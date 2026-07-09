@@ -14,6 +14,7 @@
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "editor/EditorProjectContext.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/Profiler.hpp"
 
@@ -24,6 +25,12 @@ namespace aether::app
 		std::string ToUtf8Path(const std::filesystem::path& path)
 		{
 			return path.generic_string();
+		}
+
+		bool IsSubpath(const std::filesystem::path& relativePath)
+		{
+			const std::string generic = relativePath.generic_string();
+			return !generic.empty() && !relativePath.is_absolute() && generic != "." && !generic.starts_with("../") && generic != "..";
 		}
 
 		template<std::size_t N>
@@ -41,7 +48,7 @@ namespace aether::app
 		{
 			std::string ext = path.extension().generic_string();
 			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-			if (ext == ".mesh")
+			if (ext == ".mesh" || ext == ".gltf" || ext == ".glb")
 			{
 				return dragdrop::FileKind::Model;
 			}
@@ -291,39 +298,51 @@ namespace aether::app
 		}
 	} // namespace
 
-	void FileExplorerPanel::OnAttach(LayerContext&)
+	void FileExplorerPanel::OnAttach(LayerContext& context)
 	{
-		RefreshRoot();
+		RefreshRoot(context);
 	}
 
-	void FileExplorerPanel::RefreshRoot()
+	void FileExplorerPanel::RefreshRoot(LayerContext& context)
 	{
-#if defined(AETHER_GAME_PROJECT)
-		m_root = std::filesystem::path(AETHER_GAME_PROJECT).parent_path();
+		const auto* project = context.TryGet<EditorProjectContext>();
+		if (project == nullptr || !project->IsLoaded())
+		{
+			m_root.clear();
+			m_scriptRoot.clear();
+			m_projectName.clear();
+			m_rootAvailable = false;
+			return;
+		}
+
+		m_root = project->root;
+		m_scriptRoot = project->scriptsDir;
+		m_projectName = project->name.empty() ? project->root.filename().generic_string() : project->name;
 		std::error_code ec;
 		m_rootAvailable = std::filesystem::exists(m_root, ec) && std::filesystem::is_directory(m_root, ec);
-#else
-		m_root.clear();
-		m_rootAvailable = false;
-#endif
 	}
 
 	void FileExplorerPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
+		if (const auto* project = context.TryGet<EditorProjectContext>(); project == nullptr || !project->IsLoaded() || project->root != m_root)
+		{
+			RefreshRoot(context);
+		}
+
 		ImGui::Begin("File Explorer", VisiblePtr());
 		if (ImGui::SmallButton(ICON_FA_ROTATE "##refreshFiles"))
 		{
-			RefreshRoot();
+			RefreshRoot(context);
 		}
 		ImGui::SameLine();
-		ImGui::TextDisabled("%s", m_rootAvailable ? ToUtf8Path(m_root).c_str() : "Script source unavailable");
+		ImGui::TextDisabled("%s", m_rootAvailable ? ToUtf8Path(m_root).c_str() : "Open a project to browse files");
 
 		ImGui::Separator();
 		if (!m_rootAvailable)
 		{
-			ImGui::TextDisabled("No source project is available in this build.");
+			ImGui::TextDisabled("No project is open.");
 			ImGui::End();
 			return;
 		}
@@ -337,10 +356,10 @@ namespace aether::app
 		if (ImGui::Button(ICON_FA_PLUS "  Create"))
 		{
 			m_newScriptError.clear();
-			if (CreateGameScriptFile(m_root, typeName, m_newScriptError))
+			if (CreateGameScriptFile(m_scriptRoot.empty() ? m_root / "scripts" : m_scriptRoot, typeName, m_newScriptError))
 			{
 				m_newScriptNameBuf[0] = '\0';
-				RefreshRoot();
+				RefreshRoot(context);
 			}
 		}
 		ImGui::EndDisabled();
@@ -386,7 +405,7 @@ namespace aether::app
 		std::sort(dirs.begin(), dirs.end(), byName);
 		std::sort(files.begin(), files.end(), byName);
 
-		const std::string label = depth == 0 ? std::string(ICON_FA_FOLDER_OPEN "  AetherGame") : std::string(ICON_FA_FOLDER_OPEN "  ") + dir.filename().generic_string();
+		const std::string label = depth == 0 ? std::string(ICON_FA_FOLDER_OPEN "  ") + (m_projectName.empty() ? dir.filename().generic_string() : m_projectName) : std::string(ICON_FA_FOLDER_OPEN "  ") + dir.filename().generic_string();
 		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 		if (depth == 0)
 		{
@@ -417,11 +436,21 @@ namespace aether::app
 		const std::string name = path.filename().generic_string();
 		const std::string label = std::string(isScript ? ICON_FA_CODE "  " : ICON_FA_IMAGE "  ") + name;
 		const std::string pathText = ToUtf8Path(path);
+		std::string payloadPath = pathText;
+		if (!isScript && !m_root.empty())
+		{
+			std::error_code ec;
+			const std::filesystem::path relative = std::filesystem::relative(path, m_root, ec);
+			if (!ec && IsSubpath(relative))
+			{
+				payloadPath = "project://" + relative.generic_string();
+			}
+		}
 		if (ImGui::Selectable(label.c_str(), false))
 		{
 			if (auto* selection = context.TryGet<SceneSelection>())
 			{
-				selection->SelectAsset(ToSelectionKind(kind), pathText, name);
+				selection->SelectAsset(ToSelectionKind(kind), isScript ? pathText : payloadPath, name);
 			}
 		}
 
@@ -439,7 +468,7 @@ namespace aether::app
 			{
 				dragdrop::FilePayload payload{};
 				payload.kind = kind;
-				CopyToPayload(payload.path, pathText);
+				CopyToPayload(payload.path, payloadPath);
 				CopyToPayload(payload.displayName, name);
 				ImGui::SetDragDropPayload(dragdrop::kFilePayload, &payload, sizeof(payload));
 				DrawPayloadPreview(ICON_FA_IMAGE, name.c_str(), payload.path, IM_COL32(168, 179, 196, 255));

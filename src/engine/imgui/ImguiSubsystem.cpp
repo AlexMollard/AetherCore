@@ -1,14 +1,11 @@
 #include "imgui/ImguiSubsystem.hpp"
-
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
-
 #include <algorithm>
 #include <chrono>
 #include <span>
-
 #include "Color.hpp"
 #include "io/FileSystem.hpp"
 #include "gpu/GpuDevice.hpp"
@@ -27,6 +24,7 @@ namespace aether
 {
 	namespace
 	{
+
 		void ApplyTheme()
 		{
 			auto& style = ImGui::GetStyle();
@@ -38,12 +36,10 @@ namespace aether
 			{
 				return ImColor(0, 0, 0, a);
 			};
-
 			constexpr auto withAlpha = [](const ImColor& c, int a)
 			{
 				return ImColor(c.Value.x, c.Value.y, c.Value.z, a / 255.0f);
 			};
-
 			const auto toIm = [](const glm::vec4& c)
 			{
 				return ImColor(c.r, c.g, c.b, c.a);
@@ -89,7 +85,7 @@ namespace aether
 			// Window
 			colors[ImGuiCol_WindowBg] = bg;
 			colors[ImGuiCol_ChildBg] = bg;
-			colors[ImGuiCol_PopupBg] = bgElevated; // elevated above surface
+			colors[ImGuiCol_PopupBg] = bgElevated;
 			colors[ImGuiCol_Border] = cBorder;
 			colors[ImGuiCol_BorderShadow] = ImColor(0, 0, 0, 0);
 
@@ -185,7 +181,28 @@ namespace aether
 			colors[ImGuiCol_NavWindowingHighlight] = withAlpha(fg, 112);
 			colors[ImGuiCol_NavWindowingDimBg] = black(128);
 		}
+
+		void ProcessBackendTextureUpdates(ImDrawData* drawData)
+		{
+			if (drawData == nullptr || drawData->Textures == nullptr)
+			{
+				return;
+			}
+
+			for (ImTextureData* texture: *drawData->Textures)
+			{
+				if (texture != nullptr && texture->Status != ImTextureStatus_OK)
+				{
+					ImGui_ImplVulkan_UpdateTexture(texture);
+				}
+			}
+		}
+
 	} // anonymous namespace
+
+	// ---------------------------------------------------------------------------
+	// Lifetime
+	// ---------------------------------------------------------------------------
 
 	ImguiSubsystem::~ImguiSubsystem()
 	{
@@ -205,24 +222,22 @@ namespace aether
 
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
-
 		ImGuiIO& io = ImGui::GetIO();
+
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-		// Install multi-viewport support unconditionally so the runtime toggle is just a
-		// flag flip; SettingsService::ApplyAll applies the persisted on/off at startup.
+		// Install multi-viewport support unconditionally so the runtime toggle is
+		// just a flag flip; SettingsService::ApplyAll applies the persisted on/off
+		// at startup.
 		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-		// ImGui 1.92 per-monitor DPI: dynamic fonts re-rasterize crisply at monitor DPI
-		// (ConfigDpiScaleFonts -> FontScaleDpi), and ImGui window geometry scales across
-		// monitors (ConfigDpiScaleViewports). Complementary; no double font scaling. The
-		// framebuffer-size DisplaySize override is intentionally dropped so imgui_impl_glfw
-		// owns the DPI-aware DisplaySize (logical) + DisplayFramebufferScale.
+		// ImGui 1.92 per-monitor DPI: dynamic fonts re-rasterize crisply at
+		// monitor DPI (ConfigDpiScaleFonts -> FontScaleDpi), and ImGui window
+		// geometry scales across monitors (ConfigDpiScaleViewports).
 		io.ConfigDpiScaleFonts = true;
 		io.ConfigDpiScaleViewports = true;
-		// Windows (including a torn-out Viewport) move only by their title bar, so a
-		// drag over the viewport body / gizmo doesn't drag the whole window and doesn't
-		// steal the press from the scene camera.
+
+		// Windows (including a torn-out Viewport) move only by their title bar.
 		io.ConfigWindowsMoveFromTitleBarOnly = true;
 
 		ApplyTheme();
@@ -249,9 +264,7 @@ namespace aether
 			}
 		}
 
-		// Merge Font Awesome 6 Free-Solid into the same atlas: icon codepoints sit
-		// in the Private Use Area (0xE000-0xF8FF) so text rendering stays Roboto.
-		// Consumers use the ICON_FA_* UTF-8 literals (app: debug/Icons.hpp).
+		// Merge Font Awesome 6 Free-Solid into the same atlas.
 		constexpr std::string_view kIconFontPath = "assets://fonts/fa-solid-900.ttf";
 		if (!io.Fonts->Fonts.empty() && io::FileSystem::Exists(kIconFontPath))
 		{
@@ -266,8 +279,6 @@ namespace aether
 				iconConfig.PixelSnapH = true;
 				iconConfig.SizePixels = 13.0f;
 				iconConfig.GlyphMinAdvanceX = 16.0f;
-				// Nudge merged icons up-and-left so their ink sits optically centered on
-				// the Roboto baseline instead of low-and-right inside the 16px advance box.
 				iconConfig.GlyphOffset = ImVec2(-1.0f, 0.0f);
 				io.Fonts->AddFontFromMemoryTTF(m_iconFontData.data(), static_cast<int>(m_iconFontData.size()), iconConfig.SizePixels, &iconConfig, kIconRange);
 			}
@@ -294,6 +305,10 @@ namespace aether
 		AE_INFO(LogCategory::UI, "Dear ImGui subsystem shutdown.");
 	}
 
+	// ---------------------------------------------------------------------------
+	// Frame lifecycle (producer / game thread)
+	// ---------------------------------------------------------------------------
+
 	void ImguiSubsystem::BeginFrame(ServiceContainer& services, float deltaTimeSeconds)
 	{
 		if (!m_initialized)
@@ -303,11 +318,11 @@ namespace aether
 
 		m_gameThreadFrameLock.reset();
 		m_gameThreadFrameLock.emplace(m_mutex);
+
 		RetirePendingTextureReleases();
+
 		ImGuiIO& io = ImGui::GetIO();
-		// imgui_impl_glfw's NewFrame sets the DPI-aware DisplaySize (logical) +
-		// DisplayFramebufferScale each frame; only provide a fallback when the backends
-		// (and thus that NewFrame) aren't running, so ImGui::NewFrame never sees size 0.
+
 		if (!m_backendsInitialized)
 		{
 			if (auto window = services.TryGet<Window>())
@@ -316,6 +331,7 @@ namespace aether
 				io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
 			}
 		}
+
 		io.DeltaTime = deltaTimeSeconds > 0.0f ? deltaTimeSeconds : 1.0f / 60.0f;
 
 		if (m_backendsInitialized)
@@ -323,6 +339,7 @@ namespace aether
 			ImGui_ImplVulkan_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
 		}
+
 		ImGui::NewFrame();
 		++m_frameIndex;
 
@@ -339,7 +356,9 @@ namespace aether
 		{
 			return;
 		}
+
 		ImGui::Render();
+
 		const ImGuiIO& io = ImGui::GetIO();
 		m_wantsInputCapture = io.WantCaptureMouse || io.WantCaptureKeyboard;
 	}
@@ -350,10 +369,7 @@ namespace aether
 		{
 			return;
 		}
-		// When ViewportsEnable is set, ImGui REQUIRES UpdatePlatformWindows() every frame
-		// after Render() (it asserts on the next NewFrame otherwise). GLFW-only here: the
-		// Vulkan renderer hooks are nulled, so spawning an OS window touches no GPU state,
-		// and the swapchain/backend/pipeline all already exist from Init.
+
 		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
 		{
 			ImGui::UpdatePlatformWindows();
@@ -367,16 +383,17 @@ namespace aether
 		{
 			return departed;
 		}
+
 		const ImGuiContext& g = *ImGui::GetCurrentContext();
 		const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+
 		for (ImGuiViewportP* vp: g.Viewports)
 		{
 			if (vp == mainViewport)
 			{
 				continue;
 			}
-			// A created OS window that was not active this frame will be destroyed by the
-			// next UpdatePlatformWindows(); its render-thread swapchain must retire first.
+
 			if (vp->PlatformWindowCreated && vp->LastFrameActive < g.FrameCount)
 			{
 				departed.push_back(vp->ID);
@@ -391,22 +408,26 @@ namespace aether
 		{
 			return;
 		}
-		// The game thread already holds m_mutex via m_gameThreadFrameLock (BeginFrame), so
-		// do NOT re-lock here.
-		outFrame.Capture(ImGui::GetDrawData()); // main viewport
+
+		// The game thread already holds m_mutex via m_gameThreadFrameLock
+		// (BeginFrame), so do NOT re-lock here.
+		ImDrawData* mainDrawData = ImGui::GetDrawData();
+		ProcessBackendTextureUpdates(mainDrawData);
+		outFrame.Capture(mainDrawData); // main viewport
+
 		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
 		{
 			const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
 			const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+
 			for (ImGuiViewport* vp: platformIO.Viewports)
 			{
 				if (vp == mainViewport || vp->DrawData == nullptr || vp->PlatformHandle == nullptr)
 				{
 					continue;
 				}
-				// Per-viewport framebuffer scale (correct on hi-DPI secondary monitors);
-				// keeps the swapchain size EnsureWindow picks consistent with the render
-				// viewport in RenderOne.
+
+				ProcessBackendTextureUpdates(vp->DrawData);
 				outFrame.CaptureSecondary(vp->DrawData, vp->ID, vp->Pos, vp->Size, vp->DrawData->FramebufferScale, vp->PlatformHandle);
 			}
 		}
@@ -417,12 +438,17 @@ namespace aether
 		m_gameThreadFrameLock.reset();
 	}
 
+	// ---------------------------------------------------------------------------
+	// Viewport management
+	// ---------------------------------------------------------------------------
+
 	void ImguiSubsystem::RenderViewports(const ImguiFrameData& frame)
 	{
 		if (!m_initialized || m_viewportRenderer == nullptr)
 		{
 			return;
 		}
+
 		m_viewportRenderer->Render(frame);
 	}
 
@@ -440,8 +466,10 @@ namespace aether
 		{
 			return;
 		}
+
 		m_viewportsEnabled = enabled;
 		ImGuiIO& io = ImGui::GetIO();
+
 		if (enabled)
 		{
 			io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
@@ -449,9 +477,6 @@ namespace aether
 		else
 		{
 			io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
-			// ImGui merges torn-out windows back into the main viewport at their last
-			// screen position, which can leave the title bar off the main window's
-			// edge (ungrabbable). Clamp them back into view over the next few frames.
 			m_clampWindowsFrames = 3;
 		}
 	}
@@ -462,20 +487,24 @@ namespace aether
 		{
 			return;
 		}
+
 		const ImGuiContext& g = *ImGui::GetCurrentContext();
 		const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
 		const ImVec2 workMin = mainViewport->WorkPos;
 		const ImVec2 workMax = ImVec2(mainViewport->WorkPos.x + mainViewport->WorkSize.x, mainViewport->WorkPos.y + mainViewport->WorkSize.y);
 		const float titleH = ImGui::GetFrameHeight();
+
 		for (ImGuiWindow* window: g.Windows)
 		{
 			if (window == nullptr || !window->WasActive || (window->Flags & ImGuiWindowFlags_ChildWindow) != 0)
 			{
 				continue;
 			}
+
 			ImVec2 pos = window->Pos;
 			pos.x = std::clamp(pos.x, workMin.x, std::max(workMin.x, workMax.x - window->Size.x));
 			pos.y = std::clamp(pos.y, workMin.y, std::max(workMin.y, workMax.y - titleH));
+
 			if (pos.x != window->Pos.x || pos.y != window->Pos.y)
 			{
 				ImGui::SetWindowPos(window, pos, ImGuiCond_Always);
@@ -489,8 +518,13 @@ namespace aether
 		{
 			return;
 		}
+
 		ImGui::GetStyle().FontScaleMain = std::clamp(uiScale, 0.5f, 3.0f);
 	}
+
+	// ---------------------------------------------------------------------------
+	// Render thread
+	// ---------------------------------------------------------------------------
 
 	void ImguiSubsystem::RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target)
 	{
@@ -517,13 +551,20 @@ namespace aether
 
 		commands.BeginDebugLabel("ImGui", 0.95f, 0.45f, 0.15f, 1.0f);
 		commands.BeginRendering(renderInfo);
+
 		const auto t0 = std::chrono::high_resolution_clock::now();
 		ImGui_ImplVulkan_RenderDrawData(const_cast<ImDrawData*>(frame.GetDrawData()), reinterpret_cast<VkCommandBuffer>(commands.GetCommandBuffer()));
 		const auto t1 = std::chrono::high_resolution_clock::now();
+
 		m_lastRenderCpuTimeMs.store(std::chrono::duration<float, std::milli>(t1 - t0).count(), std::memory_order_relaxed);
+
 		commands.EndRendering();
 		commands.EndDebugLabel();
 	}
+
+	// ---------------------------------------------------------------------------
+	// Texture management
+	// ---------------------------------------------------------------------------
 
 	ImTextureID ImguiSubsystem::RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout)
 	{
@@ -533,6 +574,7 @@ namespace aether
 		}
 
 		const VkDescriptorSet descriptorSet = ImGui_ImplVulkan_AddTexture(static_cast<VkImageView>(imageView), ToVk(layout));
+
 		return static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(descriptorSet));
 	}
 
@@ -587,6 +629,10 @@ namespace aether
 		}
 	}
 
+	// ---------------------------------------------------------------------------
+	// Backend init / shutdown
+	// ---------------------------------------------------------------------------
+
 	void ImguiSubsystem::InitBackends(ServiceContainer& services)
 	{
 		if (m_backendsInitialized)
@@ -637,10 +683,8 @@ namespace aether
 			return;
 		}
 
-		// Suppress the stock Vulkan renderer viewport hooks: UpdatePlatformWindows() must do
-		// GLFW-only work (no swapchain / vkDeviceWaitIdle on the producer thread) and we
-		// never call RenderPlatformWindowsDefault(). Secondary viewports render on the
-		// render thread via our own ImguiViewportRenderer. The glfw PLATFORM hooks stay.
+		// Suppress the stock Vulkan renderer viewport hooks: UpdatePlatformWindows()
+		// must do GLFW-only work and we never call RenderPlatformWindowsDefault().
 		ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
 		platformIO.Renderer_CreateWindow = nullptr;
 		platformIO.Renderer_DestroyWindow = nullptr;
@@ -650,7 +694,6 @@ namespace aether
 
 		m_viewportRenderer = std::make_unique<ImguiViewportRenderer>();
 		m_viewportRenderer->Init(vk, ToVk(swapchain.GetImageFormat()));
-
 		m_backendsInitialized = true;
 	}
 
@@ -666,13 +709,16 @@ namespace aether
 			ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(pending.textureId)));
 		}
 		m_pendingTextureReleases.clear();
+
 		if (m_viewportRenderer)
 		{
 			m_viewportRenderer->Shutdown();
 			m_viewportRenderer.reset();
 		}
+
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		m_backendsInitialized = false;
 	}
+
 } // namespace aether

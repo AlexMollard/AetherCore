@@ -2,7 +2,7 @@
 // single binary (.pak) file consumed by the runtime PakBackend.
 //
 // Usage:
-//   AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>
+//   AssetPacker [--project] [--import-materials] [--compress-level N] <source-dir> <output.pak>
 //   AssetPacker import-materials <source-dir>
 //   AssetPacker bake-font <ttf> <outDir>
 
@@ -20,11 +20,17 @@ namespace fs = std::filesystem;
 
 struct Args
 {
+	bool project = false;
 	bool importMaterials = false;
 	int compressionLevel = 3;
 	fs::path sourceDir;
 	fs::path outputPath;
 };
+
+static bool HasProjectDescriptor(const fs::path& projectRoot)
+{
+	return fs::is_regular_file(projectRoot / ".project" / "aether.project");
+}
 
 static std::optional<Args> ParseArgs(int argc, char* argv[])
 {
@@ -38,6 +44,11 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 		if (arg == "--import-materials")
 		{
 			args.importMaterials = true;
+			++argOffset;
+		}
+		else if (arg == "--project" || arg == "pack-project")
+		{
+			args.project = true;
 			++argOffset;
 		}
 		else if (arg == "--compress-level")
@@ -92,7 +103,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 
 	if (argc < argOffset + 2)
 	{
-		std::cerr << "Usage: AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
+		std::cerr << "Usage: AssetPacker [--project] [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
 		std::cerr << "       AssetPacker bake-font <ttf> <outDir>\n";
 		return std::nullopt;
@@ -118,9 +129,16 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	if (args->project && !HasProjectDescriptor(args->sourceDir))
+	{
+		std::cerr << "AssetPacker: project directory is missing .project/aether.project: " << args->sourceDir << "\n";
+		return 1;
+	}
+
 	if (args->importMaterials)
 	{
-		if (MaterialImporter::ImportDirectory(args->sourceDir) < 0)
+		const fs::path materialRoot = (args->project && fs::is_directory(args->sourceDir / "assets")) ? args->sourceDir / "assets" : args->sourceDir;
+		if (MaterialImporter::ImportDirectory(materialRoot) < 0)
 		{
 			return 1;
 		}

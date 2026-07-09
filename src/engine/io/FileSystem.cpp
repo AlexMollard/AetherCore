@@ -145,7 +145,7 @@ namespace aether::io
 			return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
 		}
 
-		bool MountAssetsPak(const std::vector<std::filesystem::path>& candidates)
+		bool MountPakCandidate(std::string_view mountPoint, std::string_view pakName, const std::vector<std::filesystem::path>& candidates)
 		{
 			std::optional<std::filesystem::path> selected;
 			std::vector<std::filesystem::path> existing;
@@ -170,12 +170,22 @@ namespace aether::io
 			{
 				if (pak != *selected)
 				{
-					AE_WARN(LogCategory::FileSystem, "Ignoring alternate assets pak '{}' because '{}' was selected.", pak.string(), selected->string());
+					AE_WARN(LogCategory::FileSystem, "Ignoring alternate {} pak '{}' because '{}' was selected.", pakName, pak.string(), selected->string());
 				}
 			}
 
-			FileSystem::MountPak("assets", *selected);
+			FileSystem::MountPak(mountPoint, *selected);
 			return true;
+		}
+
+		bool MountAssetsPak(const std::vector<std::filesystem::path>& candidates)
+		{
+			return MountPakCandidate("assets", "assets", candidates);
+		}
+
+		bool MountProjectPak(const std::vector<std::filesystem::path>& candidates)
+		{
+			return MountPakCandidate("project", "project", candidates);
 		}
 
 		void MountAssetsDirectory(std::filesystem::path directory)
@@ -183,6 +193,23 @@ namespace aether::io
 			directory = NormalPath(std::move(directory));
 			AE_WARN(LogCategory::FileSystem, "Mounting loose asset directory. Processed assets such as .mesh/.texture may be unavailable unless this directory contains generated outputs: {}", directory.string());
 			FileSystem::Mount("assets", std::move(directory));
+		}
+
+		void MountProjectDirectory(std::filesystem::path directory)
+		{
+			if (directory.empty())
+			{
+				return;
+			}
+
+			directory = NormalPath(std::move(directory));
+			if (!PathExists(directory))
+			{
+				return;
+			}
+
+			AE_INFO(LogCategory::FileSystem, "Mounting loose project directory: {}", directory.string());
+			FileSystem::Mount("project", std::move(directory));
 		}
 	} // namespace
 
@@ -257,6 +284,55 @@ namespace aether::io
 				                        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
 #else
 				                        workingDirectory / "assets"
+#endif
+				                                ));
+			}
+		}
+
+		// -- project:// --------------------------------------------------------
+		// Project content is separate from engine/editor assets. Packaged runs
+		// should use data/project.pak; editor sessions can remount project:// to
+		// the opened loose project root.
+		const std::string projectMode = EnvironmentString("AETHER_PROJECT_MODE");
+		if (EqualsIgnoreCase(projectMode, "dir"))
+		{
+			MountProjectDirectory(EnvironmentPath("AETHER_PROJECT_DIR")
+			                .value_or(
+#ifdef AETHER_DEFAULT_PROJECT_DIR
+			                        std::filesystem::path(AETHER_DEFAULT_PROJECT_DIR)
+#else
+			                        std::filesystem::path{}
+#endif
+			                                ));
+		}
+		else
+		{
+			std::vector<std::filesystem::path> projectPakCandidates;
+			if (auto overridePak = EnvironmentPath("AETHER_PROJECT_PAK"))
+			{
+				AddUniquePath(projectPakCandidates, *overridePak);
+			}
+
+			AddUniquePath(projectPakCandidates, workingDirectory / "data" / "project.pak");
+			AddUniquePath(projectPakCandidates, workingDirectory / "../data/project.pak");
+			AddUniquePath(projectPakCandidates, workingDirectory / "../../data/project.pak");
+#ifdef AETHER_DEFAULT_PROJECT_PAK
+			AddUniquePath(projectPakCandidates, AETHER_DEFAULT_PROJECT_PAK);
+#endif
+
+			if (!MountProjectPak(projectPakCandidates))
+			{
+				if (EqualsIgnoreCase(projectMode, "pak"))
+				{
+					AE_ASSERT_ALWAYS(false, "AETHER_PROJECT_MODE=pak but no usable project.pak was found. Set AETHER_PROJECT_PAK or build App to generate data/project.pak.");
+				}
+
+				MountProjectDirectory(EnvironmentPath("AETHER_PROJECT_DIR")
+				                .value_or(
+#ifdef AETHER_DEFAULT_PROJECT_DIR
+				                        std::filesystem::path(AETHER_DEFAULT_PROJECT_DIR)
+#else
+				                        std::filesystem::path{}
 #endif
 				                                ));
 			}

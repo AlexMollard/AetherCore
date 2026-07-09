@@ -18,7 +18,7 @@ namespace aether::app
 
 		[[nodiscard]] bool DefaultVisible() const override
 		{
-			return false;
+			return true;
 		}
 
 		void OnAttach(LayerContext& context) override;
@@ -27,9 +27,11 @@ namespace aether::app
 	private:
 		void DrawDirectory(LayerContext& context, const std::filesystem::path& dir, int depth);
 		void DrawFile(LayerContext& context, const std::filesystem::path& path);
-		void RefreshRoot();
+		void RefreshRoot(LayerContext& context);
 
 		std::filesystem::path m_root;
+		std::filesystem::path m_scriptRoot;
+		std::string m_projectName;
 		char m_newScriptNameBuf[64] = {};
 		std::string m_newScriptError;
 		bool m_rootAvailable = false;

@@ -6,12 +6,16 @@ namespace aether::app::scene
 	std::string NewScene(World& world, const ApplySceneDeps& deps)
 	{
 		const auto desc = ReadSceneFile("default");
-		if (!desc.has_value())
+		if (desc.has_value())
 		{
-			return {};
+			ReplaceScene(*desc, world, deps);
+			return desc->name.empty() ? std::string{"Untitled"} : desc->name;
 		}
-		ReplaceScene(*desc, world, deps);
-		return desc->name.empty() ? std::string{"Untitled"} : desc->name;
+
+		SceneDescription empty;
+		empty.name = "Untitled";
+		ReplaceScene(empty, world, deps);
+		return empty.name;
 	}
 
 	bool QuickSave(World& world, const std::string& sceneName, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer)

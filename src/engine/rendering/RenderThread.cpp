@@ -1,6 +1,7 @@
 #include "rendering/RenderThread.hpp"
 
 #include "AetherCore.hpp"
+#include "imgui/ImguiFrameData.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/Swapchain.hpp"
 
@@ -160,6 +161,7 @@ namespace aether
 				if (IsReloadInProgress())
 				{
 					m_engine->DiscardPendingFrameQueues(packet);
+					ImguiFrameData::RecyclePooled(std::move(packet.imgui));
 					m_isIdle.store(true, std::memory_order_release);
 					m_reloadCv.notify_all();
 					continue;
@@ -180,6 +182,8 @@ namespace aether
 			catch (const std::exception& e)
 			{
 				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
+				// Return warm ImGui draw-list pools even on failure paths.
+				ImguiFrameData::RecyclePooled(std::move(packet.imgui));
 				m_engine->DiscardAllPendingFrameQueues();
 				{
 					std::lock_guard lock(m_reloadMutex);
@@ -190,6 +194,9 @@ namespace aether
 				m_channel.close();
 				break;
 			}
+
+			// Recycle ImguiFrameData pools so the next Capture reuses capacity.
+			ImguiFrameData::RecyclePooled(std::move(packet.imgui));
 
 			// Publish the completed frame index (for statistics / shutdown).
 			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);

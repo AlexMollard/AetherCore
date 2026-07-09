@@ -4,6 +4,7 @@
 #include <format>
 #include <fstream>
 #include <sstream>
+#include <string>
 
 #include "io/FileSystem.hpp"
 #include "utils/EngineSettings.hpp"
@@ -152,6 +153,16 @@ namespace aether
 		return parsed.has_value() ? *parsed : defaultValue;
 	}
 
+	std::string TomlConfig::GetString(std::string_view key, std::string_view defaultValue) const
+	{
+		const auto it = m_values.find(key);
+		if (it == m_values.end())
+		{
+			return std::string(defaultValue);
+		}
+		return text::StripQuotes(it->second);
+	}
+
 	void TomlConfig::Set(std::string_view key, bool value)
 	{
 		const std::string str = value ? "true" : "false";
@@ -166,6 +177,26 @@ namespace aether
 	void TomlConfig::Set(std::string_view key, float value)
 	{
 		const std::string str = std::format("{:.2f}", value);
+		auto& entry = m_values[std::string(key)];
+		if (entry != str)
+		{
+			entry = std::move(str);
+			m_dirty = true;
+		}
+	}
+
+	void TomlConfig::Set(std::string_view key, std::string_view value)
+	{
+		std::string str = "\"";
+		for (const char c: value)
+		{
+			if (c == '\\' || c == '"')
+			{
+				str += '\\';
+			}
+			str += c;
+		}
+		str += '"';
 		auto& entry = m_values[std::string(key)];
 		if (entry != str)
 		{

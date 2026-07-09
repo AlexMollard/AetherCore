@@ -115,20 +115,15 @@ namespace aether::app
 			return true;
 		}
 
-		Entity SpawnModelAsset(LayerContext& context, World& world, const std::string& path, Entity parent = {})
+		bool AssignModelAsset(LayerContext& context, World& world, Entity entity, const std::string& path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
 			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
 			if (assets == nullptr || sceneCtx == nullptr)
 			{
-				return {};
+				return false;
 			}
-			const Entity root = scene::SpawnModelEntity(world, *assets, *sceneCtx, path, glm::mat4(1.0f));
-			if (root.IsValid() && parent.IsValid())
-			{
-				ecs::SetParent(world, root, parent);
-			}
-			return root;
+			return scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, path);
 		}
 
 		Entity InstantiatePrefabAsset(LayerContext& context, World& world, const std::string& name, Entity parent = {})
@@ -164,15 +159,12 @@ namespace aether::app
 			switch (payload.kind)
 			{
 				case dragdrop::FileKind::Model:
-				{
-					const Entity root = SpawnModelAsset(context, world, payload.path, entity);
-					if (root.IsValid())
+					if (AssignModelAsset(context, world, entity, payload.path))
 					{
-						selection.Select(root);
+						selection.Select(entity);
 						return true;
 					}
 					return false;
-				}
 				case dragdrop::FileKind::Prefab:
 				{
 					const Entity root = InstantiatePrefabAsset(context, world, payload.path, entity);
@@ -258,23 +250,18 @@ namespace aether::app
 
 			if (asset.kind == SceneSelection::AssetKind::Model)
 			{
-				if (ImGui::Button(ICON_FA_PLUS "  Spawn"))
+				ImGui::BeginDisabled(!hasTarget);
+				if (ImGui::Button(ICON_FA_PERSON_RUNNING "  Apply to Target"))
 				{
-					if (Entity root = SpawnModelAsset(context, world, asset.path); root.IsValid())
+					if (AssignModelAsset(context, world, target, asset.path))
 					{
-						selection.Select(root);
+						selection.Select(target);
 					}
 				}
-				if (hasTarget)
+				ImGui::EndDisabled();
+				if (!hasTarget)
 				{
-					ImGui::SameLine();
-					if (ImGui::Button(ICON_FA_SITEMAP "  Spawn Under Target"))
-					{
-						if (Entity root = SpawnModelAsset(context, world, asset.path, target); root.IsValid())
-						{
-							selection.Select(root);
-						}
-					}
+					ImGui::TextDisabled("Select an entity to assign this model.");
 				}
 			}
 			else if (asset.kind == SceneSelection::AssetKind::Prefab)

@@ -2,10 +2,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <functional>
+#include <optional>
 #include <regex>
+#include <sstream>
 #include <string_view>
 #include <unordered_set>
 
@@ -17,6 +21,7 @@ using namespace std::string_view_literals;
 
 #ifdef _WIN32
 #	include <Windows.h>
+#	include <shobjidl.h>
 #	include <shellapi.h>
 #endif
 
@@ -24,6 +29,7 @@ using namespace std::string_view_literals;
 #include "debug/DayNightPanel.hpp"
 #include "debug/OpenInEditor.hpp"
 #include "debug/DevToolsPanel.hpp"
+#include "debug/FileExplorerPanel.hpp"
 #include "debug/Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
@@ -39,6 +45,7 @@ using namespace std::string_view_literals;
 #include "AetherCore.hpp"
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
+#include "io/FileSystem.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
@@ -54,6 +61,7 @@ using namespace std::string_view_literals;
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/TextIni.hpp"
 #include "utils/TomlConfig.hpp"
 
 namespace aether::app
@@ -155,6 +163,294 @@ namespace aether::app
 			}
 			return key;
 		}
+
+		constexpr int kMaxRecentProjects = 8;
+		constexpr std::string_view kProjectDirectory = ".project";
+		constexpr std::string_view kProjectDescriptor = "aether.project";
+
+		std::filesystem::path NormalizePath(std::filesystem::path path)
+		{
+			std::error_code ec;
+			if (path.empty())
+			{
+				return {};
+			}
+			path = std::filesystem::absolute(path, ec);
+			if (ec)
+			{
+				return path.lexically_normal();
+			}
+			const std::filesystem::path canonical = std::filesystem::weakly_canonical(path, ec);
+			return ec ? path.lexically_normal() : canonical;
+		}
+
+		std::string DisplayPath(const std::filesystem::path& path)
+		{
+			return path.empty() ? std::string{} : path.lexically_normal().string();
+		}
+
+		std::filesystem::path ProjectDirectoryPath(const std::filesystem::path& root)
+		{
+			return root / kProjectDirectory;
+		}
+
+		std::filesystem::path DescriptorPath(const std::filesystem::path& root)
+		{
+			return ProjectDirectoryPath(root) / kProjectDescriptor;
+		}
+
+		std::filesystem::path LegacyDescriptorPath(const std::filesystem::path& root)
+		{
+			return root / kProjectDescriptor;
+		}
+
+		std::filesystem::path ExistingDescriptorPath(const std::filesystem::path& root)
+		{
+			std::error_code ec;
+			const std::filesystem::path descriptor = DescriptorPath(root);
+			if (std::filesystem::is_regular_file(descriptor, ec))
+			{
+				return descriptor;
+			}
+			ec.clear();
+			const std::filesystem::path legacyDescriptor = LegacyDescriptorPath(root);
+			if (std::filesystem::is_regular_file(legacyDescriptor, ec))
+			{
+				return legacyDescriptor;
+			}
+			return descriptor;
+		}
+
+		std::filesystem::path ResolveProjectRoot(std::filesystem::path path)
+		{
+			path = NormalizePath(std::move(path));
+			if (path.empty())
+			{
+				return {};
+			}
+			if (path.filename() == kProjectDescriptor)
+			{
+				path = path.parent_path();
+			}
+			if (path.filename() == kProjectDirectory)
+			{
+				path = path.parent_path();
+			}
+			return path;
+		}
+
+		bool HasProjectDescriptor(const std::filesystem::path& root)
+		{
+			std::error_code ec;
+			if (std::filesystem::is_regular_file(DescriptorPath(root), ec))
+			{
+				return true;
+			}
+			ec.clear();
+			return std::filesystem::is_regular_file(LegacyDescriptorPath(root), ec);
+		}
+
+		std::string FallbackProjectName(const std::filesystem::path& root)
+		{
+			const std::string name = root.filename().string();
+			return name.empty() ? "Aether Project" : name;
+		}
+
+		std::filesystem::path ResolveProjectPath(const std::filesystem::path& root, std::string_view value, std::string_view fallback)
+		{
+			std::filesystem::path path = value.empty() ? std::filesystem::path(fallback) : std::filesystem::path(std::string(value));
+			if (path.is_relative())
+			{
+				path = root / path;
+			}
+			return NormalizePath(std::move(path));
+		}
+
+		EditorProjectContext ReadProjectDescriptor(const std::filesystem::path& root)
+		{
+			EditorProjectContext project;
+			project.root = NormalizePath(root);
+			project.name = FallbackProjectName(project.root);
+			project.assetsDir = ResolveProjectPath(project.root, {}, "assets");
+			project.scenesDir = ResolveProjectPath(project.root, {}, "scenes");
+			project.prefabsDir = ResolveProjectPath(project.root, {}, "assets/prefabs");
+			project.scriptsDir = ResolveProjectPath(project.root, {}, "scripts");
+			project.settingsDir = ResolveProjectPath(project.root, {}, "settings");
+
+			std::ifstream in(ExistingDescriptorPath(root));
+			if (!in.is_open())
+			{
+				return project;
+			}
+
+			std::stringstream buffer;
+			buffer << in.rdbuf();
+			std::string assetsPath;
+			std::string scenesPath;
+			std::string prefabsPath;
+			std::string scriptsPath;
+			std::string settingsPath;
+			try
+			{
+				text::ParseToml(buffer.str(),
+				        [&](const text::IniEntry& entry)
+				        {
+					        if (entry.fullKey == "project.name")
+					        {
+						        project.name = text::StripQuotes(entry.value);
+					        }
+					        else if (entry.fullKey == "paths.assets")
+					        {
+						        assetsPath = text::StripQuotes(entry.value);
+					        }
+					        else if (entry.fullKey == "paths.scenes")
+					        {
+						        scenesPath = text::StripQuotes(entry.value);
+					        }
+					        else if (entry.fullKey == "paths.prefabs")
+					        {
+						        prefabsPath = text::StripQuotes(entry.value);
+					        }
+					        else if (entry.fullKey == "paths.scripts")
+					        {
+						        scriptsPath = text::StripQuotes(entry.value);
+					        }
+					        else if (entry.fullKey == "paths.settings")
+					        {
+						        settingsPath = text::StripQuotes(entry.value);
+					        }
+				        });
+			}
+			catch (...)
+			{
+				return project;
+			}
+
+			if (project.name.empty())
+			{
+				project.name = FallbackProjectName(project.root);
+			}
+			project.assetsDir = ResolveProjectPath(project.root, assetsPath, "assets");
+			project.scenesDir = ResolveProjectPath(project.root, scenesPath, "scenes");
+			const std::string inferredPrefabsPath = !prefabsPath.empty() ? prefabsPath : (!assetsPath.empty() ? assetsPath + "/prefabs" : std::string{});
+			project.prefabsDir = ResolveProjectPath(project.root, inferredPrefabsPath, "assets/prefabs");
+			project.scriptsDir = ResolveProjectPath(project.root, scriptsPath, "scripts");
+			project.settingsDir = ResolveProjectPath(project.root, settingsPath, "settings");
+			return project;
+		}
+
+		std::string ReadProjectName(const std::filesystem::path& root)
+		{
+			return ReadProjectDescriptor(root).name;
+		}
+
+		std::string EscapeTomlString(std::string_view value)
+		{
+			std::string out;
+			for (const char c: value)
+			{
+				if (c == '\\' || c == '"')
+				{
+					out += '\\';
+				}
+				out += c;
+			}
+			return out;
+		}
+
+		bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error)
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(root, ec);
+			if (ec)
+			{
+				error = "Could not create project directory: " + ec.message();
+				return false;
+			}
+			std::filesystem::create_directories(ProjectDirectoryPath(root), ec);
+			if (ec)
+			{
+				error = "Could not create project metadata directory: " + ec.message();
+				return false;
+			}
+
+			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/prefabs"sv, "scenes"sv, "scripts"sv, "settings"sv})
+			{
+				std::filesystem::create_directories(root / std::filesystem::path(dir), ec);
+				if (ec)
+				{
+					error = "Could not create project folder: " + ec.message();
+					return false;
+				}
+			}
+
+			std::ofstream out(DescriptorPath(root), std::ios::trunc);
+			if (!out.is_open())
+			{
+				error = "Could not write aether.project.";
+				return false;
+			}
+			out << "# AetherCore project descriptor\n\n";
+			out << "[project]\n";
+			out << "version = 1\n";
+			out << "name = \"" << EscapeTomlString(name) << "\"\n";
+			out << "\n[paths]\n";
+			out << "assets = \"assets\"\n";
+			out << "scenes = \"scenes\"\n";
+			out << "prefabs = \"assets/prefabs\"\n";
+			out << "scripts = \"scripts\"\n";
+			out << "settings = \"settings\"\n";
+			return true;
+		}
+
+#ifdef _WIN32
+		std::optional<std::filesystem::path> PickProjectFolder()
+		{
+			const HRESULT coInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+			const bool uninitialize = SUCCEEDED(coInit);
+
+			IFileDialog* dialog = nullptr;
+			HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+			if (FAILED(hr) || dialog == nullptr)
+			{
+				if (uninitialize)
+				{
+					CoUninitialize();
+				}
+				return std::nullopt;
+			}
+
+			DWORD options = 0;
+			if (SUCCEEDED(dialog->GetOptions(&options)))
+			{
+				dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+			}
+			dialog->SetTitle(L"Select AetherCore Project Folder");
+
+			std::optional<std::filesystem::path> selected;
+			if (SUCCEEDED(dialog->Show(nullptr)))
+			{
+				IShellItem* item = nullptr;
+				if (SUCCEEDED(dialog->GetResult(&item)) && item != nullptr)
+				{
+					PWSTR rawPath = nullptr;
+					if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &rawPath)) && rawPath != nullptr)
+					{
+						selected = std::filesystem::path(rawPath);
+						CoTaskMemFree(rawPath);
+					}
+					item->Release();
+				}
+			}
+
+			dialog->Release();
+			if (uninitialize)
+			{
+				CoUninitialize();
+			}
+			return selected;
+		}
+#endif
 	} // namespace
 
 	void DebugLayer::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
@@ -309,12 +605,11 @@ namespace aether::app
 
 	void DebugLayer::LoadSettings(LayerContext&)
 	{
-		if (!m_debugConfig.LoadFile("debug"))
+		if (m_debugConfig.LoadFile("debug"))
 		{
-			return;
+			AE_INFO(LogCategory::App, "Debug settings loaded");
 		}
-
-		AE_INFO(LogCategory::App, "Debug settings loaded");
+		LoadLauncherSettings();
 	}
 
 	void DebugLayer::SaveSettings(LayerContext&)
@@ -332,7 +627,284 @@ namespace aether::app
 			panel->SaveSettings(m_debugConfig, context);
 			m_debugConfig.Set(PanelVisibilityKey(panel->GetName()), panel->IsVisible());
 		}
+		SaveLauncherSettings();
 		SaveSettings(context);
+	}
+
+	void DebugLayer::LoadLauncherSettings()
+	{
+		m_launcherOpenLast = m_debugConfig.GetBool("launcher.open_last", false);
+		m_currentProject.root = NormalizePath(m_debugConfig.GetString("launcher.current.path"));
+		m_currentProject.name = m_debugConfig.GetString("launcher.current.name");
+		if (!m_currentProject.root.empty() && m_currentProject.name.empty())
+		{
+			m_currentProject.name = ReadProjectName(m_currentProject.root);
+		}
+
+		m_recentProjects.clear();
+		for (int i = 0; i < kMaxRecentProjects; ++i)
+		{
+			const std::string key = std::format("launcher.recent_{}", i);
+			EditorProjectContext project;
+			project.root = NormalizePath(m_debugConfig.GetString(key + ".path"));
+			project.name = m_debugConfig.GetString(key + ".name");
+			if (project.root.empty())
+			{
+				continue;
+			}
+			if (project.name.empty())
+			{
+				project.name = ReadProjectName(project.root);
+			}
+			if (std::ranges::none_of(m_recentProjects, [&](const EditorProjectContext& existing) { return NormalizePath(existing.root) == project.root; }))
+			{
+				m_recentProjects.push_back(std::move(project));
+			}
+		}
+
+		const std::filesystem::path cwd = NormalizePath(std::filesystem::current_path());
+		std::snprintf(m_projectOpenPath, sizeof(m_projectOpenPath), "%s", DisplayPath(cwd).c_str());
+		std::snprintf(m_projectNewPath, sizeof(m_projectNewPath), "%s", DisplayPath(cwd / "AetherProject").c_str());
+		std::snprintf(m_projectNewName, sizeof(m_projectNewName), "%s", "AetherProject");
+
+		if (m_launcherOpenLast && HasCurrentProject())
+		{
+			OpenProject(m_currentProject.root);
+		}
+	}
+
+	void DebugLayer::SaveLauncherSettings()
+	{
+		m_debugConfig.Set("launcher.open_last", m_launcherOpenLast);
+		m_debugConfig.Set("launcher.current.path", DisplayPath(m_currentProject.root));
+		m_debugConfig.Set("launcher.current.name", m_currentProject.name);
+		for (int i = 0; i < kMaxRecentProjects; ++i)
+		{
+			const std::string key = std::format("launcher.recent_{}", i);
+			if (i < static_cast<int>(m_recentProjects.size()))
+			{
+				m_debugConfig.Set(key + ".path", DisplayPath(m_recentProjects[static_cast<std::size_t>(i)].root));
+				m_debugConfig.Set(key + ".name", m_recentProjects[static_cast<std::size_t>(i)].name);
+			}
+			else
+			{
+				m_debugConfig.Set(key + ".path", std::string_view{});
+				m_debugConfig.Set(key + ".name", std::string_view{});
+			}
+		}
+	}
+
+	void DebugLayer::AddRecentProject(std::filesystem::path root, std::string name)
+	{
+		root = ResolveProjectRoot(std::move(root));
+		if (root.empty())
+		{
+			return;
+		}
+		if (name.empty())
+		{
+			name = ReadProjectName(root);
+		}
+		std::erase_if(m_recentProjects, [&](const EditorProjectContext& p) { return NormalizePath(p.root) == root; });
+		EditorProjectContext project;
+		project.root = std::move(root);
+		project.name = std::move(name);
+		m_recentProjects.insert(m_recentProjects.begin(), std::move(project));
+		if (m_recentProjects.size() > kMaxRecentProjects)
+		{
+			m_recentProjects.resize(kMaxRecentProjects);
+		}
+	}
+
+	bool DebugLayer::HasCurrentProject() const
+	{
+		return !m_currentProject.root.empty() && HasProjectDescriptor(m_currentProject.root);
+	}
+
+	void DebugLayer::OpenProject(std::filesystem::path root)
+	{
+		m_launcherError.clear();
+		root = ResolveProjectRoot(std::move(root));
+		if (root.empty())
+		{
+			m_launcherError = "Choose a project folder.";
+			return;
+		}
+		if (!HasProjectDescriptor(root))
+		{
+			m_launcherError = "No .project/aether.project found in that folder.";
+			return;
+		}
+
+		m_currentProject = ReadProjectDescriptor(root);
+		m_currentProject.loaded = true;
+		io::FileSystem::Mount("project", m_currentProject.root);
+		scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
+		AddRecentProject(m_currentProject.root, m_currentProject.name);
+		m_projectLoaded = true;
+		m_launcherOpen = false;
+		SaveLauncherSettings();
+		AE_INFO(LogCategory::App, "Opened editor project '{}' at {}", m_currentProject.name, DisplayPath(m_currentProject.root));
+	}
+
+	void DebugLayer::CreateProject(std::filesystem::path root, std::string_view name)
+	{
+		m_launcherError.clear();
+		root = ResolveProjectRoot(std::move(root));
+		std::string projectName(name);
+		projectName = text::TrimAscii(std::move(projectName));
+		if (projectName.empty())
+		{
+			projectName = FallbackProjectName(root);
+		}
+		if (root.empty())
+		{
+			m_launcherError = "Choose a project folder.";
+			return;
+		}
+		if (!WriteProjectDescriptor(root, projectName, m_launcherError))
+		{
+			return;
+		}
+		OpenProject(root);
+	}
+
+	void DebugLayer::DrawProjectLauncher(LayerContext&)
+	{
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		const ImVec2 launcherSize(std::max(620.0f, std::min(900.0f, viewport->WorkSize.x - 72.0f)), std::max(440.0f, std::min(580.0f, viewport->WorkSize.y - 72.0f)));
+		const ImVec2 launcherPos(viewport->WorkPos.x + (viewport->WorkSize.x - launcherSize.x) * 0.5f, viewport->WorkPos.y + (viewport->WorkSize.y - launcherSize.y) * 0.5f);
+		ImGui::SetNextWindowPos(launcherPos, ImGuiCond_Appearing);
+		ImGui::SetNextWindowSize(launcherSize, ImGuiCond_Always);
+		ImGui::SetNextWindowViewport(viewport->ID);
+		const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking;
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
+		ImGui::Begin("AetherCore Launcher", nullptr, flags);
+		ImGui::PopStyleVar(2);
+
+		const float contentWidth = ImGui::GetContentRegionAvail().x;
+		ImGui::Text(ICON_FA_CUBE "  AetherCore");
+		ImGui::SameLine();
+		ImGui::TextDisabled("Project Launcher");
+		if (m_projectLoaded)
+		{
+			const float closeWidth = ImGui::CalcTextSize("Back to Editor").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+			ImGui::SameLine(std::max(ImGui::GetCursorPosX() + ImGui::GetStyle().ItemSpacing.x, contentWidth - closeWidth));
+			if (ImGui::Button("Back to Editor"))
+			{
+				m_launcherOpen = false;
+			}
+		}
+		ImGui::Separator();
+
+		const float leftWidth = std::min(330.0f, contentWidth * 0.38f);
+		const float bodyHeight = ImGui::GetContentRegionAvail().y;
+		ImGui::BeginChild("##launcherRecent", ImVec2(leftWidth, bodyHeight), true);
+		ImGui::TextUnformatted("Recent");
+		ImGui::Separator();
+		if (m_recentProjects.empty())
+		{
+			ImGui::TextDisabled("(none)");
+		}
+		for (const EditorProjectContext& project: m_recentProjects)
+		{
+			const std::string projectPath = DisplayPath(project.root);
+			ImGui::PushID(projectPath.c_str());
+			const bool selected = m_currentProject.root == project.root;
+			if (ImGui::Selectable(project.name.c_str(), selected, ImGuiSelectableFlags_SpanAvailWidth, ImVec2(0.0f, ImGui::GetFrameHeight() * 1.35f)))
+			{
+				OpenProject(project.root);
+			}
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+			{
+				ImGui::SetTooltip("%s", projectPath.c_str());
+			}
+			ImGui::PopID();
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+		ImGui::BeginChild("##launcherActions", ImVec2(0.0f, bodyHeight), true);
+		if (HasCurrentProject())
+		{
+			ImGui::TextUnformatted(m_currentProject.name.c_str());
+			ImGui::TextDisabled("%s", DisplayPath(m_currentProject.root).c_str());
+			if (ImGui::Button(ICON_FA_PLAY "  Continue", ImVec2(160.0f, 0.0f)))
+			{
+				OpenProject(m_currentProject.root);
+			}
+			ImGui::SameLine();
+			if (ImGui::Checkbox("Open last project", &m_launcherOpenLast))
+			{
+				SaveLauncherSettings();
+			}
+			ImGui::Separator();
+		}
+
+		if (ImGui::BeginTabBar("##launcherTabs"))
+		{
+			if (ImGui::BeginTabItem("Open"))
+			{
+				ImGui::SetNextItemWidth(-42.0f);
+				ImGui::InputTextWithHint("##openProjectPath", "Project folder...", m_projectOpenPath, sizeof(m_projectOpenPath));
+				ImGui::SameLine();
+				if (ImGui::Button(ICON_FA_FOLDER_OPEN "##browseOpen"))
+				{
+#ifdef _WIN32
+					if (const auto folder = PickProjectFolder())
+					{
+						std::snprintf(m_projectOpenPath, sizeof(m_projectOpenPath), "%s", DisplayPath(*folder).c_str());
+					}
+#endif
+				}
+				if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+				{
+					ImGui::SetTooltip("Browse");
+				}
+				if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Open Project"))
+				{
+					OpenProject(m_projectOpenPath);
+				}
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("New"))
+			{
+				ImGui::SetNextItemWidth(-1.0f);
+				ImGui::InputTextWithHint("##newProjectName", "Project name...", m_projectNewName, sizeof(m_projectNewName));
+				ImGui::SetNextItemWidth(-42.0f);
+				ImGui::InputTextWithHint("##newProjectPath", "Project folder...", m_projectNewPath, sizeof(m_projectNewPath));
+				ImGui::SameLine();
+				if (ImGui::Button(ICON_FA_FOLDER_OPEN "##browseNew"))
+				{
+#ifdef _WIN32
+					if (const auto folder = PickProjectFolder())
+					{
+						std::snprintf(m_projectNewPath, sizeof(m_projectNewPath), "%s", DisplayPath(*folder).c_str());
+					}
+#endif
+				}
+				if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+				{
+					ImGui::SetTooltip("Browse");
+				}
+				if (ImGui::Button(ICON_FA_PLUS "  Create Project"))
+				{
+					CreateProject(m_projectNewPath, m_projectNewName);
+				}
+				ImGui::EndTabItem();
+			}
+			ImGui::EndTabBar();
+		}
+
+		if (!m_launcherError.empty())
+		{
+			ImGui::Separator();
+			ImGui::TextColored(ImVec4(colors::Error.r, colors::Error.g, colors::Error.b, colors::Error.a), "%s", m_launcherError.c_str());
+		}
+		ImGui::EndChild();
+		ImGui::End();
 	}
 
 	void DebugLayer::OnAttach(LayerContext& context)
@@ -346,12 +918,14 @@ namespace aether::app
 		// Editor undo: panels push explicit points for keyboard-driven edits;
 		// mouse gestures are covered by the per-click push in OnImGui.
 		context.services.Register<UndoStack>(m_undoStack);
+		context.services.Register<EditorProjectContext>(m_currentProject);
 
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
 		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));
+		m_panels.push_back(std::make_unique<FileExplorerPanel>());
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<UiCanvasPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
@@ -388,6 +962,7 @@ namespace aether::app
 		}
 		m_panels.clear();
 		m_hierarchyPanel = nullptr;
+		context.services.Unregister<EditorProjectContext>();
 		context.services.Unregister<UndoStack>();
 		context.services.Unregister<SceneSelection>();
 
@@ -409,6 +984,11 @@ namespace aether::app
 		}
 
 		PollScriptErrors(context);
+
+		if (!m_projectLoaded)
+		{
+			return;
+		}
 
 		// Entities can be destroyed by scripts/physics at any point; keep the
 		// shared selection free of dangling ids before panels read it.
@@ -478,12 +1058,19 @@ namespace aether::app
 			ImGui::AlignTextToFramePadding();
 
 			// Left: current scene + play state.
+			if (HasCurrentProject())
+			{
+				ImGui::Text("  " ICON_FA_FOLDER_OPEN "  %s", m_currentProject.name.c_str());
+				ImGui::SameLine();
+				ImGui::TextDisabled("|");
+				ImGui::SameLine();
+			}
 			const char* sceneName = "-";
 			if (const auto* scenes = context.TryGet<SceneSubsystem>(); scenes != nullptr && !scenes->GetCurrentScene().empty())
 			{
 				sceneName = scenes->GetCurrentScene().c_str();
 			}
-			ImGui::Text("  " ICON_FA_CUBE "  %s", sceneName);
+			ImGui::Text(ICON_FA_CUBE "  %s", sceneName);
 			ImGui::SameLine();
 			ImGui::TextDisabled("|");
 			ImGui::SameLine();
@@ -721,6 +1308,13 @@ namespace aether::app
 			m_pendingLayoutApply = false;
 		}
 
+		if (!m_projectLoaded || m_launcherOpen)
+		{
+			DrawProjectLauncher(context);
+			PersistSettings(context);
+			return;
+		}
+
 		// Fill the main viewport's backbuffer with an opaque editor background behind
 		// every window. The passthrough dockspace otherwise exposes the swapchain,
 		// which shows stale pixels where the central node is empty (e.g. all panels
@@ -829,6 +1423,11 @@ namespace aether::app
 		{
 			if (ImGui::BeginMenu("File"))
 			{
+				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Project Launcher..."))
+				{
+					m_launcherOpen = true;
+				}
+				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_PLUS "  New Scene"))
 				{
 					// A non-empty return is purely NewScene's success signal (it's the
@@ -891,7 +1490,7 @@ namespace aether::app
 				};
 
 				static const std::vector<MenuGroup> kGroups = {
-				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Inspector", "Viewport", "UI Canvas"}},
+				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
@@ -1033,10 +1632,10 @@ namespace aether::app
 			ImGui::EndPopup();
 		}
 
-		// V5: classic editor arrangement - outliner left, Inspector right (over a
-		// tabbed tool stack), utility tabs bottom, Viewport/UI Canvas center. The id
-		// bump retires saved V4 layouts so the UI Canvas tab appears by default.
-		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV5");
+		// V6: project file explorer sits under the outliner, with Inspector right
+		// and Viewport/UI Canvas center. The id bump retires layouts where File
+		// Explorer was absent or hidden by the old hierarchy asset browser.
+		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV6");
 		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
 		// Reserve a row at the bottom of the dockspace for the status bar (frame 1+;
 		// withheld on frame 0 for the same reason as the menu bar). Keeping it inside
@@ -1060,11 +1659,13 @@ namespace aether::app
 
 			ImGuiID remaining = dockspace_id;
 			ImGuiID dock_left = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Left, 0.20f, nullptr, &remaining);
+			ImGuiID dock_left_files = ImGui::DockBuilderSplitNode(dock_left, ImGuiDir_Down, 0.42f, nullptr, &dock_left);
 			ImGuiID dock_right = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.27f, nullptr, &remaining);
 			ImGuiID dock_right_tools = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.38f, nullptr, &dock_right);
 			ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.28f, nullptr, &remaining);
 
 			ImGui::DockBuilderDockWindow("Scene", dock_left);
+			ImGui::DockBuilderDockWindow("File Explorer", dock_left_files);
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
 			ImGui::DockBuilderDockWindow("UI Canvas", remaining);
 			ImGui::DockBuilderDockWindow("Inspector", dock_right);

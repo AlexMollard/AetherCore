@@ -23,6 +23,12 @@ option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for f
 option(AETHERCORE_DEAD_STRIP_REPORT
     "Emit link map files (and per-section gc log) for App and AssetPacker" OFF)
 
+# Project content is packed separately from engine/editor runtime resources.
+# Set this cache path to another project root, or leave it empty to skip
+# generating data/project.pak during App builds.
+set(AETHERCORE_PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/projects/TestingProject"
+    CACHE PATH "Aether project directory packed to data/project.pak")
+
 # Generate compile_commands.json for clangd / tooling (ignored by VS generator).
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

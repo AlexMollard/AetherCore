@@ -1,23 +1,57 @@
 #include "imgui/ImguiFrameData.hpp"
+#include <imgui_internal.h>
 
 namespace aether
 {
+
+	// ---------------------------------------------------------------------------
+	// Global Object Pool for ImguiFrameData
+	// ---------------------------------------------------------------------------
+	namespace
+	{
+		std::mutex s_imguiPoolMutex;
+		std::vector<ImguiFrameData> s_imguiPool;
+	} // namespace
+
+	ImguiFrameData ImguiFrameData::AcquirePooled()
+	{
+		std::lock_guard lock(s_imguiPoolMutex);
+		if (!s_imguiPool.empty())
+		{
+			ImguiFrameData frame = std::move(s_imguiPool.back());
+			s_imguiPool.pop_back();
+			return frame;
+		}
+		return ImguiFrameData();
+	}
+
+	void ImguiFrameData::RecyclePooled(ImguiFrameData&& frame)
+	{
+		frame.Clear(); // Resets draw data but keeps internal ImDrawList pools warm
+		std::lock_guard lock(s_imguiPoolMutex);
+		s_imguiPool.push_back(std::move(frame));
+	}
+
+	// ---------------------------------------------------------------------------
+	// Lifetime
+	// ---------------------------------------------------------------------------
+
 	ImguiFrameData::~ImguiFrameData()
 	{
-		Clear();
+		for (ImDrawList* list: m_mainPool)
+		{
+			IM_DELETE(list);
+		}
+		for (ImDrawList* list: m_secondaryPool)
+		{
+			IM_DELETE(list);
+		}
 	}
 
 	ImguiFrameData::ImguiFrameData(ImguiFrameData&& other) noexcept
-	      : m_drawData(other.m_drawData), m_ownedLists(std::move(other.m_ownedLists)), m_secondary(std::move(other.m_secondary))
+	      : m_drawData(other.m_drawData), m_mainPool(std::move(other.m_mainPool)), m_secondaryPool(std::move(other.m_secondaryPool)), m_secondary(std::move(other.m_secondary))
 	{
-		RebuildView(m_drawData, m_ownedLists);
-		for (auto& vp: m_secondary)
-		{
-			RebuildView(vp.draw, vp.owned);
-		}
 		other.m_drawData.Clear();
-		other.m_ownedLists.clear();
-		other.m_secondary.clear();
 	}
 
 	ImguiFrameData& ImguiFrameData::operator=(ImguiFrameData&& other) noexcept
@@ -26,44 +60,50 @@ namespace aether
 		{
 			return *this;
 		}
-		Clear();
-		m_drawData = other.m_drawData;
-		m_ownedLists = std::move(other.m_ownedLists);
-		m_secondary = std::move(other.m_secondary);
-		RebuildView(m_drawData, m_ownedLists);
-		for (auto& vp: m_secondary)
-		{
-			RebuildView(vp.draw, vp.owned);
-		}
-		other.m_drawData.Clear();
-		other.m_ownedLists.clear();
-		other.m_secondary.clear();
-		return *this;
-	}
 
-	void ImguiFrameData::Clear()
-	{
-		for (ImDrawList* list: m_ownedLists)
+		for (ImDrawList* list: m_mainPool)
 		{
 			IM_DELETE(list);
 		}
-		m_ownedLists.clear();
+		for (ImDrawList* list: m_secondaryPool)
+		{
+			IM_DELETE(list);
+		}
+
+		m_drawData = other.m_drawData;
+		m_mainPool = std::move(other.m_mainPool);
+		m_secondaryPool = std::move(other.m_secondaryPool);
+		m_secondary = std::move(other.m_secondary);
+
+		other.m_drawData.Clear();
+		return *this;
+	}
+
+	// ---------------------------------------------------------------------------
+	// Clear
+	// ---------------------------------------------------------------------------
+
+	void ImguiFrameData::Clear()
+	{
 		m_drawData.Clear();
 
 		for (auto& vp: m_secondary)
 		{
-			for (ImDrawList* list: vp.owned)
-			{
-				IM_DELETE(list);
-			}
+			vp.draw.Clear();
 		}
+
 		m_secondary.clear();
 	}
 
-	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned, bool copyTextures)
+	// ---------------------------------------------------------------------------
+	// CloneInto
+	// ---------------------------------------------------------------------------
+
+	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& pool, std::size_t poolOffset, bool copyTextures)
 	{
+		static_cast<void>(copyTextures);
+
 		dst.Clear();
-		owned.clear();
 		if (source == nullptr || !source->Valid)
 		{
 			return;
@@ -74,44 +114,69 @@ namespace aether
 		dst.DisplaySize = source->DisplaySize;
 		dst.FramebufferScale = source->FramebufferScale;
 		dst.OwnerViewport = source->OwnerViewport;
-		// Textures is a pointer INTO the live (main-thread) ImGui context. Only the
-		// main viewport's stock renderer consumes it (safely, serialized by the frame
-		// mutex); the secondary render path never reads it, so don't hand the render
-		// thread a cross-thread pointer it won't use.
-		dst.Textures = copyTextures ? source->Textures : nullptr;
 
-		owned.reserve(static_cast<std::size_t>(source->CmdListsCount));
-		for (const ImDrawList* sourceList: source->CmdLists)
+		// Texture updates are handled on the producer thread before capture.
+		// Do not carry ImTextureData* pointers across to the render thread:
+		// ImGui owns them in the live context/platform texture list.
+		dst.Textures = nullptr;
+
+		const int count = source->CmdListsCount;
+
+		const std::size_t requiredSize = poolOffset + static_cast<std::size_t>(count);
+		if (pool.size() < requiredSize)
 		{
-			if (sourceList == nullptr)
+			const std::size_t oldSize = pool.size();
+			pool.resize(requiredSize);
+			for (std::size_t i = oldSize; i < requiredSize; ++i)
 			{
+				pool[i] = IM_NEW(ImDrawList)(&ImGui::GetCurrentContext()->DrawListSharedData);
+			}
+		}
+
+		dst.CmdLists.resize(count);
+		dst.CmdListsCount = count;
+		dst.TotalVtxCount = 0;
+		dst.TotalIdxCount = 0;
+
+		for (int i = 0; i < count; ++i)
+		{
+			ImDrawList* dstList = pool[poolOffset + static_cast<std::size_t>(i)];
+
+			if (source->CmdLists[i] == nullptr)
+			{
+				dstList->CmdBuffer.clear();
+				dstList->VtxBuffer.clear();
+				dstList->IdxBuffer.clear();
+				dst.CmdLists[i] = dstList;
 				continue;
 			}
-			ImDrawList* clone = sourceList->CloneOutput();
-			dst.CmdLists.push_back(clone);
-			owned.push_back(clone);
-			dst.CmdListsCount = dst.CmdLists.Size;
-			dst.TotalVtxCount += clone->VtxBuffer.Size;
-			dst.TotalIdxCount += clone->IdxBuffer.Size;
+
+			const ImDrawList* srcList = source->CmdLists[i];
+
+			dstList->CmdBuffer = srcList->CmdBuffer;
+			dstList->VtxBuffer = srcList->VtxBuffer;
+			dstList->IdxBuffer = srcList->IdxBuffer;
+
+			dstList->Flags = srcList->Flags;
+			dstList->_Data = srcList->_Data;
+
+			// NO manual TexRef stripping. The Vulkan backend resolves textures via
+			// dst.Textures during RenderDrawData.
+
+			dst.CmdLists[i] = dstList;
+			dst.TotalVtxCount += dstList->VtxBuffer.Size;
+			dst.TotalIdxCount += dstList->IdxBuffer.Size;
 		}
 	}
 
-	void ImguiFrameData::RebuildView(ImDrawData& dst, std::vector<ImDrawList*>& owned)
-	{
-		dst.CmdLists.resize(0);
-		dst.CmdLists.reserve(static_cast<int>(owned.size()));
-		dst.CmdListsCount = 0;
-		for (ImDrawList* list: owned)
-		{
-			dst.CmdLists.push_back(list);
-			dst.CmdListsCount = dst.CmdLists.Size;
-		}
-	}
+	// ---------------------------------------------------------------------------
+	// Capture
+	// ---------------------------------------------------------------------------
 
 	void ImguiFrameData::Capture(const ImDrawData* source)
 	{
 		Clear();
-		CloneInto(source, m_drawData, m_ownedLists, /*copyTextures=*/true);
+		CloneInto(source, m_drawData, m_mainPool, 0, /*copyTextures=*/true);
 	}
 
 	void ImguiFrameData::CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle)
@@ -120,18 +185,18 @@ namespace aether
 		{
 			return;
 		}
+
 		CapturedViewport vp;
 		vp.id = id;
 		vp.pos = pos;
 		vp.size = size;
 		vp.fbScale = fbScale;
 		vp.platformHandle = platformHandle;
-		CloneInto(source, vp.draw, vp.owned, /*copyTextures=*/false);
+		vp.poolOffset = m_secondaryPool.size();
+		vp.poolCount = static_cast<std::size_t>(source->CmdListsCount);
+
+		CloneInto(source, vp.draw, m_secondaryPool, vp.poolOffset, /*copyTextures=*/false);
 		m_secondary.push_back(std::move(vp));
 	}
 
-	void ImguiFrameData::RebuildCommandListView()
-	{
-		RebuildView(m_drawData, m_ownedLists);
-	}
 } // namespace aether

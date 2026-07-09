@@ -318,7 +318,9 @@ namespace aether
 			}
 			client.OnBuildUI(gameDt, m_producerFrameIndex);
 
-			ImguiFrameData imguiFrame;
+			// Reuse a warm ImguiFrameData shell (pooled ImDrawLists) so capture stays
+			// near zero-allocation after the first few growth frames.
+			ImguiFrameData imguiFrame = ImguiFrameData::AcquirePooled();
 			if (m_imgui)
 			{
 				m_imgui->Render();

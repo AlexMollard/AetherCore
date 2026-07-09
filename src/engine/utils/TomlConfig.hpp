@@ -19,9 +19,11 @@ namespace aether
 
 		bool GetBool(std::string_view key, bool defaultValue) const;
 		float GetFloat(std::string_view key, float defaultValue) const;
+		std::string GetString(std::string_view key, std::string_view defaultValue = {}) const;
 
 		void Set(std::string_view key, bool value);
 		void Set(std::string_view key, float value);
+		void Set(std::string_view key, std::string_view value);
 
 		bool IsDirty() const
 		{

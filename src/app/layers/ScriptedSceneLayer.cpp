@@ -7,6 +7,7 @@
 #include "IEngineRuntime.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
+#include "editor/EditorProjectContext.hpp"
 #include "material/MaterialAuthoring.hpp"
 #include "camera/CameraManager.hpp"
 #include "material/EffectManager.hpp"
@@ -179,6 +180,12 @@ namespace aether::app
 
 	void ScriptedSceneLayer::LoadStartupScene(LayerContext& context)
 	{
+		const auto* project = context.TryGet<EditorProjectContext>();
+		if (project != nullptr && !project->IsLoaded())
+		{
+			return;
+		}
+
 		const auto* settingsService = context.TryGet<aether::SettingsService>();
 		if (settingsService == nullptr || settingsService->Get().app.startupScene.empty())
 		{

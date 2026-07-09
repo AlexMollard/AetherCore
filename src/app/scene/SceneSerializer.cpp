@@ -1126,8 +1126,30 @@ namespace aether::app::scene
 
 	// ── Files ───────────────────────────────────────────────────────────────────
 
+	namespace
+	{
+		std::filesystem::path g_projectScenesDirectory;
+		std::filesystem::path g_projectPrefabsDirectory;
+	}
+
+	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir)
+	{
+		g_projectScenesDirectory = std::move(scenesDir);
+		g_projectPrefabsDirectory = std::move(prefabsDir);
+	}
+
+	void ClearProjectSceneDirectories()
+	{
+		g_projectScenesDirectory.clear();
+		g_projectPrefabsDirectory.clear();
+	}
+
 	std::string ScenesDirectory()
 	{
+		if (!g_projectScenesDirectory.empty())
+		{
+			return g_projectScenesDirectory.string();
+		}
 #ifdef AETHER_SCENES_SOURCE_DIR
 		return AETHER_SCENES_SOURCE_DIR;
 #else
@@ -1137,6 +1159,10 @@ namespace aether::app::scene
 
 	std::string PrefabsDirectory()
 	{
+		if (!g_projectPrefabsDirectory.empty())
+		{
+			return g_projectPrefabsDirectory.string();
+		}
 #ifdef AETHER_PREFABS_SOURCE_DIR
 		return AETHER_PREFABS_SOURCE_DIR;
 #else

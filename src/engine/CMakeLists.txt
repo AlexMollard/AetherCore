@@ -48,6 +48,8 @@ target_compile_definitions(Engine PUBLIC
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
     AETHER_DEFAULT_ASSET_PAK="${CMAKE_BINARY_DIR}/data/assets.pak"
     AETHER_DEFAULT_ASSET_DIR="${CMAKE_SOURCE_DIR}/resources"
+    AETHER_DEFAULT_PROJECT_PAK="${CMAKE_BINARY_DIR}/data/project.pak"
+    AETHER_DEFAULT_PROJECT_DIR="${AETHERCORE_PROJECT_DIR}"
     # Build-tier config - Defines.hpp reads these for policy (Tracy, asserts, etc.)
     $<$<CONFIG:Debug>:AE_CONFIG_DEBUG>
     $<$<CONFIG:RelWithDebInfo>:AE_CONFIG_DEV>

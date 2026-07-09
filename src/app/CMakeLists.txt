@@ -107,9 +107,8 @@ if(AETHER_HAS_DOTNET)
 endif()
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
-# Pack every file under resources/ into a single binary file that the runtime
-# PakBackend mounts as "assets://".  The pak is regenerated on every build so
-# newly added or changed source assets are always in sync.
+# Pack engine/editor runtime resources into assets.pak. Project content is
+# packed separately below so user assets keep their project-relative paths.
 # Note: $<TARGET_FILE:AssetPacker> creates an implicit dependency on AssetPacker,
 # so an explicit add_dependencies() is not needed.
 add_custom_command(TARGET App POST_BUILD
@@ -143,6 +142,30 @@ add_custom_command(TARGET App POST_BUILD
     COMMENT "Packing assets to data/assets.pak"
     VERBATIM
 )
+
+if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
+    add_custom_command(TARGET App POST_BUILD
+        COMMAND "$<TARGET_FILE:AssetPacker>"
+            "--project"
+            "--import-materials"
+            "${AETHERCORE_PROJECT_DIR}"
+            "${CMAKE_BINARY_DIR}/data/project.pak"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_BINARY_DIR}/data/project.pak"
+            "$<TARGET_FILE_DIR:App>/data/project.pak"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_BINARY_DIR}/data/project.pak.log"
+            "$<TARGET_FILE_DIR:App>/data/project.pak.log"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_BINARY_DIR}/data/project.pak.manifest"
+            "$<TARGET_FILE_DIR:App>/data/project.pak.manifest"
+        COMMENT "Packing project content to data/project.pak"
+        VERBATIM
+    )
+elseif(AETHERCORE_PROJECT_DIR)
+    message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; skipping data/project.pak")
+endif()
 
 # Copy loose runtime data (resources/data) directly to data/data/ so it can be
 # read from the filesystem without unpacking the pak. C# scripts are compiled

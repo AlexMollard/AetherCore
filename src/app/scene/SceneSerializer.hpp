@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <string>
@@ -231,8 +232,10 @@ namespace aether::app::scene
 	std::optional<SceneDescription> ParseToml(std::string_view text);
 
 	// ── Files ───────────────────────────────────────────────────────────────────
-	// Dev builds write into the repo (AETHER_SCENES_SOURCE_DIR, committable);
-	// otherwise the engine-settings directory convention applies.
+	// Editor projects may override these directories after the launcher opens a
+	// project. Without an override, dev builds use the source resources folders.
+	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir);
+	void ClearProjectSceneDirectories();
 
 	std::string ScenesDirectory();
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene);

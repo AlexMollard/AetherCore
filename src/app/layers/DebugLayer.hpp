@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "AppLayer.hpp"
+#include "editor/EditorProjectContext.hpp"
 #include "utils/LayoutPresetStore.hpp"
 #include "utils/TomlConfig.hpp"
 
@@ -57,6 +59,13 @@ namespace aether::app
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
 		void PersistSettings(LayerContext& context);
+		void LoadLauncherSettings();
+		void SaveLauncherSettings();
+		void DrawProjectLauncher(LayerContext& context);
+		void OpenProject(std::filesystem::path root);
+		void CreateProject(std::filesystem::path root, std::string_view name);
+		void AddRecentProject(std::filesystem::path root, std::string name);
+		[[nodiscard]] bool HasCurrentProject() const;
 		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
 		// by SceneSubsystem), falling back to the Scene Outliner's Save-As popup
 		// when there isn't one yet (or the quick-save failed).
@@ -90,6 +99,16 @@ namespace aether::app
 		std::vector<std::pair<std::string, bool>> m_pendingLayoutVisibility;
 		bool m_openSavePresetPopup = false;
 		char m_newPresetName[64] = {};
+
+		EditorProjectContext m_currentProject;
+		std::vector<EditorProjectContext> m_recentProjects;
+		bool m_projectLoaded = false;
+		bool m_launcherOpen = true;
+		bool m_launcherOpenLast = false;
+		char m_projectOpenPath[260] = {};
+		char m_projectNewPath[260] = {};
+		char m_projectNewName[96] = {};
+		std::string m_launcherError;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 		// Non-owning: observes the HierarchyPanel instance owned by m_panels, so

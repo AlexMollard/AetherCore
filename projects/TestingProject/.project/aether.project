@@ -1,0 +1,12 @@
+# AetherCore project descriptor
+
+[project]
+version = 1
+name = "Testing Project"
+
+[paths]
+assets = "assets"
+scenes = "scenes"
+prefabs = "assets/prefabs"
+scripts = "scripts"
+settings = "settings"

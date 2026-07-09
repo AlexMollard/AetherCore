@@ -1,27 +1,26 @@
 #pragma once
-
 #include <cstdint>
+#include <cstddef>
 #include <vector>
-
+#include <mutex>
 #include <imgui.h>
 
 namespace aether
 {
-	// Thread-transferable snapshot of an ImGui frame's draw data (main viewport +
-	// every secondary/OS-window viewport when multi-viewport is enabled).
 	class ImguiFrameData
 	{
 	public:
-		// One torn-out OS-window viewport, deep-copied for the render thread.
 		struct CapturedViewport
 		{
 			ImGuiID id = 0;
 			ImDrawData draw{};
-			std::vector<ImDrawList*> owned;
 			ImVec2 pos{0.0f, 0.0f};
 			ImVec2 size{0.0f, 0.0f};
 			ImVec2 fbScale{1.0f, 1.0f};
-			void* platformHandle = nullptr; // GLFWwindow*, created on the producer thread
+			void* platformHandle = nullptr;
+
+			std::size_t poolOffset = 0;
+			std::size_t poolCount = 0;
 		};
 
 		ImguiFrameData() = default;
@@ -33,8 +32,12 @@ namespace aether
 		ImguiFrameData& operator=(ImguiFrameData&& other) noexcept;
 
 		void Clear();
-		void Capture(const ImDrawData* source); // main viewport
+		void Capture(const ImDrawData* source);
 		void CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle);
+
+		// --- Object Pooling API ---
+		[[nodiscard]] static ImguiFrameData AcquirePooled();
+		static void RecyclePooled(ImguiFrameData&& frame);
 
 		[[nodiscard]] bool HasDrawData() const noexcept
 		{
@@ -57,12 +60,15 @@ namespace aether
 		}
 
 	private:
-		void RebuildCommandListView();
-		static void CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned, bool copyTextures);
-		static void RebuildView(ImDrawData& dst, std::vector<ImDrawList*>& owned);
+		void CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& pool, std::size_t poolOffset, bool copyTextures);
 
 		ImDrawData m_drawData;
-		std::vector<ImDrawList*> m_ownedLists;
+
+		// Persistent pools to avoid heap allocations every frame.
+		std::vector<ImDrawList*> m_mainPool;
+		std::vector<ImDrawList*> m_secondaryPool;
+
 		std::vector<CapturedViewport> m_secondary;
 	};
+
 } // namespace aether

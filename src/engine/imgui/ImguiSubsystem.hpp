@@ -1,5 +1,4 @@
 #pragma once
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -7,9 +6,7 @@
 #include <mutex>
 #include <optional>
 #include <vector>
-
 #include <imgui.h>
-
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
 
@@ -43,37 +40,47 @@ namespace aether
 		void Shutdown(ServiceContainer& services);
 
 		void BeginFrame(ServiceContainer& services, float deltaTimeSeconds);
-		// Producer-thread frame tail (replaces the old CaptureFrame): render ImGui, then
-		// update GLFW platform windows (secondary viewports), then snapshot main + every
-		// secondary viewport for the render thread.
+
+		// Producer-thread frame tail: render ImGui, then update GLFW platform
+		// windows (secondary viewports), then snapshot main + every secondary
+		// viewport for the render thread.
 		void Render();
 		void UpdatePlatformWindows();
 		void SnapshotFrame(ImguiFrameData& outFrame);
-		// Releases the game-thread frame lock taken in BeginFrame. The producer calls this
-		// before a viewport-destroy RunExclusive quiesce so the render thread can drain/park
-		// without deadlocking on the ImGui mutex this thread holds.
+
+		// Releases the game-thread frame lock taken in BeginFrame.  The producer
+		// calls this before a viewport-destroy RunExclusive quiesce so the render
+		// thread can drain/park without deadlocking on the ImGui mutex.
 		void EndFrameLock();
-		// Secondary viewports whose OS window will be destroyed this frame (retire under a
-		// quiesce before UpdatePlatformWindows destroys the GLFW window).
+
+		// Secondary viewports whose OS window will be destroyed this frame
+		// (retire under a quiesce before UpdatePlatformWindows destroys the
+		// GLFW window).
 		[[nodiscard]] std::vector<ImGuiID> SecondaryViewportIdsWithPendingDestroy() const;
+
 		void RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target);
+
 		// Render + present every secondary (torn-out) viewport (render thread).
 		void RenderViewports(const ImguiFrameData& frame);
-		// Destroy render-thread swapchains for departed viewports (producer thread, only
-		// inside a RunExclusive quiesce).
+
+		// Destroy render-thread swapchains for departed viewports (producer thread,
+		// only inside a RunExclusive quiesce).
 		void RetireViewports(const std::vector<ImGuiID>& departedIds);
+
 		// Enable/disable multi-viewport at runtime (producer thread).
 		void SetViewportsEnabled(bool enabled);
-		// Sets the manual editor UI-scale multiplier (producer thread). Composes with the
-		// per-window DPI scale: GetFontSize == FontSizeBase * FontScaleMain * FontScaleDpi.
+
+		// Sets the manual editor UI-scale multiplier (producer thread).  Composes
+		// with the per-window DPI scale:
+		//   GetFontSize == FontSizeBase * FontScaleMain * FontScaleDpi.
 		void SetUiScale(float uiScale);
+
 		[[nodiscard]] ImTextureID RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout);
 		void UnregisterTexture(ImTextureID textureId);
 
 		// Free every queued ImGui descriptor immediately, ignoring the deferred
-		// retire frame. Only safe to call when the GPU is idle and the render
-		// thread is parked (i.e. inside the quiesced swapchain/viewport recreate),
-		// so no in-flight command buffer still references the descriptors.
+		// retire frame.  Only safe when the GPU is idle and the render thread is
+		// parked (i.e. inside a quiesced swapchain/viewport recreate).
 		void FlushPendingTextureReleasesImmediate();
 
 		[[nodiscard]] bool IsInitialized() const noexcept
@@ -101,6 +108,7 @@ namespace aether
 		void InitBackends(ServiceContainer& services);
 		void ShutdownBackends();
 		void RetirePendingTextureReleases();
+
 		// After viewports are disabled, clamp windows merged back from secondary
 		// viewports so their title bars stay grabbable inside the main viewport.
 		void ClampWindowsToMainViewport();
@@ -110,13 +118,18 @@ namespace aether
 		bool m_wantsInputCapture = false;
 		std::uint64_t m_frameIndex = 0;
 		std::atomic<float> m_lastRenderCpuTimeMs = 0.0f;
+
 		std::mutex m_mutex;
 		std::optional<std::unique_lock<std::mutex>> m_gameThreadFrameLock;
+
 		std::vector<std::byte> m_fontData;
 		std::vector<std::byte> m_iconFontData;
+
 		std::vector<PendingTextureRelease> m_pendingTextureReleases;
 		std::unique_ptr<ImguiViewportRenderer> m_viewportRenderer;
+
 		bool m_viewportsEnabled = true;
 		int m_clampWindowsFrames = 0; // >0: pull merged-back windows into the main viewport
 	};
+
 } // namespace aether
