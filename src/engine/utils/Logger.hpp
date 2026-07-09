@@ -48,6 +48,8 @@ namespace aether
 
 		static void Log(LogLevel level, LogCategory category, std::string_view message, const std::source_location& location);
 		static void Log(LogLevel level, std::string_view category, std::string_view message, const std::source_location& location);
+		static void LogAtSource(LogLevel level, LogCategory category, std::string_view message, std::string_view filePath, int line);
+		static void LogAtSource(LogLevel level, std::string_view category, std::string_view message, std::string_view filePath, int line);
 
 		template<typename... Args>
 		static void VerboseAt(LogCategory category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)

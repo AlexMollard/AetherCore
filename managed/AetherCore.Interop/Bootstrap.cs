@@ -36,6 +36,7 @@ internal static unsafe class Bootstrap
         // Publish the host callbacks into the SDK's HostBridge so game-facing
         // types (Log) and this ABI layer share one source of truth.
         HostBridge.Log = callbacks->Log;
+        HostBridge.LogAtSource = callbacks->LogAtSource;
         HostBridge.ReportScriptError = callbacks->ReportScriptError;
 
         try

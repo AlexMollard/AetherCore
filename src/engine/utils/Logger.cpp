@@ -36,7 +36,7 @@ namespace aether
 			LogLevel level = LogLevel::Info;
 			std::string category;
 			std::string message;
-			const char* filePath = "";
+			std::string filePath;
 			std::uint_least32_t line = 0;
 			std::time_t timestamp = 0;
 			std::uint64_t frameNumber = kInvalidFrameNumber;
@@ -302,7 +302,7 @@ namespace aether
 		void WriteEntry(const LogEntry& entry, std::ofstream& fileStream)
 		{
 			const std::string_view timestamp = BuildTimestamp(entry.timestamp);
-			const std::string_view fileName = ExtractFileName(entry.filePath);
+			const std::string_view fileName = ExtractFileName(std::string_view{entry.filePath});
 
 			std::cerr << kAnsiGray << timestamp << kAnsiReset << " " << ToAnsiColor(entry.level) << ToLevelName(entry.level) << kAnsiReset;
 
@@ -504,6 +504,58 @@ namespace aether
 			Logger::Initialize();
 		}
 
+		void LogResolved(const LogLevel level, const std::string_view category, const std::string_view message, const std::string_view filePath, const int line)
+		{
+			if (!Logger::ShouldLog(level))
+			{
+				return;
+			}
+
+			const auto now = std::chrono::system_clock::now();
+			const std::time_t timestamp = std::chrono::system_clock::to_time_t(now);
+			const int sanitizedLine = line > 0 ? line : 0;
+
+			// Feed the in-editor Console tail (thread-safe; its own lock).
+			LogRingBuffer::Get().Push(level, category, message, filePath, sanitizedLine, timestamp);
+
+			EnsureInitialized();
+			LoggerBackend& backend = GetBackend();
+			const std::uint64_t frameNumber = g_frameNumber.load(std::memory_order_relaxed);
+			const bool shouldShowFrame = frameNumber != kInvalidFrameNumber;
+			const bool shouldShowSourceLocation = ShouldShowSourceLocation(level) && !filePath.empty() && sanitizedLine > 0;
+
+			LogEntry entry;
+			entry.level = level;
+			entry.category.assign(category);
+			entry.message.assign(message);
+			entry.filePath.assign(filePath);
+			entry.line = static_cast<std::uint_least32_t>(sanitizedLine);
+			entry.timestamp = timestamp;
+			entry.frameNumber = frameNumber;
+			entry.showFrame = shouldShowFrame;
+			entry.showSourceLocation = shouldShowSourceLocation;
+
+			if (level == LogLevel::Error)
+			{
+				std::scoped_lock writeLock(backend.outputMutex);
+				WriteEntry(entry, backend.fileStream);
+				std::cerr.flush();
+				if (backend.fileStream.is_open())
+				{
+					backend.fileStream.flush();
+				}
+				return;
+			}
+
+			{
+				std::scoped_lock lock(backend.mutex);
+				backend.pendingEntries.push_back(std::move(entry));
+				++backend.nextSequence;
+			}
+
+			backend.condition.notify_one();
+		}
+
 		void EnableVirtualTerminalProcessing()
 		{
 #ifdef _WIN32
@@ -665,50 +717,17 @@ namespace aether
 
 	void Logger::Log(const LogLevel level, const std::string_view category, const std::string_view message, const std::source_location& location)
 	{
-		if (!ShouldLog(level))
-		{
-			return;
-		}
+		LogResolved(level, category, message, location.file_name(), static_cast<int>(location.line()));
+	}
 
-		// Feed the in-editor Console tail (thread-safe; its own lock).
-		LogRingBuffer::Get().Push(level, category, message, location.file_name(), static_cast<int>(location.line()), std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+	void Logger::LogAtSource(const LogLevel level, const LogCategory category, const std::string_view message, const std::string_view filePath, const int line)
+	{
+		LogAtSource(level, ToCategoryName(category), message, filePath, line);
+	}
 
-		EnsureInitialized();
-		LoggerBackend& backend = GetBackend();
-		const std::uint64_t frameNumber = g_frameNumber.load(std::memory_order_relaxed);
-		const bool shouldShowFrame = frameNumber != kInvalidFrameNumber;
-		const bool shouldShowSourceLocation = ShouldShowSourceLocation(level);
-
-		LogEntry entry;
-		entry.level = level;
-		entry.category.assign(category);
-		entry.message.assign(message);
-		entry.filePath = location.file_name();
-		entry.line = location.line();
-		entry.timestamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-		entry.frameNumber = frameNumber;
-		entry.showFrame = shouldShowFrame;
-		entry.showSourceLocation = shouldShowSourceLocation;
-
-		if (level == LogLevel::Error)
-		{
-			std::scoped_lock writeLock(backend.outputMutex);
-			WriteEntry(entry, backend.fileStream);
-			std::cerr.flush();
-			if (backend.fileStream.is_open())
-			{
-				backend.fileStream.flush();
-			}
-			return;
-		}
-
-		{
-			std::scoped_lock lock(backend.mutex);
-			backend.pendingEntries.push_back(std::move(entry));
-			++backend.nextSequence;
-		}
-
-		backend.condition.notify_one();
+	void Logger::LogAtSource(const LogLevel level, const std::string_view category, const std::string_view message, const std::string_view filePath, const int line)
+	{
+		LogResolved(level, category, message, filePath, line);
 	}
 
 	void Logger::ErrorPlain(const std::string_view message)

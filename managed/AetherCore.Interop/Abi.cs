@@ -35,6 +35,7 @@ internal unsafe struct PropertyValue
 internal unsafe struct NativeHostCallbacks
 {
     public delegate* unmanaged<int, byte*, void> Log;
+    public delegate* unmanaged<int, byte*, byte*, int, void> LogAtSource;
     public delegate* unmanaged<byte*, void> ReportScriptError;
 }
 

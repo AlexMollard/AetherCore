@@ -83,26 +83,42 @@ namespace aether::scripting
 #	endif
 
 		// ── Native callbacks exposed to managed code ─────────────────────────────
+		LogLevel NormalizeManagedLogLevel(const std::int32_t level)
+		{
+			switch (static_cast<LogLevel>(level))
+			{
+				case LogLevel::Verbose:
+					return LogLevel::Verbose;
+				case LogLevel::Warn:
+					return LogLevel::Warn;
+				case LogLevel::Error:
+					return LogLevel::Error;
+				case LogLevel::Info:
+				default:
+					return LogLevel::Info;
+			}
+		}
+
+		std::string PrefixManagedLogMessage(const std::string_view message)
+		{
+			std::string prefixed;
+			prefixed.reserve(5 + message.size());
+			prefixed.append("[C#] ");
+			prefixed.append(message);
+			return prefixed;
+		}
+
 		void NativeLog(std::int32_t level, const char* messageUtf8)
 		{
 			const std::string_view msg = messageUtf8 != nullptr ? messageUtf8 : "";
-			const auto lvl = static_cast<LogLevel>(level);
-			switch (lvl)
-			{
-				case LogLevel::Verbose:
-					AE_INFO(LogCategory::App, "[C#] {}", msg);
-					break;
-				case LogLevel::Warn:
-					AE_WARN(LogCategory::App, "[C#] {}", msg);
-					break;
-				case LogLevel::Error:
-					AE_ERROR(LogCategory::App, "[C#] {}", msg);
-					break;
-				case LogLevel::Info:
-				default:
-					AE_INFO(LogCategory::App, "[C#] {}", msg);
-					break;
-			}
+			Logger::LogAtSource(NormalizeManagedLogLevel(level), LogCategory::App, PrefixManagedLogMessage(msg), {}, 0);
+		}
+
+		void NativeLogAtSource(std::int32_t level, const char* messageUtf8, const char* filePathUtf8, std::int32_t line)
+		{
+			const std::string_view msg = messageUtf8 != nullptr ? messageUtf8 : "";
+			const std::string_view filePath = filePathUtf8 != nullptr ? filePathUtf8 : "";
+			Logger::LogAtSource(NormalizeManagedLogLevel(level), LogCategory::App, PrefixManagedLogMessage(msg), filePath, line);
 		}
 
 		void ForwardHostfxrError(const char_t* message)
@@ -242,6 +258,7 @@ namespace aether::scripting
 		// ── 5. Exchange the ABI tables ───────────────────────────────────────
 		NativeHostCallbacks callbacks{};
 		callbacks.Log = &NativeLog;
+		callbacks.LogAtSource = &NativeLogAtSource;
 		callbacks.ReportScriptError = &NativeReportScriptError;
 
 		const int bootRc = bootstrapInit(&callbacks, static_cast<std::int32_t>(sizeof(callbacks)), &m_api, static_cast<std::int32_t>(sizeof(m_api)));

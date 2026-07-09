@@ -15,6 +15,9 @@ internal static unsafe class HostBridge
     /// <summary>Native log sink: <c>(level, utf8Message) -&gt; void</c>.</summary>
     internal static delegate* unmanaged<int, byte*, void> Log;
 
+    /// <summary>Native source-aware log sink: <c>(level, utf8Message, utf8FilePath, line) -&gt; void</c>.</summary>
+    internal static delegate* unmanaged<int, byte*, byte*, int, void> LogAtSource;
+
     /// <summary>Native script-error sink: <c>(utf8Message) -&gt; void</c>.</summary>
     internal static delegate* unmanaged<byte*, void> ReportScriptError;
 }

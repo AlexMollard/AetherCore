@@ -52,6 +52,7 @@ namespace aether::scripting
 	struct NativeHostCallbacks
 	{
 		void (*Log)(std::int32_t level, const char* messageUtf8) = nullptr;
+		void (*LogAtSource)(std::int32_t level, const char* messageUtf8, const char* filePathUtf8, std::int32_t line) = nullptr;
 		void (*ReportScriptError)(const char* messageUtf8) = nullptr;
 	};
 
