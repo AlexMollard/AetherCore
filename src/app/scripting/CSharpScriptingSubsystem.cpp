@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdio>
+#include <optional>
 #include <string>
 
 #include "io/FileUtil.hpp"
@@ -99,6 +100,122 @@ namespace aether::app::scripting
 			return pclose(pipe);
 #	endif
 		}
+
+		bool IsScriptBuildInput(const std::filesystem::path& path)
+		{
+			if (!path.has_extension())
+			{
+				return false;
+			}
+
+			const std::string extension = path.extension().string();
+			return extension == ".cs" || extension == ".csproj" || extension == ".props" || extension == ".targets" || extension == ".json";
+		}
+
+		std::optional<std::filesystem::file_time_type> LatestWriteTime(const std::filesystem::path& path)
+		{
+			std::error_code ec;
+			const auto time = std::filesystem::last_write_time(path, ec);
+			if (ec)
+			{
+				return std::nullopt;
+			}
+			return time;
+		}
+
+		bool AccumulateLatestScriptInputTime(const std::filesystem::path& root, std::optional<std::filesystem::file_time_type>& latest)
+		{
+			const auto rememberLatest = [&latest](const std::filesystem::file_time_type time)
+			{
+				if (!latest || time > *latest)
+				{
+					latest = time;
+				}
+			};
+
+			std::error_code ec;
+			if (!std::filesystem::exists(root, ec))
+			{
+				return false;
+			}
+
+			if (std::filesystem::is_regular_file(root, ec))
+			{
+				if (!IsScriptBuildInput(root))
+				{
+					return true;
+				}
+				const auto time = LatestWriteTime(root);
+				if (!time)
+				{
+					return false;
+				}
+				rememberLatest(*time);
+				return true;
+			}
+
+			if (!std::filesystem::is_directory(root, ec))
+			{
+				return true;
+			}
+
+			std::filesystem::recursive_directory_iterator it(root, std::filesystem::directory_options::skip_permission_denied, ec);
+			const std::filesystem::recursive_directory_iterator end;
+			for (; !ec && it != end; it.increment(ec))
+			{
+				const std::filesystem::directory_entry& entry = *it;
+				if (entry.is_directory(ec))
+				{
+					const std::string name = entry.path().filename().string();
+					if (name == "bin" || name == "obj" || name == "artifacts" || name == ".vs" || name == ".git")
+					{
+						it.disable_recursion_pending();
+					}
+					continue;
+				}
+
+				if (!entry.is_regular_file(ec) || !IsScriptBuildInput(entry.path()))
+				{
+					continue;
+				}
+
+				const auto time = LatestWriteTime(entry.path());
+				if (!time)
+				{
+					return false;
+				}
+				rememberLatest(*time);
+			}
+
+			return !ec;
+		}
+
+		bool IsScriptBuildRequired(const std::filesystem::path& gameProject, const std::filesystem::path& managedDir)
+		{
+			const std::filesystem::path deployedAssembly = managedDir / "AetherGame.dll";
+			if (!std::filesystem::exists(managedDir / "AetherGame.deps.json"))
+			{
+				return true;
+			}
+
+			const auto deployedTime = LatestWriteTime(deployedAssembly);
+			if (!deployedTime)
+			{
+				return true;
+			}
+
+			std::optional<std::filesystem::file_time_type> latestInput;
+			if (!AccumulateLatestScriptInputTime(gameProject.parent_path(), latestInput))
+			{
+				return true;
+			}
+
+			const std::filesystem::path repoRoot = std::filesystem::path(AETHER_MANAGED_SDK_PROJECT).parent_path().parent_path().parent_path();
+			const std::filesystem::path directoryBuildProps = repoRoot / "Directory.Build.props";
+			(void) AccumulateLatestScriptInputTime(directoryBuildProps, latestInput);
+
+			return latestInput && *latestInput > *deployedTime;
+		}
 #endif
 	} // namespace
 
@@ -112,9 +229,16 @@ namespace aether::app::scripting
 #if defined(AETHER_GAME_PROJECT) && defined(AETHER_DOTNET_EXE)
 		namespace fs = std::filesystem;
 
+		const fs::path gameProject = AETHER_GAME_PROJECT;
+		if (!IsScriptBuildRequired(gameProject, m_managedDir))
+		{
+			AE_VERBOSE(LogCategory::App, "C# scripts are current; skipping dotnet build.");
+			return true;
+		}
+
 		// Incremental `dotnet build` of the game project (a no-op when it was just
 		// built in VS). ArtifactsPath mirrors the CMake managed build.
-		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + AETHER_GAME_PROJECT + "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\" 2>&1";
+		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\" 2>&1";
 #	ifdef _WIN32
 		// cmd.exe needs the whole command re-wrapped so the quoted, spaced exe path parses.
 		const std::string command = "\"" + inner + "\"";
