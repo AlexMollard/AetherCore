@@ -1,29 +1,63 @@
-add_executable(App)
-
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 file(GLOB_RECURSE APP_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
+set(APP_EDITOR_SOURCES ${APP_SOURCES})
+set(APP_RUNTIME_SOURCES ${APP_SOURCES})
+set(APP_RUNTIME_HEADERS ${APP_HEADERS})
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
+list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
+list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
+list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.hpp$")
+
+add_executable(App)
+add_executable(GameRuntime)
+
 target_sources(App
     PRIVATE
-        ${APP_SOURCES}
+        ${APP_EDITOR_SOURCES}
         ${APP_HEADERS}
 )
 
+target_sources(GameRuntime
+    PRIVATE
+        ${APP_RUNTIME_SOURCES}
+        ${APP_RUNTIME_HEADERS}
+)
+
 target_include_directories(App PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(App PRIVATE Engine)
+target_link_libraries(GameRuntime PRIVATE Engine)
 
 aethercore_target_defaults(App)
+aethercore_target_defaults(GameRuntime)
 aethercore_enable_slang_shader_compilation(App)
 aethercore_enable_dead_strip_report(App)
+aethercore_enable_dead_strip_report(GameRuntime)
 
 set_target_properties(App PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+set_target_properties(GameRuntime PROPERTIES
+    OUTPUT_NAME "AetherGame"
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # In dev builds, let the scene serializer save/load committable scene and prefab
 # files directly from the source tree.
 target_compile_definitions(App PRIVATE
+    AETHERCORE_EDITOR_APP=1
+    AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
+    AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
+    AETHER_DEFAULT_SETTINGS_DIR="${CMAKE_SOURCE_DIR}/resources/settings"
+    AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
+    AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
+)
+
+target_compile_definitions(GameRuntime PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_DEFAULT_SETTINGS_DIR="${CMAKE_SOURCE_DIR}/resources/settings"
@@ -82,8 +116,10 @@ if(AETHER_HAS_DOTNET)
         COMMENT "Building C# managed assemblies (AetherCore + AetherCore.Interop + AetherGame)"
         VERBATIM USES_TERMINAL)
 
-    add_dependencies(App ManagedAssemblies)
-    target_link_libraries(App PRIVATE DotNet::NetHost)
+    foreach(_aether_runtime_target IN ITEMS App GameRuntime)
+        add_dependencies(${_aether_runtime_target} ManagedAssemblies)
+        target_link_libraries(${_aether_runtime_target} PRIVATE DotNet::NetHost)
+    endforeach()
 
     # Dev-only F5 rebuild: let the running engine rebuild AetherGame from source and
     # redeploy before reloading (CSharpScriptingSubsystem::RebuildFromSource). These
@@ -97,107 +133,122 @@ if(AETHER_HAS_DOTNET)
         AETHER_MANAGED_CONFIGDIR="$<IF:$<CONFIG:Debug>,debug,release>")
 
     # Mirror the managed assemblies next to the executable for standalone runs.
-    add_custom_command(TARGET App POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/scripts/managed"
+    foreach(_aether_runtime_target IN ITEMS App GameRuntime)
+        add_custom_command(TARGET ${_aether_runtime_target} POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${_aether_runtime_target}>/data/scripts/managed"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${CMAKE_BINARY_DIR}/data/scripts/managed" "$<TARGET_FILE_DIR:App>/data/scripts/managed"
+                "${CMAKE_BINARY_DIR}/data/scripts/managed" "$<TARGET_FILE_DIR:${_aether_runtime_target}>/data/scripts/managed"
         COMMENT "Copying managed assemblies to app output"
         VERBATIM)
+    endforeach()
 
-    # nethost.dll must sit next to App.exe (loader search path) so get_hostfxr_path
-    # resolves at startup.
+    # nethost.dll must sit next to each executable (loader search path) so
+    # get_hostfxr_path resolves at startup.
     if(WIN32 AND AETHER_NETHOST_DLL)
-        add_custom_command(TARGET App POST_BUILD
+        foreach(_aether_runtime_target IN ITEMS App GameRuntime)
+            add_custom_command(TARGET ${_aether_runtime_target} POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                    "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:App>"
+                    "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:${_aether_runtime_target}>"
             COMMENT "Copying nethost.dll to app output"
             VERBATIM)
+        endforeach()
     endif()
 endif()
 
-# ── Asset pipeline ─────────────────────────────────────────────────────────
-# Pack engine/editor runtime resources into engine.pak. Project content is
-# packed separately below so user assets keep their project-relative paths.
-# Do not pack the whole resources/ tree here: that directory may still contain
-# legacy/sample project content, while engine.pak should stay engine-owned.
-# Note: $<TARGET_FILE:AssetPacker> creates an implicit dependency on AssetPacker,
-# so an explicit add_dependencies() is not needed.
-add_custom_command(TARGET App POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E remove_directory
-        "${CMAKE_BINARY_DIR}/engine_assets"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${CMAKE_BINARY_DIR}/engine_assets/fonts"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/fonts"
-        "${CMAKE_BINARY_DIR}/engine_assets/fonts"
-    COMMAND "$<TARGET_FILE:AssetPacker>"
-        "${CMAKE_BINARY_DIR}/engine_assets"
-        "${CMAKE_BINARY_DIR}/data/engine.pak"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/engine.pak"
-        "$<TARGET_FILE_DIR:App>/data/engine.pak"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/engine.pak.log"
-        "$<TARGET_FILE_DIR:App>/data/engine.pak.log"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/engine.pak.manifest"
-        "$<TARGET_FILE_DIR:App>/data/engine.pak.manifest"
-    # Shipped default settings (layer 2). Source lives under resources/config/,
-    # not the repo root. Deployed beside the exe (data/config/) as a dev
-    # convenience so running from the build tree finds it; the runtime resolves it
-    # executable-relative, independent of CMake and the working directory. For a
-    # packaged build, install this same file next to the shipped executable.
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
-        "${CMAKE_BINARY_DIR}/data/config/engine.toml"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/config"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
-        "$<TARGET_FILE_DIR:App>/data/config/engine.toml"
-    COMMENT "Packing engine runtime assets to data/engine.pak"
-    VERBATIM
-)
+if(NVIDIA_AFTERMATH_FOUND)
+    get_target_property(_am_dll Nvidia::Aftermath IMPORTED_LOCATION)
+endif()
 
-if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
-    add_custom_command(TARGET App POST_BUILD
+# ── Asset pipeline ─────────────────────────────────────────────────────────
+# Pack engine runtime resources into engine.pak. Project content is packed
+# separately below so user assets keep their project-relative paths. Do not pack
+# the whole resources/ tree here: that directory may still contain legacy/sample
+# project content, while engine.pak should stay engine-owned.
+function(aethercore_add_runtime_payload target_name)
+    # Note: $<TARGET_FILE:AssetPacker> creates an implicit dependency on
+    # AssetPacker, so an explicit add_dependencies() is not needed.
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E remove_directory
+            "${CMAKE_BINARY_DIR}/engine_assets"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${CMAKE_BINARY_DIR}/engine_assets/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_SOURCE_DIR}/resources/fonts"
+            "${CMAKE_BINARY_DIR}/engine_assets/fonts"
         COMMAND "$<TARGET_FILE:AssetPacker>"
-            "--project"
-            "--import-materials"
-            "${AETHERCORE_PROJECT_DIR}"
-            "${CMAKE_BINARY_DIR}/data/project.pak"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data"
+            "${CMAKE_BINARY_DIR}/engine_assets"
+            "${CMAKE_BINARY_DIR}/data/engine.pak"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/project.pak"
-            "$<TARGET_FILE_DIR:App>/data/project.pak"
+            "${CMAKE_BINARY_DIR}/data/engine.pak"
+            "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/project.pak.log"
-            "$<TARGET_FILE_DIR:App>/data/project.pak.log"
+            "${CMAKE_BINARY_DIR}/data/engine.pak.log"
+            "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak.log"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/project.pak.manifest"
-            "$<TARGET_FILE_DIR:App>/data/project.pak.manifest"
-        COMMENT "Packing project content to data/project.pak"
+            "${CMAKE_BINARY_DIR}/data/engine.pak.manifest"
+            "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak.manifest"
+        # Shipped default settings (layer 2). Source lives under resources/config/,
+        # not the repo root. Deployed beside the exe (data/config/) as a dev
+        # convenience so running from the build tree finds it; the runtime resolves it
+        # executable-relative, independent of CMake and the working directory. For a
+        # packaged build, install this same file next to the shipped executable.
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
+            "${CMAKE_BINARY_DIR}/data/config/engine.toml"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data/config"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
+            "$<TARGET_FILE_DIR:${target_name}>/data/config/engine.toml"
+        COMMENT "Packing engine runtime assets to data/engine.pak"
         VERBATIM
     )
-elseif(AETHERCORE_PROJECT_DIR)
+
+    if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND "$<TARGET_FILE:AssetPacker>"
+                "--project"
+                "--import-materials"
+                "${AETHERCORE_PROJECT_DIR}"
+                "${CMAKE_BINARY_DIR}/data/project.pak"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_BINARY_DIR}/data/project.pak"
+                "$<TARGET_FILE_DIR:${target_name}>/data/project.pak"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_BINARY_DIR}/data/project.pak.log"
+                "$<TARGET_FILE_DIR:${target_name}>/data/project.pak.log"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_BINARY_DIR}/data/project.pak.manifest"
+                "$<TARGET_FILE_DIR:${target_name}>/data/project.pak.manifest"
+            COMMENT "Packing project content to data/project.pak"
+            VERBATIM
+        )
+    endif()
+
+    # NVIDIA Aftermath DLL - copy to output directory so the executable can find it.
+    if(NVIDIA_AFTERMATH_FOUND)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:${target_name}>"
+            COMMENT "Copying GFSDK_Aftermath_Lib.x64.dll to build output"
+            VERBATIM
+        )
+    endif()
+endfunction()
+
+if(AETHERCORE_PROJECT_DIR AND NOT EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
     message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; skipping data/project.pak")
 endif()
 
-# NVIDIA Aftermath DLL - copy to output directory so the executable can find it.
-if(NVIDIA_AFTERMATH_FOUND)
-    get_target_property(_am_dll Nvidia::Aftermath IMPORTED_LOCATION)
-    add_custom_command(TARGET App POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:App>"
-        COMMENT "Copying GFSDK_Aftermath_Lib.x64.dll to build output"
-        VERBATIM
-    )
-endif()
+aethercore_add_runtime_payload(App)
+aethercore_add_runtime_payload(GameRuntime)
+add_dependencies(App GameRuntime)
 
 # ── Redistributable package ─────────────────────────────────────────────────
 # The build output directory is a developer run tree and may contain stale files,
 # import libraries, or PDBs. PackageGame creates a clean folder that can be handed
-# to another PC: App.exe + runtime DLLs + data/ payload only.
+# to another PC: runtime executable + runtime DLLs + data/ payload only.
 set(_aether_package_dir "${CMAKE_BINARY_DIR}/package/$<CONFIG>/AetherCore")
 set(_aether_package_expect_project_pak OFF)
 
@@ -208,8 +259,8 @@ set(_aether_package_commands
         "${_aether_package_dir}/data"
         "${_aether_package_dir}/data/config"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:App>"
-        "${_aether_package_dir}/$<TARGET_FILE_NAME:App>"
+        "$<TARGET_FILE:GameRuntime>"
+        "${_aether_package_dir}/$<TARGET_FILE_NAME:GameRuntime>"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_BINARY_DIR}/data/engine.pak"
         "${_aether_package_dir}/data/engine.pak"
@@ -217,7 +268,7 @@ set(_aether_package_commands
         "${CMAKE_BINARY_DIR}/data/config/engine.toml"
         "${_aether_package_dir}/data/config/engine.toml"
     COMMAND "${CMAKE_COMMAND}"
-        -DAPP_EXE=$<TARGET_FILE:App>
+        -DAPP_EXE=$<TARGET_FILE:GameRuntime>
         -DPACKAGE_DIR=${_aether_package_dir}
         -P "${CMAKE_SOURCE_DIR}/CMake/CopyRuntimeDependencies.cmake"
 )
@@ -262,10 +313,12 @@ list(APPEND _aether_package_commands
         -DEXPECT_PROJECT_PAK=${_aether_package_expect_project_pak}
         -DEXPECT_DOTNET=${AETHER_HAS_DOTNET}
         -DEXPECT_NETHOST=$<BOOL:${AETHER_NETHOST_DLL}>
+        -DRUNTIME_EXE=$<TARGET_FILE_NAME:GameRuntime>
+        -DEDITOR_EXE=$<TARGET_FILE_NAME:App>
         -P "${CMAKE_SOURCE_DIR}/CMake/VerifyAppPackage.cmake")
 
 add_custom_target(PackageGame
     ${_aether_package_commands}
-    DEPENDS App
+    DEPENDS GameRuntime
     COMMENT "Creating redistributable package at ${_aether_package_dir}"
     VERBATIM USES_TERMINAL)

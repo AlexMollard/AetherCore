@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 
 namespace
 {
-	bool IsGeneratedProjectDirectory(const fs::path& rel)
+	bool IsExcludedProjectDirectory(const fs::path& rel)
 	{
 		const auto it = rel.begin();
 		if (it == rel.end())
@@ -32,7 +32,7 @@ namespace
 			return false;
 		}
 		const std::string first = it->generic_string();
-		return first == "Builds" || first == "artifacts" || first == ".git" || first == ".vs";
+		return first == "Builds" || first == "artifacts" || first == "scripts" || first == ".git" || first == ".vs";
 	}
 } // namespace
 
@@ -44,7 +44,7 @@ void PakWriter::AddDirectory(const fs::path& sourceDir)
 	{
 		const auto& entry = *it;
 		const auto rel = entry.path().lexically_relative(sourceDir);
-		if (entry.is_directory() && IsGeneratedProjectDirectory(rel))
+		if (entry.is_directory() && IsExcludedProjectDirectory(rel))
 		{
 			it.disable_recursion_pending();
 			continue;

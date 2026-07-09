@@ -18,6 +18,7 @@ namespace aether::app
 		std::string managedConfig;
 		std::string managedConfigDir;
 		std::filesystem::path managedSdkProject;
+		std::string runtimeExecutableName;
 	};
 
 	[[nodiscard]] EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig();

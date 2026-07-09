@@ -7,8 +7,15 @@ if(NOT EXISTS "${PACKAGE_DIR}")
     message(FATAL_ERROR "Package directory does not exist: ${PACKAGE_DIR}")
 endif()
 
+if(NOT DEFINED RUNTIME_EXE OR RUNTIME_EXE STREQUAL "")
+    set(RUNTIME_EXE "AetherGame.exe")
+endif()
+if(NOT DEFINED EDITOR_EXE OR EDITOR_EXE STREQUAL "")
+    set(EDITOR_EXE "App.exe")
+endif()
+
 set(_required_files
-    "App.exe"
+    "${RUNTIME_EXE}"
     "data/config/engine.toml"
     "data/engine.pak"
 )
@@ -38,6 +45,10 @@ foreach(_rel IN LISTS _required_files)
     endif()
 endforeach()
 
+if(EXISTS "${PACKAGE_DIR}/${EDITOR_EXE}")
+    message(FATAL_ERROR "Package contains editor executable: ${EDITOR_EXE}")
+endif()
+
 file(GLOB_RECURSE _dev_outputs
     "${PACKAGE_DIR}/*.exp"
     "${PACKAGE_DIR}/*.ilk"
@@ -57,6 +68,17 @@ file(GLOB_RECURSE _loose_sources
 if(_loose_sources)
     list(JOIN _loose_sources "\n  " _loose_source_text)
     message(FATAL_ERROR "Package contains loose source/build files:\n  ${_loose_source_text}")
+endif()
+
+file(GLOB_RECURSE _editor_artifacts
+    "${PACKAGE_DIR}/debug/*"
+    "${PACKAGE_DIR}/editor/*"
+    "${PACKAGE_DIR}/data/debug/*"
+    "${PACKAGE_DIR}/data/editor/*"
+)
+if(_editor_artifacts)
+    list(JOIN _editor_artifacts "\n  " _editor_artifact_text)
+    message(FATAL_ERROR "Package contains editor/debug artifacts:\n  ${_editor_artifact_text}")
 endif()
 
 message(STATUS "Verified redistributable package: ${PACKAGE_DIR}")

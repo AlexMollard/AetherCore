@@ -142,6 +142,24 @@ namespace aether::app
 #endif
 		}
 
+		std::string DefaultRuntimeExecutableName()
+		{
+#ifdef _WIN32
+			return "AetherGame.exe";
+#else
+			return "AetherGame";
+#endif
+		}
+
+		std::string EditorExecutableName()
+		{
+#ifdef _WIN32
+			return "App.exe";
+#else
+			return "App";
+#endif
+		}
+
 		bool CopyDirectoryRecursive(const std::filesystem::path& source, const std::filesystem::path& destination, std::string& error)
 		{
 			std::error_code ec;
@@ -232,29 +250,34 @@ namespace aether::app
 			return true;
 		}
 
-		bool VerifyPublishedGame(const std::filesystem::path& packageDir, std::string& error)
+		bool VerifyPublishedGame(const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
-#ifdef _WIN32
-			constexpr std::string_view kAppExecutable = "App.exe";
-#else
-			constexpr std::string_view kAppExecutable = "App";
-#endif
-			for (std::string_view rel: {kAppExecutable,
-			             "data/config/engine.toml"sv,
-			             "data/engine.pak"sv,
-			             "data/project.pak"sv,
-			             "data/scripts/managed/AetherCore.dll"sv,
-			             "data/scripts/managed/AetherCore.Interop.dll"sv,
-			             "data/scripts/managed/AetherCore.Interop.deps.json"sv,
-			             "data/scripts/managed/AetherCore.Interop.runtimeconfig.json"sv,
-			             "data/scripts/managed/AetherGame.dll"sv,
-			             "data/scripts/managed/AetherGame.deps.json"sv})
+			std::vector<std::filesystem::path> requiredFiles{
+			        std::filesystem::path(runtimeExecutableName),
+			        "data/config/engine.toml",
+			        "data/engine.pak",
+			        "data/project.pak",
+			        "data/scripts/managed/AetherCore.dll",
+			        "data/scripts/managed/AetherCore.Interop.dll",
+			        "data/scripts/managed/AetherCore.Interop.deps.json",
+			        "data/scripts/managed/AetherCore.Interop.runtimeconfig.json",
+			        "data/scripts/managed/AetherGame.dll",
+			        "data/scripts/managed/AetherGame.deps.json",
+			};
+			for (const std::filesystem::path& rel: requiredFiles)
 			{
-				if (!io::file_util::Exists(packageDir / std::filesystem::path(rel)))
+				if (!io::file_util::Exists(packageDir / rel))
 				{
-					error = "Published build is missing: " + std::string(rel);
+					error = "Published build is missing: " + rel.generic_string();
 					return false;
 				}
+			}
+
+			const std::string editorExecutable = EditorExecutableName();
+			if (editorExecutable != runtimeExecutableName && io::file_util::Exists(packageDir / editorExecutable))
+			{
+				error = "Published build contains the editor executable: " + editorExecutable;
+				return false;
 			}
 
 			std::error_code ec;
@@ -274,6 +297,16 @@ namespace aether::app
 				{
 					error = "Published build contains a dev/source file: " + DisplayPath(entry.path());
 					return false;
+				}
+				const std::filesystem::path rel = std::filesystem::relative(entry.path(), packageDir, ec);
+				if (!ec)
+				{
+					const std::string relText = LowerAscii(rel.generic_string());
+					if (relText.starts_with("debug/") || relText.starts_with("editor/") || relText.starts_with("data/debug/") || relText.starts_with("data/editor/"))
+					{
+						error = "Published build contains editor/debug artifacts: " + DisplayPath(entry.path());
+						return false;
+					}
 				}
 			}
 			return true;
@@ -303,13 +336,9 @@ namespace aether::app
 			return std::nullopt;
 		}
 
-		bool CopyRuntimeFromExecutableDir(const std::filesystem::path& exeDir, const std::filesystem::path& packageDir, std::string& error)
+		bool CopyRuntimeFromExecutableDir(const std::filesystem::path& exeDir, const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
-#ifdef _WIN32
-			if (!CopyIfExists(exeDir / "App.exe", packageDir / "App.exe", error))
-#else
-			if (!CopyIfExists(exeDir / "App", packageDir / "App", error))
-#endif
+			if (!CopyIfExists(exeDir / std::filesystem::path(runtimeExecutableName), packageDir / std::filesystem::path(runtimeExecutableName), error))
 			{
 				return false;
 			}
@@ -470,6 +499,11 @@ namespace aether::app
 #ifdef AETHER_MANAGED_SDK_PROJECT
 		config.managedSdkProject = AbsolutePath(AETHER_MANAGED_SDK_PROJECT);
 #endif
+#ifdef AETHER_GAME_RUNTIME_EXE_NAME
+		config.runtimeExecutableName = AETHER_GAME_RUNTIME_EXE_NAME;
+#else
+		config.runtimeExecutableName = DefaultRuntimeExecutableName();
+#endif
 		return config;
 	}
 
@@ -606,7 +640,7 @@ namespace aether::app
 			{
 				return {.succeeded = false, .message = "Could not create publish folder: " + dirResult.error().message, .outputPath = publishDir};
 			}
-			if (!CopyRuntimeFromExecutableDir(config.executableDir, publishDir, error))
+			if (!CopyRuntimeFromExecutableDir(config.executableDir, publishDir, config.runtimeExecutableName, error))
 			{
 				return {.succeeded = false, .message = "Could not copy runtime files: " + error, .outputPath = publishDir};
 			}
@@ -651,7 +685,7 @@ namespace aether::app
 		{
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}
-		if (!VerifyPublishedGame(publishDir, error))
+		if (!VerifyPublishedGame(publishDir, config.runtimeExecutableName, error))
 		{
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}

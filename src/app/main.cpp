@@ -3,10 +3,13 @@
 #include "utils/AetherExceptions.hpp"
 #include "Application.hpp"
 #include "platform/CrashHandler.hpp"
-#include "layers/DebugLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
+
+#ifdef AETHERCORE_EDITOR_APP
+#	include "layers/DebugLayer.hpp"
+#endif
 
 namespace
 {
@@ -45,7 +48,9 @@ int main()
 		application.AddService(csharpScripting);
 
 		// Layers
+#ifdef AETHERCORE_EDITOR_APP
 		application.PushLayer<aether::app::DebugLayer>();
+#endif
 		// World content comes from the startup scene file (engine.toml
 		// app.startupScene); behavior comes from entity scripts (ScriptComponent).
 		application.PushLayer<aether::app::ScriptedSceneLayer>();

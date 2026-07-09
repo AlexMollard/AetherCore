@@ -7,7 +7,6 @@
 #include "IEngineRuntime.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
-#include "editor/EditorProjectContext.hpp"
 #include "material/MaterialAuthoring.hpp"
 #include "camera/CameraManager.hpp"
 #include "material/EffectManager.hpp"
@@ -28,6 +27,10 @@
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/Profiler.hpp"
+
+#ifdef AETHERCORE_EDITOR_APP
+#	include "editor/EditorProjectContext.hpp"
+#endif
 
 namespace aether::app
 {
@@ -180,11 +183,13 @@ namespace aether::app
 
 	void ScriptedSceneLayer::LoadStartupScene(LayerContext& context)
 	{
+#ifdef AETHERCORE_EDITOR_APP
 		const auto* project = context.TryGet<EditorProjectContext>();
 		if (project != nullptr && !project->IsLoaded())
 		{
 			return;
 		}
+#endif
 
 		const auto* settingsService = context.TryGet<aether::SettingsService>();
 		if (settingsService == nullptr || settingsService->Get().app.startupScene.empty())
