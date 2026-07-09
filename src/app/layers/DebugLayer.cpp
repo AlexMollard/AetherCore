@@ -25,6 +25,7 @@ using namespace std::string_view_literals;
 #	include <Windows.h>
 #	include <shobjidl.h>
 #	include <shellapi.h>
+#	undef CopyFile // Windows.h defines CopyFile as CopyFileA/CopyFileW macro, conflicts with file_util::CopyFile
 #endif
 
 #include "debug/ConsolePanel.hpp"
@@ -339,7 +340,7 @@ namespace aether::app
 			return NormalizePath(std::move(path));
 		}
 
-		EditorProjectContext ReadProjectDescriptor(const std::filesystem::path& root)
+		Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root)
 		{
 			EditorProjectContext project;
 			project.root = NormalizePath(root);
@@ -353,7 +354,7 @@ namespace aether::app
 			auto descriptorText = io::file_util::ReadText(ExistingDescriptorPath(root));
 			if (!descriptorText)
 			{
-				return project;
+				AE_UNEXPECTED(AetherError::Engine("No project descriptor found."));
 			}
 
 			std::string assetsPath;
@@ -412,7 +413,8 @@ namespace aether::app
 
 		std::string ReadProjectName(const std::filesystem::path& root)
 		{
-			return ReadProjectDescriptor(root).name;
+			auto result = ReadProjectDescriptor(root);
+			return result.has_value() ? result->name : FallbackProjectName(root);
 		}
 
 		std::string EscapeTomlString(std::string_view value)
@@ -843,13 +845,13 @@ namespace aether::app
 			m_launcherError = "Choose a project folder.";
 			return;
 		}
-		if (!HasProjectDescriptor(root))
+		auto projectResult = ReadProjectDescriptor(root);
+		if (!projectResult)
 		{
 			m_launcherError = "No .project/aether.project found in that folder.";
 			return;
 		}
-
-		m_currentProject = ReadProjectDescriptor(root);
+		m_currentProject = *std::move(projectResult);
 		m_currentProject.loaded = true;
 		io::FileSystem::Mount("project", m_currentProject.root);
 		scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
@@ -946,9 +948,18 @@ namespace aether::app
 		{
 			if (auto dirResult = io::file_util::CreateDirectories(exeDataDir); dirResult)
 			{
-				io::file_util::CopyFile(outputPak, exeDataDir / "project.pak");
-				io::file_util::CopyFile(outputPak.string() + ".log", exeDataDir / "project.pak.log");
-				io::file_util::CopyFile(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest");
+				if (auto result = io::file_util::CopyFile(outputPak, exeDataDir / "project.pak"); !result)
+				{
+					AE_WARN(LogCategory::App, "Failed to copy project.pak: {}", result.error().message);
+				}
+				if (auto result = io::file_util::CopyFile(outputPak.string() + ".log", exeDataDir / "project.pak.log"); !result)
+				{
+					AE_WARN(LogCategory::App, "Failed to copy project.pak.log: {}", result.error().message);
+				}
+				if (auto result = io::file_util::CopyFile(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest"); !result)
+				{
+					AE_WARN(LogCategory::App, "Failed to copy project.pak.manifest: {}", result.error().message);
+				}
 			}
 		}
 
