@@ -48,7 +48,7 @@ namespace aether::io::file_util
 			}
 		}
 
-		std::ofstream out(path, std::ios::trunc);
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
 		if (!out.is_open())
 		{
 			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for writing: {}", path.string())));
