@@ -246,7 +246,7 @@ namespace aether
 		ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 1.0f;
 
 		// Load Roboto Regular for tooling UI.
-		constexpr std::string_view kFontPath = "assets://fonts/Roboto-Regular.ttf";
+		constexpr std::string_view kFontPath = "engine://fonts/Roboto-Regular.ttf";
 		if (io::FileSystem::Exists(kFontPath))
 		{
 			auto result = io::FileSystem::ReadFile(kFontPath);
@@ -265,7 +265,7 @@ namespace aether
 		}
 
 		// Merge Font Awesome 6 Free-Solid into the same atlas.
-		constexpr std::string_view kIconFontPath = "assets://fonts/fa-solid-900.ttf";
+		constexpr std::string_view kIconFontPath = "engine://fonts/fa-solid-900.ttf";
 		if (!io.Fonts->Fonts.empty() && io::FileSystem::Exists(kIconFontPath))
 		{
 			auto result = io::FileSystem::ReadFile(kIconFontPath);

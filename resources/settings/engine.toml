@@ -1,0 +1,14 @@
+# AetherCore project settings (TOML)
+
+[window]
+width = 1920
+height = 1080
+
+[graphics]
+vsync = false
+fxaa = false
+asyncCompute = true
+
+[app]
+targetFps = 0
+startupScene = "default"

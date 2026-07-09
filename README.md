@@ -39,7 +39,7 @@ C# gameplay scripting** hosted on .NET 10 (CoreCLR).
 
 **Tooling**
 - **ImGui debug tooling** - dockable panels for render stats, scene inspection, viewport controls, lighting, and diagnostics.
-- **Asset pipeline** - virtual file paths (`assets://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML, plus a processor for mesh optimization, texture compression, and SPIR-V optimization.
+- **Asset pipeline** - virtual file paths (`engine://`, `project://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML, plus a processor for mesh optimization, texture compression, and SPIR-V optimization.
 - **Tracy profiling** - integrated instrumentation via engine macros, stripped in Ship builds.
 
 ---
@@ -195,14 +195,11 @@ cmake --build --preset linux-clang
 
 ## 📦 Asset Pipeline
 
-Assets under `resources/` are packed into `build/data/assets.pak` as a post-build step. At
-runtime they are accessed via virtual paths: `assets://…`, `shaders://…`. The asset packer
-(`tools/assetpack/`) runs dedicated processors for mesh optimization, texture compression,
-and SPIR-V optimization.
+Engine-owned resources under `resources/` are packed into `build/data/engine.pak` as a post-build step and accessed through `engine://...`. Game/project content is packed separately as `build/data/project.pak` and accessed through `project://...`. The asset packer (`tools/assetpack/`) runs dedicated processors for mesh optimization, texture compression, and SPIR-V optimization.
 
 ### PBR Material Presets
 
-Define reusable materials as TOML under `resources/materials/`:
+Define reusable project materials as TOML under the opened project's `assets/materials/` folder:
 
 ```toml
 [material]
@@ -211,9 +208,9 @@ metallicFactor  = 0.0
 roughnessFactor = 0.9
 
 [textures]
-albedo            = "assets://textures/your_basecolor.png"
-normal            = "assets://textures/your_normal.png"
-metallicRoughness = "assets://textures/your_metalrough.png"
+albedo            = "project://assets/textures/your_basecolor.png"
+normal            = "project://assets/textures/your_normal.png"
+metallicRoughness = "project://assets/textures/your_metalrough.png"
 ```
 
 A folder layout (handy for downloaded PBR zips) also works, and the importer auto-generates
@@ -221,7 +218,7 @@ A folder layout (handy for downloaded PBR zips) also works, and the importer aut
 leaving hand-authored files untouched:
 
 ```powershell
-AssetPacker --import-materials resources build/data/assets.pak
+AssetPacker --project --import-materials projects/TestingProject build/data/project.pak
 ```
 
 ---

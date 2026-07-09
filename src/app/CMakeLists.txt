@@ -26,6 +26,7 @@ set_target_properties(App PROPERTIES
 target_compile_definitions(App PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
+    AETHER_DEFAULT_SETTINGS_DIR="${CMAKE_SOURCE_DIR}/resources/settings"
 )
 
 # ── Managed (C#) assemblies ────────────────────────────────────────────────
@@ -107,25 +108,33 @@ if(AETHER_HAS_DOTNET)
 endif()
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
-# Pack engine/editor runtime resources into assets.pak. Project content is
+# Pack engine/editor runtime resources into engine.pak. Project content is
 # packed separately below so user assets keep their project-relative paths.
+# Do not pack the whole resources/ tree here: that directory may still contain
+# legacy/sample project content, while engine.pak should stay engine-owned.
 # Note: $<TARGET_FILE:AssetPacker> creates an implicit dependency on AssetPacker,
 # so an explicit add_dependencies() is not needed.
 add_custom_command(TARGET App POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E remove_directory
+        "${CMAKE_BINARY_DIR}/engine_assets"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${CMAKE_BINARY_DIR}/engine_assets/fonts"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/fonts"
+        "${CMAKE_BINARY_DIR}/engine_assets/fonts"
     COMMAND "$<TARGET_FILE:AssetPacker>"
-        "--import-materials"
-        "${CMAKE_SOURCE_DIR}/resources"
-        "${CMAKE_BINARY_DIR}/data/assets.pak"
+        "${CMAKE_BINARY_DIR}/engine_assets"
+        "${CMAKE_BINARY_DIR}/data/engine.pak"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/assets.pak"
-        "$<TARGET_FILE_DIR:App>/data/assets.pak"
+        "${CMAKE_BINARY_DIR}/data/engine.pak"
+        "$<TARGET_FILE_DIR:App>/data/engine.pak"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/assets.pak.log"
-        "$<TARGET_FILE_DIR:App>/data/assets.pak.log"
+        "${CMAKE_BINARY_DIR}/data/engine.pak.log"
+        "$<TARGET_FILE_DIR:App>/data/engine.pak.log"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/assets.pak.manifest"
-        "$<TARGET_FILE_DIR:App>/data/assets.pak.manifest"
+        "${CMAKE_BINARY_DIR}/data/engine.pak.manifest"
+        "$<TARGET_FILE_DIR:App>/data/engine.pak.manifest"
     # Shipped default settings (layer 2). Source lives under resources/config/,
     # not the repo root. Deployed beside the exe (data/config/) as a dev
     # convenience so running from the build tree finds it; the runtime resolves it
@@ -139,7 +148,7 @@ add_custom_command(TARGET App POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
         "$<TARGET_FILE_DIR:App>/data/config/engine.toml"
-    COMMENT "Packing assets to data/assets.pak"
+    COMMENT "Packing engine runtime assets to data/engine.pak"
     VERBATIM
 )
 
@@ -166,23 +175,6 @@ if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.
 elseif(AETHERCORE_PROJECT_DIR)
     message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; skipping data/project.pak")
 endif()
-
-# Copy loose runtime data (resources/data) directly to data/data/ so it can be
-# read from the filesystem without unpacking the pak. C# scripts are compiled
-# into the managed assemblies (deployed to data/scripts/managed above), so the
-# source scripts do not need to be copied.
-add_custom_command(TARGET App POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/data"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/data"
-        "${CMAKE_BINARY_DIR}/data/data"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/data"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/data"
-        "$<TARGET_FILE_DIR:App>/data/data"
-    COMMENT "Copying runtime data to build output"
-    VERBATIM
-)
 
 # NVIDIA Aftermath DLL - copy to output directory so the executable can find it.
 if(NVIDIA_AFTERMATH_FOUND)

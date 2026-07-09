@@ -140,6 +140,25 @@ namespace aether::io
 			return value.empty() ? std::nullopt : std::optional<std::filesystem::path>(NormalPath(value));
 		}
 
+		std::string EnvironmentStringFirst(const char* primary, const char* legacy)
+		{
+			std::string value = EnvironmentString(primary);
+			if (!value.empty())
+			{
+				return value;
+			}
+			return EnvironmentString(legacy);
+		}
+
+		std::optional<std::filesystem::path> EnvironmentPathFirst(const char* primary, const char* legacy)
+		{
+			if (auto value = EnvironmentPath(primary))
+			{
+				return value;
+			}
+			return EnvironmentPath(legacy);
+		}
+
 		bool EqualsIgnoreCase(std::string_view lhs, std::string_view rhs)
 		{
 			return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
@@ -178,9 +197,9 @@ namespace aether::io
 			return true;
 		}
 
-		bool MountAssetsPak(const std::vector<std::filesystem::path>& candidates)
+		bool MountEnginePak(const std::vector<std::filesystem::path>& candidates)
 		{
-			return MountPakCandidate("assets", "assets", candidates);
+			return MountPakCandidate("engine", "engine", candidates);
 		}
 
 		bool MountProjectPak(const std::vector<std::filesystem::path>& candidates)
@@ -188,11 +207,11 @@ namespace aether::io
 			return MountPakCandidate("project", "project", candidates);
 		}
 
-		void MountAssetsDirectory(std::filesystem::path directory)
+		void MountEngineDirectory(std::filesystem::path directory)
 		{
 			directory = NormalPath(std::move(directory));
-			AE_WARN(LogCategory::FileSystem, "Mounting loose asset directory. Processed assets such as .mesh/.texture may be unavailable unless this directory contains generated outputs: {}", directory.string());
-			FileSystem::Mount("assets", std::move(directory));
+			AE_WARN(LogCategory::FileSystem, "Mounting loose engine resource directory. Built-in resources such as fonts may be unavailable unless this directory contains generated outputs: {}", directory.string());
+			FileSystem::Mount("engine", std::move(directory));
 		}
 
 		void MountProjectDirectory(std::filesystem::path directory)
@@ -237,53 +256,57 @@ namespace aether::io
 
 		const auto workingDirectory = std::filesystem::current_path();
 
-		// -- assets:// ---------------------------------------------------------
+		// -- engine:// ---------------------------------------------------------
+		// Engine/editor runtime assets only (fonts and other built-ins). Game
+		// models/materials/textures/animations belong under project:// so a
+		// project pak can publish without duplicating engine resources.
 		// Selection is intentionally deterministic:
-		//   AETHER_ASSET_MODE=pak|dir|auto
-		//   AETHER_ASSET_PAK=<pak path>   overrides pak candidates
-		//   AETHER_ASSET_DIR=<directory>  overrides loose directory fallback
+		//   AETHER_ENGINE_MODE=pak|dir|auto
+		//   AETHER_ENGINE_PAK=<pak path>   overrides pak candidates
+		//   AETHER_ENGINE_DIR=<directory>  overrides loose directory fallback
+		// Legacy AETHER_ASSET_* env vars are still accepted as local override aliases.
 		// Default pak candidates are run-directory data/ first (ship layout),
 		// then the CMake build data dir (dev layout).
-		const std::string assetMode = EnvironmentString("AETHER_ASSET_MODE");
-		if (EqualsIgnoreCase(assetMode, "dir"))
+		const std::string engineMode = EnvironmentStringFirst("AETHER_ENGINE_MODE", "AETHER_ASSET_MODE");
+		if (EqualsIgnoreCase(engineMode, "dir"))
 		{
-			MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR")
+			MountEngineDirectory(EnvironmentPathFirst("AETHER_ENGINE_DIR", "AETHER_ASSET_DIR")
 			                .value_or(
-#ifdef AETHER_DEFAULT_ASSET_DIR
-			                        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
+#ifdef AETHER_DEFAULT_ENGINE_DIR
+			                        std::filesystem::path(AETHER_DEFAULT_ENGINE_DIR)
 #else
-			                        workingDirectory / "assets"
+			                        workingDirectory / "engine"
 #endif
 			                                ));
 		}
 		else
 		{
 			std::vector<std::filesystem::path> pakCandidates;
-			if (auto overridePak = EnvironmentPath("AETHER_ASSET_PAK"))
+			if (auto overridePak = EnvironmentPathFirst("AETHER_ENGINE_PAK", "AETHER_ASSET_PAK"))
 			{
 				AddUniquePath(pakCandidates, *overridePak);
 			}
 
-			AddUniquePath(pakCandidates, workingDirectory / "data" / "assets.pak");
-			AddUniquePath(pakCandidates, workingDirectory / "../data/assets.pak");
-			AddUniquePath(pakCandidates, workingDirectory / "../../data/assets.pak");
-#ifdef AETHER_DEFAULT_ASSET_PAK
-			AddUniquePath(pakCandidates, AETHER_DEFAULT_ASSET_PAK);
+			AddUniquePath(pakCandidates, workingDirectory / "data" / "engine.pak");
+			AddUniquePath(pakCandidates, workingDirectory / "../data/engine.pak");
+			AddUniquePath(pakCandidates, workingDirectory / "../../data/engine.pak");
+#ifdef AETHER_DEFAULT_ENGINE_PAK
+			AddUniquePath(pakCandidates, AETHER_DEFAULT_ENGINE_PAK);
 #endif
 
-			if (!MountAssetsPak(pakCandidates))
+			if (!MountEnginePak(pakCandidates))
 			{
-				if (EqualsIgnoreCase(assetMode, "pak"))
+				if (EqualsIgnoreCase(engineMode, "pak"))
 				{
-					AE_ASSERT_ALWAYS(false, "AETHER_ASSET_MODE=pak but no usable assets.pak was found. Set AETHER_ASSET_PAK or build App to generate data/assets.pak.");
+					AE_ASSERT_ALWAYS(false, "AETHER_ENGINE_MODE=pak but no usable engine.pak was found. Set AETHER_ENGINE_PAK or build App to generate data/engine.pak.");
 				}
 
-				MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR")
+				MountEngineDirectory(EnvironmentPathFirst("AETHER_ENGINE_DIR", "AETHER_ASSET_DIR")
 				                .value_or(
-#ifdef AETHER_DEFAULT_ASSET_DIR
-				                        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
+#ifdef AETHER_DEFAULT_ENGINE_DIR
+				                        std::filesystem::path(AETHER_DEFAULT_ENGINE_DIR)
 #else
-				                        workingDirectory / "assets"
+				                        workingDirectory / "engine"
 #endif
 				                                ));
 			}

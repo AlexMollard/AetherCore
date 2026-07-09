@@ -1,23 +1,14 @@
-# AetherCore shipped default settings (TOML)
-#
-# This is LAYER 2 of the settings cascade: read-only project defaults shipped
-# beside the executable. It overrides the compiled-in engine defaults, and is in
-# turn overridden by the per-user file the game writes when a player changes
-# settings (LOCALAPPDATA/AetherCore/settings.toml on Windows,
-# $XDG_CONFIG_HOME/AetherCore/settings.toml on Linux). This file is never written
-# to at runtime; edit it to change the defaults a fresh install boots with.
-
-[window]
-width = 1920
-height = 1080
-
-[graphics]
-vsync = false
-fxaa = false
-asyncCompute = true
+# AetherCore project settings
 
 [app]
-# 0 = auto policy (swapchain-paced when VSync on, uncapped when off)
-targetFps = 0
-# Project scene file loaded at boot; empty disables.
 startupScene = "Testing"
+targetfps = 0
+
+[graphics]
+asynccompute = true
+fxaa = false
+vsync = false
+
+[window]
+height = 1080
+width = 1920

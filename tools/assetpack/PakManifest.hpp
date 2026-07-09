@@ -6,13 +6,14 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace fs = std::filesystem;
 
 // Bump when the manifest format changes so that stale cached manifests
 // are automatically regenerated on the next pack.
-inline constexpr int kManifestVersion = 4;
+inline constexpr int kManifestVersion = 5;
 
 struct ManifestEntry
 {
@@ -95,8 +96,11 @@ inline bool IsUpToDate(const fs::path& pakPath, const ManifestMap& manifest, con
 		return false;
 	}
 
+	std::unordered_set<std::string> currentSources;
+	currentSources.reserve(files.size());
 	for (const auto& file: files)
 	{
+		currentSources.insert(file.virtualPath);
 		const auto it = manifest.find(file.virtualPath);
 		if (it == manifest.end())
 		{
@@ -112,6 +116,14 @@ inline bool IsUpToDate(const fs::path& pakPath, const ManifestMap& manifest, con
 
 		const auto mtimeSec = std::chrono::duration_cast<std::chrono::seconds>(mtime.time_since_epoch()).count();
 		if (mtimeSec != it->second.mtimeSec)
+		{
+			return false;
+		}
+	}
+
+	for (const auto& [virtualPath, entry]: manifest)
+	{
+		if (entry.mtimeSec != 0 && !currentSources.contains(virtualPath))
 		{
 			return false;
 		}

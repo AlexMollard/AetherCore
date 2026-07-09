@@ -118,7 +118,7 @@ namespace aether::ui
 			return cached;
 		}
 
-		const std::string metaPath = "assets://fonts/" + std::string(name) + "-Regular.fontmeta";
+		const std::string metaPath = "engine://fonts/" + std::string(name) + "-Regular.fontmeta";
 		const auto metaBytes = io::FileSystem::ReadFile(metaPath);
 		if (!metaBytes.has_value())
 		{

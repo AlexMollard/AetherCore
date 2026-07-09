@@ -256,7 +256,7 @@ namespace aether
 
 	std::string Texture::ResolveTexturePath(std::string_view path)
 	{
-		// Derive the .texture sibling path (e.g. "assets://foo/bar.png" -> ".../bar.texture")
+		// Derive the .texture sibling path (e.g. "project://assets/foo/bar.png" -> ".../bar.texture")
 		const std::string pathStr(path);
 		std::string texturePath;
 		{

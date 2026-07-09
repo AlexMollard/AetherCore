@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "editor/EditorProjectActions.hpp"
 #include "AppLayer.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "utils/LayoutPresetStore.hpp"
@@ -63,7 +64,9 @@ namespace aether::app
 		void SaveLauncherSettings();
 		void DrawProjectLauncher(LayerContext& context);
 		void OpenProject(std::filesystem::path root);
+		void RefreshProjectServices();
 		void CreateProject(std::filesystem::path root, std::string_view name);
+		[[nodiscard]] EditorProjectActionResult PackProject(const EditorProjectContext& project) const;
 		void AddRecentProject(std::filesystem::path root, std::string name);
 		[[nodiscard]] bool HasCurrentProject() const;
 		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
@@ -101,6 +104,8 @@ namespace aether::app
 		char m_newPresetName[64] = {};
 
 		EditorProjectContext m_currentProject;
+		EditorProjectActions m_projectActions;
+		ServiceContainer* m_services = nullptr;
 		std::vector<EditorProjectContext> m_recentProjects;
 		bool m_projectLoaded = false;
 		bool m_launcherOpen = true;

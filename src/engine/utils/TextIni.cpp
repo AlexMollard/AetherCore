@@ -5,6 +5,9 @@
 #include <sstream>
 #include <toml++/toml.hpp>
 
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
+
 namespace aether::text
 {
 	namespace
@@ -145,7 +148,16 @@ namespace aether::text
 
 	void ParseToml(std::string_view text, const std::function<void(const IniEntry&)>& onEntry)
 	{
-		auto parsed = toml::parse(text);
+		toml::table parsed;
+		try
+		{
+			parsed = toml::parse(text);
+		}
+		catch (const toml::parse_error& err)
+		{
+			AE_ERROR(LogCategory::Engine, "TOML parse error at line {}: {}", err.source().begin.line, err.description());
+			return;
+		}
 		EmitTomlTable(parsed, {}, onEntry);
 	}
 } // namespace aether::text

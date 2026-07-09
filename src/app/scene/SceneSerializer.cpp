@@ -1130,7 +1130,7 @@ namespace aether::app::scene
 	{
 		std::filesystem::path g_projectScenesDirectory;
 		std::filesystem::path g_projectPrefabsDirectory;
-	}
+	} // namespace
 
 	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir)
 	{

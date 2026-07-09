@@ -33,7 +33,7 @@ public sealed class Player : EntityScript
         // append it once per session (clip 0 is the model idle).
         if (Animation.ClipCount(Self) < 2)
         {
-            int walk = Animation.AddClip(Self, "assets://animations/Walking_mixamo.com.anim", lockRoot: true);
+            int walk = Animation.AddClip(Self, "project://assets/animations/Walking/Walking_mixamo.com.anim", lockRoot: true);
             if (walk >= 0)
             {
                 Animation.Compile(Self);

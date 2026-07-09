@@ -23,7 +23,7 @@ public static class FoxSystem
             Entity fox = World.Create();
             fox.AddTransform();
             fox.SetTransform(pos, new Vector3(0.0f, yaw, 0.0f), new Vector3(0.05f, 0.05f, 0.05f));
-            fox.LoadModel("assets://models/Fox/Fox.mesh");
+            fox.LoadModel("project://assets/models/Fox/Fox.mesh");
 
             // Play the Run clip, desynchronized per fox.
             Animation.SetClip(fox, 2);

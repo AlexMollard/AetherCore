@@ -133,7 +133,7 @@ namespace aether::ui
 			return false;
 		}
 
-		const std::string atlasPath = "assets://fonts/" + std::string(name) + "-Regular.fontatlas";
+		const std::string atlasPath = "engine://fonts/" + std::string(name) + "-Regular.fontatlas";
 		const auto atlasBytes = io::FileSystem::ReadFile(atlasPath);
 		if (!atlasBytes.has_value())
 		{

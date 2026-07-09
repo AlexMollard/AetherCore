@@ -851,7 +851,7 @@ namespace aether::assets
 					{
 						AE_VERBOSE(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
 
-						// Resolve animation paths relative to the VFS mount root (e.g., assets://animations/...).
+						// Resolve animation paths relative to the VFS mount root (e.g., project://assets/animations/...).
 						const std::string mountRoot = animSetPath.substr(0, animSetPath.find("://") + 3);
 
 						// Animation channels use 0-based bone indices (from packer's remapTable).

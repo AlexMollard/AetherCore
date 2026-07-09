@@ -12,8 +12,8 @@ alphaBlend = false
 alphaMask = false
 
 [textures]
-albedo = "assets://textures/tex_DebugUVTiles.png"
-# normal = "assets://textures/your_normal.png"
-# metallicRoughness = "assets://textures/your_metalrough.png"
-# occlusion = "assets://textures/your_ao.png"
-# emissive = "assets://textures/your_emissive.png"
+albedo = "project://assets/textures/tex_DebugUVTiles.png"
+# normal = "project://assets/textures/your_normal.png"
+# metallicRoughness = "project://assets/textures/your_metalrough.png"
+# occlusion = "project://assets/textures/your_ao.png"
+# emissive = "project://assets/textures/your_emissive.png"

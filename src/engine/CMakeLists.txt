@@ -46,8 +46,8 @@ target_compile_definitions(Engine PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
     GLM_ENABLE_EXPERIMENTAL
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
-    AETHER_DEFAULT_ASSET_PAK="${CMAKE_BINARY_DIR}/data/assets.pak"
-    AETHER_DEFAULT_ASSET_DIR="${CMAKE_SOURCE_DIR}/resources"
+    AETHER_DEFAULT_ENGINE_PAK="${CMAKE_BINARY_DIR}/data/engine.pak"
+    AETHER_DEFAULT_ENGINE_DIR="${CMAKE_BINARY_DIR}/engine_assets"
     AETHER_DEFAULT_PROJECT_PAK="${CMAKE_BINARY_DIR}/data/project.pak"
     AETHER_DEFAULT_PROJECT_DIR="${AETHERCORE_PROJECT_DIR}"
     # Build-tier config - Defines.hpp reads these for policy (Tracy, asserts, etc.)

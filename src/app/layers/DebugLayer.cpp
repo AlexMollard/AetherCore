@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -12,6 +13,7 @@
 #include <sstream>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 using namespace std::string_view_literals;
 
@@ -36,6 +38,7 @@ using namespace std::string_view_literals;
 #include "debug/LightingPanel.hpp"
 #include "debug/PerformancePanel.hpp"
 #include "debug/PostProcessingPanel.hpp"
+#include "debug/ProjectPanel.hpp"
 #include "debug/RenderGraphPanel.hpp"
 #include "debug/SettingsPanel.hpp"
 #include "debug/TonemapPanel.hpp"
@@ -46,6 +49,7 @@ using namespace std::string_view_literals;
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
 #include "io/FileSystem.hpp"
+#include "io/PlatformPaths.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
@@ -59,6 +63,7 @@ using namespace std::string_view_literals;
 #include "vulkan/Swapchain.hpp"
 #include "utils/FuzzyMatch.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "utils/SettingsService.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TextIni.hpp"
@@ -100,6 +105,10 @@ namespace aether::app
 			if (panelName == "File Explorer")
 			{
 				return ICON_FA_FOLDER_OPEN;
+			}
+			if (panelName == "Project")
+			{
+				return ICON_FA_CUBE;
 			}
 			if (panelName == "Viewport")
 			{
@@ -187,6 +196,75 @@ namespace aether::app
 		std::string DisplayPath(const std::filesystem::path& path)
 		{
 			return path.empty() ? std::string{} : path.lexically_normal().string();
+		}
+
+		std::string ShellQuotePath(const std::filesystem::path& path)
+		{
+			std::string text = path.string();
+			std::string quoted = "\"";
+			for (const char c: text)
+			{
+				if (c == '"')
+				{
+					quoted += "\\\"";
+				}
+				else
+				{
+					quoted += c;
+				}
+			}
+			quoted += '"';
+			return quoted;
+		}
+
+		std::string ReadLogExcerpt(const std::filesystem::path& path)
+		{
+			std::ifstream in(path, std::ios::binary);
+			if (!in.is_open())
+			{
+				return {};
+			}
+
+			std::stringstream buffer;
+			buffer << in.rdbuf();
+			std::string text = buffer.str();
+			constexpr std::size_t kMaxExcerpt = 420;
+			if (text.size() > kMaxExcerpt)
+			{
+				text.resize(kMaxExcerpt);
+				text += "...";
+			}
+			return text;
+		}
+
+		std::optional<std::filesystem::path> FindAssetPackerExecutable()
+		{
+			std::error_code ec;
+			const std::filesystem::path exeDir = io::PlatformPaths::GetExecutableDir();
+			const std::filesystem::path configName = exeDir.filename();
+
+			std::vector<std::filesystem::path> candidates;
+			candidates.push_back(exeDir / "AssetPacker.exe");
+			candidates.push_back(exeDir.parent_path().parent_path().parent_path() / "tools" / configName / "AssetPacker.exe");
+
+			const std::filesystem::path cwd = std::filesystem::current_path(ec);
+			if (!ec)
+			{
+				candidates.push_back(cwd / "tools" / configName / "AssetPacker.exe");
+				candidates.push_back(cwd / "tools" / "RelWithDebInfo" / "AssetPacker.exe");
+				candidates.push_back(cwd / "tools" / "Debug" / "AssetPacker.exe");
+				candidates.push_back(cwd / "tools" / "Release" / "AssetPacker.exe");
+			}
+
+			for (const std::filesystem::path& candidate: candidates)
+			{
+				ec.clear();
+				if (std::filesystem::is_regular_file(candidate, ec))
+				{
+					return std::filesystem::weakly_canonical(candidate, ec);
+				}
+			}
+			return std::nullopt;
 		}
 
 		std::filesystem::path ProjectDirectoryPath(const std::filesystem::path& root)
@@ -358,6 +436,58 @@ namespace aether::app
 			return out;
 		}
 
+		bool SeedProjectTemplateFiles(const std::filesystem::path& root, std::string& error)
+		{
+			auto CopyTemplateFile = [&](const std::filesystem::path& srcRoot, const char* relPath, const std::filesystem::path& dest) -> bool
+			{
+				std::error_code ec;
+				if (std::filesystem::exists(dest, ec))
+					return true;
+				std::filesystem::create_directories(dest.parent_path(), ec);
+				if (ec)
+				{
+					error = "Could not create project folder: " + ec.message();
+					return false;
+				}
+				std::filesystem::copy_file(
+					srcRoot / relPath,
+					dest,
+					std::filesystem::copy_options::none,
+					ec);
+				if (ec)
+				{
+					error = "Could not copy project template file '" + std::string(relPath) + "': " + ec.message();
+					return false;
+				}
+				return true;
+			};
+
+			return CopyTemplateFile(AETHER_DEFAULT_SETTINGS_DIR, "engine.toml", root / "settings" / "engine.toml")
+				&& CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
+		}
+
+		std::string ReadProjectStartupScene(const EditorProjectContext& project)
+		{
+			const std::filesystem::path settingsPath = project.settingsDir / "engine.toml";
+			std::ifstream in(settingsPath);
+			if (!in.is_open())
+			{
+				return {};
+			}
+			std::stringstream buffer;
+			buffer << in.rdbuf();
+			std::string startupScene;
+			text::ParseToml(buffer.str(),
+			        [&](const text::IniEntry& entry)
+			        {
+				        if (entry.fullKey == "app.startupscene")
+				        {
+					        startupScene = text::StripQuotes(entry.value);
+				        }
+			        });
+			return startupScene;
+		}
+
 		bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error)
 		{
 			std::error_code ec;
@@ -374,7 +504,7 @@ namespace aether::app
 				return false;
 			}
 
-			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/prefabs"sv, "scenes"sv, "scripts"sv, "settings"sv})
+			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv, "settings"sv})
 			{
 				std::filesystem::create_directories(root / std::filesystem::path(dir), ec);
 				if (ec)
@@ -400,7 +530,7 @@ namespace aether::app
 			out << "prefabs = \"assets/prefabs\"\n";
 			out << "scripts = \"scripts\"\n";
 			out << "settings = \"settings\"\n";
-			return true;
+			return SeedProjectTemplateFiles(root, error);
 		}
 
 #ifdef _WIN32
@@ -740,11 +870,30 @@ namespace aether::app
 		m_currentProject.loaded = true;
 		io::FileSystem::Mount("project", m_currentProject.root);
 		scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
+		RefreshProjectServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
 		m_projectLoaded = true;
 		m_launcherOpen = false;
 		SaveLauncherSettings();
 		AE_INFO(LogCategory::App, "Opened editor project '{}' at {}", m_currentProject.name, DisplayPath(m_currentProject.root));
+	}
+
+	void DebugLayer::RefreshProjectServices()
+	{
+		if (m_services == nullptr)
+		{
+			return;
+		}
+
+		m_services->Register<EditorProjectContext>(m_currentProject);
+		if (auto* settings = m_services->TryGet<aether::SettingsService>())
+		{
+			const std::string startupScene = ReadProjectStartupScene(m_currentProject);
+			if (!startupScene.empty())
+			{
+				settings->Values().app.startupScene = startupScene;
+			}
+		}
 	}
 
 	void DebugLayer::CreateProject(std::filesystem::path root, std::string_view name)
@@ -767,6 +916,71 @@ namespace aether::app
 			return;
 		}
 		OpenProject(root);
+	}
+
+	EditorProjectActionResult DebugLayer::PackProject(const EditorProjectContext& project) const
+	{
+		if (!project.IsLoaded())
+		{
+			return {.succeeded = false, .message = "No project is open."};
+		}
+		if (!HasProjectDescriptor(project.root))
+		{
+			return {.succeeded = false, .message = "Project descriptor is missing: " + DisplayPath(DescriptorPath(project.root))};
+		}
+
+		const std::optional<std::filesystem::path> packer = FindAssetPackerExecutable();
+		if (!packer)
+		{
+			return {.succeeded = false, .message = "Could not find AssetPacker.exe in the editor build output."};
+		}
+
+		std::error_code ec;
+		const std::filesystem::path exeDataDir = io::PlatformPaths::GetExecutableDir() / "data";
+		const std::filesystem::path cwd = std::filesystem::current_path(ec);
+		const std::filesystem::path outputDir = ec ? exeDataDir : cwd / "data";
+		std::filesystem::create_directories(outputDir, ec);
+		if (ec)
+		{
+			return {.succeeded = false, .message = "Could not create output data directory: " + ec.message()};
+		}
+
+		const std::filesystem::path outputPak = outputDir / "project.pak";
+		const std::filesystem::path runLog = outputDir / "project.pak.editor.log";
+		const std::string command = ShellQuotePath(*packer) + " --project --import-materials " + ShellQuotePath(project.root) + " " + ShellQuotePath(outputPak) + " > " + ShellQuotePath(runLog) + " 2>&1";
+		const int exitCode = std::system(command.c_str());
+		if (exitCode != 0)
+		{
+			std::string message = "AssetPacker failed with exit code " + std::to_string(exitCode) + ".";
+			const std::string excerpt = ReadLogExcerpt(runLog);
+			if (!excerpt.empty())
+			{
+				message += " " + excerpt;
+			}
+			return {.succeeded = false, .message = std::move(message), .outputPath = outputPak};
+		}
+
+		ec.clear();
+		if (!std::filesystem::equivalent(outputDir, exeDataDir, ec))
+		{
+			ec.clear();
+			std::filesystem::create_directories(exeDataDir, ec);
+			if (!ec)
+			{
+				std::filesystem::copy_file(outputPak, exeDataDir / "project.pak", std::filesystem::copy_options::overwrite_existing, ec);
+				std::filesystem::copy_file(outputPak.string() + ".log", exeDataDir / "project.pak.log", std::filesystem::copy_options::overwrite_existing, ec);
+				std::filesystem::copy_file(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest", std::filesystem::copy_options::overwrite_existing, ec);
+			}
+		}
+
+		std::uintmax_t size = 0;
+		ec.clear();
+		if (std::filesystem::is_regular_file(outputPak, ec))
+		{
+			size = std::filesystem::file_size(outputPak, ec);
+		}
+		AE_INFO(LogCategory::App, "Packed project '{}' to {}", project.name, DisplayPath(outputPak));
+		return {.succeeded = true, .message = "Packed project.pak (" + std::to_string(size / 1024) + " KB).", .outputPath = outputPak};
 	}
 
 	void DebugLayer::DrawProjectLauncher(LayerContext&)
@@ -910,6 +1124,7 @@ namespace aether::app
 	void DebugLayer::OnAttach(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+		m_services = &context.services;
 		LoadSettings(context);
 
 		// Shared selection service: registered before panels attach so every
@@ -918,6 +1133,22 @@ namespace aether::app
 		// Editor undo: panels push explicit points for keyboard-driven edits;
 		// mouse gestures are covered by the per-click push in OnImGui.
 		context.services.Register<UndoStack>(m_undoStack);
+		m_projectActions.openLauncher = [this]()
+		{
+			m_launcherOpen = true;
+		};
+		m_projectActions.reloadProject = [this]()
+		{
+			if (!m_currentProject.root.empty())
+			{
+				OpenProject(m_currentProject.root);
+			}
+		};
+		m_projectActions.packProject = [this](const EditorProjectContext& project)
+		{
+			return PackProject(project);
+		};
+		context.services.Register<EditorProjectActions>(m_projectActions);
 		context.services.Register<EditorProjectContext>(m_currentProject);
 
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
@@ -925,6 +1156,7 @@ namespace aether::app
 		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));
+		m_panels.push_back(std::make_unique<ProjectPanel>());
 		m_panels.push_back(std::make_unique<FileExplorerPanel>());
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<UiCanvasPanel>());
@@ -963,8 +1195,11 @@ namespace aether::app
 		m_panels.clear();
 		m_hierarchyPanel = nullptr;
 		context.services.Unregister<EditorProjectContext>();
+		context.services.Unregister<EditorProjectActions>();
 		context.services.Unregister<UndoStack>();
 		context.services.Unregister<SceneSelection>();
+		m_services = nullptr;
+		m_projectActions = {};
 
 		m_errorToasts.clear();
 		m_dockspaceBuilt = false;
@@ -1490,7 +1725,7 @@ namespace aether::app
 				};
 
 				static const std::vector<MenuGroup> kGroups = {
-				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
+				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
@@ -1665,6 +1900,7 @@ namespace aether::app
 			ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.28f, nullptr, &remaining);
 
 			ImGui::DockBuilderDockWindow("Scene", dock_left);
+			ImGui::DockBuilderDockWindow("Project", dock_left_files);
 			ImGui::DockBuilderDockWindow("File Explorer", dock_left_files);
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
 			ImGui::DockBuilderDockWindow("UI Canvas", remaining);

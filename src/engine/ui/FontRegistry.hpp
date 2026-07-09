@@ -19,7 +19,7 @@ namespace aether::ui
 
 	// Loads and caches fonts baked by AssetPacker's "bake-font" subcommand
 	// (resources/fonts/<name>-Regular.fontmeta + .fontatlas, mounted under
-	// assets://fonts/). Parses glyph metrics on the CPU; the atlas texture's
+	// engine://fonts/). Parses glyph metrics on the CPU; the atlas texture's
 	// bindless slot is filled in by the GPU-owning caller (UiRenderer) after
 	// Load returns - see FontAsset::atlasBindlessSlot.
 	class FontRegistry
