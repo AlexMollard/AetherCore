@@ -66,8 +66,6 @@ namespace aether::app
 		void OpenProject(std::filesystem::path root);
 		void RefreshProjectServices();
 		void CreateProject(std::filesystem::path root, std::string_view name);
-		[[nodiscard]] EditorProjectActionResult PackProject(const EditorProjectContext& project) const;
-		[[nodiscard]] EditorProjectActionResult PublishProject(const EditorProjectContext& project) const;
 		void AddRecentProject(std::filesystem::path root, std::string name);
 		[[nodiscard]] bool HasCurrentProject() const;
 		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
