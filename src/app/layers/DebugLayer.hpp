@@ -16,6 +16,7 @@
 #include "utils/TomlConfig.hpp"
 
 #include "debug/DebugPanel.hpp"
+#include "debug/ProjectLauncherWindow.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/UndoStack.hpp"
 
@@ -108,11 +109,8 @@ namespace aether::app
 		std::vector<EditorProjectContext> m_recentProjects;
 		bool m_projectLoaded = false;
 		bool m_launcherOpen = true;
-		bool m_launcherOpenLast = false;
-		char m_projectOpenPath[260] = {};
-		char m_projectNewPath[260] = {};
-		char m_projectNewName[96] = {};
-		std::string m_launcherError;
+		ProjectLauncherWindow m_projectLauncher;
+		ProjectLauncherWindowState m_projectLauncherState;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 		// Non-owning: observes the HierarchyPanel instance owned by m_panels, so

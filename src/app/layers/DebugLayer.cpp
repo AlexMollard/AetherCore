@@ -691,7 +691,7 @@ namespace aether::app
 
 	void DebugLayer::LoadLauncherSettings()
 	{
-		m_launcherOpenLast = m_debugConfig.GetBool("launcher.open_last", false);
+		m_projectLauncherState.openLastProject = m_debugConfig.GetBool("launcher.open_last", false);
 		m_currentProject.root = NormalizePath(m_debugConfig.GetString("launcher.current.path"));
 		m_currentProject.name = m_debugConfig.GetString("launcher.current.name");
 		if (!m_currentProject.root.empty() && m_currentProject.name.empty())
@@ -721,11 +721,11 @@ namespace aether::app
 		}
 
 		const std::filesystem::path cwd = NormalizePath(std::filesystem::current_path());
-		std::snprintf(m_projectOpenPath, sizeof(m_projectOpenPath), "%s", DisplayPath(cwd).c_str());
-		std::snprintf(m_projectNewPath, sizeof(m_projectNewPath), "%s", DisplayPath(cwd / "AetherProject").c_str());
-		std::snprintf(m_projectNewName, sizeof(m_projectNewName), "%s", "AetherProject");
+		std::snprintf(m_projectLauncherState.openPath.data(), m_projectLauncherState.openPath.size(), "%s", DisplayPath(cwd).c_str());
+		std::snprintf(m_projectLauncherState.newPath.data(), m_projectLauncherState.newPath.size(), "%s", DisplayPath(cwd / "AetherProject").c_str());
+		std::snprintf(m_projectLauncherState.newName.data(), m_projectLauncherState.newName.size(), "%s", "AetherProject");
 
-		if (m_launcherOpenLast && HasCurrentProject())
+		if (m_projectLauncherState.openLastProject && HasCurrentProject())
 		{
 			OpenProject(m_currentProject.root);
 		}
@@ -733,7 +733,7 @@ namespace aether::app
 
 	void DebugLayer::SaveLauncherSettings()
 	{
-		m_debugConfig.Set("launcher.open_last", m_launcherOpenLast);
+		m_debugConfig.Set("launcher.open_last", m_projectLauncherState.openLastProject);
 		m_debugConfig.Set("launcher.current.path", DisplayPath(m_currentProject.root));
 		m_debugConfig.Set("launcher.current.name", m_currentProject.name);
 		for (int i = 0; i < kMaxRecentProjects; ++i)
@@ -781,17 +781,17 @@ namespace aether::app
 
 	void DebugLayer::OpenProject(std::filesystem::path root)
 	{
-		m_launcherError.clear();
+		m_projectLauncherState.error.clear();
 		root = ResolveProjectRoot(std::move(root));
 		if (root.empty())
 		{
-			m_launcherError = "Choose a project folder.";
+			m_projectLauncherState.error = "Choose a project folder.";
 			return;
 		}
 		auto projectResult = ReadProjectDescriptor(root);
 		if (!projectResult)
 		{
-			m_launcherError = "No .project/aether.project found in that folder.";
+			m_projectLauncherState.error = "No .project/aether.project found in that folder.";
 			return;
 		}
 		m_currentProject = *std::move(projectResult);
@@ -826,7 +826,7 @@ namespace aether::app
 
 	void DebugLayer::CreateProject(std::filesystem::path root, std::string_view name)
 	{
-		m_launcherError.clear();
+		m_projectLauncherState.error.clear();
 		root = ResolveProjectRoot(std::move(root));
 		std::string projectName(name);
 		projectName = text::TrimAscii(std::move(projectName));
@@ -836,10 +836,10 @@ namespace aether::app
 		}
 		if (root.empty())
 		{
-			m_launcherError = "Choose a project folder.";
+			m_projectLauncherState.error = "Choose a project folder.";
 			return;
 		}
-		if (!WriteProjectDescriptor(root, projectName, m_launcherError))
+		if (!WriteProjectDescriptor(root, projectName, m_projectLauncherState.error))
 		{
 			return;
 		}
@@ -848,140 +848,39 @@ namespace aether::app
 
 	void DebugLayer::DrawProjectLauncher(LayerContext&)
 	{
-		ImGuiViewport* viewport = ImGui::GetMainViewport();
-		const ImVec2 launcherSize(std::max(620.0f, std::min(900.0f, viewport->WorkSize.x - 72.0f)), std::max(440.0f, std::min(580.0f, viewport->WorkSize.y - 72.0f)));
-		const ImVec2 launcherPos(viewport->WorkPos.x + (viewport->WorkSize.x - launcherSize.x) * 0.5f, viewport->WorkPos.y + (viewport->WorkSize.y - launcherSize.y) * 0.5f);
-		ImGui::SetNextWindowPos(launcherPos, ImGuiCond_Appearing);
-		ImGui::SetNextWindowSize(launcherSize, ImGuiCond_Always);
-		ImGui::SetNextWindowViewport(viewport->ID);
-		const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking;
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
-		ImGui::Begin("AetherCore Launcher", nullptr, flags);
-		ImGui::PopStyleVar(2);
+		ProjectLauncherWindowModel model;
+		model.projectLoaded = m_projectLoaded;
+		model.hasCurrentProject = HasCurrentProject();
+		model.currentProject = &m_currentProject;
+		model.recentProjects = std::span<const EditorProjectContext>(m_recentProjects.data(), m_recentProjects.size());
 
-		const float contentWidth = ImGui::GetContentRegionAvail().x;
-		ImGui::Text(ICON_FA_CUBE "  AetherCore");
-		ImGui::SameLine();
-		ImGui::TextDisabled("Project Launcher");
-		if (m_projectLoaded)
+		ProjectLauncherWindowActions actions;
+		actions.openProject = [this](std::filesystem::path root)
 		{
-			const float closeWidth = ImGui::CalcTextSize("Back to Editor").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-			ImGui::SameLine(std::max(ImGui::GetCursorPosX() + ImGui::GetStyle().ItemSpacing.x, contentWidth - closeWidth));
-			if (ImGui::Button("Back to Editor"))
-			{
-				m_launcherOpen = false;
-			}
-		}
-		ImGui::Separator();
-
-		const float leftWidth = std::min(330.0f, contentWidth * 0.38f);
-		const float bodyHeight = ImGui::GetContentRegionAvail().y;
-		ImGui::BeginChild("##launcherRecent", ImVec2(leftWidth, bodyHeight), true);
-		ImGui::TextUnformatted("Recent");
-		ImGui::Separator();
-		if (m_recentProjects.empty())
+			OpenProject(std::move(root));
+		};
+		actions.createProject = [this](std::filesystem::path root, std::string_view name)
 		{
-			ImGui::TextDisabled("(none)");
-		}
-		for (const EditorProjectContext& project: m_recentProjects)
+			CreateProject(std::move(root), name);
+		};
+		actions.browseFolder = []() -> std::optional<std::filesystem::path>
 		{
-			const std::string projectPath = DisplayPath(project.root);
-			ImGui::PushID(projectPath.c_str());
-			const bool selected = m_currentProject.root == project.root;
-			if (ImGui::Selectable(project.name.c_str(), selected, ImGuiSelectableFlags_SpanAvailWidth, ImVec2(0.0f, ImGui::GetFrameHeight() * 1.35f)))
-			{
-				OpenProject(project.root);
-			}
-			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-			{
-				ImGui::SetTooltip("%s", projectPath.c_str());
-			}
-			ImGui::PopID();
-		}
-		ImGui::EndChild();
-
-		ImGui::SameLine();
-		ImGui::BeginChild("##launcherActions", ImVec2(0.0f, bodyHeight), true);
-		if (HasCurrentProject())
-		{
-			ImGui::TextUnformatted(m_currentProject.name.c_str());
-			ImGui::TextDisabled("%s", DisplayPath(m_currentProject.root).c_str());
-			if (ImGui::Button(ICON_FA_PLAY "  Continue", ImVec2(160.0f, 0.0f)))
-			{
-				OpenProject(m_currentProject.root);
-			}
-			ImGui::SameLine();
-			if (ImGui::Checkbox("Open last project", &m_launcherOpenLast))
-			{
-				SaveLauncherSettings();
-			}
-			ImGui::Separator();
-		}
-
-		if (ImGui::BeginTabBar("##launcherTabs"))
-		{
-			if (ImGui::BeginTabItem("Open"))
-			{
-				ImGui::SetNextItemWidth(-42.0f);
-				ImGui::InputTextWithHint("##openProjectPath", "Project folder...", m_projectOpenPath, sizeof(m_projectOpenPath));
-				ImGui::SameLine();
-				if (ImGui::Button(ICON_FA_FOLDER_OPEN "##browseOpen"))
-				{
 #ifdef _WIN32
-					if (const auto folder = PickProjectFolder())
-					{
-						std::snprintf(m_projectOpenPath, sizeof(m_projectOpenPath), "%s", DisplayPath(*folder).c_str());
-					}
+			return PickProjectFolder();
+#else
+			return std::nullopt;
 #endif
-				}
-				if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-				{
-					ImGui::SetTooltip("Browse");
-				}
-				if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Open Project"))
-				{
-					OpenProject(m_projectOpenPath);
-				}
-				ImGui::EndTabItem();
-			}
-
-			if (ImGui::BeginTabItem("New"))
-			{
-				ImGui::SetNextItemWidth(-1.0f);
-				ImGui::InputTextWithHint("##newProjectName", "Project name...", m_projectNewName, sizeof(m_projectNewName));
-				ImGui::SetNextItemWidth(-42.0f);
-				ImGui::InputTextWithHint("##newProjectPath", "Project folder...", m_projectNewPath, sizeof(m_projectNewPath));
-				ImGui::SameLine();
-				if (ImGui::Button(ICON_FA_FOLDER_OPEN "##browseNew"))
-				{
-#ifdef _WIN32
-					if (const auto folder = PickProjectFolder())
-					{
-						std::snprintf(m_projectNewPath, sizeof(m_projectNewPath), "%s", DisplayPath(*folder).c_str());
-					}
-#endif
-				}
-				if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-				{
-					ImGui::SetTooltip("Browse");
-				}
-				if (ImGui::Button(ICON_FA_PLUS "  Create Project"))
-				{
-					CreateProject(m_projectNewPath, m_projectNewName);
-				}
-				ImGui::EndTabItem();
-			}
-			ImGui::EndTabBar();
-		}
-
-		if (!m_launcherError.empty())
+		};
+		actions.closeLauncher = [this]()
 		{
-			ImGui::Separator();
-			ImGui::TextColored(ImVec4(colors::Error.r, colors::Error.g, colors::Error.b, colors::Error.a), "%s", m_launcherError.c_str());
-		}
-		ImGui::EndChild();
-		ImGui::End();
+			m_launcherOpen = false;
+		};
+		actions.saveSettings = [this]()
+		{
+			SaveLauncherSettings();
+		};
+
+		m_projectLauncher.Draw(m_projectLauncherState, model, actions);
 	}
 
 	void DebugLayer::OnAttach(LayerContext& context)
