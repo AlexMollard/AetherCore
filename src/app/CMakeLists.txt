@@ -193,3 +193,79 @@ if(NVIDIA_AFTERMATH_FOUND)
         VERBATIM
     )
 endif()
+
+# ── Redistributable package ─────────────────────────────────────────────────
+# The build output directory is a developer run tree and may contain stale files,
+# import libraries, or PDBs. PackageGame creates a clean folder that can be handed
+# to another PC: App.exe + runtime DLLs + data/ payload only.
+set(_aether_package_dir "${CMAKE_BINARY_DIR}/package/$<CONFIG>/AetherCore")
+set(_aether_package_expect_project_pak OFF)
+
+set(_aether_package_commands
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_aether_package_dir}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${_aether_package_dir}"
+        "${_aether_package_dir}/data"
+        "${_aether_package_dir}/data/config"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:App>"
+        "${_aether_package_dir}/$<TARGET_FILE_NAME:App>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/engine.pak"
+        "${_aether_package_dir}/data/engine.pak"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/config/engine.toml"
+        "${_aether_package_dir}/data/config/engine.toml"
+    COMMAND "${CMAKE_COMMAND}"
+        -DAPP_EXE=$<TARGET_FILE:App>
+        -DPACKAGE_DIR=${_aether_package_dir}
+        -P "${CMAKE_SOURCE_DIR}/CMake/CopyRuntimeDependencies.cmake"
+)
+
+if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
+    set(_aether_package_expect_project_pak ON)
+    list(APPEND _aether_package_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_BINARY_DIR}/data/project.pak"
+            "${_aether_package_dir}/data/project.pak")
+endif()
+
+if(AETHER_HAS_DOTNET)
+    list(APPEND _aether_package_commands
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${_aether_package_dir}/data/scripts"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_BINARY_DIR}/data/scripts/managed"
+            "${_aether_package_dir}/data/scripts/managed")
+endif()
+
+if(WIN32 AND AETHER_NETHOST_DLL)
+    list(APPEND _aether_package_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${AETHER_NETHOST_DLL}"
+            "${_aether_package_dir}/nethost.dll")
+endif()
+
+if(NVIDIA_AFTERMATH_FOUND)
+    list(APPEND _aether_package_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${_am_dll}"
+            "${_aether_package_dir}")
+endif()
+
+list(APPEND _aether_package_commands
+    COMMAND "${CMAKE_COMMAND}"
+        -DPACKAGE_DIR=${_aether_package_dir}
+        -P "${CMAKE_SOURCE_DIR}/CMake/PrunePackageDevFiles.cmake"
+    COMMAND "${CMAKE_COMMAND}"
+        -DPACKAGE_DIR=${_aether_package_dir}
+        -DEXPECT_PROJECT_PAK=${_aether_package_expect_project_pak}
+        -DEXPECT_DOTNET=${AETHER_HAS_DOTNET}
+        -DEXPECT_NETHOST=$<BOOL:${AETHER_NETHOST_DLL}>
+        -P "${CMAKE_SOURCE_DIR}/CMake/VerifyAppPackage.cmake")
+
+add_custom_target(PackageGame
+    ${_aether_package_commands}
+    DEPENDS App
+    COMMENT "Creating redistributable package at ${_aether_package_dir}"
+    VERBATIM USES_TERMINAL)
