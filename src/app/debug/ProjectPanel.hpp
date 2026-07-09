@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -36,8 +37,12 @@ namespace aether::app
 		void EnsureStandardFolders(const EditorProjectContext& project);
 		void LoadProjectSettings(const EditorProjectContext& project);
 		void SaveProjectSettings(const EditorProjectContext& project);
+		void LoadPublishSettings(const EditorProjectContext& project);
+		void SavePublishSettings(const EditorProjectContext& project);
+		void ResetPublishSettings(const EditorProjectContext& project);
 		void DrawFolderRow(const char* label, const std::filesystem::path& path);
 		void DrawSceneTable();
+		void DrawPublishDialog(LayerContext& context, const EditorProjectContext& project);
 
 		std::filesystem::path m_lastRoot;
 		std::vector<SceneEntry> m_scenes;
@@ -49,6 +54,15 @@ namespace aether::app
 		std::filesystem::path m_lastPublishPath;
 		std::string m_publishStatus;
 		bool m_publishSucceeded = false;
+		std::array<char, 128> m_publishProductName{};
+		std::array<char, 64> m_publishPlatformName{};
+		std::array<char, 260> m_publishOutputRoot{};
+		bool m_publishCleanOutput = true;
+		bool m_publishBuildScripts = true;
+		bool m_publishUsePackageTemplate = true;
+		bool m_publishVerifyOutput = true;
+		bool m_publishSyncEditorPak = true;
+		bool m_publishOpenAfter = true;
 		bool m_dirtySettings = false;
 	};
 } // namespace aether::app

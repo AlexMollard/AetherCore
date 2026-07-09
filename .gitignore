@@ -9,6 +9,7 @@
 /artifacts/
 **/artifacts/
 **/Builds/
+**/.project/publish.toml
 # Stray per-project intermediates (normally routed to /artifacts via ArtifactsPath)
 **/obj/
 managed/**/bin/

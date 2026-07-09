@@ -160,6 +160,39 @@ namespace aether::app
 #endif
 		}
 
+		std::string SanitizePathSegment(std::string value, std::string_view fallback)
+		{
+			for (char& c: value)
+			{
+				const unsigned char ch = static_cast<unsigned char>(c);
+				if (ch < 32 || c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
+				{
+					c = '_';
+				}
+			}
+			while (!value.empty() && (value.back() == ' ' || value.back() == '.'))
+			{
+				value.pop_back();
+			}
+			if (value.empty())
+			{
+				value = fallback;
+			}
+			return value;
+		}
+
+		std::filesystem::path ResolvePublishRoot(const EditorProjectContext& project, const EditorProjectPublishOptions& options)
+		{
+			return options.outputRoot.empty() ? project.root / "Builds" : options.outputRoot;
+		}
+
+		std::filesystem::path ResolvePublishDirectory(const EditorProjectContext& project, const EditorProjectPublishOptions& options)
+		{
+			const std::string platform = SanitizePathSegment(options.platformName, PublishPlatformDirectoryName());
+			const std::string product = SanitizePathSegment(options.productName, project.name.empty() ? "AetherCore"sv : std::string_view(project.name));
+			return ResolvePublishRoot(project, options) / platform / product;
+		}
+
 		bool CopyDirectoryRecursive(const std::filesystem::path& source, const std::filesystem::path& destination, std::string& error)
 		{
 			std::error_code ec;
@@ -537,89 +570,109 @@ namespace aether::app
 		         "</Project>\n";
 	}
 
-	EditorProjectActionResult PackProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config)
+	namespace
 	{
-		if (std::optional<EditorProjectActionResult> validationError = ValidateProjectForPackaging(project))
+		EditorProjectActionResult PackProjectInternal(const EditorProjectContext& project, const EditorProjectPublishConfig& config, bool syncEditorRuntimeProjectPak)
 		{
-			return *validationError;
-		}
-		if (config.assetPackerExe.empty())
-		{
-			return {.succeeded = false, .message = "Could not find AssetPacker.exe in the editor build output."};
-		}
-
-		const std::filesystem::path exeDataDir = config.executableDir / "data";
-		const std::filesystem::path outputDir = project.root / "Builds" / "Pack";
-		if (auto dirResult = io::file_util::CreateDirectories(outputDir); !dirResult)
-		{
-			return {.succeeded = false, .message = "Could not create output data directory: " + dirResult.error().message};
-		}
-
-		const std::filesystem::path outputPak = outputDir / "project.pak";
-		const std::filesystem::path runLog = outputDir / "project.pak.editor.log";
-		const std::string command = ShellQuotePath(config.assetPackerExe) + " --project --import-materials " + ShellQuotePath(project.root) + " " + ShellQuotePath(outputPak) + " > " + ShellQuotePath(runLog) + " 2>&1";
-		const int exitCode = std::system(command.c_str());
-		if (exitCode != 0)
-		{
-			std::string message = "AssetPacker failed with exit code " + std::to_string(exitCode) + ".";
-			const std::string excerpt = ReadLogExcerpt(runLog);
-			if (!excerpt.empty())
+			if (std::optional<EditorProjectActionResult> validationError = ValidateProjectForPackaging(project))
 			{
-				message += " " + excerpt;
+				return *validationError;
 			}
-			return {.succeeded = false, .message = std::move(message), .outputPath = outputPak};
-		}
-
-		if (outputDir != exeDataDir)
-		{
-			if (auto dirResult = io::file_util::CreateDirectories(exeDataDir); dirResult)
+			if (config.assetPackerExe.empty())
 			{
-				if (auto result = io::file_util::CopyFile(outputPak, exeDataDir / "project.pak"); !result)
+				return {.succeeded = false, .message = "Could not find AssetPacker.exe in the editor build output."};
+			}
+
+			const std::filesystem::path exeDataDir = config.executableDir / "data";
+			const std::filesystem::path outputDir = project.root / "Builds" / "Pack";
+			if (auto dirResult = io::file_util::CreateDirectories(outputDir); !dirResult)
+			{
+				return {.succeeded = false, .message = "Could not create output data directory: " + dirResult.error().message};
+			}
+
+			const std::filesystem::path outputPak = outputDir / "project.pak";
+			const std::filesystem::path runLog = outputDir / "project.pak.editor.log";
+			const std::string command = ShellQuotePath(config.assetPackerExe) + " --project --import-materials " + ShellQuotePath(project.root) + " " + ShellQuotePath(outputPak) + " > " + ShellQuotePath(runLog) + " 2>&1";
+			const int exitCode = std::system(command.c_str());
+			if (exitCode != 0)
+			{
+				std::string message = "AssetPacker failed with exit code " + std::to_string(exitCode) + ".";
+				const std::string excerpt = ReadLogExcerpt(runLog);
+				if (!excerpt.empty())
 				{
-					AE_WARN(LogCategory::App, "Failed to copy project.pak: {}", result.error().message);
+					message += " " + excerpt;
 				}
-				if (auto result = io::file_util::CopyFile(outputPak.string() + ".log", exeDataDir / "project.pak.log"); !result)
+				return {.succeeded = false, .message = std::move(message), .outputPath = outputPak};
+			}
+
+			if (syncEditorRuntimeProjectPak && outputDir != exeDataDir)
+			{
+				if (auto dirResult = io::file_util::CreateDirectories(exeDataDir); dirResult)
 				{
-					AE_WARN(LogCategory::App, "Failed to copy project.pak.log: {}", result.error().message);
-				}
-				if (auto result = io::file_util::CopyFile(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest"); !result)
-				{
-					AE_WARN(LogCategory::App, "Failed to copy project.pak.manifest: {}", result.error().message);
+					if (auto result = io::file_util::CopyFile(outputPak, exeDataDir / "project.pak"); !result)
+					{
+						AE_WARN(LogCategory::App, "Failed to copy project.pak: {}", result.error().message);
+					}
+					if (auto result = io::file_util::CopyFile(outputPak.string() + ".log", exeDataDir / "project.pak.log"); !result)
+					{
+						AE_WARN(LogCategory::App, "Failed to copy project.pak.log: {}", result.error().message);
+					}
+					if (auto result = io::file_util::CopyFile(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest"); !result)
+					{
+						AE_WARN(LogCategory::App, "Failed to copy project.pak.manifest: {}", result.error().message);
+					}
 				}
 			}
-		}
 
-		std::uintmax_t size = 0;
-		if (auto fileSizeResult = io::file_util::FileSize(outputPak))
-		{
-			size = *fileSizeResult;
+			std::uintmax_t size = 0;
+			if (auto fileSizeResult = io::file_util::FileSize(outputPak))
+			{
+				size = *fileSizeResult;
+			}
+			AE_INFO(LogCategory::App, "Packed project '{}' to {}", project.name, DisplayPath(outputPak));
+			return {.succeeded = true, .message = "Packed project.pak (" + std::to_string(size / 1024) + " KB).", .outputPath = outputPak};
 		}
-		AE_INFO(LogCategory::App, "Packed project '{}' to {}", project.name, DisplayPath(outputPak));
-		return {.succeeded = true, .message = "Packed project.pak (" + std::to_string(size / 1024) + " KB).", .outputPath = outputPak};
+	} // namespace
+
+	EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const EditorProjectContext& project)
+	{
+		EditorProjectPublishOptions options;
+		options.outputRoot = project.root / "Builds";
+		options.productName = SanitizePathSegment(project.name, "AetherCore");
+		options.platformName = PublishPlatformDirectoryName();
+		return options;
 	}
 
-	EditorProjectActionResult PublishProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config)
+	EditorProjectActionResult PackProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config)
+	{
+		return PackProjectInternal(project, config, true);
+	}
+
+	EditorProjectActionResult PublishProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options)
 	{
 		if (std::optional<EditorProjectActionResult> validationError = ValidateProjectForPackaging(project))
 		{
 			return *validationError;
 		}
 
-		const std::filesystem::path publishRoot = project.root / "Builds";
-		const std::filesystem::path publishDir = publishRoot / PublishPlatformDirectoryName() / "AetherCore";
-		if (!PathStartsWith(publishDir, publishRoot))
+		const std::filesystem::path publishRoot = ResolvePublishRoot(project, options);
+		const std::filesystem::path publishDir = ResolvePublishDirectory(project, options);
+		if (options.outputRoot.empty() && !PathStartsWith(publishDir, publishRoot))
 		{
 			return {.succeeded = false, .message = "Refusing to publish outside the project Builds folder.", .outputPath = publishDir};
 		}
 
 		std::error_code ec;
-		std::filesystem::remove_all(publishRoot, ec);
-		if (ec)
+		if (options.cleanOutput)
 		{
-			return {.succeeded = false, .message = "Could not clean publish folder: " + ec.message(), .outputPath = publishDir};
+			std::filesystem::remove_all(publishDir, ec);
+			if (ec)
+			{
+				return {.succeeded = false, .message = "Could not clean publish folder: " + ec.message(), .outputPath = publishDir};
+			}
 		}
 
-		EditorProjectActionResult packResult = PackProject(project, config);
+		EditorProjectActionResult packResult = PackProjectInternal(project, config, options.syncEditorRuntimeProjectPak);
 		if (!packResult.succeeded)
 		{
 			return packResult;
@@ -627,7 +680,7 @@ namespace aether::app
 
 		std::string error;
 		const std::filesystem::path exeDataDir = config.executableDir / "data";
-		if (!config.packageTemplateDir.empty())
+		if (options.usePackageTemplate && !config.packageTemplateDir.empty())
 		{
 			if (!CopyDirectoryRecursive(config.packageTemplateDir, publishDir, error))
 			{
@@ -656,7 +709,7 @@ namespace aether::app
 		}
 
 		const std::filesystem::path scriptsProject = project.scriptsDir / "AetherGame.csproj";
-		if (io::file_util::Exists(scriptsProject))
+		if (options.buildProjectScripts && io::file_util::Exists(scriptsProject))
 		{
 			if (config.dotnetExe.empty() || config.managedConfig.empty() || config.managedConfigDir.empty())
 			{
@@ -685,7 +738,7 @@ namespace aether::app
 		{
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}
-		if (!VerifyPublishedGame(publishDir, config.runtimeExecutableName, error))
+		if (options.verifyOutput && !VerifyPublishedGame(publishDir, config.runtimeExecutableName, error))
 		{
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}

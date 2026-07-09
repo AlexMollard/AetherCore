@@ -1011,9 +1011,9 @@ namespace aether::app
 		{
 			return PackProject(project, MakeDefaultEditorProjectPublishConfig());
 		};
-		m_projectActions.publishProject = [](const EditorProjectContext& project)
+		m_projectActions.publishProject = [](const EditorProjectContext& project, const EditorProjectPublishOptions& options)
 		{
-			return PublishProject(project, MakeDefaultEditorProjectPublishConfig());
+			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options);
 		};
 		context.services.Register<EditorProjectActions>(m_projectActions);
 		context.services.Register<EditorProjectContext>(m_currentProject);

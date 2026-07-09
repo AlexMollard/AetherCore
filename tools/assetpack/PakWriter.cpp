@@ -34,6 +34,23 @@ namespace
 		const std::string first = it->generic_string();
 		return first == "Builds" || first == "artifacts" || first == "scripts" || first == ".git" || first == ".vs";
 	}
+
+	bool IsExcludedProjectFile(const fs::path& rel)
+	{
+		auto it = rel.begin();
+		if (it == rel.end())
+		{
+			return false;
+		}
+		const std::string first = it->generic_string();
+		++it;
+		if (it == rel.end())
+		{
+			return false;
+		}
+		const std::string second = it->generic_string();
+		return first == ".project" && second == "publish.toml";
+	}
 } // namespace
 
 void PakWriter::AddDirectory(const fs::path& sourceDir)
@@ -47,6 +64,10 @@ void PakWriter::AddDirectory(const fs::path& sourceDir)
 		if (entry.is_directory() && IsExcludedProjectDirectory(rel))
 		{
 			it.disable_recursion_pending();
+			continue;
+		}
+		if (entry.is_regular_file() && IsExcludedProjectFile(rel))
+		{
 			continue;
 		}
 		if (!entry.is_regular_file())

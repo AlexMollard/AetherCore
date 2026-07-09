@@ -22,7 +22,8 @@ namespace aether::app
 	};
 
 	[[nodiscard]] EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig();
+	[[nodiscard]] EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const EditorProjectContext& project);
 	[[nodiscard]] std::string MakeProjectScriptCsprojText(const std::filesystem::path& managedSdkProject);
 	[[nodiscard]] EditorProjectActionResult PackProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config);
-	[[nodiscard]] EditorProjectActionResult PublishProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config);
+	[[nodiscard]] EditorProjectActionResult PublishProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options);
 } // namespace aether::app

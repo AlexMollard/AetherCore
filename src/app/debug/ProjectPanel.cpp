@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 
 #include <imgui.h>
@@ -19,6 +20,7 @@
 #include "editor/EditorProjectActions.hpp"
 #include "io/FileUtil.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "editor/EditorProjectPublisher.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TextIni.hpp"
@@ -36,6 +38,11 @@ namespace aether::app
 		std::filesystem::path SettingsPath(const EditorProjectContext& project)
 		{
 			return project.settingsDir / "engine.toml";
+		}
+
+		std::filesystem::path PublishSettingsPath(const EditorProjectContext& project)
+		{
+			return project.root / ".project" / "publish.toml";
 		}
 
 		std::string SceneNameFromPath(const std::filesystem::path& path)
@@ -85,6 +92,20 @@ namespace aether::app
 			static_cast<void>(path);
 #endif
 		}
+
+		template <std::size_t N>
+		void CopyToBuffer(std::array<char, N>& buffer, std::string_view text)
+		{
+			buffer.fill('\0');
+			const std::size_t count = std::min(text.size(), N - 1);
+			std::copy_n(text.data(), count, buffer.data());
+		}
+
+		template <std::size_t N>
+		std::string BufferText(const std::array<char, N>& buffer)
+		{
+			return std::string(buffer.data());
+		}
 	} // namespace
 
 	void ProjectPanel::Refresh(const EditorProjectContext& project)
@@ -97,6 +118,8 @@ namespace aether::app
 		m_lastPublishPath.clear();
 		m_publishStatus.clear();
 		m_publishSucceeded = false;
+		ResetPublishSettings(project);
+		LoadPublishSettings(project);
 		LoadProjectSettings(project);
 
 		std::error_code ec;
@@ -212,6 +235,84 @@ namespace aether::app
 		m_status = "Project settings saved.";
 	}
 
+	void ProjectPanel::LoadPublishSettings(const EditorProjectContext& project)
+	{
+		auto text = io::file_util::ReadText(PublishSettingsPath(project));
+		if (!text)
+		{
+			return;
+		}
+
+		TomlConfig config;
+		try
+		{
+			config.Load(*text);
+		}
+		catch (...)
+		{
+			m_publishStatus = "Could not parse publish settings.";
+			m_publishSucceeded = false;
+			return;
+		}
+
+		CopyToBuffer(m_publishProductName, config.GetString("publish.productname", BufferText(m_publishProductName)));
+		CopyToBuffer(m_publishPlatformName, config.GetString("publish.platformname", BufferText(m_publishPlatformName)));
+		CopyToBuffer(m_publishOutputRoot, config.GetString("publish.outputroot", BufferText(m_publishOutputRoot)));
+		m_publishCleanOutput = config.GetBool("publish.cleanoutput", m_publishCleanOutput);
+		m_publishBuildScripts = config.GetBool("publish.buildscripts", m_publishBuildScripts);
+		m_publishUsePackageTemplate = config.GetBool("publish.usepackagetemplate", m_publishUsePackageTemplate);
+		m_publishVerifyOutput = config.GetBool("publish.verifyoutput", m_publishVerifyOutput);
+		m_publishSyncEditorPak = config.GetBool("publish.synceditorpak", m_publishSyncEditorPak);
+		m_publishOpenAfter = config.GetBool("publish.openafter", m_publishOpenAfter);
+	}
+
+	void ProjectPanel::SavePublishSettings(const EditorProjectContext& project)
+	{
+		TomlConfig config;
+		config.Set("publish.productName", BufferText(m_publishProductName));
+		config.Set("publish.platformName", BufferText(m_publishPlatformName));
+		config.Set("publish.outputRoot", BufferText(m_publishOutputRoot));
+		config.Set("publish.cleanOutput", m_publishCleanOutput);
+		config.Set("publish.buildScripts", m_publishBuildScripts);
+		config.Set("publish.usePackageTemplate", m_publishUsePackageTemplate);
+		config.Set("publish.verifyOutput", m_publishVerifyOutput);
+		config.Set("publish.syncEditorPak", m_publishSyncEditorPak);
+		config.Set("publish.openAfter", m_publishOpenAfter);
+
+		if (auto result = io::file_util::CreateDirectories(PublishSettingsPath(project).parent_path()); !result)
+		{
+			m_publishStatus = "Could not create publish settings folder: " + result.error().message;
+			m_publishSucceeded = false;
+			return;
+		}
+
+		std::ostringstream buffer;
+		config.Save(buffer, "AetherCore editor publish settings");
+
+		if (auto result = io::file_util::WriteText(PublishSettingsPath(project), buffer.str()); !result)
+		{
+			m_publishStatus = "Could not write publish settings.";
+			m_publishSucceeded = false;
+			return;
+		}
+		m_publishStatus = "Publish defaults saved.";
+		m_publishSucceeded = true;
+	}
+
+	void ProjectPanel::ResetPublishSettings(const EditorProjectContext& project)
+	{
+		const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
+		CopyToBuffer(m_publishProductName, defaults.productName);
+		CopyToBuffer(m_publishPlatformName, defaults.platformName);
+		CopyToBuffer(m_publishOutputRoot, DisplayPath(defaults.outputRoot));
+		m_publishCleanOutput = defaults.cleanOutput;
+		m_publishBuildScripts = defaults.buildProjectScripts;
+		m_publishUsePackageTemplate = defaults.usePackageTemplate;
+		m_publishVerifyOutput = defaults.verifyOutput;
+		m_publishSyncEditorPak = defaults.syncEditorRuntimeProjectPak;
+		m_publishOpenAfter = true;
+	}
+
 	void ProjectPanel::DrawFolderRow(const char* label, const std::filesystem::path& path)
 	{
 		ImGui::TableNextRow();
@@ -264,6 +365,107 @@ namespace aether::app
 		}
 
 		ImGui::EndTable();
+	}
+
+	void ProjectPanel::DrawPublishDialog(LayerContext& context, const EditorProjectContext& project)
+	{
+		ImGui::SetNextWindowSize(ImVec2(620.0f, 0.0f), ImGuiCond_Appearing);
+		if (!ImGui::BeginPopupModal("Publish Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			return;
+		}
+
+		ImGui::SeparatorText("Output");
+		ImGui::SetNextItemWidth(260.0f);
+		ImGui::InputText("Product", m_publishProductName.data(), m_publishProductName.size());
+		ImGui::SetNextItemWidth(180.0f);
+		ImGui::InputText("Platform", m_publishPlatformName.data(), m_publishPlatformName.size());
+		ImGui::SetNextItemWidth(440.0f);
+		ImGui::InputText("Output Root", m_publishOutputRoot.data(), m_publishOutputRoot.size());
+		ImGui::SameLine();
+		if (ImGui::SmallButton(ICON_FA_ROTATE))
+		{
+			const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
+			CopyToBuffer(m_publishOutputRoot, DisplayPath(defaults.outputRoot));
+		}
+
+		const std::filesystem::path outputRoot = BufferText(m_publishOutputRoot);
+		const std::string platform = BufferText(m_publishPlatformName).empty() ? std::string{"Windows"} : BufferText(m_publishPlatformName);
+		const std::string product = BufferText(m_publishProductName).empty() ? project.name : BufferText(m_publishProductName);
+		const std::filesystem::path finalFolder = outputRoot / platform / product;
+		ImGui::TextDisabled("%s", DisplayPath(finalFolder).c_str());
+
+		ImGui::SeparatorText("Build");
+		if (ImGui::BeginTable("##publishSettings", 2, ImGuiTableFlags_SizingStretchSame))
+		{
+			ImGui::TableNextColumn();
+			ImGui::Checkbox("Clean output", &m_publishCleanOutput);
+			ImGui::Checkbox("Build scripts", &m_publishBuildScripts);
+			ImGui::Checkbox("Use package template", &m_publishUsePackageTemplate);
+			ImGui::TableNextColumn();
+			ImGui::Checkbox("Verify package", &m_publishVerifyOutput);
+			ImGui::Checkbox("Sync editor pak", &m_publishSyncEditorPak);
+			ImGui::Checkbox("Open when done", &m_publishOpenAfter);
+			ImGui::EndTable();
+		}
+
+		if (!m_publishStatus.empty())
+		{
+			const ImVec4 color = m_publishSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
+			ImGui::TextColored(color, "%s", m_publishStatus.c_str());
+		}
+
+		ImGui::Separator();
+		const auto* actions = context.TryGet<EditorProjectActions>();
+		const bool canPublish = actions != nullptr && actions->publishProject && !BufferText(m_publishProductName).empty() && !BufferText(m_publishPlatformName).empty() && !BufferText(m_publishOutputRoot).empty();
+		if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save Defaults", ImVec2(140.0f, 0.0f)))
+		{
+			SavePublishSettings(project);
+		}
+		ImGui::SameLine();
+		ImGui::BeginDisabled(!canPublish);
+		if (ImGui::Button(ICON_FA_ROCKET "  Publish", ImVec2(140.0f, 0.0f)))
+		{
+			if (m_dirtySettings)
+			{
+				SaveProjectSettings(project);
+			}
+			SavePublishSettings(project);
+
+			EditorProjectPublishOptions options;
+			options.outputRoot = outputRoot;
+			options.productName = BufferText(m_publishProductName);
+			options.platformName = BufferText(m_publishPlatformName);
+			options.cleanOutput = m_publishCleanOutput;
+			options.buildProjectScripts = m_publishBuildScripts;
+			options.usePackageTemplate = m_publishUsePackageTemplate;
+			options.verifyOutput = m_publishVerifyOutput;
+			options.syncEditorRuntimeProjectPak = m_publishSyncEditorPak;
+
+			const EditorProjectActionResult result = actions->publishProject(project, options);
+			m_publishSucceeded = result.succeeded;
+			m_publishStatus = result.message;
+			m_lastPublishPath = result.outputPath;
+			if (result.succeeded)
+			{
+				m_packSucceeded = true;
+				m_packStatus = "Project packed as part of publish.";
+				m_lastPackPath = result.outputPath / "data" / "project.pak";
+				if (m_publishOpenAfter)
+				{
+					OpenFolderInShell(result.outputPath);
+				}
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(100.0f, 0.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
 	}
 
 	void ProjectPanel::OnImGui(LayerContext& context)
@@ -388,25 +590,17 @@ namespace aether::app
 			ImGui::EndDisabled();
 			ImGui::SameLine();
 			ImGui::BeginDisabled(!actions->publishProject);
-			if (ImGui::Button(ICON_FA_ROCKET "  Publish Game"))
+			if (ImGui::Button(ICON_FA_ROCKET "  Publish..."))
 			{
-				if (m_dirtySettings)
-				{
-					SaveProjectSettings(*project);
-				}
-				const EditorProjectActionResult result = actions->publishProject(*project);
-				m_publishSucceeded = result.succeeded;
-				m_publishStatus = result.message;
-				m_lastPublishPath = result.outputPath;
-				if (result.succeeded)
-				{
-					m_packSucceeded = true;
-					m_packStatus = "Project packed as part of publish.";
-					m_lastPackPath = result.outputPath / "data" / "project.pak";
-				}
+				ResetPublishSettings(*project);
+				LoadPublishSettings(*project);
+				m_publishStatus.clear();
+				m_publishSucceeded = false;
+				ImGui::OpenPopup("Publish Game");
 			}
 			ImGui::EndDisabled();
 		}
+		DrawPublishDialog(context, *project);
 		if (!m_lastPackPath.empty())
 		{
 			ImGui::SameLine();
