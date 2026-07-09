@@ -2,10 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
-#include <fstream>
-#include <iterator>
 #include <system_error>
 
+#include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -158,11 +157,11 @@ namespace aether
 	std::vector<LayoutPreset> LayoutPresetStore::LoadAll(const std::filesystem::path& dir)
 	{
 		std::vector<LayoutPreset> result;
-		std::error_code ec;
-		if (!std::filesystem::exists(dir, ec))
+		if (!io::file_util::Exists(dir))
 		{
 			return result;
 		}
+		std::error_code ec;
 		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
 		{
 			if (ec)
@@ -173,13 +172,12 @@ namespace aether
 			{
 				continue;
 			}
-			std::ifstream in(entry.path(), std::ios::binary);
-			if (!in.is_open())
+			auto text = io::file_util::ReadText(entry.path());
+			if (!text)
 			{
 				continue;
 			}
-			const std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-			if (auto preset = Deserialize(text))
+			if (auto preset = Deserialize(*text))
 			{
 				result.push_back(std::move(*preset));
 			}
@@ -201,18 +199,12 @@ namespace aether
 
 	bool LayoutPresetStore::Save(const LayoutPreset& preset, const std::filesystem::path& dir)
 	{
-		std::error_code ec;
-		std::filesystem::create_directories(dir, ec);
 		const auto path = dir / (SlugFor(preset.name) + ".layout");
-		// Binary mode: keep the ini's '\n' unmangled so a save/load round-trips
-		// exactly and matches ImGui's own newline convention.
-		std::ofstream out(path, std::ios::binary | std::ios::trunc);
-		if (!out.is_open())
+		if (auto result = io::file_util::WriteText(path, Serialize(preset)); !result)
 		{
-			AE_WARN(LogCategory::Engine, "Failed to write layout preset: {}", path.string());
+			AE_WARN(LogCategory::Engine, "Failed to write layout preset: {} - {}", path.string(), result.error().message);
 			return false;
 		}
-		out << Serialize(preset);
 		return true;
 	}
 
@@ -228,7 +220,6 @@ namespace aether
 
 	bool LayoutPresetStore::Remove(std::string_view name, const std::filesystem::path& dir)
 	{
-		std::error_code ec;
-		return std::filesystem::remove(dir / (SlugFor(name) + ".layout"), ec);
+		return io::file_util::Remove(dir / (SlugFor(name) + ".layout")).has_value();
 	}
 } // namespace aether

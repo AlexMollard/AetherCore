@@ -2,7 +2,6 @@
 
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <set>
 #include <string>
 #include <vector>
@@ -10,6 +9,7 @@
 #include <imgui.h>
 
 #include "debug/OpenInEditor.hpp"
+#include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 #include "utils/FuzzyMatch.hpp"
 #include "utils/LogCategory.hpp"
@@ -257,15 +257,14 @@ namespace aether::app
 			const auto dir = io::PlatformPaths::GetUserConfigDir();
 			if (!dir.empty())
 			{
-				const auto path = dir / "console-log.txt";
-				std::ofstream out(path, std::ios::binary | std::ios::trunc);
-				if (out.is_open())
+				std::string content;
+				for (const auto& cr: display)
 				{
-					for (const auto& cr: display)
-					{
-						out << rowText(cr) << '\n';
-					}
-					out.close();
+					content += std::string(rowText(cr)) + '\n';
+				}
+				const auto path = dir / "console-log.txt";
+				if (io::file_util::WriteText(path, content))
+				{
 					AE_INFO(LogCategory::UI, "Console log saved to {}", path.string());
 				}
 			}

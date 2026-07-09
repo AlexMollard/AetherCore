@@ -1,14 +1,13 @@
 #include "utils/EngineSettings.hpp"
 
 #include <algorithm>
-#include <fstream>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
 
+#include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -19,23 +18,6 @@ namespace aether
 {
 	namespace
 	{
-		std::optional<std::string> ReadFileText(const std::filesystem::path& path)
-		{
-			std::error_code ec;
-			if (!std::filesystem::exists(path, ec))
-			{
-				return std::nullopt;
-			}
-			std::ifstream in(path, std::ios::binary);
-			if (!in.is_open())
-			{
-				return std::nullopt;
-			}
-			std::ostringstream buffer;
-			buffer << in.rdbuf();
-			return buffer.str();
-		}
-
 		// Parses a raw TOML value string into a typed setting field. The type is
 		// resolved at compile time from the field, so one branch per supported type
 		// covers every current and future setting of that type.
@@ -232,8 +214,7 @@ namespace aether
 
 		for (const auto& candidate: candidates)
 		{
-			std::error_code existsEc;
-			if (std::filesystem::exists(candidate, existsEc))
+			if (io::file_util::Exists(candidate))
 			{
 				return candidate;
 			}
@@ -248,7 +229,7 @@ namespace aether
 
 		// Layer 2: shipped project defaults (read-only, beside the executable).
 		const auto shippedPath = ResolvePath(shippedFile);
-		if (const auto text = ReadFileText(shippedPath))
+		if (auto text = io::file_util::ReadText(shippedPath))
 		{
 			Apply(*text, result.values);
 			AE_INFO(LogCategory::Engine, "Shipped settings loaded from {}", shippedPath.string());
@@ -264,7 +245,7 @@ namespace aether
 		if (const auto userDir = io::PlatformPaths::GetUserConfigDir(); !userDir.empty())
 		{
 			const auto userPath = userDir / userFile;
-			if (const auto text = ReadFileText(userPath))
+			if (auto text = io::file_util::ReadText(userPath))
 			{
 				Apply(*text, result.values);
 				AE_INFO(LogCategory::Engine, "User settings overrides loaded from {}", userPath.string());
@@ -302,13 +283,11 @@ namespace aether
 		const auto path = userDir / userFile;
 		const std::string text = SerializeOverrides(settings, base);
 
-		std::ofstream out(path, std::ios::trunc);
-		if (!out.is_open())
+		if (auto result = io::file_util::WriteText(path, text); !result)
 		{
-			AE_WARN(LogCategory::Engine, "Failed to write user settings file: {}", path.string());
+			AE_WARN(LogCategory::Engine, "Failed to write user settings file: {} - {}", path.string(), result.error().message);
 			return;
 		}
-		out << text;
 		AE_INFO(LogCategory::Engine, "User settings saved to {}", path.string());
 	}
 } // namespace aether

@@ -2,7 +2,8 @@
 
 #include <cstdlib>
 #include <filesystem>
-#include <system_error>
+
+#include "io/FileUtil.hpp"
 
 #ifdef _WIN32
 #	include <windows.h>
@@ -24,7 +25,7 @@ namespace aether::app
 		{
 			std::error_code ec;
 			auto candidate = std::filesystem::weakly_canonical(std::filesystem::current_path() / ".." / ".." / filePath, ec);
-			if (!ec && std::filesystem::exists(candidate, ec))
+			if (!ec && io::file_util::Exists(candidate))
 			{
 				resolved = candidate.string();
 			}

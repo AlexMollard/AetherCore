@@ -481,6 +481,31 @@ namespace aether::io
 		return backend->Read(relativePath);
 	}
 
+	Expected<std::string> FileSystem::ReadFileText(std::string_view virtualPath)
+	{
+		AE_TRY(data, ReadFile(virtualPath));
+		return std::string(reinterpret_cast<const char*>(data->data()), data->size());
+	}
+
+	Expected<void> FileSystem::WriteFile(std::string_view virtualPath, std::span<const std::byte> data)
+	{
+		if (s_backend == nullptr)
+		{
+			AE_ASSERT_ALWAYS(false, "FileSystem::WriteFile() called before Initialize().");
+		}
+
+		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
+		AE_VERBOSE(LogCategory::FileSystem, "WriteFile: {}", virtualPath);
+		const auto backend = ResolveBackend(mountPoint);
+		return backend->Write(relativePath, data);
+	}
+
+	Expected<void> FileSystem::WriteFileText(std::string_view virtualPath, std::string_view text)
+	{
+		std::span<const std::byte> data(reinterpret_cast<const std::byte*>(text.data()), text.size());
+		return WriteFile(virtualPath, data);
+	}
+
 	Expected<std::unique_ptr<std::istream>> FileSystem::OpenStream(std::string_view virtualPath)
 	{
 		if (s_backend == nullptr)

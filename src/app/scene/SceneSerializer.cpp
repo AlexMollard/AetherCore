@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -28,6 +26,7 @@
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
+#include "io/FileUtil.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -1173,17 +1172,18 @@ namespace aether::app::scene
 	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefab)
 	{
 		const std::filesystem::path dir{PrefabsDirectory()};
-		std::error_code ec;
-		std::filesystem::create_directories(dir, ec);
-		const std::filesystem::path path = dir / (prefabName + ".prefab.toml");
-
-		std::ofstream out(path, std::ios::trunc);
-		if (!out.is_open())
+		if (!io::file_util::CreateDirectories(dir))
 		{
-			AE_WARN(LogCategory::App, "SavePrefabFile: cannot open '{}'", path.string());
+			AE_WARN(LogCategory::App, "SavePrefabFile: cannot create directory '{}'", dir.string());
 			return false;
 		}
-		out << WriteToml(prefab);
+		const std::filesystem::path path = dir / (prefabName + ".prefab.toml");
+
+		if (!io::file_util::WriteText(path, WriteToml(prefab)))
+		{
+			AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", path.string());
+			return false;
+		}
 		AE_INFO(LogCategory::App, "Prefab saved: {} ({} entities)", path.string(), prefab.entities.size());
 		return true;
 	}
@@ -1191,15 +1191,13 @@ namespace aether::app::scene
 	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName)
 	{
 		const std::filesystem::path path = std::filesystem::path{PrefabsDirectory()} / (prefabName + ".prefab.toml");
-		std::ifstream in(path);
-		if (!in.is_open())
+		auto text = io::file_util::ReadText(path);
+		if (!text)
 		{
-			AE_WARN(LogCategory::App, "ReadPrefabFile: cannot open '{}'", path.string());
+			AE_WARN(LogCategory::App, "ReadPrefabFile: cannot read '{}'", path.string());
 			return std::nullopt;
 		}
-		std::stringstream buffer;
-		buffer << in.rdbuf();
-		return ParseToml(buffer.str());
+		return ParseToml(*text);
 	}
 
 	std::vector<std::string> ListPrefabFiles()
@@ -1227,17 +1225,18 @@ namespace aether::app::scene
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene)
 	{
 		const std::filesystem::path dir{ScenesDirectory()};
-		std::error_code ec;
-		std::filesystem::create_directories(dir, ec);
-		const std::filesystem::path path = dir / (sceneName + ".scene.toml");
-
-		std::ofstream out(path, std::ios::trunc);
-		if (!out.is_open())
+		if (!io::file_util::CreateDirectories(dir))
 		{
-			AE_WARN(LogCategory::App, "SaveSceneFile: cannot open '{}'", path.string());
+			AE_WARN(LogCategory::App, "SaveSceneFile: cannot create directory '{}'", dir.string());
 			return false;
 		}
-		out << WriteToml(scene);
+		const std::filesystem::path path = dir / (sceneName + ".scene.toml");
+
+		if (!io::file_util::WriteText(path, WriteToml(scene)))
+		{
+			AE_WARN(LogCategory::App, "SaveSceneFile: cannot write '{}'", path.string());
+			return false;
+		}
 		AE_INFO(LogCategory::App, "Scene saved: {} ({} entities)", path.string(), scene.entities.size());
 		return true;
 	}
@@ -1245,15 +1244,13 @@ namespace aether::app::scene
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName)
 	{
 		const std::filesystem::path path = std::filesystem::path{ScenesDirectory()} / (sceneName + ".scene.toml");
-		std::ifstream in(path);
-		if (!in.is_open())
+		auto text = io::file_util::ReadText(path);
+		if (!text)
 		{
-			AE_WARN(LogCategory::App, "ReadSceneFile: cannot open '{}'", path.string());
+			AE_WARN(LogCategory::App, "ReadSceneFile: cannot read '{}'", path.string());
 			return std::nullopt;
 		}
-		std::stringstream buffer;
-		buffer << in.rdbuf();
-		return ParseToml(buffer.str());
+		return ParseToml(*text);
 	}
 
 	std::vector<std::string> ListSceneFiles()

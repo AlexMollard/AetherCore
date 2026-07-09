@@ -3,7 +3,8 @@
 #include <array>
 #include <cstdio>
 #include <string>
-#include <system_error>
+
+#include "io/FileUtil.hpp"
 
 #include "utils/Logger.hpp"
 
@@ -23,7 +24,7 @@ namespace aether::app::scripting
 			};
 			for (const auto& dir: candidates)
 			{
-				if (std::filesystem::exists(dir / "AetherCore.Interop.dll"))
+				if (io::file_util::Exists(dir / "AetherCore.Interop.dll"))
 				{
 					return dir;
 				}

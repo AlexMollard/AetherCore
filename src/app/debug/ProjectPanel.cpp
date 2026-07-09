@@ -17,6 +17,7 @@
 
 #include "debug/Icons.hpp"
 #include "editor/EditorProjectActions.hpp"
+#include "io/FileUtil.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/Profiler.hpp"
@@ -56,16 +57,12 @@ namespace aether::app
 
 		std::string FileSummary(const std::filesystem::path& path)
 		{
-			std::error_code ec;
-			if (!std::filesystem::is_regular_file(path, ec))
+			auto size = io::file_util::FileSize(path);
+			if (!size)
 			{
 				return "Not built yet";
 			}
-			const std::uintmax_t bytes = std::filesystem::file_size(path, ec);
-			if (ec)
-			{
-				return "Built";
-			}
+			const std::uintmax_t bytes = *size;
 			if (bytes >= 1024ull * 1024ull)
 			{
 				const double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
@@ -128,7 +125,6 @@ namespace aether::app
 
 	void ProjectPanel::EnsureStandardFolders(const EditorProjectContext& project)
 	{
-		std::error_code ec;
 		for (const std::filesystem::path& path: {project.assetsDir,
 		             project.assetsDir / "models",
 		             project.assetsDir / "materials",
@@ -140,10 +136,9 @@ namespace aether::app
 		             project.scriptsDir,
 		             project.settingsDir})
 		{
-			std::filesystem::create_directories(path, ec);
-			if (ec)
+			if (auto result = io::file_util::CreateDirectories(path); !result)
 			{
-				m_status = "Could not create " + DisplayPath(path) + ": " + ec.message();
+				m_status = "Could not create " + DisplayPath(path) + ": " + result.error().message;
 				return;
 			}
 		}
@@ -156,43 +151,35 @@ namespace aether::app
 		m_startupScene.clear();
 		m_dirtySettings = false;
 
-		std::ifstream in(SettingsPath(project), std::ios::binary);
-		if (!in.is_open())
+		auto text = io::file_util::ReadText(SettingsPath(project));
+		if (!text)
 		{
 			return;
 		}
 
-		std::stringstream buffer;
-		buffer << in.rdbuf();
+		TomlConfig config;
 		try
 		{
-			text::ParseToml(buffer.str(),
-			        [this](const text::IniEntry& entry)
-			        {
-				        if (entry.fullKey == "app.startupscene")
-				        {
-					        m_startupScene = text::StripQuotes(entry.value);
-				        }
-			        });
+			config.Load(*text);
 		}
 		catch (...)
 		{
 			m_status = "Could not parse project settings.";
+			return;
 		}
+		m_startupScene = config.GetString("app.startupscene");
 	}
 
 	void ProjectPanel::SaveProjectSettings(const EditorProjectContext& project)
 	{
 		TomlConfig config;
 		{
-			std::ifstream in(SettingsPath(project), std::ios::binary);
-			if (in.is_open())
+			auto text = io::file_util::ReadText(SettingsPath(project));
+			if (text)
 			{
-				std::stringstream buffer;
-				buffer << in.rdbuf();
 				try
 				{
-					config.Load(buffer.str());
+					config.Load(*text);
 				}
 				catch (...)
 				{
@@ -204,22 +191,20 @@ namespace aether::app
 
 		config.Set("app.startupScene", m_startupScene);
 
-		std::error_code ec;
-		std::filesystem::create_directories(project.settingsDir, ec);
-		if (ec)
+		if (auto result = io::file_util::CreateDirectories(project.settingsDir); !result)
 		{
-			m_status = "Could not create settings folder: " + ec.message();
+			m_status = "Could not create settings folder: " + result.error().message;
 			return;
 		}
 
-		std::ofstream out(SettingsPath(project), std::ios::binary | std::ios::trunc);
-		if (!out.is_open())
+		std::ostringstream buffer;
+		config.Save(buffer, "AetherCore project settings");
+
+		if (auto result = io::file_util::WriteText(SettingsPath(project), buffer.str()); !result)
 		{
 			m_status = "Could not write project settings.";
 			return;
 		}
-
-		config.Save(out, "AetherCore project settings");
 		m_dirtySettings = false;
 		m_status = "Project settings saved.";
 	}

@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
-#include <fstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -11,6 +10,7 @@
 
 #include <imgui.h>
 
+#include "io/FileUtil.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
@@ -236,29 +236,20 @@ namespace aether::app
 
 		bool CreateGameScriptFile(const std::filesystem::path& scriptDir, std::string_view typeName, std::string& error)
 		{
-			std::error_code ec;
-			std::filesystem::create_directories(scriptDir, ec);
-			if (ec)
+			if (!io::file_util::CreateDirectories(scriptDir))
 			{
-				error = "Could not create script directory: " + ec.message();
+				error = "Could not create script directory.";
 				return false;
 			}
 
 			const std::filesystem::path outPath = scriptDir / (std::string(typeName) + ".cs");
-			if (std::filesystem::exists(outPath))
+			if (io::file_util::Exists(outPath))
 			{
 				error = "A script file with that name already exists.";
 				return false;
 			}
 
-			std::ofstream out(outPath, std::ios::binary);
-			if (!out)
-			{
-				error = "Could not open the script file for writing.";
-				return false;
-			}
-			out << BuildScriptTemplate(typeName);
-			if (!out)
+			if (!io::file_util::WriteText(outPath, BuildScriptTemplate(typeName)))
 			{
 				error = "Could not write the script file.";
 				return false;

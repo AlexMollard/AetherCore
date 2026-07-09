@@ -1,14 +1,10 @@
-# AetherCore project settings (TOML)
-
-[window]
-width = 1920
-height = 1080
-
-[graphics]
-vsync = false
-fxaa = false
-asyncCompute = true
+# Per-project settings.
+#
+# Only app.startupScene is consumed at runtime — the engine loads window,
+# graphics, and FPS settings from the shipped config://engine.toml and per-user
+# overrides, NOT from this file.
+#
+# See resources/config/engine.toml for the shipped defaults.
 
 [app]
-targetFps = 0
 startupScene = "default"

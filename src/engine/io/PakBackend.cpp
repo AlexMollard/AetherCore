@@ -334,4 +334,9 @@ namespace aether::io
 		return results;
 	}
 
+	Expected<void> PakBackend::Write(std::string_view, std::span<const std::byte>) const
+	{
+		AE_UNEXPECTED(AetherError::FileSystem("pak backends are read-only"));
+	}
+
 } // namespace aether::io

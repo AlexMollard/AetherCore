@@ -38,6 +38,16 @@ namespace aether::io
 		// Synchronous read - returns entire file contents.
 		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFile(std::string_view virtualPath);
 
+		// Convenience: read file as text string.
+		[[nodiscard]] static Expected<std::string> ReadFileText(std::string_view virtualPath);
+
+		// Synchronous write - writes data to a virtual path.
+		// Creates parent directories if needed.
+		[[nodiscard]] static Expected<void> WriteFile(std::string_view virtualPath, std::span<const std::byte> data);
+
+		// Convenience: write text string to a virtual path.
+		[[nodiscard]] static Expected<void> WriteFileText(std::string_view virtualPath, std::string_view text);
+
 		// Synchronous stream - caller owns the returned stream.
 		[[nodiscard]] static Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view virtualPath);
 

@@ -1,18 +1,53 @@
 #include "utils/TomlConfig.hpp"
 
+#include <cstdlib>
 #include <filesystem>
 #include <format>
-#include <fstream>
 #include <sstream>
 #include <string>
 
 #include "io/FileSystem.hpp"
+#include "io/FileUtil.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/TextIni.hpp"
 
 namespace aether
 {
+	namespace
+	{
+		// ParseToml strips quotes from string values. When saving a value that was
+		// loaded (not Set), we must re-quote bare strings to produce valid TOML.
+		// Booleans, numbers, and arrays are left as-is.
+		bool IsBareStringValue(std::string_view value)
+		{
+			if (value.empty())
+			{
+				return true;
+			}
+			if (value.front() == '"' || value.front() == '\'')
+			{
+				return false; // already quoted
+			}
+			if (value.front() == '[')
+			{
+				return false; // array
+			}
+			if (value == "true" || value == "false")
+			{
+				return false; // boolean
+			}
+			// Numbers
+			char* end = nullptr;
+			std::strtod(value.data(), &end);
+			if (end == value.data() + value.size())
+			{
+				return false;
+			}
+			return true; // bare word → needs quotes
+		}
+	} // namespace
+
 	void TomlConfig::Load(std::string_view tomlText)
 	{
 		m_values.clear();
@@ -47,7 +82,16 @@ namespace aether
 				}
 			}
 
-			out << key << " = " << rawValue << "\n";
+			out << key << " = ";
+			if (IsBareStringValue(rawValue))
+			{
+				out << '"' << rawValue << '"';
+			}
+			else
+			{
+				out << rawValue;
+			}
+			out << "\n";
 		}
 	}
 
@@ -80,21 +124,13 @@ namespace aether
 
 		const std::string tomlName = std::format("{}.toml", fileName);
 		const std::filesystem::path path = EngineSettingsIO::ResolvePath(tomlName);
-		if (!std::filesystem::exists(path))
+		auto text = io::file_util::ReadText(path);
+		if (!text)
 		{
 			return false;
 		}
 
-		std::ifstream in(path);
-		if (!in.is_open())
-		{
-			AE_WARN(LogCategory::Engine, "Failed to open config file: {}", path.string());
-			return false;
-		}
-
-		std::stringstream buffer;
-		buffer << in.rdbuf();
-		Load(buffer.str());
+		Load(*text);
 		return true;
 	}
 
@@ -117,23 +153,22 @@ namespace aether
 		const std::string tomlName = std::format("{}.toml", fileName);
 		const std::filesystem::path path = EngineSettingsIO::ResolvePath(tomlName);
 
-		std::error_code ec;
-		std::filesystem::create_directories(path.parent_path(), ec);
+		std::ostringstream buffer;
+		Save(buffer, headerComment);
 
-		std::ofstream out(path, std::ios::trunc);
-		if (!out.is_open())
+		auto result = io::file_util::WriteText(path, buffer.str());
+		if (!result)
 		{
-			AE_WARN(LogCategory::Engine, "Failed to write config file: {}", path.string());
+			AE_WARN(LogCategory::Engine, "Failed to write config file: {} - {}", path.string(), result.error().message);
 			return false;
 		}
 
-		Save(out, headerComment);
 		return true;
 	}
 
 	bool TomlConfig::GetBool(std::string_view key, bool defaultValue) const
 	{
-		const auto it = m_values.find(key);
+		const auto it = m_values.find(text::ToLowerAscii(std::string(key)));
 		if (it == m_values.end())
 		{
 			return defaultValue;
@@ -144,7 +179,7 @@ namespace aether
 
 	float TomlConfig::GetFloat(std::string_view key, float defaultValue) const
 	{
-		const auto it = m_values.find(key);
+		const auto it = m_values.find(text::ToLowerAscii(std::string(key)));
 		if (it == m_values.end())
 		{
 			return defaultValue;
@@ -155,7 +190,7 @@ namespace aether
 
 	std::string TomlConfig::GetString(std::string_view key, std::string_view defaultValue) const
 	{
-		const auto it = m_values.find(key);
+		const auto it = m_values.find(text::ToLowerAscii(std::string(key)));
 		if (it == m_values.end())
 		{
 			return std::string(defaultValue);
@@ -165,8 +200,9 @@ namespace aether
 
 	void TomlConfig::Set(std::string_view key, bool value)
 	{
+		const std::string lowerKey = text::ToLowerAscii(std::string(key));
 		const std::string str = value ? "true" : "false";
-		auto& entry = m_values[std::string(key)];
+		auto& entry = m_values[lowerKey];
 		if (entry != str)
 		{
 			entry = str;
@@ -176,8 +212,9 @@ namespace aether
 
 	void TomlConfig::Set(std::string_view key, float value)
 	{
+		const std::string lowerKey = text::ToLowerAscii(std::string(key));
 		const std::string str = std::format("{:.2f}", value);
-		auto& entry = m_values[std::string(key)];
+		auto& entry = m_values[lowerKey];
 		if (entry != str)
 		{
 			entry = std::move(str);
@@ -187,6 +224,7 @@ namespace aether
 
 	void TomlConfig::Set(std::string_view key, std::string_view value)
 	{
+		const std::string lowerKey = text::ToLowerAscii(std::string(key));
 		std::string str = "\"";
 		for (const char c: value)
 		{
@@ -197,7 +235,7 @@ namespace aether
 			str += c;
 		}
 		str += '"';
-		auto& entry = m_values[std::string(key)];
+		auto& entry = m_values[lowerKey];
 		if (entry != str)
 		{
 			entry = std::move(str);
@@ -207,7 +245,7 @@ namespace aether
 
 	bool TomlConfig::Has(std::string_view key) const
 	{
-		return m_values.find(key) != m_values.end();
+		return m_values.find(text::ToLowerAscii(std::string(key))) != m_values.end();
 	}
 
 	void TomlConfig::Clear()

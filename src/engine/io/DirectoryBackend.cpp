@@ -330,6 +330,38 @@ namespace aether::io
 		return std::nullopt;
 	}
 
+	Expected<void> DirectoryBackend::Write(std::string_view relativePath, std::span<const std::byte> data) const
+	{
+		auto fullPath = Resolve(relativePath);
+
+		std::error_code ec;
+		auto parent = fullPath.parent_path();
+		if (!parent.empty())
+		{
+			std::filesystem::create_directories(parent, ec);
+			if (ec)
+			{
+				AE_UNEXPECTED(AetherError::FileSystem(std::format("failed to create directories for '{}': {}", fullPath.string(), ec.message())));
+			}
+		}
+
+		std::ofstream out(fullPath, std::ios::binary | std::ios::trunc);
+		if (!out)
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("failed to open file for writing: " + fullPath.string()));
+		}
+
+		out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+		out.close();
+
+		if (out.fail())
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("failed to write file: " + fullPath.string()));
+		}
+
+		return {};
+	}
+
 	std::vector<std::string> DirectoryBackend::CollectDidYouMean(std::string_view relativePath, int maxSuggestions) const
 	{
 		const auto fullPath = Resolve(relativePath);

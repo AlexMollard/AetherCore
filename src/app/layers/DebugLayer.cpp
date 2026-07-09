@@ -49,6 +49,7 @@ using namespace std::string_view_literals;
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
 #include "io/FileSystem.hpp"
+#include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
@@ -219,22 +220,20 @@ namespace aether::app
 
 		std::string ReadLogExcerpt(const std::filesystem::path& path)
 		{
-			std::ifstream in(path, std::ios::binary);
-			if (!in.is_open())
+			auto text = io::file_util::ReadText(path);
+			if (!text)
 			{
 				return {};
 			}
 
-			std::stringstream buffer;
-			buffer << in.rdbuf();
-			std::string text = buffer.str();
+			std::string result = std::move(*text);
 			constexpr std::size_t kMaxExcerpt = 420;
-			if (text.size() > kMaxExcerpt)
+			if (result.size() > kMaxExcerpt)
 			{
-				text.resize(kMaxExcerpt);
-				text += "...";
+				result.resize(kMaxExcerpt);
+				result += "...";
 			}
-			return text;
+			return result;
 		}
 
 		std::optional<std::filesystem::path> FindAssetPackerExecutable()
@@ -258,9 +257,9 @@ namespace aether::app
 
 			for (const std::filesystem::path& candidate: candidates)
 			{
-				ec.clear();
-				if (std::filesystem::is_regular_file(candidate, ec))
+				if (io::file_util::Exists(candidate))
 				{
+					std::error_code ec;
 					return std::filesystem::weakly_canonical(candidate, ec);
 				}
 			}
@@ -284,15 +283,13 @@ namespace aether::app
 
 		std::filesystem::path ExistingDescriptorPath(const std::filesystem::path& root)
 		{
-			std::error_code ec;
 			const std::filesystem::path descriptor = DescriptorPath(root);
-			if (std::filesystem::is_regular_file(descriptor, ec))
+			if (io::file_util::Exists(descriptor))
 			{
 				return descriptor;
 			}
-			ec.clear();
 			const std::filesystem::path legacyDescriptor = LegacyDescriptorPath(root);
-			if (std::filesystem::is_regular_file(legacyDescriptor, ec))
+			if (io::file_util::Exists(legacyDescriptor))
 			{
 				return legacyDescriptor;
 			}
@@ -319,13 +316,11 @@ namespace aether::app
 
 		bool HasProjectDescriptor(const std::filesystem::path& root)
 		{
-			std::error_code ec;
-			if (std::filesystem::is_regular_file(DescriptorPath(root), ec))
+			if (io::file_util::Exists(DescriptorPath(root)))
 			{
 				return true;
 			}
-			ec.clear();
-			return std::filesystem::is_regular_file(LegacyDescriptorPath(root), ec);
+			return io::file_util::Exists(LegacyDescriptorPath(root));
 		}
 
 		std::string FallbackProjectName(const std::filesystem::path& root)
@@ -355,14 +350,12 @@ namespace aether::app
 			project.scriptsDir = ResolveProjectPath(project.root, {}, "scripts");
 			project.settingsDir = ResolveProjectPath(project.root, {}, "settings");
 
-			std::ifstream in(ExistingDescriptorPath(root));
-			if (!in.is_open())
+			auto descriptorText = io::file_util::ReadText(ExistingDescriptorPath(root));
+			if (!descriptorText)
 			{
 				return project;
 			}
 
-			std::stringstream buffer;
-			buffer << in.rdbuf();
 			std::string assetsPath;
 			std::string scenesPath;
 			std::string prefabsPath;
@@ -370,7 +363,7 @@ namespace aether::app
 			std::string settingsPath;
 			try
 			{
-				text::ParseToml(buffer.str(),
+				text::ParseToml(*descriptorText,
 				        [&](const text::IniEntry& entry)
 				        {
 					        if (entry.fullKey == "project.name")
@@ -440,96 +433,86 @@ namespace aether::app
 		{
 			auto CopyTemplateFile = [&](const std::filesystem::path& srcRoot, const char* relPath, const std::filesystem::path& dest) -> bool
 			{
-				std::error_code ec;
-				if (std::filesystem::exists(dest, ec))
-					return true;
-				std::filesystem::create_directories(dest.parent_path(), ec);
-				if (ec)
+				if (io::file_util::Exists(dest))
 				{
-					error = "Could not create project folder: " + ec.message();
+					return true;
+				}
+				if (auto dirResult = io::file_util::CreateDirectories(dest.parent_path()); !dirResult)
+				{
+					error = "Could not create project folder: " + dirResult.error().message;
 					return false;
 				}
-				std::filesystem::copy_file(
-					srcRoot / relPath,
-					dest,
-					std::filesystem::copy_options::none,
-					ec);
-				if (ec)
+				if (auto copyResult = io::file_util::CopyFile(srcRoot / relPath, dest); !copyResult)
 				{
-					error = "Could not copy project template file '" + std::string(relPath) + "': " + ec.message();
+					error = "Could not copy project template file '" + std::string(relPath) + "': " + copyResult.error().message;
 					return false;
 				}
 				return true;
 			};
 
-			return CopyTemplateFile(AETHER_DEFAULT_SETTINGS_DIR, "engine.toml", root / "settings" / "engine.toml")
-				&& CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
+			return CopyTemplateFile(AETHER_DEFAULT_SETTINGS_DIR, "engine.toml", root / "settings" / "engine.toml") && CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
 		}
 
 		std::string ReadProjectStartupScene(const EditorProjectContext& project)
 		{
 			const std::filesystem::path settingsPath = project.settingsDir / "engine.toml";
-			std::ifstream in(settingsPath);
-			if (!in.is_open())
+			auto content = io::file_util::ReadText(settingsPath);
+			if (!content)
 			{
 				return {};
 			}
-			std::stringstream buffer;
-			buffer << in.rdbuf();
-			std::string startupScene;
-			text::ParseToml(buffer.str(),
-			        [&](const text::IniEntry& entry)
-			        {
-				        if (entry.fullKey == "app.startupscene")
-				        {
-					        startupScene = text::StripQuotes(entry.value);
-				        }
-			        });
-			return startupScene;
+			TomlConfig config;
+			try
+			{
+				config.Load(*content);
+			}
+			catch (...)
+			{
+				AE_WARN(LogCategory::App, "Failed to parse project settings file: {}", settingsPath.string());
+				return {};
+			}
+			return config.GetString("app.startupscene");
 		}
 
 		bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error)
 		{
-			std::error_code ec;
-			std::filesystem::create_directories(root, ec);
-			if (ec)
+			if (auto dirResult = io::file_util::CreateDirectories(root); !dirResult)
 			{
-				error = "Could not create project directory: " + ec.message();
+				error = "Could not create project directory: " + dirResult.error().message;
 				return false;
 			}
-			std::filesystem::create_directories(ProjectDirectoryPath(root), ec);
-			if (ec)
+			if (auto dirResult = io::file_util::CreateDirectories(ProjectDirectoryPath(root)); !dirResult)
 			{
-				error = "Could not create project metadata directory: " + ec.message();
+				error = "Could not create project metadata directory: " + dirResult.error().message;
 				return false;
 			}
 
 			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv, "settings"sv})
 			{
-				std::filesystem::create_directories(root / std::filesystem::path(dir), ec);
-				if (ec)
+				if (auto dirResult = io::file_util::CreateDirectories(root / std::filesystem::path(dir)); !dirResult)
 				{
-					error = "Could not create project folder: " + ec.message();
+					error = "Could not create project folder: " + dirResult.error().message;
 					return false;
 				}
 			}
 
-			std::ofstream out(DescriptorPath(root), std::ios::trunc);
-			if (!out.is_open())
+			const std::string descriptor = "# AetherCore project descriptor\n\n"
+			                               "[project]\n"
+			                               "version = 1\n"
+			                               "name = \""
+			                               + EscapeTomlString(name)
+			                               + "\"\n"
+			                                 "\n[paths]\n"
+			                                 "assets = \"assets\"\n"
+			                                 "scenes = \"scenes\"\n"
+			                                 "prefabs = \"assets/prefabs\"\n"
+			                                 "scripts = \"scripts\"\n"
+			                                 "settings = \"settings\"\n";
+			if (auto writeResult = io::file_util::WriteText(DescriptorPath(root), descriptor); !writeResult)
 			{
 				error = "Could not write aether.project.";
 				return false;
 			}
-			out << "# AetherCore project descriptor\n\n";
-			out << "[project]\n";
-			out << "version = 1\n";
-			out << "name = \"" << EscapeTomlString(name) << "\"\n";
-			out << "\n[paths]\n";
-			out << "assets = \"assets\"\n";
-			out << "scenes = \"scenes\"\n";
-			out << "prefabs = \"assets/prefabs\"\n";
-			out << "scripts = \"scripts\"\n";
-			out << "settings = \"settings\"\n";
 			return SeedProjectTemplateFiles(root, error);
 		}
 
@@ -939,10 +922,9 @@ namespace aether::app
 		const std::filesystem::path exeDataDir = io::PlatformPaths::GetExecutableDir() / "data";
 		const std::filesystem::path cwd = std::filesystem::current_path(ec);
 		const std::filesystem::path outputDir = ec ? exeDataDir : cwd / "data";
-		std::filesystem::create_directories(outputDir, ec);
-		if (ec)
+		if (auto dirResult = io::file_util::CreateDirectories(outputDir); !dirResult)
 		{
-			return {.succeeded = false, .message = "Could not create output data directory: " + ec.message()};
+			return {.succeeded = false, .message = "Could not create output data directory: " + dirResult.error().message};
 		}
 
 		const std::filesystem::path outputPak = outputDir / "project.pak";
@@ -960,24 +942,20 @@ namespace aether::app
 			return {.succeeded = false, .message = std::move(message), .outputPath = outputPak};
 		}
 
-		ec.clear();
-		if (!std::filesystem::equivalent(outputDir, exeDataDir, ec))
+		if (outputDir != exeDataDir)
 		{
-			ec.clear();
-			std::filesystem::create_directories(exeDataDir, ec);
-			if (!ec)
+			if (auto dirResult = io::file_util::CreateDirectories(exeDataDir); dirResult)
 			{
-				std::filesystem::copy_file(outputPak, exeDataDir / "project.pak", std::filesystem::copy_options::overwrite_existing, ec);
-				std::filesystem::copy_file(outputPak.string() + ".log", exeDataDir / "project.pak.log", std::filesystem::copy_options::overwrite_existing, ec);
-				std::filesystem::copy_file(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest", std::filesystem::copy_options::overwrite_existing, ec);
+				io::file_util::CopyFile(outputPak, exeDataDir / "project.pak");
+				io::file_util::CopyFile(outputPak.string() + ".log", exeDataDir / "project.pak.log");
+				io::file_util::CopyFile(outputPak.string() + ".manifest", exeDataDir / "project.pak.manifest");
 			}
 		}
 
 		std::uintmax_t size = 0;
-		ec.clear();
-		if (std::filesystem::is_regular_file(outputPak, ec))
+		if (auto fileSizeResult = io::file_util::FileSize(outputPak))
 		{
-			size = std::filesystem::file_size(outputPak, ec);
+			size = *fileSizeResult;
 		}
 		AE_INFO(LogCategory::App, "Packed project '{}' to {}", project.name, DisplayPath(outputPak));
 		return {.succeeded = true, .message = "Packed project.pak (" + std::to_string(size / 1024) + " KB).", .outputPath = outputPak};
