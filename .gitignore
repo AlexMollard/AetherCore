@@ -8,6 +8,7 @@
 # .NET artifacts (IDE-side C# builds; ArtifactsPath in Directory.Build.props)
 /artifacts/
 **/artifacts/
+**/Builds/
 # Stray per-project intermediates (normally routed to /artifacts via ArtifactsPath)
 **/obj/
 managed/**/bin/

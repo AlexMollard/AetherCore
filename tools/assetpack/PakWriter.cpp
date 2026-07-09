@@ -22,18 +22,38 @@
 
 namespace fs = std::filesystem;
 
+namespace
+{
+	bool IsGeneratedProjectDirectory(const fs::path& rel)
+	{
+		const auto it = rel.begin();
+		if (it == rel.end())
+		{
+			return false;
+		}
+		const std::string first = it->generic_string();
+		return first == "Builds" || first == "artifacts" || first == ".git" || first == ".vs";
+	}
+} // namespace
+
 void PakWriter::AddDirectory(const fs::path& sourceDir)
 {
 	m_sourceDir = sourceDir;
 
-	for (const auto& entry: fs::recursive_directory_iterator(sourceDir))
+	for (fs::recursive_directory_iterator it(sourceDir), end; it != end; ++it)
 	{
+		const auto& entry = *it;
+		const auto rel = entry.path().lexically_relative(sourceDir);
+		if (entry.is_directory() && IsGeneratedProjectDirectory(rel))
+		{
+			it.disable_recursion_pending();
+			continue;
+		}
 		if (!entry.is_regular_file())
 		{
 			continue;
 		}
 
-		const auto rel = entry.path().lexically_relative(sourceDir);
 		const auto vpath = rel.generic_string();
 		m_files.push_back({vpath, entry.path()});
 	}

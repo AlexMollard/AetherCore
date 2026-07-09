@@ -28,6 +28,7 @@
 #define ICON_FA_FOLDER_OPEN "\xef\x81\xbc"             // U+F07C load scene
 #define ICON_FA_PLAY "\xef\x81\x8b"                    // U+F04B play simulation
 #define ICON_FA_STOP "\xef\x81\x8d"                    // U+F04D stop + restore
+#define ICON_FA_ROCKET "\xef\x84\xb5"                  // U+F135 publish
 
 // Inspector sections
 #define ICON_FA_UP_DOWN_LEFT_RIGHT "\xef\x82\xb2"      // U+F0B2 transform

@@ -46,6 +46,9 @@ namespace aether::app
 		std::filesystem::path m_lastPackPath;
 		std::string m_packStatus;
 		bool m_packSucceeded = false;
+		std::filesystem::path m_lastPublishPath;
+		std::string m_publishStatus;
+		bool m_publishSucceeded = false;
 		bool m_dirtySettings = false;
 	};
 } // namespace aether::app

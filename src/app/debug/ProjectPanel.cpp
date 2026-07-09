@@ -94,6 +94,9 @@ namespace aether::app
 		m_lastPackPath.clear();
 		m_packStatus.clear();
 		m_packSucceeded = false;
+		m_lastPublishPath.clear();
+		m_publishStatus.clear();
+		m_publishSucceeded = false;
 		LoadProjectSettings(project);
 
 		std::error_code ec;
@@ -383,6 +386,26 @@ namespace aether::app
 				m_lastPackPath = result.outputPath;
 			}
 			ImGui::EndDisabled();
+			ImGui::SameLine();
+			ImGui::BeginDisabled(!actions->publishProject);
+			if (ImGui::Button(ICON_FA_ROCKET "  Publish Game"))
+			{
+				if (m_dirtySettings)
+				{
+					SaveProjectSettings(*project);
+				}
+				const EditorProjectActionResult result = actions->publishProject(*project);
+				m_publishSucceeded = result.succeeded;
+				m_publishStatus = result.message;
+				m_lastPublishPath = result.outputPath;
+				if (result.succeeded)
+				{
+					m_packSucceeded = true;
+					m_packStatus = "Project packed as part of publish.";
+					m_lastPackPath = result.outputPath / "data" / "project.pak";
+				}
+			}
+			ImGui::EndDisabled();
 		}
 		if (!m_lastPackPath.empty())
 		{
@@ -400,6 +423,21 @@ namespace aether::app
 		{
 			const ImVec4 color = m_packSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
 			ImGui::TextColored(color, "%s", m_packStatus.c_str());
+		}
+		if (!m_lastPublishPath.empty())
+		{
+			ImGui::BeginDisabled(!FolderExists(m_lastPublishPath));
+			if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Published Build"))
+			{
+				OpenFolderInShell(m_lastPublishPath);
+			}
+			ImGui::EndDisabled();
+			ImGui::TextDisabled("%s", DisplayPath(m_lastPublishPath).c_str());
+		}
+		if (!m_publishStatus.empty())
+		{
+			const ImVec4 color = m_publishSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
+			ImGui::TextColored(color, "%s", m_publishStatus.c_str());
 		}
 
 		ImGui::End();
