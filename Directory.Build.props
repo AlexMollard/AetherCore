@@ -23,6 +23,7 @@
     <DebugType>portable</DebugType>
 
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\artifacts\**\*</DefaultItemExcludes>
   </PropertyGroup>
 
 </Project>

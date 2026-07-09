@@ -27,6 +27,7 @@ target_compile_definitions(App PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_DEFAULT_SETTINGS_DIR="${CMAKE_SOURCE_DIR}/resources/settings"
+    AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
 )
 
 # ── Managed (C#) assemblies ────────────────────────────────────────────────
@@ -49,7 +50,14 @@ target_compile_definitions(App PRIVATE
 # (CMake cannot generate SDK-style .csproj, so those are hand-authored source.)
 if(AETHER_HAS_DOTNET)
     set(_aether_interop_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Interop/AetherCore.Interop.csproj")
-    set(_aether_game_proj "${CMAKE_SOURCE_DIR}/game/AetherGame/AetherGame.csproj")
+    get_filename_component(_aether_project_dir_abs "${AETHERCORE_PROJECT_DIR}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+    set(_aether_project_game_proj "${_aether_project_dir_abs}/scripts/AetherGame.csproj")
+    set(_aether_fallback_game_proj "${CMAKE_SOURCE_DIR}/game/AetherGame/AetherGame.csproj")
+    if(AETHERCORE_PROJECT_DIR AND EXISTS "${_aether_project_game_proj}")
+        set(_aether_game_proj "${_aether_project_game_proj}")
+    else()
+        set(_aether_game_proj "${_aether_fallback_game_proj}")
+    endif()
     set(_aether_managed_cfg "$<IF:$<CONFIG:Debug>,Debug,Release>")
     set(_aether_managed_cfgdir "$<IF:$<CONFIG:Debug>,debug,release>")
     # AetherCore.Interop's output carries the boot assembly + runtimeconfig AND the

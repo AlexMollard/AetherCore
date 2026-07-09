@@ -431,6 +431,64 @@ namespace aether::app
 			return out;
 		}
 
+		std::string EscapeXmlAttribute(std::string_view value)
+		{
+			std::string out;
+			for (const char c: value)
+			{
+				switch (c)
+				{
+				case '&':
+					out += "&amp;";
+					break;
+				case '<':
+					out += "&lt;";
+					break;
+				case '>':
+					out += "&gt;";
+					break;
+				case '"':
+					out += "&quot;";
+					break;
+				case '\'':
+					out += "&apos;";
+					break;
+				default:
+					out += c;
+					break;
+				}
+			}
+			return out;
+		}
+
+		std::string ProjectScriptCsprojText()
+		{
+			const std::filesystem::path sdkProject = std::filesystem::path(AETHER_MANAGED_SDK_PROJECT).lexically_normal();
+			return "<Project Sdk=\"Microsoft.NET.Sdk\">\n"
+			       "\n"
+			       "  <!--\n"
+			       "    Project-owned game scripts. The engine builds this assembly when\n"
+			       "    AETHERCORE_PROJECT_DIR points at this project, then loads AetherGame.dll\n"
+			       "    through the collectible scripting context.\n"
+			       "\n"
+			       "    AetherCore is compile-only because the engine already loads the SDK assembly.\n"
+			       "  -->\n"
+			       "  <PropertyGroup>\n"
+			       "    <AssemblyName>AetherGame</AssemblyName>\n"
+			       "    <RootNamespace>AetherGame</RootNamespace>\n"
+			       "  </PropertyGroup>\n"
+			       "\n"
+			       "  <ItemGroup>\n"
+			       "    <ProjectReference Include=\""
+			       + EscapeXmlAttribute(sdkProject.generic_string())
+			       + "\"\n"
+			         "                      Private=\"false\"\n"
+			         "                      ExcludeAssets=\"runtime\" />\n"
+			         "  </ItemGroup>\n"
+			         "\n"
+			         "</Project>\n";
+		}
+
 		bool SeedProjectTemplateFiles(const std::filesystem::path& root, std::string& error)
 		{
 			auto CopyTemplateFile = [&](const std::filesystem::path& srcRoot, const char* relPath, const std::filesystem::path& dest) -> bool
@@ -451,6 +509,16 @@ namespace aether::app
 				}
 				return true;
 			};
+
+			const std::filesystem::path scriptsProject = root / "scripts" / "AetherGame.csproj";
+			if (!io::file_util::Exists(scriptsProject))
+			{
+				if (auto writeResult = io::file_util::WriteText(scriptsProject, ProjectScriptCsprojText()); !writeResult)
+				{
+					error = "Could not write project scripts file: " + writeResult.error().message;
+					return false;
+				}
+			}
 
 			return CopyTemplateFile(AETHER_DEFAULT_SETTINGS_DIR, "engine.toml", root / "settings" / "engine.toml") && CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
 		}

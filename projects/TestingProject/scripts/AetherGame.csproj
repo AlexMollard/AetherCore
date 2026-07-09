@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Project-owned game scripts. The engine builds this assembly when
+    AETHERCORE_PROJECT_DIR points at this project, then loads AetherGame.dll
+    through the collectible scripting context.
+
+    AetherCore is compile-only because the engine already loads the SDK assembly.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherGame</AssemblyName>
+    <RootNamespace>AetherGame</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../managed/AetherCore/AetherCore.csproj"
+                      Private="false"
+                      ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>
