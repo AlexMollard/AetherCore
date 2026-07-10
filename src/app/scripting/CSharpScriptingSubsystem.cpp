@@ -1,11 +1,11 @@
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include <array>
-#include <cstdio>
 #include <optional>
 #include <string>
 
 #include "io/FileUtil.hpp"
+#include "io/Process.hpp"
 
 #include "utils/Logger.hpp"
 
@@ -75,32 +75,6 @@ namespace aether::app::scripting
 	namespace
 	{
 #if defined(AETHER_GAME_PROJECT) && defined(AETHER_DOTNET_EXE)
-		// Runs a shell command, capturing combined stdout+stderr. Returns the
-		// process exit code (0 == success), or -1 if the process failed to start.
-		int RunCapture(const std::string& command, std::string& output)
-		{
-#	ifdef _WIN32
-			FILE* pipe = _popen(command.c_str(), "r");
-#	else
-			FILE* pipe = popen(command.c_str(), "r");
-#	endif
-			if (pipe == nullptr)
-			{
-				output = "failed to start build process";
-				return -1;
-			}
-			char buffer[512];
-			while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr)
-			{
-				output += buffer;
-			}
-#	ifdef _WIN32
-			return _pclose(pipe);
-#	else
-			return pclose(pipe);
-#	endif
-		}
-
 		bool IsScriptBuildInput(const std::filesystem::path& path)
 		{
 			if (!path.has_extension())
@@ -238,16 +212,11 @@ namespace aether::app::scripting
 
 		// Incremental `dotnet build` of the game project (a no-op when it was just
 		// built in VS). ArtifactsPath mirrors the CMake managed build.
-		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\" 2>&1";
-#	ifdef _WIN32
-		// cmd.exe needs the whole command re-wrapped so the quoted, spaced exe path parses.
-		const std::string command = "\"" + inner + "\"";
-#	else
-		const std::string command = inner;
-#	endif
+		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG
+		        + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\"";
 
 		std::string output;
-		const int rc = RunCapture(command, output);
+		const int rc = io::RunProcessCapture(inner, output);
 		if (rc != 0)
 		{
 			error = output.empty() ? "dotnet build failed" : output;

@@ -11,7 +11,6 @@ namespace aether::app
 
 	struct EditorProjectPublishConfig
 	{
-		std::filesystem::path assetPackerExe;
 		std::filesystem::path executableDir;
 		std::filesystem::path packageTemplateDir;
 		std::filesystem::path dotnetExe;

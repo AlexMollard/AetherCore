@@ -29,7 +29,7 @@ target_sources(GameRuntime
 target_include_directories(App PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(App PRIVATE Engine)
+target_link_libraries(App PRIVATE Engine AssetPipeline)
 target_link_libraries(GameRuntime PRIVATE Engine)
 
 aethercore_target_defaults(App)

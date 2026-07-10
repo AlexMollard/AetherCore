@@ -11,9 +11,12 @@
 #include <utility>
 #include <vector>
 
+#include "AssetPipeline.hpp"
+
 #include "editor/EditorProjectContext.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
+#include "io/Process.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
@@ -69,25 +72,6 @@ namespace aether::app
 			return pathText == parentText || (pathText.starts_with(parentText) && pathText.size() > parentText.size() && (pathText[parentText.size()] == '/' || parentText.ends_with('/')));
 		}
 
-		std::string ShellQuotePath(const std::filesystem::path& path)
-		{
-			std::string text = path.string();
-			std::string quoted = "\"";
-			for (const char c: text)
-			{
-				if (c == '"')
-				{
-					quoted += "\\\"";
-				}
-				else
-				{
-					quoted += c;
-				}
-			}
-			quoted += '"';
-			return quoted;
-		}
-
 		std::string ReadLogExcerpt(const std::filesystem::path& path)
 		{
 			auto text = io::file_util::ReadText(path);
@@ -104,28 +88,6 @@ namespace aether::app
 				result += "...";
 			}
 			return result;
-		}
-
-		bool RunCommandToLog(const std::string& command, const std::filesystem::path& logPath, std::string& error)
-		{
-			if (auto dirResult = io::file_util::CreateDirectories(logPath.parent_path()); !dirResult)
-			{
-				error = "Could not create log directory: " + dirResult.error().message;
-				return false;
-			}
-			const std::string wrapped = command + " > " + ShellQuotePath(logPath) + " 2>&1";
-			const int exitCode = std::system(wrapped.c_str());
-			if (exitCode != 0)
-			{
-				error = "Command failed with exit code " + std::to_string(exitCode) + ".";
-				const std::string excerpt = ReadLogExcerpt(logPath);
-				if (!excerpt.empty())
-				{
-					error += " " + excerpt;
-				}
-				return false;
-			}
-			return true;
 		}
 
 		std::string PublishPlatformDirectoryName()
@@ -407,35 +369,6 @@ namespace aether::app
 			       && CopyDirectoryRecursive(exeDataDir / "scripts" / "managed", packageDataDir / "scripts" / "managed", error);
 		}
 
-		std::optional<std::filesystem::path> FindAssetPackerExecutable(const std::filesystem::path& exeDir)
-		{
-			std::error_code ec;
-			const std::filesystem::path configName = exeDir.filename();
-
-			std::vector<std::filesystem::path> candidates;
-			candidates.push_back(exeDir / "AssetPacker.exe");
-			candidates.push_back(exeDir.parent_path().parent_path().parent_path() / "tools" / configName / "AssetPacker.exe");
-
-			const std::filesystem::path cwd = std::filesystem::current_path(ec);
-			if (!ec)
-			{
-				candidates.push_back(cwd / "tools" / configName / "AssetPacker.exe");
-				candidates.push_back(cwd / "tools" / "RelWithDebInfo" / "AssetPacker.exe");
-				candidates.push_back(cwd / "tools" / "Debug" / "AssetPacker.exe");
-				candidates.push_back(cwd / "tools" / "Release" / "AssetPacker.exe");
-			}
-
-			for (const std::filesystem::path& candidate: candidates)
-			{
-				if (io::file_util::Exists(candidate))
-				{
-					std::error_code canonicalEc;
-					return std::filesystem::weakly_canonical(candidate, canonicalEc);
-				}
-			}
-			return std::nullopt;
-		}
-
 		std::filesystem::path ProjectFilePath(const std::filesystem::path& root)
 		{
 			return root / kProjectFileName;
@@ -504,10 +437,6 @@ namespace aether::app
 	{
 		EditorProjectPublishConfig config;
 		config.executableDir = io::PlatformPaths::GetExecutableDir();
-		if (const std::optional<std::filesystem::path> packer = FindAssetPackerExecutable(config.executableDir))
-		{
-			config.assetPackerExe = *packer;
-		}
 		if (const std::optional<std::filesystem::path> package = FindCMakePackageDirectory(config.executableDir))
 		{
 			config.packageTemplateDir = *package;
@@ -571,10 +500,6 @@ namespace aether::app
 			{
 				return *validationError;
 			}
-			if (config.assetPackerExe.empty())
-			{
-				return {.succeeded = false, .message = "Could not find AssetPacker.exe in the editor build output."};
-			}
 
 			const std::filesystem::path exeDataDir = config.executableDir / "data";
 			const std::filesystem::path outputDir = project.root / "Builds" / "Pack";
@@ -584,18 +509,11 @@ namespace aether::app
 			}
 
 			const std::filesystem::path outputPak = outputDir / "project.pak";
-			const std::filesystem::path runLog = outputDir / "project.pak.editor.log";
-			const std::string command = ShellQuotePath(config.assetPackerExe) + " --project --import-materials " + ShellQuotePath(project.root) + " " + ShellQuotePath(outputPak) + " > " + ShellQuotePath(runLog) + " 2>&1";
-			const int exitCode = std::system(command.c_str());
-			if (exitCode != 0)
+			const assetpipeline::PackResult packResult =
+			        assetpipeline::PackProject(project.root, outputPak, {.importMaterials = true, .projectLayout = true});
+			if (!packResult.ok)
 			{
-				std::string message = "AssetPacker failed with exit code " + std::to_string(exitCode) + ".";
-				const std::string excerpt = ReadLogExcerpt(runLog);
-				if (!excerpt.empty())
-				{
-					message += " " + excerpt;
-				}
-				return {.succeeded = false, .message = std::move(message), .outputPath = outputPak};
+				return {.succeeded = false, .message = packResult.message, .outputPath = outputPak};
 			}
 
 			if (syncEditorRuntimeProjectPak && outputDir != exeDataDir)
@@ -715,10 +633,17 @@ namespace aether::app
 			{
 				return {.succeeded = false, .message = "Could not clean script publish intermediates: " + ec.message(), .outputPath = publishDir};
 			}
-			const std::string command = ShellQuotePath(config.dotnetExe) + " build " + ShellQuotePath(scriptsProject) + " -c " + config.managedConfig + " --nologo -v:m -p:ArtifactsPath=" + ShellQuotePath(artifactsDir);
-			if (!RunCommandToLog(command, publishLog, error))
+			const std::string command = "\"" + config.dotnetExe.string() + "\" build \"" + scriptsProject.string()
+			        + "\" -c " + config.managedConfig + " --nologo -v:m -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
+			if (const int rc = io::RunProcessToLog(command, publishLog); rc != 0)
 			{
-				return {.succeeded = false, .message = "Project script build failed. " + error, .outputPath = publishDir};
+				std::string message = "Project script build failed (exit " + std::to_string(rc) + ").";
+				const std::string excerpt = ReadLogExcerpt(publishLog);
+				if (!excerpt.empty())
+				{
+					message += " " + excerpt;
+				}
+				return {.succeeded = false, .message = std::move(message), .outputPath = publishDir};
 			}
 			const std::filesystem::path gameOutDir = artifactsDir / "bin" / "AetherGame" / config.managedConfigDir;
 			if (!CopyDirectoryRecursive(gameOutDir, publishDir / "data" / "scripts" / "managed", error))
