@@ -46,7 +46,7 @@ namespace aether
 		};
 
 		template<typename T>
-		[[nodiscard]] T& Create(std::string name, T value = {}, ProductMetadata metadata = {})
+		[[nodiscard]] T& Create(std::string name, T value = {}, ProductMetadata metadata = DefaultMetadata())
 		{
 			std::any& storage = CreateStorage(std::type_index(typeid(T)), typeid(T).name(), std::move(name), std::any{std::move(value)}, metadata, false);
 			T* product = std::any_cast<T>(&storage);
@@ -55,7 +55,7 @@ namespace aether
 		}
 
 		template<typename T>
-		[[nodiscard]] T& CreateOrReplace(std::string name, T value = {}, ProductMetadata metadata = {})
+		[[nodiscard]] T& CreateOrReplace(std::string name, T value = {}, ProductMetadata metadata = DefaultMetadata())
 		{
 			std::any& storage = CreateStorage(std::type_index(typeid(T)), typeid(T).name(), std::move(name), std::any{std::move(value)}, metadata, true);
 			T* product = std::any_cast<T>(&storage);
@@ -64,7 +64,7 @@ namespace aether
 		}
 
 		template<typename T>
-		[[nodiscard]] T& Import(std::string name, T value = {}, ProductMetadata metadata = {}, std::string_view producerName = "Imported")
+		[[nodiscard]] T& Import(std::string name, T value = {}, ProductMetadata metadata = DefaultMetadata(), std::string_view producerName = "Imported")
 		{
 			metadata.source = ProductSource::Imported;
 			T& product = CreateOrReplace<T>(name, std::move(value), metadata);
@@ -73,7 +73,7 @@ namespace aether
 		}
 
 		template<typename T>
-		[[nodiscard]] T& SetFrameProduct(std::string name, T value = {}, ProductMetadata metadata = {}, std::string_view producerName = "FrameSetup")
+		[[nodiscard]] T& SetFrameProduct(std::string name, T value = {}, ProductMetadata metadata = DefaultMetadata(), std::string_view producerName = "FrameSetup")
 		{
 			metadata.source = ProductSource::FrameSetup;
 			T& product = CreateOrReplace<T>(name, std::move(value), metadata);
@@ -82,7 +82,7 @@ namespace aether
 		}
 
 		template<typename T>
-		[[nodiscard]] T& DeclareGraphProduct(std::string name, T value = {}, ProductMetadata metadata = {})
+		[[nodiscard]] T& DeclareGraphProduct(std::string name, T value = {}, ProductMetadata metadata = DefaultMetadata())
 		{
 			metadata.source = ProductSource::GraphPass;
 			return CreateOrReplace<T>(std::move(name), std::move(value), metadata);
@@ -142,6 +142,21 @@ namespace aether
 		[[nodiscard]] std::vector<ProductInfo> GetProducts() const;
 
 	private:
+		// Factory for the default ProductMetadata argument. Spelled as a function
+		// call (rather than `= {}`) at the call sites to dodge a Clang bug: clang-cl
+		// rejects a nested struct's in-class default member initializers being
+		// materialized for an aggregate default argument (`= {}`) of a *member
+		// function template*, erroring "default member initializer ... needed within
+		// definition of enclosing class ... outside of member functions" (LLVM issues
+		// #36032 / #36684). MSVC and the standard's complete-class-context rules accept
+		// the original form; building the value inside this function body sidesteps the
+		// complete-class context. Keep this indirection until the minimum supported
+		// clang no longer includes an affected release.
+		[[nodiscard]] static ProductMetadata DefaultMetadata()
+		{
+			return {};
+		}
+
 		struct ProductEntry
 		{
 			std::type_index type = std::type_index(typeid(void));
