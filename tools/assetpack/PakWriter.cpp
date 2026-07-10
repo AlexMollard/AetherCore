@@ -267,12 +267,21 @@ namespace aether::assetpipeline
 		const uint64_t pathDataOffset = sizeof(PakHeader) + entryTableSize;
 		const uint64_t assetDataOffset = pathDataOffset + static_cast<uint64_t>(pathData.size());
 
+		// Index hash = XXH3-64 over the entry table bytes followed by the path blob.
+		XXH3_state_t* xstate = XXH3_createState();
+		XXH3_64bits_reset(xstate);
+		XXH3_64bits_update(xstate, entries.data(), static_cast<size_t>(entryTableSize));
+		XXH3_64bits_update(xstate, pathData.data(), pathData.size());
+		const uint64_t indexHash = XXH3_64bits_digest(xstate);
+		XXH3_freeState(xstate);
+
 		PakHeader header;
 		header.numEntries = static_cast<uint32_t>(entries.size());
 		header.pathDataOffset = pathDataOffset;
 		header.pathDataSize = static_cast<uint64_t>(pathData.size());
 		header.assetDataOffset = assetDataOffset;
 		header.assetDataSize = static_cast<uint64_t>(assetData.size());
+		header.indexHash = indexHash;
 
 		fs::create_directories(outPath.parent_path());
 

@@ -7,14 +7,14 @@
 // build tool and the engine's PakBackend.  Both must include this file.
 //
 // File layout:
-//   PakHeader        (48 bytes)
+//   PakHeader        (64 bytes)
 //   PakEntry[N]      (40 bytes each)
 //   path-data        concatenated null-terminated UTF-8 strings
 //   asset-data       raw or zstd-compressed file bytes
 //
 // All integers are little-endian.
 
-inline constexpr uint32_t PAK_VERSION   = 1;
+inline constexpr uint32_t PAK_VERSION   = 2;
 inline constexpr uint32_t PAK_FLAG_ZSTD = 1u << 0; // entry data is zstd-compressed
 inline constexpr uint32_t PAK_PIPELINE_VERSION = 4;
 inline constexpr const char* PAK_MANIFEST_PATH = "__aetherpak/manifest.txt";
@@ -26,14 +26,16 @@ struct PakHeader
 	char     magic[4]        = { 'A', 'E', 'P', 'K' };
 	uint32_t version         = PAK_VERSION;
 	uint32_t numEntries      = 0;
-	uint32_t reserved        = 0;
+	uint32_t flags           = 0; // pak-level flags (reserved, must be 0 for now)
 	uint64_t pathDataOffset  = 0;
 	uint64_t pathDataSize    = 0;
 	uint64_t assetDataOffset = 0;
 	uint64_t assetDataSize   = 0;
+	uint64_t indexHash       = 0; // XXH3-64 of (entry table bytes ++ path-data bytes)
+	uint64_t headerReserved  = 0; // reserved, must be 0
 };
 
-static_assert(sizeof(PakHeader) == 48);
+static_assert(sizeof(PakHeader) == 64);
 
 struct PakEntry
 {

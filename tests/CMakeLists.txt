@@ -29,6 +29,7 @@ add_executable(EngineTests
     ui/FontShapingTests.cpp
     imgui/ImguiFrameDataTests.cpp
     assetpack/AssetPipelineTests.cpp
+    assetpack/PakFormatTests.cpp
     io/ProcessTests.cpp
     # App-side translation units under test: EngineTests links Engine only, so
     # the scene serializer and the app pieces it needs compile in directly.
@@ -37,6 +38,8 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
+# xxHash headers so format tests can recompute a pak's index hash.
+target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")
 # Mirror the App target's scenes dir so ReadSceneFile("default") resolves the
 # committed template from within the headless test binary (SceneSerializer.cpp
 # reads it via std::ifstream on this absolute path).

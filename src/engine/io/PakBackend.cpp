@@ -100,9 +100,36 @@ namespace aether::io
 			throw FileSystemError("Unsupported pak version (" + std::to_string(header.version) + ", expected " + std::to_string(PAK_VERSION) + ") in: " + m_pakPath.string());
 		}
 
+		// Validate the index against the real file size before trusting any offset.
+		std::error_code sizeEc;
+		const std::uintmax_t fileSize = std::filesystem::file_size(m_pakPath, sizeEc);
+		if (sizeEc)
+		{
+			throw FileSystemError("Cannot stat pak file: " + m_pakPath.string());
+		}
+
+		constexpr uint32_t kMaxEntries = 8u * 1024u * 1024u; // 8M entries sanity cap
+		if (header.numEntries > kMaxEntries)
+		{
+			throw FileSystemError("Corrupt pak index (entry count out of range) in: " + m_pakPath.string());
+		}
+		const uint64_t entryTableSize = static_cast<uint64_t>(header.numEntries) * sizeof(PakEntry);
+		const uint64_t indexEnd = sizeof(PakHeader) + entryTableSize;
+		// Overflow-safe, ORDER-DEPENDENT: each term relies on the earlier terms
+		// being false so every subtraction stays non-wrapping.
+		if (indexEnd > fileSize
+		    || header.pathDataOffset != indexEnd
+		    || header.pathDataSize > fileSize - header.pathDataOffset
+		    || header.assetDataOffset != header.pathDataOffset + header.pathDataSize
+		    || header.assetDataOffset > fileSize
+		    || header.assetDataSize > fileSize - header.assetDataOffset)
+		{
+			throw FileSystemError("Corrupt pak index (offsets out of range) in: " + m_pakPath.string());
+		}
+
 		// Read entry table.
 		std::vector<PakEntry> entries(header.numEntries);
-		pak.read(reinterpret_cast<char*>(entries.data()), static_cast<std::streamsize>(header.numEntries * sizeof(PakEntry)));
+		pak.read(reinterpret_cast<char*>(entries.data()), static_cast<std::streamsize>(entryTableSize));
 
 		// Read path-data section.
 		std::vector<char> pathData(static_cast<std::size_t>(header.pathDataSize));
@@ -114,11 +141,33 @@ namespace aether::io
 			throw FileSystemError("Failed to read pak index from: " + m_pakPath.string());
 		}
 
+		// Verify the index hash covers the entry table + path blob unmodified.
+		{
+			XXH3_state_t* xstate = XXH3_createState();
+			XXH3_64bits_reset(xstate);
+			XXH3_64bits_update(xstate, entries.data(), static_cast<size_t>(entryTableSize));
+			XXH3_64bits_update(xstate, pathData.data(), pathData.size());
+			const uint64_t actualIndexHash = XXH3_64bits_digest(xstate);
+			XXH3_freeState(xstate);
+			if (actualIndexHash != header.indexHash)
+			{
+				throw FileSystemError("Corrupt pak index (hash mismatch) in: " + m_pakPath.string());
+			}
+		}
+
 		m_assetDataBase = header.assetDataOffset;
 		m_index.reserve(header.numEntries);
 
 		for (const auto& e: entries)
 		{
+			// Subtraction form (guarded by the size fields validated above) avoids uint64 overflow.
+			if (static_cast<uint64_t>(e.pathOffset) + e.pathLen > header.pathDataSize
+			    || e.dataOffset > header.assetDataSize
+			    || e.dataSize > header.assetDataSize - e.dataOffset)
+			{
+				throw FileSystemError("Corrupt pak entry (range out of bounds) in: " + m_pakPath.string());
+			}
+
 			std::string path(pathData.data() + e.pathOffset, e.pathLen);
 			m_index.emplace(std::move(path), EntryInfo{.offset = e.dataOffset, .size = e.dataSize, .hash = e.contentHash, .flags = e.flags});
 		}

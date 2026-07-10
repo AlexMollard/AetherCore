@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <PakFormat.hpp>
+
 namespace aether::assetpipeline
 {
 	namespace fs = std::filesystem;
@@ -16,6 +18,17 @@ namespace aether::assetpipeline
 	// Bump when the manifest format changes so that stale cached manifests
 	// are automatically regenerated on the next pack.
 	inline constexpr int kManifestVersion = 5;
+
+	// Incremental-cache header line. Encodes the manifest schema version AND the
+	// on-disk pak format + pipeline versions, so bumping any of them invalidates a
+	// stale cached manifest and forces a full repack (otherwise an "up to date"
+	// pak could be left in an older on-disk format the runtime now rejects).
+	inline std::string ManifestHeaderLine()
+	{
+		return "# AetherPak manifest v" + std::to_string(kManifestVersion)
+		     + " pak" + std::to_string(PAK_VERSION)
+		     + " pipeline" + std::to_string(PAK_PIPELINE_VERSION);
+	}
 
 	struct ManifestEntry
 	{
@@ -41,8 +54,7 @@ namespace aether::assetpipeline
 			{
 				continue;
 			}
-			const std::string expected = "# AetherPak manifest v" + std::to_string(kManifestVersion);
-			if (line != expected)
+			if (line != ManifestHeaderLine())
 			{
 				return {};
 			}
@@ -83,7 +95,7 @@ namespace aether::assetpipeline
 			return;
 		}
 
-		out << "# AetherPak manifest v" << kManifestVersion << "\n";
+		out << ManifestHeaderLine() << "\n";
 		for (const auto& [vpath, e]: map)
 		{
 			out << vpath << '\t' << std::dec << e.mtimeSec << '\t' << std::hex << e.contentHash << '\n';
