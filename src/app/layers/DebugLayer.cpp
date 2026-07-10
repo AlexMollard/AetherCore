@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <functional>
@@ -35,6 +36,7 @@ using namespace std::string_view_literals;
 #include "AetherCore.hpp"
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
+#include "io/PlatformPaths.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
@@ -156,22 +158,34 @@ namespace aether::app
 			return key;
 		}
 
+		std::filesystem::path EditorStatePath()
+		{
+			return io::PlatformPaths::GetUserConfigDir() / "EditorState.toml";
+		}
+
 	} // namespace
 
 	void DebugLayer::LoadSettings(LayerContext&)
 	{
-		if (m_debugConfig.LoadFile("debug"))
+		const auto path = EditorStatePath();
+		if (!path.empty() && m_debugConfig.LoadFromPath(path))
 		{
-			AE_INFO(LogCategory::App, "Debug settings loaded");
+			AE_INFO(LogCategory::App, "Editor state loaded from {}", path.string());
 		}
 		m_projects.LoadSettings(m_debugConfig);
 	}
 
 	void DebugLayer::SaveSettings(LayerContext&)
 	{
-		if (m_debugConfig.SaveIfDirty("debug", "Debug layer settings"))
+		if (!m_debugConfig.IsDirty())
 		{
-			AE_INFO(LogCategory::App, "Debug settings saved");
+			return;
+		}
+		const auto path = EditorStatePath();
+		if (!path.empty() && m_debugConfig.SaveToPath(path, "AetherCore editor state"))
+		{
+			m_debugConfig.MarkClean();
+			AE_INFO(LogCategory::App, "Editor state saved to {}", path.string());
 		}
 	}
 
