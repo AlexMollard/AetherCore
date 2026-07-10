@@ -2,7 +2,9 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "rendering/GraphicsPipeline.hpp"
@@ -144,5 +146,21 @@ namespace aether
 		RenderTargetService* m_renderTargetService = nullptr;
 		World* m_world = nullptr;
 		gpu::UploadContext* m_uploadContext = nullptr;
+
+		// Deduplicated, AssetManager-lifetime storage for per-material shader VFS
+		// path overrides parsed from a material preset (binary .material or
+		// properties.toml fallback). MaterialTemplate::shaderVfsPath is a
+		// string_view that PipelineCache stores by value for the cache's lifetime
+		// (see MaterialTemplate.hpp), so a locally-parsed std::string cannot back
+		// it directly -- it must be interned somewhere that outlives the cache.
+		// unordered_set gives both dedup (repeated loads of the same override
+		// don't grow this unboundedly) and reference stability across inserts.
+		std::unordered_set<std::string> m_internedShaderVfsPaths;
+
+		// Intern a per-material shader VFS path so a stable string_view can be
+		// handed to MaterialTemplate::shaderVfsPath. Returns an empty view for an
+		// empty input (caller then keeps whatever default the MaterialAsset
+		// already carries).
+		[[nodiscard]] std::string_view InternShaderVfsPath(std::string path);
 	};
 } // namespace aether

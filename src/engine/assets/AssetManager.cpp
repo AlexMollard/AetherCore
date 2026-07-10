@@ -41,6 +41,14 @@ namespace aether
 			std::string metallicRoughnessPath; // glTF ORM: G=roughness, B=metallic
 			std::string occlusionPath;
 			std::string emissivePath;
+			// Optional per-material shader override (e.g. "shaders://myeffect.spv"),
+			// authored verbatim -- unlike the texture paths above, it is NOT
+			// resolved relative to the preset's folder since shaders:// is its own
+			// mount. Empty -> keep the MaterialAsset default templateDesc. Kept as
+			// an owned std::string (not directly written into material.templateDesc,
+			// which is a string_view) so the caller can intern it into storage that
+			// outlives the PipelineCache before assigning.
+			std::string shaderVfsPath;
 		};
 
 		std::string NormalizeVirtualFolder(std::string path)
@@ -221,6 +229,12 @@ namespace aether
 					        }
 					        return;
 				        }
+				        if (entry.fullKey == "material.shader" || entry.fullKey == "shader")
+				        {
+					        // Verbatim VFS path, no relative resolution (unlike textures.*).
+					        spec.shaderVfsPath = entry.value;
+					        return;
+				        }
 
 				        if (entry.fullKey == "textures.albedo" || entry.fullKey == "albedo" || entry.fullKey == "textures.basecolor")
 				        {
@@ -348,6 +362,19 @@ namespace aether
 		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
 	}
 
+	std::string_view AssetManager::InternShaderVfsPath(std::string path)
+	{
+		if (path.empty())
+		{
+			return {};
+		}
+		// unordered_set never relocates existing elements on insert, so the
+		// returned view stays valid for the AssetManager's lifetime even as more
+		// paths are interned later.
+		const auto [it, inserted] = m_internedShaderVfsPaths.insert(std::move(path));
+		return *it;
+	}
+
 	Expected<MaterialAsset> AssetManager::LoadMaterialPreset(std::string_view path)
 	{
 		AE_PROFILE_ZONE();
@@ -420,6 +447,15 @@ namespace aether
 						}
 					}
 
+					// Optional trailing per-material shader override (see the
+					// BinaryFormats.hpp comment above MaterialHeaderDisk). Absent
+					// or empty -> keep MaterialAsset's default templateDesc.
+					std::string shaderVfsPath = reader.ReadString();
+					if (!shaderVfsPath.empty())
+					{
+						material.templateDesc.shaderVfsPath = InternShaderVfsPath(std::move(shaderVfsPath));
+					}
+
 					AE_INFO(LogCategory::Engine, "Loaded binary material '{}'.", requestedPath);
 					return material;
 				}
@@ -430,6 +466,10 @@ namespace aether
 		AE_TRY(text, ReadTextFile(presetPath));
 		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
 		MaterialAsset material = spec.material;
+		if (!spec.shaderVfsPath.empty())
+		{
+			material.templateDesc.shaderVfsPath = InternShaderVfsPath(spec.shaderVfsPath);
+		}
 
 		// The sink owns .texture-sibling resolution; Acquire dedups + ref-counts.
 		// Empty path or load failure -> invalid handle (optional map not set).
@@ -609,6 +649,16 @@ namespace aether
 				mat.doubleSided = srcMat.doubleSided;
 				mat.alphaBlend = srcMat.alphaBlend;
 				mat.alphaMask = srcMat.alphaMask;
+
+				// Optional per-material shader override authored in the mesh
+				// material's properties.toml. Intern into AssetManager-lifetime
+				// storage (templateDesc.shaderVfsPath is a string_view the
+				// PipelineCache holds for its lifetime); empty -> keep the
+				// MaterialAsset default ("shaders://gltf_mesh.spv").
+				if (!srcMat.shaderVfsPath.empty())
+				{
+					mat.templateDesc.shaderVfsPath = InternShaderVfsPath(srcMat.shaderVfsPath);
+				}
 
 				// New format: resolve texture paths from GltfMaterial.
 				// Old format: resolve via imageHandles index chain.

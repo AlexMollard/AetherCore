@@ -625,6 +625,14 @@ namespace aether::assets
 				}
 			}
 
+			// Optional trailing per-material shader override, written by
+			// MaterialProcessor::Process directly after the texture entries (see
+			// the format comment above MaterialHeaderDisk in BinaryFormats.hpp).
+			// ReadString() is bounds-checked and returns "" on an exhausted buffer,
+			// so a pre-Phase-5 blob (no trailing bytes) safely reads as "no
+			// override". No relative resolution: shaders:// is its own VFS mount.
+			outMat.shaderVfsPath = reader.ReadString();
+
 			return true;
 		}
 

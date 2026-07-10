@@ -14,8 +14,11 @@
 
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
+#include "editor/ShaderCompiler.hpp"
+#include "io/DirectoryBackend.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
+#include "io/OverlayBackend.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -248,6 +251,62 @@ namespace aether::app
 			return SeedProjectTemplateFiles(root, error);
 		}
 
+		// (Re)builds the shaders:// overlay's project layer for `projectRoot`:
+		// prepends a DirectoryBackend over its compiled-shader intermediate dir
+		// (ShaderCompiler::ProjectShaderIntermediateDir) when that dir exists,
+		// so a project shader overrides an engine shader of the same name;
+		// falls back to engine-only otherwise (project has no assets/shaders,
+		// or this build has no slangc so nothing was ever compiled). Called
+		// after every compile attempt - project load, project switch, and the
+		// manual "Recompile Shaders" action - so the overlay never serves a
+		// stale project layer.
+		void UpdateProjectShaderOverlay(const std::filesystem::path& projectRoot)
+		{
+			if (projectRoot.empty())
+			{
+				io::FileSystem::MountShaderOverlay(std::nullopt);
+				return;
+			}
+
+			const std::filesystem::path shaderDir = ProjectShaderIntermediateDir(projectRoot);
+			std::error_code ec;
+			if (std::filesystem::is_directory(shaderDir, ec))
+			{
+				io::FileSystem::MountShaderOverlay(io::OverlayBackend::Layer{std::make_shared<io::DirectoryBackend>(shaderDir), ""});
+			}
+			else
+			{
+				io::FileSystem::MountShaderOverlay(std::nullopt);
+			}
+
+			// Diagnostic: prove shaders:// actually resolves through the freshly
+			// (re)mounted overlay - cheap enough to run on every project
+			// load/switch/recompile, and useful for debugging a shader that fails
+			// to resolve at runtime.
+			if (const auto shaderGlob = io::FileSystem::Glob("shaders://**/*.spv"); shaderGlob.has_value())
+			{
+				AE_INFO(LogCategory::App, "shaders:// overlay resolves {} shader(s) after project shader compile.", shaderGlob->size());
+			}
+		}
+
+		// Compiles `projectRoot`'s Slang shaders and refreshes the shaders://
+		// overlay to match the result. Shared by OpenProject and the manual
+		// "Recompile Shaders" action so both go through the same path.
+		ShaderCompileResult CompileProjectShadersAndRefreshOverlay(const std::filesystem::path& projectRoot)
+		{
+			const ShaderCompileResult result = CompileProject(projectRoot);
+			if (!result.ok)
+			{
+				AE_WARN(LogCategory::App, "Project shader compile had failures: {}", result.message);
+			}
+			else if (!result.message.empty())
+			{
+				AE_INFO(LogCategory::App, "Project shader compile: {}", result.message);
+			}
+			UpdateProjectShaderOverlay(projectRoot);
+			return result;
+		}
+
 #ifdef _WIN32
 		std::optional<std::filesystem::path> PickProjectFolder()
 		{
@@ -395,6 +454,18 @@ namespace aether::app
 				return BakeEnginePak(config.executableDir / "data" / "engine.pak");
 			};
 		}
+		if (CanCompileShaders())
+		{
+			m_actions.recompileShaders = [this]() -> EditorProjectActionResult
+			{
+				if (m_currentProject.root.empty())
+				{
+					return {.succeeded = false, .message = "No project is open."};
+				}
+				const ShaderCompileResult result = CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
+				return {.succeeded = result.ok, .message = result.message, .outputPath = ProjectShaderIntermediateDir(m_currentProject.root)};
+			};
+		}
 	}
 
 	void EditorProjectManager::LoadSettings(TomlConfig& config)
@@ -507,6 +578,13 @@ namespace aether::app
 		m_currentProject = *std::move(projectResult);
 		m_currentProject.loaded = true;
 		io::FileSystem::Mount("project", m_currentProject.root);
+		// Compile this project's Slang shaders (dev-only, no-op without slangc -
+		// see ShaderCompiler::CanCompileShaders) and (re)mount shaders:// so the
+		// project's compiled shaders take priority over engine shaders of the
+		// same name. Runs on every OpenProject - including project switches, so
+		// a switch away from a project drops its shader layer instead of
+		// leaking it into the newly opened project.
+		CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
 		scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
 		RefreshServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);

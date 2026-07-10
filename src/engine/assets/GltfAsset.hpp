@@ -48,6 +48,13 @@ namespace aether::assets
 		std::string metallicRoughnessPath;
 		std::string occlusionPath;
 		std::string emissivePath;
+
+		// Optional per-material shader override authored in the material's
+		// properties.toml (e.g. "shaders://myeffect.spv"). Empty = none, keep the
+		// engine default template. Read from the trailing string in a binary
+		// .material (see BinaryFormats.hpp), threaded to
+		// MaterialTemplate::shaderVfsPath in AssetManager::FinaliseModelLoad.
+		std::string shaderVfsPath;
 	};
 
 	struct GltfSkin

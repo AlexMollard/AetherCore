@@ -53,6 +53,24 @@ namespace aether::assetpipeline
 			const std::string second = it->generic_string();
 			return first == ".project" && second == "publish.toml";
 		}
+
+		// Prepends a normalized prefix ("shaders", "shaders/", "" all accepted)
+		// to a directory-relative virtual path. Returns rel unchanged when
+		// prefix is empty.
+		std::string ApplyPrefix(std::string_view prefix, const fs::path& rel)
+		{
+			std::string relStr = rel.generic_string();
+			std::string p(prefix);
+			while (!p.empty() && p.back() == '/')
+			{
+				p.pop_back();
+			}
+			if (p.empty())
+			{
+				return relStr;
+			}
+			return p + "/" + relStr;
+		}
 	} // namespace
 
 	void PakWriter::AddDirectory(const fs::path& sourceDir)
@@ -68,8 +86,11 @@ namespace aether::assetpipeline
 				it.disable_recursion_pending();
 				continue;
 			}
-			if (entry.is_regular_file() && (IsExcludedProjectFile(rel) || rel.generic_string() == "ProjectSettings.toml"))
+			if (entry.is_regular_file() && (IsExcludedProjectFile(rel) || rel.generic_string() == "ProjectSettings.toml" || rel.extension() == ".slang"))
 			{
+				// .slang sources are authoring-time only; the compiled .spv
+				// output ships instead (see AddDirectoryAs, called separately
+				// with the project's compiled-shader intermediate dir).
 				continue;
 			}
 			if (!entry.is_regular_file())
@@ -78,7 +99,35 @@ namespace aether::assetpipeline
 			}
 
 			const auto vpath = rel.generic_string();
-			m_files.push_back({vpath, entry.path()});
+			m_files.push_back({vpath, entry.path(), sourceDir});
+		}
+
+		std::sort(m_files.begin(), m_files.end(), [](const FileRecord& a, const FileRecord& b) { return a.virtualPath < b.virtualPath; });
+	}
+
+	void PakWriter::AddDirectoryAs(const fs::path& sourceDir, std::string_view vpathPrefix)
+	{
+		for (fs::recursive_directory_iterator it(sourceDir), end; it != end; ++it)
+		{
+			const auto& entry = *it;
+			if (!entry.is_regular_file())
+			{
+				continue;
+			}
+
+			// The only current caller is ShaderCompiler's compiled-shader
+			// intermediate dir, which also holds a "<stem>.slangc.log" build
+			// log per shader (see ShaderCompiler::CompileOne) - a dev-only
+			// diagnostic artifact that must not leak into the shipped pak.
+			// Restricting to .spv keeps this genuinely "only compiled shader
+			// binaries ship" rather than "whatever happens to be in the dir".
+			if (entry.path().extension() != ".spv")
+			{
+				continue;
+			}
+
+			const auto rel = entry.path().lexically_relative(sourceDir);
+			m_files.push_back({ApplyPrefix(vpathPrefix, rel), entry.path(), sourceDir});
 		}
 
 		std::sort(m_files.begin(), m_files.end(), [](const FileRecord& a, const FileRecord& b) { return a.virtualPath < b.virtualPath; });
@@ -113,7 +162,7 @@ namespace aether::assetpipeline
 		ThreadPool pool;
 		for (const auto& file: m_files)
 		{
-			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = m_sourceDir, compressionLevel = m_compressionLevel]() { return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel); }));
+			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = file.sourceDir, compressionLevel = m_compressionLevel]() { return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel); }));
 		}
 
 		// --- Collect results ----------------------------------------------------

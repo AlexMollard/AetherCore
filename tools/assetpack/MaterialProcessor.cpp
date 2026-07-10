@@ -99,6 +99,17 @@ namespace aether::assetpipeline
 				return v && v->get();
 			}();
 
+			// Optional per-material shader override, e.g. "shaders://myeffect.spv".
+			// Absent -> empty string -> runtime keeps the default template shader.
+			std::string shaderVfsPath;
+			{
+				const auto v = tbl["material"]["shader"].as_string();
+				if (v)
+				{
+					shaderVfsPath = v->get();
+				}
+			}
+
 			struct TexEntry
 			{
 				uint8_t type;
@@ -148,6 +159,19 @@ namespace aether::assetpipeline
 				append(&tex.type, sizeof(tex.type));
 				append(&pathLen, sizeof(pathLen));
 				append(tex.path.data(), tex.path.size());
+			}
+
+			// Trailing optional shader-path override (see BinaryFormats.hpp comment
+			// above MaterialHeaderDisk). Always write the length prefix so the
+			// runtime reader's ReadString() call has a well-formed field to read;
+			// 0 means "no override".
+			{
+				const uint16_t shaderPathLen = static_cast<uint16_t>(shaderVfsPath.size());
+				append(&shaderPathLen, sizeof(shaderPathLen));
+				if (shaderPathLen > 0)
+				{
+					append(shaderVfsPath.data(), shaderVfsPath.size());
+				}
 			}
 
 			return out;

@@ -35,6 +35,12 @@ namespace aether::assetpipeline
 
 			PakWriter writer(options.compressionLevel);
 			writer.AddDirectory(sourceDir);
+
+			if (!options.shaderSpirvDir.empty() && std::filesystem::is_directory(options.shaderSpirvDir, ec))
+			{
+				writer.AddDirectoryAs(options.shaderSpirvDir, "shaders");
+			}
+
 			const std::uint64_t sourceFiles = static_cast<std::uint64_t>(writer.FileCount());
 
 			if (!writer.Write(outputPak))

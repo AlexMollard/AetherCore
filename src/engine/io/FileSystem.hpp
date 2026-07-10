@@ -4,12 +4,14 @@
 #include <filesystem>
 #include <istream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
 
 #include "FileGlobOptions.hpp"
 #include "FileRequest.hpp"
+#include "OverlayBackend.hpp"
 #include "utils/Expected.hpp"
 #include "utils/coro/Task.hpp"
 
@@ -33,6 +35,19 @@ namespace aether::io
 		// Register a compiled .pak file under a virtual mount point name.
 		// Replaces any existing backend registered to that mount point.
 		static void MountPak(std::string_view mountPoint, std::filesystem::path pakPath);
+
+		// Rebuild the shaders:// overlay with `projectLayer` (when present)
+		// prepended as the highest-priority layer, ahead of the engine shader
+		// layer InitializeDefaultMounts() built (pak or dir, matching whichever
+		// mode engine:// resolved to). Pass std::nullopt to fall back to
+		// engine-only (no project open, or its compiled-shader directory does
+		// not exist yet). Editors call this on project load/switch/unload with
+		// a DirectoryBackend over "<project>/Builds/Intermediate/shaders" - see
+		// EditorProjectManager - so a project shader overrides an engine shader
+		// of the same name and new project-only shaders resolve too. Requires
+		// InitializeDefaultMounts() to have run first (it seeds the engine
+		// layer this call reuses).
+		static void MountShaderOverlay(std::optional<OverlayBackend::Layer> projectLayer);
 
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 

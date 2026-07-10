@@ -15,6 +15,13 @@ namespace aether::assetpipeline
 		int  compressionLevel = 3;
 		bool importMaterials  = false; // run MaterialImporter before packing
 		bool projectLayout    = false; // require ProjectSettings.toml; import from assets/ subdir
+
+		// Optional directory of compiled .spv shaders (e.g. a project's
+		// ShaderCompiler intermediate output). When set and it resolves to an
+		// existing directory, its files are packed into the SAME pak under a
+		// "shaders/" prefix alongside the normal source-directory contents.
+		// Empty (default) = no shader directory packed.
+		std::filesystem::path shaderSpirvDir;
 	};
 
 	struct PackResult

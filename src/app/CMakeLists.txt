@@ -58,6 +58,20 @@ target_compile_definitions(App PRIVATE
     AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
 )
 
+# Dev-only project shader compilation (ShaderCompiler, src/app/editor). Only
+# defined when CMake found slangc (aethercore_enable_slang_shader_compilation
+# above populates the SLANGC_EXECUTABLE cache var) - absent in a shipped editor
+# or on a machine without the Vulkan SDK, where ShaderCompiler::CanCompileShaders()
+# degrades to a graceful no-op, mirroring the AETHER_HAS_DOTNET gating below for
+# the C# rebuild-from-source path. GameRuntime never gets this define (or the
+# ShaderCompiler translation unit at all - it lives under src/app/editor, which
+# GameRuntime's source list excludes).
+if(SLANGC_EXECUTABLE)
+    target_compile_definitions(App PRIVATE
+        AETHER_SLANGC_EXE="${SLANGC_EXECUTABLE}"
+        AETHER_SLANG_ARGS="${AETHERCORE_SLANG_SHADER_ARGS}")
+endif()
+
 target_compile_definitions(GameRuntime PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"

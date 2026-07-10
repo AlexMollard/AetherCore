@@ -115,6 +115,8 @@ namespace aether::app
 		m_lastPackPath.clear();
 		m_packStatus.clear();
 		m_packSucceeded = false;
+		m_shaderStatus.clear();
+		m_shaderSucceeded = false;
 		m_lastPublishPath.clear();
 		m_publishStatus.clear();
 		m_publishSucceeded = false;
@@ -601,6 +603,16 @@ namespace aether::app
 				}
 				ImGui::SameLine();
 			}
+			if (actions->recompileShaders)
+			{
+				if (ImGui::Button(ICON_FA_BOLT "  Recompile Shaders"))
+				{
+					const EditorProjectActionResult result = actions->recompileShaders();
+					m_shaderSucceeded = result.succeeded;
+					m_shaderStatus = result.message;
+				}
+				ImGui::SameLine();
+			}
 			ImGui::BeginDisabled(!actions->publishProject);
 			if (ImGui::Button(ICON_FA_ROCKET "  Publish..."))
 			{
@@ -629,6 +641,11 @@ namespace aether::app
 		{
 			const ImVec4 color = m_packSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
 			ImGui::TextColored(color, "%s", m_packStatus.c_str());
+		}
+		if (!m_shaderStatus.empty())
+		{
+			const ImVec4 color = m_shaderSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
+			ImGui::TextColored(color, "%s", m_shaderStatus.c_str());
 		}
 		if (!m_lastPublishPath.empty())
 		{

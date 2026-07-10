@@ -186,6 +186,18 @@ struct MaterialHeaderDisk
     // Total: 4+4+16+4+4+12+4+1+1+1+1+12 = 64 bytes
 };
 
+// Trailing sections after MaterialHeaderDisk (not reflected in MATL_VERSION,
+// which only governs the fixed header layout above):
+//   texturePathCount * { uint8_t type; uint16_t pathLen; char path[pathLen]; }
+//   uint16_t shaderPathLen; char shaderVfsPath[shaderPathLen];   (Phase 5)
+// The trailing shader-path string is a length-prefixed string in the same
+// format BinaryReader::ReadString() produces/consumes. It is ALWAYS written
+// (length 0 = "no per-material shader override, use the template default").
+// A pre-Phase-5 blob simply has no bytes here; BinaryReader::ReadString()
+// on an exhausted buffer returns "" (CanRead fails -> Read<uint16_t>() is 0),
+// which reads identically to an explicit empty override, so this is backward-
+// compatible without a MATL_VERSION bump.
+
 #pragma pack(pop)
 
 static_assert(sizeof(SkelHeaderDisk)      == 22);

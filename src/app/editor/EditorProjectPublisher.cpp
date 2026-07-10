@@ -15,7 +15,9 @@
 
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "editor/ShaderCompiler.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PakBackend.hpp"
 #include "io/PlatformPaths.hpp"
 #include "io/Process.hpp"
 #include "utils/LogCategory.hpp"
@@ -245,6 +247,34 @@ namespace aether::app
 			return true;
 		}
 
+		// Shaders now ship inside engine.pak's "shaders/" prefix (the overlay
+		// pipeline - see FileSystem::InitializeDefaultMounts) rather than as a
+		// loose shaders/ folder beside the executable, so a file-existence check
+		// alone can't catch a shaderless publish (e.g. a dev editor built without
+		// AETHER_SHADER_BUILD_DIR baking a fonts-only engine.pak - see
+		// EditorEnginePak::CanBakeEnginePak). Mount the shipped engine.pak and
+		// glob its "shaders/" prefix directly so verification fails loudly
+		// instead of shipping a game that access-violates in BindlessManager.
+		bool VerifyPublishedGameShaders(const std::filesystem::path& enginePakPath, std::string& error)
+		{
+			try
+			{
+				const io::PakBackend enginePak(enginePakPath);
+				const auto shaderGlob = enginePak.Glob("shaders/**/*.spv", {});
+				if (!shaderGlob.has_value() || shaderGlob->empty())
+				{
+					error = "Published engine.pak contains no shaders (shaders/*.spv missing): " + DisplayPath(enginePakPath);
+					return false;
+				}
+			}
+			catch (const std::exception& ex)
+			{
+				error = "Could not verify shaders in published engine.pak: " + std::string(ex.what());
+				return false;
+			}
+			return true;
+		}
+
 		bool VerifyPublishedGame(const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
 			std::vector<std::filesystem::path> requiredFiles{
@@ -266,6 +296,11 @@ namespace aether::app
 					error = "Published build is missing: " + rel.generic_string();
 					return false;
 				}
+			}
+
+			if (!VerifyPublishedGameShaders(packageDir / "data" / "engine.pak", error))
+			{
+				return false;
 			}
 
 			const std::string editorExecutable = EditorExecutableName();
@@ -509,9 +544,40 @@ namespace aether::app
 				return {.succeeded = false, .message = "Could not create output data directory: " + dirResult.error().message};
 			}
 
+			// Compile the project's Slang shaders before packing so their .spv
+			// output can be pulled into project.pak's "shaders/" prefix (see
+			// PakWriter::AddDirectoryAs / PackOptions::shaderSpirvDir). Unlike
+			// the dev hot-reload compile (CompileProjectShadersAndRefreshOverlay,
+			// which stays incremental for fast iteration), this is a CLEAN
+			// compile - the intermediate dir is wiped first, mirroring the
+			// project-scripts dotnet build below, so a .slang source deleted
+			// since the last compile can't leave an orphaned .spv behind for
+			// AddDirectoryAs to ship into project.pak. When this build has no
+			// slangc wired in (CanCompileShaders() == false), this is a
+			// graceful no-op and project.pak simply ships with no project
+			// shader layer; the published game still runs on engine shaders.
+			std::filesystem::path shaderSpirvDir;
+			if (CanCompileShaders())
+			{
+				const std::filesystem::path intermediateShaderDir = ProjectShaderIntermediateDir(project.root);
+				std::error_code shaderEc;
+				std::filesystem::remove_all(intermediateShaderDir, shaderEc);
+				if (shaderEc)
+				{
+					return {.succeeded = false, .message = "Could not clean shader intermediates: " + shaderEc.message()};
+				}
+
+				const ShaderCompileResult shaderResult = CompileProject(project.root);
+				if (!shaderResult.ok)
+				{
+					return {.succeeded = false, .message = "Project shader compile failed: " + shaderResult.message, .outputPath = outputDir / "project.pak"};
+				}
+				shaderSpirvDir = intermediateShaderDir;
+			}
+
 			const std::filesystem::path outputPak = outputDir / "project.pak";
 			const assetpipeline::PackResult packResult =
-			        assetpipeline::PackProject(project.root, outputPak, {.importMaterials = true, .projectLayout = true});
+			        assetpipeline::PackProject(project.root, outputPak, {.importMaterials = true, .projectLayout = true, .shaderSpirvDir = shaderSpirvDir});
 			if (!packResult.ok)
 			{
 				return {.succeeded = false, .message = packResult.message, .outputPath = outputPak};

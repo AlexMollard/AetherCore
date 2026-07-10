@@ -37,6 +37,17 @@ namespace aether::io
 			std::map<std::string, std::shared_ptr<IFileBackend>, std::less<>> mounts;
 			std::mutex mountsMutex;
 			std::unique_ptr<IoExecutor> ioThread;
+
+			// The engine shader layer InitializeDefaultMounts() resolved (pak or
+			// dir, mirroring engine://'s choice). Remembered so
+			// FileSystem::MountShaderOverlay() can rebuild the shaders:// overlay
+			// with a project layer prepended without re-deriving the engine
+			// pak-vs-dir logic.
+			// Write-once: only InitializeDefaultMounts() ever assigns this, and it
+			// does so before any other thread can be touching s_backend. Every
+			// later read (MountShaderOverlay() and its callers) is therefore safe
+			// without taking mountsMutex - it's not protecting this field.
+			std::optional<OverlayBackend::Layer> engineShaderLayer;
 		};
 
 		FileSystemBackend* s_backend = nullptr;
@@ -353,6 +364,12 @@ namespace aether::io
 		// Project content is separate from engine/editor assets. Packaged runs
 		// should use data/project.pak; editor sessions can remount project:// to
 		// the opened loose project root.
+		// projectUsesPak records whether project:// resolved to project.pak (as
+		// opposed to a loose directory, or nothing at all when no project is
+		// mounted yet) - the shaders:// section below uses it to decide whether
+		// to prepend a project.pak shader layer (shipped) up front, matching
+		// how engineUsesPak steers the engine shader layer.
+		bool projectUsesPak = false;
 		const std::string projectMode = EnvironmentString("AETHER_PROJECT_MODE");
 		if (EqualsIgnoreCase(projectMode, "dir"))
 		{
@@ -380,7 +397,8 @@ namespace aether::io
 			AddUniquePath(projectPakCandidates, AETHER_DEFAULT_PROJECT_PAK);
 #endif
 
-			if (!MountProjectPak(projectPakCandidates))
+			projectUsesPak = MountProjectPak(projectPakCandidates);
+			if (!projectUsesPak)
 			{
 				if (EqualsIgnoreCase(projectMode, "pak"))
 				{
@@ -407,17 +425,19 @@ namespace aether::io
 		// or both dir, never mixed, or dev and shipped runs would disagree on
 		// where shaders come from.
 		//
-		// Layer 0 (highest priority) is left open for a future PROJECT shader
-		// layer (project-specific/overridden shaders, Phase 3/4): prepend it to
-		// shaderLayers before constructing the OverlayBackend below so it wins
-		// over the engine layer on name collisions.
-		std::vector<OverlayBackend::Layer> shaderLayers;
+		// The engine layer is remembered on s_backend so FileSystem::
+		// MountShaderOverlay() can later rebuild shaders:// with a project
+		// layer prepended as layer 0 (highest priority) - see
+		// EditorProjectManager, which calls it on project load/switch with a
+		// DirectoryBackend over "<project>/Builds/Intermediate/shaders" so a
+		// project shader overrides an engine shader of the same name.
+		OverlayBackend::Layer engineShaderLayer;
 		if (engineUsesPak)
 		{
 			// Reuse the already-mounted engine.pak backend (already parsed above)
 			// instead of opening a second PakBackend on the same file.
 			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// from engine.pak ('shaders/' prefix)");
-			shaderLayers.push_back(OverlayBackend::Layer{ResolveBackend("engine"), "shaders/"});
+			engineShaderLayer = OverlayBackend::Layer{ResolveBackend("engine"), "shaders/"};
 		}
 		else
 		{
@@ -430,9 +450,30 @@ namespace aether::io
 			        workingDirectory / "../../build/shaders",
 			});
 			AE_INFO(LogCategory::FileSystem, "CWD for shader mount: '{}' -> resolved: '{}'", workingDirectory.string(), shaderDirectory.string());
-			shaderLayers.push_back(OverlayBackend::Layer{std::make_shared<DirectoryBackend>(shaderDirectory), ""});
+			engineShaderLayer = OverlayBackend::Layer{std::make_shared<DirectoryBackend>(shaderDirectory), ""};
 		}
-		MountBackend("shaders", std::make_shared<OverlayBackend>(std::move(shaderLayers)));
+		s_backend->engineShaderLayer = engineShaderLayer;
+
+		// A shipped run mounted project:// from project.pak above - reuse that
+		// same backend (no reparsing) as the shaders:// project layer, prefix
+		// "shaders/", so project shaders (packed by EditorProjectPublisher::
+		// PublishProject via PackOptions::shaderSpirvDir) override engine
+		// shaders of the same name from first boot, with no editor involved
+		// (GameRuntime never calls MountShaderOverlay itself - see
+		// FileSystem.hpp). When project:// is a loose directory or unmounted
+		// (dev editor, no project published yet), stay engine-only here; the
+		// dev editor's EditorProjectManager rebuilds shaders:// again once a
+		// project is opened, layering its compiled-shader intermediate dir
+		// instead (see UpdateProjectShaderOverlay).
+		if (projectUsesPak)
+		{
+			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// with the project.pak layer prepended ('shaders/' prefix)");
+			MountShaderOverlay(OverlayBackend::Layer{ResolveBackend("project"), "shaders/"});
+		}
+		else
+		{
+			MountShaderOverlay(std::nullopt);
+		}
 
 		// -- config:// ---------------------------------------------------------
 		// Settings/config files are deployed to data/config at build time.
@@ -514,6 +555,28 @@ namespace aether::io
 		AE_INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
 		std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
+	}
+
+	void FileSystem::MountShaderOverlay(std::optional<OverlayBackend::Layer> projectLayer)
+	{
+		AE_PROFILE_ZONE();
+		if (s_backend == nullptr)
+		{
+			AE_ASSERT_ALWAYS(false, "FileSystem::MountShaderOverlay() called before Initialize().");
+		}
+		if (!s_backend->engineShaderLayer)
+		{
+			AE_ASSERT_ALWAYS(false, "FileSystem::MountShaderOverlay() called before InitializeDefaultMounts() built the engine shader layer.");
+		}
+
+		std::vector<OverlayBackend::Layer> shaderLayers;
+		if (projectLayer)
+		{
+			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// with a project layer prepended (highest priority)");
+			shaderLayers.push_back(*std::move(projectLayer));
+		}
+		shaderLayers.push_back(*s_backend->engineShaderLayer);
+		MountBackend("shaders", std::make_shared<OverlayBackend>(std::move(shaderLayers)));
 	}
 
 	bool FileSystem::Exists(std::string_view virtualPath)
