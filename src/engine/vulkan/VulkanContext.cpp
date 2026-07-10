@@ -963,6 +963,10 @@ namespace aether
 				case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:
 					typeStr = "None";
 					break;
+				// Enum sentinel (0x7FFFFFFF), never a real address type. Listed
+				// explicitly so the exhaustive-switch check (-Wswitch-enum, active under
+				// clang-cl) is satisfied; shares the default's "unknown" handling.
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
 				default:
 					typeStr = "Unknown";
 					break;
