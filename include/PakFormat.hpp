@@ -16,7 +16,7 @@
 
 inline constexpr uint32_t PAK_VERSION   = 2;
 inline constexpr uint32_t PAK_FLAG_ZSTD = 1u << 0; // entry data is zstd-compressed
-inline constexpr uint32_t PAK_PIPELINE_VERSION = 5; // v5: paks may carry a "shaders/" section (engine.pak/project.pak)
+inline constexpr uint32_t PAK_PIPELINE_VERSION = 6; // v6: packed .spv keep OpName and strip debug info coherently (valid SPIR-V)
 inline constexpr const char* PAK_MANIFEST_PATH = "__aetherpak/manifest.txt";
 
 #pragma pack(push, 1)

@@ -308,7 +308,14 @@ namespace aether
 	RenderGraph::PassBuilder RenderGraph::AddFullscreenPass(FullscreenPassDesc desc, std::source_location loc)
 	{
 		PassBuilder pass = AddPass(std::move(desc.name), loc);
-		pass.SetExtent(desc.extent);
+		// A zero extent means "cover the whole target": leave extentOverride unset
+		// so the pass resolves to the render-time target (swapchain) extent instead
+		// of recording a degenerate 0x0 renderArea/viewport. Passes that render to a
+		// smaller off-screen target still pass their explicit extent.
+		if (desc.extent.width != 0 && desc.extent.height != 0)
+		{
+			pass.SetExtent(desc.extent);
+		}
 		for (const FrameProductRef& product: desc.consumes)
 		{
 			pass.ConsumesProductRef(product);

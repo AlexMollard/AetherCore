@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "utils/Expected.hpp"
+#include "utils/StringUtils.hpp"
 
 namespace aether::io
 {
@@ -14,6 +15,26 @@ namespace aether::io
 		std::string ApplyPrefix(const std::string& prefix, std::string_view relativePath)
 		{
 			return prefix.empty() ? std::string(relativePath) : prefix + std::string(relativePath);
+		}
+
+		// Strip `prefix` off the front of `path` case-insensitively. Backends
+		// like DirectoryBackend::Glob match case-insensitively by default
+		// (FileGlobOptions::caseSensitive == false), so a path returned from a
+		// layer can be cased differently than the layer's configured prefix
+		// (e.g. prefix "shaders/" vs an on-disk "Shaders/" folder). A
+		// case-sensitive starts_with would fail to strip that path, leaking an
+		// un-relativized path into the merged results.
+		std::string StripPrefix(const std::string& prefix, const std::string& path)
+		{
+			if (prefix.empty() || path.size() < prefix.size())
+			{
+				return path;
+			}
+			if (!utils::IEq(std::string_view(path).substr(0, prefix.size()), prefix))
+			{
+				return path;
+			}
+			return path.substr(prefix.size());
 		}
 	} // namespace
 
@@ -82,7 +103,7 @@ namespace aether::io
 			anySucceeded = true;
 			for (auto& path: *result)
 			{
-				std::string stripped = (!layer.prefix.empty() && path.starts_with(layer.prefix)) ? path.substr(layer.prefix.size()) : path;
+				std::string stripped = StripPrefix(layer.prefix, path);
 
 				if (seen.insert(stripped).second)
 				{

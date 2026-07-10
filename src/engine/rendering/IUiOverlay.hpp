@@ -62,6 +62,14 @@ namespace aether
 		[[nodiscard]] virtual std::vector<std::uint32_t> SecondaryViewportIdsWithPendingDestroy() const = 0;
 		virtual void RetireViewports(const std::vector<std::uint32_t>& departedIds) = 0;
 
+		// True when SnapshotFrame would perform backend texture uploads (create/
+		// update/destroy). Texture uploads submit to the graphics queue from the
+		// producer thread; vkQueueSubmit is externally synchronized, so AetherCore
+		// must quiesce the render thread (RunExclusive) before a SnapshotFrame that
+		// returns true here, or the two threads race on the queue (spec-level UB;
+		// crashes inside the validation layer's state tracking).
+		[[nodiscard]] virtual bool HasPendingTextureUpdates() const = 0;
+
 		// Render thread: draw the captured frame into the current target, then
 		// present every secondary viewport.
 		virtual void RenderFrame(const IUiOverlayFrameData& frame, gpu::CommandList& commands, const FrameTarget& target) = 0;

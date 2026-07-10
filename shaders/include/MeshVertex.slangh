@@ -27,7 +27,13 @@ struct VSOutput
     [[vk::location(5)]] float2 uv2             : TEXCOORD5;
     [[vk::location(6)]] float3 vertexColor     : TEXCOORD6;
     [[vk::location(7)]] nointerpolation uint materialIndex : TEXCOORD7;
+#ifdef AETHER_VS_EFFECT_PARAMS
+    // Per-entity EffectParams slot. Only effect shaders (plasma/molten) consume
+    // it, so it is an opt-in varying: shaders that do not define
+    // AETHER_VS_EFFECT_PARAMS (e.g. the standard PBR gltf_mesh) neither emit nor
+    // read it, avoiding an unused vertex->fragment output at location 8.
     [[vk::location(8)]] nointerpolation uint effectParamIndex : TEXCOORD8;
+#endif
 };
 
 // Transform direction vectors (normal/tangent) through a world matrix basis,

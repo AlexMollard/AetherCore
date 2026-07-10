@@ -444,6 +444,57 @@ namespace aether
 		}
 	}
 
+	bool ImguiSubsystem::HasPendingTextureUpdates() const
+	{
+		if (!m_initialized)
+		{
+			return false;
+		}
+
+		// Mirrors SnapshotFrame's iteration exactly: any texture it would hand to
+		// ImGui_ImplVulkan_UpdateTexture (a producer-thread vkQueueSubmit) makes
+		// this true so AetherCore quiesces the render thread first. The game
+		// thread already holds m_mutex via the frame lock; do NOT re-lock here.
+		const auto drawDataHasPending = [](const ImDrawData* drawData)
+		{
+			if (drawData == nullptr || drawData->Textures == nullptr)
+			{
+				return false;
+			}
+			for (const ImTextureData* texture: *drawData->Textures)
+			{
+				if (texture != nullptr && texture->Status != ImTextureStatus_OK)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+
+		if (drawDataHasPending(ImGui::GetDrawData()))
+		{
+			return true;
+		}
+
+		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
+		{
+			const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+			const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+			for (const ImGuiViewport* vp: platformIO.Viewports)
+			{
+				if (vp == mainViewport || vp->PlatformHandle == nullptr)
+				{
+					continue;
+				}
+				if (drawDataHasPending(vp->DrawData))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	void ImguiSubsystem::RecycleFrameData(std::unique_ptr<IUiOverlayFrameData> frame)
 	{
 		// frame always originates from AcquireFrameData() above, so this

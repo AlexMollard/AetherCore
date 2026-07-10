@@ -31,12 +31,19 @@ namespace aether::app
 	[[nodiscard]] std::filesystem::path ProjectShaderIntermediateDir(const std::filesystem::path& projectRoot);
 
 	// Compiles a single .slang file to "<outDir>/<stem>.spv" via slangc, but
-	// only if the output is missing or older than the source (and its log from
-	// a previous compile, mirroring CSharpScriptingSubsystem::RebuildFromSource's
-	// stale check). Returns true when the output is up to date on return
-	// (either it already was, or the compile just succeeded); on failure
-	// returns false and fills `error` with a log excerpt. No-op success when
-	// this build has no slangc wired in (CanCompileShaders() == false).
+	// only if the output is missing, older than the source .slang file, or
+	// older than the newest mtime among all shader-source files (.slang,
+	// .slangh, .hlsl, .h) in the same directory - a conservative
+	// header-dependency heuristic, since slangc reports no #include
+	// dependency info here, so editing a shared .slangh recompiles every
+	// .spv in the directory, not just the .slang that changed (mirrors
+	// CSharpScriptingSubsystem::RebuildFromSource's own-mtime stale check,
+	// extended for headers). The .slangc.log from a previous compile is
+	// write-only diagnostics and is not consulted by the stale check.
+	// Returns true when the output is up to date on return (either it
+	// already was, or the compile just succeeded); on failure returns false
+	// and fills `error` with a log excerpt. No-op success when this build
+	// has no slangc wired in (CanCompileShaders() == false).
 	bool CompileOne(const std::filesystem::path& slangFile, const std::filesystem::path& outDir, std::string& error);
 
 	// Compiles every "<projectRoot>/assets/shaders/*.slang" into

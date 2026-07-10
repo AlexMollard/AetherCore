@@ -129,3 +129,32 @@ TEST_CASE("a prefixed layer resolves rel under the prefix")
 	REQUIRE(bytes.has_value());
 	CHECK(ToString(*bytes) == "nested content");
 }
+
+TEST_CASE("Glob strips a layer prefix case-insensitively")
+{
+	// DirectoryBackend::Glob matches case-insensitively by default
+	// (FileGlobOptions::caseSensitive == false), so it can hand back a path
+	// whose on-disk directory casing ("Shaders/") differs from the layer's
+	// configured prefix ("shaders/"). OverlayBackend::Glob must still strip
+	// that prefix and yield a mount-relative name, not leak the
+	// still-prefixed, differently-cased path into the merged results.
+	const std::filesystem::path dirD = MakeTempDir("case_insensitive_prefix");
+	WriteFile(dirD / "Shaders" / "foo.spv", "spv bytes");
+
+	auto backendD = std::make_shared<io::DirectoryBackend>(dirD);
+	io::OverlayBackend overlay(std::vector<io::OverlayBackend::Layer>{
+	        {.backend = backendD, .prefix = "shaders/"},
+	});
+
+	const auto matches = overlay.Glob("*.spv", io::FileGlobOptions{});
+	REQUIRE(matches.has_value());
+	REQUIRE(matches->size() == 1);
+	CHECK((*matches)[0] == "foo.spv");
+
+	// Prove the stripped name is genuinely mount-relative by resolving it
+	// back through the overlay.
+	CHECK(overlay.Exists("foo.spv"));
+	const auto bytes = overlay.Read("foo.spv");
+	REQUIRE(bytes.has_value());
+	CHECK(ToString(*bytes) == "spv bytes");
+}

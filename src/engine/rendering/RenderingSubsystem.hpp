@@ -182,6 +182,14 @@ namespace aether
 		void DestroySceneViewportDepth();
 		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless);
 
+		// Re-registers the persistent, swapchain-independent texture-preview image
+		// as an external render-graph resource. The backing GPU image lives for the
+		// lifetime of the subsystem, but RenderGraph::Clear() (on every scene-viewport
+		// rebuild) drops all external registrations, so the cached m_texturePreview
+		// handle must be refreshed whenever the graph topology is rebuilt or it will
+		// dangle and alias whichever resource next claims its old external slot.
+		void RegisterTexturePreviewImage();
+
 		struct PerFrameResourceTable
 		{
 			gpu::BufferHandle handle{};

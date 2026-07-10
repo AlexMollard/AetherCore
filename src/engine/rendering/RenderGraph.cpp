@@ -1229,6 +1229,35 @@ namespace aether
 			for (const AttachmentRef& a: pass.colorWrites)
 			{
 				const uint32_t resId = a.image.id;
+#ifndef NDEBUG
+				// A depth-format resource must never reach a color-attachment slot:
+				// the color-write path unconditionally uses COLOR aspect + COLOR
+				// layout, which is invalid for depth images. This most commonly
+				// signals a dangling external RGImage handle that has aliased a
+				// depth resource's slot (e.g. a cached handle not re-registered
+				// after RenderGraph::Clear()). Fail loudly in debug so the graph
+				// declaration is fixed rather than silently corrupting barriers.
+				{
+					gpu::ImageAspect attachmentAspect = gpu::ImageAspect::Color;
+					if (IsTransientId(resId))
+					{
+						attachmentAspect = m_storage->ResolveTransientAspect(TransientIndex(resId));
+					}
+					else if (resId == kSwapchainDepthId)
+					{
+						attachmentAspect = gpu::ImageAspect::Depth;
+					}
+					else if (resId != kSwapchainColorId)
+					{
+						const uint32_t extIdx = ExternalIndex(resId);
+						if (extIdx < m_externalImages.size())
+						{
+							attachmentAspect = m_externalImages[extIdx].aspect;
+						}
+					}
+					AE_ASSERT(attachmentAspect != gpu::ImageAspect::Depth, std::format("RenderGraph: depth-format resource id={} declared as a COLOR attachment in pass '{}' (dangling/aliased external handle?)", resId, pass.name));
+				}
+#endif
 				constexpr gpu::ImageLayout kTarget = gpu::ImageLayout::ColorAttachment;
 				constexpr auto kDstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 				constexpr auto kDstWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -2021,7 +2050,15 @@ namespace aether
 				std::scoped_lock lock(m_debugStateMutex);
 				passDebugDisabled = pass.debugDisabled;
 			}
-			const bool useDynamicRendering = !passDebugDisabled && pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || depthInfo.has_value());
+			const bool hasAttachments = pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || depthInfo.has_value());
+			// A graphics pass whose target resolves to a zero-sized extent cannot
+			// legally begin dynamic rendering (renderArea and viewport must be > 0).
+			// This is a degenerate state (e.g. a minimized/0x0 swapchain). Skip its
+			// GPU body exactly like a debug-disabled pass - preserving any
+			// housekeeping callback - instead of emitting invalid commands.
+			const bool degenerateExtent = hasAttachments && (passExtent.width == 0 || passExtent.height == 0);
+			const bool skipPassBody = passDebugDisabled || degenerateExtent;
+			const bool useDynamicRendering = !skipPassBody && hasAttachments;
 			if (useDynamicRendering)
 			{
 				const gpu::RenderingInfo renderInfo{
@@ -2056,7 +2093,7 @@ namespace aether
 				m_diagnosticEngine->WriteBreadcrumb(reinterpret_cast<VkCommandBuffer>(cmd), breadcrumbValue);
 			}
 
-			if (passDebugDisabled)
+			if (skipPassBody)
 			{
 				if (pass.debugDisabledExecute)
 				{

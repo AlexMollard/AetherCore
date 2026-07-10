@@ -16,6 +16,11 @@
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
+// This effect shader consumes the per-entity EffectParams slot, so opt into the
+// effectParamIndex vertex->fragment varying (location 8) before pulling in the
+// shared mesh vertex output / vertexMain.
+#define AETHER_VS_EFFECT_PARAMS 1
+
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
 #include "include/EffectParams.slangh"

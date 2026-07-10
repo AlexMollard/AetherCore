@@ -72,6 +72,12 @@ namespace aether
 		// GLFW window).
 		[[nodiscard]] std::vector<std::uint32_t> SecondaryViewportIdsWithPendingDestroy() const override;
 
+		// True when any draw-data texture needs a backend create/update/destroy:
+		// SnapshotFrame would then vkQueueSubmit from the producer thread, which
+		// requires the render thread to be quiesced first (see IUiOverlay).  Call
+		// after Render() while still holding the frame lock.
+		[[nodiscard]] bool HasPendingTextureUpdates() const override;
+
 		void RenderFrame(const IUiOverlayFrameData& frame, gpu::CommandList& commands, const FrameTarget& target) override;
 
 		// Render + present every secondary (torn-out) viewport (render thread).

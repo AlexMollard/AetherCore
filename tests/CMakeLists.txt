@@ -31,6 +31,7 @@ add_executable(EngineTests
     assetpack/AssetPipelineTests.cpp
     assetpack/PakFormatTests.cpp
     assetpack/MaterialProcessorShaderTests.cpp
+    assetpack/SpirvStripTests.cpp
     io/ProcessTests.cpp
     io/OverlayBackendTests.cpp
     io/FileSystemShaderOverlayTests.cpp

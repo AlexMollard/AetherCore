@@ -28,9 +28,11 @@ namespace aether::app
 		}
 
 		// True when `output` needs to be (re)built from `source`: missing, or
-		// older than the source file. Mirrors the mtime-comparison stale check
-		// CSharpScriptingSubsystem::RebuildFromSource uses for the C# build.
-		bool IsOutputStale(const fs::path& source, const fs::path& output)
+		// older than the source file, or older than `newestSourceMTime` (see
+		// NewestShaderSourceMTime below). Mirrors the mtime-comparison stale
+		// check CSharpScriptingSubsystem::RebuildFromSource uses for the C#
+		// build, extended with the header heuristic.
+		bool IsOutputStale(const fs::path& source, const fs::path& output, const std::optional<fs::file_time_type>& newestSourceMTime)
 		{
 			const auto outputTime = LatestWriteTime(output);
 			if (!outputTime)
@@ -38,7 +40,47 @@ namespace aether::app
 				return true;
 			}
 			const auto sourceTime = LatestWriteTime(source);
-			return !sourceTime || *sourceTime > *outputTime;
+			if (!sourceTime || *sourceTime > *outputTime)
+			{
+				return true;
+			}
+			return newestSourceMTime.has_value() && *newestSourceMTime > *outputTime;
+		}
+
+		// slangc doesn't report #include dependencies here, so a .slang file's
+		// own mtime alone can't tell us whether a shared header it includes
+		// (.slangh, or an .hlsl/.h shared snippet) changed. Conservative
+		// heuristic: treat the newest mtime among ALL shader-source files in
+		// the project's shader source directory as a floor for every output in
+		// that directory - editing any header invalidates every .spv there, not
+		// just the one whose own .slang happened to change. Overcompiles on a
+		// header edit, but never under-compiles (stale binary shipped).
+		bool IsShaderHeaderExtension(const fs::path& extension)
+		{
+			return extension == ".slang" || extension == ".slangh" || extension == ".hlsl" || extension == ".h";
+		}
+
+		std::optional<fs::file_time_type> NewestShaderSourceMTime(const fs::path& sourceDir)
+		{
+			std::optional<fs::file_time_type> newest;
+			std::error_code ec;
+			for (const auto& entry: fs::directory_iterator(sourceDir, ec))
+			{
+				if (ec)
+				{
+					break;
+				}
+				std::error_code fileEc;
+				if (!entry.is_regular_file(fileEc) || fileEc || !IsShaderHeaderExtension(entry.path().extension()))
+				{
+					continue;
+				}
+				if (const auto mtime = LatestWriteTime(entry.path()); mtime && (!newest || *mtime > *newest))
+				{
+					newest = mtime;
+				}
+			}
+			return newest;
 		}
 
 		std::string ReadLogExcerpt(const fs::path& path)
@@ -87,7 +129,8 @@ namespace aether::app
 	{
 #ifdef AETHER_SLANGC_EXE
 		const fs::path outFile = outDir / (slangFile.stem().string() + ".spv");
-		if (!IsOutputStale(slangFile, outFile))
+		const auto newestSourceMTime = NewestShaderSourceMTime(slangFile.parent_path());
+		if (!IsOutputStale(slangFile, outFile, newestSourceMTime))
 		{
 			return true;
 		}
@@ -146,6 +189,10 @@ namespace aether::app
 		const fs::path outDir = ProjectShaderIntermediateDir(projectRoot);
 		std::vector<std::string> failures;
 
+		// Computed once per project: every .slang in `sourceDir` shares the
+		// same header-dependency floor (see NewestShaderSourceMTime).
+		const auto newestSourceMTime = NewestShaderSourceMTime(sourceDir);
+
 		for (const auto& entry: fs::directory_iterator(sourceDir, ec))
 		{
 			if (ec)
@@ -158,7 +205,7 @@ namespace aether::app
 			}
 
 			const fs::path outFile = outDir / (entry.path().stem().string() + ".spv");
-			const bool wasStale = IsOutputStale(entry.path(), outFile);
+			const bool wasStale = IsOutputStale(entry.path(), outFile, newestSourceMTime);
 
 			std::string compileError;
 			if (!CompileOne(entry.path(), outDir, compileError))

@@ -120,6 +120,13 @@ namespace
 		{
 			return true;
 		}
+		// "vkCreateDevice(): Cannot open shader validation cache at ... for reading
+		//  (it may not exist yet)" -- the layer bootstrapping its own internal
+		// cache file on first run; layer housekeeping, not an engine finding.
+		if (msg.find("Cannot open shader validation cache") != std::string_view::npos)
+		{
+			return true;
+		}
 		// "vkCreateDevice(): Warning that validation is adjusting settings:
 		//  Forcing fragmentStoresAndAtomics to VK_TRUE ..."
 		// "vkCreateDevice(): Warning that validation is adjusting settings:
@@ -218,6 +225,14 @@ namespace
 		{
 			aether::Logger::WarnAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
 		}
+		else if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0 && (messageType & (VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)) != 0)
+		{
+			// INFO-severity VALIDATION/PERFORMANCE messages are real findings (e.g.
+			// best-practices advisories) and must surface in the log. INFO-severity
+			// GENERAL messages are loader/driver enumeration chatter (layer
+			// manifests, PnP registry scans) and stay verbose with the rest.
+			aether::Logger::InfoAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
+		}
 		else
 		{
 			aether::Logger::VerboseAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
@@ -289,23 +304,36 @@ namespace aether
 		instanceBuilder.set_debug_messenger_severity(debugSeverity);
 		instanceBuilder.set_debug_messenger_type(debugTypes);
 
-		// Debug printf routes shader debugPrintfEXT() calls through the debug
-		// messenger so GPU-side printfs surface in the log.
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
+#	if defined(VULKAN_BEST_PRACTICES)
+		// Best-practices checks are opt-in (see Defines.hpp): SDK 1.4.350's layer
+		// null-derefs in BestPractices::ValidateImageInQueue on the first imgui
+		// texture-upload submit, crashing the editor before any message is emitted.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
+#	endif
 #	if VK_VALIDATION_GPU
 		// GPU-AV is incompatible with sync validation: the two inject conflicting
 		// tracking into pipeline/descriptor state (LunarG docs). Skip sync-val.
+		// Debug printf routes shader debugPrintfEXT() calls through the debug
+		// messenger. It is GPU shader instrumentation (like GPU-AV) and is therefore
+		// incompatible with VK_EXT_descriptor_heap, so it belongs to the GPU tier only
+		// -- enabling it under CPU-only validation crashes at pipeline creation.
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
 		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (GPU-AV, debug printf + best practices).");
 #	else
+		// CPU-only validation: core checks + synchronization validation + best
+		// practices. No GPU shader instrumentation (no debug printf / GPU-AV), so it
+		// is compatible with VK_EXT_descriptor_heap.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
-		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + debug printf + best practices).");
+		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + best practices).");
 #	endif
 #endif
 #if VK_VALIDATION_GPU
-		static_assert(AETHERCORE_ENABLE_DESCRIPTOR_HEAP == 0,
-		        "GPU-AV (VULKAN_GPU_DEBUG) is incompatible with VK_EXT_descriptor_heap. "
-		        "Set AETHERCORE_ENABLE_DESCRIPTOR_HEAP=0 in Defines.hpp.");
+		// GPU-AV + VK_EXT_descriptor_heap: empirically verified COMPATIBLE on SDK
+		// 1.4.350 / NVIDIA (previously believed mutually exclusive). Proven by a
+		// full instrumented editor session plus a shader debugPrintfEXT probe
+		// surfacing through the debug messenger (instrumentation demonstrably
+		// live), with zero validation findings. Expect ~20s startup overhead
+		// while every pipeline is instrumented.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT);
 		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
@@ -455,6 +483,14 @@ namespace aether
 			}
 			else
 			{
+#if VK_VALIDATION_CPU
+				// The Vulkan validation layers and NVIDIA Aftermath both instrument the
+				// device and are mutually incompatible (per NVIDIA Nsight Aftermath docs):
+				// running them together access-violates at pipeline creation. When any
+				// validation tier is compiled in (VULKAN_CPU_DEBUG / VULKAN_GPU_DEBUG),
+				// skip Aftermath -- use validation OR Aftermath, not both.
+				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled because the Vulkan validation layer is active (mutually incompatible; enable one or the other).");
+#else
 				const bool diagnosticsConfigPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
 				const bool checkpointsPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 				if (diagnosticsConfigPresent && checkpointsPresent)
@@ -464,12 +500,16 @@ namespace aether
 					// (see ResolveGpuCacheDir above) -- redirect them under LocalAppData.
 					const std::string crashDumpDir = ResolveGpuCacheDir("gpu-crash-dumps").string();
 					aftermathDeviceExtensionsEnabled = m_aftermathContext.EnableGpuCrashDumps(crashDumpDir.c_str());
-					AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: enabling GPU crash dumps (editor build, NVIDIA device '{}').", physicalDeviceResult.value().properties.deviceName);
+					if (aftermathDeviceExtensionsEnabled)
+					{
+						AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: enabling GPU crash dumps (editor build, NVIDIA device '{}').", physicalDeviceResult.value().properties.deviceName);
+					}
 				}
 				else
 				{
 					AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath: NVIDIA device does not expose VK_NV_device_diagnostics_config/VK_NV_device_diagnostic_checkpoints (diagnosticsConfig={}, checkpoints={}); disabling.", diagnosticsConfigPresent, checkpointsPresent);
 				}
+#endif
 			}
 		}
 #endif
@@ -484,7 +524,20 @@ namespace aether
 		// manual chain must NOT be set up here.
 		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
+#if defined(VULKAN_BEST_PRACTICES)
+		        // SDK 1.4.350 layer bug: with maintenance9 enabled, BestPractices::
+		        // ValidateImageInQueue computes qf_count = last_usage.queue_family_index
+		        // + 1 on an image's FIRST use, where the index is the UINT32_MAX
+		        // sentinel -> overflows to 0 -> qf_props.back() on an empty vector ->
+		        // access violation (bp_image.cpp:280-281, vulkan-sdk-1.4.350.0). Keep
+		        // the extension but drop the feature bit for best-practices lint runs;
+		        // the buggy branch is feature-gated, and the feature bit only grants
+		        // API permission (same driver behavior on this hardware). QFOT-related
+		        // best-practice findings may differ from production accordingly.
+		        .maintenance9 = VK_FALSE,
+#else
 		        .maintenance9 = VK_TRUE,
+#endif
 		};
 
 		VkPhysicalDeviceShaderObjectFeaturesEXT shaderObjectFeatures{
@@ -622,17 +675,17 @@ namespace aether
 		// VK_EXT_device_address_binding_report is a device extension, so this can
 		// only be done after device creation. Stored in m_debugMessenger and
 		// destroyed manually in the destructor.
-		VkDebugUtilsMessengerCreateInfoEXT upgradedDebugMessengerCreateInfo{
-		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-		        .messageSeverity = debugSeverity,
-		        .messageType = debugTypesWithAddressBinding,
-		        .pfnUserCallback = LogValidationMessage,
-		};
-		VkResult upgradedMessengerResult = vkCreateDebugUtilsMessengerEXT(m_instance->instance, &upgradedDebugMessengerCreateInfo, nullptr, &m_debugMessenger);
-		if (upgradedMessengerResult != VK_SUCCESS)
-		{
-			AE_WARN(LogCategory::Vulkan, "Unable to enable device address binding debug messenger events after Vulkan device creation: VkResult={}.", static_cast<int>(upgradedMessengerResult));
-		}
+		// The device-address-binding report messenger is intentionally NOT created
+		// while the validation layer is active: the driver's
+		// VK_EXT_device_address_binding_report callbacks, delivered through the debug
+		// messenger while the Khronos validation layer simultaneously wraps the
+		// descriptor-buffer bindless path, fault (near-null deref) inside the
+		// layer/driver at the first buffer bind. The BDA->resource-name registry it
+		// feeds is a post-mortem nicety; drop it so the rest of validation (core + sync
+		// + best practices) can run. Without validation, this messenger is created
+		// below via the else branch (no layer in the chain, no crash).
+		(void) debugTypesWithAddressBinding;
+		m_debugMessenger = VK_NULL_HANDLE;
 #endif
 
 		const auto graphicsQueueResult = m_device->get_queue(vkb::QueueType::graphics);

@@ -334,8 +334,14 @@ namespace aether
 				// render-thread swapchains before UpdatePlatformWindows destroys the GLFW
 				// window: park the render thread + idle the GPU via RunExclusive. Create and
 				// resize need no quiesce (render-thread-local).
+				//
+				// Pending backend TEXTURE updates force the same quiesce: SnapshotFrame
+				// uploads them via a producer-thread vkQueueSubmit, and vkQueueSubmit is
+				// externally synchronized -- submitting while the render thread is also
+				// submitting races the queue (spec-level UB; corrupts the validation
+				// layer's tracking). Rare (font atlas on the first frames, new textures).
 				const std::vector<std::uint32_t> departedViewports = m_uiOverlay->SecondaryViewportIdsWithPendingDestroy();
-				if (!departedViewports.empty())
+				if (!departedViewports.empty() || m_uiOverlay->HasPendingTextureUpdates())
 				{
 					// Release the ImGui frame lock BEFORE quiescing: RunExclusive drains and
 					// parks the render thread, which would otherwise deadlock waiting on the

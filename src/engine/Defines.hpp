@@ -34,12 +34,29 @@
 
 // ── Vulkan validation ───────────────────────────────────────────────────────
 // Uncomment the desired validation level before local development builds.
-// GPU-AV is mutually exclusive with VK_EXT_descriptor_heap (see below).
 //
-// #define VULKAN_CPU_DEBUG 1    // CPU-only validation
-// #define VULKAN_GPU_DEBUG 1    // GPU-based validation (slower, more thorough)
+//   VULKAN_CPU_DEBUG - core checks + synchronization validation. The everyday
+//       tier: near-full API coverage, modest overhead.
+//   VULKAN_GPU_DEBUG - GPU-assisted validation + shader debug printf. Deep
+//       memory-safety scan (descriptor indexing, BDA, OOB access) that
+//       instruments every shader; by design it drops core+sync checks, so it
+//       COMPLEMENTS the CPU tier rather than replacing it. ~20s startup while
+//       pipelines are instrumented. Empirically verified compatible with
+//       VK_EXT_descriptor_heap on SDK 1.4.350 / NVIDIA (proven live via a
+//       debugPrintfEXT probe through the debug messenger; a prior note here
+//       claiming mutual exclusion was stale). TDR risk on AMD/Intel.
+//
+#define VULKAN_CPU_DEBUG 1    // CPU-only validation
+// #define VULKAN_GPU_DEBUG 1    // GPU-assisted deep scan (periodic, not daily)
+//
+// Best-practices checks (opt-in, composes with either level above). SDK
+// 1.4.350's layer has a first-image-use crash in BestPractices::
+// ValidateImageInQueue (qf_count integer overflow, bp_image.cpp:280); best-
+// practices builds dodge it by dropping the maintenance9 FEATURE BIT (see
+// VulkanContext.cpp) -- remove that dodge after an SDK fix.
+#define VULKAN_BEST_PRACTICES 1
 
-// ── Descriptor heap extension ───────────────────────────────────────────────
-// Enable VK_EXT_descriptor_heap (Vulkan 1.4). This is incompatible with
-// VULKAN_GPU_DEBUG; disable it if you need GPU-AV.
-#define AETHERCORE_ENABLE_DESCRIPTOR_HEAP 1
+// ── Descriptor heap ──────────────────────────────────────────────────────────
+// The renderer requires VK_EXT_descriptor_heap unconditionally (BindlessManager
+// has no non-heap path); there is deliberately no toggle for it. GPU-AV works
+// with it (see above).

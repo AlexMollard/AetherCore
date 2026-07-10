@@ -52,37 +52,6 @@ namespace aether
 		}
 	}
 
-	ImguiFrameData::ImguiFrameData(ImguiFrameData&& other) noexcept
-	      : m_drawData(other.m_drawData), m_mainPool(std::move(other.m_mainPool)), m_secondaryPool(std::move(other.m_secondaryPool)), m_secondary(std::move(other.m_secondary))
-	{
-		other.m_drawData.Clear();
-	}
-
-	ImguiFrameData& ImguiFrameData::operator=(ImguiFrameData&& other) noexcept
-	{
-		if (this == &other)
-		{
-			return *this;
-		}
-
-		for (ImDrawList* list: m_mainPool)
-		{
-			IM_DELETE(list);
-		}
-		for (ImDrawList* list: m_secondaryPool)
-		{
-			IM_DELETE(list);
-		}
-
-		m_drawData = other.m_drawData;
-		m_mainPool = std::move(other.m_mainPool);
-		m_secondaryPool = std::move(other.m_secondaryPool);
-		m_secondary = std::move(other.m_secondary);
-
-		other.m_drawData.Clear();
-		return *this;
-	}
-
 	// ---------------------------------------------------------------------------
 	// Clear
 	// ---------------------------------------------------------------------------

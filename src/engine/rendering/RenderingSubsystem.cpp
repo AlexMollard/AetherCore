@@ -123,6 +123,16 @@ namespace aether
 		m_sceneDepth = {};
 	}
 
+	void RenderingSubsystem::RegisterTexturePreviewImage()
+	{
+		if (!m_texturePreviewHandle.IsValid())
+		{
+			m_texturePreview = {};
+			return;
+		}
+		m_texturePreview = m_renderGraph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_texturePreviewHandle), m_texturePreviewView, gpu::ImageAspect::Color);
+	}
+
 	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless)
 	{
 		(void) device;
@@ -232,7 +242,7 @@ namespace aether
 			{
 				const auto& previewTexture = gpu::ResourceRegistry::ResolveTexture(m_texturePreviewHandle);
 				m_texturePreviewView = previewTexture.view;
-				m_texturePreview = m_renderGraph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_texturePreviewHandle), previewTexture.view);
+				RegisterTexturePreviewImage();
 			}
 			AE_EXPECT_OR_THROW(texturePreviewPipeline,
 			        GraphicsPipeline::Create(vk.GetDevice().device,
@@ -394,6 +404,10 @@ namespace aether
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
+		// RenderGraph::Clear() above dropped every external image registration,
+		// including the persistent texture-preview target. Re-register it so its
+		// cached RGImage handle does not dangle into another resource's slot.
+		RegisterTexturePreviewImage();
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);

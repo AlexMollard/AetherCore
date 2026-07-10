@@ -15,6 +15,10 @@
 
 #	include "utils/Logger.hpp"
 
+#	ifdef _WIN32
+#		include <windows.h>
+#	endif
+
 namespace aether
 {
 	namespace
@@ -310,6 +314,29 @@ namespace aether
 				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to write shader debug info to disk");
 			}
 		}
+
+#	ifdef _WIN32
+		// GFSDK_Aftermath_Lib.x64.dll is /DELAYLOAD-ed (see the App target's
+		// link options), so the first GFSDK_Aftermath_* call below would
+		// otherwise be what triggers the OS to resolve it. On a dev machine
+		// that doesn't have the DLL (e.g. no NVIDIA Aftermath redistributable
+		// installed), that lazy resolve raises an unhandled SEH exception
+		// (0xC06D007E / ERROR_MOD_NOT_FOUND) instead of returning a normal
+		// failure, crashing the whole editor process mid-session. Probe for
+		// the DLL explicitly before making any Aftermath SDK call so a
+		// missing DLL degrades to "Aftermath disabled" instead.
+		bool IsAftermathDllLoadable()
+		{
+			const HMODULE module = ::LoadLibraryW(L"GFSDK_Aftermath_Lib.x64.dll");
+			if (module == nullptr)
+			{
+				return false;
+			}
+			// Leave it loaded - the delay-load thunk will reuse this module
+			// handle for the real SDK calls that follow.
+			return true;
+		}
+#	endif // _WIN32
 	} // namespace
 
 	void AftermathContext::RegisterShaderBinary(const void* pSpirv, uint32_t spirvSize)
@@ -358,6 +385,16 @@ namespace aether
 		{
 			return true;
 		}
+
+#	ifdef _WIN32
+		// Check before the first Aftermath SDK call (below) reaches into the
+		// delay-loaded DLL - see IsAftermathDllLoadable's comment.
+		if (!IsAftermathDllLoadable())
+		{
+			AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath DLL not found; GPU crash dumps disabled");
+			return false;
+		}
+#	endif // _WIN32
 
 		if (crashDumpDir != nullptr)
 		{

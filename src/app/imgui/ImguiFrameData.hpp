@@ -36,8 +36,6 @@ namespace aether
 
 		ImguiFrameData(const ImguiFrameData&) = delete;
 		ImguiFrameData& operator=(const ImguiFrameData&) = delete;
-		ImguiFrameData(ImguiFrameData&& other) noexcept;
-		ImguiFrameData& operator=(ImguiFrameData&& other) noexcept;
 
 		void Clear();
 		void Capture(const ImDrawData* source);
