@@ -31,6 +31,7 @@ add_executable(EngineTests
     assetpack/AssetPipelineTests.cpp
     assetpack/PakFormatTests.cpp
     io/ProcessTests.cpp
+    io/OverlayBackendTests.cpp
     # App-side translation units under test: EngineTests links Engine only, so
     # the scene serializer and the app pieces it needs compile in directly.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
