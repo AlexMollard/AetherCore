@@ -12,9 +12,11 @@
 #include <optional>
 #include <string>
 
+#include "AssetPipeline.hpp"
 #include "FontProcessor.hpp"
 #include "MaterialImporter.hpp"
-#include "PakWriter.hpp"
+
+using namespace aether::assetpipeline;
 
 namespace fs = std::filesystem;
 
@@ -26,11 +28,6 @@ struct Args
 	fs::path sourceDir;
 	fs::path outputPath;
 };
-
-static bool HasProjectDescriptor(const fs::path& projectRoot)
-{
-	return fs::is_regular_file(projectRoot / "ProjectSettings.toml");
-}
 
 static std::optional<Args> ParseArgs(int argc, char* argv[])
 {
@@ -123,28 +120,18 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	if (!fs::is_directory(args->sourceDir))
+	const PackOptions options{
+	        .compressionLevel = args->compressionLevel,
+	        .importMaterials = args->importMaterials,
+	        .projectLayout = args->project,
+	};
+	const PackResult result = args->project
+	        ? PackProject(args->sourceDir, args->outputPath, options)
+	        : PackDirectory(args->sourceDir, args->outputPath, options);
+	if (!result.ok)
 	{
-		std::cerr << "AssetPacker: source directory not found: " << args->sourceDir << "\n";
+		std::cerr << "AssetPacker: " << result.message << "\n";
 		return 1;
 	}
-
-	if (args->project && !HasProjectDescriptor(args->sourceDir))
-	{
-		std::cerr << "AssetPacker: project directory is missing ProjectSettings.toml: " << args->sourceDir << "\n";
-		return 1;
-	}
-
-	if (args->importMaterials)
-	{
-		const fs::path materialRoot = (args->project && fs::is_directory(args->sourceDir / "assets")) ? args->sourceDir / "assets" : args->sourceDir;
-		if (MaterialImporter::ImportDirectory(materialRoot) < 0)
-		{
-			return 1;
-		}
-	}
-
-	PakWriter writer(args->compressionLevel);
-	writer.AddDirectory(args->sourceDir);
-	return writer.Write(args->outputPath) ? 0 : 1;
+	return 0;
 }

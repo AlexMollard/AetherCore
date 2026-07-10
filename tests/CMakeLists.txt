@@ -28,6 +28,7 @@ add_executable(EngineTests
     ui/UiDrawBuilderTests.cpp
     ui/FontShapingTests.cpp
     imgui/ImguiFrameDataTests.cpp
+    assetpack/AssetPipelineTests.cpp
     # App-side translation units under test: EngineTests links Engine only, so
     # the scene serializer and the app pieces it needs compile in directly.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
@@ -39,7 +40,7 @@ target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 # committed template from within the headless test binary (SceneSerializer.cpp
 # reads it via std::ifstream on this absolute path).
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
-target_link_libraries(EngineTests PRIVATE Engine doctest::doctest)
+target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest)
 aethercore_target_defaults(EngineTests)
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
 add_test(NAME EngineTests COMMAND EngineTests)
