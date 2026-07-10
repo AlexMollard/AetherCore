@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 namespace aether::io
@@ -19,6 +20,13 @@ namespace aether::io
 		// Absolute directory containing the running executable. Returns the current
 		// working directory as a last-resort fallback if the OS query fails.
 		[[nodiscard]] static std::filesystem::path GetExecutableDir();
+
+		// Filename of the running executable, without its extension (e.g. "App" or
+		// "AetherGame"). Used to key per-user cache files so distinct binaries that
+		// share the same LocalAppData/AetherCore folder (editor vs. shipped game,
+		// or multiple published games built from this engine) don't stomp each
+		// other's caches. Returns an empty string if the OS query fails.
+		[[nodiscard]] static std::string GetExecutableName();
 
 		// Per-user writable directory for this application's settings, created on
 		// demand:

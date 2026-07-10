@@ -204,6 +204,8 @@ namespace aether
 	// Lifetime
 	// ---------------------------------------------------------------------------
 
+	ImguiSubsystem::ImguiSubsystem() = default;
+
 	ImguiSubsystem::~ImguiSubsystem()
 	{
 		if (m_initialized)
@@ -376,9 +378,9 @@ namespace aether
 		}
 	}
 
-	std::vector<ImGuiID> ImguiSubsystem::SecondaryViewportIdsWithPendingDestroy() const
+	std::vector<std::uint32_t> ImguiSubsystem::SecondaryViewportIdsWithPendingDestroy() const
 	{
-		std::vector<ImGuiID> departed;
+		std::vector<std::uint32_t> departed;
 		if (!m_initialized)
 		{
 			return departed;
@@ -402,18 +404,27 @@ namespace aether
 		return departed;
 	}
 
-	void ImguiSubsystem::SnapshotFrame(ImguiFrameData& outFrame)
+	std::unique_ptr<IUiOverlayFrameData> ImguiSubsystem::AcquireFrameData()
+	{
+		return ImguiFrameData::AcquirePooled();
+	}
+
+	void ImguiSubsystem::SnapshotFrame(IUiOverlayFrameData& outFrame)
 	{
 		if (!m_initialized)
 		{
 			return;
 		}
 
+		// outFrame always originates from AcquireFrameData() above, so this
+		// downcast is safe.
+		auto& frame = static_cast<ImguiFrameData&>(outFrame);
+
 		// The game thread already holds m_mutex via m_gameThreadFrameLock
 		// (BeginFrame), so do NOT re-lock here.
 		ImDrawData* mainDrawData = ImGui::GetDrawData();
 		ProcessBackendTextureUpdates(mainDrawData);
-		outFrame.Capture(mainDrawData); // main viewport
+		frame.Capture(mainDrawData); // main viewport
 
 		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
 		{
@@ -428,9 +439,16 @@ namespace aether
 				}
 
 				ProcessBackendTextureUpdates(vp->DrawData);
-				outFrame.CaptureSecondary(vp->DrawData, vp->ID, vp->Pos, vp->Size, vp->DrawData->FramebufferScale, vp->PlatformHandle);
+				frame.CaptureSecondary(vp->DrawData, vp->ID, vp->Pos, vp->Size, vp->DrawData->FramebufferScale, vp->PlatformHandle);
 			}
 		}
+	}
+
+	void ImguiSubsystem::RecycleFrameData(std::unique_ptr<IUiOverlayFrameData> frame)
+	{
+		// frame always originates from AcquireFrameData() above, so this
+		// downcast is safe.
+		ImguiFrameData::RecyclePooled(std::unique_ptr<ImguiFrameData>(static_cast<ImguiFrameData*>(frame.release())));
 	}
 
 	void ImguiSubsystem::EndFrameLock()
@@ -442,17 +460,17 @@ namespace aether
 	// Viewport management
 	// ---------------------------------------------------------------------------
 
-	void ImguiSubsystem::RenderViewports(const ImguiFrameData& frame)
+	void ImguiSubsystem::RenderViewports(const IUiOverlayFrameData& frame)
 	{
 		if (!m_initialized || m_viewportRenderer == nullptr)
 		{
 			return;
 		}
 
-		m_viewportRenderer->Render(frame);
+		m_viewportRenderer->Render(static_cast<const ImguiFrameData&>(frame));
 	}
 
-	void ImguiSubsystem::RetireViewports(const std::vector<ImGuiID>& departedIds)
+	void ImguiSubsystem::RetireViewports(const std::vector<std::uint32_t>& departedIds)
 	{
 		if (m_viewportRenderer != nullptr)
 		{
@@ -526,8 +544,9 @@ namespace aether
 	// Render thread
 	// ---------------------------------------------------------------------------
 
-	void ImguiSubsystem::RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target)
+	void ImguiSubsystem::RenderFrame(const IUiOverlayFrameData& overlayFrame, gpu::CommandList& commands, const FrameTarget& target)
 	{
+		const auto& frame = static_cast<const ImguiFrameData&>(overlayFrame);
 		if (!m_initialized || !m_backendsInitialized || !frame.HasDrawData())
 		{
 			m_lastRenderCpuTimeMs.store(0.0f, std::memory_order_relaxed);

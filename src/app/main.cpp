@@ -39,7 +39,15 @@ int main()
 	{
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Info);
 
-		aether::app::Application application;
+		// NVIDIA Aftermath (dev-only GPU crash diagnostics) is only ever turned
+		// on for an editor build - see the vendor + editor gate in
+		// VulkanContext.cpp. GameRuntime leaves this false, so a shipped game
+		// never enables it (and never needs GFSDK_Aftermath_Lib.x64.dll).
+		aether::AetherCore::Config engineConfig{};
+#ifdef AETHERCORE_EDITOR_APP
+		engineConfig.enableGpuDiagnostics = true;
+#endif
+		aether::app::Application application(engineConfig);
 
 		// Services
 		// C# scripting: boots CoreCLR and loads the game-scripts assembly.

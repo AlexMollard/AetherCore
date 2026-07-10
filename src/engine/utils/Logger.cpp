@@ -1,5 +1,6 @@
 #include "utils/Logger.hpp"
 
+#include "io/PlatformPaths.hpp"
 #include "utils/LogRingBuffer.hpp"
 
 #include <atomic>
@@ -585,6 +586,34 @@ namespace aether
 			isEnabled = true;
 #endif
 		}
+
+		// Default log destination when Initialize() is called with no explicit
+		// path. Resolves under the per-user LocalAppData directory so a shipped
+		// game never creates a "logs" folder inside its own install directory.
+		// Falls back to the old CWD-relative path only if the OS has no
+		// resolvable per-user location at all (degraded but still logging,
+		// rather than not logging).
+		//
+		// Keyed by executable name (App vs. AetherGame) so the editor and a
+		// published game -- which share the same LocalAppData/AetherCore folder
+		// but run as separate processes -- don't append to the same log file
+		// concurrently.
+		std::string ResolveDefaultLogPath()
+		{
+			std::string exeName = io::PlatformPaths::GetExecutableName();
+			if (exeName.empty())
+			{
+				exeName = "AetherCore";
+			}
+			const std::string fileName = exeName + ".log";
+
+			const std::filesystem::path userDir = io::PlatformPaths::GetUserConfigDir();
+			if (userDir.empty())
+			{
+				return "logs/" + fileName;
+			}
+			return (userDir / "logs" / fileName).string();
+		}
 	} // namespace
 
 	void Logger::Initialize(const std::string_view filePath)
@@ -597,7 +626,7 @@ namespace aether
 			return;
 		}
 
-		backend.filePath = std::string(filePath);
+		backend.filePath = filePath.empty() ? ResolveDefaultLogPath() : std::string(filePath);
 		if (!backend.filePath.empty())
 		{
 			const std::filesystem::path logPath{backend.filePath};

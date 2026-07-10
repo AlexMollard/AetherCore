@@ -26,9 +26,6 @@
 #include "gpu/GpuProfiler.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/CommandList.hpp"
-#include "imgui/ImguiFrameData.hpp"
-#include "imgui/ImguiSubsystem.hpp"
-#include "imgui/ImguiViewportRenderer.hpp" // complete type for ImguiSubsystem's unique_ptr member
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
@@ -71,7 +68,6 @@ namespace aether
 		m_gpu = std::make_unique<GpuDevice>();
 		m_services.Register<GpuDevice>(*m_gpu);
 		m_cameras = std::make_unique<CameraSubsystem>();
-		m_imgui = std::make_unique<ImguiSubsystem>();
 		m_rendering = std::make_unique<RenderingSubsystem>();
 
 		auto& platform = m_services.Get<PlatformSubsystem>();
@@ -84,7 +80,7 @@ namespace aether
 		m_services.Register<Input>(platform.GetInput());
 
 		// -- 2. Graphics device ----------------------------------------------
-		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync}));
+		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics}));
 
 		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();
@@ -115,9 +111,13 @@ namespace aether
 		m_services.Register<ShadowService>(m_rendering->GetShadowService());
 		m_services.Register<RenderTargetService>(m_rendering->GetRenderTargetService());
 
-		// -- 7. ImGui tooling -----------------------------------------------
-		m_imgui->Init(m_services);
-		m_services.Register<ImguiSubsystem>(*m_imgui);
+		// -- 7. UI overlay (optional, editor-only) ---------------------------
+		// No overlay is created here: the engine core has zero knowledge of any
+		// concrete UI toolkit. An editor build (App) constructs one (Dear ImGui's
+		// ImguiSubsystem, src/app/imgui/) and installs it via SetUiOverlay()
+		// right after this constructor returns - see Application.cpp. The
+		// shipped GameRuntime never installs one, so m_uiOverlay stays null and
+		// no UI-toolkit code is ever linked or run.
 
 		// Link cross-subsystem dependencies.
 		m_cameras->GetLightingManager().LinkRenderer(m_rendering->GetRenderer());
@@ -180,7 +180,10 @@ namespace aether
 
 		// Subsystems free their VMA-backed allocations (VMA still alive).
 		m_rendering->Shutdown();
-		m_imgui->Shutdown(m_services);
+		if (m_uiOverlay)
+		{
+			m_uiOverlay->Shutdown(m_services);
+		}
 		m_cameras->Shutdown();
 		m_services.Get<AssetSubsystem>().Shutdown();
 		// SceneSubsystem has no shutdown work.
@@ -312,49 +315,51 @@ namespace aether
 
 			client.OnUpdate(gameDt, m_producerFrameIndex);
 
-			if (m_imgui)
+			if (m_uiOverlay)
 			{
-				m_imgui->BeginFrame(m_services, static_cast<float>(rawDt));
+				m_uiOverlay->BeginFrame(m_services, static_cast<float>(rawDt));
 			}
 			client.OnBuildUI(gameDt, m_producerFrameIndex);
 
-			// Reuse a warm ImguiFrameData shell (pooled ImDrawLists) so capture stays
-			// near zero-allocation after the first few growth frames.
-			ImguiFrameData imguiFrame = ImguiFrameData::AcquirePooled();
-			if (m_imgui)
+			// Acquire a warm overlay frame-data shell (pooled ImDrawLists under the
+			// hood) so capture stays near zero-allocation after the first few
+			// growth frames. Stays null when no overlay is installed (GameRuntime).
+			std::unique_ptr<IUiOverlayFrameData> overlayFrame;
+			if (m_uiOverlay)
 			{
-				m_imgui->Render();
+				overlayFrame = m_uiOverlay->AcquireFrameData();
+				m_uiOverlay->Render();
 
 				// Structural viewport DESTROY (re-dock / close / toggle-off) must retire the
 				// render-thread swapchains before UpdatePlatformWindows destroys the GLFW
 				// window: park the render thread + idle the GPU via RunExclusive. Create and
 				// resize need no quiesce (render-thread-local).
-				const std::vector<ImGuiID> departedViewports = m_imgui->SecondaryViewportIdsWithPendingDestroy();
+				const std::vector<std::uint32_t> departedViewports = m_uiOverlay->SecondaryViewportIdsWithPendingDestroy();
 				if (!departedViewports.empty())
 				{
 					// Release the ImGui frame lock BEFORE quiescing: RunExclusive drains and
 					// parks the render thread, which would otherwise deadlock waiting on the
 					// mutex this producer thread still holds via the frame lock.
-					m_imgui->EndFrameLock();
+					m_uiOverlay->EndFrameLock();
 					RunExclusive(QuiesceMode::Drain,
 					        [this, &departedViewports]()
 					        {
-						        m_imgui->RetireViewports(departedViewports);
-						        m_imgui->UpdatePlatformWindows();
+						        m_uiOverlay->RetireViewports(departedViewports);
+						        m_uiOverlay->UpdatePlatformWindows();
 					        });
-					m_imgui->SnapshotFrame(imguiFrame); // render thread idle post-quiesce
+					m_uiOverlay->SnapshotFrame(*overlayFrame); // render thread idle post-quiesce
 				}
 				else
 				{
-					m_imgui->UpdatePlatformWindows();
-					m_imgui->SnapshotFrame(imguiFrame);
-					m_imgui->EndFrameLock();
+					m_uiOverlay->UpdatePlatformWindows();
+					m_uiOverlay->SnapshotFrame(*overlayFrame);
+					m_uiOverlay->EndFrameLock();
 				}
 			}
 
 			RenderFramePacket packet = PrepareFrame(drawSlot, m_producerFrameIndex);
 			packet.elapsedTime = static_cast<float>(m_gameElapsedSeconds);
-			packet.imgui = std::move(imguiFrame);
+			packet.uiOverlay = std::move(overlayFrame);
 
 			m_renderThread.SubmitFrame(std::move(packet));
 
@@ -381,9 +386,9 @@ namespace aether
 		auto& platform = m_services.Get<PlatformSubsystem>();
 		auto& input = platform.GetInput();
 		input.Update();
-		if (m_imgui)
+		if (m_uiOverlay)
 		{
-			input.SetMouseCaptured(m_imgui->WantsInputCapture() && !input.IsMouseViewportInputActive());
+			input.SetMouseCaptured(m_uiOverlay->WantsInputCapture() && !input.IsMouseViewportInputActive());
 		}
 		m_cameras->GetCameraManager().Update(input, dt);
 	}
@@ -439,9 +444,9 @@ namespace aether
 
 	void AetherCore::FlushImguiPendingTextureReleases()
 	{
-		if (m_imgui)
+		if (m_uiOverlay)
 		{
-			m_imgui->FlushPendingTextureReleasesImmediate();
+			m_uiOverlay->FlushPendingTextureReleasesImmediate();
 		}
 	}
 
@@ -489,18 +494,35 @@ namespace aether
 	void AetherCore::SetImguiViewportsEnabled(bool enabled)
 	{
 		m_settings.graphics.imguiViewports = enabled;
-		if (m_imgui)
+		if (m_uiOverlay)
 		{
-			m_imgui->SetViewportsEnabled(enabled);
+			m_uiOverlay->SetViewportsEnabled(enabled);
 		}
 	}
 
 	void AetherCore::SetUiScale(float uiScale)
 	{
 		m_settings.graphics.uiScale = uiScale;
-		if (m_imgui)
+		if (m_uiOverlay)
 		{
-			m_imgui->SetUiScale(uiScale);
+			m_uiOverlay->SetUiScale(uiScale);
+		}
+	}
+
+	void AetherCore::SetUiOverlay(std::unique_ptr<IUiOverlay> overlay)
+	{
+		m_uiOverlay = std::move(overlay);
+		if (m_uiOverlay)
+		{
+			m_uiOverlay->Init(m_services);
+		}
+	}
+
+	void AetherCore::RecycleUiOverlayFrameData(std::unique_ptr<IUiOverlayFrameData> frame)
+	{
+		if (m_uiOverlay && frame)
+		{
+			m_uiOverlay->RecycleFrameData(std::move(frame));
 		}
 	}
 
@@ -660,7 +682,10 @@ namespace aether
 		}
 
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
-		m_imgui->RenderFrame(packet.imgui, m_currentCmdList, m_gpu->BuildFrameTarget());
+		if (m_uiOverlay && packet.uiOverlay)
+		{
+			m_uiOverlay->RenderFrame(*packet.uiOverlay, m_currentCmdList, m_gpu->BuildFrameTarget());
+		}
 
 		SubmitAndAdvance(frameIdx);
 
@@ -668,7 +693,10 @@ namespace aether
 		// main frame's render graph produced any images they sample (e.g. the Viewport
 		// panel's final-color image) — correct GPU synchronization, unlike a producer-side
 		// present.
-		m_imgui->RenderViewports(packet.imgui);
+		if (m_uiOverlay && packet.uiOverlay)
+		{
+			m_uiOverlay->RenderViewports(*packet.uiOverlay);
+		}
 	}
 
 	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)

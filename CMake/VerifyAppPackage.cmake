@@ -81,4 +81,13 @@ if(_editor_artifacts)
     message(FATAL_ERROR "Package contains editor/debug artifacts:\n  ${_editor_artifact_text}")
 endif()
 
+# NVIDIA Aftermath is a dev-only GPU-crash-diagnostics tool, editor-gated at
+# runtime (VulkanContext.cpp) - GameRuntime never enables it and must not ship
+# GFSDK_Aftermath_Lib.x64.dll (or any GFSDK_Aftermath* file).
+file(GLOB_RECURSE _aftermath_artifacts "${PACKAGE_DIR}/GFSDK_Aftermath*")
+if(_aftermath_artifacts)
+    list(JOIN _aftermath_artifacts "\n  " _aftermath_artifact_text)
+    message(FATAL_ERROR "Package contains NVIDIA Aftermath (dev-only, editor-gated) files:\n  ${_aftermath_artifact_text}")
+endif()
+
 message(STATUS "Verified redistributable package: ${PACKAGE_DIR}")

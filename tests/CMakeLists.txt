@@ -39,6 +39,12 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
+    # ImguiFrameData (src/app/imgui/, editor-only) is not part of Engine - see
+    # rendering/IUiOverlay.hpp - but imgui/ImguiFrameDataTests.cpp above still
+    # exercises its ImDrawList-pool safety invariant directly, so compile the
+    # concrete type in here too (this test binary links imgui below, unlike
+    # GameRuntime/Engine).
+    "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 # xxHash headers so format tests can recompute a pak's index hash.
@@ -47,7 +53,7 @@ target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")
 # committed template from within the headless test binary (SceneSerializer.cpp
 # reads it via std::ifstream on this absolute path).
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
-target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest)
+target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest imgui)
 aethercore_target_defaults(EngineTests)
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
 add_test(NAME EngineTests COMMAND EngineTests)

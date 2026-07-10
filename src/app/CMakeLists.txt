@@ -7,9 +7,14 @@ set(APP_RUNTIME_HEADERS ${APP_HEADERS})
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
+# Dear ImGui integration (src/app/imgui/) is editor-only: GameRuntime must
+# neither link nor initialize imgui (see rendering/IUiOverlay.hpp in Engine
+# and the AETHERCORE_EDITOR_APP-gated construction in Application.cpp).
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.hpp$")
+list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
 
 add_executable(App)
 add_executable(GameRuntime)
@@ -29,7 +34,7 @@ target_sources(GameRuntime
 target_include_directories(App PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(App PRIVATE Engine AssetPipeline)
+target_link_libraries(App PRIVATE Engine AssetPipeline imgui)
 target_link_libraries(GameRuntime PRIVATE Engine)
 
 aethercore_target_defaults(App)
@@ -266,8 +271,12 @@ function(aethercore_add_runtime_payload target_name)
         )
     endif()
 
-    # NVIDIA Aftermath DLL - copy to output directory so the executable can find it.
-    if(NVIDIA_AFTERMATH_FOUND)
+    # NVIDIA Aftermath DLL - dev-only GPU crash diagnostics, editor-only (see the
+    # vendor/editor runtime gate in VulkanContext.cpp + the /DELAYLOAD link
+    # option on Engine in src/engine/CMakeLists.txt). Only App calls into it, so
+    # only App gets the DLL copied next to it; GameRuntime never enables
+    # Aftermath and must not carry the DLL into a shipped game.
+    if(NVIDIA_AFTERMATH_FOUND AND target_name STREQUAL "App")
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:${target_name}>"
             COMMENT "Copying GFSDK_Aftermath_Lib.x64.dll to build output"
@@ -336,12 +345,11 @@ if(WIN32 AND AETHER_NETHOST_DLL)
             "${_aether_package_dir}/nethost.dll")
 endif()
 
-if(NVIDIA_AFTERMATH_FOUND)
-    list(APPEND _aether_package_commands
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${_am_dll}"
-            "${_aether_package_dir}")
-endif()
+# NVIDIA Aftermath's DLL is deliberately NOT packaged here: PackageGame builds
+# a GameRuntime redistributable, and GameRuntime never enables Aftermath (dev-
+# only diagnostics, editor-gated - see VulkanContext.cpp + Engine's /DELAYLOAD
+# link option) and does not need the DLL to launch. VerifyAppPackage.cmake
+# fails the build if a GFSDK_Aftermath* file ever ends up in the package.
 
 list(APPEND _aether_package_commands
     COMMAND "${CMAKE_COMMAND}"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include "utils/Assert.hpp"
@@ -39,7 +40,16 @@ namespace aether
 		// Factory: create and initialize a VulkanContext. Returns an error
 		// on failure instead of throwing, so callers can propagate via
 		// Expected / AE_TRY.
-		[[nodiscard]] static Expected<std::unique_ptr<VulkanContext>> Create(const Window& window, const char* appName);
+		//
+		// enableGpuDiagnostics: gates NVIDIA Aftermath (dev-only GPU crash
+		// diagnostics). Only set true by an editor build (AETHERCORE_EDITOR_APP -
+		// see src/app/main.cpp); the shipped GameRuntime always passes false.
+		// Aftermath is only actually turned on when this is true AND the
+		// selected physical device is NVIDIA (vendorID 0x10DE) - see the
+		// vendor gate in VulkanContext.cpp, which runs strictly after physical
+		// device selection so a non-NVIDIA device never has its NVIDIA-only
+		// extensions requested.
+		[[nodiscard]] static Expected<std::unique_ptr<VulkanContext>> Create(const Window& window, const char* appName, bool enableGpuDiagnostics = false);
 
 		VulkanContext(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
 		VulkanContext& operator=(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
@@ -102,13 +112,16 @@ namespace aether
 #endif
 
 	private:
-		VulkanContext(const Window& window, const char* appName);
+		VulkanContext(const Window& window, const char* appName, bool enableGpuDiagnostics);
 
 		std::optional<vkb::Instance> m_instance;
 		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 		std::optional<vkb::Device> m_device;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
+		// Resolved once at Create() time: %LOCALAPPDATA%/AetherCore/cache/<exe>/pipeline/pipeline_cache.bin
+		// (never CWD/exe-dir-relative -- see ResolveGpuCacheDir in VulkanContext.cpp).
+		std::filesystem::path m_pipelineCachePath;
 		VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 		VkQueue m_graphicsQueue = VK_NULL_HANDLE;
 		VkQueue m_computeQueue = VK_NULL_HANDLE;

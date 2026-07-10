@@ -2,6 +2,7 @@
 
 #	include "vulkan/AftermathContext.hpp"
 
+#	include <atomic>
 #	include <chrono>
 #	include <cstdint>
 #	include <cstdio>
@@ -18,6 +19,17 @@ namespace aether
 {
 	namespace
 	{
+		// Set true only while an AftermathContext instance has successfully
+		// enabled GPU crash dumps (editor build + NVIDIA device - see the
+		// vendor/editor gate in VulkanContext.cpp). RegisterShaderBinary is
+		// called unconditionally from every pipeline/shader-object creation
+		// site (ComputePipelineFactory, GraphicsPipelineFactory, ShaderUtils)
+		// whenever AETHER_ENABLE_NVIDIA_AFTERMATH is compiled in - i.e. on
+		// GameRuntime too, and on any vendor. Gating on this flag is what
+		// stops GameRuntime / non-NVIDIA processes from calling into the
+		// Aftermath SDK and writing .spv shader dumps to disk when Aftermath
+		// was never actually turned on for this process.
+		std::atomic<bool> s_gpuDiagnosticsActive{false};
 		struct ShaderDebugInfoIdentifierHash
 		{
 			std::size_t operator()(const GFSDK_Aftermath_ShaderDebugInfoIdentifier& id) const
@@ -171,6 +183,11 @@ namespace aether
 
 		void RegisterShaderBinaryData(const void* pSpirv, uint32_t spirvSize)
 		{
+			if (!s_gpuDiagnosticsActive.load(std::memory_order_relaxed))
+			{
+				return;
+			}
+
 			if (!pSpirv || spirvSize == 0)
 			{
 				return;
@@ -359,6 +376,7 @@ namespace aether
 		}
 
 		m_crashDumpsEnabled = true;
+		s_gpuDiagnosticsActive.store(true, std::memory_order_relaxed);
 		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dumps enabled");
 		return true;
 	}
@@ -414,6 +432,7 @@ namespace aether
 		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: Disabling GPU crash dumps");
 		GFSDK_Aftermath_DisableGpuCrashDumps();
 		m_crashDumpsEnabled = false;
+		s_gpuDiagnosticsActive.store(false, std::memory_order_relaxed);
 	}
 } // namespace aether
 

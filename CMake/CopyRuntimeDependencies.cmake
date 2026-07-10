@@ -36,6 +36,16 @@ foreach(_dep IN LISTS _resolved_deps)
     if(_is_windows_system_dll AND NOT _is_msvc_runtime_dll)
         continue()
     endif()
+    # NVIDIA Aftermath is a dev-only GPU-crash-diagnostics tool, editor-gated
+    # at runtime (VulkanContext.cpp) and delay-loaded (see the /DELAYLOAD link
+    # option on Engine in src/engine/CMakeLists.txt) so it is never a hard
+    # load-time dependency of GameRuntime.exe. GET_RUNTIME_DEPENDENCIES still
+    # walks the PE delay-load import descriptor table and resolves it as if it
+    # were a regular dependency - exclude it explicitly so a GameRuntime
+    # package never carries it.
+    if(_dep_name_lower MATCHES "^gfsdk_aftermath")
+        continue()
+    endif()
     file(COPY_FILE "${_dep}" "${PACKAGE_DIR}/${_dep_name}" ONLY_IF_DIFFERENT)
 endforeach()
 

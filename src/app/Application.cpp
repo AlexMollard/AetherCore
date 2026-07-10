@@ -4,7 +4,9 @@
 
 #include "animation/AnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
-#include "imgui/ImguiSubsystem.hpp"
+#ifdef AETHERCORE_EDITOR_APP
+#	include "imgui/ImguiSubsystem.hpp"
+#endif
 #include "physics/PhysicsSystem.hpp"
 #include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
@@ -76,6 +78,18 @@ namespace aether::app
 	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded)
 	      : m_engine(BuildConfigFromSettings(engineConfig, loaded.values), loaded.values), m_settingsService(loaded.values, loaded.base, m_engine.GetServiceContainer())
 	{
+#ifdef AETHERCORE_EDITOR_APP
+		// Dear ImGui tooling is editor-only: construct it here (never inside
+		// AetherCore, which has zero knowledge of any UI toolkit) and install
+		// it as the engine's optional UI overlay. GameRuntime never compiles
+		// this block, so it neither links nor initializes imgui - see
+		// SetUiOverlay's doc comment in AetherCore.hpp.
+		auto imgui = std::make_unique<aether::ImguiSubsystem>();
+		aether::ImguiSubsystem& imguiRef = *imgui;
+		m_engine.SetUiOverlay(std::move(imgui)); // calls imguiRef.Init(...)
+		m_engine.GetServiceContainer().Register<aether::ImguiSubsystem>(imguiRef);
+#endif
+
 		AE_INFO(LogCategory::App, "Application created.");
 	}
 

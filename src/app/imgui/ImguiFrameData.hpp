@@ -1,13 +1,21 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 #include <vector>
 #include <mutex>
 #include <imgui.h>
 
+#include "rendering/IUiOverlay.hpp"
+
 namespace aether
 {
-	class ImguiFrameData
+	// Concrete Dear ImGui implementation of the engine's opaque per-frame
+	// overlay snapshot (IUiOverlayFrameData). Lives in the editor-only
+	// src/app/imgui/ module - the engine core (AetherCore, RenderFramePacket,
+	// RenderThread) only ever touches instances of this through the abstract
+	// base, so it never needs to know Dear ImGui exists.
+	class ImguiFrameData : public IUiOverlayFrameData
 	{
 	public:
 		struct CapturedViewport
@@ -24,7 +32,7 @@ namespace aether
 		};
 
 		ImguiFrameData() = default;
-		~ImguiFrameData();
+		~ImguiFrameData() override;
 
 		ImguiFrameData(const ImguiFrameData&) = delete;
 		ImguiFrameData& operator=(const ImguiFrameData&) = delete;
@@ -36,8 +44,11 @@ namespace aether
 		void CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle);
 
 		// --- Object Pooling API ---
-		[[nodiscard]] static ImguiFrameData AcquirePooled();
-		static void RecyclePooled(ImguiFrameData&& frame);
+		// Pool stores heap-owned instances (not by-value) so a pooled frame's
+		// identity - and its warm ImDrawList* pools - never moves; handing one
+		// out/back is just a pointer transfer.
+		[[nodiscard]] static std::unique_ptr<ImguiFrameData> AcquirePooled();
+		static void RecyclePooled(std::unique_ptr<ImguiFrameData> frame);
 
 		[[nodiscard]] bool HasDrawData() const noexcept
 		{

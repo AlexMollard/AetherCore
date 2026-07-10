@@ -10,24 +10,28 @@ namespace aether
 	namespace
 	{
 		std::mutex s_imguiPoolMutex;
-		std::vector<ImguiFrameData> s_imguiPool;
+		std::vector<std::unique_ptr<ImguiFrameData>> s_imguiPool;
 	} // namespace
 
-	ImguiFrameData ImguiFrameData::AcquirePooled()
+	std::unique_ptr<ImguiFrameData> ImguiFrameData::AcquirePooled()
 	{
 		std::lock_guard lock(s_imguiPoolMutex);
 		if (!s_imguiPool.empty())
 		{
-			ImguiFrameData frame = std::move(s_imguiPool.back());
+			std::unique_ptr<ImguiFrameData> frame = std::move(s_imguiPool.back());
 			s_imguiPool.pop_back();
 			return frame;
 		}
-		return ImguiFrameData();
+		return std::make_unique<ImguiFrameData>();
 	}
 
-	void ImguiFrameData::RecyclePooled(ImguiFrameData&& frame)
+	void ImguiFrameData::RecyclePooled(std::unique_ptr<ImguiFrameData> frame)
 	{
-		frame.Clear(); // Resets draw data but keeps internal ImDrawList pools warm
+		if (!frame)
+		{
+			return;
+		}
+		frame->Clear(); // Resets draw data but keeps internal ImDrawList pools warm
 		std::lock_guard lock(s_imguiPoolMutex);
 		s_imguiPool.push_back(std::move(frame));
 	}

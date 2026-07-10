@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include "io/PlatformPaths.hpp"
 #include "utils/Logger.hpp"
 
 // clang-format off
@@ -69,7 +70,31 @@ namespace aether
 
 		std::filesystem::path BuildCrashBasePath()
 		{
-			const std::filesystem::path crashDirectory = std::filesystem::current_path() / "crashes";
+			// Crash reports must not land in the game's install directory (a
+			// shipped game must not write into its own program directory) --
+			// write them under the per-user LocalAppData directory instead.
+			// Keyed by executable name (App vs. AetherGame) so the editor and a
+			// published game -- which share the same LocalAppData/AetherCore
+			// folder but are installed as distinct products -- keep their crash
+			// dumps in separate, identifiable folders. This is independent of the
+			// caller's Install() appName tag (both currently pass "AetherCore").
+			// Falls back to the CWD only if the OS has no resolvable per-user
+			// location at all; the non-throwing current_path overload keeps an
+			// invalid CWD from throwing on an already-degraded path.
+			std::filesystem::path crashDirectory = io::PlatformPaths::GetUserConfigDir();
+			if (crashDirectory.empty())
+			{
+				std::error_code cwdError;
+				crashDirectory = std::filesystem::current_path(cwdError);
+			}
+
+			std::string exeName = io::PlatformPaths::GetExecutableName();
+			if (exeName.empty())
+			{
+				exeName = "AetherCore";
+			}
+			crashDirectory = crashDirectory / "crashes" / exeName;
+
 			std::error_code errorCode;
 			std::filesystem::create_directories(crashDirectory, errorCode);
 

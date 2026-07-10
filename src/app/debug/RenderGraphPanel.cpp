@@ -432,7 +432,7 @@ namespace aether::app
 				ImGui::SameLine();
 				ImGui::TextDisabled("after graph");
 				ImGui::TableSetColumnIndex(3);
-				ImGui::TextDisabled("src/engine/imgui");
+				ImGui::TextDisabled("src/app/imgui");
 				ImGui::TableSetColumnIndex(4);
 				ImGui::TextDisabled("External");
 				ImGui::TableSetColumnIndex(5);
@@ -478,7 +478,7 @@ namespace aether::app
 				DrawMetricRow("Attachment", "Swapchain color");
 				DrawMetricRow("Load", "Load");
 				DrawMetricRow("Store", "Store");
-				DrawMetricRow("Source", "src/engine/imgui/ImguiSubsystem.cpp");
+				DrawMetricRow("Source", "src/app/imgui/ImguiSubsystem.cpp");
 				ImGui::EndTable();
 			}
 			return;

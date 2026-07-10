@@ -26,6 +26,9 @@ namespace aether
 		{
 			const char* appName = "AetherCore";
 			bool enableVsync = true;
+			// See AetherCore::Config::enableGpuDiagnostics - forwarded unchanged
+			// to VulkanContext::Create's enableGpuDiagnostics parameter.
+			bool enableGpuDiagnostics = false;
 		};
 
 		[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);

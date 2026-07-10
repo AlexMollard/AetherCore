@@ -69,40 +69,60 @@ namespace aether::io
 			}
 			return dir;
 		}
+
+		// Full path (directory + filename) to the running executable. Shared by
+		// GetExecutableDir (parent_path()) and GetExecutableName (stem()) so the
+		// OS-specific query lives in exactly one place. Returns an empty path if
+		// the OS query fails.
+		std::filesystem::path ResolveExecutablePath()
+		{
+#if defined(_WIN32)
+			std::wstring buffer(MAX_PATH, L'\0');
+			for (;;)
+			{
+				const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+				if (length == 0)
+				{
+					break;
+				}
+				if (length < buffer.size())
+				{
+					buffer.resize(length);
+					return std::filesystem::path(buffer);
+				}
+				// Truncated: grow and retry.
+				buffer.resize(buffer.size() * 2);
+			}
+#elif defined(__linux__)
+			std::string buffer(PATH_MAX, '\0');
+			const ssize_t length = ::readlink("/proc/self/exe", buffer.data(), buffer.size());
+			if (length > 0)
+			{
+				buffer.resize(static_cast<std::size_t>(length));
+				return std::filesystem::path(buffer);
+			}
+#endif
+			return {};
+		}
 	} // namespace
 
 	std::filesystem::path PlatformPaths::GetExecutableDir()
 	{
-#if defined(_WIN32)
-		std::wstring buffer(MAX_PATH, L'\0');
-		for (;;)
+		if (const std::filesystem::path exePath = ResolveExecutablePath(); !exePath.empty())
 		{
-			const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-			if (length == 0)
-			{
-				break;
-			}
-			if (length < buffer.size())
-			{
-				buffer.resize(length);
-				return std::filesystem::path(buffer).parent_path();
-			}
-			// Truncated: grow and retry.
-			buffer.resize(buffer.size() * 2);
+			return exePath.parent_path();
 		}
-#elif defined(__linux__)
-		std::string buffer(PATH_MAX, '\0');
-		const ssize_t length = ::readlink("/proc/self/exe", buffer.data(), buffer.size());
-		if (length > 0)
-		{
-			buffer.resize(static_cast<std::size_t>(length));
-			return std::filesystem::path(buffer).parent_path();
-		}
-#endif
+
 		// Fallback: better to resolve relative to the CWD than to return nothing.
 		std::error_code ec;
 		auto cwd = std::filesystem::current_path(ec);
 		return ec ? std::filesystem::path{} : cwd;
+	}
+
+	std::string PlatformPaths::GetExecutableName()
+	{
+		const std::filesystem::path exePath = ResolveExecutablePath();
+		return exePath.empty() ? std::string{} : exePath.stem().string();
 	}
 
 	std::filesystem::path PlatformPaths::GetUserConfigDir()

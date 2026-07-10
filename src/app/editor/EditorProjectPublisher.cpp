@@ -20,6 +20,7 @@
 #include "io/PakBackend.hpp"
 #include "io/PlatformPaths.hpp"
 #include "io/Process.hpp"
+#include "utils/EngineSettings.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
@@ -59,6 +60,15 @@ namespace aether::app
 				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 			}
 			return value;
+		}
+
+		// NVIDIA Aftermath is a dev-only GPU-crash-diagnostics tool, gated at
+		// runtime to editor builds on an NVIDIA device (see VulkanContext.cpp).
+		// A published game must not carry GFSDK_Aftermath_Lib.x64.dll (or any
+		// GFSDK_Aftermath* file).
+		bool IsAftermathRuntimeFile(const std::filesystem::path& path)
+		{
+			return LowerAscii(path.stem().generic_string()).starts_with("gfsdk_aftermath");
 		}
 
 		bool PathStartsWith(std::filesystem::path path, std::filesystem::path parent)
@@ -275,6 +285,93 @@ namespace aether::app
 			return true;
 		}
 
+		// The shipped data/config/EngineSettings.toml is a byte-for-byte copy of
+		// the engine's generic resources/config/EngineSettings.toml template (see
+		// aethercore_add_runtime_payload in src/app/CMakeLists.txt) - it knows
+		// nothing about the project being published. The editor never ships this
+		// gap: EditorProjectManager::RefreshServices() re-loads settings with the
+		// open project's ProjectSettings.toml layered on top
+		// (EngineSettingsIO::LoadLayered's layer 3) before ScriptedSceneLayer ever
+		// attaches. GameRuntime has no EditorProjectManager - Application always
+		// constructs SettingsService from layers 1+2+4 only (see
+		// Application::Application(engineConfig) in src/app/Application.cpp) - so
+		// without this bake step the published app.startupScene stays whatever
+		// the generic template shipped with (empty), and the game boots into an
+		// empty world.
+		//
+		// Bake layers 1 (compiled defaults) + 2 (the just-copied shipped file) +
+		// 3 (the project's ProjectSettings.toml) into the published
+		// EngineSettings.toml, exactly mirroring what the editor resolves at
+		// runtime. Deliberately uses LoadedEngineSettings::base (pre layer-4)
+		// rather than .values: baking the *publishing developer's own*
+		// UserSettings.toml (layer 4, read from this machine's LocalAppData)
+		// into the shipped defaults would leak that developer's local window
+		// size/vsync/etc. preferences into every player's fresh install.
+		bool BakePublishedEngineSettings(const std::filesystem::path& publishedSettingsPath, const std::filesystem::path& projectFile, std::string& error)
+		{
+			if (auto dirResult = io::file_util::CreateDirectories(publishedSettingsPath.parent_path()); !dirResult)
+			{
+				error = "Could not create settings output folder: " + dirResult.error().message;
+				return false;
+			}
+
+			const std::string shippedPath = publishedSettingsPath.string();
+			const aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, projectFile);
+			const std::string merged = aether::EngineSettingsIO::Serialize(loaded.base);
+			if (auto writeResult = io::file_util::WriteText(publishedSettingsPath, merged); !writeResult)
+			{
+				error = "Could not bake project startup settings into " + DisplayPath(publishedSettingsPath) + ": " + writeResult.error().message;
+				return false;
+			}
+			AE_INFO(LogCategory::App, "Baked published settings ({}) from project '{}'", DisplayPath(publishedSettingsPath), DisplayPath(projectFile));
+			return true;
+		}
+
+		// Reads back the just-baked published settings and, if a startup scene is
+		// configured, confirms the scene file is actually present in the shipped
+		// project.pak - the same project:// lookup ScriptedSceneLayer::
+		// LoadStartupScene / scene::ReadSceneFile perform at boot (see
+		// kProjectScenesVfsDir in src/app/scene/SceneSerializer.cpp). Catches a
+		// published build that would silently boot into an empty world instead
+		// of shipping one.
+		bool VerifyPublishedStartupScene(const std::filesystem::path& packageDir, std::string& error)
+		{
+			const std::filesystem::path settingsPath = packageDir / "data" / "config" / "EngineSettings.toml";
+			auto text = io::file_util::ReadText(settingsPath);
+			if (!text)
+			{
+				error = "Could not read published settings to verify the startup scene: " + DisplayPath(settingsPath);
+				return false;
+			}
+
+			aether::EngineSettings settings{};
+			aether::EngineSettingsIO::Apply(*text, settings);
+			if (settings.app.startupScene.empty())
+			{
+				// No startup scene configured is a deliberate project choice
+				// (e.g. a purely script-driven bootstrap) - nothing to verify.
+				return true;
+			}
+
+			const std::filesystem::path projectPakPath = packageDir / "data" / "project.pak";
+			try
+			{
+				const io::PakBackend projectPak(projectPakPath);
+				const std::string sceneVirtualPath = "scenes/" + settings.app.startupScene + ".scene.toml";
+				if (!projectPak.Exists(sceneVirtualPath))
+				{
+					error = "Published build would boot empty: startup scene '" + settings.app.startupScene + "' (" + sceneVirtualPath + ") was not found in " + DisplayPath(projectPakPath);
+					return false;
+				}
+			}
+			catch (const std::exception& ex)
+			{
+				error = "Could not verify startup scene '" + settings.app.startupScene + "' in " + DisplayPath(projectPakPath) + ": " + std::string(ex.what());
+				return false;
+			}
+			return true;
+		}
+
 		bool VerifyPublishedGame(const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
 			std::vector<std::filesystem::path> requiredFiles{
@@ -303,6 +400,11 @@ namespace aether::app
 				return false;
 			}
 
+			if (!VerifyPublishedStartupScene(packageDir, error))
+			{
+				return false;
+			}
+
 			const std::string editorExecutable = EditorExecutableName();
 			if (editorExecutable != runtimeExecutableName && io::file_util::Exists(packageDir / editorExecutable))
 			{
@@ -326,6 +428,11 @@ namespace aether::app
 				if (ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk" || ext == ".cs" || ext == ".csproj" || ext == ".vcxproj")
 				{
 					error = "Published build contains a dev/source file: " + DisplayPath(entry.path());
+					return false;
+				}
+				if (IsAftermathRuntimeFile(entry.path()))
+				{
+					error = "Published build contains NVIDIA Aftermath (dev-only, editor-gated): " + DisplayPath(entry.path());
 					return false;
 				}
 				const std::filesystem::path rel = std::filesystem::relative(entry.path(), packageDir, ec);
@@ -366,6 +473,11 @@ namespace aether::app
 			return std::nullopt;
 		}
 
+		// exeDir here is the running editor's (App.exe's) own executable
+		// directory - App and GameRuntime share a build-tree output directory,
+		// so App's copy of GFSDK_Aftermath_Lib.x64.dll sits right next to it and
+		// would otherwise get swept up by the loop below (see
+		// IsAftermathRuntimeFile). A published game must not carry it.
 		bool CopyRuntimeFromExecutableDir(const std::filesystem::path& exeDir, const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
 			if (!CopyIfExists(exeDir / std::filesystem::path(runtimeExecutableName), packageDir / std::filesystem::path(runtimeExecutableName), error))
@@ -388,6 +500,10 @@ namespace aether::app
 				const std::string ext = LowerAscii(entry.path().extension().generic_string());
 				if (ext == ".dll" || ext == ".so" || ext == ".dylib")
 				{
+					if (IsAftermathRuntimeFile(entry.path()))
+					{
+						continue;
+					}
 					if (auto result = io::file_util::CopyFile(entry.path(), packageDir / entry.path().filename()); !result)
 					{
 						error = result.error().message;
@@ -679,6 +795,16 @@ namespace aether::app
 			{
 				return {.succeeded = false, .message = "Could not copy shipped data: " + error, .outputPath = publishDir};
 			}
+		}
+
+		// Bake the project's ProjectSettings.toml (app.startupScene and friends)
+		// into the just-copied published EngineSettings.toml so GameRuntime -
+		// which never opens a project the way the editor does - still resolves
+		// the same startup scene. Must run after the copy above populates
+		// data/config/EngineSettings.toml, and before VerifyPublishedGame.
+		if (!BakePublishedEngineSettings(publishDir / "data" / "config" / "EngineSettings.toml", project.projectFile, error))
+		{
+			return {.succeeded = false, .message = "Could not bake published settings: " + error, .outputPath = publishDir};
 		}
 
 		// Prefer a freshly baked engine.pak over the (possibly stale) build-tree copy

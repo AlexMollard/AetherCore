@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include <glm/glm.hpp>
 
-#include "imgui/ImguiFrameData.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
+#include "rendering/IUiOverlay.hpp"
 #include "rendering/Renderer.hpp"
 
 namespace aether
@@ -48,9 +49,12 @@ namespace aether
 		std::uint64_t materialBufferAddr = 0;
 		std::uint64_t effectParamBufferAddr = 0;
 
-		// Dear ImGui draw data snapshotted on the game thread and consumed by
-		// the render thread after world/runtime UI/debug geometry.
-		ImguiFrameData imgui;
+		// Optional UI-overlay draw data snapshotted on the game thread and
+		// consumed by the render thread after world/runtime UI/debug geometry.
+		// Null whenever no IUiOverlay is installed (the shipped GameRuntime
+		// never installs one - see AetherCore::SetUiOverlay). Opaque to the
+		// engine core; only the overlay that produced it interprets it.
+		std::unique_ptr<IUiOverlayFrameData> uiOverlay;
 
 		// Frame identity - render thread uses these for GPU buffer slot selection.
 		std::uint64_t frameIndex = 0;

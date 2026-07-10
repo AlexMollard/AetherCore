@@ -32,6 +32,9 @@ namespace aether
 		{
 			const char* appName = "AetherCore";
 			bool enableVsync = true;
+			// See AetherCore::Config::enableGpuDiagnostics - forwarded through
+			// unchanged to GraphicsDevice::Config -> VulkanContext::Create.
+			bool enableGpuDiagnostics = false;
 		};
 
 		GpuDevice();

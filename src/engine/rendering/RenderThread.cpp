@@ -1,7 +1,6 @@
 #include "rendering/RenderThread.hpp"
 
 #include "AetherCore.hpp"
-#include "imgui/ImguiFrameData.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/Swapchain.hpp"
 
@@ -161,7 +160,7 @@ namespace aether
 				if (IsReloadInProgress())
 				{
 					m_engine->DiscardPendingFrameQueues(packet);
-					ImguiFrameData::RecyclePooled(std::move(packet.imgui));
+					m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 					m_isIdle.store(true, std::memory_order_release);
 					m_reloadCv.notify_all();
 					continue;
@@ -182,8 +181,8 @@ namespace aether
 			catch (const std::exception& e)
 			{
 				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
-				// Return warm ImGui draw-list pools even on failure paths.
-				ImguiFrameData::RecyclePooled(std::move(packet.imgui));
+				// Return warm UI-overlay draw-list pools even on failure paths.
+				m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 				m_engine->DiscardAllPendingFrameQueues();
 				{
 					std::lock_guard lock(m_reloadMutex);
@@ -195,8 +194,8 @@ namespace aether
 				break;
 			}
 
-			// Recycle ImguiFrameData pools so the next Capture reuses capacity.
-			ImguiFrameData::RecyclePooled(std::move(packet.imgui));
+			// Recycle the overlay's frame-data pool so the next Capture reuses capacity.
+			m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 
 			// Publish the completed frame index (for statistics / shutdown).
 			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);

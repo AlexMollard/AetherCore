@@ -1,3 +1,9 @@
+# Dear ImGui is deliberately NOT linked here (nor by any Engine source under
+# this directory - the old src/engine/imgui/ has moved to src/app/imgui/).
+# Engine core only depends on the abstract rendering/IUiOverlay.hpp interface,
+# so the shipped GameRuntime (which links Engine but not App's imgui-bearing
+# sources) neither links nor initializes imgui. See AetherCore::SetUiOverlay
+# and src/app/CMakeLists.txt's runtime source-filter for App/GameRuntime.
 add_library(Engine STATIC)
 
 # CONFIGURE_DEPENDS re-runs glob at build time when the directory changes,
@@ -27,9 +33,25 @@ target_link_libraries(Engine
         $<$<PLATFORM_ID:Linux>:dl>
         Tracy::TracyClient
         $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:Nvidia::Aftermath>
-        imgui
+        # delayimp provides the delay-load helper thunk required by the
+        # /DELAYLOAD link option below.
+        $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:delayimp>
     PRIVATE
         freetype
+)
+
+# NVIDIA Aftermath is a dev-only GPU-crash-diagnostics tool that must not be a
+# hard load-time dependency of every executable linking Engine (GameRuntime,
+# EngineTests, and App on a machine that happens to be missing the DLL). The
+# vendor/editor runtime gate in VulkanContext.cpp already guarantees the SDK
+# is never CALLED unless this process is an editor build on an NVIDIA device
+# (AftermathContext::RegisterShaderBinary is likewise gated - see
+# AftermathContext.cpp), so delay-loading the DLL is safe: the OS loader no
+# longer resolves GFSDK_Aftermath_Lib.x64.dll at process start, only (if ever)
+# on the first actual call into it. PUBLIC so the option propagates to every
+# executable that links this static library (App, GameRuntime, EngineTests).
+target_link_options(Engine PUBLIC
+    $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:/DELAYLOAD:GFSDK_Aftermath_Lib.x64.dll>
 )
 
 # ── .NET (CoreCLR) hosting ────────────────────────────────────────────────────

@@ -40,6 +40,7 @@
 #include "utils/Profiler.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "platform/Window.hpp"
+#include "io/PlatformPaths.hpp"
 
 namespace
 {
@@ -224,11 +225,46 @@ namespace
 
 		return VK_FALSE;
 	}
+
+	// Per-user, per-app writable directory for runtime-generated GPU caches
+	// (Vulkan pipeline cache, Aftermath crash/shader-debug dumps) so a shipped
+	// game never writes into its own install directory. Lives under
+	// PlatformPaths::GetUserConfigDir() (%LOCALAPPDATA%/AetherCore on Windows),
+	// keyed by executable name so the editor (App) and a published game
+	// (AetherGame) don't share -- and potentially stomp -- each other's cache.
+	// Falls back to the current working directory only if the OS has no
+	// resolvable per-user location at all (matches PlatformPaths' own policy).
+	std::filesystem::path ResolveGpuCacheDir(std::string_view subdir)
+	{
+		std::filesystem::path base = aether::io::PlatformPaths::GetUserConfigDir();
+		if (base.empty())
+		{
+			// Non-throwing overload: an unresolvable LocalAppData plus an invalid
+			// CWD degrades to an empty path rather than throwing.
+			std::error_code cwdError;
+			base = std::filesystem::current_path(cwdError);
+		}
+
+		std::string exeName = aether::io::PlatformPaths::GetExecutableName();
+		if (exeName.empty())
+		{
+			exeName = "AetherCore";
+		}
+
+		std::filesystem::path dir = base / "cache" / exeName / subdir;
+		std::error_code ec;
+		std::filesystem::create_directories(dir, ec);
+		if (ec)
+		{
+			AE_WARN(aether::LogCategory::Vulkan, "Failed to create GPU cache directory '{}': {}", dir.string(), ec.message());
+		}
+		return dir;
+	}
 } // namespace
 
 namespace aether
 {
-	VulkanContext::VulkanContext(const Window& window, const char* appName)
+	VulkanContext::VulkanContext(const Window& window, const char* appName, [[maybe_unused]] bool enableGpuDiagnostics)
 	{
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
@@ -372,16 +408,16 @@ namespace aether
 		// DiagnosticEngine to maintain a BDA -> resource-name registry for
 		// post-mortem address resolution.
 		selector.add_required_extension(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
-#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
-		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
-		// VK_NV_device_diagnostic_checkpoints provides vkCmdSetCheckpointNV for event markers.
-		{
-			[[maybe_unused]] auto _ = m_aftermathContext.EnableGpuCrashDumps(".");
-			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
-			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
-		}
-#endif
+		// NVIDIA Aftermath's VK_NV_device_diagnostics_config / _checkpoints are
+		// NOT requested here. They are NVIDIA-only extensions, and the vendor of
+		// the physical device isn't known until AFTER selector.select() below
+		// picks one. Requesting them as *required* selector extensions this
+		// early (the previous approach) would make select() reject every
+		// candidate device that doesn't expose them - i.e. it would fail to
+		// find ANY suitable device on a non-NVIDIA GPU (AMD, Intel). See the
+		// vendor + editor gate right after select() succeeds, which enables
+		// them post-hoc via PhysicalDevice::enable_extension_if_present only
+		// when appropriate.
 
 		auto physicalDeviceResult = selector.select();
 
@@ -389,6 +425,54 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(0, "Failed to select a suitable Vulkan physical device."));
 		}
+
+		// -- NVIDIA Aftermath vendor + editor gate ---------------------------
+		// AETHER_ENABLE_NVIDIA_AFTERMATH only controls whether Aftermath is
+		// *compiled* into Engine (and therefore into both App and GameRuntime).
+		// Whether it's actually turned ON for this process is a runtime decision
+		// gated on two independent conditions, both required:
+		//   1. enableGpuDiagnostics - true only for an editor build (App, under
+		//      AETHERCORE_EDITOR_APP; see src/app/main.cpp). GameRuntime always
+		//      passes false, so a shipped game never enables a dev GPU-crash tool.
+		//   2. physical device vendorID == 0x10DE (NVIDIA) - VK_NV_device_diagnostics_config
+		//      and VK_NV_device_diagnostic_checkpoints are NVIDIA-only. This check
+		//      MUST happen after physical device selection (vendor is now known)
+		//      and BEFORE any Aftermath extension/feature is requested on the
+		//      device - that ordering is what makes a non-NVIDIA device (e.g. AMD)
+		//      safe: it never has an NVIDIA-only extension requested at all.
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		bool aftermathDeviceExtensionsEnabled = false;
+		{
+			const std::uint32_t vendorId = physicalDeviceResult.value().properties.vendorID;
+			constexpr std::uint32_t kVendorIdNvidia = 0x10DE;
+			if (!enableGpuDiagnostics)
+			{
+				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: not requested by this process (dev-only diagnostics; disabled for a shipped game runtime).");
+			}
+			else if (vendorId != kVendorIdNvidia)
+			{
+				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled - physical device vendorID=0x{:04X} is not NVIDIA (0x10DE); no NVIDIA-only extension requested.", vendorId);
+			}
+			else
+			{
+				const bool diagnosticsConfigPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+				const bool checkpointsPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+				if (diagnosticsConfigPresent && checkpointsPresent)
+				{
+					// Crash dumps, shader debug info, and the .spv shader binaries Aftermath
+					// writes alongside them must not land in the game's install directory
+					// (see ResolveGpuCacheDir above) -- redirect them under LocalAppData.
+					const std::string crashDumpDir = ResolveGpuCacheDir("gpu-crash-dumps").string();
+					aftermathDeviceExtensionsEnabled = m_aftermathContext.EnableGpuCrashDumps(crashDumpDir.c_str());
+					AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: enabling GPU crash dumps (editor build, NVIDIA device '{}').", physicalDeviceResult.value().properties.deviceName);
+				}
+				else
+				{
+					AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath: NVIDIA device does not expose VK_NV_device_diagnostics_config/VK_NV_device_diagnostic_checkpoints (diagnosticsConfig={}, checkpoints={}); disabling.", diagnosticsConfigPresent, checkpointsPresent);
+				}
+			}
+		}
+#endif
 
 		// Non-core extension feature structs chained into the vkb::DeviceBuilder
 		// pNext. The core 1.1/1.2/1.3/1.4 features above are handled by vkb
@@ -498,7 +582,10 @@ namespace aether
 		deviceBuilder.add_pNext(&extendedDynamicState2Features);
 		deviceBuilder.add_pNext(&extendedDynamicState3Features);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		deviceBuilder.add_pNext(&diagnosticsConfig);
+		if (aftermathDeviceExtensionsEnabled)
+		{
+			deviceBuilder.add_pNext(&diagnosticsConfig);
+		}
 #endif
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
@@ -632,13 +719,17 @@ namespace aether
 			        m_descriptorHeapProps.maxPushDataSize);
 		}
 
-		// Pipeline cache for faster pipeline creation across runs.
+		// Pipeline cache for faster pipeline creation across runs. Lives under
+		// LocalAppData (never CWD/the game's install directory -- a shipped game
+		// must not write into its own program directory).
 		// Attempt to load cached data from a previous session; fall back to empty
 		// if the file is missing or the driver rejects the data (e.g. after a
 		// driver update where the cache UUID no longer matches).
 		{
+			m_pipelineCachePath = ResolveGpuCacheDir("pipeline") / "pipeline_cache.bin";
+
 			std::vector<char> cacheData;
-			if (std::ifstream inFile("pipeline_cache.bin", std::ios::binary | std::ios::ate); inFile.is_open())
+			if (std::ifstream inFile(m_pipelineCachePath, std::ios::binary | std::ios::ate); inFile.is_open())
 			{
 				const auto fileSize = inFile.tellg();
 				if (fileSize > 0)
@@ -648,7 +739,7 @@ namespace aether
 					inFile.read(cacheData.data(), fileSize);
 				}
 				inFile.close();
-				AE_INFO(LogCategory::Vulkan, "Loaded pipeline cache from pipeline_cache.bin ({} bytes).", cacheData.size());
+				AE_INFO(LogCategory::Vulkan, "Loaded pipeline cache from {} ({} bytes).", m_pipelineCachePath.string(), cacheData.size());
 			}
 
 			const VkPipelineCacheCreateInfo cacheInfo{
@@ -738,7 +829,10 @@ namespace aether
 #endif
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		[[maybe_unused]] auto _ = m_aftermathContext.Initialize(m_device->device, physicalDeviceResult.value().physical_device);
+		if (aftermathDeviceExtensionsEnabled)
+		{
+			[[maybe_unused]] auto _ = m_aftermathContext.Initialize(m_device->device, physicalDeviceResult.value().physical_device);
+		}
 #endif
 
 		AE_INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");
@@ -759,13 +853,13 @@ namespace aether
 				{
 					std::vector<char> cacheData(cacheSize);
 					const VkResult saveResult = vkGetPipelineCacheData(m_device->device, m_pipelineCache, &cacheSize, cacheData.data());
-					if (saveResult == VK_SUCCESS || saveResult == VK_INCOMPLETE)
+					if ((saveResult == VK_SUCCESS || saveResult == VK_INCOMPLETE) && !m_pipelineCachePath.empty())
 					{
-						if (std::ofstream outFile("pipeline_cache.bin", std::ios::binary); outFile.is_open())
+						if (std::ofstream outFile(m_pipelineCachePath, std::ios::binary); outFile.is_open())
 						{
 							outFile.write(cacheData.data(), static_cast<std::streamsize>(cacheSize));
 							outFile.close();
-							AE_INFO(LogCategory::Vulkan, "Saved pipeline cache to pipeline_cache.bin ({} bytes).", cacheSize);
+							AE_INFO(LogCategory::Vulkan, "Saved pipeline cache to {} ({} bytes).", m_pipelineCachePath.string(), cacheSize);
 						}
 					}
 				}
@@ -819,11 +913,11 @@ namespace aether
 		}
 	}
 
-	Expected<std::unique_ptr<VulkanContext>> VulkanContext::Create(const Window& window, const char* appName)
+	Expected<std::unique_ptr<VulkanContext>> VulkanContext::Create(const Window& window, const char* appName, bool enableGpuDiagnostics)
 	{
 		try
 		{
-			return std::unique_ptr<VulkanContext>(new VulkanContext(window, appName));
+			return std::unique_ptr<VulkanContext>(new VulkanContext(window, appName, enableGpuDiagnostics));
 		}
 		catch (const VulkanError& e)
 		{

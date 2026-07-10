@@ -8,6 +8,7 @@
 #include "IEngineRuntime.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "rendering/IUiOverlay.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/RenderThread.hpp"
 #include "utils/EngineSettings.hpp"
@@ -21,7 +22,6 @@ namespace aether
 	class AnimationBlendSystem;
 	class GpuDevice;
 	class CameraSubsystem;
-	class ImguiSubsystem;
 	class RenderingSubsystem;
 
 	// Owns the whole frame lifecycle: the render thread, the producer/game-thread
@@ -37,6 +37,14 @@ namespace aether
 			int height = 720;
 			bool enableVsync = true;
 			const char* settingsFile = "EngineSettings.toml";
+			// Enables dev-only GPU diagnostics (NVIDIA Aftermath crash dumps),
+			// and only then on an NVIDIA device - see the vendor gate in
+			// VulkanContext.cpp. Set true only by an editor build (App, under
+			// AETHERCORE_EDITOR_APP; see src/app/main.cpp). The shipped
+			// GameRuntime must leave this false: Aftermath is a dev tool (dumps
+			// every shader's .spv, needs GFSDK_Aftermath_Lib.x64.dll) that a
+			// shipped game should not carry or enable.
+			bool enableGpuDiagnostics = false;
 		};
 
 		struct CameraRenderTarget
@@ -100,6 +108,18 @@ namespace aether
 		// Applies the manual editor UI scale at runtime (producer thread).
 		void SetUiScale(float uiScale);
 
+		// Installs the optional UI overlay (Dear ImGui in the editor). Only an
+		// editor build (App, under AETHERCORE_EDITOR_APP) calls this, right
+		// after constructing AetherCore - see Application.cpp. The shipped
+		// GameRuntime never calls it, so the engine never links or initializes
+		// any UI-toolkit code. Calls overlay->Init(GetServiceContainer()).
+		void SetUiOverlay(std::unique_ptr<IUiOverlay> overlay);
+
+		// Returns a just-consumed frame's UI-overlay draw data to the overlay's
+		// pool (render thread, RenderThread::ThreadLoop). No-op when no overlay
+		// is installed or frame is null (always true for GameRuntime).
+		void RecycleUiOverlayFrameData(std::unique_ptr<IUiOverlayFrameData> frame);
+
 		// Frame lifecycle steps (used by the loop and the render thread).
 		[[nodiscard]] bool ShouldClose();
 		void PumpEvents();
@@ -145,7 +165,7 @@ namespace aether
 
 		std::unique_ptr<GpuDevice> m_gpu;
 		std::unique_ptr<CameraSubsystem> m_cameras;
-		std::unique_ptr<ImguiSubsystem> m_imgui;
+		std::unique_ptr<IUiOverlay> m_uiOverlay;
 		std::unique_ptr<RenderingSubsystem> m_rendering;
 
 		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
