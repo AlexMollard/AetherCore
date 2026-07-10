@@ -66,7 +66,7 @@ void PakWriter::AddDirectory(const fs::path& sourceDir)
 			it.disable_recursion_pending();
 			continue;
 		}
-		if (entry.is_regular_file() && IsExcludedProjectFile(rel))
+		if (entry.is_regular_file() && (IsExcludedProjectFile(rel) || rel.generic_string() == "ProjectSettings.toml"))
 		{
 			continue;
 		}

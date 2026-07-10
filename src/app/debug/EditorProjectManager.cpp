@@ -17,6 +17,7 @@
 #include "io/FileUtil.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
+#include "utils/EngineSettings.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -30,8 +31,7 @@ namespace aether::app
 	namespace
 	{
 		constexpr int kMaxRecentProjects = 8;
-		constexpr std::string_view kProjectDirectory = ".project";
-		constexpr std::string_view kProjectDescriptor = "aether.project";
+		constexpr std::string_view kProjectFileName = "ProjectSettings.toml";
 
 		std::filesystem::path NormalizePath(std::filesystem::path path)
 		{
@@ -54,34 +54,9 @@ namespace aether::app
 			return path.empty() ? std::string{} : path.lexically_normal().string();
 		}
 
-		std::filesystem::path ProjectDirectoryPath(const std::filesystem::path& root)
+		std::filesystem::path ProjectFilePath(const std::filesystem::path& root)
 		{
-			return root / kProjectDirectory;
-		}
-
-		std::filesystem::path DescriptorPath(const std::filesystem::path& root)
-		{
-			return ProjectDirectoryPath(root) / kProjectDescriptor;
-		}
-
-		std::filesystem::path LegacyDescriptorPath(const std::filesystem::path& root)
-		{
-			return root / kProjectDescriptor;
-		}
-
-		std::filesystem::path ExistingDescriptorPath(const std::filesystem::path& root)
-		{
-			const std::filesystem::path descriptor = DescriptorPath(root);
-			if (io::file_util::Exists(descriptor))
-			{
-				return descriptor;
-			}
-			const std::filesystem::path legacyDescriptor = LegacyDescriptorPath(root);
-			if (io::file_util::Exists(legacyDescriptor))
-			{
-				return legacyDescriptor;
-			}
-			return descriptor;
+			return root / kProjectFileName;
 		}
 
 		std::filesystem::path ResolveProjectRoot(std::filesystem::path path)
@@ -91,11 +66,7 @@ namespace aether::app
 			{
 				return {};
 			}
-			if (path.filename() == kProjectDescriptor)
-			{
-				path = path.parent_path();
-			}
-			if (path.filename() == kProjectDirectory)
+			if (path.filename() == kProjectFileName)
 			{
 				path = path.parent_path();
 			}
@@ -104,7 +75,7 @@ namespace aether::app
 
 		bool HasProjectDescriptor(const std::filesystem::path& root)
 		{
-			return io::file_util::Exists(DescriptorPath(root)) || io::file_util::Exists(LegacyDescriptorPath(root));
+			return io::file_util::Exists(ProjectFilePath(root));
 		}
 
 		std::string FallbackProjectName(const std::filesystem::path& root)
@@ -127,14 +98,14 @@ namespace aether::app
 		{
 			EditorProjectContext project;
 			project.root = NormalizePath(root);
+			project.projectFile = ProjectFilePath(project.root);
 			project.name = FallbackProjectName(project.root);
 			project.assetsDir = ResolveProjectPath(project.root, {}, "assets");
 			project.scenesDir = ResolveProjectPath(project.root, {}, "scenes");
 			project.prefabsDir = ResolveProjectPath(project.root, {}, "assets/prefabs");
 			project.scriptsDir = ResolveProjectPath(project.root, {}, "scripts");
-			project.settingsDir = ResolveProjectPath(project.root, {}, "settings");
 
-			auto descriptorText = io::file_util::ReadText(ExistingDescriptorPath(root));
+			auto descriptorText = io::file_util::ReadText(ProjectFilePath(root));
 			if (!descriptorText)
 			{
 				AE_UNEXPECTED(AetherError::Engine("No project descriptor found."));
@@ -144,7 +115,6 @@ namespace aether::app
 			std::string scenesPath;
 			std::string prefabsPath;
 			std::string scriptsPath;
-			std::string settingsPath;
 			try
 			{
 				text::ParseToml(*descriptorText,
@@ -170,10 +140,6 @@ namespace aether::app
 					        {
 						        scriptsPath = text::StripQuotes(entry.value);
 					        }
-					        else if (entry.fullKey == "paths.settings")
-					        {
-						        settingsPath = text::StripQuotes(entry.value);
-					        }
 				        });
 			}
 			catch (...)
@@ -190,7 +156,6 @@ namespace aether::app
 			const std::string inferredPrefabsPath = !prefabsPath.empty() ? prefabsPath : (!assetsPath.empty() ? assetsPath + "/prefabs" : std::string{});
 			project.prefabsDir = ResolveProjectPath(project.root, inferredPrefabsPath, "assets/prefabs");
 			project.scriptsDir = ResolveProjectPath(project.root, scriptsPath, "scripts");
-			project.settingsDir = ResolveProjectPath(project.root, settingsPath, "settings");
 			return project;
 		}
 
@@ -246,28 +211,7 @@ namespace aether::app
 				}
 			}
 
-			return CopyTemplateFile(AETHER_DEFAULT_SETTINGS_DIR, "engine.toml", root / "settings" / "engine.toml") && CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
-		}
-
-		std::string ReadProjectStartupScene(const EditorProjectContext& project)
-		{
-			const std::filesystem::path settingsPath = project.settingsDir / "engine.toml";
-			auto content = io::file_util::ReadText(settingsPath);
-			if (!content)
-			{
-				return {};
-			}
-			TomlConfig config;
-			try
-			{
-				config.Load(*content);
-			}
-			catch (...)
-			{
-				AE_WARN(LogCategory::App, "Failed to parse project settings file: {}", settingsPath.string());
-				return {};
-			}
-			return config.GetString("app.startupscene");
+			return CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
 		}
 
 		bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error)
@@ -277,13 +221,8 @@ namespace aether::app
 				error = "Could not create project directory: " + dirResult.error().message;
 				return false;
 			}
-			if (auto dirResult = io::file_util::CreateDirectories(ProjectDirectoryPath(root)); !dirResult)
-			{
-				error = "Could not create project metadata directory: " + dirResult.error().message;
-				return false;
-			}
 
-			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv, "settings"sv})
+			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv})
 			{
 				if (auto dirResult = io::file_util::CreateDirectories(root / std::filesystem::path(dir)); !dirResult)
 				{
@@ -292,21 +231,15 @@ namespace aether::app
 				}
 			}
 
-			const std::string descriptor = "# AetherCore project descriptor\n\n"
-			                               "[project]\n"
-			                               "version = 1\n"
-			                               "name = \""
-			                               + EscapeTomlString(name)
-			                               + "\"\n"
-			                                 "\n[paths]\n"
-			                                 "assets = \"assets\"\n"
-			                                 "scenes = \"scenes\"\n"
-			                                 "prefabs = \"assets/prefabs\"\n"
-			                                 "scripts = \"scripts\"\n"
-			                                 "settings = \"settings\"\n";
-			if (auto writeResult = io::file_util::WriteText(DescriptorPath(root), descriptor); !writeResult)
+			const std::string descriptor =
+			    "# AetherCore project file.\n\n"
+			    "[project]\nversion = 1\nname = \"" + EscapeTomlString(name) + "\"\n\n"
+			    "[paths]\nassets = \"assets\"\nscenes = \"scenes\"\nprefabs = \"assets/prefabs\"\nscripts = \"scripts\"\n\n"
+			    "[app]\nstartupScene = \"default\"\n\n"
+			    "[publish]\nplatformName = \"Windows\"\nproductName = \"" + EscapeTomlString(name) + "\"\n";
+			if (auto writeResult = io::file_util::WriteText(ProjectFilePath(root), descriptor); !writeResult)
 			{
-				error = "Could not write aether.project.";
+				error = "Could not write ProjectSettings.toml.";
 				return false;
 			}
 			return SeedProjectTemplateFiles(root, error);
@@ -335,6 +268,56 @@ namespace aether::app
 				dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
 			}
 			dialog->SetTitle(L"Select AetherCore Project Folder");
+
+			std::optional<std::filesystem::path> selected;
+			if (SUCCEEDED(dialog->Show(nullptr)))
+			{
+				IShellItem* item = nullptr;
+				if (SUCCEEDED(dialog->GetResult(&item)) && item != nullptr)
+				{
+					PWSTR rawPath = nullptr;
+					if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &rawPath)) && rawPath != nullptr)
+					{
+						selected = std::filesystem::path(rawPath);
+						CoTaskMemFree(rawPath);
+					}
+					item->Release();
+				}
+			}
+
+			dialog->Release();
+			if (uninitialize)
+			{
+				CoUninitialize();
+			}
+			return selected;
+		}
+
+		std::optional<std::filesystem::path> PickProjectFile()
+		{
+			const HRESULT coInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+			const bool uninitialize = SUCCEEDED(coInit);
+
+			IFileDialog* dialog = nullptr;
+			HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+			if (FAILED(hr) || dialog == nullptr)
+			{
+				if (uninitialize)
+				{
+					CoUninitialize();
+				}
+				return std::nullopt;
+			}
+
+			DWORD options = 0;
+			if (SUCCEEDED(dialog->GetOptions(&options)))
+			{
+				dialog->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST);
+			}
+			const COMDLG_FILTERSPEC filters[] = {{L"AetherCore project", L"ProjectSettings.toml"}, {L"TOML files", L"*.toml"}};
+			dialog->SetFileTypes(2, filters);
+			dialog->SetFileName(L"ProjectSettings.toml");
+			dialog->SetTitle(L"Select ProjectSettings.toml");
 
 			std::optional<std::filesystem::path> selected;
 			if (SUCCEEDED(dialog->Show(nullptr)))
@@ -501,7 +484,7 @@ namespace aether::app
 		auto projectResult = ReadProjectDescriptor(root);
 		if (!projectResult)
 		{
-			m_launcherState.error = "No .project/aether.project found in that folder.";
+			m_launcherState.error = "No ProjectSettings.toml found there.";
 			return;
 		}
 		m_currentProject = *std::move(projectResult);
@@ -525,11 +508,10 @@ namespace aether::app
 		m_services->Register<EditorProjectContext>(m_currentProject);
 		if (auto* settings = m_services->TryGet<aether::SettingsService>())
 		{
-			const std::string startupScene = ReadProjectStartupScene(m_currentProject);
-			if (!startupScene.empty())
-			{
-				settings->Values().app.startupScene = startupScene;
-			}
+			auto loaded = EngineSettingsIO::LoadLayered("EngineSettings.toml", m_currentProject.projectFile);
+			settings->Values() = loaded.values;
+			settings->Base() = loaded.base;
+			settings->ApplyAll();
 		}
 	}
 
@@ -576,6 +558,14 @@ namespace aether::app
 		{
 #ifdef _WIN32
 			return PickProjectFolder();
+#else
+			return std::nullopt;
+#endif
+		};
+		actions.browseProjectFile = []() -> std::optional<std::filesystem::path>
+		{
+#ifdef _WIN32
+			return PickProjectFile();
 #else
 			return std::nullopt;
 #endif

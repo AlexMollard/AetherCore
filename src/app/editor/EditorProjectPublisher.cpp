@@ -23,8 +23,7 @@ namespace aether::app
 {
 	namespace
 	{
-		constexpr std::string_view kProjectDirectory = ".project";
-		constexpr std::string_view kProjectDescriptor = "aether.project";
+		constexpr std::string_view kProjectFileName = "ProjectSettings.toml";
 
 		std::filesystem::path NormalizePath(std::filesystem::path path)
 		{
@@ -287,7 +286,7 @@ namespace aether::app
 		{
 			std::vector<std::filesystem::path> requiredFiles{
 			        std::filesystem::path(runtimeExecutableName),
-			        "data/config/engine.toml",
+			        "data/config/EngineSettings.toml",
 			        "data/engine.pak",
 			        "data/project.pak",
 			        "data/scripts/managed/AetherCore.dll",
@@ -404,7 +403,7 @@ namespace aether::app
 		bool CopyShippedDataPayload(const std::filesystem::path& exeDataDir, const std::filesystem::path& packageDataDir, std::string& error)
 		{
 			return CopyIfExists(exeDataDir / "engine.pak", packageDataDir / "engine.pak", error)
-			       && CopyIfExists(exeDataDir / "config" / "engine.toml", packageDataDir / "config" / "engine.toml", error)
+			       && CopyIfExists(exeDataDir / "config" / "EngineSettings.toml", packageDataDir / "config" / "EngineSettings.toml", error)
 			       && CopyDirectoryRecursive(exeDataDir / "scripts" / "managed", packageDataDir / "scripts" / "managed", error);
 		}
 
@@ -437,19 +436,13 @@ namespace aether::app
 			return std::nullopt;
 		}
 
-		std::filesystem::path ProjectDirectoryPath(const std::filesystem::path& root)
+		std::filesystem::path ProjectFilePath(const std::filesystem::path& root)
 		{
-			return root / kProjectDirectory;
+			return root / kProjectFileName;
 		}
-
-		std::filesystem::path DescriptorPath(const std::filesystem::path& root)
-		{
-			return ProjectDirectoryPath(root) / kProjectDescriptor;
-		}
-
 		bool HasProjectDescriptor(const std::filesystem::path& root)
 		{
-			return io::file_util::Exists(DescriptorPath(root)) || io::file_util::Exists(root / kProjectDescriptor);
+			return io::file_util::Exists(ProjectFilePath(root));
 		}
 
 		std::optional<EditorProjectActionResult> ValidateProjectForPackaging(const EditorProjectContext& project)
@@ -460,7 +453,7 @@ namespace aether::app
 			}
 			if (!HasProjectDescriptor(project.root))
 			{
-				return EditorProjectActionResult{.succeeded = false, .message = "Project descriptor is missing: " + DisplayPath(DescriptorPath(project.root))};
+				return EditorProjectActionResult{.succeeded = false, .message = "Project descriptor is missing: " + DisplayPath(ProjectFilePath(project.root))};
 			}
 			return std::nullopt;
 		}

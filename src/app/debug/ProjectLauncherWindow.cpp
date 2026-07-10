@@ -284,13 +284,13 @@ namespace aether::app
 
 		DrawInputLabel("OPEN EXISTING");
 		ImGui::SetNextItemWidth(-44.0f);
-		ImGui::InputTextWithHint("##openProjectPath", "Project folder...", state.openPath.data(), state.openPath.size());
+		ImGui::InputTextWithHint("##openProjectPath", "ProjectSettings.toml file...", state.openPath.data(), state.openPath.size());
 		ImGui::SameLine();
-		if (GhostButton(ICON_FA_FOLDER_OPEN "##browseOpen", ImVec2(36.0f, 0.0f)) && actions.browseFolder)
+		if (GhostButton(ICON_FA_FOLDER_OPEN "##browseOpen", ImVec2(36.0f, 0.0f)) && actions.browseProjectFile)
 		{
-			if (const auto folder = actions.browseFolder())
+			if (const auto file = actions.browseProjectFile())
 			{
-				CopyToBuffer(state.openPath, *folder);
+				CopyToBuffer(state.openPath, *file);
 			}
 		}
 		if (ActionButton(ICON_FA_FOLDER_OPEN "  Open Project", ImVec2(-1.0f, 38.0f), kAmber, ImVec4{1.0f, 0.64f, 0.24f, 1.0f}) && actions.openProject)

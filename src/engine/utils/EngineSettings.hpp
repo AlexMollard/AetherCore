@@ -71,13 +71,13 @@ namespace aether
 		f("app.autoplay", settings.app.autoplay);
 	}
 
-	// Result of a layered load. 'base' is layers 1+2 (compiled defaults overlaid
-	// with the shipped file) with NO user overrides applied, so a caller can diff
-	// against it to persist only what the user changed.
+	// Result of a layered load. 'base' is layers 1+2+3 (compiled defaults overlaid
+	// with the shipped file, then the project file) with NO user overrides applied,
+	// so a caller can diff against it to persist only what the user changed.
 	struct LoadedEngineSettings
 	{
-		EngineSettings values; // merged: defaults -> shipped -> user
-		EngineSettings base;   // defaults -> shipped only
+		EngineSettings values; // merged: defaults -> shipped -> project -> user
+		EngineSettings base;   // defaults -> shipped -> project
 	};
 
 	// Four-layer settings I/O:

@@ -37,12 +37,12 @@ namespace aether::app
 
 		std::filesystem::path SettingsPath(const EditorProjectContext& project)
 		{
-			return project.settingsDir / "engine.toml";
+			return project.projectFile;
 		}
 
 		std::filesystem::path PublishSettingsPath(const EditorProjectContext& project)
 		{
-			return project.root / ".project" / "publish.toml";
+			return project.projectFile;
 		}
 
 		std::string SceneNameFromPath(const std::filesystem::path& path)
@@ -159,8 +159,7 @@ namespace aether::app
 		             project.prefabsDir,
 		             project.root / "data",
 		             project.scenesDir,
-		             project.scriptsDir,
-		             project.settingsDir})
+		             project.scriptsDir})
 		{
 			if (auto result = io::file_util::CreateDirectories(path); !result)
 			{
@@ -217,14 +216,8 @@ namespace aether::app
 
 		config.Set("app.startupScene", m_startupScene);
 
-		if (auto result = io::file_util::CreateDirectories(project.settingsDir); !result)
-		{
-			m_status = "Could not create settings folder: " + result.error().message;
-			return;
-		}
-
 		std::ostringstream buffer;
-		config.Save(buffer, "AetherCore project settings");
+		config.Save(buffer, "AetherCore project file.");
 
 		if (auto result = io::file_util::WriteText(SettingsPath(project), buffer.str()); !result)
 		{
@@ -269,6 +262,23 @@ namespace aether::app
 	void ProjectPanel::SavePublishSettings(const EditorProjectContext& project)
 	{
 		TomlConfig config;
+		{
+			auto text = io::file_util::ReadText(PublishSettingsPath(project));
+			if (text)
+			{
+				try
+				{
+					config.Load(*text);
+				}
+				catch (...)
+				{
+					m_publishStatus = "Could not parse publish settings.";
+					m_publishSucceeded = false;
+					return;
+				}
+			}
+		}
+
 		config.Set("publish.productName", BufferText(m_publishProductName));
 		config.Set("publish.platformName", BufferText(m_publishPlatformName));
 		config.Set("publish.outputRoot", BufferText(m_publishOutputRoot));
@@ -279,15 +289,8 @@ namespace aether::app
 		config.Set("publish.syncEditorPak", m_publishSyncEditorPak);
 		config.Set("publish.openAfter", m_publishOpenAfter);
 
-		if (auto result = io::file_util::CreateDirectories(PublishSettingsPath(project).parent_path()); !result)
-		{
-			m_publishStatus = "Could not create publish settings folder: " + result.error().message;
-			m_publishSucceeded = false;
-			return;
-		}
-
 		std::ostringstream buffer;
-		config.Save(buffer, "AetherCore editor publish settings");
+		config.Save(buffer, "AetherCore project file.");
 
 		if (auto result = io::file_util::WriteText(PublishSettingsPath(project), buffer.str()); !result)
 		{
@@ -542,7 +545,6 @@ namespace aether::app
 			DrawFolderRow("Prefabs", project->prefabsDir);
 			DrawFolderRow("Data", project->root / "data");
 			DrawFolderRow("Scripts", project->scriptsDir);
-			DrawFolderRow("Settings", project->settingsDir);
 			ImGui::EndTable();
 		}
 

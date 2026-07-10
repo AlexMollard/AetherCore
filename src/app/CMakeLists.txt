@@ -52,7 +52,6 @@ target_compile_definitions(App PRIVATE
     AETHERCORE_EDITOR_APP=1
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
-    AETHER_DEFAULT_SETTINGS_DIR="${CMAKE_SOURCE_DIR}/resources/settings"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
 )
@@ -60,7 +59,6 @@ target_compile_definitions(App PRIVATE
 target_compile_definitions(GameRuntime PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
-    AETHER_DEFAULT_SETTINGS_DIR="${CMAKE_SOURCE_DIR}/resources/settings"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
 )
 
@@ -205,7 +203,7 @@ function(aethercore_add_runtime_payload target_name)
         VERBATIM
     )
 
-    if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
+    if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND "$<TARGET_FILE:AssetPacker>"
                 "--project"
@@ -237,7 +235,7 @@ function(aethercore_add_runtime_payload target_name)
     endif()
 endfunction()
 
-if(AETHERCORE_PROJECT_DIR AND NOT EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
+if(AETHERCORE_PROJECT_DIR AND NOT EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
     message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; skipping data/project.pak")
 endif()
 
@@ -273,7 +271,7 @@ set(_aether_package_commands
         -P "${CMAKE_SOURCE_DIR}/CMake/CopyRuntimeDependencies.cmake"
 )
 
-if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/.project/aether.project")
+if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
     set(_aether_package_expect_project_pak ON)
     list(APPEND _aether_package_commands
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different

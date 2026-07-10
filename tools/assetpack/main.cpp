@@ -29,7 +29,7 @@ struct Args
 
 static bool HasProjectDescriptor(const fs::path& projectRoot)
 {
-	return fs::is_regular_file(projectRoot / ".project" / "aether.project");
+	return fs::is_regular_file(projectRoot / "ProjectSettings.toml");
 }
 
 static std::optional<Args> ParseArgs(int argc, char* argv[])
@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
 
 	if (args->project && !HasProjectDescriptor(args->sourceDir))
 	{
-		std::cerr << "AssetPacker: project directory is missing .project/aether.project: " << args->sourceDir << "\n";
+		std::cerr << "AssetPacker: project directory is missing ProjectSettings.toml: " << args->sourceDir << "\n";
 		return 1;
 	}
 

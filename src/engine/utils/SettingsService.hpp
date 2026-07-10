@@ -21,8 +21,9 @@ namespace aether
 	{
 	public:
 		// 'values' is the merged result of the settings cascade; 'base' is layers
-		// 1+2 (defaults + shipped) for delta saves. 'services' must outlive this
-		// object and is used to reach the subsystems live changes are applied to.
+		// 1+2+3 (defaults -> shipped -> project) for delta saves. 'services' must
+		// outlive this object and is used to reach the subsystems live changes are
+		// applied to.
 		SettingsService(const EngineSettings& values, const EngineSettings& base, ServiceContainer& services);
 
 		[[nodiscard]] const EngineSettings& Get() const
@@ -35,6 +36,11 @@ namespace aether
 		[[nodiscard]] EngineSettings& Values()
 		{
 			return m_values;
+		}
+
+		[[nodiscard]] EngineSettings& Base() noexcept
+		{
+			return m_base;
 		}
 
 		[[nodiscard]] const EngineSettings& Base() const

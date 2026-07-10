@@ -34,6 +34,7 @@ namespace aether::app
 		std::function<void(std::filesystem::path)> openProject;
 		std::function<void(std::filesystem::path, std::string_view)> createProject;
 		std::function<std::optional<std::filesystem::path>()> browseFolder;
+		std::function<std::optional<std::filesystem::path>()> browseProjectFile;
 		std::function<void()> closeLauncher;
 		std::function<void()> saveSettings;
 	};
