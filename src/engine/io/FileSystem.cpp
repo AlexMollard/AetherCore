@@ -23,6 +23,7 @@
 #include "IOThread.hpp" // IoExecutor
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
+#include "OverlayBackend.hpp"
 #include "PakBackend.hpp"
 
 namespace aether::io
@@ -61,6 +62,23 @@ namespace aether::io
 				AE_ASSERT_ALWAYS(false, "No backend mounted at: " + std::string(mountPoint));
 			}
 			return it->second;
+		}
+
+		// Register a prebuilt backend (e.g. an OverlayBackend composed from other
+		// already-mounted backends) under a mount point. FileSystem::Mount()/MountPak()
+		// only cover the "build one DirectoryBackend/PakBackend from a path" case;
+		// this is the lower-level entry point for mounts assembled in code, used by
+		// InitializeDefaultMounts for shaders://.
+		void MountBackend(std::string_view mountPoint, std::shared_ptr<IFileBackend> backend)
+		{
+			if (s_backend == nullptr)
+			{
+				AE_ASSERT_ALWAYS(false, "MountBackend() called before Initialize().");
+			}
+
+			AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> <composite backend>", mountPoint);
+			std::scoped_lock lock(s_backend->mountsMutex);
+			s_backend->mounts.insert_or_assign(std::string(mountPoint), std::move(backend));
 		}
 
 		std::filesystem::path ResolveMountedDirectory(const std::initializer_list<std::filesystem::path>& candidates)
@@ -277,6 +295,11 @@ namespace aether::io
 		// Legacy AETHER_ASSET_* env vars are still accepted as local override aliases.
 		// Default pak candidates are run-directory data/ first (ship layout),
 		// then the CMake build data dir (dev layout).
+		// engineUsesPak records which branch below actually won, so the
+		// shaders:// overlay further down can mirror it exactly (both pak or
+		// both dir - see the shaders:// section for why this must never diverge
+		// from engine://'s choice).
+		bool engineUsesPak = false;
 		const std::string engineMode = EnvironmentStringFirst("AETHER_ENGINE_MODE", "AETHER_ASSET_MODE");
 		if (EqualsIgnoreCase(engineMode, "dir"))
 		{
@@ -304,7 +327,11 @@ namespace aether::io
 			AddUniquePath(pakCandidates, AETHER_DEFAULT_ENGINE_PAK);
 #endif
 
-			if (!MountEnginePak(pakCandidates))
+			if (MountEnginePak(pakCandidates))
+			{
+				engineUsesPak = true;
+			}
+			else
 			{
 				if (EqualsIgnoreCase(engineMode, "pak"))
 				{
@@ -372,16 +399,40 @@ namespace aether::io
 		}
 
 		// -- shaders:// --------------------------------------------------------
-		const auto shaderDirectory = ResolveMountedDirectory({
-		        workingDirectory / "shaders",
-		        workingDirectory / "build/shaders",
-		        workingDirectory / "../shaders",
-		        workingDirectory / "../../shaders",
-		        workingDirectory / "../build/shaders",
-		        workingDirectory / "../../build/shaders",
-		});
-		AE_INFO(LogCategory::FileSystem, "CWD for shader mount: '{}' -> resolved: '{}'", workingDirectory.string(), shaderDirectory.string());
-		Mount("shaders", shaderDirectory);
+		// Compiled engine .spv shaders ship inside engine.pak (under "shaders/")
+		// rather than as loose files beside the executable - a published game
+		// that only ships engine.pak must still be able to resolve shaders://,
+		// which loose files can't guarantee. shaders:// therefore MUST track
+		// whichever mode engine:// resolved to above (engineUsesPak): both pak
+		// or both dir, never mixed, or dev and shipped runs would disagree on
+		// where shaders come from.
+		//
+		// Layer 0 (highest priority) is left open for a future PROJECT shader
+		// layer (project-specific/overridden shaders, Phase 3/4): prepend it to
+		// shaderLayers before constructing the OverlayBackend below so it wins
+		// over the engine layer on name collisions.
+		std::vector<OverlayBackend::Layer> shaderLayers;
+		if (engineUsesPak)
+		{
+			// Reuse the already-mounted engine.pak backend (already parsed above)
+			// instead of opening a second PakBackend on the same file.
+			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// from engine.pak ('shaders/' prefix)");
+			shaderLayers.push_back(OverlayBackend::Layer{ResolveBackend("engine"), "shaders/"});
+		}
+		else
+		{
+			const auto shaderDirectory = ResolveMountedDirectory({
+			        workingDirectory / "shaders",
+			        workingDirectory / "build/shaders",
+			        workingDirectory / "../shaders",
+			        workingDirectory / "../../shaders",
+			        workingDirectory / "../build/shaders",
+			        workingDirectory / "../../build/shaders",
+			});
+			AE_INFO(LogCategory::FileSystem, "CWD for shader mount: '{}' -> resolved: '{}'", workingDirectory.string(), shaderDirectory.string());
+			shaderLayers.push_back(OverlayBackend::Layer{std::make_shared<DirectoryBackend>(shaderDirectory), ""});
+		}
+		MountBackend("shaders", std::make_shared<OverlayBackend>(std::move(shaderLayers)));
 
 		// -- config:// ---------------------------------------------------------
 		// Settings/config files are deployed to data/config at build time.

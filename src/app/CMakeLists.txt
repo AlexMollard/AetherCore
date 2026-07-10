@@ -51,6 +51,7 @@ set_target_properties(GameRuntime PROPERTIES
 target_compile_definitions(App PRIVATE
     AETHERCORE_EDITOR_APP=1
     AETHER_ENGINE_RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"
+    AETHER_SHADER_BUILD_DIR="${AETHERCORE_SHADER_OUTPUT_DIR}"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
@@ -164,6 +165,15 @@ endif()
 # the whole resources/ tree here: that directory may still contain legacy/sample
 # project content, while engine.pak should stay engine-owned.
 function(aethercore_add_runtime_payload target_name)
+    # Shaders are compiled by the App_CompileShaders target (the only Slang
+    # compile target registered - see aethercore_enable_slang_shader_compilation(App)
+    # above). Both App and GameRuntime bake engine.pak in their own POST_BUILD
+    # step, so both must wait for shaders to exist before this step's
+    # copy_directory below runs, not just App.
+    if(TARGET App_CompileShaders)
+        add_dependencies(${target_name} App_CompileShaders)
+    endif()
+
     # Note: $<TARGET_FILE:AssetPacker> creates an implicit dependency on
     # AssetPacker, so an explicit add_dependencies() is not needed.
     add_custom_command(TARGET ${target_name} POST_BUILD
@@ -174,6 +184,22 @@ function(aethercore_add_runtime_payload target_name)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
             "${CMAKE_SOURCE_DIR}/resources/fonts"
             "${CMAKE_BINARY_DIR}/engine_assets/fonts"
+        # Engine .spv shaders ship inside engine.pak (under shaders/) so a
+        # published game does not depend on loose .spv files next to the exe -
+        # see shaders:// OverlayBackend in FileSystem::InitializeDefaultMounts.
+        # The source make_directory ensures AETHERCORE_SHADER_OUTPUT_DIR exists
+        # even when shader compilation was skipped (no slangc / AETHERCORE_ENABLE_SLANG=OFF
+        # / no .slang sources - all graceful early-returns in SlangShaders.cmake).
+        # Without it, copy_directory would hard-fail on a missing source and break
+        # the build on any machine without the Vulkan SDK. An empty source copies
+        # nothing, so engine.pak simply ships without shaders in that case.
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${AETHERCORE_SHADER_OUTPUT_DIR}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${CMAKE_BINARY_DIR}/engine_assets/shaders"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${AETHERCORE_SHADER_OUTPUT_DIR}"
+            "${CMAKE_BINARY_DIR}/engine_assets/shaders"
         COMMAND "$<TARGET_FILE:AssetPacker>"
             "${CMAKE_BINARY_DIR}/engine_assets"
             "${CMAKE_BINARY_DIR}/data/engine.pak"
