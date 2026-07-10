@@ -26,4 +26,15 @@ namespace aether::app::scene
 		}
 		return SaveSceneFile(sceneName, CaptureScene(world, materials, textures, renderer));
 	}
+
+	bool SwitchScene(const std::string& sceneName, World& world, const ApplySceneDeps& deps)
+	{
+		if (!sceneName.empty() && LoadSceneFile(sceneName, world, deps))
+		{
+			return true;
+		}
+		// Nothing to load: clear the previous scene rather than leaving it live.
+		ReplaceScene(SceneDescription{}, world, deps);
+		return false;
+	}
 } // namespace aether::app::scene

@@ -29,7 +29,12 @@ namespace aether::app
 
 		void OpenLauncher();
 		void CloseLauncher();
-		void OpenProject(std::filesystem::path root);
+		// Opens the project at `root`. `reloadScene` drives the newly opened
+		// project's startup scene into the live world (tearing down any scene from
+		// the previously open project); it is left false only for the boot-time
+		// "reopen last project" path, where ScriptedSceneLayer performs the initial
+		// startup-scene load once it attaches.
+		void OpenProject(std::filesystem::path root, bool reloadScene = true);
 		void CreateProject(std::filesystem::path root, std::string_view name);
 		void RefreshServices();
 
@@ -42,6 +47,10 @@ namespace aether::app
 	private:
 		void ConfigureActions();
 		void AddRecentProject(std::filesystem::path root, std::string name);
+		// Drives the current project's startup scene (from the just-reloaded
+		// settings) into the live world through the shared ReplaceScene path,
+		// clearing any previously loaded scene.
+		void LoadProjectStartupScene();
 
 		EditorProjectContext m_currentProject;
 		EditorProjectActions m_actions;

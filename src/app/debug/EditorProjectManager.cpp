@@ -17,6 +17,8 @@
 #include "io/FileUtil.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
+#include "scene/SceneWorkflow.hpp"
+#include "scene/World.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -369,7 +371,11 @@ namespace aether::app
 		{
 			if (!m_currentProject.root.empty())
 			{
-				OpenProject(m_currentProject.root);
+				// Reload re-reads the project descriptor/settings for the SAME
+				// project; leave the working scene alone so in-editor edits aren't
+				// discarded (project switching, which does swap scenes, goes through
+				// the launcher's OpenProject instead).
+				OpenProject(m_currentProject.root, /*reloadScene=*/false);
 			}
 		};
 		m_actions.packProject = [](const EditorProjectContext& project)
@@ -420,7 +426,9 @@ namespace aether::app
 
 		if (m_launcherState.openLastProject && HasCurrentProject())
 		{
-			OpenProject(m_currentProject.root);
+			// Boot-time reopen: ScriptedSceneLayer attaches after this and loads the
+			// startup scene itself, so don't drive a (duplicate) scene load here.
+			OpenProject(m_currentProject.root, /*reloadScene=*/false);
 		}
 	}
 
@@ -472,7 +480,7 @@ namespace aether::app
 		return !m_currentProject.root.empty() && HasProjectDescriptor(m_currentProject.root);
 	}
 
-	void EditorProjectManager::OpenProject(std::filesystem::path root)
+	void EditorProjectManager::OpenProject(std::filesystem::path root, bool reloadScene)
 	{
 		m_launcherState.error.clear();
 		root = ResolveProjectRoot(std::move(root));
@@ -495,7 +503,42 @@ namespace aether::app
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
 		m_projectLoaded = true;
 		m_launcherOpen = false;
+		// Swap the live world over to this project's startup scene. Skipped only at
+		// boot-time reopen, where the scene layer has not attached yet and performs
+		// the initial load itself once it does.
+		if (reloadScene)
+		{
+			LoadProjectStartupScene();
+		}
 		AE_INFO(LogCategory::App, "Opened editor project '{}' at {}", m_currentProject.name, DisplayPath(m_currentProject.root));
+	}
+
+	void EditorProjectManager::LoadProjectStartupScene()
+	{
+		if (m_services == nullptr)
+		{
+			return;
+		}
+		auto* world = m_services->TryGet<World>();
+		if (world == nullptr)
+		{
+			return;
+		}
+
+		std::string sceneName;
+		if (const auto* settings = m_services->TryGet<aether::SettingsService>())
+		{
+			sceneName = settings->Get().app.startupScene;
+		}
+
+		// SwitchScene tears down the previously loaded scene (ReplaceScene) before
+		// applying the new one, and clears the world when the project has no
+		// startup scene - so switching projects never leaves the old scene live.
+		const bool loaded = scene::SwitchScene(sceneName, *world, scene::MakeApplySceneDeps(*m_services));
+		if (auto* scenes = m_services->TryGet<aether::SceneSubsystem>())
+		{
+			scenes->SetCurrentScene(loaded ? sceneName : std::string{});
+		}
 	}
 
 	void EditorProjectManager::RefreshServices()
