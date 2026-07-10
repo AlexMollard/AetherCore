@@ -129,7 +129,14 @@ namespace aether
 			pool.resize(requiredSize);
 			for (std::size_t i = oldSize; i < requiredSize; ++i)
 			{
-				pool[i] = IM_NEW(ImDrawList)(&ImGui::GetCurrentContext()->DrawListSharedData);
+					// Null shared data on purpose: these are render-thread copies that
+					// only carry vertex/index/command buffers. Constructing them against
+					// the live context's ImDrawListSharedData would register them in its
+					// DrawLists registry, and because the frame pool is process-lifetime
+					// (kept warm in a static pool), they outlive ImGui::DestroyContext()
+					// and trip ~ImDrawListSharedData's `DrawLists.Size == 0` assertion at
+					// shutdown. Keeping _Data null decouples the snapshot from the context.
+					pool[i] = IM_NEW(ImDrawList)(nullptr);
 			}
 		}
 
@@ -158,7 +165,9 @@ namespace aether
 			dstList->IdxBuffer = srcList->IdxBuffer;
 
 			dstList->Flags = srcList->Flags;
-			dstList->_Data = srcList->_Data;
+			// Deliberately NOT copying srcList->_Data: the clone must stay detached
+			// from the live context's shared data (see the IM_NEW(nullptr) above).
+			// The Vulkan backend renders from the buffers only and never reads _Data.
 
 			// NO manual TexRef stripping. The Vulkan backend resolves textures via
 			// dst.Textures during RenderDrawData.

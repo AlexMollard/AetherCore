@@ -27,6 +27,7 @@ add_executable(EngineTests
     ui/UiEntitiesTests.cpp
     ui/UiDrawBuilderTests.cpp
     ui/FontShapingTests.cpp
+    imgui/ImguiFrameDataTests.cpp
     # App-side translation units under test: EngineTests links Engine only, so
     # the scene serializer and the app pieces it needs compile in directly.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
