@@ -26,6 +26,7 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/Entity.hpp"
@@ -470,6 +471,8 @@ namespace aether::app
 			addPrimitive(PrimitiveMesh::Cube, ICON_FA_CUBE "  Mesh - Cube", "cube");
 			addPrimitive(PrimitiveMesh::Sphere, ICON_FA_CIRCLE "  Mesh - Sphere", "sphere");
 			addPrimitive(PrimitiveMesh::Plane, ICON_FA_IMAGE "  Mesh - Plane", "plane");
+			addPrimitive(PrimitiveMesh::Quad, ICON_FA_IMAGE "  Mesh - Quad", "quad");
+			addPrimitive(PrimitiveMesh::Triangle, ICON_FA_PLAY "  Mesh - Triangle", "triangle");
 			if (PaletteEntry(ICON_FA_PALETTE "  Material", m_addFilter, world.Has<MaterialComponent>(entity)) && assets != nullptr)
 			{
 				MaterialAsset asset{};
@@ -492,6 +495,14 @@ namespace aether::app
 					world.Emplace<TransformComponent>(entity);
 				}
 				world.Emplace<SpotLightComponent>(entity);
+			}
+			if (PaletteEntry(ICON_FA_VIDEO "  Camera", m_addFilter, world.Has<CameraComponent>(entity)))
+			{
+				if (!world.Has<TransformComponent>(entity))
+				{
+					world.Emplace<TransformComponent>(entity);
+				}
+				world.Emplace<CameraComponent>(entity);
 			}
 			if (sceneCtx != nullptr && sceneCtx->effects != nullptr && assets != nullptr)
 			{
@@ -537,6 +548,15 @@ namespace aether::app
 			if (PaletteEntry(ICON_FA_HEART_PULSE "  Material Pulse", m_addFilter, world.Has<MaterialPulseComponent>(entity)))
 			{
 				world.Emplace<MaterialPulseComponent>(entity, MaterialPulseComponent{.emissiveA = {0.0f, 0.0f, 0.05f}, .emissiveB = {0.9f, 0.2f, 0.05f}, .frequency = 2.0f});
+			}
+			if (PaletteEntry(ICON_FA_EXPAND "  Scale Pulse", m_addFilter, world.Has<ScalePulseComponent>(entity)))
+			{
+				world.Emplace<ScalePulseComponent>(entity, ScalePulseComponent{.amplitude = 0.2f, .frequency = 2.0f});
+			}
+			if (PaletteEntry(ICON_FA_EYE "  Look At", m_addFilter, world.Has<LookAtComponent>(entity)))
+			{
+				// Aim at the world origin by default; drag the target in the section.
+				world.Emplace<LookAtComponent>(entity, LookAtComponent{.target = {0.0f, 0.0f, 0.0f}});
 			}
 
 			ImGui::SeparatorText("Physics");
@@ -592,6 +612,7 @@ namespace aether::app
 		DrawUiImage(world, entity);
 		DrawUiText(world, entity);
 		DrawLights(world, entity);
+		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
 		DrawBehaviors(world, entity);
 		DrawPhysics(world, entity);

@@ -467,6 +467,17 @@ namespace aether::app::scene
 					clean.time = 0.0f;
 					rec.materialPulse = clean;
 				}
+				if (const auto* scale = world.TryGet<ScalePulseComponent>(e))
+				{
+					ScalePulseComponent clean = *scale;
+					clean.baseCaptured = false; // re-base from the restored transform
+					clean.time = 0.0f;
+					rec.scalePulse = clean;
+				}
+				if (const auto* look = world.TryGet<LookAtComponent>(e))
+				{
+					rec.lookAt = *look;
+				}
 				if (const auto* pl = world.TryGet<PointLightComponent>(e))
 				{
 					rec.pointLight = *pl;
@@ -474,6 +485,11 @@ namespace aether::app::scene
 				if (const auto* sl = world.TryGet<SpotLightComponent>(e))
 				{
 					rec.spotLight = *sl;
+				}
+				if (const auto* cam = world.TryGet<CameraComponent>(e))
+				{
+					rec.camera = *cam;
+					rec.mainCamera = world.Has<MainCameraComponent>(e);
 				}
 				if (const auto* script = world.TryGet<ScriptComponent>(e); script != nullptr)
 				{
@@ -798,6 +814,21 @@ namespace aether::app::scene
 				p.insert("frequency", rec.materialPulse->frequency);
 				t.insert("material_pulse", std::move(p));
 			}
+			if (rec.scalePulse)
+			{
+				toml::table p;
+				p.insert("amplitude", rec.scalePulse->amplitude);
+				p.insert("frequency", rec.scalePulse->frequency);
+				p.insert("phase", rec.scalePulse->phase);
+				t.insert("scale_pulse", std::move(p));
+			}
+			if (rec.lookAt)
+			{
+				toml::table p;
+				p.insert("target", Vec3ToToml(rec.lookAt->target));
+				p.insert("keep_upright", rec.lookAt->keepUpright);
+				t.insert("look_at", std::move(p));
+			}
 			if (rec.pointLight)
 			{
 				toml::table l;
@@ -817,6 +848,15 @@ namespace aether::app::scene
 				l.insert("outer_rad", rec.spotLight->outerAngleRad);
 				l.insert("shadow", rec.spotLight->castsShadow);
 				t.insert("spot_light", std::move(l));
+			}
+			if (rec.camera)
+			{
+				toml::table c;
+				c.insert("fov", rec.camera->fovDegrees);
+				c.insert("near", rec.camera->nearPlane);
+				c.insert("far", rec.camera->farPlane);
+				c.insert("main", rec.mainCamera);
+				t.insert("camera", std::move(c));
 			}
 			if (!rec.scripts.empty())
 			{
@@ -1069,6 +1109,16 @@ namespace aether::app::scene
 				rec.materialPulse =
 				        MaterialPulseComponent{.emissiveA = Vec3FromToml(pv["emissive_a"], glm::vec3(0.0f)), .emissiveB = Vec3FromToml(pv["emissive_b"], glm::vec3(1.0f, 0.5f, 0.1f)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0))};
 			}
+			if (const auto* p = tv["scale_pulse"].as_table())
+			{
+				const toml::node_view<const toml::node> pv{*p};
+				rec.scalePulse = ScalePulseComponent{.amplitude = static_cast<float>(pv["amplitude"].value_or(0.2)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0)), .phase = static_cast<float>(pv["phase"].value_or(0.0))};
+			}
+			if (const auto* p = tv["look_at"].as_table())
+			{
+				const toml::node_view<const toml::node> pv{*p};
+				rec.lookAt = LookAtComponent{.target = Vec3FromToml(pv["target"], glm::vec3(0.0f)), .keepUpright = pv["keep_upright"].value_or(true)};
+			}
 			if (const auto* l = tv["point_light"].as_table())
 			{
 				const toml::node_view<const toml::node> lv{*l};
@@ -1084,6 +1134,16 @@ namespace aether::app::scene
 				        .innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35)),
 				        .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)),
 				        .castsShadow = lv["shadow"].value_or(false)};
+			}
+			if (const auto* c = tv["camera"].as_table())
+			{
+				const toml::node_view<const toml::node> cv{*c};
+				rec.camera = CameraComponent{
+				        .fovDegrees = static_cast<float>(cv["fov"].value_or(60.0)),
+				        .nearPlane = static_cast<float>(cv["near"].value_or(0.1)),
+				        .farPlane = static_cast<float>(cv["far"].value_or(1000.0)),
+				};
+				rec.mainCamera = cv["main"].value_or(false);
 			}
 			if (const auto* scripts = tv["scripts"].as_array())
 			{
@@ -1426,8 +1486,12 @@ namespace aether::app::scene
 			RemoveIf<SpinComponent>(world, entity);
 			RemoveIf<OrbitComponent>(world, entity);
 			RemoveIf<MaterialPulseComponent>(world, entity);
+			RemoveIf<ScalePulseComponent>(world, entity);
+			RemoveIf<LookAtComponent>(world, entity);
 			RemoveIf<PointLightComponent>(world, entity);
 			RemoveIf<SpotLightComponent>(world, entity);
+			RemoveIf<CameraComponent>(world, entity);
+			RemoveIf<MainCameraComponent>(world, entity);
 			RemoveIf<ScriptComponent>(world, entity);
 		}
 
@@ -1674,6 +1738,16 @@ namespace aether::app::scene
 					world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
 					++behaviorCount;
 				}
+				if (rec.scalePulse)
+				{
+					world.Emplace<ScalePulseComponent>(e, *rec.scalePulse);
+					++behaviorCount;
+				}
+				if (rec.lookAt)
+				{
+					world.Emplace<LookAtComponent>(e, *rec.lookAt);
+					++behaviorCount;
+				}
 				if (rec.pointLight)
 				{
 					world.Emplace<PointLightComponent>(e, *rec.pointLight);
@@ -1681,6 +1755,14 @@ namespace aether::app::scene
 				if (rec.spotLight)
 				{
 					world.Emplace<SpotLightComponent>(e, *rec.spotLight);
+				}
+				if (rec.camera)
+				{
+					world.Emplace<CameraComponent>(e, *rec.camera);
+					if (rec.mainCamera)
+					{
+						ecs::SetMainCameraEntity(world, e);
+					}
 				}
 				if (!rec.scripts.empty())
 				{

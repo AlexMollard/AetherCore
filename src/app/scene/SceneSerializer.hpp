@@ -13,6 +13,7 @@
 #include "material/MaterialAsset.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
 
@@ -156,9 +157,16 @@ namespace aether::app::scene
 		std::optional<SpinComponent> spin;
 		std::optional<OrbitComponent> orbit;
 		std::optional<MaterialPulseComponent> materialPulse;
+		std::optional<ScalePulseComponent> scalePulse;
+		std::optional<LookAtComponent> lookAt;
 		// Entity lights (v3+): position/aim come from the TRS above.
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
+		// Entity camera (v8+): projection params; pose/aim come from the TRS above.
+		// backingCamera is runtime state and is never serialized. mainCamera marks
+		// the entity as the scene's main view (MainCameraComponent).
+		std::optional<CameraComponent> camera;
+		bool mainCamera = false;
 		// Entity script slots (v7+, ScriptComponent). Attach state is runtime.
 		std::vector<ScriptRecord> scripts;
 	};
@@ -200,7 +208,7 @@ namespace aether::app::scene
 	// v5 = C# script type names + serialized script_properties;
 	// v6 = UI components (ui_canvas/ui_rect/ui_image/ui_text);
 	// v7 = multiple entity script slots.
-	inline constexpr int kSceneFormatVersion = 7;
+	inline constexpr int kSceneFormatVersion = 8;
 
 	struct SceneDescription
 	{

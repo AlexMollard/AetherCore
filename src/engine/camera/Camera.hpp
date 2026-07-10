@@ -89,6 +89,15 @@ namespace aether
 		void SetOrbitYawPitch(float yaw, float pitch);
 
 		// -- Projection params -------------------------------------------------
+		// Overrides the perspective frustum (e.g. driving a Manual camera from an
+		// entity's CameraComponent). Aspect stays a per-frame render-target input.
+		void SetPerspective(float fovDegrees, float nearPlane, float farPlane)
+		{
+			m_fovDeg = fovDegrees;
+			m_near = nearPlane;
+			m_far = farPlane;
+		}
+
 		[[nodiscard]] float GetFovDegrees() const
 		{
 			return m_fovDeg;

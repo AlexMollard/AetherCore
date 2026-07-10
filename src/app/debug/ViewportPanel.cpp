@@ -29,6 +29,9 @@
 #include "platform/Input.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "scene/CameraComponents.hpp"
+#include "scene/CameraSystem.hpp"
+#include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/Ray.hpp"
@@ -73,6 +76,10 @@ namespace aether::app
 			}
 			if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
 			{
+				// Restore free-fly + default lens in case a prior look-through preview
+				// left this camera in Manual mode with the entity camera's projection.
+				editorCam->SetMode(CameraMode::Free);
+				editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
 				// Seed the editor pose from whatever the player was looking at so
 				// the swap is seamless.
 				if (const Camera* from = cameras->TryGet(CameraHandle{m_gameCamId}); from != nullptr && main.IsValid() && main.id != m_editorCamId)
@@ -93,16 +100,65 @@ namespace aether::app
 		{
 			// A script OnAttach runs in UpdateSystems (before this layer), so if it
 			// claimed the view this first Play frame, main is already its camera -
-			// keep it. Otherwise restore the remembered game camera.
+			// keep it. Otherwise prefer the scene's main-camera entity (CameraSystem
+			// synced its backing this same frame), then fall back to the remembered
+			// game camera.
+			CameraHandle entityMain{};
+			if (auto* cameraSystem = context.TryGet<CameraSystem>())
+			{
+				entityMain = cameraSystem->GetMainCameraBacking();
+			}
 			if (main.IsValid() && main.id != m_editorCamId)
 			{
 				m_gameCamId = main.id;
+			}
+			else if (entityMain.IsValid())
+			{
+				m_gameCamId = entityMain.id;
+				cameras->SetMainCamera(entityMain);
 			}
 			else if (m_gameCamId != 0 && cameras->TryGet(CameraHandle{m_gameCamId}) != nullptr)
 			{
 				cameras->SetMainCamera(CameraHandle{m_gameCamId});
 			}
 			m_editorCamActive = false;
+			m_lookThroughEntityId = 0; // preview is an edit-only affordance
+		}
+
+		// Live "look through" preview: while Editing, lock the editor camera to the
+		// selected camera entity's pose + projection each frame (Manual mode so its
+		// own fly input is ignored). Exiting the preview leaves the editor camera
+		// exactly where the entity camera was looking, then re-enables free-fly.
+		if (editing && m_editorCamActive && m_editorCamId != 0)
+		{
+			Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId});
+			World& world = context.Get<World>();
+			const Entity target{m_lookThroughEntityId};
+			const auto* targetCam = (m_lookThroughEntityId != 0 && world.GetRegistry().valid(World::ToEntt(target))) ? world.TryGet<CameraComponent>(target) : nullptr;
+			const auto* targetTc = targetCam != nullptr ? world.TryGet<TransformComponent>(target) : nullptr;
+			if (editorCam != nullptr && targetCam != nullptr && targetTc != nullptr)
+			{
+				const glm::vec3 position = glm::vec3(targetTc->localToWorld[3]);
+				glm::vec3 forward = -glm::vec3(targetTc->localToWorld[2]);
+				const float len = glm::length(forward);
+				forward = len > 1e-6f ? forward / len : glm::vec3(0.0f, 0.0f, -1.0f);
+				const float pitch = glm::degrees(std::asin(std::clamp(forward.y, -1.0f, 1.0f)));
+				const float yaw = glm::degrees(std::atan2(-forward.x, -forward.z));
+				editorCam->SetMode(CameraMode::Manual);
+				editorCam->SetPosition(position);
+				editorCam->SetYawPitch(yaw, pitch);
+				editorCam->SetPerspective(targetCam->fovDegrees, targetCam->nearPlane, targetCam->farPlane);
+			}
+			else
+			{
+				// Target gone or not a camera: end the preview and restore free-fly.
+				if (m_lookThroughEntityId != 0 && editorCam != nullptr)
+				{
+					editorCam->SetMode(CameraMode::Free);
+					editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+				}
+				m_lookThroughEntityId = 0;
+			}
 		}
 	}
 
@@ -277,6 +333,171 @@ namespace aether::app
 		}
 	}
 
+	void ViewportPanel::DrawCameraGizmos(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		// Overlay is an editing aid; while Playing the viewport shows the game.
+		if (auto* playState = context.TryGet<PlayState>(); playState != nullptr && playState->IsPlaying())
+		{
+			return;
+		}
+		const Camera* viewCam = context.Get<CameraManager>().TryGetMainCamera();
+		if (viewCam == nullptr)
+		{
+			return;
+		}
+		World& world = context.Get<World>();
+		auto& reg = world.GetRegistry();
+		if (reg.view<CameraComponent, TransformComponent>().size_hint() == 0)
+		{
+			return;
+		}
+		auto* selection = context.TryGet<SceneSelection>();
+
+		// GL-convention view-projection (undo the Vulkan Y-flip) so the manual
+		// world->screen map below matches the displayed image, same as the gizmo.
+		const glm::mat4 view = viewCam->GetViewMatrix();
+		glm::mat4 proj = viewCam->GetProjectionMatrix(renderAspect);
+		proj[1][1] *= -1.0f;
+		const glm::mat4 viewProj = proj * view;
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->PushClipRect(ImVec2(imageMin.x, imageMin.y), ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y), true);
+
+		reg.view<CameraComponent, TransformComponent>().each(
+		        [&](entt::entity handle, const CameraComponent& cam, const TransformComponent& tc)
+		        {
+			        const Entity e = World::FromEntt(handle);
+			        const bool isMain = reg.all_of<MainCameraComponent>(handle);
+			        const bool isSelected = selection != nullptr && selection->Contains(e);
+
+			        const glm::vec3 pos = glm::vec3(tc.localToWorld[3]);
+			        const glm::vec3 right = glm::normalize(glm::vec3(tc.localToWorld[0]));
+			        const glm::vec3 up = glm::normalize(glm::vec3(tc.localToWorld[1]));
+			        const glm::vec3 fwd = -glm::normalize(glm::vec3(tc.localToWorld[2]));
+
+			        // Draw the near plane and a modest preview-far plane so the wedge
+			        // stays readable regardless of the (often huge) real far distance.
+			        const float nearD = std::max(0.02f, cam.nearPlane);
+			        const float farD = std::clamp(cam.farPlane, nearD + 0.5f, nearD + 9.0f);
+			        const float tanHalf = std::tan(glm::radians(cam.fovDegrees) * 0.5f);
+
+			        auto planeCorners = [&](float dist, glm::vec3 out[4])
+			        {
+				        const float h = tanHalf * dist;
+				        const float w = h * renderAspect;
+				        const glm::vec3 c = pos + fwd * dist;
+				        out[0] = c - right * w + up * h; // top-left
+				        out[1] = c + right * w + up * h; // top-right
+				        out[2] = c + right * w - up * h; // bottom-right
+				        out[3] = c - right * w - up * h; // bottom-left
+			        };
+			        glm::vec3 nearC[4];
+			        glm::vec3 farC[4];
+			        planeCorners(nearD, nearC);
+			        planeCorners(farD, farC);
+
+			        auto project = [&](const glm::vec3& wp, ImVec2& out) -> bool
+			        {
+				        const glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
+				        if (clip.w <= 1e-4f)
+				        {
+					        return false; // behind the viewing camera
+				        }
+				        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+				        out = ImVec2(imageMin.x + (ndc.x * 0.5f + 0.5f) * imageSize.x, imageMin.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * imageSize.y);
+				        return true;
+			        };
+
+			        const ImU32 color = isSelected ? IM_COL32(255, 255, 255, 235) : isMain ? IM_COL32(255, 170, 60, 220) : IM_COL32(110, 180, 255, 190);
+			        const float thickness = (isSelected || isMain) ? 2.0f : 1.25f;
+
+			        auto line = [&](const glm::vec3& a, const glm::vec3& b)
+			        {
+				        ImVec2 sa, sb;
+				        if (project(a, sa) && project(b, sb))
+				        {
+					        drawList->AddLine(sa, sb, color, thickness);
+				        }
+			        };
+			        for (int i = 0; i < 4; ++i)
+			        {
+				        const int j = (i + 1) % 4;
+				        line(nearC[i], nearC[j]); // near rectangle
+				        line(farC[i], farC[j]);   // far rectangle
+				        line(nearC[i], farC[i]);  // connecting edge
+			        }
+			        // A small nub toward the apex so the facing direction reads at a glance.
+			        line(pos, nearC[0]);
+			        line(pos, nearC[1]);
+			        line(pos, nearC[2]);
+			        line(pos, nearC[3]);
+		        });
+
+		drawList->PopClipRect();
+	}
+
+	void ViewportPanel::DrawCameraPreviewControls(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize)
+	{
+		auto* playState = context.TryGet<PlayState>();
+		const bool editing = playState == nullptr || !playState->IsPlaying();
+		auto& selection = context.Get<SceneSelection>();
+		World& world = context.Get<World>();
+
+		const Entity primary = selection.Primary();
+		const bool selectedIsCamera = editing && primary.IsValid() && world.GetRegistry().valid(World::ToEntt(primary)) && world.Has<CameraComponent>(primary);
+		const bool previewing = m_lookThroughEntityId != 0;
+		if (!selectedIsCamera && !previewing)
+		{
+			return;
+		}
+
+		const char* label = previewing ? ICON_FA_VIDEO "  Exit camera view" : ICON_FA_VIDEO "  Look through";
+		const float btnW = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		const ImVec2 pillPad(8.0f, 5.0f);
+		const float pillW = btnW + pillPad.x * 2.0f;
+		const float pillH = ImGui::GetFrameHeight() + pillPad.y * 2.0f;
+		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - pillW) * 0.5f, imageMin.y + imageSize.y - pillH - 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.10f, 0.12f, 0.90f));
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
+		ImGui::BeginChild("##vpCameraPreview", ImVec2(pillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		if (previewing)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+		}
+		if (ImGui::Button(label))
+		{
+			if (previewing)
+			{
+				// End preview: hand free-fly back to the editor camera in place.
+				if (auto* cameras = context.TryGet<CameraManager>())
+				{
+					if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
+					{
+						editorCam->SetMode(CameraMode::Free);
+						editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+					}
+				}
+				m_lookThroughEntityId = 0;
+			}
+			else
+			{
+				m_lookThroughEntityId = primary.id;
+			}
+		}
+		if (previewing)
+		{
+			ImGui::PopStyleColor(4);
+		}
+		ImGui::EndChild();
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor();
+	}
+
 	void ViewportPanel::OnAttach(LayerContext& context)
 	{
 		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, true);
@@ -432,6 +653,7 @@ namespace aether::app
 		const ImVec2 imageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 		const bool gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 
 		// ImGuizmo's CanActivate() consults ImGui::IsAnyItemHovered(), which
 		// includes the PREVIOUS frame's hovered item - so merely submitting the
@@ -674,6 +896,10 @@ namespace aether::app
 
 		ImGui::PopStyleVar(4);
 		ImGui::PopStyleColor();
+
+		// Look-through preview pill (bottom-center), shown for camera selections.
+		DrawCameraPreviewControls(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageSize.x, imageSize.y});
+		toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
 
 		// Tick() consumes this value on the next frame when translating ImGui capture
 		// into camera capture. Toolbar hover is intentionally ignored: the camera

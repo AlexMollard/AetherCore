@@ -25,6 +25,7 @@
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
@@ -446,6 +447,10 @@ namespace aether::app
 		if (world.Has<ui::UIImage>(entity) || world.Has<ui::UIRect>(entity))
 		{
 			return {ICON_FA_IMAGE, ImVec4(0.55f, 0.85f, 0.95f, 1.0f)};
+		}
+		if (world.Has<CameraComponent>(entity))
+		{
+			return {ICON_FA_VIDEO, ImVec4(0.60f, 0.80f, 1.00f, 1.0f)};
 		}
 		if (world.Has<PointLightComponent>(entity) || world.Has<SpotLightComponent>(entity))
 		{
@@ -1052,6 +1057,47 @@ namespace aether::app
 				ImGui::DragFloat("Frequency##pulse", &pulse->frequency, 0.02f, 0.0f, 20.0f);
 			}
 		}
+
+		if (auto* scale = world.TryGet<ScalePulseComponent>(entity))
+		{
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_EXPAND "  Scale Pulse", ICON_FA_XMARK "##removeScalePulse", removed);
+			if (removed)
+			{
+				world.Remove<ScalePulseComponent>(entity);
+			}
+			else if (open)
+			{
+				ImGui::DragFloat("Amplitude##scalePulse", &scale->amplitude, 0.01f, 0.0f, 4.0f);
+				ImGui::DragFloat("Frequency##scalePulse", &scale->frequency, 0.02f, 0.0f, 20.0f);
+				ImGui::DragFloat("Phase##scalePulse", &scale->phase, 0.02f);
+				if (scale->baseCaptured)
+				{
+					ImGui::TextDisabled("Base %.2f, %.2f, %.2f", scale->baseScale.x, scale->baseScale.y, scale->baseScale.z);
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Re-base##scalePulse"))
+					{
+						scale->baseCaptured = false; // next tick re-captures from the transform
+					}
+				}
+			}
+		}
+
+		if (auto* look = world.TryGet<LookAtComponent>(entity))
+		{
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_EYE "  Look At", ICON_FA_XMARK "##removeLookAt", removed);
+			if (removed)
+			{
+				world.Remove<LookAtComponent>(entity);
+			}
+			else if (open)
+			{
+				DrawVec3Row("Target", look->target, 0.0f, 0.05f);
+				ImGui::Checkbox("Keep upright##lookAt", &look->keepUpright);
+				ImGui::TextDisabled("Aims the entity's -Z at the target while Playing");
+			}
+		}
 	}
 
 	void DrawLights(World& world, Entity entity)
@@ -1096,6 +1142,60 @@ namespace aether::app
 				ImGui::TextDisabled("Aims along the entity's -Z: rotate to aim the cone");
 			}
 		}
+	}
+
+	void DrawCamera(World& world, Entity entity)
+	{
+		auto* cam = world.TryGet<CameraComponent>(entity);
+		if (cam == nullptr)
+		{
+			return;
+		}
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_VIDEO "  Camera", ICON_FA_XMARK "##removeCamera", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		if (removed)
+		{
+			// CameraSystem reaps the backing pool camera next tick once the
+			// component (and its MainCamera tag) are gone.
+			world.Remove<CameraComponent>(entity);
+			if (world.Has<MainCameraComponent>(entity))
+			{
+				world.Remove<MainCameraComponent>(entity);
+			}
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+
+		const bool isMain = world.Has<MainCameraComponent>(entity);
+		if (isMain)
+		{
+			ImGui::TextColored(ImVec4(0.60f, 0.80f, 1.00f, 1.0f), ICON_FA_VIDEO "  Main camera");
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Clear##mainCam"))
+			{
+				world.Remove<MainCameraComponent>(entity);
+			}
+			ImGui::SetItemTooltip("Stop using this camera as the scene's main view while Playing");
+		}
+		else
+		{
+			if (ImGui::Button(ICON_FA_VIDEO "  Set as Main Camera"))
+			{
+				ecs::SetMainCameraEntity(world, entity);
+			}
+			ImGui::SetItemTooltip("Drive the scene view from this camera while Playing");
+		}
+
+		ImGui::DragFloat("FOV##cam", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f deg");
+		cam->fovDegrees = std::clamp(cam->fovDegrees, 1.0f, 179.0f);
+		ImGui::DragFloat("Near##cam", &cam->nearPlane, 0.01f, 0.001f, 100.0f, "%.3f");
+		ImGui::DragFloat("Far##cam", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f");
+		cam->nearPlane = std::max(0.001f, cam->nearPlane);
+		cam->farPlane = std::max(cam->nearPlane + 0.01f, cam->farPlane);
+		ImGui::TextDisabled("Views along the entity's -Z: rotate to aim");
 	}
 
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName)

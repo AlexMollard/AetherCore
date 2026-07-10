@@ -17,6 +17,8 @@
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "scene/BehaviorSystem.hpp"
+#include "scene/CameraSystem.hpp"
+#include "camera/CameraManager.hpp"
 #include "scene/LightSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
@@ -106,6 +108,7 @@ namespace aether::app
 
 		// Unregister engine-level systems before detaching layers.
 		context.Get<World>().UnregisterSystem("ScriptComponentSystem");
+		context.Get<World>().UnregisterSystem("CameraSystem");
 		context.Get<World>().UnregisterSystem("LightSystem");
 		context.Get<World>().UnregisterSystem("DayNightSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
@@ -187,6 +190,13 @@ namespace aether::app
 			auto lightPtr = lightSystem.get();
 			attachContext.Get<World>().RegisterSystem(std::move(lightSystem));
 			services.Register<aether::LightSystem>(*lightPtr);
+
+			// Entity cameras -> CameraManager backing pool, every frame (see
+			// CameraSystem). Registered for the edit-mode dt=0 call below.
+			auto cameraSystem = std::make_unique<aether::CameraSystem>(*attachContext.TryGet<aether::CameraManager>());
+			auto cameraPtr = cameraSystem.get();
+			attachContext.Get<World>().RegisterSystem(std::move(cameraSystem));
+			services.Register<aether::CameraSystem>(*cameraPtr);
 
 			// Data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse) - frozen
 			// with the rest of the simulation while Editing.
@@ -271,6 +281,12 @@ namespace aether::app
 			if (auto* lights = ctx.TryGet<aether::LightSystem>())
 			{
 				lights->Update(ctx.Get<World>(), 0.0f);
+			}
+			// Entity cameras sync their backing pool cameras while paused too, so
+			// frustum gizmos and the look-through preview track edits live.
+			if (auto* cameras = ctx.TryGet<aether::CameraSystem>())
+			{
+				cameras->Update(ctx.Get<World>(), 0.0f);
 			}
 		}
 		m_layers.UpdateAll(ctx);

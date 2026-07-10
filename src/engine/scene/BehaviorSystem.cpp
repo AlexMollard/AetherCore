@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "assets/AssetManager.hpp"
 #include "material/MaterialSystem.hpp"
@@ -62,6 +63,42 @@ namespace aether
 			// model's forward convention.
 			const float yawDeg = -orbit.angleDeg + orbit.yawOffsetDeg;
 			ecs::SetWorldTransform(world, World::FromEntt(enttE), ComposeTransform(pos, glm::vec3(0.0f, yawDeg, 0.0f), curScale));
+		}
+
+		// ScalePulse: sine breathing around the base scale captured on first update.
+		for (auto&& [enttE, pulse, tc]: reg.view<ScalePulseComponent, TransformComponent>().each())
+		{
+			glm::vec3 pos{}, euler{}, scale{};
+			DecomposeTRS(tc.localToWorld, pos, euler, scale);
+			if (!pulse.baseCaptured)
+			{
+				pulse.baseScale = scale;
+				pulse.baseCaptured = true;
+			}
+			pulse.time += dt;
+			const float factor = 1.0f + std::sin(pulse.time * pulse.frequency + pulse.phase) * pulse.amplitude;
+			const glm::vec3 pulsed = glm::max(pulse.baseScale * factor, glm::vec3(0.001f));
+			ecs::SetWorldTransform(world, World::FromEntt(enttE), ComposeTransform(pos, euler, pulsed));
+		}
+
+		// LookAt: aim local -Z at a world-space target, preserving position/scale.
+		for (auto&& [enttE, look, tc]: reg.view<LookAtComponent, TransformComponent>().each())
+		{
+			glm::vec3 pos{}, euler{}, scale{};
+			DecomposeTRS(tc.localToWorld, pos, euler, scale);
+			const glm::vec3 to = look.target - pos;
+			if (glm::dot(to, to) < 1e-8f)
+			{
+				continue; // target coincides with the entity - nothing to aim at
+			}
+			const glm::vec3 dir = glm::normalize(to);
+			const glm::vec3 up = look.keepUpright && glm::abs(glm::dot(dir, glm::vec3(0, 1, 0))) < 0.99f ? glm::vec3(0, 1, 0) : glm::vec3(0, 0, 1);
+			glm::mat4 m = glm::mat4_cast(glm::quatLookAt(dir, up));
+			m[0] *= scale.x;
+			m[1] *= scale.y;
+			m[2] *= scale.z;
+			m[3] = glm::vec4(pos, 1.0f);
+			ecs::SetWorldTransform(world, World::FromEntt(enttE), m);
 		}
 
 		// MaterialPulse: sine-lerped emissive through the instance setters -

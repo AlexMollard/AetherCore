@@ -63,6 +63,9 @@ namespace aether::app
 	// Point/spot light sections, live-editable and removable (LightSystem
 	// republishes to the renderer every frame, edit mode included).
 	void DrawLights(World& world, Entity entity);
+	// Camera section: projection params (fov/near/far) + a "Set as Main Camera"
+	// control. The live "look through" preview is owned by the viewport.
+	void DrawCamera(World& world, Entity entity);
 	// Entity script section: type/path, attach state, and (for C# scripts) the
 	// inspector-exposed, per-entity serialized properties. Removable.
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName = {});

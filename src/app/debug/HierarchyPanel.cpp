@@ -25,6 +25,7 @@
 #include "physics/PhysicsSystem.hpp"
 #include "rendering/Renderer.hpp"
 #include "debug/UndoStack.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
@@ -1043,6 +1044,14 @@ namespace aether::app
 				{
 					CreatePrimitive(context, world, selection, PrimitiveMesh::Plane, "Plane", "plane");
 				}
+				if (ImGui::MenuItem(ICON_FA_IMAGE "  Quad"))
+				{
+					CreatePrimitive(context, world, selection, PrimitiveMesh::Quad, "Quad", "quad");
+				}
+				if (ImGui::MenuItem(ICON_FA_PLAY "  Triangle"))
+				{
+					CreatePrimitive(context, world, selection, PrimitiveMesh::Triangle, "Triangle", "triangle");
+				}
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light"))
 				{
@@ -1052,6 +1061,19 @@ namespace aether::app
 				{
 					// Spawn aimed forward-down so the cone lands in front of you.
 					selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera"))
+				{
+					// Spawn back-and-up looking toward the origin, so it frames the
+					// scene the way the default editor view does.
+					const Entity cam = ecs::CreateCameraEntity(world, {0.0f, 3.0f, 8.0f}, {0.0f, -0.35f, -1.0f}, CameraComponent{});
+					// First camera created becomes the main camera for convenience.
+					if (!ecs::GetMainCameraEntity(world).IsValid())
+					{
+						ecs::SetMainCameraEntity(world, cam);
+					}
+					selection.Select(cam);
 				}
 				ImGui::Separator();
 				if (ImGui::BeginMenu(ICON_FA_IMAGE "  UI"))

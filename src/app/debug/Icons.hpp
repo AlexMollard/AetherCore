@@ -16,6 +16,7 @@
 #define ICON_FA_WEIGHT_HANGING "\xef\x97\x8d"          // U+F5CD physics body
 #define ICON_FA_WAND_MAGIC_SPARKLES "\xee\x8b\x8a"     // U+E2CA effect-driven
 #define ICON_FA_CIRCLE "\xef\x84\x91"                  // U+F111 plain entity
+#define ICON_FA_VIDEO "\xef\x80\xbd"                   // U+F03D camera entity
 
 // Toolbar / actions
 #define ICON_FA_MAGNIFYING_GLASS "\xef\x80\x82"        // U+F002 search

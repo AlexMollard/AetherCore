@@ -36,6 +36,12 @@ namespace aether::app
 		bool DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// Play/Stop toolbar buttons (snapshot on Play, restore on Stop).
 		void DrawPlayControls(LayerContext& context);
+		// Wireframe frustums for every entity camera, drawn over the scene image
+		// (main camera highlighted, selected brightened). Purely an overlay.
+		void DrawCameraGizmos(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		// "Look through selected camera" overlay button + exit control. Toggling
+		// sets m_lookThroughEntityId, which OnUpdate uses to lock the editor camera.
+		void DrawCameraPreviewControls(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
 
 		std::uint64_t m_sceneViewportTextureId = 0;
 		gpu::ImageView m_sceneViewportImageView = nullptr;
@@ -54,5 +60,9 @@ namespace aether::app
 		std::uint32_t m_editorCamId = 0;
 		std::uint32_t m_gameCamId = 0;
 		bool m_editorCamActive = false;
+
+		// While Editing, locks the editor camera to this camera entity's pose+fov
+		// each frame (live "look through" preview). 0 = not previewing.
+		std::uint32_t m_lookThroughEntityId = 0;
 	};
 } // namespace aether::app

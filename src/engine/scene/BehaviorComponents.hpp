@@ -52,4 +52,26 @@ namespace aether
 		float frequency = 2.0f; // radians/sec inside sin
 		float time = 0.0f;
 	};
+
+	// Sinusoidal uniform-scale "breathing" around the scale captured on the first
+	// update (so a gizmo scale while paused re-bases naturally on re-apply).
+	// Position and rotation are preserved.
+	struct ScalePulseComponent
+	{
+		float amplitude = 0.2f; // peak fractional change (0.2 = +/-20% of base)
+		float frequency = 2.0f; // radians/sec inside sin
+		float phase = 0.0f;
+		bool baseCaptured = false;
+		glm::vec3 baseScale{1.0f};
+		float time = 0.0f;
+	};
+
+	// Continuously aims the entity's local -Z at a world-space target point
+	// (camera-forward convention), preserving position and scale. Handy for
+	// pointing a camera or spot light at a fixed spot in the scene.
+	struct LookAtComponent
+	{
+		glm::vec3 target{0.0f};
+		bool keepUpright = true; // lock roll using world +Y as up
+	};
 } // namespace aether
