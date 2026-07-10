@@ -1,35 +1,35 @@
 # AetherCore project file.
 
-[project]
-version = 1
-name = "Testing Project"
-
-[paths]
-assets  = "assets"
-scenes  = "scenes"
-prefabs = "assets/prefabs"
-scripts = "scripts"
-
 [app]
-startupScene = "Testing"
-targetFps = 0
-
-[window]
-width = 1920
-height = 1080
+startupscene = "Testing"
+targetfps = 0
 
 [graphics]
-vsync = false
+asynccompute = true
 fxaa = false
-asyncCompute = true
+vsync = false
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+name = "Testing Project"
+version = 1
 
 [publish]
-platformName = "Windows"
-productName  = "TestingProject"
-buildScripts = true
-cleanOutput  = true
-openAfter    = true
-syncEditorPak = true
-usePackageTemplate = true
-verifyOutput = true
-outputRoot   = "D:\\AetherCore\\projects\\TestingProject\\Builds"
+buildscripts = true
+cleanoutput = true
+openafter = true
+outputroot = "D:\\AetherCore\\projects\\TestingProject\\Builds"
+platformname = "Windows"
+productname = "TestingProject"
+synceditorpak = true
+usepackagetemplate = true
+verifyoutput = true
+
+[window]
+height = 1080
+width = 1920
