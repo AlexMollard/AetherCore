@@ -591,6 +591,16 @@ namespace aether::app
 			}
 			ImGui::EndDisabled();
 			ImGui::SameLine();
+			if (actions->rebuildEnginePak)
+			{
+				if (ImGui::Button(ICON_FA_GEAR "  Rebuild Engine Pak"))
+				{
+					const EditorProjectActionResult result = actions->rebuildEnginePak();
+					m_packSucceeded = result.succeeded;
+					m_packStatus = result.message;
+				}
+				ImGui::SameLine();
+			}
 			ImGui::BeginDisabled(!actions->publishProject);
 			if (ImGui::Button(ICON_FA_ROCKET "  Publish..."))
 			{

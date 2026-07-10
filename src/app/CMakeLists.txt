@@ -50,6 +50,7 @@ set_target_properties(GameRuntime PROPERTIES
 # files directly from the source tree.
 target_compile_definitions(App PRIVATE
     AETHERCORE_EDITOR_APP=1
+    AETHER_ENGINE_RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"

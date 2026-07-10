@@ -13,6 +13,7 @@
 
 #include "AssetPipeline.hpp"
 
+#include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
@@ -611,6 +612,17 @@ namespace aether::app
 			if (!CopyShippedDataPayload(exeDataDir, publishDir / "data", error))
 			{
 				return {.succeeded = false, .message = "Could not copy shipped data: " + error, .outputPath = publishDir};
+			}
+		}
+
+		// Prefer a freshly baked engine.pak over the (possibly stale) build-tree copy
+		// when this dev editor can bake one. A shipped editor keeps the copied pak.
+		if (CanBakeEnginePak())
+		{
+			const EditorProjectActionResult bake = BakeEnginePak(publishDir / "data" / "engine.pak");
+			if (!bake.succeeded)
+			{
+				return {.succeeded = false, .message = "Could not bake engine.pak: " + bake.message, .outputPath = publishDir};
 			}
 		}
 

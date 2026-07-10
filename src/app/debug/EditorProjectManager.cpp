@@ -12,6 +12,7 @@
 #	undef CopyFile // Windows.h defines CopyFile as CopyFileA/CopyFileW macro, conflicts with file_util::CopyFile
 #endif
 
+#include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
@@ -386,6 +387,14 @@ namespace aether::app
 		{
 			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options);
 		};
+		if (CanBakeEnginePak())
+		{
+			m_actions.rebuildEnginePak = []
+			{
+				const EditorProjectPublishConfig config = MakeDefaultEditorProjectPublishConfig();
+				return BakeEnginePak(config.executableDir / "data" / "engine.pak");
+			};
+		}
 	}
 
 	void EditorProjectManager::LoadSettings(TomlConfig& config)

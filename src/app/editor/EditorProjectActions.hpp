@@ -33,5 +33,6 @@ namespace aether::app
 		std::function<void()> reloadProject;
 		std::function<EditorProjectActionResult(const EditorProjectContext&)> packProject;
 		std::function<EditorProjectActionResult(const EditorProjectContext&, const EditorProjectPublishOptions&)> publishProject;
+		std::function<EditorProjectActionResult()> rebuildEnginePak;
 	};
 } // namespace aether::app
