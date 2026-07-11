@@ -27,6 +27,33 @@ namespace aether::ecs
 		return false;
 	}
 
+	// True if the entity or any of its ancestors carries DisabledComponent, i.e.
+	// the entity is effectively inactive. Every render/update system consults this
+	// to skip disabled entities and their whole subtree; the hierarchy panel greys
+	// such rows. Takes a const World so const-only call sites (the renderer) can
+	// use it too.
+	inline bool HasDisabledAncestor(const World& world, Entity entity)
+	{
+		Entity cur = entity;
+		while (cur.IsValid())
+		{
+			if (world.Has<DisabledComponent>(cur))
+			{
+				return true;
+			}
+			const auto* h = world.TryGet<HierarchyComponent>(cur);
+			cur = h ? h->parent : Entity{};
+		}
+		return false;
+	}
+
+	// Convenience inverse of HasDisabledAncestor: the entity participates in
+	// simulation and rendering (neither it nor any ancestor is disabled).
+	inline bool IsActiveInHierarchy(const World& world, Entity entity)
+	{
+		return !HasDisabledAncestor(world, entity);
+	}
+
 	// True if `possibleAncestor` is `entity` itself or any ancestor of it.
 	inline bool IsAncestor(World& world, Entity entity, Entity possibleAncestor)
 	{

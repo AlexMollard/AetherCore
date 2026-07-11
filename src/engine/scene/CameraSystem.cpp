@@ -8,6 +8,7 @@
 
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
@@ -34,6 +35,13 @@ namespace aether
 
 		for (const entt::entity handle: reg.view<CameraComponent, TransformComponent>())
 		{
+			// Disabled cameras (and subtrees) drop out: their backing camera is
+			// reaped below and recreated when re-enabled.
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(handle)))
+			{
+				continue;
+			}
+
 			auto& cam = reg.get<CameraComponent>(handle);
 			const auto& tc = reg.get<TransformComponent>(handle);
 

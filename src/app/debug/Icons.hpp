@@ -17,6 +17,8 @@
 #define ICON_FA_WAND_MAGIC_SPARKLES "\xee\x8b\x8a"     // U+E2CA effect-driven
 #define ICON_FA_CIRCLE "\xef\x84\x91"                  // U+F111 plain entity
 #define ICON_FA_VIDEO "\xef\x80\xbd"                   // U+F03D camera entity
+#define ICON_FA_CIRCLE_INFO "\xef\x81\x9a"             // U+F05A info / empty state
+#define ICON_FA_HASHTAG "\xef\x8a\x92"                 // U+F292 entity id
 
 // Toolbar / actions
 #define ICON_FA_MAGNIFYING_GLASS "\xef\x80\x82"        // U+F002 search
@@ -58,6 +60,7 @@
 #define ICON_FA_CLONE                   "\xef\x89\x8d"  // U+F24D duplicate
 #define ICON_FA_LOCK                    "\xef\x80\xa3"  // U+F023 not pickable
 #define ICON_FA_UNLOCK                  "\xef\x82\x9c"  // U+F09C pickable
+#define ICON_FA_POWER_OFF               "\xef\x80\x91"  // U+F011 active/disabled toggle
 
 // Window menu categories / panels
 #define ICON_FA_BUG "\xef\x86\x88"                     // U+F188 debug tools

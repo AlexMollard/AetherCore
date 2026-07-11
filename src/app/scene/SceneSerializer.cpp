@@ -402,6 +402,7 @@ namespace aether::app::scene
 						        rec.tags.push_back(tagName);
 					        }
 				        });
+				rec.disabled = world.Has<DisabledComponent>(e);
 				if (const auto* tc = world.TryGet<TransformComponent>(e))
 				{
 					rec.hasTransform = true;
@@ -751,6 +752,10 @@ namespace aether::app::scene
 				}
 				t.insert("tags", std::move(tags));
 			}
+			if (rec.disabled)
+			{
+				t.insert("disabled", true);
+			}
 			t.insert("parent", rec.parentIndex);
 			if (rec.hasTransform)
 			{
@@ -1085,6 +1090,7 @@ namespace aether::app::scene
 					}
 				}
 			}
+			rec.disabled = tv["disabled"].value_or(false);
 			rec.parentIndex = static_cast<int>(tv["parent"].value_or(std::int64_t{-1}));
 			if (tv["position"] || tv["euler"] || tv["scale"])
 			{
@@ -1671,6 +1677,10 @@ namespace aether::app::scene
 					{
 						TagAdd(&world, e.id, tagId);
 					}
+				}
+				if (rec.disabled)
+				{
+					world.Emplace<DisabledComponent>(e);
 				}
 				if (rec.hasTransform)
 				{

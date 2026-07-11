@@ -53,6 +53,7 @@
 
 #include "physics/PhysicsSystem.hpp"
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
@@ -584,7 +585,8 @@ namespace aether
 	{
 		AE_PROFILE_ZONE_N("Phys.SyncTransforms");
 		// WaitForStep() has already run; no step is in flight, NoLock is safe.
-		const auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
+		// Non-const: disabled bodies are deactivated in the loop below.
+		auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
 
 		int64_t synced = 0;
 		for (const auto& [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
@@ -593,6 +595,19 @@ namespace aether
 			const JPH::BodyID id = ToJolt(rigid.body);
 			if (id.IsInvalid())
 			{
+				continue;
+			}
+
+			// Disabled entities (and their subtree) freeze: deactivate the body so
+			// it stops simulating (won't fall under gravity while disabled) and skip
+			// propagating its transform. Deactivate is idempotent on an already
+			// inactive body. Re-enabling leaves the body asleep until disturbed.
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
+			{
+				if (bi.IsActive(id))
+				{
+					bi.DeactivateBody(id);
+				}
 				continue;
 			}
 

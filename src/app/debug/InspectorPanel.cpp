@@ -13,10 +13,12 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include "Color.hpp"
 #include "assets/AssetManager.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
+#include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
 #include "material/EffectManager.hpp"
 #include "layers/AppLayer.hpp"
@@ -348,58 +350,100 @@ namespace aether::app
 				return;
 			}
 			ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.4f));
-			const char* msg = "Nothing selected";
+			const char* icon = ICON_FA_CIRCLE_INFO;
+			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(icon).x) * 0.5f);
+			ImGui::TextDisabled("%s", icon);
+			const char* msg = "Select an entity to inspect it";
 			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(msg).x) * 0.5f);
 			ImGui::TextDisabled("%s", msg);
 			ImGui::End();
 			return;
 		}
 
-		// ── Header: kind icon, editable name, muted id ─────────────────────────
+		// ── Header card: kind badge, editable name, id ─────────────────────────
 		const KindBadge badge = EntityKindBadge(world, entity);
-		ImGui::TextColored(badge.color, "%s", badge.icon);
-		ImGui::SameLine();
-		if (auto* nc = world.TryGet<NameComponent>(entity))
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, iw::ToImVec4(colors::Surface));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 8.0f));
+		ImGui::BeginChild("##inspectorHeader", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		{
-			char buf[128];
-			std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
-			ImGui::SetNextItemWidth(-88.0f);
-			if (ImGui::InputText("##name", buf, sizeof(buf)))
+			// Active toggle: unchecking adds DisabledComponent, which stops the
+			// entity (and its whole subtree) from rendering, updating, simulating
+			// and ticking scripts. Applies to the whole selection when multi-editing.
+			bool active = !world.Has<DisabledComponent>(entity);
+			ImGui::AlignTextToFramePadding();
+			if (ImGui::Checkbox("##active", &active))
 			{
-				nc->name = buf;
+				const bool disable = !active;
+				auto applyActive = [&](Entity target)
+				{
+					if (disable)
+					{
+						world.EmplaceOrReplace<DisabledComponent>(target);
+					}
+					else if (world.Has<DisabledComponent>(target))
+					{
+						world.Remove<DisabledComponent>(target);
+					}
+				};
+				if (selection.All().size() > 1 && selection.Contains(entity))
+				{
+					for (const Entity target: selection.All())
+					{
+						if (IsAlive(world, target))
+						{
+							applyActive(target);
+						}
+					}
+				}
+				else
+				{
+					applyActive(entity);
+				}
 			}
+			ImGui::SetItemTooltip("Active - uncheck to disable this entity and its children");
 			ImGui::SameLine();
-			if (ImGui::SmallButton(ICON_FA_XMARK "##removeName"))
+
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextColored(badge.color, "%s", badge.icon);
+			ImGui::SameLine();
+			if (auto* nc = world.TryGet<NameComponent>(entity))
 			{
-				world.Remove<NameComponent>(entity);
+				char buf[128];
+				std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
+				ImGui::SetNextItemWidth(-1.0f);
+				if (ImGui::InputText("##name", buf, sizeof(buf)))
+				{
+					nc->name = buf;
+				}
 			}
-		}
-		else
-		{
-			if (ImGui::SmallButton("Add name"))
+			else if (ImGui::SmallButton(ICON_FA_PEN "  Name this entity"))
 			{
 				world.Emplace<NameComponent>(entity, NameComponent{.name = "Entity"});
 			}
-		}
-		ImGui::SameLine();
-		ImGui::TextDisabled("#%u", entity.id);
 
-		if (selection.All().size() > 1)
-		{
-			ImGui::TextDisabled("Editing primary of %zu selected", selection.All().size());
+			ImGui::PushStyleColor(ImGuiCol_Text, iw::ToImVec4(colors::TextSecondary));
+			ImGui::Text(ICON_FA_HASHTAG " %u", entity.id);
+			if (selection.All().size() > 1)
+			{
+				ImGui::SameLine();
+				ImGui::Text("   \xc2\xb7   editing primary of %zu selected", selection.All().size());
+			}
+			ImGui::PopStyleColor();
 		}
+		ImGui::EndChild();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor();
 
-		// ── Add Component palette + delete entity ──────────────────────────────
-		if (ImGui::Button(ICON_FA_PLUS "  Add Component"))
+		// ── Add Component / Delete ─────────────────────────────────────────────
+		const float toolWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+		if (iw::AccentButton(ICON_FA_PLUS "  Add Component", ImVec2(toolWidth, 0.0f)))
 		{
 			m_addFilter[0] = '\0';
 			m_addFocusPending = true;
 			ImGui::OpenPopup("AddComponent");
 		}
 		ImGui::SameLine();
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.45f, 1.0f));
-		const bool deleteClicked = ImGui::Button(ICON_FA_TRASH "  Delete");
-		ImGui::PopStyleColor();
+		const bool deleteClicked = iw::DangerButton(ICON_FA_TRASH "  Delete", ImVec2(toolWidth, 0.0f));
 		if (deleteClicked)
 		{
 			ecs::DestroyHierarchy(world, entity);

@@ -65,6 +65,13 @@ namespace aether::ui
 	// shared across the whole canvas, so it must be threaded through by reference.
 	static void Walk(World& world, Entity entity, FontRegistry* fonts, const TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out)
 	{
+		// A disabled entity prunes the whole subtree from the UI: the top-down
+		// walk simply stops recursing, so its children never emit either.
+		if (world.Has<DisabledComponent>(entity))
+		{
+			return;
+		}
+
 		if (const auto* rect = world.TryGet<UIRect>(entity))
 		{
 			if (const auto* img = world.TryGet<UIImage>(entity))

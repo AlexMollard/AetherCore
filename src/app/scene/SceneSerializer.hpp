@@ -164,6 +164,10 @@ namespace aether::app::scene
 		std::uint32_t entityId = 0;
 		std::string name;
 		std::vector<std::string> tags;
+		// Entity explicitly disabled by the user (DisabledComponent): it and its
+		// subtree stop rendering/updating. Persisted so a saved scene reloads in
+		// the same active/inactive state.
+		bool disabled = false;
 		bool hasTransform = false;
 		glm::vec3 position{0.0f};
 		glm::vec3 eulerDeg{0.0f};

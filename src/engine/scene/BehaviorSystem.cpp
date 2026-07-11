@@ -9,6 +9,7 @@
 #include "material/MaterialSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
@@ -30,6 +31,10 @@ namespace aether
 		// while paused re-bases naturally after the component is re-applied).
 		for (auto&& [enttE, bob, tc]: reg.view<BobComponent, TransformComponent>().each())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+			{
+				continue;
+			}
 			if (!bob.baseCaptured)
 			{
 				bob.baseY = tc.localToWorld[3].y;
@@ -44,6 +49,10 @@ namespace aether
 		// Spin: additive euler rate, translation/scale preserved.
 		for (auto&& [enttE, spin, tc]: reg.view<SpinComponent, TransformComponent>().each())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+			{
+				continue;
+			}
 			glm::vec3 pos{}, euler{}, scale{};
 			DecomposeTRS(tc.localToWorld, pos, euler, scale);
 			euler += spin.eulerDegPerSec * dt;
@@ -53,6 +62,10 @@ namespace aether
 		// Orbit: circular patrol around a center, facing along the tangent.
 		for (auto&& [enttE, orbit, tc]: reg.view<OrbitComponent, TransformComponent>().each())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+			{
+				continue;
+			}
 			orbit.angleDeg = std::fmod(orbit.angleDeg + orbit.angularSpeedDeg * dt, 360.0f);
 			const float rad = glm::radians(orbit.angleDeg);
 			const glm::vec3 pos{orbit.center.x + std::cos(rad) * orbit.radius, orbit.height, orbit.center.z + std::sin(rad) * orbit.radius};
@@ -68,6 +81,10 @@ namespace aether
 		// ScalePulse: sine breathing around the base scale captured on first update.
 		for (auto&& [enttE, pulse, tc]: reg.view<ScalePulseComponent, TransformComponent>().each())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+			{
+				continue;
+			}
 			glm::vec3 pos{}, euler{}, scale{};
 			DecomposeTRS(tc.localToWorld, pos, euler, scale);
 			if (!pulse.baseCaptured)
@@ -84,6 +101,10 @@ namespace aether
 		// LookAt: aim local -Z at a world-space target, preserving position/scale.
 		for (auto&& [enttE, look, tc]: reg.view<LookAtComponent, TransformComponent>().each())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+			{
+				continue;
+			}
 			glm::vec3 pos{}, euler{}, scale{};
 			DecomposeTRS(tc.localToWorld, pos, euler, scale);
 			const glm::vec3 to = look.target - pos;
@@ -108,6 +129,10 @@ namespace aether
 		auto& pipelines = m_assets.GetPipelineCache();
 		for (auto&& [enttE, pulse]: reg.view<MaterialPulseComponent>().each())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+			{
+				continue;
+			}
 			pulse.time += dt;
 			const float t = 0.5f + 0.5f * std::sin(pulse.time * pulse.frequency);
 			const glm::vec3 emissive = glm::mix(pulse.emissiveA, pulse.emissiveB, t);

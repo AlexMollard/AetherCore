@@ -5,6 +5,7 @@
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
@@ -39,6 +40,12 @@ namespace aether
 			const auto& transformComp = view.get<const TransformComponent>(enttEntity);
 
 			if (!meshComp.mesh || !meshComp.mesh->IsAlive())
+			{
+				continue;
+			}
+
+			// Disabled entities (and their subtree) are not drawn.
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttEntity)))
 			{
 				continue;
 			}

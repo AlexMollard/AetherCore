@@ -6,6 +6,7 @@
 
 #include "rendering/Renderer.hpp"
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
@@ -22,6 +23,10 @@ namespace aether
 		points.reserve(reg.view<PointLightComponent, TransformComponent>().size_hint());
 		for (const auto e: reg.view<PointLightComponent, TransformComponent>())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(e)))
+			{
+				continue;
+			}
 			points.push_back(e);
 		}
 		std::ranges::sort(points);
@@ -31,6 +36,10 @@ namespace aether
 		spots.reserve(reg.view<SpotLightComponent, TransformComponent>().size_hint());
 		for (const auto e: reg.view<SpotLightComponent, TransformComponent>())
 		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(e)))
+			{
+				continue;
+			}
 			spots.push_back(e);
 		}
 		std::ranges::sort(spots);

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
@@ -230,6 +231,10 @@ namespace aether::app
 			if (!reg.valid(World::ToEntt(e)))
 			{
 				continue; // destroyed by an earlier script this tick
+			}
+			if (ecs::HasDisabledAncestor(world, e))
+			{
+				continue; // disabled entities (and subtrees) don't tick scripts
 			}
 			auto* sc = world.TryGet<ScriptComponent>(e);
 			if (sc == nullptr || sc->scripts.empty())

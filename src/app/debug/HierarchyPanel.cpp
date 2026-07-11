@@ -575,6 +575,20 @@ namespace aether::app
 			m_openPrefabSave = true;
 		}
 		ImGui::Separator();
+		const bool selfDisabled = world.Has<DisabledComponent>(e);
+		if (ImGui::MenuItem(selfDisabled ? ICON_FA_POWER_OFF "  Enable" : ICON_FA_POWER_OFF "  Disable"))
+		{
+			if (selfDisabled)
+			{
+				world.Remove<DisabledComponent>(e);
+			}
+			else
+			{
+				world.Emplace<DisabledComponent>(e);
+			}
+			m_dirty = true;
+		}
+		ImGui::Separator();
 		if (ImGui::MenuItem(ICON_FA_SITEMAP "  Select children"))
 		{
 			if (const auto* h = world.TryGet<HierarchyComponent>(e))
@@ -633,7 +647,20 @@ namespace aether::app
 		{
 			ImGui::SameLine();
 		}
-		ImGui::TextColored(badge.color, "%s", badge.icon);
+
+		// Inactive entities (self-disabled, or greyed by a disabled ancestor) are
+		// dimmed across icon, name and id so a disabled subtree reads as a unit.
+		const bool inactive = ecs::HasDisabledAncestor(world, e);
+		ImVec4 iconColor = badge.color;
+		if (inactive)
+		{
+			iconColor.w *= 0.4f;
+		}
+		ImGui::TextColored(iconColor, "%s", badge.icon);
+		if (inactive)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 0.6f));
+		}
 
 		if (m_renaming == e)
 		{
@@ -692,6 +719,11 @@ namespace aether::app
 		}
 		ImGui::SameLine();
 		ImGui::TextDisabled("#%u", e.id);
+
+		if (inactive)
+		{
+			ImGui::PopStyleColor();
+		}
 	}
 
 	void HierarchyPanel::FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask)
@@ -766,53 +798,89 @@ namespace aether::app
 	void HierarchyPanel::DrawRowUtilityToggles(World& world, Entity e)
 	{
 		const float rowEndX = ImGui::GetContentRegionMax().x + ImGui::GetCursorPosX() - ImGui::GetContentRegionAvail().x;
-		ImGui::SameLine();
+		const ImGuiStyle& style = ImGui::GetStyle();
 
-		// Visibility toggle (eye icon).
+		const bool selfDisabled = world.Has<DisabledComponent>(e);
+		const bool inactive = ecs::HasDisabledAncestor(world, e); // self or ancestor
 		const bool hidden = world.Has<HiddenTag>(e);
-		const float eyeX = rowEndX - ImGui::GetFrameHeight() * (hidden ? 1.0f : 2.5f);
-		ImGui::SetCursorPosX(eyeX);
-		const ImVec4 eyeCol = hidden ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f);
-		ImGui::PushStyleColor(ImGuiCol_Text, eyeCol);
-		if (ImGui::SmallButton(ICON_FA_EYE))
+		const bool notPickable = world.Has<NotPickableTag>(e);
+
+		// Active/disable (power), visibility (eye) and pickability (padlock). The
+		// power icon is red when this entity is explicitly disabled, muted when it
+		// is only greyed by a disabled ancestor, and normal when active.
+		struct Toggle
 		{
-			if (hidden)
-			{
-				world.Remove<HiddenTag>(e);
-			}
-			else
-			{
-				world.Emplace<HiddenTag>(e);
-			}
-			m_dirty = true;
-		}
-		ImGui::PopStyleColor();
-		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+			const char* icon;
+			ImVec4 color;
+			const char* tip;
+			int kind; // 0 = disable, 1 = hidden, 2 = pickable
+		};
+		const Toggle toggles[3] = {
+		        {ICON_FA_POWER_OFF, selfDisabled ? ImVec4(0.86f, 0.45f, 0.40f, 0.95f) : (inactive ? ImVec4(0.45f, 0.45f, 0.45f, 0.5f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f)), selfDisabled ? "Enable entity" : "Disable entity (and children)", 0},
+		        {ICON_FA_EYE, hidden ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f), hidden ? "Show in Scene View" : "Hide in Scene View", 1},
+		        {notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK, notPickable ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f), notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View", 2},
+		};
+
+		// Right-align the group so the three buttons hug the row's trailing edge.
+		float totalWidth = style.ItemSpacing.x * 2.0f;
+		for (const Toggle& t: toggles)
 		{
-			ImGui::SetTooltip(hidden ? "Show in Scene View" : "Hide in Scene View");
+			totalWidth += ImGui::CalcTextSize(t.icon).x + style.FramePadding.x * 2.0f;
 		}
 
-		// Pickability toggle (padlock icon).
-		const bool notPickable = world.Has<NotPickableTag>(e);
-		ImGui::SameLine(0, 0);
-		const ImVec4 lockCol = notPickable ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f);
-		ImGui::PushStyleColor(ImGuiCol_Text, lockCol);
-		if (ImGui::SmallButton(notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK))
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(rowEndX - totalWidth);
+		for (int i = 0; i < 3; ++i)
 		{
-			if (notPickable)
+			if (i > 0)
 			{
-				world.Remove<NotPickableTag>(e);
+				ImGui::SameLine();
 			}
-			else
+			ImGui::PushStyleColor(ImGuiCol_Text, toggles[i].color);
+			const bool clicked = ImGui::SmallButton(toggles[i].icon);
+			ImGui::PopStyleColor();
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
 			{
-				world.Emplace<NotPickableTag>(e);
+				ImGui::SetTooltip("%s", toggles[i].tip);
+			}
+			if (!clicked)
+			{
+				continue;
+			}
+			switch (toggles[i].kind)
+			{
+				case 0:
+					if (selfDisabled)
+					{
+						world.Remove<DisabledComponent>(e);
+					}
+					else
+					{
+						world.Emplace<DisabledComponent>(e);
+					}
+					break;
+				case 1:
+					if (hidden)
+					{
+						world.Remove<HiddenTag>(e);
+					}
+					else
+					{
+						world.Emplace<HiddenTag>(e);
+					}
+					break;
+				default:
+					if (notPickable)
+					{
+						world.Remove<NotPickableTag>(e);
+					}
+					else
+					{
+						world.Emplace<NotPickableTag>(e);
+					}
+					break;
 			}
 			m_dirty = true;
-		}
-		ImGui::PopStyleColor();
-		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-		{
-			ImGui::SetTooltip(notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View");
 		}
 	}
 
@@ -834,7 +902,7 @@ namespace aether::app
 		const float arrowSlot = ImGui::GetFontSize();
 		const ImVec2 rowStart = ImGui::GetCursorScreenPos();
 
-		const float utilityReserve = ImGui::GetFrameHeight() * 3.25f;
+		const float utilityReserve = ImGui::GetFrameHeight() * 5.0f;
 		const float fullRowWidth = ImGui::GetContentRegionAvail().x;
 		const float rowWidth = std::max(1.0f, fullRowWidth - utilityReserve);
 		ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);

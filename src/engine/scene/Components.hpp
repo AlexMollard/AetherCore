@@ -114,6 +114,16 @@ namespace aether
 	{
 	};
 
+	// Present when the entity is explicitly disabled by the user. A disabled
+	// entity - and its whole subtree, via the hierarchy - stops rendering,
+	// updating, simulating physics, ticking scripts and animating (see
+	// ecs::HasDisabledAncestor in scene/Hierarchy.hpp, which every render/update
+	// system consults). Toggled from the inspector "Active" checkbox and the
+	// hierarchy row power button; persisted with the scene.
+	struct DisabledComponent
+	{
+	};
+
 	// Serialized C# script field override (Unity-style [SerializeField]). The tag
 	// mirrors the scripting PropertyType wire enum.
 	struct ScriptPropertyValue

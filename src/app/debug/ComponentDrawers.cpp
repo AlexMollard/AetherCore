@@ -13,6 +13,7 @@
 #include "assets/AssetManager.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
+#include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
@@ -37,59 +38,31 @@
 
 namespace aether::app
 {
+	// Shared inspector toolkit (Color-token property rows, section headers,
+	// vector rows, accent/danger buttons). Kept as short aliases so the drawers
+	// read cleanly and every component gets the same consistent styling.
+	using iw::AccentButton;
+	using iw::DangerButton;
+	using iw::PropCheckbox;
+	using iw::PropColor3;
+	using iw::PropColor4;
+	using iw::PropCombo;
+	using iw::PropComboStr;
+	using iw::PropDrag2;
+	using iw::PropFloat;
+	using iw::PropInputText;
+	using iw::PropInt;
+	using iw::PropSlider;
+	using iw::PropText;
+	using iw::RemovableSection;
+	using iw::SectionHeader;
+
 	namespace
 	{
-		// Unity-style vector row: colored axis chip (click resets that axis) +
-		// per-axis drag. Returns true when any component changed.
-		bool DrawVec3Row(const char* label, glm::vec3& value, float resetValue, float speed)
+		// Back-compat name for the shared axis-chip vector row.
+		inline bool DrawVec3Row(const char* label, glm::vec3& value, float resetValue, float speed)
 		{
-			bool changed = false;
-			ImGui::PushID(label);
-
-			ImGui::AlignTextToFramePadding();
-			ImGui::TextUnformatted(label);
-			ImGui::SameLine(86.0f);
-
-			struct AxisChip
-			{
-				const char* tag;
-				ImVec4 color;
-				float* component;
-			};
-
-			AxisChip axes[3] = {
-			        {"X", ImVec4(0.79f, 0.29f, 0.32f, 1.0f), &value.x},
-			        {"Y", ImVec4(0.38f, 0.64f, 0.31f, 1.0f), &value.y},
-			        {"Z", ImVec4(0.26f, 0.50f, 0.83f, 1.0f), &value.z},
-			};
-
-			const float chipWidth = ImGui::GetFrameHeight();
-			const float spacing = 4.0f;
-			const float fieldWidth = std::max(42.0f, (ImGui::GetContentRegionAvail().x - 3.0f * chipWidth - 2.0f * spacing) / 3.0f);
-
-			for (int i = 0; i < 3; ++i)
-			{
-				if (i > 0)
-				{
-					ImGui::SameLine(0.0f, spacing);
-				}
-				ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(axes[i].color.x * 1.2f, axes[i].color.y * 1.2f, axes[i].color.z * 1.2f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
-				if (ImGui::Button(axes[i].tag, ImVec2(chipWidth, 0.0f)))
-				{
-					*axes[i].component = resetValue;
-					changed = true;
-				}
-				ImGui::PopStyleColor(3);
-				ImGui::SameLine(0.0f, 0.0f);
-				ImGui::SetNextItemWidth(fieldWidth);
-				const std::string dragId = std::string("##drag") + axes[i].tag;
-				changed |= ImGui::DragFloat(dragId.c_str(), axes[i].component, speed);
-			}
-
-			ImGui::PopID();
-			return changed;
+			return iw::Vec3Row(label, value, resetValue, speed);
 		}
 
 		void ApplyAnchorPreset(ui::UIRect& rect, int preset)
@@ -309,7 +282,7 @@ namespace aether::app
 				case ScriptPropertyValue::Type::Float:
 				{
 					float f = value.f4[0];
-					if (ImGui::DragFloat(info.name.c_str(), &f, 0.1f))
+					if (PropFloat(info.name.c_str(), &f, 0.1f))
 					{
 						value.f4[0] = f;
 						edited = true;
@@ -320,7 +293,7 @@ namespace aether::app
 				case ScriptPropertyValue::Type::Enum:
 				{
 					int n = static_cast<int>(value.i64);
-					if (ImGui::DragInt(info.name.c_str(), &n))
+					if (PropInt(info.name.c_str(), &n))
 					{
 						value.i64 = n;
 						edited = true;
@@ -330,7 +303,7 @@ namespace aether::app
 				case ScriptPropertyValue::Type::Bool:
 				{
 					bool b = value.i64 != 0;
-					if (ImGui::Checkbox(info.name.c_str(), &b))
+					if (PropCheckbox(info.name.c_str(), &b))
 					{
 						value.i64 = b ? 1 : 0;
 						edited = true;
@@ -339,12 +312,12 @@ namespace aether::app
 				}
 				case ScriptPropertyValue::Type::Vector3:
 				{
-					float v[3] = {value.f4[0], value.f4[1], value.f4[2]};
-					if (ImGui::DragFloat3(info.name.c_str(), v, 0.1f))
+					glm::vec3 v{value.f4[0], value.f4[1], value.f4[2]};
+					if (iw::Vec3Row(info.name.c_str(), v, 0.0f, 0.1f))
 					{
-						value.f4[0] = v[0];
-						value.f4[1] = v[1];
-						value.f4[2] = v[2];
+						value.f4[0] = v.x;
+						value.f4[1] = v.y;
+						value.f4[2] = v.z;
 						edited = true;
 					}
 					break;
@@ -353,7 +326,7 @@ namespace aether::app
 				{
 					char buf[256];
 					std::snprintf(buf, sizeof(buf), "%s", value.str.c_str());
-					if (ImGui::InputText(info.name.c_str(), buf, sizeof(buf)))
+					if (PropInputText(info.name.c_str(), buf, sizeof(buf)))
 					{
 						value.str = buf;
 						edited = true;
@@ -368,7 +341,7 @@ namespace aether::app
 					const std::string buttonId = label + "##entityField" + info.name;
 					ImGui::AlignTextToFramePadding();
 					ImGui::TextUnformatted(info.name.c_str());
-					ImGui::SameLine(120.0f);
+					ImGui::SameLine(iw::kLabelWidth);
 					const ImGuiStyle& style = ImGui::GetStyle();
 					const float clearButtonWidth = ImGui::CalcTextSize(ICON_FA_XMARK).x + style.FramePadding.x * 2.0f;
 					const float selfButtonWidth = ImGui::CalcTextSize(ICON_FA_LINK).x + style.FramePadding.x * 2.0f;
@@ -532,7 +505,7 @@ namespace aether::app
 		{
 			return;
 		}
-		if (!ImGui::CollapsingHeader(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform", ImGuiTreeNodeFlags_DefaultOpen))
+		if (!SectionHeader(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
@@ -580,7 +553,7 @@ namespace aether::app
 	void DrawSkinnedMesh(World& world, Entity entity)
 	{
 		auto* smc = world.TryGet<SkinnedMeshComponent>(entity);
-		if (!smc || !ImGui::CollapsingHeader(ICON_FA_FILM "  Skinned Mesh"))
+		if (!smc || !SectionHeader(ICON_FA_FILM "  Skinned Mesh"))
 		{
 			return;
 		}
@@ -616,7 +589,7 @@ namespace aether::app
 		}
 
 		int clip = static_cast<int>(smc->clipIndex);
-		if (ImGui::InputInt("Clip", &clip))
+		if (PropInt("Clip", &clip, 0.1f, 0, 0, "Animation clip index"))
 		{
 			const auto clipIndex = static_cast<std::uint32_t>(std::max(0, clip));
 			for (auto* part: group)
@@ -625,28 +598,28 @@ namespace aether::app
 				part->animTime = 0.0f; // restart together so parts stay in phase
 			}
 		}
-		if (ImGui::DragFloat("Speed", &smc->playbackSpeed, 0.01f, -4.0f, 4.0f))
+		if (PropFloat("Speed", &smc->playbackSpeed, 0.01f, -4.0f, 4.0f, "%.2f", "Playback rate (negative reverses)"))
 		{
 			for (auto* part: group)
 			{
 				part->playbackSpeed = smc->playbackSpeed;
 			}
 		}
-		if (ImGui::DragFloat("Time", &smc->animTime, 0.01f, 0.0f, 1000.0f))
+		if (PropFloat("Time", &smc->animTime, 0.01f, 0.0f, 1000.0f, "%.2f", "Current time along the clip"))
 		{
 			for (auto* part: group)
 			{
 				part->animTime = smc->animTime;
 			}
 		}
-		if (ImGui::Checkbox("Looping", &smc->looping))
+		if (PropCheckbox("Looping", &smc->looping))
 		{
 			for (auto* part: group)
 			{
 				part->looping = smc->looping;
 			}
 		}
-		ImGui::TextDisabled("Skin %u, %u joints", smc->skinIndex, smc->jointCount);
+		PropText("Skin", "%u  (%u joints)", smc->skinIndex, smc->jointCount);
 		if (group.size() > 1)
 		{
 			ImGui::TextDisabled("Drives all %zu skinned parts of this model", group.size());
@@ -656,7 +629,7 @@ namespace aether::app
 	void DrawMaterial(LayerContext& context, World& world, Entity entity)
 	{
 		auto* mc = world.TryGet<MaterialComponent>(entity);
-		if (!mc || !ImGui::CollapsingHeader(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_DefaultOpen))
+		if (!mc || !SectionHeader(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
@@ -687,12 +660,13 @@ namespace aether::app
 		MaterialAsset& asset = inst->asset;
 
 		bool changed = false;
-		changed |= ImGui::ColorEdit4("Base color", &asset.baseColorFactor.x);
-		changed |= ImGui::SliderFloat("Metallic", &asset.metallicFactor, 0.0f, 1.0f);
-		changed |= ImGui::SliderFloat("Roughness", &asset.roughnessFactor, 0.0f, 1.0f);
-		changed |= ImGui::SliderFloat("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f);
-		changed |= ImGui::ColorEdit3("Emissive", &asset.emissiveFactor.x);
+		changed |= PropColor4("Base color", &asset.baseColorFactor.x);
+		changed |= PropSlider("Metallic", &asset.metallicFactor, 0.0f, 1.0f, "%.2f");
+		changed |= PropSlider("Roughness", &asset.roughnessFactor, 0.0f, 1.0f, "%.2f");
+		changed |= PropSlider("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f, "%.2f");
+		changed |= PropColor3("Emissive", &asset.emissiveFactor.x);
 
+		iw::PropLabel("Flags");
 		changed |= ImGui::Checkbox("Two-sided", &asset.doubleSided);
 		ImGui::SameLine();
 		changed |= ImGui::Checkbox("Blend", &asset.alphaBlend);
@@ -702,13 +676,13 @@ namespace aether::app
 		changed |= ImGui::Checkbox("Vtx color", &asset.modulateVertexColor);
 		if (asset.alphaMask)
 		{
-			changed |= ImGui::DragFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f);
+			changed |= PropFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f, "%.2f");
 		}
 
 		auto textureRow = [&](const char* label, TextureHandle& h)
 		{
 			ImGui::TextDisabled("%s", label);
-			ImGui::SameLine(120.0f);
+			ImGui::SameLine(iw::kLabelWidth);
 			if (h.index == TextureHandle::kBrokenIndex)
 			{
 				ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.85f, 1.0f), ICON_FA_IMAGE "  missing (magenta fallback)");
@@ -761,31 +735,31 @@ namespace aether::app
 				}
 			}
 		}
-		ImGui::TextDisabled("GPU slot %u", mc->gpuSlot);
+		PropText("GPU slot", "%u", mc->gpuSlot);
 	}
 
 	void DrawUiCanvas(World& world, Entity entity)
 	{
 		auto* canvas = world.TryGet<ui::UICanvas>(entity);
-		if (canvas == nullptr || !ImGui::CollapsingHeader(ICON_FA_IMAGE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen))
+		if (canvas == nullptr || !SectionHeader(ICON_FA_IMAGE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
 
 		int scaleMode = static_cast<int>(canvas->scaleMode);
-		if (ImGui::Combo("Scale Mode", &scaleMode, "Constant Pixel\0Scale With Reference\0"))
+		if (PropComboStr("Scale mode", &scaleMode, "Constant Pixel\0Scale With Reference\0"))
 		{
 			canvas->scaleMode = static_cast<ui::UICanvas::ScaleMode>(std::clamp(scaleMode, 0, 1));
 		}
-		ImGui::DragFloat2("Reference Resolution", &canvas->referenceResolution.x, 1.f, 1.f, 16384.f);
+		PropDrag2("Reference res", &canvas->referenceResolution.x, 1.f, 1.f, 16384.f, "%.0f");
 		canvas->referenceResolution = glm::max(canvas->referenceResolution, glm::vec2(1.f));
-		ImGui::DragInt("Sort Bias", &canvas->sortBias, 1.f, -100000, 100000);
+		PropInt("Sort bias", &canvas->sortBias, 1.f, -100000, 100000);
 	}
 
 	void DrawUiRect(World& world, Entity entity)
 	{
 		auto* rect = world.TryGet<ui::UIRect>(entity);
-		if (rect == nullptr || !ImGui::CollapsingHeader(ICON_FA_EXPAND "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen))
+		if (rect == nullptr || !SectionHeader(ICON_FA_EXPAND "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
@@ -804,24 +778,24 @@ namespace aether::app
 		};
 
 		int preset = -1;
-		if (ImGui::Combo("Anchor Preset", &preset, kPresets, IM_ARRAYSIZE(kPresets)) && preset >= 0)
+		if (PropCombo("Anchor preset", &preset, kPresets, IM_ARRAYSIZE(kPresets)) && preset >= 0)
 		{
 			ApplyAnchorPreset(*rect, preset);
 		}
 
-		ImGui::DragFloat2("Anchor Min", &rect->anchorMin.x, 0.01f, 0.f, 1.f);
-		ImGui::DragFloat2("Anchor Max", &rect->anchorMax.x, 0.01f, 0.f, 1.f);
+		PropDrag2("Anchor min", &rect->anchorMin.x, 0.01f, 0.f, 1.f, "%.2f");
+		PropDrag2("Anchor max", &rect->anchorMax.x, 0.01f, 0.f, 1.f, "%.2f");
 		rect->anchorMin = glm::clamp(rect->anchorMin, glm::vec2(0.f), glm::vec2(1.f));
 		rect->anchorMax = glm::clamp(rect->anchorMax, glm::vec2(0.f), glm::vec2(1.f));
 		rect->anchorMax = glm::max(rect->anchorMax, rect->anchorMin);
 
-		ImGui::DragFloat2("Offset Min", &rect->offsetMin.x, 1.f);
-		ImGui::DragFloat2("Offset Max", &rect->offsetMax.x, 1.f);
+		PropDrag2("Offset min", &rect->offsetMin.x, 1.f, 0.f, 0.f, "%.0f");
+		PropDrag2("Offset max", &rect->offsetMax.x, 1.f, 0.f, 0.f, "%.0f");
 		if (rect->anchorMin == rect->anchorMax)
 		{
 			rect->offsetMax = glm::max(rect->offsetMax, rect->offsetMin + glm::vec2(1.f));
 		}
-		ImGui::DragFloat2("Pivot", &rect->pivot.x, 0.01f, 0.f, 1.f);
+		PropDrag2("Pivot", &rect->pivot.x, 0.01f, 0.f, 1.f, "%.2f");
 		rect->pivot = glm::clamp(rect->pivot, glm::vec2(0.f), glm::vec2(1.f));
 		ImGui::TextDisabled("Resolved %.1f, %.1f  %.1f x %.1f", rect->resolvedRect.x, rect->resolvedRect.y, rect->resolvedRect.z, rect->resolvedRect.w);
 	}
@@ -829,78 +803,62 @@ namespace aether::app
 	void DrawUiImage(World& world, Entity entity)
 	{
 		auto* image = world.TryGet<ui::UIImage>(entity);
-		if (image == nullptr || !ImGui::CollapsingHeader(ICON_FA_IMAGE "  UI Image", ImGuiTreeNodeFlags_DefaultOpen))
+		if (image == nullptr || !SectionHeader(ICON_FA_IMAGE "  UI Image", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
 
-		ImGui::ColorEdit4("Color##uiImage", &image->color.x);
-		ImGui::DragFloat("Corner Radius", &image->cornerRadius, 0.5f, 0.f, 200.f);
+		PropColor4("Color", &image->color.x);
+		PropFloat("Corner radius", &image->cornerRadius, 0.5f, 0.f, 200.f, "%.1f");
 		if (image->texture.IsValid())
 		{
-			ImGui::TextDisabled("Texture entry %u", image->texture.index);
+			PropText("Texture", "entry %u", image->texture.index);
 		}
 		else
 		{
-			ImGui::TextDisabled("Texture (none)");
+			PropText("Texture", "(none)");
 		}
 	}
 
 	void DrawUiText(World& world, Entity entity)
 	{
 		auto* text = world.TryGet<ui::UIText>(entity);
-		if (text == nullptr || !ImGui::CollapsingHeader(ICON_FA_CODE "  UI Text", ImGuiTreeNodeFlags_DefaultOpen))
+		if (text == nullptr || !SectionHeader(ICON_FA_CODE "  UI Text", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
 
 		char textBuf[512]{};
 		std::snprintf(textBuf, sizeof(textBuf), "%s", text->text.c_str());
-		if (ImGui::InputTextMultiline("Text", textBuf, sizeof(textBuf), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 4.0f)))
+		iw::PropLabel("Text");
+		if (ImGui::InputTextMultiline("##text", textBuf, sizeof(textBuf), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 4.0f)))
 		{
 			text->text = textBuf;
 		}
 
 		char fontBuf[128]{};
 		std::snprintf(fontBuf, sizeof(fontBuf), "%s", text->fontName.c_str());
-		if (ImGui::InputText("Font", fontBuf, sizeof(fontBuf)))
+		if (PropInputText("Font", fontBuf, sizeof(fontBuf), "default"))
 		{
 			text->fontName = fontBuf;
 		}
 
-		ImGui::DragFloat("Pixel Size", &text->pixelSize, 0.5f, 4.f, 200.f);
+		PropFloat("Pixel size", &text->pixelSize, 0.5f, 4.f, 200.f, "%.0f");
 		text->pixelSize = std::max(text->pixelSize, 1.f);
-		ImGui::ColorEdit4("Color##uiText", &text->color.x);
+		PropColor4("Color", &text->color.x);
 
 		int hAlign = static_cast<int>(text->hAlign);
-		if (ImGui::Combo("H Align", &hAlign, "Left\0Center\0Right\0"))
+		if (PropComboStr("H align", &hAlign, "Left\0Center\0Right\0"))
 		{
 			text->hAlign = static_cast<ui::UIText::HAlign>(std::clamp(hAlign, 0, 2));
 		}
 		int vAlign = static_cast<int>(text->vAlign);
-		if (ImGui::Combo("V Align", &vAlign, "Top\0Middle\0Bottom\0"))
+		if (PropComboStr("V align", &vAlign, "Top\0Middle\0Bottom\0"))
 		{
 			text->vAlign = static_cast<ui::UIText::VAlign>(std::clamp(vAlign, 0, 2));
 		}
-		ImGui::Checkbox("Wrap", &text->wrap);
+		PropCheckbox("Wrap", &text->wrap);
 	}
-
-	namespace
-	{
-		// CollapsingHeader with a right-aligned remove-x. AllowOverlap is the
-		// load-bearing part: the header is a full-row item submitted FIRST, so
-		// without it the header grabs the click (ActiveId) and the x underneath
-		// can never be pressed - it just toggles the section. Returns the open
-		// state; `removed` reports the x.
-		bool RemovableSection(const char* label, const char* removeId, bool& removed, ImGuiTreeNodeFlags flags = 0)
-		{
-			const bool open = ImGui::CollapsingHeader(label, flags | ImGuiTreeNodeFlags_AllowOverlap);
-			ImGui::SameLine();
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 22.0f);
-			removed = ImGui::SmallButton(removeId);
-			return open;
-		}
-	} // namespace
 
 	void DrawEffectParams(LayerContext& context, World& world, Entity entity)
 	{
@@ -942,10 +900,10 @@ namespace aether::app
 		}
 
 		bool changed = false;
-		changed |= ImGui::ColorEdit4("Tint", &ep->params.tint.x);
-		changed |= ImGui::DragFloat("Speed", &ep->params.speed, 0.02f, 0.0f, 10.0f);
-		changed |= ImGui::DragFloat("Scale", &ep->params.scale, 0.02f, 0.0f, 10.0f);
-		changed |= ImGui::DragFloat("Intensity", &ep->params.intensity, 0.02f, 0.0f, 10.0f);
+		changed |= PropColor4("Tint", &ep->params.tint.x);
+		changed |= PropFloat("Speed", &ep->params.speed, 0.02f, 0.0f, 10.0f, "%.2f");
+		changed |= PropFloat("Scale", &ep->params.scale, 0.02f, 0.0f, 10.0f, "%.2f");
+		changed |= PropFloat("Intensity", &ep->params.intensity, 0.02f, 0.0f, 10.0f, "%.2f");
 
 		// Same path as the das set_effect_* bindings: mutate the CPU-authoritative
 		// copy, one buffer write. GPU reads it next frame.
@@ -956,7 +914,7 @@ namespace aether::app
 				buffer->Write(ep->paramSlot, ep->params);
 			}
 		}
-		ImGui::TextDisabled("Param slot %u", ep->paramSlot);
+		PropText("Param slot", "%u", ep->paramSlot);
 	}
 
 	void DrawPhysics(LayerContext& context, World& world, Entity entity)
@@ -994,8 +952,7 @@ namespace aether::app
 			{
 				const char* kShapes[] = {"Box", "Sphere", "Capsule", "Cylinder"};
 				int shapeIdx = static_cast<int>(collider->shape);
-				ImGui::SetNextItemWidth(150.0f);
-				if (ImGui::Combo("Shape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes)))
+				if (PropCombo("Shape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes)))
 				{
 					collider->shape = static_cast<PhysicsShapeType>(std::clamp(shapeIdx, 0, 3));
 					rebuild = true;
@@ -1003,31 +960,32 @@ namespace aether::app
 				switch (collider->shape)
 				{
 					case PhysicsShapeType::Box:
-						ImGui::DragFloat3("Half extents", &collider->halfExtents.x, 0.02f, 0.01f, 1000.0f);
+						iw::PropLabel("Half extents");
+						ImGui::DragFloat3("##he", &collider->halfExtents.x, 0.02f, 0.01f, 1000.0f);
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						break;
 					case PhysicsShapeType::Sphere:
-						ImGui::DragFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f);
+						PropFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f, "%.3f");
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						break;
 					case PhysicsShapeType::Capsule:
 					case PhysicsShapeType::Cylinder:
-						ImGui::DragFloat("Radius##shape", &collider->radius, 0.02f, 0.01f, 1000.0f);
+						PropFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f, "%.3f");
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-						ImGui::DragFloat("Half height##shape", &collider->halfHeight, 0.02f, 0.01f, 1000.0f);
+						PropFloat("Half height", &collider->halfHeight, 0.02f, 0.01f, 1000.0f, "%.3f");
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						break;
 				}
-				ImGui::DragFloat3("Center", &collider->center.x, 0.02f);
+				iw::PropLabel("Center");
+				ImGui::DragFloat3("##center", &collider->center.x, 0.02f);
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 
 				bool live = false;
-				live |= ImGui::DragFloat("Friction", &collider->friction, 0.005f, 0.0f, 2.0f);
-				live |= ImGui::DragFloat("Restitution", &collider->restitution, 0.005f, 0.0f, 1.0f);
+				live |= PropFloat("Friction", &collider->friction, 0.005f, 0.0f, 2.0f, "%.3f");
+				live |= PropFloat("Restitution", &collider->restitution, 0.005f, 0.0f, 1.0f, "%.3f");
 				collider->friction = std::max(0.0f, collider->friction);
 				collider->restitution = std::clamp(collider->restitution, 0.0f, 1.0f);
-				rebuild |= ImGui::Checkbox("Sensor (trigger)", &collider->isSensor);
-				ImGui::SetItemTooltip("Reports overlaps but produces no collision response");
+				rebuild |= PropCheckbox("Sensor (trigger)", &collider->isSensor, "Reports overlaps but produces no collision response");
 
 				if (live && physics != nullptr && rb != nullptr && rb->body.IsValid())
 				{
@@ -1053,44 +1011,38 @@ namespace aether::app
 			{
 				const char* kMotions[] = {"Static", "Kinematic", "Dynamic"};
 				int motionIdx = static_cast<int>(rb->motionType);
-				ImGui::SetNextItemWidth(150.0f);
-				if (ImGui::Combo("Motion", &motionIdx, kMotions, IM_ARRAYSIZE(kMotions)))
+				if (PropCombo("Motion", &motionIdx, kMotions, IM_ARRAYSIZE(kMotions)))
 				{
 					rb->motionType = static_cast<PhysicsMotionType>(std::clamp(motionIdx, 0, 2));
 					rebuild = true;
 				}
 
 				bool live = false;
-				live |= ImGui::DragFloat("Gravity factor", &rb->gravityFactor, 0.01f, -4.0f, 4.0f);
-				ImGui::DragFloat("Mass (0=auto)", &rb->mass, 0.05f, 0.0f, 100000.0f);
+				live |= PropFloat("Gravity factor", &rb->gravityFactor, 0.01f, -4.0f, 4.0f, "%.2f");
+				PropFloat("Mass", &rb->mass, 0.05f, 0.0f, 100000.0f, "%.2f", "0 = auto (computed from the shape)");
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 				rb->mass = std::max(0.0f, rb->mass);
-				ImGui::DragFloat("Linear damping", &rb->linearDamping, 0.005f, 0.0f, 1.0f);
+				PropFloat("Linear damping", &rb->linearDamping, 0.005f, 0.0f, 1.0f, "%.3f");
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-				ImGui::DragFloat("Angular damping", &rb->angularDamping, 0.005f, 0.0f, 1.0f);
+				PropFloat("Angular damping", &rb->angularDamping, 0.005f, 0.0f, 1.0f, "%.3f");
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 				rb->linearDamping = std::clamp(rb->linearDamping, 0.0f, 1.0f);
 				rb->angularDamping = std::clamp(rb->angularDamping, 0.0f, 1.0f);
-				ImGui::DragFloat("Max linear vel", &rb->maxLinearVelocity, 1.0f, 0.0f, 100000.0f);
+				PropFloat("Max linear vel", &rb->maxLinearVelocity, 1.0f, 0.0f, 100000.0f, "%.0f");
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-				ImGui::DragFloat("Max angular vel", &rb->maxAngularVelocity, 0.5f, 0.0f, 10000.0f);
+				PropFloat("Max angular vel", &rb->maxAngularVelocity, 0.5f, 0.0f, 10000.0f, "%.1f");
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 
-				rebuild |= ImGui::Checkbox("CCD", &rb->continuousCollision);
-				ImGui::SetItemTooltip("Continuous collision - stops fast bodies tunneling");
-				ImGui::SameLine();
-				rebuild |= ImGui::Checkbox("Sleeps", &rb->allowSleeping);
-				ImGui::SetItemTooltip("Let the solver deactivate this body when it comes to rest");
+				rebuild |= PropCheckbox("Continuous (CCD)", &rb->continuousCollision, "Continuous collision - stops fast bodies tunneling");
+				rebuild |= PropCheckbox("Can sleep", &rb->allowSleeping, "Let the solver deactivate this body when it comes to rest");
 
-				ImGui::TextDisabled("Freeze pos");
-				ImGui::SameLine();
+				iw::PropLabel("Freeze pos");
 				rebuild |= ImGui::Checkbox("X##lockPosX", &rb->lockPosition.x);
 				ImGui::SameLine();
 				rebuild |= ImGui::Checkbox("Y##lockPosY", &rb->lockPosition.y);
 				ImGui::SameLine();
 				rebuild |= ImGui::Checkbox("Z##lockPosZ", &rb->lockPosition.z);
-				ImGui::TextDisabled("Freeze rot");
-				ImGui::SameLine();
+				iw::PropLabel("Freeze rot");
 				rebuild |= ImGui::Checkbox("X##lockRotX", &rb->lockRotation.x);
 				ImGui::SameLine();
 				rebuild |= ImGui::Checkbox("Y##lockRotY", &rb->lockRotation.y);
@@ -1205,8 +1157,7 @@ namespace aether::app
 
 		const char* kTypes[] = {"Fixed", "Point", "Hinge", "Distance", "Slider"};
 		int typeIdx = static_cast<int>(joint->type);
-		ImGui::SetNextItemWidth(150.0f);
-		if (ImGui::Combo("Type", &typeIdx, kTypes, IM_ARRAYSIZE(kTypes)))
+		if (PropCombo("Type", &typeIdx, kTypes, IM_ARRAYSIZE(kTypes)))
 		{
 			joint->type = static_cast<JointType>(std::clamp(typeIdx, 0, 4));
 			rebuild = true;
@@ -1215,9 +1166,7 @@ namespace aether::app
 		// Target body: drag an entity from the hierarchy, or leave empty for world.
 		const bool targetAlive = joint->target.IsValid() && world.GetRegistry().valid(World::ToEntt(joint->target));
 		const std::string targetLabel = targetAlive ? std::string(EntityDisplayName(world, joint->target)) + "  #" + std::to_string(joint->target.id) : "World (fixed)";
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextDisabled("Target");
-		ImGui::SameLine(90.0f);
+		iw::PropLabel("Target");
 		ImGui::Button((targetLabel + "##jointTarget").c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 26.0f, 0.0f));
 		if (ImGui::BeginDragDropTarget())
 		{
@@ -1238,24 +1187,26 @@ namespace aether::app
 			rebuild = true;
 		}
 
-		ImGui::DragFloat3("Anchor", &joint->anchor.x, 0.02f);
+		iw::PropLabel("Anchor");
+		ImGui::DragFloat3("##anchor", &joint->anchor.x, 0.02f);
 		rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 		if (joint->type == JointType::Hinge || joint->type == JointType::Slider)
 		{
-			ImGui::DragFloat3("Axis", &joint->axis.x, 0.02f);
+			iw::PropLabel("Axis");
+			ImGui::DragFloat3("##axis", &joint->axis.x, 0.02f);
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-			ImGui::DragFloat("Limit min", &joint->minLimit, 0.01f);
+			PropFloat("Limit min", &joint->minLimit, 0.01f, 0.0f, 0.0f, "%.3f");
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-			ImGui::DragFloat("Limit max", &joint->maxLimit, 0.01f);
+			PropFloat("Limit max", &joint->maxLimit, 0.01f, 0.0f, 0.0f, "%.3f");
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 			ImGui::TextDisabled(joint->type == JointType::Hinge ? "Limits in radians; min>=max = free spin" : "Limits in metres; min>=max = free slide");
 		}
 		if (joint->type == JointType::Distance)
 		{
-			ImGui::DragFloat("Distance (-1=current)", &joint->distance, 0.02f, -1.0f, 10000.0f);
+			PropFloat("Distance", &joint->distance, 0.02f, -1.0f, 10000.0f, "%.3f", "-1 = keep the distance at creation time");
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 		}
-		rebuild |= ImGui::Checkbox("Collide connected", &joint->collideConnected);
+		rebuild |= PropCheckbox("Collide connected", &joint->collideConnected);
 
 		if (rebuild && physics != nullptr)
 		{
@@ -1267,6 +1218,7 @@ namespace aether::app
 	{
 		if (auto* bob = world.TryGet<BobComponent>(entity))
 		{
+			ImGui::PushID(bob);
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_WAVE_SQUARE "  Bob", ICON_FA_XMARK "##removeBob", removed);
 			if (removed)
@@ -1275,9 +1227,9 @@ namespace aether::app
 			}
 			else if (open)
 			{
-				ImGui::DragFloat("Amplitude##bob", &bob->amplitude, 0.02f, 0.0f, 50.0f);
-				ImGui::DragFloat("Frequency##bob", &bob->frequency, 0.01f, 0.0f, 20.0f);
-				ImGui::DragFloat("Phase##bob", &bob->phase, 0.02f);
+				PropFloat("Amplitude", &bob->amplitude, 0.02f, 0.0f, 50.0f, "%.2f");
+				PropFloat("Frequency", &bob->frequency, 0.01f, 0.0f, 20.0f, "%.2f");
+				PropFloat("Phase", &bob->phase, 0.02f, 0.0f, 0.0f, "%.2f");
 				if (bob->baseCaptured)
 				{
 					ImGui::TextDisabled("Base Y %.2f", bob->baseY);
@@ -1290,6 +1242,7 @@ namespace aether::app
 					}
 				}
 			}
+			ImGui::PopID();
 		}
 
 		if (auto* spin = world.TryGet<SpinComponent>(entity))
@@ -1317,16 +1270,17 @@ namespace aether::app
 			else if (open)
 			{
 				DrawVec3Row("Center", orbit->center, 0.0f, 0.05f);
-				ImGui::DragFloat("Radius##orbit", &orbit->radius, 0.05f, 0.0f, 500.0f);
-				ImGui::DragFloat("Speed deg/s##orbit", &orbit->angularSpeedDeg, 0.2f, -720.0f, 720.0f);
-				ImGui::DragFloat("Angle##orbit", &orbit->angleDeg, 0.5f);
-				ImGui::DragFloat("Yaw offset##orbit", &orbit->yawOffsetDeg, 0.5f);
-				ImGui::DragFloat("Height##orbit", &orbit->height, 0.05f);
+				PropFloat("Radius", &orbit->radius, 0.05f, 0.0f, 500.0f, "%.2f");
+				PropFloat("Speed deg/s", &orbit->angularSpeedDeg, 0.2f, -720.0f, 720.0f, "%.1f");
+				PropFloat("Angle", &orbit->angleDeg, 0.5f, 0.0f, 0.0f, "%.1f");
+				PropFloat("Yaw offset", &orbit->yawOffsetDeg, 0.5f, 0.0f, 0.0f, "%.1f");
+				PropFloat("Height", &orbit->height, 0.05f, 0.0f, 0.0f, "%.2f");
 			}
 		}
 
 		if (auto* pulse = world.TryGet<MaterialPulseComponent>(entity))
 		{
+			ImGui::PushID(pulse);
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_HEART_PULSE "  Material Pulse", ICON_FA_XMARK "##removePulse", removed);
 			if (removed)
@@ -1335,14 +1289,16 @@ namespace aether::app
 			}
 			else if (open)
 			{
-				ImGui::ColorEdit3("Emissive A##pulse", &pulse->emissiveA.x);
-				ImGui::ColorEdit3("Emissive B##pulse", &pulse->emissiveB.x);
-				ImGui::DragFloat("Frequency##pulse", &pulse->frequency, 0.02f, 0.0f, 20.0f);
+				PropColor3("Emissive A", &pulse->emissiveA.x);
+				PropColor3("Emissive B", &pulse->emissiveB.x);
+				PropFloat("Frequency", &pulse->frequency, 0.02f, 0.0f, 20.0f, "%.2f");
 			}
+			ImGui::PopID();
 		}
 
 		if (auto* scale = world.TryGet<ScalePulseComponent>(entity))
 		{
+			ImGui::PushID(scale);
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_EXPAND "  Scale Pulse", ICON_FA_XMARK "##removeScalePulse", removed);
 			if (removed)
@@ -1351,9 +1307,9 @@ namespace aether::app
 			}
 			else if (open)
 			{
-				ImGui::DragFloat("Amplitude##scalePulse", &scale->amplitude, 0.01f, 0.0f, 4.0f);
-				ImGui::DragFloat("Frequency##scalePulse", &scale->frequency, 0.02f, 0.0f, 20.0f);
-				ImGui::DragFloat("Phase##scalePulse", &scale->phase, 0.02f);
+				PropFloat("Amplitude", &scale->amplitude, 0.01f, 0.0f, 4.0f, "%.2f");
+				PropFloat("Frequency", &scale->frequency, 0.02f, 0.0f, 20.0f, "%.2f");
+				PropFloat("Phase", &scale->phase, 0.02f, 0.0f, 0.0f, "%.2f");
 				if (scale->baseCaptured)
 				{
 					ImGui::TextDisabled("Base %.2f, %.2f, %.2f", scale->baseScale.x, scale->baseScale.y, scale->baseScale.z);
@@ -1364,6 +1320,7 @@ namespace aether::app
 					}
 				}
 			}
+			ImGui::PopID();
 		}
 
 		if (auto* look = world.TryGet<LookAtComponent>(entity))
@@ -1377,7 +1334,7 @@ namespace aether::app
 			else if (open)
 			{
 				DrawVec3Row("Target", look->target, 0.0f, 0.05f);
-				ImGui::Checkbox("Keep upright##lookAt", &look->keepUpright);
+				PropCheckbox("Keep upright", &look->keepUpright);
 				ImGui::TextDisabled("Aims the entity's -Z at the target while Playing");
 			}
 		}
@@ -1387,6 +1344,7 @@ namespace aether::app
 	{
 		if (auto* pl = world.TryGet<PointLightComponent>(entity))
 		{
+			ImGui::PushID("pointLight");
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_LIGHTBULB "  Point Light", ICON_FA_XMARK "##removePointLight", removed, ImGuiTreeNodeFlags_DefaultOpen);
 			if (removed)
@@ -1395,15 +1353,17 @@ namespace aether::app
 			}
 			else if (open)
 			{
-				ImGui::ColorEdit3("Color##pl", &pl->color.x);
-				ImGui::DragFloat("Intensity##pl", &pl->intensity, 0.2f, 0.0f, 1000.0f);
-				ImGui::DragFloat("Radius##pl", &pl->radius, 0.1f, 0.0f, 500.0f);
-				ImGui::Checkbox("Casts shadow##pl", &pl->castsShadow);
+				PropColor3("Color", &pl->color.x);
+				PropFloat("Intensity", &pl->intensity, 0.2f, 0.0f, 1000.0f, "%.1f");
+				PropFloat("Radius", &pl->radius, 0.1f, 0.0f, 500.0f, "%.2f");
+				PropCheckbox("Casts shadow", &pl->castsShadow);
 			}
+			ImGui::PopID();
 		}
 
 		if (auto* sl = world.TryGet<SpotLightComponent>(entity))
 		{
+			ImGui::PushID("spotLight");
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_LIGHTBULB "  Spot Light", ICON_FA_XMARK "##removeSpotLight", removed, ImGuiTreeNodeFlags_DefaultOpen);
 			if (removed)
@@ -1412,18 +1372,21 @@ namespace aether::app
 			}
 			else if (open)
 			{
-				ImGui::ColorEdit3("Color##sl", &sl->color.x);
-				ImGui::DragFloat("Intensity##sl", &sl->intensity, 0.2f, 0.0f, 1000.0f);
-				ImGui::DragFloat("Radius##sl", &sl->radius, 0.1f, 0.0f, 500.0f);
-				ImGui::SliderAngle("Inner angle##sl", &sl->innerAngleRad, 1.0f, 89.0f);
-				ImGui::SliderAngle("Outer angle##sl", &sl->outerAngleRad, 1.0f, 89.0f);
+				PropColor3("Color", &sl->color.x);
+				PropFloat("Intensity", &sl->intensity, 0.2f, 0.0f, 1000.0f, "%.1f");
+				PropFloat("Radius", &sl->radius, 0.1f, 0.0f, 500.0f, "%.2f");
+				iw::PropLabel("Inner angle");
+				ImGui::SliderAngle("##inner", &sl->innerAngleRad, 1.0f, 89.0f);
+				iw::PropLabel("Outer angle");
+				ImGui::SliderAngle("##outer", &sl->outerAngleRad, 1.0f, 89.0f);
 				if (sl->outerAngleRad < sl->innerAngleRad)
 				{
 					sl->outerAngleRad = sl->innerAngleRad;
 				}
-				ImGui::Checkbox("Casts shadow##sl", &sl->castsShadow);
+				PropCheckbox("Casts shadow", &sl->castsShadow);
 				ImGui::TextDisabled("Aims along the entity's -Z: rotate to aim the cone");
 			}
+			ImGui::PopID();
 		}
 	}
 
@@ -1455,7 +1418,7 @@ namespace aether::app
 		const bool isMain = world.Has<MainCameraComponent>(entity);
 		if (isMain)
 		{
-			ImGui::TextColored(ImVec4(0.60f, 0.80f, 1.00f, 1.0f), ICON_FA_VIDEO "  Main camera");
+			ImGui::TextColored(iw::ToImVec4(colors::Info), ICON_FA_VIDEO "  Main camera");
 			ImGui::SameLine();
 			if (ImGui::SmallButton("Clear##mainCam"))
 			{
@@ -1465,17 +1428,17 @@ namespace aether::app
 		}
 		else
 		{
-			if (ImGui::Button(ICON_FA_VIDEO "  Set as Main Camera"))
+			if (AccentButton(ICON_FA_VIDEO "  Set as Main Camera", ImVec2(-FLT_MIN, 0.0f)))
 			{
 				ecs::SetMainCameraEntity(world, entity);
 			}
 			ImGui::SetItemTooltip("Drive the scene view from this camera while Playing");
 		}
 
-		ImGui::DragFloat("FOV##cam", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f deg");
+		PropFloat("FOV", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f\xc2\xb0");
 		cam->fovDegrees = std::clamp(cam->fovDegrees, 1.0f, 179.0f);
-		ImGui::DragFloat("Near##cam", &cam->nearPlane, 0.01f, 0.001f, 100.0f, "%.3f");
-		ImGui::DragFloat("Far##cam", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f");
+		PropFloat("Near", &cam->nearPlane, 0.01f, 0.001f, 100.0f, "%.3f");
+		PropFloat("Far", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f");
 		cam->nearPlane = std::max(0.001f, cam->nearPlane);
 		cam->farPlane = std::max(cam->nearPlane + 0.01f, cam->farPlane);
 		ImGui::TextDisabled("Views along the entity's -Z: rotate to aim");
@@ -1581,12 +1544,12 @@ namespace aether::app
 	{
 		const auto* mesh = world.TryGet<MeshComponent>(entity);
 		const auto* pipe = world.TryGet<PipelineComponent>(entity);
-		if ((!mesh && !pipe) || !ImGui::CollapsingHeader(ICON_FA_GEARS "  Render"))
+		if ((!mesh && !pipe) || !SectionHeader(ICON_FA_GEARS "  Render"))
 		{
 			return;
 		}
-		ImGui::Text("Mesh: %s", (mesh && mesh->mesh) ? "present" : "none");
-		ImGui::Text("Pipeline: %s", (pipe && pipe->pipeline) ? "present" : "none");
+		PropText("Mesh", "%s", (mesh && mesh->mesh) ? "present" : "none");
+		PropText("Pipeline", "%s", (pipe && pipe->pipeline) ? "present" : "none");
 		ImGui::TextDisabled("Asset swapping needs a picker - later spec");
 	}
 
@@ -1597,7 +1560,7 @@ namespace aether::app
 		{
 			return;
 		}
-		const bool open = ImGui::CollapsingHeader(ICON_FA_SITEMAP "  Hierarchy", ImGuiTreeNodeFlags_AllowOverlap);
+		const bool open = SectionHeader(ICON_FA_SITEMAP "  Hierarchy", ImGuiTreeNodeFlags_AllowOverlap);
 		// Removable only when the link is inert - removing a live link would
 		// orphan parent/children bookkeeping.
 		if (!h->parent.IsValid() && h->children.empty())
@@ -1661,7 +1624,7 @@ namespace aether::app
 
 	void DrawTags(World& world, Entity entity, char* addTagBuf, std::size_t addTagBufSize)
 	{
-		if (!ImGui::CollapsingHeader(ICON_FA_TAG "  Tags"))
+		if (!SectionHeader(ICON_FA_TAG "  Tags"))
 		{
 			return;
 		}

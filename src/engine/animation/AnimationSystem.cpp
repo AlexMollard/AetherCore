@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
@@ -17,6 +18,10 @@ namespace aether
 		for (auto entity: view)
 		{
 			auto& smc = view.get<SkinnedMeshComponent>(entity);
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
+			{
+				continue; // disabled entities freeze their animation time
+			}
 			if (!smc.animDb || !smc.animDb->IsValid())
 			{
 				continue;
@@ -41,7 +46,7 @@ namespace aether
 		auto blendView = world.View<AnimationBlendComponent>();
 		for (const auto& [entity, blendComp]: blendView.each())
 		{
-			if (!blendComp.inTransition)
+			if (!blendComp.inTransition || ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
 			{
 				continue;
 			}
