@@ -45,6 +45,17 @@ namespace aether
 		// the channel transfer is the synchronization point.
 		std::vector<DebugVertex> debugVertices;
 
+		// Collider wireframe instances extracted from the ECS on the producer
+		// (PhysicsDebugRenderer::ExtractShapes) so the $PhysicsDebug pass never reads
+		// the world. Empty unless physics-debug shapes are enabled.
+		std::vector<PhysicsDebugInstance> physicsDebugShapes;
+
+		// Whether the $PhysicsDebug pass should draw this frame. The producer reads
+		// the debug toggle and puts the decision here; the render thread branches on
+		// this packet field, never on a live global. (For lists like debugVertices /
+		// physicsDebugShapes the toggle is expressed as data presence instead.)
+		bool debugRenderingEnabled = false;
+
 		// Stable GPU resource addresses.
 		std::uint64_t materialBufferAddr = 0;
 		std::uint64_t effectParamBufferAddr = 0;

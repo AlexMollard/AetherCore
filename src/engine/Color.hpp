@@ -56,6 +56,12 @@ namespace aether::colors
 	inline constexpr auto Neutral = detail::rgb(105, 96, 86); // #696056  Warm mid-grey
 	inline constexpr auto Overlay = detail::rgba(0, 0, 0, 0.6f);
 
+	// Spatial axes (X/Y/Z) - one convention shared by the move/rotate/scale gizmos
+	// and the inspector's Vec3 rows so a red field always means X, etc.
+	inline constexpr auto AxisX = detail::rgb(214, 79, 92);  // #D64F5C  warm red
+	inline constexpr auto AxisY = detail::rgb(120, 190, 90); // #78BE5A  green
+	inline constexpr auto AxisZ = detail::rgb(84, 148, 224); // #5494E0  blue
+
 	// Debug visualisation
 	inline constexpr auto DebugRed = detail::rgb(255, 45, 85);     // #FF2D55
 	inline constexpr auto DebugGreen = detail::rgb(50, 255, 126);  // #32FF7E

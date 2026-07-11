@@ -100,8 +100,9 @@ namespace aether
 	      : m_enabled(rhs.m_enabled),
 	        m_selfTestEnabled(rhs.m_selfTestEnabled),
 	        m_colorMode(rhs.m_colorMode),
-	        m_world(rhs.m_world),
 	        m_frameDebugVertices(rhs.m_frameDebugVertices),
+	        m_frameShapes(rhs.m_frameShapes),
+	        m_frameDebugEnabled(rhs.m_frameDebugEnabled),
 	        m_colorFormat(rhs.m_colorFormat),
 	        m_depthFormat(rhs.m_depthFormat),
 	        m_pipelineHandle(rhs.m_pipelineHandle),
@@ -133,8 +134,9 @@ namespace aether
 			m_enabled = rhs.m_enabled;
 			m_selfTestEnabled = rhs.m_selfTestEnabled;
 			m_colorMode = rhs.m_colorMode;
-			m_world = rhs.m_world;
 			m_frameDebugVertices = rhs.m_frameDebugVertices;
+			m_frameShapes = rhs.m_frameShapes;
+			m_frameDebugEnabled = rhs.m_frameDebugEnabled;
 			m_colorFormat = rhs.m_colorFormat;
 			m_depthFormat = rhs.m_depthFormat;
 			m_pipelineHandle = rhs.m_pipelineHandle;
@@ -679,64 +681,67 @@ namespace aether
 		cmd.Draw(immediateCount, 1, 0, 0);
 	}
 
+	void PhysicsDebugRenderer::ExtractShapes(const World& world, std::vector<PhysicsDebugInstance>& out) const
+	{
+		if (!s_physicsDebugShapesEnabled)
+		{
+			return;
+		}
+		world.View<ColliderComponent, PhysicsStateComponent, RigidBodyComponent>().each(
+		        [&](entt::entity /*entity*/, const ColliderComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
+		        {
+			        const glm::vec4 tint = m_colorMode == PhysicsDebugColorMode::ByMotionType ? GetColorForMotionType(rigid.motionType) : glm::vec4(colors::DebugYellow);
+			        const glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation) * glm::mat4(glm::scale(glm::mat4(1.0f), state.scale));
+			        out.push_back({.model = model, .tint = tint, .shape = shape.shape});
+		        });
+	}
+
 	void PhysicsDebugRenderer::DrawPhysicsDebugShapes(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr) const
 	{
-		if (!s_physicsDebugShapesEnabled || m_world == nullptr)
+		// Replays whatever the PRODUCER extracted into the packet - nothing more.
+		// The "is physics-debug on?" decision lives ENTIRELY on the extract side
+		// (ExtractShapes): if it's off, the list is empty and this loop draws
+		// nothing. The render thread checks no flag and reads no global state - the
+		// presence of data in the packet IS the toggle.
+		if (m_frameShapes == nullptr)
 		{
 			return;
 		}
 
-		m_world->View<ColliderComponent, PhysicsStateComponent, RigidBodyComponent>().each(
-		        [&](entt::entity /*entity*/, const ColliderComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
-		        {
-			        glm::vec4 tint = colors::DebugYellow;
-			        if (m_colorMode == PhysicsDebugColorMode::ByMotionType)
-			        {
-				        tint = GetColorForMotionType(rigid.motionType);
-			        }
+		for (const PhysicsDebugInstance& inst: *m_frameShapes)
+		{
+			gpu::BufferHandle vertexHandle{};
+			std::uint32_t vertexCount = 0;
+			switch (inst.shape)
+			{
+				case PhysicsShapeType::Box:
+					vertexHandle = m_boxVertexHandle;
+					vertexCount = m_boxVertexCount;
+					break;
+				case PhysicsShapeType::Sphere:
+					vertexHandle = m_sphereVertexHandle;
+					vertexCount = m_sphereVertexCount;
+					break;
+				case PhysicsShapeType::Capsule:
+					vertexHandle = m_capsuleVertexHandle;
+					vertexCount = m_capsuleVertexCount;
+					break;
+				case PhysicsShapeType::Cylinder:
+					vertexHandle = m_cylinderVertexHandle;
+					vertexCount = m_cylinderVertexCount;
+					break;
+			}
 
-			        const glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation) * glm::mat4(glm::scale(glm::mat4(1.0f), state.scale));
+			if (!vertexHandle.IsValid() || vertexCount == 0)
+			{
+				continue;
+			}
 
-			        gpu::BufferHandle vertexHandle{};
-			        std::uint32_t vertexCount = 0;
-			        switch (shape.shape)
-			        {
-				        case PhysicsShapeType::Box:
-				        {
-					        vertexHandle = m_boxVertexHandle;
-					        vertexCount = m_boxVertexCount;
-					        break;
-				        }
-				        case PhysicsShapeType::Sphere:
-				        {
-					        vertexHandle = m_sphereVertexHandle;
-					        vertexCount = m_sphereVertexCount;
-					        break;
-				        }
-				        case PhysicsShapeType::Capsule:
-				        {
-					        vertexHandle = m_capsuleVertexHandle;
-					        vertexCount = m_capsuleVertexCount;
-					        break;
-				        }
-				        case PhysicsShapeType::Cylinder:
-				        {
-					        vertexHandle = m_cylinderVertexHandle;
-					        vertexCount = m_cylinderVertexCount;
-					        break;
-				        }
-			        }
-
-			        if (!vertexHandle.IsValid() || vertexCount == 0)
-			        {
-				        return;
-			        }
-
-			        const DebugPc pc{.frameAddr = frameConstantsAddr, .tintColor = tint, .model = model};
-			        cmd.PushDataRaw(0, std::as_bytes(std::span{&pc, 1}));
-			        cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(vertexHandle));
-			        cmd.Draw(vertexCount, 1, 0, 0);
-		        });
+			const DebugPc pc{.frameAddr = frameConstantsAddr, .tintColor = inst.tint, .model = inst.model};
+			cmd.PushDataRaw(0, std::as_bytes(std::span{&pc, 1}));
+			cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(vertexHandle));
+			cmd.Draw(vertexCount, 1, 0, 0);
+		}
 	}
 
 	void PhysicsDebugRenderer::RegisterPass(RenderGraph& graph, RGImage color, RGImage depth, gpu::Extent2D extent)
@@ -765,7 +770,7 @@ namespace aether
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
-			                if (!s_debugRenderingEnabled || !m_pipelineHandle.IsValid())
+			                if (!m_frameDebugEnabled || !m_pipelineHandle.IsValid())
 			                {
 				                return;
 			                }

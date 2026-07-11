@@ -16,15 +16,15 @@ TEST_CASE("Apply overlays only the keys present in the document") {
     CHECK(s.graphics.fxaa == true);          // changed
     CHECK(s.graphics.vsync == true);         // untouched default
     CHECK(s.graphics.asyncCompute == true);  // untouched default
-    CHECK(s.window.width == 1280);           // untouched default
+    CHECK(s.window.width == 2560);           // untouched default (QHD)
 }
 
 TEST_CASE("Apply merges layers in order: later documents win") {
     EngineSettings s;
     EngineSettingsIO::Apply("[window]\nwidth = 1920\nheight = 1080\n", s); // shipped
-    EngineSettingsIO::Apply("[window]\nwidth = 2560\n", s);                // user override
+    EngineSettingsIO::Apply("[window]\nwidth = 3840\n", s);                // user override
 
-    CHECK(s.window.width == 2560);   // user layer wins
+    CHECK(s.window.width == 3840);   // user layer wins
     CHECK(s.window.height == 1080);  // still from shipped layer
 }
 
@@ -36,8 +36,8 @@ TEST_CASE("Sanitize resets invalid dimensions to defaults and clamps targetFps")
 
     EngineSettingsIO::Sanitize(s);
 
-    CHECK(s.window.width == 1280);   // reset to compiled default
-    CHECK(s.window.height == 720);   // reset to compiled default
+    CHECK(s.window.width == 2560);   // reset to compiled default (QHD)
+    CHECK(s.window.height == 1440);  // reset to compiled default (QHD)
     CHECK(s.app.targetFps == doctest::Approx(0.0f)); // clamped
 }
 
@@ -70,12 +70,12 @@ TEST_CASE("SerializeOverrides emits only keys that differ from the base") {
     EngineSettings base; // defaults
     EngineSettings current = base;
     current.graphics.fxaa = true;
-    current.window.width = 2560;
+    current.window.width = 3840;
 
     const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
 
     CHECK(toml.find("fxaa = true") != std::string::npos);
-    CHECK(toml.find("width = 2560") != std::string::npos);
+    CHECK(toml.find("width = 3840") != std::string::npos);
     // Unchanged keys must NOT be written, so they keep tracking shipped defaults.
     CHECK(toml.find("vsync") == std::string::npos);
     CHECK(toml.find("height") == std::string::npos);
@@ -174,7 +174,7 @@ TEST_CASE("LoadLayered applies the project file as a layer and includes it in ba
     CHECK(loaded.values.window.width == 1600);    // project layer applied by LoadLayered
     CHECK(loaded.base.window.width == 1600);      // base INCLUDES the project layer (regression guard)
     CHECK(loaded.values.graphics.vsync == false); // project override took effect
-    CHECK(loaded.values.window.height == 720);    // compiled default not in project file is untouched
+    CHECK(loaded.values.window.height == 1440);   // compiled default (QHD) not in project file is untouched
 
     std::error_code ec;
     std::filesystem::remove(projectPath, ec);

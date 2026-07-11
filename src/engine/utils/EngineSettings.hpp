@@ -11,8 +11,8 @@ namespace aether
 	{
 		struct Window
 		{
-			int width = 1280;
-			int height = 720;
+			int width = 2560;  // QHD (1440p) default
+			int height = 1440;
 		} window;
 
 		struct Graphics

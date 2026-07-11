@@ -414,47 +414,51 @@ namespace aether::app
 
 	KindBadge EntityKindBadge(const World& world, Entity entity)
 	{
+		// Icon tints route through the shared palette (Color.hpp) so entity kinds
+		// stay distinct but on-brand: UI/camera = info blue, lights = yellow,
+		// effects = mauve, physics = amber, meshes = green.
+		using iw::ToImVec4;
 		if (world.Has<ui::UICanvas>(entity))
 		{
-			return {ICON_FA_IMAGE, ImVec4(0.52f, 0.78f, 1.00f, 1.0f)};
+			return {ICON_FA_IMAGE, ToImVec4(colors::Info)};
 		}
 		if (world.Has<ui::UIText>(entity))
 		{
-			return {ICON_FA_CODE, ImVec4(0.75f, 0.90f, 1.00f, 1.0f)};
+			return {ICON_FA_CODE, ToImVec4(colors::Info)};
 		}
 		if (world.Has<ui::UIImage>(entity) || world.Has<ui::UIRect>(entity))
 		{
-			return {ICON_FA_IMAGE, ImVec4(0.55f, 0.85f, 0.95f, 1.0f)};
+			return {ICON_FA_IMAGE, ToImVec4(colors::Info)};
 		}
 		if (world.Has<CameraComponent>(entity))
 		{
-			return {ICON_FA_VIDEO, ImVec4(0.60f, 0.80f, 1.00f, 1.0f)};
+			return {ICON_FA_VIDEO, ToImVec4(colors::Info)};
 		}
 		if (world.Has<PointLightComponent>(entity) || world.Has<SpotLightComponent>(entity))
 		{
-			return {ICON_FA_LIGHTBULB, ImVec4(1.00f, 0.86f, 0.40f, 1.0f)};
+			return {ICON_FA_LIGHTBULB, ToImVec4(colors::Yellow)};
 		}
 		if (world.Has<SkinnedMeshComponent>(entity))
 		{
-			return {ICON_FA_PERSON_RUNNING, ImVec4(0.55f, 0.75f, 1.00f, 1.0f)};
+			return {ICON_FA_PERSON_RUNNING, ToImVec4(colors::Info)};
 		}
 		if (world.Has<EffectParamsComponent>(entity))
 		{
-			return {ICON_FA_WAND_MAGIC_SPARKLES, ImVec4(0.80f, 0.55f, 1.00f, 1.0f)};
+			return {ICON_FA_WAND_MAGIC_SPARKLES, ToImVec4(colors::Mauve)};
 		}
 		if (world.Has<RigidBodyComponent>(entity))
 		{
-			return {ICON_FA_WEIGHT_HANGING, ImVec4(1.00f, 0.72f, 0.35f, 1.0f)};
+			return {ICON_FA_WEIGHT_HANGING, ToImVec4(colors::Orange)};
 		}
 		if (world.Has<SpriteRendererComponent>(entity))
 		{
-			return {ICON_FA_IMAGE, ImVec4(0.96f, 0.74f, 0.45f, 1.0f)};
+			return {ICON_FA_IMAGE, ToImVec4(colors::Orange)};
 		}
 		if (world.Has<MeshComponent>(entity))
 		{
-			return {ICON_FA_CUBE, ImVec4(0.62f, 0.88f, 0.62f, 1.0f)};
+			return {ICON_FA_CUBE, ToImVec4(colors::Success)};
 		}
-		return {ICON_FA_CIRCLE, ImVec4(0.50f, 0.50f, 0.50f, 1.0f)};
+		return {ICON_FA_CIRCLE, ToImVec4(colors::Neutral)};
 	}
 
 	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld)
@@ -730,7 +734,7 @@ namespace aether::app
 			ImGui::SameLine(iw::kLabelWidth);
 			if (h.index == TextureHandle::kBrokenIndex)
 			{
-				ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.85f, 1.0f), ICON_FA_IMAGE "  missing (magenta fallback)");
+				ImGui::TextColored(iw::ToImVec4(colors::Mauve), ICON_FA_IMAGE "  missing (magenta fallback)");
 			}
 			else if (h.IsValid())
 			{
@@ -2066,7 +2070,7 @@ namespace aether::app
 			        any = true;
 			        ImGui::PushID(static_cast<int>(id));
 			        ImGui::AlignTextToFramePadding();
-			        ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.45f, 1.0f), ICON_FA_TAG);
+			        ImGui::TextColored(iw::ToImVec4(colors::Yellow), ICON_FA_TAG);
 			        ImGui::SameLine();
 			        ImGui::TextUnformatted(name.c_str());
 			        ImGui::SameLine();

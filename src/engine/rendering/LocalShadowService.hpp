@@ -78,7 +78,7 @@ namespace aether
 		// allocate atlas regions, and fill FrameConstants with shadow info.
 		// The shadow render queue is populated by PrepareQueues on the game thread;
 		// this render-thread step must not clear or mutate producer-side queue state.
-		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc);
+		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.
 		void RegisterPasses(RenderGraph& graph, CullPass& cullPass);

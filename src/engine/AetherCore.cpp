@@ -370,6 +370,18 @@ namespace aether
 			packet.elapsedTime = static_cast<float>(m_gameElapsedSeconds);
 			packet.uiOverlay = std::move(overlayFrame);
 
+			// Resolve the scene UI (canvases -> draw commands) HERE, on the producer,
+			// which owns the ECS - never on the render thread, which runs concurrently
+			// and would race a structural registry change (script attach on Play). The
+			// draw commands land in this slot's buffer; the render graph's $UiOverlay
+			// pass reads that same slot when it executes the submitted packet.
+			if (m_rendering)
+			{
+				ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
+				uiRenderer.SetWorld(&m_services.Get<SceneSubsystem>().GetWorld());
+				uiRenderer.BuildFrame({static_cast<float>(packet.renderExtent.width), static_cast<float>(packet.renderExtent.height)}, packet.drawSlot);
+			}
+
 			m_renderThread.SubmitFrame(std::move(packet));
 
 			++m_producerFrameIndex;
@@ -610,6 +622,12 @@ namespace aether
 		m_pendingDebugVertices.clear();
 		packet.spotLights.assign(renderer.GetSpotLights().begin(), renderer.GetSpotLights().end());
 
+		// Debug-viz toggles are read HERE (producer) and expressed as packet data:
+		// the master switch as a bool the pass branches on, the collider shapes as
+		// presence-or-absence. The render thread reads neither global.
+		packet.debugRenderingEnabled = IsDebugRenderingEnabled();
+		m_rendering->GetPhysicsDebugRenderer().ExtractShapes(world, packet.physicsDebugShapes);
+
 		return packet;
 	}
 
@@ -620,22 +638,19 @@ namespace aether
 		m_frameIndex = packet.frameIndex;
 		BeginFrame();
 
+		// INVARIANT: the render thread reads ONLY `packet`, never the live ECS. All
+		// world-derived data (draw lists, lights, shadows, UI, physics-debug shapes)
+		// is extracted on the producer in PrepareFrame. Do NOT add a
+		// SceneSubsystem::GetWorld() here - the producer runs up to
+		// kMaxFramesInFlight ahead and can structurally mutate the registry (e.g.
+		// script attach on Play), which would race an entt read on this thread.
+		// See docs/architecture/render-frame-extraction.md.
 		if (m_rendering)
 		{
-			World& world = m_services.Get<SceneSubsystem>().GetWorld();
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
 			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);
-			debugRenderer.SetWorld(&world);
-
-			// Per-frame UI drive: resolve layout + upload this frame's draw commands
-			// into packet.drawSlot's buffer BEFORE EndFrame -> RenderGraph::Execute
-			// reads that same slot from $UiOverlay's Execute (ctx.frameSlot). Mirrors
-			// the PhysicsDebugRenderer feed immediately above; renderExtent matches
-			// what RegisterPasses used for the pass's own extent (scene-viewport
-			// extent, or the swapchain extent when the scene viewport is disabled).
-			ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
-			uiRenderer.SetWorld(&world);
-			uiRenderer.BuildFrame({static_cast<float>(packet.renderExtent.width), static_cast<float>(packet.renderExtent.height)}, packet.drawSlot);
+			debugRenderer.SetFramePhysicsShapes(&packet.physicsDebugShapes);
+			debugRenderer.SetFrameDebugEnabled(packet.debugRenderingEnabled);
 		}
 
 		EndFrame(packet);
@@ -719,7 +734,7 @@ namespace aether
 	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)
 	{
 		m_rendering->GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), fc);
-		m_rendering->GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), m_services.Get<SceneSubsystem>().GetWorld(), fc);
+		m_rendering->GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), fc);
 
 		if (packet.hasCameraData)
 		{

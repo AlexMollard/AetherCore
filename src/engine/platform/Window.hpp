@@ -15,6 +15,15 @@ namespace aether
 	class Window
 	{
 	public:
+		// Declare the process per-monitor DPI-aware. MUST be called before any GLFW
+		// or windowing init (i.e. first thing in main). Without it, Windows
+		// virtualizes a high-DPI monitor (e.g. a 2560x1440 display at 133% scaling
+		// reports 1920x1080 and upscales - blurry, and the swapchain is only 1080p).
+		// With it, GLFW reports the true framebuffer + content scale, and ImGui's
+		// ConfigDpiScaleFonts/Viewports keep the UI crisp and correctly sized.
+		// No-op off Windows. Safe to call once; extra calls are ignored.
+		static void EnableHighDpiAwareness();
+
 		Window(const char* title, int width, int height);
 		~Window();
 

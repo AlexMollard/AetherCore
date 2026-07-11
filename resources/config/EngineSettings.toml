@@ -8,8 +8,8 @@
 # to at runtime; edit it to change the defaults a fresh install boots with.
 
 [window]
-width = 1920
-height = 1080
+width = 2560
+height = 1440
 
 [graphics]
 vsync = false

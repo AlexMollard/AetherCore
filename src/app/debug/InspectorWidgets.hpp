@@ -27,7 +27,7 @@
 namespace aether::app::iw
 {
 	// Width of the label column in property rows. Fields fill the remainder.
-	inline constexpr float kLabelWidth = 116.0f;
+	inline constexpr float kLabelWidth = 128.0f;
 
 	[[nodiscard]] inline ImVec4 ToImVec4(const glm::vec4& c)
 	{
@@ -146,15 +146,37 @@ namespace aether::app::iw
 	// Every row draws a muted label in the fixed label column, then a field that
 	// fills the rest of the width. PushID(label) keeps the "##" field id unique.
 
+	// Draws a muted label clipped to the label column, so a label longer than the
+	// column can never bleed over the field to its right. Truncated labels get a
+	// hover tooltip with the full text. The field always starts at startX +
+	// kLabelWidth and fills the remaining width.
+	inline void LabelColumn(const char* label)
+	{
+		ImGui::AlignTextToFramePadding();
+		const float startX = ImGui::GetCursorPosX();
+		const ImVec2 screenPos = ImGui::GetCursorScreenPos();
+		const float columnWidth = kLabelWidth - ImGui::GetStyle().ItemInnerSpacing.x;
+		const bool truncated = ImGui::CalcTextSize(label).x > columnWidth;
+
+		const ImVec2 clipMin = screenPos;
+		const ImVec2 clipMax(screenPos.x + columnWidth, screenPos.y + ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
+		ImGui::PushClipRect(clipMin, clipMax, true);
+		ImGui::TextUnformatted(label);
+		ImGui::PopClipRect();
+		ImGui::PopStyleColor();
+		if (truncated && ImGui::IsMouseHoveringRect(clipMin, clipMax))
+		{
+			ImGui::SetTooltip("%s", label);
+		}
+
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::SetCursorPosX(startX + kLabelWidth);
+	}
+
 	inline void PropLabel(const char* label)
 	{
-		const float startX = ImGui::GetCursorPosX();
-		ImGui::AlignTextToFramePadding();
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
-		ImGui::TextUnformatted(label);
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
-		ImGui::SetCursorPosX(startX + kLabelWidth);
+		LabelColumn(label);
 		ImGui::SetNextItemWidth(-FLT_MIN);
 	}
 
@@ -295,13 +317,7 @@ namespace aether::app::iw
 		bool changed = false;
 		ImGui::PushID(label);
 
-		const float startX = ImGui::GetCursorPosX();
-		ImGui::AlignTextToFramePadding();
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
-		ImGui::TextUnformatted(label);
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
-		ImGui::SetCursorPosX(startX + kLabelWidth);
+		LabelColumn(label);
 
 		struct AxisChip
 		{
@@ -310,9 +326,9 @@ namespace aether::app::iw
 			float* component;
 		};
 		AxisChip axes[3] = {
-		        {"X", ImVec4(0.80f, 0.30f, 0.32f, 1.0f), &value.x},
-		        {"Y", ImVec4(0.42f, 0.68f, 0.30f, 1.0f), &value.y},
-		        {"Z", ImVec4(0.28f, 0.52f, 0.86f, 1.0f), &value.z},
+		        {"X", ToImVec4(colors::AxisX), &value.x},
+		        {"Y", ToImVec4(colors::AxisY), &value.y},
+		        {"Z", ToImVec4(colors::AxisZ), &value.z},
 		};
 
 		const float chipWidth = ImGui::GetFrameHeight();
@@ -326,9 +342,9 @@ namespace aether::app::iw
 				ImGui::SameLine(0.0f, spacing);
 			}
 			ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(axes[i].color.x * 1.2f, axes[i].color.y * 1.2f, axes[i].color.z * 1.2f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(axes[i].color.x * 1.2f, 1.0f), std::min(axes[i].color.y * 1.2f, 1.0f), std::min(axes[i].color.z * 1.2f, 1.0f), 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextPrimary));
 			if (ImGui::Button(axes[i].tag, ImVec2(chipWidth, 0.0f)))
 			{
 				*axes[i].component = resetValue;
@@ -351,9 +367,9 @@ namespace aether::app::iw
 	inline bool AccentButton(const char* label, const ImVec2& size = ImVec2(0.0f, 0.0f))
 	{
 		ImGui::PushStyleColor(ImGuiCol_Button, ToImVec4(colors::Orange));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(colors::Orange, 0.85f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, WithAlpha(colors::Orange, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.09f, 0.08f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ToImVec4(colors::PrimaryHover));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ToImVec4(colors::PrimaryActive));
+		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::OnPrimary));
 		const bool clicked = ImGui::Button(label, size);
 		ImGui::PopStyleColor(4);
 		return clicked;

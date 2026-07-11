@@ -287,11 +287,10 @@ namespace aether
 		WorldRenderer::Flush(world, m_shadowRenderQueue, /*shadowPass*/ true);
 	}
 
-	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc)
+	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)
 	{
 		AE_PROFILE_ZONE();
 		(void) packet;
-		(void) world;
 
 		m_atlasManager.Reset();
 		m_perLightShadows.clear();

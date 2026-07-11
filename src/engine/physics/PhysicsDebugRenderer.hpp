@@ -40,6 +40,16 @@ namespace aether
 		glm::vec4 color;
 	};
 
+	// One collider's wireframe instance, EXTRACTED from the ECS on the producer
+	// thread into the RenderFramePacket. The render thread replays these (picking
+	// the static per-shape vertex buffer by `shape`) so it never reads the world.
+	struct PhysicsDebugInstance
+	{
+		glm::mat4 model{1.0f};
+		glm::vec4 tint{1.0f};
+		PhysicsShapeType shape = PhysicsShapeType::Box;
+	};
+
 	// Immediate-mode debug primitive builders. Append DebugVertex entries to the
 	// supplied vector. Thread-safe by construction: each thread holds its own
 	// std::vector and the render graph consumes it via the RenderFramePacket.
@@ -87,9 +97,26 @@ namespace aether
 			return m_colorMode;
 		}
 
-		void SetWorld(World* world)
+		// Producer-thread extract: walk the ECS colliders and append a wireframe
+		// instance (model matrix + tint + shape) for each into `out`. Called from
+		// AetherCore::PrepareFrame; the render thread never touches the world.
+		// No-op when physics-debug shapes are disabled.
+		void ExtractShapes(const World& world, std::vector<PhysicsDebugInstance>& out) const;
+
+		// Per-frame pointer to the extracted collider instances (lives in
+		// RenderFramePacket::physicsDebugShapes). Set by ExecuteRenderFrame before
+		// RenderGraph::Execute; the packet's channel transfer is the sync point.
+		void SetFramePhysicsShapes(const std::vector<PhysicsDebugInstance>* shapes)
 		{
-			m_world = world;
+			m_frameShapes = shapes;
+		}
+
+		// Whether the $PhysicsDebug pass draws this frame - copied from the packet
+		// by ExecuteRenderFrame, so the render thread branches on this per-frame
+		// snapshot instead of reading the mutable debug-toggle global.
+		void SetFrameDebugEnabled(bool enabled)
+		{
+			m_frameDebugEnabled = enabled;
 		}
 
 		// Per-frame pointer to the immediate-mode debug vertex vector (lives in
@@ -143,8 +170,9 @@ namespace aether
 		bool m_selfTestEnabled = false;
 		PhysicsDebugColorMode m_colorMode = PhysicsDebugColorMode::None;
 
-		World* m_world = nullptr;
 		const std::vector<DebugVertex>* m_frameDebugVertices = nullptr;
+		const std::vector<PhysicsDebugInstance>* m_frameShapes = nullptr;
+		bool m_frameDebugEnabled = false;
 		gpu::Format m_colorFormat = gpu::Format::Undefined;
 		gpu::Format m_depthFormat = gpu::Format::Undefined;
 

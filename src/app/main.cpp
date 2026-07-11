@@ -3,6 +3,7 @@
 #include "utils/AetherExceptions.hpp"
 #include "Application.hpp"
 #include "platform/CrashHandler.hpp"
+#include "platform/Window.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
@@ -34,6 +35,10 @@ namespace
 
 int main()
 {
+	// Before any windowing/GLFW init, so a high-DPI monitor isn't virtualized down
+	// (a 1440p @ 133% display would otherwise render + present at 1080p and upscale).
+	aether::Window::EnableHighDpiAwareness();
+
 	RuntimeSystemsGuard runtimeSystemsGuard;
 
 	try

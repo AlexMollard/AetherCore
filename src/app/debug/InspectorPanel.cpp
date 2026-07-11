@@ -698,6 +698,11 @@ namespace aether::app
 		ImGui::Separator();
 
 		// ── Component sections ─────────────────────────────────────────────────
+		// The editor's global ItemSpacing.y is tight (3px) for dense list panels;
+		// property rows need more vertical air so stacked sliders/inputs don't
+		// touch. Taller frames + roomier row gaps just for the inspector body.
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 6.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
 		DrawTransform(context, world, entity);
 		DrawSkinnedMesh(world, entity);
 		DrawMaterial(context, world, entity);
@@ -718,6 +723,7 @@ namespace aether::app
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);
+		ImGui::PopStyleVar(2); // ItemSpacing + FramePadding for the component body
 
 		if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload != nullptr && (activePayload->IsDataType(dragdrop::kScriptPayload) || activePayload->IsDataType(dragdrop::kFilePayload)))
 		{

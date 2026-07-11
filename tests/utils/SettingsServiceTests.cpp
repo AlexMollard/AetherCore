@@ -14,15 +14,15 @@ using namespace aether;
 TEST_CASE("SettingsService exposes the values it was constructed with") {
     EngineSettings values;
     values.graphics.fxaa = true;
-    values.window.width = 2560;
-    EngineSettings base; // defaults
+    values.window.width = 3840;
+    EngineSettings base; // defaults (QHD)
 
     ServiceContainer services;
     SettingsService service(values, base, services);
 
     CHECK(service.Get().graphics.fxaa == true);
-    CHECK(service.Get().window.width == 2560);
-    CHECK(service.Base().window.width == 1280);
+    CHECK(service.Get().window.width == 3840);
+    CHECK(service.Base().window.width == 2560);
 }
 
 TEST_CASE("ApplyField marks the settings dirty") {

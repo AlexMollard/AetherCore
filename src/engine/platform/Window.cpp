@@ -1,5 +1,7 @@
 #include "platform/Window.hpp"
 
+#include <cmath>
+
 #include "utils/AetherExceptions.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -7,8 +9,28 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#ifdef _WIN32
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	include <Windows.h>
+#endif
+
 namespace aether
 {
+	void Window::EnableHighDpiAwareness()
+	{
+#ifdef _WIN32
+		// Per-monitor-v2: correct framebuffer + non-client scaling on every monitor.
+		// SetProcessDpiAwarenessContext returns FALSE (harmless) if awareness was
+		// already set - so calling it first thing in main wins over any later default.
+		SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+#endif
+	}
+
 	Window::Window(const char* title, int width, int height)
 	{
 		AE_PROFILE_ZONE();
@@ -30,7 +52,13 @@ namespace aether
 		glfwSetWindowUserPointer(m_window, this);
 		glfwSetFramebufferSizeCallback(m_window, &Window::FramebufferSizeCallback);
 
-		AE_INFO(LogCategory::Window, "Window created successfully.");
+		float xScale = 1.0f;
+		float yScale = 1.0f;
+		glfwGetWindowContentScale(m_window, &xScale, &yScale);
+		int fbW = 0;
+		int fbH = 0;
+		glfwGetFramebufferSize(m_window, &fbW, &fbH);
+		AE_INFO(LogCategory::Window, "Window created: {}x{} framebuffer, content scale {:.2f}x.", fbW, fbH, xScale);
 	}
 
 	void Window::FramebufferSizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
