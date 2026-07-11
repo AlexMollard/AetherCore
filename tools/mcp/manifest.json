@@ -394,6 +394,81 @@
         "type": "object"
       },
       "tool": "get_settings"
+    },
+    {
+      "description": "List every editor panel/window and whether it is currently open. Names feed set_window.",
+      "mutates": false,
+      "name": "editor.windows",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_windows"
+    },
+    {
+      "description": "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.",
+      "mutates": true,
+      "name": "editor.window_set",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "visible"
+        ],
+        "type": "object"
+      },
+      "tool": "set_window"
+    },
+    {
+      "description": "Open the Inspector and scroll a specific component's drawer into view (force-opening it), e.g. 'Rigid Body' or 'Material'. Select an entity first. Matches the section label case-insensitively - use it to frame a component for a screenshot.",
+      "mutates": true,
+      "name": "editor.inspect_component",
+      "paramsSchema": {
+        "properties": {
+          "component": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "type": "object"
+      },
+      "tool": "inspect_component"
+    },
+    {
+      "description": "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",
+      "mutates": true,
+      "name": "scene.select",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "select_entity"
+    },
+    {
+      "description": "The current editor selection: the primary entity id (0 if none) plus all selected ids.",
+      "mutates": false,
+      "name": "scene.selection",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "get_selection"
     }
   ]
 }

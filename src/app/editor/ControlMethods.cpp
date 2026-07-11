@@ -13,6 +13,8 @@
 #include "assets/AssetManager.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
+#include "debug/EditorWindowActions.hpp"
+#include "debug/SceneSelection.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "io/PlatformPaths.hpp"
@@ -477,6 +479,80 @@ namespace aether::app::editor
 			        if (svc == nullptr) { return json{{"error", "no settings service"}}; }
 			        const EngineSettings& s = svc->Get();
 			        return json{{"width", s.window.width}, {"height", s.window.height}, {"vsync", s.graphics.vsync}, {"targetFps", s.app.targetFps}};
+		        }});
+
+		// ── Editor windows + selection ───────────────────────────────────────────
+		// Drive the editor's ImGui panels + entity selection so an agent can set the
+		// editor up to SEE what it is working on: select an entity, open the
+		// inspector, then viewport.screenshot. Editor-only (no EditorWindowActions in
+		// GameRuntime).
+		methods.push_back({"editor.windows", "list_windows", "List every editor panel/window and whether it is currently open. Names feed set_window.", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
+			        if (windows == nullptr || !windows->list) { return json{{"error", "no editor window actions (editor only)"}}; }
+			        json arr = json::array();
+			        for (const EditorWindowInfo& w: windows->list())
+			        {
+				        arr.push_back(json{{"name", w.name}, {"visible", w.visible}});
+			        }
+			        return json{{"windows", arr}};
+		        }});
+
+		methods.push_back({"editor.window_set", "set_window", "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.", true, Obj({{"name", StrProp()}, {"visible", json{{"type", "boolean"}}}}, {"name", "visible"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
+			        if (windows == nullptr || !windows->setVisible) { return json{{"error", "no editor window actions (editor only)"}}; }
+			        const std::string name = p.value("name", std::string{});
+			        const bool visible = p.value("visible", true);
+			        if (!windows->setVisible(name, visible)) { return json{{"error", "no window named '" + name + "' (call list_windows)"}}; }
+			        return json{{"name", name}, {"visible", visible}};
+		        }});
+
+		methods.push_back({"editor.inspect_component", "inspect_component", "Open the Inspector and scroll a specific component's drawer into view (force-opening it), e.g. 'Rigid Body' or 'Material'. Select an entity first. Matches the section label case-insensitively - use it to frame a component for a screenshot.", true, Obj({{"component", StrProp()}}, {"component"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
+			        if (windows == nullptr || !windows->focusInspectorComponent) { return json{{"error", "no editor window actions (editor only)"}}; }
+			        const std::string component = p.value("component", std::string{});
+			        if (component.empty()) { return json{{"error", "component name required"}}; }
+			        windows->focusInspectorComponent(component);
+			        return json{{"focused", component}};
+		        }});
+
+		methods.push_back({"scene.select", "select_entity", "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.", true, Obj({{"id", IntProp()}}, {"id"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* selection = ctx.services.TryGet<SceneSelection>();
+			        if (selection == nullptr) { return json{{"error", "no selection service (editor only)"}}; }
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr) { return ErrNoScene(); }
+			        const std::uint32_t id = IdOf(p);
+			        if (id == 0) { selection->Clear(); return json{{"selected", 0}}; }
+			        const Entity entity{id};
+			        if (!scenes->GetWorld().GetRegistry().valid(World::ToEntt(entity))) { return ErrNoEntity(); }
+			        selection->Select(entity);
+			        json j{{"selected", entity.id}};
+			        if (const auto* n = scenes->GetWorld().TryGet<NameComponent>(entity)) { j["name"] = n->name; }
+			        return j;
+		        }});
+
+		methods.push_back({"scene.selection", "get_selection", "The current editor selection: the primary entity id (0 if none) plus all selected ids.", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* selection = ctx.services.TryGet<SceneSelection>();
+			        if (selection == nullptr) { return json{{"error", "no selection service (editor only)"}}; }
+			        const Entity primary = selection->Primary();
+			        json ids = json::array();
+			        for (const Entity e: selection->All()) { ids.push_back(e.id); }
+			        json j{{"primary", primary.IsValid() ? primary.id : 0u}, {"selected", ids}};
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes != nullptr && primary.IsValid())
+			        {
+				        if (const auto* n = scenes->GetWorld().TryGet<NameComponent>(primary)) { j["primaryName"] = n->name; }
+			        }
+			        return j;
 		        }});
 
 		return methods;

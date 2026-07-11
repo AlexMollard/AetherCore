@@ -13,6 +13,7 @@
 
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorProjectManager.hpp"
+#include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/ScriptErrorOverlay.hpp"
 #include "debug/UndoStack.hpp"
@@ -53,6 +54,9 @@ namespace aether::app
 
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
+		// Window show/hide facade handed to the control endpoint (ServiceContainer
+		// registers a reference to this, so it must outlive the registration).
+		EditorWindowActions m_windowActions;
 		// Selection-outline pulse bookkeeping (brightness eases after changes).
 		std::uint64_t m_outlineSeenSerial = 0;
 		double m_outlinePulseStart = -1.0;

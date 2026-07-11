@@ -1,11 +1,13 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cfloat>
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include <string_view>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -46,12 +48,61 @@ namespace aether::app::iw
 		}
 	}
 
+	// ── Inspector focus (control endpoint / MCP) ──────────────────────────────
+	// One-shot request: the next component section whose label contains this text
+	// (case-insensitive; the icon + spacing prefix is ignored) force-opens and
+	// scrolls itself to the top of the Inspector. Set by the endpoint's
+	// inspect_component method on the main thread and consumed on the very next
+	// inspector draw (same thread), so no locking is needed. Empty => no request.
+	// A free-function-local static is the pragmatic home: every drawer funnels
+	// through the shared BeginSection below, which has no InspectorPanel handle.
+	inline std::string& InspectorFocusRequest()
+	{
+		static std::string request;
+		return request;
+	}
+
 	// ── Section headers ───────────────────────────────────────────────────────
 	// Themed collapsing header shared by every component section. Removable
 	// variant adds a right-aligned remove control; both render identically.
 
 	inline bool BeginSection(const char* label, ImGuiTreeNodeFlags flags)
 	{
+		std::string& focus = InspectorFocusRequest();
+		bool wantFocus = false;
+		if (!focus.empty())
+		{
+			const auto containsIgnoreCase = [](std::string_view haystack, std::string_view needle)
+			{
+				const auto lower = [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); };
+				if (needle.empty() || needle.size() > haystack.size())
+				{
+					return false;
+				}
+				for (std::size_t i = 0; i + needle.size() <= haystack.size(); ++i)
+				{
+					std::size_t j = 0;
+					for (; j < needle.size(); ++j)
+					{
+						if (lower(haystack[i + j]) != lower(needle[j]))
+						{
+							break;
+						}
+					}
+					if (j == needle.size())
+					{
+						return true;
+					}
+				}
+				return false;
+			};
+			wantFocus = containsIgnoreCase(label, focus);
+			if (wantFocus)
+			{
+				ImGui::SetNextItemOpen(true); // expand so the drawer body is visible
+			}
+		}
+
 		ImGui::PushStyleColor(ImGuiCol_Header, ToImVec4(colors::SurfaceElevated));
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(colors::Orange, 0.22f));
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, WithAlpha(colors::Orange, 0.32f));
@@ -59,6 +110,12 @@ namespace aether::app::iw
 		const bool open = ImGui::CollapsingHeader(label, flags | ImGuiTreeNodeFlags_AllowOverlap);
 		ImGui::PopStyleVar();
 		ImGui::PopStyleColor(3);
+
+		if (wantFocus)
+		{
+			ImGui::SetScrollHereY(0.08f); // bring this header near the top of the Inspector
+			focus.clear();                // one-shot
+		}
 		return open;
 	}
 

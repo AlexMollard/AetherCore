@@ -18,6 +18,7 @@ using namespace std::string_view_literals;
 
 #include "debug/ConsolePanel.hpp"
 #include "debug/ControlServerPanel.hpp"
+#include "debug/InspectorWidgets.hpp"
 #include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
 #include "debug/FileExplorerPanel.hpp"
@@ -244,6 +245,59 @@ namespace aether::app
 			panel->LoadSettings(m_debugConfig, context);
 			panel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(panel->GetName()), panel->DefaultVisible()));
 		}
+
+		// Expose window control to the control endpoint / MCP (list + show/hide by
+		// name). Registered after panels exist; cleared in OnDetach. Runs on the
+		// main thread (same as OnImGui), so mutating visibility here is race-free.
+		EditorWindowActions windowActions;
+		windowActions.list = [this]()
+		{
+			std::vector<EditorWindowInfo> out;
+			out.reserve(m_panels.size());
+			for (const auto& panel: m_panels)
+			{
+				out.push_back({std::string(panel->GetName()), panel->IsVisible()});
+			}
+			return out;
+		};
+		windowActions.setVisible = [this](std::string_view name, bool visible) -> bool
+		{
+			const auto equalsIgnoreCase = [](std::string_view a, std::string_view b)
+			{
+				if (a.size() != b.size())
+				{
+					return false;
+				}
+				for (std::size_t i = 0; i < a.size(); ++i)
+				{
+					if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
+					{
+						return false;
+					}
+				}
+				return true;
+			};
+			for (auto& panel: m_panels)
+			{
+				if (equalsIgnoreCase(panel->GetName(), name))
+				{
+					panel->SetVisible(visible);
+					return true;
+				}
+			}
+			return false;
+		};
+		windowActions.focusInspectorComponent = [this](std::string_view component)
+		{
+			// Make sure the Inspector is visible, then hand the drawer-focus token to
+			// the shared section header (iw::BeginSection consumes it next frame).
+			if (DebugPanel* inspector = FindPanelByName("Inspector"))
+			{
+				inspector->SetVisible(true);
+			}
+			iw::InspectorFocusRequest() = std::string(component);
+		};
+		context.services.Register<EditorWindowActions>(m_windowActions = std::move(windowActions));
 	}
 
 	void DebugLayer::OnDetach(LayerContext& context)
@@ -255,6 +309,8 @@ namespace aether::app
 		{
 			panel->OnDetach(context);
 		}
+		context.services.Unregister<EditorWindowActions>(); // callbacks capture m_panels; drop before clearing
+		m_windowActions = {};
 		m_panels.clear();
 		m_hierarchyPanel = nullptr;
 		context.services.Unregister<EditorProjectContext>();

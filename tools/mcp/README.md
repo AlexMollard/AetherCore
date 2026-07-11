@@ -30,6 +30,9 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `engine_info` | yes | Scene name, entity count, frame index, fps. |
 | `list_entities` | yes | Every entity: id, name, world position. |
 | `get_entity` | yes | One entity's full detail: name, position, scale, component types. |
+| `select_entity` / `get_selection` | yes | Set / read the editor's entity selection (the Inspector shows the primary). `select_entity` first, then `set_window` the Inspector open, then `screenshot` to *see* an entity's components. |
+| `list_windows` / `set_window` | yes | List every editor panel + visibility; open/close one by name (case-insensitive). Lets the agent stage the editor before a screenshot. |
+| `inspect_component` | yes | Open the Inspector and scroll a named component's drawer into view (force-opening it), e.g. `Rigid Body`. Select an entity first, then screenshot that component. |
 | `create_entity` | yes | Create an entity (`name`, `position`). Returns its id. |
 | `rename_entity` | yes | Rename an entity by `id`. |
 | `parent_entity` | yes | Set an entity's parent by `id` (`parent:0` unparents to root). |
