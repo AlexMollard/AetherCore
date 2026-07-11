@@ -76,6 +76,36 @@ namespace aether::app::scene
 		float radius = 0.5f;
 		float halfHeight = 0.5f;
 		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
+		// Material + body tunables (v8+): the Collider's friction/bounce/sensor and
+		// the RigidBody's mass/damping/gravity/CCD/axis-locks survive a save/load.
+		glm::vec3 center{0.0f};
+		float friction = 0.5f;
+		float restitution = 0.0f;
+		float mass = 0.0f;
+		float linearDamping = 0.05f;
+		float angularDamping = 0.05f;
+		float gravityFactor = 1.0f;
+		float maxLinearVelocity = 500.0f;
+		float maxAngularVelocity = 47.124f;
+		bool isSensor = false;
+		bool continuousCollision = false;
+		bool allowSleeping = true;
+		glm::bvec3 lockPosition{false};
+		glm::bvec3 lockRotation{false};
+	};
+
+	// Joint/constraint record. target is a file-local entity index (-1 = world),
+	// resolved on apply the same way script entity references are.
+	struct JointRecord
+	{
+		JointType type = JointType::Fixed;
+		int targetIndex = -1;
+		glm::vec3 anchor{0.0f};
+		glm::vec3 axis{0.0f, 1.0f, 0.0f};
+		float minLimit = 0.0f;
+		float maxLimit = 0.0f;
+		float distance = -1.0f;
+		bool collideConnected = false;
 	};
 
 	// UI records are self-contained plain data - they do NOT depend on the
@@ -169,6 +199,8 @@ namespace aether::app::scene
 		bool mainCamera = false;
 		// Entity script slots (v7+, ScriptComponent). Attach state is runtime.
 		std::vector<ScriptRecord> scripts;
+		// Physics joint (v8+): references another entity by file-local index.
+		std::optional<JointRecord> joint;
 	};
 
 	// LEGACY (pre-v3): renderer-level light list. Still parsed so old files

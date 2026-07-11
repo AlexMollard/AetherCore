@@ -73,7 +73,16 @@ namespace aether::app
 	void DrawScript(LayerContext& context, World& world, Entity entity);
 	// Scene-transient marker (excluded from captures), removable.
 	void DrawSceneTransient(World& world, Entity entity);
-	void DrawPhysics(World& world, Entity entity);
+	// Full physics editor: motion type, shape size, material (friction /
+	// restitution / mass / damping / gravity / sensor / CCD / axis-locks) and
+	// runtime controls (velocity, impulse, wake/sleep). Friction, restitution and
+	// gravity apply live; structural changes go through PhysicsSystem::RebuildBody.
+	void DrawPhysics(LayerContext& context, World& world, Entity entity);
+	// Live collision/trigger event readout (overlaps + this-frame enter/exit).
+	void DrawCollisionEvents(World& world, Entity entity);
+	// Joint/constraint editor: type, target entity, anchor/axis/limits. Edits
+	// trigger a constraint rebuild through PhysicsSystem.
+	void DrawJoint(LayerContext& context, World& world, Entity entity);
 	void DrawMeshPipeline(World& world, Entity entity);
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection);
 	// addTagBuf: caller-owned input buffer for the add-by-name field (the

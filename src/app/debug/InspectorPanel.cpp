@@ -560,35 +560,50 @@ namespace aether::app
 			}
 
 			ImGui::SeparatorText("Physics");
-			const bool hasBody = world.Has<RigidBodyComponent>(entity) || world.Has<BoxBodyDesc>(entity) || world.Has<SphereBodyDesc>(entity) || world.Has<CapsuleBodyDesc>(entity);
-			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Box Body (dynamic)", m_addFilter, hasBody))
+			const bool hasCollider = world.Has<ColliderComponent>(entity);
+			const bool hasRigidBody = world.Has<RigidBodyComponent>(entity);
+
+			// Rigid Body drives motion; a Collider is what actually forms the body.
+			// A collider with no rigid body bakes as a static collider.
+			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Rigid Body", m_addFilter, hasRigidBody))
 			{
-				BoxBodyDesc desc{};
-				desc.halfExtents = curScale * 0.5f;
-				desc.motionType = PhysicsMotionType::Dynamic;
-				world.Emplace<BoxBodyDesc>(entity, desc);
+				world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
 			}
-			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Box Body (static)", m_addFilter, hasBody))
+			const auto addCollider = [&](PhysicsShapeType shape, const char* label)
 			{
-				BoxBodyDesc desc{};
-				desc.halfExtents = curScale * 0.5f;
-				desc.motionType = PhysicsMotionType::Static;
-				world.Emplace<BoxBodyDesc>(entity, desc);
+				if (!PaletteEntry(label, m_addFilter, hasCollider))
+				{
+					return;
+				}
+				ColliderComponent c{};
+				c.shape = shape;
+				c.halfExtents = curScale * 0.5f;
+				c.radius = shape == PhysicsShapeType::Sphere ? std::max({curScale.x, curScale.y, curScale.z}) * 0.5f : curScale.x * 0.5f;
+				c.halfHeight = curScale.y * 0.5f;
+				world.Emplace<ColliderComponent>(entity, c);
+			};
+			addCollider(PhysicsShapeType::Box, ICON_FA_WEIGHT_HANGING "  Box Collider");
+			addCollider(PhysicsShapeType::Sphere, ICON_FA_WEIGHT_HANGING "  Sphere Collider");
+			addCollider(PhysicsShapeType::Capsule, ICON_FA_WEIGHT_HANGING "  Capsule Collider");
+			addCollider(PhysicsShapeType::Cylinder, ICON_FA_WEIGHT_HANGING "  Cylinder Collider");
+			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Trigger Volume (box sensor)", m_addFilter, hasCollider))
+			{
+				// A box collider marked as a sensor: reports overlaps, no response.
+				ColliderComponent c{};
+				c.shape = PhysicsShapeType::Box;
+				c.halfExtents = curScale * 0.5f;
+				c.isSensor = true;
+				c.layer = PhysicsLayer::Sensor;
+				world.Emplace<ColliderComponent>(entity, c);
 			}
-			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Sphere Body (dynamic)", m_addFilter, hasBody))
+			if (PaletteEntry(ICON_FA_LINK "  Joint", m_addFilter, world.Has<JointComponent>(entity)))
 			{
-				SphereBodyDesc desc{};
-				desc.radius = std::max({curScale.x, curScale.y, curScale.z}) * 0.5f;
-				desc.motionType = PhysicsMotionType::Dynamic;
-				world.Emplace<SphereBodyDesc>(entity, desc);
+				// Anchor at the entity's current position; edit type/target in the section.
+				world.Emplace<JointComponent>(entity, JointComponent{.anchor = curPos});
 			}
-			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Capsule Body (dynamic)", m_addFilter, hasBody))
+			if (PaletteEntry(ICON_FA_BOLT "  Collision Events", m_addFilter, world.Has<CollisionEventsComponent>(entity)))
 			{
-				CapsuleBodyDesc desc{};
-				desc.radius = curScale.x * 0.5f;
-				desc.halfHeight = curScale.y * 0.5f;
-				desc.motionType = PhysicsMotionType::Dynamic;
-				world.Emplace<CapsuleBodyDesc>(entity, desc);
+				world.GetRegistry().emplace<CollisionEventsComponent>(World::ToEntt(entity));
 			}
 
 			ImGui::SeparatorText("Editor");
@@ -615,7 +630,9 @@ namespace aether::app
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
 		DrawBehaviors(world, entity);
-		DrawPhysics(world, entity);
+		DrawPhysics(context, world, entity);
+		DrawJoint(context, world, entity);
+		DrawCollisionEvents(world, entity);
 		DrawMeshPipeline(world, entity);
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));

@@ -124,6 +124,7 @@ namespace aether
 		void CreateBoxGeometry();
 		void CreateSphereGeometry();
 		void CreateCapsuleGeometry();
+		void CreateCylinderGeometry();
 
 		// Ensure the immediate vertex buffer can hold `vertexCount` vertices;
 		// reallocates (destroy + create) if needed. The handle is owned by the
@@ -160,6 +161,9 @@ namespace aether
 
 		gpu::BufferHandle m_capsuleVertexHandle = {};
 		std::uint32_t m_capsuleVertexCount = 0;
+
+		gpu::BufferHandle m_cylinderVertexHandle = {};
+		std::uint32_t m_cylinderVertexCount = 0;
 
 		// Batched vertex buffer for the per-frame vertex vector. Host-visible
 		// (CpuToGpu memory); uploaded once per frame and drawn in a single draw.

@@ -47,6 +47,8 @@ namespace aether::app::scene
 					return "sphere";
 				case PhysicsShapeType::Capsule:
 					return "capsule";
+				case PhysicsShapeType::Cylinder:
+					return "cylinder";
 				default:
 					return "box";
 			}
@@ -62,7 +64,49 @@ namespace aether::app::scene
 			{
 				return PhysicsShapeType::Capsule;
 			}
+			if (s == "cylinder")
+			{
+				return PhysicsShapeType::Cylinder;
+			}
 			return PhysicsShapeType::Box;
+		}
+
+		const char* JointTypeName(JointType t)
+		{
+			switch (t)
+			{
+				case JointType::Point:
+					return "point";
+				case JointType::Hinge:
+					return "hinge";
+				case JointType::Distance:
+					return "distance";
+				case JointType::Slider:
+					return "slider";
+				default:
+					return "fixed";
+			}
+		}
+
+		JointType JointTypeFromName(std::string_view s)
+		{
+			if (s == "point")
+			{
+				return JointType::Point;
+			}
+			if (s == "hinge")
+			{
+				return JointType::Hinge;
+			}
+			if (s == "distance")
+			{
+				return JointType::Distance;
+			}
+			if (s == "slider")
+			{
+				return JointType::Slider;
+			}
+			return JointType::Fixed;
 		}
 
 		const char* MotionName(PhysicsMotionType t)
@@ -406,10 +450,49 @@ namespace aether::app::scene
 				{
 					rec.skinned = SkinnedRecord{.clipIndex = smc->clipIndex, .animTime = smc->animTime, .playbackSpeed = smc->playbackSpeed, .looping = smc->looping};
 				}
-				if (const auto* shape = world.TryGet<PhysicsDebugShapeComponent>(e))
+				if (const auto* col = world.TryGet<ColliderComponent>(e))
 				{
-					const auto* rb = world.TryGet<RigidBodyComponent>(e);
-					rec.physics = PhysicsRecord{.shapeType = shape->shapeType, .halfExtents = shape->halfExtents, .radius = shape->radius, .halfHeight = shape->halfHeight, .motionType = rb ? rb->motionType : PhysicsMotionType::Static};
+					PhysicsRecord pr{.shapeType = col->shape, .halfExtents = col->halfExtents, .radius = col->radius, .halfHeight = col->halfHeight};
+					pr.center = col->center;
+					pr.friction = col->friction;
+					pr.restitution = col->restitution;
+					pr.isSensor = col->isSensor;
+					if (const auto* rb = world.TryGet<RigidBodyComponent>(e))
+					{
+						pr.motionType = rb->motionType;
+						pr.mass = rb->mass;
+						pr.linearDamping = rb->linearDamping;
+						pr.angularDamping = rb->angularDamping;
+						pr.gravityFactor = rb->gravityFactor;
+						pr.maxLinearVelocity = rb->maxLinearVelocity;
+						pr.maxAngularVelocity = rb->maxAngularVelocity;
+						pr.continuousCollision = rb->continuousCollision;
+						pr.allowSleeping = rb->allowSleeping;
+						pr.lockPosition = rb->lockPosition;
+						pr.lockRotation = rb->lockRotation;
+					}
+					else
+					{
+						pr.motionType = PhysicsMotionType::Static;
+					}
+					rec.physics = pr;
+				}
+				if (const auto* j = world.TryGet<JointComponent>(e))
+				{
+					JointRecord jr;
+					jr.type = j->type;
+					if (j->target.IsValid())
+					{
+						const auto it = indexOf.find(j->target.id);
+						jr.targetIndex = it != indexOf.end() ? it->second : -1;
+					}
+					jr.anchor = j->anchor;
+					jr.axis = j->axis;
+					jr.minLimit = j->minLimit;
+					jr.maxLimit = j->maxLimit;
+					jr.distance = j->distance;
+					jr.collideConnected = j->collideConnected;
+					rec.joint = jr;
 				}
 				if (const auto* c = world.TryGet<ui::UICanvas>(e))
 				{
@@ -728,7 +811,34 @@ namespace aether::app::scene
 				p.insert("half_extents", Vec3ToToml(rec.physics->halfExtents));
 				p.insert("radius", rec.physics->radius);
 				p.insert("half_height", rec.physics->halfHeight);
+				p.insert("center", Vec3ToToml(rec.physics->center));
+				p.insert("friction", rec.physics->friction);
+				p.insert("restitution", rec.physics->restitution);
+				p.insert("mass", rec.physics->mass);
+				p.insert("linear_damping", rec.physics->linearDamping);
+				p.insert("angular_damping", rec.physics->angularDamping);
+				p.insert("gravity_factor", rec.physics->gravityFactor);
+				p.insert("max_linear_vel", rec.physics->maxLinearVelocity);
+				p.insert("max_angular_vel", rec.physics->maxAngularVelocity);
+				p.insert("sensor", rec.physics->isSensor);
+				p.insert("ccd", rec.physics->continuousCollision);
+				p.insert("allow_sleeping", rec.physics->allowSleeping);
+				p.insert("lock_position", Vec3ToToml(glm::vec3(rec.physics->lockPosition.x ? 1.0f : 0.0f, rec.physics->lockPosition.y ? 1.0f : 0.0f, rec.physics->lockPosition.z ? 1.0f : 0.0f)));
+				p.insert("lock_rotation", Vec3ToToml(glm::vec3(rec.physics->lockRotation.x ? 1.0f : 0.0f, rec.physics->lockRotation.y ? 1.0f : 0.0f, rec.physics->lockRotation.z ? 1.0f : 0.0f)));
 				t.insert("physics", std::move(p));
+			}
+			if (rec.joint)
+			{
+				toml::table j;
+				j.insert("type", JointTypeName(rec.joint->type));
+				j.insert("target", static_cast<std::int64_t>(rec.joint->targetIndex));
+				j.insert("anchor", Vec3ToToml(rec.joint->anchor));
+				j.insert("axis", Vec3ToToml(rec.joint->axis));
+				j.insert("min_limit", rec.joint->minLimit);
+				j.insert("max_limit", rec.joint->maxLimit);
+				j.insert("distance", rec.joint->distance);
+				j.insert("collide_connected", rec.joint->collideConnected);
+				t.insert("joint", std::move(j));
 			}
 			if (rec.uiCanvas)
 			{
@@ -1024,11 +1134,41 @@ namespace aether::app::scene
 			if (const auto* p = tv["physics"].as_table())
 			{
 				const toml::node_view<const toml::node> pv{*p};
+				const glm::vec3 lockPos = Vec3FromToml(pv["lock_position"], glm::vec3(0.0f));
+				const glm::vec3 lockRot = Vec3FromToml(pv["lock_rotation"], glm::vec3(0.0f));
 				rec.physics = PhysicsRecord{.shapeType = ShapeFromName(pv["shape"].value_or(std::string{"box"})),
 				        .halfExtents = Vec3FromToml(pv["half_extents"], glm::vec3(0.5f)),
 				        .radius = static_cast<float>(pv["radius"].value_or(0.5)),
 				        .halfHeight = static_cast<float>(pv["half_height"].value_or(0.5)),
-				        .motionType = MotionFromName(pv["motion"].value_or(std::string{"dynamic"}))};
+				        .motionType = MotionFromName(pv["motion"].value_or(std::string{"dynamic"})),
+				        .center = Vec3FromToml(pv["center"], glm::vec3(0.0f)),
+				        .friction = static_cast<float>(pv["friction"].value_or(0.5)),
+				        .restitution = static_cast<float>(pv["restitution"].value_or(0.0)),
+				        .mass = static_cast<float>(pv["mass"].value_or(0.0)),
+				        .linearDamping = static_cast<float>(pv["linear_damping"].value_or(0.05)),
+				        .angularDamping = static_cast<float>(pv["angular_damping"].value_or(0.05)),
+				        .gravityFactor = static_cast<float>(pv["gravity_factor"].value_or(1.0)),
+				        .maxLinearVelocity = static_cast<float>(pv["max_linear_vel"].value_or(500.0)),
+				        .maxAngularVelocity = static_cast<float>(pv["max_angular_vel"].value_or(47.124)),
+				        .isSensor = pv["sensor"].value_or(false),
+				        .continuousCollision = pv["ccd"].value_or(false),
+				        .allowSleeping = pv["allow_sleeping"].value_or(true),
+				        .lockPosition = glm::bvec3(lockPos.x > 0.5f, lockPos.y > 0.5f, lockPos.z > 0.5f),
+				        .lockRotation = glm::bvec3(lockRot.x > 0.5f, lockRot.y > 0.5f, lockRot.z > 0.5f)};
+			}
+			if (const auto* j = tv["joint"].as_table())
+			{
+				const toml::node_view<const toml::node> jv{*j};
+				rec.joint = JointRecord{
+				        .type = JointTypeFromName(jv["type"].value_or(std::string{"fixed"})),
+				        .targetIndex = static_cast<int>(jv["target"].value_or(std::int64_t{-1})),
+				        .anchor = Vec3FromToml(jv["anchor"], glm::vec3(0.0f)),
+				        .axis = Vec3FromToml(jv["axis"], glm::vec3(0.0f, 1.0f, 0.0f)),
+				        .minLimit = static_cast<float>(jv["min_limit"].value_or(0.0)),
+				        .maxLimit = static_cast<float>(jv["max_limit"].value_or(0.0)),
+				        .distance = static_cast<float>(jv["distance"].value_or(-1.0)),
+				        .collideConnected = jv["collide_connected"].value_or(false),
+				};
 			}
 			if (const auto* c = tv["ui_canvas"].as_table())
 			{
@@ -1470,12 +1610,11 @@ namespace aether::app::scene
 			RemoveIf<MaterialComponent>(world, entity);
 			RemoveIf<MaterialInstanceComponent>(world, entity);
 			RemoveIf<SkinnedMeshComponent>(world, entity);
-			RemoveIf<SphereBodyDesc>(world, entity);
-			RemoveIf<CapsuleBodyDesc>(world, entity);
-			RemoveIf<BoxBodyDesc>(world, entity);
+			RemoveIf<JointComponent>(world, entity);
+			RemoveIf<CollisionEventsComponent>(world, entity);
+			RemoveIf<ColliderComponent>(world, entity);
 			RemoveIf<RigidBodyComponent>(world, entity);
 			RemoveIf<PhysicsStateComponent>(world, entity);
-			RemoveIf<PhysicsDebugShapeComponent>(world, entity);
 			RemoveIf<ui::UICanvas>(world, entity);
 			RemoveIf<ui::UIRect>(world, entity);
 			RemoveIf<ui::UIImage>(world, entity);
@@ -1538,38 +1677,57 @@ namespace aether::app::scene
 					world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = ComposeTransform(rec.position, rec.eulerDeg, rec.scale)});
 				}
 
-				// Physics: emplace the same descriptor the das bindings emplace (only
-				// shape + motion are authored); FlushPendingBodies builds the body.
+				// Physics: emplace the Collider + Rigid Body that PhysicsSystem bakes
+				// into a live body on the next flush.
 				if (rec.physics)
 				{
-					switch (rec.physics->shapeType)
+					const PhysicsRecord& phys = *rec.physics;
+					world.Emplace<ColliderComponent>(e,
+					        ColliderComponent{
+					                .shape = phys.shapeType,
+					                .halfExtents = phys.halfExtents,
+					                .radius = phys.radius,
+					                .halfHeight = phys.halfHeight,
+					                .center = phys.center,
+					                .friction = phys.friction,
+					                .restitution = phys.restitution,
+					                .isSensor = phys.isSensor,
+					                .layer = phys.isSensor ? PhysicsLayer::Sensor : PhysicsLayer::Moving,
+					        });
+					world.Emplace<RigidBodyComponent>(e,
+					        RigidBodyComponent{
+					                .motionType = phys.motionType,
+					                .mass = phys.mass,
+					                .linearDamping = phys.linearDamping,
+					                .angularDamping = phys.angularDamping,
+					                .gravityFactor = phys.gravityFactor,
+					                .maxLinearVelocity = phys.maxLinearVelocity,
+					                .maxAngularVelocity = phys.maxAngularVelocity,
+					                .continuousCollision = phys.continuousCollision,
+					                .allowSleeping = phys.allowSleeping,
+					                .lockPosition = phys.lockPosition,
+					                .lockRotation = phys.lockRotation,
+					        });
+				}
+				if (rec.joint)
+				{
+					const JointRecord& jr = *rec.joint;
+					Entity targetEntity{};
+					if (jr.targetIndex >= 0 && jr.targetIndex < static_cast<int>(created.size()))
 					{
-						case PhysicsShapeType::Sphere:
-						{
-							SphereBodyDesc desc{};
-							desc.radius = rec.physics->radius;
-							desc.motionType = rec.physics->motionType;
-							world.Emplace<SphereBodyDesc>(e, desc);
-							break;
-						}
-						case PhysicsShapeType::Capsule:
-						{
-							CapsuleBodyDesc desc{};
-							desc.halfHeight = rec.physics->halfHeight;
-							desc.radius = rec.physics->radius;
-							desc.motionType = rec.physics->motionType;
-							world.Emplace<CapsuleBodyDesc>(e, desc);
-							break;
-						}
-						default:
-						{
-							BoxBodyDesc desc{};
-							desc.halfExtents = rec.physics->halfExtents;
-							desc.motionType = rec.physics->motionType;
-							world.Emplace<BoxBodyDesc>(e, desc);
-							break;
-						}
+						targetEntity = created[static_cast<std::size_t>(jr.targetIndex)];
 					}
+					world.Emplace<JointComponent>(e,
+					        JointComponent{
+					                .type = jr.type,
+					                .target = targetEntity,
+					                .anchor = jr.anchor,
+					                .axis = jr.axis,
+					                .minLimit = jr.minLimit,
+					                .maxLimit = jr.maxLimit,
+					                .distance = jr.distance,
+					                .collideConnected = jr.collideConnected,
+					        });
 				}
 
 				if (rec.uiCanvas)

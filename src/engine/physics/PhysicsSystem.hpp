@@ -4,6 +4,7 @@
 #include <memory>
 #include <semaphore>
 #include <thread>
+#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <entt/entt.hpp>
@@ -37,16 +38,15 @@ namespace aether
 	// Usage:
 	//   world.RegisterSystem(std::make_unique<PhysicsSystem>());
 	//
-	//   // Spawn a physics-backed entity by emplacing a descriptor + transform:
+	//   // Spawn a physics-backed entity by emplacing a Collider (+ RigidBody):
 	//   auto e = world.Create();
-	//   world.Emplace<TransformComponent>(e, ...);       // position only, no scale
-	//   world.Emplace<BoxBodyDesc>(e, BoxBodyDesc{       // engine handles the rest
-	//       .halfExtents = {1, 1, 1},
-	//       .motionType  = PhysicsMotionType::Static,
-	//   });
+	//   world.Emplace<TransformComponent>(e, ...);        // position only, no scale
+	//   world.Emplace<ColliderComponent>(e, ColliderComponent{.shape = PhysicsShapeType::Box, .halfExtents = {1, 1, 1}});
+	//   world.Emplace<RigidBodyComponent>(e, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
 	//
-	//   // PhysicsSystem processes the descriptor on the next Update, creates the
-	//   // physics body, sets the correct scaled transform, and removes the descriptor.
+	//   // PhysicsSystem bakes the Jolt body from the Collider + RigidBody on the
+	//   // next Update, sets the correct scaled transform, and fills in the handle.
+	//   // A Collider with no RigidBody bakes as a static body.
 	//
 	class PhysicsSystem final : public System
 	{
@@ -81,10 +81,32 @@ namespace aether
 		[[nodiscard]] glm::vec3 GetAngularVelocity(PhysicsBodyHandle body);
 		void AddImpulse(PhysicsBodyHandle body, glm::vec3 impulse);
 		void AddForce(PhysicsBodyHandle body, glm::vec3 force);
+		void AddTorque(PhysicsBodyHandle body, glm::vec3 torque);
+		void AddAngularImpulse(PhysicsBodyHandle body, glm::vec3 angularImpulse);
 
 		// Teleport a body (does not generate contacts for the move).
 		void SetPosition(PhysicsBodyHandle body, glm::vec3 position);
 		void SetRotation(PhysicsBodyHandle body, glm::quat rotation);
+
+		// -- Live material edits (no rebuild needed) ---------------------------
+		void SetFriction(PhysicsBodyHandle body, float friction);
+		void SetRestitution(PhysicsBodyHandle body, float restitution);
+		void SetGravityFactor(PhysicsBodyHandle body, float factor);
+
+		// Wake / sleep a body, and query whether it is currently simulating.
+		void SetBodyActive(PhysicsBodyHandle body, bool active);
+		[[nodiscard]] bool IsBodyActive(PhysicsBodyHandle body);
+
+		// Destroy an entity's live body so the next flush re-bakes it from its
+		// (persistent) ColliderComponent + RigidBodyComponent, preserving velocity.
+		// Used by the inspector for changes Jolt cannot apply in place - shape,
+		// dimensions, motion type, mass, damping, sensor flag, CCD, or axis locks.
+		// Safe to call while Editing; steps nothing, just re-bakes.
+		void RebuildBody(World& world, Entity entity);
+
+		// Destroy an entity's joint constraint so FlushPendingJoints recreates it
+		// from the (edited) JointComponent next tick. Used by the inspector.
+		void RebuildJoint(World& world, Entity entity);
 
 		// Block until no async physics step is in flight. Callers that destroy
 		// bodies outside Update (scene replace-all, editor stop-restore) MUST
@@ -106,6 +128,7 @@ namespace aether
 			glm::vec3 normal{0.f, 0.f, 0.f};   // surface normal at hit point
 			float fraction = 1.f;              // hit distance / maxDistance
 			PhysicsBodyHandle body;            // Body that was hit
+			std::uint32_t entity = 0;          // entity id of the hit body (0 = none)
 		};
 
 		// Cast a ray against the physics world.
@@ -122,12 +145,31 @@ namespace aether
 			return CastRay(origin, {0.f, -1.f, 0.f}, maxDistance);
 		}
 
+		// Sweep a sphere of `radius` from origin along direction for maxDistance.
+		// Like CastRay but with thickness - useful for character/projectile moves.
+		RaycastResult SphereCast(glm::vec3 origin, glm::vec3 direction, float radius, float maxDistance);
+
+		// Entity ids of every body overlapping a sphere at `center`. Reads each hit
+		// body's user-data (its entity id); the calling code maps them to entities.
+		[[nodiscard]] std::vector<std::uint32_t> OverlapSphere(glm::vec3 center, float radius);
+
 		static constexpr float kFixedTimestep = 1.0f / 60.0f;
 
+	public:
+		// Called via entt sink when a JointComponent is destroyed - removes the
+		// backing Jolt constraint so constraints never leak.
+		void OnJointDestroyed(entt::registry& registry, entt::entity enttEntity);
+
 	private:
-		// Consume pending *BodyDesc components and create Jolt bodies for them.
+		// Consume pending Collider components and create Jolt bodies for them.
 		// Called at the top of every Update before the physics step.
 		void FlushPendingBodies(World& world);
+		// Create constraints for JointComponents whose bodies are now both live.
+		void FlushPendingJoints(World& world);
+		// Remove one joint constraint by id (re-enabling any disabled collision pair).
+		void RemoveJointConstraint(std::uint32_t constraintId);
+		// Move buffered contact-listener events into CollisionEventsComponents.
+		void DrainContactEvents(World& world);
 
 		void StepPhysics();
 		void SyncTransforms(World& world, float alpha);
@@ -167,9 +209,10 @@ namespace aether
 		// Alpha saved at end of each Update for the next frame's SyncTransforms.
 		float m_lastAlpha = 0.0f;
 
-		// Auto-disconnects in the destructor (declared last so it disconnects
+		// Auto-disconnects in the destructor (declared last so they disconnect
 		// before m_impl is destroyed - reverse member destruction order).
 		entt::scoped_connection m_rigidBodyDestroyConn;
+		entt::scoped_connection m_jointDestroyConn;
 	};
 
 } // namespace aether

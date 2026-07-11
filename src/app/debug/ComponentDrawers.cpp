@@ -959,24 +959,307 @@ namespace aether::app
 		ImGui::TextDisabled("Param slot %u", ep->paramSlot);
 	}
 
-	void DrawPhysics(World& world, Entity entity)
+	void DrawPhysics(LayerContext& context, World& world, Entity entity)
 	{
-		const auto* rb = world.TryGet<RigidBodyComponent>(entity);
-		const auto* ps = world.TryGet<PhysicsStateComponent>(entity);
-		if ((!rb && !ps) || !ImGui::CollapsingHeader(ICON_FA_WEIGHT_HANGING "  Physics"))
+		auto* collider = world.TryGet<ColliderComponent>(entity);
+		auto* rb = world.TryGet<RigidBodyComponent>(entity);
+		auto* ps = world.TryGet<PhysicsStateComponent>(entity);
+		if (collider == nullptr && rb == nullptr)
 		{
 			return;
 		}
-		if (rb)
+
+		auto* physics = context.TryGet<PhysicsSystem>();
+		bool rebuild = false;
+
+		// ── Collider: shape + dimensions + surface material ────────────────────
+		if (collider != nullptr)
 		{
-			const char* motion = rb->motionType == PhysicsMotionType::Static ? "Static" : rb->motionType == PhysicsMotionType::Kinematic ? "Kinematic" : "Dynamic";
-			ImGui::Text("Motion: %s", motion);
-			ImGui::TextDisabled("(motion/shape changes need a body rebuild - later spec)");
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_CUBE "  Collider", ICON_FA_XMARK "##removeCollider", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			if (removed)
+			{
+				// Removing the collider removes the whole body (collider + rigid body).
+				if (physics != nullptr)
+				{
+					physics->RemoveBody(world, entity);
+				}
+				else
+				{
+					world.Remove<ColliderComponent>(entity);
+				}
+				return;
+			}
+			if (open)
+			{
+				const char* kShapes[] = {"Box", "Sphere", "Capsule", "Cylinder"};
+				int shapeIdx = static_cast<int>(collider->shape);
+				ImGui::SetNextItemWidth(150.0f);
+				if (ImGui::Combo("Shape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes)))
+				{
+					collider->shape = static_cast<PhysicsShapeType>(std::clamp(shapeIdx, 0, 3));
+					rebuild = true;
+				}
+				switch (collider->shape)
+				{
+					case PhysicsShapeType::Box:
+						ImGui::DragFloat3("Half extents", &collider->halfExtents.x, 0.02f, 0.01f, 1000.0f);
+						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+						break;
+					case PhysicsShapeType::Sphere:
+						ImGui::DragFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f);
+						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+						break;
+					case PhysicsShapeType::Capsule:
+					case PhysicsShapeType::Cylinder:
+						ImGui::DragFloat("Radius##shape", &collider->radius, 0.02f, 0.01f, 1000.0f);
+						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+						ImGui::DragFloat("Half height##shape", &collider->halfHeight, 0.02f, 0.01f, 1000.0f);
+						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+						break;
+				}
+				ImGui::DragFloat3("Center", &collider->center.x, 0.02f);
+				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+
+				bool live = false;
+				live |= ImGui::DragFloat("Friction", &collider->friction, 0.005f, 0.0f, 2.0f);
+				live |= ImGui::DragFloat("Restitution", &collider->restitution, 0.005f, 0.0f, 1.0f);
+				collider->friction = std::max(0.0f, collider->friction);
+				collider->restitution = std::clamp(collider->restitution, 0.0f, 1.0f);
+				rebuild |= ImGui::Checkbox("Sensor (trigger)", &collider->isSensor);
+				ImGui::SetItemTooltip("Reports overlaps but produces no collision response");
+
+				if (live && physics != nullptr && rb != nullptr && rb->body.IsValid())
+				{
+					physics->SetFriction(rb->body, collider->friction);
+					physics->SetRestitution(rb->body, collider->restitution);
+				}
+			}
 		}
-		if (ps)
+
+		// ── Rigid Body: motion + body-level tunables + runtime controls ────────
+		if (rb != nullptr)
 		{
-			ImGui::Text("Position  %.2f  %.2f  %.2f", ps->currPosition.x, ps->currPosition.y, ps->currPosition.z);
-			ImGui::Text("Scale     %.2f  %.2f  %.2f", ps->scale.x, ps->scale.y, ps->scale.z);
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_WEIGHT_HANGING "  Rigid Body", ICON_FA_XMARK "##removeRigidBody", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			if (removed)
+			{
+				// Drop the rigid body; a remaining collider re-bakes as a static body.
+				world.Remove<RigidBodyComponent>(entity); // on_destroy hook frees the Jolt body
+				world.Remove<PhysicsStateComponent>(entity);
+				return;
+			}
+			if (open)
+			{
+				const char* kMotions[] = {"Static", "Kinematic", "Dynamic"};
+				int motionIdx = static_cast<int>(rb->motionType);
+				ImGui::SetNextItemWidth(150.0f);
+				if (ImGui::Combo("Motion", &motionIdx, kMotions, IM_ARRAYSIZE(kMotions)))
+				{
+					rb->motionType = static_cast<PhysicsMotionType>(std::clamp(motionIdx, 0, 2));
+					rebuild = true;
+				}
+
+				bool live = false;
+				live |= ImGui::DragFloat("Gravity factor", &rb->gravityFactor, 0.01f, -4.0f, 4.0f);
+				ImGui::DragFloat("Mass (0=auto)", &rb->mass, 0.05f, 0.0f, 100000.0f);
+				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+				rb->mass = std::max(0.0f, rb->mass);
+				ImGui::DragFloat("Linear damping", &rb->linearDamping, 0.005f, 0.0f, 1.0f);
+				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+				ImGui::DragFloat("Angular damping", &rb->angularDamping, 0.005f, 0.0f, 1.0f);
+				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+				rb->linearDamping = std::clamp(rb->linearDamping, 0.0f, 1.0f);
+				rb->angularDamping = std::clamp(rb->angularDamping, 0.0f, 1.0f);
+				ImGui::DragFloat("Max linear vel", &rb->maxLinearVelocity, 1.0f, 0.0f, 100000.0f);
+				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+				ImGui::DragFloat("Max angular vel", &rb->maxAngularVelocity, 0.5f, 0.0f, 10000.0f);
+				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+
+				rebuild |= ImGui::Checkbox("CCD", &rb->continuousCollision);
+				ImGui::SetItemTooltip("Continuous collision - stops fast bodies tunneling");
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("Sleeps", &rb->allowSleeping);
+				ImGui::SetItemTooltip("Let the solver deactivate this body when it comes to rest");
+
+				ImGui::TextDisabled("Freeze pos");
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("X##lockPosX", &rb->lockPosition.x);
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("Y##lockPosY", &rb->lockPosition.y);
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("Z##lockPosZ", &rb->lockPosition.z);
+				ImGui::TextDisabled("Freeze rot");
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("X##lockRotX", &rb->lockRotation.x);
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("Y##lockRotY", &rb->lockRotation.y);
+				ImGui::SameLine();
+				rebuild |= ImGui::Checkbox("Z##lockRotZ", &rb->lockRotation.z);
+
+				if (live && physics != nullptr && rb->body.IsValid())
+				{
+					physics->SetGravityFactor(rb->body, rb->gravityFactor);
+				}
+
+				if (physics != nullptr && rb->body.IsValid())
+				{
+					ImGui::SeparatorText("Runtime");
+					glm::vec3 velocity = physics->GetLinearVelocity(rb->body);
+					if (DrawVec3Row("Velocity", velocity, 0.0f, 0.05f))
+					{
+						physics->SetLinearVelocity(rb->body, velocity);
+					}
+					if (ImGui::SmallButton("Impulse +Y"))
+					{
+						physics->AddImpulse(rb->body, glm::vec3(0.0f, 5.0f, 0.0f));
+					}
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Spin +Y"))
+					{
+						physics->AddAngularImpulse(rb->body, glm::vec3(0.0f, 2.0f, 0.0f));
+					}
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Stop"))
+					{
+						physics->SetLinearVelocity(rb->body, glm::vec3(0.0f));
+						physics->SetAngularVelocity(rb->body, glm::vec3(0.0f));
+					}
+					ImGui::SameLine();
+					const bool active = physics->IsBodyActive(rb->body);
+					if (ImGui::SmallButton(active ? "Sleep" : "Wake"))
+					{
+						physics->SetBodyActive(rb->body, !active);
+					}
+					ImGui::SameLine();
+					ImGui::TextDisabled(active ? "awake" : "asleep");
+				}
+			}
+		}
+
+		if (ps != nullptr)
+		{
+			ImGui::TextDisabled("Pos %.2f %.2f %.2f   Scale %.2f %.2f %.2f", ps->currPosition.x, ps->currPosition.y, ps->currPosition.z, ps->scale.x, ps->scale.y, ps->scale.z);
+		}
+
+		if (rebuild && physics != nullptr)
+		{
+			physics->RebuildBody(world, entity);
+		}
+	}
+
+	void DrawCollisionEvents(World& world, Entity entity)
+	{
+		auto* ev = world.TryGet<CollisionEventsComponent>(entity);
+		if (ev == nullptr)
+		{
+			return;
+		}
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_BOLT "  Collision Events", ICON_FA_XMARK "##removeCollisionEvents", removed);
+		if (removed)
+		{
+			world.Remove<CollisionEventsComponent>(entity);
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+		ImGui::TextDisabled("This frame  contacts +%zu / -%zu   triggers +%zu / -%zu", ev->collisionEnter.size(), ev->collisionExit.size(), ev->triggerEnter.size(), ev->triggerExit.size());
+		ImGui::Text("Overlapping (%zu)", ev->overlapping.size());
+		int shown = 0;
+		for (const Entity other: ev->overlapping)
+		{
+			if (shown++ >= 12)
+			{
+				ImGui::BulletText("...");
+				break;
+			}
+			ImGui::BulletText("%s  #%u", EntityDisplayName(world, other), other.id);
+		}
+		ImGui::TextDisabled("Runtime only - populated while Playing.");
+	}
+
+	void DrawJoint(LayerContext& context, World& world, Entity entity)
+	{
+		auto* joint = world.TryGet<JointComponent>(entity);
+		if (joint == nullptr)
+		{
+			return;
+		}
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_LINK "  Joint", ICON_FA_XMARK "##removeJoint", removed);
+		if (removed)
+		{
+			world.Remove<JointComponent>(entity);
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+
+		auto* physics = context.TryGet<PhysicsSystem>();
+		bool rebuild = false;
+
+		const char* kTypes[] = {"Fixed", "Point", "Hinge", "Distance", "Slider"};
+		int typeIdx = static_cast<int>(joint->type);
+		ImGui::SetNextItemWidth(150.0f);
+		if (ImGui::Combo("Type", &typeIdx, kTypes, IM_ARRAYSIZE(kTypes)))
+		{
+			joint->type = static_cast<JointType>(std::clamp(typeIdx, 0, 4));
+			rebuild = true;
+		}
+
+		// Target body: drag an entity from the hierarchy, or leave empty for world.
+		const bool targetAlive = joint->target.IsValid() && world.GetRegistry().valid(World::ToEntt(joint->target));
+		const std::string targetLabel = targetAlive ? std::string(EntityDisplayName(world, joint->target)) + "  #" + std::to_string(joint->target.id) : "World (fixed)";
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("Target");
+		ImGui::SameLine(90.0f);
+		ImGui::Button((targetLabel + "##jointTarget").c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 26.0f, 0.0f));
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload))
+			{
+				if (payload->DataSize == sizeof(std::uint32_t))
+				{
+					joint->target = Entity{*static_cast<const std::uint32_t*>(payload->Data)};
+					rebuild = true;
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton(ICON_FA_XMARK "##clearJointTarget"))
+		{
+			joint->target = Entity{};
+			rebuild = true;
+		}
+
+		ImGui::DragFloat3("Anchor", &joint->anchor.x, 0.02f);
+		rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+		if (joint->type == JointType::Hinge || joint->type == JointType::Slider)
+		{
+			ImGui::DragFloat3("Axis", &joint->axis.x, 0.02f);
+			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+			ImGui::DragFloat("Limit min", &joint->minLimit, 0.01f);
+			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+			ImGui::DragFloat("Limit max", &joint->maxLimit, 0.01f);
+			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+			ImGui::TextDisabled(joint->type == JointType::Hinge ? "Limits in radians; min>=max = free spin" : "Limits in metres; min>=max = free slide");
+		}
+		if (joint->type == JointType::Distance)
+		{
+			ImGui::DragFloat("Distance (-1=current)", &joint->distance, 0.02f, -1.0f, 10000.0f);
+			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+		}
+		rebuild |= ImGui::Checkbox("Collide connected", &joint->collideConnected);
+
+		if (rebuild && physics != nullptr)
+		{
+			physics->RebuildJoint(world, entity);
 		}
 	}
 

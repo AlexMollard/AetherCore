@@ -77,7 +77,7 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     const std::uint32_t groundTag = TagCreate("serializer_test_ground");
     TagAdd(&world, floor.id, groundTag);
     world.Emplace<TransformComponent>(floor, TransformComponent{.localToWorld = ComposeTransform({0, -1, 0}, {0, 0, 0}, {112, 2, 112})});
-    world.Emplace<PhysicsDebugShapeComponent>(floor, PhysicsDebugShapeComponent{.shapeType = PhysicsShapeType::Box, .halfExtents = {56, 1, 56}});
+    world.Emplace<ColliderComponent>(floor, ColliderComponent{.shape = PhysicsShapeType::Box, .halfExtents = {56, 1, 56}});
     world.Emplace<RigidBodyComponent>(floor, RigidBodyComponent{.motionType = PhysicsMotionType::Static});
     world.Emplace<MeshSourceComponent>(floor, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "cube", .primitiveIndex = 0});
 
@@ -86,7 +86,7 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     world.Emplace<NameComponent>(child, NameComponent{.name = "Toy"});
     world.Emplace<TransformComponent>(child, TransformComponent{.localToWorld = ComposeTransform({1, 2, 3}, {10, 20, 30}, {2, 2, 2})});
     ecs::SetParent(world, child, floor);
-    world.Emplace<PhysicsDebugShapeComponent>(child, PhysicsDebugShapeComponent{.shapeType = PhysicsShapeType::Sphere, .radius = 0.75f});
+    world.Emplace<ColliderComponent>(child, ColliderComponent{.shape = PhysicsShapeType::Sphere, .radius = 0.75f});
     world.Emplace<RigidBodyComponent>(child, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
     MaterialAsset asset;
     asset.baseColorFactor = {0.9f, 0.2f, 0.1f, 1.0f};
@@ -284,7 +284,7 @@ TEST_CASE("ApplyScene rebuilds names, tags, transforms, physics descs and hierar
     source.Emplace<NameComponent>(kid, NameComponent{.name = "Kid"});
     source.Emplace<TransformComponent>(kid, TransformComponent{});
     ecs::SetParent(source, kid, parent);
-    source.Emplace<PhysicsDebugShapeComponent>(kid, PhysicsDebugShapeComponent{.shapeType = PhysicsShapeType::Capsule, .radius = 0.3f, .halfHeight = 0.9f});
+    source.Emplace<ColliderComponent>(kid, ColliderComponent{.shape = PhysicsShapeType::Capsule, .radius = 0.3f, .halfHeight = 0.9f});
     source.Emplace<RigidBodyComponent>(kid, RigidBodyComponent{.motionType = PhysicsMotionType::Kinematic});
     const std::uint32_t tag = TagCreate("serializer_test_apply");
     TagAdd(&source, kid.id, tag);
@@ -313,11 +313,14 @@ TEST_CASE("ApplyScene rebuilds names, tags, transforms, physics descs and hierar
     REQUIRE(fresh.TryGet<HierarchyComponent>(appliedKid) != nullptr);
     CHECK(fresh.Get<HierarchyComponent>(appliedKid).parent == appliedParent);
 
-    const auto* capsule = fresh.TryGet<CapsuleBodyDesc>(appliedKid);
-    REQUIRE(capsule != nullptr);
-    CHECK(capsule->radius == doctest::Approx(0.3f));
-    CHECK(capsule->halfHeight == doctest::Approx(0.9f));
-    CHECK(capsule->motionType == PhysicsMotionType::Kinematic);
+    const auto* collider = fresh.TryGet<ColliderComponent>(appliedKid);
+    REQUIRE(collider != nullptr);
+    CHECK(collider->shape == PhysicsShapeType::Capsule);
+    CHECK(collider->radius == doctest::Approx(0.3f));
+    CHECK(collider->halfHeight == doctest::Approx(0.9f));
+    const auto* body = fresh.TryGet<RigidBodyComponent>(appliedKid);
+    REQUIRE(body != nullptr);
+    CHECK(body->motionType == PhysicsMotionType::Kinematic);
 }
 
 TEST_CASE("Effect records apply through the real effect path on load") {

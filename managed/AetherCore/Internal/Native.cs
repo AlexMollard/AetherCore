@@ -161,6 +161,52 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial int aether_physics_is_debug_enabled();
 
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_set_angular_velocity(uint id, Vector3 velocity);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector3 aether_physics_get_angular_velocity(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_add_force(uint id, Vector3 force);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_add_impulse(uint id, Vector3 impulse);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_add_torque(uint id, Vector3 torque);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_add_angular_impulse(uint id, Vector3 impulse);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_freeze_rotation(uint id, int x, int y, int z);
+
+    [LibraryImport(Lib)]
+    internal static partial RaycastHit aether_physics_raycast(Vector3 origin, Vector3 direction, float maxDistance);
+
+    [LibraryImport(Lib)]
+    internal static partial RaycastHit aether_physics_spherecast(Vector3 origin, Vector3 direction, float radius, float maxDistance);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_physics_overlap_sphere(Vector3 center, float radius);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_physics_overlap_at(int index);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_enable_events(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_physics_event_count(uint id, int kind);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_physics_event_at(uint id, int kind, int index);
+
     // ── Effects ───────────────────────────────────────────────────────────────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_effect_set(uint id, string name);

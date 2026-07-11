@@ -111,6 +111,8 @@ namespace aether
 	        m_sphereVertexCount(rhs.m_sphereVertexCount),
 	        m_capsuleVertexHandle(rhs.m_capsuleVertexHandle),
 	        m_capsuleVertexCount(rhs.m_capsuleVertexCount),
+	        m_cylinderVertexHandle(rhs.m_cylinderVertexHandle),
+	        m_cylinderVertexCount(rhs.m_cylinderVertexCount),
 	        m_immediateVertexHandle(rhs.m_immediateVertexHandle),
 	        m_immediateCapacity(rhs.m_immediateCapacity)
 	{
@@ -118,6 +120,7 @@ namespace aether
 		rhs.m_boxVertexHandle = {};
 		rhs.m_sphereVertexHandle = {};
 		rhs.m_capsuleVertexHandle = {};
+		rhs.m_cylinderVertexHandle = {};
 		rhs.m_immediateVertexHandle = {};
 		rhs.m_immediateCapacity = 0;
 	}
@@ -141,6 +144,8 @@ namespace aether
 			m_sphereVertexCount = rhs.m_sphereVertexCount;
 			m_capsuleVertexHandle = rhs.m_capsuleVertexHandle;
 			m_capsuleVertexCount = rhs.m_capsuleVertexCount;
+			m_cylinderVertexHandle = rhs.m_cylinderVertexHandle;
+			m_cylinderVertexCount = rhs.m_cylinderVertexCount;
 			m_immediateVertexHandle = rhs.m_immediateVertexHandle;
 			m_immediateCapacity = rhs.m_immediateCapacity;
 
@@ -148,6 +153,7 @@ namespace aether
 			rhs.m_boxVertexHandle = {};
 			rhs.m_sphereVertexHandle = {};
 			rhs.m_capsuleVertexHandle = {};
+			rhs.m_cylinderVertexHandle = {};
 			rhs.m_immediateVertexHandle = {};
 			rhs.m_immediateCapacity = 0;
 		}
@@ -163,6 +169,7 @@ namespace aether
 		CreateBoxGeometry();
 		CreateSphereGeometry();
 		CreateCapsuleGeometry();
+		CreateCylinderGeometry();
 		m_immediateCapacity = 0;
 		m_enabled = true;
 		m_colorMode = PhysicsDebugColorMode::ByMotionType;
@@ -185,6 +192,11 @@ namespace aether
 		{
 			gpu::ResourceRegistry::Destroy(m_capsuleVertexHandle);
 			m_capsuleVertexHandle = {};
+		}
+		if (m_cylinderVertexHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_cylinderVertexHandle);
+			m_cylinderVertexHandle = {};
 		}
 		DestroyImmediateBuffer();
 		if (m_pipelineHandle.IsValid())
@@ -394,6 +406,41 @@ namespace aether
 
 		m_capsuleVertexCount = static_cast<std::uint32_t>(vertices.size());
 		m_capsuleVertexHandle = CreateStaticVertexBuffer(vertices, "PhysicsDebug.CapsuleGeometry");
+	}
+
+	void PhysicsDebugRenderer::CreateCylinderGeometry()
+	{
+		// Unit cylinder: radius 0.5, half-height 0.5, axis along Y. Scaled per-body
+		// by the entity transform (radius*2, halfHeight*2, radius*2).
+		std::vector<DebugVertex> vertices;
+		constexpr glm::vec4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
+		constexpr int kSegments = 16;
+		constexpr float kRadius = 0.5f;
+		constexpr float kHalfHeight = 0.5f;
+		constexpr float kTwoPi = 6.28318530718f;
+
+		for (int i = 0; i < kSegments; ++i)
+		{
+			const float theta1 = (static_cast<float>(i) * kTwoPi) / kSegments;
+			const float theta2 = (static_cast<float>(i + 1) * kTwoPi) / kSegments;
+			const float cx1 = kRadius * std::cos(theta1);
+			const float cz1 = kRadius * std::sin(theta1);
+			const float cx2 = kRadius * std::cos(theta2);
+			const float cz2 = kRadius * std::sin(theta2);
+
+			// Top ring.
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, kHalfHeight, cz1}, .color = kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, kHalfHeight, cz2}, .color = kWhite});
+			// Bottom ring.
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, -kHalfHeight, cz1}, .color = kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, -kHalfHeight, cz2}, .color = kWhite});
+			// Vertical strut connecting the two rings.
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, kHalfHeight, cz1}, .color = kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, -kHalfHeight, cz1}, .color = kWhite});
+		}
+
+		m_cylinderVertexCount = static_cast<std::uint32_t>(vertices.size());
+		m_cylinderVertexHandle = CreateStaticVertexBuffer(vertices, "PhysicsDebug.CylinderGeometry");
 	}
 
 	// -- Free-function debug primitive builders -------------------------------
@@ -639,8 +686,8 @@ namespace aether
 			return;
 		}
 
-		m_world->View<PhysicsDebugShapeComponent, PhysicsStateComponent, RigidBodyComponent>().each(
-		        [&](entt::entity /*entity*/, const PhysicsDebugShapeComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
+		m_world->View<ColliderComponent, PhysicsStateComponent, RigidBodyComponent>().each(
+		        [&](entt::entity /*entity*/, const ColliderComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
 		        {
 			        glm::vec4 tint = colors::DebugYellow;
 			        if (m_colorMode == PhysicsDebugColorMode::ByMotionType)
@@ -652,7 +699,7 @@ namespace aether
 
 			        gpu::BufferHandle vertexHandle{};
 			        std::uint32_t vertexCount = 0;
-			        switch (shape.shapeType)
+			        switch (shape.shape)
 			        {
 				        case PhysicsShapeType::Box:
 				        {
@@ -670,6 +717,12 @@ namespace aether
 				        {
 					        vertexHandle = m_capsuleVertexHandle;
 					        vertexCount = m_capsuleVertexCount;
+					        break;
+				        }
+				        case PhysicsShapeType::Cylinder:
+				        {
+					        vertexHandle = m_cylinderVertexHandle;
+					        vertexCount = m_cylinderVertexCount;
 					        break;
 				        }
 			        }
