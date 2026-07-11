@@ -85,3 +85,4 @@ Thumbs.db
 *.tmp
 *.log
 .aider*
+gauntlet-report.json

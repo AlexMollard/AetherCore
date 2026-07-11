@@ -1,16 +1,21 @@
-# Build verification for the claude/camera-entities-previews branch.
+# Build verification for master and its PRs.
 #
-# The stock cmake-multi-platform.yml only triggers on master and installs no
-# dependencies, so it never actually builds (it dies at find_package(Vulkan)).
-# This workflow installs the real toolchain (CMake 4, the Vulkan SDK - which
-# also provides slangc - plus the Linux window-system dev libs GLFW needs) and
-# actually compiles the engine, so the branch's changes are verified on a real
-# compiler. Scoped to this branch to avoid disturbing the master CI.
-name: CI build verify (branch)
+# The stock cmake-multi-platform.yml installs no dependencies, so it never
+# actually builds (it dies at find_package(Vulkan)). This workflow installs the
+# real toolchain (CMake 4, the Vulkan SDK - which also provides slangc - plus the
+# Linux window-system dev libs GLFW needs) and actually compiles the engine.
+#
+# The Windows job runs scripts/Run-DebugGauntlet.ps1 in -CI mode, which builds
+# App + GameRuntime + EngineTests AND runs the unit suite. Building every target
+# (not just the default) plus running the tests is what catches regressions the
+# old build-only CI missed - e.g. a GameRuntime-only compile break, or a failing
+# test. The GPU validation smokes the gauntlet also contains are skipped in CI
+# (runners have no GPU/display); they run locally via the same script.
+name: CI build verify
 
 on:
   push:
-    branches: [ "claude/camera-entities-previews-aoc1wj" ]
+    branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:
@@ -71,5 +76,9 @@ jobs:
           -DAETHERCORE_ENABLE_SLANG=OFF
           -DAETHERCORE_BUILD_TESTS=ON
 
-      - name: Build
-        run: cmake --build build --config Release
+      # Build App + GameRuntime + EngineTests and run the unit suite. -CI skips
+      # the GPU validation smokes (no GPU/display on the runner). This is the step
+      # that fails on a GameRuntime-only compile break or a failing test.
+      - name: Gauntlet (build all targets + unit tests)
+        shell: pwsh
+        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build -Config Release -CI
