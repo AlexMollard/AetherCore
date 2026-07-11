@@ -10,6 +10,8 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <iostream>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -17,6 +19,7 @@
 #include <vector>
 
 #include "io/PlatformPaths.hpp"
+#include "utils/LogRingBuffer.hpp"
 #include "utils/Logger.hpp"
 
 // clang-format off
@@ -26,6 +29,7 @@
 #	endif
 #	include <Windows.h>
 #	include <DbgHelp.h>
+#	include <TlHelp32.h>
 #else
 #	include <execinfo.h>
 #	include <dlfcn.h>
@@ -41,6 +45,21 @@ namespace aether
 		std::string g_appName = "AetherCore";
 		std::mutex g_writeMutex;
 		std::atomic_flag g_crashInProgress = ATOMIC_FLAG_INIT;
+
+		// Engine-supplied context (GPU/driver/scene/build id ...) printed in every
+		// report header. Guarded by its own mutex so SetContext is callable from
+		// any thread at any time, independent of the crash-write path.
+		std::mutex g_contextMutex;
+		std::map<std::string, std::string> g_context;
+
+		std::string BuildConfigName()
+		{
+#ifdef NDEBUG
+			return "Release";
+#else
+			return "Debug";
+#endif
+		}
 
 		struct StackFrame
 		{
@@ -103,6 +122,62 @@ namespace aether
 			return crashDirectory / std::format("{}_{}_t{}", g_appName, timestamp, threadHash);
 		}
 
+		const char* ToLevelText(LogLevel level)
+		{
+			switch (level)
+			{
+				case LogLevel::Verbose: return "VERB";
+				case LogLevel::Info: return "INFO";
+				case LogLevel::Warn: return "WARN";
+				case LogLevel::Error: return "ERROR";
+			}
+			return "?";
+		}
+
+		// Build identity + the engine-supplied context map. Cross-platform so a
+		// Linux crash report carries the same header shape.
+		void WriteBuildAndContext(std::ofstream& output)
+		{
+			output << std::format("Build: {} ({} {})\n", BuildConfigName(), __DATE__, __TIME__);
+
+			std::map<std::string, std::string> contextCopy;
+			{
+				std::scoped_lock lock(g_contextMutex);
+				contextCopy = g_context;
+			}
+			for (const auto& [key, value]: contextCopy)
+			{
+				output << std::format("Context.{}: {}\n", key, value);
+			}
+		}
+
+		// The last lines the engine logged before the fault - what the engine was
+		// actually doing (which scene, which pass, which asset). Pulled from the
+		// process-wide LogRingBuffer that also feeds the editor Console.
+		void WriteRecentLog(std::ofstream& output, std::size_t maxLines = 60)
+		{
+			std::vector<LogRingBuffer::Record> records;
+			LogRingBuffer::Get().Snapshot(records);
+			if (records.empty())
+			{
+				return;
+			}
+
+			const std::size_t begin = records.size() > maxLines ? records.size() - maxLines : 0;
+			output << std::format("RecentLog (last {} of {} entries):\n", records.size() - begin, records.size());
+			for (std::size_t i = begin; i < records.size(); ++i)
+			{
+				const LogRingBuffer::Record& record = records[i];
+				output << "  " << (record.time.empty() ? "--:--:--" : record.time) << ' ' << ToLevelText(record.level);
+				if (!record.category.empty())
+				{
+					output << ' ' << record.category << ':';
+				}
+				output << ' ' << record.message << '\n';
+			}
+			output.flush();
+		}
+
 #ifdef _WIN32
 		bool IsNoiseFrame(const StackFrame& frame)
 		{
@@ -110,7 +185,8 @@ namespace aether
 			const std::string& file = frame.file;
 
 			if (name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("SignalHandlerThunk") != std::string::npos
-			        || name.find("UnhandledExceptionFilterThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos)
+			        || name.find("UnhandledExceptionFilterThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos || name.find("WriteAllThreadStacks") != std::string::npos || name.find("WriteMiniDump") != std::string::npos
+			        || name.find("WriteSystemInfo") != std::string::npos || name.find("WriteRecentLog") != std::string::npos || name.find("CollectThreadProgramCounters") != std::string::npos)
 			{
 				return true;
 			}
@@ -138,8 +214,27 @@ namespace aether
 			std::call_once(symbolInitFlag,
 			        []
 			        {
+				        // SymSetOptions is process-global, so line/undecorate options
+				        // apply even if a Vulkan layer (or other component) already owns
+				        // the symbol handler.
 				        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
-				        symbolsInitialized = SymInitialize(GetCurrentProcess(), nullptr, TRUE) == TRUE;
+				        if (SymInitialize(GetCurrentProcess(), nullptr, TRUE) == TRUE)
+				        {
+					        symbolsInitialized = true;
+					        return;
+				        }
+
+				        // SymInitialize fails with ERROR_INVALID_PARAMETER when the
+				        // symbol handler is already initialized for this process (common:
+				        // a Vulkan validation layer does it first). The symbol APIs still
+				        // work in that case - just refresh the module list (picks up
+				        // late-loaded driver DLLs) and proceed rather than giving up and
+				        // emitting a stackless "<symbol capture failed>" report.
+				        if (GetLastError() == ERROR_INVALID_PARAMETER)
+				        {
+					        SymRefreshModuleList(GetCurrentProcess());
+					        symbolsInitialized = true;
+				        }
 			        });
 
 			return symbolsInitialized;
@@ -367,6 +462,189 @@ namespace aether
 			output << std::format("AccessViolation: attempted to {} address 0x{:X}{}\n", operation, static_cast<unsigned long long>(address), IsLikelyNullPointer(address) ? " (likely null/near-null dereference)" : "");
 		}
 
+		// Host machine + process facts: which GPU driver DLL, how much RAM, which
+		// OS build, the exact command line. A crash on one machine and not another
+		// is very often explained here.
+		void WriteSystemInfo(std::ofstream& output)
+		{
+			output << "CommandLine: " << GetCommandLineA() << '\n';
+
+			// RtlGetVersion reports the true OS version (GetVersionEx is app-compat
+			// shimmed and lies on modern Windows). OSVERSIONINFOW is layout-compatible
+			// with RTL_OSVERSIONINFOW; the void* signature avoids depending on the RTL
+			// typedef being visible.
+			using RtlGetVersionFn = LONG(WINAPI*)(void*);
+			if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll"))
+			{
+				if (auto rtlGetVersion = reinterpret_cast<RtlGetVersionFn>(reinterpret_cast<void*>(GetProcAddress(ntdll, "RtlGetVersion"))))
+				{
+					OSVERSIONINFOW osv{};
+					osv.dwOSVersionInfoSize = sizeof(osv);
+					if (rtlGetVersion(&osv) == 0)
+					{
+						output << std::format("OS: Windows {}.{} build {}\n", osv.dwMajorVersion, osv.dwMinorVersion, osv.dwBuildNumber);
+					}
+				}
+			}
+
+			SYSTEM_INFO systemInfo{};
+			GetNativeSystemInfo(&systemInfo);
+			output << std::format("CPU: {} logical processors (arch {})\n", systemInfo.dwNumberOfProcessors, systemInfo.wProcessorArchitecture);
+
+			MEMORYSTATUSEX memoryStatus{};
+			memoryStatus.dwLength = sizeof(memoryStatus);
+			if (GlobalMemoryStatusEx(&memoryStatus) != 0)
+			{
+				output << std::format("Memory: {} MB total, {} MB available ({}% in use)\n", memoryStatus.ullTotalPhys / (1024 * 1024), memoryStatus.ullAvailPhys / (1024 * 1024), memoryStatus.dwMemoryLoad);
+			}
+		}
+
+		// Write a real minidump next to the text report. This is the artifact worth
+		// keeping: open it in Visual Studio / WinDbg for the full state of every
+		// thread, locals, and referenced heap - the thing a text report can never
+		// carry. Flags balance usefulness against size (~a few MB typical).
+		std::filesystem::path WriteMiniDump(const std::filesystem::path& dumpPath, EXCEPTION_POINTERS* exceptionPointers)
+		{
+			const HANDLE fileHandle = CreateFileW(dumpPath.wstring().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+			if (fileHandle == INVALID_HANDLE_VALUE)
+			{
+				return {};
+			}
+
+			MINIDUMP_EXCEPTION_INFORMATION exceptionInfo{};
+			exceptionInfo.ThreadId = GetCurrentThreadId();
+			exceptionInfo.ExceptionPointers = exceptionPointers;
+			exceptionInfo.ClientPointers = FALSE;
+
+			const auto dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpWithThreadInfo | MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithProcessThreadData | MiniDumpWithUnloadedModules);
+
+			const BOOL wrote = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), fileHandle, dumpType, exceptionPointers != nullptr ? &exceptionInfo : nullptr, nullptr, nullptr);
+			CloseHandle(fileHandle);
+			return wrote != 0 ? dumpPath : std::filesystem::path{};
+		}
+
+		// Walk one suspended thread's stack into raw PC addresses. Kept alloc-light
+		// and symbol-free so the caller can resume the thread BEFORE symbolicating -
+		// resolving symbols allocates, and holding another thread suspended across a
+		// heap allocation is the classic minidump self-deadlock.
+		std::vector<std::uint64_t> CollectThreadProgramCounters(HANDLE thread)
+		{
+			std::vector<std::uint64_t> programCounters;
+			CONTEXT context{};
+			context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+			if (GetThreadContext(thread, &context) == FALSE)
+			{
+				return programCounters;
+			}
+
+			STACKFRAME64 stackFrame{};
+			stackFrame.AddrPC.Offset = context.Rip;
+			stackFrame.AddrPC.Mode = AddrModeFlat;
+			stackFrame.AddrFrame.Offset = context.Rbp;
+			stackFrame.AddrFrame.Mode = AddrModeFlat;
+			stackFrame.AddrStack.Offset = context.Rsp;
+			stackFrame.AddrStack.Mode = AddrModeFlat;
+
+			for (std::size_t i = 0; i < 48; ++i)
+			{
+				if (StackWalk64(IMAGE_FILE_MACHINE_AMD64, GetCurrentProcess(), thread, &stackFrame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr) == FALSE || stackFrame.AddrPC.Offset == 0)
+				{
+					break;
+				}
+				programCounters.push_back(stackFrame.AddrPC.Offset);
+			}
+
+			return programCounters;
+		}
+
+		// Every OTHER thread's call stack. For a render-thread engine the faulting
+		// thread is frequently the victim, not the culprit (a producer parked in a
+		// full channel, a worker holding a lock) - so the report is only actionable
+		// with all threads visible. The faulting thread itself is dumped separately
+		// from the precise exception context.
+		void WriteAllThreadStacks(std::ofstream& output)
+		{
+			if (!EnsureSymbolsInitialized())
+			{
+				return;
+			}
+
+			const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+			if (snapshot == INVALID_HANDLE_VALUE)
+			{
+				return;
+			}
+
+			const DWORD processId = GetCurrentProcessId();
+			const DWORD currentThreadId = GetCurrentThreadId();
+
+			THREADENTRY32 threadEntry{};
+			threadEntry.dwSize = sizeof(threadEntry);
+
+			output << "AllThreadStacks (faulting thread shown above):\n";
+			int threadCount = 0;
+			if (Thread32First(snapshot, &threadEntry) != FALSE)
+			{
+				do
+				{
+					if (threadEntry.th32OwnerProcessID != processId || threadEntry.th32ThreadID == currentThreadId)
+					{
+						continue;
+					}
+
+					if (++threadCount > 32)
+					{
+						output << "  ... additional threads omitted\n";
+						break;
+					}
+
+					const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, threadEntry.th32ThreadID);
+					if (thread == nullptr)
+					{
+						continue;
+					}
+
+					std::vector<std::uint64_t> programCounters;
+					if (SuspendThread(thread) != static_cast<DWORD>(-1))
+					{
+						programCounters = CollectThreadProgramCounters(thread);
+						ResumeThread(thread);
+					}
+					CloseHandle(thread);
+
+					output << std::format("  Thread {}:\n", threadEntry.th32ThreadID);
+					std::size_t shown = 0;
+					for (const std::uint64_t programCounter: programCounters)
+					{
+						const StackFrame frame = ResolveAddressToFrame(programCounter);
+						if (IsNoiseFrame(frame))
+						{
+							continue;
+						}
+						if (shown++ >= 16)
+						{
+							break;
+						}
+						if (!frame.file.empty())
+						{
+							output << std::format("    {} + 0x{:X} ({}:{}) [{}]\n", frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.displacement), frame.file, frame.line, frame.module);
+						}
+						else
+						{
+							output << std::format("    {} @ 0x{:X} [{}]\n", frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.address), frame.module.empty() ? "?" : frame.module);
+						}
+					}
+					if (shown == 0)
+					{
+						output << "    <no symbolic frames>\n";
+					}
+				} while (Thread32Next(snapshot, &threadEntry) != FALSE);
+			}
+
+			CloseHandle(snapshot);
+			output.flush();
+		}
+
 		void WriteCallStack(std::ofstream& output, EXCEPTION_POINTERS* exceptionPointers, const StackFrame* faultFrame)
 		{
 			const auto frames = CaptureStackFrames(exceptionPointers);
@@ -419,11 +697,11 @@ namespace aether
 
 				if (!frame.file.empty())
 				{
-					output << std::format("  [{}] {} + 0x{:X} ({}:{})\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.displacement), frame.file, frame.line);
+					output << std::format("  [{}] {} + 0x{:X} ({}:{}) [{}]\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.displacement), frame.file, frame.line, frame.module.empty() ? "?" : frame.module);
 				}
 				else
 				{
-					output << std::format("  [{}] {} @ 0x{:X}\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.address));
+					output << std::format("  [{}] {} @ 0x{:X} [{}]\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.address), frame.module.empty() ? "?" : frame.module);
 				}
 
 				++filteredIndex;
@@ -567,7 +845,8 @@ namespace aether
 #else
 		        void* /*exceptionPointers*/,
 #endif
-		        int signalNumber)
+		        int signalNumber,
+		        const std::filesystem::path& dumpPath)
 		{
 			std::ofstream output(reportPath, std::ios::out | std::ios::trunc);
 			if (!output)
@@ -581,6 +860,11 @@ namespace aether
 			{
 				output << "Detail: " << detail << '\n';
 			}
+			if (!dumpPath.empty())
+			{
+				output << "MiniDump: " << dumpPath.string() << "  (open in Visual Studio / WinDbg for full state)\n";
+			}
+			WriteBuildAndContext(output);
 			output << "ThreadIdHash: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << '\n';
 
 			if (signalNumber != 0)
@@ -589,6 +873,8 @@ namespace aether
 			}
 
 #ifdef _WIN32
+			WriteSystemInfo(output);
+
 			StackFrame faultFrame{};
 			bool hasFaultFrame = false;
 
@@ -617,9 +903,12 @@ namespace aether
 			}
 
 			WriteCallStack(output, exceptionPointers, hasFaultFrame ? &faultFrame : nullptr);
+			WriteAllThreadStacks(output);
 #else
 			WriteCallStack(output, nullptr, nullptr);
 #endif
+
+			WriteRecentLog(output);
 		}
 
 		void CaptureCrashArtifacts(const std::string_view reason,
@@ -638,8 +927,27 @@ namespace aether
 
 			std::scoped_lock lock(g_writeMutex);
 			const auto basePath = BuildCrashBasePath();
+
+			std::filesystem::path dumpPath;
+#ifdef _WIN32
+			auto dumpTarget = basePath;
+			dumpTarget.replace_extension(".dmp");
+			dumpPath = WriteMiniDump(dumpTarget, exceptionPointers); // reliable artifact first
+#endif
+
 			auto reportPath = basePath;
-			WriteTextCrashReport(reportPath.replace_extension(".txt"), reason, detail, exceptionPointers, signalNumber);
+			reportPath.replace_extension(".txt");
+			WriteTextCrashReport(reportPath, reason, detail, exceptionPointers, signalNumber, dumpPath);
+
+			// Point whoever is watching at the artifacts (std::cerr, not the logger:
+			// its worker thread may already be gone by the time we crash).
+			std::cerr << "\n[CrashHandler] " << reason << " captured -> " << reportPath.string();
+			if (!dumpPath.empty())
+			{
+				std::cerr << "  (+ minidump " << dumpPath.string() << ")";
+			}
+			std::cerr << '\n';
+			std::cerr.flush();
 		}
 
 		void CaptureDiagnosticReport(const std::string_view reason, const std::string_view detail)
@@ -651,8 +959,17 @@ namespace aether
 
 			std::scoped_lock lock(g_writeMutex);
 			const auto basePath = BuildCrashBasePath();
+
+			std::filesystem::path dumpPath;
+#ifdef _WIN32
+			auto dumpTarget = basePath;
+			dumpTarget.replace_extension(".dmp");
+			dumpPath = WriteMiniDump(dumpTarget, nullptr); // no exception context, but all-thread state still captured
+#endif
+
 			auto reportPath = basePath;
-			WriteTextCrashReport(reportPath.replace_extension(".txt"), reason, detail, nullptr, 0);
+			reportPath.replace_extension(".txt");
+			WriteTextCrashReport(reportPath, reason, detail, nullptr, 0, dumpPath);
 		}
 
 #ifdef _WIN32
@@ -740,5 +1057,16 @@ namespace aether
 	{
 		const std::string reason = std::format("GraphicsFault:{}", stage);
 		CaptureDiagnosticReport(reason, detail);
+	}
+
+	void CrashHandler::SetContext(std::string_view key, std::string_view value)
+	{
+		std::scoped_lock lock(g_contextMutex);
+		if (value.empty())
+		{
+			g_context.erase(std::string(key));
+			return;
+		}
+		g_context[std::string(key)] = std::string(value);
 	}
 } // namespace aether

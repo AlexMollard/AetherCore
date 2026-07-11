@@ -290,6 +290,110 @@
         "type": "object"
       },
       "tool": "query_rendergraph"
+    },
+    {
+      "description": "Render-graph frame statistics: pass/barrier counts, transient-image cache hit/miss, and the transient GPU heap capacity vs. bytes used - the engine's per-frame allocation profile.",
+      "mutates": false,
+      "name": "render.stats",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "render_stats"
+    },
+    {
+      "description": "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.",
+      "mutates": false,
+      "name": "render.benchmark",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "render_benchmark"
+    },
+    {
+      "description": "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
+      "mutates": false,
+      "name": "viewport.screenshot",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "screenshot"
+    },
+    {
+      "description": "List every registered texture / render target (shadow atlas, GBuffer, scene color, asset textures): name, format, extent, aspect, mips, layers, bindless slot.",
+      "mutates": false,
+      "name": "render.textures",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_textures"
+    },
+    {
+      "description": "Capture a registered texture / render target (name from list_textures) to a .png and return its path - use it to SEE any GPU texture, not just the viewport. Handles 8-bit color, depth (normalized grayscale) and HDR (tonemapped) targets.",
+      "mutates": false,
+      "name": "render.capture_texture",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "capture_texture"
+    },
+    {
+      "description": "Per-component-type entity counts in the live scene - a histogram over the ECS storage pools.",
+      "mutates": false,
+      "name": "scene.stats",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "scene_stats"
+    },
+    {
+      "description": "Every light in the live scene: id, name, type (point/spot), world position, color, intensity, radius, shadow-casting flag (spots also report cone angles and aim direction).",
+      "mutates": false,
+      "name": "scene.lights",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_lights"
+    },
+    {
+      "description": "Active camera: world position, forward direction, and vertical field of view (degrees).",
+      "mutates": false,
+      "name": "camera.info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "camera_info"
+    },
+    {
+      "description": "Current engine settings: resolution, vsync, and target fps.",
+      "mutates": false,
+      "name": "settings.get",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "get_settings"
     }
   ]
 }

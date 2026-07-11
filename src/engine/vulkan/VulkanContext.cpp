@@ -36,6 +36,7 @@
 #if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 #	include <tracy/TracyVulkan.hpp>
 #endif
+#include "platform/CrashHandler.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
@@ -748,6 +749,11 @@ namespace aether
 				        props.limits.maxPushConstantsSize);
 			}
 			AE_INFO(LogCategory::Vulkan, "Physical device: {}, maxPushConstantsSize={}", props.deviceName, props.limits.maxPushConstantsSize);
+
+			// Stamp the adapter + driver into any future crash report: "which GPU"
+			// is the first question when a fault lands in a driver DLL, and it must
+			// survive even after the startup log has scrolled out of the ring buffer.
+			CrashHandler::SetContext("GPU", std::format("{} (Vulkan {}.{}.{}, driver 0x{:X})", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion), props.driverVersion));
 		}
 
 		// Query VK_EXT_descriptor_heap properties. Used by BindlessManager to

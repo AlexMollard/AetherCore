@@ -11,6 +11,7 @@
 #include "rendering/IUiOverlay.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/RenderThread.hpp"
+#include "rendering/ScreenshotService.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -164,6 +165,7 @@ namespace aether
 		std::vector<DebugVertex> m_pendingDebugVertices;
 
 		std::unique_ptr<GpuDevice> m_gpu;
+		ScreenshotService m_screenshotService;
 		std::unique_ptr<CameraSubsystem> m_cameras;
 		std::unique_ptr<IUiOverlay> m_uiOverlay;
 		std::unique_ptr<RenderingSubsystem> m_rendering;

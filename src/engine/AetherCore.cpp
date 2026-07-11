@@ -67,6 +67,7 @@ namespace aether
 		m_services.RegisterOwned(std::make_unique<AsyncComputeContext>());
 		m_gpu = std::make_unique<GpuDevice>();
 		m_services.Register<GpuDevice>(*m_gpu);
+		m_services.Register<ScreenshotService>(m_screenshotService); // Init() below, after the device exists
 		m_cameras = std::make_unique<CameraSubsystem>();
 		m_rendering = std::make_unique<RenderingSubsystem>();
 
@@ -81,6 +82,7 @@ namespace aether
 
 		// -- 2. Graphics device ----------------------------------------------
 		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics}));
+		m_screenshotService.Init(m_gpu->GetDevice(), m_gpu->GetGraphicsQueueFamily(), m_gpu->GetGraphicsQueue());
 
 		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();
@@ -175,6 +177,7 @@ namespace aether
 		m_renderThread.Stop();
 
 		m_gpu->WaitIdle();
+		m_screenshotService.Shutdown();
 
 		m_services.Get<AsyncComputeContext>().Shutdown(*m_gpu);
 
@@ -636,6 +639,14 @@ namespace aether
 		}
 
 		EndFrame(packet);
+
+		// After the frame is presented, service any pending screenshot request
+		// (render thread owns the queue; the readback is self-contained).
+		if (m_screenshotService.IsInitialized())
+		{
+			m_screenshotService.ProcessPending(static_cast<void*>(m_gpu->GetSwapchain().GetCurrentImage()), m_gpu->GetSwapchainExtent(), m_gpu->GetSwapchainColorFormat());
+		}
+
 		AE_PROFILE_PLOT("Frame/RenderThreadExecNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - execStart).count()));
 	}
 

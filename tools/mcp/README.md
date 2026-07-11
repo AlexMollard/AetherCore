@@ -41,10 +41,21 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `new_scene` | yes | Replace the live scene with a fresh empty one. |
 | `play` / `stop` / `toggle_play` | yes | Enter/exit Play mode (mirrors the editor Play button; `play` rebuilds + starts the C# scripts). |
 | `query_rendergraph` | yes | Every compiled pass: type, dependencies, produced/consumed frame products, CPU time. |
+| `render_stats` | yes | Render-graph frame profile: pass/barrier counts, transient cache hit/miss, transient GPU heap used vs. capacity, fps. |
+| `render_benchmark` | yes | Per-pass CPU-time benchmark of the last frame, slowest-first, plus hottest pass and total graph CPU ms. Poll to sample min/avg/max. |
+| `list_textures` | yes | Every registered texture / render target: name, format, aspect, extent, mips, layers, bindless slot. |
+| `capture_texture` | yes | Capture *any* registered texture (name from `list_textures`) to a compressed `.png` — 8-bit color, depth (normalized grayscale), or HDR (tonemapped). Lets the agent *see* shadow maps, GBuffer, scene color, asset textures — not just the viewport. |
+| `scene_stats` | yes | Per-component-type entity-count histogram over the live ECS. |
+| `list_lights` | yes | Every light: id, name, type (point/spot), position, color, intensity, radius, shadow flag (spots add cone angles + aim). |
+| `camera_info` | yes | Active camera: world position, forward direction, vertical FOV (deg). |
+| `get_settings` | yes | Current engine settings: resolution, vsync, target fps. |
+| `list_component_types` | yes | The 28 components the ComponentCatalog can add (name + category). |
+| `screenshot` | yes | Capture the current editor frame to a compressed `.png` and return its path — lets the agent *see* what's rendered. |
 
 Rich components (mesh/material/physics) stay inspector-authored; they need
-meshes/materials/defaults the Add-Component palette wires. A viewport screenshot
-tool is the remaining gap (needs GPU readback).
+meshes/materials/defaults the Add-Component palette wires. The agent can now
+*see* any GPU texture (`capture_texture`), not just the viewport, and query
+render-graph, scene, light, camera and settings state across subsystems.
 
 The editor exposes a **Control Server** panel (Window menu) to start/stop the
 endpoint, pick the port, toggle auto-start, and watch live request stats.

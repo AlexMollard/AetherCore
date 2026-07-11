@@ -1,6 +1,9 @@
 #include "editor/ControlMethods.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -8,7 +11,14 @@
 #include "PlaySession.hpp"
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
+#include "camera/Camera.hpp"
+#include "camera/CameraManager.hpp"
 #include "editor/ComponentCatalog.hpp"
+#include "gpu/ResourceRegistry.hpp"
+#include "io/PlatformPaths.hpp"
+#include "rendering/ScreenshotService.hpp"
+#include "utils/EngineSettings.hpp"
+#include "utils/SettingsService.hpp"
 #include "layers/AppLayer.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/Renderer.hpp"
@@ -16,12 +26,14 @@
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
+#include "vulkan/RenderGraphStorage.hpp" // FrameStats definition (GetFrameStats)
 
 namespace aether::app::editor
 {
@@ -43,6 +55,14 @@ namespace aether::app::editor
 		}
 		json IntProp() { return json{{"type", "integer"}}; }
 		json StrProp() { return json{{"type", "string"}}; }
+
+		// Registry debug names are "<logical> (file:line)"; the logical prefix is the
+		// stable, unique id the endpoint exposes (callers never pass the source site).
+		std::string LogicalTexName(const std::string& debugName)
+		{
+			const std::size_t paren = debugName.rfind(" (");
+			return paren == std::string::npos ? debugName : debugName.substr(0, paren);
+		}
 
 		// ── value helpers ────────────────────────────────────────────────────────
 		std::uint32_t IdOf(const json& p, const char* key = "id")
@@ -304,6 +324,159 @@ namespace aether::app::editor
 				        arr.push_back(json{{"name", pass.name}, {"index", pass.index}, {"graphics", pass.isGraphics}, {"compute", pass.isCompute}, {"asyncCompute", pass.isAsyncCompute}, {"compiled", pass.isCompiled}, {"culled", pass.isCulled}, {"dependencies", pass.logicalDependencies}, {"producedFrameProducts", pass.producedFrameProducts}, {"consumedFrameProducts", pass.consumedFrameProducts}, {"colorWriteCount", pass.colorWriteCount}, {"hasDepthWrite", pass.hasDepthWrite}, {"cpuTimeMs", pass.lastCpuTimeMs}});
 			        }
 			        return json{{"passes", arr}};
+		        }});
+
+		methods.push_back({"render.stats", "render_stats", "Render-graph frame statistics: pass/barrier counts, transient-image cache hit/miss, and the transient GPU heap capacity vs. bytes used - the engine's per-frame allocation profile.", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* rendering = ctx.services.TryGet<RenderingSubsystem>();
+			        if (rendering == nullptr) { return json{{"error", "no rendering subsystem"}}; }
+			        const FrameStats& s = rendering->GetRenderGraph().GetFrameStats();
+			        return json{{"passCount", s.passCount}, {"barrierCount", s.barrierCount}, {"transientAllocated", s.transientAllocated}, {"transientCacheHit", s.transientCacheHit}, {"transientCacheMiss", s.transientCacheMiss}, {"pendingDestructions", s.pendingDestructions}, {"cacheSize", s.cacheSize}, {"aliasedImageCount", s.aliasedImageCount}, {"aliasedBufferCount", s.aliasedBufferCount}, {"heapCapacityBytes", s.heapCapacity}, {"heapUsedBytes", s.heapUsed}, {"frame", ctx.frameIndex}, {"fps", ctx.fps}};
+		        }});
+
+		methods.push_back({"render.benchmark", "render_benchmark", "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* rendering = ctx.services.TryGet<RenderingSubsystem>();
+			        if (rendering == nullptr) { return json{{"error", "no rendering subsystem"}}; }
+			        std::vector<RenderGraph::PassInfo> passes = rendering->GetRenderGraph().GetPasses();
+			        std::erase_if(passes, [](const RenderGraph::PassInfo& p) { return p.isCulled || !p.isCompiled; });
+			        std::ranges::sort(passes, std::ranges::greater{}, &RenderGraph::PassInfo::lastCpuTimeMs);
+			        json arr = json::array();
+			        float total = 0.0f;
+			        for (const RenderGraph::PassInfo& p: passes)
+			        {
+				        total += p.lastCpuTimeMs;
+				        arr.push_back(json{{"name", p.name}, {"cpuTimeMs", p.lastCpuTimeMs}, {"graphics", p.isGraphics}, {"compute", p.isCompute}, {"asyncCompute", p.isAsyncCompute}});
+			        }
+			        json result{{"passes", arr}, {"activePassCount", passes.size()}, {"totalCpuMs", total}, {"frame", ctx.frameIndex}, {"fps", ctx.fps}};
+			        if (!passes.empty()) { result["hottest"] = json{{"name", passes.front().name}, {"cpuTimeMs", passes.front().lastCpuTimeMs}}; }
+			        return result;
+		        }});
+
+		methods.push_back({"viewport.screenshot", "screenshot", "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.", false, Obj({{"path", StrProp()}}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* shot = ctx.services.TryGet<ScreenshotService>();
+			        if (shot == nullptr || !shot->IsInitialized()) { return json{{"error", "no screenshot service"}}; }
+			        std::string path = p.value("path", std::string{});
+			        if (path.empty())
+			        {
+				        const std::filesystem::path dir = io::PlatformPaths::GetUserConfigDir() / "screenshots";
+				        path = (dir / ("shot_" + std::to_string(ctx.frameIndex) + ".png")).string();
+			        }
+			        std::future<std::string> fut = shot->Request(path);
+			        // The render thread fulfils this within a queued frame; a short wait is
+			        // safe (frames stay in flight). On timeout the file may still land.
+			        if (fut.wait_for(std::chrono::seconds(8)) != std::future_status::ready) { return json{{"path", path}, {"status", "requested (still saving)"}}; }
+			        const std::string saved = fut.get();
+			        if (saved.empty()) { return json{{"error", "capture failed"}}; }
+			        return json{{"path", saved}};
+		        }});
+
+		methods.push_back({"render.textures", "list_textures", "List every registered texture / render target (shadow atlas, GBuffer, scene color, asset textures): name, format, extent, aspect, mips, layers, bindless slot.", false, Obj(),
+		        [](const json&, MethodContext&) -> json
+		        {
+			        json arr = json::array();
+			        for (const gpu::DebugTextureInfo& t: gpu::ResourceRegistry::ListDebugTextures())
+			        {
+				        arr.push_back(json{{"name", LogicalTexName(t.debugName)}, {"source", t.debugName}, {"format", static_cast<int>(t.format)}, {"width", t.extent.width}, {"height", t.extent.height}, {"aspect", static_cast<int>(t.aspect)}, {"mipLevels", t.mipLevels}, {"arrayLayers", t.arrayLayers}, {"bindlessSlot", t.hasBindlessSampled ? static_cast<int>(t.bindlessSampledSlot) : -1}});
+			        }
+			        return json{{"textures", arr}};
+		        }});
+
+		methods.push_back({"render.capture_texture", "capture_texture", "Capture a registered texture / render target (name from list_textures) to a .png and return its path - use it to SEE any GPU texture, not just the viewport. Handles 8-bit color, depth (normalized grayscale) and HDR (tonemapped) targets.", false, Obj({{"name", StrProp()}, {"path", StrProp()}}, {"name"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* shot = ctx.services.TryGet<ScreenshotService>();
+			        if (shot == nullptr || !shot->IsInitialized()) { return json{{"error", "no screenshot service"}}; }
+			        const std::string name = p.value("name", std::string{});
+			        const auto textures = gpu::ResourceRegistry::ListDebugTextures();
+			        // Match the logical name (preferred) or the full debug string, so callers pass e.g. "Scene.Depth".
+			        auto it = std::ranges::find_if(textures, [&](const gpu::DebugTextureInfo& t) { return LogicalTexName(t.debugName) == name; });
+			        if (it == textures.end()) { it = std::ranges::find_if(textures, [&](const gpu::DebugTextureInfo& t) { return t.debugName == name; }); }
+			        if (it == textures.end()) { return json{{"error", "no texture named '" + name + "' (call list_textures)"}}; }
+			        void* image = gpu::ResourceRegistry::ResolveTextureImage(it->handle);
+			        std::string path = p.value("path", std::string{});
+			        if (path.empty())
+			        {
+				        std::string safe = name;
+				        for (char& c: safe) { if (c == '$' || c == '/' || c == '\\' || c == ':' || c == ' ') { c = '_'; } }
+				        path = (io::PlatformPaths::GetUserConfigDir() / "screenshots" / ("tex_" + safe + ".png")).string();
+			        }
+			        std::future<std::string> fut = shot->RequestImage(image, it->extent, it->format, it->aspect, gpu::ImageLayout::ShaderReadOnly, path);
+			        if (fut.wait_for(std::chrono::seconds(8)) != std::future_status::ready) { return json{{"path", path}, {"status", "requested (still saving)"}}; }
+			        const std::string saved = fut.get();
+			        if (saved.empty()) { return json{{"error", "capture failed (format may be unsupported - 8-bit color only)"}}; }
+			        return json{{"path", saved}};
+		        }});
+
+		methods.push_back({"scene.stats", "scene_stats", "Per-component-type entity counts in the live scene - a histogram over the ECS storage pools.", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr) { return ErrNoScene(); }
+			        World& world = scenes->GetWorld();
+			        json counts = json::object();
+			        for (auto&& [id, storage]: world.GetRegistry().storage())
+			        {
+				        counts[std::string(storage.type().name())] = storage.size();
+			        }
+			        std::size_t total = 0;
+			        for ([[maybe_unused]] auto e: world.View<NameComponent>()) { ++total; }
+			        return json{{"entities", total}, {"componentCounts", counts}};
+		        }});
+
+		methods.push_back({"scene.lights", "list_lights", "Every light in the live scene: id, name, type (point/spot), world position, color, intensity, radius, shadow-casting flag (spots also report cone angles and aim direction).", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr) { return ErrNoScene(); }
+			        World& world = scenes->GetWorld();
+			        json arr = json::array();
+			        for (auto enttEntity: world.View<PointLightComponent>())
+			        {
+				        const Entity e = World::FromEntt(enttEntity);
+				        const auto& L = world.Get<PointLightComponent>(e);
+				        json j{{"id", e.id}, {"type", "point"}, {"color", Vec3ToJson(L.color)}, {"intensity", L.intensity}, {"radius", L.radius}, {"castsShadow", L.castsShadow}};
+				        if (const auto* n = world.TryGet<NameComponent>(e)) { j["name"] = n->name; }
+				        if (const auto* t = world.TryGet<TransformComponent>(e)) { j["position"] = Vec3ToJson(glm::vec3(t->localToWorld[3])); }
+				        arr.push_back(std::move(j));
+			        }
+			        for (auto enttEntity: world.View<SpotLightComponent>())
+			        {
+				        const Entity e = World::FromEntt(enttEntity);
+				        const auto& L = world.Get<SpotLightComponent>(e);
+				        json j{{"id", e.id}, {"type", "spot"}, {"color", Vec3ToJson(L.color)}, {"intensity", L.intensity}, {"radius", L.radius}, {"castsShadow", L.castsShadow}, {"innerAngleDeg", glm::degrees(L.innerAngleRad)}, {"outerAngleDeg", glm::degrees(L.outerAngleRad)}};
+				        if (const auto* n = world.TryGet<NameComponent>(e)) { j["name"] = n->name; }
+				        if (const auto* t = world.TryGet<TransformComponent>(e))
+				        {
+					        j["position"] = Vec3ToJson(glm::vec3(t->localToWorld[3]));
+					        j["direction"] = Vec3ToJson(-glm::normalize(glm::vec3(t->localToWorld[2]))); // aims along local -Z
+				        }
+				        arr.push_back(std::move(j));
+			        }
+			        return json{{"lights", arr}};
+		        }});
+
+		methods.push_back({"camera.info", "camera_info", "Active camera: world position, forward direction, and vertical field of view (degrees).", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* cams = ctx.services.TryGet<CameraManager>();
+			        if (cams == nullptr) { return json{{"error", "no camera manager"}}; }
+			        const Camera* cam = cams->TryGetMainCamera();
+			        if (cam == nullptr) { return json{{"error", "no active camera"}}; }
+			        return json{{"position", Vec3ToJson(cam->GetPosition())}, {"forward", Vec3ToJson(cam->GetForward())}, {"fovDegrees", cam->GetFovDegrees()}};
+		        }});
+
+		methods.push_back({"settings.get", "get_settings", "Current engine settings: resolution, vsync, and target fps.", false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* svc = ctx.services.TryGet<SettingsService>();
+			        if (svc == nullptr) { return json{{"error", "no settings service"}}; }
+			        const EngineSettings& s = svc->Get();
+			        return json{{"width", s.window.width}, {"height", s.window.height}, {"vsync", s.graphics.vsync}, {"targetFps", s.app.targetFps}};
 		        }});
 
 		return methods;
