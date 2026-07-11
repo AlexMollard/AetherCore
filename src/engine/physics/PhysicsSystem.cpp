@@ -904,7 +904,11 @@ namespace aether
 				continue;
 			}
 			const JPH::BodyID id = body->GetID();
-			const bool startActive = rb != nullptr ? rb->startActive : true;
+			// A body baked while its entity (or an ancestor) is already disabled is
+			// added inactive, so it never simulates a step before SyncTransforms
+			// would deactivate it - matching the disabled-body freeze there.
+			const bool disabled = ecs::HasDisabledAncestor(world, entity);
+			const bool startActive = (rb != nullptr ? rb->startActive : true) && !disabled;
 			bi.AddBody(id, startActive ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
 
 			// Ensure the RigidBodyComponent exists as the body-handle holder.

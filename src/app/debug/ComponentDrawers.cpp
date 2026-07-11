@@ -635,6 +635,14 @@ namespace aether::app
 		}
 	}
 
+	// Forward declaration: the shared asset-picker helper is defined further down
+	// with the other asset helpers, but DrawMaterial (below) already uses it. The
+	// default argument lives here, on the first declaration.
+	namespace
+	{
+		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel = nullptr);
+	} // namespace
+
 	void DrawMaterial(LayerContext& context, World& world, Entity entity)
 	{
 		auto* mc = world.TryGet<MaterialComponent>(entity);
@@ -1668,7 +1676,7 @@ namespace aether::app
 		// Returns the picked id (invalid if nothing was picked this frame). This is
 		// the one handle-based control shared by the mesh, texture and material
 		// pickers, so they all read from the same AssetDatabase.
-		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel = nullptr)
+		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel)
 		{
 			// Textures/materials are referenced by a runtime handle, not an AssetId,
 			// so the caller passes the button text explicitly; meshes derive it from

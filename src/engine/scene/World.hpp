@@ -21,14 +21,18 @@ namespace aether
 		[[nodiscard]] Entity Create();
 		void Destroy(Entity entity);
 
+		// decltype(auto): EnTT's emplace returns T& for regular components but VOID
+		// for empty (stateless) tag types like DisabledComponent, which are not
+		// stored per-entity. Forward that return type exactly instead of forcing
+		// T& (which fails to compile for any empty component).
 		template<typename T, typename... Args>
-		T& Emplace(Entity entity, Args&&... args)
+		decltype(auto) Emplace(Entity entity, Args&&... args)
 		{
 			return m_registry.emplace<T>(ToEntt(entity), std::forward<Args>(args)...);
 		}
 
 		template<typename T, typename... Args>
-		T& EmplaceOrReplace(Entity entity, Args&&... args)
+		decltype(auto) EmplaceOrReplace(Entity entity, Args&&... args)
 		{
 			return m_registry.emplace_or_replace<T>(ToEntt(entity), std::forward<Args>(args)...);
 		}
