@@ -30,7 +30,7 @@ namespace aether
 			auto& style = ImGui::GetStyle();
 			auto& colors = style.Colors;
 
-			using colors::Background, colors::Surface, colors::SurfaceElevated, colors::Border, colors::TextPrimary, colors::TextSecondary, colors::Orange, colors::Yellow, colors::Green, colors::Red;
+			using colors::Background, colors::Surface, colors::SurfaceElevated, colors::Border, colors::TextPrimary, colors::TextSecondary, colors::Orange, colors::Yellow, colors::Red;
 
 			constexpr auto black = [](int a)
 			{
@@ -53,15 +53,15 @@ namespace aether
 			const auto fgMuted = toIm(TextSecondary);
 			const auto cOrange = toIm(Orange);
 			const auto cYellow = toIm(Yellow);
-			const auto cGreen = toIm(Green);
 			const auto cRed = toIm(Red);
 
-			// Rounding and spacing
-			style.FrameRounding = 0.0f;
-			style.GrabRounding = 0.0f;
-			style.ChildRounding = 0.0f;
-			style.PopupRounding = 0.0f;
-			style.TabRounding = 0.0f;
+			// Rounding and spacing - 3px matches the project launcher's language
+			// (windows stay square so docked panels tile flush).
+			style.FrameRounding = 3.0f;
+			style.GrabRounding = 3.0f;
+			style.ChildRounding = 3.0f;
+			style.PopupRounding = 3.0f;
+			style.TabRounding = 3.0f;
 			style.WindowRounding = 0.0f;
 			style.FrameBorderSize = 0.0f;
 			style.WindowBorderSize = 1.0f;
@@ -103,9 +103,9 @@ namespace aether
 			colors[ImGuiCol_ScrollbarGrabHovered] = withAlpha(cOrange, 140);
 			colors[ImGuiCol_ScrollbarGrabActive] = cOrange;
 
-			// Checkbox, radio, slider
-			colors[ImGuiCol_CheckMark] = cGreen;
-			colors[ImGuiCol_CheckboxSelectedBg] = withAlpha(cGreen, 40);
+			// Checkbox, radio, slider - amber, matching the single-accent language.
+			colors[ImGuiCol_CheckMark] = cOrange;
+			colors[ImGuiCol_CheckboxSelectedBg] = withAlpha(cOrange, 40);
 			colors[ImGuiCol_SliderGrab] = cOrange;
 			colors[ImGuiCol_SliderGrabActive] = cYellow;
 

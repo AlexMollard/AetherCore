@@ -2,29 +2,38 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <string>
 
 #include <imgui.h>
 
+#include "Color.hpp"
 #include "debug/Icons.hpp"
 
 namespace aether::app
 {
 	namespace
 	{
-		constexpr ImVec4 kInk{0.06f, 0.055f, 0.05f, 1.0f};
-		constexpr ImVec4 kPanel{0.105f, 0.095f, 0.085f, 0.96f};
-		constexpr ImVec4 kPanelSoft{0.15f, 0.13f, 0.105f, 0.82f};
-		constexpr ImVec4 kAmber{0.95f, 0.55f, 0.18f, 1.0f};
-		constexpr ImVec4 kGold{1.0f, 0.76f, 0.36f, 1.0f};
-		constexpr ImVec4 kTeal{0.20f, 0.72f, 0.72f, 1.0f};
-		constexpr ImVec4 kSteel{0.36f, 0.45f, 0.55f, 1.0f};
-		constexpr ImVec4 kText{0.88f, 0.84f, 0.76f, 1.0f};
-		constexpr ImVec4 kMuted{0.58f, 0.54f, 0.48f, 1.0f};
-		constexpr ImVec4 kError{0.96f, 0.36f, 0.32f, 1.0f};
+		// The palette IS the editor palette (engine/Color.hpp "Night Amber") -
+		// the launcher defined this language; both must move together.
+		[[nodiscard]] inline ImVec4 C(const glm::vec4& v)
+		{
+			return ImVec4{v.r, v.g, v.b, v.a};
+		}
+
+		const ImVec4 kBgTop = C(colors::Background);
+		const ImVec4 kBgBottom = C(colors::Surface); // gradient lifts into the panel tone
+		const ImVec4 kPanel = C(colors::Surface);
+		const ImVec4 kPanelHi = C(colors::SurfaceElevated);
+		const ImVec4 kStroke = C(colors::Border);
+		const ImVec4 kAccent = C(colors::Primary);
+		const ImVec4 kAccentHi = C(colors::PrimaryHover);
+		const ImVec4 kAccentDim = C(colors::PrimaryActive);
+		const ImVec4 kText = C(colors::TextPrimary);
+		const ImVec4 kMuted = C(colors::TextSecondary);
+		const ImVec4 kFaint = C(colors::TextFaint);
+		const ImVec4 kError = C(colors::Error);
+		const ImVec4 kBtnText = C(colors::OnPrimary);
 
 		[[nodiscard]] ImU32 ToU32(const ImVec4& color)
 		{
@@ -58,98 +67,196 @@ namespace aether::app
 			std::snprintf(buffer.data(), buffer.size(), "%s", DisplayPath(path).c_str());
 		}
 
-		void TextAt(ImDrawList* drawList, ImVec2 pos, ImU32 color, const char* text)
+		// Crisp arbitrary-size text (imgui 1.92 dynamic fonts bake per size).
+		void TextSized(ImDrawList* drawList, float size, ImVec2 pos, const ImVec4& color, const char* text)
 		{
-			drawList->AddText(pos, color, text);
+			drawList->AddText(ImGui::GetFont(), size, pos, ToU32(color), text);
+		}
+
+		[[nodiscard]] ImVec2 MeasureSized(float size, const char* text)
+		{
+			return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+		}
+
+		// Targeting-reticle corner brackets - the one overtly "gamer" flourish,
+		// reserved for the hovered/selected project row.
+		void DrawCornerBrackets(ImDrawList* drawList, const ImVec2 min, const ImVec2 max, float arm, float thickness, const ImVec4& color)
+		{
+			const ImU32 c = ToU32(color);
+			drawList->AddLine(ImVec2(min.x, min.y), ImVec2(min.x + arm, min.y), c, thickness);
+			drawList->AddLine(ImVec2(min.x, min.y), ImVec2(min.x, min.y + arm), c, thickness);
+			drawList->AddLine(ImVec2(max.x - arm, min.y), ImVec2(max.x, min.y), c, thickness);
+			drawList->AddLine(ImVec2(max.x, min.y), ImVec2(max.x, min.y + arm), c, thickness);
+			drawList->AddLine(ImVec2(min.x, max.y - arm), ImVec2(min.x, max.y), c, thickness);
+			drawList->AddLine(ImVec2(min.x, max.y), ImVec2(min.x + arm, max.y), c, thickness);
+			drawList->AddLine(ImVec2(max.x, max.y - arm), ImVec2(max.x, max.y), c, thickness);
+			drawList->AddLine(ImVec2(max.x - arm, max.y), ImVec2(max.x, max.y), c, thickness);
 		}
 
 		void DrawLauncherBackground(ImDrawList* drawList, const ImVec2 min, const ImVec2 max)
 		{
-			drawList->AddRectFilledMultiColor(min, max, ToU32(kInk), ToU32(ImVec4{0.055f, 0.075f, 0.078f, 1.0f}), ToU32(ImVec4{0.13f, 0.095f, 0.065f, 1.0f}), ToU32(ImVec4{0.08f, 0.055f, 0.045f, 1.0f}));
+			// Vertical near-black gradient.
+			drawList->AddRectFilledMultiColor(min, max, ToU32(kBgTop), ToU32(kBgTop), ToU32(kBgBottom), ToU32(kBgBottom));
 
-			const float width = max.x - min.x;
-			const float height = max.y - min.y;
-			const ImVec2 horizonA{min.x, min.y + height * 0.64f};
-			const ImVec2 horizonB{max.x, min.y + height * 0.82f};
-			drawList->AddRectFilledMultiColor(horizonA, horizonB, ToU32(WithAlpha(kAmber, 0.0f)), ToU32(WithAlpha(kTeal, 0.04f)), ToU32(WithAlpha(kAmber, 0.10f)), ToU32(WithAlpha(kGold, 0.08f)));
-
-			for (int i = 0; i < 9; ++i)
+			// Fine grid, barely-there. Structure without noise.
+			constexpr float kPitch = 56.0f;
+			const ImU32 gridColor = ToU32(WithAlpha(kStroke, 0.16f));
+			for (float x = min.x + kPitch; x < max.x; x += kPitch)
 			{
-				const float t = static_cast<float>(i) / 8.0f;
-				const float x = min.x + width * (0.10f + t * 0.76f);
-				const float peak = min.y + height * (0.23f + 0.10f * std::sin(t * 7.0f));
-				const float base = min.y + height * (0.72f + 0.06f * std::cos(t * 5.0f));
-				drawList->AddLine(ImVec2{x, peak}, ImVec2{x - width * 0.16f, base}, ToU32(WithAlpha(kSteel, 0.13f)), 2.0f);
-				drawList->AddLine(ImVec2{x, peak}, ImVec2{x + width * 0.13f, base}, ToU32(WithAlpha(kAmber, 0.10f)), 2.0f);
+				drawList->AddLine(ImVec2(x, min.y), ImVec2(x, max.y), gridColor, 1.0f);
+			}
+			for (float y = min.y + kPitch; y < max.y; y += kPitch)
+			{
+				drawList->AddLine(ImVec2(min.x, y), ImVec2(max.x, y), gridColor, 1.0f);
 			}
 
-			drawList->AddCircleFilled(ImVec2{min.x + width * 0.73f, min.y + height * 0.25f}, height * 0.11f, ToU32(WithAlpha(kGold, 0.10f)), 64);
-			drawList->AddCircle(ImVec2{min.x + width * 0.73f, min.y + height * 0.25f}, height * 0.11f, ToU32(WithAlpha(kGold, 0.22f)), 64, 2.0f);
+			// Soft amber wash behind the header band, fading right.
+			const float bandBottom = min.y + 200.0f;
+			drawList->AddRectFilledMultiColor(min, ImVec2(min.x + (max.x - min.x) * 0.55f, bandBottom), ToU32(WithAlpha(kAccent, 0.045f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.03f)));
+
+			// Bottom edge: 2px accent hairline fading out to the right.
+			drawList->AddRectFilledMultiColor(ImVec2(min.x, max.y - 2.0f), max, ToU32(WithAlpha(kAccent, 0.85f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.85f)));
+
+			// HUD stripe motif: three diagonal slashes in the top-right corner.
+			const float slashBaseX = max.x - 96.0f;
+			const float slashY = min.y + 44.0f;
+			for (int i = 0; i < 3; ++i)
+			{
+				const float x = slashBaseX + static_cast<float>(i) * 18.0f;
+				drawList->AddLine(ImVec2(x + 14.0f, slashY), ImVec2(x, slashY + 26.0f), ToU32(WithAlpha(kAccent, 0.65f - static_cast<float>(i) * 0.2f)), 3.0f);
+			}
 		}
 
-		void DrawPanel(ImDrawList* drawList, const ImVec2 min, const ImVec2 max, const ImVec4& fill, const ImVec4& border)
+		// Micro section label: small amber tick + spaced uppercase text.
+		void SectionLabel(ImDrawList* drawList, ImVec2 pos, const char* label)
 		{
-			drawList->AddRectFilled(min, max, ToU32(fill), 8.0f);
-			drawList->AddRect(min, max, ToU32(border), 8.0f, 0, 1.2f);
+			drawList->AddRectFilled(pos, Add(pos, ImVec2(3.0f, 12.0f)), ToU32(kAccent));
+			TextSized(drawList, 13.0f, Add(pos, ImVec2(10.0f, -1.0f)), kMuted, label);
 		}
 
-		bool ActionButton(const char* label, const ImVec2 size, const ImVec4& base, const ImVec4& hover)
+		bool PrimaryButton(const char* label, const ImVec2 size)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, base);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{base.x * 0.92f, base.y * 0.92f, base.z * 0.92f, base.w});
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.08f, 0.07f, 0.055f, 1.0f});
+			ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kAccentHi);
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, kAccentDim);
+			ImGui::PushStyleColor(ImGuiCol_Text, kBtnText);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 			const bool pressed = ImGui::Button(label, size);
+			ImGui::PopStyleVar();
 			ImGui::PopStyleColor(4);
+			return pressed;
+		}
+
+		bool OutlineButton(const char* label, const ImVec2 size)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(kAccent, 0.14f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, WithAlpha(kAccent, 0.22f));
+			ImGui::PushStyleColor(ImGuiCol_Text, kAccentHi);
+			ImGui::PushStyleColor(ImGuiCol_Border, WithAlpha(kAccent, 0.55f));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			const bool pressed = ImGui::Button(label, size);
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor(5);
 			return pressed;
 		}
 
 		bool GhostButton(const char* label, const ImVec2 size)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.20f});
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.95f, 0.55f, 0.18f, 0.18f});
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.95f, 0.55f, 0.18f, 0.26f});
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(kAccent, 0.12f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, WithAlpha(kAccent, 0.20f));
+			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
 			const bool pressed = ImGui::Button(label, size);
-			ImGui::PopStyleColor(3);
+			ImGui::PopStyleColor(4);
 			return pressed;
 		}
 
-		bool DrawRecentProjectRow(const EditorProjectContext& project, bool selected)
+		bool DrawRecentProjectRow(const EditorProjectContext& project, bool selected, bool missing)
 		{
 			const ImVec2 start = ImGui::GetCursorScreenPos();
 			const float width = ImGui::GetContentRegionAvail().x;
-			const float height = 66.0f;
+			constexpr float kRowHeight = 72.0f;
 			ImGui::PushID(DisplayPath(project.root).c_str());
-			const bool pressed = ImGui::InvisibleButton("##recentProject", ImVec2(width, height));
+			const bool pressed = ImGui::InvisibleButton("##recentProject", ImVec2(width, kRowHeight));
 			const bool hovered = ImGui::IsItemHovered();
-			const ImVec2 end = Add(start, ImVec2(width, height));
+			const ImVec2 end = Add(start, ImVec2(width, kRowHeight));
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec4 fill = selected ? ImVec4{0.95f, 0.55f, 0.18f, 0.20f} : (hovered ? ImVec4{0.95f, 0.55f, 0.18f, 0.12f} : ImVec4{0.02f, 0.02f, 0.02f, 0.22f});
-			DrawPanel(drawList, start, end, fill, selected ? WithAlpha(kGold, 0.64f) : WithAlpha(kSteel, hovered ? 0.42f : 0.22f));
 
-			drawList->AddRectFilled(Add(start, ImVec2(12.0f, 12.0f)), Add(start, ImVec2(42.0f, 42.0f)), ToU32(WithAlpha(selected ? kGold : kTeal, 0.88f)), 5.0f);
-			TextAt(drawList, Add(start, ImVec2(20.0f, 17.0f)), ToU32(ImVec4{0.08f, 0.07f, 0.055f, 1.0f}), ICON_FA_CUBE);
-			TextAt(drawList, Add(start, ImVec2(52.0f, 10.0f)), ToU32(kText), project.name.c_str());
+			// Card: flat dark fill, hairline border; hover lifts the fill and adds
+			// the corner brackets; selected keeps a solid left accent bar. A project
+			// whose ProjectSettings.toml no longer exists renders muted, with no
+			// hover affordances - clicking it still reports the error.
+			drawList->AddRectFilled(start, end, ToU32(hovered && !missing ? kPanelHi : kPanel), 3.0f);
+			drawList->AddRect(start, end, ToU32(hovered && !missing ? WithAlpha(kAccent, 0.45f) : kStroke), 3.0f, 0, 1.0f);
+			if (selected && !missing)
+			{
+				drawList->AddRectFilled(start, Add(start, ImVec2(3.0f, kRowHeight)), ToU32(kAccent), 2.0f);
+			}
+			if (hovered && !missing)
+			{
+				DrawCornerBrackets(drawList, Add(start, ImVec2(-3.0f, -3.0f)), Add(end, ImVec2(3.0f, 3.0f)), 10.0f, 2.0f, kAccent);
+			}
 
+			// Icon chip.
+			const bool lit = (hovered || selected) && !missing;
+			const ImVec2 chipMin = Add(start, ImVec2(16.0f, 18.0f));
+			const ImVec2 chipMax = Add(chipMin, ImVec2(36.0f, 36.0f));
+			const ImVec4& chipTint = missing ? kFaint : kAccent;
+			drawList->AddRectFilled(chipMin, chipMax, ToU32(WithAlpha(chipTint, lit ? 0.18f : 0.10f)), 3.0f);
+			drawList->AddRect(chipMin, chipMax, ToU32(WithAlpha(chipTint, lit ? 0.7f : 0.35f)), 3.0f, 0, 1.0f);
+			TextSized(drawList, 16.0f, Add(chipMin, ImVec2(9.0f, 10.0f)), missing ? kFaint : (lit ? kAccentHi : kAccentDim), ICON_FA_CUBE);
+
+			// Name + path.
+			TextSized(drawList, 17.0f, Add(start, ImVec2(66.0f, 14.0f)), missing ? kMuted : kText, project.name.c_str());
 			const std::string path = DisplayPath(project.root);
-			const char* pathText = path.c_str();
-			ImGui::PushClipRect(Add(start, ImVec2(52.0f, 34.0f)), Sub(end, ImVec2(12.0f, 10.0f)), true);
-			TextAt(drawList, Add(start, ImVec2(52.0f, 36.0f)), ToU32(kMuted), pathText);
+			ImGui::PushClipRect(Add(start, ImVec2(66.0f, 38.0f)), Sub(end, ImVec2(86.0f, 8.0f)), true);
+			TextSized(drawList, 13.5f, Add(start, ImVec2(66.0f, 40.0f)), missing ? kFaint : kMuted, path.c_str());
 			ImGui::PopClipRect();
 
-			if (hovered)
+			// Right-edge affordance: OPEN + chevron on hover, or a persistent
+			// MISSING tag when the project is gone from disk.
+			if (missing)
 			{
-				ImGui::SetTooltip("%s", pathText);
+				const char* tag = "MISSING";
+				const ImVec2 tagSize = MeasureSized(12.0f, tag);
+				TextSized(drawList, 12.0f, ImVec2(end.x - tagSize.x - 18.0f, start.y + (kRowHeight - tagSize.y) * 0.5f), kError, tag);
+				if (hovered)
+				{
+					ImGui::SetTooltip("ProjectSettings.toml no longer exists at\n%s", path.c_str());
+				}
+			}
+			else if (hovered)
+			{
+				const char* hint = "OPEN";
+				const ImVec2 hintSize = MeasureSized(13.0f, hint);
+				TextSized(drawList, 13.0f, ImVec2(end.x - hintSize.x - 34.0f, start.y + (kRowHeight - hintSize.y) * 0.5f), kAccentHi, hint);
+				TextSized(drawList, 15.0f, ImVec2(end.x - 24.0f, start.y + (kRowHeight - 15.0f) * 0.5f - 1.0f), kAccentHi, ">");
+				ImGui::SetTooltip("%s", path.c_str());
 			}
 			ImGui::PopID();
 			return pressed;
 		}
 
-		void DrawInputLabel(const char* label)
+		void PushInputStyles()
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			ImGui::TextUnformatted(label);
-			ImGui::PopStyleColor();
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 9.0f));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4{0.043f, 0.047f, 0.055f, 1.0f});
+			ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4{0.055f, 0.059f, 0.071f, 1.0f});
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{0.055f, 0.059f, 0.071f, 1.0f});
+			ImGui::PushStyleColor(ImGuiCol_Border, kStroke);
+			ImGui::PushStyleColor(ImGuiCol_Text, kText);
+			ImGui::PushStyleColor(ImGuiCol_TextDisabled, kFaint);
+			ImGui::PushStyleColor(ImGuiCol_CheckMark, kAccent);
+		}
+
+		void PopInputStyles()
+		{
+			ImGui::PopStyleColor(7);
+			ImGui::PopStyleVar(3);
 		}
 	}
 
@@ -173,168 +280,204 @@ namespace aether::app
 		DrawLauncherBackground(drawList, windowMin, windowMax);
 
 		const float width = windowMax.x - windowMin.x;
-		const float height = windowMax.y - windowMin.y;
-		const float margin = std::clamp(width * 0.045f, 34.0f, 72.0f);
-		const ImVec2 contentMin = Add(windowMin, ImVec2(margin, margin));
-		const ImVec2 contentMax = Sub(windowMax, ImVec2(margin, margin));
+		const float margin = std::clamp(width * 0.05f, 40.0f, 84.0f);
+		const ImVec2 contentMin = Add(windowMin, ImVec2(margin, margin * 0.8f));
+		const ImVec2 contentMax = Sub(windowMax, ImVec2(margin, margin * 0.7f));
 
-		TextAt(drawList, contentMin, ToU32(kGold), ICON_FA_CUBE "  AETHERCORE");
-		TextAt(drawList, Add(contentMin, ImVec2(0.0f, 28.0f)), ToU32(kMuted), "Project Command Center");
+		// ── Wordmark ────────────────────────────────────────────────────────────
+		constexpr float kWordmarkSize = 42.0f;
+		const ImVec2 aetherSize = MeasureSized(kWordmarkSize, "AETHER");
+		TextSized(drawList, kWordmarkSize, contentMin, kText, "AETHER");
+		TextSized(drawList, kWordmarkSize, Add(contentMin, ImVec2(aetherSize.x, 0.0f)), kAccent, "CORE");
+		const ImVec2 coreSize = MeasureSized(kWordmarkSize, "CORE");
+		// EDITOR tag: small outlined chip after the wordmark.
+		{
+			const ImVec2 tagTextSize = MeasureSized(12.0f, "EDITOR");
+			const ImVec2 tagMin = Add(contentMin, ImVec2(aetherSize.x + coreSize.x + 16.0f, 10.0f));
+			const ImVec2 tagMax = Add(tagMin, Add(tagTextSize, ImVec2(16.0f, 10.0f)));
+			drawList->AddRect(tagMin, tagMax, ToU32(WithAlpha(kAccent, 0.5f)), 2.0f, 0, 1.0f);
+			TextSized(drawList, 12.0f, Add(tagMin, ImVec2(8.0f, 5.0f)), kAccentHi, "EDITOR");
+		}
+		// Accent underline + subtitle.
+		drawList->AddRectFilled(Add(contentMin, ImVec2(2.0f, kWordmarkSize + 10.0f)), Add(contentMin, ImVec2(58.0f, kWordmarkSize + 13.0f)), ToU32(kAccent));
+		TextSized(drawList, 14.5f, Add(contentMin, ImVec2(2.0f, kWordmarkSize + 24.0f)), kMuted, "Select a project to begin.");
 
 		if (model.projectLoaded)
 		{
-			ImGui::SetCursorScreenPos(ImVec2(contentMax.x - 150.0f, contentMin.y));
-			if (GhostButton("Back to Editor", ImVec2(150.0f, 34.0f)) && actions.closeLauncher)
+			ImGui::SetCursorScreenPos(ImVec2(contentMax.x - 150.0f, contentMin.y + 4.0f));
+			if (GhostButton(ICON_FA_XMARK "  Back to Editor", ImVec2(150.0f, 32.0f)) && actions.closeLauncher)
 			{
 				actions.closeLauncher();
 			}
 		}
 
-		const float leftWidth = std::clamp(width * 0.31f, 310.0f, 430.0f);
-		const float rightWidth = std::clamp(width * 0.34f, 390.0f, 520.0f);
-		const ImVec2 leftMin{contentMin.x, contentMin.y + 82.0f};
-		const ImVec2 leftMax{leftMin.x + leftWidth, contentMax.y};
-		const ImVec2 rightMin{contentMax.x - rightWidth, contentMin.y + 82.0f};
-		const ImVec2 rightMax{contentMax.x, contentMax.y};
+		// ── Columns ─────────────────────────────────────────────────────────────
+		const float columnsTop = contentMin.y + kWordmarkSize + 62.0f;
+		const float footerH = 30.0f;
+		const float rightWidth = std::clamp(width * 0.30f, 400.0f, 460.0f);
+		constexpr float kGap = 32.0f;
+		const ImVec2 leftMin{contentMin.x, columnsTop};
+		const ImVec2 leftMax{contentMax.x - rightWidth - kGap, contentMax.y - footerH};
+		const ImVec2 rightMin{contentMax.x - rightWidth, columnsTop};
+		const ImVec2 rightMax{contentMax.x, contentMax.y - footerH};
 
-		const ImVec2 featureMin{leftMax.x + 24.0f, contentMin.y + height * 0.19f};
-		const ImVec2 featureMax{rightMin.x - 24.0f, contentMax.y - height * 0.12f};
-		if (featureMax.x > featureMin.x + 180.0f)
-		{
-			DrawPanel(drawList, featureMin, featureMax, ImVec4{0.05f, 0.045f, 0.04f, 0.42f}, WithAlpha(kGold, 0.22f));
-			drawList->AddRectFilledMultiColor(Add(featureMin, ImVec2(1.0f, 1.0f)), Sub(featureMax, ImVec2(1.0f, 1.0f)), ToU32(WithAlpha(kAmber, 0.10f)), ToU32(WithAlpha(kTeal, 0.08f)), ToU32(WithAlpha(kSteel, 0.10f)), ToU32(WithAlpha(kGold, 0.04f)));
-			TextAt(drawList, Add(featureMin, ImVec2(24.0f, 24.0f)), ToU32(kGold), "BUILD WORLDS");
-			TextAt(drawList, Add(featureMin, ImVec2(24.0f, 52.0f)), ToU32(kText), "Create, open, and ship Aether projects from one dedicated hub.");
-			TextAt(drawList, Add(featureMin, ImVec2(24.0f, 88.0f)), ToU32(kMuted), ICON_FA_FOLDER_OPEN "  Project-aware paths");
-			TextAt(drawList, Add(featureMin, ImVec2(24.0f, 116.0f)), ToU32(kMuted), ICON_FA_CODE "  Per-project scripts");
-			TextAt(drawList, Add(featureMin, ImVec2(24.0f, 144.0f)), ToU32(kMuted), ICON_FA_ROCKET "  Runtime publishing pipeline");
-		}
-
-		DrawPanel(drawList, leftMin, leftMax, kPanel, WithAlpha(kGold, 0.28f));
-		ImGui::SetCursorScreenPos(Add(leftMin, ImVec2(18.0f, 16.0f)));
-		ImGui::PushStyleColor(ImGuiCol_Text, kGold);
-		ImGui::TextUnformatted("RECENT REALMS");
-		ImGui::PopStyleColor();
-		ImGui::SetCursorScreenPos(Add(leftMin, ImVec2(18.0f, 48.0f)));
-		ImGui::BeginChild("##launcherRecentProjects", ImVec2(leftWidth - 36.0f, leftMax.y - leftMin.y - 64.0f), false);
+		// ── Left: recent projects ───────────────────────────────────────────────
+		// Cap the list width so rows stay readable on wide displays.
+		const float listWidth = std::min(leftMax.x - leftMin.x, 860.0f);
+		SectionLabel(drawList, leftMin, "RECENT PROJECTS");
+		ImGui::SetCursorScreenPos(Add(leftMin, ImVec2(0.0f, 30.0f)));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+		ImGui::BeginChild("##launcherRecentProjects", ImVec2(listWidth, leftMax.y - leftMin.y - 30.0f), false);
 		if (model.recentProjects.empty())
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			ImGui::TextWrapped("No recent projects yet. Open an existing project or create a new one.");
-			ImGui::PopStyleColor();
+			const ImVec2 emptyPos = ImGui::GetCursorScreenPos();
+			ImDrawList* childDrawList = ImGui::GetWindowDrawList();
+			TextSized(childDrawList, 15.0f, Add(emptyPos, ImVec2(2.0f, 8.0f)), kFaint, "Nothing here yet.");
+			TextSized(childDrawList, 14.0f, Add(emptyPos, ImVec2(2.0f, 34.0f)), kFaint, "Open an existing project or create a new one to get started.");
 		}
 		for (const EditorProjectContext& project: model.recentProjects)
 		{
 			const bool selected = model.currentProject != nullptr && model.currentProject->root == project.root;
-			if (DrawRecentProjectRow(project, selected) && actions.openProject)
+			std::error_code existsEc;
+			const bool missing = !std::filesystem::exists(project.root / "ProjectSettings.toml", existsEc);
+			if (DrawRecentProjectRow(project, selected, missing) && actions.openProject)
 			{
 				actions.openProject(project.root);
 			}
-			ImGui::Dummy(ImVec2(1.0f, 8.0f));
+			ImGui::Dummy(ImVec2(1.0f, 10.0f));
 		}
 		ImGui::EndChild();
+		ImGui::PopStyleColor(); // ChildBg
 
-		DrawPanel(drawList, rightMin, rightMax, kPanel, WithAlpha(kTeal, 0.32f));
-		ImGui::SetCursorScreenPos(Add(rightMin, ImVec2(20.0f, 18.0f)));
-		ImGui::PushStyleColor(ImGuiCol_Text, kGold);
-		ImGui::TextUnformatted("PROJECT GATEWAY");
-		ImGui::PopStyleColor();
+		// ── Right: actions panel ────────────────────────────────────────────────
+		// The panel hugs its content: widgets draw on channel 1 first, then the
+		// panel chrome lands behind them on channel 0 once the height is known.
+		drawList->ChannelsSplit(2);
+		drawList->ChannelsSetCurrent(1);
 
-		ImGui::SetCursorScreenPos(Add(rightMin, ImVec2(20.0f, 54.0f)));
+		constexpr float kPad = 22.0f;
+		float cursorY = rightMin.y + kPad;
+		const float innerWidth = rightWidth - kPad * 2.0f;
+
+		PushInputStyles();
+
+		// Continue (only when a current project exists).
 		if (model.hasCurrentProject && model.currentProject != nullptr)
 		{
-			const ImVec2 currentMin = ImGui::GetCursorScreenPos();
-			DrawPanel(drawList, currentMin, Add(currentMin, ImVec2(rightWidth - 40.0f, 82.0f)), kPanelSoft, WithAlpha(kGold, 0.20f));
-			ImGui::SetCursorScreenPos(Add(currentMin, ImVec2(16.0f, 14.0f)));
-			ImGui::BeginGroup();
-			ImGui::PushStyleColor(ImGuiCol_Text, kText);
-			ImGui::TextUnformatted(model.currentProject->name.c_str());
-			ImGui::PopStyleColor();
-			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			ImGui::TextWrapped("%s", DisplayPath(model.currentProject->root).c_str());
-			ImGui::PopStyleColor();
-			ImGui::EndGroup();
-			ImGui::SetCursorScreenPos(Add(rightMin, ImVec2(20.0f, 148.0f)));
-			if (ActionButton(ICON_FA_PLAY "  Continue", ImVec2(174.0f, 38.0f), kGold, ImVec4{1.0f, 0.82f, 0.42f, 1.0f}) && actions.openProject)
+			SectionLabel(drawList, ImVec2(rightMin.x + kPad, cursorY), "CONTINUE");
+			cursorY += 28.0f;
+			TextSized(drawList, 17.0f, ImVec2(rightMin.x + kPad, cursorY), kText, model.currentProject->name.c_str());
+			cursorY += 24.0f;
+			ImGui::PushClipRect(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY + 18.0f), true);
+			TextSized(drawList, 13.0f, ImVec2(rightMin.x + kPad, cursorY), kMuted, DisplayPath(model.currentProject->root).c_str());
+			ImGui::PopClipRect();
+			cursorY += 28.0f;
+			ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
+			if (PrimaryButton(ICON_FA_PLAY "  Continue", ImVec2(innerWidth, 40.0f)) && actions.openProject)
 			{
 				actions.openProject(model.currentProject->root);
 			}
-			ImGui::SameLine();
-			if (ImGui::Checkbox("Open last project", &state.openLastProject) && actions.saveSettings)
-			{
-				actions.saveSettings();
-			}
-		}
-		else
-		{
-			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			ImGui::TextWrapped("Choose a project to enter the editor.");
-			ImGui::PopStyleColor();
+			cursorY += 54.0f;
+			drawList->AddLine(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY), ToU32(kStroke), 1.0f);
+			cursorY += 20.0f;
 		}
 
-		const float formsTop = model.hasCurrentProject ? 210.0f : 98.0f;
-		const ImVec2 formsMin = Add(rightMin, ImVec2(20.0f, formsTop));
-		ImGui::SetCursorScreenPos(formsMin);
-		ImGui::BeginChild("##launcherForms", ImVec2(rightWidth - 40.0f, std::max(180.0f, rightMax.y - formsMin.y - 24.0f)), false);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4{0.02f, 0.02f, 0.02f, 0.38f});
-		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4{0.95f, 0.55f, 0.18f, 0.10f});
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{0.95f, 0.55f, 0.18f, 0.14f});
-
-		DrawInputLabel("OPEN EXISTING");
-		ImGui::SetNextItemWidth(-44.0f);
-		ImGui::InputTextWithHint("##openProjectPath", "ProjectSettings.toml file...", state.openPath.data(), state.openPath.size());
-		ImGui::SameLine();
-		if (GhostButton(ICON_FA_FOLDER_OPEN "##browseOpen", ImVec2(36.0f, 0.0f)) && actions.browseProjectFile)
+		// Open existing. Enter in the path field submits; the button disables
+		// until there is a path, so requirements read before the error does.
+		SectionLabel(drawList, ImVec2(rightMin.x + kPad, cursorY), "OPEN PROJECT");
+		cursorY += 28.0f;
+		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
+		ImGui::SetNextItemWidth(innerWidth - 44.0f);
+		bool openSubmitted = ImGui::InputTextWithHint("##openProjectPath", "Path to ProjectSettings.toml...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+		ImGui::SameLine(0.0f, 8.0f);
+		if (OutlineButton(ICON_FA_FOLDER_OPEN "##browseOpen", ImVec2(36.0f, 0.0f)) && actions.browseProjectFile)
 		{
 			if (const auto file = actions.browseProjectFile())
 			{
 				CopyToBuffer(state.openPath, *file);
 			}
 		}
-		if (ActionButton(ICON_FA_FOLDER_OPEN "  Open Project", ImVec2(-1.0f, 38.0f), kAmber, ImVec4{1.0f, 0.64f, 0.24f, 1.0f}) && actions.openProject)
+		cursorY += 44.0f;
+		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
+		const bool openPathEmpty = state.openPath[0] == '\0';
+		ImGui::BeginDisabled(openPathEmpty);
+		openSubmitted = OutlineButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(innerWidth, 38.0f)) || openSubmitted;
+		ImGui::EndDisabled();
+		if (openSubmitted && !openPathEmpty && actions.openProject)
 		{
 			actions.openProject(std::filesystem::path(state.openPath.data()));
 		}
+		cursorY += 56.0f;
+		drawList->AddLine(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY), ToU32(kStroke), 1.0f);
+		cursorY += 20.0f;
 
-		ImGui::Dummy(ImVec2(1.0f, 18.0f));
-		DrawInputLabel("CREATE NEW");
-		ImGui::SetNextItemWidth(-1.0f);
-		ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size());
-		ImGui::SetNextItemWidth(-44.0f);
-		ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size());
-		ImGui::SameLine();
-		if (GhostButton(ICON_FA_FOLDER_OPEN "##browseNew", ImVec2(36.0f, 0.0f)) && actions.browseFolder)
+		// Create new. Enter in either field submits; Create disables until both
+		// the name and folder are present.
+		SectionLabel(drawList, ImVec2(rightMin.x + kPad, cursorY), "NEW PROJECT");
+		cursorY += 28.0f;
+		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
+		ImGui::SetNextItemWidth(innerWidth);
+		bool createSubmitted = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+		cursorY += 44.0f;
+		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
+		ImGui::SetNextItemWidth(innerWidth - 44.0f);
+		createSubmitted = ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || createSubmitted;
+		ImGui::SameLine(0.0f, 8.0f);
+		if (OutlineButton(ICON_FA_FOLDER_OPEN "##browseNew", ImVec2(36.0f, 0.0f)) && actions.browseFolder)
 		{
 			if (const auto folder = actions.browseFolder())
 			{
 				CopyToBuffer(state.newPath, *folder);
 			}
 		}
-		if (ActionButton(ICON_FA_PLUS "  Create Project", ImVec2(-1.0f, 38.0f), kTeal, ImVec4{0.27f, 0.84f, 0.84f, 1.0f}) && actions.createProject)
+		cursorY += 44.0f;
+		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
+		const bool createIncomplete = state.newName[0] == '\0' || state.newPath[0] == '\0';
+		ImGui::BeginDisabled(createIncomplete);
+		createSubmitted = PrimaryButton(ICON_FA_PLUS "  Create", ImVec2(innerWidth, 38.0f)) || createSubmitted;
+		ImGui::EndDisabled();
+		if (createSubmitted && !createIncomplete && actions.createProject)
 		{
 			actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data());
 		}
+		cursorY += 54.0f;
 
-		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar(2);
-
+		// Error (if any), a hairline, then the startup toggle - all inline so the
+		// panel can hug its content.
 		if (!state.error.empty())
 		{
-			ImGui::Dummy(ImVec2(1.0f, 14.0f));
+			ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
 			ImGui::PushStyleColor(ImGuiCol_Text, kError);
+			ImGui::PushTextWrapPos(rightMax.x - kPad);
 			ImGui::TextWrapped("%s", state.error.c_str());
+			ImGui::PopTextWrapPos();
 			ImGui::PopStyleColor();
+			cursorY = ImGui::GetItemRectMax().y + 12.0f;
 		}
-		ImGui::EndChild();
 
-		ImGui::SetCursorScreenPos(ImVec2(contentMin.x, contentMax.y - 26.0f));
+		drawList->AddLine(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY), ToU32(kStroke), 1.0f);
+		cursorY += 16.0f;
+		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
 		ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-		ImGui::TextUnformatted("AetherCore Editor");
-		ImGui::SameLine();
-		ImGui::TextUnformatted("   " ICON_FA_ROCKET " ship-ready project pipeline");
+		if (ImGui::Checkbox("Open last project on startup", &state.openLastProject) && actions.saveSettings)
+		{
+			actions.saveSettings();
+		}
 		ImGui::PopStyleColor();
+		cursorY = ImGui::GetItemRectMax().y + kPad;
+
+		PopInputStyles();
+
+		// Panel chrome behind the content, now that the height is known.
+		const ImVec2 panelMax{rightMax.x, std::min(cursorY, rightMax.y)};
+		drawList->ChannelsSetCurrent(0);
+		drawList->AddRectFilled(rightMin, panelMax, ToU32(kPanel), 4.0f);
+		drawList->AddRect(rightMin, panelMax, ToU32(kStroke), 4.0f, 0, 1.0f);
+		drawList->AddRectFilled(rightMin, ImVec2(panelMax.x, rightMin.y + 2.0f), ToU32(WithAlpha(kAccent, 0.9f)), 4.0f, ImDrawFlags_RoundCornersTop);
+		drawList->ChannelsMerge();
+
+		// ── Footer ──────────────────────────────────────────────────────────────
+		TextSized(drawList, 13.0f, ImVec2(contentMin.x, contentMax.y - 16.0f), kFaint, "AetherCore Editor");
 
 		ImGui::End();
 	}

@@ -18,23 +18,31 @@ namespace aether::colors
 		}
 	} // namespace detail
 
-	// ── AetherCore Warm Charcoal ─────────────────────────────────────────────────
+	// ── AetherCore Night Amber ───────────────────────────────────────────────────
+	// Warm near-black neutrals with a single amber accent - the language set by
+	// the project launcher. One accent; warm grays carry everything else.
 
 	// Backgrounds
-	inline constexpr auto Background = detail::rgb(30, 27, 24);      // #1E1B18  Warm dark charcoal
-	inline constexpr auto Surface = detail::rgb(40, 36, 32);         // #282420  Panel
-	inline constexpr auto SurfaceElevated = detail::rgb(51, 48, 44); // #33302C  Raised panel / modal
-	inline constexpr auto Border = detail::rgb(74, 68, 62);          // #4A443E  Warm separator
+	inline constexpr auto Background = detail::rgb(15, 13, 11);      // #0F0D0B  Near-black, warm-leaning
+	inline constexpr auto Surface = detail::rgb(25, 22, 19);         // #191613  Panel
+	inline constexpr auto SurfaceElevated = detail::rgb(32, 28, 24); // #201C18  Raised panel / modal
+	inline constexpr auto Border = detail::rgb(50, 44, 38);          // #322C26  Hairline separator
 
 	// Foreground
-	inline constexpr auto TextPrimary = detail::rgb(226, 214, 196);   // #E2D6C4  Warm cream
-	inline constexpr auto TextSecondary = detail::rgb(138, 126, 110); // #8A7E6E  Warm muted tan
+	inline constexpr auto TextPrimary = detail::rgb(237, 233, 227);   // #EDE9E3  Warm near-white
+	inline constexpr auto TextSecondary = detail::rgb(150, 141, 128); // #968D80  Warm muted gray
+	inline constexpr auto TextFaint = detail::rgb(99, 91, 80);        // #635B50  De-emphasized / hints
 
 	// Accents
-	inline constexpr auto Orange = detail::rgb(255, 124, 50); // #FF7C32
+	inline constexpr auto Orange = detail::rgb(255, 148, 41); // #FF9429  The accent
 	inline constexpr auto Yellow = detail::rgb(240, 188, 46); // #F0BC2E
 	inline constexpr auto Green = detail::rgb(140, 216, 74);  // #8CD84A
 	inline constexpr auto Red = detail::rgb(255, 64, 80);     // #FF4050
+
+	// Primary interaction states + on-accent text (dark text on amber fills).
+	inline constexpr auto PrimaryHover = detail::rgb(255, 179, 82); // #FFB352
+	inline constexpr auto PrimaryActive = detail::rgb(184, 107, 31); // #B86B1F
+	inline constexpr auto OnPrimary = detail::rgb(18, 15, 11);       // #120F0B
 
 	// Semantic aliases
 	inline constexpr auto Error = Red;
@@ -45,7 +53,7 @@ namespace aether::colors
 	// Extended
 	inline constexpr auto Info = detail::rgb(56, 189, 255);   // #38BDFF
 	inline constexpr auto Mauve = detail::rgb(192, 128, 255); // #C080FF
-	inline constexpr auto Neutral = detail::rgb(92, 82, 72);  // #5C5248  Warm mid-grey
+	inline constexpr auto Neutral = detail::rgb(105, 96, 86); // #696056  Warm mid-grey
 	inline constexpr auto Overlay = detail::rgba(0, 0, 0, 0.6f);
 
 	// Debug visualisation
