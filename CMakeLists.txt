@@ -48,6 +48,7 @@ if(AETHERCORE_ENABLE_CLANG_TIDY_TARGET)
 endif()
 
 add_subdirectory(tools/assetpack)
+add_subdirectory(tools/control-client)
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
 

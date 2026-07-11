@@ -247,6 +247,32 @@ if(TARGET libzstd_static AND NOT TARGET zstd::libzstd_static)
     add_library(zstd::libzstd_static ALIAS libzstd_static)
 endif()
 
+# ── Editor control endpoint (JSON + ENet transport) ───────────────────────────
+# Used by the editor-only ControlServer (src/app/editor) and the aether-ctl CLI
+# (tools/control-client) for the localhost MCP control channel. Linked only where
+# used, so GameRuntime carries neither.
+CPMAddPackage(
+    NAME nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+    GIT_SHALLOW    TRUE
+    OPTIONS "JSON_BuildTests OFF"
+)
+
+CPMAddPackage(
+    NAME enet
+    GIT_REPOSITORY https://github.com/lsalzman/enet.git
+    GIT_TAG        v1.3.18
+    GIT_SHALLOW    TRUE
+)
+
+# lsalzman/enet's CMake scopes its include dir to its own build only; export it on
+# the target so consumers (App, aether-ctl) resolve <enet/enet.h>.
+if(TARGET enet)
+    target_include_directories(enet PUBLIC "${enet_SOURCE_DIR}/include")
+    set_target_properties(enet PROPERTIES FOLDER "Dependencies")
+endif()
+
 # ── Solution folder organisation (Visual Studio only) ─────────────────────────
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

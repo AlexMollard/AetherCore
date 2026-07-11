@@ -37,6 +37,17 @@ target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(App PRIVATE Engine AssetPipeline imgui)
 target_link_libraries(GameRuntime PRIVATE Engine)
 
+# ── Editor control endpoint deps (ENet transport + JSON) ────────────────────
+# ControlServer (src/app/editor) exposes a localhost JSON-over-ENet control
+# endpoint that the AetherCore MCP / aether-ctl drive. Both deps come from CPM
+# (see CMake/Dependencies.cmake) and are linked ONLY into App: the editor/
+# directory is excluded from GameRuntime's source list, so a shipped game links
+# neither ENet nor the JSON library.
+target_link_libraries(App PRIVATE nlohmann_json::nlohmann_json enet)
+if(WIN32)
+    target_link_libraries(App PRIVATE ws2_32 winmm)
+endif()
+
 aethercore_target_defaults(App)
 aethercore_target_defaults(GameRuntime)
 aethercore_enable_slang_shader_compilation(App)

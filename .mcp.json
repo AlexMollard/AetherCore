@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aethercore": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["tools/mcp/aethercore_mcp.py"],
+      "env": {
+        "AETHER_CONTROL_PORT": "8787"
+      }
+    }
+  }
+}

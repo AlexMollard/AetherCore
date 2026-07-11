@@ -17,6 +17,7 @@ using namespace std::string_view_literals;
 #include <imgui_internal.h>
 
 #include "debug/ConsolePanel.hpp"
+#include "debug/ControlServerPanel.hpp"
 #include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
 #include "debug/FileExplorerPanel.hpp"
@@ -230,6 +231,7 @@ namespace aether::app
 		m_panels.push_back(std::make_unique<ConsolePanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
 		m_panels.push_back(std::make_unique<DayNightPanel>());
+		m_panels.push_back(std::make_unique<ControlServerPanel>());
 		for (auto& panel: m_panels)
 		{
 			panel->OnAttach(context);

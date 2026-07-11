@@ -1,0 +1,295 @@
+{
+  "methods": [
+    {
+      "description": "Live editor summary: current scene name, entity count, frame index, fps.",
+      "mutates": false,
+      "name": "info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "engine_info"
+    },
+    {
+      "description": "List every entity in the live scene with id, name, and world position.",
+      "mutates": false,
+      "name": "scene.entities",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_entities"
+    },
+    {
+      "description": "Full detail for one entity by id: name, world position, scale, and its component type list.",
+      "mutates": false,
+      "name": "scene.get",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "get_entity"
+    },
+    {
+      "description": "Create an entity in the live scene. Returns its id.",
+      "mutates": true,
+      "name": "scene.create",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "create_entity"
+    },
+    {
+      "description": "Rename an entity by id.",
+      "mutates": true,
+      "name": "scene.rename",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "rename_entity"
+    },
+    {
+      "description": "Set an entity's parent by id. parent=0 unparents it to the scene root.",
+      "mutates": true,
+      "name": "scene.parent",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "parent": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "parent_entity"
+    },
+    {
+      "description": "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
+      "mutates": true,
+      "name": "scene.transform",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "set_transform"
+    },
+    {
+      "description": "Delete an entity from the live scene by id.",
+      "mutates": true,
+      "name": "scene.delete",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "delete_entity"
+    },
+    {
+      "description": "Add a component to an entity by id. 'type' is a ComponentCatalog name (call list_component_types for the set).",
+      "mutates": true,
+      "name": "scene.add_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "add_component"
+    },
+    {
+      "description": "Remove a component from an entity by id ('type' is a ComponentCatalog name).",
+      "mutates": true,
+      "name": "scene.remove_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_component"
+    },
+    {
+      "description": "List every component the ComponentCatalog can add (name + category) - the same set as the editor Add-Component menu.",
+      "mutates": false,
+      "name": "scene.component_types",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_component_types"
+    },
+    {
+      "description": "Save the live scene to its committable .scene.toml. Defaults to the current scene; pass 'name' to save under a different name.",
+      "mutates": true,
+      "name": "scene.save",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "save_scene"
+    },
+    {
+      "description": "Switch the live editor to a scene by name (tears the current scene down first).",
+      "mutates": true,
+      "name": "scene.load",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "load_scene"
+    },
+    {
+      "description": "Replace the live scene with a fresh empty scene.",
+      "mutates": true,
+      "name": "scene.new",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "new_scene"
+    },
+    {
+      "description": "Enter Play mode: snapshot the scene, rebuild + start the C# scripts. Mirrors the editor Play button.",
+      "mutates": true,
+      "name": "engine.play",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "play"
+    },
+    {
+      "description": "Exit Play mode and restore the pre-play scene snapshot.",
+      "mutates": true,
+      "name": "engine.stop",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "stop"
+    },
+    {
+      "description": "Toggle Play/Stop.",
+      "mutates": true,
+      "name": "engine.toggle_play",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "toggle_play"
+    },
+    {
+      "description": "Dump the live render graph: every compiled pass with its type, dependencies, produced/consumed frame products, and last CPU time.",
+      "mutates": false,
+      "name": "rendergraph",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "query_rendergraph"
+    }
+  ]
+}

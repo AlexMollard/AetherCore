@@ -8,6 +8,7 @@
 #include "utils/Logger.hpp"
 
 #ifdef AETHERCORE_EDITOR_APP
+#	include "editor/ControlServerLayer.hpp"
 #	include "layers/DebugLayer.hpp"
 #endif
 
@@ -58,6 +59,9 @@ int main()
 		// Layers
 #ifdef AETHERCORE_EDITOR_APP
 		application.PushLayer<aether::app::DebugLayer>();
+		// Editor control endpoint (dormant unless AETHER_CONTROL_PORT is set); lets
+		// the AetherCore MCP / aether-ctl drive the live editor.
+		application.PushLayer<aether::app::editor::ControlServerLayer>();
 #endif
 		// World content comes from the startup scene file (engine.toml
 		// app.startupScene); behavior comes from entity scripts (ScriptComponent).
