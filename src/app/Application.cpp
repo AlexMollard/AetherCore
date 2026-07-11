@@ -1,6 +1,8 @@
 #include "Application.hpp"
 
 #include <chrono>
+#include <cstdlib>
+#include <filesystem>
 
 #include "animation/AnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
@@ -39,6 +41,41 @@ namespace aether::app
 			return cfg;
 		}
 
+		// GameRuntime: resolve the project's ProjectSettings.toml so the settings
+		// cascade gets its layer 3 (project overrides - app.startupScene lives
+		// there). Mirrors FileSystem's project-root resolution: the AETHER_PROJECT_DIR
+		// env override first, then the build-tree default project. Without this the
+		// build-tree runtime boots with the shipped template's startupScene="" and
+		// silently renders an empty world. The editor returns empty here - its
+		// project manager owns the layer and re-resolves it on project open. A
+		// published game normally has neither path (publish BAKES the project layer
+		// into the shipped EngineSettings.toml); the empty path skips the layer.
+		std::filesystem::path ResolveRuntimeProjectSettingsFile()
+		{
+#ifdef AETHERCORE_EDITOR_APP
+			return {};
+#else
+			std::filesystem::path projectRoot;
+			if (const char* env = std::getenv("AETHER_PROJECT_DIR"); env != nullptr && *env != '\0')
+			{
+				projectRoot = env;
+			}
+#	ifdef AETHER_DEFAULT_PROJECT_DIR
+			if (projectRoot.empty())
+			{
+				projectRoot = AETHER_DEFAULT_PROJECT_DIR;
+			}
+#	endif
+			if (projectRoot.empty())
+			{
+				return {};
+			}
+			std::filesystem::path candidate = projectRoot / "ProjectSettings.toml";
+			std::error_code ec;
+			return std::filesystem::exists(candidate, ec) ? candidate : std::filesystem::path{};
+#endif
+		}
+
 		void ConfigureTracyPlots()
 		{
 			AE_PROFILE_PLOT_CONFIG("Frame/ChannelSubmitNs", tracy::PlotFormatType::Number, false, true, 0x4EA3FF);
@@ -71,7 +108,7 @@ namespace aether::app
 	}
 
 	Application::Application(const aether::AetherCore::Config& engineConfig)
-	      : Application(engineConfig, aether::EngineSettingsIO::LoadLayered(engineConfig.settingsFile))
+	      : Application(engineConfig, aether::EngineSettingsIO::LoadLayered(engineConfig.settingsFile, ResolveRuntimeProjectSettingsFile()))
 	{
 	}
 

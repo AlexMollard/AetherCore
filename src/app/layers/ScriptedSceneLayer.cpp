@@ -206,6 +206,10 @@ namespace aether::app
 		const auto* settingsService = context.TryGet<aether::SettingsService>();
 		if (settingsService == nullptr || settingsService->Get().app.startupScene.empty())
 		{
+			// Loud on purpose: a game that boots into an empty world with no
+			// explanation cost hours to diagnose (the "GameRuntime startup hang"
+			// was exactly this - startupScene unset in the runtime's cascade).
+			AE_WARN(LogCategory::App, "No startup scene configured (app.startupScene is empty) - booting an EMPTY world. Set it in ProjectSettings.toml / EngineSettings.toml.");
 			return;
 		}
 		const std::string& sceneName = settingsService->Get().app.startupScene;
@@ -231,11 +235,20 @@ namespace aether::app
 		}
 		else if (m_sceneCtx.assets != nullptr)
 		{
+			AE_WARN(LogCategory::App, "Startup scene '{}' could not be read - attempting to auto-generate it from script content.", sceneName);
 			const auto captured = scene::CaptureScene(context.Get<World>(), m_sceneCtx.assets->GetMaterialRegistry(), m_sceneCtx.assets->GetTextureRegistry(), m_sceneCtx.renderer);
 			if (scene::SaveSceneFile(sceneName, captured))
 			{
 				AE_INFO(LogCategory::App, "Startup scene '{}' auto-generated from script content - commit resources/scenes/{}.scene.toml", sceneName, sceneName);
 			}
+			else
+			{
+				AE_ERROR(LogCategory::App, "Startup scene '{}' auto-generate FAILED - the world is empty.", sceneName);
+			}
+		}
+		else
+		{
+			AE_ERROR(LogCategory::App, "Startup scene '{}' could not be read and no asset manager is available to auto-generate it - the world is empty.", sceneName);
 		}
 	}
 
