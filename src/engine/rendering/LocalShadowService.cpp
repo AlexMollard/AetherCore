@@ -546,7 +546,13 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
-			                m_shadowRenderQueue.SetDebugForceVisible(true);
+			                // Cull shadow casters per light. This was pinned to force-visible
+			                // (no culling) during shadow bring-up, which makes the atlas render
+			                // every caster into every light region - fine for a static scene, but
+			                // it cliffs into a render-thread wedge the moment a shadow-caster is
+			                // added at runtime (the GPU shadow workload explodes). Restore proper
+			                // culling; the atlas then only renders casters each light can see.
+			                m_shadowRenderQueue.SetDebugForceVisible(false);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), ctx.frameSlot);
 		                })
 		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameSlot); });
