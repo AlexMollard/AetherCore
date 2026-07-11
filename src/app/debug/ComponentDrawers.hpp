@@ -83,7 +83,13 @@ namespace aether::app
 	// Joint/constraint editor: type, target entity, anchor/axis/limits. Edits
 	// trigger a constraint rebuild through PhysicsSystem.
 	void DrawJoint(LayerContext& context, World& world, Entity entity);
-	void DrawMeshPipeline(World& world, Entity entity);
+	// Unity-style Mesh Renderer: mesh source picker (primitive swap + glTF model
+	// drop), visibility toggle, and a material/pipeline summary - the single
+	// front-door for the scattered Mesh/Pipeline/MeshSource/Material components.
+	void DrawMeshRenderer(LayerContext& context, World& world, Entity entity);
+	// Unity-style 2D Sprite Renderer: texture drop slot + tint over a flat quad
+	// drawn through the standard mesh path.
+	void DrawSpriteRenderer(LayerContext& context, World& world, Entity entity);
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection);
 	// addTagBuf: caller-owned input buffer for the add-by-name field (the
 	// drawers are stateless free functions; InspectorPanel owns the state).

@@ -29,7 +29,7 @@ namespace aether
 		}
 	} // namespace
 
-	void WorldRenderer::Flush(const World& world, RenderQueue& queue)
+	void WorldRenderer::Flush(const World& world, RenderQueue& queue, bool shadowPass)
 	{
 		AE_PROFILE_ZONE();
 		auto view = world.GetRegistry().view<const PipelineComponent, const MeshComponent, const TransformComponent>();
@@ -46,6 +46,14 @@ namespace aether
 
 			// Disabled entities (and their subtree) are not drawn.
 			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttEntity)))
+			{
+				continue;
+			}
+
+			// A MeshRenderer toggled invisible hides its mesh in every pass; one
+			// with castShadows==false still draws in color passes but is skipped
+			// for the shadow-map queues.
+			if (const auto* mr = world.GetRegistry().try_get<MeshRendererComponent>(enttEntity); mr != nullptr && (!mr->visible || (shadowPass && !mr->castShadows)))
 			{
 				continue;
 			}

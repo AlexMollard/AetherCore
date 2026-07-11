@@ -32,6 +32,10 @@ namespace aether
 		{
 			flags |= GpuMaterial::kModulateVertexColor;
 		}
+		if (!a.receiveShadows)
+		{
+			flags |= GpuMaterial::kNoReceiveShadows;
+		}
 		g.flags = flags;
 
 		// Optional map not set (default-constructed handle) -> kNoTexture so the

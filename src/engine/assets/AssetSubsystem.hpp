@@ -14,6 +14,7 @@
 #include "material/EffectParamBuffer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/AssetDatabase.hpp"
 
 namespace aether
 {
@@ -93,6 +94,11 @@ namespace aether
 			return m_primitiveMeshes;
 		}
 
+		[[nodiscard]] AssetDatabase& GetAssetDatabase()
+		{
+			return m_assetDatabase;
+		}
+
 		[[nodiscard]] gpu::UploadContext& GetUploadContext()
 		{
 			return m_uploadContext;
@@ -122,6 +128,9 @@ namespace aether
 		// Declared after the registry + cache: the authoring layer references both.
 		MaterialAuthoring m_materialAuthoring{m_materialRegistry, m_pipelineCache};
 		PrimitiveMeshes m_primitiveMeshes;
+		// Central asset catalog; references PrimitiveMeshes for built-in resolution,
+		// so it is declared after it. The app layer injects the model-mesh resolver.
+		AssetDatabase m_assetDatabase{m_primitiveMeshes};
 		gpu::UploadContext m_uploadContext;
 		VulkanContext* m_context = nullptr;
 		World* m_world = nullptr;

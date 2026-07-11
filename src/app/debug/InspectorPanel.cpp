@@ -14,7 +14,9 @@
 #include <imgui_internal.h>
 
 #include "Color.hpp"
+#include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/AssetTypes.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
@@ -99,6 +101,11 @@ namespace aether::app
 			MaterialAsset material = std::move(loaded.value());
 			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
 			ReleaseMaterialAssetTextures(*assets, material);
+			// Catalogue the preset so the Material panel's preset picker can re-apply it.
+			if (auto* db = context.TryGet<AssetDatabase>())
+			{
+				db->Register(MakeMaterialPresetSource(std::string(path)));
+			}
 			return true;
 		}
 
@@ -511,12 +518,41 @@ namespace aether::app
 					asset.doubleSided = true;
 					MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 				}
+				// Mark it a Mesh Renderer so the inspector shows the unified panel.
+				world.EmplaceOrReplace<MeshRendererComponent>(entity);
 			};
-			addPrimitive(PrimitiveMesh::Cube, ICON_FA_CUBE "  Mesh - Cube", "cube");
-			addPrimitive(PrimitiveMesh::Sphere, ICON_FA_CIRCLE "  Mesh - Sphere", "sphere");
-			addPrimitive(PrimitiveMesh::Plane, ICON_FA_IMAGE "  Mesh - Plane", "plane");
-			addPrimitive(PrimitiveMesh::Quad, ICON_FA_IMAGE "  Mesh - Quad", "quad");
-			addPrimitive(PrimitiveMesh::Triangle, ICON_FA_PLAY "  Mesh - Triangle", "triangle");
+			addPrimitive(PrimitiveMesh::Cube, ICON_FA_CUBE "  Mesh Renderer - Cube", "cube");
+			addPrimitive(PrimitiveMesh::Sphere, ICON_FA_CIRCLE "  Mesh Renderer - Sphere", "sphere");
+			addPrimitive(PrimitiveMesh::Plane, ICON_FA_IMAGE "  Mesh Renderer - Plane", "plane");
+			addPrimitive(PrimitiveMesh::Quad, ICON_FA_IMAGE "  Mesh Renderer - Quad", "quad");
+			addPrimitive(PrimitiveMesh::Triangle, ICON_FA_PLAY "  Mesh Renderer - Triangle", "triangle");
+
+			// 2D sprite: a flat quad with an alpha-blended, two-sided material.
+			if (PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer (2D)", m_addFilter, world.Has<SpriteRendererComponent>(entity)) && primitives != nullptr && assets != nullptr)
+			{
+				if (!world.Has<TransformComponent>(entity))
+				{
+					world.Emplace<TransformComponent>(entity);
+				}
+				world.EmplaceOrReplace<MeshComponent>(entity, MeshComponent{.mesh = &primitives->Get(PrimitiveMesh::Quad)});
+				world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "quad", .primitiveIndex = 0});
+				MaterialAsset asset{};
+				asset.baseColorFactor = glm::vec4(1.0f);
+				asset.roughnessFactor = 1.0f;
+				asset.metallicFactor = 0.0f;
+				asset.doubleSided = true;
+				asset.alphaBlend = true;
+				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
+				world.EmplaceOrReplace<SpriteRendererComponent>(entity);
+			}
+
+			// Models can't be picked from a menu; they load by dragging a file.
+			if (m_addFilter[0] == '\0')
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+				ImGui::TextWrapped(ICON_FA_CUBE "  glTF Model: drag a .gltf/.glb from the File Explorer onto the entity or its Mesh Renderer slot");
+				ImGui::PopStyleColor();
+			}
 			if (PaletteEntry(ICON_FA_PALETTE "  Material", m_addFilter, world.Has<MaterialComponent>(entity)) && assets != nullptr)
 			{
 				MaterialAsset asset{};
@@ -677,7 +713,8 @@ namespace aether::app
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
 		DrawCollisionEvents(world, entity);
-		DrawMeshPipeline(world, entity);
+		DrawMeshRenderer(context, world, entity);
+		DrawSpriteRenderer(context, world, entity);
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);

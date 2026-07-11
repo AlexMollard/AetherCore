@@ -27,6 +27,9 @@ namespace aether
 		// When true, the shader multiplies base color by the mesh's vertex color
 		// (used by primitive meshes that carry meaningful vertex colors).
 		bool modulateVertexColor = false;
+		// When false, this surface's lit fragments ignore the directional shadow
+		// map (packs to GpuMaterial::kNoReceiveShadows). Default receives shadows.
+		bool receiveShadows = true;
 
 		// Default-constructed (invalid) handle = "optional map not set" -> the
 		// shader skips the sample (GpuMaterial::kNoTexture at pack time).

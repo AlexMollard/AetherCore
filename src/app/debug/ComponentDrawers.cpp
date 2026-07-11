@@ -10,19 +10,23 @@
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 
+#include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/AssetTypes.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/SceneContext.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/MaterialSystem.hpp"
 #include "material/TextureRegistry.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
@@ -30,6 +34,7 @@
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "scene/TagSlots.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
@@ -441,6 +446,10 @@ namespace aether::app
 		{
 			return {ICON_FA_WEIGHT_HANGING, ImVec4(1.00f, 0.72f, 0.35f, 1.0f)};
 		}
+		if (world.Has<SpriteRendererComponent>(entity))
+		{
+			return {ICON_FA_IMAGE, ImVec4(0.96f, 0.74f, 0.45f, 1.0f)};
+		}
 		if (world.Has<MeshComponent>(entity))
 		{
 			return {ICON_FA_CUBE, ImVec4(0.62f, 0.88f, 0.62f, 1.0f)};
@@ -658,8 +667,34 @@ namespace aether::app
 			inst = &world.Emplace<MaterialInstanceComponent>(entity, MaterialInstanceComponent{seed});
 		}
 		MaterialAsset& asset = inst->asset;
+		auto* assetDb = context.TryGet<AssetDatabase>();
 
 		bool changed = false;
+
+		// Material preset: replace this material with a catalogued .mat preset
+		// (presets are catalogued when dropped from the File Explorer).
+		iw::PropLabel("Preset");
+		if (const AssetId pk = AssetPickerButton("##matPresetPicker", assetDb, AssetType::Material, AssetId{}, "Load a preset..."); pk.IsValid() && assetDb != nullptr)
+		{
+			AssetSource src;
+			if (assetDb->Describe(pk, src))
+			{
+				if (auto loaded = assets->LoadMaterialPreset(src.path))
+				{
+					asset = std::move(loaded.value());
+					for (const TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
+					{
+						if (h.IsValid())
+						{
+							transientTextureRefs.push_back(h);
+						}
+					}
+					changed = true;
+				}
+			}
+		}
+		iw::ItemTooltip("Replace this material with a catalogued preset");
+
 		changed |= PropColor4("Base color", &asset.baseColorFactor.x);
 		changed |= PropSlider("Metallic", &asset.metallicFactor, 0.0f, 1.0f, "%.2f");
 		changed |= PropSlider("Roughness", &asset.roughnessFactor, 0.0f, 1.0f, "%.2f");
@@ -674,13 +709,15 @@ namespace aether::app
 		changed |= ImGui::Checkbox("Mask", &asset.alphaMask);
 		ImGui::SameLine();
 		changed |= ImGui::Checkbox("Vtx color", &asset.modulateVertexColor);
+		changed |= PropCheckbox("Receives shadows", &asset.receiveShadows, "When off, the sun never shadows this surface");
 		if (asset.alphaMask)
 		{
 			changed |= PropFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f, "%.2f");
 		}
 
-		auto textureRow = [&](const char* label, TextureHandle& h)
+		auto textureRow = [&](const char* label, const char* mapId, TextureHandle& h)
 		{
+			ImGui::PushID(mapId);
 			ImGui::TextDisabled("%s", label);
 			ImGui::SameLine(iw::kLabelWidth);
 			if (h.index == TextureHandle::kBrokenIndex)
@@ -707,19 +744,66 @@ namespace aether::app
 							h = assets->GetTextureRegistry().Acquire(file->path);
 							transientTextureRefs.push_back(h);
 							changed = true;
+							if (assetDb != nullptr)
+							{
+								assetDb->Register(MakeTextureSource(file->path));
+							}
 						}
 					}
 				}
 				ImGui::EndDragDropTarget();
 			}
+			// Pick a catalogued texture (resolves through the TextureRegistry).
+			if (assetDb != nullptr)
+			{
+				ImGui::SameLine();
+				if (ImGui::SmallButton(ICON_FA_FOLDER_OPEN))
+				{
+					ImGui::OpenPopup("texpick");
+				}
+				AssetId pk{};
+				if (ImGui::BeginPopup("texpick"))
+				{
+					bool any = false;
+					assetDb->ForEach(AssetType::Texture,
+					        [&](AssetId id, const AssetDatabase::Entry& entry)
+					        {
+						        any = true;
+						        if (ImGui::Selectable((entry.displayName + "##" + id.ToHex()).c_str()))
+						        {
+							        pk = id;
+						        }
+					        });
+					if (!any)
+					{
+						ImGui::TextDisabled("(drop a texture to add it)");
+					}
+					if (pk.IsValid())
+					{
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::EndPopup();
+				}
+				if (pk.IsValid())
+				{
+					AssetSource src;
+					if (assetDb->Describe(pk, src))
+					{
+						h = assets->GetTextureRegistry().Acquire(src.path);
+						transientTextureRefs.push_back(h);
+						changed = true;
+					}
+				}
+			}
+			ImGui::PopID();
 		};
 		if (ImGui::TreeNodeEx("Textures", ImGuiTreeNodeFlags_SpanAvailWidth))
 		{
-			textureRow("Albedo", asset.albedoTex);
-			textureRow("Normal", asset.normalTex);
-			textureRow("Metal/Rough", asset.metallicRoughnessTex);
-			textureRow("Occlusion", asset.occlusionTex);
-			textureRow("Emissive", asset.emissiveTex);
+			textureRow("Albedo", "albedo", asset.albedoTex);
+			textureRow("Normal", "normal", asset.normalTex);
+			textureRow("Metal/Rough", "metalrough", asset.metallicRoughnessTex);
+			textureRow("Occlusion", "occlusion", asset.occlusionTex);
+			textureRow("Emissive", "emissive", asset.emissiveTex);
 			ImGui::TreePop();
 		}
 		if (changed)
@@ -1540,17 +1624,350 @@ namespace aether::app
 		}
 	}
 
-	void DrawMeshPipeline(World& world, Entity entity)
+	namespace
 	{
-		const auto* mesh = world.TryGet<MeshComponent>(entity);
-		const auto* pipe = world.TryGet<PipelineComponent>(entity);
-		if ((!mesh && !pipe) || !SectionHeader(ICON_FA_GEARS "  Render"))
+		struct PrimitiveOption
+		{
+			const char* label;
+			const char* kindName;
+			PrimitiveMesh kind;
+		};
+
+		constexpr PrimitiveOption kPrimitiveOptions[] = {
+		        {"Cube", "cube", PrimitiveMesh::Cube},
+		        {"Sphere", "sphere", PrimitiveMesh::Sphere},
+		        {"Plane", "plane", PrimitiveMesh::Plane},
+		        {"Quad", "quad", PrimitiveMesh::Quad},
+		        {"Triangle", "triangle", PrimitiveMesh::Triangle},
+		};
+
+		// Basename of a model/texture path for a compact display label.
+		std::string PathBasename(const std::string& path)
+		{
+			const auto slash = path.find_last_of("/\\");
+			return slash == std::string::npos ? path : path.substr(slash + 1);
+		}
+
+		// Give a mesh entity a neutral two-sided material + pipeline when it has
+		// none, so a freshly swapped primitive is actually drawable.
+		void EnsureDefaultMaterial(AssetManager& assets, World& world, Entity entity)
+		{
+			if (world.Has<MaterialComponent>(entity) && world.Has<PipelineComponent>(entity))
+			{
+				return;
+			}
+			MaterialAsset asset{};
+			asset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
+			asset.roughnessFactor = 0.6f;
+			asset.doubleSided = true;
+			MaterialSystem::AssignMaterial(world, entity, assets.GetMaterialRegistry(), assets.GetPipelineCache(), asset);
+		}
+
+		// Full-width asset-reference field: a button labelled with the current
+		// asset's name that opens a popup listing every catalogued asset of `type`.
+		// Returns the picked id (invalid if nothing was picked this frame). This is
+		// the one handle-based control shared by the mesh, texture and material
+		// pickers, so they all read from the same AssetDatabase.
+		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel = nullptr)
+		{
+			// Textures/materials are referenced by a runtime handle, not an AssetId,
+			// so the caller passes the button text explicitly; meshes derive it from
+			// the current id.
+			std::string label;
+			if (explicitLabel != nullptr)
+			{
+				label = explicitLabel;
+			}
+			else if (current.IsValid() && db != nullptr)
+			{
+				label = db->DisplayName(current);
+			}
+			if (label.empty())
+			{
+				label = emptyLabel;
+			}
+			if (ImGui::Button((label + "##btn" + popupId).c_str(), ImVec2(-FLT_MIN, 0.0f)) && db != nullptr)
+			{
+				ImGui::OpenPopup(popupId);
+			}
+			AssetId picked{};
+			if (db != nullptr && ImGui::BeginPopup(popupId))
+			{
+				ImGui::TextDisabled("%s assets", AssetTypeName(type));
+				ImGui::Separator();
+				bool any = false;
+				db->ForEach(type,
+				        [&](AssetId id, const AssetDatabase::Entry& entry)
+				        {
+					        any = true;
+					        if (ImGui::Selectable((entry.displayName + "##" + id.ToHex()).c_str(), id == current))
+					        {
+						        picked = id;
+					        }
+				        });
+				if (!any)
+				{
+					ImGui::TextDisabled("(none catalogued yet - drop one to add it)");
+				}
+				if (picked.IsValid())
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
+			}
+			return picked;
+		}
+	} // namespace
+
+	void DrawMeshRenderer(LayerContext& context, World& world, Entity entity)
+	{
+		const bool hasMesh = world.Has<MeshComponent>(entity);
+		// Sprites carry a mesh too but own the "Sprite Renderer" panel instead.
+		if ((!hasMesh && !world.Has<MeshRendererComponent>(entity)) || world.Has<SpriteRendererComponent>(entity))
 		{
 			return;
 		}
-		PropText("Mesh", "%s", (mesh && mesh->mesh) ? "present" : "none");
-		PropText("Pipeline", "%s", (pipe && pipe->pipeline) ? "present" : "none");
-		ImGui::TextDisabled("Asset swapping needs a picker - later spec");
+		if (!SectionHeader(ICON_FA_CUBE "  Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		auto* assets = context.TryGet<AssetManager>();
+		auto* primitives = context.TryGet<PrimitiveMeshes>();
+		auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+
+		const MeshSourceComponent* source = world.TryGet<MeshSourceComponent>(entity);
+		bool isModel = source != nullptr && source->kind == MeshSourceComponent::Kind::Model;
+
+		auto* assetDb = context.TryGet<AssetDatabase>();
+		// Component pointers are invalidated by EmplaceOrReplace below; re-fetch
+		// after every mutation before touching `source` again.
+		const auto refetchSource = [&]()
+		{
+			source = world.TryGet<MeshSourceComponent>(entity);
+			isModel = source != nullptr && source->kind == MeshSourceComponent::Kind::Model;
+		};
+
+		// Apply a picked mesh asset onto this entity's mesh + stable source identity.
+		const auto applyMeshAsset = [&](AssetId picked)
+		{
+			AssetSource src;
+			if (assetDb == nullptr || !assetDb->Describe(picked, src) || src.type != AssetType::Mesh)
+			{
+				return;
+			}
+			if (src.builtin)
+			{
+				if (primitives == nullptr || assets == nullptr)
+				{
+					return;
+				}
+				PrimitiveMesh kind = PrimitiveMesh::Cube;
+				for (const PrimitiveOption& opt: kPrimitiveOptions)
+				{
+					if (src.path == opt.kindName)
+					{
+						kind = opt.kind;
+					}
+				}
+				world.EmplaceOrReplace<MeshComponent>(entity, MeshComponent{.mesh = &primitives->Get(kind)});
+				world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = src.path, .primitiveIndex = 0});
+				if (world.Has<SkinnedMeshComponent>(entity))
+				{
+					world.Remove<SkinnedMeshComponent>(entity);
+				}
+				EnsureDefaultMaterial(*assets, world, entity);
+			}
+			else if (assets != nullptr && sceneCtx != nullptr)
+			{
+				scene::AssignModelMeshToEntity(world, *assets, *sceneCtx, entity, src.path, src.subIndex);
+			}
+		};
+
+		// Register the current mesh (and, for a model, its sibling primitives) so the
+		// picker lists them, then resolve its stable id.
+		AssetId currentId{};
+		if (source != nullptr && assetDb != nullptr)
+		{
+			if (isModel && assets != nullptr && sceneCtx != nullptr)
+			{
+				scene::RegisterModelAssets(*assetDb, *assets, *sceneCtx, source->path);
+			}
+			currentId = assetDb->Register(isModel ? MakeModelMeshSource(source->path, static_cast<int>(source->primitiveIndex)) : MakePrimitiveMeshSource(source->path));
+		}
+
+		// Mesh asset field: the handle-based front door - pick any mesh asset
+		// (built-in primitives + loaded model meshes) from the shared catalog.
+		iw::PropLabel("Mesh");
+		if (const AssetId picked = AssetPickerButton("##meshAssetPicker", assetDb, AssetType::Mesh, currentId, "None"); picked.IsValid())
+		{
+			applyMeshAsset(picked);
+		}
+		iw::ItemTooltip("Pick a mesh asset from the project");
+		refetchSource();
+
+		// glTF model slot: drop a .gltf/.glb/.mesh file to (re)load a model onto
+		// this entity; the model + its primitives are registered as assets.
+		iw::PropLabel("Model");
+		const std::string modelLabel = isModel ? PathBasename(source->path) : "Drop .gltf / .glb here";
+		ImGui::Button((modelLabel + "##modelSlot").c_str(), ImVec2(-FLT_MIN, 0.0f));
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload))
+			{
+				if (payload->DataSize == sizeof(dragdrop::FilePayload))
+				{
+					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+					if (file->kind == dragdrop::FileKind::Model && assets != nullptr && sceneCtx != nullptr)
+					{
+						scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, file->path);
+						if (assetDb != nullptr)
+						{
+							scene::RegisterModelAssets(*assetDb, *assets, *sceneCtx, file->path);
+						}
+					}
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+		iw::ItemTooltip("Drag a model file from the File Explorer onto this slot");
+		refetchSource();
+
+		// Hot-reload: re-read the model file and re-point every mesh referencing it.
+		if (isModel && assets != nullptr && sceneCtx != nullptr && assetDb != nullptr)
+		{
+			iw::PropLabel("Source");
+			if (AccentButton(ICON_FA_ROTATE "  Reload from disk", ImVec2(-FLT_MIN, 0.0f)))
+			{
+				scene::ReloadModelAssets(*assetDb, *assets, *sceneCtx, source->path);
+			}
+			iw::ItemTooltip("Re-read the model file; the resolve pass re-points meshes next frame (hot-reload)");
+		}
+
+		// Primitive picker: a model can hold several meshes. Scrub which one this
+		// renderer references (re-resolves the shared mesh + its material).
+		if (isModel && assets != nullptr && sceneCtx != nullptr)
+		{
+			const int primCount = scene::ModelPrimitiveCount(*assets, *sceneCtx, source->path);
+			if (primCount > 1)
+			{
+				int primIndex = static_cast<int>(source->primitiveIndex);
+				if (PropInt("Primitive", &primIndex, 0.1f, 0, primCount - 1, "Which mesh of the model this renderer references"))
+				{
+					scene::AssignModelMeshToEntity(world, *assets, *sceneCtx, entity, source->path, primIndex);
+				}
+			}
+			else if (primCount > 0)
+			{
+				PropText("Primitive", "1 / 1");
+			}
+		}
+
+		// Visibility + shadow casting. Lazily created so a plain mesh entity is
+		// unaffected until you actually toggle something.
+		auto* mr = world.TryGet<MeshRendererComponent>(entity);
+		bool visible = mr == nullptr || mr->visible;
+		bool castShadows = mr == nullptr || mr->castShadows;
+		const bool visChanged = PropCheckbox("Visible", &visible, "Hide the mesh without disabling scripts/physics");
+		const bool castChanged = PropCheckbox("Cast shadows", &castShadows, "Render this mesh into the shadow maps");
+		if (visChanged || castChanged)
+		{
+			if (mr == nullptr)
+			{
+				mr = &world.Emplace<MeshRendererComponent>(entity);
+			}
+			mr->visible = visible;
+			mr->castShadows = castShadows;
+		}
+		ImGui::TextDisabled("Receive shadows is a material flag (Material section)");
+
+		PropText("Material", "%s", world.Has<MaterialComponent>(entity) ? "assigned  (edit in Material)" : "none");
+		PropText("Pipeline", "%s", world.Has<PipelineComponent>(entity) ? "present" : "none");
+		if (!world.Has<MaterialComponent>(entity) && assets != nullptr && AccentButton(ICON_FA_PALETTE "  Add default material"))
+		{
+			EnsureDefaultMaterial(*assets, world, entity);
+		}
+	}
+
+	void DrawSpriteRenderer(LayerContext& context, World& world, Entity entity)
+	{
+		if (!world.Has<SpriteRendererComponent>(entity))
+		{
+			return;
+		}
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_IMAGE "  Sprite Renderer", ICON_FA_XMARK "##removeSprite", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		if (removed)
+		{
+			world.Remove<SpriteRendererComponent>(entity);
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+
+		auto* assets = context.TryGet<AssetManager>();
+		const auto* inst = world.TryGet<MaterialInstanceComponent>(entity);
+
+		// Texture slot: pick a catalogued texture, or drop a texture file. Both
+		// resolve through the TextureRegistry - no second texture cache.
+		auto* assetDb = context.TryGet<AssetDatabase>();
+		const auto setSpriteTexture = [&](const std::string& path)
+		{
+			if (assets == nullptr)
+			{
+				return;
+			}
+			TextureHandle h = assets->GetTextureRegistry().Acquire(path);
+			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), h);
+			if (h.IsValid())
+			{
+				assets->GetTextureRegistry().Release(h);
+			}
+			if (assetDb != nullptr)
+			{
+				assetDb->Register(MakeTextureSource(path));
+			}
+		};
+
+		iw::PropLabel("Sprite");
+		const bool hasTex = inst != nullptr && inst->asset.albedoTex.IsValid();
+		const std::string texLabel = hasTex ? ("Texture entry " + std::to_string(inst->asset.albedoTex.index)) : std::string("Drop / pick a texture");
+		const AssetId pickedTex = AssetPickerButton("##spriteTexPicker", assetDb, AssetType::Texture, AssetId{}, "Drop / pick a texture", texLabel.c_str());
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload))
+			{
+				if (payload->DataSize == sizeof(dragdrop::FilePayload))
+				{
+					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+					if (file->kind == dragdrop::FileKind::Texture)
+					{
+						setSpriteTexture(file->path);
+					}
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+		iw::ItemTooltip("Drag a texture onto this slot, or click to pick a catalogued one");
+		if (pickedTex.IsValid() && assetDb != nullptr)
+		{
+			AssetSource src;
+			if (assetDb->Describe(pickedTex, src))
+			{
+				setSpriteTexture(src.path);
+			}
+		}
+
+		// Tint drives the material base colour (rgb); alpha lives in the Material
+		// section (sprites default to an alpha-blended two-sided material).
+		glm::vec3 tint = inst != nullptr ? glm::vec3(inst->asset.baseColorFactor) : glm::vec3(1.0f);
+		if (PropColor3("Tint", &tint.x) && assets != nullptr)
+		{
+			MaterialSystem::SetBaseColor(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), tint);
+		}
+		ImGui::TextDisabled("Flat quad drawn via the mesh path - full colour/alpha in Material.");
 	}
 
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection)

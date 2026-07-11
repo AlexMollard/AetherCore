@@ -12,6 +12,7 @@
 #include "material/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -172,6 +173,17 @@ namespace aether::app
 		// Scene tooling (the debug-UI serializer) reaches the model cache, the
 		// effect manager and sceneEntities through the service container.
 		context.services.Register<scripting::SceneContext>(m_sceneCtx);
+
+		// The engine-side asset database resolves built-in primitives itself; give
+		// it a way to resolve glTF model primitives through this layer's model cache.
+		if (auto* assetDb = context.services.TryGet<AssetDatabase>())
+		{
+			assetDb->SetModelMeshResolver(
+			        [this](const std::string& path, int primitiveIndex) -> const Mesh*
+			        {
+				        return m_sceneCtx.assets != nullptr ? scene::ResolveModelPrimitiveMesh(*m_sceneCtx.assets, m_sceneCtx, path, primitiveIndex) : nullptr;
+			        });
+		}
 
 		// The default primitive material is built lazily and acquired through the
 		// MaterialRegistry per entity - nothing to register here.

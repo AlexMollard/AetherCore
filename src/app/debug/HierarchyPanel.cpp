@@ -11,7 +11,9 @@
 #include <imgui.h>
 #include <imgui_internal.h> // IsMouseDragPastThreshold / IsDragDropActive
 
+#include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/AssetTypes.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
@@ -29,10 +31,12 @@
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/World.hpp"
 #include "scene/SceneSubsystem.hpp"
+#include "scripting/SceneContext.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/TomlConfig.hpp"
 #include "utils/SettingsService.hpp"
@@ -88,6 +92,10 @@ namespace aether::app
 			MaterialAsset material = std::move(loaded.value());
 			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
 			ReleaseMaterialAssetTextures(*assets, material);
+			if (auto* db = context.TryGet<AssetDatabase>())
+			{
+				db->Register(MakeMaterialPresetSource(std::string(path)));
+			}
 			return true;
 		}
 
@@ -121,11 +129,35 @@ namespace aether::app
 			return {};
 		}
 
+		bool AssignModelToEntity(LayerContext& context, World& world, Entity entity, std::string_view path)
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			if (assets == nullptr || sceneCtx == nullptr)
+			{
+				return false;
+			}
+			const bool ok = scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, std::string(path));
+			if (ok)
+			{
+				if (auto* db = context.TryGet<AssetDatabase>())
+				{
+					scene::RegisterModelAssets(*db, *assets, *sceneCtx, std::string(path));
+				}
+			}
+			return ok;
+		}
+
 		bool ApplyFilePayloadToEntity(LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
 		{
 			switch (payload.kind)
 			{
 				case dragdrop::FileKind::Model:
+					if (AssignModelToEntity(context, world, entity, payload.path))
+					{
+						selection.Select(entity);
+						return true;
+					}
 					return false;
 				case dragdrop::FileKind::Prefab:
 				{
@@ -148,7 +180,7 @@ namespace aether::app
 
 		bool CanApplyFilePayloadInHierarchy(const dragdrop::FilePayload& payload)
 		{
-			return payload.kind == dragdrop::FileKind::Prefab || payload.kind == dragdrop::FileKind::Material || payload.kind == dragdrop::FileKind::Texture;
+			return payload.kind == dragdrop::FileKind::Prefab || payload.kind == dragdrop::FileKind::Material || payload.kind == dragdrop::FileKind::Texture || payload.kind == dragdrop::FileKind::Model;
 		}
 
 		// Small icon toggle used for the kind-filter chips.

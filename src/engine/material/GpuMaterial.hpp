@@ -29,6 +29,9 @@ namespace aether
 		static constexpr std::uint32_t kAlphaBlend = 1u << 1;
 		static constexpr std::uint32_t kAlphaMask = 1u << 2;
 		static constexpr std::uint32_t kModulateVertexColor = 1u << 3;
+		// Inverted so the default (flags == 0, incl. material-less draws) receives
+		// shadows; the bit is set only when a material opts OUT.
+		static constexpr std::uint32_t kNoReceiveShadows = 1u << 4;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};

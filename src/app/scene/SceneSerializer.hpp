@@ -20,6 +20,7 @@
 namespace aether
 {
 	class AssetManager;
+	class AssetDatabase;
 	class EffectParamBuffer;
 	class MaterialRegistry;
 	class PhysicsSystem;
@@ -168,6 +169,14 @@ namespace aether::app::scene
 		// subtree stop rendering/updating. Persisted so a saved scene reloads in
 		// the same active/inactive state.
 		bool disabled = false;
+		// Unity-style renderer markers. `sprite` == SpriteRendererComponent (2D
+		// quad). `meshRenderer` == MeshRendererComponent; `meshRendererVisible`
+		// is its visibility toggle. Kept minimal - the mesh/material identity is
+		// already carried by MeshSourceComponent + the material record.
+		bool sprite = false;
+		bool meshRenderer = false;
+		bool meshRendererVisible = true;
+		bool meshRendererCastShadows = true;
 		bool hasTransform = false;
 		glm::vec3 position{0.0f};
 		glm::vec3 eulerDeg{0.0f};
@@ -246,6 +255,20 @@ namespace aether::app::scene
 	// v7 = multiple entity script slots.
 	inline constexpr int kSceneFormatVersion = 8;
 
+	// One row of the persisted asset manifest: a stable AssetId (hex) and the
+	// source it resolves to. Lets a loaded scene populate the asset catalog
+	// deterministically, puts the AssetIds in the file, and is the seam for
+	// future rename-stable references (the manifest becomes the id -> path
+	// authority a rename tool updates).
+	struct AssetManifestEntry
+	{
+		std::string id;      // AssetId hex
+		std::string type;    // "mesh" | "texture"
+		std::string path;    // primitive kind name or VFS path
+		int subIndex = -1;   // model primitive index, else -1
+		bool builtin = false; // path is a built-in primitive kind name
+	};
+
 	struct SceneDescription
 	{
 		std::string name;
@@ -253,6 +276,9 @@ namespace aether::app::scene
 		std::vector<EntityRecord> entities;
 		std::vector<LightRecord> lights;
 		std::optional<EnvironmentRecord> environment;
+		// Referenced assets (meshes + textures), stable-id keyed. Written after the
+		// entities; ignored by readers that predate it.
+		std::vector<AssetManifestEntry> assetManifest;
 	};
 
 	// ── Capture / TOML ──────────────────────────────────────────────────────────
@@ -304,6 +330,7 @@ namespace aether::app::scene
 		scripting::SceneContext* sceneContext = nullptr; // model cache + sceneEntities registration
 		PhysicsSystem* physics = nullptr;                // step-idle guard before replace-all destroys
 		Renderer* renderer = nullptr;                    // lights + environment re-apply
+		AssetDatabase* assetDatabase = nullptr;          // catalog population for the asset picker
 	};
 
 	// Resolves every apply dependency from the service container - the shared

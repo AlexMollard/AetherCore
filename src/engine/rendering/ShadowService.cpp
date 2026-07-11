@@ -164,7 +164,7 @@ namespace aether
 			m_shadowRenderQueue.DiscardPending(drawSlot);
 			return;
 		}
-		WorldRenderer::Flush(world, m_shadowRenderQueue);
+		WorldRenderer::Flush(world, m_shadowRenderQueue, /*shadowPass*/ true);
 	}
 
 	void ShadowService::SetAnimationDatabase(const AnimationDatabase* animationDb)

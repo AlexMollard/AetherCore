@@ -67,6 +67,11 @@ namespace aether
 
 		m_meshUploadQueue.Initialize();
 		m_primitiveMeshes.Initialize(m_uploadContext);
+		// The asset catalog is now resolvable for built-in primitives; the app layer
+		// injects the glTF model-mesh resolver once the SceneContext model cache
+		// exists (ScriptedSceneLayer::OnAttach).
+		services.Register<AssetDatabase>(m_assetDatabase);
+		m_assetDatabase.RegisterBuiltinPrimitives();
 		m_world = &world;
 		m_assetManager.Initialize(vk, bindless, m_materialRegistry, m_materialAuthoring, m_pipelineCache, m_effectParamBuffer, m_textureRegistry, world, m_uploadContext);
 		EffectSystem::ConnectLifecycle(world, m_effectParamBuffer);

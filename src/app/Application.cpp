@@ -12,6 +12,7 @@
 #include "rendering/RenderQueue.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/ShadowService.hpp"
+#include "assets/AssetDatabase.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/Logger.hpp"
@@ -256,6 +257,15 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 		LayerContext ctx = MakeLayerContext(gameDt, frameIndex);
+
+		// Keep every mesh pointer resolved from its asset id - back-fills the id on
+		// first sight and re-points meshes whose asset was hot-reloaded - before
+		// systems, UI or rendering read them. Runs in both play and edit modes.
+		if (auto* assetDb = ctx.TryGet<AssetDatabase>())
+		{
+			assetDb->ResolveWorldMeshes(ctx.Get<World>());
+		}
+
 		if (m_playState.IsPlaying())
 		{
 			ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));

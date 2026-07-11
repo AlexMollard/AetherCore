@@ -284,7 +284,7 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
 		m_shadowRenderQueue.Clear(drawSlot);
-		WorldRenderer::Flush(world, m_shadowRenderQueue);
+		WorldRenderer::Flush(world, m_shadowRenderQueue, /*shadowPass*/ true);
 	}
 
 	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc)

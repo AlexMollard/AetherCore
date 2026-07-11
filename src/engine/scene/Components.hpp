@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "animation/AnimationDatabase.hpp"
+#include "assets/AssetId.hpp"
 #include "assets/GltfAsset.hpp"
 #include "material/EffectParams.hpp"
 #include "material/MaterialAsset.hpp"
@@ -42,10 +43,17 @@ namespace aether
 		std::vector<Entity> children; // ordered
 	};
 
-	// Reference to a GPU vertex/index buffer.
+	// A drawn mesh. `asset` is the id-primary reference (stable across reloads and
+	// scene round-trips); `mesh` is the live pointer the renderer reads, resolved
+	// from `asset` through the AssetDatabase. AssetDatabase::ResolveWorldMeshes
+	// keeps `mesh` in sync - back-filling `asset` from MeshSourceComponent the
+	// first time and re-pointing `mesh` whenever the asset's generation bumps
+	// (hot-reload). `mesh` may be set directly at spawn as the initial value.
 	struct MeshComponent
 	{
 		const Mesh* mesh = nullptr;
+		AssetId asset{};                      // authoritative reference (0 = derive from MeshSource)
+		std::uint32_t resolvedGeneration = 0; // asset generation `mesh` was last resolved at
 	};
 
 	// Reference to a registry material + the cached GPU slot for the render loop.
@@ -96,6 +104,27 @@ namespace aether
 		Kind kind = Kind::Primitive;
 		std::string path;
 		std::uint32_t primitiveIndex = 0;
+	};
+
+	// Unity-style mesh renderer settings. The drawn mesh is still MeshComponent
+	// (+ PipelineComponent + optional MaterialComponent); this component marks the
+	// entity as an authored 3D renderer and holds render toggles. WorldRenderer
+	// honors `visible` (hides the mesh without disabling the whole entity). Its
+	// presence lets the inspector group mesh source, material and flags into one
+	// "Mesh Renderer" panel instead of scattered render components.
+	struct MeshRendererComponent
+	{
+		bool visible = true;     // WorldRenderer skips the mesh in every pass
+		bool castShadows = true; // when false, drawn in color passes but not shadow maps
+	};
+
+	// Unity-style 2D sprite marker: the entity draws a flat textured Quad through
+	// the standard mesh path with sprite-friendly material defaults (double-sided,
+	// alpha-blended). The texture and tint live in the entity's material; this
+	// marks it as a sprite for the inspector "Sprite Renderer" panel and the
+	// hierarchy badge.
+	struct SpriteRendererComponent
+	{
 	};
 
 	// Which named effect drives this entity (set_entity_effect). The effect

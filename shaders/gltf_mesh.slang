@@ -224,7 +224,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 diffuse = kD * baseColor.rgb * diffuseAo / kPI;
 
     const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L);
-    const float shadowVisibility = max(shadow, 0.08f);
+    // Materials can opt out of shadow receiving (flag set == opt out); such
+    // surfaces stay fully lit by the sun regardless of the shadow map.
+    const bool receivesShadows = (mat.flags & kFlagNoReceiveShadows) == 0u;
+    const float shadowVisibility = receivesShadows ? max(shadow, 0.08f) : 1.0f;
     float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
 
     // Local lights accumulate separately so their AO weight does not also hit
