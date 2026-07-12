@@ -18,6 +18,7 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/volk.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "debug/EditorChrome.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -28,32 +29,6 @@ namespace aether
 		void ApplyTheme()
 		{
 			auto& style = ImGui::GetStyle();
-			auto& colors = style.Colors;
-
-			using colors::Background, colors::Surface, colors::SurfaceElevated, colors::Border, colors::TextPrimary, colors::TextSecondary, colors::Orange, colors::Yellow, colors::Red;
-
-			constexpr auto black = [](int a)
-			{
-				return ImColor(0, 0, 0, a);
-			};
-			constexpr auto withAlpha = [](const ImColor& c, int a)
-			{
-				return ImColor(c.Value.x, c.Value.y, c.Value.z, a / 255.0f);
-			};
-			const auto toIm = [](const glm::vec4& c)
-			{
-				return ImColor(c.r, c.g, c.b, c.a);
-			};
-
-			const auto bg = toIm(Background);
-			const auto bgSurface = toIm(Surface);
-			const auto bgElevated = toIm(SurfaceElevated);
-			const auto cBorder = toIm(Border);
-			const auto fg = toIm(TextPrimary);
-			const auto fgMuted = toIm(TextSecondary);
-			const auto cOrange = toIm(Orange);
-			const auto cYellow = toIm(Yellow);
-			const auto cRed = toIm(Red);
 
 			// Rounding and spacing - 3px matches the project launcher's language
 			// (windows stay square so docked panels tile flush).
@@ -76,110 +51,11 @@ namespace aether
 			style.ScrollbarRounding = 0.0f;
 			style.GrabMinSize = 5.0f;
 
-			// Text
-			colors[ImGuiCol_Text] = fg;
-			colors[ImGuiCol_TextDisabled] = fgMuted;
-			colors[ImGuiCol_TextLink] = cOrange;
-			colors[ImGuiCol_TextSelectedBg] = withAlpha(cOrange, 48);
-
-			// Window
-			colors[ImGuiCol_WindowBg] = bg;
-			colors[ImGuiCol_ChildBg] = bg;
-			colors[ImGuiCol_PopupBg] = bgElevated;
-			colors[ImGuiCol_Border] = cBorder;
-			colors[ImGuiCol_BorderShadow] = ImColor(0, 0, 0, 0);
-
-			// Title
-			colors[ImGuiCol_TitleBg] = bgSurface;
-			colors[ImGuiCol_TitleBgActive] = bgElevated;
-			colors[ImGuiCol_TitleBgCollapsed] = bg;
-
-			// Menu
-			colors[ImGuiCol_MenuBarBg] = bgSurface;
-
-			// Scrollbar
-			colors[ImGuiCol_ScrollbarBg] = bg;
-			colors[ImGuiCol_ScrollbarGrab] = bgElevated;
-			colors[ImGuiCol_ScrollbarGrabHovered] = withAlpha(cOrange, 140);
-			colors[ImGuiCol_ScrollbarGrabActive] = cOrange;
-
-			// Checkbox, radio, slider - amber, matching the single-accent language.
-			colors[ImGuiCol_CheckMark] = cOrange;
-			colors[ImGuiCol_CheckboxSelectedBg] = withAlpha(cOrange, 40);
-			colors[ImGuiCol_SliderGrab] = cOrange;
-			colors[ImGuiCol_SliderGrabActive] = cYellow;
-
-			// Button
-			colors[ImGuiCol_Button] = bgSurface;
-			colors[ImGuiCol_ButtonHovered] = withAlpha(cOrange, 180);
-			colors[ImGuiCol_ButtonActive] = cOrange;
-
-			// Header (collapsing headers, tree nodes, selectables)
-			colors[ImGuiCol_Header] = bgSurface;
-			colors[ImGuiCol_HeaderHovered] = withAlpha(cOrange, 100);
-			colors[ImGuiCol_HeaderActive] = withAlpha(cOrange, 160);
-
-			// Separator
-			colors[ImGuiCol_Separator] = cBorder;
-			colors[ImGuiCol_SeparatorHovered] = cOrange;
-			colors[ImGuiCol_SeparatorActive] = cYellow;
-
-			// Resize grip
-			colors[ImGuiCol_ResizeGrip] = bgSurface;
-			colors[ImGuiCol_ResizeGripHovered] = withAlpha(cOrange, 140);
-			colors[ImGuiCol_ResizeGripActive] = cOrange;
-
-			// Frame BG (input fields, combo, etc.)
-			colors[ImGuiCol_FrameBg] = bgSurface;
-			colors[ImGuiCol_FrameBgHovered] = withAlpha(cOrange, 60);
-			colors[ImGuiCol_FrameBgActive] = withAlpha(cOrange, 100);
-
-			// Input text
-			colors[ImGuiCol_InputTextCursor] = fg;
-
-			// Tabs
-			colors[ImGuiCol_Tab] = bg;
-			colors[ImGuiCol_TabHovered] = withAlpha(cOrange, 80);
-			colors[ImGuiCol_TabSelected] = bgSurface;
-			colors[ImGuiCol_TabSelectedOverline] = cOrange;
-			colors[ImGuiCol_TabDimmed] = bg;
-			colors[ImGuiCol_TabDimmedSelected] = bgSurface;
-			colors[ImGuiCol_TabDimmedSelectedOverline] = withAlpha(cOrange, 80);
-
-			// Docking
-			colors[ImGuiCol_DockingPreview] = withAlpha(cOrange, 120);
-			colors[ImGuiCol_DockingEmptyBg] = bg;
-
-			// Plot
-			colors[ImGuiCol_PlotLines] = fgMuted;
-			colors[ImGuiCol_PlotLinesHovered] = cOrange;
-			colors[ImGuiCol_PlotHistogram] = cOrange;
-			colors[ImGuiCol_PlotHistogramHovered] = cYellow;
-
-			// Tables
-			colors[ImGuiCol_TableHeaderBg] = bgElevated;
-			colors[ImGuiCol_TableBorderStrong] = cBorder;
-			colors[ImGuiCol_TableBorderLight] = withAlpha(cBorder, 80);
-			colors[ImGuiCol_TableRowBg] = bg;
-			colors[ImGuiCol_TableRowBgAlt] = withAlpha(bgSurface, 160);
-
-			// Tree
-			colors[ImGuiCol_TreeLines] = cBorder;
-
-			// Unsaved marker
-			colors[ImGuiCol_UnsavedMarker] = cYellow;
-
-			// Modal dimming
-			colors[ImGuiCol_ModalWindowDimBg] = black(128);
-
-			// Drag and drop
-			colors[ImGuiCol_DragDropTarget] = cOrange;
-			colors[ImGuiCol_DragDropTargetBg] = withAlpha(cOrange, 48);
-
-			// Nav
-			colors[ImGuiCol_NavCursor] = withAlpha(cOrange, 100);
-			colors[ImGuiCol_NavWindowingHighlight] = withAlpha(fg, 112);
-			colors[ImGuiCol_NavWindowingDimBg] = black(128);
+			// All widget COLOURS come from the runtime editor palette (chrome::) so the
+			// Theme panel can recolour every widget live; only the non-colour style
+			// (rounding/spacing above) stays fixed here.
+			app::chrome::RefreshTokens();
+			app::chrome::ApplyImGuiColors(style);
 		}
 
 		void ProcessBackendTextureUpdates(ImDrawData* drawData)

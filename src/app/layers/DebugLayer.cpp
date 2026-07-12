@@ -22,6 +22,7 @@ using namespace std::string_view_literals;
 #include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
 #include "debug/FileExplorerPanel.hpp"
+#include "debug/EditorChrome.hpp"
 #include "debug/Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
@@ -31,6 +32,7 @@ using namespace std::string_view_literals;
 #include "debug/ProjectPanel.hpp"
 #include "debug/RenderGraphPanel.hpp"
 #include "debug/SettingsPanel.hpp"
+#include "debug/ThemePanel.hpp"
 #include "debug/TonemapPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/UiCanvasPanel.hpp"
@@ -145,6 +147,10 @@ namespace aether::app
 			{
 				return ICON_FA_GEARS;
 			}
+			if (panelName == "Theme")
+			{
+				return ICON_FA_PALETTE;
+			}
 			return ICON_FA_CIRCLE;
 		}
 
@@ -228,6 +234,7 @@ namespace aether::app
 		m_panels.push_back(std::make_unique<TonemapPanel>());
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
 		m_panels.push_back(std::make_unique<SettingsPanel>());
+		m_panels.push_back(std::make_unique<ThemePanel>());
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
 		m_panels.push_back(std::make_unique<ConsolePanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
@@ -403,39 +410,101 @@ namespace aether::app
 
 	void DebugLayer::DrawStatusBar(LayerContext& context)
 	{
+		using namespace chrome;
 		// A child that fills the row reserved below the DockSpace. Drawn inside the
-		// (NoBackground) host window, so it gets its own menu-bar-coloured background.
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_MenuBarBg));
+		// (NoBackground) host window; the warm surface tone matches the launcher
+		// chrome rather than the default menu-bar grey.
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, kPanel);
 		if (ImGui::BeginChild("##StatusBar", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
 		{
+			const auto* playState = context.TryGet<PlayState>();
+			const bool playing = playState != nullptr && playState->IsPlaying();
+			const bool compiling = playState != nullptr && playState->IsCompiling();
+
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 barMin = ImGui::GetWindowPos();
+			const float barW = ImGui::GetWindowWidth();
+
+			// Live-session accent hairline along the TOP edge of the bar (mirrors the
+			// viewport's), fading in from both ends; dimmed while compiling.
+			if (playing || compiling)
+			{
+				AccentHairline(drawList, barMin, barW, playing ? 0.85f : 0.35f);
+			}
+
 			ImGui::AlignTextToFramePadding();
 
-			// Left: current scene + play state.
+			// Amber tick + spaced item, then a faint hairline divider between groups.
+			const auto tick = [&](const ImVec4& color)
+			{
+				const ImVec2 p = ImGui::GetCursorScreenPos();
+				const float h = ImGui::GetTextLineHeight();
+				drawList->AddRectFilled(ImVec2(p.x, p.y + 2.0f), ImVec2(p.x + 3.0f, p.y + h - 1.0f), U32(color));
+				ImGui::Dummy(ImVec2(9.0f, 0.0f));
+				ImGui::SameLine();
+			};
+			const auto divider = [&]()
+			{
+				ImGui::SameLine(0.0f, 12.0f);
+				const ImVec2 p = ImGui::GetCursorScreenPos();
+				const float h = ImGui::GetTextLineHeight();
+				drawList->AddLine(ImVec2(p.x, p.y + 2.0f), ImVec2(p.x, p.y + h - 1.0f), U32(WithAlpha(kStroke, 0.9f)), 1.0f);
+				ImGui::Dummy(ImVec2(0.0f, 0.0f));
+				ImGui::SameLine(0.0f, 12.0f);
+			};
+
+			ImGui::Dummy(ImVec2(2.0f, 0.0f));
+			ImGui::SameLine();
+
+			// Project.
 			if (m_projects.HasCurrentProject())
 			{
-				ImGui::Text("  " ICON_FA_FOLDER_OPEN "  %s", m_projects.CurrentProject().name.c_str());
-				ImGui::SameLine();
-				ImGui::TextDisabled("|");
-				ImGui::SameLine();
+				tick(kAccent);
+				ImGui::PushStyleColor(ImGuiCol_Text, kText);
+				ImGui::Text(ICON_FA_FOLDER_OPEN "  %s", m_projects.CurrentProject().name.c_str());
+				ImGui::PopStyleColor();
+				divider();
 			}
+
+			// Scene.
 			const char* sceneName = "-";
 			if (const auto* scenes = context.TryGet<SceneSubsystem>(); scenes != nullptr && !scenes->GetCurrentScene().empty())
 			{
 				sceneName = scenes->GetCurrentScene().c_str();
 			}
+			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
 			ImGui::Text(ICON_FA_CUBE "  %s", sceneName);
-			ImGui::SameLine();
-			ImGui::TextDisabled("|");
-			ImGui::SameLine();
-			const auto* playState = context.TryGet<PlayState>();
-			const char* playLabel = ICON_FA_STOP "  Editing";
-			if (playState != nullptr)
-			{
-				playLabel = playState->IsPlaying() ? ICON_FA_PLAY "  Playing" : (playState->IsCompiling() ? ICON_FA_GEAR "  Compiling..." : ICON_FA_STOP "  Editing");
-			}
-			ImGui::TextUnformatted(playLabel);
+			ImGui::PopStyleColor();
+			divider();
 
-			// Right (aligned): resolution, FPS, frame time.
+			// Play-state pill: filled amber while live, amber-outline compiling,
+			// quiet muted while editing - the viewport's state language, miniaturised.
+			{
+				const char* label = playing ? ICON_FA_PLAY "  PLAYING" : (compiling ? ICON_FA_GEAR "  COMPILING" : ICON_FA_STOP "  EDITING");
+				const ImVec2 textSize = ImGui::CalcTextSize(label);
+				const ImVec2 pad(7.0f, 1.0f);
+				const ImVec2 p = ImGui::GetCursorScreenPos();
+				const ImVec2 pillMin(p.x, p.y + (ImGui::GetFrameHeight() - (textSize.y + pad.y * 2.0f)) * 0.5f);
+				const ImVec2 pillMax(pillMin.x + textSize.x + pad.x * 2.0f, pillMin.y + textSize.y + pad.y * 2.0f);
+				if (playing)
+				{
+					drawList->AddRectFilled(pillMin, pillMax, U32(kAccent), 3.0f);
+					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kOnAccent), label);
+				}
+				else if (compiling)
+				{
+					drawList->AddRect(pillMin, pillMax, U32(WithAlpha(kAccent, 0.7f)), 3.0f, 0, 1.0f);
+					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kAccentHi), label);
+				}
+				else
+				{
+					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kMuted), label);
+				}
+				ImGui::Dummy(ImVec2(textSize.x + pad.x * 2.0f, 0.0f));
+			}
+
+			// Right (aligned): resolution / FPS / frame time as faint micro-caps with
+			// a warm-white gauge value, right-anchored.
 			const ImGuiIO& io = ImGui::GetIO();
 			gpu::Extent2D extent{};
 			if (const auto* swapchain = context.TryGet<Swapchain>())
@@ -443,14 +512,31 @@ namespace aether::app
 				extent = swapchain->GetExtent();
 			}
 			const float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
-			const std::string right = std::format(ICON_FA_GAUGE_HIGH "  {}x{}    {:.0f} FPS    {:.2f} ms  ", extent.width, extent.height, io.Framerate, frameMs);
-			const float rightWidth = ImGui::CalcTextSize(right.c_str()).x;
-			const float targetX = ImGui::GetWindowWidth() - rightWidth;
+			const std::string res = std::format("{}x{}", extent.width, extent.height);
+			const std::string fps = std::format("{:.0f} FPS", io.Framerate);
+			const std::string ms = std::format("{:.2f} MS", frameMs);
+			const float gap = 18.0f;
+			const float totalW = ImGui::CalcTextSize(ICON_FA_GAUGE_HIGH).x + 8.0f + ImGui::CalcTextSize(res.c_str()).x + gap + ImGui::CalcTextSize(fps.c_str()).x + gap + ImGui::CalcTextSize(ms.c_str()).x + 12.0f;
+			const float targetX = ImGui::GetWindowWidth() - totalW;
 			if (targetX > ImGui::GetCursorPosX())
 			{
 				ImGui::SameLine(targetX);
 			}
-			ImGui::TextUnformatted(right.c_str());
+			ImGui::PushStyleColor(ImGuiCol_Text, kAccentHi);
+			ImGui::TextUnformatted(ICON_FA_GAUGE_HIGH);
+			ImGui::PopStyleColor();
+			ImGui::SameLine(0.0f, 8.0f);
+			ImGui::PushStyleColor(ImGuiCol_Text, kFaint);
+			ImGui::TextUnformatted(res.c_str());
+			ImGui::SameLine(0.0f, gap);
+			ImGui::PopStyleColor();
+			ImGui::PushStyleColor(ImGuiCol_Text, kText);
+			ImGui::TextUnformatted(fps.c_str());
+			ImGui::PopStyleColor();
+			ImGui::SameLine(0.0f, gap);
+			ImGui::PushStyleColor(ImGuiCol_Text, kFaint);
+			ImGui::TextUnformatted(ms.c_str());
+			ImGui::PopStyleColor();
 		}
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
@@ -751,6 +837,12 @@ namespace aether::app
 		// dockspace pattern). A separate BeginMainMenuBar() shrinks the viewport
 		// work-area, which collided with this full-viewport host and crashed the
 		// renderer on the first frame.
+		// Menu bar in the launcher chrome: warm surface, amber hover/accent, and a
+		// right-aligned live-session chip echoing the status bar's play state.
+		ImGui::PushStyleColor(ImGuiCol_MenuBarBg, chrome::kPanel);
+		ImGui::PushStyleColor(ImGuiCol_Header, chrome::WithAlpha(chrome::kAccent, 0.20f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, chrome::WithAlpha(chrome::kAccent, 0.28f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, chrome::WithAlpha(chrome::kAccent, 0.36f));
 		if (showMenuBar && ImGui::BeginMenuBar())
 		{
 			if (ImGui::BeginMenu("File"))
@@ -931,8 +1023,28 @@ namespace aether::app
 				}
 				ImGui::EndMenu();
 			}
+
+			// Right-aligned session chip: brand-tinted app name + a live-state dot.
+			{
+				using namespace chrome;
+				const auto* playState = context.TryGet<PlayState>();
+				const bool playing = playState != nullptr && playState->IsPlaying();
+				const bool compiling = playState != nullptr && playState->IsCompiling();
+				const char* chip = playing ? ICON_FA_PLAY "  LIVE" : (compiling ? ICON_FA_GEAR "  BUILD" : "AETHERCORE");
+				const ImVec4 chipColor = playing ? kAccentHi : (compiling ? kAccentHi : kFaint);
+				const float chipW = ImGui::CalcTextSize(chip).x;
+				const float avail = ImGui::GetContentRegionAvail().x;
+				if (avail > chipW + 16.0f)
+				{
+					ImGui::SameLine(ImGui::GetCursorPosX() + avail - chipW - 12.0f);
+					ImGui::PushStyleColor(ImGuiCol_Text, chipColor);
+					ImGui::TextUnformatted(chip);
+					ImGui::PopStyleColor();
+				}
+			}
 			ImGui::EndMenuBar();
 		}
+		ImGui::PopStyleColor(4);
 
 		if (m_openSavePresetPopup)
 		{
@@ -1007,6 +1119,7 @@ namespace aether::app
 			ImGui::DockBuilderDockWindow("Tonemap", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Post Processing", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Settings", dock_right_tools);
+			ImGui::DockBuilderDockWindow("Theme", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
 			ImGui::DockBuilderDockWindow("Console", dock_bottom);
 			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);

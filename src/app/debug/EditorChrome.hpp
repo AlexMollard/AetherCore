@@ -16,19 +16,6 @@ namespace aether::app::chrome
 		return ImVec4{v.r, v.g, v.b, v.a};
 	}
 
-	// Palette tokens (engine/Color.hpp "Night Amber").
-	inline const ImVec4 kBg = C(colors::Background);
-	inline const ImVec4 kPanel = C(colors::Surface);
-	inline const ImVec4 kPanelHi = C(colors::SurfaceElevated);
-	inline const ImVec4 kStroke = C(colors::Border);
-	inline const ImVec4 kAccent = C(colors::Primary);
-	inline const ImVec4 kAccentHi = C(colors::PrimaryHover);
-	inline const ImVec4 kAccentDim = C(colors::PrimaryActive);
-	inline const ImVec4 kText = C(colors::TextPrimary);
-	inline const ImVec4 kMuted = C(colors::TextSecondary);
-	inline const ImVec4 kFaint = C(colors::TextFaint);
-	inline const ImVec4 kOnAccent = C(colors::OnPrimary);
-
 	[[nodiscard]] inline ImU32 U32(const ImVec4& color)
 	{
 		return ImGui::ColorConvertFloat4ToU32(color);
@@ -40,17 +27,206 @@ namespace aether::app::chrome
 		return color;
 	}
 
-	// ── Interaction tokens ─────────────────────────────────────────────────────
-	// Selection, hover, drop targets and drag ghosts all speak the single amber
-	// accent so every panel matches (no per-panel blues/grays).
-	inline const ImVec4 kSelectionBg = WithAlpha(kAccent, 0.28f);   // selected row fill
-	inline const ImVec4 kSelectionBar = kAccentHi;                  // 3px leading bar on selection
-	inline const ImVec4 kHoverBg = WithAlpha(kText, 0.06f);         // hovered row wash
-	inline const ImVec4 kDropTarget = kAccentHi;                    // drop indicator lines / borders
-	inline const ImVec4 kDropTargetBg = WithAlpha(kAccent, 0.20f);  // drop-into fill
-	inline const ImVec4 kDragGhostBg = WithAlpha(kPanelHi, 0.94f);  // drag-payload card fill
-	inline const ImVec4 kDragGhostBorder = WithAlpha(kAccent, 0.72f);
-	inline const ImVec4 kSuccess = C(colors::Success);              // confirmation flashes / "ready"
+	// ── Runtime theme ───────────────────────────────────────────────────────────
+	// The editor palette is runtime-editable (the Theme panel). Every chrome token
+	// AND the ImGui widget style derive from it, so changing the accent recolours
+	// the whole editor at once. Defaults are the "Night Amber" world (Color.hpp).
+	struct EditorTheme
+	{
+		ImVec4 background;
+		ImVec4 surface;
+		ImVec4 surfaceElevated;
+		ImVec4 border;
+		ImVec4 accent;
+		ImVec4 accentHover;
+		ImVec4 accentActive;
+		ImVec4 onAccent;
+		ImVec4 textPrimary;
+		ImVec4 textSecondary;
+		ImVec4 textFaint;
+		ImVec4 success;
+		ImVec4 warning;
+		ImVec4 error;
+	};
+
+	[[nodiscard]] inline EditorTheme NightAmberTheme()
+	{
+		return EditorTheme{
+		        .background = C(colors::Background),
+		        .surface = C(colors::Surface),
+		        .surfaceElevated = C(colors::SurfaceElevated),
+		        .border = C(colors::Border),
+		        .accent = C(colors::Primary),
+		        .accentHover = C(colors::PrimaryHover),
+		        .accentActive = C(colors::PrimaryActive),
+		        .onAccent = C(colors::OnPrimary),
+		        .textPrimary = C(colors::TextPrimary),
+		        .textSecondary = C(colors::TextSecondary),
+		        .textFaint = C(colors::TextFaint),
+		        .success = C(colors::Success),
+		        .warning = C(colors::Warn),
+		        .error = C(colors::Error),
+		};
+	}
+
+	[[nodiscard]] inline EditorTheme& ActiveTheme()
+	{
+		static EditorTheme theme = NightAmberTheme();
+		return theme;
+	}
+
+	// Palette tokens - rewritten from ActiveTheme() by RefreshTokens(). Initialised
+	// to Night Amber so any read before the first RefreshTokens() is still valid.
+	inline ImVec4 kBg = C(colors::Background);
+	inline ImVec4 kPanel = C(colors::Surface);
+	inline ImVec4 kPanelHi = C(colors::SurfaceElevated);
+	inline ImVec4 kStroke = C(colors::Border);
+	inline ImVec4 kAccent = C(colors::Primary);
+	inline ImVec4 kAccentHi = C(colors::PrimaryHover);
+	inline ImVec4 kAccentDim = C(colors::PrimaryActive);
+	inline ImVec4 kText = C(colors::TextPrimary);
+	inline ImVec4 kMuted = C(colors::TextSecondary);
+	inline ImVec4 kFaint = C(colors::TextFaint);
+	inline ImVec4 kOnAccent = C(colors::OnPrimary);
+	inline ImVec4 kSuccess = C(colors::Success);
+	inline ImVec4 kWarning = C(colors::Warn);
+	inline ImVec4 kError = C(colors::Error);
+
+	// ── Interaction tokens (derived from the accent) ───────────────────────────
+	// Selection, hover, drop targets and drag ghosts all speak the single accent
+	// so every panel matches (no per-panel blues/grays).
+	inline ImVec4 kSelectionBg = WithAlpha(C(colors::Primary), 0.28f);
+	inline ImVec4 kSelectionBar = C(colors::PrimaryHover);
+	inline ImVec4 kHoverBg = WithAlpha(C(colors::TextPrimary), 0.06f);
+	inline ImVec4 kDropTarget = C(colors::PrimaryHover);
+	inline ImVec4 kDropTargetBg = WithAlpha(C(colors::Primary), 0.20f);
+	inline ImVec4 kDragGhostBg = WithAlpha(C(colors::SurfaceElevated), 0.94f);
+	inline ImVec4 kDragGhostBorder = WithAlpha(C(colors::Primary), 0.72f);
+
+	// Recompute every token from the active palette (base first, then derived).
+	inline void RefreshTokens()
+	{
+		const EditorTheme& t = ActiveTheme();
+		kBg = t.background;
+		kPanel = t.surface;
+		kPanelHi = t.surfaceElevated;
+		kStroke = t.border;
+		kAccent = t.accent;
+		kAccentHi = t.accentHover;
+		kAccentDim = t.accentActive;
+		kText = t.textPrimary;
+		kMuted = t.textSecondary;
+		kFaint = t.textFaint;
+		kOnAccent = t.onAccent;
+		kSuccess = t.success;
+		kWarning = t.warning;
+		kError = t.error;
+		kSelectionBg = WithAlpha(kAccent, 0.28f);
+		kSelectionBar = kAccentHi;
+		kHoverBg = WithAlpha(kText, 0.06f);
+		kDropTarget = kAccentHi;
+		kDropTargetBg = WithAlpha(kAccent, 0.20f);
+		kDragGhostBg = WithAlpha(kPanelHi, 0.94f);
+		kDragGhostBorder = WithAlpha(kAccent, 0.72f);
+	}
+
+	// Map the active palette onto the ImGui widget style (colours only; the
+	// rounding/spacing setup stays in ImguiSubsystem). Call after any theme change.
+	inline void ApplyImGuiColors(ImGuiStyle& style)
+	{
+		const EditorTheme& t = ActiveTheme();
+		ImVec4* c = style.Colors;
+		const auto A = [](const ImVec4& col, const float a) { return ImVec4(col.x, col.y, col.z, a); };
+
+		c[ImGuiCol_Text] = t.textPrimary;
+		c[ImGuiCol_TextDisabled] = t.textSecondary;
+		c[ImGuiCol_TextLink] = t.accent;
+		c[ImGuiCol_TextSelectedBg] = A(t.accent, 0.19f);
+
+		c[ImGuiCol_WindowBg] = t.background;
+		c[ImGuiCol_ChildBg] = t.background;
+		c[ImGuiCol_PopupBg] = t.surfaceElevated;
+		c[ImGuiCol_Border] = t.border;
+		c[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
+
+		c[ImGuiCol_TitleBg] = t.surface;
+		c[ImGuiCol_TitleBgActive] = t.surfaceElevated;
+		c[ImGuiCol_TitleBgCollapsed] = t.background;
+		c[ImGuiCol_MenuBarBg] = t.surface;
+
+		c[ImGuiCol_ScrollbarBg] = t.background;
+		c[ImGuiCol_ScrollbarGrab] = t.surfaceElevated;
+		c[ImGuiCol_ScrollbarGrabHovered] = A(t.accent, 0.55f);
+		c[ImGuiCol_ScrollbarGrabActive] = t.accent;
+
+		c[ImGuiCol_CheckMark] = t.accent;
+		c[ImGuiCol_CheckboxSelectedBg] = A(t.accent, 0.16f);
+		c[ImGuiCol_SliderGrab] = t.accent;
+		c[ImGuiCol_SliderGrabActive] = t.accentHover;
+
+		c[ImGuiCol_Button] = t.surface;
+		c[ImGuiCol_ButtonHovered] = A(t.accent, 0.70f);
+		c[ImGuiCol_ButtonActive] = t.accent;
+
+		c[ImGuiCol_Header] = t.surface;
+		c[ImGuiCol_HeaderHovered] = A(t.accent, 0.39f);
+		c[ImGuiCol_HeaderActive] = A(t.accent, 0.63f);
+
+		c[ImGuiCol_Separator] = t.border;
+		c[ImGuiCol_SeparatorHovered] = t.accent;
+		c[ImGuiCol_SeparatorActive] = t.accentHover;
+
+		c[ImGuiCol_ResizeGrip] = t.surface;
+		c[ImGuiCol_ResizeGripHovered] = A(t.accent, 0.55f);
+		c[ImGuiCol_ResizeGripActive] = t.accent;
+
+		c[ImGuiCol_FrameBg] = t.surface;
+		c[ImGuiCol_FrameBgHovered] = A(t.accent, 0.24f);
+		c[ImGuiCol_FrameBgActive] = A(t.accent, 0.39f);
+		c[ImGuiCol_InputTextCursor] = t.textPrimary;
+
+		c[ImGuiCol_Tab] = t.background;
+		c[ImGuiCol_TabHovered] = A(t.accent, 0.31f);
+		c[ImGuiCol_TabSelected] = t.surface;
+		c[ImGuiCol_TabSelectedOverline] = t.accent;
+		c[ImGuiCol_TabDimmed] = t.background;
+		c[ImGuiCol_TabDimmedSelected] = t.surface;
+		c[ImGuiCol_TabDimmedSelectedOverline] = A(t.accent, 0.31f);
+
+		c[ImGuiCol_DockingPreview] = A(t.accent, 0.47f);
+		c[ImGuiCol_DockingEmptyBg] = t.background;
+
+		c[ImGuiCol_PlotLines] = t.textSecondary;
+		c[ImGuiCol_PlotLinesHovered] = t.accent;
+		c[ImGuiCol_PlotHistogram] = t.accent;
+		c[ImGuiCol_PlotHistogramHovered] = t.accentHover;
+
+		c[ImGuiCol_TableHeaderBg] = t.surfaceElevated;
+		c[ImGuiCol_TableBorderStrong] = t.border;
+		c[ImGuiCol_TableBorderLight] = A(t.border, 0.31f);
+		c[ImGuiCol_TableRowBg] = t.background;
+		c[ImGuiCol_TableRowBgAlt] = A(t.surface, 0.63f);
+
+		c[ImGuiCol_TreeLines] = t.border;
+		c[ImGuiCol_UnsavedMarker] = t.warning;
+		c[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.5f);
+		c[ImGuiCol_DragDropTarget] = t.accent;
+		c[ImGuiCol_DragDropTargetBg] = A(t.accent, 0.19f);
+		c[ImGuiCol_NavCursor] = A(t.accent, 0.39f);
+		c[ImGuiCol_NavWindowingHighlight] = A(t.textPrimary, 0.44f);
+		c[ImGuiCol_NavWindowingDimBg] = ImVec4(0, 0, 0, 0.5f);
+
+		// Multi-viewport OS windows must be opaque.
+		c[ImGuiCol_WindowBg].w = 1.0f;
+	}
+
+	// Set the active theme, refresh chrome tokens, and restyle ImGui widgets.
+	inline void ApplyTheme(const EditorTheme& theme)
+	{
+		ActiveTheme() = theme;
+		RefreshTokens();
+		ApplyImGuiColors(ImGui::GetStyle());
+	}
 
 	// Crisp arbitrary-size text (imgui 1.92 dynamic fonts bake per size).
 	inline void TextSized(ImDrawList* drawList, const float size, const ImVec2 pos, const ImVec4& color, const char* text)

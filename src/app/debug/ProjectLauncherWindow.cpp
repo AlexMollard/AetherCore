@@ -20,10 +20,10 @@ namespace aether::app
 		// debug/EditorChrome.hpp so every panel adopting the look moves with it.
 		using namespace chrome;
 
-		// Launcher-specific aliases on top of the shared tokens.
+		// Launcher-specific aliases on top of the shared tokens (kError now comes
+		// from chrome:: too - it is themeable).
 		const ImVec4 kBgTop = kBg;
 		const ImVec4 kBgBottom = kPanel; // gradient lifts into the panel tone
-		const ImVec4 kError = C(colors::Error);
 		const ImVec4 kBtnText = kOnAccent;
 
 		[[nodiscard]] ImU32 ToU32(const ImVec4& color)
