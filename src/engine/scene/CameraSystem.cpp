@@ -112,12 +112,12 @@ namespace aether
 			m_backing.erase(entityId);
 		}
 
-		// The scene's main-camera entity IS the active render camera. Apply it here
-		// so BOTH the shipped runtime and the editor pick the scene camera up from
-		// one place; the editor's ViewportPanel overrides this with the free-look
-		// camera only while Editing (it runs later in the frame). When no entity is
-		// tagged, leave the current main alone (e.g. the engine's startup default).
-		if (m_mainBacking.IsValid())
+		// The scene's main-camera entity IS the active render camera in the shipped
+		// runtime and while Playing. The editor clears m_applyMainCamera while Editing
+		// so the free-look editor camera owns the viewport - otherwise the scene
+		// camera would reclaim the view every frame and the editor camera would be
+		// un-controllable. When no entity is tagged, leave the current main alone.
+		if (m_applyMainCamera && m_mainBacking.IsValid())
 		{
 			m_cameras.SetMainCamera(m_mainBacking);
 		}

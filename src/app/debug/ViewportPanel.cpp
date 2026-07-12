@@ -67,7 +67,10 @@ namespace aether::app
 			{
 				m_gameCamId = main.id;
 			}
-			if (m_editorCamId == 0)
+			// Create the editor camera once. On later edit re-entries (e.g. after
+			// Stop) keep its existing pose so it doesn't jump each play cycle.
+			const bool justCreated = (m_editorCamId == 0);
+			if (justCreated)
 			{
 				CameraDesc desc;
 				desc.mode = CameraMode::Free;
@@ -80,17 +83,30 @@ namespace aether::app
 				// left this camera in Manual mode with the entity camera's projection.
 				editorCam->SetMode(CameraMode::Free);
 				editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
-				// Seed the editor pose from whatever the player was looking at so
-				// the swap is seamless.
-				if (const Camera* from = cameras->TryGet(CameraHandle{m_gameCamId}); from != nullptr && main.IsValid() && main.id != m_editorCamId)
+				// Seed a BRAND-NEW editor camera from the scene's main camera (nice
+				// starting framing), falling back to the last game camera. Existing
+				// editor cameras keep their own pose across Play/Stop.
+				if (justCreated)
 				{
-					const glm::mat4 inv = glm::inverse(from->GetViewMatrix());
-					const glm::vec3 eye = glm::vec3(inv[3]);
-					const glm::vec3 fwd = glm::normalize(-glm::vec3(inv[2]));
-					const float pitch = glm::degrees(std::asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
-					const float yaw = glm::degrees(std::atan2(-fwd.x, -fwd.z));
-					editorCam->SetPosition(eye);
-					editorCam->SetYawPitch(yaw, pitch);
+					CameraHandle seedFrom{};
+					if (auto* cameraSystem = context.TryGet<CameraSystem>())
+					{
+						seedFrom = cameraSystem->GetMainCameraBacking();
+					}
+					if (!seedFrom.IsValid())
+					{
+						seedFrom = CameraHandle{m_gameCamId};
+					}
+					if (const Camera* from = cameras->TryGet(seedFrom); from != nullptr && seedFrom.id != m_editorCamId)
+					{
+						const glm::mat4 inv = glm::inverse(from->GetViewMatrix());
+						const glm::vec3 eye = glm::vec3(inv[3]);
+						const glm::vec3 fwd = glm::normalize(-glm::vec3(inv[2]));
+						const float pitch = glm::degrees(std::asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
+						const float yaw = glm::degrees(std::atan2(-fwd.x, -fwd.z));
+						editorCam->SetPosition(eye);
+						editorCam->SetYawPitch(yaw, pitch);
+					}
 				}
 				cameras->SetMainCamera(CameraHandle{m_editorCamId});
 				m_editorCamActive = true;
@@ -291,6 +307,11 @@ namespace aether::app
 	{
 		// The gizmo owns the mouse while hovered or dragging.
 		if (ImGuizmo::IsOver() || ImGuizmo::IsUsingAny())
+		{
+			return;
+		}
+		// Alt+LMB is the orbit chord, never a selection click.
+		if (ImGui::GetIO().KeyAlt)
 		{
 			return;
 		}
@@ -710,7 +731,9 @@ namespace aether::app
 						const float sy = glm::length(glm::vec3(tc->localToWorld[1]));
 						const float sz = glm::length(glm::vec3(tc->localToWorld[2]));
 						const float dist = glm::max(4.0f, 2.5f * glm::max(sx, glm::max(sy, sz)));
-						cam->SetPosition(target - cam->GetForward() * dist);
+						// Frame it AND set it as the orbit/dolly pivot (Alt+LMB / scroll
+						// now revolve around what you just focused).
+						cam->FocusOn(target, dist);
 					}
 				}
 			}

@@ -15,7 +15,10 @@
 #include "assets/AssetTypes.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "editor/ComponentCatalog.hpp"
+#include "editor/EditorProjectContext.hpp"
+#include "editor/ModelBake.hpp"
 #include "debug/Icons.hpp"
+#include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
@@ -1905,6 +1908,16 @@ namespace aether::app
 					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
 					if (file->kind == dragdrop::FileKind::Model && assets != nullptr && sceneCtx != nullptr)
 					{
+						// Bake the .mesh the loader needs (no-op if already baked) before
+						// assigning - project:// is the raw project folder in the editor.
+						if (const auto* project = context.TryGet<EditorProjectContext>())
+						{
+							std::string bakeError;
+							if (!editor::EnsureModelBaked(file->path, *project, bakeError))
+							{
+								AE_WARN(LogCategory::App, "Model import failed for '{}': {}", file->path, bakeError);
+							}
+						}
 						scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, file->path);
 						if (assetDb != nullptr)
 						{

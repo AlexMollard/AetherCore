@@ -40,8 +40,20 @@ namespace aether
 			return m_mainBacking;
 		}
 
+		// Whether Update() promotes the scene's MainCameraComponent entity to the
+		// active render camera. True in the shipped runtime and while Playing, so the
+		// scene camera drives the view. The editor sets it FALSE while Editing so the
+		// free-look editor camera owns the viewport - otherwise the scene camera would
+		// reclaim the view every frame and fight the editor camera. Backing cameras
+		// are still mirrored either way (gizmos + look-through preview stay live).
+		void SetApplyMainCamera(bool apply)
+		{
+			m_applyMainCamera = apply;
+		}
+
 	private:
 		CameraManager& m_cameras;
+		bool m_applyMainCamera = true;
 		// entity id -> backing camera handle, so backings can be torn down when the
 		// owning entity or component goes away (the component itself is gone by then).
 		std::unordered_map<std::uint32_t, CameraHandle> m_backing;

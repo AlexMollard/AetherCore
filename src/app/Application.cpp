@@ -324,6 +324,14 @@ namespace aether::app
 		// so it costs nothing in edit or play mode and in the shipped runtime.
 		UpdatePlaySession(ctx);
 
+		// The scene's main camera only owns the render view while Playing; in edit
+		// mode the free-look editor camera owns it (CameraSystem otherwise reclaims
+		// the view every frame, making the editor camera uncontrollable).
+		if (auto* cameraSystem = ctx.TryGet<aether::CameraSystem>())
+		{
+			cameraSystem->SetApplyMainCamera(m_playState.IsPlaying());
+		}
+
 		if (m_playState.IsPlaying())
 		{
 			ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));

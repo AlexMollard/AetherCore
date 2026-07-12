@@ -22,7 +22,10 @@
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
+#include "editor/EditorProjectContext.hpp"
+#include "editor/ModelBake.hpp"
 #include "material/EffectManager.hpp"
+#include "utils/Logger.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialSystem.hpp"
@@ -132,6 +135,18 @@ namespace aether::app
 			if (assets == nullptr || sceneCtx == nullptr)
 			{
 				return false;
+			}
+			// The editor mounts project:// to the raw project folder, which has only
+			// the .gltf; bake the .mesh the loader needs (no-op if already baked)
+			// before assigning, so dropping a model just works.
+			if (const auto* project = context.TryGet<EditorProjectContext>())
+			{
+				std::string bakeError;
+				if (!editor::EnsureModelBaked(path, *project, bakeError))
+				{
+					AE_WARN(LogCategory::App, "Model import failed for '{}': {}", path, bakeError);
+					return false;
+				}
 			}
 			return scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, path);
 		}

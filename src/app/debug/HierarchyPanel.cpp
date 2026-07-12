@@ -27,6 +27,8 @@
 #include "physics/PhysicsSystem.hpp"
 #include "rendering/Renderer.hpp"
 #include "debug/UndoStack.hpp"
+#include "editor/EditorProjectContext.hpp"
+#include "editor/ModelBake.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
@@ -38,6 +40,7 @@
 #include "scene/SceneSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/EngineSettings.hpp"
+#include "utils/Logger.hpp"
 #include "utils/TomlConfig.hpp"
 #include "utils/SettingsService.hpp"
 #include "utils/Profiler.hpp"
@@ -136,6 +139,18 @@ namespace aether::app
 			if (assets == nullptr || sceneCtx == nullptr)
 			{
 				return false;
+			}
+			// Bake the .mesh the loader needs (no-op if already baked) before
+			// assigning - project:// is the raw project folder in the editor, which
+			// holds only the .gltf.
+			if (const auto* project = context.TryGet<EditorProjectContext>())
+			{
+				std::string bakeError;
+				if (!editor::EnsureModelBaked(std::string(path), *project, bakeError))
+				{
+					AE_WARN(LogCategory::App, "Model import failed for '{}': {}", path, bakeError);
+					return false;
+				}
 			}
 			const bool ok = scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, std::string(path));
 			if (ok)

@@ -64,6 +64,21 @@ namespace aether
 
 		void SetYawPitch(float yaw, float pitch);
 
+		// -- Unified editor navigation (Free mode) -----------------------------
+		// Free mode is a full scene-view camera: hold RMB to fly (look + WASD/QE,
+		// scroll = speed); Alt+LMB orbits the focus point; MMB pans; scroll (no
+		// button) dollies toward the focus point. The focus point is `position +
+		// forward * focusDistance` - orbit and dolly pivot around it, F reframes it.
+
+		// Frame `target` at `distance`: places the eye `distance` back along the
+		// current view direction and makes `target` the orbit/dolly pivot.
+		void FocusOn(glm::vec3 target, float distance);
+
+		[[nodiscard]] float GetFocusDistance() const
+		{
+			return m_focusDistance;
+		}
+
 		// -- Orbit mode pose ---------------------------------------------------
 		[[nodiscard]] glm::vec3 GetOrbitTarget() const
 		{
@@ -129,6 +144,9 @@ namespace aether
 		glm::vec3 m_position;
 		float m_yaw;   // degrees, Y-axis rotation
 		float m_pitch; // degrees, up/down
+
+		// Distance from the eye to the orbit/dolly pivot along forward (Free mode).
+		float m_focusDistance = 10.0f;
 
 		// Orbit camera pose
 		glm::vec3 m_orbitTarget;

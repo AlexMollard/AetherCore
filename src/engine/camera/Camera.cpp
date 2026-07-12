@@ -16,6 +16,7 @@ namespace aether
 	        m_position(desc.position),
 	        m_yaw(desc.yaw),
 	        m_pitch(desc.pitch),
+	        m_focusDistance(std::max(0.2f, desc.orbitDistance)),
 	        m_orbitTarget(desc.orbitTarget),
 	        m_orbitDistance(desc.orbitDistance),
 	        m_orbitYaw(desc.orbitYaw),
@@ -85,6 +86,14 @@ namespace aether
 		m_orbitPitch = std::clamp(pitch, -kPitchLimit, kPitchLimit);
 	}
 
+	void Camera::FocusOn(glm::vec3 target, float distance)
+	{
+		// Keep the current view direction; pull the eye back so `target` sits at the
+		// pivot, and remember the distance so orbit + dolly work around it.
+		m_focusDistance = std::max(0.2f, distance);
+		m_position = target - GetForward() * m_focusDistance;
+	}
+
 	// -- Matrices --------------------------------------------------------------
 
 	glm::mat4 Camera::GetViewMatrix() const
@@ -134,51 +143,64 @@ namespace aether
 
 		if (m_mode == CameraMode::Free)
 		{
-			// Unreal-editor style: the fly chord is HOLD RMB. Look, WASD/QE
-			// movement and the scroll speed-scale all live inside it, so bare
-			// W/E/R stay free for editor hotkeys (gizmo ops) and typing.
-			if (input.IsMouseButtonDown(MouseButton::Right))
+			// Unified scene-view nav (Unity/Godot style). LMB stays free for
+			// selection/gizmo; nav uses RMB (fly), Alt+LMB (orbit), MMB (pan) and the
+			// scroll wheel (dolly). The pivot is `position + forward*focusDistance`.
+			const glm::vec2 delta = input.GetMouseDelta();
+			const float scroll = input.GetScrollDelta().y;
+			const bool alt = input.IsKeyDown(Key::LeftAlt) || input.IsKeyDown(Key::RightAlt);
+			const bool rmb = input.IsMouseButtonDown(MouseButton::Right);
+			const bool mmb = input.IsMouseButtonDown(MouseButton::Middle);
+			const bool lmb = input.IsMouseButtonDown(MouseButton::Left);
+
+			if (rmb)
 			{
-				const glm::vec2 delta = input.GetMouseDelta();
+				// Fly chord: hold RMB to look; WASD/QE move in camera-local space;
+				// scroll scales fly speed (so it doesn't dolly while flying).
 				m_yaw -= delta.x * m_lookSpeed;
 				m_pitch -= delta.y * m_lookSpeed; // inverted: drag up = look up
 				m_pitch = std::clamp(m_pitch, -kPitchLimit, kPitchLimit);
 
-				// WASD + Q/E to move in camera-local space.
 				const glm::vec3 fwd = GetForward();
 				const glm::vec3 right = GetRight();
+				if (input.IsKeyDown(Key::W)) { m_position += fwd * m_moveSpeed * dt; }
+				if (input.IsKeyDown(Key::S)) { m_position -= fwd * m_moveSpeed * dt; }
+				if (input.IsKeyDown(Key::D)) { m_position += right * m_moveSpeed * dt; }
+				if (input.IsKeyDown(Key::A)) { m_position -= right * m_moveSpeed * dt; }
+				if (input.IsKeyDown(Key::E)) { m_position.y += m_moveSpeed * dt; }
+				if (input.IsKeyDown(Key::Q)) { m_position.y -= m_moveSpeed * dt; }
 
-				if (input.IsKeyDown(Key::W))
-				{
-					m_position += fwd * m_moveSpeed * dt;
-				}
-				if (input.IsKeyDown(Key::S))
-				{
-					m_position -= fwd * m_moveSpeed * dt;
-				}
-				if (input.IsKeyDown(Key::D))
-				{
-					m_position += right * m_moveSpeed * dt;
-				}
-				if (input.IsKeyDown(Key::A))
-				{
-					m_position -= right * m_moveSpeed * dt;
-				}
-				if (input.IsKeyDown(Key::E))
-				{
-					m_position.y += m_moveSpeed * dt;
-				}
-				if (input.IsKeyDown(Key::Q))
-				{
-					m_position.y -= m_moveSpeed * dt;
-				}
-
-				// Scroll wheel: scale move speed (min 0.5).
-				const float scroll = input.GetScrollDelta().y;
 				if (scroll != 0.0f)
 				{
-					m_moveSpeed = std::max(0.5f, m_moveSpeed + scroll * 0.5f);
+					m_moveSpeed = std::clamp(m_moveSpeed + scroll * 0.5f, 0.5f, 200.0f);
 				}
+			}
+			else if (alt && lmb)
+			{
+				// Orbit around the focus pivot: the eye swings, the pivot stays put.
+				const glm::vec3 pivot = m_position + GetForward() * m_focusDistance;
+				m_yaw -= delta.x * m_orbitSpeed;
+				m_pitch -= delta.y * m_orbitSpeed;
+				m_pitch = std::clamp(m_pitch, -kPitchLimit, kPitchLimit);
+				m_position = pivot - GetForward() * m_focusDistance;
+			}
+			else if (mmb)
+			{
+				// Pan the eye (and pivot) in the camera's screen plane; scaled by the
+				// focus distance so the drag tracks the cursor at any zoom.
+				const glm::vec3 right = GetRight();
+				const glm::vec3 up = glm::normalize(glm::cross(right, GetForward()));
+				const float panScale = m_focusDistance * 0.0015f + 0.001f;
+				m_position += (right * -delta.x + up * delta.y) * panScale;
+			}
+
+			// Scroll without the fly chord dollies toward the pivot. Exponential so
+			// each notch is a consistent proportion (Unity/Blender feel).
+			if (!rmb && scroll != 0.0f)
+			{
+				const glm::vec3 pivot = m_position + GetForward() * m_focusDistance;
+				m_focusDistance = std::clamp(m_focusDistance * std::pow(0.85f, scroll), 0.2f, 5000.0f);
+				m_position = pivot - GetForward() * m_focusDistance;
 			}
 		}
 		else if (m_mode == CameraMode::Orbit)
