@@ -1,4 +1,5 @@
 #include "debug/InspectorPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -745,7 +746,7 @@ namespace aether::app
 			const ImVec2 windowPos = ImGui::GetWindowPos();
 			const ImVec2 windowSize = ImGui::GetWindowSize();
 			const ImRect dropRect(windowPos, ImVec2(windowPos.x + windowSize.x, windowPos.y + windowSize.y));
-			ImGui::GetWindowDrawList()->AddRect(ImVec2(dropRect.Min.x + 3.0f, dropRect.Min.y + 3.0f), ImVec2(dropRect.Max.x - 3.0f, dropRect.Max.y - 3.0f), IM_COL32(105, 170, 255, 180), 4.0f, 0, 2.0f);
+			ImGui::GetWindowDrawList()->AddRect(ImVec2(dropRect.Min.x + 3.0f, dropRect.Min.y + 3.0f), ImVec2(dropRect.Max.x - 3.0f, dropRect.Max.y - 3.0f), chrome::U32(chrome::WithAlpha(chrome::kDropTarget, 0.72f)), 4.0f, 0, 2.0f);
 			if (ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##inspectorScriptDropTarget")))
 			{
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))

@@ -1,4 +1,5 @@
 #include "debug/FileExplorerPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -278,8 +279,8 @@ namespace aether::app
 
 			ImDrawList* drawList = ImGui::GetForegroundDrawList();
 			drawList->AddRectFilled(ImVec2(min.x + 2.0f, min.y + 3.0f), ImVec2(max.x + 2.0f, max.y + 3.0f), IM_COL32(0, 0, 0, 95), 5.0f);
-			drawList->AddRectFilled(min, max, IM_COL32(31, 34, 40, 238), 5.0f);
-			drawList->AddRect(min, max, IM_COL32(105, 170, 255, 185), 5.0f, 0, 1.0f);
+			drawList->AddRectFilled(min, max, chrome::U32(chrome::kDragGhostBg), 5.0f);
+			drawList->AddRect(min, max, chrome::U32(chrome::kDragGhostBorder), 5.0f, 0, 1.0f);
 			drawList->AddText(textPos, iconColor, icon);
 			drawList->AddText(ImVec2(titleX, textPos.y), ImGui::GetColorU32(ImGuiCol_Text), title);
 			if (hasDetail)
@@ -453,7 +454,7 @@ namespace aether::app
 				CopyToPayload(payload.typeName, path.stem().generic_string());
 				CopyToPayload(payload.sourcePath, pathText);
 				ImGui::SetDragDropPayload(dragdrop::kScriptPayload, &payload, sizeof(payload));
-				DrawPayloadPreview(ICON_FA_CODE, payload.typeName, payload.sourcePath, IM_COL32(105, 170, 255, 255));
+				DrawPayloadPreview(ICON_FA_CODE, payload.typeName, payload.sourcePath, chrome::U32(chrome::kAccentHi));
 			}
 			else
 			{
@@ -462,7 +463,7 @@ namespace aether::app
 				CopyToPayload(payload.path, payloadPath);
 				CopyToPayload(payload.displayName, name);
 				ImGui::SetDragDropPayload(dragdrop::kFilePayload, &payload, sizeof(payload));
-				DrawPayloadPreview(ICON_FA_IMAGE, name.c_str(), payload.path, IM_COL32(168, 179, 196, 255));
+				DrawPayloadPreview(ICON_FA_IMAGE, name.c_str(), payload.path, chrome::U32(chrome::kMuted));
 			}
 			ImGui::EndDragDropSource();
 		}

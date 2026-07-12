@@ -1,4 +1,5 @@
 #include "debug/ConsolePanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -66,7 +67,7 @@ namespace aether::app
 		{
 			char label[48];
 			std::snprintf(label, sizeof(label), "%s %d", tag, count);
-			ImGui::PushStyleColor(ImGuiCol_Text, *shown ? color : ImVec4(0.45f, 0.45f, 0.45f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, *shown ? color : chrome::kFaint);
 			if (ImGui::SmallButton(label))
 			{
 				*shown = !*shown;

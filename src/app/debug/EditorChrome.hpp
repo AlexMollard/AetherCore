@@ -40,6 +40,18 @@ namespace aether::app::chrome
 		return color;
 	}
 
+	// ── Interaction tokens ─────────────────────────────────────────────────────
+	// Selection, hover, drop targets and drag ghosts all speak the single amber
+	// accent so every panel matches (no per-panel blues/grays).
+	inline const ImVec4 kSelectionBg = WithAlpha(kAccent, 0.28f);   // selected row fill
+	inline const ImVec4 kSelectionBar = kAccentHi;                  // 3px leading bar on selection
+	inline const ImVec4 kHoverBg = WithAlpha(kText, 0.06f);         // hovered row wash
+	inline const ImVec4 kDropTarget = kAccentHi;                    // drop indicator lines / borders
+	inline const ImVec4 kDropTargetBg = WithAlpha(kAccent, 0.20f);  // drop-into fill
+	inline const ImVec4 kDragGhostBg = WithAlpha(kPanelHi, 0.94f);  // drag-payload card fill
+	inline const ImVec4 kDragGhostBorder = WithAlpha(kAccent, 0.72f);
+	inline const ImVec4 kSuccess = C(colors::Success);              // confirmation flashes / "ready"
+
 	// Crisp arbitrary-size text (imgui 1.92 dynamic fonts bake per size).
 	inline void TextSized(ImDrawList* drawList, const float size, const ImVec2 pos, const ImVec4& color, const char* text)
 	{

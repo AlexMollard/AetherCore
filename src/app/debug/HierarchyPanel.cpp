@@ -1,4 +1,5 @@
 #include "debug/HierarchyPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -233,8 +234,8 @@ namespace aether::app
 
 			ImDrawList* drawList = ImGui::GetForegroundDrawList();
 			drawList->AddRectFilled(ImVec2(min.x + 2.0f, min.y + 3.0f), ImVec2(max.x + 2.0f, max.y + 3.0f), IM_COL32(0, 0, 0, 95), 5.0f);
-			drawList->AddRectFilled(min, max, IM_COL32(31, 34, 40, 238), 5.0f);
-			drawList->AddRect(min, max, IM_COL32(105, 170, 255, 185), 5.0f, 0, 1.0f);
+			drawList->AddRectFilled(min, max, chrome::U32(chrome::kDragGhostBg), 5.0f);
+			drawList->AddRect(min, max, chrome::U32(chrome::kDragGhostBorder), 5.0f, 0, 1.0f);
 			drawList->AddText(textPos, ImGui::ColorConvertFloat4ToU32(badge.color), badge.icon);
 			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x, textPos.y), ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
 			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x + nameSize.x, textPos.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), idText.c_str());
@@ -327,13 +328,13 @@ namespace aether::app
 
 		if ((rowIndex & 1) == 1)
 		{
-			drawList->AddRectFilled(rowMin, rowMax, IM_COL32(255, 255, 255, 4));
+			drawList->AddRectFilled(rowMin, rowMax, chrome::U32(chrome::WithAlpha(chrome::kText, 0.02f)));
 		}
 
 		if (selection.Contains(e))
 		{
-			drawList->AddRectFilled(rowMin, rowMax, IM_COL32(70, 135, 255, 72));
-			drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), IM_COL32(105, 170, 255, 220));
+			drawList->AddRectFilled(rowMin, rowMax, chrome::U32(chrome::kSelectionBg));
+			drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
 		}
 
 		if (const auto it = m_spawnFlash.find(e.id); it != m_spawnFlash.end())
@@ -342,7 +343,7 @@ namespace aether::app
 			if (t < 1.0f)
 			{
 				const float eased = (1.0f - t) * (1.0f - t); // quadratic fade-out
-				drawList->AddRectFilled(rowMin, rowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(0.35f, 0.85f, 0.45f, eased * 0.30f)));
+				drawList->AddRectFilled(rowMin, rowMax, chrome::U32(chrome::WithAlpha(chrome::kSuccess, eased * 0.30f)));
 			}
 		}
 
@@ -352,7 +353,7 @@ namespace aether::app
 			if (t < 1.0f)
 			{
 				const float eased = (1.0f - t) * (1.0f - t);
-				drawList->AddRectFilled(rowMin, rowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(0.30f, 0.62f, 1.00f, eased * 0.35f)));
+				drawList->AddRectFilled(rowMin, rowMax, chrome::U32(chrome::WithAlpha(chrome::kAccent, eased * 0.35f)));
 			}
 		}
 	}
@@ -504,8 +505,8 @@ namespace aether::app
 			if (ImGui::IsDragDropActive() && (hasScriptPayload || hasFilePayload || canDropHere))
 			{
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
-				const ImU32 lineCol = IM_COL32(105, 170, 255, 230);
-				const ImU32 fillCol = IM_COL32(70, 135, 255, 52);
+				const ImU32 lineCol = chrome::U32(chrome::kDropTarget);
+				const ImU32 fillCol = chrome::U32(chrome::kDropTargetBg);
 				if (hasScriptPayload || hasFilePayload)
 				{
 					drawList->AddRectFilled(dropRect.Min, dropRect.Max, fillCol);
@@ -706,7 +707,7 @@ namespace aether::app
 		ImGui::TextColored(iconColor, "%s", badge.icon);
 		if (inactive)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 0.6f));
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::WithAlpha(chrome::kMuted, 0.62f));
 		}
 
 		if (m_renaming == e)
@@ -745,7 +746,7 @@ namespace aether::app
 						ImGui::TextUnformatted(name.substr(0, pos).c_str());
 						ImGui::SameLine(0, 0);
 					}
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_Text, chrome::kAccentHi);
 					ImGui::TextUnformatted(name.substr(pos, needle.length()).c_str());
 					ImGui::PopStyleColor();
 					ImGui::SameLine(0, 0);
@@ -806,7 +807,7 @@ namespace aether::app
 		// ArrowButton is drawn with FramePadding=(0,0), so its width is the font size.
 		const float arrowCenter = ImGui::GetFontSize() * 0.5f;
 		const float indentSp = ImGui::GetStyle().IndentSpacing + 6.0f;
-		const ImU32 lineCol = IM_COL32(120, 145, 180, 155);
+		const ImU32 lineCol = chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.55f));
 		const float cx = (rowMin.y + rowMax.y) * 0.5f;
 
 		for (int d = 0; d + 1 < entry.depth; ++d)
@@ -863,9 +864,9 @@ namespace aether::app
 			int kind; // 0 = disable, 1 = hidden, 2 = pickable
 		};
 		const Toggle toggles[3] = {
-		        {ICON_FA_POWER_OFF, selfDisabled ? ImVec4(0.86f, 0.45f, 0.40f, 0.95f) : (inactive ? ImVec4(0.45f, 0.45f, 0.45f, 0.5f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f)), selfDisabled ? "Enable entity" : "Disable entity (and children)", 0},
-		        {ICON_FA_EYE, hidden ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f), hidden ? "Show in Scene View" : "Hide in Scene View", 1},
-		        {notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK, notPickable ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f), notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View", 2},
+		        {ICON_FA_POWER_OFF, selfDisabled ? ImVec4(0.86f, 0.45f, 0.40f, 0.95f) : (inactive ? chrome::WithAlpha(chrome::kFaint, 0.55f) : chrome::WithAlpha(chrome::kMuted, 0.9f)), selfDisabled ? "Enable entity" : "Disable entity (and children)", 0},
+		        {ICON_FA_EYE, hidden ? chrome::WithAlpha(chrome::kFaint, 0.45f) : chrome::WithAlpha(chrome::kMuted, 0.9f), hidden ? "Show in Scene View" : "Hide in Scene View", 1},
+		        {notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK, notPickable ? chrome::WithAlpha(chrome::kFaint, 0.45f) : chrome::WithAlpha(chrome::kMuted, 0.9f), notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View", 2},
 		};
 
 		// Right-align the group so the three buttons hug the row's trailing edge.
@@ -969,7 +970,7 @@ namespace aether::app
 
 		if (visualRowHovered && !selection.Contains(e) && !ImGui::IsDragDropActive())
 		{
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, visualRowMax, IM_COL32(255, 255, 255, 16));
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, visualRowMax, chrome::U32(chrome::kHoverBg));
 		}
 
 		const ImVec2 arrowMin(rowStart.x + depthOffset, rowMin.y);
@@ -1019,7 +1020,7 @@ namespace aether::app
 		if (hasKids)
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImU32 arrowColor = arrowHovered ? ImGui::GetColorU32(ImGuiCol_Text) : IM_COL32(220, 216, 204, 210);
+			const ImU32 arrowColor = arrowHovered ? ImGui::GetColorU32(ImGuiCol_Text) : chrome::U32(chrome::WithAlpha(chrome::kText, 0.82f));
 			const float midY = (arrowMin.y + arrowMax.y) * 0.5f;
 			const float size = std::min(arrowSlot, rowMax.y - rowMin.y) * 0.58f;
 			const float left = arrowMin.x + (arrowSlot - size) * 0.5f;
@@ -2021,7 +2022,7 @@ namespace aether::app
 			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
 			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
 			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-			ImGui::PushStyleColor(ImGuiCol_Text, isPrimary ? ImGui::GetStyle().Colors[ImGuiCol_Text] : ImVec4(0.5f, 0.5f, 0.5f, 0.6f));
+			ImGui::PushStyleColor(ImGuiCol_Text, isPrimary ? ImGui::GetStyle().Colors[ImGuiCol_Text] : chrome::WithAlpha(chrome::kMuted, 0.62f));
 			if (ImGui::Selectable(label, false))
 			{
 				selection.Select(e);

@@ -9,35 +9,26 @@
 
 #include "Color.hpp"
 #include "debug/Icons.hpp"
+#include "debug/EditorChrome.hpp"
 
 namespace aether::app
 {
 	namespace
 	{
-		// The palette IS the editor palette (engine/Color.hpp "Night Amber") -
-		// the launcher defined this language; both must move together.
-		[[nodiscard]] inline ImVec4 C(const glm::vec4& v)
-		{
-			return ImVec4{v.r, v.g, v.b, v.a};
-		}
+		// The palette IS the editor palette ("Night Amber", engine/Color.hpp). The
+		// launcher defined this language; the shared primitives now live in
+		// debug/EditorChrome.hpp so every panel adopting the look moves with it.
+		using namespace chrome;
 
-		const ImVec4 kBgTop = C(colors::Background);
-		const ImVec4 kBgBottom = C(colors::Surface); // gradient lifts into the panel tone
-		const ImVec4 kPanel = C(colors::Surface);
-		const ImVec4 kPanelHi = C(colors::SurfaceElevated);
-		const ImVec4 kStroke = C(colors::Border);
-		const ImVec4 kAccent = C(colors::Primary);
-		const ImVec4 kAccentHi = C(colors::PrimaryHover);
-		const ImVec4 kAccentDim = C(colors::PrimaryActive);
-		const ImVec4 kText = C(colors::TextPrimary);
-		const ImVec4 kMuted = C(colors::TextSecondary);
-		const ImVec4 kFaint = C(colors::TextFaint);
+		// Launcher-specific aliases on top of the shared tokens.
+		const ImVec4 kBgTop = kBg;
+		const ImVec4 kBgBottom = kPanel; // gradient lifts into the panel tone
 		const ImVec4 kError = C(colors::Error);
-		const ImVec4 kBtnText = C(colors::OnPrimary);
+		const ImVec4 kBtnText = kOnAccent;
 
 		[[nodiscard]] ImU32 ToU32(const ImVec4& color)
 		{
-			return ImGui::ColorConvertFloat4ToU32(color);
+			return U32(color);
 		}
 
 		[[nodiscard]] ImVec2 Add(const ImVec2& a, const ImVec2& b)
@@ -50,11 +41,7 @@ namespace aether::app
 			return ImVec2(a.x - b.x, a.y - b.y);
 		}
 
-		[[nodiscard]] ImVec4 WithAlpha(ImVec4 color, float alpha)
-		{
-			color.w = alpha;
-			return color;
-		}
+		// WithAlpha comes from chrome::.
 
 		[[nodiscard]] std::string DisplayPath(const std::filesystem::path& path)
 		{
@@ -67,30 +54,11 @@ namespace aether::app
 			std::snprintf(buffer.data(), buffer.size(), "%s", DisplayPath(path).c_str());
 		}
 
-		// Crisp arbitrary-size text (imgui 1.92 dynamic fonts bake per size).
-		void TextSized(ImDrawList* drawList, float size, ImVec2 pos, const ImVec4& color, const char* text)
+		// TextSized / MeasureSized come from chrome::; brackets forward to the
+		// shared primitive (the launcher's call sites predate the extraction).
+		void DrawCornerBrackets(ImDrawList* drawList, const ImVec2 min, const ImVec2 max, const float arm, const float thickness, const ImVec4& color)
 		{
-			drawList->AddText(ImGui::GetFont(), size, pos, ToU32(color), text);
-		}
-
-		[[nodiscard]] ImVec2 MeasureSized(float size, const char* text)
-		{
-			return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
-		}
-
-		// Targeting-reticle corner brackets - the one overtly "gamer" flourish,
-		// reserved for the hovered/selected project row.
-		void DrawCornerBrackets(ImDrawList* drawList, const ImVec2 min, const ImVec2 max, float arm, float thickness, const ImVec4& color)
-		{
-			const ImU32 c = ToU32(color);
-			drawList->AddLine(ImVec2(min.x, min.y), ImVec2(min.x + arm, min.y), c, thickness);
-			drawList->AddLine(ImVec2(min.x, min.y), ImVec2(min.x, min.y + arm), c, thickness);
-			drawList->AddLine(ImVec2(max.x - arm, min.y), ImVec2(max.x, min.y), c, thickness);
-			drawList->AddLine(ImVec2(max.x, min.y), ImVec2(max.x, min.y + arm), c, thickness);
-			drawList->AddLine(ImVec2(min.x, max.y - arm), ImVec2(min.x, max.y), c, thickness);
-			drawList->AddLine(ImVec2(min.x, max.y), ImVec2(min.x + arm, max.y), c, thickness);
-			drawList->AddLine(ImVec2(max.x, max.y - arm), ImVec2(max.x, max.y), c, thickness);
-			drawList->AddLine(ImVec2(max.x - arm, max.y), ImVec2(max.x, max.y), c, thickness);
+			CornerBrackets(drawList, min, max, arm, thickness, color);
 		}
 
 		void DrawLauncherBackground(ImDrawList* drawList, const ImVec2 min, const ImVec2 max)
@@ -134,44 +102,7 @@ namespace aether::app
 			TextSized(drawList, 13.0f, Add(pos, ImVec2(10.0f, -1.0f)), kMuted, label);
 		}
 
-		bool PrimaryButton(const char* label, const ImVec2 size)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kAccentHi);
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, kAccentDim);
-			ImGui::PushStyleColor(ImGuiCol_Text, kBtnText);
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-			const bool pressed = ImGui::Button(label, size);
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor(4);
-			return pressed;
-		}
-
-		bool OutlineButton(const char* label, const ImVec2 size)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(kAccent, 0.14f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, WithAlpha(kAccent, 0.22f));
-			ImGui::PushStyleColor(ImGuiCol_Text, kAccentHi);
-			ImGui::PushStyleColor(ImGuiCol_Border, WithAlpha(kAccent, 0.55f));
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-			const bool pressed = ImGui::Button(label, size);
-			ImGui::PopStyleVar(2);
-			ImGui::PopStyleColor(5);
-			return pressed;
-		}
-
-		bool GhostButton(const char* label, const ImVec2 size)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(kAccent, 0.12f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, WithAlpha(kAccent, 0.20f));
-			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			const bool pressed = ImGui::Button(label, size);
-			ImGui::PopStyleColor(4);
-			return pressed;
-		}
+		// PrimaryButton / OutlineButton / GhostButton come from chrome::.
 
 		bool DrawRecentProjectRow(const EditorProjectContext& project, bool selected, bool missing)
 		{
