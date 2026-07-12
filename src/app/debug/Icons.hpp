@@ -66,3 +66,9 @@
 #define ICON_FA_BUG "\xef\x86\x88"                     // U+F188 debug tools
 #define ICON_FA_GAUGE_HIGH "\xef\x98\xa5"              // U+F625 performance
 #define ICON_FA_CLOUD_SUN "\xef\x9b\x84"               // U+F6C4 day / night
+
+// File explorer
+#define ICON_FA_FOLDER "\xef\x81\xbb"                  // U+F07B closed folder
+#define ICON_FA_FILE "\xef\x85\x9b"                    // U+F15B generic file
+#define ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "\xef\x82\x8e" // U+F08E open externally
+#define ICON_FA_COPY "\xef\x83\x85"                    // U+F0C5 copy path

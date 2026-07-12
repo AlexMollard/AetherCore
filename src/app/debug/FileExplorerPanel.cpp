@@ -9,20 +9,42 @@
 #include <system_error>
 #include <vector>
 
+#ifdef _WIN32
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	include <windows.h>
+
+#	include <shellapi.h>
+#endif
+
 #include <imgui.h>
 
-#include "io/FileUtil.hpp"
+#include "assets/AssetManager.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
+#include "debug/OpenInEditor.hpp"
 #include "debug/SceneSelection.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "gpu/ResourceRegistry.hpp"
+#include "imgui/ImguiSubsystem.hpp"
+#include "io/FileUtil.hpp"
 #include "layers/AppLayer.hpp"
+#include "material/TextureRegistry.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
 {
 	namespace
 	{
+		// Rescan cadence for the cached tree: cheap insurance against external
+		// changes (builds, git, other tools) without a directory watcher.
+		constexpr double kAutoRescanSeconds = 4.0;
+		constexpr int kMaxScanDepth = 24;
+
 		std::string ToUtf8Path(const std::filesystem::path& path)
 		{
 			return path.generic_string();
@@ -38,11 +60,6 @@ namespace aether::app
 		void CopyToPayload(char (&dst)[N], const std::string& src)
 		{
 			std::snprintf(dst, N, "%s", src.c_str());
-		}
-
-		bool IsCSharpScriptFile(const std::filesystem::path& path)
-		{
-			return path.extension() == ".cs";
 		}
 
 		dragdrop::FileKind InferFileKind(const std::filesystem::path& path)
@@ -102,6 +119,124 @@ namespace aether::app
 			}
 		}
 
+		// One icon + warm tint per kind, matching the Hierarchy's category chips
+		// (semantic identity in a quiet tint, never generic-editor primaries).
+		const char* KindIcon(dragdrop::FileKind kind, bool isScript)
+		{
+			if (isScript)
+			{
+				return ICON_FA_CODE;
+			}
+			switch (kind)
+			{
+				case dragdrop::FileKind::Model:
+					return ICON_FA_CUBE;
+				case dragdrop::FileKind::Texture:
+					return ICON_FA_IMAGE;
+				case dragdrop::FileKind::Prefab:
+					return ICON_FA_BOX_OPEN;
+				case dragdrop::FileKind::Scene:
+					return ICON_FA_FILM;
+				case dragdrop::FileKind::Material:
+					return ICON_FA_PALETTE;
+				case dragdrop::FileKind::Script:
+					return ICON_FA_CODE;
+				case dragdrop::FileKind::Unknown:
+				default:
+					return ICON_FA_FILE;
+			}
+		}
+
+		ImVec4 KindTint(dragdrop::FileKind kind, bool isScript)
+		{
+			if (isScript || kind == dragdrop::FileKind::Script)
+			{
+				return chrome::kAccentHi;
+			}
+			switch (kind)
+			{
+				case dragdrop::FileKind::Model:
+					return ImVec4(0.62f, 0.84f, 0.60f, 1.0f);
+				case dragdrop::FileKind::Texture:
+					return ImVec4(0.74f, 0.68f, 0.58f, 1.0f);
+				case dragdrop::FileKind::Prefab:
+					return ImVec4(0.88f, 0.72f, 0.45f, 1.0f);
+				case dragdrop::FileKind::Scene:
+					return ImVec4(0.78f, 0.62f, 0.92f, 1.0f);
+				case dragdrop::FileKind::Material:
+					return ImVec4(0.92f, 0.62f, 0.55f, 1.0f);
+				case dragdrop::FileKind::Unknown:
+				default:
+					return chrome::kFaint;
+			}
+		}
+
+		bool IsTextPreviewable(const std::filesystem::path& path)
+		{
+			std::string ext = path.extension().generic_string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return ext == ".cs" || ext == ".toml" || ext == ".md" || ext == ".txt" || ext == ".json" || ext == ".xml" || ext == ".csproj" || ext == ".slang" || ext == ".slangh" || ext == ".hlsl" || ext == ".glsl" || ext == ".ini";
+		}
+
+		const char* KindLabel(dragdrop::FileKind kind)
+		{
+			switch (kind)
+			{
+				case dragdrop::FileKind::Model: return "MODEL";
+				case dragdrop::FileKind::Script: return "SCRIPT";
+				case dragdrop::FileKind::Texture: return "TEXTURE";
+				case dragdrop::FileKind::Prefab: return "PREFAB";
+				case dragdrop::FileKind::Scene: return "SCENE";
+				case dragdrop::FileKind::Material: return "MATERIAL";
+				case dragdrop::FileKind::Unknown:
+				default: return "FILE";
+			}
+		}
+
+		std::string FormatSize(std::uint64_t bytes)
+		{
+			char buf[32];
+			if (bytes < 1024ull)
+			{
+				std::snprintf(buf, sizeof(buf), "%llu B", static_cast<unsigned long long>(bytes));
+			}
+			else if (bytes < 1024ull * 1024ull)
+			{
+				std::snprintf(buf, sizeof(buf), "%.1f KB", static_cast<double>(bytes) / 1024.0);
+			}
+			else
+			{
+				std::snprintf(buf, sizeof(buf), "%.1f MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
+			}
+			return buf;
+		}
+
+		// Directories that only ever hold generated noise (dotnet build output,
+		// VCS / IDE metadata). Hidden from the tree to keep it about the project.
+		bool IsIgnoredDirectory(const std::string& name)
+		{
+			return name == "bin" || name == "obj" || name == ".git" || name == ".vs" || name == ".idea" || name == ".vscode";
+		}
+
+		void OpenInOS(const std::filesystem::path& path)
+		{
+#ifdef _WIN32
+			ShellExecuteA(nullptr, "open", path.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+			std::system(("xdg-open \"" + path.string() + "\" &").c_str());
+#endif
+		}
+
+		void ShowInOSExplorer(const std::filesystem::path& path)
+		{
+#ifdef _WIN32
+			const std::string args = "/select,\"" + path.string() + "\"";
+			ShellExecuteA(nullptr, "open", "explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+#else
+			std::system(("xdg-open \"" + path.parent_path().string() + "\" &").c_str());
+#endif
+		}
+
 		std::string TrimCopy(std::string_view text)
 		{
 			size_t first = 0;
@@ -115,6 +250,34 @@ namespace aether::app
 				--last;
 			}
 			return std::string(text.substr(first, last - first));
+		}
+
+		bool ContainsCaseInsensitive(std::string_view haystack, std::string_view needleLower)
+		{
+			if (needleLower.empty())
+			{
+				return true;
+			}
+			if (haystack.size() < needleLower.size())
+			{
+				return false;
+			}
+			for (std::size_t i = 0; i + needleLower.size() <= haystack.size(); ++i)
+			{
+				std::size_t j = 0;
+				for (; j < needleLower.size(); ++j)
+				{
+					if (static_cast<char>(std::tolower(static_cast<unsigned char>(haystack[i + j]))) != needleLower[j])
+					{
+						break;
+					}
+				}
+				if (j == needleLower.size())
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		bool IsValidCSharpIdentifier(std::string_view name)
@@ -135,85 +298,11 @@ namespace aether::app
 			{
 				return false;
 			}
-			constexpr std::string_view kKeywords[] = {"abstract",
-			        "as",
-			        "base",
-			        "bool",
-			        "break",
-			        "byte",
-			        "case",
-			        "catch",
-			        "char",
-			        "checked",
-			        "class",
-			        "const",
-			        "continue",
-			        "decimal",
-			        "default",
-			        "delegate",
-			        "do",
-			        "double",
-			        "else",
-			        "enum",
-			        "event",
-			        "explicit",
-			        "extern",
-			        "false",
-			        "finally",
-			        "fixed",
-			        "float",
-			        "for",
-			        "foreach",
-			        "goto",
-			        "if",
-			        "implicit",
-			        "in",
-			        "int",
-			        "interface",
-			        "internal",
-			        "is",
-			        "lock",
-			        "long",
-			        "namespace",
-			        "new",
-			        "null",
-			        "object",
-			        "operator",
-			        "out",
-			        "override",
-			        "params",
-			        "private",
-			        "protected",
-			        "public",
-			        "readonly",
-			        "record",
-			        "ref",
-			        "return",
-			        "sbyte",
-			        "sealed",
-			        "short",
-			        "sizeof",
-			        "stackalloc",
-			        "static",
-			        "string",
-			        "struct",
-			        "switch",
-			        "this",
-			        "throw",
-			        "true",
-			        "try",
-			        "typeof",
-			        "uint",
-			        "ulong",
-			        "unchecked",
-			        "unsafe",
-			        "ushort",
-			        "using",
-			        "virtual",
-			        "void",
-			        "volatile",
-			        "while"};
-			return std::find(kKeywords, kKeywords + (sizeof(kKeywords) / sizeof(kKeywords[0])), name) == kKeywords + (sizeof(kKeywords) / sizeof(kKeywords[0]));
+			constexpr std::string_view kKeywords[] = {"abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const", "continue", "decimal", "default", "delegate", "do", "double",
+			        "else", "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock", "long", "namespace",
+			        "new", "null", "object", "operator", "out", "override", "params", "private", "protected", "public", "readonly", "record", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc", "static",
+			        "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while"};
+			return std::find(std::begin(kKeywords), std::end(kKeywords), name) == std::end(kKeywords);
 		}
 
 		std::string BuildScriptTemplate(std::string_view typeName)
@@ -239,7 +328,7 @@ namespace aether::app
 		{
 			if (!io::file_util::CreateDirectories(scriptDir))
 			{
-				error = "Could not create script directory.";
+				error = "Could not create the script directory.";
 				return false;
 			}
 
@@ -295,6 +384,11 @@ namespace aether::app
 		RefreshRoot(context);
 	}
 
+	void FileExplorerPanel::OnDetach(LayerContext& context)
+	{
+		ReleasePreview(context);
+	}
+
 	void FileExplorerPanel::RefreshRoot(LayerContext& context)
 	{
 		const auto* project = context.TryGet<EditorProjectContext>();
@@ -304,6 +398,7 @@ namespace aether::app
 			m_scriptRoot.clear();
 			m_projectName.clear();
 			m_rootAvailable = false;
+			m_tree = Entry{};
 			return;
 		}
 
@@ -312,7 +407,210 @@ namespace aether::app
 		m_projectName = project->name.empty() ? project->root.filename().generic_string() : project->name;
 		std::error_code ec;
 		m_rootAvailable = std::filesystem::exists(m_root, ec) && std::filesystem::is_directory(m_root, ec);
+		m_createDir = m_root;
+		m_treeDirty = true;
 	}
+
+	void FileExplorerPanel::RescanTree()
+	{
+		AE_PROFILE_ZONE();
+		m_tree = Entry{};
+		m_tree.path = m_root;
+		m_tree.name = m_projectName;
+		m_tree.isDirectory = true;
+		m_fileCount = 0;
+		m_dirCount = 0;
+		m_scanError.clear();
+		if (m_rootAvailable)
+		{
+			ScanDirectory(m_root, m_tree, 0);
+		}
+		m_lastScanTime = ImGui::GetTime();
+		m_treeDirty = false;
+	}
+
+	void FileExplorerPanel::ScanDirectory(const std::filesystem::path& dir, Entry& out, const int depth)
+	{
+		if (depth > kMaxScanDepth)
+		{
+			return;
+		}
+
+		std::error_code ec;
+		std::vector<std::filesystem::directory_entry> dirs;
+		std::vector<std::filesystem::directory_entry> files;
+		for (const auto& entry: std::filesystem::directory_iterator(dir, std::filesystem::directory_options::skip_permission_denied, ec))
+		{
+			if (ec)
+			{
+				break;
+			}
+			std::error_code typeEc;
+			if (entry.is_directory(typeEc))
+			{
+				if (!IsIgnoredDirectory(entry.path().filename().generic_string()))
+				{
+					dirs.push_back(entry);
+				}
+			}
+			else if (entry.is_regular_file(typeEc))
+			{
+				files.push_back(entry);
+			}
+		}
+		if (ec)
+		{
+			m_scanError = "Some entries could not be read (" + ec.message() + ").";
+		}
+
+		const auto byNameNoCase = [](const auto& a, const auto& b)
+		{
+			const std::string an = a.path().filename().generic_string();
+			const std::string bn = b.path().filename().generic_string();
+			return std::lexicographical_compare(an.begin(), an.end(), bn.begin(), bn.end(),
+			        [](char x, char y) { return std::tolower(static_cast<unsigned char>(x)) < std::tolower(static_cast<unsigned char>(y)); });
+		};
+		std::sort(dirs.begin(), dirs.end(), byNameNoCase);
+		std::sort(files.begin(), files.end(), byNameNoCase);
+
+		out.children.reserve(dirs.size() + files.size());
+		for (const auto& child: dirs)
+		{
+			Entry e;
+			e.path = child.path();
+			e.name = child.path().filename().generic_string();
+			e.isDirectory = true;
+			++m_dirCount;
+			ScanDirectory(child.path(), e, depth + 1);
+			out.children.push_back(std::move(e));
+		}
+		for (const auto& file: files)
+		{
+			Entry e;
+			e.path = file.path();
+			e.name = file.path().filename().generic_string();
+			e.kind = InferFileKind(e.path);
+			std::error_code sizeEc;
+			e.sizeBytes = file.file_size(sizeEc);
+
+			// Assets travel as project:// (the editor VFS mount); scripts stay
+			// absolute so tooling (VS Code) can open them directly.
+			e.payloadPath = ToUtf8Path(e.path);
+			if (e.kind != dragdrop::FileKind::Script && !m_root.empty())
+			{
+				std::error_code relEc;
+				const std::filesystem::path relative = std::filesystem::relative(e.path, m_root, relEc);
+				if (!relEc && IsSubpath(relative))
+				{
+					e.payloadPath = "project://" + relative.generic_string();
+				}
+			}
+			++m_fileCount;
+			out.children.push_back(std::move(e));
+		}
+	}
+
+	// ── File operations ────────────────────────────────────────────────────────
+
+	void FileExplorerPanel::BeginRename(const Entry& entry)
+	{
+		m_renameTarget = entry.path;
+		std::snprintf(m_renameBuf, sizeof(m_renameBuf), "%s", entry.name.c_str());
+		m_renameFocusPending = true;
+	}
+
+	bool FileExplorerPanel::ApplyRename(const std::filesystem::path& target, std::string_view newName)
+	{
+		const std::string trimmed = TrimCopy(newName);
+		if (trimmed.empty() || trimmed.find('/') != std::string::npos || trimmed.find('\\') != std::string::npos)
+		{
+			m_opError = "Enter a plain file name (no path separators).";
+			return false;
+		}
+		const std::filesystem::path newPath = target.parent_path() / trimmed;
+		if (newPath == target)
+		{
+			return true;
+		}
+		std::error_code ec;
+		if (std::filesystem::exists(newPath, ec))
+		{
+			m_opError = "Something with that name already exists.";
+			return false;
+		}
+		std::filesystem::rename(target, newPath, ec);
+		if (ec)
+		{
+			m_opError = "Rename failed (" + ec.message() + ").";
+			return false;
+		}
+		m_opError.clear();
+		m_selectedPath = ToUtf8Path(newPath);
+		m_treeDirty = true;
+		return true;
+	}
+
+	bool FileExplorerPanel::DuplicateEntry(const std::filesystem::path& target)
+	{
+		const std::filesystem::path parent = target.parent_path();
+		const std::string stem = target.stem().generic_string();
+		const std::string ext = target.extension().generic_string();
+		std::filesystem::path copyPath;
+		for (int i = 1; i <= 32; ++i)
+		{
+			const std::string suffix = (i == 1) ? " Copy" : (" Copy " + std::to_string(i));
+			copyPath = parent / (stem + suffix + ext);
+			std::error_code existsEc;
+			if (!std::filesystem::exists(copyPath, existsEc))
+			{
+				break;
+			}
+			copyPath.clear();
+		}
+		if (copyPath.empty())
+		{
+			m_opError = "Too many copies already exist.";
+			return false;
+		}
+		std::error_code ec;
+		std::filesystem::copy_file(target, copyPath, ec);
+		if (ec)
+		{
+			m_opError = "Duplicate failed (" + ec.message() + ").";
+			return false;
+		}
+		m_opError.clear();
+		m_selectedPath = ToUtf8Path(copyPath);
+		m_treeDirty = true;
+		return true;
+	}
+
+	bool FileExplorerPanel::DeleteEntry(const std::filesystem::path& target, const bool isDirectory)
+	{
+		std::error_code ec;
+		if (isDirectory)
+		{
+			std::filesystem::remove_all(target, ec);
+		}
+		else
+		{
+			std::filesystem::remove(target, ec);
+		}
+		if (ec)
+		{
+			m_opError = "Delete failed (" + ec.message() + ").";
+			return false;
+		}
+		m_opError.clear();
+		if (m_selectedPath == ToUtf8Path(target))
+		{
+			m_selectedPath.clear();
+		}
+		m_treeDirty = true;
+		return true;
+	}
+
+	// ── Drawing ────────────────────────────────────────────────────────────────
 
 	void FileExplorerPanel::OnImGui(LayerContext& context)
 	{
@@ -324,127 +622,330 @@ namespace aether::app
 		}
 
 		ImGui::Begin("File Explorer", VisiblePtr());
-		chrome::PanelHeader("PROJECT FILES");
-		const float feBtnH = ImGui::GetFrameHeight();
-		if (chrome::GhostButton(ICON_FA_ROTATE "##refreshFiles", ImVec2(std::max(feBtnH, ImGui::CalcTextSize(ICON_FA_ROTATE).x + ImGui::GetStyle().FramePadding.x * 2.0f), feBtnH)))
+
+		char stat[64]{};
+		if (m_rootAvailable)
 		{
-			RefreshRoot(context);
+			std::snprintf(stat, sizeof(stat), "%d FILES \xC2\xB7 %d FOLDERS", m_fileCount, m_dirCount);
 		}
-		ImGui::SetItemTooltip("Refresh");
-		ImGui::SameLine();
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextDisabled("%s", m_rootAvailable ? ToUtf8Path(m_root).c_str() : "Open a project to browse files");
+		chrome::PanelHeader("PROJECT FILES", stat);
+
 		if (!m_rootAvailable)
 		{
-			ImGui::TextDisabled("No project is open.");
+			ImGui::TextDisabled("Open a project to browse its files.");
 			ImGui::End();
 			return;
 		}
 
-		ImGui::SetNextItemWidth(200.0f);
-		ImGui::InputTextWithHint("##newScriptName", "New script name", m_newScriptNameBuf, sizeof(m_newScriptNameBuf));
-		ImGui::SameLine();
-		const std::string typeName = TrimCopy(m_newScriptNameBuf);
-		const bool validName = IsValidCSharpIdentifier(typeName);
-		ImGui::BeginDisabled(!validName);
-		if (chrome::OutlineButton(ICON_FA_PLUS " Create"))
+		// Cached tree: rescan on demand, after file operations, and when stale.
+		if (!m_treeDirty && ImGui::GetTime() - m_lastScanTime > kAutoRescanSeconds)
 		{
-			m_newScriptError.clear();
-			if (CreateGameScriptFile(m_scriptRoot.empty() ? m_root / "scripts" : m_scriptRoot, typeName, m_newScriptError))
+			m_treeDirty = true;
+		}
+		if (m_treeDirty)
+		{
+			RescanTree();
+		}
+
+		DrawToolbar(context);
+
+		if (!m_opError.empty() || !m_scanError.empty())
+		{
+			ImGui::TextColored(chrome::C(colors::Error), "%s", !m_opError.empty() ? m_opError.c_str() : m_scanError.c_str());
+		}
+
+		// Row surface: selection + hover speak the shared amber language.
+		ImGui::PushStyleColor(ImGuiCol_Header, chrome::kSelectionBg);
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, chrome::kHoverBg);
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, chrome::WithAlpha(chrome::kAccent, 0.35f));
+		// Leave room for the preview card when a file is selected.
+		const bool showPreview = !m_selectedPath.empty() && !m_selectedIsDirectory;
+		constexpr float kPreviewCardH = 205.0f;
+		ImGui::BeginChild("##feRows", ImVec2(0.0f, showPreview ? -(kPreviewCardH + 6.0f) : 0.0f), ImGuiChildFlags_Borders);
+		if (m_search[0] != '\0')
+		{
+			DrawSearchResults(context, m_tree);
+		}
+		else
+		{
+			for (Entry& child: m_tree.children)
 			{
-				m_newScriptNameBuf[0] = '\0';
-				RefreshRoot(context);
+				if (child.isDirectory)
+				{
+					DrawDirectoryNode(context, child, 0);
+				}
+				else
+				{
+					DrawFileRow(context, child);
+				}
+			}
+			if (m_tree.children.empty())
+			{
+				ImGui::TextDisabled("This project folder is empty.");
 			}
 		}
-		ImGui::EndDisabled();
-		if (!validName && !typeName.empty())
-		{
-			ImGui::TextDisabled("Use a C# class name, e.g. PlayerMotor");
-		}
-		if (!m_newScriptError.empty())
-		{
-			ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f), "%s", m_newScriptError.c_str());
-		}
-		ImGui::Separator();
+		ImGui::EndChild();
+		ImGui::PopStyleColor(3);
 
-		DrawDirectory(context, m_root, 0);
+		if (showPreview)
+		{
+			DrawPreviewCard(context);
+		}
+
+		DrawPendingPopups(context);
 		ImGui::End();
 	}
 
-	void FileExplorerPanel::DrawDirectory(LayerContext& context, const std::filesystem::path& dir, int depth)
+	void FileExplorerPanel::DrawToolbar(LayerContext& context)
 	{
-		std::error_code ec;
-		std::vector<std::filesystem::directory_entry> dirs;
-		std::vector<std::filesystem::directory_entry> files;
-		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
+		(void) context;
+		if (m_openNewPopup)
 		{
-			if (ec)
+			ImGui::OpenPopup("##feNew");
+			m_openNewPopup = false;
+		}
+		if (chrome::OutlineButton(ICON_FA_PLUS " New"))
+		{
+			if (m_createDir.empty())
 			{
-				break;
+				m_createDir = m_root;
 			}
-			if (entry.is_directory(ec))
+			ImGui::OpenPopup("##feNew");
+		}
+		ImGui::SetItemTooltip("Create a script or folder (in the selected folder)");
+
+		if (ImGui::BeginPopup("##feNew"))
+		{
+			chrome::SectionTag("CREATE");
+			std::error_code relEc;
+			const std::filesystem::path rel = std::filesystem::relative(m_createDir, m_root, relEc);
+			ImGui::TextDisabled("in %s", (!relEc && IsSubpath(rel)) ? rel.generic_string().c_str() : m_projectName.c_str());
+			ImGui::Spacing();
+
+			// C# script.
+			ImGui::SetNextItemWidth(220.0f);
+			const bool scriptEntered = ImGui::InputTextWithHint("##feScript", "Script class name...", m_newScriptNameBuf, sizeof(m_newScriptNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+			ImGui::SameLine();
+			const std::string typeName = TrimCopy(m_newScriptNameBuf);
+			const bool validName = IsValidCSharpIdentifier(typeName);
+			ImGui::BeginDisabled(!validName);
+			if (chrome::GhostButton(ICON_FA_CODE " Script", ImVec2(0.0f, 0.0f), chrome::kAccentHi) || (scriptEntered && validName))
 			{
-				dirs.push_back(entry);
+				std::string error;
+				const std::filesystem::path dir = m_scriptRoot.empty() ? m_root / "scripts" : m_scriptRoot;
+				if (CreateGameScriptFile(dir, typeName, error))
+				{
+					m_newScriptNameBuf[0] = '\0';
+					m_opError.clear();
+					m_treeDirty = true;
+					ImGui::CloseCurrentPopup();
+				}
+				else
+				{
+					m_opError = error;
+				}
 			}
-			else if (entry.is_regular_file(ec))
+			ImGui::EndDisabled();
+			if (!validName && !typeName.empty())
 			{
-				files.push_back(entry);
+				ImGui::TextDisabled("Use a C# class name, e.g. PlayerMotor");
 			}
+
+			// Folder.
+			ImGui::SetNextItemWidth(220.0f);
+			const bool folderEntered = ImGui::InputTextWithHint("##feFolder", "Folder name...", m_newFolderNameBuf, sizeof(m_newFolderNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+			ImGui::SameLine();
+			const std::string folderName = TrimCopy(m_newFolderNameBuf);
+			const bool validFolder = !folderName.empty() && folderName.find('/') == std::string::npos && folderName.find('\\') == std::string::npos;
+			ImGui::BeginDisabled(!validFolder);
+			if (chrome::GhostButton(ICON_FA_FOLDER " Folder") || (folderEntered && validFolder))
+			{
+				if (io::file_util::CreateDirectories(m_createDir / folderName))
+				{
+					m_newFolderNameBuf[0] = '\0';
+					m_opError.clear();
+					m_treeDirty = true;
+					ImGui::CloseCurrentPopup();
+				}
+				else
+				{
+					m_opError = "Could not create the folder.";
+				}
+			}
+			ImGui::EndDisabled();
+			ImGui::EndPopup();
 		}
 
-		const auto byName = [](const auto& a, const auto& b)
+		ImGui::SameLine();
+		const float btnH = ImGui::GetFrameHeight();
+		const float refreshW = std::max(btnH, ImGui::CalcTextSize(ICON_FA_ROTATE).x + ImGui::GetStyle().FramePadding.x * 2.0f);
+		if (chrome::GhostButton(ICON_FA_ROTATE "##feRefresh", ImVec2(refreshW, btnH)))
 		{
-			return a.path().filename().generic_string() < b.path().filename().generic_string();
-		};
-		std::sort(dirs.begin(), dirs.end(), byName);
-		std::sort(files.begin(), files.end(), byName);
-
-		const std::string label = depth == 0 ? std::string(ICON_FA_FOLDER_OPEN "  ") + (m_projectName.empty() ? dir.filename().generic_string() : m_projectName) : std::string(ICON_FA_FOLDER_OPEN "  ") + dir.filename().generic_string();
-		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-		if (depth == 0)
-		{
-			flags |= ImGuiTreeNodeFlags_DefaultOpen;
+			m_treeDirty = true;
 		}
-		const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
-		if (!open)
+		ImGui::SetItemTooltip("Rescan (auto-rescans every few seconds)");
+
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(-1.0f);
+		ImGui::InputTextWithHint("##feSearch", "Search files...", m_search, sizeof(m_search));
+	}
+
+	void FileExplorerPanel::DrawDirectoryNode(LayerContext& context, Entry& entry, const int depth)
+	{
+		(void) depth;
+		ImGui::PushID(entry.path.generic_string().c_str());
+
+		// Inline rename replaces the whole row.
+		if (m_renameTarget == entry.path)
 		{
+			ImGui::SetNextItemWidth(-1.0f);
+			if (m_renameFocusPending)
+			{
+				ImGui::SetKeyboardFocusHere();
+				m_renameFocusPending = false;
+			}
+			if (ImGui::InputText("##feRename", m_renameBuf, sizeof(m_renameBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+			{
+				ApplyRename(m_renameTarget, m_renameBuf);
+				m_renameTarget.clear();
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered()))
+			{
+				m_renameTarget.clear();
+			}
+			ImGui::PopID();
 			return;
 		}
 
-		for (const auto& child: dirs)
+		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
+		if (selected)
 		{
-			DrawDirectory(context, child.path(), depth + 1);
+			flags |= ImGuiTreeNodeFlags_Selected;
 		}
-		for (const auto& file: files)
-		{
-			DrawFile(context, file.path());
-		}
+		const bool open = ImGui::TreeNodeEx("##dir", flags);
 
-		ImGui::TreePop();
-	}
-
-	void FileExplorerPanel::DrawFile(LayerContext& context, const std::filesystem::path& path)
-	{
-		const bool isScript = IsCSharpScriptFile(path);
-		const dragdrop::FileKind kind = InferFileKind(path);
-		const std::string name = path.filename().generic_string();
-		const std::string label = std::string(isScript ? ICON_FA_CODE "  " : ICON_FA_IMAGE "  ") + name;
-		const std::string pathText = ToUtf8Path(path);
-		std::string payloadPath = pathText;
-		if (!isScript && !m_root.empty())
+		// Manual label overlay: amber-tinted folder icon, warm name, faint child
+		// count on the right (TreeNodeEx alone cannot tint the icon separately).
 		{
-			std::error_code ec;
-			const std::filesystem::path relative = std::filesystem::relative(path, m_root, ec);
-			if (!ec && IsSubpath(relative))
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 rowMin = ImGui::GetItemRectMin();
+			const ImVec2 rowMax = ImGui::GetItemRectMax();
+			const float textY = rowMin.y + (rowMax.y - rowMin.y - ImGui::GetFontSize()) * 0.5f;
+			const float iconX = rowMin.x + ImGui::GetTreeNodeToLabelSpacing();
+			const float nameX = iconX + ImGui::GetFontSize() * 1.5f;
+			drawList->AddText(ImVec2(iconX, textY), chrome::U32(chrome::WithAlpha(chrome::kAccent, 0.85f)), open ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER);
+			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
+			char countText[24];
+			std::snprintf(countText, sizeof(countText), "%zu", entry.children.size());
+			const float countW = chrome::MeasureSized(12.0f, countText).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - countW - 8.0f, textY + 2.0f), chrome::kFaint, countText);
+			if (selected)
 			{
-				payloadPath = "project://" + relative.generic_string();
+				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
 			}
 		}
-		if (ImGui::Selectable(label.c_str(), false))
+
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 		{
+			m_selectedPath = ToUtf8Path(entry.path);
+			m_selectedPayloadPath.clear();
+			m_selectedKind = dragdrop::FileKind::Unknown;
+			m_selectedIsDirectory = true;
+			m_createDir = entry.path;
+		}
+		const bool mutated = DrawRowContextMenu(context, entry);
+
+		if (open)
+		{
+			if (!mutated)
+			{
+				for (Entry& child: entry.children)
+				{
+					if (child.isDirectory)
+					{
+						DrawDirectoryNode(context, child, depth + 1);
+					}
+					else
+					{
+						DrawFileRow(context, child);
+					}
+				}
+			}
+			ImGui::TreePop();
+		}
+		ImGui::PopID();
+	}
+
+	void FileExplorerPanel::DrawFileRow(LayerContext& context, const Entry& entry)
+	{
+		ImGui::PushID(entry.path.generic_string().c_str());
+
+		if (m_renameTarget == entry.path)
+		{
+			ImGui::SetNextItemWidth(-1.0f);
+			if (m_renameFocusPending)
+			{
+				ImGui::SetKeyboardFocusHere();
+				m_renameFocusPending = false;
+			}
+			if (ImGui::InputText("##feRename", m_renameBuf, sizeof(m_renameBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+			{
+				ApplyRename(m_renameTarget, m_renameBuf);
+				m_renameTarget.clear();
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered()))
+			{
+				m_renameTarget.clear();
+			}
+			ImGui::PopID();
+			return;
+		}
+
+		const bool isScript = entry.kind == dragdrop::FileKind::Script;
+		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
+		ImGui::Selectable("##feRow", selected, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_AllowOverlap);
+
+		// Manual overlay: tinted kind icon, name, size micro-stat on the right.
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 rowMin = ImGui::GetItemRectMin();
+			const ImVec2 rowMax = ImGui::GetItemRectMax();
+			const float textY = rowMin.y + (rowMax.y - rowMin.y - ImGui::GetFontSize()) * 0.5f;
+			const float iconX = rowMin.x + 4.0f;
+			const float nameX = iconX + ImGui::GetFontSize() * 1.5f;
+			drawList->AddText(ImVec2(iconX, textY), chrome::U32(KindTint(entry.kind, isScript)), KindIcon(entry.kind, isScript));
+			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
+			const std::string sizeText = FormatSize(entry.sizeBytes);
+			const float sizeW = chrome::MeasureSized(12.0f, sizeText.c_str()).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - sizeW - 8.0f, textY + 2.0f), chrome::kFaint, sizeText.c_str());
+			if (selected)
+			{
+				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
+			}
+		}
+
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+		{
+			m_selectedPath = ToUtf8Path(entry.path);
+			m_selectedPayloadPath = entry.payloadPath;
+			m_selectedKind = entry.kind;
+			m_selectedIsDirectory = false;
+			m_createDir = entry.path.parent_path();
 			if (auto* selection = context.TryGet<SceneSelection>())
 			{
-				selection->SelectAsset(ToSelectionKind(kind), isScript ? pathText : payloadPath, name);
+				selection->SelectAsset(ToSelectionKind(entry.kind), isScript ? ToUtf8Path(entry.path) : entry.payloadPath, entry.name);
+			}
+		}
+		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			if (isScript)
+			{
+				OpenInEditor(ToUtf8Path(entry.path), 0);
+			}
+			else
+			{
+				OpenInOS(entry.path);
 			}
 		}
 
@@ -453,21 +954,321 @@ namespace aether::app
 			if (isScript)
 			{
 				dragdrop::ScriptPayload payload{};
-				CopyToPayload(payload.typeName, path.stem().generic_string());
-				CopyToPayload(payload.sourcePath, pathText);
+				CopyToPayload(payload.typeName, entry.path.stem().generic_string());
+				CopyToPayload(payload.sourcePath, ToUtf8Path(entry.path));
 				ImGui::SetDragDropPayload(dragdrop::kScriptPayload, &payload, sizeof(payload));
 				DrawPayloadPreview(ICON_FA_CODE, payload.typeName, payload.sourcePath, chrome::U32(chrome::kAccentHi));
 			}
 			else
 			{
 				dragdrop::FilePayload payload{};
-				payload.kind = kind;
-				CopyToPayload(payload.path, payloadPath);
-				CopyToPayload(payload.displayName, name);
+				payload.kind = entry.kind;
+				CopyToPayload(payload.path, entry.payloadPath);
+				CopyToPayload(payload.displayName, entry.name);
 				ImGui::SetDragDropPayload(dragdrop::kFilePayload, &payload, sizeof(payload));
-				DrawPayloadPreview(ICON_FA_IMAGE, name.c_str(), payload.path, chrome::U32(chrome::kMuted));
+				DrawPayloadPreview(KindIcon(entry.kind, false), entry.name.c_str(), payload.path, chrome::U32(KindTint(entry.kind, false)));
 			}
 			ImGui::EndDragDropSource();
 		}
+
+		DrawRowContextMenu(context, entry);
+		ImGui::PopID();
+	}
+
+	void FileExplorerPanel::DrawSearchResults(LayerContext& context, const Entry& entry)
+	{
+		std::string needle = TrimCopy(m_search);
+		std::transform(needle.begin(), needle.end(), needle.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+		int matches = 0;
+		const auto walk = [&](const auto& self, const Entry& node) -> void
+		{
+			for (const Entry& child: node.children)
+			{
+				if (child.isDirectory)
+				{
+					self(self, child);
+					continue;
+				}
+				if (!ContainsCaseInsensitive(child.name, needle))
+				{
+					continue;
+				}
+				++matches;
+				DrawFileRow(context, child);
+				// Faint project-relative parent path under the row (search context).
+				std::error_code relEc;
+				const std::filesystem::path rel = std::filesystem::relative(child.path.parent_path(), m_root, relEc);
+				if (!relEc)
+				{
+					ImGui::Indent(ImGui::GetFontSize() * 1.5f);
+					ImGui::PushStyleColor(ImGuiCol_Text, chrome::kFaint);
+					ImGui::TextUnformatted(IsSubpath(rel) ? rel.generic_string().c_str() : "/");
+					ImGui::PopStyleColor();
+					ImGui::Unindent(ImGui::GetFontSize() * 1.5f);
+				}
+			}
+		};
+		walk(walk, entry);
+
+		if (matches == 0)
+		{
+			ImGui::TextDisabled("No files match '%s'.", m_search);
+		}
+	}
+
+	bool FileExplorerPanel::DrawRowContextMenu(LayerContext& context, const Entry& entry)
+	{
+		(void) context;
+		bool mutated = false;
+		if (ImGui::BeginPopupContextItem("##fectx"))
+		{
+			m_selectedPath = ToUtf8Path(entry.path);
+			if (ImGui::MenuItem(entry.kind == dragdrop::FileKind::Script ? ICON_FA_CODE "  Open in editor" : ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "  Open"))
+			{
+				if (entry.kind == dragdrop::FileKind::Script)
+				{
+					OpenInEditor(ToUtf8Path(entry.path), 0);
+				}
+				else
+				{
+					OpenInOS(entry.path);
+				}
+			}
+			if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in Explorer"))
+			{
+				ShowInOSExplorer(entry.path);
+			}
+			if (ImGui::MenuItem(ICON_FA_COPY "  Copy path"))
+			{
+				ImGui::SetClipboardText(ToUtf8Path(entry.path).c_str());
+			}
+			if (!entry.isDirectory && entry.payloadPath.starts_with("project://") && ImGui::MenuItem(ICON_FA_LINK "  Copy project:// path"))
+			{
+				ImGui::SetClipboardText(entry.payloadPath.c_str());
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem(ICON_FA_PEN "  Rename"))
+			{
+				BeginRename(entry);
+			}
+			if (!entry.isDirectory && ImGui::MenuItem(ICON_FA_CLONE "  Duplicate"))
+			{
+				mutated = DuplicateEntry(entry.path);
+			}
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::C(colors::Error));
+			if (ImGui::MenuItem(ICON_FA_TRASH "  Delete..."))
+			{
+				m_deleteTarget = entry.path;
+				m_deleteIsDirectory = entry.isDirectory;
+				m_openDeletePopup = true;
+			}
+			ImGui::PopStyleColor();
+			if (entry.isDirectory)
+			{
+				ImGui::Separator();
+				if (ImGui::MenuItem(ICON_FA_PLUS "  New here..."))
+				{
+					m_createDir = entry.path;
+					m_openNewPopup = true;
+				}
+			}
+			ImGui::EndPopup();
+		}
+		return mutated;
+	}
+
+	void FileExplorerPanel::DrawPendingPopups(LayerContext& context)
+	{
+		(void) context;
+		if (m_openDeletePopup)
+		{
+			ImGui::OpenPopup("Delete?");
+			m_openDeletePopup = false;
+		}
+		if (ImGui::BeginPopupModal("Delete?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			const std::string name = m_deleteTarget.filename().generic_string();
+			ImGui::Text("Delete '%s'%s?", name.c_str(), m_deleteIsDirectory ? " and everything in it" : "");
+			ImGui::TextDisabled("This cannot be undone.");
+			ImGui::Spacing();
+			ImGui::PushStyleColor(ImGuiCol_Button, chrome::WithAlpha(chrome::C(colors::Error), 0.22f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chrome::WithAlpha(chrome::C(colors::Error), 0.65f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, chrome::C(colors::Error));
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kText);
+			if (ImGui::Button(ICON_FA_TRASH " Delete", ImVec2(120.0f, 0.0f)))
+			{
+				DeleteEntry(m_deleteTarget, m_deleteIsDirectory);
+				m_deleteTarget.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::PopStyleColor(4);
+			ImGui::SameLine();
+			if (chrome::GhostButton("Cancel", ImVec2(120.0f, 0.0f)))
+			{
+				m_deleteTarget.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+	}
+	// ── Preview card ───────────────────────────────────────────────────────────
+
+	void FileExplorerPanel::ReleasePreview(LayerContext& context)
+	{
+		if (m_previewImGuiId != 0)
+		{
+			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(m_previewImGuiId));
+			}
+			m_previewImGuiId = 0;
+		}
+		if (m_previewTexture.IsValid())
+		{
+			if (auto* assets = context.TryGet<AssetManager>())
+			{
+				assets->GetTextureRegistry().Release(m_previewTexture);
+			}
+			m_previewTexture = {};
+		}
+		m_previewExtent = {};
+		m_previewText.clear();
+		m_previewIsImage = false;
+		m_previewIsText = false;
+		m_previewFailed = false;
+		m_previewLoadedFor = "<none>";
+	}
+
+	void FileExplorerPanel::UpdatePreview(LayerContext& context)
+	{
+		if (m_previewLoadedFor == m_selectedPath)
+		{
+			return;
+		}
+		ReleasePreview(context);
+		m_previewLoadedFor = m_selectedPath;
+		if (m_selectedPath.empty() || m_selectedIsDirectory)
+		{
+			return;
+		}
+
+		const std::filesystem::path path(m_selectedPath);
+		if (m_selectedKind == dragdrop::FileKind::Texture)
+		{
+			// Make the image resident via the texture registry (VFS-aware, ref
+			// counted), then display its live image view directly - the same path
+			// the Textures panel uses. Fallback-slot results mean the decode failed.
+			auto* assets = context.TryGet<AssetManager>();
+			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+			if (assets == nullptr || imgui == nullptr)
+			{
+				m_previewFailed = true;
+				return;
+			}
+			auto& textures = assets->GetTextureRegistry();
+			m_previewTexture = textures.Acquire(m_selectedPayloadPath.empty() ? m_selectedPath : m_selectedPayloadPath);
+			const std::uint32_t slot = textures.ResolveSlot(m_previewTexture);
+			const std::uint32_t fallbackSlot = textures.ResolveSlot(textures.DefaultHandle());
+			if (!m_previewTexture.IsValid() || slot == 0xFFFFFFFFu || slot == fallbackSlot)
+			{
+				m_previewFailed = true;
+				return;
+			}
+			for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
+			{
+				if (info.hasBindlessSampled && info.bindlessSampledSlot == slot && info.view != nullptr)
+				{
+					const ImTextureID id = imgui->RegisterTexture(info.view, gpu::ImageLayout::ShaderReadOnly);
+					if (id != ImTextureID_Invalid)
+					{
+						m_previewImGuiId = static_cast<std::uint64_t>(id);
+						m_previewExtent = info.extent;
+						m_previewIsImage = true;
+					}
+					break;
+				}
+			}
+			m_previewFailed = !m_previewIsImage;
+			return;
+		}
+
+		if (IsTextPreviewable(path))
+		{
+			if (auto text = io::file_util::ReadText(path))
+			{
+				constexpr std::size_t kMaxPreviewChars = 2400;
+				m_previewText = text->size() > kMaxPreviewChars ? text->substr(0, kMaxPreviewChars) + "\n..." : *text;
+				m_previewIsText = true;
+			}
+			else
+			{
+				m_previewFailed = true;
+			}
+		}
+	}
+
+	void FileExplorerPanel::DrawPreviewCard(LayerContext& context)
+	{
+		UpdatePreview(context);
+
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::WithAlpha(chrome::kPanel, 0.6f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+		ImGui::BeginChild("##fePreview", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+
+		// Mini band: PREVIEW eyebrow + the file kind right-aligned in faint caps.
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 bp = ImGui::GetCursorScreenPos();
+			const float bandW = ImGui::GetContentRegionAvail().x;
+			drawList->AddRectFilled(ImVec2(bp.x, bp.y + 1.0f), ImVec2(bp.x + 3.0f, bp.y + 13.0f), chrome::U32(chrome::kAccent));
+			chrome::TextSized(drawList, 12.0f, ImVec2(bp.x + 10.0f, bp.y), chrome::kMuted, "PREVIEW");
+			const char* kindLabel = KindLabel(m_selectedKind);
+			const float kindW = chrome::MeasureSized(12.0f, kindLabel).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(bp.x + bandW - kindW, bp.y), chrome::kFaint, kindLabel);
+			ImGui::Dummy(ImVec2(0.0f, 16.0f));
+		}
+
+		const std::filesystem::path path(m_selectedPath);
+		ImGui::TextUnformatted(path.filename().generic_string().c_str());
+
+		const float contentH = ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing();
+		if (m_previewIsImage && m_previewImGuiId != 0 && m_previewExtent.width > 0 && m_previewExtent.height > 0)
+		{
+			// Fit into the card, preserving aspect.
+			const float availW = ImGui::GetContentRegionAvail().x;
+			const float scale = std::min(availW / static_cast<float>(m_previewExtent.width), std::max(40.0f, contentH) / static_cast<float>(m_previewExtent.height));
+			const ImVec2 size(static_cast<float>(m_previewExtent.width) * std::min(scale, 1.0f), static_cast<float>(m_previewExtent.height) * std::min(scale, 1.0f));
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (availW - size.x) * 0.5f));
+			ImGui::Image(ImTextureRef(static_cast<ImTextureID>(m_previewImGuiId)), size);
+		}
+		else if (m_previewIsText)
+		{
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.25f));
+			ImGui::BeginChild("##fePrevText", ImVec2(0.0f, std::max(40.0f, contentH)), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
+			ImGui::TextUnformatted(m_previewText.c_str());
+			ImGui::PopStyleColor();
+			ImGui::EndChild();
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			ImGui::TextDisabled(m_previewFailed ? "Preview could not be loaded." : "No preview for this file type.");
+		}
+
+		// Meta line: extent for images, plus the payload identity.
+		if (m_previewIsImage)
+		{
+			ImGui::TextDisabled("%u x %u  \xC2\xB7  %s", m_previewExtent.width, m_previewExtent.height, m_selectedPayloadPath.c_str());
+		}
+		else if (!m_selectedPayloadPath.empty())
+		{
+			ImGui::TextDisabled("%s", m_selectedPayloadPath.c_str());
+		}
+
+		ImGui::EndChild();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor();
 	}
 } // namespace aether::app

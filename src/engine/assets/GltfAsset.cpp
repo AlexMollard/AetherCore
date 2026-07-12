@@ -921,10 +921,20 @@ namespace aether::assets
 			return !meshPath.empty() && io::FileSystem::Exists(meshPath);
 		};
 
+		// Resolve non-.mesh inputs (e.g. a source .gltf reference) to their baked
+		// sibling FIRST. The editor mounts project:// at the RAW project folder,
+		// so the source .gltf exists right next to its baked .mesh - trying the
+		// literal path first would read glTF JSON as a packed mesh ("invalid mesh
+		// magic"). In the pak-mounted runtime the raw source never exists, so this
+		// ordering is correct for both mounts.
 		std::string meshPath = vfsPath;
-		if (!TryMesh(meshPath))
+		if (!vfsPath.ends_with(".mesh"))
 		{
-			meshPath = DeriveMeshPath(vfsPath);
+			const std::string derived = DeriveMeshPath(vfsPath);
+			if (TryMesh(derived))
+			{
+				meshPath = derived;
+			}
 		}
 
 		if (!TryMesh(meshPath))
