@@ -104,6 +104,35 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial Vector4 aether_ui_get_rect(uint id);
 
+    // ── Debug draw (Module 08) ──────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_debug_set_enabled(int enabled);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_debug_is_enabled();
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_debug_draw_line(Vector3 a, Vector3 b, Vector4 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_debug_draw_ray(Vector3 origin, Vector3 dir, Vector4 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_debug_draw_sphere(Vector3 center, float radius, Vector4 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_debug_draw_box(Vector3 center, Vector3 halfExtents, Vector4 color);
+
+    // ── Time (Module 05) ────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial float aether_time_total();
+
+    [LibraryImport(Lib)]
+    internal static partial float aether_time_delta();
+
+    [LibraryImport(Lib)]
+    internal static partial long aether_time_frame_count();
+
     // ── Mouse input (Module 03) ─────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial int aether_input_mouse_down(int btn);

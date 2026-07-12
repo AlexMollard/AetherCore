@@ -98,7 +98,6 @@ namespace aether
 
 	PhysicsDebugRenderer::PhysicsDebugRenderer(PhysicsDebugRenderer&& rhs) noexcept
 	      : m_enabled(rhs.m_enabled),
-	        m_selfTestEnabled(rhs.m_selfTestEnabled),
 	        m_colorMode(rhs.m_colorMode),
 	        m_frameDebugVertices(rhs.m_frameDebugVertices),
 	        m_frameShapes(rhs.m_frameShapes),
@@ -132,7 +131,6 @@ namespace aether
 		{
 			Shutdown();
 			m_enabled = rhs.m_enabled;
-			m_selfTestEnabled = rhs.m_selfTestEnabled;
 			m_colorMode = rhs.m_colorMode;
 			m_frameDebugVertices = rhs.m_frameDebugVertices;
 			m_frameShapes = rhs.m_frameShapes;
@@ -587,17 +585,6 @@ namespace aether
 		AddDebugLine(out, origin, origin + zAxis, colors::DebugBlue);
 	}
 
-	void PhysicsDebugRenderer::AppendSelfTestPattern(std::vector<DebugVertex>& out)
-	{
-		// DIAGNOSTIC: a fullscreen NDC diamond. Pushed with the bypass flag
-		// (tint.w == 2.0). If this is visible the pipeline is alive and writes
-		// to the swapchain color; the issue is geometry/transform. If not,
-		// the color attachment or pipeline is fundamentally broken.
-		// World-space sanity pattern: RGB axes + a 1m wireframe AABB at the origin.
-		AddDebugAxes(out, glm::mat4(1.0f), 1.0f);
-		AddDebugAabb(out, glm::vec3(-0.5f), glm::vec3(0.5f), colors::Mauve);
-	}
-
 	void PhysicsDebugRenderer::EnsureImmediateBufferCapacity(std::uint32_t vertexCount)
 	{
 		constexpr std::uint32_t kInitialImmediateCapacity = 4096;
@@ -643,25 +630,11 @@ namespace aether
 
 	void PhysicsDebugRenderer::DrawImmediateDebugPrimitives(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr)
 	{
-		std::vector<DebugVertex> scratch;
-		std::vector<DebugVertex>* drawList = nullptr;
-		if (m_frameDebugVertices != nullptr && !m_frameDebugVertices->empty())
-		{
-			drawList = const_cast<std::vector<DebugVertex>*>(m_frameDebugVertices);
-		}
-		if (m_selfTestEnabled)
-		{
-			if (drawList == nullptr)
-			{
-				scratch.reserve(64);
-				drawList = &scratch;
-			}
-			AppendSelfTestPattern(*drawList);
-		}
-		if (drawList == nullptr || drawList->empty())
+		if (m_frameDebugVertices == nullptr || m_frameDebugVertices->empty())
 		{
 			return;
 		}
+		std::vector<DebugVertex>* drawList = const_cast<std::vector<DebugVertex>*>(m_frameDebugVertices);
 
 		const auto immediateCount = static_cast<std::uint32_t>(drawList->size());
 		EnsureImmediateBufferCapacity(immediateCount);

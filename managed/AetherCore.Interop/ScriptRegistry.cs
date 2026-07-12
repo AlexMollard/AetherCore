@@ -296,7 +296,12 @@ internal static unsafe class ScriptRegistry
     {
         if (Resolve(handle) is { } script)
         {
-            try { script.OnUpdate(deltaTime); }
+            try
+            {
+                script.DispatchPhysicsEvents();
+                script.TickCoroutines(deltaTime);
+                script.OnUpdate(deltaTime);
+            }
             catch (Exception ex) { Bootstrap.ReportError($"{script.GetType().Name}.OnUpdate: {ex}"); }
         }
     }

@@ -214,8 +214,11 @@ namespace aether::app
 			return;
 		}
 
-		// Keep delta current for Input.DeltaTime.
+		// Keep delta current for Input.DeltaTime, and advance the play-time clock
+		// + frame counter for the scripting Time API (once per frame while playing).
 		sceneCtx->deltaTime = dt;
+		sceneCtx->elapsedTime += dt;
+		++sceneCtx->frameCount;
 
 		// Snapshot first: scripts may create/destroy entities (spawns) which
 		// would invalidate a live view iteration.

@@ -22,6 +22,7 @@ namespace aether
 	class PhysicsSystem;
 	class IEngineRuntime;
 	class ServiceContainer;
+	struct DebugVertex;
 } // namespace aether
 
 namespace aether::app
@@ -42,6 +43,9 @@ namespace aether::app::scripting
 		// Service container of the owning layer - lets script interop reach the
 		// SceneSubsystem (prefab I/O) and build ApplySceneDeps for Instantiate.
 		aether::ServiceContainer* services = nullptr;
+		// Per-frame immediate debug-line accumulator (the engine's pending list,
+		// extracted into the RenderFramePacket each frame). Backs Debug.DrawLine.
+		std::vector<aether::DebugVertex>* debugVertices = nullptr;
 		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
@@ -50,6 +54,10 @@ namespace aether::app::scripting
 		aether::IEngineRuntime* engineRuntime = nullptr;
 		gpu::CommandPool uploadPool = nullptr;
 		float deltaTime = 0.0f;
+		// Play-time accumulators for the scripting Time API (advanced once per frame
+		// by ScriptComponentSystem while playing).
+		float elapsedTime = 0.0f;
+		std::uint64_t frameCount = 0;
 
 		// All entities that should be destroyed on scene unload/reload.
 		std::vector<aether::Entity> sceneEntities;

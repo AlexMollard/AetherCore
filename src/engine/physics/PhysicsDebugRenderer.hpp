@@ -130,21 +130,9 @@ namespace aether
 
 		// Register the $Debug pass. The pass body draws (in this order):
 		//   1. game-thread immediate-mode primitives from RenderFramePacket::debugVertices
-		//   2. self-test pattern (gizmo + world AABB) when m_selfTestEnabled
-		//   3. physics shape components (boxes/spheres/capsules) from the World when enabled
+		//      (DebugLayer gizmos and script Debug.Draw* calls)
+		//   2. physics shape components (boxes/spheres/capsules) from the World when enabled
 		void RegisterPass(RenderGraph& graph, RGImage color = {}, RGImage depth = {}, gpu::Extent2D extent = {});
-
-		// Toggle the always-on self-test pattern. Useful for diagnosing whether
-		// the pipeline is alive independent of any caller-supplied primitives.
-		void SetSelfTestEnabled(bool enabled)
-		{
-			m_selfTestEnabled = enabled;
-		}
-
-		[[nodiscard]] bool IsSelfTestEnabled() const
-		{
-			return m_selfTestEnabled;
-		}
 
 	private:
 		void CreateWireframePipeline(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat);
@@ -162,12 +150,7 @@ namespace aether
 		void DrawImmediateDebugPrimitives(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr);
 		void DrawPhysicsDebugShapes(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr) const;
 
-		// Append a self-test pattern (axis gizmo at origin + 1m world AABB + camera frustum)
-		// to `out`. Used to verify the pipeline end-to-end.
-		static void AppendSelfTestPattern(std::vector<DebugVertex>& out);
-
 		bool m_enabled = false;
-		bool m_selfTestEnabled = false;
 		PhysicsDebugColorMode m_colorMode = PhysicsDebugColorMode::None;
 
 		const std::vector<DebugVertex>* m_frameDebugVertices = nullptr;

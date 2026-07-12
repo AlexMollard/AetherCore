@@ -14,12 +14,8 @@ namespace aether::app
 			return "DevTools";
 		}
 
-		void OnUpdate(LayerContext& context) override;
 		void OnImGui(LayerContext& context) override;
 		void LoadSettings(TomlConfig& config, LayerContext& context) override;
 		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
-
-	private:
-		bool m_debugTestShapes = true;
 	};
 } // namespace aether::app

@@ -4,6 +4,7 @@
 
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
+#include "AetherCore.hpp"
 #include "IEngineRuntime.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
@@ -170,6 +171,10 @@ namespace aether::app
 			m_sceneCtx.physics = static_cast<aether::PhysicsSystem*>(physSys);
 		}
 		m_sceneCtx.engineRuntime = &context.Get<aether::IEngineRuntime>();
+		if (auto* engine = context.TryGet<aether::AetherCore>())
+		{
+			m_sceneCtx.debugVertices = &engine->GetPendingDebugVertices();
+		}
 
 		// Scene tooling (the debug-UI serializer) reaches the model cache, the
 		// effect manager and sceneEntities through the service container.
