@@ -586,6 +586,7 @@ namespace aether
 		shadowService.SetDirectionalShadowEnabled(directionalShadowEnabled);
 		shadowService.PrepareQueues(drawSlot, world);
 		localShadowService.PrepareQueues(drawSlot, world);
+		m_rendering->GetCameraPreview().PrepareQueue(drawSlot, world);
 
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;
@@ -794,6 +795,9 @@ namespace aether
 		m_rendering->GetRenderGraph().BeginFrame(frameIdx);
 		fc.resourceTableAddr = static_cast<std::uint64_t>(m_rendering->PublishFrameResourceTable(frameIdx));
 		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
+		// Build the camera-preview frame constants from the same fc (keeps lighting /
+		// shadow / resource-table addresses), overriding the camera to the preview POV.
+		m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx);
 		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);
 		m_currentCmdList.EndDebugLabel();

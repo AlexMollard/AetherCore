@@ -11,6 +11,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "passes/CullPass.hpp"
 #include "passes/GTAOPass.hpp"
+#include "rendering/CameraPreviewService.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/GraphicsPipeline.hpp"
@@ -164,6 +165,11 @@ namespace aether
 			return m_physicsDebug;
 		}
 
+		[[nodiscard]] CameraPreviewService& GetCameraPreview()
+		{
+			return m_cameraPreview;
+		}
+
 		[[nodiscard]] ui::UiRenderer& GetUiRenderer()
 		{
 			return m_uiRenderer;
@@ -205,6 +211,7 @@ namespace aether
 		std::array<PerFrameResourceTable, kMaxFramesInFlight> m_resourceTableBuffers{};
 		ShadowService m_shadowService;
 		LocalShadowService m_localShadowService;
+		CameraPreviewService m_cameraPreview;
 		RenderTargetService m_renderTargetService;
 		CullPass m_cullPass;
 		GraphicsPipeline m_preDepthPipeline;

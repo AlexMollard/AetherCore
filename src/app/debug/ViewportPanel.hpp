@@ -46,6 +46,11 @@ namespace aether::app
 		std::uint64_t m_sceneViewportTextureId = 0;
 		gpu::ImageView m_sceneViewportImageView = nullptr;
 
+		// Cached ImGui descriptor for the live camera-preview thumbnail (re-registered
+		// when the view changes, like the scene image above).
+		std::uint64_t m_cameraPreviewTextureId = 0;
+		gpu::ImageView m_cameraPreviewImageView = nullptr;
+
 		int m_viewportDisplayMode = 0; // Fit, fill, actual, integer
 		int m_viewportAspectMode = 0;  // Render, free, 16:9, 16:10, 4:3, 1:1
 		bool m_viewportShowStats = true;

@@ -470,25 +470,78 @@ namespace aether::app
 		auto& selection = context.Get<SceneSelection>();
 		World& world = context.Get<World>();
 
+		auto& rendering = context.Get<aether::RenderingSubsystem>();
+		CameraPreviewService& preview = rendering.GetCameraPreview();
+
 		const Entity primary = selection.Primary();
 		const bool selectedIsCamera = editing && primary.IsValid() && world.GetRegistry().valid(World::ToEntt(primary)) && world.Has<CameraComponent>(primary);
 		const bool previewing = m_lookThroughEntityId != 0;
+
+		// Drive the live preview render from the selected camera's synced backing pose.
+		bool enabled = false;
+		if (selectedIsCamera)
+		{
+			if (const auto* cc = world.TryGet<CameraComponent>(primary))
+			{
+				if (const Camera* backing = context.Get<CameraManager>().TryGet(CameraHandle{cc->backingCamera}))
+				{
+					constexpr float aspect = static_cast<float>(CameraPreviewService::kWidth) / static_cast<float>(CameraPreviewService::kHeight);
+					preview.SetRequest(true, backing->GetViewMatrix(), backing->GetProjectionMatrix(aspect), backing->GetPosition());
+					enabled = true;
+				}
+			}
+		}
+		if (!enabled)
+		{
+			preview.SetRequest(false, glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f));
+		}
+
 		if (!selectedIsCamera && !previewing)
 		{
 			return;
 		}
 
-		const char* label = previewing ? ICON_FA_VIDEO "  Exit camera view" : ICON_FA_VIDEO "  Look through";
-		const float btnW = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-		const ImVec2 pillPad(8.0f, 5.0f);
-		const float pillW = btnW + pillPad.x * 2.0f;
-		const float pillH = ImGui::GetFrameHeight() + pillPad.y * 2.0f;
-		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - pillW) * 0.5f, imageMin.y + imageSize.y - pillH - 10.0f));
+		// Bottom-right pill: a live thumbnail of the camera's view + a look-through toggle.
+		const float thumbW = 240.0f;
+		const float thumbH = thumbW * static_cast<float>(CameraPreviewService::kHeight) / static_cast<float>(CameraPreviewService::kWidth);
+		const ImVec2 pillPad(6.0f, 6.0f);
+		const float pillW = thumbW + pillPad.x * 2.0f;
+		const float pillH = thumbH + ImGui::GetFrameHeight() + pillPad.y * 2.0f + ImGui::GetStyle().ItemSpacing.y;
+		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - pillW - 12.0f, imageMin.y + imageSize.y - pillH - 12.0f));
 
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.10f, 0.12f, 0.90f));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.07f, 0.09f, 0.94f));
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
 		ImGui::BeginChild("##vpCameraPreview", ImVec2(pillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+		// Lazily (re-)register the preview colour target as an ImGui texture.
+		if (enabled)
+		{
+			const gpu::ImageView pv = preview.GetColorView();
+			if (pv != m_cameraPreviewImageView)
+			{
+				if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+				{
+					if (m_cameraPreviewTextureId != 0)
+					{
+						imgui->UnregisterTexture(static_cast<ImTextureID>(m_cameraPreviewTextureId));
+					}
+					const ImTextureID id = imgui->RegisterTexture(pv, gpu::ImageLayout::ShaderReadOnly);
+					m_cameraPreviewTextureId = (id != ImTextureID_Invalid) ? static_cast<std::uint64_t>(id) : 0;
+					m_cameraPreviewImageView = pv;
+				}
+			}
+		}
+		if (enabled && m_cameraPreviewTextureId != 0)
+		{
+			ImGui::Image(ImTextureRef(static_cast<ImTextureID>(m_cameraPreviewTextureId)), ImVec2(thumbW, thumbH));
+		}
+		else
+		{
+			ImGui::Dummy(ImVec2(thumbW, thumbH));
+		}
+
+		const char* label = previewing ? ICON_FA_VIDEO "  Exit camera view" : ICON_FA_VIDEO "  Look through";
 		if (previewing)
 		{
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
@@ -496,11 +549,11 @@ namespace aether::app
 			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
 		}
-		if (ImGui::Button(label))
+		if (ImGui::Button(label, ImVec2(thumbW, 0.0f)))
 		{
 			if (previewing)
 			{
-				// End preview: hand free-fly back to the editor camera in place.
+				// End look-through: hand free-fly back to the editor camera in place.
 				if (auto* cameras = context.TryGet<CameraManager>())
 				{
 					if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))

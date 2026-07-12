@@ -207,6 +207,7 @@ namespace aether
 
 		m_shadowService.Initialize(vk, swapchain, bindless, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
+		m_cameraPreview.Initialize(vk, bindless, m_renderQueuePipelines, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
 		m_cullPass.Initialize(vk.GetDevice().device);
 
@@ -323,6 +324,7 @@ namespace aether
 		m_preDepthPipeline.Destroy();
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
+		m_cameraPreview.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
 
 		for (auto& buf: m_resourceTableBuffers)
@@ -666,6 +668,12 @@ namespace aether
 				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr, nullptr, 0, &cullMode);
 			        });
 		}
+
+		// Camera preview (editor thumbnail): a self-contained second POV render into
+		// its own target. Registered after the main forward so the shadow atlas +
+		// light buffers it consumes are already produced. Inert when disabled.
+		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
+		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless);
 
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
