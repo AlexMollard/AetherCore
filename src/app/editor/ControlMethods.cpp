@@ -103,7 +103,13 @@ namespace aether::app::editor
 					        ++count;
 				        }
 			        }
-			        return json{{"frame", ctx.frameIndex}, {"fps", ctx.fps}, {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""}, {"entities", count}};
+			        const auto* playState = ctx.services.TryGet<PlayState>();
+			        const char* mode = "editing";
+			        if (playState != nullptr)
+			        {
+				        mode = playState->IsPlaying() ? "playing" : (playState->IsCompiling() ? "compiling" : "editing");
+			        }
+			        return json{{"frame", ctx.frameIndex}, {"fps", ctx.fps}, {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""}, {"entities", count}, {"playState", mode}};
 		        }});
 
 		methods.push_back({"scene.entities", "list_entities", "List every entity in the live scene with id, name, and world position.", false, Obj(),
@@ -314,10 +320,18 @@ namespace aether::app::editor
 				else if (w == "stop") { ok = StopPlaySession(lc); }
 				else { ok = TogglePlaySession(lc); }
 				const auto* playState = ctx.services.TryGet<PlayState>();
-				return json{{"ok", ok}, {"playing", playState != nullptr && playState->IsPlaying()}};
+				const char* state = "editing";
+				if (playState != nullptr)
+				{
+					state = playState->IsPlaying() ? "playing" : (playState->IsCompiling() ? "compiling" : "editing");
+				}
+				// Play is async: entering it returns state="compiling" immediately while
+				// the C# build runs on a worker thread. Poll `info`.playState until it
+				// reads "playing".
+				return json{{"ok", ok}, {"playing", playState != nullptr && playState->IsPlaying()}, {"state", state}};
 			};
 		};
-		methods.push_back({"engine.play", "play", "Enter Play mode: snapshot the scene, rebuild + start the C# scripts. Mirrors the editor Play button.", true, Obj(), playHandler("play")});
+		methods.push_back({"engine.play", "play", "Enter Play mode (async): rebuild the C# scripts on a worker thread, then snapshot + start. Returns immediately with state='compiling'; poll info.playState until 'playing'. The editor never blocks. Mirrors the Play button.", true, Obj(), playHandler("play")});
 		methods.push_back({"engine.stop", "stop", "Exit Play mode and restore the pre-play scene snapshot.", true, Obj(), playHandler("stop")});
 		methods.push_back({"engine.toggle_play", "toggle_play", "Toggle Play/Stop.", true, Obj(), playHandler("toggle")});
 

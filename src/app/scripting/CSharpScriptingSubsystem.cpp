@@ -1,8 +1,12 @@
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include <array>
+#include <atomic>
+#include <cstdlib>
 #include <optional>
 #include <string>
+#include <thread>
+#include <utility>
 
 #include "io/FileUtil.hpp"
 #include "io/Process.hpp"
@@ -190,8 +194,97 @@ namespace aether::app::scripting
 
 			return latestInput && *latestInput > *deployedTime;
 		}
+
+		// Core build step shared by the sync (F5) and async (Play) paths: runs
+		// `dotnet build` and redeploys the assembly. Pure file IO with no engine or
+		// managed-runtime access, so it is safe to run on a worker thread. Returns
+		// true on success (or a no-op when scripts are current); fills `error` on
+		// failure.
+		bool PerformScriptBuild(const std::filesystem::path& managedDir, std::string& error)
+		{
+			namespace fs = std::filesystem;
+			const fs::path gameProject = AETHER_GAME_PROJECT;
+			if (!IsScriptBuildRequired(gameProject, managedDir))
+			{
+				AE_VERBOSE(LogCategory::App, "C# scripts are current; skipping dotnet build.");
+				return true;
+			}
+
+			// `-p:UseSharedCompilation=false` keeps the Roslyn build server from
+			// spawning; with MSBUILDDISABLENODEREUSE (set at startup) no persistent
+			// child outlives the build to hold our capture handle.
+			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG
+			        + " --nologo -v:m -p:UseSharedCompilation=false -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\"";
+
+			std::string output;
+			const int rc = io::RunProcessCapture(inner, output);
+			if (rc == io::kProcessTimedOut)
+			{
+				error = "dotnet build timed out";
+				return false;
+			}
+			if (rc != 0)
+			{
+				error = output.empty() ? "dotnet build failed" : output;
+				return false;
+			}
+
+			// Redeploy the freshly built game assembly into the load dir. The scripts
+			// ALC loads from bytes (see ScriptRegistry.Load), so overwriting the
+			// on-disk dll mid-run is safe.
+			const fs::path buildOut = fs::path(AETHER_MANAGED_ARTIFACTS) / "bin" / "AetherGame" / AETHER_MANAGED_CONFIGDIR;
+			for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
+			{
+				const fs::path src = buildOut / name;
+				if (!fs::exists(src))
+				{
+					continue;
+				}
+				std::error_code ec;
+				fs::copy_file(src, managedDir / name, fs::copy_options::overwrite_existing, ec);
+				if (ec)
+				{
+					error = std::string("failed to deploy ") + name + ": " + ec.message();
+					return false;
+				}
+			}
+			return true;
+		}
 #endif
+
+		// Stop `dotnet` spawning persistent build-server children that would inherit
+		// our output handle and outlive the build. Set once and inherited by every
+		// child process. Harmless when no .NET SDK is present.
+		void ConfigureDotnetEnvironmentOnce()
+		{
+			static const bool done = []()
+			{
+#ifdef _WIN32
+				_putenv_s("MSBUILDDISABLENODEREUSE", "1");
+				_putenv_s("DOTNET_CLI_USE_MSBUILD_SERVER", "0");
+				_putenv_s("DOTNET_CLI_TELEMETRY_OPTOUT", "1");
+				_putenv_s("DOTNET_NOLOGO", "1");
+#else
+				setenv("MSBUILDDISABLENODEREUSE", "1", 1);
+				setenv("DOTNET_CLI_USE_MSBUILD_SERVER", "0", 1);
+				setenv("DOTNET_CLI_TELEMETRY_OPTOUT", "1", 1);
+				setenv("DOTNET_NOLOGO", "1", 1);
+#endif
+				return true;
+			}();
+			(void) done;
+		}
 	} // namespace
+
+	// Background build job: the detached worker fills `error` then flips `done` with
+	// release ordering; the main thread reads them with acquire. `ok` and `error`
+	// are only meaningful once `done` is true.
+	struct ScriptBuildJob
+	{
+		std::atomic<bool> done{false};
+		std::atomic<bool> ok{false};
+		std::string error;
+	};
 
 	// Dev-only. Rebuilds AetherGame from source and redeploys it before a reload so
 	// F5 reflects source edits with no separate build step. In a packaged build the
@@ -201,52 +294,71 @@ namespace aether::app::scripting
 	bool CSharpScriptingSubsystem::RebuildFromSource(std::string& error)
 	{
 #if defined(AETHER_GAME_PROJECT) && defined(AETHER_DOTNET_EXE)
-		namespace fs = std::filesystem;
-
-		const fs::path gameProject = AETHER_GAME_PROJECT;
-		if (!IsScriptBuildRequired(gameProject, m_managedDir))
-		{
-			AE_VERBOSE(LogCategory::App, "C# scripts are current; skipping dotnet build.");
-			return true;
-		}
-
-		// Incremental `dotnet build` of the game project (a no-op when it was just
-		// built in VS). ArtifactsPath mirrors the CMake managed build.
-		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG
-		        + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\"";
-
-		std::string output;
-		const int rc = io::RunProcessCapture(inner, output);
-		if (rc != 0)
-		{
-			error = output.empty() ? "dotnet build failed" : output;
-			return false;
-		}
-
-		// Redeploy the freshly built game assembly into the load dir. The scripts
-		// ALC loads from bytes (see ScriptRegistry.Load), so overwriting the on-disk
-		// dll mid-run is safe.
-		const fs::path buildOut = fs::path(AETHER_MANAGED_ARTIFACTS) / "bin" / "AetherGame" / AETHER_MANAGED_CONFIGDIR;
-		for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
-		{
-			const fs::path src = buildOut / name;
-			if (!fs::exists(src))
-			{
-				continue;
-			}
-			std::error_code ec;
-			fs::copy_file(src, m_managedDir / name, fs::copy_options::overwrite_existing, ec);
-			if (ec)
-			{
-				error = std::string("failed to deploy ") + name + ": " + ec.message();
-				return false;
-			}
-		}
-		return true;
+		ConfigureDotnetEnvironmentOnce();
+		return PerformScriptBuild(m_managedDir, error);
 #else
 		(void) error;
 		return true; // packaged build / no SDK: reload-only
 #endif
+	}
+
+	void CSharpScriptingSubsystem::BeginRebuildFromSource()
+	{
+#if defined(AETHER_GAME_PROJECT) && defined(AETHER_DOTNET_EXE)
+		// Adopt an in-flight build instead of starting a second: two dotnet builds
+		// racing on the same output dll would clobber each other.
+		if (m_buildJob && !m_buildJob->done.load(std::memory_order_acquire))
+		{
+			return;
+		}
+		ConfigureDotnetEnvironmentOnce();
+		auto job = std::make_shared<ScriptBuildJob>();
+		m_buildJob = job;
+		const std::filesystem::path managedDir = m_managedDir; // copied; the worker never touches `this`
+		std::thread(
+		        [job, managedDir]()
+		        {
+			        std::string err;
+			        const bool ok = PerformScriptBuild(managedDir, err);
+			        job->error = std::move(err);
+			        job->ok.store(ok, std::memory_order_relaxed);
+			        job->done.store(true, std::memory_order_release);
+		        })
+		        .detach();
+#else
+		// No SDK / packaged build: nothing to build. Present an immediately-successful
+		// job so the play orchestration transitions straight to Playing.
+		auto job = std::make_shared<ScriptBuildJob>();
+		job->ok.store(true, std::memory_order_relaxed);
+		job->done.store(true, std::memory_order_release);
+		m_buildJob = job;
+#endif
+	}
+
+	CSharpScriptingSubsystem::BuildStatus CSharpScriptingSubsystem::PollRebuildStatus(std::string& error) const
+	{
+		if (!m_buildJob)
+		{
+			return BuildStatus::Idle;
+		}
+		if (!m_buildJob->done.load(std::memory_order_acquire))
+		{
+			return BuildStatus::Running;
+		}
+		if (m_buildJob->ok.load(std::memory_order_relaxed))
+		{
+			return BuildStatus::Succeeded;
+		}
+		error = m_buildJob->error;
+		return BuildStatus::Failed;
+	}
+
+	void CSharpScriptingSubsystem::ClearRebuild()
+	{
+		// Drop our reference only; a still-running worker keeps its own shared_ptr,
+		// so this never blocks (unlike joining a thread or destroying a std::async
+		// future). Callers invoke this after a terminal poll.
+		m_buildJob.reset();
 	}
 
 	void CSharpScriptingSubsystem::RefreshTypeNames()

@@ -24,6 +24,9 @@ namespace aether::app
 		enum class Mode
 		{
 			Editing,
+			Compiling, // Play pressed; the async script build is running. Sim stays
+			           // frozen (as in Editing) and the editor stays interactive until
+			           // the build completes and we transition to Playing.
 			Playing,
 		};
 
@@ -35,6 +38,12 @@ namespace aether::app
 		[[nodiscard]] bool IsPlaying() const
 		{
 			return m_mode == Mode::Playing;
+		}
+
+		// True while waiting on the async script build before Play begins.
+		[[nodiscard]] bool IsCompiling() const
+		{
+			return m_mode == Mode::Compiling;
 		}
 
 		void SetMode(Mode mode)

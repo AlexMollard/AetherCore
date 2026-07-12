@@ -28,6 +28,9 @@ public static class Camera
     /// <summary>Make <paramref name="camera"/> the scene's single main camera.</summary>
     public static void SetMain(Entity camera) => Native.aether_camera_set_main(camera.Id);
 
+    /// <summary>The scene's current main-camera entity (invalid if none).</summary>
+    public static Entity Main => new(Native.aether_camera_get_main());
+
     public static void SetMode(Entity camera, CameraMode mode) => Native.aether_camera_set_mode(camera.Id, (int)mode);
 
     public static void SetPosition(Entity camera, Vector3 position) => Native.aether_camera_set_position(camera.Id, position);

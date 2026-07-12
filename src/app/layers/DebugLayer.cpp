@@ -428,8 +428,12 @@ namespace aether::app
 			ImGui::TextDisabled("|");
 			ImGui::SameLine();
 			const auto* playState = context.TryGet<PlayState>();
-			const bool playing = playState != nullptr && playState->IsPlaying();
-			ImGui::TextUnformatted(playing ? ICON_FA_PLAY "  Playing" : ICON_FA_STOP "  Editing");
+			const char* playLabel = ICON_FA_STOP "  Editing";
+			if (playState != nullptr)
+			{
+				playLabel = playState->IsPlaying() ? ICON_FA_PLAY "  Playing" : (playState->IsCompiling() ? ICON_FA_GEAR "  Compiling..." : ICON_FA_STOP "  Editing");
+			}
+			ImGui::TextUnformatted(playLabel);
 
 			// Right (aligned): resolution, FPS, frame time.
 			const ImGuiIO& io = ImGui::GetIO();

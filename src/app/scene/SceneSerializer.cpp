@@ -1788,8 +1788,16 @@ namespace aether::app::scene
 			RemoveIf<PointLightComponent>(world, entity);
 			RemoveIf<SpotLightComponent>(world, entity);
 			RemoveIf<CameraComponent>(world, entity);
+			RemoveIf<OrbitCameraComponent>(world, entity);
 			RemoveIf<MainCameraComponent>(world, entity);
 			RemoveIf<ScriptComponent>(world, entity);
+			// Render-visibility + active-state components are re-emplaced by
+			// ApplySceneToEntities too; clearing them keeps in-place restore
+			// idempotent. A missed one double-emplaces and trips ENTT_ASSERT, which
+			// in a debug build pops a modal dialog that wedges the whole editor.
+			RemoveIf<MeshRendererComponent>(world, entity);
+			RemoveIf<SpriteRendererComponent>(world, entity);
+			RemoveIf<DisabledComponent>(world, entity);
 		}
 
 		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities)
@@ -1847,15 +1855,15 @@ namespace aether::app::scene
 				}
 				if (rec.disabled)
 				{
-					world.Emplace<DisabledComponent>(e);
+					world.EmplaceOrReplace<DisabledComponent>(e);
 				}
 				if (rec.sprite)
 				{
-					world.Emplace<SpriteRendererComponent>(e);
+					world.EmplaceOrReplace<SpriteRendererComponent>(e);
 				}
 				if (rec.meshRenderer)
 				{
-					world.Emplace<MeshRendererComponent>(e, MeshRendererComponent{.visible = rec.meshRendererVisible, .castShadows = rec.meshRendererCastShadows});
+					world.EmplaceOrReplace<MeshRendererComponent>(e, MeshRendererComponent{.visible = rec.meshRendererVisible, .castShadows = rec.meshRendererCastShadows});
 				}
 				if (rec.hasTransform)
 				{
@@ -2130,7 +2138,7 @@ namespace aether::app::scene
 				}
 				if (rec.orbitCamera)
 				{
-					world.Emplace<OrbitCameraComponent>(e, *rec.orbitCamera);
+					world.EmplaceOrReplace<OrbitCameraComponent>(e, *rec.orbitCamera);
 				}
 				if (!rec.scripts.empty())
 				{

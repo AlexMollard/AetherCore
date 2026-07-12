@@ -57,6 +57,12 @@ AE_SCRIPT_API void aether_camera_set_main(std::uint32_t id)
 	aether::ecs::SetMainCameraEntity(ActiveWorld(), aether::Entity{id});
 }
 
+// The scene's current main-camera entity (0 if none tagged).
+AE_SCRIPT_API std::uint32_t aether_camera_get_main()
+{
+	return aether::ecs::GetMainCameraEntity(ActiveWorld()).id;
+}
+
 AE_SCRIPT_API void aether_camera_set_mode(std::uint32_t id, std::int32_t mode)
 {
 	auto& world = ActiveWorld();

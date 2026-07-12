@@ -171,21 +171,27 @@ namespace aether::app
 		}
 
 		// Neutral button that adopts the editor's "active = orange accent" language
-		// while playing (same as the selected gizmo tool) - no out-of-palette fill.
+		// while playing or compiling (same as the selected gizmo tool) - no
+		// out-of-palette fill. Compiling means the async C# build kicked off by Play
+		// is still running; the editor stays fully interactive meanwhile.
 		const bool playing = playState->IsPlaying();
-		if (playing)
+		const bool compiling = playState->IsCompiling();
+		const bool accent = playing || compiling;
+		if (accent)
 		{
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
 		}
-		const bool clicked = ImGui::Button(playing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play", ImVec2(0.0f, ImGui::GetFrameHeight()));
-		if (playing)
+		const char* label = playing ? ICON_FA_STOP "  Stop" : (compiling ? ICON_FA_GEAR "  Compiling..." : ICON_FA_PLAY "  Play");
+		const bool clicked = ImGui::Button(label, ImVec2(0.0f, ImGui::GetFrameHeight()));
+		if (accent)
 		{
 			ImGui::PopStyleColor(4);
 		}
-		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place" : "Snapshot the scene and simulate");
+		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place"
+		                : (compiling ? "Building C# scripts on a worker thread - click to cancel" : "Snapshot the scene and simulate"));
 		if (!clicked)
 		{
 			return;

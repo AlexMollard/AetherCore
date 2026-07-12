@@ -231,6 +231,9 @@ internal static unsafe partial class Native
     internal static partial void aether_camera_set_main(uint id);
 
     [LibraryImport(Lib)]
+    internal static partial uint aether_camera_get_main();
+
+    [LibraryImport(Lib)]
     internal static partial void aether_camera_set_mode(uint id, int mode);
 
     [LibraryImport(Lib)]

@@ -1,0 +1,22 @@
+# Collectible orb spawned by GameManager via Scene.Instantiate("Orb", pos).
+# The Orb script bobs / spins / pulses it; the GameManager tags and collects it.
+[[entities]]
+name = 'Orb'
+parent = -1
+position = [ 0.0, 1.2, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.35, 0.35, 0.35 ]
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+    [entities.material]
+    base_color = [ 0.10, 0.62, 0.92, 1.0 ]
+    metallic = 0.1
+    roughness = 0.25
+    emissive = [ 0.08, 0.45, 0.7 ]
+
+    [[entities.scripts]]
+    type = 'Orb'

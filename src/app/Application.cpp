@@ -27,6 +27,7 @@
 #include "scene/LightSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
+#include "PlaySession.hpp"
 
 namespace aether::app
 {
@@ -316,6 +317,12 @@ namespace aether::app
 		{
 			assetDb->ResolveWorldMeshes(ctx.Get<World>());
 		}
+
+		// Pump the async play transition: while a Play-triggered script build runs on
+		// its worker thread, this polls it each frame and enters Playing when it's
+		// done (or returns to Editing on error). A no-op outside the Compiling state,
+		// so it costs nothing in edit or play mode and in the shipped runtime.
+		UpdatePlaySession(ctx);
 
 		if (m_playState.IsPlaying())
 		{

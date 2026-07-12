@@ -728,3 +728,86 @@ TEST_CASE("Scene and prefab file helpers read and list through mounted project V
     io::FileSystem::Shutdown();
     fs::remove_all(root, ec);
 }
+
+TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting") {
+    // Regression for the Stop wedge: RestoreSceneInPlace resets each surviving
+    // entity then re-applies the snapshot. If ResetRestorableEntity misses a
+    // component the snapshot re-emplaces, entt asserts on the duplicate (which in
+    // a debug editor pops a modal dialog that reads like a hang). This exercises
+    // the exact component shapes that were missed - orbit camera, disabled subtree,
+    // mesh/sprite renderers - plus reparenting a snapshot entity under a runtime
+    // entity, which is the messy state scripts leave behind at Stop.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    World world = MakeWorld();
+
+    // An orbit main-camera entity: the exact shape that tripped the double-emplace.
+    Entity cam = world.Create();
+    world.Emplace<NameComponent>(cam, NameComponent{.name = "Camera"});
+    world.Emplace<TransformComponent>(cam, TransformComponent{});
+    world.Emplace<CameraComponent>(cam, CameraComponent{.fovDegrees = 55.0f});
+    world.Emplace<OrbitCameraComponent>(cam, OrbitCameraComponent{.target = {0, 1, 0}, .yaw = 15.0f, .pitch = 25.0f, .distance = 8.0f});
+    world.Emplace<MainCameraComponent>(cam, MainCameraComponent{});
+
+    // A disabled parent with an enabled child (inactive subtree), plus a mesh
+    // renderer and a sprite - the render/active markers reset must also strip.
+    Entity disabledParent = world.Create();
+    world.Emplace<NameComponent>(disabledParent, NameComponent{.name = "DisabledParent"});
+    world.Emplace<TransformComponent>(disabledParent, TransformComponent{});
+    world.Emplace<DisabledComponent>(disabledParent);
+    Entity child = world.Create();
+    world.Emplace<NameComponent>(child, NameComponent{.name = "Child"});
+    world.Emplace<TransformComponent>(child, TransformComponent{});
+    world.Emplace<MeshRendererComponent>(child, MeshRendererComponent{.visible = false, .castShadows = false});
+    ecs::SetParent(world, child, disabledParent);
+    Entity sprite = world.Create();
+    world.Emplace<NameComponent>(sprite, NameComponent{.name = "Sprite"});
+    world.Emplace<TransformComponent>(sprite, TransformComponent{});
+    world.Emplace<SpriteRendererComponent>(sprite);
+
+    // Snapshot exactly as StartPlaySession does (direct capture; entityId matters).
+    const SceneDescription snapshot = CaptureScene(world, mreg, treg);
+    const std::uint32_t camIdBefore = cam.id;
+
+    // "Play": spawn a runtime entity, reparent a snapshot entity under it, and flip
+    // the disabled state - the kind of mess scripts leave for Stop to clean up.
+    Entity spawned = world.Create();
+    world.Emplace<NameComponent>(spawned, NameComponent{.name = "SpawnedOrb"});
+    world.Emplace<TransformComponent>(spawned, TransformComponent{});
+    ecs::SetParent(world, sprite, spawned);            // snapshot root now under a runtime entity
+    world.Remove<DisabledComponent>(disabledParent);   // re-enabled during play
+    world.EmplaceOrReplace<DisabledComponent>(sprite); // newly disabled during play
+
+    // Stop: this is where the double-emplace assert used to fire.
+    const std::vector<Entity> restored = RestoreSceneInPlace(snapshot, world, ApplySceneDeps{});
+    REQUIRE(restored.size() == snapshot.entities.size());
+
+    // In-place restore: the camera keeps its id and its components come back.
+    const Entity camAfter = AppliedOf(snapshot, restored, "Camera");
+    CHECK(camAfter.id == camIdBefore);
+    REQUIRE(world.TryGet<OrbitCameraComponent>(camAfter) != nullptr);
+    CHECK(world.Get<OrbitCameraComponent>(camAfter).distance == doctest::Approx(8.0f));
+    CHECK(world.Has<MainCameraComponent>(camAfter));
+
+    // Disabled state matches the snapshot again (parent disabled, sprite enabled).
+    const Entity dp = AppliedOf(snapshot, restored, "DisabledParent");
+    const Entity sp = AppliedOf(snapshot, restored, "Sprite");
+    CHECK(world.Has<DisabledComponent>(dp));
+    CHECK(!world.Has<DisabledComponent>(sp));
+
+    // The sprite is re-rooted (snapshot had it at root), not left under the
+    // now-destroyed runtime entity.
+    const auto* sh = world.TryGet<HierarchyComponent>(sp);
+    CHECK((sh == nullptr || !sh->parent.IsValid()));
+
+    // Mesh-renderer visibility restored from the snapshot.
+    const Entity ch = AppliedOf(snapshot, restored, "Child");
+    REQUIRE(world.TryGet<MeshRendererComponent>(ch) != nullptr);
+    CHECK(world.Get<MeshRendererComponent>(ch).visible == false);
+
+    // The runtime-spawned entity is gone.
+    CHECK(world.GetRegistry().valid(World::ToEntt(spawned)) == false);
+}

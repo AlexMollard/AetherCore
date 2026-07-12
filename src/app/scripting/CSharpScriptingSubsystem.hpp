@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,30 @@ namespace aether::app::scripting
 		// no-op - in a packaged build where the source/SDK paths were not baked in.
 		// On a build failure returns false and fills `error` with the build output.
 		bool RebuildFromSource(std::string& error);
+
+		// ── Async source rebuild (non-blocking Play) ──────────────────────────
+		// Status of the background build kicked off by BeginRebuildFromSource.
+		enum class BuildStatus
+		{
+			Idle,      // no build in flight
+			Running,   // build executing on a worker thread
+			Succeeded, // finished OK; assembly redeployed
+			Failed,    // build failed; PollRebuildStatus fills the error
+		};
+
+		// Kick off a source rebuild on a background thread so the caller (the main
+		// thread) never blocks on `dotnet build`; the editor stays fully responsive.
+		// The worker does only file IO (build + redeploy the dll) - no ECS or
+		// managed-runtime access. A no-op build (scripts already current) completes
+		// immediately; if a build is already in flight, this adopts it.
+		void BeginRebuildFromSource();
+
+		// Main-thread poll of the async build. Returns Idle/Running/Succeeded/Failed;
+		// on Failed, `error` holds the captured build output.
+		[[nodiscard]] BuildStatus PollRebuildStatus(std::string& error) const;
+
+		// Drop a consumed terminal build result (back to Idle). Never blocks.
+		void ClearRebuild();
 
 		// Concrete EntityScript type names discovered in the loaded assembly.
 		[[nodiscard]] const std::vector<std::string>& GetScriptTypeNames() const
@@ -107,6 +132,11 @@ namespace aether::app::scripting
 		std::filesystem::path m_managedDir;
 		std::string m_scriptsAssemblyPath;
 		std::vector<std::string> m_typeNames;
+
+		// Background build job (detached worker + atomic completion flags), shared
+		// with the worker so it stays alive even if we stop tracking it. Never joined,
+		// so polling it never blocks the main thread.
+		std::shared_ptr<struct ScriptBuildJob> m_buildJob;
 
 		bool m_reloadRequested = false;
 		bool m_reloadInProgress = false;

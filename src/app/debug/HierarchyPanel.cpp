@@ -616,7 +616,7 @@ namespace aether::app
 			}
 			else
 			{
-				world.Emplace<DisabledComponent>(e);
+				world.EmplaceOrReplace<DisabledComponent>(e);
 			}
 			m_dirty = true;
 		}
@@ -888,7 +888,7 @@ namespace aether::app
 					}
 					else
 					{
-						world.Emplace<DisabledComponent>(e);
+						world.EmplaceOrReplace<DisabledComponent>(e);
 					}
 					break;
 				case 1:
