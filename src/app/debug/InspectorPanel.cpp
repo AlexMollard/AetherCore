@@ -383,11 +383,27 @@ namespace aether::app
 			return;
 		}
 
-		// ── Header card: kind badge, editable name, id ─────────────────────────
+		// ── Eyebrow band + header card ─────
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 p = ImGui::GetCursorScreenPos();
+			const float bandW = ImGui::GetContentRegionAvail().x;
+			drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + 13.0f), chrome::U32(chrome::kAccent));
+			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), chrome::kMuted, "ENTITY");
+			char idText[64]{};
+			if (selection.All().size() > 1)
+			{
+				std::snprintf(idText, sizeof(idText), "#%u \xC2\xB7 %zu SELECTED", entity.id, selection.All().size());
+			}
+			else
+			{
+				std::snprintf(idText, sizeof(idText), "#%u", entity.id);
+			}
+			const float idW = chrome::MeasureSized(12.0f, idText).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + bandW - idW, p.y), chrome::kFaint, idText);
+			ImGui::Dummy(ImVec2(0.0f, 17.0f));
+		}
 		const KindBadge badge = EntityKindBadge(world, entity);
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, iw::ToImVec4(colors::Surface));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 8.0f));
-		ImGui::BeginChild("##inspectorHeader", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		{
 			// Active toggle: unchecking adds DisabledComponent, which stops the
 			// entity (and its whole subtree) from rendering, updating, simulating
@@ -426,9 +442,15 @@ namespace aether::app
 			ImGui::SetItemTooltip("Active - uncheck to disable this entity and its children");
 			ImGui::SameLine();
 
+			// Title treatment: the entity name IS the panel title (launcher rows lead
+			// with a display-size title; the field chrome only shows on hover).
+			ImGui::PushFont(nullptr, 18.0f);
 			ImGui::AlignTextToFramePadding();
 			ImGui::TextColored(badge.color, "%s", badge.icon);
 			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, iw::WithAlpha(colors::Orange, 0.08f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, iw::WithAlpha(colors::Orange, 0.12f));
 			if (auto* nc = world.TryGet<NameComponent>(entity))
 			{
 				char buf[128];
@@ -443,22 +465,16 @@ namespace aether::app
 			{
 				world.Emplace<NameComponent>(entity, NameComponent{.name = "Entity"});
 			}
+			ImGui::PopStyleColor(3);
+			ImGui::PopFont();
 
-			ImGui::PushStyleColor(ImGuiCol_Text, iw::ToImVec4(colors::TextSecondary));
-			ImGui::Text(ICON_FA_HASHTAG " %u", entity.id);
-			if (selection.All().size() > 1)
-			{
-				ImGui::SameLine();
-				ImGui::Text("   \xc2\xb7   editing primary of %zu selected", selection.All().size());
-			}
-			ImGui::PopStyleColor();
 		}
-		ImGui::EndChild();
-		ImGui::PopStyleVar();
-		ImGui::PopStyleColor();
 
 		// ── Add Component / Delete ─────────────────────────────────────────────
-		const float toolWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+		// One amber call-to-action; deleting the entity is deliberately quiet
+		// (ghost trash, red only when engaged) instead of a competing slab.
+		const float trashW = ImGui::GetFrameHeight() + 8.0f;
+		const float toolWidth = ImGui::GetContentRegionAvail().x - trashW - ImGui::GetStyle().ItemSpacing.x;
 		if (iw::AccentButton(ICON_FA_PLUS "  Add Component", ImVec2(toolWidth, 0.0f)))
 		{
 			m_addFilter[0] = '\0';
@@ -466,7 +482,13 @@ namespace aether::app
 			ImGui::OpenPopup("AddComponent");
 		}
 		ImGui::SameLine();
-		const bool deleteClicked = iw::DangerButton(ICON_FA_TRASH "  Delete", ImVec2(toolWidth, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_Text, iw::WithAlpha(colors::Red, 0.8f));
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, iw::WithAlpha(colors::Red, 0.28f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, iw::WithAlpha(colors::Red, 0.45f));
+		const bool deleteClicked = ImGui::Button(ICON_FA_TRASH, ImVec2(trashW, 0.0f));
+		ImGui::PopStyleColor(4);
+		ImGui::SetItemTooltip("Delete entity (and children)");
 		if (deleteClicked)
 		{
 			ecs::DestroyHierarchy(world, entity);
@@ -474,6 +496,9 @@ namespace aether::app
 			ImGui::End();
 			return;
 		}
+
+		chrome::AccentHairline(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), ImGui::GetContentRegionAvail().x, 0.25f);
+		ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
 		if (ImGui::BeginPopup("AddComponent"))
 		{

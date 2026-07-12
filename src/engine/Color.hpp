@@ -57,10 +57,13 @@ namespace aether::colors
 	inline constexpr auto Overlay = detail::rgba(0, 0, 0, 0.6f);
 
 	// Spatial axes (X/Y/Z) - one convention shared by the move/rotate/scale gizmos
-	// and the inspector's Vec3 rows so a red field always means X, etc.
-	inline constexpr auto AxisX = detail::rgb(214, 79, 92);  // #D64F5C  warm red
-	inline constexpr auto AxisY = detail::rgb(120, 190, 90); // #78BE5A  green
-	inline constexpr auto AxisZ = detail::rgb(84, 148, 224); // #5494E0  blue
+	// and the inspector's Vec3 rows so a red field always means X, etc. Tuned to
+	// the Night Amber world: hue identity kept (red/green/blue muscle memory) but
+	// warmed + desaturated so they sit in the warm near-black palette instead of
+	// reading as generic editor primaries.
+	inline constexpr auto AxisX = detail::rgb(198, 91, 76);   // #C65B4C  clay rust
+	inline constexpr auto AxisY = detail::rgb(150, 172, 88);  // #96AC58  olive moss
+	inline constexpr auto AxisZ = detail::rgb(108, 141, 181); // #6C8DB5  dusty steel
 
 	// Debug visualisation
 	inline constexpr auto DebugRed = detail::rgb(255, 45, 85);     // #FF2D55

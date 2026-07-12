@@ -30,10 +30,10 @@ namespace aether::app
 				case LogLevel::Warn:
 					return ImVec4(0.96f, 0.80f, 0.35f, 1.0f);
 				case LogLevel::Info:
-					return ImVec4(0.78f, 0.86f, 0.96f, 1.0f);
+					return ImVec4(0.88f, 0.85f, 0.79f, 1.0f); // warm near-white (Night Amber, not blue)
 				case LogLevel::Verbose:
 				default:
-					return ImVec4(0.58f, 0.58f, 0.58f, 1.0f);
+					return ImVec4(0.59f, 0.55f, 0.50f, 1.0f); // warm muted gray
 			}
 		}
 
@@ -62,17 +62,23 @@ namespace aether::app
 			return std::filesystem::path(path).filename().string();
 		}
 
-		// Colored, toggleable "TAG N" badge; clicking flips *shown. Grey = filtered.
+		// Toggleable "TAG N" chip in the tinted-ghost language: the severity tint
+		// fills quietly while shown; filtered-off chips drop to faint text, no fill.
 		void LevelBadge(const char* tag, int count, bool* shown, ImVec4 color)
 		{
 			char label[48];
 			std::snprintf(label, sizeof(label), "%s %d", tag, count);
+			ImGui::PushStyleColor(ImGuiCol_Button, *shown ? ImVec4(color.x, color.y, color.z, 0.16f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.x, color.y, color.z, 0.30f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.x, color.y, color.z, 0.45f));
 			ImGui::PushStyleColor(ImGuiCol_Text, *shown ? color : chrome::kFaint);
-			if (ImGui::SmallButton(label))
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+			if (ImGui::Button(label))
 			{
 				*shown = !*shown;
 			}
-			ImGui::PopStyleColor();
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor(4);
 		}
 	} // namespace
 
@@ -110,6 +116,22 @@ namespace aether::app
 			}
 		}
 
+		// ── Header band ──
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 p = ImGui::GetCursorScreenPos();
+			const float bandW = ImGui::GetContentRegionAvail().x;
+			drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + 13.0f), chrome::U32(chrome::kAccent));
+			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), chrome::kMuted, "CONSOLE");
+			char totalText[32]{};
+			std::snprintf(totalText, sizeof(totalText), "%zu MESSAGES", records.size());
+			const float totalW = chrome::MeasureSized(12.0f, totalText).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + bandW - totalW, p.y), chrome::kFaint, totalText);
+			ImGui::Dummy(ImVec2(0.0f, 16.0f));
+			chrome::AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
+			ImGui::Dummy(ImVec2(0.0f, 4.0f));
+		}
+
 		// ── Row 1: clickable level count badges ──
 		LevelBadge("ERR", nErr, &m_showError, LevelColor(LogLevel::Error));
 		ImGui::SameLine();
@@ -126,7 +148,7 @@ namespace aether::app
 		ImGui::SameLine();
 		ImGui::Checkbox("Autoscroll", &m_autoScroll);
 		ImGui::SameLine();
-		if (ImGui::Button("Categories"))
+		if (chrome::GhostButton("Categories"))
 		{
 			ImGui::OpenPopup("##catpopup");
 		}
@@ -242,7 +264,7 @@ namespace aether::app
 		};
 
 		ImGui::SameLine();
-		if (ImGui::Button("Copy"))
+		if (chrome::GhostButton("Copy"))
 		{
 			std::string all;
 			for (const auto& cr: display)
@@ -253,7 +275,7 @@ namespace aether::app
 			ImGui::SetClipboardText(all.c_str());
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Save"))
+		if (chrome::GhostButton("Save"))
 		{
 			const auto dir = io::PlatformPaths::GetUserConfigDir();
 			if (!dir.empty())
@@ -271,7 +293,7 @@ namespace aether::app
 			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Clear"))
+		if (chrome::GhostButton("Clear"))
 		{
 			LogRingBuffer::Get().Clear();
 		}
@@ -279,7 +301,8 @@ namespace aether::app
 		// ── Filter box ──
 		ImGui::SetNextItemWidth(-1.0f);
 		ImGui::InputTextWithHint("##logfilter", "Filter (message / category)...", m_filter, sizeof(m_filter));
-		ImGui::Separator();
+		chrome::AccentHairline(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), ImGui::GetContentRegionAvail().x, 0.22f);
+		ImGui::Dummy(ImVec2(0.0f, 3.0f));
 
 		// ── Log rows ──
 		ImGui::BeginChild("##loglines", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);

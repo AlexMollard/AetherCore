@@ -259,6 +259,21 @@ namespace aether::app
 		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 		ImGuizmo::SetRect(imageMin.x, imageMin.y, imageSize.x, imageSize.y);
 
+		// One axis convention: the gizmo takes its colours from the same tokens the
+		// inspector's Vec3 chips use (engine/Color.hpp AxisX/Y/Z), and the engaged
+		// state carries the editor's amber accent instead of ImGuizmo's defaults.
+		{
+			auto& gizmoStyle = ImGuizmo::GetStyle();
+			const auto axis = [](const glm::vec4& c, const float a) { return ImVec4(c.r, c.g, c.b, a); };
+			gizmoStyle.Colors[ImGuizmo::DIRECTION_X] = axis(colors::AxisX, 1.0f);
+			gizmoStyle.Colors[ImGuizmo::DIRECTION_Y] = axis(colors::AxisY, 1.0f);
+			gizmoStyle.Colors[ImGuizmo::DIRECTION_Z] = axis(colors::AxisZ, 1.0f);
+			gizmoStyle.Colors[ImGuizmo::PLANE_X] = axis(colors::AxisX, 0.42f);
+			gizmoStyle.Colors[ImGuizmo::PLANE_Y] = axis(colors::AxisY, 0.42f);
+			gizmoStyle.Colors[ImGuizmo::PLANE_Z] = axis(colors::AxisZ, 0.42f);
+			gizmoStyle.Colors[ImGuizmo::SELECTION] = axis(colors::Primary, 0.9f);
+		}
+
 		const glm::mat4 view = camera->GetViewMatrix();
 		glm::mat4 proj = camera->GetProjectionMatrix(renderAspect);
 		proj[1][1] *= -1.0f; // undo the Vulkan Y-flip: ImGuizmo assumes GL clip conventions

@@ -1130,8 +1130,40 @@ namespace aether::app
 				ImGui::OpenPopup("LoadScene");
 			}
 
+			// ── Header band: SCENE eyebrow + name + live entity count ───────────
+			std::size_t count = 0;
+			for (const auto handle: reg.storage<entt::entity>())
+			{
+				if (reg.valid(handle) && World::FromEntt(handle).IsValid())
+				{
+					++count;
+				}
+			}
+			{
+				const auto* scenes = context.TryGet<aether::SceneSubsystem>();
+				const char* sceneName = (scenes != nullptr && !scenes->GetCurrentScene().empty()) ? scenes->GetCurrentScene().c_str() : "Untitled";
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
+				const ImVec2 p = ImGui::GetCursorScreenPos();
+				const float bandW = ImGui::GetContentRegionAvail().x;
+				drawList->AddRectFilled(ImVec2(p.x, p.y + 3.0f), ImVec2(p.x + 3.0f, p.y + 30.0f), chrome::U32(chrome::kAccent));
+				chrome::TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), chrome::kMuted, "SCENE");
+				chrome::TextSized(drawList, 17.0f, ImVec2(p.x + 10.0f, p.y + 14.0f), chrome::kText, sceneName);
+				char countText[32]{};
+				std::snprintf(countText, sizeof(countText), "%zu ENTITIES", count);
+				const float countW = chrome::MeasureSized(12.0f, countText).x;
+				chrome::TextSized(drawList, 12.0f, ImVec2(p.x + bandW - countW, p.y + 1.0f), chrome::kFaint, countText);
+				ImGui::Dummy(ImVec2(0.0f, 34.0f));
+				chrome::AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
+				ImGui::Dummy(ImVec2(0.0f, 5.0f));
+			}
+
+			// Ghost toolbar icons (FA advance can exceed a square's inner width - size
+			// from the measured icon so the glyph centres).
+			const float tbBtnH = ImGui::GetFrameHeight();
+			const auto tbIconW = [&](const char* icon) { return std::max(tbBtnH, ImGui::CalcTextSize(icon).x + ImGui::GetStyle().FramePadding.x * 2.0f); };
+
 			// ── Toolbar ────────────────────────────────────────────────────────
-			if (ImGui::Button(ICON_FA_PLUS))
+			if (chrome::GhostButton(ICON_FA_PLUS, ImVec2(tbIconW(ICON_FA_PLUS), tbBtnH), chrome::kAccentHi))
 			{
 				ImGui::OpenPopup("CreateEntity");
 			}
@@ -1213,7 +1245,7 @@ namespace aether::app
 
 			// Scene save/load.
 			ImGui::SameLine();
-			if (ImGui::Button(ICON_FA_FLOPPY_DISK))
+			if (chrome::GhostButton(ICON_FA_FLOPPY_DISK, ImVec2(tbIconW(ICON_FA_FLOPPY_DISK), tbBtnH)))
 			{
 				ImGui::OpenPopup("SaveScene");
 			}
@@ -1222,7 +1254,7 @@ namespace aether::app
 				ImGui::SetTooltip("Save scene");
 			}
 			ImGui::SameLine();
-			if (ImGui::Button(ICON_FA_FOLDER_OPEN))
+			if (chrome::GhostButton(ICON_FA_FOLDER_OPEN, ImVec2(tbIconW(ICON_FA_FOLDER_OPEN), tbBtnH)))
 			{
 				m_sceneListDirty = true;
 				ImGui::OpenPopup("LoadScene");
@@ -1232,7 +1264,7 @@ namespace aether::app
 				ImGui::SetTooltip("Load scene (replaces all entities)");
 			}
 			ImGui::SameLine();
-			if (ImGui::Button(ICON_FA_ROTATE))
+			if (chrome::GhostButton(ICON_FA_ROTATE, ImVec2(tbIconW(ICON_FA_ROTATE), tbBtnH)))
 			{
 				m_sceneListDirty = true;
 			}
@@ -1389,18 +1421,6 @@ namespace aether::app
 			ImGui::SameLine();
 			FilterChip(ICON_FA_WAND_MAGIC_SPARKLES, "Effects", ImVec4(0.80f, 0.55f, 1.00f, 1.0f), m_filterEffect);
 
-			std::size_t count = 0;
-			for (const auto handle: reg.storage<entt::entity>())
-			{
-				if (reg.valid(handle) && World::FromEntt(handle).IsValid())
-				{
-					++count;
-				}
-			}
-			char countText[32]{};
-			std::snprintf(countText, sizeof(countText), "%zu entities", count);
-			ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::CalcTextSize(countText).x);
-			ImGui::TextDisabled("%s", countText);
 
 			// Sync persistent expansion from settings once the world is ready.
 			if (!m_expandedPathsLoaded)

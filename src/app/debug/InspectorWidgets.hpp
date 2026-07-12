@@ -103,13 +103,26 @@ namespace aether::app::iw
 			}
 		}
 
-		ImGui::PushStyleColor(ImGuiCol_Header, ToImVec4(colors::SurfaceElevated));
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(colors::Orange, 0.22f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, WithAlpha(colors::Orange, 0.32f));
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 5.0f));
+		// Launcher language: flat headers (no boxes) - an open section carries a
+		// 3px amber tick on its leading edge, and a hairline under every header
+		// keeps sections separated without nesting surfaces.
+		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(colors::Orange, 0.14f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, WithAlpha(colors::Orange, 0.24f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
 		const bool open = ImGui::CollapsingHeader(label, flags | ImGuiTreeNodeFlags_AllowOverlap);
 		ImGui::PopStyleVar();
 		ImGui::PopStyleColor(3);
+		{
+			ImDrawList* headerDrawList = ImGui::GetWindowDrawList();
+			const ImVec2 hMin = ImGui::GetItemRectMin();
+			const ImVec2 hMax = ImGui::GetItemRectMax();
+			if (open)
+			{
+				headerDrawList->AddRectFilled(ImVec2(hMin.x, hMin.y + 4.0f), ImVec2(hMin.x + 3.0f, hMax.y - 4.0f), ImGui::ColorConvertFloat4ToU32(ToImVec4(colors::Primary)));
+			}
+			headerDrawList->AddLine(ImVec2(hMin.x, hMax.y), ImVec2(hMax.x, hMax.y), ImGui::ColorConvertFloat4ToU32(WithAlpha(colors::Border, 0.9f)), 1.0f);
+		}
 
 		if (wantFocus)
 		{
@@ -341,10 +354,14 @@ namespace aether::app::iw
 			{
 				ImGui::SameLine(0.0f, spacing);
 			}
-			ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(axes[i].color.x * 1.2f, 1.0f), std::min(axes[i].color.y * 1.2f, 1.0f), std::min(axes[i].color.z * 1.2f, 1.0f), 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
-			ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextPrimary));
+			// Tinted-ghost chips (the editor's quiet-control language): a low-alpha
+			// tint carries the axis identity, the letter takes the full axis colour,
+			// and the fill only strengthens under the cursor. Solid full-bleed chips
+			// read as generic-editor primaries against the Night Amber palette.
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.22f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.45f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.65f));
+			ImGui::PushStyleColor(ImGuiCol_Text, axes[i].color);
 			if (ImGui::Button(axes[i].tag, ImVec2(chipWidth, 0.0f)))
 			{
 				*axes[i].component = resetValue;
