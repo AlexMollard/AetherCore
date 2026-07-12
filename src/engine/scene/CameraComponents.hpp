@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -29,6 +30,20 @@ namespace aether
 		// in sync (0 = not created yet). Never serialized - it is re-established on
 		// load and can change between runs.
 		std::uint32_t backingCamera = 0;
+	};
+
+	// Turns a camera entity into an orbit (third-person) camera: CameraSystem
+	// recomputes the entity's TransformComponent from these params every frame, so
+	// the eye circles `target` at `distance` on the (yaw, pitch) sphere. This is
+	// how scripted follow-cameras stay first-class entities in the hierarchy - it
+	// replaces the old raw CameraManager "Orbit mode". Scripts mutate the fields
+	// through the Camera interop (SetTarget/SetOrbital); the engine owns the math.
+	struct OrbitCameraComponent
+	{
+		glm::vec3 target{0.0f}; // world-space point the camera looks at and circles
+		float yaw = 0.0f;       // degrees around +Y (0 => camera on the +Z side)
+		float pitch = 20.0f;    // degrees above the horizon (clamped by the driver)
+		float distance = 10.0f; // metres from the target
 	};
 
 	// Tags the single entity whose CameraComponent drives the main scene view
@@ -94,6 +109,41 @@ namespace aether
 			world.Emplace<NameComponent>(e, NameComponent{.name = std::move(name)});
 			world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = CameraAimMatrix(position, direction)});
 			world.Emplace<CameraComponent>(e, camera);
+			return e;
+		}
+
+		// Pitch clamp shared by the orbit driver and the interop, so a script can't
+		// flip the camera over the pole. Matches the retired Camera::kPitchLimit.
+		inline constexpr float kOrbitPitchLimit = 89.0f;
+
+		// World matrix for an orbit camera: eye = target + spherical(yaw, pitch,
+		// distance), looking back at the target. The spherical convention matches
+		// the retired Camera "Orbit mode" so existing yaw/pitch/distance values keep
+		// their framing. CameraSystem writes this into the entity's TransformComponent
+		// each frame; the same pose is what GetForward/GetRight report.
+		inline glm::mat4 OrbitCameraMatrix(const glm::vec3& target, float yaw, float pitch, float distance)
+		{
+			const float oy = glm::radians(yaw);
+			const float op = glm::radians(glm::clamp(pitch, -kOrbitPitchLimit, kOrbitPitchLimit));
+			const float d = glm::max(0.1f, distance);
+			const glm::vec3 offset{
+			        d * std::cos(op) * std::sin(oy),
+			        d * std::sin(op),
+			        d * std::cos(op) * std::cos(oy),
+			};
+			const glm::vec3 eye = target + offset;
+			return CameraAimMatrix(eye, target - eye);
+		}
+
+		// Spawn a camera entity that orbits `target`. It appears in the hierarchy
+		// like any other entity and, once tagged via SetMainCameraEntity, drives the
+		// scene view. This is the entity-first replacement for the old scripted
+		// CameraManager::Create(Orbit) path.
+		inline Entity CreateOrbitCameraEntity(World& world, const glm::vec3& target, float yaw, float pitch, float distance, const CameraComponent& camera = {}, std::string name = "Camera")
+		{
+			const glm::mat4 pose = OrbitCameraMatrix(target, yaw, pitch, distance);
+			const Entity e = CreateCameraEntity(world, glm::vec3(pose[3]), -glm::vec3(pose[2]), camera, std::move(name));
+			world.Emplace<OrbitCameraComponent>(e, OrbitCameraComponent{.target = target, .yaw = yaw, .pitch = pitch, .distance = distance});
 			return e;
 		}
 	} // namespace ecs

@@ -32,6 +32,13 @@ namespace aether::app::editor
 		std::function<void(World&, Entity, ServiceContainer&)> add;
 		// Remove it (the bundle's components, for composite entries).
 		std::function<void(World&, Entity)> remove;
+
+		// False for entries that exist only so scripts can type-validate a component
+		// reference (IComponentRef fields), NOT to be slapped onto an arbitrary
+		// entity. UI Text is the canonical example: it is authored as a UI ENTITY
+		// (Create > UI > Text), never added as a loose component. The Add-Component
+		// palette and scene.add_component skip these; `has` still drives ref drops.
+		bool addable = true;
 	};
 
 	// The catalog, built once. Order groups entries by category for the palette.

@@ -210,6 +210,9 @@ namespace aether::app::scene
 		// the entity as the scene's main view (MainCameraComponent).
 		std::optional<CameraComponent> camera;
 		bool mainCamera = false;
+		// Orbit-camera params (v8+): if present, the entity is an orbit/third-person
+		// camera whose pose is driven from target/yaw/pitch/distance by CameraSystem.
+		std::optional<OrbitCameraComponent> orbitCamera;
 		// Entity script slots (v7+, ScriptComponent). Attach state is runtime.
 		std::vector<ScriptRecord> scripts;
 		// Physics joint (v8+): references another entity by file-local index.

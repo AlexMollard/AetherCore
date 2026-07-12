@@ -17,6 +17,7 @@ internal enum PropertyType
     String = 5,
     Enum = 6,
     Entity = 7,
+    Component = 8,
 }
 
 /// <summary>Blittable tagged union for one script property crossing the boundary.</summary>

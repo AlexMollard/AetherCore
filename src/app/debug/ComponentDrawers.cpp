@@ -14,6 +14,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/EditorDragDrop.hpp"
+#include "editor/ComponentCatalog.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
@@ -382,6 +383,61 @@ namespace aether::app
 						ImGui::SameLine();
 					}
 					if (ImGui::SmallButton((std::string(ICON_FA_XMARK "##clear") + info.name).c_str()))
+					{
+						value.i64 = 0;
+						edited = true;
+					}
+					break;
+				}
+				case ScriptPropertyValue::Type::Component:
+				{
+					// A component reference: an entity slot constrained to entities
+					// that carry the required component (value.str = its catalog
+					// name). Dropping an entity links its component; drops that lack
+					// it are rejected so the field can never point at the wrong thing.
+					const std::string& componentName = value.str;
+					const editor::ComponentCatalogEntry* catEntry = editor::FindComponent(componentName);
+					const Entity target{static_cast<std::uint32_t>(value.i64)};
+					const bool targetAlive = target.IsValid() && world.GetRegistry().valid(World::ToEntt(target));
+					const std::string prefix = catEntry != nullptr ? catEntry->icon + "  " : std::string();
+					std::string label = targetAlive ? prefix + std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
+					const std::string buttonId = label + "##compField" + info.name;
+					ImGui::AlignTextToFramePadding();
+					ImGui::TextUnformatted(info.name.c_str());
+					if (!componentName.empty())
+					{
+						ImGui::SetItemTooltip("Link an entity that has a '%s' component", componentName.c_str());
+					}
+					ImGui::SameLine(iw::kLabelWidth);
+					const ImGuiStyle& style = ImGui::GetStyle();
+					const float clearButtonWidth = ImGui::CalcTextSize(ICON_FA_XMARK).x + style.FramePadding.x * 2.0f;
+					const float trailingButtonWidth = clearButtonWidth + style.ItemSpacing.x;
+					const float entityButtonWidth = std::max(ImGui::GetFrameHeight(), ImGui::GetContentRegionAvail().x - trailingButtonWidth);
+					ImGui::Button(buttonId.c_str(), ImVec2(entityButtonWidth, 0.0f));
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload))
+						{
+							std::uint32_t droppedId = 0;
+							if (payload->DataSize == sizeof(std::uint32_t))
+							{
+								droppedId = *static_cast<const std::uint32_t*>(payload->Data);
+							}
+							else if (payload->DataSize == sizeof(dragdrop::EntityPayload))
+							{
+								droppedId = static_cast<const dragdrop::EntityPayload*>(payload->Data)->id;
+							}
+							const Entity dropped{droppedId};
+							if (dropped.IsValid() && catEntry != nullptr && catEntry->has(world, dropped))
+							{
+								value.i64 = droppedId;
+								edited = true;
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+					ImGui::SameLine();
+					if (ImGui::SmallButton((std::string(ICON_FA_XMARK "##clearComp") + info.name).c_str()))
 					{
 						value.i64 = 0;
 						edited = true;
@@ -1537,7 +1593,24 @@ namespace aether::app
 		PropFloat("Far", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f");
 		cam->nearPlane = std::max(0.001f, cam->nearPlane);
 		cam->farPlane = std::max(cam->nearPlane + 0.01f, cam->farPlane);
-		ImGui::TextDisabled("Views along the entity's -Z: rotate to aim");
+
+		// Orbit cameras drive their own transform from these params (CameraSystem
+		// recomputes the pose each tick), so the -Z hint below doesn't apply to them.
+		if (auto* orbit = world.TryGet<OrbitCameraComponent>(entity))
+		{
+			ImGui::SeparatorText("Orbit");
+			DrawVec3Row("Target", orbit->target, 0.0f, 0.05f);
+			PropFloat("Yaw", &orbit->yaw, 0.5f, -3600.0f, 3600.0f, "%.1f\xc2\xb0");
+			PropFloat("Pitch", &orbit->pitch, 0.5f, -ecs::kOrbitPitchLimit, ecs::kOrbitPitchLimit, "%.1f\xc2\xb0");
+			orbit->pitch = std::clamp(orbit->pitch, -ecs::kOrbitPitchLimit, ecs::kOrbitPitchLimit);
+			PropFloat("Distance", &orbit->distance, 0.1f, 0.1f, 10000.0f, "%.2f");
+			orbit->distance = std::max(0.1f, orbit->distance);
+			ImGui::TextDisabled("Pose driven by orbit params (target + yaw/pitch/distance)");
+		}
+		else
+		{
+			ImGui::TextDisabled("Views along the entity's -Z: rotate to aim");
+		}
 	}
 
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName)

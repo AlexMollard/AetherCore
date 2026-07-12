@@ -243,6 +243,10 @@ namespace aether::app::editor
 				const std::string type = p.value("type", std::string{});
 				const ComponentCatalogEntry* entry = FindComponent(type);
 				if (entry == nullptr) { return json{{"error", "unknown component '" + type + "' (call list_component_types)"}}; }
+				if (!entry->addable || (add ? !entry->add : !entry->remove))
+				{
+					return json{{"error", "'" + type + "' is reference-only and cannot be added/removed as a component (e.g. UI Text is authored as a UI entity)"}};
+				}
 				if (add) { entry->add(world, entity, ctx.services); }
 				else { entry->remove(world, entity); }
 				return json{{"id", entity.id}, {"type", type}, {add ? "added" : "removed", true}};
@@ -256,6 +260,8 @@ namespace aether::app::editor
 			        json arr = json::array();
 			        for (const ComponentCatalogEntry& e: ComponentCatalog())
 			        {
+				        // Skip reference-only entries (e.g. UI Text) - they can't be added.
+				        if (!e.addable) { continue; }
 				        arr.push_back(json{{"name", e.name}, {"category", e.category}});
 			        }
 			        return json{{"components", arr}};

@@ -10,7 +10,7 @@ sun_intensity = 0.654101550579071
 
 [scene]
 name = ''
-version = 7
+version = 8
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
@@ -137,6 +137,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'Player'
+    properties = { Cam = { t = 'component', v = 11, c = 'Camera' }, Body = { t = 'component', v = 4, c = 'Rigid Body' }, Hud = { t = 'component', v = 10, c = 'UI Text' } }
 
 [[entities]]
 name = 'Canvas'
@@ -243,3 +244,24 @@ parent = 9
     text = 'Future Value'
     v_align = 1
     wrap = true
+
+# Authored third-person camera (index 11). The Player script references this
+# entity through its CameraEntity field and drives the follow target each tick.
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Camera'
+parent = -1
+position = [ 0.0, 7.1, 12.65 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    far = 1000.0
+    fov = 60.0
+    main = true
+    near = 0.1
+
+    [entities.orbit_camera]
+    distance = 13.46
+    pitch = 20.0
+    target = [ 0.0, 2.5, 0.0 ]
+    yaw = 0.0

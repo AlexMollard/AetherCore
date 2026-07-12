@@ -150,6 +150,7 @@ namespace aether::app
 		}
 
 		m_sceneCtx.world = &context.Get<World>();
+		m_sceneCtx.services = &context.services;
 		m_sceneCtx.assets = &context.Get<AssetManager>();
 		m_sceneCtx.cameras = &context.Get<CameraManager>();
 		m_sceneCtx.renderer = &context.Get<Renderer>();

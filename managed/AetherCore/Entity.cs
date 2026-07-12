@@ -48,6 +48,34 @@ public readonly struct Entity : IEquatable<Entity>
 
     public void Destroy() => Native.aether_entity_destroy(Id);
 
+    // ── Hierarchy ───────────────────────────────────────────────────────────────
+
+    /// <summary>The parent entity (invalid if this is a root).</summary>
+    public Entity Parent => new(Native.aether_entity_get_parent(Id));
+
+    /// <summary>Re-parent under <paramref name="parent"/> (pass an invalid entity to detach to root).</summary>
+    public void SetParent(Entity parent) => Native.aether_entity_set_parent(Id, parent.Id);
+
+    /// <summary>Number of direct children.</summary>
+    public int ChildCount => Native.aether_entity_child_count(Id);
+
+    /// <summary>The i-th direct child (invalid if out of range).</summary>
+    public Entity GetChild(int index) => new(Native.aether_entity_child_at(Id, index));
+
+    // ── Active state ────────────────────────────────────────────────────────────
+
+    /// <summary>True when neither this entity nor any ancestor is disabled - i.e.
+    /// it participates in simulation and rendering.</summary>
+    public bool ActiveInHierarchy => Native.aether_entity_is_active(Id) != 0;
+
+    /// <summary>Enable or disable this entity (and its subtree) in the scene.</summary>
+    public void SetActive(bool active) => Native.aether_entity_set_active(Id, active ? 1 : 0);
+
+    /// <summary>A typed reference to one of this entity's components, e.g.
+    /// <c>entity.Get&lt;RigidBodyRef&gt;()</c>. The wrapper's operations no-op if the
+    /// entity doesn't actually carry the component.</summary>
+    public T Get<T>() where T : IComponentRef => (T)Activator.CreateInstance(typeof(T), this)!;
+
     /// <summary>Exclude this entity (and subtree) from scene serialization.</summary>
     public void MarkTransient() => Native.aether_mark_transient(Id);
 

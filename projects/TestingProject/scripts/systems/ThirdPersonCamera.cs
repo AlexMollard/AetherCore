@@ -5,9 +5,9 @@ namespace AetherGame.Systems;
 /// <summary>Keeps an orbit camera's target locked to a followed entity.</summary>
 public static class ThirdPersonCamera
 {
-    public static void Update(CameraId camera, Entity target)
+    public static void Update(Entity camera, Entity target)
     {
-        if (camera.Value == 0 || !target.IsValid)
+        if (!camera.IsValid || !target.IsValid)
         {
             return;
         }

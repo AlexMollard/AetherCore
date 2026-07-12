@@ -33,6 +33,18 @@ namespace aether
 		m_seenScratch.clear();
 		m_mainBacking = {};
 
+		// Orbit cameras drive their own entity pose: recompute the transform from
+		// the orbit params first, so the CameraComponent mirror below (and the
+		// hierarchy, gizmos and "look through" preview) all read a live transform.
+		for (auto&& [handle, orbit, tc]: reg.view<OrbitCameraComponent, TransformComponent>().each())
+		{
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(handle)))
+			{
+				continue;
+			}
+			tc.localToWorld = ecs::OrbitCameraMatrix(orbit.target, orbit.yaw, orbit.pitch, orbit.distance);
+		}
+
 		for (const entt::entity handle: reg.view<CameraComponent, TransformComponent>())
 		{
 			// Disabled cameras (and subtrees) drop out: their backing camera is
@@ -98,6 +110,16 @@ namespace aether
 		{
 			m_cameras.Destroy(m_backing[entityId]);
 			m_backing.erase(entityId);
+		}
+
+		// The scene's main-camera entity IS the active render camera. Apply it here
+		// so BOTH the shipped runtime and the editor pick the scene camera up from
+		// one place; the editor's ViewportPanel overrides this with the free-look
+		// camera only while Editing (it runs later in the frame). When no entity is
+		// tagged, leave the current main alone (e.g. the engine's startup default).
+		if (m_mainBacking.IsValid())
+		{
+			m_cameras.SetMainCamera(m_mainBacking);
 		}
 	}
 } // namespace aether

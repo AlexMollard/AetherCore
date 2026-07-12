@@ -52,6 +52,105 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_get_name(uint id, byte* buf, int bufLen);
 
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_ui_set_text(uint id, string text);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_get_text(uint id, byte* buf, int bufLen);
+
+    // ── UI toolkit (Module 02) ──────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_canvas();
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_image(uint canvas);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_text(uint canvas);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_anchors(uint id, Vector2 min, Vector2 max);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_offsets(uint id, Vector2 min, Vector2 max);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_pivot(uint id, Vector2 pivot);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_rect(uint id, float x, float y, float w, float h);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_text_color(uint id, Vector4 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_font_size(uint id, float pixelSize);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_text_align(uint id, int h, int v);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_image_color(uint id, Vector4 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_image_corner_radius(uint id, float radius);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_ui_set_image_texture(uint id, string path);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_contains_point(uint id, Vector2 pt);
+
+    [LibraryImport(Lib)]
+    internal static partial Vector4 aether_ui_get_rect(uint id);
+
+    // ── Mouse input (Module 03) ─────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_mouse_down(int btn);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_mouse_pressed(int btn);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_mouse_released(int btn);
+
+    [LibraryImport(Lib)]
+    internal static partial Vector2 aether_input_mouse_pos();
+
+    [LibraryImport(Lib)]
+    internal static partial Vector2 aether_input_mouse_delta();
+
+    [LibraryImport(Lib)]
+    internal static partial Vector2 aether_input_scroll_delta();
+
+    // ── Entity & scene (Module 01) ──────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_entity_set_parent(uint child, uint parent);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_entity_get_parent(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_entity_child_count(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_entity_child_at(uint id, int index);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_entity_set_active(uint id, int active);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_entity_is_active(uint id);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_scene_find_by_name(string name);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_scene_create_entity(string name, Vector3 pos);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_scene_instantiate_prefab(string name, Vector3 pos);
+
     [LibraryImport(Lib)]
     [SuppressGCTransition]
     internal static partial Vector3 aether_get_position(uint id);

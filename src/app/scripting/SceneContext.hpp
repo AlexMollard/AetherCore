@@ -21,6 +21,7 @@ namespace aether
 	class PrimitiveMeshes;
 	class PhysicsSystem;
 	class IEngineRuntime;
+	class ServiceContainer;
 } // namespace aether
 
 namespace aether::app
@@ -38,6 +39,9 @@ namespace aether::app::scripting
 		aether::CameraManager* cameras = nullptr;
 		aether::Renderer* renderer = nullptr;
 		aether::Input* input = nullptr;
+		// Service container of the owning layer - lets script interop reach the
+		// SceneSubsystem (prefab I/O) and build ApplySceneDeps for Instantiate.
+		aether::ServiceContainer* services = nullptr;
 		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;

@@ -31,7 +31,7 @@ public sealed class CharacterController
         return current + (target > current ? maxDelta : -maxDelta);
     }
 
-    public void Update(Entity player, float dt, int idleClip, int walkClip, float inputX, float inputZ, CameraId cam,
+    public void Update(Entity player, float dt, int idleClip, int walkClip, float inputX, float inputZ, Entity cam,
         bool isSprinting, int runClip)
     {
         if (!player.IsValid)
@@ -42,7 +42,7 @@ public sealed class CharacterController
         // 1. Camera-relative basis flattened to the XZ plane (orbit yaw).
         Vector3 camFwd = new(0.0f, 0.0f, -1.0f);
         Vector3 camRight = new(1.0f, 0.0f, 0.0f);
-        if (cam.Value != 0)
+        if (cam.IsValid)
         {
             float yaw = Camera.GetYaw(cam) * 0.01745329252f;
             camFwd = new Vector3(-MathF.Sin(yaw), 0.0f, -MathF.Cos(yaw));

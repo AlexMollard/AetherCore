@@ -44,4 +44,14 @@ public static class Material
     /// <summary>Create a shared material; edit it, bind it to many entities.</summary>
     public static MaterialId Make(Vector3 color, float metallic, float roughness)
         => new(Native.aether_make_material(color, metallic, roughness));
+
+    // ── Per-entity material (edits this entity's own material instance) ───────────
+
+    /// <summary>Apply a texture (VFS path) as this entity's albedo map.</summary>
+    public static void SetTexture(Entity entity, string path) => Native.aether_set_material_texture(entity.Id, path);
+
+    public static void SetColor(Entity entity, Vector3 color) => Native.aether_entity_material_set_color(entity.Id, color);
+    public static void SetMetallic(Entity entity, float metallic) => Native.aether_entity_material_set_metallic(entity.Id, metallic);
+    public static void SetRoughness(Entity entity, float roughness) => Native.aether_entity_material_set_roughness(entity.Id, roughness);
+    public static void SetEmissive(Entity entity, Vector3 emissive) => Native.aether_entity_material_set_emissive(entity.Id, emissive);
 }

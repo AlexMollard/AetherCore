@@ -229,6 +229,8 @@ namespace aether::app::scene
 					return "enum";
 				case ScriptPropertyValue::Type::Entity:
 					return "entity";
+				case ScriptPropertyValue::Type::Component:
+					return "component";
 				case ScriptPropertyValue::Type::None:
 				default:
 					return "none";
@@ -251,6 +253,13 @@ namespace aether::app::scene
 					case ScriptPropertyValue::Type::Enum:
 					case ScriptPropertyValue::Type::Entity:
 						entry.insert("v", static_cast<std::int64_t>(value.i64));
+						break;
+					case ScriptPropertyValue::Type::Component:
+						// v = referenced entity (scene index, remapped like Entity);
+						// c = required component's catalog name (self-describing so the
+						// inspector can validate after load without the managed default).
+						entry.insert("v", static_cast<std::int64_t>(value.i64));
+						entry.insert("c", value.str);
 						break;
 					case ScriptPropertyValue::Type::Bool:
 						entry.insert("v", value.i64 != 0);
@@ -298,6 +307,12 @@ namespace aether::app::scene
 					pv.type = ScriptPropertyValue::Type::Entity;
 					pv.i64 = value.value_or(std::int64_t{0});
 				}
+				else if (tag == "component")
+				{
+					pv.type = ScriptPropertyValue::Type::Component;
+					pv.i64 = value.value_or(std::int64_t{0});
+					pv.str = (*entry)["c"].value_or(std::string{});
+				}
 				else if (tag == "bool")
 				{
 					pv.type = ScriptPropertyValue::Type::Bool;
@@ -330,7 +345,8 @@ namespace aether::app::scene
 			std::map<std::string, ScriptPropertyValue> out = props;
 			for (auto& [_, value]: out)
 			{
-				if (value.type != ScriptPropertyValue::Type::Entity || value.i64 == 0)
+				const bool isRef = value.type == ScriptPropertyValue::Type::Entity || value.type == ScriptPropertyValue::Type::Component;
+				if (!isRef || value.i64 == 0)
 				{
 					continue;
 				}
@@ -345,9 +361,10 @@ namespace aether::app::scene
 			std::map<std::string, ScriptPropertyValue> out = props;
 			for (auto& [_, value]: out)
 			{
-				if (value.type != ScriptPropertyValue::Type::Entity || value.i64 < 0 || static_cast<std::size_t>(value.i64) >= created.size())
+				const bool isRef = value.type == ScriptPropertyValue::Type::Entity || value.type == ScriptPropertyValue::Type::Component;
+				if (!isRef || value.i64 < 0 || static_cast<std::size_t>(value.i64) >= created.size())
 				{
-					if (value.type == ScriptPropertyValue::Type::Entity)
+					if (isRef)
 					{
 						value.i64 = 0;
 					}
@@ -583,6 +600,10 @@ namespace aether::app::scene
 				{
 					rec.camera = *cam;
 					rec.mainCamera = world.Has<MainCameraComponent>(e);
+				}
+				if (const auto* orbit = world.TryGet<OrbitCameraComponent>(e))
+				{
+					rec.orbitCamera = *orbit;
 				}
 				if (const auto* script = world.TryGet<ScriptComponent>(e); script != nullptr)
 				{
@@ -1033,6 +1054,15 @@ namespace aether::app::scene
 				c.insert("main", rec.mainCamera);
 				t.insert("camera", std::move(c));
 			}
+				if (rec.orbitCamera)
+				{
+					toml::table o;
+					o.insert("target", toml::array{rec.orbitCamera->target.x, rec.orbitCamera->target.y, rec.orbitCamera->target.z});
+					o.insert("yaw", rec.orbitCamera->yaw);
+					o.insert("pitch", rec.orbitCamera->pitch);
+					o.insert("distance", rec.orbitCamera->distance);
+					t.insert("orbit_camera", std::move(o));
+				}
 			if (!rec.scripts.empty())
 			{
 				toml::array scripts;
@@ -1401,6 +1431,16 @@ namespace aether::app::scene
 				        .farPlane = static_cast<float>(cv["far"].value_or(1000.0)),
 				};
 				rec.mainCamera = cv["main"].value_or(false);
+			}
+			if (const auto* o = tv["orbit_camera"].as_table())
+			{
+				const toml::node_view<const toml::node> ov{*o};
+				OrbitCameraComponent orbit;
+				orbit.target = Vec3FromToml(ov["target"], glm::vec3(0.0f));
+				orbit.yaw = static_cast<float>(ov["yaw"].value_or(0.0));
+				orbit.pitch = static_cast<float>(ov["pitch"].value_or(20.0));
+				orbit.distance = static_cast<float>(ov["distance"].value_or(10.0));
+				rec.orbitCamera = orbit;
 			}
 			if (const auto* scripts = tv["scripts"].as_array())
 			{
@@ -2087,6 +2127,10 @@ namespace aether::app::scene
 					{
 						ecs::SetMainCameraEntity(world, e);
 					}
+				}
+				if (rec.orbitCamera)
+				{
+					world.Emplace<OrbitCameraComponent>(e, *rec.orbitCamera);
 				}
 				if (!rec.scripts.empty())
 				{

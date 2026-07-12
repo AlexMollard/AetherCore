@@ -63,6 +63,10 @@ internal static unsafe class ScriptRegistry
         public required string Name;
         public required PropertyType Type;
         public required System.Reflection.FieldInfo Field;
+        // For PropertyType.Component: the ComponentCatalog name of the required
+        // component (from the IComponentRef wrapper's static ComponentType). The
+        // inspector reads it (via the value's Str) to validate entity drops.
+        public string? ComponentType;
     }
 
     private static readonly Dictionary<string, Prop[]> s_props = new(StringComparer.Ordinal);
@@ -83,6 +87,7 @@ internal static unsafe class ScriptRegistry
         if (t == typeof(System.Numerics.Vector3)) return PropertyType.Vector3;
         if (t == typeof(string)) return PropertyType.String;
         if (t == typeof(Entity)) return PropertyType.Entity;
+        if (typeof(IComponentRef).IsAssignableFrom(t)) return PropertyType.Component;
         if (t.IsEnum) return PropertyType.Enum;
         return PropertyType.None;
     }
@@ -104,7 +109,16 @@ internal static unsafe class ScriptRegistry
             PropertyType pt = MapPropertyType(field.FieldType);
             if (pt != PropertyType.None)
             {
-                props.Add(new Prop { Name = field.Name, Type = pt, Field = field });
+                // Component fields carry the required component's catalog name,
+                // read once here from the wrapper type's static ComponentType.
+                string? componentType = null;
+                if (pt == PropertyType.Component)
+                {
+                    componentType = field.FieldType
+                        .GetProperty("ComponentType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                        ?.GetValue(null) as string;
+                }
+                props.Add(new Prop { Name = field.Name, Type = pt, Field = field, ComponentType = componentType });
             }
         }
         int selfIndex = props.FindIndex(static p => p.Name == "Self");
@@ -389,6 +403,17 @@ internal static unsafe class ScriptRegistry
             case PropertyType.Entity:
                 outValue->I64 = ((Entity)value!).Id;
                 break;
+            case PropertyType.Component:
+                // Entity id in I64 (like Entity), required component name in Str so
+                // the inspector can validate drops without a metadata round-trip.
+                outValue->I64 = value is IComponentRef cref ? cref.Owner.Id : 0;
+                if (s_stringScratch != IntPtr.Zero)
+                {
+                    Marshal.FreeCoTaskMem(s_stringScratch);
+                }
+                s_stringScratch = Marshal.StringToCoTaskMemUTF8(p.ComponentType ?? string.Empty);
+                outValue->Str = (byte*)s_stringScratch;
+                break;
             default:
                 return 0;
         }
@@ -432,6 +457,11 @@ internal static unsafe class ScriptRegistry
                     break;
                 case PropertyType.Entity:
                     p.Field.SetValue(script, new Entity((uint)value->I64));
+                    break;
+                case PropertyType.Component:
+                    // Reconstruct the wrapper (RigidBodyRef, ...) from the linked
+                    // entity id via its public T(Entity) ctor.
+                    p.Field.SetValue(script, Activator.CreateInstance(p.Field.FieldType, new Entity((uint)value->I64)));
                     break;
                 default:
                     return 0;

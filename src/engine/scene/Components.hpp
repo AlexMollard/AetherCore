@@ -167,12 +167,18 @@ namespace aether
 			String = 5,
 			Enum = 6,
 			Entity = 7,
+			// Component reference: a typed link to a component ON an entity. i64
+			// holds the entity id (remapped through the scene index like Entity);
+			// str holds the ComponentCatalog name of the required component, so the
+			// inspector only accepts entities that have it. Backs C# IComponentRef
+			// wrapper fields (CameraRef, RigidBodyRef, ...).
+			Component = 8,
 		};
 
 		Type type = Type::None;
 		float f4[4] = {};     // Float (x), Vector3 (xyz)
-		std::int64_t i64 = 0; // Int, Bool (0/1), Enum, Entity id
-		std::string str;      // String
+		std::int64_t i64 = 0; // Int, Bool (0/1), Enum, Entity id, Component entity id
+		std::string str;      // String, Component (catalog component name)
 	};
 
 	struct ScriptEntry

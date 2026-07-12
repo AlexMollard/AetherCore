@@ -17,6 +17,7 @@
 #include "scene/Entity.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/World.hpp"
+#include "ui/UiComponents.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::app::editor
@@ -181,6 +182,16 @@ namespace aether::app::editor
 			        [](const World& w, Entity e) { return w.Has<CameraComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer&) { EnsureTransform(w, e); w.EmplaceOrReplace<CameraComponent>(e); },
 			        [](World& w, Entity e) { w.Remove<CameraComponent>(e); }});
+			// Reference-only (addable=false): UI text is authored as a UI ENTITY
+			// (Create > UI > Text / ui::CreateTextEntity), never slapped onto an
+			// arbitrary entity as a loose component. This entry exists purely so a
+			// script's UiTextRef field can drop-validate against real UI text
+			// entities through the `has` predicate - the single, Unity-style model.
+			c.push_back(ComponentCatalogEntry{"UI Text", "Rendering", ICON_FA_PEN,
+			        [](const World& w, Entity e) { return w.Has<ui::UIText>(e); },
+			        nullptr,
+			        nullptr,
+			        /*addable=*/false});
 
 			// ── Behaviors ───────────────────────────────────────────────────────
 			c.push_back(Simple<BobComponent>("Bob", "Behaviors", ICON_FA_WAVE_SQUARE, BobComponent{.amplitude = 1.5f, .frequency = 0.8f}));
