@@ -10,10 +10,29 @@
 #include <cstddef>
 #include <cstring>
 
+// The stock ImGui_ImplVulkanH_CreateOrResizeWindow submits an "initial layout
+// transition to PRESENT_SRC" for every fresh swapchain image. That violates the
+// WSI rules (a presentable image may only be used between acquire and present -
+// the validation layer flags every window creation) and is wasted work here:
+// RenderOne transitions each image from UNDEFINED on first use. These two
+// internal helpers do all the real work; they have external linkage in
+// imgui_impl_vulkan.cpp, so declaring them lets us (re)create viewport windows
+// without that submit. An imgui bump that changes them fails at link, loudly.
+void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, VkDevice device, ImGui_ImplVulkanH_Window* wd, const VkAllocationCallbacks* allocator, int w, int h, uint32_t min_image_count, VkImageUsageFlags image_usage);
+void ImGui_ImplVulkanH_CreateWindowCommandBuffers(VkPhysicalDevice physical_device, VkDevice device, ImGui_ImplVulkanH_Window* wd, uint32_t queue_family, const VkAllocationCallbacks* allocator);
+
 namespace aether
 {
 	namespace
 	{
+		// Swapchain + per-frame command buffers, WITHOUT the stock helper's
+		// unacquired-image init transition (see the extern declarations above).
+		void CreateOrResizeViewportWindow(VulkanContext& vk, VkDevice device, ImGui_ImplVulkanH_Window& wd, int width, int height)
+		{
+			ImGui_ImplVulkanH_CreateWindowSwapChain(vk.GetPhysicalDevice(), device, &wd, nullptr, width, height, 2, 0);
+			ImGui_ImplVulkanH_CreateWindowCommandBuffers(vk.GetPhysicalDevice(), device, &wd, vk.GetGraphicsQueueFamily(), nullptr);
+		}
+
 		// __glsl_shader_vert_spv[] and __glsl_shader_frag_spv[] copied verbatim from
 		// imgui_impl_vulkan.cpp (ImGui's own shaders). These match ImDrawVert
 		// (pos/uv/col), a set-0 sampled image + set-1 sampler (ImGui 1.92's separated
@@ -908,10 +927,14 @@ namespace aether
 		ImGui_ImplVulkanH_FrameSemaphores& fsd = wd.FrameSemaphores[wd.SemaphoreIndex];
 		std::uint32_t imageIndex = 0;
 		const VkResult acquire = vkAcquireNextImageKHR(m_device, wd.Swapchain, UINT64_MAX, fsd.ImageAcquiredSemaphore, VK_NULL_HANDLE, &imageIndex);
-		if (acquire == VK_ERROR_OUT_OF_DATE_KHR || acquire == VK_SUBOPTIMAL_KHR)
+		if (acquire == VK_ERROR_OUT_OF_DATE_KHR)
 		{
-			// Window resized / out-of-date: rebuild and present next frame.
-			ImGui_ImplVulkanH_CreateOrResizeWindow(m_vk->GetInstance().instance, m_vk->GetPhysicalDevice(), m_device, &wd, m_vk->GetGraphicsQueueFamily(), nullptr, wd.Width, wd.Height, 2, 0);
+			// Nothing was acquired: rebuild and render next frame. SUBOPTIMAL is NOT
+			// handled here - a suboptimal acquire still acquired an image and signaled
+			// the semaphore, so bailing would leave an acquired-never-presented image
+			// and a stale semaphore; render + present it and rebuild on the present
+			// result below instead.
+			CreateOrResizeViewportWindow(*m_vk, m_device, wd, wd.Width, wd.Height);
 			return;
 		}
 		wd.FrameIndex = imageIndex;
@@ -933,7 +956,11 @@ namespace aether
 		toColor.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		toColor.image = fd.Backbuffer;
 		toColor.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-		vkCmdPipelineBarrier(fd.CommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &toColor);
+		// srcStage must include the stage the submit waits on the acquire semaphore
+		// at (COLOR_ATTACHMENT_OUTPUT, see pWaitDstStageMask below) so the layout
+		// transition is execution-ordered after the presentation engine releases the
+		// image. TOP_OF_PIPE left the transition racing the acquire (WRITE_AFTER_READ).
+		vkCmdPipelineBarrier(fd.CommandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &toColor);
 
 		VkRenderingAttachmentInfo colorAttachment{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
 		colorAttachment.imageView = fd.BackbufferView;
@@ -1088,9 +1115,14 @@ namespace aether
 		present.swapchainCount = 1;
 		present.pSwapchains = &wd.Swapchain;
 		present.pImageIndices = &imageIndex;
-		vkQueuePresentKHR(queue, &present);
-
+		const VkResult presented = vkQueuePresentKHR(queue, &present);
 		wd.SemaphoreIndex = (wd.SemaphoreIndex + 1) % wd.SemaphoreCount;
+		if (presented == VK_ERROR_OUT_OF_DATE_KHR || presented == VK_SUBOPTIMAL_KHR)
+		{
+			// Rebuild now that this frame's image is back with the presentation
+			// engine (CreateOrResizeWindow waits for device idle internally).
+			CreateOrResizeViewportWindow(*m_vk, m_device, wd, wd.Width, wd.Height);
+		}
 	}
 
 	void ImguiViewportRenderer::EnsureWindow(PerViewport& vp, void* glfwWindow, int width, int height)
@@ -1113,14 +1145,14 @@ namespace aether
 			wd.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(m_vk->GetPhysicalDevice(), surface, requested, 1, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR);
 			const VkPresentModeKHR presentModes[] = {VK_PRESENT_MODE_FIFO_KHR};
 			wd.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(m_vk->GetPhysicalDevice(), surface, presentModes, 1);
-			ImGui_ImplVulkanH_CreateOrResizeWindow(m_vk->GetInstance().instance, m_vk->GetPhysicalDevice(), m_device, &wd, m_vk->GetGraphicsQueueFamily(), nullptr, width, height, minImageCount, 0);
+			CreateOrResizeViewportWindow(*m_vk, m_device, wd, width, height);
 			vp.created = true;
 			AE_INFO(LogCategory::UI, "ImGui secondary viewport swapchain created ({}x{}, {} images).", width, height, wd.ImageCount);
 			return;
 		}
 		if (wd.Width != width || wd.Height != height)
 		{
-			ImGui_ImplVulkanH_CreateOrResizeWindow(m_vk->GetInstance().instance, m_vk->GetPhysicalDevice(), m_device, &wd, m_vk->GetGraphicsQueueFamily(), nullptr, width, height, minImageCount, 0);
+			CreateOrResizeViewportWindow(*m_vk, m_device, wd, width, height);
 		}
 	}
 
