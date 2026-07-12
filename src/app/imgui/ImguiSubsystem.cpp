@@ -257,11 +257,10 @@ namespace aether
 				m_fontData = std::move(*result);
 				ImFontConfig fontConfig{};
 				fontConfig.FontDataOwnedByAtlas = false;
-				fontConfig.SizePixels = 15.0f;
-				fontConfig.OversampleH = 3;
-				fontConfig.OversampleV = 3;
-				fontConfig.PixelSnapH = false;
-				io.Fonts->AddFontFromMemoryTTF(m_fontData.data(), static_cast<int>(m_fontData.size()), fontConfig.SizePixels, &fontConfig);
+				// 1.92 dynamic fonts: glyphs re-rasterize per size/DPI; Oversample 0 =
+				// auto (the old explicit 3 is legacy-atlas advice). 15px is the base
+				// UI size (ConfigDpiScaleFonts scales it per monitor).
+				io.Fonts->AddFontFromMemoryTTF(m_fontData.data(), static_cast<int>(m_fontData.size()), 15.0f, &fontConfig);
 				io.FontDefault = io.Fonts->Fonts.back();
 			}
 		}
@@ -279,9 +278,14 @@ namespace aether
 				iconConfig.FontDataOwnedByAtlas = false;
 				iconConfig.MergeMode = true;
 				iconConfig.PixelSnapH = true;
-				iconConfig.SizePixels = 13.0f;
-				iconConfig.GlyphMinAdvanceX = 16.0f;
-				iconConfig.GlyphOffset = ImVec2(-1.0f, 0.0f);
+				// 1.92 merge semantics: a merged source's SizePixels sets its scale
+				// RELATIVE to the base font (ScaleFactor = SizePixels / baseSize) -
+				// the old 13-vs-15 mismatch permanently baked every icon at 87% size,
+				// riding small and high on the baseline. Match the base for 1:1.
+				// (SizePixels also serves as the reference GlyphMinAdvanceX scales from;
+				// ImGui centres each glyph within the widened advance.)
+				iconConfig.SizePixels = 15.0f;
+				iconConfig.GlyphMinAdvanceX = 15.0f; // 1em monospaced icons
 				io.Fonts->AddFontFromMemoryTTF(m_iconFontData.data(), static_cast<int>(m_iconFontData.size()), iconConfig.SizePixels, &iconConfig, kIconRange);
 			}
 		}

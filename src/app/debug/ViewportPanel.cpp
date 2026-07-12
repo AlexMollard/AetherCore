@@ -1,6 +1,7 @@
 #include "ViewportPanel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <format>
 
@@ -16,6 +17,7 @@
 #include "camera/CameraManager.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
+#include "debug/EditorChrome.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/ScenePicker.hpp"
@@ -186,25 +188,25 @@ namespace aether::app
 			return;
 		}
 
-		// Neutral button that adopts the editor's "active = orange accent" language
-		// while playing or compiling (same as the selected gizmo tool) - no
-		// out-of-palette fill. Compiling means the async C# build kicked off by Play
-		// is still running; the editor stays fully interactive meanwhile.
+		// Night Amber state language: Play is a quiet amber ghost (ready), Compiling
+		// an amber outline (in flight), Stop a filled amber primary (live). Compiling
+		// means the async C# build kicked off by Play is still running; the editor
+		// stays fully interactive meanwhile.
 		const bool playing = playState->IsPlaying();
 		const bool compiling = playState->IsCompiling();
-		const bool accent = playing || compiling;
-		if (accent)
+		const ImVec2 size(0.0f, ImGui::GetFrameHeight());
+		bool clicked = false;
+		if (playing)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+			clicked = chrome::PrimaryButton(ICON_FA_STOP " Stop", size);
 		}
-		const char* label = playing ? ICON_FA_STOP "  Stop" : (compiling ? ICON_FA_GEAR "  Compiling..." : ICON_FA_PLAY "  Play");
-		const bool clicked = ImGui::Button(label, ImVec2(0.0f, ImGui::GetFrameHeight()));
-		if (accent)
+		else if (compiling)
 		{
-			ImGui::PopStyleColor(4);
+			clicked = chrome::OutlineButton(ICON_FA_GEAR " Compiling", size);
+		}
+		else
+		{
+			clicked = chrome::GhostButton(ICON_FA_PLAY " Play", size, chrome::kAccentHi);
 		}
 		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place"
 		                : (compiling ? "Building C# scripts on a worker thread - click to cancel" : "Snapshot the scene and simulate"));
@@ -501,18 +503,24 @@ namespace aether::app
 			return;
 		}
 
-		// Bottom-right pill: a live thumbnail of the camera's view + a look-through toggle.
+		// Bottom-right: camera-feed card in the launcher chrome. The corner
+		// brackets are the reticle flourish - thematically at home on a camera feed.
 		const float thumbW = 240.0f;
 		const float thumbH = thumbW * static_cast<float>(CameraPreviewService::kHeight) / static_cast<float>(CameraPreviewService::kWidth);
-		const ImVec2 pillPad(6.0f, 6.0f);
+		const ImVec2 pillPad(8.0f, 8.0f);
+		const ImVec2 pillSpacing(6.0f, 6.0f);
 		const float pillW = thumbW + pillPad.x * 2.0f;
-		const float pillH = thumbH + ImGui::GetFrameHeight() + pillPad.y * 2.0f + ImGui::GetStyle().ItemSpacing.y;
+		const float pillH = pillPad.y * 2.0f + 15.0f + pillSpacing.y + thumbH + pillSpacing.y + ImGui::GetFrameHeight();
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - pillW - 12.0f, imageMin.y + imageSize.y - pillH - 12.0f));
 
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.07f, 0.09f, 0.94f));
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::WithAlpha(chrome::kPanel, 0.95f));
+		ImGui::PushStyleColor(ImGuiCol_Border, chrome::kStroke);
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
-		ImGui::BeginChild("##vpCameraPreview", ImVec2(pillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, pillSpacing);
+		ImGui::BeginChild("##vpCameraPreview", ImVec2(pillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+		chrome::SectionTag(previewing ? "CAMERA VIEW · LIVE" : "CAMERA VIEW");
 
 		// Lazily (re-)register the preview colour target as an ImGui texture.
 		if (enabled)
@@ -532,6 +540,7 @@ namespace aether::app
 				}
 			}
 		}
+		const ImVec2 thumbMin = ImGui::GetCursorScreenPos();
 		if (enabled && m_cameraPreviewTextureId != 0)
 		{
 			ImGui::Image(ImTextureRef(static_cast<ImTextureID>(m_cameraPreviewTextureId)), ImVec2(thumbW, thumbH));
@@ -540,16 +549,17 @@ namespace aether::app
 		{
 			ImGui::Dummy(ImVec2(thumbW, thumbH));
 		}
-
-		const char* label = previewing ? ICON_FA_VIDEO "  Exit camera view" : ICON_FA_VIDEO "  Look through";
-		if (previewing)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+			// Hairline frame + reticle brackets over the feed.
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 thumbMax(thumbMin.x + thumbW, thumbMin.y + thumbH);
+			drawList->AddRect(thumbMin, thumbMax, chrome::U32(chrome::kStroke), 0.0f, 0, 1.0f);
+			chrome::CornerBrackets(drawList, ImVec2(thumbMin.x + 5.0f, thumbMin.y + 5.0f), ImVec2(thumbMax.x - 5.0f, thumbMax.y - 5.0f), 14.0f, 2.0f, previewing ? chrome::kAccentHi : chrome::WithAlpha(chrome::kAccent, 0.7f));
 		}
-		if (ImGui::Button(label, ImVec2(thumbW, 0.0f)))
+
+		const char* label = previewing ? ICON_FA_VIDEO " Exit camera view" : ICON_FA_VIDEO " Look through";
+		const bool toggle = previewing ? chrome::PrimaryButton(label, ImVec2(thumbW, 0.0f)) : chrome::OutlineButton(label, ImVec2(thumbW, 0.0f));
+		if (toggle)
 		{
 			if (previewing)
 			{
@@ -569,13 +579,9 @@ namespace aether::app
 				m_lookThroughEntityId = primary.id;
 			}
 		}
-		if (previewing)
-		{
-			ImGui::PopStyleColor(4);
-		}
 		ImGui::EndChild();
-		ImGui::PopStyleVar(2);
-		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(3);
+		ImGui::PopStyleColor(2);
 	}
 
 	void ViewportPanel::OnAttach(LayerContext& context)
@@ -793,32 +799,54 @@ namespace aether::app
 		}
 		if (m_viewportShowStats || m_viewportShowMouse)
 		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 pad(8.0f, 6.0f);
-			std::string overlay;
+			// Micro HUD card in the launcher language: hairline panel, faint uppercase
+			// labels in a fixed column, warm-white values.
+			struct StatRow
+			{
+				const char* label;
+				std::string value;
+			};
+			std::array<StatRow, 3> rows;
+			std::size_t rowCount = 0;
 			if (m_viewportShowStats)
 			{
-				overlay += std::format("Render: {} x {}\nView: {:.0f} x {:.0f}", extent.width, extent.height, imageSize.x, imageSize.y);
+				rows[rowCount++] = {"RENDER", std::format("{} x {}", extent.width, extent.height)};
+				rows[rowCount++] = {"VIEW", std::format("{:.0f} x {:.0f}", imageSize.x, imageSize.y)};
 			}
 			if (m_viewportShowMouse)
 			{
 				const glm::vec2 mouse = context.Get<Input>().GetMousePos();
 				if (mouse.x > -999999.0f)
 				{
-					if (!overlay.empty())
-					{
-						overlay += "\n";
-					}
-					overlay += std::format("Mouse: {:.0f}, {:.0f}", mouse.x, mouse.y);
+					rows[rowCount++] = {"MOUSE", std::format("{:.0f}, {:.0f}", mouse.x, mouse.y)};
 				}
 			}
-			if (!overlay.empty())
+			if (rowCount > 0)
 			{
-				const ImVec2 textSize = ImGui::CalcTextSize(overlay.c_str());
-				const ImVec2 rectMin(imageMin.x + 8.0f, imageMin.y + 44.0f);
-				const ImVec2 rectMax(rectMin.x + textSize.x + pad.x * 2.0f, rectMin.y + textSize.y + pad.y * 2.0f);
-				drawList->AddRectFilled(rectMin, rectMax, IM_COL32(22, 24, 28, 210), 4.0f);
-				drawList->AddText(ImVec2(rectMin.x + pad.x, rectMin.y + pad.y), IM_COL32(235, 238, 242, 255), overlay.c_str());
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
+				constexpr float kLabelSize = 12.0f;
+				constexpr float kValueSize = 13.0f;
+				constexpr float kRowH = 17.0f;
+				const ImVec2 pad(10.0f, 8.0f);
+				float labelW = 0.0f;
+				float valueW = 0.0f;
+				for (std::size_t i = 0; i < rowCount; ++i)
+				{
+					labelW = std::max(labelW, chrome::MeasureSized(kLabelSize, rows[i].label).x);
+					valueW = std::max(valueW, chrome::MeasureSized(kValueSize, rows[i].value.c_str()).x);
+				}
+				const ImVec2 rectMin(imageMin.x + 10.0f, imageMin.y + 54.0f);
+				const ImVec2 rectMax(rectMin.x + pad.x * 2.0f + labelW + 14.0f + valueW, rectMin.y + pad.y * 2.0f + static_cast<float>(rowCount) * kRowH - 3.0f);
+				drawList->AddRectFilled(rectMin, rectMax, chrome::U32(chrome::WithAlpha(chrome::kPanel, 0.88f)), 4.0f);
+				drawList->AddRect(rectMin, rectMax, chrome::U32(chrome::kStroke), 4.0f, 0, 1.0f);
+				// Amber tick on the leading edge - the section-label motif.
+				drawList->AddRectFilled(ImVec2(rectMin.x, rectMin.y + 6.0f), ImVec2(rectMin.x + 3.0f, rectMax.y - 6.0f), chrome::U32(chrome::WithAlpha(chrome::kAccent, 0.9f)));
+				for (std::size_t i = 0; i < rowCount; ++i)
+				{
+					const float y = rectMin.y + pad.y + static_cast<float>(i) * kRowH;
+					chrome::TextSized(drawList, kLabelSize, ImVec2(rectMin.x + pad.x, y + 1.0f), chrome::kFaint, rows[i].label);
+					chrome::TextSized(drawList, kValueSize, ImVec2(rectMin.x + pad.x + labelW + 14.0f, y), chrome::kText, rows[i].value.c_str());
+				}
 			}
 		}
 
@@ -840,53 +868,50 @@ namespace aether::app
 		}
 
 		// ── Floating toolbar: tools (left) · Play (center) · settings (right) ──────
-		// Three edge-anchored pills instead of one bar. Each pill is its own child
-		// window, which also isolates hover so the camera-input fallback below stays
-		// off while the mouse is over the toolbar.
+		// Three edge-anchored pills in the launcher chrome (warm surface, hairline
+		// stroke, amber accent). Each pill is its own child window, which also
+		// isolates hover so the camera-input fallback below stays off while the
+		// mouse is over the toolbar.
 		auto* toolbarPlayState = context.TryGet<PlayState>();
 		const bool toolbarPlaying = toolbarPlayState != nullptr && toolbarPlayState->IsPlaying();
+		const bool toolbarCompiling = toolbarPlayState != nullptr && toolbarPlayState->IsCompiling();
 		const float btnH = ImGui::GetFrameHeight();
-		const ImVec2 pillPad(8.0f, 5.0f);
+		const ImVec2 pillPad(4.0f, 4.0f);
 		const float pillH = btnH + pillPad.y * 2.0f;
 		const float pillTop = imageMin.y + 8.0f;
 		bool toolbarControlActive = false;
 
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.10f, 0.12f, 0.90f));
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f, 4.0f));
-		const auto pushFlatButtonStyle = []()
+		// Live-session hairline across the top edge of the scene image: solid amber
+		// while playing, dimmed while the async script build is still running.
+		if (toolbarPlaying || toolbarCompiling)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.3f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.4f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
-		};
+			chrome::AccentHairline(ImGui::GetWindowDrawList(), imageMin, imageSize.x, toolbarPlaying ? 0.85f : 0.35f);
+		}
 
-		// Left pill: gizmo tools + orientation. The active op gets a filled accent
-		// (segmented-control feel) rather than just tinted text.
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::WithAlpha(chrome::kPanel, 0.92f));
+		ImGui::PushStyleColor(ImGuiCol_Border, chrome::kStroke);
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));
+
+		// Left pill: gizmo tools + orientation. The active op is a filled amber
+		// segment; idle ops are ghosts.
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, pillTop));
-		ImGui::BeginChild("##vpTools", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::BeginChild("##vpTools", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
 			const auto tool = [&](const char* icon, int op, const char* tooltip)
 			{
+				// Wide enough for the FA advance so the glyph centers instead of
+				// left-clamping (icon advance can exceed a btnH square's inner width).
+				const float iconW = std::max(btnH, ImGui::CalcTextSize(icon).x + ImGui::GetStyle().FramePadding.x * 2.0f);
 				const bool active = m_gizmoOp == op;
-				if (active)
-				{
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
-				}
-				if (ImGui::Button(icon, ImVec2(btnH, btnH)))
+				const bool pressed = active ? chrome::ActiveToolButton(icon, ImVec2(iconW, btnH)) : chrome::GhostButton(icon, ImVec2(iconW, btnH));
+				if (pressed)
 				{
 					m_gizmoOp = op;
 				}
 				toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
-				if (active)
-				{
-					ImGui::PopStyleColor(4);
-				}
 				ImGui::SetItemTooltip("%s", tooltip);
 			};
 			tool(ICON_FA_UP_DOWN_LEFT_RIGHT, 0, "Translate (W)");
@@ -895,7 +920,8 @@ namespace aether::app
 			ImGui::SameLine();
 			tool(ICON_FA_EXPAND, 2, "Scale (R)");
 			ImGui::SameLine(0.0f, 10.0f);
-			if (ImGui::Button(m_gizmoLocal ? "Local" : "World", ImVec2(0.0f, btnH)))
+			// Space toggle: amber text signals the non-default Local space.
+			if (chrome::GhostButton(m_gizmoLocal ? "Local" : "World", ImVec2(0.0f, btnH), m_gizmoLocal ? chrome::kAccentHi : chrome::kMuted))
 			{
 				m_gizmoLocal = !m_gizmoLocal;
 			}
@@ -905,43 +931,38 @@ namespace aether::app
 		ImGui::EndChild();
 
 		// Center pill: Play/Stop, horizontally centered over the scene.
-		const float playBtnW = ImGui::CalcTextSize(toolbarPlaying ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		const char* playSizeLabel = toolbarPlaying ? ICON_FA_STOP " Stop" : (toolbarCompiling ? ICON_FA_GEAR " Compiling" : ICON_FA_PLAY " Play");
+		const float playBtnW = ImGui::CalcTextSize(playSizeLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 		const float playPillW = playBtnW + pillPad.x * 2.0f;
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - playPillW) * 0.5f, pillTop));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
-			if (!toolbarPlaying)
-			{
-				pushFlatButtonStyle();
-			}
 			DrawPlayControls(context);
 			toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
-			if (!toolbarPlaying)
-			{
-				ImGui::PopStyleColor(3);
-			}
 		}
 		ImGui::EndChild();
-		ImGui::PopStyleColor();
 
-		// Right pill: view settings gear, anchored to the right edge.
-		const float gearPillW = btnH + pillPad.x * 2.0f;
+		// Right pill: view settings gear, anchored to the right edge. Sized for the
+		// FA advance so the glyph centers (see the tool buttons above).
+		const float gearBtnW = std::max(btnH, ImGui::CalcTextSize(ICON_FA_GEAR).x + ImGui::GetStyle().FramePadding.x * 2.0f);
+		const float gearPillW = gearBtnW + pillPad.x * 2.0f;
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - gearPillW - 8.0f, pillTop));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
-			pushFlatButtonStyle();
-			if (ImGui::Button(ICON_FA_GEAR, ImVec2(btnH, btnH)))
+			if (chrome::GhostButton(ICON_FA_GEAR, ImVec2(gearBtnW, btnH)))
 			{
 				ImGui::OpenPopup("##vpSettings");
 			}
 			toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
-			ImGui::PopStyleColor(3);
 			ImGui::SetItemTooltip("View settings");
+			ImGui::PushStyleColor(ImGuiCol_PopupBg, chrome::WithAlpha(chrome::kPanelHi, 0.98f));
+			ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 4.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
 			if (ImGui::BeginPopup("##vpSettings"))
 			{
 				toolbarControlActive = true;
+				chrome::SectionTag("VIEW SETTINGS");
+				ImGui::Spacing();
 				const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
 				int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
 				ImGui::SetNextItemWidth(150.0f);
@@ -967,17 +988,20 @@ namespace aether::app
 				const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
 				ImGui::SetNextItemWidth(150.0f);
 				ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
-				ImGui::Separator();
+				ImGui::Spacing();
+				chrome::SectionTag("OVERLAYS");
+				ImGui::Spacing();
 				ImGui::Checkbox("Stats overlay", &m_viewportShowStats);
 				ImGui::Checkbox("Mouse overlay", &m_viewportShowMouse);
 				ImGui::EndPopup();
 			}
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor();
 		}
 		ImGui::EndChild();
-		ImGui::PopStyleColor();
 
 		ImGui::PopStyleVar(4);
-		ImGui::PopStyleColor();
+		ImGui::PopStyleColor(2);
 
 		// Look-through preview pill (bottom-center), shown for camera selections.
 		DrawCameraPreviewControls(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageSize.x, imageSize.y});
