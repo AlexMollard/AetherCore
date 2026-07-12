@@ -29,11 +29,13 @@
 #include "debug/OpenInEditor.hpp"
 #include "debug/SceneSelection.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "editor/ModelBake.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/FileUtil.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/TextureRegistry.hpp"
+#include "rendering/RenderingSubsystem.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
@@ -116,6 +118,20 @@ namespace aether::app
 				case dragdrop::FileKind::Unknown:
 				default:
 					return SceneSelection::AssetKind::File;
+			}
+		}
+
+		dragdrop::FileKind FromSelectionKind(SceneSelection::AssetKind kind)
+		{
+			switch (kind)
+			{
+				case SceneSelection::AssetKind::Model: return dragdrop::FileKind::Model;
+				case SceneSelection::AssetKind::Material: return dragdrop::FileKind::Material;
+				case SceneSelection::AssetKind::Texture: return dragdrop::FileKind::Texture;
+				case SceneSelection::AssetKind::Script: return dragdrop::FileKind::Script;
+				case SceneSelection::AssetKind::Prefab: return dragdrop::FileKind::Prefab;
+				case SceneSelection::AssetKind::Scene: return dragdrop::FileKind::Scene;
+				default: return dragdrop::FileKind::Unknown;
 			}
 		}
 
@@ -637,6 +653,24 @@ namespace aether::app
 			return;
 		}
 
+		// Mirror an asset selected elsewhere (e.g. the asset.select control
+		// method) so the preview card follows the editor-wide selection.
+		if (auto* selection = context.TryGet<SceneSelection>(); selection != nullptr && selection->HasAsset())
+		{
+			const auto& asset = selection->SelectedAsset();
+			if (asset.path != m_lastAdoptedAsset)
+			{
+				m_lastAdoptedAsset = asset.path;
+				if (asset.path != m_selectedPath && asset.path != m_selectedPayloadPath)
+				{
+					m_selectedPath = asset.path;
+					m_selectedPayloadPath = asset.path;
+					m_selectedKind = FromSelectionKind(asset.kind);
+					m_selectedIsDirectory = false;
+				}
+			}
+		}
+
 		// Cached tree: rescan on demand, after file operations, and when stale.
 		if (!m_treeDirty && ImGui::GetTime() - m_lastScanTime > kAutoRescanSeconds)
 		{
@@ -1124,6 +1158,16 @@ namespace aether::app
 			}
 			m_previewImGuiId = 0;
 		}
+		if (m_previewIsModel)
+		{
+			auto* rendering = context.TryGet<aether::RenderingSubsystem>();
+			auto* assets = context.TryGet<AssetManager>();
+			if (rendering != nullptr && assets != nullptr)
+			{
+				rendering->GetModelPreview().ClearModel(*assets);
+			}
+			m_previewIsModel = false;
+		}
 		if (m_previewTexture.IsValid())
 		{
 			if (auto* assets = context.TryGet<AssetManager>())
@@ -1193,6 +1237,39 @@ namespace aether::app
 			return;
 		}
 
+		if (m_selectedKind == dragdrop::FileKind::Model)
+		{
+			// Turntable 3D thumbnail: bake raw glTF if needed (same as the drop
+			// path), then stage the model in the isolated preview renderer.
+			auto* assets = context.TryGet<AssetManager>();
+			auto* rendering = context.TryGet<aether::RenderingSubsystem>();
+			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+			if (assets == nullptr || rendering == nullptr || imgui == nullptr)
+			{
+				m_previewFailed = true;
+				return;
+			}
+			const std::string modelPath = m_selectedPayloadPath.empty() ? m_selectedPath : m_selectedPayloadPath;
+			if (const auto* project = context.TryGet<EditorProjectContext>(); project != nullptr && project->IsLoaded())
+			{
+				std::string bakeError;
+				(void) editor::EnsureModelBaked(modelPath, *project, bakeError);
+			}
+			std::string error;
+			if (rendering->GetModelPreview().ShowModel(*assets, modelPath, error))
+			{
+				const ImTextureID id = imgui->RegisterTexture(rendering->GetModelPreview().GetColorView(), gpu::ImageLayout::ShaderReadOnly);
+				if (id != ImTextureID_Invalid)
+				{
+					m_previewImGuiId = static_cast<std::uint64_t>(id);
+					m_previewExtent = {aether::ModelPreviewService::kSize, aether::ModelPreviewService::kSize};
+					m_previewIsModel = true;
+				}
+			}
+			m_previewFailed = !m_previewIsModel;
+			return;
+		}
+
 		if (IsTextPreviewable(path))
 		{
 			if (auto text = io::file_util::ReadText(path))
@@ -1233,7 +1310,7 @@ namespace aether::app
 		ImGui::TextUnformatted(path.filename().generic_string().c_str());
 
 		const float contentH = ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing();
-		if (m_previewIsImage && m_previewImGuiId != 0 && m_previewExtent.width > 0 && m_previewExtent.height > 0)
+		if ((m_previewIsImage || m_previewIsModel) && m_previewImGuiId != 0 && m_previewExtent.width > 0 && m_previewExtent.height > 0)
 		{
 			// Fit into the card, preserving aspect.
 			const float availW = ImGui::GetContentRegionAvail().x;
@@ -1257,8 +1334,15 @@ namespace aether::app
 			ImGui::TextDisabled(m_previewFailed ? "Preview could not be loaded." : "No preview for this file type.");
 		}
 
-		// Meta line: extent for images, plus the payload identity.
-		if (m_previewIsImage)
+		// Meta line: extent for images, primitive count for models, payload identity.
+		if (m_previewIsModel)
+		{
+			if (auto* rendering = context.TryGet<aether::RenderingSubsystem>())
+			{
+				ImGui::TextDisabled("%zu primitive(s)  \xC2\xB7  %s", rendering->GetModelPreview().PrimitiveCount(), m_selectedPayloadPath.c_str());
+			}
+		}
+		else if (m_previewIsImage)
 		{
 			ImGui::TextDisabled("%u x %u  \xC2\xB7  %s", m_previewExtent.width, m_previewExtent.height, m_selectedPayloadPath.c_str());
 		}

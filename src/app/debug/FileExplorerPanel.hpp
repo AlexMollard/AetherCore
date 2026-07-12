@@ -87,6 +87,7 @@ namespace aether::app
 		std::string m_selectedPath;        // generic_string of the selected entry
 		std::string m_selectedPayloadPath; // project:// for assets, absolute for scripts
 		dragdrop::FileKind m_selectedKind = dragdrop::FileKind::Unknown;
+		std::string m_lastAdoptedAsset; // external SceneSelection asset we last mirrored
 		bool m_selectedIsDirectory = false;
 
 		// Preview cache, valid while m_previewLoadedFor == m_selectedPath.
@@ -96,6 +97,7 @@ namespace aether::app
 		gpu::Extent2D m_previewExtent{};
 		std::string m_previewText;          // truncated text excerpt
 		bool m_previewIsImage = false;
+		bool m_previewIsModel = false;
 		bool m_previewIsText = false;
 		bool m_previewFailed = false;
 

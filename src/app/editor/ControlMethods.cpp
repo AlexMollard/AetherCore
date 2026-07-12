@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -539,6 +540,27 @@ namespace aether::app::editor
 			        if (component.empty()) { return json{{"error", "component name required"}}; }
 			        windows->focusInspectorComponent(component);
 			        return json{{"focused", component}};
+		        }});
+
+		methods.push_back({"asset.select", "select_asset", "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.", true, Obj({{"path", StrProp()}}, {"path"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* selection = ctx.services.TryGet<SceneSelection>();
+			        if (selection == nullptr) { return json{{"error", "no selection service (editor only)"}}; }
+			        const std::string path = p.value("path", std::string{});
+			        if (path.empty()) { return json{{"error", "path is required"}}; }
+			        // Infer the asset kind from the extension (mirrors the File Explorer).
+			        std::string ext = std::filesystem::path(path).extension().generic_string();
+			        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			        SceneSelection::AssetKind kind = SceneSelection::AssetKind::File;
+			        if (ext == ".mesh" || ext == ".gltf" || ext == ".glb") { kind = SceneSelection::AssetKind::Model; }
+			        else if (ext == ".cs") { kind = SceneSelection::AssetKind::Script; }
+			        else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".dds" || ext == ".texture") { kind = SceneSelection::AssetKind::Texture; }
+			        else if (path.find(".prefab.toml") != std::string::npos) { kind = SceneSelection::AssetKind::Prefab; }
+			        else if (path.find(".scene.toml") != std::string::npos) { kind = SceneSelection::AssetKind::Scene; }
+			        const std::string name = std::filesystem::path(path).filename().generic_string();
+			        selection->SelectAsset(kind, path, name);
+			        return json{{"selected", path}, {"kind", static_cast<int>(kind)}};
 		        }});
 
 		methods.push_back({"scene.select", "select_entity", "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.", true, Obj({{"id", IntProp()}}, {"id"}),

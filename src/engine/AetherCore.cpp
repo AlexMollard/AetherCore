@@ -592,6 +592,7 @@ namespace aether
 		shadowService.PrepareQueues(drawSlot, world);
 		localShadowService.PrepareQueues(drawSlot, world);
 		m_rendering->GetCameraPreview().PrepareQueue(drawSlot, world);
+		m_rendering->GetModelPreview().PrepareQueue(drawSlot);
 
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;
@@ -804,6 +805,7 @@ namespace aether
 		// resource-table addresses), overriding the camera to the preview POV and
 		// staging the preview's own light binning.
 		m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager());
+		m_rendering->GetModelPreview().BuildFrameConstants(fc, frameIdx);
 		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);
 		m_currentCmdList.EndDebugLabel();

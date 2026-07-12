@@ -12,6 +12,7 @@
 #include "passes/CullPass.hpp"
 #include "passes/GTAOPass.hpp"
 #include "rendering/CameraPreviewService.hpp"
+#include "rendering/ModelPreviewService.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/GraphicsPipeline.hpp"
@@ -170,6 +171,11 @@ namespace aether
 			return m_cameraPreview;
 		}
 
+		[[nodiscard]] ModelPreviewService& GetModelPreview()
+		{
+			return m_modelPreview;
+		}
+
 		[[nodiscard]] ui::UiRenderer& GetUiRenderer()
 		{
 			return m_uiRenderer;
@@ -212,6 +218,7 @@ namespace aether
 		ShadowService m_shadowService;
 		LocalShadowService m_localShadowService;
 		CameraPreviewService m_cameraPreview;
+		ModelPreviewService m_modelPreview;
 		RenderTargetService m_renderTargetService;
 		CullPass m_cullPass;
 		GraphicsPipeline m_preDepthPipeline;

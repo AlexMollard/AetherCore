@@ -208,6 +208,7 @@ namespace aether
 		m_shadowService.Initialize(vk, swapchain, bindless, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
 		m_cameraPreview.Initialize(vk, bindless, m_renderQueuePipelines, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
+		m_modelPreview.Initialize(vk, bindless, m_renderQueuePipelines, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
 		m_cullPass.Initialize(vk.GetDevice().device);
 
@@ -325,6 +326,9 @@ namespace aether
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
 		m_cameraPreview.Shutdown();
+		// The File Explorer clears any staged model on detach; a nullptr here only
+		// skips registry releases the registries' own shutdown handles anyway.
+		m_modelPreview.Shutdown(nullptr);
 		m_frameConstantsBuffer.Shutdown();
 
 		for (auto& buf: m_resourceTableBuffers)
@@ -484,6 +488,8 @@ namespace aether
 		m_shadowService.DiscardPendingQueue(slot);
 		m_localShadowService.DiscardPendingQueue(slot);
 		m_renderTargetService.DiscardPendingQueues(slot);
+		m_cameraPreview.DiscardPendingQueue(slot);
+		m_modelPreview.DiscardPendingQueue(slot);
 	}
 
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
@@ -674,6 +680,8 @@ namespace aether
 		// light buffers it consumes are already produced. Inert when disabled.
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline());
+		m_modelPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
+		m_modelPreview.RegisterGraphicsPasses(m_renderGraph, bindless, m_postProcessStack);
 
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
