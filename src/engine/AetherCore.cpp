@@ -83,6 +83,11 @@ namespace aether
 		// -- 2. Graphics device ----------------------------------------------
 		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics}));
 		m_screenshotService.Init(m_gpu->GetDevice(), m_gpu->GetGraphicsQueueFamily(), m_gpu->GetGraphicsQueue());
+		// Capture whole-frame screenshots from inside the frame command buffer while
+		// the image is still owned + in COLOR_ATTACHMENT, not after present.
+		m_gpu->GetSwapchain().SetPrePresentCapture(
+		        [this](void* cmd, void* image, gpu::Extent2D extent)
+		        { m_screenshotService.RecordFrameCapture(cmd, image, extent, m_gpu->GetSwapchainColorFormat()); });
 
 		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();
@@ -795,9 +800,10 @@ namespace aether
 		m_rendering->GetRenderGraph().BeginFrame(frameIdx);
 		fc.resourceTableAddr = static_cast<std::uint64_t>(m_rendering->PublishFrameResourceTable(frameIdx));
 		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
-		// Build the camera-preview frame constants from the same fc (keeps lighting /
-		// shadow / resource-table addresses), overriding the camera to the preview POV.
-		m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx);
+		// Build the camera-preview frame constants from the same fc (keeps shadow /
+		// resource-table addresses), overriding the camera to the preview POV and
+		// staging the preview's own light binning.
+		m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager());
 		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);
 		m_currentCmdList.EndDebugLabel();

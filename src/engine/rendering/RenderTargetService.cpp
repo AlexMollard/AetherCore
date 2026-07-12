@@ -190,6 +190,11 @@ namespace aether
 		{
 			return;
 		}
+		if (m_lightingManager != nullptr && it->second.lightViewId != kInvalidLightView)
+		{
+			m_lightingManager->UnregisterView(it->second.lightViewId);
+			it->second.lightViewId = kInvalidLightView;
+		}
 
 		m_graph->RemovePass("$CameraRT_" + std::to_string(id));
 		m_graph->RemovePass("$CullDraws_RTT_" + std::to_string(id));
@@ -291,10 +296,21 @@ namespace aether
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
 			                const auto frameIdx = ctx.frameSlot;
-			                m_lightingManager->UpdateForView(frameIdx, *cam, gpu::Extent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
+			                // Bin local lights against THIS camera's frustum (the main
+			                // view's screen-space tile lists are wrong from any other POV).
+			                if (rit->second.lightViewId == kInvalidLightView)
+			                {
+				                rit->second.lightViewId = m_lightingManager->RegisterView(rit->second.debugName);
+			                }
+			                const bool lit = rit->second.lightViewId != kInvalidLightView
+			                        && m_lightingManager->PrepareView(rit->second.lightViewId, frameIdx, fc.view, fc.proj, cam->GetNearPlane(), gpu::Extent2D(rit->second.extent), fc);
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
+			                if (lit)
+			                {
+				                m_lightingManager->RecordBinLights(rit->second.lightViewId, frameIdx, ctx.recorder.View());
+			                }
 			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, ctx.frameSlot);
 		                })
 		        .OnDebugDisabled(
@@ -325,7 +341,10 @@ namespace aether
 			                }
 
 			                const auto frameIdx = ctx.frameSlot;
-			                auto lightingAddr = m_lightingManager ? m_lightingManager->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
+			                // Shade with THIS target's per-view tile lists (bound during prepare).
+			                auto lightingAddr = m_lightingManager && rit->second.lightViewId != kInvalidLightView
+			                        ? m_lightingManager->GetLightingAddresses(rit->second.lightViewId, frameIdx)
+			                        : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
 			                const gpu::CullMode cullMode = m_renderer->GetCullMode();

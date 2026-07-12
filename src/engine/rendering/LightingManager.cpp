@@ -15,6 +15,7 @@
 #include "io/FileSystem.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "utils/Expected.hpp"
+#include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/ShaderUtils.hpp"
 
@@ -27,9 +28,13 @@ namespace aether
 		m_context = &context;
 		m_renderer = nullptr;
 
+		// View 0 is permanently the main camera.
+		m_views[kMainLightView].registered = true;
+		m_views[kMainLightView].debugName = "Main";
+
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
-			EnsureBuffers(i, 1, 1, 1);
+			EnsureLightsBuffer(i, 1);
 		}
 	}
 
@@ -46,19 +51,13 @@ namespace aether
 			return;
 		}
 
-		for (auto& frame: m_buffers)
+		for (auto& frame: m_lightBuffers)
 		{
-			auto destroyBuf = [](gpu::BufferHandle& h)
+			if (frame.lightsHandle.IsValid())
 			{
-				if (h.IsValid())
-				{
-					gpu::ResourceRegistry::Destroy(h);
-					h = {};
-				}
-			};
-			destroyBuf(frame.lightsHandle);
-			destroyBuf(frame.tileHeadersHandle);
-			destroyBuf(frame.tileIndicesHandle);
+				gpu::ResourceRegistry::Destroy(frame.lightsHandle);
+				frame.lightsHandle = {};
+			}
 			for (auto& stale: frame.staleBuffers)
 			{
 				if (stale.IsValid())
@@ -68,27 +67,20 @@ namespace aether
 			}
 			frame.staleBuffers.clear();
 			frame.lightsMapped = nullptr;
-			frame.tileHeadersMapped = nullptr;
-			frame.tileIndicesMapped = nullptr;
 			frame.lightsBuffer = nullptr;
-			frame.tileHeadersBuffer = nullptr;
-			frame.tileIndicesBuffer = nullptr;
-			frame.lightsSize = 0;
-			frame.tileHeadersSize = 0;
-			frame.tileIndicesSize = 0;
-			frame.lightsCapacity = 0;
-			frame.headersCapacity = 0;
-			frame.indicesCapacity = 0;
 			frame.lightsDeviceAddr = 0;
-			frame.tileHeadersDeviceAddr = 0;
-			frame.tileIndicesDeviceAddr = 0;
+			frame.lightsSize = 0;
+			frame.lightsCapacity = 0;
+			frame.lightCount = 0;
 		}
 
-		if (m_initPipelineHandle.IsValid())
+		for (auto& view: m_views)
 		{
-			gpu::ResourceRegistry::Destroy(m_initPipelineHandle);
-			m_initPipelineHandle = {};
+			DestroyViewBuffers(view);
+			view.registered = false;
+			view.debugName.clear();
 		}
+
 		if (m_cullPipelineHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_cullPipelineHandle);
@@ -100,22 +92,31 @@ namespace aether
 		m_device = nullptr;
 	}
 
-	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
-	        const Camera& camera,
-	        const gpu::Extent2D extent,
-	        FrameConstants& fc,
-	        const bool enableBinningForView,
-	        const std::span<const Renderer::PointLight> pointLights,
-	        const std::span<const Renderer::SpotLight> spotLights) const
+	LightViewId LightingManager::RegisterView(std::string debugName)
 	{
-		AE_PROFILE_ZONE();
-		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
+		// View 0 is reserved for the main camera.
+		for (LightViewId id = 1; id < kMaxLightViews; ++id)
 		{
-			DisableForView(fc);
+			if (!m_views[id].registered)
+			{
+				m_views[id].registered = true;
+				m_views[id].debugName = std::move(debugName);
+				return id;
+			}
+		}
+		AE_WARN(LogCategory::Render, "LightingManager: light-view pool exhausted ({} views); '{}' will shade without local lights.", kMaxLightViews, debugName);
+		return kInvalidLightView;
+	}
+
+	void LightingManager::UnregisterView(const LightViewId viewId)
+	{
+		if (viewId == kMainLightView || viewId >= kMaxLightViews || !m_views[viewId].registered)
+		{
 			return;
 		}
-
-		UpdateForViewCpu(frameSlot, camera, extent, fc, pointLights, spotLights);
+		DestroyViewBuffers(m_views[viewId]);
+		m_views[viewId].registered = false;
+		m_views[viewId].debugName.clear();
 	}
 
 	void LightingManager::BuildLightList(std::vector<GpuLight>& outLights, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
@@ -144,169 +145,11 @@ namespace aether
 		}
 	}
 
-	void LightingManager::UpdateForViewCpu(
-	        const std::uint32_t frameSlot, const Camera& camera, const gpu::Extent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	void LightingManager::EnsureLightsBuffer(const std::uint32_t frameSlot, const std::size_t lightCount) const
 	{
 		AE_PROFILE_ZONE();
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
-		std::vector<GpuLight> lights;
-		BuildLightList(lights, pointLights, spotLights);
-
-		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
-		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
-		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
-		std::vector<TileHeader> headers(tileCount);
-		std::vector<std::uint32_t> counts(tileCount, 0u);
-
-		struct ScreenBounds
-		{
-			int minTx = 0;
-			int maxTx = -1;
-			int minTy = 0;
-			int maxTy = -1;
-			bool visible = false;
-		};
-
-		std::vector<ScreenBounds> bounds(lights.size());
-
-		const glm::mat4 view = camera.GetViewMatrix();
-		const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-		const glm::mat4 proj = camera.GetProjectionMatrix(aspect);
-		const glm::mat4 viewProj = proj * view;
-		const float pixelScaleY = 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]);
-		const float nearClip = camera.GetNearPlane();
-
-		auto computeLightBounds = [&](const GpuLight& light, ScreenBounds& out)
-		{
-			const glm::vec4 viewPos4 = view * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
-			const float depth = -viewPos4.z;
-			const float r = light.positionRadius.w;
-			if (depth + r < nearClip)
-			{
-				out.visible = false;
-				return;
-			}
-			if (depth <= nearClip + r)
-			{
-				out.minTx = 0;
-				out.maxTx = static_cast<int>(tilesX - 1u);
-				out.minTy = 0;
-				out.maxTy = static_cast<int>(tilesY - 1u);
-				out.visible = true;
-				return;
-			}
-
-			const glm::vec4 clip = viewProj * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
-			if (std::abs(clip.w) <= 1e-6f)
-			{
-				out.visible = false;
-				return;
-			}
-
-			const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-			const float screenX = (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width);
-			const float screenY = (ndc.y * 0.5f + 0.5f) * static_cast<float>(extent.height);
-			const float effectiveDepth = std::max(std::sqrt(std::max(depth * depth - r * r, 0.0f)), nearClip);
-			const float radiusPx = r * pixelScaleY / effectiveDepth;
-			if (radiusPx <= 0.5f)
-			{
-				out.visible = false;
-				return;
-			}
-
-			const float minX = screenX - radiusPx;
-			const float maxX = screenX + radiusPx;
-			const float minY = screenY - radiusPx;
-			const float maxY = screenY + radiusPx;
-
-			if (maxX < 0.0f || maxY < 0.0f || minX >= static_cast<float>(extent.width) || minY >= static_cast<float>(extent.height))
-			{
-				out.visible = false;
-				return;
-			}
-
-			out.minTx = static_cast<int>(glm::clamp(std::floor(minX / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesX - 1u)));
-			out.maxTx = static_cast<int>(glm::clamp(std::floor(maxX / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesX - 1u)));
-			out.minTy = static_cast<int>(glm::clamp(std::floor(minY / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesY - 1u)));
-			out.maxTy = static_cast<int>(glm::clamp(std::floor(maxY / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesY - 1u)));
-			out.visible = true;
-		};
-
-		for (std::size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex)
-		{
-			computeLightBounds(lights[lightIndex], bounds[lightIndex]);
-			if (!bounds[lightIndex].visible)
-			{
-				continue;
-			}
-			for (int ty = bounds[lightIndex].minTy; ty <= bounds[lightIndex].maxTy; ++ty)
-			{
-				for (int tx = bounds[lightIndex].minTx; tx <= bounds[lightIndex].maxTx; ++tx)
-				{
-					const std::size_t tile = static_cast<std::size_t>(ty) * tilesX + static_cast<std::size_t>(tx);
-					++counts[tile];
-				}
-			}
-		}
-
-		std::uint32_t totalIndices = 0;
-		for (std::size_t tile = 0; tile < tileCount; ++tile)
-		{
-			headers[tile].offset = totalIndices;
-			headers[tile].count = counts[tile];
-			totalIndices += counts[tile];
-		}
-
-		std::vector<std::uint32_t> indices(totalIndices);
-		std::vector<std::uint32_t> cursors(tileCount, 0u);
-		for (std::size_t tile = 0; tile < tileCount; ++tile)
-		{
-			cursors[tile] = headers[tile].offset;
-		}
-
-		for (std::size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex)
-		{
-			if (!bounds[lightIndex].visible)
-			{
-				continue;
-			}
-			for (int ty = bounds[lightIndex].minTy; ty <= bounds[lightIndex].maxTy; ++ty)
-			{
-				for (int tx = bounds[lightIndex].minTx; tx <= bounds[lightIndex].maxTx; ++tx)
-				{
-					const std::size_t tile = static_cast<std::size_t>(ty) * tilesX + static_cast<std::size_t>(tx);
-					indices[cursors[tile]++] = static_cast<std::uint32_t>(lightIndex);
-				}
-			}
-		}
-
-		EnsureBuffers(slot, lights.size(), headers.size(), indices.size());
-		auto& frame = m_buffers[slot];
-		if (!lights.empty())
-		{
-			std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
-		}
-		if (!headers.empty())
-		{
-			std::memcpy(frame.tileHeadersMapped, headers.data(), headers.size() * sizeof(TileHeader));
-		}
-		if (!indices.empty())
-		{
-			std::memcpy(frame.tileIndicesMapped, indices.data(), indices.size() * sizeof(std::uint32_t));
-		}
-		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(lights.size()) * sizeof(GpuLight));
-		gpu::ResourceRegistry::FlushMappedBuffer(frame.tileHeadersHandle, 0, static_cast<gpu::DeviceSize>(headers.size()) * sizeof(TileHeader));
-		gpu::ResourceRegistry::FlushMappedBuffer(frame.tileIndicesHandle, 0, static_cast<gpu::DeviceSize>(indices.size()) * sizeof(std::uint32_t));
-
-		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
-	}
-
-	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
-	{
-		AE_PROFILE_ZONE();
-		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
-		auto& frame = m_buffers[slot];
+		auto& frame = m_lightBuffers[slot];
 
 		// Retire stale buffers from kMaxFramesInFlight frames ago - this slot is
 		// guaranteed to have completed all GPU work referencing them.
@@ -319,100 +162,164 @@ namespace aether
 		}
 		frame.staleBuffers.clear();
 
-		auto ensureBuffer = [&](gpu::BufferHandle& handle, void*& mapped, gpu::Buffer& buffer, gpu::DeviceSize& size, std::size_t& capacity, const std::size_t required, const std::size_t stride)
+		const std::size_t safeRequired = std::max<std::size_t>(lightCount, 1u);
+		if (frame.lightsHandle.IsValid() && frame.lightsCapacity >= safeRequired)
+		{
+			return;
+		}
+
+		frame.lightsCapacity = std::max(safeRequired, frame.lightsCapacity * 2u);
+
+		const gpu::MappedBufferDesc desc{
+		        .size = static_cast<gpu::DeviceSize>(sizeof(GpuLight) * frame.lightsCapacity),
+		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+		        .memoryUsage = gpu::MappedMemoryUsage::Auto,
+		        .debugName = "LightingManager.Lights",
+		};
+		const auto newHandle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!newHandle.IsValid())
+		{
+			Throw(AetherError::Engine("LightingManager: CreateMappedBuffer failed"));
+		}
+
+		if (frame.lightsHandle.IsValid())
+		{
+			frame.staleBuffers.push_back(frame.lightsHandle);
+		}
+		frame.lightsHandle = newHandle;
+
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(frame.lightsHandle);
+		frame.lightsMapped = view.mappedPtr;
+		frame.lightsSize = view.size;
+		frame.lightsBuffer = static_cast<gpu::Buffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(frame.lightsHandle));
+		frame.lightsDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.lightsHandle).deviceAddress;
+		AE_ASSERT_ALWAYS(frame.lightsDeviceAddr != 0, "LightingManager lights buffer requires a valid shader device address.");
+	}
+
+	void LightingManager::EnsureViewBuffers(View& view, const std::uint32_t slot, const std::size_t tileCount, const std::size_t indexCount) const
+	{
+		AE_PROFILE_ZONE();
+		auto& vs = view.slots[slot];
+		auto& frame = m_lightBuffers[slot];
+
+		auto ensure = [&](gpu::BufferHandle& handle, gpu::Buffer& buffer, gpu::DeviceAddress& addr, std::size_t& capacity, const std::size_t required, const std::size_t stride, const char* debugName)
 		{
 			const std::size_t safeRequired = std::max<std::size_t>(required, 1u);
 			if (handle.IsValid() && capacity >= safeRequired)
 			{
 				return;
 			}
-
 			capacity = std::max(safeRequired, capacity * 2u);
-			if (capacity == 0)
-			{
-				capacity = safeRequired;
-			}
 
-			const gpu::MappedBufferDesc desc{
+			// Device-local: these are GPU-written by binLights and GPU-read by the
+			// forward passes - the CPU never touches them.
+			const auto newHandle = gpu::ResourceRegistry::CreateBuffer({
 			        .size = static_cast<gpu::DeviceSize>(stride * capacity),
 			        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
-			        .memoryUsage = gpu::MappedMemoryUsage::Auto,
-			        .debugName = "LightingManager.FrameBuffer",
-			};
-			const auto newHandle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			        .debugName = debugName,
+			});
 			if (!newHandle.IsValid())
 			{
-				Throw(AetherError::Engine("LightingManager: CreateMappedBuffer failed"));
+				Throw(AetherError::Engine("LightingManager: view tile buffer creation failed"));
 			}
-
 			if (handle.IsValid())
 			{
+				// Defer destruction on the shared per-slot retire list.
 				frame.staleBuffers.push_back(handle);
 			}
 			handle = newHandle;
-
-			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(handle);
-			mapped = view.mappedPtr;
-			size = view.size;
 			buffer = static_cast<gpu::Buffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(handle));
+			addr = gpu::ResourceRegistry::ResolveBuffer(handle).deviceAddress;
+			AE_ASSERT_ALWAYS(addr != 0, "LightingManager view tile buffer requires a valid shader device address.");
 		};
 
-		ensureBuffer(frame.lightsHandle, frame.lightsMapped, frame.lightsBuffer, frame.lightsSize, frame.lightsCapacity, lightCount, sizeof(GpuLight));
-		ensureBuffer(frame.tileHeadersHandle, frame.tileHeadersMapped, frame.tileHeadersBuffer, frame.tileHeadersSize, frame.headersCapacity, tileCount, sizeof(TileHeader));
-		ensureBuffer(frame.tileIndicesHandle, frame.tileIndicesMapped, frame.tileIndicesBuffer, frame.tileIndicesSize, frame.indicesCapacity, indexCount, sizeof(std::uint32_t));
+		ensure(vs.headersHandle, vs.headersBuffer, vs.headersAddr, vs.headersCapacity, tileCount, sizeof(TileHeader), "LightingManager.TileHeaders");
+		ensure(vs.indicesHandle, vs.indicesBuffer, vs.indicesAddr, vs.indicesCapacity, indexCount, sizeof(std::uint32_t), "LightingManager.TileIndices");
+	}
 
-		frame.lightsDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.lightsHandle).deviceAddress;
-		frame.tileHeadersDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.tileHeadersHandle).deviceAddress;
-		frame.tileIndicesDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.tileIndicesHandle).deviceAddress;
-		AE_ASSERT_ALWAYS(frame.lightsDeviceAddr != 0 && frame.tileHeadersDeviceAddr != 0 && frame.tileIndicesDeviceAddr != 0, "LightingManager buffers require valid shader device addresses.");
+	void LightingManager::DestroyViewBuffers(View& view)
+	{
+		for (auto& vs: view.slots)
+		{
+			if (vs.headersHandle.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(vs.headersHandle);
+			}
+			if (vs.indicesHandle.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(vs.indicesHandle);
+			}
+			vs = ViewSlot{};
+		}
+	}
+
+	void LightingManager::StageViewDispatch(View& view, const std::uint32_t slot, const glm::mat4& viewMat, const glm::mat4& proj, const float nearPlane, const gpu::Extent2D extent, FrameConstants& fc) const
+	{
+		auto& frame = m_lightBuffers[slot];
+		auto& vs = view.slots[slot];
+
+		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
+		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
+		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
+
+		EnsureViewBuffers(view, slot, tileCount, tileCount * static_cast<std::size_t>(m_maxLightsPerTile));
+
+		// The shader culls in eye space: it needs the view matrix plus the signed
+		// inverse projection scales to build per-tile frustum planes (1/proj[1][1]
+		// carries the Vulkan Y flip). Perspective projections only.
+		vs.push.lightDataAddr = frame.lightsDeviceAddr;
+		vs.push.tileHeadersAddr = vs.headersAddr;
+		vs.push.tileLightIndicesAddr = vs.indicesAddr;
+		vs.push.view = viewMat;
+		vs.push.params0 = glm::vec4(nearPlane, 1.0f / proj[0][0], 1.0f / proj[1][1], 0.0f);
+		vs.push.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, frame.lightCount);
+		vs.push.params2 = glm::uvec4(m_maxLightsPerTile, extent.width, extent.height, 0u);
+		vs.tilesX = tilesX;
+		vs.tilesY = tilesY;
+		vs.ready = true;
+
+		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, frame.lightCount);
+		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
 	void LightingManager::EnsureComputePipeline() const
 	{
-		AE_PROFILE_ZONE();
-		if (m_initPipelineHandle.IsValid() && m_cullPipelineHandle.IsValid())
+		if (m_cullPipelineHandle.IsValid())
 		{
 			return;
 		}
 
-		auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
-		if (!m_initPipelineHandle.IsValid())
-		{
-			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
-			        gpu::ComputePipelineDesc{
-			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
-			                .shaderEntry = "initTiles",
-			                .debugName = "LightCull.InitTiles",
-			        });
-			if (!m_initPipelineHandle.IsValid())
-			{
-				Throw(AetherError::Vulkan(0, "LightingManager: failed to create initTiles compute pipeline."));
-			}
-		}
-
+		const auto device = m_context->GetDevice().device;
+		m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://tiled_light_cull.spv",
+		                // The module has a single entry point; slangc emits it as "main".
+		                .shaderEntry = "main",
+		                .debugName = "LightCull.BinLights",
+		        });
 		if (!m_cullPipelineHandle.IsValid())
 		{
-			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
-			        gpu::ComputePipelineDesc{
-			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
-			                .shaderEntry = "binLights",
-			                .debugName = "LightCull.BinLights",
-			        });
-			if (!m_cullPipelineHandle.IsValid())
-			{
-				Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
-			}
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
 		}
 	}
 
-	DrawContracts::LightingAddresses LightingManager::GetLightingAddresses(std::uint32_t frameSlot) const
+	DrawContracts::LightingAddresses LightingManager::GetLightingAddresses(const std::uint32_t frameSlot) const
+	{
+		return GetLightingAddresses(kMainLightView, frameSlot);
+	}
+
+	DrawContracts::LightingAddresses LightingManager::GetLightingAddresses(const LightViewId viewId, const std::uint32_t frameSlot) const
 	{
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
-		auto& frame = m_buffers[slot];
+		if (viewId >= kMaxLightViews || !m_views[viewId].registered)
+		{
+			return DrawContracts::LightingAddresses{};
+		}
+		const auto& vs = m_views[viewId].slots[slot];
 		return DrawContracts::LightingAddresses{
-		        .lightDataAddr = frame.lightsDeviceAddr,
-		        .tileHeadersAddr = frame.tileHeadersDeviceAddr,
-		        .tileLightIndicesAddr = frame.tileIndicesDeviceAddr,
+		        .lightDataAddr = m_lightBuffers[slot].lightsDeviceAddr,
+		        .tileHeadersAddr = vs.headersAddr,
+		        .tileLightIndicesAddr = vs.indicesAddr,
 		};
 	}
 
@@ -420,13 +327,13 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
-		auto& frame = m_buffers[slot];
+		auto& frame = m_lightBuffers[slot];
 		if (!frame.lightsHandle.IsValid() || frame.lightsMapped == nullptr || shadowIndices.empty())
 		{
 			return;
 		}
 
-		const std::size_t lightCount = frame.lightsSize / sizeof(GpuLight);
+		const std::size_t lightCount = frame.lightCount;
 		const std::size_t applyCount = std::min(lightCount, shadowIndices.size());
 		auto mapped = static_cast<GpuLight*>(frame.lightsMapped);
 		for (std::size_t i = 0; i < applyCount; ++i)
@@ -460,6 +367,10 @@ namespace aether
 
 		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
 
+		// One pass bins every prepared view this frame (main + camera preview +
+		// any secondary view not recorded inline via RecordBinLights). All views
+		// share the light-data upload; each dispatch culls against its own frustum
+		// into its own tile buffers.
 		graph.AddComputeBufferPass({
 		                                   .name = "$Lighting.BinLights",
 		                                   .reads = {m_rgLights},
@@ -471,18 +382,39 @@ namespace aether
 		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
 		                {
 			                const std::uint32_t slot = ctx.frameSlot;
-			                if (!m_lightDataReady[slot] || m_lightTileGroups[slot] == 0)
+			                if (!m_lightDataReady[slot])
 			                {
 				                return;
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
-			                cmd.BindComputePipeline(cullPipeline);
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush[slot]));
-			                cmd.Dispatch(m_lightTileGroups[slot], 1, 1);
+			                bool bound = false;
+			                for (auto& view: m_views)
+			                {
+				                auto& vs = view.slots[slot];
+				                if (!view.registered || !vs.ready)
+				                {
+					                continue;
+				                }
+				                if (!bound)
+				                {
+					                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+					                cmd.BindComputePipeline(cullPipeline);
+					                bound = true;
+				                }
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(vs.push));
+				                cmd.Dispatch(vs.tilesX, vs.tilesY, 1);
+				                vs.ready = false;
+			                }
+			                if (bound)
+			                {
+				                // Secondary views' tile buffers are not graph-tracked;
+				                // make the binning writes visible to their consumers.
+				                cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader,
+				                        gpu::AccessFlags::ShaderStorageWrite,
+				                        gpu::PipelineStage::FragmentShader | gpu::PipelineStage::ComputeShader,
+				                        gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderStorageRead);
+			                }
 		                });
-
-		m_rgPassesRegistered = true;
 	}
 
 	bool LightingManager::PrepareForRenderGraph(
@@ -512,52 +444,74 @@ namespace aether
 		std::vector<GpuLight> lights;
 		BuildLightList(lights, pointLights, spotLights);
 
-		if (lights.empty() && pointLights.empty() && spotLights.empty())
+		if (lights.empty())
 		{
 			DisableForView(fc);
 			m_lightDataReady[slot] = false;
+			m_lightBuffers[slot].lightCount = 0;
 			return false;
 		}
 
-		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
-		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
-		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
-		const std::size_t indexCount = tileCount * static_cast<std::size_t>(m_maxLightsPerTile);
-
-		EnsureBuffers(slot, lights.size(), tileCount, indexCount);
-		auto& frame = m_buffers[slot];
-		if (!lights.empty())
-		{
-			std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
-		}
+		EnsureLightsBuffer(slot, lights.size());
+		auto& frame = m_lightBuffers[slot];
+		std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
 		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(lights.size()) * sizeof(GpuLight));
+		frame.lightCount = static_cast<std::uint32_t>(lights.size());
 
 		EnsureComputePipeline();
 
-		m_lightPush[slot].viewProj = proj * view;
-		m_lightPush[slot].params0 = glm::vec4(nearPlane, 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
-		m_lightPush[slot].params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		m_lightPush[slot].params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
-		m_lightPush[slot].lightDataAddr = frame.lightsDeviceAddr;
-		m_lightPush[slot].tileHeadersAddr = frame.tileHeadersDeviceAddr;
-		m_lightPush[slot].tileLightIndicesAddr = frame.tileIndicesDeviceAddr;
-
-		m_lightTileGroups[slot] = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
-		m_lightLightGroups[slot] = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
+		StageViewDispatch(m_views[kMainLightView], slot, view, proj, nearPlane, extent, fc);
 		m_lightDataReady[slot] = true;
-
-		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
-
 		return true;
+	}
+
+	bool LightingManager::PrepareView(const LightViewId viewId, const std::uint32_t frameSlot, const glm::mat4& view, const glm::mat4& proj, const float nearPlane, const gpu::Extent2D extent, FrameConstants& fc)
+	{
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		if (viewId == kMainLightView || viewId >= kMaxLightViews || !m_views[viewId].registered || extent.width == 0 || extent.height == 0 || !m_lightDataReady[slot] || m_lightBuffers[slot].lightCount == 0)
+		{
+			DisableForView(fc);
+			return false;
+		}
+
+		StageViewDispatch(m_views[viewId], slot, view, proj, nearPlane, extent, fc);
+		return true;
+	}
+
+	void LightingManager::RecordBinLights(const LightViewId viewId, const std::uint32_t frameSlot, gpu::CommandList cmd)
+	{
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		if (viewId >= kMaxLightViews || !m_views[viewId].registered)
+		{
+			return;
+		}
+		auto& vs = m_views[viewId].slots[slot];
+		if (!vs.ready)
+		{
+			return;
+		}
+		vs.ready = false; // consume so $Lighting.BinLights won't dispatch it again
+
+		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
+
+		// The shared light upload is a host write from earlier this frame; the
+		// caller's pass may run before $Lighting.BinLights emits its barrier.
+		cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+		cmd.BindComputePipeline(const_cast<void*>(cullResolved.state));
+		cmd.PushDataRaw(0, gpu::AsPushConstantBytes(vs.push));
+		cmd.Dispatch(vs.tilesX, vs.tilesY, 1);
+		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader,
+		        gpu::AccessFlags::ShaderStorageWrite,
+		        gpu::PipelineStage::FragmentShader | gpu::PipelineStage::ComputeShader,
+		        gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderStorageRead);
 	}
 
 	void LightingManager::UpdateBufferHandles(RenderGraph& graph, const std::uint32_t frameSlot) const
 	{
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
-		auto& frame = m_buffers[slot];
-		graph.UpdateExternalBuffer(m_rgLights, static_cast<void*>(frame.lightsBuffer));
-		graph.UpdateExternalBuffer(m_rgTileHeaders, static_cast<void*>(frame.tileHeadersBuffer));
-		graph.UpdateExternalBuffer(m_rgTileIndices, static_cast<void*>(frame.tileIndicesBuffer));
+		const auto& mainSlot = m_views[kMainLightView].slots[slot];
+		graph.UpdateExternalBuffer(m_rgLights, static_cast<void*>(m_lightBuffers[slot].lightsBuffer));
+		graph.UpdateExternalBuffer(m_rgTileHeaders, static_cast<void*>(mainSlot.headersBuffer));
+		graph.UpdateExternalBuffer(m_rgTileIndices, static_cast<void*>(mainSlot.indicesBuffer));
 	}
 } // namespace aether

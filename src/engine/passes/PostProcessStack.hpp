@@ -118,6 +118,14 @@ namespace aether
 			return m_exposure;
 		}
 
+		// The tonemap HDR->LDR pipeline (R8G8B8A8_UNORM target). Reused by the camera
+		// preview to resolve its own offscreen HDR with the same operator + exposure
+		// as the main view, so the thumbnail matches instead of showing raw HDR.
+		[[nodiscard]] gpu::Pipeline GetTonemapPipeline() const
+		{
+			return m_tonemapPipeline.GetPipeline();
+		}
+
 		// FXAA toggle.  When disabled the $FXAA pass becomes a passthrough
 		// (no blurring) so graph topology stays stable across toggles.
 		void SetFxaaEnabled(bool enabled)

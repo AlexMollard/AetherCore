@@ -8,6 +8,7 @@
 
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuFormat.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 
 namespace aether
@@ -35,9 +36,16 @@ namespace aether
 		// depth (D32) is normalized to grayscale and HDR (RGBA16F) is tonemapped.
 		[[nodiscard]] std::future<std::string> RequestImage(void* image, gpu::Extent2D extent, gpu::Format format, gpu::ImageAspect aspect, gpu::ImageLayout srcLayout, std::string absolutePath);
 
-		// Render thread, once per frame AFTER present: if a capture is pending, read
-		// it back and write the .png. `swapchainColorImage` (PRESENT_SRC) is used for
-		// a whole-frame request; a specific-image request captures its own target.
+		// Render thread, called from Swapchain's pre-present hook while the acquired
+		// swapchain image is still in COLOR_ATTACHMENT: if a whole-frame request is
+		// pending, record the copy into the frame's own command buffer (`cmd`). The
+		// readback is completed later by ProcessPending. `cmd`/`image` are opaque
+		// VkCommandBuffer/VkImage. Cheap no-op when nothing is pending.
+		void RecordFrameCapture(void* cmd, void* swapchainImage, gpu::Extent2D extent, gpu::Format format);
+
+		// Render thread, once per frame AFTER present: completes an in-frame swapchain
+		// capture recorded by RecordFrameCapture, then services any pending
+		// specific-image (non-swapchain) request via a self-contained one-shot copy.
 		void ProcessPending(void* swapchainColorImage, gpu::Extent2D swapchainExtent, gpu::Format swapchainFormat);
 
 		[[nodiscard]] bool IsInitialized() const noexcept { return m_device != nullptr; }
@@ -64,5 +72,21 @@ namespace aether
 			std::promise<std::string> promise;
 		};
 		std::optional<Pending> m_pending;
+
+		// A whole-frame capture whose copy has been recorded into the frame's command
+		// buffer (by RecordFrameCapture) and is awaiting readback in ProcessPending.
+		struct FrameCapture
+		{
+			std::string path;
+			std::promise<std::string> promise;
+			gpu::BufferHandle buffer{};
+			void* mapped = nullptr;
+			std::uint32_t width = 0;
+			std::uint32_t height = 0;
+			gpu::Format format = gpu::Format::Undefined;
+		};
+		std::optional<FrameCapture> m_frameCapture;
+
+		void CompleteFrameCapture();
 	};
 } // namespace aether

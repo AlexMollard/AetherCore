@@ -673,7 +673,7 @@ namespace aether
 		// its own target. Registered after the main forward so the shadow atlas +
 		// light buffers it consumes are already produced. Inert when disabled.
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
-		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless);
+		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline());
 
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);

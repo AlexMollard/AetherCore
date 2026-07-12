@@ -54,7 +54,9 @@ namespace aether
 			        .add_fallback_format({.format = VK_FORMAT_R8G8B8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
 			        .set_desired_present_mode(presentMode)
 			        .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
-			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+			        // TRANSFER_SRC lets the screenshot service copy the composited image
+			        // (with UI) straight out of the swapchain before present.
+			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
 			        .build();
 		};
 
@@ -355,6 +357,14 @@ namespace aether
 
 		FrameSync& frame = m_frames[m_currentFrame];
 		VkCommandBuffer cmd = frame.commandBuffer;
+
+		// While the image is still owned + in COLOR_ATTACHMENT, let a consumer copy
+		// the composited frame out of it (e.g. the screenshot service). Doing this
+		// before the present transition avoids touching a presented/unacquired image.
+		if (m_prePresentCapture)
+		{
+			m_prePresentCapture(static_cast<void*>(cmd), static_cast<void*>(m_images[m_imageIndex]), GetExtent());
+		}
 
 		vkutil::TransitionImage(cmd,
 		        m_images[m_imageIndex],

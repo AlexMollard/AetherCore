@@ -242,28 +242,148 @@ namespace aether
 		return fut;
 	}
 
+	void ScreenshotService::RecordFrameCapture(void* cmdV, void* imageV, gpu::Extent2D extent, gpu::Format format)
+	{
+		if (m_device == nullptr || cmdV == nullptr || imageV == nullptr)
+		{
+			return;
+		}
+
+		// Claim a pending whole-frame request (image == nullptr). Specific-image
+		// requests are serviced by ProcessPending's one-shot path instead.
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			if (!m_pending || m_pending->image != nullptr || m_frameCapture)
+			{
+				return;
+			}
+			m_frameCapture.emplace();
+			m_frameCapture->path = std::move(m_pending->path);
+			m_frameCapture->promise = std::move(m_pending->promise);
+			m_pending.reset();
+		}
+
+		const std::uint32_t bpp = BytesPerPixel(format);
+		const std::uint32_t width = extent.width;
+		const std::uint32_t height = extent.height;
+		if (bpp == 0 || width == 0 || height == 0)
+		{
+			AE_WARN(LogCategory::Render, "ScreenshotService: unsupported swapchain format {} for capture to '{}'.", static_cast<int>(format), m_frameCapture->path);
+			m_frameCapture->promise.set_value(std::string{});
+			m_frameCapture.reset();
+			return;
+		}
+		const std::uint32_t byteSize = width * height * bpp;
+
+		gpu::MappedBufferDesc bufDesc{.size = byteSize, .usage = gpu::BufferUsage::TransferDst, .memoryUsage = gpu::MappedMemoryUsage::Auto, .debugName = "Screenshot"};
+		gpu::BufferHandle bufHandle = gpu::ResourceRegistry::CreateMappedBuffer(bufDesc);
+		if (!bufHandle.IsValid())
+		{
+			m_frameCapture->promise.set_value(std::string{});
+			m_frameCapture.reset();
+			return;
+		}
+
+		auto cmd = static_cast<VkCommandBuffer>(cmdV);
+		auto image = static_cast<VkImage>(imageV);
+		auto buffer = static_cast<VkBuffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(bufHandle));
+
+		const auto barrier = [&](VkImageLayout oldL, VkImageLayout newL, VkAccessFlags srcA, VkAccessFlags dstA, VkPipelineStageFlags srcS, VkPipelineStageFlags dstS)
+		{
+			VkImageMemoryBarrier b{
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			        .srcAccessMask = srcA,
+			        .dstAccessMask = dstA,
+			        .oldLayout = oldL,
+			        .newLayout = newL,
+			        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			        .image = image,
+			        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+			};
+			vkCmdPipelineBarrier(cmd, srcS, dstS, 0, 0, nullptr, 0, nullptr, 1, &b);
+		};
+
+		// The image is in COLOR_ATTACHMENT here (just before the present transition).
+		barrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		VkBufferImageCopy region{
+		        .bufferOffset = 0,
+		        .bufferRowLength = 0,
+		        .bufferImageHeight = 0,
+		        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+		        .imageOffset = {0, 0, 0},
+		        .imageExtent = {width, height, 1},
+		};
+		vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &region);
+
+		// Restore COLOR_ATTACHMENT so the following present transition sees its
+		// expected old layout.
+		barrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+		m_frameCapture->buffer = bufHandle;
+		m_frameCapture->mapped = gpu::ResourceRegistry::ResolveMappedBuffer(bufHandle).mappedPtr;
+		m_frameCapture->width = width;
+		m_frameCapture->height = height;
+		m_frameCapture->format = format;
+	}
+
+	void ScreenshotService::CompleteFrameCapture()
+	{
+		if (!m_frameCapture)
+		{
+			return;
+		}
+		FrameCapture fc = std::move(*m_frameCapture);
+		m_frameCapture.reset();
+
+		bool ok = false;
+		if (fc.buffer.IsValid() && fc.mapped != nullptr)
+		{
+			// The copy was recorded into the frame that has since been submitted; wait
+			// for it to retire before reading the mapped buffer.
+			vkQueueWaitIdle(static_cast<VkQueue>(m_queue));
+			const std::uint32_t byteSize = fc.width * fc.height * BytesPerPixel(fc.format);
+			std::vector<std::uint8_t> raw(byteSize);
+			std::memcpy(raw.data(), fc.mapped, byteSize);
+			std::vector<std::uint8_t> rgba = ConvertToRgba(fc.format, raw.data(), fc.width, fc.height);
+			ok = !rgba.empty() && WritePng(fc.path, rgba.data(), fc.width, fc.height);
+		}
+		if (fc.buffer.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(fc.buffer);
+		}
+		if (!ok)
+		{
+			AE_WARN(LogCategory::Render, "ScreenshotService: frame capture to '{}' failed.", fc.path);
+		}
+		fc.promise.set_value(ok ? fc.path : std::string{});
+	}
+
 	void ScreenshotService::ProcessPending(void* swapchainColorImage, gpu::Extent2D swapchainExtent, gpu::Format swapchainFormat)
 	{
+		(void) swapchainColorImage;
+		(void) swapchainExtent;
+		(void) swapchainFormat;
+
+		// Finish any whole-frame capture whose copy was recorded before present.
+		CompleteFrameCapture();
+
+		// Specific-image (non-swapchain) requests are safe to capture with a
+		// self-contained one-shot: those targets are owned by us, not in the
+		// swapchain acquire/present lifecycle.
 		Pending pending;
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
-			if (!m_pending)
+			if (!m_pending || m_pending->image == nullptr)
 			{
-				return;
+				return; // nothing, or a whole-frame request the pre-present hook will claim
 			}
 			pending = std::move(*m_pending);
 			m_pending.reset();
 		}
 
-		bool ok = false;
-		if (pending.image != nullptr) // specific texture / render target
-		{
-			ok = Capture(pending.image, pending.extent.width, pending.extent.height, pending.format, pending.aspect, static_cast<std::int32_t>(ToVkLayout(pending.srcLayout)), pending.path);
-		}
-		else // whole editor frame (swapchain image is in PRESENT_SRC)
-		{
-			ok = Capture(swapchainColorImage, swapchainExtent.width, swapchainExtent.height, swapchainFormat, gpu::ImageAspect::Color, static_cast<std::int32_t>(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR), pending.path);
-		}
+		const bool ok = Capture(pending.image, pending.extent.width, pending.extent.height, pending.format, pending.aspect, static_cast<std::int32_t>(ToVkLayout(pending.srcLayout)), pending.path);
 		pending.promise.set_value(ok ? pending.path : std::string{});
 	}
 

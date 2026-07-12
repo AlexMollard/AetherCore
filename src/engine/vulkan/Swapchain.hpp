@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <vector>
 #include <VkBootstrap.h>
 #include "vulkan/volk.hpp"
@@ -66,6 +67,17 @@ namespace aether
 		// that alters the present mode without a resize).
 		void RequestRecreation();
 
+		// Invoked in SubmitAndPresent while the acquired image is still in
+		// COLOR_ATTACHMENT (before the present transition), so a consumer (the
+		// screenshot service) can copy the composited frame out of an owned,
+		// correctly-laid-out image instead of racing a presented one. Args are the
+		// frame command buffer (VkCommandBuffer) and the current image (VkImage) as
+		// opaque pointers, plus the swapchain extent — keeps callers Vulkan-free.
+		void SetPrePresentCapture(std::function<void(void* cmd, void* image, gpu::Extent2D extent)> callback)
+		{
+			m_prePresentCapture = std::move(callback);
+		}
+
 	private:
 		struct FrameSync
 		{
@@ -98,5 +110,6 @@ namespace aether
 		VkImageLayout m_depthLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		VkDevice m_device = VK_NULL_HANDLE;
 		bool m_shutdown = false;
+		std::function<void(void* cmd, void* image, gpu::Extent2D extent)> m_prePresentCapture;
 	};
 } // namespace aether

@@ -10,6 +10,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/FrameContext.hpp"
+#include "rendering/LightingManager.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
 
@@ -59,6 +60,9 @@ namespace aether
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;
 			std::unique_ptr<RenderQueue> renderQueue;
+			// Per-target light-binning view: local lights are culled against THIS
+			// camera's frustum (registered lazily on first prepare).
+			LightViewId lightViewId = kInvalidLightView;
 		};
 
 		void RegisterPassFor(std::uint32_t id);

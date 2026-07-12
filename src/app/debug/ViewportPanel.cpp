@@ -486,7 +486,7 @@ namespace aether::app
 				if (const Camera* backing = context.Get<CameraManager>().TryGet(CameraHandle{cc->backingCamera}))
 				{
 					constexpr float aspect = static_cast<float>(CameraPreviewService::kWidth) / static_cast<float>(CameraPreviewService::kHeight);
-					preview.SetRequest(true, backing->GetViewMatrix(), backing->GetProjectionMatrix(aspect), backing->GetPosition());
+					preview.SetRequest(true, backing->GetViewMatrix(), backing->GetProjectionMatrix(aspect), backing->GetPosition(), backing->GetNearPlane());
 					enabled = true;
 				}
 			}
