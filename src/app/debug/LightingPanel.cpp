@@ -1,4 +1,5 @@
 #include "LightingPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -170,6 +171,7 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 
 		ImGui::Begin("Lighting", VisiblePtr());
+		chrome::PanelHeader("LIGHTING");
 		{
 			Renderer& renderer = context.Get<Renderer>();
 			ImGui::Text("Point lights: %zu", renderer.GetPointLights().size());

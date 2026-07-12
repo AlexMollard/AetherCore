@@ -1,4 +1,5 @@
 #include "DevToolsPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <imgui.h>
 
@@ -17,6 +18,7 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 
 		ImGui::Begin("Debug", VisiblePtr());
+		chrome::PanelHeader("DEV TOOLS");
 		{
 			bool debugRenderer = aether::IsDebugRenderingEnabled();
 			if (ImGui::Checkbox("Debug overlay", &debugRenderer))

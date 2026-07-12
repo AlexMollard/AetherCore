@@ -1,4 +1,5 @@
 #include "debug/TextureInspectorPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <array>
@@ -128,6 +129,7 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 
 		ImGui::Begin("Textures", VisiblePtr());
+		chrome::PanelHeader("TEXTURES");
 
 		const std::vector<gpu::DebugTextureInfo> textures = gpu::ResourceRegistry::ListDebugTextures();
 		if (textures.empty())

@@ -1,4 +1,5 @@
 #include "PerformancePanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -70,6 +71,9 @@ namespace aether::app
 		char title[96];
 		std::snprintf(title, sizeof(title), "Performance  |  %.0f FPS  |  %.2f ms###Performance", m_titleFps, m_titleMs);
 		ImGui::Begin(title, VisiblePtr());
+		char perfStat[48];
+		std::snprintf(perfStat, sizeof(perfStat), "%.0f FPS Â· %.2f MS", m_titleFps, m_titleMs);
+		chrome::PanelHeader("PERFORMANCE", perfStat);
 
 		// Compact 4-column stats grid
 		if (ImGui::BeginTable("PerfStats", 4, ImGuiTableFlags_SizingStretchProp))

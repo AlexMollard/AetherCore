@@ -1,4 +1,5 @@
 #include "DayNightPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,7 @@ namespace aether::app
 	void DayNightPanel::OnImGui(LayerContext& context)
 	{
 		ImGui::Begin("Day / Night", VisiblePtr());
+		chrome::PanelHeader("DAY / NIGHT CYCLE");
 		if (auto dayNight = context.TryGet<DayNightSystem>())
 		{
 			bool enabled = dayNight->IsEnabled();

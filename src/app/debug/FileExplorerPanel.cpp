@@ -324,14 +324,16 @@ namespace aether::app
 		}
 
 		ImGui::Begin("File Explorer", VisiblePtr());
-		if (ImGui::SmallButton(ICON_FA_ROTATE "##refreshFiles"))
+		chrome::PanelHeader("PROJECT FILES");
+		const float feBtnH = ImGui::GetFrameHeight();
+		if (chrome::GhostButton(ICON_FA_ROTATE "##refreshFiles", ImVec2(std::max(feBtnH, ImGui::CalcTextSize(ICON_FA_ROTATE).x + ImGui::GetStyle().FramePadding.x * 2.0f), feBtnH)))
 		{
 			RefreshRoot(context);
 		}
+		ImGui::SetItemTooltip("Refresh");
 		ImGui::SameLine();
+		ImGui::AlignTextToFramePadding();
 		ImGui::TextDisabled("%s", m_rootAvailable ? ToUtf8Path(m_root).c_str() : "Open a project to browse files");
-
-		ImGui::Separator();
 		if (!m_rootAvailable)
 		{
 			ImGui::TextDisabled("No project is open.");
@@ -345,7 +347,7 @@ namespace aether::app
 		const std::string typeName = TrimCopy(m_newScriptNameBuf);
 		const bool validName = IsValidCSharpIdentifier(typeName);
 		ImGui::BeginDisabled(!validName);
-		if (ImGui::Button(ICON_FA_PLUS "  Create"))
+		if (chrome::OutlineButton(ICON_FA_PLUS " Create"))
 		{
 			m_newScriptError.clear();
 			if (CreateGameScriptFile(m_scriptRoot.empty() ? m_root / "scripts" : m_scriptRoot, typeName, m_newScriptError))

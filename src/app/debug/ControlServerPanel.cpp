@@ -1,4 +1,5 @@
 #include "debug/ControlServerPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 
@@ -41,6 +42,7 @@ namespace aether::app
 	{
 		if (ImGui::Begin("Control Server", VisiblePtr()))
 		{
+			chrome::PanelHeader("CONTROL SERVER");
 			auto* server = context.TryGet<editor::ControlServer>();
 			if (server == nullptr)
 			{

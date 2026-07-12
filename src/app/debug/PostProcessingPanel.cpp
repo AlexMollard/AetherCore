@@ -1,4 +1,5 @@
 #include "debug/PostProcessingPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <imgui.h>
@@ -22,6 +23,7 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 
 		ImGui::Begin("Post Processing", VisiblePtr());
+		chrome::PanelHeader("POST PROCESSING");
 		{
 			Renderer& renderer = context.Get<Renderer>();
 

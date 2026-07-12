@@ -1,4 +1,5 @@
 #include "debug/TonemapPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -141,6 +142,7 @@ namespace aether::app
 			return;
 		}
 		stack.SetHistogramCaptureEnabled(true);
+		chrome::PanelHeader("TONEMAP");
 
 		// ── Tonemap selection ──────────────────────────────────────────────
 		const char* preview = kTonemapDefs[static_cast<std::size_t>(stack.GetTonemapMode())].name;

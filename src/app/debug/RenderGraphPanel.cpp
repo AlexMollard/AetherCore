@@ -1,4 +1,5 @@
 #include "debug/RenderGraphPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <array>
@@ -190,6 +191,8 @@ namespace aether::app
 			ImGui::End();
 			return;
 		}
+
+		chrome::PanelHeader("RENDER GRAPH");
 
 		if (auto rg = context.TryGet<aether::RenderGraph>())
 		{

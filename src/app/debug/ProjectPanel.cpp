@@ -1,4 +1,5 @@
 #include "debug/ProjectPanel.hpp"
+#include "debug/EditorChrome.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -423,13 +424,13 @@ namespace aether::app
 		ImGui::Separator();
 		const auto* actions = context.TryGet<EditorProjectActions>();
 		const bool canPublish = actions != nullptr && actions->publishProject && !BufferText(m_publishProductName).empty() && !BufferText(m_publishPlatformName).empty() && !BufferText(m_publishOutputRoot).empty();
-		if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save Defaults", ImVec2(140.0f, 0.0f)))
+		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Defaults", ImVec2(140.0f, 0.0f)))
 		{
 			SavePublishSettings(project);
 		}
 		ImGui::SameLine();
 		ImGui::BeginDisabled(!canPublish);
-		if (ImGui::Button(ICON_FA_ROCKET "  Publish", ImVec2(140.0f, 0.0f)))
+		if (chrome::PrimaryButton(ICON_FA_ROCKET " Publish", ImVec2(140.0f, 0.0f)))
 		{
 			if (m_dirtySettings)
 			{
@@ -482,10 +483,11 @@ namespace aether::app
 		const auto* project = context.TryGet<EditorProjectContext>();
 		if (project == nullptr || !project->IsLoaded())
 		{
-			ImGui::TextDisabled("No project is open.");
+			chrome::PanelHeader("PROJECT");
+		ImGui::TextDisabled("No project is open.");
 			if (auto* actions = context.TryGet<EditorProjectActions>())
 			{
-				if (actions->openLauncher && ImGui::Button(ICON_FA_CUBE "  Open Launcher"))
+				if (actions->openLauncher && chrome::OutlineButton(ICON_FA_CUBE " Open Launcher"))
 				{
 					actions->openLauncher();
 				}
@@ -499,29 +501,39 @@ namespace aether::app
 			Refresh(*project);
 		}
 
-		ImGui::TextUnformatted(project->name.c_str());
-		ImGui::TextDisabled("%s", DisplayPath(project->root).c_str());
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 bp = ImGui::GetCursorScreenPos();
+			const float bandW = ImGui::GetContentRegionAvail().x;
+			drawList->AddRectFilled(ImVec2(bp.x, bp.y + 3.0f), ImVec2(bp.x + 3.0f, bp.y + 30.0f), chrome::U32(chrome::kAccent));
+			chrome::TextSized(drawList, 12.0f, ImVec2(bp.x + 10.0f, bp.y), chrome::kMuted, "PROJECT");
+			chrome::TextSized(drawList, 17.0f, ImVec2(bp.x + 10.0f, bp.y + 14.0f), chrome::kText, project->name.c_str());
+			ImGui::Dummy(ImVec2(0.0f, 34.0f));
+			ImGui::TextDisabled("%s", DisplayPath(project->root).c_str());
+			chrome::AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
+			ImGui::Dummy(ImVec2(0.0f, 4.0f));
+		}
 
 		if (auto* actions = context.TryGet<EditorProjectActions>())
 		{
-			if (actions->openLauncher && ImGui::Button(ICON_FA_CUBE "  Launcher"))
+			if (actions->openLauncher && chrome::GhostButton(ICON_FA_CUBE " Launcher"))
 			{
 				actions->openLauncher();
 			}
 			ImGui::SameLine();
-			if (actions->reloadProject && ImGui::Button(ICON_FA_ROTATE "  Reload"))
+			if (actions->reloadProject && chrome::GhostButton(ICON_FA_ROTATE " Reload"))
 			{
 				actions->reloadProject();
 				Refresh(*project);
 			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Root"))
+		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Root"))
 		{
 			OpenFolderInShell(project->root);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Repair Folders"))
+		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Repair Folders"))
 		{
 			EnsureStandardFolders(*project);
 		}
@@ -562,7 +574,7 @@ namespace aether::app
 
 		const bool hasStartup = !m_startupScene.empty();
 		ImGui::BeginDisabled(!hasStartup);
-		if (ImGui::Button(ICON_FA_XMARK "  Clear Startup"))
+		if (chrome::GhostButton(ICON_FA_XMARK " Clear Startup"))
 		{
 			m_startupScene.clear();
 			m_dirtySettings = true;
@@ -570,7 +582,7 @@ namespace aether::app
 		ImGui::EndDisabled();
 		ImGui::SameLine();
 		ImGui::BeginDisabled(!m_dirtySettings);
-		if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save Project Settings"))
+		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Project Settings"))
 		{
 			SaveProjectSettings(*project);
 		}
@@ -580,7 +592,7 @@ namespace aether::app
 		if (auto* actions = context.TryGet<EditorProjectActions>())
 		{
 			ImGui::BeginDisabled(!actions->packProject);
-			if (ImGui::Button(ICON_FA_BOX_OPEN "  Pack Project"))
+			if (chrome::GhostButton(ICON_FA_BOX_OPEN " Pack Project"))
 			{
 				if (m_dirtySettings)
 				{
@@ -595,7 +607,7 @@ namespace aether::app
 			ImGui::SameLine();
 			if (actions->rebuildEnginePak)
 			{
-				if (ImGui::Button(ICON_FA_GEAR "  Rebuild Engine Pak"))
+				if (chrome::GhostButton(ICON_FA_GEAR " Rebuild Engine Pak"))
 				{
 					const EditorProjectActionResult result = actions->rebuildEnginePak();
 					m_packSucceeded = result.succeeded;

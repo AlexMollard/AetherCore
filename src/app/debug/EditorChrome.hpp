@@ -88,6 +88,26 @@ namespace aether::app::chrome
 		drawList->AddRectFilledMultiColor(ImVec2(midX, min.y), ImVec2(min.x + width, min.y + 2.0f), solid, clear, clear, solid);
 	}
 
+	// Standard panel header band: amber tick + uppercase eyebrow + an optional
+	// right-aligned micro-stat, over a fading hairline. Call first thing after
+	// ImGui::Begin so every panel opens with the same composition.
+	inline void PanelHeader(const char* eyebrow, const char* stat = nullptr)
+	{
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImVec2 p = ImGui::GetCursorScreenPos();
+		const float bandW = ImGui::GetContentRegionAvail().x;
+		drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + 13.0f), U32(kAccent));
+		TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), kMuted, eyebrow);
+		if (stat != nullptr && stat[0] != '\0')
+		{
+			const float statW = MeasureSized(12.0f, stat).x;
+			TextSized(drawList, 12.0f, ImVec2(p.x + bandW - statW, p.y), kFaint, stat);
+		}
+		ImGui::Dummy(ImVec2(0.0f, 16.0f));
+		AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
+		ImGui::Dummy(ImVec2(0.0f, 4.0f));
+	}
+
 	// Micro section label: small amber tick + 13px uppercase muted text. Draws at
 	// the current cursor and advances it (widget-flow friendly).
 	inline void SectionTag(const char* label)
