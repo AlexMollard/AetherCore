@@ -252,7 +252,7 @@
       "tool": "new_scene"
     },
     {
-      "description": "Enter Play mode: snapshot the scene, rebuild + start the C# scripts. Mirrors the editor Play button.",
+      "description": "Enter Play mode (async): rebuild the C# scripts on a worker thread, then snapshot + start. Returns immediately with state='compiling'; poll info.playState until 'playing'. The editor never blocks. Mirrors the Play button.",
       "mutates": true,
       "name": "engine.play",
       "paramsSchema": {
@@ -442,6 +442,23 @@
         "type": "object"
       },
       "tool": "inspect_component"
+    },
+    {
+      "description": "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
+      "mutates": true,
+      "name": "asset.select",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "select_asset"
     },
     {
       "description": "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",

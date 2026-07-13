@@ -218,7 +218,7 @@ The **Launcher** has no control server of its own (it stays decoupled), but when
 | a port (e.g. `9000`) | that value is the base |
 | `off` / `none` / `0` | disabled - spawned editors start no control endpoint |
 
-The Nth editor opened from the hub gets `base + N` (8787, 8788, …) so multiple editors never collide. The MCP server itself reads `AETHER_BUILD_DIR` / `AETHER_CONTROL_PORT` from its own env - point them at your build dir (`build/vs2022-msvc`) and the target editor's port. See [tools/mcp/README.md](tools/mcp/README.md).
+The Nth editor opened from the hub gets `base + N` (8787, 8788, …) so multiple editors never collide. The MCP server auto-detects the build dir (override with `AETHER_BUILD_DIR`) and resolves `aether-ctl` **lazily**, so a client built *after* the server started is picked up without restarting it; set `AETHER_CONTROL_PORT` to the target editor's port (default `8787`). Note the server reads config once at process start, so if you edit its registration you must restart the MCP client to relaunch it. See [tools/mcp/README.md](tools/mcp/README.md).
 
 ## Dependencies
 

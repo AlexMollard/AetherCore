@@ -38,11 +38,16 @@ PWSH = os.environ.get("AETHER_PWSH", "pwsh")
 MANIFEST_CACHE = Path(__file__).resolve().parent / "manifest.json"
 
 
+# Candidate build dirs, tried in order. Includes the legacy hyphenated name so an
+# older local layout still resolves. `build/vs2022-msvc` is the current default.
+_BUILD_DIR_NAMES = ("build/vs2022-msvc", "build-vs2022-msvc", "build/default", "build", "build/ninja-clang")
+
+
 def _find_build_dir() -> Path:
     env = os.environ.get("AETHER_BUILD_DIR")
     if env:
         return Path(env)
-    for name in ("build/vs2022-msvc", "build/default", "build/ninja-clang"):
+    for name in _BUILD_DIR_NAMES:
         candidate = REPO / name
         if candidate.exists():
             return candidate
@@ -52,23 +57,29 @@ def _find_build_dir() -> Path:
 BUILD_DIR = _find_build_dir()
 
 
-def _find_ctl() -> str:
+def _ctl_path() -> str:
+    """Locate aether-ctl. Resolved LAZILY (per call, not at import) so a client built
+    *after* the server started is picked up without restarting the MCP, and so a wrong
+    build dir cached at startup can't stick. Prefers AETHER_CTL, then the first
+    candidate build dir / config that actually contains the exe; otherwise returns the
+    primary Debug path so the 'build it' error names a sensible target."""
     env = os.environ.get("AETHER_CTL")
     if env:
         return env
     exe = "aether-ctl.exe" if os.name == "nt" else "aether-ctl"
-    candidates = [
-        BUILD_DIR / "tools" / "control-client" / "Debug" / exe,
-        BUILD_DIR / "tools" / "control-client" / "Release" / exe,
-        BUILD_DIR / "tools" / "control-client" / exe,
-    ]
-    for c in candidates:
-        if c.exists():
-            return str(c)
-    return str(candidates[0])
+    build_env = os.environ.get("AETHER_BUILD_DIR")
+    names = ([build_env] if build_env else []) + list(_BUILD_DIR_NAMES)
+    fallback: Path | None = None
+    for name in names:
+        base = Path(name) if os.path.isabs(name) else (REPO / name)
+        for cfg in ("Debug", "Release", None):
+            cand = base / "tools" / "control-client" / cfg / exe if cfg else base / "tools" / "control-client" / exe
+            fallback = fallback or cand
+            if cand.exists():
+                return str(cand)
+    return str(fallback)
 
 
-CTL = _find_ctl()
 GAUNTLET = REPO / "scripts" / "Run-DebugGauntlet.ps1"
 
 
@@ -77,9 +88,10 @@ GAUNTLET = REPO / "scripts" / "Run-DebugGauntlet.ps1"
 def _ctl(method: str, params: dict | None = None) -> dict:
     """Invoke aether-ctl for one control-endpoint method; return a result dict
     ({"result": ...} on success, {"error": ...} on failure)."""
-    if not Path(CTL).exists():
-        return {"error": f"aether-ctl not found at {CTL}; build it: cmake --build {BUILD_DIR} --target aether-ctl"}
-    args = [CTL, "--port", str(PORT), method]
+    ctl = _ctl_path()
+    if not Path(ctl).exists():
+        return {"error": f"aether-ctl not found (searched build dirs under {REPO}); build it: cmake --build {BUILD_DIR} --target aether-ctl"}
+    args = [ctl, "--port", str(PORT), method]
     if params:
         args.append(json.dumps(params))
     try:

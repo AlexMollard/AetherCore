@@ -98,3 +98,7 @@ Thumbs.db
 *.log
 .aider*
 gauntlet-report.json
+
+# Python bytecode cache (MCP server / tooling)
+__pycache__/
+*.pyc
