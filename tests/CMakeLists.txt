@@ -40,6 +40,12 @@ add_executable(EngineTests
     # the scene serializer and the app pieces it needs compile in directly.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
+    # Component reflection: the serializer resolves reflected components through the
+    # registry, which the declaration TUs populate at static-init.
+    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     # ImguiFrameData (src/app/imgui/, editor-only) is not part of Engine - see
     # rendering/IUiOverlay.hpp - but imgui/ImguiFrameDataTests.cpp above still

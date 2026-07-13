@@ -61,12 +61,9 @@ namespace aether::editor
 	void DrawUiRect(World& world, Entity entity);
 	void DrawUiImage(World& world, Entity entity);
 	void DrawUiText(World& world, Entity entity);
-	// One section per present behavior component (Bob/Spin/Orbit/MaterialPulse),
-	// each live-editable and removable.
-	void DrawBehaviors(World& world, Entity entity);
-	// Point/spot light sections, live-editable and removable (LightSystem
-	// republishes to the renderer every frame, edit mode included).
-	void DrawLights(World& world, Entity entity);
+	// Lights, behaviors, orbit camera, animation blend, root motion, joint colliders
+	// etc. are drawn generically from the reflection registry (ReflectedComponentDrawer);
+	// only the drawers below remain hand-written (they do real per-component work).
 	// Camera section: projection params (fov/near/far) + a "Set as Main Camera"
 	// control. The live "look through" preview is owned by the viewport.
 	void DrawCamera(World& world, Entity entity);

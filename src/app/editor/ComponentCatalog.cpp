@@ -17,6 +17,7 @@
 #include "scene/Entity.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/World.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "ui/UiComponents.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -118,7 +119,8 @@ namespace aether::editor
 			std::vector<ComponentCatalogEntry> c;
 
 			// ── Core ────────────────────────────────────────────────────────────
-			c.push_back(Simple<TransformComponent>("Transform", "Core", ICON_FA_UP_DOWN_LEFT_RIGHT));
+			// Transform is auto-included from the reflection registry below (its
+			// default is just identity, so no hand-written entry is needed).
 			c.push_back(Simple<NameComponent>("Name", "Core", ICON_FA_PEN, NameComponent{.name = "Entity"}));
 			c.push_back(Simple<HierarchyComponent>("Hierarchy", "Core", ICON_FA_SITEMAP));
 
@@ -242,6 +244,22 @@ namespace aether::editor
 
 			// ── Editor ──────────────────────────────────────────────────────────
 			c.push_back(Simple<SceneTransientComponent>("Scene Transient", "Editor", ICON_FA_GHOST));
+
+			// Auto-include any addable reflected component (scene/reflection/) not
+			// hand-written above, so a new component needs only its AE_COMPONENT
+			// declaration to appear in the palette + MCP - its has/add/remove come
+			// from the registry. Hand-written entries win by name (they carry custom
+			// add behaviour / seeds / bundles). The &rt captures are stable: the
+			// registry is a program-lifetime static.
+			for (const reflect::ComponentType& rt: reflect::ComponentTypes())
+			{
+				if (!rt.addable) { continue; }
+				if (std::any_of(c.begin(), c.end(), [&](const ComponentCatalogEntry& e) { return e.name == rt.name; })) { continue; }
+				c.push_back(ComponentCatalogEntry{rt.name, rt.category, rt.icon,
+				        [&rt](const World& w, Entity e) { return rt.has(w, e); },
+				        [&rt](World& w, Entity e, ServiceContainer&) { rt.emplaceDefault(w, e); },
+				        [&rt](World& w, Entity e) { rt.remove(w, e); }});
+			}
 
 			return c;
 		}

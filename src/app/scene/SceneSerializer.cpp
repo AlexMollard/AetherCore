@@ -26,6 +26,7 @@
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
 #include "io/FileSystem.hpp"
@@ -204,6 +205,81 @@ namespace aether::app::scene
 				return {static_cast<float>((*arr)[0].value_or(0.0)), static_cast<float>((*arr)[1].value_or(0.0)), static_cast<float>((*arr)[2].value_or(0.0)), static_cast<float>((*arr)[3].value_or(0.0))};
 			}
 			return fallback;
+		}
+
+		// ── Generic component <-> TOML via the reflection registry ────────────────
+		// A migrated component's sub-table is written/read from its declared fields
+		// (scene/reflection/) instead of a hand-written block. Field names are the
+		// TOML keys and the value formats match the helpers above, so a migrated
+		// component round-trips byte-for-byte with the legacy path. `comp` points at
+		// the live/record component value.
+		toml::table WriteReflectedToToml(std::string_view typeName, const void* comp)
+		{
+			toml::table tbl;
+			const reflect::ComponentType* rt = reflect::FindComponentType(typeName);
+			if (rt == nullptr) { return tbl; }
+			for (const reflect::FieldDesc& f: rt->fields)
+			{
+				if (!f.meta.serialize) { continue; }
+				const std::string key = f.meta.serializeName.empty() ? f.name : f.meta.serializeName;
+				const reflect::FieldValue v = f.get(comp);
+				switch (f.type)
+				{
+					// Angle fields are exposed in degrees but persist in radians.
+					case reflect::FieldType::Float: tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num); break;
+					case reflect::FieldType::Int:
+					case reflect::FieldType::UInt: tbl.insert(key, static_cast<std::int64_t>(v.num)); break;
+					case reflect::FieldType::Bool: tbl.insert(key, v.boolean); break;
+					case reflect::FieldType::Vec2: tbl.insert(key, Vec2ToToml(glm::vec2(v.vec))); break;
+					case reflect::FieldType::Vec3:
+					case reflect::FieldType::Color3: tbl.insert(key, Vec3ToToml(glm::vec3(v.vec))); break;
+					case reflect::FieldType::Vec4:
+					case reflect::FieldType::Color4: tbl.insert(key, Vec4ToToml(v.vec)); break;
+					case reflect::FieldType::Enum: tbl.insert(key, f.meta.enumTable != nullptr ? f.meta.enumTable->NameOf(v.enumValue) : std::to_string(v.enumValue)); break;
+					case reflect::FieldType::String: tbl.insert(key, v.str); break;
+					case reflect::FieldType::EntityRef: tbl.insert(key, static_cast<std::int64_t>(v.entity)); break;
+				}
+			}
+			return tbl;
+		}
+
+		// `comp` must point at a value pre-initialized to the component's defaults;
+		// missing keys keep that default (mirrors the legacy value_or(default)).
+		void ReadReflectedFromToml(std::string_view typeName, const toml::table& src, void* comp)
+		{
+			const reflect::ComponentType* rt = reflect::FindComponentType(typeName);
+			if (rt == nullptr) { return; }
+			const toml::node_view<const toml::node> view{src};
+			for (const reflect::FieldDesc& f: rt->fields)
+			{
+				const std::string key = f.meta.serializeName.empty() ? f.name : f.meta.serializeName;
+				const auto node = view[key];
+				if (!node) { continue; }
+				reflect::FieldValue v = f.get(comp);
+				switch (f.type)
+				{
+					// Persisted in radians; f.set re-applies the degrees<->radians round-trip.
+					case reflect::FieldType::Float: v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(glm::radians(v.num))) : node.value_or(v.num); break;
+					case reflect::FieldType::Int:
+					case reflect::FieldType::UInt: v.num = static_cast<double>(node.value_or(static_cast<std::int64_t>(v.num))); break;
+					case reflect::FieldType::Bool: v.boolean = node.value_or(v.boolean); break;
+					case reflect::FieldType::Vec2: v.vec = glm::vec4(Vec2FromToml(node, glm::vec2(v.vec)), 0.0f, 0.0f); break;
+					case reflect::FieldType::Vec3:
+					case reflect::FieldType::Color3: v.vec = glm::vec4(Vec3FromToml(node, glm::vec3(v.vec)), 0.0f); break;
+					case reflect::FieldType::Vec4:
+					case reflect::FieldType::Color4: v.vec = Vec4FromToml(node, v.vec); break;
+					case reflect::FieldType::Enum:
+						if (f.meta.enumTable != nullptr)
+						{
+							if (node.is_string()) { v.enumValue = f.meta.enumTable->ValueOf(node.value_or(std::string{}), v.enumValue); }
+							else { v.enumValue = static_cast<int>(node.value_or(static_cast<std::int64_t>(v.enumValue))); }
+						}
+						break;
+					case reflect::FieldType::String: v.str = node.value_or(v.str); break;
+					case reflect::FieldType::EntityRef: v.entity = static_cast<std::uint64_t>(node.value_or(static_cast<std::int64_t>(v.entity))); break;
+				}
+				f.set(comp, v);
+			}
 		}
 
 		// ── Script property (de)serialization ─────────────────────────────────────
@@ -977,92 +1053,22 @@ namespace aether::app::scene
 				f.insert("intensity", rec.effect->params.intensity);
 				t.insert("effect", std::move(f));
 			}
-			if (rec.bob)
-			{
-				toml::table b;
-				b.insert("amplitude", rec.bob->amplitude);
-				b.insert("frequency", rec.bob->frequency);
-				b.insert("phase", rec.bob->phase);
-				t.insert("bob", std::move(b));
-			}
-			if (rec.spin)
-			{
-				toml::table s;
-				s.insert("euler_deg_per_sec", Vec3ToToml(rec.spin->eulerDegPerSec));
-				t.insert("spin", std::move(s));
-			}
-			if (rec.orbit)
-			{
-				toml::table o;
-				o.insert("center", Vec3ToToml(rec.orbit->center));
-				o.insert("radius", rec.orbit->radius);
-				o.insert("speed_deg", rec.orbit->angularSpeedDeg);
-				o.insert("angle_deg", rec.orbit->angleDeg);
-				o.insert("yaw_offset_deg", rec.orbit->yawOffsetDeg);
-				o.insert("height", rec.orbit->height);
-				t.insert("orbit", std::move(o));
-			}
-			if (rec.materialPulse)
-			{
-				toml::table p;
-				p.insert("emissive_a", Vec3ToToml(rec.materialPulse->emissiveA));
-				p.insert("emissive_b", Vec3ToToml(rec.materialPulse->emissiveB));
-				p.insert("frequency", rec.materialPulse->frequency);
-				t.insert("material_pulse", std::move(p));
-			}
-			if (rec.scalePulse)
-			{
-				toml::table p;
-				p.insert("amplitude", rec.scalePulse->amplitude);
-				p.insert("frequency", rec.scalePulse->frequency);
-				p.insert("phase", rec.scalePulse->phase);
-				t.insert("scale_pulse", std::move(p));
-			}
-			if (rec.lookAt)
-			{
-				toml::table p;
-				p.insert("target", Vec3ToToml(rec.lookAt->target));
-				p.insert("keep_upright", rec.lookAt->keepUpright);
-				t.insert("look_at", std::move(p));
-			}
-			if (rec.pointLight)
-			{
-				toml::table l;
-				l.insert("color", Vec3ToToml(rec.pointLight->color));
-				l.insert("intensity", rec.pointLight->intensity);
-				l.insert("radius", rec.pointLight->radius);
-				l.insert("shadow", rec.pointLight->castsShadow);
-				t.insert("point_light", std::move(l));
-			}
-			if (rec.spotLight)
-			{
-				toml::table l;
-				l.insert("color", Vec3ToToml(rec.spotLight->color));
-				l.insert("intensity", rec.spotLight->intensity);
-				l.insert("radius", rec.spotLight->radius);
-				l.insert("inner_rad", rec.spotLight->innerAngleRad);
-				l.insert("outer_rad", rec.spotLight->outerAngleRad);
-				l.insert("shadow", rec.spotLight->castsShadow);
-				t.insert("spot_light", std::move(l));
-			}
+			// Behavior components: written generically from the reflection registry.
+			if (rec.bob) { t.insert("bob", WriteReflectedToToml("Bob", &*rec.bob)); }
+			if (rec.spin) { t.insert("spin", WriteReflectedToToml("Spin", &*rec.spin)); }
+			if (rec.orbit) { t.insert("orbit", WriteReflectedToToml("Orbit", &*rec.orbit)); }
+			if (rec.materialPulse) { t.insert("material_pulse", WriteReflectedToToml("Material Pulse", &*rec.materialPulse)); }
+			if (rec.scalePulse) { t.insert("scale_pulse", WriteReflectedToToml("Scale Pulse", &*rec.scalePulse)); }
+			if (rec.lookAt) { t.insert("look_at", WriteReflectedToToml("Look At", &*rec.lookAt)); }
+			if (rec.pointLight) { t.insert("point_light", WriteReflectedToToml("Point Light", &*rec.pointLight)); }
+			if (rec.spotLight) { t.insert("spot_light", WriteReflectedToToml("Spot Light", &*rec.spotLight)); }
 			if (rec.camera)
 			{
-				toml::table c;
-				c.insert("fov", rec.camera->fovDegrees);
-				c.insert("near", rec.camera->nearPlane);
-				c.insert("far", rec.camera->farPlane);
-				c.insert("main", rec.mainCamera);
+				toml::table c = WriteReflectedToToml("Camera", &*rec.camera);
+				c.insert("main", rec.mainCamera); // 'main' is a separate record field (the MainCameraComponent tag)
 				t.insert("camera", std::move(c));
 			}
-				if (rec.orbitCamera)
-				{
-					toml::table o;
-					o.insert("target", toml::array{rec.orbitCamera->target.x, rec.orbitCamera->target.y, rec.orbitCamera->target.z});
-					o.insert("yaw", rec.orbitCamera->yaw);
-					o.insert("pitch", rec.orbitCamera->pitch);
-					o.insert("distance", rec.orbitCamera->distance);
-					t.insert("orbit_camera", std::move(o));
-				}
+				if (rec.orbitCamera) { t.insert("orbit_camera", WriteReflectedToToml("Orbit Camera", &*rec.orbitCamera)); }
 			if (!rec.scripts.empty())
 			{
 				toml::array scripts;
@@ -1370,78 +1376,24 @@ namespace aether::app::scene
 				fx.params.intensity = static_cast<float>(fv["intensity"].value_or(1.0));
 				rec.effect = std::move(fx);
 			}
-			if (const auto* b = tv["bob"].as_table())
-			{
-				const toml::node_view<const toml::node> bv{*b};
-				rec.bob = BobComponent{.amplitude = static_cast<float>(bv["amplitude"].value_or(1.0)), .frequency = static_cast<float>(bv["frequency"].value_or(1.0)), .phase = static_cast<float>(bv["phase"].value_or(0.0))};
-			}
-			if (const auto* s = tv["spin"].as_table())
-			{
-				const toml::node_view<const toml::node> sv{*s};
-				rec.spin = SpinComponent{.eulerDegPerSec = Vec3FromToml(sv["euler_deg_per_sec"], glm::vec3(0.0f, 40.0f, 0.0f))};
-			}
-			if (const auto* o = tv["orbit"].as_table())
-			{
-				const toml::node_view<const toml::node> ov{*o};
-				rec.orbit = OrbitComponent{.center = Vec3FromToml(ov["center"], glm::vec3(0.0f)),
-				        .radius = static_cast<float>(ov["radius"].value_or(5.0)),
-				        .angularSpeedDeg = static_cast<float>(ov["speed_deg"].value_or(30.0)),
-				        .angleDeg = static_cast<float>(ov["angle_deg"].value_or(0.0)),
-				        .yawOffsetDeg = static_cast<float>(ov["yaw_offset_deg"].value_or(0.0)),
-				        .height = static_cast<float>(ov["height"].value_or(0.0))};
-			}
-			if (const auto* p = tv["material_pulse"].as_table())
-			{
-				const toml::node_view<const toml::node> pv{*p};
-				rec.materialPulse =
-				        MaterialPulseComponent{.emissiveA = Vec3FromToml(pv["emissive_a"], glm::vec3(0.0f)), .emissiveB = Vec3FromToml(pv["emissive_b"], glm::vec3(1.0f, 0.5f, 0.1f)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0))};
-			}
-			if (const auto* p = tv["scale_pulse"].as_table())
-			{
-				const toml::node_view<const toml::node> pv{*p};
-				rec.scalePulse = ScalePulseComponent{.amplitude = static_cast<float>(pv["amplitude"].value_or(0.2)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0)), .phase = static_cast<float>(pv["phase"].value_or(0.0))};
-			}
-			if (const auto* p = tv["look_at"].as_table())
-			{
-				const toml::node_view<const toml::node> pv{*p};
-				rec.lookAt = LookAtComponent{.target = Vec3FromToml(pv["target"], glm::vec3(0.0f)), .keepUpright = pv["keep_upright"].value_or(true)};
-			}
-			if (const auto* l = tv["point_light"].as_table())
-			{
-				const toml::node_view<const toml::node> lv{*l};
-				rec.pointLight = PointLightComponent{
-				        .color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(20.0)), .radius = static_cast<float>(lv["radius"].value_or(15.0)), .castsShadow = lv["shadow"].value_or(false)};
-			}
-			if (const auto* l = tv["spot_light"].as_table())
-			{
-				const toml::node_view<const toml::node> lv{*l};
-				rec.spotLight = SpotLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)),
-				        .intensity = static_cast<float>(lv["intensity"].value_or(30.0)),
-				        .radius = static_cast<float>(lv["radius"].value_or(30.0)),
-				        .innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35)),
-				        .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)),
-				        .castsShadow = lv["shadow"].value_or(false)};
-			}
+			// Behavior components: read generically into a default-seeded component
+			// (missing keys keep the struct default, matching the old value_or defaults).
+			if (const auto* b = tv["bob"].as_table()) { BobComponent c{}; ReadReflectedFromToml("Bob", *b, &c); rec.bob = c; }
+			if (const auto* s = tv["spin"].as_table()) { SpinComponent c{}; ReadReflectedFromToml("Spin", *s, &c); rec.spin = c; }
+			if (const auto* o = tv["orbit"].as_table()) { OrbitComponent c{}; ReadReflectedFromToml("Orbit", *o, &c); rec.orbit = c; }
+			if (const auto* p = tv["material_pulse"].as_table()) { MaterialPulseComponent c{}; ReadReflectedFromToml("Material Pulse", *p, &c); rec.materialPulse = c; }
+			if (const auto* p = tv["scale_pulse"].as_table()) { ScalePulseComponent c{}; ReadReflectedFromToml("Scale Pulse", *p, &c); rec.scalePulse = c; }
+			if (const auto* p = tv["look_at"].as_table()) { LookAtComponent c{}; ReadReflectedFromToml("Look At", *p, &c); rec.lookAt = c; }
+			if (const auto* l = tv["point_light"].as_table()) { PointLightComponent c{}; ReadReflectedFromToml("Point Light", *l, &c); rec.pointLight = c; }
+			if (const auto* l = tv["spot_light"].as_table()) { SpotLightComponent c{}; ReadReflectedFromToml("Spot Light", *l, &c); rec.spotLight = c; }
 			if (const auto* c = tv["camera"].as_table())
 			{
-				const toml::node_view<const toml::node> cv{*c};
-				rec.camera = CameraComponent{
-				        .fovDegrees = static_cast<float>(cv["fov"].value_or(60.0)),
-				        .nearPlane = static_cast<float>(cv["near"].value_or(0.1)),
-				        .farPlane = static_cast<float>(cv["far"].value_or(1000.0)),
-				};
-				rec.mainCamera = cv["main"].value_or(false);
+				CameraComponent cam{};
+				ReadReflectedFromToml("Camera", *c, &cam);
+				rec.camera = cam;
+				rec.mainCamera = toml::node_view<const toml::node>{*c}["main"].value_or(false);
 			}
-			if (const auto* o = tv["orbit_camera"].as_table())
-			{
-				const toml::node_view<const toml::node> ov{*o};
-				OrbitCameraComponent orbit;
-				orbit.target = Vec3FromToml(ov["target"], glm::vec3(0.0f));
-				orbit.yaw = static_cast<float>(ov["yaw"].value_or(0.0));
-				orbit.pitch = static_cast<float>(ov["pitch"].value_or(20.0));
-				orbit.distance = static_cast<float>(ov["distance"].value_or(10.0));
-				rec.orbitCamera = orbit;
-			}
+			if (const auto* o = tv["orbit_camera"].as_table()) { OrbitCameraComponent c{}; ReadReflectedFromToml("Orbit Camera", *o, &c); rec.orbitCamera = c; }
 			if (const auto* scripts = tv["scripts"].as_array())
 			{
 				for (const toml::node& scriptNode: *scripts)

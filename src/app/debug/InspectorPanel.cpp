@@ -19,6 +19,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/ComponentDrawers.hpp"
+#include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
@@ -753,10 +754,11 @@ namespace aether::editor
 		DrawUiRect(world, entity);
 		DrawUiImage(world, entity);
 		DrawUiText(world, entity);
-		DrawLights(world, entity);
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
-		DrawBehaviors(world, entity);
+		// Behavior components are now drawn generically from the reflection registry
+		// (scene/reflection/) instead of a hand-written per-component drawer.
+		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name"});
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
 		DrawCollisionEvents(world, entity);

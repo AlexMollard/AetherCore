@@ -19,6 +19,7 @@
 #include "editor/ComponentCatalog.hpp"
 #include "editor/ComponentFields.hpp"
 #include "editor/ModelImport.hpp"
+#include "editor/ReflectionJson.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "io/PlatformPaths.hpp"
 #include "rendering/ScreenshotService.hpp"
@@ -304,7 +305,7 @@ namespace aether::editor
 		methods.push_back({"scene.remove_component", "remove_component", "Remove a component from an entity by id ('type' is a ComponentCatalog name).", true, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}), componentOp(false)});
 
 		methods.push_back({"scene.get_component", "get_component",
-		        "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a ComponentCatalog name that has editable fields (Point Light, Spot Light, Skinned Mesh, Camera, Material; call list_component_types to see each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
+		        "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a component name (call list_component_types for the set and each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
 		        false, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -314,6 +315,22 @@ namespace aether::editor
 			        const Entity entity{IdOf(p)};
 			        if (!world.GetRegistry().valid(World::ToEntt(entity))) { return ErrNoEntity(); }
 			        const std::string type = p.value("type", std::string{});
+			        // Reflection-driven (covers every migrated component); falls back to the
+			        // legacy ComponentFields registry for not-yet-migrated types.
+			        if (const auto* rt = reflect::FindComponentType(type))
+			        {
+				        const void* comp = rt->tryGetRawConst(world, entity);
+				        if (comp == nullptr) { return json{{"error", "entity has no '" + type + "' component"}}; }
+				        json out = json::object();
+				        for (const auto& f: rt->fields)
+				        {
+					        const reflect::FieldValue fv = f.get(comp);
+					        // Enums read out as their name string (set accepts name or int).
+					        if (f.type == reflect::FieldType::Enum && f.meta.enumTable != nullptr) { out[f.name] = f.meta.enumTable->NameOf(fv.enumValue); }
+					        else { out[f.name] = editor::FieldValueToJson(fv); }
+				        }
+				        return json{{"id", entity.id}, {"type", type}, {"fields", out}};
+			        }
 			        const auto* fields = editor::FindComponentFields(type);
 			        if (fields == nullptr) { return json{{"error", "component '" + type + "' has no editable fields"}}; }
 			        json out = json::object();
@@ -322,7 +339,7 @@ namespace aether::editor
 		        }});
 
 		methods.push_back({"scene.set_component", "set_component",
-		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a ComponentCatalog name (Point Light, Spot Light, Skinned Mesh, Camera, Material); 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours are [r,g,b(,a)] arrays. Returns {id, type, applied:[...]}.",
+		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
 		        true, Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -332,25 +349,58 @@ namespace aether::editor
 			        const Entity entity{IdOf(p)};
 			        if (!world.GetRegistry().valid(World::ToEntt(entity))) { return ErrNoEntity(); }
 			        const std::string type = p.value("type", std::string{});
+			        const json values = (p.contains("values") && p["values"].is_object()) ? p["values"] : json::object();
+			        if (const auto* rt = reflect::FindComponentType(type))
+			        {
+				        void* comp = rt->tryGetRaw(world, entity);
+				        if (comp == nullptr) { return json{{"error", "entity has no '" + type + "' component"}}; }
+				        json applied = json::array();
+				        for (const auto& f: rt->fields)
+				        {
+					        if (values.contains(f.name))
+					        {
+						        f.set(comp, editor::JsonToFieldValue(values.at(f.name), f));
+						        applied.push_back(f.name);
+					        }
+				        }
+				        if (applied.empty()) { return json{{"error", "'values' named no known fields of '" + type + "'"}}; }
+				        if (rt->postSet) { rt->postSet(world, entity); }
+				        return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
+			        }
 			        const auto* fields = editor::FindComponentFields(type);
 			        if (fields == nullptr) { return json{{"error", "component '" + type + "' has no editable fields"}}; }
-			        const json values = (p.contains("values") && p["values"].is_object()) ? p["values"] : json::object();
 			        const auto applied = fields->write(world, entity, values, ctx.services);
 			        if (applied.empty()) { return json{{"error", "entity has no '" + type + "' component, or 'values' named no known fields"}}; }
 			        return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
 		        }});
 
-		methods.push_back({"scene.component_types", "list_component_types", "List every component the ComponentCatalog can add (name + category), plus, for components with editable fields, the field list that get_component / set_component accept.", false, Obj(),
+		methods.push_back({"scene.component_types", "list_component_types", "List every component (name + category), plus, for components with editable fields, the field list get_component / set_component accept.", false, Obj(),
 		        [](const json&, MethodContext&) -> json
 		        {
+			        // Build a "name:type, ..." hint from a reflected component's fields.
+			        const auto reflectedHint = [](const reflect::ComponentType& rt) -> std::string
+			        {
+				        std::string h;
+				        for (const auto& f: rt.fields) { h += (h.empty() ? "" : ", ") + f.name + ":" + editor::FieldTypeName(f.type); }
+				        return h;
+			        };
 			        json arr = json::array();
+			        std::vector<std::string> listed;
 			        for (const ComponentCatalogEntry& e: ComponentCatalog())
 			        {
-				        // Skip reference-only entries (e.g. UI Text) - they can't be added.
-				        if (!e.addable) { continue; }
+				        if (!e.addable) { continue; } // reference-only entries can't be added
 				        json entry = {{"name", e.name}, {"category", e.category}};
-				        if (const auto* fields = editor::FindComponentFields(e.name)) { entry["fields"] = fields->fields; }
+				        if (const auto* rt = reflect::FindComponentType(e.name)) { entry["fields"] = reflectedHint(*rt); }
+				        else if (const auto* fields = editor::FindComponentFields(e.name)) { entry["fields"] = fields->fields; }
 				        arr.push_back(entry);
+				        listed.push_back(e.name);
+			        }
+			        // Reflected components not in the add-palette (e.g. Transform, Skinned Mesh)
+			        // are still get/set-able - list them so agents can discover their fields.
+			        for (const reflect::ComponentType& rt: reflect::ComponentTypes())
+			        {
+				        if (std::find(listed.begin(), listed.end(), rt.name) != listed.end()) { continue; }
+				        arr.push_back(json{{"name", rt.name}, {"category", rt.category}, {"fields", reflectedHint(rt)}});
 			        }
 			        return json{{"components", arr}};
 		        }});

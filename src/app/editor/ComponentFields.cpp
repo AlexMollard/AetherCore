@@ -10,11 +10,15 @@
 #include "material/MaterialRegistry.hpp"
 #include "material/MaterialSystem.hpp"
 #include "material/PipelineCache.hpp"
-#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
-#include "scene/LightComponents.hpp"
 #include "scene/World.hpp"
 #include "utils/ServiceContainer.hpp"
+
+// Legacy field registry. Component reflection (scene/reflection/) is the successor
+// and covers most components via one declaration each; this now holds only the
+// components not yet migrated because they need bespoke access - currently just
+// Material (copy-on-write via MaterialInstanceComponent + MaterialSystem). The MCP
+// checks reflection first and falls back here.
 
 namespace aether::editor
 {
@@ -34,109 +38,6 @@ namespace aether::editor
 		}
 		json Arr3(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
 		json Arr4(const glm::vec4& v) { return json::array({v.x, v.y, v.z, v.w}); }
-
-		// --- Point Light -----------------------------------------------------------
-		bool ReadPointLight(const World& w, Entity e, ServiceContainer&, json& out)
-		{
-			const auto* pl = w.TryGet<PointLightComponent>(e);
-			if (pl == nullptr) { return false; }
-			out["color"] = Arr3(pl->color);
-			out["intensity"] = pl->intensity;
-			out["radius"] = pl->radius;
-			out["castsShadow"] = pl->castsShadow;
-			return true;
-		}
-		std::vector<std::string> WritePointLight(World& w, Entity e, const json& v, ServiceContainer&)
-		{
-			std::vector<std::string> applied;
-			auto* pl = w.TryGet<PointLightComponent>(e);
-			if (pl == nullptr) { return applied; }
-			if (v.contains("color")) { pl->color = JVec3(v["color"], pl->color); applied.emplace_back("color"); }
-			if (v.contains("intensity")) { pl->intensity = v["intensity"].get<float>(); applied.emplace_back("intensity"); }
-			if (v.contains("radius")) { pl->radius = v["radius"].get<float>(); applied.emplace_back("radius"); }
-			if (v.contains("castsShadow")) { pl->castsShadow = v["castsShadow"].get<bool>(); applied.emplace_back("castsShadow"); }
-			return applied;
-		}
-
-		// --- Spot Light ------------------------------------------------------------
-		bool ReadSpotLight(const World& w, Entity e, ServiceContainer&, json& out)
-		{
-			const auto* sl = w.TryGet<SpotLightComponent>(e);
-			if (sl == nullptr) { return false; }
-			out["color"] = Arr3(sl->color);
-			out["intensity"] = sl->intensity;
-			out["radius"] = sl->radius;
-			out["innerAngleDeg"] = glm::degrees(sl->innerAngleRad);
-			out["outerAngleDeg"] = glm::degrees(sl->outerAngleRad);
-			out["castsShadow"] = sl->castsShadow;
-			return true;
-		}
-		std::vector<std::string> WriteSpotLight(World& w, Entity e, const json& v, ServiceContainer&)
-		{
-			std::vector<std::string> applied;
-			auto* sl = w.TryGet<SpotLightComponent>(e);
-			if (sl == nullptr) { return applied; }
-			if (v.contains("color")) { sl->color = JVec3(v["color"], sl->color); applied.emplace_back("color"); }
-			if (v.contains("intensity")) { sl->intensity = v["intensity"].get<float>(); applied.emplace_back("intensity"); }
-			if (v.contains("radius")) { sl->radius = v["radius"].get<float>(); applied.emplace_back("radius"); }
-			if (v.contains("innerAngleDeg")) { sl->innerAngleRad = glm::radians(v["innerAngleDeg"].get<float>()); applied.emplace_back("innerAngleDeg"); }
-			if (v.contains("outerAngleDeg")) { sl->outerAngleRad = glm::radians(v["outerAngleDeg"].get<float>()); applied.emplace_back("outerAngleDeg"); }
-			sl->outerAngleRad = std::max(sl->outerAngleRad, sl->innerAngleRad); // keep the cone valid
-			if (v.contains("castsShadow")) { sl->castsShadow = v["castsShadow"].get<bool>(); applied.emplace_back("castsShadow"); }
-			return applied;
-		}
-
-		// --- Skinned Mesh ----------------------------------------------------------
-		bool ReadSkinned(const World& w, Entity e, ServiceContainer&, json& out)
-		{
-			const auto* smc = w.TryGet<SkinnedMeshComponent>(e);
-			if (smc == nullptr) { return false; }
-			out["clip"] = smc->clipIndex;
-			out["speed"] = smc->playbackSpeed;
-			out["time"] = smc->animTime;
-			out["looping"] = smc->looping;
-			return true;
-		}
-		std::vector<std::string> WriteSkinned(World& w, Entity e, const json& v, ServiceContainer&)
-		{
-			std::vector<std::string> applied;
-			auto* smc = w.TryGet<SkinnedMeshComponent>(e);
-			if (smc == nullptr) { return applied; }
-			if (v.contains("clip")) { smc->clipIndex = static_cast<std::uint32_t>(std::max(0, v["clip"].get<int>())); smc->animTime = 0.0f; applied.emplace_back("clip"); }
-			if (v.contains("speed")) { smc->playbackSpeed = v["speed"].get<float>(); applied.emplace_back("speed"); }
-			if (v.contains("time")) { smc->animTime = v["time"].get<float>(); applied.emplace_back("time"); }
-			if (v.contains("looping")) { smc->looping = v["looping"].get<bool>(); applied.emplace_back("looping"); }
-			return applied;
-		}
-
-		// --- Camera ----------------------------------------------------------------
-		bool ReadCamera(const World& w, Entity e, ServiceContainer&, json& out)
-		{
-			const auto* cam = w.TryGet<CameraComponent>(e);
-			if (cam == nullptr) { return false; }
-			out["fov"] = cam->fovDegrees;
-			out["near"] = cam->nearPlane;
-			out["far"] = cam->farPlane;
-			out["main"] = w.Has<MainCameraComponent>(e);
-			return true;
-		}
-		std::vector<std::string> WriteCamera(World& w, Entity e, const json& v, ServiceContainer&)
-		{
-			std::vector<std::string> applied;
-			auto* cam = w.TryGet<CameraComponent>(e);
-			if (cam == nullptr) { return applied; }
-			if (v.contains("fov")) { cam->fovDegrees = v["fov"].get<float>(); applied.emplace_back("fov"); }
-			if (v.contains("near")) { cam->nearPlane = v["near"].get<float>(); applied.emplace_back("near"); }
-			if (v.contains("far")) { cam->farPlane = v["far"].get<float>(); applied.emplace_back("far"); }
-			if (v.contains("main"))
-			{
-				const bool main = v["main"].get<bool>();
-				if (main && !w.Has<MainCameraComponent>(e)) { w.Emplace<MainCameraComponent>(e, MainCameraComponent{}); }
-				else if (!main && w.Has<MainCameraComponent>(e)) { w.Remove<MainCameraComponent>(e); }
-				applied.emplace_back("main");
-			}
-			return applied;
-		}
 
 		// --- Material (copy-on-write via MaterialInstanceComponent) ----------------
 		// Mirrors DrawMaterial: edits land on a per-entity instance seeded from the
@@ -173,8 +74,6 @@ namespace aether::editor
 			auto* assets = services.TryGet<AssetManager>();
 			if (mc == nullptr || assets == nullptr) { return applied; }
 
-			// Seed a live instance from the current material so untouched fields
-			// (textures, other factors) are preserved.
 			auto* inst = w.TryGet<MaterialInstanceComponent>(e);
 			if (inst == nullptr)
 			{
@@ -204,10 +103,6 @@ namespace aether::editor
 		const std::vector<ComponentFieldSet>& BuildSets()
 		{
 			static const std::vector<ComponentFieldSet> sets = {
-			        {"Point Light", "color:vec3, intensity:float, radius:float, castsShadow:bool", ReadPointLight, WritePointLight},
-			        {"Spot Light", "color:vec3, intensity:float, radius:float, innerAngleDeg:float, outerAngleDeg:float, castsShadow:bool", ReadSpotLight, WriteSpotLight},
-			        {"Skinned Mesh", "clip:int, speed:float, time:float, looping:bool", ReadSkinned, WriteSkinned},
-			        {"Camera", "fov:float, near:float, far:float, main:bool", ReadCamera, WriteCamera},
 			        {"Material", "baseColor:vec4, metallic:float, roughness:float, occlusion:float, emissive:vec3, doubleSided:bool, alphaBlend:bool, alphaMask:bool, alphaCutoff:float, receiveShadows:bool", ReadMaterial, WriteMaterial},
 			};
 			return sets;
