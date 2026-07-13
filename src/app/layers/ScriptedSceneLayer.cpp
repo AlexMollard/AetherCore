@@ -228,6 +228,13 @@ namespace aether::app
 		deps.sceneContext = &m_sceneCtx;
 		deps.physics = m_sceneCtx.physics;
 		deps.renderer = m_sceneCtx.renderer;
+		// Editor-only: auto-import a model the scene references but that hasn't been
+		// baked yet, so a freshly checked-out project boots rendered. Null (skipped)
+		// in the shipped runtime, whose models are already baked in the pak.
+		if (const auto* bakeHook = context.TryGet<scene::ModelBakeHook>(); bakeHook != nullptr)
+		{
+			deps.ensureModelBaked = bakeHook->ensureBaked;
+		}
 
 		if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
 		{

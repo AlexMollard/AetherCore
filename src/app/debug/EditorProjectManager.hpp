@@ -10,6 +10,7 @@
 #include "editor/EditorProjectActions.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "material/Texture.hpp"
+#include "scene/ModelBakeHook.hpp"
 #include "utils/TomlConfig.hpp"
 
 namespace aether
@@ -79,6 +80,9 @@ namespace aether::editor
 		// that has no preview yet, so the scene has time to render first). 0 = idle.
 		int m_previewCaptureCountdown = 0;
 		EditorProjectActions m_actions;
+		// Registered as a service so scene load can bake models on demand; wired to
+		// EnsureModelBaked against the live project. Editor-only (see ModelBakeHook).
+		app::scene::ModelBakeHook m_bakeHook;
 		ServiceContainer* m_services = nullptr;
 		std::vector<app::EditorProjectContext> m_recentProjects;
 		app::ProjectLauncherWindow m_launcher;

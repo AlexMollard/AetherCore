@@ -1729,6 +1729,12 @@ namespace aether::app::scene
 		deps.physics = services.TryGet<PhysicsSystem>();
 		deps.renderer = services.TryGet<Renderer>();
 		deps.assetDatabase = services.TryGet<AssetDatabase>();
+		// Editor-only auto-import: present when the editor registered a bake hook,
+		// absent (null) in the shipped runtime where models are already baked.
+		if (const auto* bakeHook = services.TryGet<ModelBakeHook>(); bakeHook != nullptr)
+		{
+			deps.ensureModelBaked = bakeHook->ensureBaked;
+		}
 		return deps;
 	}
 
@@ -1981,6 +1987,23 @@ namespace aether::app::scene
 						else if (deps.assets != nullptr)
 						{
 							auto result = deps.assets->LoadModel(rec.mesh->path);
+							// Not baked yet? In the editor, import it on demand and
+							// retry - a hand-authored or freshly checked-out scene then
+							// resolves without a manual bake step. No-op in the runtime
+							// (hook null), where models are already baked in the pak.
+							if (!result && deps.ensureModelBaked)
+							{
+								std::string bakeError;
+								if (deps.ensureModelBaked(rec.mesh->path, bakeError))
+								{
+									AE_INFO(LogCategory::App, "Scene load: auto-imported model '{}'", rec.mesh->path);
+									result = deps.assets->LoadModel(rec.mesh->path);
+								}
+								else
+								{
+									AE_WARN(LogCategory::App, "Scene load: auto-import of model '{}' failed: {}", rec.mesh->path, bakeError);
+								}
+							}
 							if (result)
 							{
 								ctx.loadedModels.push_back(std::move(result.value()));

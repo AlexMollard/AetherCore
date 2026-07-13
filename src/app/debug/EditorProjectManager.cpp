@@ -17,6 +17,7 @@
 #include "assets/AssetManager.hpp"
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
+#include "editor/ModelBake.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
@@ -135,6 +136,14 @@ namespace aether::editor
 		ConfigureActions();
 		services.Register<EditorProjectActions>(m_actions);
 		services.Register<app::EditorProjectContext>(m_currentProject);
+
+		// Let scene load bake a not-yet-imported model against the live project.
+		// Reads m_currentProject at call time, so it tracks project switches.
+		m_bakeHook.ensureBaked = [this](const std::string& vfsModelPath, std::string& error) -> bool
+		{
+			return editor::EnsureModelBaked(vfsModelPath, m_currentProject, error);
+		};
+		services.Register<app::scene::ModelBakeHook>(m_bakeHook);
 	}
 
 	void EditorProjectManager::Detach()

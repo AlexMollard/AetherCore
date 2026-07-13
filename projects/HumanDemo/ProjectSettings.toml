@@ -1,0 +1,35 @@
+# AetherCore project file.
+
+[app]
+startupscene = "HumanDemo"
+targetfps = 0
+
+[graphics]
+asynccompute = true
+fxaa = false
+vsync = false
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+name = "Human Demo"
+version = 1
+
+[publish]
+buildscripts = true
+cleanoutput = true
+openafter = true
+outputroot = "D:\\AetherCore\\projects\\HumanDemo\\Builds"
+platformname = "Windows"
+productname = "HumanDemo"
+synceditorpak = true
+usepackagetemplate = true
+verifyoutput = true
+
+[window]
+height = 1440
+width = 2560

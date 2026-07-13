@@ -16,6 +16,7 @@
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
+#include "scene/ModelBakeHook.hpp"
 
 namespace aether
 {
@@ -334,6 +335,10 @@ namespace aether::app::scene
 		PhysicsSystem* physics = nullptr;                // step-idle guard before replace-all destroys
 		Renderer* renderer = nullptr;                    // lights + environment re-apply
 		AssetDatabase* assetDatabase = nullptr;          // catalog population for the asset picker
+
+		// Editor-only: bake an unimported model on load so the scene resolves it.
+		// Null in the shipped runtime (models are pre-baked) - see ModelBakeHook.
+		std::function<bool(const std::string& vfsModelPath, std::string& error)> ensureModelBaked;
 	};
 
 	// Resolves every apply dependency from the service container - the shared

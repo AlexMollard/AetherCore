@@ -49,6 +49,7 @@ using namespace std::string_view_literals;
 #include "rendering/RenderingSubsystem.hpp"
 #include "scene/Components.hpp"
 #include "PlayState.hpp"
+#include "scene/ModelBakeHook.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
@@ -348,6 +349,7 @@ namespace aether::editor
 		m_panels.clear();
 		m_hierarchyPanel = nullptr;
 		context.services.Unregister<app::EditorProjectContext>();
+		context.services.Unregister<app::scene::ModelBakeHook>();
 		context.services.Unregister<EditorProjectActions>();
 		context.services.Unregister<UndoStack>();
 		context.services.Unregister<SceneSelection>();

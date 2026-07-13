@@ -1,0 +1,409 @@
+# AetherCore scene - hand-authored hierarchy (no runtime spawner scripts).
+# Entities are placed directly here; the human animates via its skinned component.
+[environment]
+ambient = [ 0.020000000474974513, 0.02199999988079071, 0.027999999225139618 ]
+sky_horizon = [ 0.03999999910593033, 0.05000000074505806, 0.07999999821186066 ]
+sky_void = [ 0.0020000000949949026, 0.003000000026077032, 0.006000000052154064 ]
+sky_zenith = [ 0.009999999776482582, 0.014999999664723873, 0.029999999329447746 ]
+sun_color = [ 0.30000001192092896, 0.3199999928474426, 0.38999998569488525 ]
+sun_direction = [ 0.20000000298023224, -0.8999999761581421, 0.30000001192092896 ]
+sun_intensity = 1.2000000476837158
+
+[scene]
+name = 'HumanDemo'
+version = 7
+
+# ── Ground ──────────────────────────────────────────────────────────────────
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Ground'
+parent = -1
+position = [ 0.0, -0.5, 0.0 ]
+scale = [ 16.0, 1.0, 16.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.10000000149011612, 0.10999999940395355, 0.12999999523162842, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.800000011920929
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    half_extents = [ 8.0, 0.5, 8.0 ]
+    half_height = 0.5
+    motion = 'static'
+    radius = 0.5
+    shape = 'box'
+
+# ── Human (skinned model; root container + one child per primitive) ──────────
+# A multi-primitive model is a root transform with one child per submesh, each
+# carrying its own mesh index, skin and material (mirrors ModelSpawn). The root
+# holds the placement + 0.01 scale (the model is authored in centimetres); the
+# two primitive children (body + joints) render relative to it. Both walk (clip 1).
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Human'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+# ── Lighting rig (grouped under an empty transform) ─────────────────────────
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Lighting'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Key Light'
+parent = 2
+position = [ 3.5, 4.5, 3.5 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.8500000238418579, 0.6000000238418579 ]
+    intensity = 40.0
+    radius = 22.0
+    shadow = true
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Fill Light'
+parent = 2
+position = [ -4.0, 3.0, 2.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.4000000059604645, 0.6000000238418579, 1.0 ]
+    intensity = 18.0
+    radius = 22.0
+    shadow = false
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Rim Light'
+parent = 2
+position = [ 0.0, 4.0, -4.5 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.8500000238418579, 0.8999999761581421, 1.0 ]
+    intensity = 26.0
+    radius = 22.0
+    shadow = false
+
+# ── Camera (orbits the human) ───────────────────────────────────────────────
+[[entities]]
+euler = [ -12.0, 0.0, 0.0 ]
+name = 'Camera'
+parent = -1
+position = [ 0.0, 2.0, 5.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    far = 1000.0
+    fov = 55.0
+    main = true
+    near = 0.10000000149011612
+
+    [entities.orbit_camera]
+    distance = 4.5
+    pitch = 12.0
+    target = [ 0.0, 1.0, 0.0 ]
+    yaw = 0.0
+
+# ── Props: a colonnade framing the character (grouped under an empty transform) ─
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Props'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Pillar Back-Left'
+parent = 7
+position = [ -3.5, 2.0, -3.0 ]
+scale = [ 0.5, 4.0, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.18000000715255737, 0.19000000715255737, 0.2199999988079071, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8500000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    half_extents = [ 0.25, 2.0, 0.25 ]
+    half_height = 2.0
+    motion = 'static'
+    radius = 0.25
+    shape = 'box'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Pillar Back-Right'
+parent = 7
+position = [ 3.5, 2.0, -3.0 ]
+scale = [ 0.5, 4.0, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.18000000715255737, 0.19000000715255737, 0.2199999988079071, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8500000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    half_extents = [ 0.25, 2.0, 0.25 ]
+    half_height = 2.0
+    motion = 'static'
+    radius = 0.25
+    shape = 'box'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Pillar Front-Left'
+parent = 7
+position = [ -3.5, 2.0, 1.5 ]
+scale = [ 0.5, 4.0, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.18000000715255737, 0.19000000715255737, 0.2199999988079071, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8500000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    half_extents = [ 0.25, 2.0, 0.25 ]
+    half_height = 2.0
+    motion = 'static'
+    radius = 0.25
+    shape = 'box'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Pillar Front-Right'
+parent = 7
+position = [ 3.5, 2.0, 1.5 ]
+scale = [ 0.5, 4.0, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.18000000715255737, 0.19000000715255737, 0.2199999988079071, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8500000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    half_extents = [ 0.25, 2.0, 0.25 ]
+    half_height = 2.0
+    motion = 'static'
+    radius = 0.25
+    shape = 'box'
+
+# ── Accents: floating PBR spheres (metallic + emissive) ─────────────────────
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Accents'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Gold Orb'
+parent = 12
+position = [ 2.2, 1.6, -1.5 ]
+scale = [ 0.5, 0.5, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.7799999713897705, 0.3499999940395355, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 1.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.25
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Glow Orb'
+parent = 12
+position = [ -2.0, 2.4, -2.0 ]
+scale = [ 0.35, 0.35, 0.35 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.05000000074505806, 0.07999999821186066, 0.11999999731779099, 1.0 ]
+    double_sided = false
+    emissive = [ 0.15000000596046448, 0.5, 1.399999976158142 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.5
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Crimson Orb'
+parent = 12
+position = [ 1.4, 0.45, 1.8 ]
+scale = [ 0.3, 0.3, 0.3 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.2199999988079071, 0.20000000298023224, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.8999999761581421
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.30000001192092896
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+# ── Human primitive 0: Beta_Surface (body/skin), skin 0, material 0 ──────────
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Human mesh'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.009999999776482582, 0.009999999776482582, 0.009999999776482582 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8370000123977661, 0.30230802297592163, 0.26365500688552856, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8082915544509888
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'model'
+    path = 'project://assets/models/Human/Human.gltf'
+
+    [entities.skinned]
+    clip = 1
+    looping = true
+    speed = 1.0
+    time = 0.0
+
+# ── Human primitive 1: Beta_Joints, skin 1, material 1 ──────────────────────
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Human mesh'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.009999999776482582, 0.009999999776482582, 0.009999999776482582 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.3333333432674408, 0.12452887743711472, 0.10101473331451416, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8585786437626904
+    vertex_color = false
+
+    [entities.mesh]
+    index = 1
+    kind = 'model'
+    path = 'project://assets/models/Human/Human.gltf'
+
+    [entities.skinned]
+    clip = 1
+    looping = true
+    speed = 1.0
+    time = 0.0
