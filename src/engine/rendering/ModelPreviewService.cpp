@@ -322,10 +322,10 @@ namespace aether
 		m_draws = graph.CreatePreparedDrawList("ModelPreviewDraws");
 
 		graph.AddQueuePreparePass({
-		             .name = "$ModelPreviewCull",
-		             .produces = m_draws,
-		             .sideEffectReason = "prepares model-preview draw queue",
-		     })
+		                                  .name = "$ModelPreviewCull",
+		                                  .produces = m_draws,
+		                                  .sideEffectReason = "prepares model-preview draw queue",
+		                          })
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
@@ -367,13 +367,12 @@ namespace aether
 
 		// Same tonemap treatment as the camera preview so thumbnails match the
 		// main view's exposure/operator.
-		graph
-		        .AddFullscreenPass({
-		                .name = "$ModelPreviewTonemap",
-		                .color = m_colorLdr,
-		                .extent = {kSize, kSize},
-		                .loadOp = gpu::LoadOp::DontCare,
-		        })
+		graph.AddFullscreenPass({
+		                                .name = "$ModelPreviewTonemap",
+		                                .color = m_colorLdr,
+		                                .extent = {kSize, kSize},
+		                                .loadOp = gpu::LoadOp::DontCare,
+		                        })
 		        .ReadTexture(m_color)
 		        .Execute(
 		                [this, &bindless, &postProcess](PassContext& ctx)

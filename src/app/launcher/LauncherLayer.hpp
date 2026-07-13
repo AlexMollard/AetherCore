@@ -68,6 +68,7 @@ namespace aether::app
 			Texture texture;
 			std::uint64_t textureId = 0;
 		};
+
 		std::unordered_map<std::string, PreviewEntry> m_previews;
 
 		// MCP integration: each spawned Editor gets AETHER_CONTROL_PORT so its

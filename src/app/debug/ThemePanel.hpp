@@ -25,9 +25,9 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
-		void Apply();          // push m_theme into chrome + restyle ImGui
-		void Persist() const;  // write m_theme to EditorTheme.toml
-		bool LoadPersisted();  // read EditorTheme.toml into m_theme; false if none
+		void Apply();         // push m_theme into chrome + restyle ImGui
+		void Persist() const; // write m_theme to EditorTheme.toml
+		bool LoadPersisted(); // read EditorTheme.toml into m_theme; false if none
 
 		chrome::EditorTheme m_theme = chrome::NightAmberTheme();
 		bool m_loaded = false;

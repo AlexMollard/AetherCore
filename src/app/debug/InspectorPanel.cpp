@@ -468,7 +468,6 @@ namespace aether::editor
 			}
 			ImGui::PopStyleColor(3);
 			ImGui::PopFont();
-
 		}
 
 		// ── Add Component / Delete ─────────────────────────────────────────────

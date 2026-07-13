@@ -500,10 +500,7 @@ namespace aether
 		cmd.BindComputePipeline(const_cast<void*>(cullResolved.state));
 		cmd.PushDataRaw(0, gpu::AsPushConstantBytes(vs.push));
 		cmd.Dispatch(vs.tilesX, vs.tilesY, 1);
-		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader,
-		        gpu::AccessFlags::ShaderStorageWrite,
-		        gpu::PipelineStage::FragmentShader | gpu::PipelineStage::ComputeShader,
-		        gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderStorageRead);
+		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::FragmentShader | gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderStorageRead);
 	}
 
 	void LightingManager::UpdateBufferHandles(RenderGraph& graph, const std::uint32_t frameSlot) const

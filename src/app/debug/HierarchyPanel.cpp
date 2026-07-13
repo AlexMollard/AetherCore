@@ -863,8 +863,12 @@ namespace aether::editor
 			const char* tip;
 			int kind; // 0 = disable, 1 = hidden, 2 = pickable
 		};
+
 		const Toggle toggles[3] = {
-		        {ICON_FA_POWER_OFF, selfDisabled ? ImVec4(0.86f, 0.45f, 0.40f, 0.95f) : (inactive ? chrome::WithAlpha(chrome::kFaint, 0.55f) : chrome::WithAlpha(chrome::kMuted, 0.9f)), selfDisabled ? "Enable entity" : "Disable entity (and children)", 0},
+		        {ICON_FA_POWER_OFF,
+		                selfDisabled ? ImVec4(0.86f, 0.45f, 0.40f, 0.95f) : (inactive ? chrome::WithAlpha(chrome::kFaint, 0.55f) : chrome::WithAlpha(chrome::kMuted, 0.9f)),
+		                selfDisabled ? "Enable entity" : "Disable entity (and children)",
+		                0},
 		        {ICON_FA_EYE, hidden ? chrome::WithAlpha(chrome::kFaint, 0.45f) : chrome::WithAlpha(chrome::kMuted, 0.9f), hidden ? "Show in Scene View" : "Hide in Scene View", 1},
 		        {notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK, notPickable ? chrome::WithAlpha(chrome::kFaint, 0.45f) : chrome::WithAlpha(chrome::kMuted, 0.9f), notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View", 2},
 		};
@@ -1160,7 +1164,10 @@ namespace aether::editor
 			// Ghost toolbar icons (FA advance can exceed a square's inner width - size
 			// from the measured icon so the glyph centres).
 			const float tbBtnH = ImGui::GetFrameHeight();
-			const auto tbIconW = [&](const char* icon) { return std::max(tbBtnH, ImGui::CalcTextSize(icon).x + ImGui::GetStyle().FramePadding.x * 2.0f); };
+			const auto tbIconW = [&](const char* icon)
+			{
+				return std::max(tbBtnH, ImGui::CalcTextSize(icon).x + ImGui::GetStyle().FramePadding.x * 2.0f);
+			};
 
 			// ── Toolbar ────────────────────────────────────────────────────────
 			if (chrome::GhostIconButton(ICON_FA_PLUS, "##addEntity", ImVec2(tbIconW(ICON_FA_PLUS), tbBtnH), chrome::kAccentHi))
@@ -1395,7 +1402,6 @@ namespace aether::editor
 			FilterChip(ICON_FA_WEIGHT_HANGING, "Physics", ImVec4(1.00f, 0.72f, 0.35f, 1.0f), m_filterPhysics);
 			ImGui::SameLine();
 			FilterChip(ICON_FA_WAND_MAGIC_SPARKLES, "Effects", ImVec4(0.80f, 0.55f, 1.00f, 1.0f), m_filterEffect);
-
 
 			// Sync persistent expansion from settings once the world is ready.
 			if (!m_expandedPathsLoaded)

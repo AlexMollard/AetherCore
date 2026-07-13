@@ -48,7 +48,10 @@ namespace aether
 		// specific-image (non-swapchain) request via a self-contained one-shot copy.
 		void ProcessPending(void* swapchainColorImage, gpu::Extent2D swapchainExtent, gpu::Format swapchainFormat);
 
-		[[nodiscard]] bool IsInitialized() const noexcept { return m_device != nullptr; }
+		[[nodiscard]] bool IsInitialized() const noexcept
+		{
+			return m_device != nullptr;
+		}
 
 	private:
 		// vkSrcLayout is a raw VkImageLayout value (kept as int so the header stays
@@ -61,6 +64,7 @@ namespace aether
 		std::uint32_t m_queueFamily = 0;
 
 		std::mutex m_mutex;
+
 		struct Pending
 		{
 			std::string path;
@@ -71,6 +75,7 @@ namespace aether
 			gpu::ImageLayout srcLayout = gpu::ImageLayout::ShaderReadOnly;
 			std::promise<std::string> promise;
 		};
+
 		std::optional<Pending> m_pending;
 
 		// A whole-frame capture whose copy has been recorded into the frame's command
@@ -85,6 +90,7 @@ namespace aether
 			std::uint32_t height = 0;
 			gpu::Format format = gpu::Format::Undefined;
 		};
+
 		std::optional<FrameCapture> m_frameCapture;
 
 		void CompleteFrameCapture();

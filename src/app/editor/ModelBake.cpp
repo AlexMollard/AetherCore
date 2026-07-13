@@ -73,10 +73,9 @@ namespace aether::editor
 		}
 
 		const std::string rel = StripMount(vfsModelPath); // assets/models/Fox/Fox.gltf
-		const fs::path diskPath = project.root / rel;      // disk source (resolves external .bin URIs)
+		const fs::path diskPath = project.root / rel;     // disk source (resolves external .bin URIs)
 
-		const auto result = assetpipeline::MeshProcessor::Process(
-		        std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, project.root);
+		const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, project.root);
 
 		if (result.meshData.empty())
 		{

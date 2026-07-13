@@ -102,14 +102,14 @@ namespace aether
 			pool.resize(requiredSize);
 			for (std::size_t i = oldSize; i < requiredSize; ++i)
 			{
-					// Null shared data on purpose: these are render-thread copies that
-					// only carry vertex/index/command buffers. Constructing them against
-					// the live context's ImDrawListSharedData would register them in its
-					// DrawLists registry, and because the frame pool is process-lifetime
-					// (kept warm in a static pool), they outlive ImGui::DestroyContext()
-					// and trip ~ImDrawListSharedData's `DrawLists.Size == 0` assertion at
-					// shutdown. Keeping _Data null decouples the snapshot from the context.
-					pool[i] = IM_NEW(ImDrawList)(nullptr);
+				// Null shared data on purpose: these are render-thread copies that
+				// only carry vertex/index/command buffers. Constructing them against
+				// the live context's ImDrawListSharedData would register them in its
+				// DrawLists registry, and because the frame pool is process-lifetime
+				// (kept warm in a static pool), they outlive ImGui::DestroyContext()
+				// and trip ~ImDrawListSharedData's `DrawLists.Size == 0` assertion at
+				// shutdown. Keeping _Data null decouples the snapshot from the context.
+				pool[i] = IM_NEW(ImDrawList)(nullptr);
 			}
 		}
 

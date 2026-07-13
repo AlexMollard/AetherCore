@@ -14,7 +14,10 @@ namespace aether::editor
 {
 	namespace
 	{
-		ImVec4 ToImVec4(const glm::vec4& c) { return {c.r, c.g, c.b, c.a}; }
+		ImVec4 ToImVec4(const glm::vec4& c)
+		{
+			return {c.r, c.g, c.b, c.a};
+		}
 	} // namespace
 
 	void ControlServerPanel::OnUpdate(app::LayerContext& context)

@@ -184,11 +184,7 @@ namespace aether::app
 		// it a way to resolve glTF model primitives through this layer's model cache.
 		if (auto* assetDb = context.services.TryGet<AssetDatabase>())
 		{
-			assetDb->SetModelMeshResolver(
-			        [this](const std::string& path, int primitiveIndex) -> const Mesh*
-			        {
-				        return m_sceneCtx.assets != nullptr ? scene::ResolveModelPrimitiveMesh(*m_sceneCtx.assets, m_sceneCtx, path, primitiveIndex) : nullptr;
-			        });
+			assetDb->SetModelMeshResolver([this](const std::string& path, int primitiveIndex) -> const Mesh* { return m_sceneCtx.assets != nullptr ? scene::ResolveModelPrimitiveMesh(*m_sceneCtx.assets, m_sceneCtx, path, primitiveIndex) : nullptr; });
 		}
 
 		// The default primitive material is built lazily and acquired through the

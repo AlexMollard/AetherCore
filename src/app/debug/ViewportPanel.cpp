@@ -208,8 +208,7 @@ namespace aether::editor
 		{
 			clicked = chrome::GhostButton(ICON_FA_PLAY " Play", size, chrome::kAccentHi);
 		}
-		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place"
-		                : (compiling ? "Building C# scripts on a worker thread - click to cancel" : "Snapshot the scene and simulate"));
+		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place" : (compiling ? "Building C# scripts on a worker thread - click to cancel" : "Snapshot the scene and simulate"));
 		if (!clicked)
 		{
 			return;
@@ -264,7 +263,10 @@ namespace aether::editor
 		// state carries the editor's amber accent instead of ImGuizmo's defaults.
 		{
 			auto& gizmoStyle = ImGuizmo::GetStyle();
-			const auto axis = [](const glm::vec4& c, const float a) { return ImVec4(c.r, c.g, c.b, a); };
+			const auto axis = [](const glm::vec4& c, const float a)
+			{
+				return ImVec4(c.r, c.g, c.b, a);
+			};
 			gizmoStyle.Colors[ImGuizmo::DIRECTION_X] = axis(colors::AxisX, 1.0f);
 			gizmoStyle.Colors[ImGuizmo::DIRECTION_Y] = axis(colors::AxisY, 1.0f);
 			gizmoStyle.Colors[ImGuizmo::DIRECTION_Z] = axis(colors::AxisZ, 1.0f);
@@ -821,6 +823,7 @@ namespace aether::editor
 				const char* label;
 				std::string value;
 			};
+
 			std::array<StatRow, 3> rows;
 			std::size_t rowCount = 0;
 			if (m_viewportShowStats)
@@ -913,7 +916,8 @@ namespace aether::editor
 		// Left pill: gizmo tools + orientation. The active op is a filled amber
 		// segment; idle ops are ghosts.
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, pillTop));
-		ImGui::BeginChild("##vpTools", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::BeginChild(
+		        "##vpTools", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
 			const auto tool = [&](const char* icon, int op, const char* tooltip)
 			{

@@ -71,8 +71,8 @@ namespace aether
 		glm::vec3 center{0.0f, 0.0f, 0.0f};      // local offset of the shape from the entity origin
 
 		float friction = 0.5f;
-		float restitution = 0.0f;    // bounciness (0 = none, 1 = perfectly elastic)
-		bool isSensor = false;       // trigger: reports overlaps, no collision response
+		float restitution = 0.0f;                  // bounciness (0 = none, 1 = perfectly elastic)
+		bool isSensor = false;                     // trigger: reports overlaps, no collision response
 		PhysicsLayer layer = PhysicsLayer::Moving; // broadphase layer (sensor forces Sensor)
 	};
 
@@ -129,13 +129,13 @@ namespace aether
 	struct JointComponent
 	{
 		JointType type = JointType::Fixed;
-		Entity target{};                     // other body; invalid = attach to the world
-		glm::vec3 anchor{0.0f, 0.0f, 0.0f};  // world-space anchor at creation (Point/Hinge/Slider/Distance)
-		glm::vec3 axis{0.0f, 1.0f, 0.0f};    // world-space axis (Hinge/Slider)
-		float minLimit = 0.0f;               // Hinge angle (rad) / Slider distance min; min>=max = free
-		float maxLimit = 0.0f;               // Hinge angle (rad) / Slider distance max
-		float distance = -1.0f;              // Distance joint target (<0 = current distance at creation)
-		bool collideConnected = false;       // let the two connected bodies still collide
+		Entity target{};                    // other body; invalid = attach to the world
+		glm::vec3 anchor{0.0f, 0.0f, 0.0f}; // world-space anchor at creation (Point/Hinge/Slider/Distance)
+		glm::vec3 axis{0.0f, 1.0f, 0.0f};   // world-space axis (Hinge/Slider)
+		float minLimit = 0.0f;              // Hinge angle (rad) / Slider distance min; min>=max = free
+		float maxLimit = 0.0f;              // Hinge angle (rad) / Slider distance max
+		float distance = -1.0f;             // Distance joint target (<0 = current distance at creation)
+		bool collideConnected = false;      // let the two connected bodies still collide
 
 		std::uint32_t constraintId = 0; // runtime: 0 = not created yet
 	};

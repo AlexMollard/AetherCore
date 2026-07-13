@@ -25,8 +25,7 @@ namespace aether::assetpipeline
 
 			if (options.importMaterials)
 			{
-				const std::filesystem::path materialRoot =
-				        (options.projectLayout && std::filesystem::is_directory(sourceDir / "assets", ec)) ? sourceDir / "assets" : sourceDir;
+				const std::filesystem::path materialRoot = (options.projectLayout && std::filesystem::is_directory(sourceDir / "assets", ec)) ? sourceDir / "assets" : sourceDir;
 				if (MaterialImporter::ImportDirectory(materialRoot) < 0)
 				{
 					return {.ok = false, .message = "Material import failed for: " + materialRoot.generic_string(), .outputPath = outputPak};
@@ -45,10 +44,7 @@ namespace aether::assetpipeline
 
 			if (!writer.Write(outputPak))
 			{
-				return {.ok = false,
-				        .message = "Pack failed; see " + std::filesystem::path(outputPak.string() + ".log").generic_string(),
-				        .sourceFiles = sourceFiles,
-				        .outputPath = outputPak};
+				return {.ok = false, .message = "Pack failed; see " + std::filesystem::path(outputPak.string() + ".log").generic_string(), .sourceFiles = sourceFiles, .outputPath = outputPak};
 			}
 
 			std::uintmax_t bytes = std::filesystem::file_size(outputPak, ec);
@@ -56,11 +52,7 @@ namespace aether::assetpipeline
 			{
 				bytes = 0;
 			}
-			return {.ok = true,
-			        .message = "Packed " + std::to_string(sourceFiles) + " file(s) (" + std::to_string(bytes / 1024) + " KB).",
-			        .sourceFiles = sourceFiles,
-			        .pakBytes = bytes,
-			        .outputPath = outputPak};
+			return {.ok = true, .message = "Packed " + std::to_string(sourceFiles) + " file(s) (" + std::to_string(bytes / 1024) + " KB).", .sourceFiles = sourceFiles, .pakBytes = bytes, .outputPath = outputPak};
 		}
 	} // namespace
 
@@ -77,4 +69,4 @@ namespace aether::assetpipeline
 	{
 		return RunPack(sourceDir, outputPak, options);
 	}
-}
+} // namespace aether::assetpipeline

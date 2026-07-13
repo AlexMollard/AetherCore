@@ -300,6 +300,7 @@ namespace aether
 			std::uint64_t entity2;
 			bool sensor;
 		};
+
 		struct Removed
 		{
 			JPH::BodyID body1;
@@ -360,6 +361,7 @@ namespace aether
 			std::uint32_t bodyB = 0;
 			bool collisionDisabled = false;
 		};
+
 		std::unordered_map<std::uint32_t, LiveConstraint> constraints;
 		std::uint32_t nextConstraintId = 1;
 
@@ -1059,7 +1061,10 @@ namespace aether
 			return;
 		}
 
-		auto alive = [&](Entity e) { return e.IsValid() && reg.valid(World::ToEntt(e)); };
+		auto alive = [&](Entity e)
+		{
+			return e.IsValid() && reg.valid(World::ToEntt(e));
+		};
 		auto record = [&](Entity self, Entity other, bool sensor, bool entered)
 		{
 			auto* ev = reg.try_get<CollisionEventsComponent>(World::ToEntt(self));

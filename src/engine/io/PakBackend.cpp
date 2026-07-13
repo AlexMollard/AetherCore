@@ -117,12 +117,8 @@ namespace aether::io
 		const uint64_t indexEnd = sizeof(PakHeader) + entryTableSize;
 		// Overflow-safe, ORDER-DEPENDENT: each term relies on the earlier terms
 		// being false so every subtraction stays non-wrapping.
-		if (indexEnd > fileSize
-		    || header.pathDataOffset != indexEnd
-		    || header.pathDataSize > fileSize - header.pathDataOffset
-		    || header.assetDataOffset != header.pathDataOffset + header.pathDataSize
-		    || header.assetDataOffset > fileSize
-		    || header.assetDataSize > fileSize - header.assetDataOffset)
+		if (indexEnd > fileSize || header.pathDataOffset != indexEnd || header.pathDataSize > fileSize - header.pathDataOffset || header.assetDataOffset != header.pathDataOffset + header.pathDataSize || header.assetDataOffset > fileSize
+		        || header.assetDataSize > fileSize - header.assetDataOffset)
 		{
 			throw FileSystemError("Corrupt pak index (offsets out of range) in: " + m_pakPath.string());
 		}
@@ -161,9 +157,7 @@ namespace aether::io
 		for (const auto& e: entries)
 		{
 			// Subtraction form (guarded by the size fields validated above) avoids uint64 overflow.
-			if (static_cast<uint64_t>(e.pathOffset) + e.pathLen > header.pathDataSize
-			    || e.dataOffset > header.assetDataSize
-			    || e.dataSize > header.assetDataSize - e.dataOffset)
+			if (static_cast<uint64_t>(e.pathOffset) + e.pathLen > header.pathDataSize || e.dataOffset > header.assetDataSize || e.dataSize > header.assetDataSize - e.dataOffset)
 			{
 				throw FileSystemError("Corrupt pak entry (range out of bounds) in: " + m_pakPath.string());
 			}

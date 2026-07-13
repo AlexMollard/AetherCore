@@ -125,9 +125,7 @@ int main(int argc, char* argv[])
 	        .importMaterials = args->importMaterials,
 	        .projectLayout = args->project,
 	};
-	const PackResult result = args->project
-	        ? PackProject(args->sourceDir, args->outputPath, options)
-	        : PackDirectory(args->sourceDir, args->outputPath, options);
+	const PackResult result = args->project ? PackProject(args->sourceDir, args->outputPath, options) : PackDirectory(args->sourceDir, args->outputPath, options);
 	if (!result.ok)
 	{
 		std::cerr << "AssetPacker: " << result.message << "\n";

@@ -212,8 +212,7 @@ namespace aether::app::scripting
 			// `-p:UseSharedCompilation=false` keeps the Roslyn build server from
 			// spawning; with MSBUILDDISABLENODEREUSE (set at startup) no persistent
 			// child outlives the build to hold our capture handle.
-			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG
-			        + " --nologo -v:m -p:UseSharedCompilation=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
+			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:UseSharedCompilation=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 
 			std::string output;
 			const int rc = io::RunProcessCapture(inner, output);

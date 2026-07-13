@@ -21,9 +21,9 @@ namespace aether::editor
 	// component to the engine means one entry in ComponentCatalog.cpp.
 	struct ComponentCatalogEntry
 	{
-		std::string name;      // stable id shown to the agent + inspector, e.g. "Cube", "Point Light"
-		std::string category;  // "Core", "Rendering", "Behaviors", "Physics", "Editor"
-		std::string icon;      // ICON_FA_* glyph string for the inspector palette
+		std::string name;     // stable id shown to the agent + inspector, e.g. "Cube", "Point Light"
+		std::string category; // "Core", "Rendering", "Behaviors", "Physics", "Editor"
+		std::string icon;     // ICON_FA_* glyph string for the inspector palette
 
 		// Present on the entity? (a bundle reports true when its primary component is.)
 		std::function<bool(const World&, Entity)> has;

@@ -40,7 +40,7 @@ namespace aether::colors
 	inline constexpr auto Red = detail::rgb(255, 64, 80);     // #FF4050
 
 	// Primary interaction states + on-accent text (dark text on amber fills).
-	inline constexpr auto PrimaryHover = detail::rgb(255, 179, 82); // #FFB352
+	inline constexpr auto PrimaryHover = detail::rgb(255, 179, 82);  // #FFB352
 	inline constexpr auto PrimaryActive = detail::rgb(184, 107, 31); // #B86B1F
 	inline constexpr auto OnPrimary = detail::rgb(18, 15, 11);       // #120F0B
 

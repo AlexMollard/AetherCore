@@ -11,7 +11,7 @@ namespace aether
 	{
 		struct Window
 		{
-			int width = 2560;  // QHD (1440p) default
+			int width = 2560; // QHD (1440p) default
 			int height = 1440;
 		} window;
 
@@ -100,15 +100,11 @@ namespace aether
 		// base (1+2+3) for later delta saves. Unlike shippedFile/userFile (looked up
 		// via ResolvePath / GetUserConfigDir), projectFile is an already-resolved
 		// absolute path supplied by the caller; an empty path skips the project layer.
-		[[nodiscard]] static LoadedEngineSettings LoadLayered(std::string_view shippedFile = "EngineSettings.toml",
-		                                                      const std::filesystem::path& projectFile = {},
-		                                                      std::string_view userFile = "UserSettings.toml");
+		[[nodiscard]] static LoadedEngineSettings LoadLayered(std::string_view shippedFile = "EngineSettings.toml", const std::filesystem::path& projectFile = {}, std::string_view userFile = "UserSettings.toml");
 
 		// Convenience wrapper returning only the merged values. Kept for callers
 		// that don't need to save (e.g. one-shot engine embedders).
-		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view shippedFile = "EngineSettings.toml",
-		                                                 const std::filesystem::path& projectFile = {},
-		                                                 std::string_view userFile = "UserSettings.toml");
+		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view shippedFile = "EngineSettings.toml", const std::filesystem::path& projectFile = {}, std::string_view userFile = "UserSettings.toml");
 
 		// Writes only the keys where 'settings' differs from 'base' to the per-user
 		// settings file (io::PlatformPaths::GetUserConfigDir()/userFile). Never

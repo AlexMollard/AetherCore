@@ -34,6 +34,7 @@ namespace aether::editor
 			}
 			return glm::vec3(0.0f);
 		}
+
 		glm::vec3 EntityScale(const World& w, Entity e)
 		{
 			if (const auto* t = w.TryGet<TransformComponent>(e))
@@ -73,6 +74,7 @@ namespace aether::editor
 			}
 			w.EmplaceOrReplace<MeshRendererComponent>(e);
 		}
+
 		void RemoveMeshBundle(World& w, Entity e)
 		{
 			w.Remove<MeshRendererComponent>(e);
@@ -96,8 +98,9 @@ namespace aether::editor
 		template<typename T>
 		ComponentCatalogEntry Simple(std::string name, std::string category, std::string icon, T value = T{})
 		{
-			return ComponentCatalogEntry{
-			        std::move(name), std::move(category), std::move(icon),
+			return ComponentCatalogEntry{std::move(name),
+			        std::move(category),
+			        std::move(icon),
 			        [](const World& w, Entity e) { return w.Has<T>(e); },
 			        [value](World& w, Entity e, ServiceContainer&)
 			        {
@@ -127,7 +130,9 @@ namespace aether::editor
 			// ── Rendering ───────────────────────────────────────────────────────
 			const auto meshEntry = [](std::string name, std::string icon, PrimitiveMesh kind, const char* path)
 			{
-				return ComponentCatalogEntry{std::move(name), "Rendering", std::move(icon),
+				return ComponentCatalogEntry{std::move(name),
+				        "Rendering",
+				        std::move(icon),
 				        [](const World& w, Entity e) { return w.Has<MeshComponent>(e); },
 				        [kind, path](World& w, Entity e, ServiceContainer& s) { AddMeshPrimitive(w, e, s, kind, path); },
 				        [](World& w, Entity e) { RemoveMeshBundle(w, e); }};
@@ -138,13 +143,18 @@ namespace aether::editor
 			c.push_back(meshEntry("Quad", ICON_FA_IMAGE, PrimitiveMesh::Quad, "quad"));
 			c.push_back(meshEntry("Triangle", ICON_FA_PLAY, PrimitiveMesh::Triangle, "triangle"));
 
-			c.push_back(ComponentCatalogEntry{"Sprite", "Rendering", ICON_FA_IMAGE,
+			c.push_back(ComponentCatalogEntry{"Sprite",
+			        "Rendering",
+			        ICON_FA_IMAGE,
 			        [](const World& w, Entity e) { return w.Has<SpriteRendererComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer& s)
 			        {
 				        auto* prims = s.TryGet<PrimitiveMeshes>();
 				        auto* assets = s.TryGet<AssetManager>();
-				        if (prims == nullptr || assets == nullptr) { return; }
+				        if (prims == nullptr || assets == nullptr)
+				        {
+					        return;
+				        }
 				        EnsureTransform(w, e);
 				        w.EmplaceOrReplace<MeshComponent>(e, MeshComponent{.mesh = &prims->Get(PrimitiveMesh::Quad)});
 				        w.EmplaceOrReplace<MeshSourceComponent>(e, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "quad", .primitiveIndex = 0});
@@ -159,12 +169,17 @@ namespace aether::editor
 			        },
 			        [](World& w, Entity e) { RemoveMeshBundle(w, e); }});
 
-			c.push_back(ComponentCatalogEntry{"Material", "Rendering", ICON_FA_PALETTE,
+			c.push_back(ComponentCatalogEntry{"Material",
+			        "Rendering",
+			        ICON_FA_PALETTE,
 			        [](const World& w, Entity e) { return w.Has<MaterialComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer& s)
 			        {
 				        auto* assets = s.TryGet<AssetManager>();
-				        if (assets == nullptr) { return; }
+				        if (assets == nullptr)
+				        {
+					        return;
+				        }
 				        MaterialAsset asset{};
 				        asset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
 				        asset.roughnessFactor = 0.6f;
@@ -172,24 +187,44 @@ namespace aether::editor
 			        },
 			        [](World& w, Entity e) { w.Remove<MaterialComponent>(e); }});
 
-			c.push_back(ComponentCatalogEntry{"Point Light", "Rendering", ICON_FA_LIGHTBULB,
+			c.push_back(ComponentCatalogEntry{"Point Light",
+			        "Rendering",
+			        ICON_FA_LIGHTBULB,
 			        [](const World& w, Entity e) { return w.Has<PointLightComponent>(e); },
-			        [](World& w, Entity e, ServiceContainer&) { EnsureTransform(w, e); w.EmplaceOrReplace<PointLightComponent>(e); },
+			        [](World& w, Entity e, ServiceContainer&)
+			        {
+				        EnsureTransform(w, e);
+				        w.EmplaceOrReplace<PointLightComponent>(e);
+			        },
 			        [](World& w, Entity e) { w.Remove<PointLightComponent>(e); }});
-			c.push_back(ComponentCatalogEntry{"Spot Light", "Rendering", ICON_FA_LIGHTBULB,
+			c.push_back(ComponentCatalogEntry{"Spot Light",
+			        "Rendering",
+			        ICON_FA_LIGHTBULB,
 			        [](const World& w, Entity e) { return w.Has<SpotLightComponent>(e); },
-			        [](World& w, Entity e, ServiceContainer&) { EnsureTransform(w, e); w.EmplaceOrReplace<SpotLightComponent>(e); },
+			        [](World& w, Entity e, ServiceContainer&)
+			        {
+				        EnsureTransform(w, e);
+				        w.EmplaceOrReplace<SpotLightComponent>(e);
+			        },
 			        [](World& w, Entity e) { w.Remove<SpotLightComponent>(e); }});
-			c.push_back(ComponentCatalogEntry{"Camera", "Rendering", ICON_FA_VIDEO,
+			c.push_back(ComponentCatalogEntry{"Camera",
+			        "Rendering",
+			        ICON_FA_VIDEO,
 			        [](const World& w, Entity e) { return w.Has<CameraComponent>(e); },
-			        [](World& w, Entity e, ServiceContainer&) { EnsureTransform(w, e); w.EmplaceOrReplace<CameraComponent>(e); },
+			        [](World& w, Entity e, ServiceContainer&)
+			        {
+				        EnsureTransform(w, e);
+				        w.EmplaceOrReplace<CameraComponent>(e);
+			        },
 			        [](World& w, Entity e) { w.Remove<CameraComponent>(e); }});
 			// Reference-only (addable=false): UI text is authored as a UI ENTITY
 			// (Create > UI > Text / ui::CreateTextEntity), never slapped onto an
 			// arbitrary entity as a loose component. This entry exists purely so a
 			// script's UiTextRef field can drop-validate against real UI text
 			// entities through the `has` predicate - the single, Unity-style model.
-			c.push_back(ComponentCatalogEntry{"UI Text", "Rendering", ICON_FA_PEN,
+			c.push_back(ComponentCatalogEntry{"UI Text",
+			        "Rendering",
+			        ICON_FA_PEN,
 			        [](const World& w, Entity e) { return w.Has<ui::UIText>(e); },
 			        nullptr,
 			        nullptr,
@@ -198,7 +233,9 @@ namespace aether::editor
 			// ── Behaviors ───────────────────────────────────────────────────────
 			c.push_back(Simple<BobComponent>("Bob", "Behaviors", ICON_FA_WAVE_SQUARE, BobComponent{.amplitude = 1.5f, .frequency = 0.8f}));
 			c.push_back(Simple<SpinComponent>("Spin", "Behaviors", ICON_FA_ROTATE, SpinComponent{.eulerDegPerSec = {0.0f, 40.0f, 0.0f}}));
-			c.push_back(ComponentCatalogEntry{"Orbit", "Behaviors", ICON_FA_CIRCLE_NOTCH,
+			c.push_back(ComponentCatalogEntry{"Orbit",
+			        "Behaviors",
+			        ICON_FA_CIRCLE_NOTCH,
 			        [](const World& w, Entity e) { return w.Has<OrbitComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer&)
 			        {
@@ -215,7 +252,9 @@ namespace aether::editor
 			c.push_back(Simple<RigidBodyComponent>("Rigid Body", "Physics", ICON_FA_WEIGHT_HANGING, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic}));
 			const auto colliderEntry = [](std::string name, PhysicsShapeType shape)
 			{
-				return ComponentCatalogEntry{std::move(name), "Physics", ICON_FA_WEIGHT_HANGING,
+				return ComponentCatalogEntry{std::move(name),
+				        "Physics",
+				        ICON_FA_WEIGHT_HANGING,
 				        [](const World& w, Entity e) { return w.Has<ColliderComponent>(e); },
 				        [shape](World& w, Entity e, ServiceContainer&) { AddCollider(w, e, shape); },
 				        [](World& w, Entity e) { w.Remove<ColliderComponent>(e); }};
@@ -224,7 +263,9 @@ namespace aether::editor
 			c.push_back(colliderEntry("Sphere Collider", PhysicsShapeType::Sphere));
 			c.push_back(colliderEntry("Capsule Collider", PhysicsShapeType::Capsule));
 			c.push_back(colliderEntry("Cylinder Collider", PhysicsShapeType::Cylinder));
-			c.push_back(ComponentCatalogEntry{"Trigger Volume", "Physics", ICON_FA_WEIGHT_HANGING,
+			c.push_back(ComponentCatalogEntry{"Trigger Volume",
+			        "Physics",
+			        ICON_FA_WEIGHT_HANGING,
 			        [](const World& w, Entity e) { return w.Has<ColliderComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer&)
 			        {
@@ -236,7 +277,9 @@ namespace aether::editor
 				        w.Emplace<ColliderComponent>(e, col);
 			        },
 			        [](World& w, Entity e) { w.Remove<ColliderComponent>(e); }});
-			c.push_back(ComponentCatalogEntry{"Joint", "Physics", ICON_FA_LINK,
+			c.push_back(ComponentCatalogEntry{"Joint",
+			        "Physics",
+			        ICON_FA_LINK,
 			        [](const World& w, Entity e) { return w.Has<JointComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer&) { w.EmplaceOrReplace<JointComponent>(e, JointComponent{.anchor = EntityPosition(w, e)}); },
 			        [](World& w, Entity e) { w.Remove<JointComponent>(e); }});
@@ -253,12 +296,16 @@ namespace aether::editor
 			// registry is a program-lifetime static.
 			for (const reflect::ComponentType& rt: reflect::ComponentTypes())
 			{
-				if (!rt.addable) { continue; }
-				if (std::any_of(c.begin(), c.end(), [&](const ComponentCatalogEntry& e) { return e.name == rt.name; })) { continue; }
-				c.push_back(ComponentCatalogEntry{rt.name, rt.category, rt.icon,
-				        [&rt](const World& w, Entity e) { return rt.has(w, e); },
-				        [&rt](World& w, Entity e, ServiceContainer&) { rt.emplaceDefault(w, e); },
-				        [&rt](World& w, Entity e) { rt.remove(w, e); }});
+				if (!rt.addable)
+				{
+					continue;
+				}
+				if (std::any_of(c.begin(), c.end(), [&](const ComponentCatalogEntry& e) { return e.name == rt.name; }))
+				{
+					continue;
+				}
+				c.push_back(ComponentCatalogEntry{
+				        rt.name, rt.category, rt.icon, [&rt](const World& w, Entity e) { return rt.has(w, e); }, [&rt](World& w, Entity e, ServiceContainer&) { rt.emplaceDefault(w, e); }, [&rt](World& w, Entity e) { rt.remove(w, e); }});
 			}
 
 			return c;

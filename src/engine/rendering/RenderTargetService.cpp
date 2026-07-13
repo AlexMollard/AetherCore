@@ -302,8 +302,7 @@ namespace aether
 			                {
 				                rit->second.lightViewId = m_lightingManager->RegisterView(rit->second.debugName);
 			                }
-			                const bool lit = rit->second.lightViewId != kInvalidLightView
-			                        && m_lightingManager->PrepareView(rit->second.lightViewId, frameIdx, fc.view, fc.proj, cam->GetNearPlane(), gpu::Extent2D(rit->second.extent), fc);
+			                const bool lit = rit->second.lightViewId != kInvalidLightView && m_lightingManager->PrepareView(rit->second.lightViewId, frameIdx, fc.view, fc.proj, cam->GetNearPlane(), gpu::Extent2D(rit->second.extent), fc);
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
@@ -342,9 +341,7 @@ namespace aether
 
 			                const auto frameIdx = ctx.frameSlot;
 			                // Shade with THIS target's per-view tile lists (bound during prepare).
-			                auto lightingAddr = m_lightingManager && rit->second.lightViewId != kInvalidLightView
-			                        ? m_lightingManager->GetLightingAddresses(rit->second.lightViewId, frameIdx)
-			                        : DrawContracts::LightingAddresses{};
+			                auto lightingAddr = m_lightingManager && rit->second.lightViewId != kInvalidLightView ? m_lightingManager->GetLightingAddresses(rit->second.lightViewId, frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
 			                const gpu::CullMode cullMode = m_renderer->GetCullMode();

@@ -539,8 +539,7 @@ namespace aether::editor
 			// Script-build indicator: while the editor builds the open project's C#
 			// scripts on a worker thread (project open / F5), show what's happening with
 			// an indeterminate progress bar - distinct from the Play-compile pill above.
-			if (const auto* buildScripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
-			    buildScripting != nullptr && buildScripting->IsBuilding() && !compiling)
+			if (const auto* buildScripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>(); buildScripting != nullptr && buildScripting->IsBuilding() && !compiling)
 			{
 				divider();
 				tick(kAccent);
@@ -559,7 +558,7 @@ namespace aether::editor
 				const float trackY = curPos.y + (ImGui::GetFrameHeight() - trackH) * 0.5f;
 				const float radius = trackH * 0.5f;
 				drawList->AddRectFilled(ImVec2(curPos.x, trackY), ImVec2(curPos.x + trackW, trackY + trackH), U32(WithAlpha(kAccent, 0.20f)), radius);
-				const double sweep = ImGui::GetTime() * 0.8; // ~1.25s per pass
+				const double sweep = ImGui::GetTime() * 0.8;                               // ~1.25s per pass
 				const float u = static_cast<float>(sweep - static_cast<long long>(sweep)); // 0..1 sawtooth
 				const float segX = curPos.x + u * (trackW - segW);
 				drawList->AddRectFilled(ImVec2(segX, trackY), ImVec2(segX + segW, trackY + trackH), U32(kAccentHi), radius);

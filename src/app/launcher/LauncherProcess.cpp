@@ -55,10 +55,7 @@ namespace aether::app::launcher
 		startupInfo.cb = sizeof(startupInfo);
 		PROCESS_INFORMATION processInfo{};
 		const std::string workingDir = dir.string();
-		const BOOL started = CreateProcessA(
-		        nullptr, command.data(), nullptr, nullptr, FALSE,
-		        DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr,
-		        workingDir.empty() ? nullptr : workingDir.c_str(), &startupInfo, &processInfo);
+		const BOOL started = CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDir.empty() ? nullptr : workingDir.c_str(), &startupInfo, &processInfo);
 		if (started)
 		{
 			CloseHandle(processInfo.hProcess);

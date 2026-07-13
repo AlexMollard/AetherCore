@@ -97,9 +97,7 @@ namespace aether
 		m_screenshotService.Init(m_gpu->GetDevice(), m_gpu->GetGraphicsQueueFamily(), m_gpu->GetGraphicsQueue());
 		// Capture whole-frame screenshots from inside the frame command buffer while
 		// the image is still owned + in COLOR_ATTACHMENT, not after present.
-		m_gpu->GetSwapchain().SetPrePresentCapture(
-		        [this](void* cmd, void* image, gpu::Extent2D extent)
-		        { m_screenshotService.RecordFrameCapture(cmd, image, extent, m_gpu->GetSwapchainColorFormat()); });
+		m_gpu->GetSwapchain().SetPrePresentCapture([this](void* cmd, void* image, gpu::Extent2D extent) { m_screenshotService.RecordFrameCapture(cmd, image, extent, m_gpu->GetSwapchainColorFormat()); });
 
 		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();

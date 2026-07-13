@@ -94,7 +94,7 @@ namespace aether::editor
 #endif
 		}
 
-		template <std::size_t N>
+		template<std::size_t N>
 		void CopyToBuffer(std::array<char, N>& buffer, std::string_view text)
 		{
 			buffer.fill('\0');
@@ -102,7 +102,7 @@ namespace aether::editor
 			std::copy_n(text.data(), count, buffer.data());
 		}
 
-		template <std::size_t N>
+		template<std::size_t N>
 		std::string BufferText(const std::array<char, N>& buffer)
 		{
 			return std::string(buffer.data());
@@ -154,15 +154,8 @@ namespace aether::editor
 
 	void ProjectPanel::EnsureStandardFolders(const app::EditorProjectContext& project)
 	{
-		for (const std::filesystem::path& path: {project.assetsDir,
-		             project.assetsDir / "models",
-		             project.assetsDir / "materials",
-		             project.assetsDir / "textures",
-		             project.assetsDir / "animations",
-		             project.prefabsDir,
-		             project.root / "data",
-		             project.scenesDir,
-		             project.scriptsDir})
+		for (const std::filesystem::path& path:
+		        {project.assetsDir, project.assetsDir / "models", project.assetsDir / "materials", project.assetsDir / "textures", project.assetsDir / "animations", project.prefabsDir, project.root / "data", project.scenesDir, project.scriptsDir})
 		{
 			if (auto result = io::file_util::CreateDirectories(path); !result)
 			{
@@ -484,7 +477,7 @@ namespace aether::editor
 		if (project == nullptr || !project->IsLoaded())
 		{
 			chrome::PanelHeader("PROJECT");
-		ImGui::TextDisabled("No project is open.");
+			ImGui::TextDisabled("No project is open.");
 			if (auto* actions = context.TryGet<EditorProjectActions>())
 			{
 				if (actions->openLauncher && chrome::OutlineButton(ICON_FA_CUBE " Open Launcher"))

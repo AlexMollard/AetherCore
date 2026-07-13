@@ -109,7 +109,7 @@ namespace aether::editor
 			return result;
 		}
 
-	}
+	} // namespace
 
 	void EditorProjectManager::Attach(ServiceContainer& services)
 	{

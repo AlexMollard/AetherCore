@@ -38,4 +38,4 @@ namespace aether::io
 	// has no such dependency: the wait completes when the direct child exits,
 	// regardless of any lingering grandchildren.
 	[[nodiscard]] int RunProcessCapture(const std::string& command, std::string& output, int timeoutMs = kDefaultProcessTimeoutMs);
-}
+} // namespace aether::io

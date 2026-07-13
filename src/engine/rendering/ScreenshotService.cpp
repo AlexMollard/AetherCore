@@ -35,15 +35,19 @@ namespace aether
 		{
 			switch (f)
 			{
-				case gpu::Format::R8Unorm: return 1;
+				case gpu::Format::R8Unorm:
+					return 1;
 				case gpu::Format::R8G8B8A8Unorm:
 				case gpu::Format::R8G8B8A8Srgb:
 				case gpu::Format::B8G8R8A8Unorm:
 				case gpu::Format::B8G8R8A8Srgb:
-				case gpu::Format::D32Sfloat: return 4;
+				case gpu::Format::D32Sfloat:
+					return 4;
 				case gpu::Format::R16G16B16A16Sfloat:
-				case gpu::Format::R32G32Sfloat: return 8;
-				default: return 0; // unsupported for capture
+				case gpu::Format::R32G32Sfloat:
+					return 8;
+				default:
+					return 0; // unsupported for capture
 			}
 		}
 
@@ -173,7 +177,8 @@ namespace aether
 					}
 					break;
 				}
-				default: return {};
+				default:
+					return {};
 			}
 			return out;
 		}
@@ -182,12 +187,18 @@ namespace aether
 		{
 			switch (l)
 			{
-				case gpu::ImageLayout::General: return VK_IMAGE_LAYOUT_GENERAL;
-				case gpu::ImageLayout::ColorAttachment: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-				case gpu::ImageLayout::ShaderReadOnly: return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				case gpu::ImageLayout::TransferSrc: return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-				case gpu::ImageLayout::TransferDst: return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-				default: return VK_IMAGE_LAYOUT_GENERAL;
+				case gpu::ImageLayout::General:
+					return VK_IMAGE_LAYOUT_GENERAL;
+				case gpu::ImageLayout::ColorAttachment:
+					return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+				case gpu::ImageLayout::ShaderReadOnly:
+					return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				case gpu::ImageLayout::TransferSrc:
+					return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+				case gpu::ImageLayout::TransferDst:
+					return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+				default:
+					return VK_IMAGE_LAYOUT_GENERAL;
 			}
 		}
 	} // namespace

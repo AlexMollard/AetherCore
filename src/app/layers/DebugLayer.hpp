@@ -71,7 +71,7 @@ namespace aether::editor
 		// reopens at that size next launch. The launcher no longer resizes the OS
 		// window, so there is no launcher-vs-editor sizing policy.
 		void CaptureEditorWindowSize(app::LayerContext& context);
-		int m_editorWindowW = 0;             // last editor window size (0 = not yet loaded)
+		int m_editorWindowW = 0; // last editor window size (0 = not yet loaded)
 		int m_editorWindowH = 0;
 
 		SceneSelection m_selection;

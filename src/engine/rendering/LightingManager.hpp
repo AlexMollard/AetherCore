@@ -207,9 +207,9 @@ namespace aether
 		mutable std::array<View, kMaxLightViews> m_views{};
 		mutable std::array<bool, kMaxFramesInFlight> m_lightDataReady{}; // shared light list uploaded this frame
 
-		RGBuffer m_rgLights{};      // render graph handle for lights buffer
-		RGBuffer m_rgTileHeaders{}; // render graph handle for the MAIN view's tile headers
-		RGBuffer m_rgTileIndices{}; // render graph handle for the MAIN view's tile indices
+		RGBuffer m_rgLights{};                  // render graph handle for lights buffer
+		RGBuffer m_rgTileHeaders{};             // render graph handle for the MAIN view's tile headers
+		RGBuffer m_rgTileIndices{};             // render graph handle for the MAIN view's tile indices
 		std::uint32_t m_maxLightsPerTile = 128; // must stay <= the shader's MAX_LIGHTS_PER_TILE (128)
 		static constexpr std::uint32_t kTileSizePx = 16;
 	};

@@ -128,13 +128,20 @@ namespace aether::editor
 		{
 			switch (kind)
 			{
-				case SceneSelection::AssetKind::Model: return dragdrop::FileKind::Model;
-				case SceneSelection::AssetKind::Material: return dragdrop::FileKind::Material;
-				case SceneSelection::AssetKind::Texture: return dragdrop::FileKind::Texture;
-				case SceneSelection::AssetKind::Script: return dragdrop::FileKind::Script;
-				case SceneSelection::AssetKind::Prefab: return dragdrop::FileKind::Prefab;
-				case SceneSelection::AssetKind::Scene: return dragdrop::FileKind::Scene;
-				default: return dragdrop::FileKind::Unknown;
+				case SceneSelection::AssetKind::Model:
+					return dragdrop::FileKind::Model;
+				case SceneSelection::AssetKind::Material:
+					return dragdrop::FileKind::Material;
+				case SceneSelection::AssetKind::Texture:
+					return dragdrop::FileKind::Texture;
+				case SceneSelection::AssetKind::Script:
+					return dragdrop::FileKind::Script;
+				case SceneSelection::AssetKind::Prefab:
+					return dragdrop::FileKind::Prefab;
+				case SceneSelection::AssetKind::Scene:
+					return dragdrop::FileKind::Scene;
+				default:
+					return dragdrop::FileKind::Unknown;
 			}
 		}
 
@@ -201,14 +208,21 @@ namespace aether::editor
 		{
 			switch (kind)
 			{
-				case dragdrop::FileKind::Model: return "MODEL";
-				case dragdrop::FileKind::Script: return "SCRIPT";
-				case dragdrop::FileKind::Texture: return "TEXTURE";
-				case dragdrop::FileKind::Prefab: return "PREFAB";
-				case dragdrop::FileKind::Scene: return "SCENE";
-				case dragdrop::FileKind::Material: return "MATERIAL";
+				case dragdrop::FileKind::Model:
+					return "MODEL";
+				case dragdrop::FileKind::Script:
+					return "SCRIPT";
+				case dragdrop::FileKind::Texture:
+					return "TEXTURE";
+				case dragdrop::FileKind::Prefab:
+					return "PREFAB";
+				case dragdrop::FileKind::Scene:
+					return "SCENE";
+				case dragdrop::FileKind::Material:
+					return "MATERIAL";
 				case dragdrop::FileKind::Unknown:
-				default: return "FILE";
+				default:
+					return "FILE";
 			}
 		}
 
@@ -317,10 +331,84 @@ namespace aether::editor
 			{
 				return false;
 			}
-			constexpr std::string_view kKeywords[] = {"abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const", "continue", "decimal", "default", "delegate", "do", "double",
-			        "else", "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock", "long", "namespace",
-			        "new", "null", "object", "operator", "out", "override", "params", "private", "protected", "public", "readonly", "record", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc", "static",
-			        "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while"};
+			constexpr std::string_view kKeywords[] = {"abstract",
+			        "as",
+			        "base",
+			        "bool",
+			        "break",
+			        "byte",
+			        "case",
+			        "catch",
+			        "char",
+			        "checked",
+			        "class",
+			        "const",
+			        "continue",
+			        "decimal",
+			        "default",
+			        "delegate",
+			        "do",
+			        "double",
+			        "else",
+			        "enum",
+			        "event",
+			        "explicit",
+			        "extern",
+			        "false",
+			        "finally",
+			        "fixed",
+			        "float",
+			        "for",
+			        "foreach",
+			        "goto",
+			        "if",
+			        "implicit",
+			        "in",
+			        "int",
+			        "interface",
+			        "internal",
+			        "is",
+			        "lock",
+			        "long",
+			        "namespace",
+			        "new",
+			        "null",
+			        "object",
+			        "operator",
+			        "out",
+			        "override",
+			        "params",
+			        "private",
+			        "protected",
+			        "public",
+			        "readonly",
+			        "record",
+			        "ref",
+			        "return",
+			        "sbyte",
+			        "sealed",
+			        "short",
+			        "sizeof",
+			        "stackalloc",
+			        "static",
+			        "string",
+			        "struct",
+			        "switch",
+			        "this",
+			        "throw",
+			        "true",
+			        "try",
+			        "typeof",
+			        "uint",
+			        "ulong",
+			        "unchecked",
+			        "unsafe",
+			        "ushort",
+			        "using",
+			        "virtual",
+			        "void",
+			        "volatile",
+			        "while"};
 			return std::find(std::begin(kKeywords), std::end(kKeywords), name) == std::end(kKeywords);
 		}
 
@@ -486,8 +574,7 @@ namespace aether::editor
 		{
 			const std::string an = a.path().filename().generic_string();
 			const std::string bn = b.path().filename().generic_string();
-			return std::lexicographical_compare(an.begin(), an.end(), bn.begin(), bn.end(),
-			        [](char x, char y) { return std::tolower(static_cast<unsigned char>(x)) < std::tolower(static_cast<unsigned char>(y)); });
+			return std::lexicographical_compare(an.begin(), an.end(), bn.begin(), bn.end(), [](char x, char y) { return std::tolower(static_cast<unsigned char>(x)) < std::tolower(static_cast<unsigned char>(y)); });
 		};
 		std::sort(dirs.begin(), dirs.end(), byNameNoCase);
 		std::sort(files.begin(), files.end(), byNameNoCase);
@@ -1069,7 +1156,10 @@ namespace aether::editor
 				const Entity root = editor::ImportModelIntoScene(context.Get<World>(), context.services, vfs, glm::mat4(1.0f), std::string{}, error);
 				if (root.IsValid())
 				{
-					if (auto* selection = context.TryGet<SceneSelection>()) { selection->Select(root); }
+					if (auto* selection = context.TryGet<SceneSelection>())
+					{
+						selection->Select(root);
+					}
 					mutated = true;
 				}
 				else
@@ -1165,6 +1255,7 @@ namespace aether::editor
 			ImGui::EndPopup();
 		}
 	}
+
 	// ── Preview card ───────────────────────────────────────────────────────────
 
 	void FileExplorerPanel::ReleasePreview(app::LayerContext& context)

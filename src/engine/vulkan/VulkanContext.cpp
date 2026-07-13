@@ -484,14 +484,14 @@ namespace aether
 			}
 			else
 			{
-#if VK_VALIDATION_CPU
+#	if VK_VALIDATION_CPU
 				// The Vulkan validation layers and NVIDIA Aftermath both instrument the
 				// device and are mutually incompatible (per NVIDIA Nsight Aftermath docs):
 				// running them together access-violates at pipeline creation. When any
 				// validation tier is compiled in (VULKAN_CPU_DEBUG / VULKAN_GPU_DEBUG),
 				// skip Aftermath -- use validation OR Aftermath, not both.
 				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled because the Vulkan validation layer is active (mutually incompatible; enable one or the other).");
-#else
+#	else
 				const bool diagnosticsConfigPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
 				const bool checkpointsPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 				if (diagnosticsConfigPresent && checkpointsPresent)
@@ -508,9 +508,12 @@ namespace aether
 				}
 				else
 				{
-					AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath: NVIDIA device does not expose VK_NV_device_diagnostics_config/VK_NV_device_diagnostic_checkpoints (diagnosticsConfig={}, checkpoints={}); disabling.", diagnosticsConfigPresent, checkpointsPresent);
+					AE_WARN(LogCategory::Vulkan,
+					        "NVIDIA Aftermath: NVIDIA device does not expose VK_NV_device_diagnostics_config/VK_NV_device_diagnostic_checkpoints (diagnosticsConfig={}, checkpoints={}); disabling.",
+					        diagnosticsConfigPresent,
+					        checkpointsPresent);
 				}
-#endif
+#	endif
 			}
 		}
 #endif
@@ -753,7 +756,8 @@ namespace aether
 			// Stamp the adapter + driver into any future crash report: "which GPU"
 			// is the first question when a fault lands in a driver DLL, and it must
 			// survive even after the startup log has scrolled out of the ring buffer.
-			CrashHandler::SetContext("GPU", std::format("{} (Vulkan {}.{}.{}, driver 0x{:X})", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion), props.driverVersion));
+			CrashHandler::SetContext(
+			        "GPU", std::format("{} (Vulkan {}.{}.{}, driver 0x{:X})", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion), props.driverVersion));
 		}
 
 		// Query VK_EXT_descriptor_heap properties. Used by BindlessManager to

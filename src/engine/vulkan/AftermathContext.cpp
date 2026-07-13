@@ -34,6 +34,7 @@ namespace aether
 		// Aftermath SDK and writing .spv shader dumps to disk when Aftermath
 		// was never actually turned on for this process.
 		std::atomic<bool> s_gpuDiagnosticsActive{false};
+
 		struct ShaderDebugInfoIdentifierHash
 		{
 			std::size_t operator()(const GFSDK_Aftermath_ShaderDebugInfoIdentifier& id) const

@@ -40,8 +40,8 @@ namespace aether::editor
 		struct Entry
 		{
 			std::filesystem::path path;
-			std::string name;          // filename, UTF-8
-			std::string payloadPath;   // project://relative for assets, absolute for scripts
+			std::string name;        // filename, UTF-8
+			std::string payloadPath; // project://relative for assets, absolute for scripts
 			std::uint64_t sizeBytes = 0;
 			dragdrop::FileKind kind = dragdrop::FileKind::Unknown;
 			bool isDirectory = false;
@@ -76,9 +76,9 @@ namespace aether::editor
 		std::string m_projectName;
 		bool m_rootAvailable = false;
 
-		Entry m_tree;                 // cached root
-		bool m_treeDirty = true;      // rescan before next draw
-		double m_lastScanTime = 0.0;  // staleness timer (seconds, ImGui clock)
+		Entry m_tree;                // cached root
+		bool m_treeDirty = true;     // rescan before next draw
+		double m_lastScanTime = 0.0; // staleness timer (seconds, ImGui clock)
 		int m_fileCount = 0;
 		int m_dirCount = 0;
 		std::string m_scanError;
@@ -95,7 +95,7 @@ namespace aether::editor
 		TextureHandle m_previewTexture{};   // registry ref held while an image preview is shown
 		std::uint64_t m_previewImGuiId = 0; // registered ImGui texture for the image view
 		gpu::Extent2D m_previewExtent{};
-		std::string m_previewText;          // truncated text excerpt
+		std::string m_previewText; // truncated text excerpt
 		bool m_previewIsImage = false;
 		bool m_previewIsModel = false;
 		bool m_previewIsText = false;

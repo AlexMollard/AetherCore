@@ -41,7 +41,8 @@ namespace aether
 		}
 	} // namespace
 
-	AssetDatabase::AssetDatabase(PrimitiveMeshes& primitives): m_primitives(primitives)
+	AssetDatabase::AssetDatabase(PrimitiveMeshes& primitives)
+	      : m_primitives(primitives)
 	{
 	}
 

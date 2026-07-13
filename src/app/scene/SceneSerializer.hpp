@@ -266,10 +266,10 @@ namespace aether::app::scene
 	// authority a rename tool updates).
 	struct AssetManifestEntry
 	{
-		std::string id;      // AssetId hex
-		std::string type;    // "mesh" | "texture"
-		std::string path;    // primitive kind name or VFS path
-		int subIndex = -1;   // model primitive index, else -1
+		std::string id;       // AssetId hex
+		std::string type;     // "mesh" | "texture"
+		std::string path;     // primitive kind name or VFS path
+		int subIndex = -1;    // model primitive index, else -1
 		bool builtin = false; // path is a built-in primitive kind name
 	};
 

@@ -36,11 +36,11 @@ namespace aether::editor
 	// adding a capability is exactly one entry here and zero lines of Python.
 	struct ControlMethod
 	{
-		std::string name;             // wire method, e.g. "scene.create"
-		std::string tool;             // friendly MCP tool name, e.g. "create_entity"
-		std::string description;      // one line, shown to the agent
-		bool mutates = false;         // hint: does it change engine state?
-		nlohmann::json paramsSchema;  // JSON Schema (object) for the params
+		std::string name;            // wire method, e.g. "scene.create"
+		std::string tool;            // friendly MCP tool name, e.g. "create_entity"
+		std::string description;     // one line, shown to the agent
+		bool mutates = false;        // hint: does it change engine state?
+		nlohmann::json paramsSchema; // JSON Schema (object) for the params
 		MethodHandler handler;
 	};
 

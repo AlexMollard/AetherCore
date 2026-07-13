@@ -74,7 +74,10 @@ namespace aether::editor::iw
 		{
 			const auto containsIgnoreCase = [](std::string_view haystack, std::string_view needle)
 			{
-				const auto lower = [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); };
+				const auto lower = [](char c)
+				{
+					return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+				};
 				if (needle.empty() || needle.size() > haystack.size())
 				{
 					return false;
@@ -338,6 +341,7 @@ namespace aether::editor::iw
 			ImVec4 color;
 			float* component;
 		};
+
 		AxisChip axes[3] = {
 		        {"X", ToImVec4(colors::AxisX), &value.x},
 		        {"Y", ToImVec4(colors::AxisY), &value.y},

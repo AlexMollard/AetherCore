@@ -138,7 +138,10 @@ namespace aether::editor::chrome
 	{
 		const EditorTheme& t = ActiveTheme();
 		ImVec4* c = style.Colors;
-		const auto A = [](const ImVec4& col, const float a) { return ImVec4(col.x, col.y, col.z, a); };
+		const auto A = [](const ImVec4& col, const float a)
+		{
+			return ImVec4(col.x, col.y, col.z, a);
+		};
 
 		c[ImGuiCol_Text] = t.textPrimary;
 		c[ImGuiCol_TextDisabled] = t.textSecondary;

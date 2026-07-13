@@ -57,7 +57,11 @@ namespace aether::editor
 		void SetFrameInfo(std::uint64_t frameIndex, double fps) noexcept;
 
 		[[nodiscard]] bool IsRunning() const noexcept;
-		[[nodiscard]] int Port() const noexcept { return m_port; }
+
+		[[nodiscard]] int Port() const noexcept
+		{
+			return m_port;
+		}
 
 		// ── Live stats for the editor's Control Server panel ──────────────────
 		struct RequestLogEntry
@@ -65,8 +69,17 @@ namespace aether::editor
 			std::string method;
 			bool ok = true;
 		};
-		[[nodiscard]] std::uint64_t RequestCount() const noexcept { return m_requestCount.load(std::memory_order_relaxed); }
-		[[nodiscard]] int ConnectedClients() const noexcept { return m_connectedClients.load(std::memory_order_relaxed); }
+
+		[[nodiscard]] std::uint64_t RequestCount() const noexcept
+		{
+			return m_requestCount.load(std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] int ConnectedClients() const noexcept
+		{
+			return m_connectedClients.load(std::memory_order_relaxed);
+		}
+
 		// Most-recent requests (newest last), capped. Copied under lock.
 		[[nodiscard]] std::vector<RequestLogEntry> RecentRequests() const;
 

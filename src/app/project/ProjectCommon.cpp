@@ -56,24 +56,24 @@ namespace aether::app::project
 			{
 				switch (c)
 				{
-				case '&':
-					out += "&amp;";
-					break;
-				case '<':
-					out += "&lt;";
-					break;
-				case '>':
-					out += "&gt;";
-					break;
-				case '"':
-					out += "&quot;";
-					break;
-				case '\'':
-					out += "&apos;";
-					break;
-				default:
-					out += c;
-					break;
+					case '&':
+						out += "&amp;";
+						break;
+					case '<':
+						out += "&lt;";
+						break;
+					case '>':
+						out += "&gt;";
+						break;
+					case '"':
+						out += "&quot;";
+						break;
+					case '\'':
+						out += "&apos;";
+						break;
+					default:
+						out += c;
+						break;
 				}
 			}
 			return out;
@@ -363,12 +363,14 @@ namespace aether::app::project
 			}
 		}
 
-		const std::string descriptor =
-		    "# AetherCore project file.\n\n"
-		    "[project]\nversion = 1\nname = \"" + EscapeTomlString(name) + "\"\n\n"
-		    "[paths]\nassets = \"assets\"\nscenes = \"scenes\"\nprefabs = \"assets/prefabs\"\nscripts = \"scripts\"\n\n"
-		    "[app]\nstartupScene = \"default\"\n\n"
-		    "[publish]\nplatformName = \"Windows\"\nproductName = \"" + EscapeTomlString(name) + "\"\n";
+		const std::string descriptor = "# AetherCore project file.\n\n"
+		                               "[project]\nversion = 1\nname = \""
+		                               + EscapeTomlString(name)
+		                               + "\"\n\n"
+		                                 "[paths]\nassets = \"assets\"\nscenes = \"scenes\"\nprefabs = \"assets/prefabs\"\nscripts = \"scripts\"\n\n"
+		                                 "[app]\nstartupScene = \"default\"\n\n"
+		                                 "[publish]\nplatformName = \"Windows\"\nproductName = \""
+		                               + EscapeTomlString(name) + "\"\n";
 		if (auto writeResult = io::file_util::WriteText(ProjectFilePath(root), descriptor); !writeResult)
 		{
 			error = "Could not write ProjectSettings.toml.";

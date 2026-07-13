@@ -53,8 +53,8 @@ namespace aether::reflect
 	struct FieldMeta
 	{
 		float min = 0.0f;
-		float max = 0.0f;   // min==max==0 => unbounded
-		float speed = 0.0f; // 0 => a sensible default per type
+		float max = 0.0f;            // min==max==0 => unbounded
+		float speed = 0.0f;          // 0 => a sensible default per type
 		bool isAngleDegrees = false; // member stored in radians, exposed/edited in degrees
 		bool serialize = true;       // editable-but-not-persisted fields set false
 		const EnumTable* enumTable = nullptr;
@@ -70,12 +70,12 @@ namespace aether::reflect
 	struct FieldValue
 	{
 		FieldType type = FieldType::Float;
-		double num = 0.0;             // Float / Int / UInt
-		bool boolean = false;         // Bool
-		glm::vec4 vec{0.0f};          // Vec2 / Vec3 / Vec4 / Color3 / Color4
-		int enumValue = 0;            // Enum
-		std::uint64_t entity = 0;     // EntityRef
-		std::string str;              // String
+		double num = 0.0;         // Float / Int / UInt
+		bool boolean = false;     // Bool
+		glm::vec4 vec{0.0f};      // Vec2 / Vec3 / Vec4 / Color3 / Color4
+		int enumValue = 0;        // Enum
+		std::uint64_t entity = 0; // EntityRef
+		std::string str;          // String
 	};
 
 	struct FieldDesc
@@ -126,25 +126,122 @@ namespace aether::reflect
 	void RegisterComponent(ComponentType type); // used by the DSL; safe to call directly
 
 	// ── FieldValue <-> C++ conversions (member-type driven) ─────────────────────
-	inline FieldValue MakeValue(float v) { FieldValue f; f.type = FieldType::Float; f.num = v; return f; }
-	inline FieldValue MakeValue(int v) { FieldValue f; f.type = FieldType::Int; f.num = v; return f; }
-	inline FieldValue MakeValue(std::uint32_t v) { FieldValue f; f.type = FieldType::UInt; f.num = static_cast<double>(v); return f; }
-	inline FieldValue MakeValue(bool v) { FieldValue f; f.type = FieldType::Bool; f.boolean = v; return f; }
-	inline FieldValue MakeValue(const glm::vec2& v) { FieldValue f; f.type = FieldType::Vec2; f.vec = glm::vec4(v, 0.0f, 0.0f); return f; }
-	inline FieldValue MakeValue(const glm::vec3& v) { FieldValue f; f.type = FieldType::Vec3; f.vec = glm::vec4(v, 0.0f); return f; }
-	inline FieldValue MakeValue(const glm::vec4& v) { FieldValue f; f.type = FieldType::Vec4; f.vec = v; return f; }
-	inline FieldValue MakeValue(const std::string& v) { FieldValue f; f.type = FieldType::String; f.str = v; return f; }
-	inline FieldValue MakeValue(Entity v) { FieldValue f; f.type = FieldType::EntityRef; f.entity = v.id; return f; }
+	inline FieldValue MakeValue(float v)
+	{
+		FieldValue f;
+		f.type = FieldType::Float;
+		f.num = v;
+		return f;
+	}
 
-	inline void ApplyValue(const FieldValue& f, float& out) { out = static_cast<float>(f.num); }
-	inline void ApplyValue(const FieldValue& f, int& out) { out = static_cast<int>(f.num); }
-	inline void ApplyValue(const FieldValue& f, std::uint32_t& out) { out = static_cast<std::uint32_t>(f.num < 0.0 ? 0.0 : f.num); }
-	inline void ApplyValue(const FieldValue& f, bool& out) { out = f.boolean; }
-	inline void ApplyValue(const FieldValue& f, glm::vec2& out) { out = glm::vec2(f.vec); }
-	inline void ApplyValue(const FieldValue& f, glm::vec3& out) { out = glm::vec3(f.vec); }
-	inline void ApplyValue(const FieldValue& f, glm::vec4& out) { out = f.vec; }
-	inline void ApplyValue(const FieldValue& f, std::string& out) { out = f.str; }
-	inline void ApplyValue(const FieldValue& f, Entity& out) { out = Entity{static_cast<std::uint32_t>(f.entity)}; }
+	inline FieldValue MakeValue(int v)
+	{
+		FieldValue f;
+		f.type = FieldType::Int;
+		f.num = v;
+		return f;
+	}
+
+	inline FieldValue MakeValue(std::uint32_t v)
+	{
+		FieldValue f;
+		f.type = FieldType::UInt;
+		f.num = static_cast<double>(v);
+		return f;
+	}
+
+	inline FieldValue MakeValue(bool v)
+	{
+		FieldValue f;
+		f.type = FieldType::Bool;
+		f.boolean = v;
+		return f;
+	}
+
+	inline FieldValue MakeValue(const glm::vec2& v)
+	{
+		FieldValue f;
+		f.type = FieldType::Vec2;
+		f.vec = glm::vec4(v, 0.0f, 0.0f);
+		return f;
+	}
+
+	inline FieldValue MakeValue(const glm::vec3& v)
+	{
+		FieldValue f;
+		f.type = FieldType::Vec3;
+		f.vec = glm::vec4(v, 0.0f);
+		return f;
+	}
+
+	inline FieldValue MakeValue(const glm::vec4& v)
+	{
+		FieldValue f;
+		f.type = FieldType::Vec4;
+		f.vec = v;
+		return f;
+	}
+
+	inline FieldValue MakeValue(const std::string& v)
+	{
+		FieldValue f;
+		f.type = FieldType::String;
+		f.str = v;
+		return f;
+	}
+
+	inline FieldValue MakeValue(Entity v)
+	{
+		FieldValue f;
+		f.type = FieldType::EntityRef;
+		f.entity = v.id;
+		return f;
+	}
+
+	inline void ApplyValue(const FieldValue& f, float& out)
+	{
+		out = static_cast<float>(f.num);
+	}
+
+	inline void ApplyValue(const FieldValue& f, int& out)
+	{
+		out = static_cast<int>(f.num);
+	}
+
+	inline void ApplyValue(const FieldValue& f, std::uint32_t& out)
+	{
+		out = static_cast<std::uint32_t>(f.num < 0.0 ? 0.0 : f.num);
+	}
+
+	inline void ApplyValue(const FieldValue& f, bool& out)
+	{
+		out = f.boolean;
+	}
+
+	inline void ApplyValue(const FieldValue& f, glm::vec2& out)
+	{
+		out = glm::vec2(f.vec);
+	}
+
+	inline void ApplyValue(const FieldValue& f, glm::vec3& out)
+	{
+		out = glm::vec3(f.vec);
+	}
+
+	inline void ApplyValue(const FieldValue& f, glm::vec4& out)
+	{
+		out = f.vec;
+	}
+
+	inline void ApplyValue(const FieldValue& f, std::string& out)
+	{
+		out = f.str;
+	}
+
+	inline void ApplyValue(const FieldValue& f, Entity& out)
+	{
+		out = Entity{static_cast<std::uint32_t>(f.entity)};
+	}
 
 	// ── Builder used by the DSL ─────────────────────────────────────────────────
 	class ComponentBuilder
@@ -160,11 +257,29 @@ namespace aether::reflect
 		template<typename C>
 		void SetEcsOps()
 		{
-			m_type.has = [](const World& w, Entity e) { return w.Has<C>(e); };
-			m_type.emplaceDefault = [](World& w, Entity e) -> void* { return &w.EmplaceOrReplace<C>(e, C{}); };
-			m_type.remove = [](World& w, Entity e) { if (w.Has<C>(e)) { w.Remove<C>(e); } };
-			m_type.tryGetRaw = [](World& w, Entity e) -> void* { return w.TryGet<C>(e); };
-			m_type.tryGetRawConst = [](const World& w, Entity e) -> const void* { return w.TryGet<C>(e); };
+			m_type.has = [](const World& w, Entity e)
+			{
+				return w.Has<C>(e);
+			};
+			m_type.emplaceDefault = [](World& w, Entity e) -> void*
+			{
+				return &w.EmplaceOrReplace<C>(e, C{});
+			};
+			m_type.remove = [](World& w, Entity e)
+			{
+				if (w.Has<C>(e))
+				{
+					w.Remove<C>(e);
+				}
+			};
+			m_type.tryGetRaw = [](World& w, Entity e) -> void*
+			{
+				return w.TryGet<C>(e);
+			};
+			m_type.tryGetRawConst = [](const World& w, Entity e) -> const void*
+			{
+				return w.TryGet<C>(e);
+			};
 		}
 
 		// A plain member field. `Tag` is the semantic FieldType (Color3 vs Vec3 etc.);
@@ -181,13 +296,19 @@ namespace aether::reflect
 			{
 				FieldValue v = MakeValue(static_cast<const C*>(comp)->*member);
 				v.type = tag;
-				if (angle) { v.num = glm::degrees(v.num); }
+				if (angle)
+				{
+					v.num = glm::degrees(v.num);
+				}
 				return v;
 			};
 			f.set = [member, angle](void* comp, const FieldValue& in)
 			{
 				FieldValue v = in;
-				if (angle) { v.num = glm::radians(v.num); }
+				if (angle)
+				{
+					v.num = glm::radians(v.num);
+				}
 				ApplyValue(v, static_cast<C*>(comp)->*member);
 			};
 			m_type.fields.push_back(std::move(f));
@@ -196,9 +317,7 @@ namespace aether::reflect
 
 		// A computed field (e.g. Transform position/euler/scale over a matrix). The
 		// caller supplies value get/set directly against the component pointer.
-		ComponentBuilder& CustomField(const char* name, FieldType tag,
-		        std::function<FieldValue(const void*)> get,
-		        std::function<void(void*, const FieldValue&)> set, FieldMeta meta = {})
+		ComponentBuilder& CustomField(const char* name, FieldType tag, std::function<FieldValue(const void*)> get, std::function<void(void*, const FieldValue&)> set, FieldMeta meta = {})
 		{
 			FieldDesc f;
 			f.name = name;
@@ -226,16 +345,36 @@ namespace aether::reflect
 				v.enumValue = static_cast<int>(static_cast<const C*>(comp)->*member);
 				return v;
 			};
-			f.set = [member](void* comp, const FieldValue& in) { static_cast<C*>(comp)->*member = static_cast<E>(in.enumValue); };
+			f.set = [member](void* comp, const FieldValue& in)
+			{
+				static_cast<C*>(comp)->*member = static_cast<E>(in.enumValue);
+			};
 			m_type.fields.push_back(std::move(f));
 			return *this;
 		}
 
-		ComponentBuilder& Addable(bool v) { m_type.addable = v; return *this; }
-		ComponentBuilder& Serializable(bool v) { m_type.serializable = v; return *this; }
-		ComponentBuilder& PostSet(std::function<void(World&, Entity)> fn) { m_type.postSet = std::move(fn); return *this; }
+		ComponentBuilder& Addable(bool v)
+		{
+			m_type.addable = v;
+			return *this;
+		}
 
-		ComponentType Build() && { return std::move(m_type); }
+		ComponentBuilder& Serializable(bool v)
+		{
+			m_type.serializable = v;
+			return *this;
+		}
+
+		ComponentBuilder& PostSet(std::function<void(World&, Entity)> fn)
+		{
+			m_type.postSet = std::move(fn);
+			return *this;
+		}
+
+		ComponentType Build() &&
+		{
+			return std::move(m_type);
+		}
 
 	private:
 		ComponentType m_type;

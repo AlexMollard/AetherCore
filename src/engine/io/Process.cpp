@@ -8,16 +8,16 @@
 #include <vector>
 
 #ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	include <windows.h>
 #else
-#include <cstdlib>
-#include <sys/wait.h>
+#	include <cstdlib>
+#	include <sys/wait.h>
 #endif
 
 namespace aether::io
@@ -49,8 +49,7 @@ namespace aether::io
 			inheritable.bInheritHandle = TRUE;
 
 			// The child writes combined stdout+stderr straight into this file.
-			HANDLE hOut = CreateFileW(outFile.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &inheritable,
-			        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+			HANDLE hOut = CreateFileW(outFile.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &inheritable, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 			if (hOut == INVALID_HANDLE_VALUE)
 			{
 				return kProcessLaunchFailed;
@@ -82,8 +81,7 @@ namespace aether::io
 			mutableCmd.push_back('\0');
 
 			PROCESS_INFORMATION pi{};
-			const BOOL started = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, TRUE /*inherit handles*/,
-			        CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &si, &pi);
+			const BOOL started = CreateProcessA(nullptr, mutableCmd.data(), nullptr, nullptr, TRUE /*inherit handles*/, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &si, &pi);
 
 			int result = kProcessLaunchFailed;
 			if (started != 0)

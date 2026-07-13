@@ -212,7 +212,7 @@ namespace aether
 		if (vkBeginCommandBuffer(frame.commandBuffer, &beginInfo) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to begin compute command buffer."));
-		}	
+		}
 	}
 
 	gpu::CommandBuffer RenderGraphStorage::GetComputeCommandBuffer(std::uint32_t frameIndex) const

@@ -222,9 +222,7 @@ namespace aether
 		return candidates.empty() ? requested : candidates.front();
 	}
 
-	LoadedEngineSettings EngineSettingsIO::LoadLayered(std::string_view shippedFile,
-	                                                   const std::filesystem::path& projectFile,
-	                                                   std::string_view userFile)
+	LoadedEngineSettings EngineSettingsIO::LoadLayered(std::string_view shippedFile, const std::filesystem::path& projectFile, std::string_view userFile)
 	{
 		AE_PROFILE_ZONE();
 		LoadedEngineSettings result; // layer 1: compiled-in defaults
@@ -279,9 +277,7 @@ namespace aether
 		return result;
 	}
 
-	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view shippedFile,
-	                                              const std::filesystem::path& projectFile,
-	                                              std::string_view userFile)
+	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view shippedFile, const std::filesystem::path& projectFile, std::string_view userFile)
 	{
 		return LoadLayered(shippedFile, projectFile, userFile).values;
 	}

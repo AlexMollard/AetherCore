@@ -126,10 +126,14 @@ namespace aether
 		{
 			switch (level)
 			{
-				case LogLevel::Verbose: return "VERB";
-				case LogLevel::Info: return "INFO";
-				case LogLevel::Warn: return "WARN";
-				case LogLevel::Error: return "ERROR";
+				case LogLevel::Verbose:
+					return "VERB";
+				case LogLevel::Info:
+					return "INFO";
+				case LogLevel::Warn:
+					return "WARN";
+				case LogLevel::Error:
+					return "ERROR";
 			}
 			return "?";
 		}
@@ -185,8 +189,8 @@ namespace aether
 			const std::string& file = frame.file;
 
 			if (name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("SignalHandlerThunk") != std::string::npos
-			        || name.find("UnhandledExceptionFilterThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos || name.find("WriteAllThreadStacks") != std::string::npos || name.find("WriteMiniDump") != std::string::npos
-			        || name.find("WriteSystemInfo") != std::string::npos || name.find("WriteRecentLog") != std::string::npos || name.find("CollectThreadProgramCounters") != std::string::npos)
+			        || name.find("UnhandledExceptionFilterThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos || name.find("WriteAllThreadStacks") != std::string::npos
+			        || name.find("WriteMiniDump") != std::string::npos || name.find("WriteSystemInfo") != std::string::npos || name.find("WriteRecentLog") != std::string::npos || name.find("CollectThreadProgramCounters") != std::string::npos)
 			{
 				return true;
 			}
@@ -638,7 +642,8 @@ namespace aether
 					{
 						output << "    <no symbolic frames>\n";
 					}
-				} while (Thread32Next(snapshot, &threadEntry) != FALSE);
+				}
+				while (Thread32Next(snapshot, &threadEntry) != FALSE);
 			}
 
 			CloseHandle(snapshot);
@@ -697,7 +702,13 @@ namespace aether
 
 				if (!frame.file.empty())
 				{
-					output << std::format("  [{}] {} + 0x{:X} ({}:{}) [{}]\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.displacement), frame.file, frame.line, frame.module.empty() ? "?" : frame.module);
+					output << std::format("  [{}] {} + 0x{:X} ({}:{}) [{}]\n",
+					        filteredIndex,
+					        frame.symbol.empty() ? "<unknown>" : frame.symbol,
+					        static_cast<unsigned long long>(frame.displacement),
+					        frame.file,
+					        frame.line,
+					        frame.module.empty() ? "?" : frame.module);
 				}
 				else
 				{

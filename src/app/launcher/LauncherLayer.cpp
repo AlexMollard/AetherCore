@@ -219,16 +219,37 @@ namespace aether::app
 		model.logoTextureId = m_logoTextureId;
 		model.currentProject = &m_currentProject;
 		model.recentProjects = std::span<const EditorProjectContext>(m_recentProjects.data(), m_recentProjects.size());
-		model.previewTextureId = [this](const EditorProjectContext& project) { return PreviewTextureFor(project); };
-		model.modifiedLabel = [](const EditorProjectContext& project) { return project::LastModifiedLabel(project.root); };
+		model.previewTextureId = [this](const EditorProjectContext& project)
+		{
+			return PreviewTextureFor(project);
+		};
+		model.modifiedLabel = [](const EditorProjectContext& project)
+		{
+			return project::LastModifiedLabel(project.root);
+		};
 
 		ProjectLauncherWindowActions actions;
-		actions.openProject = [this](std::filesystem::path root) { OpenProject(root); };
-		actions.createProject = [this](std::filesystem::path root, std::string_view name) { CreateProject(root, name); };
-		actions.browseFolder = []() { return project::PickProjectFolder(); };
-		actions.browseProjectFile = []() { return project::PickProjectFile(); };
+		actions.openProject = [this](std::filesystem::path root)
+		{
+			OpenProject(root);
+		};
+		actions.createProject = [this](std::filesystem::path root, std::string_view name)
+		{
+			CreateProject(root, name);
+		};
+		actions.browseFolder = []()
+		{
+			return project::PickProjectFolder();
+		};
+		actions.browseProjectFile = []()
+		{
+			return project::PickProjectFile();
+		};
 		actions.closeLauncher = []() {}; // no-op: the hub IS the launcher; quit via the OS window
-		actions.saveSettings = [this]() { PersistSettings(); };
+		actions.saveSettings = [this]()
+		{
+			PersistSettings();
+		};
 
 		m_window.Draw(m_windowState, model, actions);
 	}

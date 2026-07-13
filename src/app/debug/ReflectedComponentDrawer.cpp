@@ -33,50 +33,82 @@ namespace aether::editor
 				case FieldType::Float:
 				{
 					float x = static_cast<float>(v.num);
-					if (iw::PropFloat(lbl, &x, speed, f.meta.min, f.meta.max)) { v.num = x; changed = true; }
+					if (iw::PropFloat(lbl, &x, speed, f.meta.min, f.meta.max))
+					{
+						v.num = x;
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Int:
 				{
 					int x = static_cast<int>(v.num);
-					if (iw::PropInt(lbl, &x)) { v.num = x; changed = true; }
+					if (iw::PropInt(lbl, &x))
+					{
+						v.num = x;
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::UInt:
 				{
 					int x = static_cast<int>(v.num);
-					if (iw::PropInt(lbl, &x, 1.0f, 0, 0)) { v.num = x < 0 ? 0 : x; changed = true; }
+					if (iw::PropInt(lbl, &x, 1.0f, 0, 0))
+					{
+						v.num = x < 0 ? 0 : x;
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Bool:
 				{
 					bool b = v.boolean;
-					if (iw::PropCheckbox(lbl, &b)) { v.boolean = b; changed = true; }
+					if (iw::PropCheckbox(lbl, &b))
+					{
+						v.boolean = b;
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Vec2:
 				{
 					glm::vec2 vv = glm::vec2(v.vec);
-					if (iw::PropDrag2(lbl, &vv.x, speed)) { v.vec = glm::vec4(vv, 0.0f, 0.0f); changed = true; }
+					if (iw::PropDrag2(lbl, &vv.x, speed))
+					{
+						v.vec = glm::vec4(vv, 0.0f, 0.0f);
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Vec3:
 				{
 					glm::vec3 vv = glm::vec3(v.vec);
-					if (iw::Vec3Row(lbl, vv, 0.0f, speed)) { v.vec = glm::vec4(vv, 0.0f); changed = true; }
+					if (iw::Vec3Row(lbl, vv, 0.0f, speed))
+					{
+						v.vec = glm::vec4(vv, 0.0f);
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Vec4:
 				case FieldType::Color4:
 				{
 					glm::vec4 c = v.vec;
-					if (iw::PropColor4(lbl, &c.x)) { v.vec = c; changed = true; }
+					if (iw::PropColor4(lbl, &c.x))
+					{
+						v.vec = c;
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Color3:
 				{
 					glm::vec3 c = glm::vec3(v.vec);
-					if (iw::PropColor3(lbl, &c.x)) { v.vec = glm::vec4(c, 0.0f); changed = true; }
+					if (iw::PropColor3(lbl, &c.x))
+					{
+						v.vec = glm::vec4(c, 0.0f);
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::Enum:
@@ -88,7 +120,10 @@ namespace aether::editor
 						for (std::size_t i = 0; i < f.meta.enumTable->values.size(); ++i)
 						{
 							items.push_back(f.meta.enumTable->values[i].first.c_str());
-							if (f.meta.enumTable->values[i].second == v.enumValue) { cur = static_cast<int>(i); }
+							if (f.meta.enumTable->values[i].second == v.enumValue)
+							{
+								cur = static_cast<int>(i);
+							}
 						}
 						if (iw::PropCombo(lbl, &cur, items.data(), static_cast<int>(items.size())) && cur >= 0 && cur < static_cast<int>(f.meta.enumTable->values.size()))
 						{
@@ -102,21 +137,31 @@ namespace aether::editor
 				{
 					char buf[256];
 					std::snprintf(buf, sizeof(buf), "%s", v.str.c_str());
-					if (iw::PropInputText(lbl, buf, sizeof(buf))) { v.str = buf; changed = true; }
+					if (iw::PropInputText(lbl, buf, sizeof(buf)))
+					{
+						v.str = buf;
+						changed = true;
+					}
 					break;
 				}
 				case FieldType::EntityRef:
 					iw::PropText(lbl, "entity %llu", static_cast<unsigned long long>(v.entity));
 					break;
 			}
-			if (changed) { f.set(comp, v); }
+			if (changed)
+			{
+				f.set(comp, v);
+			}
 			return changed;
 		}
 
 		void DrawReflectedComponent(World& world, Entity entity, const reflect::ComponentType& rt)
 		{
 			void* comp = rt.tryGetRaw(world, entity);
-			if (comp == nullptr) { return; }
+			if (comp == nullptr)
+			{
+				return;
+			}
 
 			ImGui::PushID(rt.name.c_str());
 			bool removed = false;
@@ -132,8 +177,14 @@ namespace aether::editor
 			if (open)
 			{
 				bool anyChanged = false;
-				for (const auto& f: rt.fields) { anyChanged |= DrawField(f, comp); }
-				if (anyChanged && rt.postSet) { rt.postSet(world, entity); }
+				for (const auto& f: rt.fields)
+				{
+					anyChanged |= DrawField(f, comp);
+				}
+				if (anyChanged && rt.postSet)
+				{
+					rt.postSet(world, entity);
+				}
 			}
 			ImGui::PopID();
 		}
@@ -152,7 +203,10 @@ namespace aether::editor
 					break;
 				}
 			}
-			if (!skip) { DrawReflectedComponent(world, entity, rt); }
+			if (!skip)
+			{
+				DrawReflectedComponent(world, entity, rt);
+			}
 		}
 	}
 } // namespace aether::editor

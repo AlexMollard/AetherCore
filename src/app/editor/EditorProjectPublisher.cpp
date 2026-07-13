@@ -589,8 +589,7 @@ namespace aether::editor
 
 		bool CopyShippedDataPayload(const std::filesystem::path& exeDataDir, const std::filesystem::path& packageDataDir, std::string& error)
 		{
-			return CopyIfExists(exeDataDir / "engine.pak", packageDataDir / "engine.pak", error)
-			       && CopyIfExists(exeDataDir / "config" / "EngineSettings.toml", packageDataDir / "config" / "EngineSettings.toml", error)
+			return CopyIfExists(exeDataDir / "engine.pak", packageDataDir / "engine.pak", error) && CopyIfExists(exeDataDir / "config" / "EngineSettings.toml", packageDataDir / "config" / "EngineSettings.toml", error)
 			       && CopyDirectoryRecursive(exeDataDir / "scripts" / "managed", packageDataDir / "scripts" / "managed", error);
 		}
 
@@ -598,6 +597,7 @@ namespace aether::editor
 		{
 			return root / kProjectFileName;
 		}
+
 		bool HasProjectDescriptor(const std::filesystem::path& root)
 		{
 			return io::file_util::Exists(ProjectFilePath(root));
@@ -705,8 +705,7 @@ namespace aether::editor
 			}
 
 			const std::filesystem::path outputPak = outputDir / "project.pak";
-			const assetpipeline::PackResult packResult =
-			        assetpipeline::PackProject(project.root, outputPak, {.importMaterials = true, .projectLayout = true, .shaderSpirvDir = shaderSpirvDir});
+			const assetpipeline::PackResult packResult = assetpipeline::PackProject(project.root, outputPak, {.importMaterials = true, .projectLayout = true, .shaderSpirvDir = shaderSpirvDir});
 			if (!packResult.ok)
 			{
 				return {.succeeded = false, .message = packResult.message, .outputPath = outputPak};
@@ -817,7 +816,7 @@ namespace aether::editor
 				const std::string have = runtimePakVersion ? std::to_string(*runtimePakVersion) : std::string("unknown");
 				return {.succeeded = false,
 				        .message = "Runtime package is out of date: its " + std::string(config.runtimeExecutableName) + " targets pak pipeline v" + have + " but this editor produces v" + std::to_string(PAK_PIPELINE_VERSION)
-				                 + ". Rebuild the runtime package (build target PackageGame: cmake --build <builddir> --target PackageGame), then publish again.",
+				                   + ". Rebuild the runtime package (build target PackageGame: cmake --build <builddir> --target PackageGame), then publish again.",
 				        .outputPath = publishDir};
 			}
 		}
@@ -877,8 +876,7 @@ namespace aether::editor
 			{
 				return {.succeeded = false, .message = "Could not clean script publish intermediates: " + ec.message(), .outputPath = publishDir};
 			}
-			const std::string command = "\"" + config.dotnetExe.string() + "\" build \"" + scriptsProject.string()
-			        + "\" -c " + config.managedConfig + " --nologo -v:m -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
+			const std::string command = "\"" + config.dotnetExe.string() + "\" build \"" + scriptsProject.string() + "\" -c " + config.managedConfig + " --nologo -v:m -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 			if (const int rc = io::RunProcessToLog(command, publishLog); rc != 0)
 			{
 				std::string message = "Project script build failed (exit " + std::to_string(rc) + ").";

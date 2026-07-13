@@ -111,8 +111,7 @@ int main(int argc, char** argv)
 		enet_peer_reset(peer);
 		enet_host_destroy(client);
 		enet_deinitialize();
-		return Fail("error: could not connect to control endpoint at 127.0.0.1:" + std::to_string(port)
-		            + " (is the editor running with AETHER_CONTROL_PORT set?)");
+		return Fail("error: could not connect to control endpoint at 127.0.0.1:" + std::to_string(port) + " (is the editor running with AETHER_CONTROL_PORT set?)");
 	}
 
 	const json request = {{"id", 1}, {"method", method}, {"params", params}};

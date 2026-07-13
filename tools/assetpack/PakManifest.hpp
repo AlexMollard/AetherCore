@@ -25,9 +25,7 @@ namespace aether::assetpipeline
 	// pak could be left in an older on-disk format the runtime now rejects).
 	inline std::string ManifestHeaderLine()
 	{
-		return "# AetherPak manifest v" + std::to_string(kManifestVersion)
-		     + " pak" + std::to_string(PAK_VERSION)
-		     + " pipeline" + std::to_string(PAK_PIPELINE_VERSION);
+		return "# AetherPak manifest v" + std::to_string(kManifestVersion) + " pak" + std::to_string(PAK_VERSION) + " pipeline" + std::to_string(PAK_PIPELINE_VERSION);
 	}
 
 	struct ManifestEntry

@@ -162,8 +162,7 @@ namespace aether
 			m_lightView = lighting->RegisterView("CameraPreview");
 			m_lighting = lighting;
 		}
-		const bool lit = lighting != nullptr && m_lightView != kInvalidLightView && m_enabled.load(std::memory_order_relaxed)
-		        && lighting->PrepareView(m_lightView, frameIdx, fc.view, fc.proj, nearPlane, {kWidth, kHeight}, fc);
+		const bool lit = lighting != nullptr && m_lightView != kInvalidLightView && m_enabled.load(std::memory_order_relaxed) && lighting->PrepareView(m_lightView, frameIdx, fc.view, fc.proj, nearPlane, {kWidth, kHeight}, fc);
 		if (!lit)
 		{
 			// Hide the main view's grid info the fc copy carried: its tile lists are
@@ -201,10 +200,10 @@ namespace aether
 		// constants), producing the preview draw list. Always registered; when the
 		// preview is off it just discards the (empty) queue slot.
 		graph.AddQueuePreparePass({
-		             .name = "$CameraPreviewCull",
-		             .produces = m_draws,
-		             .sideEffectReason = "prepares camera-preview draw queue",
-		     })
+		                                  .name = "$CameraPreviewCull",
+		                                  .produces = m_draws,
+		                                  .sideEffectReason = "prepares camera-preview draw queue",
+		                          })
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
@@ -226,13 +225,12 @@ namespace aether
 		// backdrop instead of black. Fullscreen + no depth (mirrors the main $Skybox);
 		// the forward pass then Loads over it. Pushes the PREVIEW frame constants so the
 		// sky is rendered from the preview camera (its invViewProj drives the rays).
-		graph
-		        .AddFullscreenPass({
-		                .name = "$CameraPreviewSkybox",
-		                .color = m_color,
-		                .extent = {kWidth, kHeight},
-		                .loadOp = gpu::LoadOp::Clear,
-		        })
+		graph.AddFullscreenPass({
+		                                .name = "$CameraPreviewSkybox",
+		                                .color = m_color,
+		                                .extent = {kWidth, kHeight},
+		                                .loadOp = gpu::LoadOp::Clear,
+		                        })
 		        .Execute(
 		                [this, skyboxPipeline](PassContext& ctx)
 		                {
@@ -285,22 +283,19 @@ namespace aether
 			        }
 			        // Shade with the preview view's own tile lists (culled against the
 			        // preview frustum by $Lighting.BinLights).
-			        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr && m_lightView != kInvalidLightView
-			                ? lighting->GetLightingAddresses(m_lightView, ctx.frameSlot)
-			                : DrawContracts::LightingAddresses{};
+			        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr && m_lightView != kInvalidLightView ? lighting->GetLightingAddresses(m_lightView, ctx.frameSlot) : DrawContracts::LightingAddresses{};
 			        bindless.CmdBindHeaps(ctx.recorder);
 			        m_queue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, &lightingAddr, m_constants.GetDeviceAddress(ctx.frameSlot), nullptr, 0, nullptr);
 		        });
 
 		// Resolve the preview HDR to LDR with the SAME tonemap operator + exposure as the
 		// main view, so the thumbnail matches instead of showing raw (dark) HDR.
-		graph
-		        .AddFullscreenPass({
-		                .name = "$CameraPreviewTonemap",
-		                .color = m_colorLdr,
-		                .extent = {kWidth, kHeight},
-		                .loadOp = gpu::LoadOp::DontCare,
-		        })
+		graph.AddFullscreenPass({
+		                                .name = "$CameraPreviewTonemap",
+		                                .color = m_colorLdr,
+		                                .extent = {kWidth, kHeight},
+		                                .loadOp = gpu::LoadOp::DontCare,
+		                        })
 		        .ReadTexture(m_color)
 		        .Execute(
 		                [this, &bindless, &postProcess](PassContext& ctx)

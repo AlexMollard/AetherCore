@@ -26,7 +26,10 @@ namespace aether::editor
 
 		std::string ToHex(const ImVec4& c)
 		{
-			const auto ch = [](float v) { return static_cast<int>(v * 255.0f + 0.5f) & 0xFF; };
+			const auto ch = [](float v)
+			{
+				return static_cast<int>(v * 255.0f + 0.5f) & 0xFF;
+			};
 			char buf[10];
 			std::snprintf(buf, sizeof(buf), "#%02X%02X%02X%02X", ch(c.x), ch(c.y), ch(c.z), ch(c.w));
 			return buf;
@@ -41,9 +44,18 @@ namespace aether::editor
 			}
 			const auto nib = [](char c) -> int
 			{
-				if (c >= '0' && c <= '9') return c - '0';
-				if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-				if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+				if (c >= '0' && c <= '9')
+				{
+					return c - '0';
+				}
+				if (c >= 'a' && c <= 'f')
+				{
+					return c - 'a' + 10;
+				}
+				if (c >= 'A' && c <= 'F')
+				{
+					return c - 'A' + 10;
+				}
 				return -1;
 			};
 			const auto byteAt = [&](std::size_t i) -> int
@@ -138,7 +150,10 @@ namespace aether::editor
 			return false;
 		}
 		const EditorTheme def = chrome::NightAmberTheme();
-		const auto read = [&](const char* key, const ImVec4& fallback) { return FromHex(cfg.GetString(key, ToHex(fallback)), fallback); };
+		const auto read = [&](const char* key, const ImVec4& fallback)
+		{
+			return FromHex(cfg.GetString(key, ToHex(fallback)), fallback);
+		};
 		m_theme.background = read("theme.background", def.background);
 		m_theme.surface = read("theme.surface", def.surface);
 		m_theme.surfaceElevated = read("theme.surface_elevated", def.surfaceElevated);

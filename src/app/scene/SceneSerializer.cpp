@@ -217,27 +217,51 @@ namespace aether::app::scene
 		{
 			toml::table tbl;
 			const reflect::ComponentType* rt = reflect::FindComponentType(typeName);
-			if (rt == nullptr) { return tbl; }
+			if (rt == nullptr)
+			{
+				return tbl;
+			}
 			for (const reflect::FieldDesc& f: rt->fields)
 			{
-				if (!f.meta.serialize) { continue; }
+				if (!f.meta.serialize)
+				{
+					continue;
+				}
 				const std::string key = f.meta.serializeName.empty() ? f.name : f.meta.serializeName;
 				const reflect::FieldValue v = f.get(comp);
 				switch (f.type)
 				{
 					// Angle fields are exposed in degrees but persist in radians.
-					case reflect::FieldType::Float: tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num); break;
+					case reflect::FieldType::Float:
+						tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num);
+						break;
 					case reflect::FieldType::Int:
-					case reflect::FieldType::UInt: tbl.insert(key, static_cast<std::int64_t>(v.num)); break;
-					case reflect::FieldType::Bool: tbl.insert(key, v.boolean); break;
-					case reflect::FieldType::Vec2: tbl.insert(key, Vec2ToToml(glm::vec2(v.vec))); break;
+					case reflect::FieldType::UInt:
+						tbl.insert(key, static_cast<std::int64_t>(v.num));
+						break;
+					case reflect::FieldType::Bool:
+						tbl.insert(key, v.boolean);
+						break;
+					case reflect::FieldType::Vec2:
+						tbl.insert(key, Vec2ToToml(glm::vec2(v.vec)));
+						break;
 					case reflect::FieldType::Vec3:
-					case reflect::FieldType::Color3: tbl.insert(key, Vec3ToToml(glm::vec3(v.vec))); break;
+					case reflect::FieldType::Color3:
+						tbl.insert(key, Vec3ToToml(glm::vec3(v.vec)));
+						break;
 					case reflect::FieldType::Vec4:
-					case reflect::FieldType::Color4: tbl.insert(key, Vec4ToToml(v.vec)); break;
-					case reflect::FieldType::Enum: tbl.insert(key, f.meta.enumTable != nullptr ? f.meta.enumTable->NameOf(v.enumValue) : std::to_string(v.enumValue)); break;
-					case reflect::FieldType::String: tbl.insert(key, v.str); break;
-					case reflect::FieldType::EntityRef: tbl.insert(key, static_cast<std::int64_t>(v.entity)); break;
+					case reflect::FieldType::Color4:
+						tbl.insert(key, Vec4ToToml(v.vec));
+						break;
+					case reflect::FieldType::Enum:
+						tbl.insert(key, f.meta.enumTable != nullptr ? f.meta.enumTable->NameOf(v.enumValue) : std::to_string(v.enumValue));
+						break;
+					case reflect::FieldType::String:
+						tbl.insert(key, v.str);
+						break;
+					case reflect::FieldType::EntityRef:
+						tbl.insert(key, static_cast<std::int64_t>(v.entity));
+						break;
 				}
 			}
 			return tbl;
@@ -248,35 +272,63 @@ namespace aether::app::scene
 		void ReadReflectedFromToml(std::string_view typeName, const toml::table& src, void* comp)
 		{
 			const reflect::ComponentType* rt = reflect::FindComponentType(typeName);
-			if (rt == nullptr) { return; }
+			if (rt == nullptr)
+			{
+				return;
+			}
 			const toml::node_view<const toml::node> view{src};
 			for (const reflect::FieldDesc& f: rt->fields)
 			{
 				const std::string key = f.meta.serializeName.empty() ? f.name : f.meta.serializeName;
 				const auto node = view[key];
-				if (!node) { continue; }
+				if (!node)
+				{
+					continue;
+				}
 				reflect::FieldValue v = f.get(comp);
 				switch (f.type)
 				{
 					// Persisted in radians; f.set re-applies the degrees<->radians round-trip.
-					case reflect::FieldType::Float: v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(glm::radians(v.num))) : node.value_or(v.num); break;
+					case reflect::FieldType::Float:
+						v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(glm::radians(v.num))) : node.value_or(v.num);
+						break;
 					case reflect::FieldType::Int:
-					case reflect::FieldType::UInt: v.num = static_cast<double>(node.value_or(static_cast<std::int64_t>(v.num))); break;
-					case reflect::FieldType::Bool: v.boolean = node.value_or(v.boolean); break;
-					case reflect::FieldType::Vec2: v.vec = glm::vec4(Vec2FromToml(node, glm::vec2(v.vec)), 0.0f, 0.0f); break;
+					case reflect::FieldType::UInt:
+						v.num = static_cast<double>(node.value_or(static_cast<std::int64_t>(v.num)));
+						break;
+					case reflect::FieldType::Bool:
+						v.boolean = node.value_or(v.boolean);
+						break;
+					case reflect::FieldType::Vec2:
+						v.vec = glm::vec4(Vec2FromToml(node, glm::vec2(v.vec)), 0.0f, 0.0f);
+						break;
 					case reflect::FieldType::Vec3:
-					case reflect::FieldType::Color3: v.vec = glm::vec4(Vec3FromToml(node, glm::vec3(v.vec)), 0.0f); break;
+					case reflect::FieldType::Color3:
+						v.vec = glm::vec4(Vec3FromToml(node, glm::vec3(v.vec)), 0.0f);
+						break;
 					case reflect::FieldType::Vec4:
-					case reflect::FieldType::Color4: v.vec = Vec4FromToml(node, v.vec); break;
+					case reflect::FieldType::Color4:
+						v.vec = Vec4FromToml(node, v.vec);
+						break;
 					case reflect::FieldType::Enum:
 						if (f.meta.enumTable != nullptr)
 						{
-							if (node.is_string()) { v.enumValue = f.meta.enumTable->ValueOf(node.value_or(std::string{}), v.enumValue); }
-							else { v.enumValue = static_cast<int>(node.value_or(static_cast<std::int64_t>(v.enumValue))); }
+							if (node.is_string())
+							{
+								v.enumValue = f.meta.enumTable->ValueOf(node.value_or(std::string{}), v.enumValue);
+							}
+							else
+							{
+								v.enumValue = static_cast<int>(node.value_or(static_cast<std::int64_t>(v.enumValue)));
+							}
 						}
 						break;
-					case reflect::FieldType::String: v.str = node.value_or(v.str); break;
-					case reflect::FieldType::EntityRef: v.entity = static_cast<std::uint64_t>(node.value_or(static_cast<std::int64_t>(v.entity))); break;
+					case reflect::FieldType::String:
+						v.str = node.value_or(v.str);
+						break;
+					case reflect::FieldType::EntityRef:
+						v.entity = static_cast<std::uint64_t>(node.value_or(static_cast<std::int64_t>(v.entity)));
+						break;
 				}
 				f.set(comp, v);
 			}
@@ -1054,21 +1106,48 @@ namespace aether::app::scene
 				t.insert("effect", std::move(f));
 			}
 			// Behavior components: written generically from the reflection registry.
-			if (rec.bob) { t.insert("bob", WriteReflectedToToml("Bob", &*rec.bob)); }
-			if (rec.spin) { t.insert("spin", WriteReflectedToToml("Spin", &*rec.spin)); }
-			if (rec.orbit) { t.insert("orbit", WriteReflectedToToml("Orbit", &*rec.orbit)); }
-			if (rec.materialPulse) { t.insert("material_pulse", WriteReflectedToToml("Material Pulse", &*rec.materialPulse)); }
-			if (rec.scalePulse) { t.insert("scale_pulse", WriteReflectedToToml("Scale Pulse", &*rec.scalePulse)); }
-			if (rec.lookAt) { t.insert("look_at", WriteReflectedToToml("Look At", &*rec.lookAt)); }
-			if (rec.pointLight) { t.insert("point_light", WriteReflectedToToml("Point Light", &*rec.pointLight)); }
-			if (rec.spotLight) { t.insert("spot_light", WriteReflectedToToml("Spot Light", &*rec.spotLight)); }
+			if (rec.bob)
+			{
+				t.insert("bob", WriteReflectedToToml("Bob", &*rec.bob));
+			}
+			if (rec.spin)
+			{
+				t.insert("spin", WriteReflectedToToml("Spin", &*rec.spin));
+			}
+			if (rec.orbit)
+			{
+				t.insert("orbit", WriteReflectedToToml("Orbit", &*rec.orbit));
+			}
+			if (rec.materialPulse)
+			{
+				t.insert("material_pulse", WriteReflectedToToml("Material Pulse", &*rec.materialPulse));
+			}
+			if (rec.scalePulse)
+			{
+				t.insert("scale_pulse", WriteReflectedToToml("Scale Pulse", &*rec.scalePulse));
+			}
+			if (rec.lookAt)
+			{
+				t.insert("look_at", WriteReflectedToToml("Look At", &*rec.lookAt));
+			}
+			if (rec.pointLight)
+			{
+				t.insert("point_light", WriteReflectedToToml("Point Light", &*rec.pointLight));
+			}
+			if (rec.spotLight)
+			{
+				t.insert("spot_light", WriteReflectedToToml("Spot Light", &*rec.spotLight));
+			}
 			if (rec.camera)
 			{
 				toml::table c = WriteReflectedToToml("Camera", &*rec.camera);
 				c.insert("main", rec.mainCamera); // 'main' is a separate record field (the MainCameraComponent tag)
 				t.insert("camera", std::move(c));
 			}
-				if (rec.orbitCamera) { t.insert("orbit_camera", WriteReflectedToToml("Orbit Camera", &*rec.orbitCamera)); }
+			if (rec.orbitCamera)
+			{
+				t.insert("orbit_camera", WriteReflectedToToml("Orbit Camera", &*rec.orbitCamera));
+			}
 			if (!rec.scripts.empty())
 			{
 				toml::array scripts;
@@ -1378,14 +1457,54 @@ namespace aether::app::scene
 			}
 			// Behavior components: read generically into a default-seeded component
 			// (missing keys keep the struct default, matching the old value_or defaults).
-			if (const auto* b = tv["bob"].as_table()) { BobComponent c{}; ReadReflectedFromToml("Bob", *b, &c); rec.bob = c; }
-			if (const auto* s = tv["spin"].as_table()) { SpinComponent c{}; ReadReflectedFromToml("Spin", *s, &c); rec.spin = c; }
-			if (const auto* o = tv["orbit"].as_table()) { OrbitComponent c{}; ReadReflectedFromToml("Orbit", *o, &c); rec.orbit = c; }
-			if (const auto* p = tv["material_pulse"].as_table()) { MaterialPulseComponent c{}; ReadReflectedFromToml("Material Pulse", *p, &c); rec.materialPulse = c; }
-			if (const auto* p = tv["scale_pulse"].as_table()) { ScalePulseComponent c{}; ReadReflectedFromToml("Scale Pulse", *p, &c); rec.scalePulse = c; }
-			if (const auto* p = tv["look_at"].as_table()) { LookAtComponent c{}; ReadReflectedFromToml("Look At", *p, &c); rec.lookAt = c; }
-			if (const auto* l = tv["point_light"].as_table()) { PointLightComponent c{}; ReadReflectedFromToml("Point Light", *l, &c); rec.pointLight = c; }
-			if (const auto* l = tv["spot_light"].as_table()) { SpotLightComponent c{}; ReadReflectedFromToml("Spot Light", *l, &c); rec.spotLight = c; }
+			if (const auto* b = tv["bob"].as_table())
+			{
+				BobComponent c{};
+				ReadReflectedFromToml("Bob", *b, &c);
+				rec.bob = c;
+			}
+			if (const auto* s = tv["spin"].as_table())
+			{
+				SpinComponent c{};
+				ReadReflectedFromToml("Spin", *s, &c);
+				rec.spin = c;
+			}
+			if (const auto* o = tv["orbit"].as_table())
+			{
+				OrbitComponent c{};
+				ReadReflectedFromToml("Orbit", *o, &c);
+				rec.orbit = c;
+			}
+			if (const auto* p = tv["material_pulse"].as_table())
+			{
+				MaterialPulseComponent c{};
+				ReadReflectedFromToml("Material Pulse", *p, &c);
+				rec.materialPulse = c;
+			}
+			if (const auto* p = tv["scale_pulse"].as_table())
+			{
+				ScalePulseComponent c{};
+				ReadReflectedFromToml("Scale Pulse", *p, &c);
+				rec.scalePulse = c;
+			}
+			if (const auto* p = tv["look_at"].as_table())
+			{
+				LookAtComponent c{};
+				ReadReflectedFromToml("Look At", *p, &c);
+				rec.lookAt = c;
+			}
+			if (const auto* l = tv["point_light"].as_table())
+			{
+				PointLightComponent c{};
+				ReadReflectedFromToml("Point Light", *l, &c);
+				rec.pointLight = c;
+			}
+			if (const auto* l = tv["spot_light"].as_table())
+			{
+				SpotLightComponent c{};
+				ReadReflectedFromToml("Spot Light", *l, &c);
+				rec.spotLight = c;
+			}
 			if (const auto* c = tv["camera"].as_table())
 			{
 				CameraComponent cam{};
@@ -1393,7 +1512,12 @@ namespace aether::app::scene
 				rec.camera = cam;
 				rec.mainCamera = toml::node_view<const toml::node>{*c}["main"].value_or(false);
 			}
-			if (const auto* o = tv["orbit_camera"].as_table()) { OrbitCameraComponent c{}; ReadReflectedFromToml("Orbit Camera", *o, &c); rec.orbitCamera = c; }
+			if (const auto* o = tv["orbit_camera"].as_table())
+			{
+				OrbitCameraComponent c{};
+				ReadReflectedFromToml("Orbit Camera", *o, &c);
+				rec.orbitCamera = c;
+			}
 			if (const auto* scripts = tv["scripts"].as_array())
 			{
 				for (const toml::node& scriptNode: *scripts)

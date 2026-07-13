@@ -63,6 +63,7 @@ namespace aether::editor
 			std::string method;
 			std::string params;
 		};
+
 		struct Outbound
 		{
 			ENetPeer* peer = nullptr;
@@ -76,13 +77,19 @@ namespace aether::editor
 	};
 
 	ControlServer::ControlServer(ServiceContainer& services)
-	    : m_services(services)
+	      : m_services(services)
 	{
 	}
 
-	ControlServer::~ControlServer() { Stop(); }
+	ControlServer::~ControlServer()
+	{
+		Stop();
+	}
 
-	bool ControlServer::IsRunning() const noexcept { return m_impl != nullptr && m_impl->running.load(); }
+	bool ControlServer::IsRunning() const noexcept
+	{
+		return m_impl != nullptr && m_impl->running.load();
+	}
 
 	void ControlServer::SetFrameInfo(std::uint64_t frameIndex, double fps) noexcept
 	{

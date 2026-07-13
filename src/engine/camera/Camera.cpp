@@ -163,12 +163,30 @@ namespace aether
 
 				const glm::vec3 fwd = GetForward();
 				const glm::vec3 right = GetRight();
-				if (input.IsKeyDown(Key::W)) { m_position += fwd * m_moveSpeed * dt; }
-				if (input.IsKeyDown(Key::S)) { m_position -= fwd * m_moveSpeed * dt; }
-				if (input.IsKeyDown(Key::D)) { m_position += right * m_moveSpeed * dt; }
-				if (input.IsKeyDown(Key::A)) { m_position -= right * m_moveSpeed * dt; }
-				if (input.IsKeyDown(Key::E)) { m_position.y += m_moveSpeed * dt; }
-				if (input.IsKeyDown(Key::Q)) { m_position.y -= m_moveSpeed * dt; }
+				if (input.IsKeyDown(Key::W))
+				{
+					m_position += fwd * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::S))
+				{
+					m_position -= fwd * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::D))
+				{
+					m_position += right * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::A))
+				{
+					m_position -= right * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::E))
+				{
+					m_position.y += m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::Q))
+				{
+					m_position.y -= m_moveSpeed * dt;
+				}
 
 				if (scroll != 0.0f)
 				{

@@ -20,7 +20,10 @@ namespace aether::reflect
 	{
 		for (const auto& [name, v]: values)
 		{
-			if (v == value) { return name; }
+			if (v == value)
+			{
+				return name;
+			}
 		}
 		return {};
 	}
@@ -29,7 +32,10 @@ namespace aether::reflect
 	{
 		for (const auto& [n, v]: values)
 		{
-			if (n == name) { return v; }
+			if (n == name)
+			{
+				return v;
+			}
 		}
 		return fallback;
 	}
@@ -57,7 +63,13 @@ namespace aether::reflect
 		auto& registry = Registry();
 		// Last declaration wins if a name is registered twice (keeps the table unique).
 		const auto it = std::find_if(registry.begin(), registry.end(), [&](const ComponentType& t) { return t.name == type.name; });
-		if (it != registry.end()) { *it = std::move(type); }
-		else { registry.push_back(std::move(type)); }
+		if (it != registry.end())
+		{
+			*it = std::move(type);
+		}
+		else
+		{
+			registry.push_back(std::move(type));
+		}
 	}
 } // namespace aether::reflect
