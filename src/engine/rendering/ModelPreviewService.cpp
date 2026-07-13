@@ -112,6 +112,7 @@ namespace aether
 			ClearModel(*assets);
 		}
 		m_queue.DiscardAllPending();
+		m_queue.Shutdown(); // release the queue's persistent GPU buffers now, while the ResourceRegistry is alive - else they leak to ResourceRegistry::Shutdown
 		m_constants.Shutdown();
 		for (gpu::TextureHandle* handle: {&m_colorHandle, &m_depthHandle, &m_colorLdrHandle})
 		{

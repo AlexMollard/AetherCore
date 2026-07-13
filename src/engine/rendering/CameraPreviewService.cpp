@@ -76,6 +76,7 @@ namespace aether
 	void CameraPreviewService::Shutdown()
 	{
 		m_queue.DiscardAllPending();
+		m_queue.Shutdown(); // release the queue's persistent GPU buffers now, while the ResourceRegistry is alive - else they leak to ResourceRegistry::Shutdown
 		m_constants.Shutdown();
 		if (m_colorHandle.IsValid())
 		{

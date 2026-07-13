@@ -1243,35 +1243,10 @@ namespace aether::app
 				ImGui::EndPopup();
 			}
 
-			// Scene save/load.
-			ImGui::SameLine();
-			if (chrome::GhostButton(ICON_FA_FLOPPY_DISK, ImVec2(tbIconW(ICON_FA_FLOPPY_DISK), tbBtnH)))
-			{
-				ImGui::OpenPopup("SaveScene");
-			}
-			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-			{
-				ImGui::SetTooltip("Save scene");
-			}
-			ImGui::SameLine();
-			if (chrome::GhostButton(ICON_FA_FOLDER_OPEN, ImVec2(tbIconW(ICON_FA_FOLDER_OPEN), tbBtnH)))
-			{
-				m_sceneListDirty = true;
-				ImGui::OpenPopup("LoadScene");
-			}
-			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-			{
-				ImGui::SetTooltip("Load scene (replaces all entities)");
-			}
-			ImGui::SameLine();
-			if (chrome::GhostButton(ICON_FA_ROTATE, ImVec2(tbIconW(ICON_FA_ROTATE), tbBtnH)))
-			{
-				m_sceneListDirty = true;
-			}
-			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-			{
-				ImGui::SetTooltip("Refresh scenes");
-			}
+			// Scene Save / Save As / Open live in the main menu bar (File menu), which
+			// owns the SaveScene/LoadScene popups below via RequestSaveAsPopup /
+			// RequestOpenPopup. Keeping them out of this panel de-clutters the toolbar,
+			// which is scoped to scene-tree actions (create entity, search, filter).
 
 			if (ImGui::BeginPopup("SaveScene"))
 			{

@@ -272,27 +272,35 @@ namespace aether::app::chrome
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const ImVec2 p = ImGui::GetCursorScreenPos();
 		const float bandW = ImGui::GetContentRegionAvail().x;
-		drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + 13.0f), U32(kAccent));
-		TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), kMuted, eyebrow);
+		// Sizes derive from the body font (was a tiny fixed 12px, hard to read). The
+		// panel eyebrow reads at full body size so it's a clear title; the micro-stat
+		// stays smaller.
+		const float labelSize = ImGui::GetFontSize();
+		const float statSize = ImGui::GetFontSize() * 0.82f;
+		const float th = MeasureSized(labelSize, eyebrow).y;
+		drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + th), U32(kAccent));
+		TextSized(drawList, labelSize, ImVec2(p.x + 11.0f, p.y), kMuted, eyebrow);
 		if (stat != nullptr && stat[0] != '\0')
 		{
-			const float statW = MeasureSized(12.0f, stat).x;
-			TextSized(drawList, 12.0f, ImVec2(p.x + bandW - statW, p.y), kFaint, stat);
+			const ImVec2 sm = MeasureSized(statSize, stat);
+			TextSized(drawList, statSize, ImVec2(p.x + bandW - sm.x, p.y + (th - sm.y) * 0.5f), kFaint, stat);
 		}
-		ImGui::Dummy(ImVec2(0.0f, 16.0f));
+		ImGui::Dummy(ImVec2(0.0f, th + 5.0f));
 		AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
 		ImGui::Dummy(ImVec2(0.0f, 4.0f));
 	}
 
-	// Micro section label: small amber tick + 13px uppercase muted text. Draws at
-	// the current cursor and advances it (widget-flow friendly).
+	// Micro section label: amber tick + uppercase muted text, sized from the body
+	// font (DPI-aware). Draws at the current cursor and advances it (widget-flow friendly).
 	inline void SectionTag(const char* label)
 	{
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const ImVec2 pos = ImGui::GetCursorScreenPos();
-		drawList->AddRectFilled(ImVec2(pos.x, pos.y + 1.0f), ImVec2(pos.x + 3.0f, pos.y + 13.0f), U32(kAccent));
-		TextSized(drawList, 13.0f, ImVec2(pos.x + 10.0f, pos.y), kMuted, label);
-		ImGui::Dummy(ImVec2(10.0f + MeasureSized(13.0f, label).x, 15.0f));
+		const float size = ImGui::GetFontSize() * 0.92f;
+		const float th = MeasureSized(size, label).y;
+		drawList->AddRectFilled(ImVec2(pos.x, pos.y + 1.0f), ImVec2(pos.x + 3.0f, pos.y + th), U32(kAccent));
+		TextSized(drawList, size, ImVec2(pos.x + 11.0f, pos.y), kMuted, label);
+		ImGui::Dummy(ImVec2(11.0f + MeasureSized(size, label).x, th + 2.0f));
 	}
 
 	// Amber-filled call-to-action (dark text).

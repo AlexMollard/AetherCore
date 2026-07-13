@@ -721,12 +721,80 @@ namespace aether::app
 			}
 		}
 
-		if (!saved && m_hierarchyPanel != nullptr)
+		if (saved)
+		{
+			// Quick-save writes silently (only a log line otherwise) - surface an
+			// on-screen confirmation so Ctrl+S visibly does something.
+			ShowToast(std::string(ICON_FA_FLOPPY_DISK "  Saved  ") + currentName);
+		}
+		else if (m_hierarchyPanel != nullptr)
 		{
 			// No scene name yet (or the quick-save failed) - fall back to the
 			// named Save-As prompt instead of silently doing nothing.
 			m_hierarchyPanel->RequestSaveAsPopup();
 		}
+	}
+
+	void DebugLayer::ShowToast(std::string text, bool isError)
+	{
+		m_toastText = std::move(text);
+		m_toastStart = ImGui::GetTime();
+		m_toastError = isError;
+	}
+
+	void DebugLayer::DrawToasts()
+	{
+		if (m_toastStart < 0.0)
+		{
+			return;
+		}
+		constexpr float kLifetime = 2.4f; // seconds on screen
+		constexpr float kFadeIn = 0.12f;
+		constexpr float kFadeOut = 0.5f;
+		const auto age = static_cast<float>(ImGui::GetTime() - m_toastStart);
+		if (age > kLifetime)
+		{
+			m_toastStart = -1.0;
+			return;
+		}
+
+		float alpha = 1.0f;
+		if (age < kFadeIn)
+		{
+			alpha = age / kFadeIn;
+		}
+		else if (age > kLifetime - kFadeOut)
+		{
+			alpha = (kLifetime - age) / kFadeOut;
+		}
+		alpha = std::clamp(alpha, 0.0f, 1.0f);
+
+		ImGuiViewport* vp = ImGui::GetMainViewport();
+		ImDrawList* dl = ImGui::GetForegroundDrawList(vp);
+		constexpr float kFont = 14.0f;
+		const ImVec2 textSize = chrome::MeasureSized(kFont, m_toastText.c_str());
+		constexpr float padX = 18.0f;
+		constexpr float padY = 10.0f;
+		const float w = textSize.x + padX * 2.0f;
+		const float h = textSize.y + padY * 2.0f;
+		// Bottom-centre, floating just above the status bar. A small rise as it
+		// fades in gives it a bit of life without being distracting.
+		const float rise = (1.0f - alpha) * 8.0f;
+		const float cx = vp->Pos.x + vp->Size.x * 0.5f;
+		const float bottom = vp->Pos.y + vp->Size.y - ImGui::GetFrameHeight() - 18.0f + rise;
+		const ImVec2 p0(cx - w * 0.5f, bottom - h);
+		const ImVec2 p1(cx + w * 0.5f, bottom);
+		const ImVec4 accent = m_toastError ? chrome::kError : chrome::kSuccess;
+
+		// Flat left edge (only the right corners round) so the accent spine reads as a
+		// clean flush bar rather than fighting a rounded corner.
+		constexpr float rounding = 9.0f;
+		constexpr ImDrawFlags roundRight = ImDrawFlags_RoundCornersRight;
+		dl->AddRectFilled(ImVec2(p0.x, p0.y + 3.0f), ImVec2(p1.x, p1.y + 3.0f), chrome::U32(chrome::WithAlpha(chrome::kBg, 0.55f * alpha)), rounding, roundRight); // drop shadow
+		dl->AddRectFilled(p0, p1, chrome::U32(chrome::WithAlpha(chrome::kPanelHi, 0.98f * alpha)), rounding, roundRight);
+		dl->AddRect(p0, p1, chrome::U32(chrome::WithAlpha(accent, 0.75f * alpha)), rounding, roundRight, 1.5f);
+		dl->AddRectFilled(p0, ImVec2(p0.x + 3.0f, p1.y), chrome::U32(chrome::WithAlpha(accent, alpha))); // square accent spine, flush with the flat left edge
+		chrome::TextSized(dl, kFont, ImVec2(p0.x + padX, p0.y + padY), chrome::WithAlpha(chrome::kText, alpha), m_toastText.c_str());
 	}
 
 	void DebugLayer::OnImGui(LayerContext& context)
@@ -1134,6 +1202,7 @@ namespace aether::app
 		if (showStatusBar)
 		{
 			DrawStatusBar(context);
+			DrawToasts(); // transient confirmations (e.g. Ctrl+S), on top via the foreground draw list
 		}
 		ImGui::PopStyleVar(); // ItemSpacing
 

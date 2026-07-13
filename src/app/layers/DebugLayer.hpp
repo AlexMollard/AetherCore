@@ -52,6 +52,15 @@ namespace aether::app
 		// when there isn't one yet (or the quick-save failed).
 		void SaveCurrentScene(LayerContext& context);
 
+		// Transient confirmation toast (e.g. Ctrl+S save feedback): a fading pill in
+		// the editor chrome, so an action that otherwise only writes a log line still
+		// reads on-screen. ShowToast raises it; DrawToasts renders + expires it.
+		void ShowToast(std::string text, bool isError = false);
+		void DrawToasts();
+		std::string m_toastText;
+		double m_toastStart = -1.0; // ImGui::GetTime() when raised; < 0 => inactive
+		bool m_toastError = false;
+
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
 		// Window show/hide facade handed to the control endpoint (ServiceContainer
