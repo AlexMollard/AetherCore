@@ -17,9 +17,9 @@ Outputs (per map file found):
 
 Usage:
     python scripts/dead-strip-report.py \
-        --build-dir build-vs2022-msvc \
+        --build-dir build/vs2022-msvc \
         --source-dir . \
-        --out-dir build-vs2022-msvc/dead-strip-report
+        --out-dir build/vs2022-msvc/dead-strip-report
 """
 from __future__ import annotations
 

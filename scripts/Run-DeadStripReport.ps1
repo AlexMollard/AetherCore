@@ -49,14 +49,14 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path "$PSScriptRoot/..").Path
 $parserScript = Join-Path $repoRoot 'scripts/dead-strip-report.py'
 
-# CMakePresets.json uses 'build' for the 'default' preset and 'build-<preset>'
-# for everything else.
+# CMakePresets.json nests every preset under build/: 'build/default' for the
+# 'default' preset and 'build/<preset>' for everything else.
 function Get-BuildDir {
     param([string]$PresetName)
     if ($PresetName -eq 'default') {
-        return Join-Path $repoRoot 'build'
+        return Join-Path $repoRoot 'build/default'
     }
-    return Join-Path $repoRoot "build-$PresetName"
+    return Join-Path $repoRoot "build/$PresetName"
 }
 
 function Invoke-Step {
@@ -111,7 +111,7 @@ Invoke-Step '2/4' 'cmake' @('--build', '--preset', $Preset, '--target', 'App', '
 
 # 3. Run the parser. Uses the actual binary dir resolved from the preset, not
 # the script's guess, so a custom binaryDir in CMakePresets.json would still
-# work (we currently hardcode build-vsXXXX/, which matches all current presets).
+# work (we currently hardcode build/<preset>/, which matches all current presets).
 if (-not (Test-Path $buildDir)) {
     throw "Expected build dir not found: $buildDir. Check CMakePresets.json binaryDir."
 }

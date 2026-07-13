@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Continue'
 # or git worktree (previously hardcoded to a single clone).
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $clangTidy = 'C:\Program Files\LLVM\bin\clang-tidy.exe'
-$buildDir = "$repoRoot\build-ninja-clang"
+$buildDir = "$repoRoot\build\ninja-clang"
 
 # Organized output directories
 $outDir = "$repoRoot\audit"

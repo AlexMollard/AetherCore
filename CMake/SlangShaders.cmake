@@ -2,7 +2,7 @@
 
 option(AETHERCORE_ENABLE_SLANG "Enable Slang shader compilation when slangc is available" ON)
 set(AETHERCORE_SLANG_ROOT "$ENV{VULKAN_SDK}" CACHE PATH "Root path for Slang SDK/install (defaults to VULKAN_SDK)")
-set(AETHERCORE_SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders" CACHE PATH "Directory containing Slang shader sources")
+set(AETHERCORE_SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders" CACHE PATH "Directory containing Slang shader sources")
 set(AETHERCORE_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders" CACHE PATH "Directory for compiled shader outputs")
 set(AETHERCORE_SLANG_SHADER_ARGS "-target spirv -emit-spirv-directly -fvk-use-scalar-layout -matrix-layout-column-major" CACHE STRING "Extra arguments passed to slangc for shader compilation")
 

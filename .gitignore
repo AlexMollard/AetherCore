@@ -13,7 +13,6 @@
 # Stray per-project intermediates (normally routed to /artifacts via ArtifactsPath)
 **/obj/
 managed/**/bin/
-game/**/bin/
 
 # CMake generated files
 /CMakeFiles/
@@ -25,10 +24,11 @@ game/**/bin/
 /install_manifest.txt
 
 # Visual Studio / MSBuild
-/.vs/
+# Unanchored so it matches .vs/ anywhere (the managed solution lives under managed/).
+.vs/
 *.sln
 # The generated C++ solution is a *.sln and stays ignored. The hand-authored managed
-# solution is AetherCore.slnx (XML format) - *.sln doesn't match it, so it is tracked.
+# solution is managed/AetherCore.slnx (XML format) - *.sln doesn't match it, so it is tracked.
 *.vcxproj*
 *.vcproj*
 *.filters
@@ -60,6 +60,18 @@ Makefile
 
 # Vulkan / shader outputs
 *.spv
+
+# Baked model artifacts. Cooked from source glTF/GLB by the editor's bake-on-drop
+# (EnsureModelBaked / MeshProcessor) and placed next to the source. They are
+# derived data: regenerated on demand and packed into project.pak on Publish, and
+# version-fragile (rejected once the baker format bumps, e.g. MESH_VERSION), so
+# they must not be committed. Commit the source (.gltf/.bin/textures) instead.
+# Force one in with `git add -f` if a project ever needs an authored .mesh/.material.
+*.mesh
+*.skel
+*.animset
+*.anim
+*.material
 
 # Editors and OS files
 .vscode/

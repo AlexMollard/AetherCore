@@ -24,7 +24,7 @@ target_include_directories(AssetPipeline PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_include_directories(AssetPipeline PRIVATE
-    "${CMAKE_SOURCE_DIR}/include"   # PakFormat.hpp, AeBnFormat.hpp
+    "${CMAKE_SOURCE_DIR}/src/include"   # PakFormat.hpp, AeBnFormat.hpp
     "${xxHash_SOURCE_DIR}"
 )
 
@@ -60,7 +60,7 @@ target_include_directories(AssetPacker SYSTEM PRIVATE "${stb_SOURCE_DIR}")
 # PRIVATE on AssetPipeline (a library implementation detail), so main.cpp -
 # compiled straight into this exe target, not into the library - needs its own
 # path to it.
-target_include_directories(AssetPacker PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(AssetPacker PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 
 set_target_properties(AssetPacker PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tools"

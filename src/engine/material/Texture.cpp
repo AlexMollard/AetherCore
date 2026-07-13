@@ -318,6 +318,11 @@ namespace aether
 		m_bindlessSlot = 0xFFFFFFFFu;
 	}
 
+	gpu::ImageView Texture::GetView() const
+	{
+		return gpu::ResourceRegistry::ResolveTexture(m_handle).view;
+	}
+
 	std::uint32_t Texture::GetBindlessSlot() const
 	{
 		return m_bindlessSlot;

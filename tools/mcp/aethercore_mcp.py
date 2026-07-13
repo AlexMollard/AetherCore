@@ -42,11 +42,11 @@ def _find_build_dir() -> Path:
     env = os.environ.get("AETHER_BUILD_DIR")
     if env:
         return Path(env)
-    for name in ("build-vs2022-msvc", "build", "build-ninja-clang"):
+    for name in ("build/vs2022-msvc", "build/default", "build/ninja-clang"):
         candidate = REPO / name
         if candidate.exists():
             return candidate
-    return REPO / "build-vs2022-msvc"
+    return REPO / "build/vs2022-msvc"
 
 
 BUILD_DIR = _find_build_dir()

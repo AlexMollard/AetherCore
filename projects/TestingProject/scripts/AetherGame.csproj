@@ -1,15 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Project-owned game scripts. The engine builds this assembly when
-    AETHERCORE_PROJECT_DIR points at this project, then loads AetherGame.dll
-    through the collectible scripting context.
+    Project-owned game scripts. The editor builds this assembly at runtime from the
+    open project, then loads AetherGame.dll through the collectible scripting context.
 
     AetherCore is compile-only because the engine already loads the SDK assembly.
+  -->
+  <!--
+    Self-contained: a game project is portable and must build without depending on
+    the engine repo's Directory.Build.props (which now scopes to managed/). These
+    mirror the engine's managed build settings so scripts compile the same whether
+    the project lives inside or outside the engine checkout.
   -->
   <PropertyGroup>
     <AssemblyName>AetherGame</AssemblyName>
     <RootNamespace>AetherGame</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

@@ -7,7 +7,7 @@
       "displayName": "VS 2022 ClangCL",
       "description": "Uses clang-cl with Visual Studio 2022 generator.",
       "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build-vs2022-clang",
+      "binaryDir": "${sourceDir}/build/vs2022-clang",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -23,7 +23,7 @@
       "displayName": "VS 2022 MSVC",
       "description": "Uses MSVC with Visual Studio 2022 generator.",
       "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build-vs2022-msvc",
+      "binaryDir": "${sourceDir}/build/vs2022-msvc",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -35,7 +35,7 @@
       "displayName": "VS 2026 ClangCL",
       "description": "Uses clang-cl with Visual Studio 2026 generator.",
       "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build-vs2026-clang",
+      "binaryDir": "${sourceDir}/build/vs2026-clang",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -51,7 +51,7 @@
       "displayName": "VS 2026 MSVC",
       "description": "Uses MSVC with Visual Studio 2026 generator.",
       "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build-vs2026-msvc",
+      "binaryDir": "${sourceDir}/build/vs2026-msvc",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -63,7 +63,7 @@
       "displayName": "Linux Clang",
       "description": "Uses clang with Ninja generator on Linux.",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-linux-clang",
+      "binaryDir": "${sourceDir}/build/linux-clang",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -80,7 +80,7 @@
       "displayName": "VS 2022 MSVC",
       "description": "Default: MSVC with Visual Studio 2022 generator, RelWithDebInfo build type.",
       "inherits": "vs2022-msvc",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
@@ -90,7 +90,7 @@
       "displayName": "Clangd (Ninja + clang-cl)",
       "description": "Ninja + clang-cl for compile_commands.json. Not used for production builds.",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-ninja-clang",
+      "binaryDir": "${sourceDir}/build/ninja-clang",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -108,14 +108,14 @@
       "displayName": "VS 2022 MSVC Release",
       "description": "Shipping build (Release, no profiling).",
       "inherits": "vs2022-msvc",
-      "binaryDir": "${sourceDir}/build-vs2022-msvc-release"
+      "binaryDir": "${sourceDir}/build/vs2022-msvc-release"
     },
     {
       "name": "vs2022-msvc-retail",
       "displayName": "VS 2022 MSVC Retail",
       "description": "Retail build - LTCG enabled, all diagnostics stripped.",
       "inherits": "vs2022-msvc",
-      "binaryDir": "${sourceDir}/build-vs2022-msvc-retail",
+      "binaryDir": "${sourceDir}/build/vs2022-msvc-retail",
       "cacheVariables": {
         "AETHERCORE_RETAIL": "ON",
         "CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE": "ON"

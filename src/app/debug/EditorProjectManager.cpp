@@ -12,9 +12,12 @@
 #	undef CopyFile // Windows.h defines CopyFile as CopyFileA/CopyFileW macro, conflicts with file_util::CopyFile
 #endif
 
+#include "PlayState.hpp"
+#include "assets/AssetManager.hpp"
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "editor/ShaderCompiler.hpp"
+#include "imgui/ImguiSubsystem.hpp"
 #include "io/DirectoryBackend.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
@@ -23,6 +26,7 @@
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -38,6 +42,7 @@ namespace aether::app
 	{
 		constexpr int kMaxRecentProjects = 8;
 		constexpr std::string_view kProjectFileName = "ProjectSettings.toml";
+		constexpr std::string_view kEditorLogoPath = "engine://branding/aethercore-icon-white.png";
 
 		std::filesystem::path NormalizePath(std::filesystem::path path)
 		{
@@ -410,6 +415,25 @@ namespace aether::app
 	void EditorProjectManager::Attach(ServiceContainer& services)
 	{
 		m_services = &services;
+
+		if (auto* assets = services.TryGet<AssetManager>())
+		{
+			auto logo = assets->CreateTexture(kEditorLogoPath);
+			if (!logo)
+			{
+				AE_WARN(LogCategory::App, "Could not load editor logo '{}': {}", kEditorLogoPath, logo.error());
+			}
+			else if (auto* imgui = services.TryGet<ImguiSubsystem>())
+			{
+				const ImTextureID textureId = imgui->RegisterTexture(logo->GetView(), gpu::ImageLayout::ShaderReadOnly);
+				if (textureId != ImTextureID_Invalid)
+				{
+					m_logoTexture = std::move(*logo);
+					m_logoTextureId = static_cast<std::uint64_t>(textureId);
+				}
+			}
+		}
+
 		ConfigureActions();
 		services.Register<EditorProjectActions>(m_actions);
 		services.Register<EditorProjectContext>(m_currentProject);
@@ -417,6 +441,15 @@ namespace aether::app
 
 	void EditorProjectManager::Detach()
 	{
+		if (m_logoTextureId != 0 && m_services != nullptr)
+		{
+			if (auto* imgui = m_services->TryGet<ImguiSubsystem>())
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(m_logoTextureId));
+			}
+		}
+		m_logoTextureId = 0;
+		m_logoTexture.Destroy();
 		m_services = nullptr;
 		m_actions = {};
 	}
@@ -560,6 +593,87 @@ namespace aether::app
 		return !m_currentProject.root.empty() && HasProjectDescriptor(m_currentProject.root);
 	}
 
+	void EditorProjectManager::BuildAndReloadProjectScripts()
+	{
+		if (m_services == nullptr)
+		{
+			return;
+		}
+		auto* scripting = m_services->TryGet<scripting::CSharpScriptingSubsystem>();
+		if (scripting == nullptr)
+		{
+			return;
+		}
+
+		const std::filesystem::path scriptsProject = m_currentProject.scriptsDir / "AetherGame.csproj";
+		std::error_code ec;
+		if (!std::filesystem::exists(scriptsProject, ec))
+		{
+			// No game scripts in this project: clear any prior project's build config
+			// so switching away from a scripted project stops rebuilding it.
+			scripting->SetScriptProject({}, {});
+			return;
+		}
+
+		scripting->SetScriptProject(scriptsProject, m_currentProject.root / "Builds" / "Intermediate" / "managed");
+		// Kick the dotnet build onto a worker thread so opening a project never blocks
+		// the UI (a cold build can take tens of seconds). UpdateScriptBuild(), ticked
+		// from DebugLayer, polls it to completion and reloads the assembly; the status
+		// bar shows a "compiling C# scripts" progress bar until then. Scripts don't
+		// tick in edit mode, so the scene can load before the build finishes.
+		scripting->BeginRebuildFromSource();
+		m_scriptBuildPending = true;
+	}
+
+	void EditorProjectManager::UpdateScriptBuild()
+	{
+		if (!m_scriptBuildPending || m_services == nullptr)
+		{
+			return;
+		}
+		auto* scripting = m_services->TryGet<scripting::CSharpScriptingSubsystem>();
+		if (scripting == nullptr)
+		{
+			m_scriptBuildPending = false;
+			return;
+		}
+
+		// If the user pressed Play while the open-build was still running, the play
+		// session adopts the in-flight build and drives it to Playing - stop tracking
+		// it here so completion isn't double-handled.
+		if (const auto* play = m_services->TryGet<PlayState>(); play != nullptr && play->IsCompiling())
+		{
+			m_scriptBuildPending = false;
+			return;
+		}
+
+		using BuildStatus = scripting::CSharpScriptingSubsystem::BuildStatus;
+		std::string error;
+		switch (scripting->PollRebuildStatus(error))
+		{
+			case BuildStatus::Running:
+				return; // keep the "compiling C# scripts" indicator up
+			case BuildStatus::Succeeded:
+				scripting->ClearRebuild();
+				if (scripting->IsAvailable())
+				{
+					scripting->ClearErrors();
+					scripting->LoadScripts();
+				}
+				m_scriptBuildPending = false;
+				AE_INFO(LogCategory::App, "Project C# scripts built and loaded.");
+				return;
+			case BuildStatus::Failed:
+				scripting->ReportScriptError("Project script build failed:\n" + error);
+				scripting->ClearRebuild();
+				m_scriptBuildPending = false;
+				return;
+			case BuildStatus::Idle:
+				m_scriptBuildPending = false;
+				return;
+		}
+	}
+
 	void EditorProjectManager::OpenProject(std::filesystem::path root, bool reloadScene)
 	{
 		m_launcherState.error.clear();
@@ -585,6 +699,11 @@ namespace aether::app
 		// a switch away from a project drops its shader layer instead of
 		// leaking it into the newly opened project.
 		CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
+		// Build this project's C# game scripts and load them, so opening a project
+		// makes its scripts live - the runtime replacement for the old CMake
+		// build-time game-scripts staging. Runs on every OpenProject, including
+		// switches, so a switch drops the previous project's scripts.
+		BuildAndReloadProjectScripts();
 		scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
 		RefreshServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
@@ -672,6 +791,7 @@ namespace aether::app
 		ProjectLauncherWindowModel model;
 		model.projectLoaded = m_projectLoaded;
 		model.hasCurrentProject = HasCurrentProject();
+		model.logoTextureId = m_logoTextureId;
 		model.currentProject = &m_currentProject;
 		model.recentProjects = std::span<const EditorProjectContext>(m_recentProjects.data(), m_recentProjects.size());
 
@@ -727,6 +847,11 @@ namespace aether::app
 	bool EditorProjectManager::IsLauncherOpen() const noexcept
 	{
 		return m_launcherOpen;
+	}
+
+	std::uint64_t EditorProjectManager::LogoTextureId() const noexcept
+	{
+		return m_logoTextureId;
 	}
 
 	const EditorProjectContext& EditorProjectManager::CurrentProject() const noexcept

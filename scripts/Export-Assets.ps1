@@ -68,8 +68,8 @@ Write-Host "`n── Preset: $Preset  |  Config: $Config ──`n" -ForegroundCo
 Push-Location $RepoRoot
 try {
     # ── Configure if needed ─────────────────────────────────────────────
-    $BinDir = "build-$Preset"
-    if ($Preset -eq "default") { $BinDir = "build" }
+    $BinDir = "build/$Preset"
+    if ($Preset -eq "default") { $BinDir = "build/default" }
 
     if (-not (Test-Path "$RepoRoot\$BinDir\CMakeCache.txt")) {
         Write-Host "Configuring $Preset... " -ForegroundColor Yellow
@@ -101,12 +101,12 @@ try {
     # so clangd picks it up (works because clangd translates MSVC flags).
     if (-not $NoLspSync) {
         $SrcDb = "$RepoRoot\$BinDir\compile_commands.json"
-        $DstDir = "$RepoRoot\build-ninja-clang"
+        $DstDir = "$RepoRoot\build\ninja-clang"
         $DstDb = "$DstDir\compile_commands.json"
         if (Test-Path $SrcDb) {
             New-Item -ItemType Directory -Path $DstDir -Force | Out-Null
             Copy-Item -LiteralPath $SrcDb -Destination $DstDb -Force
-            Write-Host "LSP database synced from $BinDir to build-ninja-clang." -ForegroundColor Green
+            Write-Host "LSP database synced from $BinDir to build/ninja-clang." -ForegroundColor Green
         } else {
             Write-Warning "compile_commands.json not found at $SrcDb - LSP may show stale diagnostics"
         }

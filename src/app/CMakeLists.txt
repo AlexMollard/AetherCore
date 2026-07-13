@@ -31,6 +31,16 @@ target_sources(GameRuntime
         ${APP_RUNTIME_HEADERS}
 )
 
+if(WIN32)
+    set(AETHERCORE_APP_ICON_RC_PATH "${CMAKE_SOURCE_DIR}/resources/branding/aethercore-app-icon.ico")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/AetherCoreEditor.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/AetherCoreEditor.rc"
+        @ONLY
+    )
+    target_sources(App PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/AetherCoreEditor.rc")
+endif()
+
 target_include_directories(App PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -107,43 +117,32 @@ target_compile_definitions(GameRuntime PRIVATE
 #
 # The build invokes `dotnet build` on the two leaf .csproj DIRECTLY (each pulls in
 # the AetherCore SDK via ProjectReference). It deliberately does NOT build the
-# checked-in AetherCore.slnx: the solution is only an IDE convenience (VS + Rider),
+# checked-in managed/AetherCore.slnx: the solution is only an IDE convenience (VS + Rider),
 # so the CMake build stays generator-agnostic and cross-platform and never depends
 # on a solution file. The C# projects are likewise NOT bolted onto this generated
-# C++ solution via include_external_msproject - editing happens in AetherCore.slnx.
+# C++ solution via include_external_msproject - editing happens in managed/AetherCore.slnx.
 # (CMake cannot generate SDK-style .csproj, so those are hand-authored source.)
 if(AETHER_HAS_DOTNET)
     set(_aether_interop_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Interop/AetherCore.Interop.csproj")
-    get_filename_component(_aether_project_dir_abs "${AETHERCORE_PROJECT_DIR}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
-    set(_aether_project_game_proj "${_aether_project_dir_abs}/scripts/AetherGame.csproj")
-    set(_aether_fallback_game_proj "${CMAKE_SOURCE_DIR}/game/AetherGame/AetherGame.csproj")
-    if(AETHERCORE_PROJECT_DIR AND EXISTS "${_aether_project_game_proj}")
-        set(_aether_game_proj "${_aether_project_game_proj}")
-    else()
-        set(_aether_game_proj "${_aether_fallback_game_proj}")
-    endif()
     set(_aether_managed_cfg "$<IF:$<CONFIG:Debug>,Debug,Release>")
     set(_aether_managed_cfgdir "$<IF:$<CONFIG:Debug>,debug,release>")
     # AetherCore.Interop's output carries the boot assembly + runtimeconfig AND the
-    # SDK dll it references; AetherGame's carries the game dll + deps.json.
+    # SDK dll it references. Project game scripts (AetherGame) are deliberately NOT
+    # built here: they belong to a project, so the editor builds them at runtime from
+    # the OPEN project (CSharpScriptingSubsystem) and publish bakes them into the
+    # shipped package. This keeps the engine build free of any single project.
     set(_aether_interop_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Interop/${_aether_managed_cfgdir}")
-    set(_aether_game_out "${CMAKE_BINARY_DIR}/managed/bin/AetherGame/${_aether_managed_cfgdir}")
 
+    # Build ONLY the engine managed code: AetherCore.Interop (boot) pulls in the
+    # AetherCore SDK via ProjectReference, so its output dir carries both dlls.
     add_custom_target(ManagedAssemblies ALL
         COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_interop_proj}"
                 -c ${_aether_managed_cfg} --nologo -v:m
                 -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
-        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_game_proj}"
-                -c ${_aether_managed_cfg} --nologo -v:m
-                -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts/managed"
-        # Boot assembly + SDK first (dll + runtimeconfig the host boots from), then
-        # the game scripts assembly on top.
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
                 "${_aether_interop_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${_aether_game_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
-        COMMENT "Building C# managed assemblies (AetherCore + AetherCore.Interop + AetherGame)"
+        COMMENT "Building C# engine managed assemblies (AetherCore SDK + AetherCore.Interop)"
         VERBATIM USES_TERMINAL)
 
     foreach(_aether_runtime_target IN ITEMS App GameRuntime)
@@ -151,14 +150,14 @@ if(AETHER_HAS_DOTNET)
         target_link_libraries(${_aether_runtime_target} PRIVATE DotNet::NetHost)
     endforeach()
 
-    # Dev-only F5 rebuild: let the running engine rebuild AetherGame from source and
-    # redeploy before reloading (CSharpScriptingSubsystem::RebuildFromSource). These
-    # paths only exist in a dev build tree; a packaged build leaves them undefined
-    # and the engine falls back to reload-only.
+    # Build-machine facts the editor + publisher use to build a PROJECT's game
+    # scripts at runtime (CSharpScriptingSubsystem::RebuildFromSource /
+    # EditorProjectPublisher). No project path is baked in: the editor supplies the
+    # open project's scripts/AetherGame.csproj at runtime. App-only - GameRuntime
+    # never builds scripts (it loads the deployed/baked assembly), and a packaged
+    # build leaves these undefined so a source rebuild is a no-op (reload-only).
     target_compile_definitions(App PRIVATE
         AETHER_DOTNET_EXE="${AETHER_DOTNET_EXE}"
-        AETHER_GAME_PROJECT="${_aether_game_proj}"
-        AETHER_MANAGED_ARTIFACTS="${CMAKE_BINARY_DIR}/managed"
         AETHER_MANAGED_CONFIG="$<IF:$<CONFIG:Debug>,Debug,Release>"
         AETHER_MANAGED_CONFIGDIR="$<IF:$<CONFIG:Debug>,debug,release>")
 
@@ -214,6 +213,11 @@ function(aethercore_add_runtime_payload target_name)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
             "${CMAKE_SOURCE_DIR}/resources/fonts"
             "${CMAKE_BINARY_DIR}/engine_assets/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${CMAKE_BINARY_DIR}/engine_assets/branding"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/resources/branding/aethercore-icon-white.png"
+            "${CMAKE_BINARY_DIR}/engine_assets/branding/aethercore-icon-white.png"
         # Engine .spv shaders ship inside engine.pak (under shaders/) so a
         # published game does not depend on loose .spv files next to the exe -
         # see shaders:// OverlayBackend in FileSystem::InitializeDefaultMounts.

@@ -1,9 +1,0 @@
-{
-  "profiles": {
-    "AetherCore (App.exe)": {
-      "commandName": "Executable",
-      "executablePath": "../../build-vs2022-msvc/src/app/Debug/App.exe",
-      "workingDirectory": "../../build-vs2022-msvc/src/app/Debug"
-    }
-  }
-}

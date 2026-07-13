@@ -116,10 +116,15 @@ option(AETHERCORE_ENABLE_TRACY_GPU "Enable Tracy Vulkan GPU timeline instrumenta
 option(AETHERCORE_ENABLE_TRACY_PLOTS "Enable Tracy plot/counter streams" ON)
 option(AETHERCORE_ENABLE_TRACY_MEMORY "Enable Tracy CPU and named-pool memory reporting" ON)
 
-# Tracy is always compiled with profiling support enabled so all profiler symbols
-# exist in the library. The engine controls TRACY_ENABLE per build config via
-# Defines.hpp (AE_CONFIG_DEBUG/DEV → Tracy ON, AE_CONFIG_SHIP/RETAIL → Tracy OFF).
-# The linker strips unused Tracy symbols in Ship/Retail via /OPT:REF /Gy.
+# Tracy is a developer-only profiler. The TracyClient library is compiled with
+# profiling support so its symbols exist, but Engine links it ONLY in Debug /
+# RelWithDebInfo (see src/engine/CMakeLists.txt) - the exact configs whose
+# Defines.hpp sets TRACY_ENABLE. Ship (Release) and Retail therefore never link
+# or ship Tracy: every <tracy/...> include is TRACY_ENABLE-gated, so a shipping
+# build references no Tracy symbol and needs no dead-strip. EXCLUDE_FROM_ALL
+# below keeps TracyClient out of the default ALL target; single-config Release
+# builds then skip it entirely, while multi-config generators (VS) may still
+# compile it as a build-order dependency but never link it into the game.
 CPMAddPackage(
     NAME Tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
@@ -129,6 +134,9 @@ CPMAddPackage(
         "TRACY_ENABLE ON"
         "TRACY_ON_DEMAND ON"
 )
+if(TARGET TracyClient)
+    set_target_properties(TracyClient PROPERTIES EXCLUDE_FROM_ALL ON)
+endif()
 
 # Strip TRACY_ENABLE from TracyClient's public interface - Defines.hpp manages
 # it per config, which is impossible with a PUBLIC define on a static library

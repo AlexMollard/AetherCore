@@ -68,6 +68,7 @@ namespace aether
 			return m_handle.IsValid();
 		}
 
+		[[nodiscard]] gpu::ImageView GetView() const;
 		[[nodiscard]] std::uint32_t GetBindlessSlot() const;
 
 	private:

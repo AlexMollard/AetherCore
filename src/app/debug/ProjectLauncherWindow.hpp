@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -25,6 +26,7 @@ namespace aether::app
 	{
 		bool projectLoaded = false;
 		bool hasCurrentProject = false;
+		std::uint64_t logoTextureId = 0;
 		const EditorProjectContext* currentProject = nullptr;
 		std::span<const EditorProjectContext> recentProjects;
 	};

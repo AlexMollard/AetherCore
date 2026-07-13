@@ -51,6 +51,14 @@ namespace aether::app::scripting
 		// On a build failure returns false and fills `error` with the build output.
 		bool RebuildFromSource(std::string& error);
 
+		// Set the game-scripts project the editor builds/reloads at runtime: the
+		// open project's scripts/AetherGame.csproj and a project-relative artifacts
+		// dir (<project>/Builds/Intermediate/managed). An empty csproj disables
+		// source rebuilds (RebuildFromSource becomes a no-op). The editor calls this
+		// on project open; GameRuntime never does, so it only loads the deployed
+		// assembly.
+		void SetScriptProject(std::filesystem::path scriptsProject, std::filesystem::path artifactsDir);
+
 		// ── Async source rebuild (non-blocking Play) ──────────────────────────
 		// Status of the background build kicked off by BeginRebuildFromSource.
 		enum class BuildStatus
@@ -74,6 +82,10 @@ namespace aether::app::scripting
 
 		// Drop a consumed terminal build result (back to Idle). Never blocks.
 		void ClearRebuild();
+
+		// True while an async source rebuild (BeginRebuildFromSource) is running on
+		// its worker thread; drives the editor's "compiling scripts" UI.
+		[[nodiscard]] bool IsBuilding() const;
 
 		// Concrete EntityScript type names discovered in the loaded assembly.
 		[[nodiscard]] const std::vector<std::string>& GetScriptTypeNames() const
@@ -132,6 +144,12 @@ namespace aether::app::scripting
 		std::filesystem::path m_managedDir;
 		std::string m_scriptsAssemblyPath;
 		std::vector<std::string> m_typeNames;
+
+		// Dev: the open project's game-scripts build inputs, set at runtime by the
+		// editor via SetScriptProject (empty in GameRuntime / packaged builds, so no
+		// source rebuild runs there).
+		std::filesystem::path m_scriptProject;      // <project>/scripts/AetherGame.csproj
+		std::filesystem::path m_scriptArtifactsDir; // <project>/Builds/Intermediate/managed
 
 		// Background build job (detached worker + atomic completion flags), shared
 		// with the worker so it stays alive even if we stop tracking it. Never joined,

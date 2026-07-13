@@ -1,10 +1,10 @@
 CompileFlags:
-  CompilationDatabase: build-ninja-clang
+  CompilationDatabase: build/ninja-clang
   Add:
     - "-std=c++23"
     - "-DNOMINMAX"
     - "-DWIN32_LEAN_AND_MEAN"
-    - "-Iinclude"
+    - "-Isrc/include"
     - "-Isrc"
 
 Diagnostics:

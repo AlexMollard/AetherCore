@@ -212,7 +212,7 @@ HeaderFilterRegex: '^(.*/)?(src|include|tools)/.*\.(h|hpp|hxx|hh)$'
 
 # Explicitly suppress diagnostics inside CPM/vendored headers.
 # These paths live under the build tree, e.g.
-#   D:/AetherCore/build-ninja-clang/_deps/entt-src/src/entt/...
+#   D:/AetherCore/build/ninja-clang/_deps/entt-src/src/entt/...
 ExcludeHeaderFilterRegex: '.*_deps/.*\.(h|hpp|hxx|hh|inl)$'
 
 SystemHeaders: false

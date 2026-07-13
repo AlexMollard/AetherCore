@@ -67,11 +67,11 @@ endpoint, pick the port, toggle auto-start, and watch live request stats.
 
 ```powershell
 # 1. Build the editor and the control client
-cmake --build build-vs2022-msvc --config Debug --target App aether-ctl
+cmake --build build/vs2022-msvc --config Debug --target App aether-ctl
 
 # 2. For the live-editor tools, run the editor with the control endpoint on:
 $env:AETHER_CONTROL_PORT = "8787"
-.\build-vs2022-msvc\src\app\Debug\App.exe   # (run from the build-tree root)
+.\build\vs2022-msvc\src\app\Debug\App.exe   # (run from the build-tree root)
 ```
 
 `run_gauntlet` works without step 2.
@@ -107,7 +107,7 @@ Add to `opencode.jsonc` under `"mcp"`:
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `AETHER_REPO` | two levels above this file | Repo root. |
-| `AETHER_BUILD_DIR` | first of `build-vs2022-msvc`, `build`, `build-ninja-clang` | CMake build dir. |
+| `AETHER_BUILD_DIR` | first of `build/vs2022-msvc`, `build/default`, `build/ninja-clang` | CMake build dir. |
 | `AETHER_CTL` | found under the build dir | Path to `aether-ctl(.exe)`. |
 | `AETHER_CONTROL_PORT` | `8787` | Editor control port (must match the editor's `AETHER_CONTROL_PORT`). |
 | `AETHER_PWSH` | `pwsh` | PowerShell used to run the gauntlet. |

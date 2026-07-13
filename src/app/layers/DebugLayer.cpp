@@ -371,6 +371,10 @@ namespace aether::app
 
 		m_scriptErrors.Poll(context);
 
+		// Drive the async project-script build (kicked off on project open) to
+		// completion and reload the assembly when it finishes.
+		m_projects.UpdateScriptBuild();
+
 		if (!m_projects.IsProjectLoaded())
 		{
 			return;
@@ -527,6 +531,36 @@ namespace aether::app
 					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kMuted), label);
 				}
 				ImGui::Dummy(ImVec2(textSize.x + pad.x * 2.0f, 0.0f));
+			}
+
+			// Script-build indicator: while the editor builds the open project's C#
+			// scripts on a worker thread (project open / F5), show what's happening with
+			// an indeterminate progress bar - distinct from the Play-compile pill above.
+			if (const auto* buildScripting = context.TryGet<scripting::CSharpScriptingSubsystem>();
+			    buildScripting != nullptr && buildScripting->IsBuilding() && !compiling)
+			{
+				divider();
+				tick(kAccent);
+				ImGui::PushStyleColor(ImGuiCol_Text, kAccentHi);
+				ImGui::TextUnformatted(ICON_FA_GEAR "  Compiling C# scripts");
+				ImGui::PopStyleColor();
+				ImGui::SameLine(0.0f, 10.0f);
+				// A slim indeterminate marquee drawn into the bar's own draw list so it
+				// sits flush and vertically centered (ImGui::ProgressBar carries frame
+				// padding that overflows the status row). A highlight segment sweeps
+				// across a faint track, animated off ImGui's clock.
+				const float trackW = 120.0f;
+				const float trackH = 3.0f;
+				const float segW = trackW * 0.34f;
+				const ImVec2 curPos = ImGui::GetCursorScreenPos();
+				const float trackY = curPos.y + (ImGui::GetFrameHeight() - trackH) * 0.5f;
+				const float radius = trackH * 0.5f;
+				drawList->AddRectFilled(ImVec2(curPos.x, trackY), ImVec2(curPos.x + trackW, trackY + trackH), U32(WithAlpha(kAccent, 0.20f)), radius);
+				const double sweep = ImGui::GetTime() * 0.8; // ~1.25s per pass
+				const float u = static_cast<float>(sweep - static_cast<long long>(sweep)); // 0..1 sawtooth
+				const float segX = curPos.x + u * (trackW - segW);
+				drawList->AddRectFilled(ImVec2(segX, trackY), ImVec2(segX + segW, trackY + trackH), U32(kAccentHi), radius);
+				ImGui::Dummy(ImVec2(trackW, 0.0f));
 			}
 
 			// Right (aligned): resolution / FPS / frame time as faint micro-caps with
@@ -1001,6 +1035,14 @@ namespace aether::app
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, chrome::WithAlpha(chrome::kAccent, 0.36f));
 		if (showMenuBar && ImGui::BeginMenuBar())
 		{
+			if (const std::uint64_t logoTextureId = m_projects.LogoTextureId(); logoTextureId != 0)
+			{
+				const float logoSize = ImGui::GetTextLineHeight();
+				const ImVec2 logoMin = ImGui::GetCursorScreenPos();
+				ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(logoTextureId)), logoMin, ImVec2(logoMin.x + logoSize, logoMin.y + logoSize), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), chrome::U32(chrome::kAccent));
+				ImGui::Dummy(ImVec2(logoSize + 2.0f, logoSize));
+				ImGui::SameLine(0.0f, 6.0f);
+			}
 			if (ImGui::BeginMenu("File"))
 			{
 				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Project Launcher..."))

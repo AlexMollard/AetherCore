@@ -48,7 +48,7 @@ namespace aether::app
 			return path.empty() ? std::string{} : path.lexically_normal().string();
 		}
 
-		template <std::size_t N>
+		template<std::size_t N>
 		void CopyToBuffer(std::array<char, N>& buffer, const std::filesystem::path& path)
 		{
 			std::snprintf(buffer.data(), buffer.size(), "%s", DisplayPath(path).c_str());
@@ -189,7 +189,7 @@ namespace aether::app
 			ImGui::PopStyleColor(7);
 			ImGui::PopStyleVar(3);
 		}
-	}
+	} // namespace
 
 	void ProjectLauncherWindow::Draw(ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
 	{
@@ -198,7 +198,8 @@ namespace aether::app
 		ImGui::SetNextWindowSize(viewport->WorkSize);
 		ImGui::SetNextWindowViewport(viewport->ID);
 
-		const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+		const ImGuiWindowFlags flags =
+		        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -217,21 +218,29 @@ namespace aether::app
 
 		// ── Wordmark ────────────────────────────────────────────────────────────
 		constexpr float kWordmarkSize = 42.0f;
+		constexpr float kLogoSize = 58.0f;
+		constexpr float kLogoGap = 14.0f;
+		const bool hasLogo = model.logoTextureId != 0;
+		if (hasLogo)
+		{
+			drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(model.logoTextureId)), contentMin, Add(contentMin, ImVec2(kLogoSize, kLogoSize)), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), ToU32(kAccent));
+		}
+		const ImVec2 wordmarkPos = Add(contentMin, ImVec2(hasLogo ? kLogoSize + kLogoGap : 0.0f, 0.0f));
 		const ImVec2 aetherSize = MeasureSized(kWordmarkSize, "AETHER");
-		TextSized(drawList, kWordmarkSize, contentMin, kText, "AETHER");
-		TextSized(drawList, kWordmarkSize, Add(contentMin, ImVec2(aetherSize.x, 0.0f)), kAccent, "CORE");
+		TextSized(drawList, kWordmarkSize, wordmarkPos, kText, "AETHER");
+		TextSized(drawList, kWordmarkSize, Add(wordmarkPos, ImVec2(aetherSize.x, 0.0f)), kAccent, "CORE");
 		const ImVec2 coreSize = MeasureSized(kWordmarkSize, "CORE");
 		// EDITOR tag: small outlined chip after the wordmark.
 		{
 			const ImVec2 tagTextSize = MeasureSized(12.0f, "EDITOR");
-			const ImVec2 tagMin = Add(contentMin, ImVec2(aetherSize.x + coreSize.x + 16.0f, 10.0f));
+			const ImVec2 tagMin = Add(wordmarkPos, ImVec2(aetherSize.x + coreSize.x + 16.0f, 10.0f));
 			const ImVec2 tagMax = Add(tagMin, Add(tagTextSize, ImVec2(16.0f, 10.0f)));
 			drawList->AddRect(tagMin, tagMax, ToU32(WithAlpha(kAccent, 0.5f)), 2.0f, 0, 1.0f);
 			TextSized(drawList, 12.0f, Add(tagMin, ImVec2(8.0f, 5.0f)), kAccentHi, "EDITOR");
 		}
 		// Accent underline + subtitle.
-		drawList->AddRectFilled(Add(contentMin, ImVec2(2.0f, kWordmarkSize + 10.0f)), Add(contentMin, ImVec2(58.0f, kWordmarkSize + 13.0f)), ToU32(kAccent));
-		TextSized(drawList, 14.5f, Add(contentMin, ImVec2(2.0f, kWordmarkSize + 24.0f)), kMuted, "Select a project to begin.");
+		drawList->AddRectFilled(Add(wordmarkPos, ImVec2(2.0f, kWordmarkSize + 10.0f)), Add(wordmarkPos, ImVec2(58.0f, kWordmarkSize + 13.0f)), ToU32(kAccent));
+		TextSized(drawList, 14.5f, Add(wordmarkPos, ImVec2(2.0f, kWordmarkSize + 24.0f)), kMuted, "Select a project to begin.");
 
 		if (model.projectLoaded)
 		{

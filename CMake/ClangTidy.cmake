@@ -10,7 +10,7 @@
 #   cmake -DAETHERCORE_CLANG_TIDY_FILE_FILTER=".*" --preset clangd
 
 set(AETHERCORE_CLANG_TIDY_BUILD_DIR
-    "${CMAKE_SOURCE_DIR}/build-ninja-clang"
+    "${CMAKE_SOURCE_DIR}/build/ninja-clang"
     CACHE PATH "Build dir providing compile_commands.json for clang-tidy")
 
 # Build default file filter from CMAKE_SOURCE_DIR so it works cross-platform.

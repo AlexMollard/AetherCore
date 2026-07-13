@@ -112,10 +112,10 @@ else()
     target_compile_options(Engine PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp")
 endif()
 
-# Shared pak format header lives at <repo>/include/ - included by PakBackend
+# Shared pak format header lives at <repo>/src/include/ - included by PakBackend
 # and the AssetPacker tool so the on-disk layout stays in sync automatically.
 target_include_directories(Engine PUBLIC
-    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/src/include"
     "${xxHash_SOURCE_DIR}"
 )
 

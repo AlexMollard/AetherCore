@@ -48,7 +48,7 @@ if (-not $ClangTidy) {
 $Exe = $ClangTidy.Source ?? $ClangTidy
 
 # --- Ensure compile_commands.json ----------------------------------------
-$BuildDir = "$RepoRoot\build-ninja-clang"
+$BuildDir = "$RepoRoot\build\ninja-clang"
 $CompileDb = "$BuildDir\compile_commands.json"
 if ($Refresh -or -not (Test-Path $CompileDb)) {
     $why = if ($Refresh) { "Refreshing" } else { "Generating" }

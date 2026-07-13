@@ -17,6 +17,7 @@ namespace aether::app
 		// (aethercore_add_runtime_payload in src/app/CMakeLists.txt), which stages
 		// resources/fonts and packs it.
 		constexpr std::string_view kEngineAssetSubdirs[] = {"fonts"};
+		constexpr std::string_view kEngineAssetFiles[] = {"branding/aethercore-icon-white.png"};
 
 		// Compiled engine .spv shaders, staged from AETHER_SHADER_BUILD_DIR into
 		// engine.pak under this same subdir name (so shaders:// can point an
@@ -113,6 +114,23 @@ namespace aether::app
 				std::error_code cleanupEc;
 				std::filesystem::remove_all(staging, cleanupEc);
 				return {.succeeded = false, .message = "Could not stage engine assets '" + std::string(subdir) + "': " + ec.message()};
+			}
+		}
+
+		for (const std::string_view file: kEngineAssetFiles)
+		{
+			const std::filesystem::path from = *resources / file;
+			const std::filesystem::path to = staging / file;
+			std::filesystem::create_directories(to.parent_path(), ec);
+			if (!ec)
+			{
+				std::filesystem::copy_file(from, to, std::filesystem::copy_options::overwrite_existing, ec);
+			}
+			if (ec)
+			{
+				std::error_code cleanupEc;
+				std::filesystem::remove_all(staging, cleanupEc);
+				return {.succeeded = false, .message = "Could not stage engine asset '" + std::string(file) + "': " + ec.message()};
 			}
 		}
 

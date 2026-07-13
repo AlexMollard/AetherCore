@@ -25,7 +25,7 @@
     (VULKAN_CPU_DEBUG / VULKAN_GPU_DEBUG / VULKAN_BEST_PRACTICES); this harness
     runs whatever the current build compiled and reports which tier it detected.
 .PARAMETER BuildDir
-    CMake build directory (default: build-vs2022-msvc).
+    CMake build directory (default: build/vs2022-msvc).
 .PARAMETER Config
     Multi-config build type: Debug or Release (default: Debug).
 .PARAMETER Targets
@@ -55,7 +55,7 @@
 #>
 
 param(
-    [string]$BuildDir = "build-vs2022-msvc",
+    [string]$BuildDir = "build/vs2022-msvc",
     [ValidateSet("Debug", "Release")]
     [string]$Config = "Debug",
     [string[]]$Targets = @("App", "GameRuntime", "EngineTests"),
