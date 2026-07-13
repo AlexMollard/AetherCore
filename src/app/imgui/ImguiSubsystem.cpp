@@ -115,6 +115,13 @@ namespace aether
 		io.ConfigDpiScaleFonts = true;
 		io.ConfigDpiScaleViewports = true;
 
+		// Force every floating (undocked) window - including the project launcher -
+		// into its own OS window instead of merging into the main window when it
+		// overlaps. The per-window NoAutoMerge window class alone did not promote the
+		// launcher to its own viewport here, so drive it globally. Docked panels are
+		// unaffected; only undocked windows become their own OS windows.
+		io.ConfigViewportsNoAutoMerge = true;
+
 		// Windows (including a torn-out Viewport) move only by their title bar.
 		io.ConfigWindowsMoveFromTitleBarOnly = true;
 
