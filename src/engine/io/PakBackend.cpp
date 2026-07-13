@@ -78,7 +78,7 @@ namespace aether::io
 		}
 	} // namespace
 
-	PakBackend::PakBackend(std::filesystem::path pakPath)
+	PakBackend::PakBackend(std::filesystem::path pakPath, bool enforceVersion)
 	      : m_pakPath(std::move(pakPath))
 	{
 		std::ifstream pak(m_pakPath, std::ios::binary);
@@ -179,10 +179,29 @@ namespace aether::io
 		}
 
 		const std::string manifestText(reinterpret_cast<const char*>(manifest->data()), manifest->size());
-		const std::string expectedVersion = "pipelineVersion=" + std::to_string(PAK_PIPELINE_VERSION);
-		if (manifestText.find(expectedVersion) == std::string::npos)
+
+		// Parse the declared "pipelineVersion=N" so callers can report a mismatch
+		// (not just reject the pak). Kept even when enforcing, so DeclaredPipelineVersion() is populated.
+		if (const auto pos = manifestText.find("pipelineVersion="); pos != std::string::npos)
 		{
-			throw FileSystemError("Pak pipeline version mismatch in " + m_pakPath.string() + "; expected " + expectedVersion + ". Rebuild assets with the current AssetPacker.");
+			std::size_t cursor = pos + std::string_view("pipelineVersion=").size();
+			uint32_t value = 0;
+			bool anyDigit = false;
+			while (cursor < manifestText.size() && manifestText[cursor] >= '0' && manifestText[cursor] <= '9')
+			{
+				value = value * 10u + static_cast<uint32_t>(manifestText[cursor] - '0');
+				++cursor;
+				anyDigit = true;
+			}
+			if (anyDigit)
+			{
+				m_declaredPipelineVersion = value;
+			}
+		}
+
+		if (enforceVersion && m_declaredPipelineVersion != PAK_PIPELINE_VERSION)
+		{
+			throw FileSystemError("Pak pipeline version mismatch in " + m_pakPath.string() + "; expected pipelineVersion=" + std::to_string(PAK_PIPELINE_VERSION) + ". Rebuild assets with the current AssetPacker.");
 		}
 	}
 

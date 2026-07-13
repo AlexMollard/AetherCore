@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "AssetPipeline.hpp"
+#include <PakFormat.hpp>
 
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectContext.hpp"
@@ -69,6 +70,53 @@ namespace aether::app
 		bool IsAftermathRuntimeFile(const std::filesystem::path& path)
 		{
 			return LowerAscii(path.stem().generic_string()).starts_with("gfsdk_aftermath");
+		}
+
+		// Debug CRT DLLs (msvcp140d.dll, msvcp140d_atomic_wait.dll, vcruntime140d.dll,
+		// vcruntime140_1d.dll, ucrtbased.dll, ...) are NOT redistributable - Microsoft
+		// licenses only the release CRT - and appear only in a Debug build. Detecting
+		// one means the whole package is Debug: unshippable (it also enables the Vulkan
+		// validation layer and runs unoptimised). Release / RelWithDebInfo link the
+		// redistributable release CRT (msvcp140.dll, no trailing 'd') and never emit these.
+		bool IsDebugCrtDll(const std::filesystem::path& path)
+		{
+			const std::string name = LowerAscii(path.filename().generic_string());
+			if (name == "ucrtbased.dll")
+			{
+				return true;
+			}
+			bool isCrt = false;
+			for (const char* prefix: {"msvcp", "vcruntime", "concrt", "vccorlib"})
+			{
+				if (name.starts_with(prefix))
+				{
+					isCrt = true;
+					break;
+				}
+			}
+			if (!isCrt || !name.ends_with(".dll"))
+			{
+				return false;
+			}
+			// Debug variants append 'd' to the numeric version segment (msvcp140d,
+			// vcruntime140_1d, msvcp140d_atomic_wait): a 'd' right after a digit, then '.'/'_'.
+			for (std::size_t i = 1; i + 1 < name.size(); ++i)
+			{
+				if (name[i] == 'd' && (std::isdigit(static_cast<unsigned char>(name[i - 1])) != 0) && (name[i + 1] == '.' || name[i + 1] == '_'))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// Packer sidecars (engine.pak.log / engine.pak.manifest / project.pak.*): the
+		// human-readable pack log + incremental-repack cache. Build intermediates with
+		// no runtime purpose that leak dev paths - never ship them.
+		bool IsPakSidecarFile(const std::filesystem::path& path)
+		{
+			const std::string name = LowerAscii(path.filename().generic_string());
+			return name.ends_with(".pak.log") || name.ends_with(".pak.manifest");
 		}
 
 		bool PathStartsWith(std::filesystem::path path, std::filesystem::path parent)
@@ -244,7 +292,7 @@ namespace aether::app
 					continue;
 				}
 				const std::string ext = LowerAscii(entry.path().extension().generic_string());
-				if (ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk")
+				if (ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk" || IsPakSidecarFile(entry.path()))
 				{
 					std::filesystem::remove(entry.path(), ec);
 					if (ec)
@@ -316,7 +364,16 @@ namespace aether::app
 			}
 
 			const std::string shippedPath = publishedSettingsPath.string();
-			const aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, projectFile);
+			aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, projectFile);
+
+			// A shipped game runtime has no editor and no Play button, so it must boot
+			// straight into Play mode: Application maps app.autoplay -> PlayState, and
+			// only Play mode ticks the C# scripts + animation. The editor default is
+			// false (the editor opens in Edit mode and the user presses Play), so force
+			// it true for the published build. Without this the game loads the startup
+			// scene but sits frozen in Edit mode - nothing updates.
+			loaded.base.app.autoplay = true;
+
 			const std::string merged = aether::EngineSettingsIO::Serialize(loaded.base);
 			if (auto writeResult = io::file_util::WriteText(publishedSettingsPath, merged); !writeResult)
 			{
@@ -433,6 +490,17 @@ namespace aether::app
 				if (IsAftermathRuntimeFile(entry.path()))
 				{
 					error = "Published build contains NVIDIA Aftermath (dev-only, editor-gated): " + DisplayPath(entry.path());
+					return false;
+				}
+				if (IsDebugCrtDll(entry.path()))
+				{
+					error = "Published build is a Debug build - it ships the non-redistributable debug CRT (" + DisplayPath(entry.path())
+					        + "), enables the Vulkan validation layer, and runs unoptimised. Build the editor/runtime in Release or RelWithDebInfo and re-publish for a shippable game.";
+					return false;
+				}
+				if (IsPakSidecarFile(entry.path()))
+				{
+					error = "Published build contains a packer sidecar (build intermediate): " + DisplayPath(entry.path());
 					return false;
 				}
 				const std::filesystem::path rel = std::filesystem::relative(entry.path(), packageDir, ec);
@@ -779,6 +847,33 @@ namespace aether::app
 			if (!CopyDirectoryRecursive(config.packageTemplateDir, publishDir, error))
 			{
 				return {.succeeded = false, .message = "Could not copy package template: " + error, .outputPath = publishDir};
+			}
+
+			// Guard against shipping a stale runtime binary. PackageGame stages
+			// AetherGame.exe and engine.pak together from one build, so the template
+			// pak's pipeline version is a faithful proxy for the version the runtime
+			// EXE expects. BakeEnginePak below rewrites engine.pak at THIS editor's
+			// PAK_PIPELINE_VERSION; if the packaged runtime predates it, the fresh pak
+			// and the stale exe disagree and the published game rejects its own pak at
+			// launch. Fail loudly with an actionable message instead of shipping it.
+			const std::filesystem::path templatePak = config.packageTemplateDir / "data" / "engine.pak";
+			std::optional<std::uint32_t> runtimePakVersion;
+			try
+			{
+				const io::PakBackend peek(templatePak, /*enforceVersion=*/false);
+				runtimePakVersion = peek.DeclaredPipelineVersion();
+			}
+			catch (const std::exception& ex)
+			{
+				return {.succeeded = false, .message = "Could not read the runtime package's engine.pak (" + DisplayPath(templatePak) + "): " + ex.what(), .outputPath = publishDir};
+			}
+			if (runtimePakVersion != PAK_PIPELINE_VERSION)
+			{
+				const std::string have = runtimePakVersion ? std::to_string(*runtimePakVersion) : std::string("unknown");
+				return {.succeeded = false,
+				        .message = "Runtime package is out of date: its " + std::string(config.runtimeExecutableName) + " targets pak pipeline v" + have + " but this editor produces v" + std::to_string(PAK_PIPELINE_VERSION)
+				                 + ". Rebuild the runtime package (build target PackageGame: cmake --build <builddir> --target PackageGame), then publish again.",
+				        .outputPath = publishDir};
 			}
 		}
 		else

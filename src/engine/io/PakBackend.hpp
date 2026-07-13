@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -24,7 +25,17 @@ namespace aether::io
 	public:
 		// Parses the header and builds an in-memory index on construction.
 		// Throws FileSystemError if the file is missing or has an invalid header.
-		explicit PakBackend(std::filesystem::path pakPath);
+		// With enforceVersion=true (default) it also throws when the pak's declared
+		// pipeline version differs from PAK_PIPELINE_VERSION. Pass false to load a
+		// pak whose version may differ and inspect DeclaredPipelineVersion() instead
+		// (e.g. tooling that must report the mismatch rather than reject the pak).
+		explicit PakBackend(std::filesystem::path pakPath, bool enforceVersion = true);
+
+		// The pipeline version the pak's manifest declares (nullopt if unparsable).
+		[[nodiscard]] std::optional<uint32_t> DeclaredPipelineVersion() const
+		{
+			return m_declaredPipelineVersion;
+		}
 
 		[[nodiscard]] bool Exists(std::string_view relativePath) const override;
 		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view relativePath) const override;
@@ -56,5 +67,6 @@ namespace aether::io
 		std::filesystem::path m_pakPath;
 		uint64_t m_assetDataBase{0};
 		Index m_index;
+		std::optional<uint32_t> m_declaredPipelineVersion;
 	};
 } // namespace aether::io
