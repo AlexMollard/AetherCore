@@ -11,7 +11,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/SettingsService.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -52,7 +52,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void SettingsPanel::OnImGui(LayerContext& context)
+	void SettingsPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -93,4 +93,4 @@ namespace aether::app
 
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

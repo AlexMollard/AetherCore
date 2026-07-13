@@ -17,7 +17,7 @@
 #include "utils/LogRingBuffer.hpp"
 #include "utils/Logger.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -111,7 +111,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void ConsolePanel::OnImGui(LayerContext& /*context*/)
+	void ConsolePanel::OnImGui(app::LayerContext& /*context*/)
 	{
 		ImGui::Begin(GetName().data(), VisiblePtr());
 
@@ -392,4 +392,4 @@ namespace aether::app
 
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

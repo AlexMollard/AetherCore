@@ -18,7 +18,7 @@ namespace aether::app
 		// The palette IS the editor palette ("Night Amber", engine/Color.hpp). The
 		// launcher defined this language; the shared primitives now live in
 		// debug/EditorChrome.hpp so every panel adopting the look moves with it.
-		using namespace chrome;
+		using namespace aether::editor::chrome;
 
 		// Launcher-specific aliases on top of the shared tokens (kError now comes
 		// from chrome:: too - it is themeable).

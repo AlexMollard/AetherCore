@@ -4,7 +4,7 @@
 
 #include "layers/AppLayer.hpp"
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	class ControlServer;
 
@@ -13,17 +13,17 @@ namespace aether::app::editor
 	// drains its request queue every frame on the main thread, and stops it on
 	// detach. Editor-only - lives under src/app/editor, which GameRuntime's source
 	// list excludes, so a shipped game never carries the control endpoint.
-	class ControlServerLayer : public AppLayer
+	class ControlServerLayer : public app::AppLayer
 	{
 	public:
 		ControlServerLayer();
 		~ControlServerLayer() override;
 
-		void OnAttach(LayerContext& context) override;
-		void OnUpdate(LayerContext& context) override;
-		void OnDetach(LayerContext& context) override;
+		void OnAttach(app::LayerContext& context) override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnDetach(app::LayerContext& context) override;
 
 	private:
 		std::unique_ptr<ControlServer> m_server;
 	};
-} // namespace aether::app::editor
+} // namespace aether::editor

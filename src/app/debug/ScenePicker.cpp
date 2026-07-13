@@ -8,7 +8,7 @@
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	PickHit PickEntity(World& world, PhysicsSystem* physics, const Ray& ray, float maxDist)
 	{
@@ -78,4 +78,4 @@ namespace aether::app
 
 		return best.entity.IsValid() ? best : PickHit{};
 	}
-} // namespace aether::app
+} // namespace aether::editor

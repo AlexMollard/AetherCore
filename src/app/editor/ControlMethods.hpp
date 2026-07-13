@@ -12,7 +12,7 @@ namespace aether
 	class ServiceContainer;
 }
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	// Everything a control-endpoint method handler needs. Handlers touch the ECS /
 	// render graph, so they only ever run on the main thread (see
@@ -46,4 +46,4 @@ namespace aether::app::editor
 
 	// Builds the full method table. Add new capabilities here.
 	[[nodiscard]] std::vector<ControlMethod> BuildControlMethods();
-} // namespace aether::app::editor
+} // namespace aether::editor

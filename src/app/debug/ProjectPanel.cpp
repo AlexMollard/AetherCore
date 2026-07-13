@@ -27,7 +27,7 @@
 #include "utils/TextIni.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -36,12 +36,12 @@ namespace aether::app
 			return path.empty() ? std::string{} : path.lexically_normal().string();
 		}
 
-		std::filesystem::path SettingsPath(const EditorProjectContext& project)
+		std::filesystem::path SettingsPath(const app::EditorProjectContext& project)
 		{
 			return project.projectFile;
 		}
 
-		std::filesystem::path PublishSettingsPath(const EditorProjectContext& project)
+		std::filesystem::path PublishSettingsPath(const app::EditorProjectContext& project)
 		{
 			return project.projectFile;
 		}
@@ -109,7 +109,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void ProjectPanel::Refresh(const EditorProjectContext& project)
+	void ProjectPanel::Refresh(const app::EditorProjectContext& project)
 	{
 		m_lastRoot = project.root;
 		m_scenes.clear();
@@ -152,7 +152,7 @@ namespace aether::app
 		std::ranges::sort(m_scenes, {}, &SceneEntry::name);
 	}
 
-	void ProjectPanel::EnsureStandardFolders(const EditorProjectContext& project)
+	void ProjectPanel::EnsureStandardFolders(const app::EditorProjectContext& project)
 	{
 		for (const std::filesystem::path& path: {project.assetsDir,
 		             project.assetsDir / "models",
@@ -174,7 +174,7 @@ namespace aether::app
 		Refresh(project);
 	}
 
-	void ProjectPanel::LoadProjectSettings(const EditorProjectContext& project)
+	void ProjectPanel::LoadProjectSettings(const app::EditorProjectContext& project)
 	{
 		m_startupScene.clear();
 		m_dirtySettings = false;
@@ -198,7 +198,7 @@ namespace aether::app
 		m_startupScene = config.GetString("app.startupscene");
 	}
 
-	void ProjectPanel::SaveProjectSettings(const EditorProjectContext& project)
+	void ProjectPanel::SaveProjectSettings(const app::EditorProjectContext& project)
 	{
 		TomlConfig config;
 		{
@@ -231,7 +231,7 @@ namespace aether::app
 		m_status = "Project settings saved.";
 	}
 
-	void ProjectPanel::LoadPublishSettings(const EditorProjectContext& project)
+	void ProjectPanel::LoadPublishSettings(const app::EditorProjectContext& project)
 	{
 		auto text = io::file_util::ReadText(PublishSettingsPath(project));
 		if (!text)
@@ -262,7 +262,7 @@ namespace aether::app
 		m_publishOpenAfter = config.GetBool("publish.openafter", m_publishOpenAfter);
 	}
 
-	void ProjectPanel::SavePublishSettings(const EditorProjectContext& project)
+	void ProjectPanel::SavePublishSettings(const app::EditorProjectContext& project)
 	{
 		TomlConfig config;
 		{
@@ -305,7 +305,7 @@ namespace aether::app
 		m_publishSucceeded = true;
 	}
 
-	void ProjectPanel::ResetPublishSettings(const EditorProjectContext& project)
+	void ProjectPanel::ResetPublishSettings(const app::EditorProjectContext& project)
 	{
 		const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
 		CopyToBuffer(m_publishProductName, defaults.productName);
@@ -373,7 +373,7 @@ namespace aether::app
 		ImGui::EndTable();
 	}
 
-	void ProjectPanel::DrawPublishDialog(LayerContext& context, const EditorProjectContext& project)
+	void ProjectPanel::DrawPublishDialog(app::LayerContext& context, const app::EditorProjectContext& project)
 	{
 		ImGui::SetNextWindowSize(ImVec2(620.0f, 0.0f), ImGuiCond_Appearing);
 		if (!ImGui::BeginPopupModal("Publish Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
@@ -474,13 +474,13 @@ namespace aether::app
 		ImGui::EndPopup();
 	}
 
-	void ProjectPanel::OnImGui(LayerContext& context)
+	void ProjectPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
 		ImGui::Begin("Project", VisiblePtr());
 
-		const auto* project = context.TryGet<EditorProjectContext>();
+		const auto* project = context.TryGet<app::EditorProjectContext>();
 		if (project == nullptr || !project->IsLoaded())
 		{
 			chrome::PanelHeader("PROJECT");
@@ -677,4 +677,4 @@ namespace aether::app
 
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

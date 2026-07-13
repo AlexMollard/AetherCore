@@ -10,14 +10,14 @@
 #include "layers/AppLayer.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
 		ImVec4 ToImVec4(const glm::vec4& c) { return {c.r, c.g, c.b, c.a}; }
 	} // namespace
 
-	void ControlServerPanel::OnUpdate(LayerContext& context)
+	void ControlServerPanel::OnUpdate(app::LayerContext& context)
 	{
 		// Deferred one-shot auto-start: runs on the first frame (after settings
 		// are loaded and all layers - including the one that registers the server
@@ -38,7 +38,7 @@ namespace aether::app
 		}
 	}
 
-	void ControlServerPanel::OnImGui(LayerContext& context)
+	void ControlServerPanel::OnImGui(app::LayerContext& context)
 	{
 		if (ImGui::Begin("Control Server", VisiblePtr()))
 		{
@@ -113,16 +113,16 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void ControlServerPanel::LoadSettings(TomlConfig& config, LayerContext& /*context*/)
+	void ControlServerPanel::LoadSettings(TomlConfig& config, app::LayerContext& /*context*/)
 	{
 		m_port = static_cast<int>(config.GetFloat("controlserver.port", static_cast<float>(m_port)));
 		m_port = std::clamp(m_port, 1, 65535);
 		m_autoStart = config.GetBool("controlserver.autostart", m_autoStart);
 	}
 
-	void ControlServerPanel::SaveSettings(TomlConfig& config, LayerContext& /*context*/) const
+	void ControlServerPanel::SaveSettings(TomlConfig& config, app::LayerContext& /*context*/) const
 	{
 		config.Set("controlserver.port", static_cast<float>(m_port));
 		config.Set("controlserver.autostart", m_autoStart);
 	}
-} // namespace aether::app
+} // namespace aether::editor

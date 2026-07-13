@@ -4,7 +4,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class DayNightPanel final : public DebugPanel
 	{
@@ -14,11 +14,11 @@ namespace aether::app
 			return "Day / Night";
 		}
 
-		void OnImGui(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnImGui(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
 		bool m_manualMode = false;
 	};
-} // namespace aether::app
+} // namespace aether::editor

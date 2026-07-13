@@ -48,7 +48,7 @@
 #include "ui/UiComponents.hpp"
 #include "ui/UiEntities.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -81,7 +81,7 @@ namespace aether::app
 			}
 		}
 
-		bool AssignMaterialPreset(LayerContext& context, World& world, Entity entity, std::string_view path)
+		bool AssignMaterialPreset(app::LayerContext& context, World& world, Entity entity, std::string_view path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
 			if (assets == nullptr)
@@ -103,7 +103,7 @@ namespace aether::app
 			return true;
 		}
 
-		bool AssignTextureToEntity(LayerContext& context, World& world, Entity entity, std::string_view path)
+		bool AssignTextureToEntity(app::LayerContext& context, World& world, Entity entity, std::string_view path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
 			if (assets == nullptr)
@@ -119,11 +119,11 @@ namespace aether::app
 			return true;
 		}
 
-		Entity InstantiatePrefabAsset(LayerContext& context, World& world, const std::string& name, Entity parent = {})
+		Entity InstantiatePrefabAsset(app::LayerContext& context, World& world, const std::string& name, Entity parent = {})
 		{
-			if (const auto prefab = scene::ReadPrefabFile(name))
+			if (const auto prefab = app::scene::ReadPrefabFile(name))
 			{
-				const Entity root = scene::InstantiatePrefab(*prefab, world, scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
+				const Entity root = app::scene::InstantiatePrefab(*prefab, world, app::scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
 				if (root.IsValid() && parent.IsValid())
 				{
 					ecs::SetParent(world, root, parent);
@@ -133,10 +133,10 @@ namespace aether::app
 			return {};
 		}
 
-		bool AssignModelToEntity(LayerContext& context, World& world, Entity entity, std::string_view path)
+		bool AssignModelToEntity(app::LayerContext& context, World& world, Entity entity, std::string_view path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
-			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			auto* sceneCtx = context.TryGet<app::scripting::SceneContext>();
 			if (assets == nullptr || sceneCtx == nullptr)
 			{
 				return false;
@@ -144,7 +144,7 @@ namespace aether::app
 			// Bake the .mesh the loader needs (no-op if already baked) before
 			// assigning - project:// is the raw project folder in the editor, which
 			// holds only the .gltf.
-			if (const auto* project = context.TryGet<EditorProjectContext>())
+			if (const auto* project = context.TryGet<app::EditorProjectContext>())
 			{
 				std::string bakeError;
 				if (!editor::EnsureModelBaked(std::string(path), *project, bakeError))
@@ -153,18 +153,18 @@ namespace aether::app
 					return false;
 				}
 			}
-			const bool ok = scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, std::string(path));
+			const bool ok = app::scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, std::string(path));
 			if (ok)
 			{
 				if (auto* db = context.TryGet<AssetDatabase>())
 				{
-					scene::RegisterModelAssets(*db, *assets, *sceneCtx, std::string(path));
+					app::scene::RegisterModelAssets(*db, *assets, *sceneCtx, std::string(path));
 				}
 			}
 			return ok;
 		}
 
-		bool ApplyFilePayloadToEntity(LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
+		bool ApplyFilePayloadToEntity(app::LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
 		{
 			switch (payload.kind)
 			{
@@ -280,7 +280,7 @@ namespace aether::app
 
 		// Origin-spawned primitive for the "+" menu; mirrors das create_mesh/add_mesh
 		// defaults (neutral two-sided material) via the same AssignMaterial path.
-		void CreatePrimitive(LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name, const char* kindName)
+		void CreatePrimitive(app::LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name, const char* kindName)
 		{
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
 			auto* assets = context.TryGet<AssetManager>();
@@ -441,7 +441,7 @@ namespace aether::app
 		}
 	}
 
-	void HierarchyPanel::HandleRowDragDrop(LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX)
+	void HierarchyPanel::HandleRowDragDrop(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX)
 	{
 		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
 		{
@@ -934,7 +934,7 @@ namespace aether::app
 
 	// One row of the outliner: flat Selectable row with depth-based indent,
 	// expand/collapse arrow, badge, name and muted id drawn inline.
-	void HierarchyPanel::DrawNode(LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle)
+	void HierarchyPanel::DrawNode(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle)
 	{
 		const auto* h = world.TryGet<HierarchyComponent>(e);
 		const bool hasKids = h && !h->children.empty();
@@ -1058,7 +1058,7 @@ namespace aether::app
 		SetVisible(true);
 	}
 
-	void HierarchyPanel::OnImGui(LayerContext& context)
+	void HierarchyPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 		World& world = context.Get<World>();
@@ -1254,13 +1254,13 @@ namespace aether::app
 				const bool entered = ImGui::InputTextWithHint("##sceneName", "Scene name...", m_sceneNameBuf, sizeof(m_sceneNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
 				ImGui::SameLine();
 				const bool save = ImGui::Button(ICON_FA_FLOPPY_DISK " Save") || entered;
-				ImGui::TextDisabled("-> %s", scene::ScenesDirectory().c_str());
+				ImGui::TextDisabled("-> %s", app::scene::ScenesDirectory().c_str());
 				if (save && m_sceneNameBuf[0] != '\0')
 				{
 					if (auto* assets = context.TryGet<AssetManager>())
 					{
-						const auto captured = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
-						scene::SaveSceneFile(m_sceneNameBuf, captured);
+						const auto captured = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+						app::scene::SaveSceneFile(m_sceneNameBuf, captured);
 						m_sceneListDirty = true;
 						if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
 						{
@@ -1275,12 +1275,12 @@ namespace aether::app
 			{
 				if (m_sceneListDirty)
 				{
-					m_sceneList = scene::ListSceneFiles();
+					m_sceneList = app::scene::ListSceneFiles();
 					m_sceneListDirty = false;
 				}
 				if (m_sceneList.empty())
 				{
-					ImGui::TextDisabled("No scenes in %s", scene::ScenesDirectory().c_str());
+					ImGui::TextDisabled("No scenes in %s", app::scene::ScenesDirectory().c_str());
 				}
 				auto* settingsService = context.TryGet<aether::SettingsService>();
 
@@ -1308,7 +1308,7 @@ namespace aether::app
 					// not auto-close, so do it here.
 					if (ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowOverlap, ImVec2(nameColWidth, 0.0f)))
 					{
-						if (scene::LoadSceneFile(name, world, scene::MakeApplySceneDeps(context.services)))
+						if (app::scene::LoadSceneFile(name, world, app::scene::MakeApplySceneDeps(context.services)))
 						{
 							selection.Clear();
 							if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
@@ -1368,12 +1368,12 @@ namespace aether::app
 					const bool entered = ImGui::InputTextWithHint("##prefabName", "Prefab name...", m_prefabNameBuf, sizeof(m_prefabNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
 					ImGui::SameLine();
 					const bool save = ImGui::Button(ICON_FA_FLOPPY_DISK " Save") || entered;
-					ImGui::TextDisabled("-> %s", scene::PrefabsDirectory().c_str());
+					ImGui::TextDisabled("-> %s", app::scene::PrefabsDirectory().c_str());
 					if (save && m_prefabNameBuf[0] != '\0')
 					{
 						if (auto* assets = context.TryGet<AssetManager>())
 						{
-							scene::SavePrefabFile(m_prefabNameBuf, scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
+							app::scene::SavePrefabFile(m_prefabNameBuf, app::scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
 						}
 						ImGui::CloseCurrentPopup();
 					}
@@ -1613,7 +1613,7 @@ namespace aether::app
 				const std::vector<Entity> roots = CollectSelectionRoots(world, selection);
 				if (!roots.empty())
 				{
-					ImGui::SetClipboardText(scene::WriteToml(scene::CaptureSubtrees(world, roots, clipAssets->GetMaterialRegistry(), clipAssets->GetTextureRegistry())).c_str());
+					ImGui::SetClipboardText(app::scene::WriteToml(app::scene::CaptureSubtrees(world, roots, clipAssets->GetMaterialRegistry(), clipAssets->GetTextureRegistry())).c_str());
 					if (cutKey)
 					{
 						if (undo != nullptr)
@@ -1635,13 +1635,13 @@ namespace aether::app
 			{
 				if (const char* clip = ImGui::GetClipboardText(); clip != nullptr && clip[0] != '\0')
 				{
-					if (const auto parsed = scene::ParseToml(clip); parsed.has_value() && !parsed->entities.empty())
+					if (const auto parsed = app::scene::ParseToml(clip); parsed.has_value() && !parsed->entities.empty())
 					{
 						if (undo != nullptr)
 						{
 							undo->Push(world, context.services);
 						}
-						const auto created = scene::ApplyScene(*parsed, world, scene::MakeApplySceneDeps(context.services));
+						const auto created = app::scene::ApplyScene(*parsed, world, app::scene::MakeApplySceneDeps(context.services));
 						bool first = true;
 						for (std::size_t i = 0; i < parsed->entities.size() && i < created.size(); ++i)
 						{
@@ -1687,14 +1687,14 @@ namespace aether::app
 					bool first = true;
 					for (const Entity root: roots)
 					{
-						const auto prefab = scene::CapturePrefab(world, root, dupAssets->GetMaterialRegistry(), dupAssets->GetTextureRegistry());
+						const auto prefab = app::scene::CapturePrefab(world, root, dupAssets->GetMaterialRegistry(), dupAssets->GetTextureRegistry());
 						glm::mat4 placed(1.0f);
 						if (const auto* tc = world.TryGet<TransformComponent>(root))
 						{
 							placed = tc->localToWorld;
 						}
 						placed[3].x += 1.0f;
-						const Entity copy = scene::InstantiatePrefab(prefab, world, scene::MakeApplySceneDeps(context.services), placed);
+						const Entity copy = app::scene::InstantiatePrefab(prefab, world, app::scene::MakeApplySceneDeps(context.services), placed);
 						if (copy.IsValid())
 						{
 							if (first)
@@ -2118,7 +2118,7 @@ namespace aether::app
 
 	// --- Settings persistence ---
 
-	void HierarchyPanel::LoadSettings(TomlConfig& config, LayerContext& context)
+	void HierarchyPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		(void) context;
 		m_filterMesh = config.GetBool("debug.hierarchy.filterMesh", m_filterMesh);
@@ -2143,7 +2143,7 @@ namespace aether::app
 		m_expandedPathsLoaded = false; // will be synced on first OnImGui with a valid world
 	}
 
-	void HierarchyPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
+	void HierarchyPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		(void) context;
 		config.Set("debug.hierarchy.filterMesh", m_filterMesh);
@@ -2151,4 +2151,4 @@ namespace aether::app
 		config.Set("debug.hierarchy.filterPhysics", m_filterPhysics);
 		config.Set("debug.hierarchy.filterEffect", m_filterEffect);
 	}
-} // namespace aether::app
+} // namespace aether::editor

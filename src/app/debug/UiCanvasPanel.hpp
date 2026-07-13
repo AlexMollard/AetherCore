@@ -11,7 +11,7 @@
 #include "scene/Entity.hpp"
 #include "ui/UiComponents.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	enum class UiRectResizeHandle : std::uint8_t
 	{
@@ -49,7 +49,7 @@ namespace aether::app
 			return "UI Canvas";
 		}
 
-		void OnImGui(LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 
 	private:
 		enum class DragKind : std::uint8_t
@@ -85,4 +85,4 @@ namespace aether::app
 		ImVec2 m_marqueeEnd{0.f, 0.f};
 		std::vector<DragOrigin> m_multiDragOrigins;
 	};
-} // namespace aether::app
+} // namespace aether::editor

@@ -13,7 +13,7 @@
 #include "systems/DayNightSystem.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -32,11 +32,11 @@ namespace aether::app
 		}
 	} // namespace
 
-	void DayNightPanel::OnImGui(LayerContext& context)
+	void DayNightPanel::OnImGui(app::LayerContext& context)
 	{
 		ImGui::Begin("Day / Night", VisiblePtr());
 		chrome::PanelHeader("DAY / NIGHT CYCLE");
-		if (auto dayNight = context.TryGet<DayNightSystem>())
+		if (auto dayNight = context.TryGet<app::DayNightSystem>())
 		{
 			bool enabled = dayNight->IsEnabled();
 			if (ImGui::Checkbox("Cycle enabled", &enabled))
@@ -93,10 +93,10 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void DayNightPanel::LoadSettings(TomlConfig& config, LayerContext& context)
+	void DayNightPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		m_manualMode = config.GetBool("debug.daynightmanual", m_manualMode);
-		if (auto dayNight = context.TryGet<DayNightSystem>())
+		if (auto dayNight = context.TryGet<app::DayNightSystem>())
 		{
 			dayNight->SetEnabled(!m_manualMode);
 			dayNight->SetTimeOfDay(config.GetFloat("debug.daynighttime", dayNight->GetTimeOfDay()));
@@ -104,10 +104,10 @@ namespace aether::app
 		}
 	}
 
-	void DayNightPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
+	void DayNightPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		config.Set("debug.daynightmanual", m_manualMode);
-		if (auto dayNight = context.TryGet<DayNightSystem>())
+		if (auto dayNight = context.TryGet<app::DayNightSystem>())
 		{
 			// Time of day auto-advances every frame while the cycle runs. SaveSettings
 			// is called each frame (SaveIfDirty), so persisting the live value would
@@ -120,4 +120,4 @@ namespace aether::app
 			config.Set("debug.daynightspeed", dayNight->GetTimeSpeed());
 		}
 	}
-} // namespace aether::app
+} // namespace aether::editor

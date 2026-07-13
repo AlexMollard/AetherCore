@@ -38,7 +38,7 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "utils/Profiler.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -395,19 +395,19 @@ namespace aether::app
 		}
 	} // namespace
 
-	void FileExplorerPanel::OnAttach(LayerContext& context)
+	void FileExplorerPanel::OnAttach(app::LayerContext& context)
 	{
 		RefreshRoot(context);
 	}
 
-	void FileExplorerPanel::OnDetach(LayerContext& context)
+	void FileExplorerPanel::OnDetach(app::LayerContext& context)
 	{
 		ReleasePreview(context);
 	}
 
-	void FileExplorerPanel::RefreshRoot(LayerContext& context)
+	void FileExplorerPanel::RefreshRoot(app::LayerContext& context)
 	{
-		const auto* project = context.TryGet<EditorProjectContext>();
+		const auto* project = context.TryGet<app::EditorProjectContext>();
 		if (project == nullptr || !project->IsLoaded())
 		{
 			m_root.clear();
@@ -628,11 +628,11 @@ namespace aether::app
 
 	// ── Drawing ────────────────────────────────────────────────────────────────
 
-	void FileExplorerPanel::OnImGui(LayerContext& context)
+	void FileExplorerPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
-		if (const auto* project = context.TryGet<EditorProjectContext>(); project == nullptr || !project->IsLoaded() || project->root != m_root)
+		if (const auto* project = context.TryGet<app::EditorProjectContext>(); project == nullptr || !project->IsLoaded() || project->root != m_root)
 		{
 			RefreshRoot(context);
 		}
@@ -730,7 +730,7 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void FileExplorerPanel::DrawToolbar(LayerContext& context)
+	void FileExplorerPanel::DrawToolbar(app::LayerContext& context)
 	{
 		(void) context;
 		if (m_openNewPopup)
@@ -824,7 +824,7 @@ namespace aether::app
 		ImGui::InputTextWithHint("##feSearch", "Search files...", m_search, sizeof(m_search));
 	}
 
-	void FileExplorerPanel::DrawDirectoryNode(LayerContext& context, Entry& entry, const int depth)
+	void FileExplorerPanel::DrawDirectoryNode(app::LayerContext& context, Entry& entry, const int depth)
 	{
 		(void) depth;
 		ImGui::PushID(entry.path.generic_string().c_str());
@@ -911,7 +911,7 @@ namespace aether::app
 		ImGui::PopID();
 	}
 
-	void FileExplorerPanel::DrawFileRow(LayerContext& context, const Entry& entry)
+	void FileExplorerPanel::DrawFileRow(app::LayerContext& context, const Entry& entry)
 	{
 		ImGui::PushID(entry.path.generic_string().c_str());
 
@@ -1009,7 +1009,7 @@ namespace aether::app
 		ImGui::PopID();
 	}
 
-	void FileExplorerPanel::DrawSearchResults(LayerContext& context, const Entry& entry)
+	void FileExplorerPanel::DrawSearchResults(app::LayerContext& context, const Entry& entry)
 	{
 		std::string needle = TrimCopy(m_search);
 		std::transform(needle.begin(), needle.end(), needle.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -1051,7 +1051,7 @@ namespace aether::app
 		}
 	}
 
-	bool FileExplorerPanel::DrawRowContextMenu(LayerContext& context, const Entry& entry)
+	bool FileExplorerPanel::DrawRowContextMenu(app::LayerContext& context, const Entry& entry)
 	{
 		(void) context;
 		bool mutated = false;
@@ -1112,7 +1112,7 @@ namespace aether::app
 		return mutated;
 	}
 
-	void FileExplorerPanel::DrawPendingPopups(LayerContext& context)
+	void FileExplorerPanel::DrawPendingPopups(app::LayerContext& context)
 	{
 		(void) context;
 		if (m_openDeletePopup)
@@ -1148,7 +1148,7 @@ namespace aether::app
 	}
 	// ── Preview card ───────────────────────────────────────────────────────────
 
-	void FileExplorerPanel::ReleasePreview(LayerContext& context)
+	void FileExplorerPanel::ReleasePreview(app::LayerContext& context)
 	{
 		if (m_previewImGuiId != 0)
 		{
@@ -1184,7 +1184,7 @@ namespace aether::app
 		m_previewLoadedFor = "<none>";
 	}
 
-	void FileExplorerPanel::UpdatePreview(LayerContext& context)
+	void FileExplorerPanel::UpdatePreview(app::LayerContext& context)
 	{
 		if (m_previewLoadedFor == m_selectedPath)
 		{
@@ -1250,7 +1250,7 @@ namespace aether::app
 				return;
 			}
 			const std::string modelPath = m_selectedPayloadPath.empty() ? m_selectedPath : m_selectedPayloadPath;
-			if (const auto* project = context.TryGet<EditorProjectContext>(); project != nullptr && project->IsLoaded())
+			if (const auto* project = context.TryGet<app::EditorProjectContext>(); project != nullptr && project->IsLoaded())
 			{
 				std::string bakeError;
 				(void) editor::EnsureModelBaked(modelPath, *project, bakeError);
@@ -1285,7 +1285,7 @@ namespace aether::app
 		}
 	}
 
-	void FileExplorerPanel::DrawPreviewCard(LayerContext& context)
+	void FileExplorerPanel::DrawPreviewCard(app::LayerContext& context)
 	{
 		UpdatePreview(context);
 
@@ -1355,4 +1355,4 @@ namespace aether::app
 		ImGui::PopStyleVar();
 		ImGui::PopStyleColor();
 	}
-} // namespace aether::app
+} // namespace aether::editor

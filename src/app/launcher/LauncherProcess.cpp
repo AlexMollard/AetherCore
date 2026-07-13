@@ -33,12 +33,23 @@ namespace aether::app::launcher
 		}
 	} // namespace
 
-	bool SpawnEditor(const std::filesystem::path& projectRoot)
+	bool SpawnEditor(const std::filesystem::path& projectRoot, int controlPort)
 	{
 		const std::filesystem::path dir = ExecutableDir();
 		const std::filesystem::path editorExe = dir / AETHER_EDITOR_EXE_NAME;
 		// CreateProcessA needs a mutable command-line buffer.
 		std::string command = "\"" + editorExe.string() + "\" --project \"" + projectRoot.string() + "\"";
+
+		// Forward the MCP control port to the child by overriding AETHER_CONTROL_PORT in
+		// THIS process's environment just before the spawn: CreateProcessA with a null
+		// lpEnvironment gives the child a copy of the current environment block, so it
+		// inherits the value we set here. Mutating our own copy is harmless - the
+		// launcher runs no ControlServer and does not read the var after startup. Each
+		// spawn overwrites it, so per-editor incrementing ports (LauncherLayer) work.
+		if (controlPort > 0)
+		{
+			SetEnvironmentVariableA("AETHER_CONTROL_PORT", std::to_string(controlPort).c_str());
+		}
 
 		STARTUPINFOA startupInfo{};
 		startupInfo.cb = sizeof(startupInfo);
@@ -52,16 +63,24 @@ namespace aether::app::launcher
 		{
 			CloseHandle(processInfo.hProcess);
 			CloseHandle(processInfo.hThread);
-			AE_INFO(LogCategory::App, "Launcher spawned Editor for project '{}'", projectRoot.string());
+			if (controlPort > 0)
+			{
+				AE_INFO(LogCategory::App, "Launcher spawned Editor for project '{}' (MCP control port {})", projectRoot.string(), controlPort);
+			}
+			else
+			{
+				AE_INFO(LogCategory::App, "Launcher spawned Editor for project '{}'", projectRoot.string());
+			}
 			return true;
 		}
 		AE_ERROR(LogCategory::App, "Launcher failed to spawn Editor (GetLastError={})", GetLastError());
 		return false;
 	}
 #else
-	bool SpawnEditor(const std::filesystem::path& projectRoot)
+	bool SpawnEditor(const std::filesystem::path& projectRoot, int controlPort)
 	{
 		(void) projectRoot;
+		(void) controlPort;
 		AE_ERROR(LogCategory::App, "Launcher process spawn is only implemented on Windows.");
 		return false;
 	}

@@ -9,7 +9,7 @@ namespace aether
 	class World;
 } // namespace aether
 
-namespace aether::app
+namespace aether::editor
 {
 	struct PickHit
 	{
@@ -26,4 +26,4 @@ namespace aether::app
 	// OBB test against every mesh entity's local AABB, merged with a physics
 	// raycast when `physics` is provided - the closer hit wins.
 	PickHit PickEntity(World& world, PhysicsSystem* physics, const Ray& ray, float maxDist);
-} // namespace aether::app
+} // namespace aether::editor

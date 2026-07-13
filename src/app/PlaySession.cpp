@@ -25,7 +25,7 @@ namespace aether::app
 		{
 			World& world = context.Get<World>();
 			playState.stopSnapshot = scene::CaptureScene(world, assets.GetMaterialRegistry(), assets.GetTextureRegistry(), context.TryGet<Renderer>());
-			if (const auto* selection = context.TryGet<SceneSelection>())
+			if (const auto* selection = context.TryGet<aether::editor::SceneSelection>())
 			{
 				playState.stopSelection = selection->All();
 				playState.stopSelectionPrimary = selection->Primary();
@@ -139,7 +139,7 @@ namespace aether::app
 		}
 
 		World& world = context.Get<World>();
-		auto* selection = context.TryGet<SceneSelection>();
+		auto* selection = context.TryGet<aether::editor::SceneSelection>();
 		std::vector<Entity> selectionToRestore = playState->stopSelection;
 		Entity primaryToRestore = playState->stopSelectionPrimary;
 		if (selection != nullptr && !selection->All().empty())

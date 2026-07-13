@@ -13,7 +13,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -114,7 +114,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void ThemePanel::OnAttach(LayerContext& /*context*/)
+	void ThemePanel::OnAttach(app::LayerContext& /*context*/)
 	{
 		if (LoadPersisted())
 		{
@@ -181,7 +181,7 @@ namespace aether::app
 		chrome::ApplyTheme(m_theme); // rewrites chrome tokens + restyles ImGui widgets
 	}
 
-	void ThemePanel::OnImGui(LayerContext& /*context*/)
+	void ThemePanel::OnImGui(app::LayerContext& /*context*/)
 	{
 		AE_PROFILE_ZONE();
 		ImGui::Begin(GetName().data(), VisiblePtr());
@@ -284,4 +284,4 @@ namespace aether::app
 
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

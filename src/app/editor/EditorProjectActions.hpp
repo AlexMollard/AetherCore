@@ -7,7 +7,10 @@
 namespace aether::app
 {
 	struct EditorProjectContext;
+}
 
+namespace aether::editor
+{
 	struct EditorProjectActionResult
 	{
 		bool succeeded = false;
@@ -31,8 +34,8 @@ namespace aether::app
 	{
 		std::function<void()> openLauncher;
 		std::function<void()> reloadProject;
-		std::function<EditorProjectActionResult(const EditorProjectContext&)> packProject;
-		std::function<EditorProjectActionResult(const EditorProjectContext&, const EditorProjectPublishOptions&)> publishProject;
+		std::function<EditorProjectActionResult(const app::EditorProjectContext&)> packProject;
+		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishOptions&)> publishProject;
 		std::function<EditorProjectActionResult()> rebuildEnginePak;
 		// Manual shader-recompile trigger (ShaderCompiler::CompileProject on the
 		// current project, then refreshes the shaders:// overlay's project
@@ -40,4 +43,4 @@ namespace aether::app
 		// filesystem watch for .slang changes yet.
 		std::function<EditorProjectActionResult()> recompileShaders;
 	};
-} // namespace aether::app
+} // namespace aether::editor

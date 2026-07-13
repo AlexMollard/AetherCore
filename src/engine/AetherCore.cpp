@@ -55,9 +55,18 @@ namespace aether
 	AetherCore::AetherCore(const Config& config, const EngineSettings& settings)
 	{
 		io::FileSystem::InitializeDefaultMounts();
+		m_profile = config.profile;
 		m_settings = settings;
 		m_settings.window.width = config.width;
 		m_settings.window.height = config.height;
+
+		// UiShell (tool front-end, e.g. the project Launcher) skips every scene
+		// subsystem: no cameras, lighting, animation, or scene render passes are
+		// created and no scene GPU resources are allocated. It brings up only the
+		// platform window, the Vulkan device, and the render graph (a single
+		// swapchain-clear pass), onto which an editor build installs the ImGui
+		// overlay via SetUiOverlay(). See RuntimeProfile.hpp.
+		const bool fullRuntime = m_profile == RuntimeProfile::Full;
 
 		// Create all subsystems.
 		m_services.Register<AetherCore>(*this);
@@ -68,7 +77,10 @@ namespace aether
 		m_gpu = std::make_unique<GpuDevice>();
 		m_services.Register<GpuDevice>(*m_gpu);
 		m_services.Register<ScreenshotService>(m_screenshotService); // Init() below, after the device exists
-		m_cameras = std::make_unique<CameraSubsystem>();
+		if (fullRuntime)
+		{
+			m_cameras = std::make_unique<CameraSubsystem>();
+		}
 		m_rendering = std::make_unique<RenderingSubsystem>();
 
 		auto& platform = m_services.Get<PlatformSubsystem>();
@@ -104,12 +116,18 @@ namespace aether
 		m_services.Register<AssetSubsystem>(assetsSub);
 
 		// -- 5. Cameras ------------------------------------------------------
-		m_cameras->Init(m_services);
-		m_services.Register<CameraManager>(m_cameras->GetCameraManager());
-		m_services.Register<LightingManager>(m_cameras->GetLightingManager());
+		// Scene-only: the CameraManager/LightingManager drive scene rendering and
+		// lighting, which UiShell has none of. Skipped there so the render graph
+		// never references camera/light state (see RenderingSubsystem::Init).
+		if (fullRuntime)
+		{
+			m_cameras->Init(m_services);
+			m_services.Register<CameraManager>(m_cameras->GetCameraManager());
+			m_services.Register<LightingManager>(m_cameras->GetLightingManager());
+		}
 
 		// -- 6. Rendering ----------------------------------------------------
-		m_rendering->Init(m_services);
+		m_rendering->Init(m_services, m_profile);
 		m_rendering->SetFrameIndexProvider([this]() { return m_frameIndex; });
 		m_services.Register<RenderingSubsystem>(*m_rendering);
 		m_services.Register<Renderer>(m_rendering->GetRenderer());
@@ -126,46 +144,58 @@ namespace aether
 		// shipped GameRuntime never installs one, so m_uiOverlay stays null and
 		// no UI-toolkit code is ever linked or run.
 
-		// Link cross-subsystem dependencies.
-		m_cameras->GetLightingManager().LinkRenderer(m_rendering->GetRenderer());
-		assetsSub.LinkRenderingDeps(m_services);
-
-		// -- 8. Create default main camera -----------------------------------
-		auto& cameras = m_services.Get<CameraManager>();
-		const CameraHandle mainCam = cameras.Create(CameraDesc{});
-		cameras.SetMainCamera(mainCam);
-
-		// -- 9. Async compute (optional) -------------------------------------
-		bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu->HasDedicatedComputeQueue();
-		if (!m_settings.graphics.asyncCompute)
+		if (fullRuntime)
 		{
-			AE_INFO(LogCategory::Engine, "Async compute disabled by settings.");
-		}
-		if (!enableAsyncCompute)
-		{
-			AE_WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
+			// Link cross-subsystem dependencies.
+			m_cameras->GetLightingManager().LinkRenderer(m_rendering->GetRenderer());
+			assetsSub.LinkRenderingDeps(m_services);
+
+			// -- 8. Create default main camera -----------------------------------
+			auto& cameras = m_services.Get<CameraManager>();
+			const CameraHandle mainCam = cameras.Create(CameraDesc{});
+			cameras.SetMainCamera(mainCam);
+
+			// -- 9. Async compute (optional) -------------------------------------
+			bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu->HasDedicatedComputeQueue();
+			if (!m_settings.graphics.asyncCompute)
+			{
+				AE_INFO(LogCategory::Engine, "Async compute disabled by settings.");
+			}
+			if (!enableAsyncCompute)
+			{
+				AE_WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
+			}
+
+			if (enableAsyncCompute)
+			{
+				m_services.Get<AsyncComputeContext>().Init(*m_gpu);
+				m_rendering->GetRenderGraph().EnableAsyncCompute(m_gpu->GetComputeQueue(), m_gpu->GetComputeQueueFamily());
+			}
+
+			// Register lighting compute passes in the render graph (after async
+			// compute enable so they can be scheduled on the async compute queue).
+			m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
 		}
 
-		if (enableAsyncCompute)
-		{
-			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
-			m_rendering->GetRenderGraph().EnableAsyncCompute(m_gpu->GetComputeQueue(), m_gpu->GetComputeQueueFamily());
-		}
-
-		// Register lighting compute passes in the render graph (after async
-		// compute enable so they can be scheduled on the async compute queue).
-		m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
+		// Register render-graph passes. In Full this wires the whole scene chain
+		// (cull/shadows/GTAO/forward/post-process + overlay); in UiShell it registers
+		// only a swapchain-clear pass so the installed ImGui overlay presents over a
+		// defined background. Runs in both profiles - RegisterPasses branches on the
+		// profile it was Init'd with.
 		m_rendering->RegisterPasses(m_services);
 
-		// -- 11. Animation systems -------------------------------------------
-		m_animationBlend = std::make_unique<AnimationBlendSystem>();
+		if (fullRuntime)
+		{
+			// -- 11. Animation systems -------------------------------------------
+			m_animationBlend = std::make_unique<AnimationBlendSystem>();
 
-		m_animationBlend->Init(256, 128);
+			m_animationBlend->Init(256, 128);
 
-		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
+			m_services.Register<AnimationBlendSystem>(*m_animationBlend);
 
-		RenderQueue& rq = m_rendering->GetRenderQueue();
-		rq.SetAnimationBlendSystem(m_animationBlend.get());
+			RenderQueue& rq = m_rendering->GetRenderQueue();
+			rq.SetAnimationBlendSystem(m_animationBlend.get());
+		}
 
 		// -- 10. Swapchain recreation callback ------------------------------
 		m_gpu->SetSwapchainRecreatedCallback([this]() { m_rendering->RecreateSwapchainResources(m_services); });
@@ -192,7 +222,10 @@ namespace aether
 		{
 			m_uiOverlay->Shutdown(m_services);
 		}
-		m_cameras->Shutdown();
+		if (m_cameras)
+		{
+			m_cameras->Shutdown();
+		}
 		m_services.Get<AssetSubsystem>().Shutdown();
 		// SceneSubsystem has no shutdown work.
 
@@ -313,13 +346,17 @@ namespace aether
 			const double gameDt = rawDt * client.GetTimeScale();
 			m_gameElapsedSeconds += gameDt;
 
-			// Reset this frame's double-buffer write slot BEFORE the update so game
-			// logic writes its draws into a cleared slot.
 			const auto drawSlot = static_cast<std::uint32_t>(m_producerFrameIndex % Swapchain::kMaxFramesInFlight);
-			auto& renderQueue = m_services.Get<RenderQueue>();
-			renderQueue.SetWriteSlot(drawSlot);
-			renderQueue.Clear(drawSlot);
-			m_services.Get<ShadowService>().PrepareWriteSlot(drawSlot);
+			if (m_profile == RuntimeProfile::Full)
+			{
+				// Reset this frame's double-buffer write slot BEFORE the update so
+				// game logic writes its draws into a cleared slot. UiShell submits no
+				// scene draws or shadows, so there is nothing to reset.
+				auto& renderQueue = m_services.Get<RenderQueue>();
+				renderQueue.SetWriteSlot(drawSlot);
+				renderQueue.Clear(drawSlot);
+				m_services.Get<ShadowService>().PrepareWriteSlot(drawSlot);
+			}
 
 			client.OnUpdate(gameDt, m_producerFrameIndex);
 
@@ -380,7 +417,10 @@ namespace aether
 			// and would race a structural registry change (script attach on Play). The
 			// draw commands land in this slot's buffer; the render graph's $UiOverlay
 			// pass reads that same slot when it executes the submitted packet.
-			if (m_rendering)
+			// Scene game-UI (ECS canvases -> $UiOverlay draw commands) is Full-runtime
+			// only. UiShell registers no $UiOverlay pass and has no ECS world; its
+			// front-end UI is drawn entirely by the installed Dear ImGui overlay.
+			if (m_rendering && m_profile == RuntimeProfile::Full)
 			{
 				ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
 				uiRenderer.SetWorld(&m_services.Get<SceneSubsystem>().GetWorld());
@@ -416,7 +456,11 @@ namespace aether
 		{
 			input.SetMouseCaptured(m_uiOverlay->WantsInputCapture() && !input.IsMouseViewportInputActive());
 		}
-		m_cameras->GetCameraManager().Update(input, dt);
+		// Scene camera navigation is Full-runtime only; UiShell has no cameras.
+		if (m_cameras)
+		{
+			m_cameras->GetCameraManager().Update(input, dt);
+		}
 	}
 
 	void AetherCore::BeginFrame()
@@ -564,6 +608,20 @@ namespace aether
 	RenderFramePacket AetherCore::PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
+
+		// UiShell has no scene to extract: no world flush, cameras, lights, shadows,
+		// or physics-debug shapes. The render graph runs a single swapchain-clear
+		// pass and the installed ImGui overlay draws on top (see EndFrame). Return a
+		// minimal packet carrying only the frame identity and the swapchain extent.
+		if (m_profile != RuntimeProfile::Full)
+		{
+			RenderFramePacket packet;
+			packet.frameIndex = frameIndex;
+			packet.drawSlot = drawSlot;
+			packet.renderExtent = m_gpu->GetSwapchainExtent();
+			return packet;
+		}
+
 		auto& assetsSub = m_services.Get<AssetSubsystem>();
 
 		gpu::Extent2D extent = m_rendering->ResolveRequestedSceneViewportExtent(m_gpu->GetSwapchainExtent());
@@ -713,11 +771,22 @@ namespace aether
 
 		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
 
-		BuildShadowsAndRunLighting(packet, frameIdx, fc);
-
-		if (packet.hasCameraData)
+		// Shadows/lighting/shadow-index patching are scene work (they read cameras,
+		// lights, and the shadow services). UiShell has none of these; it applies the
+		// no-camera lighting fallback so the frame constants are well-formed for the
+		// clear pass, then runs the (UI-only) render graph.
+		if (m_profile == RuntimeProfile::Full)
 		{
-			PatchShadowIndices(frameIdx);
+			BuildShadowsAndRunLighting(packet, frameIdx, fc);
+
+			if (packet.hasCameraData)
+			{
+				PatchShadowIndices(frameIdx);
+			}
+		}
+		else
+		{
+			m_gpu->ApplyNoCameraLightingFallback(fc);
 		}
 
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
@@ -770,9 +839,15 @@ namespace aether
 
 	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc)
 	{
+		const bool fullRuntime = m_profile == RuntimeProfile::Full;
+
 		// Update render graph buffer handles for the current frame's histogram
-		// readback buffer and collect completed histogram data.
-		m_rendering->GetPostProcessStack().UpdateBufferHandles(m_rendering->GetRenderGraph(), frameIdx);
+		// readback buffer and collect completed histogram data. Post-process is a
+		// scene resource (not created in UiShell).
+		if (fullRuntime)
+		{
+			m_rendering->GetPostProcessStack().UpdateBufferHandles(m_rendering->GetRenderGraph(), frameIdx);
+		}
 
 		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
 		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
@@ -803,9 +878,13 @@ namespace aether
 		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
 		// Build the camera-preview frame constants from the same fc (keeps shadow /
 		// resource-table addresses), overriding the camera to the preview POV and
-		// staging the preview's own light binning.
-		m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager());
-		m_rendering->GetModelPreview().BuildFrameConstants(fc, frameIdx);
+		// staging the preview's own light binning. Editor previews are scene
+		// features (they read the lighting manager); UiShell has neither.
+		if (fullRuntime)
+		{
+			m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager());
+			m_rendering->GetModelPreview().BuildFrameConstants(fc, frameIdx);
+		}
 		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);
 		m_currentCmdList.EndDebugLabel();

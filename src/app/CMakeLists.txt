@@ -1,23 +1,54 @@
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 file(GLOB_RECURSE APP_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
+# ── Editor sources ──────────────────────────────────────────────────────────
+# The full editor. Excludes only launcher/, whose LauncherMain.cpp would be a
+# second main() - the editor neither spawns nor embeds the launcher.
 set(APP_EDITOR_SOURCES ${APP_SOURCES})
+list(FILTER APP_EDITOR_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
+
+# ── GameRuntime sources ─────────────────────────────────────────────────────
+# The shipped runtime: no editor UI, no imgui, no launcher, no in-app project
+# tooling (project/ scaffolds/enumerates projects - an editor/launcher concern).
 set(APP_RUNTIME_SOURCES ${APP_SOURCES})
 set(APP_RUNTIME_HEADERS ${APP_HEADERS})
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
-# Dear ImGui integration (src/app/imgui/) is editor-only: GameRuntime must
+# Dear ImGui integration (src/app/imgui/) is tooling-only: GameRuntime must
 # neither link nor initialize imgui (see rendering/IUiOverlay.hpp in Engine
-# and the AETHERCORE_EDITOR_APP-gated construction in Application.cpp).
+# and the AETHERCORE_WITH_IMGUI-gated construction in Application.cpp).
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
-# Launcher process-spawn glue is editor-family only; GameRuntime never spawns editors.
+# Launcher + project tooling are editor-family only; GameRuntime never spawns
+# editors nor scaffolds projects.
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]project[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.hpp$")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
+list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]project[/\\\\]")
+
+# ── Launcher sources ────────────────────────────────────────────────────────
+# The slim project-hub front end: its own entry (launcher/LauncherMain.cpp), the
+# LauncherLayer hub, the shared ProjectCommon, the app framework, and imgui. It
+# deliberately excludes the editor (panels, publisher, shader compiler, control
+# server, project manager), the C# scripting host, the app-level scene systems,
+# and scene serialization - it runs on a UiShell engine and only spawns Editor
+# processes. From debug/ it keeps only ProjectLauncherWindow (the hub widget,
+# whose other deps - Icons/EditorChrome/Color - are header-only).
+set(APP_LAUNCHER_SOURCES ${APP_SOURCES})
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]main\\.cpp$")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]PlaySession\\.cpp$")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scripting[/\\\\]")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]systems[/\\\\]")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scene[/\\\\]")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]ScriptedSceneLayer\\.cpp$")
+list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug/ProjectLauncherWindow.cpp")
 
 add_executable(Editor)
 add_executable(GameRuntime)
@@ -82,12 +113,20 @@ set_target_properties(GameRuntime PROPERTIES
 # files directly from the source tree.
 target_compile_definitions(Editor PRIVATE
     AETHERCORE_EDITOR_APP=1
+    # Scene app: wire ECS scene systems (Application.cpp). Tooling app: build the Dear
+    # ImGui overlay. Both hold for the editor; the launcher is tooling but NOT a scene
+    # app; the game runtime is a scene app but NOT tooling.
+    AETHERCORE_SCENE_APP=1
+    AETHERCORE_WITH_IMGUI=1
     AETHER_ENGINE_RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"
     AETHER_SHADER_BUILD_DIR="${AETHERCORE_SHADER_OUTPUT_DIR}"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
+    # The editor's own file name, so the publish verifier rejects a game package
+    # that wrongly bundles the editor executable (EditorProjectPublisher).
+    AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
 )
 
 # Dev-only project shader compilation (ShaderCompiler, src/app/editor). Only
@@ -105,6 +144,8 @@ if(SLANGC_EXECUTABLE)
 endif()
 
 target_compile_definitions(GameRuntime PRIVATE
+    # Scene app (wires ECS scene systems) but NOT a tooling app (no imgui overlay).
+    AETHERCORE_SCENE_APP=1
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
@@ -315,50 +356,36 @@ aethercore_add_runtime_payload(GameRuntime)
 add_dependencies(Editor GameRuntime)
 
 # ── Launcher ────────────────────────────────────────────────────────────────
-# The project hub is its own executable/process: the same code as the Editor (full
-# engine boot + the launcher UI), but AETHERCORE_LAUNCHER makes OpenProject spawn a
-# separate Editor process for the chosen project instead of loading it in-process. A
-# separate process gives a real separate OS window (which the ImGui multi-viewport path
-# could not achieve). Defined here so it can copy the Editor's fully-configured
-# compile-definitions and link-libraries verbatim rather than re-listing them.
+# The project hub is its own process, built from its OWN slim source set
+# (APP_LAUNCHER_SOURCES above): its own entry (launcher/LauncherMain.cpp), the
+# LauncherLayer hub, the shared ProjectCommon, the app framework, and imgui. It runs
+# on a UiShell engine (window + Vulkan + Dear ImGui only) and, on open/create, spawns
+# a separate full-engine Editor process for the chosen project - which gives a real
+# separate OS window that the ImGui multi-viewport path could not. It links neither
+# the editor, the C# scripting host, nor the scene systems.
 add_executable(Launcher)
-target_sources(Launcher PRIVATE ${APP_EDITOR_SOURCES} ${APP_HEADERS})
+target_sources(Launcher PRIVATE ${APP_LAUNCHER_SOURCES} ${APP_HEADERS})
 target_include_directories(Launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(Launcher PRIVATE Engine imgui)
 
-get_target_property(_aether_editor_defs Editor COMPILE_DEFINITIONS)
-if(_aether_editor_defs)
-    target_compile_definitions(Launcher PRIVATE ${_aether_editor_defs})
-endif()
+# Tooling app (imgui overlay) but NOT a scene app: no ECS scene systems, no CoreCLR.
+# AETHER_EDITOR_EXE_NAME lets LauncherProcess spawn the editor; the two AETHER_* paths
+# let ProjectCommon scaffold a new project (scripts .csproj + seed scene).
 target_compile_definitions(Launcher PRIVATE
-    AETHERCORE_LAUNCHER=1
-    AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>")
-
-get_target_property(_aether_editor_libs Editor LINK_LIBRARIES)
-if(_aether_editor_libs)
-    target_link_libraries(Launcher PRIVATE ${_aether_editor_libs})
-endif()
+    AETHERCORE_WITH_IMGUI=1
+    AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
+    AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
+    AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 
 aethercore_target_defaults(Launcher)
+aethercore_enable_dead_strip_report(Launcher)
 set_target_properties(Launcher PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
-# The launcher boots the full stack (incl. the .NET host) and draws ImGui, so it needs
-# engine.pak (fonts/shaders) and the managed assemblies + nethost deployed beside it,
-# exactly like the Editor. It spawns Editor.exe at runtime, so depend on Editor building.
+# The launcher draws ImGui, so it needs engine.pak (fonts + the branding logo) beside
+# it - exactly like the editor. It does NOT deploy the managed assemblies or nethost:
+# it never boots CoreCLR. It spawns Editor.exe at runtime, so it depends on Editor.
 aethercore_add_runtime_payload(Launcher)
 add_dependencies(Launcher Editor)
-if(AETHER_HAS_DOTNET)
-    add_dependencies(Launcher ManagedAssemblies)
-    add_custom_command(TARGET Launcher POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:Launcher>/data/scripts/managed"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${CMAKE_BINARY_DIR}/data/scripts/managed" "$<TARGET_FILE_DIR:Launcher>/data/scripts/managed"
-        VERBATIM)
-    if(WIN32 AND AETHER_NETHOST_DLL)
-        add_custom_command(TARGET Launcher POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:Launcher>"
-            VERBATIM)
-    endif()
-endif()
 
 # ── Redistributable package ─────────────────────────────────────────────────
 # The build output directory is a developer run tree and may contain stale files,

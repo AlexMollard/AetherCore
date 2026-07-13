@@ -38,7 +38,7 @@
 #include "utils/ServiceContainer.hpp"
 #include "vulkan/RenderGraphStorage.hpp" // FrameStats definition (GetFrameStats)
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	using nlohmann::json;
 
@@ -104,7 +104,7 @@ namespace aether::app::editor
 					        ++count;
 				        }
 			        }
-			        const auto* playState = ctx.services.TryGet<PlayState>();
+			        const auto* playState = ctx.services.TryGet<app::PlayState>();
 			        const char* mode = "editing";
 			        if (playState != nullptr)
 			        {
@@ -282,7 +282,7 @@ namespace aether::app::editor
 			        if (scenes == nullptr || assets == nullptr) { return json{{"error", "no scene/asset subsystem"}}; }
 			        const std::string name = p.value("name", scenes->GetCurrentScene());
 			        if (name.empty()) { return json{{"error", "no scene name (open a scene first, or pass 'name')"}}; }
-			        const bool ok = scene::QuickSave(ctx.services.Get<World>(), name, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
+			        const bool ok = app::scene::QuickSave(ctx.services.Get<World>(), name, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
 			        return json{{"saved", ok}, {"scene", name}};
 		        }});
 
@@ -293,7 +293,7 @@ namespace aether::app::editor
 			        if (scenes == nullptr) { return ErrNoScene(); }
 			        const std::string name = p.value("name", std::string{});
 			        if (name.empty()) { return json{{"error", "'name' is required"}}; }
-			        const bool loaded = scene::SwitchScene(name, scenes->GetWorld(), scene::MakeApplySceneDeps(ctx.services));
+			        const bool loaded = app::scene::SwitchScene(name, scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services));
 			        if (loaded) { scenes->SetCurrentScene(name); }
 			        return json{{"scene", name}, {"loaded", loaded}};
 		        }});
@@ -303,7 +303,7 @@ namespace aether::app::editor
 		        {
 			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
 			        if (scenes == nullptr) { return ErrNoScene(); }
-			        const std::string name = scene::NewScene(scenes->GetWorld(), scene::MakeApplySceneDeps(ctx.services));
+			        const std::string name = app::scene::NewScene(scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services));
 			        if (!name.empty()) { scenes->SetCurrentScene(name); }
 			        return json{{"scene", name}, {"ok", !name.empty()}};
 		        }});
@@ -314,13 +314,13 @@ namespace aether::app::editor
 		{
 			return [which](const json&, MethodContext& ctx) -> json
 			{
-				LayerContext lc{.services = ctx.services, .frameIndex = ctx.frameIndex};
+				app::LayerContext lc{.services = ctx.services, .frameIndex = ctx.frameIndex};
 				bool ok = false;
 				const std::string w = which;
 				if (w == "play") { ok = StartPlaySession(lc); }
 				else if (w == "stop") { ok = StopPlaySession(lc); }
 				else { ok = TogglePlaySession(lc); }
-				const auto* playState = ctx.services.TryGet<PlayState>();
+				const auto* playState = ctx.services.TryGet<app::PlayState>();
 				const char* state = "editing";
 				if (playState != nullptr)
 				{
@@ -599,4 +599,4 @@ namespace aether::app::editor
 
 		return methods;
 	}
-} // namespace aether::app::editor
+} // namespace aether::editor

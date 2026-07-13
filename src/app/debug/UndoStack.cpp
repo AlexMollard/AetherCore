@@ -6,7 +6,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	bool UndoStack::Capture(World& world, ServiceContainer& services, Entry& out)
 	{
@@ -16,8 +16,8 @@ namespace aether::app
 		{
 			return false;
 		}
-		out.desc = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), services.TryGet<Renderer>());
-		out.key = scene::WriteToml(out.desc);
+		out.desc = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), services.TryGet<Renderer>());
+		out.key = app::scene::WriteToml(out.desc);
 		return true;
 	}
 
@@ -56,7 +56,7 @@ namespace aether::app
 		{
 			return false;
 		}
-		scene::ReplaceScene(m_undo.back().desc, world, scene::MakeApplySceneDeps(services));
+		app::scene::ReplaceScene(m_undo.back().desc, world, app::scene::MakeApplySceneDeps(services));
 		m_redo.push_back(std::move(current));
 		if (m_redo.size() > kMaxDepth)
 		{
@@ -77,7 +77,7 @@ namespace aether::app
 		{
 			return false;
 		}
-		scene::ReplaceScene(m_redo.back().desc, world, scene::MakeApplySceneDeps(services));
+		app::scene::ReplaceScene(m_redo.back().desc, world, app::scene::MakeApplySceneDeps(services));
 		m_undo.push_back(std::move(current));
 		if (m_undo.size() > kMaxDepth)
 		{
@@ -86,4 +86,4 @@ namespace aether::app
 		m_redo.pop_back();
 		return true;
 	}
-} // namespace aether::app
+} // namespace aether::editor

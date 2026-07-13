@@ -15,6 +15,10 @@ namespace aether
 namespace aether::app
 {
 	struct LayerContext;
+} // namespace aether::app
+
+namespace aether::editor
+{
 	class SceneSelection;
 
 	// ── Shared entity-row helpers (outliner rows + inspector header) ──────────
@@ -37,7 +41,7 @@ namespace aether::app
 	// body gets a true teleport (Jolt SetPosition/SetRotation + prev==curr
 	// interpolation state). The inspector transform drawer and the viewport
 	// gizmo both funnel through here; the future undo spec hooks this.
-	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld);
+	void ApplyWorldTransform(app::LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld);
 
 	// True if any strict ancestor of `e` is also in the selection - such an entity
 	// is already carried by its selected ancestor's ApplyWorldTransform cascade, so
@@ -49,10 +53,10 @@ namespace aether::app
 	// Each draws one collapsing section for `entity` when the matching component
 	// is present (guarded no-op otherwise). Called in order by InspectorPanel.
 
-	void DrawTransform(LayerContext& context, World& world, Entity entity);
+	void DrawTransform(app::LayerContext& context, World& world, Entity entity);
 	void DrawSkinnedMesh(World& world, Entity entity);
-	void DrawMaterial(LayerContext& context, World& world, Entity entity);
-	void DrawEffectParams(LayerContext& context, World& world, Entity entity);
+	void DrawMaterial(app::LayerContext& context, World& world, Entity entity);
+	void DrawEffectParams(app::LayerContext& context, World& world, Entity entity);
 	void DrawUiCanvas(World& world, Entity entity);
 	void DrawUiRect(World& world, Entity entity);
 	void DrawUiImage(World& world, Entity entity);
@@ -70,28 +74,28 @@ namespace aether::app
 	// inspector-exposed, per-entity serialized properties. Removable.
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName = {});
 	bool AcceptScriptDropOnEntity(World& world, Entity entity);
-	void DrawScript(LayerContext& context, World& world, Entity entity);
+	void DrawScript(app::LayerContext& context, World& world, Entity entity);
 	// Scene-transient marker (excluded from captures), removable.
 	void DrawSceneTransient(World& world, Entity entity);
 	// Full physics editor: motion type, shape size, material (friction /
 	// restitution / mass / damping / gravity / sensor / CCD / axis-locks) and
 	// runtime controls (velocity, impulse, wake/sleep). Friction, restitution and
 	// gravity apply live; structural changes go through PhysicsSystem::RebuildBody.
-	void DrawPhysics(LayerContext& context, World& world, Entity entity);
+	void DrawPhysics(app::LayerContext& context, World& world, Entity entity);
 	// Live collision/trigger event readout (overlaps + this-frame enter/exit).
 	void DrawCollisionEvents(World& world, Entity entity);
 	// Joint/constraint editor: type, target entity, anchor/axis/limits. Edits
 	// trigger a constraint rebuild through PhysicsSystem.
-	void DrawJoint(LayerContext& context, World& world, Entity entity);
+	void DrawJoint(app::LayerContext& context, World& world, Entity entity);
 	// Unity-style Mesh Renderer: mesh source picker (primitive swap + glTF model
 	// drop), visibility toggle, and a material/pipeline summary - the single
 	// front-door for the scattered Mesh/Pipeline/MeshSource/Material components.
-	void DrawMeshRenderer(LayerContext& context, World& world, Entity entity);
+	void DrawMeshRenderer(app::LayerContext& context, World& world, Entity entity);
 	// Unity-style 2D Sprite Renderer: texture drop slot + tint over a flat quad
 	// drawn through the standard mesh path.
-	void DrawSpriteRenderer(LayerContext& context, World& world, Entity entity);
+	void DrawSpriteRenderer(app::LayerContext& context, World& world, Entity entity);
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection);
 	// addTagBuf: caller-owned input buffer for the add-by-name field (the
 	// drawers are stateless free functions; InspectorPanel owns the state).
 	void DrawTags(World& world, Entity entity, char* addTagBuf, std::size_t addTagBufSize);
-} // namespace aether::app
+} // namespace aether::editor

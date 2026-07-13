@@ -7,6 +7,7 @@
 #include <mutex>
 #include <span>
 
+#include "RuntimeProfile.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "passes/CullPass.hpp"
@@ -55,7 +56,13 @@ namespace aether
 	class RenderingSubsystem
 	{
 	public:
-		void Init(ServiceContainer& services);
+		// profile selects how much of the subsystem is brought up. Full initializes
+		// every scene resource (shadows, cull, GTAO, post-process, previews,
+		// pipelines) and RegisterPasses wires the whole scene chain. UiShell
+		// initializes only the render graph, frame-constants/resource-table buffers,
+		// and the UI renderer; RegisterPasses then registers a single swapchain-clear
+		// pass. See RuntimeProfile.hpp.
+		void Init(ServiceContainer& services, RuntimeProfile profile = RuntimeProfile::Full);
 		void Shutdown();
 		void RegisterPasses(ServiceContainer& services);
 
@@ -208,6 +215,10 @@ namespace aether
 			void* mapped = nullptr;
 			gpu::DeviceAddress address = 0;
 		};
+
+		// Bring-up profile, set in Init. Gates scene-resource creation and the
+		// per-frame / RegisterPasses / RecreateSwapchainResources scene paths.
+		RuntimeProfile m_profile = RuntimeProfile::Full;
 
 		RenderQueueSharedPipelines m_renderQueuePipelines;
 		RenderGraph m_renderGraph;

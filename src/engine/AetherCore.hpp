@@ -6,6 +6,7 @@
 
 #include "EngineClient.hpp"
 #include "IEngineRuntime.hpp"
+#include "RuntimeProfile.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "rendering/IUiOverlay.hpp"
@@ -46,6 +47,12 @@ namespace aether
 			// every shader's .spv, needs GFSDK_Aftermath_Lib.x64.dll) that a
 			// shipped game should not carry or enable.
 			bool enableGpuDiagnostics = false;
+
+			// Selects the engine bring-up profile. Full initializes the complete
+			// scene runtime; UiShell brings up only window + Vulkan device + the
+			// Dear ImGui overlay for tool front-ends such as the project Launcher.
+			// See RuntimeProfile.hpp.
+			RuntimeProfile profile = RuntimeProfile::Full;
 		};
 
 		struct CameraRenderTarget
@@ -65,6 +72,16 @@ namespace aether
 		[[nodiscard]] ServiceContainer& GetServiceContainer()
 		{
 			return m_services;
+		}
+
+		// The bring-up profile this instance was constructed with. Full is the
+		// complete scene runtime; UiShell is a window + device + ImGui overlay tool
+		// front-end (no scene systems, cameras, or scene render passes). The
+		// application layer uses this to decide whether to wire ECS systems. See
+		// RuntimeProfile.hpp.
+		[[nodiscard]] RuntimeProfile GetProfile() const
+		{
+			return m_profile;
 		}
 
 		// --- Engine-owned frame lifecycle -------------------------------------
@@ -171,6 +188,11 @@ namespace aether
 		std::unique_ptr<RenderingSubsystem> m_rendering;
 
 		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
+
+		// Engine bring-up profile (Full scene runtime vs. UiShell tool front-end).
+		// Gates scene-subsystem creation in the constructor and scene work in the
+		// per-frame path. See RuntimeProfile.hpp.
+		RuntimeProfile m_profile = RuntimeProfile::Full;
 
 		// Producer/game-thread frame loop state (distinct from the render-side
 		// m_frameIndex below, which is stamped from the packet on the render thread).

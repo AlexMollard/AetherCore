@@ -17,7 +17,7 @@ namespace aether
 	class ServiceContainer;
 }
 
-namespace aether::app
+namespace aether::editor
 {
 	class EditorProjectManager final
 	{
@@ -48,8 +48,8 @@ namespace aether::app
 		[[nodiscard]] bool IsLauncherOpen() const noexcept;
 		[[nodiscard]] bool HasCurrentProject() const;
 		[[nodiscard]] std::uint64_t LogoTextureId() const noexcept;
-		[[nodiscard]] const EditorProjectContext& CurrentProject() const noexcept;
-		[[nodiscard]] EditorProjectContext& CurrentProject() noexcept;
+		[[nodiscard]] const app::EditorProjectContext& CurrentProject() const noexcept;
+		[[nodiscard]] app::EditorProjectContext& CurrentProject() noexcept;
 
 	private:
 		void ConfigureActions();
@@ -65,18 +65,18 @@ namespace aether::app
 		// lacks dotnet support.
 		void BuildAndReloadProjectScripts();
 
-		EditorProjectContext m_currentProject;
+		app::EditorProjectContext m_currentProject;
 		// True while an async project-script build kicked off by OpenProject is still
 		// being polled to completion by UpdateScriptBuild.
 		bool m_scriptBuildPending = false;
 		EditorProjectActions m_actions;
 		ServiceContainer* m_services = nullptr;
-		std::vector<EditorProjectContext> m_recentProjects;
-		ProjectLauncherWindow m_launcher;
-		ProjectLauncherWindowState m_launcherState;
+		std::vector<app::EditorProjectContext> m_recentProjects;
+		app::ProjectLauncherWindow m_launcher;
+		app::ProjectLauncherWindowState m_launcherState;
 		Texture m_logoTexture;
 		std::uint64_t m_logoTextureId = 0;
 		bool m_projectLoaded = false;
 		bool m_launcherOpen = true;
 	};
-} // namespace aether::app
+} // namespace aether::editor

@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-namespace aether::app
+namespace aether::editor
 {
 	struct EditorWindowInfo
 	{
@@ -31,4 +31,4 @@ namespace aether::app
 		// section label case-insensitively.
 		std::function<void(std::string_view component)> focusInspectorComponent;
 	};
-} // namespace aether::app
+} // namespace aether::editor

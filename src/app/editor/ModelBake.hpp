@@ -7,7 +7,7 @@ namespace aether::app
 	struct EditorProjectContext;
 } // namespace aether::app
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	// Bake a raw glTF/GLB (a VFS path such as "project://assets/models/Fox/Fox.gltf")
 	// into the .mesh (+ .skel / .animset / .anim / .material) that the runtime loader
@@ -19,5 +19,5 @@ namespace aether::app::editor
 	// Returns true (a no-op) if the .mesh already exists. Returns false and fills
 	// `error` on failure. Reuses the AssetPipeline MeshProcessor, so the result is
 	// byte-identical to what a Publish would pack.
-	[[nodiscard]] bool EnsureModelBaked(const std::string& vfsModelPath, const EditorProjectContext& project, std::string& error);
-} // namespace aether::app::editor
+	[[nodiscard]] bool EnsureModelBaked(const std::string& vfsModelPath, const app::EditorProjectContext& project, std::string& error);
+} // namespace aether::editor

@@ -5,7 +5,7 @@
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorChrome.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// Live editor theme configurator. Edits the runtime chrome palette
 	// (chrome::EditorTheme) - accent, surfaces, text tiers, semantic colours - and
@@ -21,8 +21,8 @@ namespace aether::app
 			return "Theme";
 		}
 
-		void OnAttach(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
+		void OnAttach(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 
 	private:
 		void Apply();          // push m_theme into chrome + restyle ImGui
@@ -32,4 +32,4 @@ namespace aether::app
 		chrome::EditorTheme m_theme = chrome::NightAmberTheme();
 		bool m_loaded = false;
 	};
-} // namespace aether::app
+} // namespace aether::editor

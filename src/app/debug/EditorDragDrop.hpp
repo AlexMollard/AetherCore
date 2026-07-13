@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace aether::app::dragdrop
+namespace aether::editor::dragdrop
 {
 	inline constexpr const char* kEntityPayload = "AETHER_ENTITY";
 	inline constexpr const char* kScriptPayload = "AETHER_SCRIPT_TYPE";
@@ -36,4 +36,4 @@ namespace aether::app::dragdrop
 	{
 		std::uint32_t id = 0;
 	};
-} // namespace aether::app::dragdrop
+} // namespace aether::editor::dragdrop

@@ -8,7 +8,7 @@
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -159,4 +159,4 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "Baked engine.pak to {}", outputEnginePak.generic_string());
 		return {.succeeded = true, .message = "Baked engine.pak (" + std::to_string(result.pakBytes / 1024) + " KB).", .outputPath = outputEnginePak};
 	}
-} // namespace aether::app
+} // namespace aether::editor

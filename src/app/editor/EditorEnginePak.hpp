@@ -5,7 +5,7 @@
 
 #include "editor/EditorProjectActions.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// True in dev checkouts (AETHER_ENGINE_RESOURCES_DIR defined and present, and
 	// - when this editor build was compiled with AETHER_SHADER_BUILD_DIR - that
@@ -20,4 +20,4 @@ namespace aether::app
 	// engine asset subdirs so virtual paths match the CMake build, e.g. "fonts/..",
 	// plus compiled shaders under "shaders/.." when this editor build has them).
 	[[nodiscard]] EditorProjectActionResult BakeEnginePak(const std::filesystem::path& outputEnginePak);
-} // namespace aether::app
+} // namespace aether::editor

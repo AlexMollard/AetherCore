@@ -6,7 +6,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// In-editor log console over the engine's LogRingBuffer: clickable level count
 	// badges, per-category filtering, a fuzzy text filter, consecutive-collapse,
@@ -25,7 +25,7 @@ namespace aether::app
 			return false;
 		}
 
-		void OnImGui(LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 
 	private:
 		char m_filter[128] = {};
@@ -40,4 +40,4 @@ namespace aether::app
 		// from the live log, so new categories appear enabled by default.
 		std::unordered_map<std::string, bool> m_categoryHidden;
 	};
-} // namespace aether::app
+} // namespace aether::editor

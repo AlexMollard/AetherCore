@@ -4,7 +4,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class LightingPanel final : public DebugPanel
 	{
@@ -14,10 +14,10 @@ namespace aether::app
 			return "Lighting";
 		}
 
-		void OnUpdate(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
 		bool m_lightGizmos = true;
@@ -27,4 +27,4 @@ namespace aether::app
 		bool m_lightGizmoShadowMarkers = true;
 		float m_lightGizmoScale = 1.0f;
 	};
-} // namespace aether::app
+} // namespace aether::editor

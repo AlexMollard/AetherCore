@@ -9,7 +9,7 @@
 #include "debug/DebugPanel.hpp"
 #include "editor/EditorProjectContext.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class ProjectPanel final : public DebugPanel
 	{
@@ -24,7 +24,7 @@ namespace aether::app
 			return true;
 		}
 
-		void OnImGui(LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 
 	private:
 		struct SceneEntry
@@ -33,16 +33,16 @@ namespace aether::app
 			std::filesystem::path path;
 		};
 
-		void Refresh(const EditorProjectContext& project);
-		void EnsureStandardFolders(const EditorProjectContext& project);
-		void LoadProjectSettings(const EditorProjectContext& project);
-		void SaveProjectSettings(const EditorProjectContext& project);
-		void LoadPublishSettings(const EditorProjectContext& project);
-		void SavePublishSettings(const EditorProjectContext& project);
-		void ResetPublishSettings(const EditorProjectContext& project);
+		void Refresh(const app::EditorProjectContext& project);
+		void EnsureStandardFolders(const app::EditorProjectContext& project);
+		void LoadProjectSettings(const app::EditorProjectContext& project);
+		void SaveProjectSettings(const app::EditorProjectContext& project);
+		void LoadPublishSettings(const app::EditorProjectContext& project);
+		void SavePublishSettings(const app::EditorProjectContext& project);
+		void ResetPublishSettings(const app::EditorProjectContext& project);
 		void DrawFolderRow(const char* label, const std::filesystem::path& path);
 		void DrawSceneTable();
-		void DrawPublishDialog(LayerContext& context, const EditorProjectContext& project);
+		void DrawPublishDialog(app::LayerContext& context, const app::EditorProjectContext& project);
 
 		std::filesystem::path m_lastRoot;
 		std::vector<SceneEntry> m_scenes;
@@ -67,4 +67,4 @@ namespace aether::app
 		bool m_publishOpenAfter = true;
 		bool m_dirtySettings = false;
 	};
-} // namespace aether::app
+} // namespace aether::editor

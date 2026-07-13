@@ -52,7 +52,7 @@ int main(int argc, char** argv)
 		setenv("AETHER_PROJECT_DIR", project.c_str(), 1);
 #endif
 	}
-#if defined(AETHERCORE_EDITOR_APP) && !defined(AETHERCORE_LAUNCHER)
+#ifdef AETHERCORE_EDITOR_APP
 	else
 	{
 		// The editor is always project-scoped: launch it from the Launcher, or pass
@@ -90,10 +90,10 @@ int main(int argc, char** argv)
 
 		// Layers
 #ifdef AETHERCORE_EDITOR_APP
-		application.PushLayer<aether::app::DebugLayer>();
+		application.PushLayer<aether::editor::DebugLayer>();
 		// Editor control endpoint (dormant unless AETHER_CONTROL_PORT is set); lets
 		// the AetherCore MCP / aether-ctl drive the live editor.
-		application.PushLayer<aether::app::editor::ControlServerLayer>();
+		application.PushLayer<aether::editor::ControlServerLayer>();
 #endif
 		// World content comes from the startup scene file (engine.toml
 		// app.startupScene); behavior comes from entity scripts (ScriptComponent).

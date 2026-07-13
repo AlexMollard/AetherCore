@@ -22,7 +22,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -142,7 +142,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void LightingPanel::OnUpdate(LayerContext& context)
+	void LightingPanel::OnUpdate(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -166,7 +166,7 @@ namespace aether::app
 		}
 	}
 
-	void LightingPanel::OnImGui(LayerContext& context)
+	void LightingPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -189,7 +189,7 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void LightingPanel::LoadSettings(TomlConfig& config, LayerContext& context)
+	void LightingPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		(void) context;
 		m_lightGizmos = config.GetBool("debug.lightgizmos", m_lightGizmos);
@@ -200,7 +200,7 @@ namespace aether::app
 		m_lightGizmoScale = config.GetFloat("debug.lightgizmoscale", m_lightGizmoScale);
 	}
 
-	void LightingPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
+	void LightingPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		(void) context;
 		config.Set("debug.lightgizmos", m_lightGizmos);
@@ -210,4 +210,4 @@ namespace aether::app
 		config.Set("debug.lightgizmoshadowmarkers", m_lightGizmoShadowMarkers);
 		config.Set("debug.lightgizmoscale", m_lightGizmoScale);
 	}
-} // namespace aether::app
+} // namespace aether::editor

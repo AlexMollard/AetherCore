@@ -13,7 +13,7 @@
 #include "io/FileSystem.hpp"
 #include "utils/Logger.hpp"
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	namespace fs = std::filesystem;
 
@@ -48,7 +48,7 @@ namespace aether::app::editor
 		}
 	} // namespace
 
-	bool EnsureModelBaked(const std::string& vfsModelPath, const EditorProjectContext& project, std::string& error)
+	bool EnsureModelBaked(const std::string& vfsModelPath, const app::EditorProjectContext& project, std::string& error)
 	{
 		// Already baked? The loader resolves a .mesh sibling through the VFS; if it's
 		// there (raw folder or pak), we're done. Same check the loader uses.
@@ -119,4 +119,4 @@ namespace aether::app::editor
 		AE_INFO(LogCategory::App, "Imported model '{}' ({} material(s), {} clip(s)) -> {}.mesh", vfsModelPath, result.materialFiles.size(), result.animFiles.size(), stem);
 		return true;
 	}
-} // namespace aether::app::editor
+} // namespace aether::editor

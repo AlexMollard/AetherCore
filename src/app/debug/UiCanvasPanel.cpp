@@ -22,7 +22,7 @@
 #include "ui/UiEntities.hpp"
 #include "utils/Profiler.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -863,7 +863,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void UiCanvasPanel::OnImGui(LayerContext& context)
+	void UiCanvasPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -1638,4 +1638,4 @@ namespace aether::app
 		drawList->PopClipRect();
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

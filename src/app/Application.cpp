@@ -6,9 +6,13 @@
 
 #include "animation/AnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
-#ifdef AETHERCORE_EDITOR_APP
+// Dear ImGui is used by every tooling front end (editor AND launcher) but never by
+// the shipped GameRuntime, so it is gated on AETHERCORE_WITH_IMGUI (defined by both
+// tool targets) rather than AETHERCORE_EDITOR_APP.
+#ifdef AETHERCORE_WITH_IMGUI
 #	include "imgui/ImguiSubsystem.hpp"
-#	include "debug/EditorProjectManager.hpp" // launcher window-size constants
+#endif
+#ifdef AETHERCORE_EDITOR_APP
 #	include "io/PlatformPaths.hpp"
 #	include "utils/TomlConfig.hpp"
 #endif
@@ -28,9 +32,13 @@
 #include "scene/CameraSystem.hpp"
 #include "camera/CameraManager.hpp"
 #include "scene/LightSystem.hpp"
-#include "systems/DayNightSystem.hpp"
-#include "systems/ScriptComponentSystem.hpp"
-#include "PlaySession.hpp"
+// App-level scene systems + the play-session pump are scene-app only (the launcher
+// neither compiles nor links them - see the AETHERCORE_SCENE_APP blocks below).
+#ifdef AETHERCORE_SCENE_APP
+#	include "systems/DayNightSystem.hpp"
+#	include "systems/ScriptComponentSystem.hpp"
+#	include "PlaySession.hpp"
+#endif
 
 namespace aether::app
 {
@@ -148,12 +156,12 @@ namespace aether::app
 	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded)
 	      : m_engine(BuildConfigFromSettings(engineConfig, loaded.values), loaded.values), m_settingsService(loaded.values, loaded.base, m_engine.GetServiceContainer())
 	{
-#ifdef AETHERCORE_EDITOR_APP
-		// Dear ImGui tooling is editor-only: construct it here (never inside
-		// AetherCore, which has zero knowledge of any UI toolkit) and install
-		// it as the engine's optional UI overlay. GameRuntime never compiles
-		// this block, so it neither links nor initializes imgui - see
-		// SetUiOverlay's doc comment in AetherCore.hpp.
+#ifdef AETHERCORE_WITH_IMGUI
+		// Dear ImGui tooling is used by the editor and the launcher: construct it here
+		// (never inside AetherCore, which has zero knowledge of any UI toolkit) and
+		// install it as the engine's optional UI overlay. GameRuntime never compiles
+		// this block, so it neither links nor initializes imgui - see SetUiOverlay's
+		// doc comment in AetherCore.hpp.
 		auto imgui = std::make_unique<aether::ImguiSubsystem>();
 		aether::ImguiSubsystem& imguiRef = *imgui;
 		m_engine.SetUiOverlay(std::move(imgui)); // calls imguiRef.Init(...)
@@ -191,13 +199,18 @@ namespace aether::app
 		// Reset the default executor so no more continuations are dispatched.
 		aether::coro::set_default_executor(nullptr);
 
-		// Unregister engine-level systems before detaching layers.
+		// Unregister engine-level systems before detaching layers. Scene systems are
+		// only wired in a scene app (editor / game runtime) - see Run. The Launcher
+		// (AETHERCORE_SCENE_APP undefined) never wires them, so it never links the
+		// app-level scene systems (ScriptComponentSystem's CoreCLR host, DayNightSystem).
+#ifdef AETHERCORE_SCENE_APP
 		context.Get<World>().UnregisterSystem("ScriptComponentSystem");
 		context.Get<World>().UnregisterSystem("CameraSystem");
 		context.Get<World>().UnregisterSystem("LightSystem");
 		context.Get<World>().UnregisterSystem("DayNightSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
 		context.Get<World>().UnregisterSystem("PhysicsSystem");
+#endif
 
 		m_layers.DetachAll(context);
 		AE_INFO(LogCategory::App, "Application shutdown complete.");
@@ -257,42 +270,51 @@ namespace aether::app
 			// persists the user delta on shutdown.
 			services.Register<aether::SettingsService>(m_settingsService);
 
-			attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
+			// ECS scene systems belong to a scene app (editor / game runtime). The
+			// Launcher (a tooling front end built without AETHERCORE_SCENE_APP) has no
+			// scene, so it neither wires nor links them - crucially keeping the
+			// CoreCLR host (ScriptComponentSystem) and DayNightSystem out of its binary.
+			// The engine mirrors this at runtime via RuntimeProfile::UiShell.
+#ifdef AETHERCORE_SCENE_APP
+			{
+				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
-			auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
-			auto physicsPtr = physicsSystem.get();
-			attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
-			services.Register<aether::PhysicsSystem>(*physicsPtr);
+				auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
+				auto physicsPtr = physicsSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
+				services.Register<aether::PhysicsSystem>(*physicsPtr);
 
-			auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
-			dayNightSystem->Init(*attachContext.TryGet<Renderer>());
-			auto dayNightPtr = dayNightSystem.get();
-			attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
-			services.Register<aether::app::DayNightSystem>(*dayNightPtr);
+				auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
+				dayNightSystem->Init(*attachContext.TryGet<Renderer>());
+				auto dayNightPtr = dayNightSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
+				services.Register<aether::app::DayNightSystem>(*dayNightPtr);
 
-			// Entity lights -> renderer, every frame (see LightSystem).
-			auto lightSystem = std::make_unique<aether::LightSystem>(*attachContext.TryGet<Renderer>());
-			auto lightPtr = lightSystem.get();
-			attachContext.Get<World>().RegisterSystem(std::move(lightSystem));
-			services.Register<aether::LightSystem>(*lightPtr);
+				// Entity lights -> renderer, every frame (see LightSystem).
+				auto lightSystem = std::make_unique<aether::LightSystem>(*attachContext.TryGet<Renderer>());
+				auto lightPtr = lightSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(lightSystem));
+				services.Register<aether::LightSystem>(*lightPtr);
 
-			// Entity cameras -> CameraManager backing pool, every frame (see
-			// CameraSystem). Registered for the edit-mode dt=0 call below.
-			auto cameraSystem = std::make_unique<aether::CameraSystem>(*attachContext.TryGet<aether::CameraManager>());
-			auto cameraPtr = cameraSystem.get();
-			attachContext.Get<World>().RegisterSystem(std::move(cameraSystem));
-			services.Register<aether::CameraSystem>(*cameraPtr);
+				// Entity cameras -> CameraManager backing pool, every frame (see
+				// CameraSystem). Registered for the edit-mode dt=0 call below.
+				auto cameraSystem = std::make_unique<aether::CameraSystem>(*attachContext.TryGet<aether::CameraManager>());
+				auto cameraPtr = cameraSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(cameraSystem));
+				services.Register<aether::CameraSystem>(*cameraPtr);
 
-			// Data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse) - frozen
-			// with the rest of the simulation while Editing.
-			attachContext.Get<World>().RegisterSystem(std::make_unique<BehaviorSystem>(attachContext.Get<AssetManager>()));
+				// Data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse) - frozen
+				// with the rest of the simulation while Editing.
+				attachContext.Get<World>().RegisterSystem(std::make_unique<BehaviorSystem>(attachContext.Get<AssetManager>()));
 
-			// Entity-attached scripts (ScriptComponent) - also play-gated. The
-			// service registration is for the F5 path (handle invalidation).
-			auto scriptSystem = std::make_unique<ScriptComponentSystem>(services);
-			auto scriptPtr = scriptSystem.get();
-			attachContext.Get<World>().RegisterSystem(std::move(scriptSystem));
-			services.Register<ScriptComponentSystem>(*scriptPtr);
+				// Entity-attached scripts (ScriptComponent) - also play-gated. The
+				// service registration is for the F5 path (handle invalidation).
+				auto scriptSystem = std::make_unique<ScriptComponentSystem>(services);
+				auto scriptPtr = scriptSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(scriptSystem));
+				services.Register<ScriptComponentSystem>(*scriptPtr);
+			}
+#endif
 		}
 
 		m_layers.AttachAll(attachContext);
@@ -342,6 +364,11 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 		LayerContext ctx = MakeLayerContext(gameDt, frameIndex);
 
+		// Scene simulation (asset resolve, play-session pump, per-mode system ticks)
+		// belongs to a scene app. The Launcher (no AETHERCORE_SCENE_APP) has no scene
+		// or systems and only drives its layers below - this also keeps PlaySession /
+		// ScriptComponentSystem (CoreCLR) and DayNightSystem out of its binary.
+#ifdef AETHERCORE_SCENE_APP
 		// Keep every mesh pointer resolved from its asset id - back-fills the id on
 		// first sight and re-points meshes whose asset was hot-reloaded - before
 		// systems, UI or rendering read them. Runs in both play and edit modes.
@@ -397,6 +424,7 @@ namespace aether::app
 				cameras->Update(ctx.Get<World>(), 0.0f);
 			}
 		}
+#endif
 		m_layers.UpdateAll(ctx);
 	}
 

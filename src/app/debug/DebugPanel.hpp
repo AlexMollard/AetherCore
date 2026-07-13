@@ -15,7 +15,10 @@ namespace aether
 namespace aether::app
 {
 	struct LayerContext;
+}
 
+namespace aether::editor
+{
 	// Shared ImGui draw helpers used across panels.
 	inline void DrawMetricRow(const char* label, const char* value, ImVec4 color = {colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a})
 	{
@@ -102,36 +105,36 @@ namespace aether::app
 			return &m_visible;
 		}
 
-		virtual void OnAttach(LayerContext&)
+		virtual void OnAttach(app::LayerContext&)
 		{
 		}
 
-		virtual void OnDetach(LayerContext&)
+		virtual void OnDetach(app::LayerContext&)
 		{
 		}
 
-		virtual void OnUpdate(LayerContext&)
+		virtual void OnUpdate(app::LayerContext&)
 		{
 		}
 
-		virtual void OnImGui(LayerContext& context) = 0;
+		virtual void OnImGui(app::LayerContext& context) = 0;
 
-		// See AppLayer::OnRenderTargetsInvalidated. DebugLayer forwards the
+		// See app::AppLayer::OnRenderTargetsInvalidated. DebugLayer forwards the
 		// broadcast to each panel so panels holding ImGui texture descriptors
 		// (viewport, texture inspector) can drop them on recreate.
-		virtual void OnRenderTargetsInvalidated(LayerContext&)
+		virtual void OnRenderTargetsInvalidated(app::LayerContext&)
 		{
 		}
 
-		virtual void LoadSettings(TomlConfig&, LayerContext&)
+		virtual void LoadSettings(TomlConfig&, app::LayerContext&)
 		{
 		}
 
-		virtual void SaveSettings(TomlConfig&, LayerContext&) const
+		virtual void SaveSettings(TomlConfig&, app::LayerContext&) const
 		{
 		}
 
 	protected:
 		bool m_visible = true;
 	};
-} // namespace aether::app
+} // namespace aether::editor

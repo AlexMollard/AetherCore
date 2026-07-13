@@ -2,7 +2,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 
 	class TonemapPanel final : public DebugPanel
@@ -13,7 +13,7 @@ namespace aether::app
 			return "Tonemap";
 		}
 
-		void OnImGui(LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 	};
 
-} // namespace aether::app
+} // namespace aether::editor

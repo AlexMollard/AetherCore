@@ -11,14 +11,14 @@
 #include "utils/TomlConfig.hpp"
 #include "vulkan/Swapchain.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
 		constexpr const char* kCullModeSettingKey = "debug.scene_cullmode";
 	} // namespace
 
-	void PostProcessingPanel::OnImGui(LayerContext& context)
+	void PostProcessingPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -42,7 +42,7 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void PostProcessingPanel::LoadSettings(TomlConfig& config, LayerContext& context)
+	void PostProcessingPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		constexpr int kMinCullMode = static_cast<int>(aether::gpu::CullMode::None);
 		constexpr int kMaxCullMode = static_cast<int>(aether::gpu::CullMode::FrontAndBack);
@@ -51,8 +51,8 @@ namespace aether::app
 		context.Get<Renderer>().SetCullMode(static_cast<aether::gpu::CullMode>(cullMode));
 	}
 
-	void PostProcessingPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
+	void PostProcessingPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		config.Set(kCullModeSettingKey, static_cast<float>(static_cast<int>(context.Get<Renderer>().GetCullMode())));
 	}
-} // namespace aether::app
+} // namespace aether::editor

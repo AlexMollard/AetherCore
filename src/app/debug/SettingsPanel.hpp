@@ -2,7 +2,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// Auto-generated engine settings editor. Every widget is produced from
 	// aether::ForEachSettingField, so a setting added to EngineSettings shows up
@@ -17,6 +17,6 @@ namespace aether::app
 			return "Settings";
 		}
 
-		void OnImGui(LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 	};
-} // namespace aether::app
+} // namespace aether::editor

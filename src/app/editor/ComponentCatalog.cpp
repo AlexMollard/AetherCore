@@ -20,7 +20,7 @@
 #include "ui/UiComponents.hpp"
 #include "utils/ServiceContainer.hpp"
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	namespace
 	{
@@ -264,4 +264,4 @@ namespace aether::app::editor
 		}
 		return nullptr;
 	}
-} // namespace aether::app::editor
+} // namespace aether::editor

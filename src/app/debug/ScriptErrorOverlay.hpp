@@ -6,12 +6,15 @@
 namespace aether::app
 {
 	struct LayerContext;
+}
 
+namespace aether::editor
+{
 	// Polls C# script diagnostics and renders the non-blocking bottom error toast.
 	class ScriptErrorOverlay final
 	{
 	public:
-		void Poll(LayerContext& context);
+		void Poll(app::LayerContext& context);
 		void Draw();
 		void Clear();
 
@@ -28,4 +31,4 @@ namespace aether::app
 
 		std::deque<Toast> m_toasts;
 	};
-} // namespace aether::app
+} // namespace aether::editor

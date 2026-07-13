@@ -39,14 +39,14 @@
 #include "utils/Ray.hpp"
 #include "vulkan/Swapchain.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
-	void ViewportPanel::OnUpdate(LayerContext& context)
+	void ViewportPanel::OnUpdate(app::LayerContext& context)
 	{
 		// Editor camera policy: while Editing the viewport is driven by a
 		// free-fly editor camera (RMB-fly chord); the game's camera - whatever
 		// the script made main - is remembered and restored on Play.
-		auto* playState = context.TryGet<PlayState>();
+		auto* playState = context.TryGet<app::PlayState>();
 		auto* cameras = context.TryGet<CameraManager>();
 		if (playState == nullptr || cameras == nullptr)
 		{
@@ -180,9 +180,9 @@ namespace aether::app
 		}
 	}
 
-	void ViewportPanel::DrawPlayControls(LayerContext& context)
+	void ViewportPanel::DrawPlayControls(app::LayerContext& context)
 	{
-		auto* playState = context.TryGet<PlayState>();
+		auto* playState = context.TryGet<app::PlayState>();
 		if (playState == nullptr)
 		{
 			return;
@@ -217,7 +217,7 @@ namespace aether::app
 		TogglePlaySession(context);
 	}
 
-	bool ViewportPanel::DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	bool ViewportPanel::DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		// W/E/R switch ops while the mouse is over the viewport - but not while
 		// the right button is down, which is the free-camera's WASD-fly chord.
@@ -320,7 +320,7 @@ namespace aether::app
 		return true;
 	}
 
-	void ViewportPanel::HandleViewportPicking(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	void ViewportPanel::HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		// The gizmo owns the mouse while hovered or dragging.
 		if (ImGuizmo::IsOver() || ImGuizmo::IsUsingAny())
@@ -377,10 +377,10 @@ namespace aether::app
 		}
 	}
 
-	void ViewportPanel::DrawCameraGizmos(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	void ViewportPanel::DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		// Overlay is an editing aid; while Playing the viewport shows the game.
-		if (auto* playState = context.TryGet<PlayState>(); playState != nullptr && playState->IsPlaying())
+		if (auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && playState->IsPlaying())
 		{
 			return;
 		}
@@ -480,9 +480,9 @@ namespace aether::app
 		drawList->PopClipRect();
 	}
 
-	void ViewportPanel::DrawCameraPreviewControls(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize)
+	void ViewportPanel::DrawCameraPreviewControls(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize)
 	{
-		auto* playState = context.TryGet<PlayState>();
+		auto* playState = context.TryGet<app::PlayState>();
 		const bool editing = playState == nullptr || !playState->IsPlaying();
 		auto& selection = context.Get<SceneSelection>();
 		World& world = context.Get<World>();
@@ -599,19 +599,19 @@ namespace aether::app
 		ImGui::PopStyleColor(2);
 	}
 
-	void ViewportPanel::OnAttach(LayerContext& context)
+	void ViewportPanel::OnAttach(app::LayerContext& context)
 	{
 		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, true);
 	}
 
-	void ViewportPanel::OnDetach(LayerContext& context)
+	void ViewportPanel::OnDetach(app::LayerContext& context)
 	{
 		ReleaseSceneViewportTexture(context);
 		context.Get<Input>().ClearMouseViewportTransform();
 		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, false);
 	}
 
-	void ViewportPanel::OnRenderTargetsInvalidated(LayerContext& context)
+	void ViewportPanel::OnRenderTargetsInvalidated(app::LayerContext& context)
 	{
 		// The post-process final-color image (and its view) were just destroyed
 		// and recreated. Drop our cached ImGui descriptor AND cached view so the
@@ -620,7 +620,7 @@ namespace aether::app
 		ReleaseSceneViewportTexture(context);
 	}
 
-	void ViewportPanel::ReleaseSceneViewportTexture(LayerContext& context)
+	void ViewportPanel::ReleaseSceneViewportTexture(app::LayerContext& context)
 	{
 		if (m_sceneViewportTextureId != 0)
 		{
@@ -634,7 +634,7 @@ namespace aether::app
 		m_sceneViewportImageView = nullptr;
 	}
 
-	void ViewportPanel::OnImGui(LayerContext& context)
+	void ViewportPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -887,7 +887,7 @@ namespace aether::app
 		// stroke, amber accent). Each pill is its own child window, which also
 		// isolates hover so the camera-input fallback below stays off while the
 		// mouse is over the toolbar.
-		auto* toolbarPlayState = context.TryGet<PlayState>();
+		auto* toolbarPlayState = context.TryGet<app::PlayState>();
 		const bool toolbarPlaying = toolbarPlayState != nullptr && toolbarPlayState->IsPlaying();
 		const bool toolbarCompiling = toolbarPlayState != nullptr && toolbarPlayState->IsCompiling();
 		const float btnH = ImGui::GetFrameHeight();
@@ -1035,4 +1035,4 @@ namespace aether::app
 
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

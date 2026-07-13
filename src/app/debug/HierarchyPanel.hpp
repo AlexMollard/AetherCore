@@ -18,7 +18,7 @@ namespace aether
 	class World;
 } // namespace aether
 
-namespace aether::app
+namespace aether::editor
 {
 	// The scene outliner. Draws the window titled "Scene" (the saved dock-node
 	// mapping keys off the window title, so the title stays even though the
@@ -31,9 +31,9 @@ namespace aether::app
 			return "Scene Outliner";
 		}
 
-		void OnImGui(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnImGui(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 		// Drives this panel's existing Save-As / Open (load) popups from
 		// outside (the editor's File menu and Ctrl+S), so there is one popup
@@ -72,13 +72,13 @@ namespace aether::app
 			DropZone zone;
 		};
 
-		void DrawNode(LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
+		void DrawNode(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
 		void FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask);
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex);
 		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem = true);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		// Drag source + drop target for one row (tree node or flat Selectable).
-		void HandleRowDragDrop(LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
+		void HandleRowDragDrop(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
 		bool DrawRowContextMenu(World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
@@ -177,4 +177,4 @@ namespace aether::app
 		std::unordered_map<std::string, bool> m_expandedPaths;
 		bool m_expandedPathsLoaded = false;
 	};
-} // namespace aether::app
+} // namespace aether::editor

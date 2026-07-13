@@ -9,7 +9,7 @@
 // the whole editor moves together). "Night Amber": warm near-black surfaces,
 // hairline strokes, a single amber accent, spaced micro-labels, ghost/outline
 // buttons, and corner brackets as the one overtly "gamer" flourish.
-namespace aether::app::chrome
+namespace aether::editor::chrome
 {
 	[[nodiscard]] inline ImVec4 C(const glm::vec4& v)
 	{
@@ -352,4 +352,4 @@ namespace aether::app::chrome
 	{
 		return PrimaryButton(label, size);
 	}
-} // namespace aether::app::chrome
+} // namespace aether::editor::chrome

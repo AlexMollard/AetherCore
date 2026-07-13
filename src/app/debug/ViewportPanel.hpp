@@ -8,7 +8,7 @@
 #include "debug/DebugPanel.hpp"
 #include "gpu/GpuTypes.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class ViewportPanel final : public DebugPanel
 	{
@@ -18,30 +18,30 @@ namespace aether::app
 			return "Viewport";
 		}
 
-		void OnAttach(LayerContext& context) override;
-		void OnDetach(LayerContext& context) override;
-		void OnUpdate(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
-		void OnRenderTargetsInvalidated(LayerContext& context) override;
+		void OnAttach(app::LayerContext& context) override;
+		void OnDetach(app::LayerContext& context) override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+		void OnRenderTargetsInvalidated(app::LayerContext& context) override;
 
 	private:
-		void ReleaseSceneViewportTexture(LayerContext& context);
+		void ReleaseSceneViewportTexture(app::LayerContext& context);
 		// Click-to-select. Must be called while the viewport InvisibleButton is
 		// still ImGui's last item (hover/click state reads from it).
-		void HandleViewportPicking(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		void HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// ImGuizmo manipulator on the primary selection, drawn over the image.
 		// Returns true when a gizmo was actually submitted this frame (valid
 		// selection + camera), so the caller can trust ImGuizmo's IsOver/IsUsing
 		// state - those are stale leftovers on frames where Manipulate never ran.
-		bool DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		bool DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// Play/Stop toolbar buttons (snapshot on Play, restore on Stop).
-		void DrawPlayControls(LayerContext& context);
+		void DrawPlayControls(app::LayerContext& context);
 		// Wireframe frustums for every entity camera, drawn over the scene image
 		// (main camera highlighted, selected brightened). Purely an overlay.
-		void DrawCameraGizmos(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		void DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// "Look through selected camera" overlay button + exit control. Toggling
 		// sets m_lookThroughEntityId, which OnUpdate uses to lock the editor camera.
-		void DrawCameraPreviewControls(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
+		void DrawCameraPreviewControls(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
 
 		std::uint64_t m_sceneViewportTextureId = 0;
 		gpu::ImageView m_sceneViewportImageView = nullptr;
@@ -70,4 +70,4 @@ namespace aether::app
 		// each frame (live "look through" preview). 0 = not previewing.
 		std::uint32_t m_lookThroughEntityId = 0;
 	};
-} // namespace aether::app
+} // namespace aether::editor

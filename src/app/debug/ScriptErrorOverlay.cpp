@@ -11,7 +11,7 @@
 #include "Color.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	void ScriptErrorOverlay::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
 	{
@@ -72,9 +72,9 @@ namespace aether::app
 		}
 	}
 
-	void ScriptErrorOverlay::Poll(LayerContext& context)
+	void ScriptErrorOverlay::Poll(app::LayerContext& context)
 	{
-		auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>();
+		auto scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
 		if (!scripting)
 		{
 			return;
@@ -192,4 +192,4 @@ namespace aether::app
 	{
 		m_toasts.clear();
 	}
-} // namespace aether::app
+} // namespace aether::editor

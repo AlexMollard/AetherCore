@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 
-namespace aether::app
+namespace aether::editor
 {
 	// Result of compiling a project's Slang shaders. `compiled` counts shaders
 	// that were actually invoked through slangc (stale outputs); shaders whose
@@ -53,4 +53,4 @@ namespace aether::app
 	// A no-op success (ok=true, compiled=0, failed=0) when this build has no
 	// slangc wired in, or the project has no assets/shaders directory.
 	[[nodiscard]] ShaderCompileResult CompileProject(const std::filesystem::path& projectRoot);
-} // namespace aether::app
+} // namespace aether::editor

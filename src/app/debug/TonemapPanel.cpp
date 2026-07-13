@@ -14,7 +14,7 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "rendering/Renderer.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -130,7 +130,7 @@ namespace aether::app
 
 	} // anonymous namespace
 
-	void TonemapPanel::OnImGui(LayerContext& context)
+	void TonemapPanel::OnImGui(app::LayerContext& context)
 	{
 		auto& rendering = context.Get<RenderingSubsystem>();
 		PostProcessStack& stack = rendering.GetPostProcessStack();
@@ -407,4 +407,4 @@ namespace aether::app
 		ImGui::End();
 	}
 
-} // namespace aether::app
+} // namespace aether::editor

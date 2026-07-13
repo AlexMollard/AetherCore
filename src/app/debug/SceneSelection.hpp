@@ -8,7 +8,7 @@
 #include "scene/Entity.hpp"
 #include "scene/World.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// Shared editor selection state (multi-select + a "primary" for the inspector).
 	// Registered in the ServiceContainer by DebugLayer; read by the outliner, the
@@ -209,4 +209,4 @@ namespace aether::app
 		Asset m_asset{};
 		std::uint64_t m_lastChangeSerial = 0;
 	};
-} // namespace aether::app
+} // namespace aether::editor

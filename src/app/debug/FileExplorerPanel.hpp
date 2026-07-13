@@ -11,7 +11,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "material/TextureHandle.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// Project file browser. The directory tree is CACHED (rescanned on demand, on
 	// file operations, and on a staleness timer) - never walked per frame. Rows
@@ -31,9 +31,9 @@ namespace aether::app
 			return true;
 		}
 
-		void OnAttach(LayerContext& context) override;
-		void OnDetach(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
+		void OnAttach(app::LayerContext& context) override;
+		void OnDetach(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 
 	private:
 		// One cached filesystem entry. Children are only populated for directories.
@@ -48,23 +48,23 @@ namespace aether::app
 			std::vector<Entry> children;
 		};
 
-		void RefreshRoot(LayerContext& context);
+		void RefreshRoot(app::LayerContext& context);
 		void RescanTree();
 		void ScanDirectory(const std::filesystem::path& dir, Entry& out, int depth);
 
-		void DrawToolbar(LayerContext& context);
-		void DrawTree(LayerContext& context);
-		void DrawDirectoryNode(LayerContext& context, Entry& entry, int depth);
-		void DrawFileRow(LayerContext& context, const Entry& entry);
-		void DrawSearchResults(LayerContext& context, const Entry& entry);
-		bool DrawRowContextMenu(LayerContext& context, const Entry& entry); // true = tree mutated
-		void DrawPendingPopups(LayerContext& context);
+		void DrawToolbar(app::LayerContext& context);
+		void DrawTree(app::LayerContext& context);
+		void DrawDirectoryNode(app::LayerContext& context, Entry& entry, int depth);
+		void DrawFileRow(app::LayerContext& context, const Entry& entry);
+		void DrawSearchResults(app::LayerContext& context, const Entry& entry);
+		bool DrawRowContextMenu(app::LayerContext& context, const Entry& entry); // true = tree mutated
+		void DrawPendingPopups(app::LayerContext& context);
 
 		// File operations (all rescan on success and surface errors in the status line).
 		// Preview card for the selected file (image thumbnail / text excerpt / meta).
-		void UpdatePreview(LayerContext& context);
-		void ReleasePreview(LayerContext& context);
-		void DrawPreviewCard(LayerContext& context);
+		void UpdatePreview(app::LayerContext& context);
+		void ReleasePreview(app::LayerContext& context);
+		void DrawPreviewCard(app::LayerContext& context);
 
 		void BeginRename(const Entry& entry);
 		bool ApplyRename(const std::filesystem::path& target, std::string_view newName);
@@ -118,4 +118,4 @@ namespace aether::app
 		std::filesystem::path m_createDir; // where New creates (selected dir or root)
 		std::string m_opError;             // last file-operation error, shown in the status line
 	};
-} // namespace aether::app
+} // namespace aether::editor

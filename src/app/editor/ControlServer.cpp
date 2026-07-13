@@ -14,7 +14,7 @@
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	using nlohmann::json;
 
@@ -294,4 +294,4 @@ namespace aether::app::editor
 		}
 		return json{{"error", std::string("unknown method: ") + method}}.dump();
 	}
-} // namespace aether::app::editor
+} // namespace aether::editor

@@ -23,7 +23,7 @@
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "io/OverlayBackend.hpp"
-#include "launcher/LauncherProcess.hpp"
+#include "project/ProjectCommon.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -38,225 +38,17 @@
 
 using namespace std::string_view_literals;
 
-namespace aether::app
+namespace aether::editor
 {
+	// Project descriptor/scaffold/picker/recents helpers live in the engine-agnostic
+	// ProjectCommon (shared with the standalone Launcher). Pull its names into scope
+	// so the unqualified calls below resolve to the shared implementations.
+	using namespace aether::app::project;
+
 	namespace
 	{
-		constexpr int kMaxRecentProjects = 8;
-		constexpr std::string_view kProjectFileName = "ProjectSettings.toml";
+		// kMaxRecentProjects comes from ProjectCommon (app::project::) via the using-directive above.
 		constexpr std::string_view kEditorLogoPath = "engine://branding/aethercore-icon-white.png";
-
-		std::filesystem::path NormalizePath(std::filesystem::path path)
-		{
-			std::error_code ec;
-			if (path.empty())
-			{
-				return {};
-			}
-			path = std::filesystem::absolute(path, ec);
-			if (ec)
-			{
-				return path.lexically_normal();
-			}
-			const std::filesystem::path canonical = std::filesystem::weakly_canonical(path, ec);
-			return ec ? path.lexically_normal() : canonical;
-		}
-
-		std::string DisplayPath(const std::filesystem::path& path)
-		{
-			return path.empty() ? std::string{} : path.lexically_normal().string();
-		}
-
-		std::filesystem::path ProjectFilePath(const std::filesystem::path& root)
-		{
-			return root / kProjectFileName;
-		}
-
-		std::filesystem::path ResolveProjectRoot(std::filesystem::path path)
-		{
-			path = NormalizePath(std::move(path));
-			if (path.empty())
-			{
-				return {};
-			}
-			if (path.filename() == kProjectFileName)
-			{
-				path = path.parent_path();
-			}
-			return path;
-		}
-
-		bool HasProjectDescriptor(const std::filesystem::path& root)
-		{
-			return io::file_util::Exists(ProjectFilePath(root));
-		}
-
-		std::string FallbackProjectName(const std::filesystem::path& root)
-		{
-			const std::string name = root.filename().string();
-			return name.empty() ? "Aether Project" : name;
-		}
-
-		std::filesystem::path ResolveProjectPath(const std::filesystem::path& root, std::string_view value, std::string_view fallback)
-		{
-			std::filesystem::path path = value.empty() ? std::filesystem::path(fallback) : std::filesystem::path(std::string(value));
-			if (path.is_relative())
-			{
-				path = root / path;
-			}
-			return NormalizePath(std::move(path));
-		}
-
-		Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root)
-		{
-			EditorProjectContext project;
-			project.root = NormalizePath(root);
-			project.projectFile = ProjectFilePath(project.root);
-			project.name = FallbackProjectName(project.root);
-			project.assetsDir = ResolveProjectPath(project.root, {}, "assets");
-			project.scenesDir = ResolveProjectPath(project.root, {}, "scenes");
-			project.prefabsDir = ResolveProjectPath(project.root, {}, "assets/prefabs");
-			project.scriptsDir = ResolveProjectPath(project.root, {}, "scripts");
-
-			auto descriptorText = io::file_util::ReadText(ProjectFilePath(root));
-			if (!descriptorText)
-			{
-				AE_UNEXPECTED(AetherError::Engine("No project descriptor found."));
-			}
-
-			std::string assetsPath;
-			std::string scenesPath;
-			std::string prefabsPath;
-			std::string scriptsPath;
-			try
-			{
-				text::ParseToml(*descriptorText,
-				        [&](const text::IniEntry& entry)
-				        {
-					        if (entry.fullKey == "project.name")
-					        {
-						        project.name = text::StripQuotes(entry.value);
-					        }
-					        else if (entry.fullKey == "paths.assets")
-					        {
-						        assetsPath = text::StripQuotes(entry.value);
-					        }
-					        else if (entry.fullKey == "paths.scenes")
-					        {
-						        scenesPath = text::StripQuotes(entry.value);
-					        }
-					        else if (entry.fullKey == "paths.prefabs")
-					        {
-						        prefabsPath = text::StripQuotes(entry.value);
-					        }
-					        else if (entry.fullKey == "paths.scripts")
-					        {
-						        scriptsPath = text::StripQuotes(entry.value);
-					        }
-				        });
-			}
-			catch (...)
-			{
-				return project;
-			}
-
-			if (project.name.empty())
-			{
-				project.name = FallbackProjectName(project.root);
-			}
-			project.assetsDir = ResolveProjectPath(project.root, assetsPath, "assets");
-			project.scenesDir = ResolveProjectPath(project.root, scenesPath, "scenes");
-			const std::string inferredPrefabsPath = !prefabsPath.empty() ? prefabsPath : (!assetsPath.empty() ? assetsPath + "/prefabs" : std::string{});
-			project.prefabsDir = ResolveProjectPath(project.root, inferredPrefabsPath, "assets/prefabs");
-			project.scriptsDir = ResolveProjectPath(project.root, scriptsPath, "scripts");
-			return project;
-		}
-
-		std::string ReadProjectName(const std::filesystem::path& root)
-		{
-			auto result = ReadProjectDescriptor(root);
-			return result.has_value() ? result->name : FallbackProjectName(root);
-		}
-
-		std::string EscapeTomlString(std::string_view value)
-		{
-			std::string out;
-			for (const char c: value)
-			{
-				if (c == '\\' || c == '"')
-				{
-					out += '\\';
-				}
-				out += c;
-			}
-			return out;
-		}
-
-		bool SeedProjectTemplateFiles(const std::filesystem::path& root, std::string& error)
-		{
-			auto CopyTemplateFile = [&](const std::filesystem::path& srcRoot, const char* relPath, const std::filesystem::path& dest) -> bool
-			{
-				if (io::file_util::Exists(dest))
-				{
-					return true;
-				}
-				if (auto dirResult = io::file_util::CreateDirectories(dest.parent_path()); !dirResult)
-				{
-					error = "Could not create project folder: " + dirResult.error().message;
-					return false;
-				}
-				if (auto copyResult = io::file_util::CopyFile(srcRoot / relPath, dest); !copyResult)
-				{
-					error = "Could not copy project template file '" + std::string(relPath) + "': " + copyResult.error().message;
-					return false;
-				}
-				return true;
-			};
-
-			const std::filesystem::path scriptsProject = root / "scripts" / "AetherGame.csproj";
-			if (!io::file_util::Exists(scriptsProject))
-			{
-				const EditorProjectPublishConfig publishConfig = MakeDefaultEditorProjectPublishConfig();
-				if (auto writeResult = io::file_util::WriteText(scriptsProject, MakeProjectScriptCsprojText(publishConfig.managedSdkProject)); !writeResult)
-				{
-					error = "Could not write project scripts file: " + writeResult.error().message;
-					return false;
-				}
-			}
-
-			return CopyTemplateFile(AETHER_SCENES_SOURCE_DIR, "default.scene.toml", root / "scenes" / "default.scene.toml");
-		}
-
-		bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error)
-		{
-			if (auto dirResult = io::file_util::CreateDirectories(root); !dirResult)
-			{
-				error = "Could not create project directory: " + dirResult.error().message;
-				return false;
-			}
-
-			for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv})
-			{
-				if (auto dirResult = io::file_util::CreateDirectories(root / std::filesystem::path(dir)); !dirResult)
-				{
-					error = "Could not create project folder: " + dirResult.error().message;
-					return false;
-				}
-			}
-
-			const std::string descriptor =
-			    "# AetherCore project file.\n\n"
-			    "[project]\nversion = 1\nname = \"" + EscapeTomlString(name) + "\"\n\n"
-			    "[paths]\nassets = \"assets\"\nscenes = \"scenes\"\nprefabs = \"assets/prefabs\"\nscripts = \"scripts\"\n\n"
-			    "[app]\nstartupScene = \"default\"\n\n"
-			    "[publish]\nplatformName = \"Windows\"\nproductName = \"" + EscapeTomlString(name) + "\"\n";
-			if (auto writeResult = io::file_util::WriteText(ProjectFilePath(root), descriptor); !writeResult)
-			{
-				error = "Could not write ProjectSettings.toml.";
-				return false;
-			}
-			return SeedProjectTemplateFiles(root, error);
-		}
 
 		// (Re)builds the shaders:// overlay's project layer for `projectRoot`:
 		// prepends a DirectoryBackend over its compiled-shader intermediate dir
@@ -314,104 +106,6 @@ namespace aether::app
 			return result;
 		}
 
-#ifdef _WIN32
-		std::optional<std::filesystem::path> PickProjectFolder()
-		{
-			const HRESULT coInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-			const bool uninitialize = SUCCEEDED(coInit);
-
-			IFileDialog* dialog = nullptr;
-			HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
-			if (FAILED(hr) || dialog == nullptr)
-			{
-				if (uninitialize)
-				{
-					CoUninitialize();
-				}
-				return std::nullopt;
-			}
-
-			DWORD options = 0;
-			if (SUCCEEDED(dialog->GetOptions(&options)))
-			{
-				dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-			}
-			dialog->SetTitle(L"Select AetherCore Project Folder");
-
-			std::optional<std::filesystem::path> selected;
-			if (SUCCEEDED(dialog->Show(nullptr)))
-			{
-				IShellItem* item = nullptr;
-				if (SUCCEEDED(dialog->GetResult(&item)) && item != nullptr)
-				{
-					PWSTR rawPath = nullptr;
-					if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &rawPath)) && rawPath != nullptr)
-					{
-						selected = std::filesystem::path(rawPath);
-						CoTaskMemFree(rawPath);
-					}
-					item->Release();
-				}
-			}
-
-			dialog->Release();
-			if (uninitialize)
-			{
-				CoUninitialize();
-			}
-			return selected;
-		}
-
-		std::optional<std::filesystem::path> PickProjectFile()
-		{
-			const HRESULT coInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-			const bool uninitialize = SUCCEEDED(coInit);
-
-			IFileDialog* dialog = nullptr;
-			HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
-			if (FAILED(hr) || dialog == nullptr)
-			{
-				if (uninitialize)
-				{
-					CoUninitialize();
-				}
-				return std::nullopt;
-			}
-
-			DWORD options = 0;
-			if (SUCCEEDED(dialog->GetOptions(&options)))
-			{
-				dialog->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST);
-			}
-			const COMDLG_FILTERSPEC filters[] = {{L"AetherCore project", L"ProjectSettings.toml"}, {L"TOML files", L"*.toml"}};
-			dialog->SetFileTypes(2, filters);
-			dialog->SetFileName(L"ProjectSettings.toml");
-			dialog->SetTitle(L"Select ProjectSettings.toml");
-
-			std::optional<std::filesystem::path> selected;
-			if (SUCCEEDED(dialog->Show(nullptr)))
-			{
-				IShellItem* item = nullptr;
-				if (SUCCEEDED(dialog->GetResult(&item)) && item != nullptr)
-				{
-					PWSTR rawPath = nullptr;
-					if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &rawPath)) && rawPath != nullptr)
-					{
-						selected = std::filesystem::path(rawPath);
-						CoTaskMemFree(rawPath);
-					}
-					item->Release();
-				}
-			}
-
-			dialog->Release();
-			if (uninitialize)
-			{
-				CoUninitialize();
-			}
-			return selected;
-		}
-#endif
 	}
 
 	void EditorProjectManager::Attach(ServiceContainer& services)
@@ -438,7 +132,7 @@ namespace aether::app
 
 		ConfigureActions();
 		services.Register<EditorProjectActions>(m_actions);
-		services.Register<EditorProjectContext>(m_currentProject);
+		services.Register<app::EditorProjectContext>(m_currentProject);
 	}
 
 	void EditorProjectManager::Detach()
@@ -473,11 +167,11 @@ namespace aether::app
 				OpenProject(m_currentProject.root, /*reloadScene=*/false);
 			}
 		};
-		m_actions.packProject = [](const EditorProjectContext& project)
+		m_actions.packProject = [](const app::EditorProjectContext& project)
 		{
 			return PackProject(project, MakeDefaultEditorProjectPublishConfig());
 		};
-		m_actions.publishProject = [](const EditorProjectContext& project, const EditorProjectPublishOptions& options)
+		m_actions.publishProject = [](const app::EditorProjectContext& project, const EditorProjectPublishOptions& options)
 		{
 			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options);
 		};
@@ -517,7 +211,7 @@ namespace aether::app
 		for (int i = 0; i < kMaxRecentProjects; ++i)
 		{
 			const std::string key = std::format("launcher.recent_{}", i);
-			EditorProjectContext project;
+			app::EditorProjectContext project;
 			project.root = NormalizePath(config.GetString(key + ".path"));
 			project.name = config.GetString(key + ".name");
 			if (project.root.empty())
@@ -528,7 +222,7 @@ namespace aether::app
 			{
 				project.name = ReadProjectName(project.root);
 			}
-			if (std::ranges::none_of(m_recentProjects, [&](const EditorProjectContext& existing) { return NormalizePath(existing.root) == project.root; }))
+			if (std::ranges::none_of(m_recentProjects, [&](const app::EditorProjectContext& existing) { return NormalizePath(existing.root) == project.root; }))
 			{
 				m_recentProjects.push_back(std::move(project));
 			}
@@ -539,11 +233,10 @@ namespace aether::app
 		std::snprintf(m_launcherState.newPath.data(), m_launcherState.newPath.size(), "%s", DisplayPath(cwd / "AetherProject").c_str());
 		std::snprintf(m_launcherState.newName.data(), m_launcherState.newName.size(), "%s", "AetherProject");
 
-#ifndef AETHERCORE_LAUNCHER
-		// (Editor only) A project passed on the command line (--project, surfaced as
-		// AETHER_PROJECT_DIR by main) boots straight into that project and bypasses the
-		// launcher; otherwise fall back to the persisted open-last-project behaviour. The
-		// Launcher never auto-opens - it always shows the hub and spawns Editor processes.
+		// A project passed on the command line (--project, surfaced as
+		// AETHER_PROJECT_DIR by main - the Launcher passes it when it spawns the
+		// editor) boots straight into that project; otherwise fall back to the
+		// persisted open-last-project behaviour.
 		std::filesystem::path bootProject;
 		if (const char* env = std::getenv("AETHER_PROJECT_DIR"); env != nullptr && *env != '\0')
 		{
@@ -560,7 +253,6 @@ namespace aether::app
 			// startup scene itself, so don't drive a (duplicate) scene load here.
 			OpenProject(bootProject, /*reloadScene=*/false);
 		}
-#endif
 	}
 
 	void EditorProjectManager::SaveSettings(TomlConfig& config)
@@ -595,8 +287,8 @@ namespace aether::app
 		{
 			name = ReadProjectName(root);
 		}
-		std::erase_if(m_recentProjects, [&](const EditorProjectContext& p) { return NormalizePath(p.root) == root; });
-		EditorProjectContext project;
+		std::erase_if(m_recentProjects, [&](const app::EditorProjectContext& p) { return NormalizePath(p.root) == root; });
+		app::EditorProjectContext project;
 		project.root = std::move(root);
 		project.name = std::move(name);
 		m_recentProjects.insert(m_recentProjects.begin(), std::move(project));
@@ -617,7 +309,7 @@ namespace aether::app
 		{
 			return;
 		}
-		auto* scripting = m_services->TryGet<scripting::CSharpScriptingSubsystem>();
+		auto* scripting = m_services->TryGet<app::scripting::CSharpScriptingSubsystem>();
 		if (scripting == nullptr)
 		{
 			return;
@@ -649,7 +341,7 @@ namespace aether::app
 		{
 			return;
 		}
-		auto* scripting = m_services->TryGet<scripting::CSharpScriptingSubsystem>();
+		auto* scripting = m_services->TryGet<app::scripting::CSharpScriptingSubsystem>();
 		if (scripting == nullptr)
 		{
 			m_scriptBuildPending = false;
@@ -659,13 +351,13 @@ namespace aether::app
 		// If the user pressed Play while the open-build was still running, the play
 		// session adopts the in-flight build and drives it to Playing - stop tracking
 		// it here so completion isn't double-handled.
-		if (const auto* play = m_services->TryGet<PlayState>(); play != nullptr && play->IsCompiling())
+		if (const auto* play = m_services->TryGet<app::PlayState>(); play != nullptr && play->IsCompiling())
 		{
 			m_scriptBuildPending = false;
 			return;
 		}
 
-		using BuildStatus = scripting::CSharpScriptingSubsystem::BuildStatus;
+		using BuildStatus = app::scripting::CSharpScriptingSubsystem::BuildStatus;
 		std::string error;
 		switch (scripting->PollRebuildStatus(error))
 		{
@@ -701,14 +393,6 @@ namespace aether::app
 			m_launcherState.error = "Choose a project folder.";
 			return;
 		}
-#ifdef AETHERCORE_LAUNCHER
-		// The launcher never loads a project in-process: it spawns a separate Editor
-		// process for it and stays open (Hub-style). A separate process gives the editor
-		// a real separate OS window.
-		(void) reloadScene;
-		launcher::SpawnEditor(root);
-		return;
-#endif
 		auto projectResult = ReadProjectDescriptor(root);
 		if (!projectResult)
 		{
@@ -730,7 +414,7 @@ namespace aether::app
 		// build-time game-scripts staging. Runs on every OpenProject, including
 		// switches, so a switch drops the previous project's scripts.
 		BuildAndReloadProjectScripts();
-		scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
+		app::scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
 		RefreshServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
 		m_projectLoaded = true;
@@ -766,7 +450,7 @@ namespace aether::app
 		// SwitchScene tears down the previously loaded scene (ReplaceScene) before
 		// applying the new one, and clears the world when the project has no
 		// startup scene - so switching projects never leaves the old scene live.
-		const bool loaded = scene::SwitchScene(sceneName, *world, scene::MakeApplySceneDeps(*m_services));
+		const bool loaded = app::scene::SwitchScene(sceneName, *world, app::scene::MakeApplySceneDeps(*m_services));
 		if (auto* scenes = m_services->TryGet<aether::SceneSubsystem>())
 		{
 			scenes->SetCurrentScene(loaded ? sceneName : std::string{});
@@ -780,7 +464,7 @@ namespace aether::app
 			return;
 		}
 
-		m_services->Register<EditorProjectContext>(m_currentProject);
+		m_services->Register<app::EditorProjectContext>(m_currentProject);
 		if (auto* settings = m_services->TryGet<aether::SettingsService>())
 		{
 			auto loaded = EngineSettingsIO::LoadLayered("EngineSettings.toml", m_currentProject.projectFile);
@@ -814,14 +498,14 @@ namespace aether::app
 
 	void EditorProjectManager::DrawLauncher()
 	{
-		ProjectLauncherWindowModel model;
+		app::ProjectLauncherWindowModel model;
 		model.projectLoaded = m_projectLoaded;
 		model.hasCurrentProject = HasCurrentProject();
 		model.logoTextureId = m_logoTextureId;
 		model.currentProject = &m_currentProject;
-		model.recentProjects = std::span<const EditorProjectContext>(m_recentProjects.data(), m_recentProjects.size());
+		model.recentProjects = std::span<const app::EditorProjectContext>(m_recentProjects.data(), m_recentProjects.size());
 
-		ProjectLauncherWindowActions actions;
+		app::ProjectLauncherWindowActions actions;
 		actions.openProject = [this](std::filesystem::path root)
 		{
 			OpenProject(std::move(root));
@@ -880,13 +564,13 @@ namespace aether::app
 		return m_logoTextureId;
 	}
 
-	const EditorProjectContext& EditorProjectManager::CurrentProject() const noexcept
+	const app::EditorProjectContext& EditorProjectManager::CurrentProject() const noexcept
 	{
 		return m_currentProject;
 	}
 
-	EditorProjectContext& EditorProjectManager::CurrentProject() noexcept
+	app::EditorProjectContext& EditorProjectManager::CurrentProject() noexcept
 	{
 		return m_currentProject;
 	}
-} // namespace aether::app
+} // namespace aether::editor

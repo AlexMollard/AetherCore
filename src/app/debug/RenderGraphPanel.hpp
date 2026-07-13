@@ -7,7 +7,7 @@
 #include "debug/DebugPanel.hpp"
 #include "rendering/RenderGraph.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class RenderGraphPanel final : public DebugPanel
 	{
@@ -17,9 +17,9 @@ namespace aether::app
 			return "Render Graph";
 		}
 
-		void OnImGui(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnImGui(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
 		static constexpr std::size_t kRenderBenchmarkSampleCount = 240;
@@ -60,7 +60,7 @@ namespace aether::app
 			return {.avg = total / static_cast<float>(benchmark.count), .min = minValue, .max = maxValue};
 		}
 
-		void DrawRenderGraphDebugger(LayerContext& context, RenderGraph& graph);
+		void DrawRenderGraphDebugger(app::LayerContext& context, RenderGraph& graph);
 
 		std::unordered_map<std::string, RenderPassBenchmark> m_renderPassBenchmarks;
 		std::string m_selectedRenderPass;
@@ -69,4 +69,4 @@ namespace aether::app
 		bool m_renderGraphShowCulled = true;
 		bool m_renderGraphAutoSelectHotPass = false;
 	};
-} // namespace aether::app
+} // namespace aether::editor

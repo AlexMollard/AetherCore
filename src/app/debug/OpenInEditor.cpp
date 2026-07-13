@@ -11,7 +11,7 @@
 #	include <shellapi.h>
 #endif
 
-namespace aether::app
+namespace aether::editor
 {
 	void OpenInEditor(const std::string& filePath, int line)
 	{
@@ -58,4 +58,4 @@ namespace aether::app
 		system(shellCmd.c_str());
 #endif
 	}
-} // namespace aether::app
+} // namespace aether::editor

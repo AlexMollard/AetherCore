@@ -161,18 +161,17 @@ namespace aether
 		}
 	}
 
-	void RenderingSubsystem::Init(ServiceContainer& services)
+	void RenderingSubsystem::Init(ServiceContainer& services, RuntimeProfile profile)
 	{
 		AE_PROFILE_ZONE();
+		m_profile = profile;
 		auto& vk = services.Get<VulkanContext>();
 		auto& swapchain = services.Get<Swapchain>();
 		auto& bindless = services.Get<BindlessManager>();
-		auto& cameras = services.Get<CameraManager>();
-		auto& lighting = services.Get<LightingManager>();
-		auto& materials = services.Get<MaterialBuffer>();
-		auto& effectParams = services.Get<EffectParamBuffer>();
 		auto& gpu = services.Get<GpuDevice>();
 		m_bindlessManager = &bindless;
+		// Scene-only services (CameraManager/LightingManager) are resolved below, past
+		// the UiShell early-return - they are not registered in a UiShell runtime.
 
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
 		m_renderGraph.SetVulkanContext(&vk);
@@ -204,6 +203,28 @@ namespace aether
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetDebugDisableAnimation(false);
 		m_renderQueue.SetDebugAnimPassMask(0xFu);
+
+		// UiRenderer is core (both profiles): the shapes pipeline it owns backs any
+		// game-UI overlay. It resolves bindless (live above) plus the asset upload +
+		// texture registries. In UiShell the $UiOverlay game-UI pass is not registered
+		// (see RegisterPasses), but the renderer is cheap to keep initialized and lets
+		// the frame path stay uniform. Color format matches the swapchain since the
+		// overlay draws into the swapchain when no scene viewport exists.
+		auto& assets = services.Get<AssetSubsystem>();
+		m_uiRenderer.Init(gpu, assets.GetUploadContext(), assets.GetTextureRegistry(), swapchain.GetImageFormat());
+
+		// UiShell stops here: it allocates no scene GPU resources (shadow atlases,
+		// cull, GTAO, post-process, editor previews, scene pipelines). RegisterPasses
+		// registers a single swapchain-clear pass in place of the scene chain.
+		if (m_profile != RuntimeProfile::Full)
+		{
+			return;
+		}
+
+		auto& cameras = services.Get<CameraManager>();
+		auto& lighting = services.Get<LightingManager>();
+		auto& materials = services.Get<MaterialBuffer>();
+		auto& effectParams = services.Get<EffectParamBuffer>();
 
 		m_shadowService.Initialize(vk, swapchain, bindless, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
@@ -297,38 +318,40 @@ namespace aether
 		});
 
 		m_physicsDebug.Init(gpu, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
-
-		// UiRenderer::Init resolves gpu.GetBindlessManager().GetDescriptorHeapMappings()
-		// for the ui_shapes pipeline (bindless textured-rect/SDF-glyph sampling), so it
-		// must run after BindlessManager is live - it has been since `bindless` was
-		// fetched above (line ~158) and used throughout this function, so this is safe
-		// anywhere in Init; placed alongside m_physicsDebug.Init for locality. Color
-		// format matches m_physicsDebug's (swapchain.GetImageFormat()) since $UiOverlay
-		// draws into the same target ($SceneViewport's FinalColor or the swapchain),
-		// which PostProcessStack itself builds with this same swapchainFormat.
-		auto& assets = services.Get<AssetSubsystem>();
-		m_uiRenderer.Init(gpu, assets.GetUploadContext(), assets.GetTextureRegistry(), swapchain.GetImageFormat());
 	}
 
 	void RenderingSubsystem::Shutdown()
 	{
 		AE_PROFILE_ZONE();
-		DestroySceneViewportDepth();
-		m_gtaoPass.Destroy();
-		m_postProcessStack.Destroy();
-		m_texturePreviewPipeline.Destroy();
-		if (m_texturePreviewHandle.IsValid())
+
+		// Scene resources only exist in a Full runtime (see Init). In UiShell they
+		// were never initialized, so their Destroy/Shutdown must be skipped - several
+		// dereference GPU handles that would be null.
+		if (m_profile == RuntimeProfile::Full)
 		{
-			gpu::ResourceRegistry::Destroy(m_texturePreviewHandle);
-			m_texturePreviewHandle = {};
+			DestroySceneViewportDepth();
+			m_gtaoPass.Destroy();
+			m_postProcessStack.Destroy();
+			m_texturePreviewPipeline.Destroy();
+			if (m_texturePreviewHandle.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(m_texturePreviewHandle);
+				m_texturePreviewHandle = {};
+			}
+			m_preDepthPipeline.Destroy();
+			m_skyboxPipeline.Destroy();
+			m_cullPass.Shutdown();
+			m_cameraPreview.Shutdown();
+			// The File Explorer clears any staged model on detach; a nullptr here only
+			// skips registry releases the registries' own shutdown handles anyway.
+			m_modelPreview.Shutdown(nullptr);
+			m_shadowService.Shutdown();
+			m_localShadowService.Shutdown();
+			m_renderTargetService.Shutdown();
+			m_physicsDebug.Shutdown();
 		}
-		m_preDepthPipeline.Destroy();
-		m_skyboxPipeline.Destroy();
-		m_cullPass.Shutdown();
-		m_cameraPreview.Shutdown();
-		// The File Explorer clears any staged model on detach; a nullptr here only
-		// skips registry releases the registries' own shutdown handles anyway.
-		m_modelPreview.Shutdown(nullptr);
+
+		// Core resources (initialized in both profiles).
 		m_frameConstantsBuffer.Shutdown();
 
 		for (auto& buf: m_resourceTableBuffers)
@@ -343,12 +366,8 @@ namespace aether
 		}
 
 		m_renderQueue.Shutdown();
-		m_shadowService.Shutdown();
-		m_localShadowService.Shutdown();
-		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown();
-		m_physicsDebug.Shutdown();
 		m_uiRenderer.Shutdown();
 		m_bindlessManager = nullptr;
 	}
@@ -365,6 +384,16 @@ namespace aether
 		// or postprocess textures through bindless descriptors, so retire GPU
 		// work before destroying and reusing those images/descriptors.
 		gpu.WaitIdle();
+
+		// UiShell owns no extent-dependent scene resources. A window resize only needs
+		// the graph topology rebuilt against the new swapchain, which RegisterPasses
+		// does by resolving GetSwapchainColor() afresh for its single clear pass.
+		if (m_profile != RuntimeProfile::Full)
+		{
+			m_renderGraph.Clear();
+			RegisterPasses(services);
+			return;
+		}
 
 		m_shadowService.RecreatePipeline(gpu.GetDevice(), swapchain.GetDepthFormat());
 		m_preDepthPipeline.Destroy();
@@ -495,6 +524,27 @@ namespace aether
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
+
+		// UiShell: there is no scene chain. Register a single pass that clears the
+		// swapchain every frame. This is load-bearing, not cosmetic - the installed
+		// Dear ImGui overlay (ImguiSubsystem::RenderFrame) draws with LoadOp::Load and
+		// assumes the swapchain image is already in COLOR_ATTACHMENT. Without a graph
+		// pass that writes the swapchain, the image is never transitioned and its
+		// contents are undefined. The clear pass both establishes the background and
+		// performs that layout transition, so the overlay presents correctly.
+		if (m_profile != RuntimeProfile::Full)
+		{
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$UiShellClear",
+			                .color = m_renderGraph.GetSwapchainColor(),
+			                .loadOp = gpu::LoadOp::Clear,
+			        })
+			        .Execute([](PassContext&) {});
+			(void) services;
+			return;
+		}
+
 		auto& lightingManager = services.Get<LightingManager>();
 		auto& bindless = services.Get<BindlessManager>();
 		auto& swapchain = services.Get<Swapchain>();

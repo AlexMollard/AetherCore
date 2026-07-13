@@ -7,12 +7,12 @@
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	ControlServerLayer::ControlServerLayer() = default;
 	ControlServerLayer::~ControlServerLayer() = default;
 
-	void ControlServerLayer::OnAttach(LayerContext& context)
+	void ControlServerLayer::OnAttach(app::LayerContext& context)
 	{
 		// Always construct + register the server so the editor's Control Server
 		// panel can manage it (start/stop, port, live stats). It only opens a
@@ -47,7 +47,7 @@ namespace aether::app::editor
 		m_server->Start(port);
 	}
 
-	void ControlServerLayer::OnUpdate(LayerContext& context)
+	void ControlServerLayer::OnUpdate(app::LayerContext& context)
 	{
 		if (m_server == nullptr || !m_server->IsRunning())
 		{
@@ -58,7 +58,7 @@ namespace aether::app::editor
 		m_server->DrainCommands();
 	}
 
-	void ControlServerLayer::OnDetach(LayerContext& context)
+	void ControlServerLayer::OnDetach(app::LayerContext& context)
 	{
 		if (m_server != nullptr)
 		{
@@ -67,4 +67,4 @@ namespace aether::app::editor
 			m_server.reset();
 		}
 	}
-} // namespace aether::app::editor
+} // namespace aether::editor

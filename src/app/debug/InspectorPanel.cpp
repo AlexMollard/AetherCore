@@ -46,7 +46,7 @@
 #include "scripting/SceneContext.hpp"
 #include "utils/Profiler.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -90,7 +90,7 @@ namespace aether::app
 			}
 		}
 
-		bool AssignMaterialPreset(LayerContext& context, World& world, Entity entity, std::string_view path)
+		bool AssignMaterialPreset(app::LayerContext& context, World& world, Entity entity, std::string_view path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
 			if (assets == nullptr)
@@ -113,7 +113,7 @@ namespace aether::app
 			return true;
 		}
 
-		bool AssignTextureToEntity(LayerContext& context, World& world, Entity entity, std::string_view path)
+		bool AssignTextureToEntity(app::LayerContext& context, World& world, Entity entity, std::string_view path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
 			if (assets == nullptr)
@@ -129,10 +129,10 @@ namespace aether::app
 			return true;
 		}
 
-		bool AssignModelAsset(LayerContext& context, World& world, Entity entity, const std::string& path)
+		bool AssignModelAsset(app::LayerContext& context, World& world, Entity entity, const std::string& path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
-			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			auto* sceneCtx = context.TryGet<app::scripting::SceneContext>();
 			if (assets == nullptr || sceneCtx == nullptr)
 			{
 				return false;
@@ -140,7 +140,7 @@ namespace aether::app
 			// The editor mounts project:// to the raw project folder, which has only
 			// the .gltf; bake the .mesh the loader needs (no-op if already baked)
 			// before assigning, so dropping a model just works.
-			if (const auto* project = context.TryGet<EditorProjectContext>())
+			if (const auto* project = context.TryGet<app::EditorProjectContext>())
 			{
 				std::string bakeError;
 				if (!editor::EnsureModelBaked(path, *project, bakeError))
@@ -149,14 +149,14 @@ namespace aether::app
 					return false;
 				}
 			}
-			return scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, path);
+			return app::scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, path);
 		}
 
-		Entity InstantiatePrefabAsset(LayerContext& context, World& world, const std::string& name, Entity parent = {})
+		Entity InstantiatePrefabAsset(app::LayerContext& context, World& world, const std::string& name, Entity parent = {})
 		{
-			if (const auto prefab = scene::ReadPrefabFile(name))
+			if (const auto prefab = app::scene::ReadPrefabFile(name))
 			{
-				const Entity root = scene::InstantiatePrefab(*prefab, world, scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
+				const Entity root = app::scene::InstantiatePrefab(*prefab, world, app::scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
 				if (root.IsValid() && parent.IsValid())
 				{
 					ecs::SetParent(world, root, parent);
@@ -180,7 +180,7 @@ namespace aether::app
 			return "Entity #" + std::to_string(entity.id);
 		}
 
-		bool ApplyFilePayloadToEntity(LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
+		bool ApplyFilePayloadToEntity(app::LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
 		{
 			switch (payload.kind)
 			{
@@ -257,7 +257,7 @@ namespace aether::app
 			}
 		}
 
-		void DrawAssetInspector(LayerContext& context, World& world, SceneSelection& selection)
+		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection)
 		{
 			const SceneSelection::Asset& asset = selection.SelectedAsset();
 			const Entity target = selection.LastEntityPrimary();
@@ -355,7 +355,7 @@ namespace aether::app
 		return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
 	}
 
-	void InspectorPanel::OnImGui(LayerContext& context)
+	void InspectorPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -513,7 +513,7 @@ namespace aether::app
 
 			auto* assets = context.TryGet<AssetManager>();
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
-			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			auto* sceneCtx = context.TryGet<app::scripting::SceneContext>();
 
 			// Current pose seeds the smarter defaults (orbit resumes in place,
 			// physics shapes match the visual scale).
@@ -796,4 +796,4 @@ namespace aether::app
 
 		ImGui::End();
 	}
-} // namespace aether::app
+} // namespace aether::editor

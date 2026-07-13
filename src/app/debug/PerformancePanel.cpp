@@ -13,7 +13,7 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "utils/Profiler.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	void PerformancePanel::PushFrameSample(float frameMs)
 	{
@@ -22,12 +22,12 @@ namespace aether::app
 		m_frameSampleCount = std::min(m_frameSampleCount + 1, kFrameSampleCount);
 	}
 
-	void PerformancePanel::OnUpdate(LayerContext& context)
+	void PerformancePanel::OnUpdate(app::LayerContext& context)
 	{
 		PushFrameSample(static_cast<float>(context.deltaTimeSeconds * 1000.0));
 	}
 
-	void PerformancePanel::OnImGui(LayerContext& context)
+	void PerformancePanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -214,11 +214,11 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void PerformancePanel::LoadSettings(TomlConfig& /*config*/, LayerContext& /*context*/)
+	void PerformancePanel::LoadSettings(TomlConfig& /*config*/, app::LayerContext& /*context*/)
 	{
 	}
 
-	void PerformancePanel::SaveSettings(TomlConfig& /*config*/, LayerContext& /*context*/) const
+	void PerformancePanel::SaveSettings(TomlConfig& /*config*/, app::LayerContext& /*context*/) const
 	{
 	}
-} // namespace aether::app
+} // namespace aether::editor

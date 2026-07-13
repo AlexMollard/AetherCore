@@ -10,7 +10,7 @@
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -237,4 +237,4 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "Project shader compile ({}): {} compiled, {} failed.", projectRoot.generic_string(), result.compiled, result.failed);
 		return result;
 	}
-} // namespace aether::app
+} // namespace aether::editor

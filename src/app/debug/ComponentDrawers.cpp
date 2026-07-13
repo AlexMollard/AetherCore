@@ -45,7 +45,7 @@
 #include "scene/World.hpp"
 #include "ui/UiComponents.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// Shared inspector toolkit (Color-token property rows, section headers,
 	// vector rows, accent/danger buttons). Kept as short aliases so the drawers
@@ -157,10 +157,10 @@ namespace aether::app
 		return assigned;
 	}
 
-	void DrawScriptEntry(LayerContext& context, World& world, Entity entity, ScriptComponent& sc, ScriptEntry& script, std::size_t scriptIndex)
+	void DrawScriptEntry(app::LayerContext& context, World& world, Entity entity, ScriptComponent& sc, ScriptEntry& script, std::size_t scriptIndex)
 	{
 		ImGui::PushID(static_cast<int>(scriptIndex));
-		auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>();
+		auto* cs = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
 		const bool scriptingAvailable = cs != nullptr && cs->IsAvailable();
 		const char* preview = script.path.empty() ? "Drop or choose a script" : script.path.c_str();
 		ImGui::SetNextItemWidth(-34.0f);
@@ -236,7 +236,7 @@ namespace aether::app
 		// A live instance (while playing) is the source of truth; otherwise the
 		// value is the stored override, falling back to the type default.
 		std::uint64_t handle = 0;
-		if (auto* runner = context.TryGet<ScriptComponentSystem>())
+		if (auto* runner = context.TryGet<app::ScriptComponentSystem>())
 		{
 			handle = runner->GetInstanceHandle(entity.id, static_cast<std::uint32_t>(scriptIndex));
 		}
@@ -520,7 +520,7 @@ namespace aether::app
 		return {ICON_FA_CIRCLE, ToImVec4(colors::Neutral)};
 	}
 
-	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld)
+	void ApplyWorldTransform(app::LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld)
 	{
 		if (world.TryGet<TransformComponent>(entity) == nullptr)
 		{
@@ -570,7 +570,7 @@ namespace aether::app
 		}
 	}
 
-	void DrawTransform(LayerContext& context, World& world, Entity entity)
+	void DrawTransform(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* tc = world.TryGet<TransformComponent>(entity);
 		if (!tc)
@@ -706,7 +706,7 @@ namespace aether::app
 		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel = nullptr);
 	} // namespace
 
-	void DrawMaterial(LayerContext& context, World& world, Entity entity)
+	void DrawMaterial(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* mc = world.TryGet<MaterialComponent>(entity);
 		if (!mc || !SectionHeader(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1015,7 +1015,7 @@ namespace aether::app
 		PropCheckbox("Wrap", &text->wrap);
 	}
 
-	void DrawEffectParams(LayerContext& context, World& world, Entity entity)
+	void DrawEffectParams(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* ep = world.TryGet<EffectParamsComponent>(entity);
 		if (!ep)
@@ -1072,7 +1072,7 @@ namespace aether::app
 		PropText("Param slot", "%u", ep->paramSlot);
 	}
 
-	void DrawPhysics(LayerContext& context, World& world, Entity entity)
+	void DrawPhysics(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* collider = world.TryGet<ColliderComponent>(entity);
 		auto* rb = world.TryGet<RigidBodyComponent>(entity);
@@ -1288,7 +1288,7 @@ namespace aether::app
 		ImGui::TextDisabled("Runtime only - populated while Playing.");
 	}
 
-	void DrawJoint(LayerContext& context, World& world, Entity entity)
+	void DrawJoint(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* joint = world.TryGet<JointComponent>(entity);
 		if (joint == nullptr)
@@ -1651,7 +1651,7 @@ namespace aether::app
 		return accepted;
 	}
 
-	void DrawScript(LayerContext& context, World& world, Entity entity)
+	void DrawScript(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* sc = world.TryGet<ScriptComponent>(entity);
 		if (sc == nullptr)
@@ -1807,7 +1807,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void DrawMeshRenderer(LayerContext& context, World& world, Entity entity)
+	void DrawMeshRenderer(app::LayerContext& context, World& world, Entity entity)
 	{
 		const bool hasMesh = world.Has<MeshComponent>(entity);
 		// Sprites carry a mesh too but own the "Sprite Renderer" panel instead.
@@ -1822,7 +1822,7 @@ namespace aether::app
 
 		auto* assets = context.TryGet<AssetManager>();
 		auto* primitives = context.TryGet<PrimitiveMeshes>();
-		auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+		auto* sceneCtx = context.TryGet<app::scripting::SceneContext>();
 
 		const MeshSourceComponent* source = world.TryGet<MeshSourceComponent>(entity);
 		bool isModel = source != nullptr && source->kind == MeshSourceComponent::Kind::Model;
@@ -1868,7 +1868,7 @@ namespace aether::app
 			}
 			else if (assets != nullptr && sceneCtx != nullptr)
 			{
-				scene::AssignModelMeshToEntity(world, *assets, *sceneCtx, entity, src.path, src.subIndex);
+				app::scene::AssignModelMeshToEntity(world, *assets, *sceneCtx, entity, src.path, src.subIndex);
 			}
 		};
 
@@ -1879,7 +1879,7 @@ namespace aether::app
 		{
 			if (isModel && assets != nullptr && sceneCtx != nullptr)
 			{
-				scene::RegisterModelAssets(*assetDb, *assets, *sceneCtx, source->path);
+				app::scene::RegisterModelAssets(*assetDb, *assets, *sceneCtx, source->path);
 			}
 			currentId = assetDb->Register(isModel ? MakeModelMeshSource(source->path, static_cast<int>(source->primitiveIndex)) : MakePrimitiveMeshSource(source->path));
 		}
@@ -1910,7 +1910,7 @@ namespace aether::app
 					{
 						// Bake the .mesh the loader needs (no-op if already baked) before
 						// assigning - project:// is the raw project folder in the editor.
-						if (const auto* project = context.TryGet<EditorProjectContext>())
+						if (const auto* project = context.TryGet<app::EditorProjectContext>())
 						{
 							std::string bakeError;
 							if (!editor::EnsureModelBaked(file->path, *project, bakeError))
@@ -1918,10 +1918,10 @@ namespace aether::app
 								AE_WARN(LogCategory::App, "Model import failed for '{}': {}", file->path, bakeError);
 							}
 						}
-						scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, file->path);
+						app::scene::AssignModelToEntity(world, *assets, *sceneCtx, entity, file->path);
 						if (assetDb != nullptr)
 						{
-							scene::RegisterModelAssets(*assetDb, *assets, *sceneCtx, file->path);
+							app::scene::RegisterModelAssets(*assetDb, *assets, *sceneCtx, file->path);
 						}
 					}
 				}
@@ -1937,7 +1937,7 @@ namespace aether::app
 			iw::PropLabel("Source");
 			if (AccentButton(ICON_FA_ROTATE "  Reload from disk", ImVec2(-FLT_MIN, 0.0f)))
 			{
-				scene::ReloadModelAssets(*assetDb, *assets, *sceneCtx, source->path);
+				app::scene::ReloadModelAssets(*assetDb, *assets, *sceneCtx, source->path);
 			}
 			iw::ItemTooltip("Re-read the model file; the resolve pass re-points meshes next frame (hot-reload)");
 		}
@@ -1946,13 +1946,13 @@ namespace aether::app
 		// renderer references (re-resolves the shared mesh + its material).
 		if (isModel && assets != nullptr && sceneCtx != nullptr)
 		{
-			const int primCount = scene::ModelPrimitiveCount(*assets, *sceneCtx, source->path);
+			const int primCount = app::scene::ModelPrimitiveCount(*assets, *sceneCtx, source->path);
 			if (primCount > 1)
 			{
 				int primIndex = static_cast<int>(source->primitiveIndex);
 				if (PropInt("Primitive", &primIndex, 0.1f, 0, primCount - 1, "Which mesh of the model this renderer references"))
 				{
-					scene::AssignModelMeshToEntity(world, *assets, *sceneCtx, entity, source->path, primIndex);
+					app::scene::AssignModelMeshToEntity(world, *assets, *sceneCtx, entity, source->path, primIndex);
 				}
 			}
 			else if (primCount > 0)
@@ -1987,7 +1987,7 @@ namespace aether::app
 		}
 	}
 
-	void DrawSpriteRenderer(LayerContext& context, World& world, Entity entity)
+	void DrawSpriteRenderer(app::LayerContext& context, World& world, Entity entity)
 	{
 		if (!world.Has<SpriteRendererComponent>(entity))
 		{
@@ -2188,4 +2188,4 @@ namespace aether::app
 			addTagBuf[0] = '\0';
 		}
 	}
-} // namespace aether::app
+} // namespace aether::editor

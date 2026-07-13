@@ -6,7 +6,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class PerformancePanel final : public DebugPanel
 	{
@@ -18,10 +18,10 @@ namespace aether::app
 			return "Performance";
 		}
 
-		void OnUpdate(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
 		void PushFrameSample(float frameMs);
@@ -37,4 +37,4 @@ namespace aether::app
 		float m_titleMs = 0.0f;
 		float m_titleAccum = 0.0f;
 	};
-} // namespace aether::app
+} // namespace aether::editor

@@ -10,7 +10,7 @@ namespace aether
 	class World;
 } // namespace aether
 
-namespace aether::app
+namespace aether::editor
 {
 	// The entity editor: header (name/id/kind), add-component palette, and one
 	// collapsing section per present component (see debug/ComponentDrawers.hpp).
@@ -22,7 +22,7 @@ namespace aether::app
 			return "Inspector";
 		}
 
-		void OnImGui(LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
 
 	private:
 		static bool IsAlive(const World& world, Entity entity);
@@ -31,4 +31,4 @@ namespace aether::app
 		bool m_addFocusPending = false;
 		char m_addTagBuf[48] = {};
 	};
-} // namespace aether::app
+} // namespace aether::editor

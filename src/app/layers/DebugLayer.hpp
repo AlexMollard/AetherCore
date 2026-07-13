@@ -23,39 +23,39 @@ namespace aether
 	class Window;
 }
 
-namespace aether::app
+namespace aether::editor
 {
 	class HierarchyPanel;
 
-	class DebugLayer final : public AppLayer
+	class DebugLayer final : public app::AppLayer
 	{
 	public:
-		void OnAttach(LayerContext& context) override;
-		void OnDetach(LayerContext& context) override;
-		void OnUpdate(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
-		void OnRenderTargetsInvalidated(LayerContext& context) override;
+		void OnAttach(app::LayerContext& context) override;
+		void OnDetach(app::LayerContext& context) override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+		void OnRenderTargetsInvalidated(app::LayerContext& context) override;
 
 	private:
 		// Bottom-of-viewport status bar (scene, play state, resolution, FPS). Only
 		// drawn from the second frame on, so it never resizes the docked viewport
 		// before its render targets exist.
-		void DrawStatusBar(LayerContext& context);
+		void DrawStatusBar(app::LayerContext& context);
 		// Ctrl+P fuzzy command palette (panel toggles, play, layout).
-		void DrawCommandPalette(LayerContext& context);
+		void DrawCommandPalette(app::LayerContext& context);
 		// Named layout presets: capture/apply the ImGui dock ini + panel visibility.
 		void ReloadLayoutPresets();
 		void ApplyLayoutPreset(const LayoutPreset& preset);
 		void CaptureCurrentLayout(std::string name);
 		void DeleteLayoutPreset(std::string_view name);
 		[[nodiscard]] DebugPanel* FindPanelByName(std::string_view name) const;
-		void LoadSettings(LayerContext& context);
-		void SaveSettings(LayerContext& context);
-		void PersistSettings(LayerContext& context);
+		void LoadSettings(app::LayerContext& context);
+		void SaveSettings(app::LayerContext& context);
+		void PersistSettings(app::LayerContext& context);
 		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
 		// by SceneSubsystem), falling back to the Scene Outliner's Save-As popup
 		// when there isn't one yet (or the quick-save failed).
-		void SaveCurrentScene(LayerContext& context);
+		void SaveCurrentScene(app::LayerContext& context);
 
 		// Transient confirmation toast (e.g. Ctrl+S save feedback): a fading pill in
 		// the editor chrome, so an action that otherwise only writes a log line still
@@ -70,7 +70,7 @@ namespace aether::app
 		// record the current size so it persists to EditorState (editor.window_*) and
 		// reopens at that size next launch. The launcher no longer resizes the OS
 		// window, so there is no launcher-vs-editor sizing policy.
-		void CaptureEditorWindowSize(LayerContext& context);
+		void CaptureEditorWindowSize(app::LayerContext& context);
 		int m_editorWindowW = 0;             // last editor window size (0 = not yet loaded)
 		int m_editorWindowH = 0;
 
@@ -111,4 +111,4 @@ namespace aether::app
 		// duplicating them. Set in OnAttach, cleared in OnDetach.
 		HierarchyPanel* m_hierarchyPanel = nullptr;
 	};
-} // namespace aether::app
+} // namespace aether::editor

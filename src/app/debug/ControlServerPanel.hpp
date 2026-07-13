@@ -4,7 +4,7 @@
 
 #include "debug/DebugPanel.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	// Editor window for managing the ControlServer - the localhost endpoint that
 	// the AetherCore MCP and the aether-ctl CLI drive. Start/stop the server,
@@ -23,14 +23,14 @@ namespace aether::app
 			return false;
 		}
 
-		void OnUpdate(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
 		int m_port = 8787;
 		bool m_autoStart = false;
 		bool m_didAutoStart = false; // one-shot guard for the deferred auto-start
 	};
-} // namespace aether::app
+} // namespace aether::editor

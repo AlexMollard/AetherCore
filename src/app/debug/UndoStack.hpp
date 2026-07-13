@@ -12,7 +12,7 @@ namespace aether
 	class World;
 } // namespace aether
 
-namespace aether::app
+namespace aether::editor
 {
 	// Snapshot-based editor undo. Push() captures the whole edit-mode scene
 	// (cheap at editor scale) BEFORE a gesture mutates it; Undo/Redo restore
@@ -52,7 +52,7 @@ namespace aether::app
 	private:
 		struct Entry
 		{
-			scene::SceneDescription desc;
+			app::scene::SceneDescription desc;
 			std::string key; // serialized TOML: cheap, exact change detection
 		};
 
@@ -61,4 +61,4 @@ namespace aether::app
 		std::vector<Entry> m_undo;
 		std::vector<Entry> m_redo;
 	};
-} // namespace aether::app
+} // namespace aether::editor

@@ -12,7 +12,7 @@ namespace aether
 	class ServiceContainer;
 } // namespace aether
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	// One menu-addable component (or component bundle, e.g. a "Cube" mesh renderer).
 	// This is the SINGLE SOURCE OF TRUTH for "what can be added to an entity" - the
@@ -46,4 +46,4 @@ namespace aether::app::editor
 
 	// Case-sensitive lookup by name; nullptr if unknown.
 	[[nodiscard]] const ComponentCatalogEntry* FindComponent(std::string_view name);
-} // namespace aether::app::editor
+} // namespace aether::editor

@@ -24,7 +24,7 @@
 // beyond ImGui + the colour palette, so both InspectorPanel and ComponentDrawers
 // can share them.
 
-namespace aether::app::iw
+namespace aether::editor::iw
 {
 	// Width of the label column in property rows. Fields fill the remainder.
 	inline constexpr float kLabelWidth = 128.0f;
@@ -402,4 +402,4 @@ namespace aether::app::iw
 		ImGui::PopStyleColor(4);
 		return clicked;
 	}
-} // namespace aether::app::iw
+} // namespace aether::editor::iw

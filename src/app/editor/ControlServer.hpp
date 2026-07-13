@@ -13,7 +13,7 @@ namespace aether
 	class ServiceContainer;
 }
 
-namespace aether::app::editor
+namespace aether::editor
 {
 	// Editor-only localhost control endpoint. Lets an external agent (the
 	// AetherCore MCP server, or the aether-ctl CLI) drive the LIVE editor over a
@@ -92,4 +92,4 @@ namespace aether::app::editor
 		std::deque<RequestLogEntry> m_log;
 		int m_port = 0;
 	};
-} // namespace aether::app::editor
+} // namespace aether::editor

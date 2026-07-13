@@ -21,7 +21,7 @@
 #include "utils/TomlConfig.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -180,7 +180,7 @@ namespace aether::app
 		}
 	} // anonymous namespace
 
-	void RenderGraphPanel::OnImGui(LayerContext& context)
+	void RenderGraphPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -202,21 +202,21 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void RenderGraphPanel::LoadSettings(TomlConfig& config, LayerContext& /*context*/)
+	void RenderGraphPanel::LoadSettings(TomlConfig& config, app::LayerContext& /*context*/)
 	{
 		m_renderGraphAutoSelectHotPass = config.GetBool("debug.rendergraphautoselecthotpass", false);
 		m_renderGraphShowDisabled = config.GetBool("debug.rendergraphshowdisabled", true);
 		m_renderGraphShowCulled = config.GetBool("debug.rendergraphshowculled", true);
 	}
 
-	void RenderGraphPanel::SaveSettings(TomlConfig& config, LayerContext& /*context*/) const
+	void RenderGraphPanel::SaveSettings(TomlConfig& config, app::LayerContext& /*context*/) const
 	{
 		config.Set("debug.rendergraphautoselecthotpass", m_renderGraphAutoSelectHotPass);
 		config.Set("debug.rendergraphshowdisabled", m_renderGraphShowDisabled);
 		config.Set("debug.rendergraphshowculled", m_renderGraphShowCulled);
 	}
 
-	void RenderGraphPanel::DrawRenderGraphDebugger(LayerContext& context, RenderGraph& graph)
+	void RenderGraphPanel::DrawRenderGraphDebugger(app::LayerContext& context, RenderGraph& graph)
 	{
 		AE_PROFILE_ZONE();
 
@@ -646,4 +646,4 @@ namespace aether::app
 			ImGui::EndTable();
 		}
 	}
-} // namespace aether::app
+} // namespace aether::editor

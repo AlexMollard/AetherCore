@@ -11,9 +11,9 @@
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
-	void DevToolsPanel::OnImGui(LayerContext& context)
+	void DevToolsPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -52,7 +52,7 @@ namespace aether::app
 
 			if (ImGui::Button("Reload Scripts"))
 			{
-				if (auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
+				if (auto scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
 				{
 					scripting->RequestReload();
 				}
@@ -61,7 +61,7 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void DevToolsPanel::LoadSettings(TomlConfig& config, LayerContext& context)
+	void DevToolsPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		(void) context;
 		bool overlay = config.GetBool("debug.debugoverlay", aether::IsDebugRenderingEnabled());
@@ -70,10 +70,10 @@ namespace aether::app
 		aether::SetPhysicsDebugShapesEnabled(physicsShapes);
 	}
 
-	void DevToolsPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
+	void DevToolsPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		(void) context;
 		config.Set("debug.debugoverlay", aether::IsDebugRenderingEnabled());
 		config.Set("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
 	}
-} // namespace aether::app
+} // namespace aether::editor

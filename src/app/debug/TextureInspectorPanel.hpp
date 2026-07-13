@@ -6,7 +6,7 @@
 #include "debug/DebugPanel.hpp"
 #include "gpu/GpuTypes.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	class TextureInspectorPanel final : public DebugPanel
 	{
@@ -18,19 +18,19 @@ namespace aether::app
 			return "TextureInspector";
 		}
 
-		void OnDetach(LayerContext& context) override;
-		void OnUpdate(LayerContext& context) override;
-		void OnImGui(LayerContext& context) override;
-		void OnRenderTargetsInvalidated(LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
+		void OnDetach(app::LayerContext& context) override;
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+		void OnRenderTargetsInvalidated(app::LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
 		static const char* FormatName(gpu::Format format) noexcept;
 		static std::string ImageUsageText(gpu::ImageUsage usage);
 		static std::string ImageAspectText(gpu::ImageAspect aspect);
 
-		void ReleaseTextures(LayerContext& context);
+		void ReleaseTextures(app::LayerContext& context);
 
 		std::unordered_map<std::uint32_t, std::uint64_t> m_textureInspectorTextureIds;
 		std::uint32_t m_selectedTextureBits = 0;
@@ -45,4 +45,4 @@ namespace aether::app
 		bool m_useGpuPreview = false; // opt-in: GPU channel/exposure pass vs direct display
 		std::uint64_t m_previewTextureId = 0;
 	};
-} // namespace aether::app
+} // namespace aether::editor

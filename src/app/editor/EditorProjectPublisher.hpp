@@ -8,7 +8,10 @@
 namespace aether::app
 {
 	struct EditorProjectContext;
+}
 
+namespace aether::editor
+{
 	struct EditorProjectPublishConfig
 	{
 		std::filesystem::path executableDir;
@@ -21,8 +24,7 @@ namespace aether::app
 	};
 
 	[[nodiscard]] EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig();
-	[[nodiscard]] EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const EditorProjectContext& project);
-	[[nodiscard]] std::string MakeProjectScriptCsprojText(const std::filesystem::path& managedSdkProject);
-	[[nodiscard]] EditorProjectActionResult PackProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config);
-	[[nodiscard]] EditorProjectActionResult PublishProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options);
-} // namespace aether::app
+	[[nodiscard]] EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const app::EditorProjectContext& project);
+	[[nodiscard]] EditorProjectActionResult PackProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config);
+	[[nodiscard]] EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options);
+} // namespace aether::editor

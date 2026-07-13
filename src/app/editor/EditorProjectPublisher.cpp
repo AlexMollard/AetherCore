@@ -27,7 +27,7 @@
 
 using namespace std::string_view_literals;
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -175,10 +175,15 @@ namespace aether::app
 
 		std::string EditorExecutableName()
 		{
-#ifdef _WIN32
-			return "App.exe";
+			// Single source of truth: the editor target's actual file name, injected by
+			// CMake (AETHER_EDITOR_EXE_NAME = $<TARGET_FILE_NAME:Editor>). The literal
+			// fallbacks track the current target name should the define ever be absent.
+#ifdef AETHER_EDITOR_EXE_NAME
+			return AETHER_EDITOR_EXE_NAME;
+#elif defined(_WIN32)
+			return "Editor.exe";
 #else
-			return "App";
+			return "Editor";
 #endif
 		}
 
@@ -203,12 +208,12 @@ namespace aether::app
 			return value;
 		}
 
-		std::filesystem::path ResolvePublishRoot(const EditorProjectContext& project, const EditorProjectPublishOptions& options)
+		std::filesystem::path ResolvePublishRoot(const app::EditorProjectContext& project, const EditorProjectPublishOptions& options)
 		{
 			return options.outputRoot.empty() ? project.root / "Builds" : options.outputRoot;
 		}
 
-		std::filesystem::path ResolvePublishDirectory(const EditorProjectContext& project, const EditorProjectPublishOptions& options)
+		std::filesystem::path ResolvePublishDirectory(const app::EditorProjectContext& project, const EditorProjectPublishOptions& options)
 		{
 			const std::string platform = SanitizePathSegment(options.platformName, PublishPlatformDirectoryName());
 			const std::string product = SanitizePathSegment(options.productName, project.name.empty() ? "AetherCore"sv : std::string_view(project.name));
@@ -367,7 +372,7 @@ namespace aether::app
 			aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, projectFile);
 
 			// A shipped game runtime has no editor and no Play button, so it must boot
-			// straight into Play mode: Application maps app.autoplay -> PlayState, and
+			// straight into Play mode: Application maps app.autoplay -> app::PlayState, and
 			// only Play mode ticks the C# scripts + animation. The editor default is
 			// false (the editor opens in Edit mode and the user presses Play), so force
 			// it true for the published build. Without this the game loads the startup
@@ -387,7 +392,7 @@ namespace aether::app
 		// Reads back the just-baked published settings and, if a startup scene is
 		// configured, confirms the scene file is actually present in the shipped
 		// project.pak - the same project:// lookup ScriptedSceneLayer::
-		// LoadStartupScene / scene::ReadSceneFile perform at boot (see
+		// LoadStartupScene / app::scene::ReadSceneFile perform at boot (see
 		// kProjectScenesVfsDir in src/app/scene/SceneSerializer.cpp). Catches a
 		// published build that would silently boot into an empty world instead
 		// of shipping one.
@@ -598,7 +603,7 @@ namespace aether::app
 			return io::file_util::Exists(ProjectFilePath(root));
 		}
 
-		std::optional<EditorProjectActionResult> ValidateProjectForPackaging(const EditorProjectContext& project)
+		std::optional<EditorProjectActionResult> ValidateProjectForPackaging(const app::EditorProjectContext& project)
 		{
 			if (!project.IsLoaded())
 			{
@@ -609,36 +614,6 @@ namespace aether::app
 				return EditorProjectActionResult{.succeeded = false, .message = "Project descriptor is missing: " + DisplayPath(ProjectFilePath(project.root))};
 			}
 			return std::nullopt;
-		}
-
-		std::string EscapeXmlAttribute(std::string_view value)
-		{
-			std::string out;
-			for (const char c: value)
-			{
-				switch (c)
-				{
-				case '&':
-					out += "&amp;";
-					break;
-				case '<':
-					out += "&lt;";
-					break;
-				case '>':
-					out += "&gt;";
-					break;
-				case '"':
-					out += "&quot;";
-					break;
-				case '\'':
-					out += "&apos;";
-					break;
-				default:
-					out += c;
-					break;
-				}
-			}
-			return out;
 		}
 
 		std::filesystem::path AbsolutePath(std::filesystem::path path)
@@ -682,44 +657,9 @@ namespace aether::app
 		return config;
 	}
 
-	std::string MakeProjectScriptCsprojText(const std::filesystem::path& managedSdkProject)
-	{
-		const std::filesystem::path sdkProject = AbsolutePath(managedSdkProject);
-		return "<Project Sdk=\"Microsoft.NET.Sdk\">\n"
-		       "\n"
-		       "  <!--\n"
-		       "    Project-owned game scripts. The editor builds this assembly at runtime\n"
-		       "    from the open project, then loads AetherGame.dll through the collectible\n"
-		       "    scripting context.\n"
-		       "\n"
-		       "    AetherCore is compile-only because the engine already loads the SDK assembly.\n"
-		       "    This reference is intentionally absolute so projects created outside the\n"
-		       "    engine checkout can still compile from their own scripts folder.\n"
-		       "  -->\n"
-		       "  <PropertyGroup>\n"
-		       "    <AssemblyName>AetherGame</AssemblyName>\n"
-		       "    <RootNamespace>AetherGame</RootNamespace>\n"
-		       "    <TargetFramework>net10.0</TargetFramework>\n"
-		       "    <Nullable>enable</Nullable>\n"
-		       "    <LangVersion>latest</LangVersion>\n"
-		       "    <ImplicitUsings>disable</ImplicitUsings>\n"
-		       "    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>\n"
-		       "  </PropertyGroup>\n"
-		       "\n"
-		       "  <ItemGroup>\n"
-		       "    <ProjectReference Include=\""
-		       + EscapeXmlAttribute(sdkProject.generic_string())
-		       + "\"\n"
-		         "                      Private=\"false\"\n"
-		         "                      ExcludeAssets=\"runtime\" />\n"
-		         "  </ItemGroup>\n"
-		         "\n"
-		         "</Project>\n";
-	}
-
 	namespace
 	{
-		EditorProjectActionResult PackProjectInternal(const EditorProjectContext& project, const EditorProjectPublishConfig& config, bool syncEditorRuntimeProjectPak)
+		EditorProjectActionResult PackProjectInternal(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, bool syncEditorRuntimeProjectPak)
 		{
 			if (std::optional<EditorProjectActionResult> validationError = ValidateProjectForPackaging(project))
 			{
@@ -801,7 +741,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const EditorProjectContext& project)
+	EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const app::EditorProjectContext& project)
 	{
 		EditorProjectPublishOptions options;
 		options.outputRoot = project.root / "Builds";
@@ -810,12 +750,12 @@ namespace aether::app
 		return options;
 	}
 
-	EditorProjectActionResult PackProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config)
+	EditorProjectActionResult PackProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config)
 	{
 		return PackProjectInternal(project, config, true);
 	}
 
-	EditorProjectActionResult PublishProject(const EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options)
+	EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options)
 	{
 		if (std::optional<EditorProjectActionResult> validationError = ValidateProjectForPackaging(project))
 		{
@@ -968,4 +908,4 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "Published project '{}' to {}", project.name, DisplayPath(publishDir));
 		return {.succeeded = true, .message = "Published game build.", .outputPath = publishDir};
 	}
-} // namespace aether::app
+} // namespace aether::editor

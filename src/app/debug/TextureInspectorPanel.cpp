@@ -24,7 +24,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -103,12 +103,12 @@ namespace aether::app
 		// Textures are released in OnDetach, which is called before destruction.
 	}
 
-	void TextureInspectorPanel::OnDetach(LayerContext& context)
+	void TextureInspectorPanel::OnDetach(app::LayerContext& context)
 	{
 		ReleaseTextures(context);
 	}
 
-	void TextureInspectorPanel::OnUpdate(LayerContext& context)
+	void TextureInspectorPanel::OnUpdate(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -124,7 +124,7 @@ namespace aether::app
 		}
 	}
 
-	void TextureInspectorPanel::OnImGui(LayerContext& context)
+	void TextureInspectorPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -439,21 +439,21 @@ namespace aether::app
 		ImGui::End();
 	}
 
-	void TextureInspectorPanel::LoadSettings(TomlConfig& config, LayerContext& /*context*/)
+	void TextureInspectorPanel::LoadSettings(TomlConfig& config, app::LayerContext& /*context*/)
 	{
 		m_texturePreviewChannel = static_cast<int>(config.GetFloat("textureInspector.PreviewChannel", static_cast<float>(m_texturePreviewChannel)));
 		m_texturePreviewZoom = config.GetFloat("textureInspector.PreviewZoom", m_texturePreviewZoom);
 		m_texturePreviewCheckerboard = config.GetBool("textureInspector.PreviewCheckerboard", m_texturePreviewCheckerboard);
 	}
 
-	void TextureInspectorPanel::SaveSettings(TomlConfig& config, LayerContext& /*context*/) const
+	void TextureInspectorPanel::SaveSettings(TomlConfig& config, app::LayerContext& /*context*/) const
 	{
 		config.Set("textureInspector.PreviewChannel", static_cast<float>(m_texturePreviewChannel));
 		config.Set("textureInspector.PreviewZoom", m_texturePreviewZoom);
 		config.Set("textureInspector.PreviewCheckerboard", m_texturePreviewCheckerboard);
 	}
 
-	void TextureInspectorPanel::OnRenderTargetsInvalidated(LayerContext& context)
+	void TextureInspectorPanel::OnRenderTargetsInvalidated(app::LayerContext& context)
 	{
 		// Preview descriptors may reference render targets that were just
 		// recreated; drop the whole cache so each is re-registered on demand.
@@ -466,7 +466,7 @@ namespace aether::app
 		}
 	}
 
-	void TextureInspectorPanel::ReleaseTextures(LayerContext& context)
+	void TextureInspectorPanel::ReleaseTextures(app::LayerContext& context)
 	{
 		if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
 		{
@@ -596,4 +596,4 @@ namespace aether::app
 		}
 		return text.empty() ? "None" : text;
 	}
-} // namespace aether::app
+} // namespace aether::editor

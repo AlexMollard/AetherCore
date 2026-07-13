@@ -60,7 +60,7 @@ using namespace std::string_view_literals;
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
 
-namespace aether::app
+namespace aether::editor
 {
 	namespace
 	{
@@ -175,7 +175,7 @@ namespace aether::app
 
 	} // namespace
 
-	void DebugLayer::LoadSettings(LayerContext&)
+	void DebugLayer::LoadSettings(app::LayerContext&)
 	{
 		const auto path = EditorStatePath();
 		if (!path.empty() && m_debugConfig.LoadFromPath(path))
@@ -185,7 +185,7 @@ namespace aether::app
 		m_projects.LoadSettings(m_debugConfig);
 	}
 
-	void DebugLayer::SaveSettings(LayerContext&)
+	void DebugLayer::SaveSettings(app::LayerContext&)
 	{
 		if (!m_debugConfig.IsDirty())
 		{
@@ -199,7 +199,7 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::PersistSettings(LayerContext& context)
+	void DebugLayer::PersistSettings(app::LayerContext& context)
 	{
 		for (auto& panel: m_panels)
 		{
@@ -222,7 +222,7 @@ namespace aether::app
 		SaveSettings(context);
 	}
 
-	void DebugLayer::OnAttach(LayerContext& context)
+	void DebugLayer::OnAttach(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 		m_projects.Attach(context.services);
@@ -334,7 +334,7 @@ namespace aether::app
 		context.services.Register<EditorWindowActions>(m_windowActions = std::move(windowActions));
 	}
 
-	void DebugLayer::OnDetach(LayerContext& context)
+	void DebugLayer::OnDetach(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -347,7 +347,7 @@ namespace aether::app
 		m_windowActions = {};
 		m_panels.clear();
 		m_hierarchyPanel = nullptr;
-		context.services.Unregister<EditorProjectContext>();
+		context.services.Unregister<app::EditorProjectContext>();
 		context.services.Unregister<EditorProjectActions>();
 		context.services.Unregister<UndoStack>();
 		context.services.Unregister<SceneSelection>();
@@ -357,14 +357,14 @@ namespace aether::app
 		m_dockspaceBuilt = false;
 	}
 
-	void DebugLayer::OnUpdate(LayerContext& context)
+	void DebugLayer::OnUpdate(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 		const Input& input = context.Get<Input>();
 
 		if (input.IsKeyPressed(aether::Key::F5))
 		{
-			if (auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
+			if (auto scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
 			{
 				scripting->RequestReload();
 			}
@@ -431,7 +431,7 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::OnRenderTargetsInvalidated(LayerContext& context)
+	void DebugLayer::OnRenderTargetsInvalidated(app::LayerContext& context)
 	{
 		for (auto& panel: m_panels)
 		{
@@ -439,7 +439,7 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::DrawStatusBar(LayerContext& context)
+	void DebugLayer::DrawStatusBar(app::LayerContext& context)
 	{
 		using namespace chrome;
 		// A child that fills the row reserved below the DockSpace. Drawn inside the
@@ -448,7 +448,7 @@ namespace aether::app
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, kPanel);
 		if (ImGui::BeginChild("##StatusBar", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
 		{
-			const auto* playState = context.TryGet<PlayState>();
+			const auto* playState = context.TryGet<app::PlayState>();
 			const bool playing = playState != nullptr && playState->IsPlaying();
 			const bool compiling = playState != nullptr && playState->IsCompiling();
 
@@ -537,7 +537,7 @@ namespace aether::app
 			// Script-build indicator: while the editor builds the open project's C#
 			// scripts on a worker thread (project open / F5), show what's happening with
 			// an indeterminate progress bar - distinct from the Play-compile pill above.
-			if (const auto* buildScripting = context.TryGet<scripting::CSharpScriptingSubsystem>();
+			if (const auto* buildScripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
 			    buildScripting != nullptr && buildScripting->IsBuilding() && !compiling)
 			{
 				divider();
@@ -603,7 +603,7 @@ namespace aether::app
 		ImGui::PopStyleColor();
 	}
 
-	void DebugLayer::DrawCommandPalette(LayerContext& context)
+	void DebugLayer::DrawCommandPalette(app::LayerContext& context)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
 		if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_P, false))
@@ -634,7 +634,7 @@ namespace aether::app
 			DebugPanel* p = panel.get();
 			actions.push_back({std::string("View: ") + std::string(p->GetName()), [p]() { *p->VisiblePtr() = !*p->VisiblePtr(); }});
 		}
-		if (auto* playState = context.TryGet<PlayState>())
+		if (auto* playState = context.TryGet<app::PlayState>())
 		{
 			actions.push_back({"Play: Toggle Play / Stop", [&context]() { TogglePlaySession(context); }});
 		}
@@ -768,7 +768,7 @@ namespace aether::app
 		return nullptr;
 	}
 
-	void DebugLayer::SaveCurrentScene(LayerContext& context)
+	void DebugLayer::SaveCurrentScene(app::LayerContext& context)
 	{
 		auto* scenes = context.TryGet<SceneSubsystem>();
 		const std::string currentName = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
@@ -778,7 +778,7 @@ namespace aether::app
 		{
 			if (auto* assets = context.TryGet<AssetManager>())
 			{
-				saved = scene::QuickSave(context.Get<World>(), currentName, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+				saved = app::scene::QuickSave(context.Get<World>(), currentName, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
 			}
 		}
 
@@ -796,7 +796,7 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::CaptureEditorWindowSize(LayerContext& context)
+	void DebugLayer::CaptureEditorWindowSize(app::LayerContext& context)
 	{
 		auto* window = context.services.TryGet<Window>();
 		if (window == nullptr)
@@ -876,7 +876,7 @@ namespace aether::app
 		chrome::TextSized(dl, kFont, ImVec2(p0.x + padX, p0.y + padY), chrome::WithAlpha(chrome::kText, alpha), m_toastText.c_str());
 	}
 
-	void DebugLayer::OnImGui(LayerContext& context)
+	void DebugLayer::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -937,7 +937,7 @@ namespace aether::app
 		// Every LMB press records a pre-gesture snapshot (deduped against the
 		// stack top), so a whole gizmo drag, slider drag or destructive click
 		// coalesces into ONE undo step - no per-widget instrumentation.
-		if (const auto* playState = context.TryGet<PlayState>(); playState != nullptr && !playState->IsPlaying())
+		if (const auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && !playState->IsPlaying())
 		{
 			const ImGuiIO& io = ImGui::GetIO();
 			if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -1027,7 +1027,7 @@ namespace aether::app
 					// template's cosmetic display name). A freshly created scene has no
 					// file yet, so track it as UNNAMED - empty is the "unsaved" sentinel
 					// SaveCurrentScene() checks to route Save/Ctrl+S to the Save-As prompt.
-					const std::string name = scene::NewScene(context.Get<World>(), scene::MakeApplySceneDeps(context.services));
+					const std::string name = app::scene::NewScene(context.Get<World>(), app::scene::MakeApplySceneDeps(context.services));
 					if (!name.empty())
 					{
 						if (auto* scenes = context.TryGet<SceneSubsystem>())
@@ -1196,7 +1196,7 @@ namespace aether::app
 			// Right-aligned session chip: brand-tinted app name + a live-state dot.
 			{
 				using namespace chrome;
-				const auto* playState = context.TryGet<PlayState>();
+				const auto* playState = context.TryGet<app::PlayState>();
 				const bool playing = playState != nullptr && playState->IsPlaying();
 				const bool compiling = playState != nullptr && playState->IsCompiling();
 				const char* chip = playing ? ICON_FA_PLAY "  LIVE" : (compiling ? ICON_FA_GEAR "  BUILD" : "AETHERCORE");
@@ -1323,4 +1323,4 @@ namespace aether::app
 
 		PersistSettings(context);
 	}
-} // namespace aether::app
+} // namespace aether::editor

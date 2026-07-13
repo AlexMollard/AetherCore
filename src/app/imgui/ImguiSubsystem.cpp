@@ -54,8 +54,8 @@ namespace aether
 			// All widget COLOURS come from the runtime editor palette (chrome::) so the
 			// Theme panel can recolour every widget live; only the non-colour style
 			// (rounding/spacing above) stays fixed here.
-			app::chrome::RefreshTokens();
-			app::chrome::ApplyImGuiColors(style);
+			editor::chrome::RefreshTokens();
+			editor::chrome::ApplyImGuiColors(style);
 		}
 
 		void ProcessBackendTextureUpdates(ImDrawData* drawData)
