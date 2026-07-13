@@ -37,6 +37,10 @@ namespace aether
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
 		FramebufferSize WaitForValidFramebufferSize();
 
+		// Current window size in screen coordinates (what SetSize takes). Distinct
+		// from GetFramebufferSize() on HiDPI displays; use this to persist/restore size.
+		[[nodiscard]] FramebufferSize GetWindowSize() const;
+
 		// Requests a new window size. GLFW fires the framebuffer-size callback on the
 		// next PollEvents, which drives the main-thread swapchain recreate. Must be
 		// called from the main thread.

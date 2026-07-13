@@ -44,6 +44,7 @@ using namespace std::string_view_literals;
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
+#include "platform/Window.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scene/Components.hpp"
@@ -51,6 +52,7 @@ using namespace std::string_view_literals;
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
+#include "utils/SettingsService.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/FuzzyMatch.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
@@ -205,6 +207,18 @@ namespace aether::app
 			m_debugConfig.Set(PanelVisibilityKey(panel->GetName()), panel->IsVisible());
 		}
 		m_projects.SaveSettings(m_debugConfig);
+
+		// Persist the editor window size (guarded so an unchanged size never dirties
+		// the config and triggers a redundant save).
+		if (m_editorWindowW > 0 && static_cast<int>(m_debugConfig.GetFloat("editor.window_width", -1.0f)) != m_editorWindowW)
+		{
+			m_debugConfig.Set("editor.window_width", static_cast<float>(m_editorWindowW));
+		}
+		if (m_editorWindowH > 0 && static_cast<int>(m_debugConfig.GetFloat("editor.window_height", -1.0f)) != m_editorWindowH)
+		{
+			m_debugConfig.Set("editor.window_height", static_cast<float>(m_editorWindowH));
+		}
+
 		SaveSettings(context);
 	}
 
@@ -213,6 +227,18 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 		m_projects.Attach(context.services);
 		LoadSettings(context);
+
+		// Editor window size: restore the user's last size, defaulting to the
+		// configured resolution (1440p) - the launcher forces 1920x1080 separately.
+		int defW = 2560;
+		int defH = 1440;
+		if (auto* settings = context.services.TryGet<SettingsService>())
+		{
+			defW = settings->Get().window.width;
+			defH = settings->Get().window.height;
+		}
+		m_editorWindowW = static_cast<int>(m_debugConfig.GetFloat("editor.window_width", static_cast<float>(defW)));
+		m_editorWindowH = static_cast<int>(m_debugConfig.GetFloat("editor.window_height", static_cast<float>(defH)));
 
 		// Shared selection service: registered before panels attach so every
 		// panel can resolve it for its whole lifetime.
@@ -735,6 +761,63 @@ namespace aether::app
 		}
 	}
 
+	void DebugLayer::CaptureEditorWindowSize(Window& window)
+	{
+		const auto size = window.GetWindowSize();
+		// Ignore degenerate/minimised sizes and the fixed launcher size so they can't
+		// become the remembered editor size.
+		const bool isLauncherSize = (size.width == kLauncherWindowWidth && size.height == kLauncherWindowHeight);
+		if (size.width >= 640 && size.height >= 480 && !isLauncherSize && (size.width != m_editorWindowW || size.height != m_editorWindowH))
+		{
+			m_editorWindowW = size.width;
+			m_editorWindowH = size.height;
+		}
+	}
+
+	void DebugLayer::UpdateWindowSizing(LayerContext& context)
+	{
+		auto* window = context.services.TryGet<Window>();
+		if (window == nullptr)
+		{
+			return;
+		}
+		if (m_windowSettleFrames > 0)
+		{
+			--m_windowSettleFrames;
+		}
+
+		const bool launcherMode = !m_projects.IsProjectLoaded() || m_projects.IsLauncherOpen();
+
+		if (!m_windowModeInit)
+		{
+			// The window already opened at the correct boot size (Application picks
+			// launcher vs editor size up front), so just record the mode - never
+			// resize on the first frame (frame-0 swapchain state is fragile).
+			m_launcherModeTracked = launcherMode;
+			m_windowModeInit = true;
+			return;
+		}
+
+		if (launcherMode != m_launcherModeTracked)
+		{
+			if (launcherMode)
+			{
+				CaptureEditorWindowSize(*window); // remember size before shrinking to the launcher
+				window->SetSize(kLauncherWindowWidth, kLauncherWindowHeight);
+			}
+			else
+			{
+				window->SetSize(m_editorWindowW, m_editorWindowH); // restore the user's last editor size
+			}
+			m_windowSettleFrames = 12; // let the resize settle before trusting GetWindowSize again
+			m_launcherModeTracked = launcherMode;
+		}
+		else if (!launcherMode && m_windowSettleFrames == 0)
+		{
+			CaptureEditorWindowSize(*window); // track manual resizes as the new "last size"
+		}
+	}
+
 	void DebugLayer::ShowToast(std::string text, bool isError)
 	{
 		m_toastText = std::move(text);
@@ -800,6 +883,11 @@ namespace aether::app
 	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+
+		// Keep the OS window at the launcher size (1920x1080) or the user's editor
+		// size, resizing on the launcher<->project transition. Runs before the
+		// launcher/editor branch below so it covers both.
+		UpdateWindowSizing(context);
 
 		// Once per ImGui frame, before any panel might call Manipulate.
 		ImGuizmo::BeginFrame();

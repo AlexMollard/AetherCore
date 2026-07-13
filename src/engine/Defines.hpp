@@ -18,8 +18,20 @@
 // symbols exist; the linker strips them in Ship/Retail via /OPT:REF /Gy.
 // ---------------------------------------------------------------------------
 
-// ── Tracy profiler ──────────────────────────────────────────────────────────
+// ── Developer tooling gate ───────────────────────────────────────────────────
+// Developer-only, ship-forbidden features (Vulkan validation layers, GPU-AV,
+// profilers, etc.) are compiled in ONLY for Debug and Dev (RelWithDebInfo).
+// Ship (Release) and Retail (MinSizeRel / retail Release) compile them out:
+// they require dev SDKs, add heavy overhead, and must never reach players.
+// Gate any such feature on AE_DEV_TOOLING so the policy stays in one place.
 #if defined(AE_CONFIG_DEBUG) || defined(AE_CONFIG_DEV)
+#	define AE_DEV_TOOLING 1
+#else
+#	define AE_DEV_TOOLING 0
+#endif
+
+// ── Tracy profiler ──────────────────────────────────────────────────────────
+#if AE_DEV_TOOLING
 #	define TRACY_ENABLE 1
 #	define TRACY_ON_DEMAND 1
 #endif
@@ -32,8 +44,12 @@
 // They appear here for documentation; CMake unconditionally defines them
 // for all targets so Profiler.hpp / GpuProfiler can check them at runtime.
 
-// ── Vulkan validation ───────────────────────────────────────────────────────
-// Uncomment the desired validation level before local development builds.
+// ── Vulkan validation (dev tiers only) ──────────────────────────────────────
+// Validation layers are developer-only: they need the Vulkan SDK's layers
+// installed, add heavy CPU/GPU overhead, and must never ship. They are gated on
+// AE_DEV_TOOLING, so Ship/Retail get NONE regardless of the tier chosen below;
+// a Release/Retail build always resolves VK_VALIDATION_CPU/GPU to 0 (see the
+// #else in VulkanContext.cpp). Within a dev build, pick the tier:
 //
 //   VULKAN_CPU_DEBUG - core checks + synchronization validation. The everyday
 //       tier: near-full API coverage, modest overhead.
@@ -46,15 +62,17 @@
 //       debugPrintfEXT probe through the debug messenger; a prior note here
 //       claiming mutual exclusion was stale). TDR risk on AMD/Intel.
 //
-#define VULKAN_CPU_DEBUG 1    // CPU-only validation
-// #define VULKAN_GPU_DEBUG 1    // GPU-assisted deep scan (periodic, not daily)
+#if AE_DEV_TOOLING
+#	define VULKAN_CPU_DEBUG 1 // CPU-only validation
+//	#define VULKAN_GPU_DEBUG 1 // GPU-assisted deep scan (periodic, not daily)
 //
 // Best-practices checks (opt-in, composes with either level above). SDK
 // 1.4.350's layer has a first-image-use crash in BestPractices::
 // ValidateImageInQueue (qf_count integer overflow, bp_image.cpp:280); best-
 // practices builds dodge it by dropping the maintenance9 FEATURE BIT (see
 // VulkanContext.cpp) -- remove that dodge after an SDK fix.
-#define VULKAN_BEST_PRACTICES 1
+#	define VULKAN_BEST_PRACTICES 1
+#endif
 
 // ── Descriptor heap ──────────────────────────────────────────────────────────
 // The renderer requires VK_EXT_descriptor_heap unconditionally (BindlessManager

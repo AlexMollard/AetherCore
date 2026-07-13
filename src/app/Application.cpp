@@ -8,6 +8,9 @@
 #include "assets/AssetManager.hpp"
 #ifdef AETHERCORE_EDITOR_APP
 #	include "imgui/ImguiSubsystem.hpp"
+#	include "debug/EditorProjectManager.hpp" // launcher window-size constants
+#	include "io/PlatformPaths.hpp"
+#	include "utils/TomlConfig.hpp"
 #endif
 #include "physics/PhysicsSystem.hpp"
 #include "io/FileSystem.hpp"
@@ -33,12 +36,41 @@ namespace aether::app
 {
 	namespace
 	{
+#ifdef AETHERCORE_EDITOR_APP
+		// Editor boot window size: the project launcher always opens at a fixed
+		// 1920x1080; a project reopened at boot (open_last) uses the user's last
+		// editor window size, defaulting to the configured resolution. Decided up
+		// front from EditorState so the window opens at the right size with no
+		// visible resize. Runtime launcher<->editor transitions + size persistence
+		// live in DebugLayer; this only picks the initial size. Mirrors
+		// EditorProjectManager::LoadSettings' auto-open condition (open_last +
+		// launcher.current.path).
+		FramebufferSize ResolveEditorBootWindow(int defaultWidth, int defaultHeight)
+		{
+			aether::TomlConfig state;
+			state.LoadFromPath(aether::io::PlatformPaths::GetUserConfigDir() / "EditorState.toml");
+			const bool reopensProject = state.GetBool("launcher.open_last", false) && !state.GetString("launcher.current.path").empty();
+			if (reopensProject)
+			{
+				return {.width = static_cast<int>(state.GetFloat("editor.window_width", static_cast<float>(defaultWidth))),
+				        .height = static_cast<int>(state.GetFloat("editor.window_height", static_cast<float>(defaultHeight)))};
+			}
+			return {.width = kLauncherWindowWidth, .height = kLauncherWindowHeight};
+		}
+#endif
+
 		aether::AetherCore::Config BuildConfigFromSettings(const aether::AetherCore::Config& baseConfig, const aether::EngineSettings& settings)
 		{
 			aether::AetherCore::Config cfg = baseConfig;
+			cfg.enableVsync = settings.graphics.vsync;
+#ifdef AETHERCORE_EDITOR_APP
+			const FramebufferSize boot = ResolveEditorBootWindow(settings.window.width, settings.window.height);
+			cfg.width = boot.width;
+			cfg.height = boot.height;
+#else
 			cfg.width = settings.window.width;
 			cfg.height = settings.window.height;
-			cfg.enableVsync = settings.graphics.vsync;
+#endif
 			return cfg;
 		}
 

@@ -31,7 +31,13 @@ target_link_libraries(Engine
         $<$<PLATFORM_ID:Windows>:dbghelp>
         # libdl provides dladdr for symbol resolution in crash handler on Linux
         $<$<PLATFORM_ID:Linux>:dl>
-        Tracy::TracyClient
+        # Tracy is a developer-only profiler: link it ONLY in the configs whose
+        # Defines.hpp sets TRACY_ENABLE (Debug = AE_CONFIG_DEBUG, RelWithDebInfo =
+        # AE_CONFIG_DEV). Ship (Release) and Retail (MinSizeRel / retail Release)
+        # don't reference any Tracy symbol - every <tracy/...> include is
+        # TRACY_ENABLE-gated - so the client library is never linked into or shipped
+        # with a game build (no dead-strip reliance).
+        $<$<CONFIG:Debug,RelWithDebInfo>:Tracy::TracyClient>
         $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:Nvidia::Aftermath>
         # delayimp provides the delay-load helper thunk required by the
         # /DELAYLOAD link option below.

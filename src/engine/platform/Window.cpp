@@ -127,6 +127,17 @@ namespace aether
 		glfwSetWindowSize(m_window, width, height);
 	}
 
+	FramebufferSize Window::GetWindowSize() const
+	{
+		int w = 0;
+		int h = 0;
+		if (m_window != nullptr)
+		{
+			glfwGetWindowSize(m_window, &w, &h);
+		}
+		return {.width = w, .height = h};
+	}
+
 	int Window::GetDisplayRefreshRate() const
 	{
 		GLFWmonitor* monitor = glfwGetWindowMonitor(m_window);
