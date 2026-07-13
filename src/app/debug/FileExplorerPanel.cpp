@@ -813,7 +813,7 @@ namespace aether::editor
 		ImGui::SameLine();
 		const float btnH = ImGui::GetFrameHeight();
 		const float refreshW = std::max(btnH, ImGui::CalcTextSize(ICON_FA_ROTATE).x + ImGui::GetStyle().FramePadding.x * 2.0f);
-		if (chrome::GhostButton(ICON_FA_ROTATE "##feRefresh", ImVec2(refreshW, btnH)))
+		if (chrome::GhostIconButton(ICON_FA_ROTATE, "##feRefresh", ImVec2(refreshW, btnH)))
 		{
 			m_treeDirty = true;
 		}

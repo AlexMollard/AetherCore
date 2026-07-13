@@ -2,7 +2,9 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "layers/AppLayer.hpp"
@@ -42,6 +44,13 @@ namespace aether::app
 		void RememberRecent(const std::filesystem::path& root);
 		void PersistSettings();
 
+		// Per-project preview thumbnail (<root>/.aether/preview.png, written by the
+		// editor on save). Loaded once per project and cached; the card grid shows it
+		// or a placeholder. LoadPreview is a no-op when the file is absent or fails.
+		void LoadPreview(const EditorProjectContext& project);
+		[[nodiscard]] std::uint64_t PreviewTextureFor(const EditorProjectContext& project) const;
+		void ReleasePreviews();
+
 		ProjectLauncherWindow m_window;
 		ProjectLauncherWindowState m_windowState;
 		std::vector<EditorProjectContext> m_recentProjects;
@@ -51,6 +60,15 @@ namespace aether::app
 		Texture m_logoTexture;
 		std::uint64_t m_logoTextureId = 0;
 		ServiceContainer* m_services = nullptr;
+
+		// Loaded preview thumbnails, keyed by normalized project root. A cached entry
+		// with textureId == 0 records "no preview" so it is not retried every frame.
+		struct PreviewEntry
+		{
+			Texture texture;
+			std::uint64_t textureId = 0;
+		};
+		std::unordered_map<std::string, PreviewEntry> m_previews;
 
 		// MCP integration: each spawned Editor gets AETHER_CONTROL_PORT so its
 		// ControlServer auto-starts and the AetherCore MCP / aether-ctl can drive it.

@@ -787,6 +787,8 @@ namespace aether::editor
 			// Quick-save writes silently (only a log line otherwise) - surface an
 			// on-screen confirmation so Ctrl+S visibly does something.
 			ShowToast(std::string(ICON_FA_FLOPPY_DISK "  Saved  ") + currentName);
+			// Refresh the project's launcher thumbnail from the current scene view.
+			m_projects.CaptureProjectPreview();
 		}
 		else if (m_hierarchyPanel != nullptr)
 		{

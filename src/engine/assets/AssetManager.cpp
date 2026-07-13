@@ -344,6 +344,11 @@ namespace aether
 		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool());
 	}
 
+	Expected<Texture> AssetManager::CreateTextureFromDisk(const std::filesystem::path& path)
+	{
+		return Texture::LoadFromDiskPath(path, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool());
+	}
+
 	coro::async<Expected<Texture>> AssetManager::CreateTextureAsync(std::string_view path)
 	{
 		AE_PROFILE_ZONE();

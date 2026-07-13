@@ -1,6 +1,7 @@
 #include "project/ProjectCommon.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <format>
 #include <system_error>
 
@@ -182,6 +183,61 @@ namespace aether::app::project
 	{
 		const std::string name = root.filename().string();
 		return name.empty() ? "Aether Project" : name;
+	}
+
+	std::filesystem::path PreviewImagePath(const std::filesystem::path& root)
+	{
+		return root / ".aether" / "preview.png";
+	}
+
+	std::string LastModifiedLabel(const std::filesystem::path& root)
+	{
+		namespace fs = std::filesystem;
+		fs::file_time_type newest{};
+		bool any = false;
+		for (const fs::path& candidate: {ProjectFilePath(root), PreviewImagePath(root)})
+		{
+			std::error_code ec;
+			const fs::file_time_type time = fs::last_write_time(candidate, ec);
+			if (!ec && (!any || time > newest))
+			{
+				newest = time;
+				any = true;
+			}
+		}
+		if (!any)
+		{
+			return {};
+		}
+
+		const auto when = std::chrono::clock_cast<std::chrono::system_clock>(newest);
+		const long long secs = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - when).count();
+		if (secs < 60)
+		{
+			return "just now";
+		}
+		const long long minutes = secs / 60;
+		if (minutes < 60)
+		{
+			return std::format("{} min ago", minutes);
+		}
+		const long long hours = minutes / 60;
+		if (hours < 24)
+		{
+			return std::format("{} hr ago", hours);
+		}
+		const long long days = hours / 24;
+		if (days < 7)
+		{
+			return std::format("{} day{} ago", days, days == 1 ? "" : "s");
+		}
+		if (days < 30)
+		{
+			const long long weeks = days / 7;
+			return std::format("{} week{} ago", weeks, weeks == 1 ? "" : "s");
+		}
+		// Older than a month: an absolute date reads better than "10 weeks ago".
+		return std::format("{:%b %d, %Y}", std::chrono::floor<std::chrono::days>(when));
 	}
 
 	Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root)

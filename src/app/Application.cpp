@@ -71,6 +71,13 @@ namespace aether::app
 		{
 			aether::AetherCore::Config cfg = baseConfig;
 			cfg.enableVsync = settings.graphics.vsync;
+			// A UiShell tool front end (the Launcher) sets its own fixed window size at
+			// the entry point (sized to its content); don't stretch it to the monitor
+			// or editor resolution from settings.
+			if (cfg.profile == aether::RuntimeProfile::UiShell)
+			{
+				return cfg;
+			}
 #ifdef AETHERCORE_EDITOR_APP
 			const FramebufferSize boot = ResolveEditorBootWindow(settings.window.width, settings.window.height);
 			cfg.width = boot.width;

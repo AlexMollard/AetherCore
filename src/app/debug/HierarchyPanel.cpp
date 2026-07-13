@@ -1163,7 +1163,7 @@ namespace aether::editor
 			const auto tbIconW = [&](const char* icon) { return std::max(tbBtnH, ImGui::CalcTextSize(icon).x + ImGui::GetStyle().FramePadding.x * 2.0f); };
 
 			// ── Toolbar ────────────────────────────────────────────────────────
-			if (chrome::GhostButton(ICON_FA_PLUS, ImVec2(tbIconW(ICON_FA_PLUS), tbBtnH), chrome::kAccentHi))
+			if (chrome::GhostIconButton(ICON_FA_PLUS, "##addEntity", ImVec2(tbIconW(ICON_FA_PLUS), tbBtnH), chrome::kAccentHi))
 			{
 				ImGui::OpenPopup("CreateEntity");
 			}

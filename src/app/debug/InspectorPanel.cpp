@@ -486,8 +486,9 @@ namespace aether::editor
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, iw::WithAlpha(colors::Red, 0.28f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, iw::WithAlpha(colors::Red, 0.45f));
-		const bool deleteClicked = ImGui::Button(ICON_FA_TRASH, ImVec2(trashW, 0.0f));
+		const bool deleteClicked = ImGui::Button("##deleteEntity", ImVec2(trashW, 0.0f));
 		ImGui::PopStyleColor(4);
+		chrome::CenterIconOnLastItem(ICON_FA_TRASH, iw::WithAlpha(colors::Red, 0.8f));
 		ImGui::SetItemTooltip("Delete entity (and children)");
 		if (deleteClicked)
 		{

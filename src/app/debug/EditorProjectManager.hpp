@@ -41,8 +41,14 @@ namespace aether::editor
 		void RefreshServices();
 		// Ticked every frame by DebugLayer: polls the async project-script build
 		// started on project open and reloads the assembly on success (or surfaces
-		// the build error). Cheap no-op when no build is pending.
+		// the build error), and services a pending one-shot project-preview capture.
+		// Cheap no-op when neither is pending.
 		void UpdateScriptBuild();
+
+		// Capture the scene viewport to <project>/.aether/preview.png (the launcher's
+		// card thumbnail). Called on scene save; a no-op with no open project or
+		// screenshot service. The capture itself is fulfilled by the render thread.
+		void CaptureProjectPreview();
 
 		[[nodiscard]] bool IsProjectLoaded() const noexcept;
 		[[nodiscard]] bool IsLauncherOpen() const noexcept;
@@ -69,6 +75,9 @@ namespace aether::editor
 		// True while an async project-script build kicked off by OpenProject is still
 		// being polled to completion by UpdateScriptBuild.
 		bool m_scriptBuildPending = false;
+		// Frames remaining before a one-shot preview capture (set on opening a project
+		// that has no preview yet, so the scene has time to render first). 0 = idle.
+		int m_previewCaptureCountdown = 0;
 		EditorProjectActions m_actions;
 		ServiceContainer* m_services = nullptr;
 		std::vector<app::EditorProjectContext> m_recentProjects;

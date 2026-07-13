@@ -18,12 +18,14 @@
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "editor/ShaderCompiler.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/DirectoryBackend.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "io/OverlayBackend.hpp"
 #include "project/ProjectCommon.hpp"
+#include "rendering/ScreenshotService.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -337,6 +339,13 @@ namespace aether::editor
 
 	void EditorProjectManager::UpdateScriptBuild()
 	{
+		// One-shot preview capture, scheduled on opening a preview-less project so the
+		// scene has a few frames to render before we grab it.
+		if (m_previewCaptureCountdown > 0 && --m_previewCaptureCountdown == 0)
+		{
+			CaptureProjectPreview();
+		}
+
 		if (!m_scriptBuildPending || m_services == nullptr)
 		{
 			return;
@@ -384,6 +393,37 @@ namespace aether::editor
 		}
 	}
 
+	void EditorProjectManager::CaptureProjectPreview()
+	{
+		if (m_services == nullptr || m_currentProject.root.empty())
+		{
+			return;
+		}
+		auto* shot = m_services->TryGet<ScreenshotService>();
+		if (shot == nullptr || !shot->IsInitialized())
+		{
+			return;
+		}
+		// The scene viewport's post-tonemap output - what the editor viewport shows.
+		const auto textures = gpu::ResourceRegistry::ListDebugTextures();
+		const auto it = std::ranges::find_if(textures, [](const gpu::DebugTextureInfo& t) { return t.debugName.find("PostProcess") != std::string::npos && t.debugName.find("FinalColor") != std::string::npos; });
+		if (it == textures.end())
+		{
+			return;
+		}
+		void* image = gpu::ResourceRegistry::ResolveTextureImage(it->handle);
+		if (image == nullptr)
+		{
+			return;
+		}
+		const std::filesystem::path previewPath = PreviewImagePath(m_currentProject.root);
+		std::error_code ec;
+		std::filesystem::create_directories(previewPath.parent_path(), ec);
+		// Fire and forget: the render thread fulfils the request and writes the PNG.
+		(void) shot->RequestImage(image, it->extent, it->format, it->aspect, gpu::ImageLayout::ShaderReadOnly, previewPath.string());
+		AE_VERBOSE(LogCategory::App, "Captured project preview -> {}", previewPath.string());
+	}
+
 	void EditorProjectManager::OpenProject(std::filesystem::path root, bool reloadScene)
 	{
 		m_launcherState.error.clear();
@@ -425,6 +465,13 @@ namespace aether::editor
 		if (reloadScene)
 		{
 			LoadProjectStartupScene();
+		}
+		// Give a brand-new (preview-less) project a first thumbnail: capture once the
+		// scene has had a moment to render. Existing previews refresh on save.
+		std::error_code previewEc;
+		if (!std::filesystem::exists(PreviewImagePath(m_currentProject.root), previewEc))
+		{
+			m_previewCaptureCountdown = 90;
 		}
 		AE_INFO(LogCategory::App, "Opened editor project '{}' at {}", m_currentProject.name, DisplayPath(m_currentProject.root));
 	}

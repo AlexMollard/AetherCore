@@ -55,6 +55,15 @@ namespace aether
 		}
 		else if (key == "window.width" || key == "window.height")
 		{
+			// Window size is a scene-app setting (the game/editor resolution). A
+			// UiShell tool front end (the Launcher) sizes its own window to its
+			// content at the entry point and must not be stretched to the configured
+			// resolution here - mirrors Application::BuildConfigFromSettings' UiShell
+			// branch, which likewise keeps the entry point's size.
+			if (const auto* engine = m_services.TryGet<AetherCore>(); engine != nullptr && engine->GetProfile() != RuntimeProfile::Full)
+			{
+				return;
+			}
 			if (auto* platform = m_services.TryGet<PlatformSubsystem>())
 			{
 				Window& window = platform->GetWindow();

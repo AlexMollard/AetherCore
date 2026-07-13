@@ -102,3 +102,6 @@ gauntlet-report.json
 # Python bytecode cache (MCP server / tooling)
 __pycache__/
 *.pyc
+
+# Generated per-project launcher preview thumbnails (editor writes these on save)
+**/.aether/preview.png

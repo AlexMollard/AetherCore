@@ -13,6 +13,15 @@
 
 namespace aether::app
 {
+	// Default OS-window size for the standalone Launcher process (LauncherMain) and
+	// the smallest window the responsive hub layout stays usable at (LauncherLayer
+	// applies it as the OS window's minimum size). The hub itself is fluid - it
+	// fills and re-flows to whatever window hosts it (see ProjectLauncherWindow::Draw).
+	inline constexpr int kProjectLauncherDefaultWidth = 1450;
+	inline constexpr int kProjectLauncherDefaultHeight = 880;
+	inline constexpr int kProjectLauncherMinWidth = 720;
+	inline constexpr int kProjectLauncherMinHeight = 540;
+
 	struct ProjectLauncherWindowState
 	{
 		bool openLastProject = false;
@@ -29,6 +38,12 @@ namespace aether::app
 		std::uint64_t logoTextureId = 0;
 		const EditorProjectContext* currentProject = nullptr;
 		std::span<const EditorProjectContext> recentProjects;
+		// ImGui texture id of a project's preview thumbnail, or 0 for none (the card
+		// then draws a placeholder). Optional - unset means no previews at all.
+		std::function<std::uint64_t(const EditorProjectContext&)> previewTextureId;
+		// Short "last edited" label for a project (e.g. "3 days ago"), shown on its
+		// card. Optional; return "" to omit the badge for a given project.
+		std::function<std::string(const EditorProjectContext&)> modifiedLabel;
 	};
 
 	struct ProjectLauncherWindowActions

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 #include <imgui.h>
 
 #include "Color.hpp"
@@ -333,6 +335,42 @@ namespace aether::editor::chrome
 		return pressed;
 	}
 
+	// Draw `icon` ink-centred over the most-recently-submitted item (a label-less
+	// button frame). Uses the glyph's true ink box (ImFontGlyph X0..Y1 from the current
+	// baked font, ImGui 1.92) so it is exact on both axes regardless of the glyph's
+	// advance/bearing - unlike ImGui::Button, which aligns the whole text run and thus
+	// leaves a Font Awesome glyph visually off-centre.
+	inline void CenterIconOnLastItem(const char* icon, const ImVec4& tint)
+	{
+		const ImVec2 bMin = ImGui::GetItemRectMin();
+		const ImVec2 bMax = ImGui::GetItemRectMax();
+		const ImVec2 centre((bMin.x + bMax.x) * 0.5f, (bMin.y + bMax.y) * 0.5f);
+		// Decode the icon's first UTF-8 codepoint (Font Awesome glyphs are 3 bytes).
+		const unsigned char b0 = static_cast<unsigned char>(icon[0]);
+		unsigned int codepoint = b0;
+		if (b0 >= 0xF0u)
+		{
+			codepoint = ((b0 & 0x07u) << 18) | ((static_cast<unsigned char>(icon[1]) & 0x3Fu) << 12) | ((static_cast<unsigned char>(icon[2]) & 0x3Fu) << 6) | (static_cast<unsigned char>(icon[3]) & 0x3Fu);
+		}
+		else if (b0 >= 0xE0u)
+		{
+			codepoint = ((b0 & 0x0Fu) << 12) | ((static_cast<unsigned char>(icon[1]) & 0x3Fu) << 6) | (static_cast<unsigned char>(icon[2]) & 0x3Fu);
+		}
+		else if (b0 >= 0xC0u)
+		{
+			codepoint = ((b0 & 0x1Fu) << 6) | (static_cast<unsigned char>(icon[1]) & 0x3Fu);
+		}
+		ImFontBaked* baked = ImGui::GetFontBaked(); // current-size baked font (ImGui 1.92 dynamic fonts)
+		const ImFontGlyph* glyph = baked != nullptr ? baked->FindGlyph(static_cast<ImWchar>(codepoint)) : nullptr;
+		if (glyph != nullptr)
+		{
+			// AddText draws the glyph ink at pos + (X0,Y0)..(X1,Y1); put its midpoint on
+			// the item centre.
+			const ImVec2 pos(std::floor(centre.x - (glyph->X0 + glyph->X1) * 0.5f), std::floor(centre.y - (glyph->Y0 + glyph->Y1) * 0.5f));
+			ImGui::GetWindowDrawList()->AddText(pos, ImGui::GetColorU32(tint), icon);
+		}
+	}
+
 	// Quiet control: transparent until hovered (amber wash), muted text.
 	inline bool GhostButton(const char* label, const ImVec2 size = ImVec2(0.0f, 0.0f), const ImVec4& textColor = kMuted)
 	{
@@ -344,6 +382,26 @@ namespace aether::editor::chrome
 		const bool pressed = ImGui::Button(label, size);
 		ImGui::PopStyleVar();
 		ImGui::PopStyleColor(4);
+		return pressed;
+	}
+
+	// Icon-only outline button (e.g. a "browse" affordance beside an input). `icon` is
+	// the glyph, `strId` a "##unique" id. Renders a plain label-less OutlineButton
+	// frame (so the ambient FramePadding can't shove the glyph) with the glyph drawn
+	// exactly centred on it.
+	inline bool OutlineIconButton(const char* icon, const char* strId, const ImVec2 size, const ImVec4& tint = kAccentHi)
+	{
+		const bool pressed = OutlineButton(strId, size);
+		CenterIconOnLastItem(icon, tint);
+		return pressed;
+	}
+
+	// Icon-only ghost button - the icon-only sibling of GhostButton, with the same
+	// exact glyph centring. `strId` is a "##unique" id; `tint` colours the glyph.
+	inline bool GhostIconButton(const char* icon, const char* strId, const ImVec2 size, const ImVec4& tint = kMuted)
+	{
+		const bool pressed = GhostButton(strId, size, tint);
+		CenterIconOnLastItem(icon, tint);
 		return pressed;
 	}
 

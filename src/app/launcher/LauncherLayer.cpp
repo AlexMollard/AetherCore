@@ -12,6 +12,7 @@
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/PlatformPaths.hpp"
 #include "launcher/LauncherProcess.hpp"
+#include "platform/Window.hpp"
 #include "project/ProjectCommon.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -68,6 +69,24 @@ namespace aether::app
 	{
 		m_services = &context.services;
 
+		// The launcher is a single-window hub in its own OS process, so ImGui
+		// multi-viewport (tear-out windows) is unnecessary. Worse, with the shared
+		// overlay's ConfigViewportsNoAutoMerge, the floating hub would be promoted to
+		// its own platform window - leaving the MAIN swapchain empty (the engine's
+		// ScreenshotService, which captures that swapchain, would only see the clear
+		// colour). Disabling viewports keeps the hub in the main window.
+		if (auto* imgui = context.services.TryGet<ImguiSubsystem>())
+		{
+			imgui->SetViewportsEnabled(false);
+		}
+
+		// The hub layout is responsive down to its documented minimum; stop the OS
+		// window from shrinking below it.
+		if (auto* window = context.services.TryGet<Window>())
+		{
+			window->SetMinimumSize(kProjectLauncherMinWidth, kProjectLauncherMinHeight);
+		}
+
 		// Optional hub logo. AssetManager + the Dear ImGui overlay both exist in a
 		// UiShell runtime (AssetSubsystem is initialized; the overlay is installed by
 		// the launcher entry point), so the load path mirrors the editor's.
@@ -95,6 +114,10 @@ namespace aether::app
 			AE_INFO(LogCategory::App, "Launcher state loaded from {}", path.string());
 		}
 		m_recentProjects = project::LoadRecentProjects(m_config);
+		for (const EditorProjectContext& recent: m_recentProjects)
+		{
+			LoadPreview(recent);
+		}
 
 		// Seed the hub's open/create text fields with a sensible default location.
 		const std::filesystem::path cwd = project::NormalizePath(std::filesystem::current_path());
@@ -117,6 +140,7 @@ namespace aether::app
 	void LauncherLayer::OnDetach(LayerContext& /*context*/)
 	{
 		PersistSettings();
+		ReleasePreviews();
 		if (m_logoTextureId != 0 && m_services != nullptr)
 		{
 			if (auto* imgui = m_services->TryGet<ImguiSubsystem>())
@@ -129,6 +153,64 @@ namespace aether::app
 		m_services = nullptr;
 	}
 
+	void LauncherLayer::LoadPreview(const EditorProjectContext& project)
+	{
+		if (m_services == nullptr)
+		{
+			return;
+		}
+		const std::string key = project::NormalizePath(project.root).string();
+		if (m_previews.contains(key))
+		{
+			return; // already loaded (or known-absent)
+		}
+		PreviewEntry entry;
+		const std::filesystem::path previewPath = project::PreviewImagePath(project.root);
+		std::error_code ec;
+		if (std::filesystem::exists(previewPath, ec))
+		{
+			auto* assets = m_services->TryGet<AssetManager>();
+			auto* imgui = m_services->TryGet<ImguiSubsystem>();
+			if (assets != nullptr && imgui != nullptr)
+			{
+				if (auto texture = assets->CreateTextureFromDisk(previewPath))
+				{
+					const ImTextureID textureId = imgui->RegisterTexture(texture->GetView(), gpu::ImageLayout::ShaderReadOnly);
+					if (textureId != ImTextureID_Invalid)
+					{
+						entry.texture = std::move(*texture);
+						entry.textureId = static_cast<std::uint64_t>(textureId);
+					}
+				}
+				else
+				{
+					AE_WARN(LogCategory::App, "Launcher: could not load project preview '{}': {}", previewPath.string(), texture.error());
+				}
+			}
+		}
+		m_previews.emplace(key, std::move(entry)); // cache even a 0 id so we don't retry
+	}
+
+	std::uint64_t LauncherLayer::PreviewTextureFor(const EditorProjectContext& project) const
+	{
+		const auto it = m_previews.find(project::NormalizePath(project.root).string());
+		return it != m_previews.end() ? it->second.textureId : 0;
+	}
+
+	void LauncherLayer::ReleasePreviews()
+	{
+		auto* imgui = m_services != nullptr ? m_services->TryGet<ImguiSubsystem>() : nullptr;
+		for (auto& [key, entry]: m_previews)
+		{
+			if (entry.textureId != 0 && imgui != nullptr)
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(entry.textureId));
+			}
+			entry.texture.Destroy();
+		}
+		m_previews.clear();
+	}
+
 	void LauncherLayer::OnImGui(LayerContext& /*context*/)
 	{
 		ProjectLauncherWindowModel model;
@@ -137,6 +219,8 @@ namespace aether::app
 		model.logoTextureId = m_logoTextureId;
 		model.currentProject = &m_currentProject;
 		model.recentProjects = std::span<const EditorProjectContext>(m_recentProjects.data(), m_recentProjects.size());
+		model.previewTextureId = [this](const EditorProjectContext& project) { return PreviewTextureFor(project); };
+		model.modifiedLabel = [](const EditorProjectContext& project) { return project::LastModifiedLabel(project.root); };
 
 		ProjectLauncherWindowActions actions;
 		actions.openProject = [this](std::filesystem::path root) { OpenProject(root); };
@@ -208,6 +292,7 @@ namespace aether::app
 		EditorProjectContext entry;
 		entry.root = resolved;
 		entry.name = project::ReadProjectName(resolved);
+		LoadPreview(entry); // may not exist yet (editor writes it on save) - cached as absent then
 		m_recentProjects.insert(m_recentProjects.begin(), std::move(entry));
 		if (m_recentProjects.size() > static_cast<std::size_t>(project::kMaxRecentProjects))
 		{

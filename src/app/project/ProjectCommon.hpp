@@ -33,6 +33,16 @@ namespace aether::app::project
 	[[nodiscard]] std::filesystem::path ResolveProjectRoot(std::filesystem::path path);
 	[[nodiscard]] bool HasProjectDescriptor(const std::filesystem::path& root);
 	[[nodiscard]] std::string FallbackProjectName(const std::filesystem::path& root);
+	// The per-project preview thumbnail the launcher shows for a project. Written by
+	// the editor on scene save (a capture of the scene viewport). Lives under a hidden
+	// per-project metadata dir so it never pollutes the asset tree.
+	[[nodiscard]] std::filesystem::path PreviewImagePath(const std::filesystem::path& root);
+	// A short human label for when the project was last touched - the newest write time
+	// of its ProjectSettings.toml and its preview thumbnail (the editor rewrites the
+	// preview on every scene save, so this tracks editing): "just now", "5 min ago",
+	// "3 days ago", or an absolute date for older projects. Empty when nothing readable
+	// exists (e.g. a project whose folder is gone).
+	[[nodiscard]] std::string LastModifiedLabel(const std::filesystem::path& root);
 	// Reads ProjectSettings.toml at `root` into a fully-resolved context. Falls back to
 	// folder-derived defaults for any missing field; errors only when no descriptor exists.
 	[[nodiscard]] Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root);

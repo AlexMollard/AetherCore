@@ -964,7 +964,7 @@ namespace aether::editor
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - gearPillW - 8.0f, pillTop));
 		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
-			if (chrome::GhostButton(ICON_FA_GEAR, ImVec2(gearBtnW, btnH)))
+			if (chrome::GhostIconButton(ICON_FA_GEAR, "##viewportGear", ImVec2(gearBtnW, btnH)))
 			{
 				ImGui::OpenPopup("##vpSettings");
 			}

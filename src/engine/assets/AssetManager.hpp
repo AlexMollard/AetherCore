@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <string_view>
@@ -51,6 +52,11 @@ namespace aether
 
 		// Texture creation.
 		[[nodiscard]] Expected<Texture> CreateTexture(std::string_view path);
+
+		// Load a texture straight from a raw filesystem path, bypassing the VFS. For
+		// files outside any mount - e.g. the launcher showing a project's preview
+		// thumbnail from an absolute <project>/.aether/preview.png.
+		[[nodiscard]] Expected<Texture> CreateTextureFromDisk(const std::filesystem::path& path);
 
 		// Async texture creation - co_await the file read on the I/O thread,
 		// then decode and upload to GPU on the calling (game) thread.

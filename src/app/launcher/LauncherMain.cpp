@@ -2,6 +2,7 @@
 #include <exception>
 
 #include "Application.hpp"
+#include "debug/ProjectLauncherWindow.hpp" // kProjectLauncherDefault{Width,Height}
 #include "launcher/LauncherLayer.hpp"
 #include "platform/CrashHandler.hpp"
 #include "platform/Window.hpp"
@@ -45,6 +46,14 @@ int main(int /*argc*/, char** /*argv*/)
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Info);
 
 		aether::AetherCore::Config engineConfig{};
+		engineConfig.appName = "AetherCore Launcher";
+		// The hub fills and re-flows to whatever window hosts it; this is just the
+		// pleasant default size (the UiShell branches in Application::BuildConfigFrom
+		// Settings and SettingsService keep it instead of overriding it from the
+		// configured game/editor resolution). LauncherLayer clamps the OS window to
+		// the hub's minimum usable size on attach.
+		engineConfig.width = aether::app::kProjectLauncherDefaultWidth;
+		engineConfig.height = aether::app::kProjectLauncherDefaultHeight;
 		// Dev-only GPU crash diagnostics, as for the editor (vendor/tooling gated in
 		// VulkanContext.cpp; auto-disabled when the validation layer is active).
 		engineConfig.enableGpuDiagnostics = true;

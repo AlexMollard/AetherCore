@@ -46,6 +46,11 @@ namespace aether
 		// called from the main thread.
 		void SetSize(int width, int height);
 
+		// Clamps how small the user can resize the window (screen coordinates); the
+		// maximum stays unbounded. For tool front-ends whose layout has a smallest
+		// usable size (e.g. the Launcher hub). Main thread only.
+		void SetMinimumSize(int minWidth, int minHeight);
+
 		[[nodiscard]] int GetDisplayRefreshRate() const;
 
 		// Set by the GLFW framebuffer-size callback (fires on the main thread

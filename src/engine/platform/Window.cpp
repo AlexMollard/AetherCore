@@ -127,6 +127,15 @@ namespace aether
 		glfwSetWindowSize(m_window, width, height);
 	}
 
+	void Window::SetMinimumSize(int minWidth, int minHeight)
+	{
+		if (m_window == nullptr || minWidth < 1 || minHeight < 1)
+		{
+			return;
+		}
+		glfwSetWindowSizeLimits(m_window, minWidth, minHeight, GLFW_DONT_CARE, GLFW_DONT_CARE);
+	}
+
 	FramebufferSize Window::GetWindowSize() const
 	{
 		int w = 0;

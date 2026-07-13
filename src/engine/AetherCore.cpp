@@ -305,6 +305,31 @@ namespace aether
 		AE_PROFILE_ZONE();
 		auto previousFrameTime = std::chrono::steady_clock::now();
 
+		// Dev-only one-shot self-screenshot, independent of any UI toolkit or control
+		// endpoint and of screen-lock state (the ScreenshotService captures the
+		// swapchain GPU-side, not the desktop). AETHER_SCREENSHOT=<path> captures on
+		// frame AETHER_SCREENSHOT_FRAME (default 120, giving fonts/first frames time to
+		// settle), then the app keeps running. Works in every RuntimeProfile - this is
+		// how the Launcher (which has no control server) can be captured like the
+		// editor's viewport.screenshot.
+		std::string screenshotPath;
+		std::uint64_t screenshotFrame = 120;
+		bool screenshotRequested = false;
+		if (const char* envPath = std::getenv("AETHER_SCREENSHOT"); envPath != nullptr && *envPath != '\0')
+		{
+			screenshotPath = envPath;
+			if (const char* envFrame = std::getenv("AETHER_SCREENSHOT_FRAME"); envFrame != nullptr && *envFrame != '\0')
+			{
+				try
+				{
+					screenshotFrame = static_cast<std::uint64_t>(std::stoull(envFrame));
+				}
+				catch (const std::exception&)
+				{
+				}
+			}
+		}
+
 		while (!ShouldClose())
 		{
 			AE_PROFILE_ZONE_N("Frame");
@@ -428,6 +453,13 @@ namespace aether
 			}
 
 			m_renderThread.SubmitFrame(std::move(packet));
+
+			if (!screenshotPath.empty() && !screenshotRequested && m_producerFrameIndex >= screenshotFrame && m_screenshotService.IsInitialized())
+			{
+				(void) m_screenshotService.Request(screenshotPath);
+				screenshotRequested = true;
+				AE_INFO(LogCategory::Engine, "Self-screenshot requested (frame {}) -> {}", m_producerFrameIndex, screenshotPath);
+			}
 
 			++m_producerFrameIndex;
 		}
@@ -563,6 +595,15 @@ namespace aether
 
 	void AetherCore::SetImguiViewportsEnabled(bool enabled)
 	{
+		// A UiShell app is a single-window tool front end (e.g. the Launcher): ImGui
+		// multi-viewport (tear-out OS windows) makes no sense there, and would float
+		// the overlay's windows out of the main swapchain - leaving it empty for the
+		// ScreenshotService and anything else that reads it. Force it off regardless of
+		// the requested value / the graphics.imguiViewports setting.
+		if (m_profile != RuntimeProfile::Full)
+		{
+			enabled = false;
+		}
 		m_settings.graphics.imguiViewports = enabled;
 		if (m_uiOverlay)
 		{
