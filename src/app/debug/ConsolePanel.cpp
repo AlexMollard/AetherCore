@@ -62,6 +62,35 @@ namespace aether::app
 			return std::filesystem::path(path).filename().string();
 		}
 
+		// Collapse newlines so each log row is a single, uniform-height line. The row
+		// list renders through an ImGuiListClipper, which assumes every row is the same
+		// height; a multi-line entry (e.g. a build-error dump) otherwise breaks its
+		// scroll math and the list becomes unscrollable. The full multi-line text stays
+		// available via the row's "Copy message" action.
+		std::string ToSingleLine(const std::string& text)
+		{
+			std::string out;
+			out.reserve(text.size());
+			bool inBreak = false;
+			for (const char c: text)
+			{
+				if (c == '\n' || c == '\r')
+				{
+					if (!inBreak)
+					{
+						out += "  |  ";
+						inBreak = true;
+					}
+				}
+				else
+				{
+					out += c;
+					inBreak = false;
+				}
+			}
+			return out;
+		}
+
 		// Toggleable "TAG N" chip in the tinted-ghost language: the severity tint
 		// fills quietly while shown; filtered-off chips drop to faint text, no fill.
 		void LevelBadge(const char* tag, int count, bool* shown, ImVec4 color)
@@ -317,8 +346,12 @@ namespace aether::app
 				ImGui::PushID(i);
 
 				const std::string label = rowText(cr);
+				// Display each entry on one line so multi-line messages don't break the
+				// clipper's uniform-row-height assumption (which corrupts scrolling).
+				// `label` keeps the full text for the copy actions below.
+				const std::string displayLabel = ToSingleLine(label);
 				ImGui::PushStyleColor(ImGuiCol_Text, LevelColor(r.level));
-				ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+				ImGui::Selectable(displayLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
 				ImGui::PopStyleColor();
 
 				if (r.line > 0)
