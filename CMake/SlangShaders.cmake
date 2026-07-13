@@ -106,7 +106,9 @@ function(aethercore_enable_slang_shader_compilation target_name)
         list(APPEND AETHERCORE_SHADER_OUTPUTS "${_shader_output}")
     endforeach()
 
-    add_custom_target(${target_name}_CompileShaders ALL DEPENDS ${AETHERCORE_SHADER_OUTPUTS})
-    set_target_properties(${target_name}_CompileShaders PROPERTIES FOLDER "CMake")
-    add_dependencies(${target_name} ${target_name}_CompileShaders)
+    # Fixed name (this function is registered once, for the Editor) so the target is
+    # plain "CompileShaders" rather than "<target>_CompileShaders".
+    add_custom_target(CompileShaders ALL DEPENDS ${AETHERCORE_SHADER_OUTPUTS})
+    set_target_properties(CompileShaders PROPERTIES FOLDER "Build")
+    add_dependencies(${target_name} CompileShaders)
 endfunction()

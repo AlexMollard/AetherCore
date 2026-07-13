@@ -11,7 +11,7 @@ if(NOT DEFINED RUNTIME_EXE OR RUNTIME_EXE STREQUAL "")
     set(RUNTIME_EXE "AetherGame.exe")
 endif()
 if(NOT DEFINED EDITOR_EXE OR EDITOR_EXE STREQUAL "")
-    set(EDITOR_EXE "App.exe")
+    set(EDITOR_EXE "Editor.exe")
 endif()
 
 set(_required_files

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Toggle AETHERCORE_DEAD_STRIP_REPORT on, build App + AssetPacker, parse the
+  Toggle AETHERCORE_DEAD_STRIP_REPORT on, build Editor + AssetPacker, parse the
   link maps, then toggle the option back off. Keeps the 240MB+ maps from
   regenerating on every normal `cmake --build` between audits.
 
@@ -9,9 +9,9 @@
   Maps persist after toggling OFF; pass -ReportOnly to re-parse without
   reconfiguring or rebuilding.
 
-  Only App and AssetPacker are built. Engine is a transitive dep via App's
+  Only Editor and AssetPacker are built. Engine is a transitive dep via Editor's
   target_link_libraries, so the Engine map (if we wanted one) is included
-  in App.map by the linker.
+  in Editor.map by the linker.
 
 .PARAMETER Preset
   CMake configure preset to use (e.g. vs2022-msvc, vs2022-clang, default,
@@ -99,15 +99,15 @@ if ($ReportOnly) {
     return
 }
 
-# 1. Reconfigure with option ON. This is what wires /MAP into the App and
+# 1. Reconfigure with option ON. This is what wires /MAP into the Editor and
 # AssetPacker link commands. Reconfiguration is required because the option
 # affects target_link_options; a plain rebuild wouldn't pick it up.
 Invoke-Step '1/4' 'cmake' @('--preset', $Preset, '-DAETHERCORE_DEAD_STRIP_REPORT=ON')
 
 # 2. Build only the two executables. Engine is pulled in transitively as a
-# static lib via App's target_link_libraries, so the Engine code is reflected
-# in App.map.
-Invoke-Step '2/4' 'cmake' @('--build', '--preset', $Preset, '--target', 'App', 'AssetPacker')
+# static lib via Editor's target_link_libraries, so the Engine code is reflected
+# in Editor.map.
+Invoke-Step '2/4' 'cmake' @('--build', '--preset', $Preset, '--target', 'Editor', 'AssetPacker')
 
 # 3. Run the parser. Uses the actual binary dir resolved from the preset, not
 # the script's guess, so a custom binaryDir in CMakePresets.json would still

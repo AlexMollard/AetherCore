@@ -1,7 +1,11 @@
 # Separate Launcher Window (on hardened multi-viewport)
 
 **Date:** 2026-07-13
-**Status:** Design approved; pending implementation plan
+**Status:** SUPERSEDED by `2026-07-13-multiprocess-launcher-targets-design.md`.
+Phase 1 (multi-viewport input — verified working) and Phase 2 (force-resize policy
+deleted — shipped) landed. Phase 3 (launcher as an ImGui viewport window) was
+abandoned: the viewport promotion would not create a separate OS window in this custom
+renderer, so the launcher becomes a separate **process** instead.
 
 ## Problem
 

@@ -119,7 +119,7 @@ def _run_gauntlet(mode: str, config: str) -> dict:
 
 RUN_GAUNTLET = {
     "name": "run_gauntlet",
-    "description": "Build App/GameRuntime/EngineTests, run the unit suite, and (in full mode, needs a GPU) smoke-run the editor + runtime under Vulkan validation. Returns the structured pass/fail report. Does not need the editor running.",
+    "description": "Build Editor/GameRuntime/EngineTests, run the unit suite, and (in full mode, needs a GPU) smoke-run the editor + runtime under Vulkan validation. Returns the structured pass/fail report. Does not need the editor running.",
     "inputSchema": {
         "type": "object",
         "properties": {

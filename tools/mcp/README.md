@@ -26,7 +26,7 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 
 | Tool | Needs editor running? | Purpose |
 |------|:---:|---------|
-| `run_gauntlet` | no | Build App/GameRuntime/EngineTests, run the unit suite; `mode:"full"` also runs the GPU validation smokes. Returns `gauntlet-report.json`. |
+| `run_gauntlet` | no | Build Editor/GameRuntime/EngineTests, run the unit suite; `mode:"full"` also runs the GPU validation smokes. Returns `gauntlet-report.json`. |
 | `engine_info` | yes | Scene name, entity count, frame index, fps. |
 | `list_entities` | yes | Every entity: id, name, world position. |
 | `get_entity` | yes | One entity's full detail: name, position, scale, component types. |
@@ -67,11 +67,11 @@ endpoint, pick the port, toggle auto-start, and watch live request stats.
 
 ```powershell
 # 1. Build the editor and the control client
-cmake --build build/vs2022-msvc --config Debug --target App aether-ctl
+cmake --build build/vs2022-msvc --config Debug --target Editor aether-ctl
 
 # 2. For the live-editor tools, run the editor with the control endpoint on:
 $env:AETHER_CONTROL_PORT = "8787"
-.\build\vs2022-msvc\src\app\Debug\App.exe   # (run from the build-tree root)
+.\build\vs2022-msvc\src\app\Debug\Launcher.exe   # (run from the build-tree root; it spawns the Editor)
 ```
 
 `run_gauntlet` works without step 2.

@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** Phases 1–2 shipped (multi-viewport input verified working; force-resize policy deleted). **Phase 3 is superseded** by `docs/superpowers/specs/2026-07-13-multiprocess-launcher-targets-design.md` — the launcher becomes a separate *process*, not an ImGui viewport window (viewport promotion wouldn't create a real OS window in the custom renderer).
+
 **Goal:** Make the project launcher its own fixed ~1450px OS window that coexists with the editor window, and delete the per-frame force-resize policy causing the 1080↔1440 oscillation.
 
 **Architecture:** Reuse the existing ImGui multi-viewport path (`ViewportsEnable` + custom threaded per-viewport Vulkan rendering). The editor is the ImGui *main viewport*; the launcher is a *secondary viewport* OS window. Work is phased: (1) verify secondary-viewport input works (harden only if a real defect surfaces), (2) delete the force-resize policy, (3) make the launcher its own fixed-size viewport window + coexistence lifecycle.

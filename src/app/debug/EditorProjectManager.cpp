@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <optional>
 #include <string_view>
@@ -22,6 +23,7 @@
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "io/OverlayBackend.hpp"
+#include "launcher/LauncherProcess.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -537,12 +539,28 @@ namespace aether::app
 		std::snprintf(m_launcherState.newPath.data(), m_launcherState.newPath.size(), "%s", DisplayPath(cwd / "AetherProject").c_str());
 		std::snprintf(m_launcherState.newName.data(), m_launcherState.newName.size(), "%s", "AetherProject");
 
-		if (m_launcherState.openLastProject && HasCurrentProject())
+#ifndef AETHERCORE_LAUNCHER
+		// (Editor only) A project passed on the command line (--project, surfaced as
+		// AETHER_PROJECT_DIR by main) boots straight into that project and bypasses the
+		// launcher; otherwise fall back to the persisted open-last-project behaviour. The
+		// Launcher never auto-opens - it always shows the hub and spawns Editor processes.
+		std::filesystem::path bootProject;
+		if (const char* env = std::getenv("AETHER_PROJECT_DIR"); env != nullptr && *env != '\0')
+		{
+			bootProject = NormalizePath(env);
+		}
+		else if (m_launcherState.openLastProject && HasCurrentProject())
+		{
+			bootProject = m_currentProject.root;
+		}
+
+		if (!bootProject.empty())
 		{
 			// Boot-time reopen: ScriptedSceneLayer attaches after this and loads the
 			// startup scene itself, so don't drive a (duplicate) scene load here.
-			OpenProject(m_currentProject.root, /*reloadScene=*/false);
+			OpenProject(bootProject, /*reloadScene=*/false);
 		}
+#endif
 	}
 
 	void EditorProjectManager::SaveSettings(TomlConfig& config)
@@ -683,6 +701,14 @@ namespace aether::app
 			m_launcherState.error = "Choose a project folder.";
 			return;
 		}
+#ifdef AETHERCORE_LAUNCHER
+		// The launcher never loads a project in-process: it spawns a separate Editor
+		// process for it and stays open (Hub-style). A separate process gives the editor
+		// a real separate OS window.
+		(void) reloadScene;
+		launcher::SpawnEditor(root);
+		return;
+#endif
 		auto projectResult = ReadProjectDescriptor(root);
 		if (!projectResult)
 		{

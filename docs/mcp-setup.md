@@ -29,7 +29,7 @@ Build the editor and bridge, then register the server with the coding tools you
 use:
 
 ```powershell
-cmake --build --preset default --target App aether-ctl
+cmake --build --preset default --target Editor aether-ctl
 ./scripts/Install-Mcp.ps1
 # Or limit registration, for example: ./scripts/Install-Mcp.ps1 -Targets codex
 ```
@@ -39,7 +39,7 @@ to `127.0.0.1` only and is editor-only; `GameRuntime` never includes it.
 
 ```powershell
 $env:AETHER_CONTROL_PORT = "8787"
-.\build\src\app\RelWithDebInfo\App.exe
+.\build\src\app\RelWithDebInfo\Editor.exe
 ```
 
 Alternatively, use the editor's **Control Server** panel to start or stop the

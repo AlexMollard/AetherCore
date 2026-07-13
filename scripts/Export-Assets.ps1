@@ -4,7 +4,7 @@
     Rebuild and repack all game assets into assets.pak.
 .DESCRIPTION
     Presents an interactive menu to select a build preset and configuration,
-    then configures (if needed), builds AssetPacker + App (which triggers the
+    then configures (if needed), builds AssetPacker + Editor (which triggers the
     POST_BUILD asset-packing step), and syncs the LSP compilation database.
 .PARAMETER Preset
     Skip the menu and use this preset directly.
@@ -86,10 +86,10 @@ try {
         Remove-Item -LiteralPath $PakManifest -Force
     }
 
-    # ── Build App (AssetPacker is compiled as a dependency, POST_BUILD
+    # ── Build Editor (AssetPacker is compiled as a dependency, POST_BUILD
     #    step runs it to produce assets.pak) ─────────────────────────────
-    Write-Host "`nBuilding App (compiles AssetPacker + runs packer via POST_BUILD)..." -ForegroundColor Yellow
-    cmake --build --preset $Preset --config $Config --target App *>&1 | Out-Host
+    Write-Host "`nBuilding Editor (compiles AssetPacker + runs packer via POST_BUILD)..." -ForegroundColor Yellow
+    cmake --build --preset $Preset --config $Config --target Editor *>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Build failed - check errors above"
         exit 1

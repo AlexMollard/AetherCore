@@ -346,7 +346,7 @@ namespace aether::io
 			{
 				if (EqualsIgnoreCase(engineMode, "pak"))
 				{
-					AE_ASSERT_ALWAYS(false, "AETHER_ENGINE_MODE=pak but no usable engine.pak was found. Set AETHER_ENGINE_PAK or build App to generate data/engine.pak.");
+					AE_ASSERT_ALWAYS(false, "AETHER_ENGINE_MODE=pak but no usable engine.pak was found. Set AETHER_ENGINE_PAK or build the Editor to generate data/engine.pak.");
 				}
 
 				MountEngineDirectory(EnvironmentPathFirst("AETHER_ENGINE_DIR", "AETHER_ASSET_DIR")
@@ -402,7 +402,7 @@ namespace aether::io
 			{
 				if (EqualsIgnoreCase(projectMode, "pak"))
 				{
-					AE_ASSERT_ALWAYS(false, "AETHER_PROJECT_MODE=pak but no usable project.pak was found. Set AETHER_PROJECT_PAK or build App to generate data/project.pak.");
+					AE_ASSERT_ALWAYS(false, "AETHER_PROJECT_MODE=pak but no usable project.pak was found. Set AETHER_PROJECT_PAK or build the Editor to generate data/project.pak.");
 				}
 
 				MountProjectDirectory(EnvironmentPath("AETHER_PROJECT_DIR")

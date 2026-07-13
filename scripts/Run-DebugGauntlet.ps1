@@ -5,9 +5,9 @@
 .DESCRIPTION
     One entry point that runs the whole debug loop without a human in it:
 
-      1. Build   - compile App, GameRuntime and EngineTests (MSVC multi-config).
+      1. Build   - compile Editor, GameRuntime and EngineTests (MSVC multi-config).
       2. Unit    - run EngineTests.exe and parse the doctest summary.
-      3. Editor  - launch App.exe under whatever Vulkan validation tier the build
+      3. Editor  - launch Editor.exe under whatever Vulkan validation tier the build
                    was compiled with, wait (by polling the log, not a fixed sleep)
                    until the startup scene loads, render a few frames, then stop.
                    Every Validation-category message is classified and any
@@ -29,7 +29,7 @@
 .PARAMETER Config
     Multi-config build type: Debug or Release (default: Debug).
 .PARAMETER Targets
-    Targets to build (default: App GameRuntime EngineTests).
+    Targets to build (default: Editor GameRuntime EngineTests).
 .PARAMETER RunSeconds
     Frames-worth of extra runtime AFTER the startup scene loads, per smoke
     (default: 12). GPU-AV instrumentation is slow; bump this for that tier.
@@ -58,7 +58,7 @@ param(
     [string]$BuildDir = "build/vs2022-msvc",
     [ValidateSet("Debug", "Release")]
     [string]$Config = "Debug",
-    [string[]]$Targets = @("App", "GameRuntime", "EngineTests"),
+    [string[]]$Targets = @("Editor", "GameRuntime", "EngineTests"),
     [int]$RunSeconds = 12,
     [int]$ReadyTimeoutSeconds = 60,
     [switch]$Repack,
@@ -251,7 +251,7 @@ function Invoke-UnitTests {
 }
 
 # --- Smoke (shared by editor + runtime) ----------------------------------
-function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName) {
+function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string]$ExeArgs = "") {
     Write-Head "Phase: $Name smoke"
     $exe = Join-Path $BuildRoot $ExePath
     if (-not (Test-Path $exe)) {
@@ -263,7 +263,11 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName) {
     if (Test-Path $log) { Remove-Item $log -Force }
 
     # Launch from the build root: shaders:// and engine.pak resolve relative to CWD.
-    $proc = Start-Process -FilePath $exe -WorkingDirectory $BuildRoot -PassThru
+    $proc = if ($ExeArgs) {
+        Start-Process -FilePath $exe -ArgumentList $ExeArgs -WorkingDirectory $BuildRoot -PassThru
+    } else {
+        Start-Process -FilePath $exe -WorkingDirectory $BuildRoot -PassThru
+    }
 
     # Condition-based readiness: poll the log for the startup-scene marker rather
     # than sleeping a fixed amount. Fail fast if the process dies first.
@@ -361,7 +365,10 @@ else {
     else { $results.unit = Invoke-UnitTests; if (-not $results.unit) { $overall = $false } }
 
     if ($SkipEditor) { Write-Head "Phase: editor smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "editor"; status = "skip" } }
-    else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/$Config/App.exe" -LogName "App.log"; if (-not $results.editor) { $overall = $false } }
+    # The editor is always project-scoped now: pass --project (as F5 does), else it
+    # exits requesting one. (Launching the Launcher would spawn a separate process the
+    # smoke can't track, so drive the Editor directly.)
+    else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/$Config/Editor.exe" -LogName "Editor.log" -ExeArgs "--project `"$RepoRoot\projects\TestingProject`""; if (-not $results.editor) { $overall = $false } }
 
     if ($SkipRuntime) { Write-Head "Phase: runtime smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "runtime"; status = "skip" } }
     else { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/$Config/AetherGame.exe" -LogName "AetherGame.log"; if (-not $results.runtime) { $overall = $false } }

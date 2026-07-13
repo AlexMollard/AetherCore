@@ -53,8 +53,8 @@ _SOURCE_ROOTS = ("src", "tools")
 # Keys are matched as path segments (whole-directory), so an exact match like
 # "src/app" is unambiguous: anything whose path contains a "src/app" segment.
 _SOURCE_REACH = {
-    "src/app":          frozenset({"App"}),
-    "src/engine":       frozenset({"App", "AssetPacker"}),
+    "src/app":          frozenset({"Editor"}),
+    "src/engine":       frozenset({"Editor", "AssetPacker"}),
     "tools/assetpack":  frozenset({"AssetPacker"}),
 }
 
@@ -62,7 +62,7 @@ _SOURCE_REACH = {
 def targets_for_source(cpp: Path, all_targets: set[str]) -> frozenset[str]:
     """Which executables could plausibly link this .cpp.
 
-    Determined by directory segment: src/app/* reaches only App, src/engine/*
+    Determined by directory segment: src/app/* reaches only Editor, src/engine/*
     reaches both (it is compiled into the Engine static lib that both link),
     tools/assetpack/* reaches only AssetPacker. Anything outside the known
     segments is reported against all discovered targets so new code does
@@ -241,7 +241,7 @@ def process_target(
     all_targets: set[str],
 ) -> dict:
     fmt = detect_format(map_path)
-    target = map_path.stem  # file is App.map -> target = "App"
+    target = map_path.stem  # file is Editor.map -> target = "Editor"
     objs = parse_map(map_path)
     sources = enumerate_project_sources(source_dir)
     used, unused, skipped = classify_sources(sources, objs, target, all_targets)
@@ -389,7 +389,7 @@ def main() -> int:
         md.append("")
     md.append("## How the per-target filter works")
     md.append("")
-    md.append("- `src/app/*.cpp` are only considered for `App`.")
+    md.append("- `src/app/*.cpp` are only considered for `Editor`.")
     md.append("- `tools/assetpack/*.cpp` are only considered for `AssetPacker`.")
     md.append("- `src/engine/*.cpp` are considered for both (they are compiled into")
     md.append("  the `Engine` static lib which both executables link).")

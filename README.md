@@ -81,7 +81,7 @@ cmake --build --preset default
 The editor executable is written to:
 
 ```text
-build/src/app/RelWithDebInfo/App.exe
+build/src/app/RelWithDebInfo/Launcher.exe
 ```
 
 For ClangCL:
@@ -117,7 +117,7 @@ The Vulkan loader, a working Vulkan driver, Clang, Ninja, and the platform devel
 
 ## Editor workflow
 
-1. Start `App` and create or open a project from the Project Launcher.
+1. Start `Launcher` and create or open a project; it spawns the `Editor` for that project.
 2. Build a scene with the hierarchy, inspector, viewport, asset browser, and component tools.
 3. Add gameplay under the project's `scripts/` directory using the `AetherCore` managed SDK.
 4. Enter play mode to run the scene. In a development build, press **F5** to rebuild and hot-reload gameplay code.
@@ -133,7 +133,7 @@ panels, query the render graph, capture textures and screenshots, and enter play
 mode. The live-control endpoint is editor-only and listens on `127.0.0.1`.
 
 ```powershell
-cmake --build --preset default --target App aether-ctl
+cmake --build --preset default --target Editor aether-ctl
 ./scripts/Install-Mcp.ps1 -Targets codex
 ```
 
@@ -146,7 +146,7 @@ the [full engine MCP reference](tools/mcp/README.md) for all tools and options.
 
 ```mermaid
 flowchart LR
-    Editor["App / Editor"] --> Engine["Engine static library"]
+    Editor["Editor"] --> Engine["Engine static library"]
     Scripts["AetherGame scripts"] --> SDK["AetherCore C# SDK"]
     SDK --> Interop["AetherCore.Interop"]
     Interop --> Engine
@@ -247,7 +247,7 @@ Asset references are catalogued through stable `AssetId` values while existing t
 | Target | Output |
 |---|---|
 | `Engine` | Native static engine library |
-| `App` | AetherCore editor executable |
+| `Editor` | AetherCore editor executable |
 | `GameRuntime` | Standalone runtime executable (`AetherGame`) |
 | `AssetPacker` | Asset import, conversion, and PAK command-line tool |
 | `ManagedAssemblies` | Builds and deploys `AetherCore`, `AetherCore.Interop`, and project gameplay assemblies |
