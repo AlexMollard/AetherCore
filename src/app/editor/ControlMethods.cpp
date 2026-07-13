@@ -17,6 +17,8 @@
 #include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
 #include "editor/ComponentCatalog.hpp"
+#include "editor/ComponentFields.hpp"
+#include "editor/ModelImport.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "io/PlatformPaths.hpp"
 #include "rendering/ScreenshotService.hpp"
@@ -30,9 +32,11 @@
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
+#include "scripting/SceneContext.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -175,6 +179,43 @@ namespace aether::editor
 			        return json{{"id", entity.id}, {"name", name}};
 		        }});
 
+		methods.push_back({"scene.add_model", "add_model",
+		        "Add a model file to the live scene as one operation - the seamless equivalent of dragging a glTF into the editor. Bakes the raw glTF if it hasn't been imported yet, then spawns the correct layout: a lone static mesh sits on a single entity, while a multi-primitive or skinned model becomes a root with one child per primitive (each carrying its own material and skin). 'path' is a project:// or absolute model path; optional 'name', 'position', 'rotationEuler' (degrees) and 'scale' place it (skinned models authored in centimetres usually want scale ~0.01). Returns the root id and primitive count.",
+		        true, Obj({{"path", StrProp()}, {"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"path"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr) { return ErrNoScene(); }
+			        const std::string path = p.value("path", std::string{});
+			        if (path.empty()) { return json{{"error", "'path' is required"}}; }
+			        World& world = scenes->GetWorld();
+
+			        const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
+			        const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
+			        const glm::vec3 scl = ReadVec3(p, "scale", glm::vec3(1.0f));
+			        glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
+			        m = glm::rotate(m, glm::radians(euler.z), glm::vec3(0, 0, 1));
+			        m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
+			        m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
+			        m = glm::scale(m, scl);
+
+			        std::string error;
+			        const Entity root = editor::ImportModelIntoScene(world, ctx.services, path, m, p.value("name", std::string{}), error);
+			        if (!root.IsValid()) { return json{{"error", error.empty() ? std::string("model import failed") : error}}; }
+
+			        std::string name = path;
+			        if (const auto* nc = world.TryGet<NameComponent>(root)) { name = nc->name; }
+			        int prims = 1;
+			        if (auto* assets = ctx.services.TryGet<AssetManager>())
+			        {
+				        if (auto* sc = ctx.services.TryGet<app::scripting::SceneContext>())
+				        {
+					        prims = app::scene::ModelPrimitiveCount(*assets, *sc, path);
+				        }
+			        }
+			        return json{{"id", root.id}, {"name", name}, {"primitives", prims}};
+		        }});
+
 		methods.push_back({"scene.rename", "rename_entity", "Rename an entity by id.", true, Obj({{"id", IntProp()}, {"name", StrProp()}}, {"id", "name"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -261,7 +302,45 @@ namespace aether::editor
 		};
 		methods.push_back({"scene.add_component", "add_component", "Add a component to an entity by id. 'type' is a ComponentCatalog name (call list_component_types for the set).", true, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}), componentOp(true)});
 		methods.push_back({"scene.remove_component", "remove_component", "Remove a component from an entity by id ('type' is a ComponentCatalog name).", true, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}), componentOp(false)});
-		methods.push_back({"scene.component_types", "list_component_types", "List every component the ComponentCatalog can add (name + category) - the same set as the editor Add-Component menu.", false, Obj(),
+
+		methods.push_back({"scene.get_component", "get_component",
+		        "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a ComponentCatalog name that has editable fields (Point Light, Spot Light, Skinned Mesh, Camera, Material; call list_component_types to see each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
+		        false, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr) { return ErrNoScene(); }
+			        World& world = scenes->GetWorld();
+			        const Entity entity{IdOf(p)};
+			        if (!world.GetRegistry().valid(World::ToEntt(entity))) { return ErrNoEntity(); }
+			        const std::string type = p.value("type", std::string{});
+			        const auto* fields = editor::FindComponentFields(type);
+			        if (fields == nullptr) { return json{{"error", "component '" + type + "' has no editable fields"}}; }
+			        json out = json::object();
+			        if (!fields->read(world, entity, ctx.services, out)) { return json{{"error", "entity has no '" + type + "' component"}}; }
+			        return json{{"id", entity.id}, {"type", type}, {"fields", out}};
+		        }});
+
+		methods.push_back({"scene.set_component", "set_component",
+		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a ComponentCatalog name (Point Light, Spot Light, Skinned Mesh, Camera, Material); 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours are [r,g,b(,a)] arrays. Returns {id, type, applied:[...]}.",
+		        true, Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr) { return ErrNoScene(); }
+			        World& world = scenes->GetWorld();
+			        const Entity entity{IdOf(p)};
+			        if (!world.GetRegistry().valid(World::ToEntt(entity))) { return ErrNoEntity(); }
+			        const std::string type = p.value("type", std::string{});
+			        const auto* fields = editor::FindComponentFields(type);
+			        if (fields == nullptr) { return json{{"error", "component '" + type + "' has no editable fields"}}; }
+			        const json values = (p.contains("values") && p["values"].is_object()) ? p["values"] : json::object();
+			        const auto applied = fields->write(world, entity, values, ctx.services);
+			        if (applied.empty()) { return json{{"error", "entity has no '" + type + "' component, or 'values' named no known fields"}}; }
+			        return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
+		        }});
+
+		methods.push_back({"scene.component_types", "list_component_types", "List every component the ComponentCatalog can add (name + category), plus, for components with editable fields, the field list that get_component / set_component accept.", false, Obj(),
 		        [](const json&, MethodContext&) -> json
 		        {
 			        json arr = json::array();
@@ -269,7 +348,9 @@ namespace aether::editor
 			        {
 				        // Skip reference-only entries (e.g. UI Text) - they can't be added.
 				        if (!e.addable) { continue; }
-				        arr.push_back(json{{"name", e.name}, {"category", e.category}});
+				        json entry = {{"name", e.name}, {"category", e.category}};
+				        if (const auto* fields = editor::FindComponentFields(e.name)) { entry["fields"] = fields->fields; }
+				        arr.push_back(entry);
 			        }
 			        return json{{"components", arr}};
 		        }});

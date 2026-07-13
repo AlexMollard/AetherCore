@@ -28,6 +28,9 @@
 #include "debug/Icons.hpp"
 #include "debug/OpenInEditor.hpp"
 #include "debug/SceneSelection.hpp"
+#include "editor/ModelImport.hpp"
+#include "scene/World.hpp"
+#include "utils/Logger.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -1053,11 +1056,27 @@ namespace aether::editor
 
 	bool FileExplorerPanel::DrawRowContextMenu(app::LayerContext& context, const Entry& entry)
 	{
-		(void) context;
 		bool mutated = false;
 		if (ImGui::BeginPopupContextItem("##fectx"))
 		{
 			m_selectedPath = ToUtf8Path(entry.path);
+			// Models get a one-click add - the menu equivalent of dragging the file
+			// into the viewport. Handles baking + the multi-primitive/skinned layout.
+			if (entry.kind == dragdrop::FileKind::Model && ImGui::MenuItem(ICON_FA_PLUS "  Add to Scene"))
+			{
+				const std::string vfs = entry.payloadPath.starts_with("project://") ? entry.payloadPath : ToUtf8Path(entry.path);
+				std::string error;
+				const Entity root = editor::ImportModelIntoScene(context.Get<World>(), context.services, vfs, glm::mat4(1.0f), std::string{}, error);
+				if (root.IsValid())
+				{
+					if (auto* selection = context.TryGet<SceneSelection>()) { selection->Select(root); }
+					mutated = true;
+				}
+				else
+				{
+					AE_WARN(LogCategory::App, "Add to Scene failed for '{}': {}", vfs, error);
+				}
+			}
 			if (ImGui::MenuItem(entry.kind == dragdrop::FileKind::Script ? ICON_FA_CODE "  Open in editor" : ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "  Open"))
 			{
 				if (entry.kind == dragdrop::FileKind::Script)

@@ -208,7 +208,9 @@ The agent-tool MCP servers this repo expects (Mind, clangd-mcp, codebase-memory,
 
 ## Editor control endpoint (AetherCore MCP)
 
-The editor exposes a localhost control endpoint (`ControlServer`, ENet) that the AetherCore MCP (`tools/mcp/`) and `aether-ctl` (`tools/control-client/`) drive. `describe` returns the method manifest (~33 methods: engine info, entities, play, screenshot, render/scene/camera/settings state); each MCP tool maps to a wire method (e.g. the `engine_info` tool → the `info` method). It auto-starts when `AETHER_CONTROL_PORT` is set (editor-only; under `AETHERCORE_SCENE_APP`).
+The editor exposes a localhost control endpoint (`ControlServer`, ENet) that the AetherCore MCP (`tools/mcp/`) and `aether-ctl` (`tools/control-client/`) drive. `describe` returns the method manifest (~36 methods: engine info, entities, play, screenshot, render/scene/camera/settings state); each MCP tool maps to a wire method (e.g. the `engine_info` tool → the `info` method). It auto-starts when `AETHER_CONTROL_PORT` is set (editor-only; under `AETHERCORE_SCENE_APP`).
+
+An agent can author a scene as freely as a user: `scene.add_model {path, position?, scale?, ...}` bakes-if-needed and spawns a model with the correct layout (multi-primitive / skinned → root + one child per primitive, each with its own material and skin) - the same one-call import as the File Explorer's "Add to Scene". `scene.get_component` / `scene.set_component {id, type, values}` read/write the same fields the Inspector edits (Point Light, Spot Light, Skinned Mesh, Camera, Material; `list_component_types` lists each type's fields). The field set is registered in `editor/ComponentFields.cpp` - add an editable field there once and both the MCP and inspector see it.
 
 The **Launcher** has no control server of its own (it stays decoupled), but when it spawns an Editor it forwards `AETHER_CONTROL_PORT` so that editor is MCP-drivable with zero setup:
 
