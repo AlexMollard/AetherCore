@@ -19,12 +19,6 @@ namespace aether
 
 namespace aether::app
 {
-	// The project launcher always opens at this fixed size; once a project is
-	// loaded the window restores the user's last editor size instead (see
-	// DebugLayer window-sizing policy + Application boot sizing).
-	inline constexpr int kLauncherWindowWidth = 1920;
-	inline constexpr int kLauncherWindowHeight = 1080;
-
 	class EditorProjectManager final
 	{
 	public:

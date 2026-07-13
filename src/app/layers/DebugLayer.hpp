@@ -66,16 +66,13 @@ namespace aether::app
 		double m_toastStart = -1.0; // ImGui::GetTime() when raised; < 0 => inactive
 		bool m_toastError = false;
 
-		// OS window-sizing policy: the project launcher is a fixed 1920x1080; a
-		// loaded project restores the user's last editor window size (default = the
-		// configured resolution), persisted to EditorState (editor.window_*).
-		void UpdateWindowSizing(LayerContext& context);
-		void CaptureEditorWindowSize(aether::Window& window);
+		// The editor window owns its own size - nothing forces it. Each frame we simply
+		// record the current size so it persists to EditorState (editor.window_*) and
+		// reopens at that size next launch. The launcher no longer resizes the OS
+		// window, so there is no launcher-vs-editor sizing policy.
+		void CaptureEditorWindowSize(LayerContext& context);
 		int m_editorWindowW = 0;             // last editor window size (0 = not yet loaded)
 		int m_editorWindowH = 0;
-		bool m_launcherModeTracked = false;  // previous frame's launcher-vs-editor mode
-		bool m_windowModeInit = false;       // first frame recorded the mode (no resize)
-		int m_windowSettleFrames = 0;        // frames to skip size-capture after a SetSize
 
 		SceneSelection m_selection;
 		UndoStack m_undoStack;

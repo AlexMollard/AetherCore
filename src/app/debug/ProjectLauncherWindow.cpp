@@ -193,13 +193,29 @@ namespace aether::app
 
 	void ProjectLauncherWindow::Draw(ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
 	{
-		ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowPos(viewport->WorkPos);
-		ImGui::SetNextWindowSize(viewport->WorkSize);
-		ImGui::SetNextWindowViewport(viewport->ID);
+		// The launcher is its own OS window: force it into a dedicated platform
+		// viewport (never auto-merged into the editor's main window) at the fixed size
+		// its layout is tuned for, centered on the primary monitor on first show.
+		constexpr int kLauncherWidth = 1450;
+		constexpr int kLauncherHeight = 880;
+
+		ImGuiWindowClass ownViewport;
+		ownViewport.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+		ImGui::SetNextWindowClass(&ownViewport);
+
+		const ImVec2 launcherSize(static_cast<float>(kLauncherWidth), static_cast<float>(kLauncherHeight));
+		ImGui::SetNextWindowSize(launcherSize, ImGuiCond_Once);
+		const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+		if (!platformIO.Monitors.empty())
+		{
+			const ImGuiPlatformMonitor& monitor = platformIO.Monitors[0];
+			const ImVec2 center(monitor.WorkPos.x + (monitor.WorkSize.x - launcherSize.x) * 0.5f,
+			                    monitor.WorkPos.y + (monitor.WorkSize.y - launcherSize.y) * 0.5f);
+			ImGui::SetNextWindowPos(center, ImGuiCond_Once);
+		}
 
 		const ImGuiWindowFlags flags =
-		        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+		        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking;
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));

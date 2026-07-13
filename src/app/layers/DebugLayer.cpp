@@ -228,8 +228,9 @@ namespace aether::app
 		m_projects.Attach(context.services);
 		LoadSettings(context);
 
-		// Editor window size: restore the user's last size, defaulting to the
-		// configured resolution (1440p) - the launcher forces 1920x1080 separately.
+		// Editor window size: seed from the user's last saved size, defaulting to the
+		// configured resolution. Updated each frame by CaptureEditorWindowSize and
+		// persisted to EditorState (editor.window_*).
 		int defW = 2560;
 		int defH = 1440;
 		if (auto* settings = context.services.TryGet<SettingsService>())
@@ -795,60 +796,21 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::CaptureEditorWindowSize(Window& window)
-	{
-		const auto size = window.GetWindowSize();
-		// Ignore degenerate/minimised sizes and the fixed launcher size so they can't
-		// become the remembered editor size.
-		const bool isLauncherSize = (size.width == kLauncherWindowWidth && size.height == kLauncherWindowHeight);
-		if (size.width >= 640 && size.height >= 480 && !isLauncherSize && (size.width != m_editorWindowW || size.height != m_editorWindowH))
-		{
-			m_editorWindowW = size.width;
-			m_editorWindowH = size.height;
-		}
-	}
-
-	void DebugLayer::UpdateWindowSizing(LayerContext& context)
+	void DebugLayer::CaptureEditorWindowSize(LayerContext& context)
 	{
 		auto* window = context.services.TryGet<Window>();
 		if (window == nullptr)
 		{
 			return;
 		}
-		if (m_windowSettleFrames > 0)
+		// The editor window owns its size; just remember valid (non-degenerate) sizes
+		// so they persist (editor.window_*) and reopen next launch. No forcing, and no
+		// launcher-size exclusion - the launcher never resizes the OS window anymore.
+		const auto size = window->GetWindowSize();
+		if (size.width >= 640 && size.height >= 480 && (size.width != m_editorWindowW || size.height != m_editorWindowH))
 		{
-			--m_windowSettleFrames;
-		}
-
-		const bool launcherMode = !m_projects.IsProjectLoaded() || m_projects.IsLauncherOpen();
-
-		if (!m_windowModeInit)
-		{
-			// The window already opened at the correct boot size (Application picks
-			// launcher vs editor size up front), so just record the mode - never
-			// resize on the first frame (frame-0 swapchain state is fragile).
-			m_launcherModeTracked = launcherMode;
-			m_windowModeInit = true;
-			return;
-		}
-
-		if (launcherMode != m_launcherModeTracked)
-		{
-			if (launcherMode)
-			{
-				CaptureEditorWindowSize(*window); // remember size before shrinking to the launcher
-				window->SetSize(kLauncherWindowWidth, kLauncherWindowHeight);
-			}
-			else
-			{
-				window->SetSize(m_editorWindowW, m_editorWindowH); // restore the user's last editor size
-			}
-			m_windowSettleFrames = 12; // let the resize settle before trusting GetWindowSize again
-			m_launcherModeTracked = launcherMode;
-		}
-		else if (!launcherMode && m_windowSettleFrames == 0)
-		{
-			CaptureEditorWindowSize(*window); // track manual resizes as the new "last size"
+			m_editorWindowW = size.width;
+			m_editorWindowH = size.height;
 		}
 	}
 
@@ -918,10 +880,10 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		// Keep the OS window at the launcher size (1920x1080) or the user's editor
-		// size, resizing on the launcher<->project transition. Runs before the
-		// launcher/editor branch below so it covers both.
-		UpdateWindowSizing(context);
+		// Record the editor window's current size so it persists (editor.window_*) and
+		// reopens at that size next launch. The editor window owns its size - nothing
+		// forces it (the launcher no longer resizes the OS window).
+		CaptureEditorWindowSize(context);
 
 		// Once per ImGui frame, before any panel might call Manipulate.
 		ImGuizmo::BeginFrame();
@@ -943,6 +905,15 @@ namespace aether::app
 
 		if (!m_projects.IsProjectLoaded() || m_projects.IsLauncherOpen())
 		{
+			// The launcher is now its own OS window (a dedicated viewport). Fill the
+			// main editor window with a neutral backdrop behind it so it doesn't show
+			// stale swapchain pixels while the launcher is up.
+			if (m_dockspaceBuilt)
+			{
+				ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+				const ImU32 backdrop = ImGui::GetColorU32(ImGuiCol_WindowBg) | IM_COL32(0, 0, 0, 255);
+				ImGui::GetBackgroundDrawList(mainViewport)->AddRectFilled(mainViewport->Pos, ImVec2(mainViewport->Pos.x + mainViewport->Size.x, mainViewport->Pos.y + mainViewport->Size.y), backdrop);
+			}
 			m_projects.DrawLauncher();
 			PersistSettings(context);
 			return;

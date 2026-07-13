@@ -47,15 +47,15 @@ namespace aether::app
 		// launcher.current.path).
 		FramebufferSize ResolveEditorBootWindow(int defaultWidth, int defaultHeight)
 		{
+			// The editor window always opens at the user's editor size (saved, or the
+			// configured default). The launcher no longer drives the OS window size, so
+			// there is no launcher-vs-editor boot-size branch.
 			aether::TomlConfig state;
 			state.LoadFromPath(aether::io::PlatformPaths::GetUserConfigDir() / "EditorState.toml");
-			const bool reopensProject = state.GetBool("launcher.open_last", false) && !state.GetString("launcher.current.path").empty();
-			if (reopensProject)
-			{
-				return {.width = static_cast<int>(state.GetFloat("editor.window_width", static_cast<float>(defaultWidth))),
-				        .height = static_cast<int>(state.GetFloat("editor.window_height", static_cast<float>(defaultHeight)))};
-			}
-			return {.width = kLauncherWindowWidth, .height = kLauncherWindowHeight};
+			const int savedW = static_cast<int>(state.GetFloat("editor.window_width", static_cast<float>(defaultWidth)));
+			const int savedH = static_cast<int>(state.GetFloat("editor.window_height", static_cast<float>(defaultHeight)));
+			const bool valid = savedW >= 640 && savedH >= 480;
+			return {.width = valid ? savedW : defaultWidth, .height = valid ? savedH : defaultHeight};
 		}
 #endif
 
