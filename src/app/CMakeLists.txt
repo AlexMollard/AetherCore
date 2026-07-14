@@ -368,6 +368,13 @@ target_sources(Launcher PRIVATE ${APP_LAUNCHER_SOURCES} ${APP_HEADERS})
 target_include_directories(Launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(Launcher PRIVATE Engine imgui)
 
+# Give the Launcher the same Windows icon as the Editor by reusing the .rc
+# configured above (WIN32 block near the top). 101 ICON is the Explorer/taskbar
+# executable icon; GLFW_ICON is loaded by GLFW for the runtime window icon.
+if(WIN32)
+    target_sources(Launcher PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/AetherCoreEditor.rc")
+endif()
+
 # Tooling app (imgui overlay) but NOT a scene app: no ECS scene systems, no CoreCLR.
 # AETHER_EDITOR_EXE_NAME lets LauncherProcess spawn the editor; the two AETHER_* paths
 # let ProjectCommon scaffold a new project (scripts .csproj + seed scene).
