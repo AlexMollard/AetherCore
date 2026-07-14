@@ -96,8 +96,15 @@ set_target_properties(Editor PROPERTIES
 )
 set_target_properties(GameRuntime PROPERTIES
     OUTPUT_NAME "AetherGame"
+    # Published games are windowed applications and should not allocate a console.
+    WIN32_EXECUTABLE TRUE
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+# GameRuntime shares a conventional `main` entry point with Editor. Preserve that
+# entry point while selecting the Windows GUI subsystem above.
+if(MSVC)
+    target_link_options(GameRuntime PRIVATE /ENTRY:mainCRTStartup)
+endif()
 
 target_compile_definitions(Editor PRIVATE
     AETHERCORE_EDITOR_APP=1
