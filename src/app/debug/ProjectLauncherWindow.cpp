@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 
 #include <imgui.h>
@@ -334,17 +335,22 @@ namespace aether::app
 			}
 		}
 
-		void DrawProjectDialog(ProjectLauncherWindowState& state, const ProjectLauncherWindowActions& actions, const Px& dp)
+		void DrawProjectDialog(ProjectLauncherWindowState& state, const ProjectLauncherWindowActions& actions, const Frame& f)
 		{
 			if (state.dialog == ProjectLauncherDialog::None)
 			{
 				return;
 			}
 
+			const Px& dp = f.dp;
 			const bool opening = state.dialog == ProjectLauncherDialog::Open;
 			const char* popupName = opening ? "Open Project" : "Create Project";
+			const ImGuiViewport* viewport = ImGui::GetMainViewport();
+			const float viewportInset = dp(m::kMarginMin);
+			const float viewportWidth = std::max(1.0f, viewport->WorkSize.x - viewportInset * 2.0f);
+			const float dialogWidth = std::min(f.contentWidth * 0.5f, viewportWidth);
 			ImGui::OpenPopup(popupName);
-			ImGui::SetNextWindowSize(dp(520.0f, 0.0f), ImGuiCond_Appearing);
+			ImGui::SetNextWindowSizeConstraints(ImVec2(dialogWidth, 0.0f), ImVec2(dialogWidth, std::numeric_limits<float>::max()));
 			if (!ImGui::BeginPopupModal(popupName, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
 			{
 				return;
@@ -574,7 +580,7 @@ namespace aether::app
 		PaintRecentsGrid(f, state, model, actions);
 		PaintFooter(f, state, actions);
 		ImGui::EndDisabled();
-		DrawProjectDialog(state, actions, f.dp);
+		DrawProjectDialog(state, actions, f);
 
 		ImGui::End();
 	}
