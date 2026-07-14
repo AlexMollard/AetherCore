@@ -165,26 +165,8 @@ if(AETHER_HAS_DOTNET)
         AETHER_MANAGED_CONFIG="$<IF:$<CONFIG:Debug>,Debug,Release>"
         AETHER_MANAGED_CONFIGDIR="$<IF:$<CONFIG:Debug>,debug,release>")
 
-    # Mirror the managed assemblies next to the executable for standalone runs.
-    foreach(_aether_runtime_target IN ITEMS Editor GameRuntime)
-        add_custom_command(TARGET ${_aether_runtime_target} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${_aether_runtime_target}>/data/scripts/managed"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${CMAKE_BINARY_DIR}/data/scripts/managed" "$<TARGET_FILE_DIR:${_aether_runtime_target}>/data/scripts/managed"
-        COMMENT "Copying managed assemblies to app output"
-        VERBATIM)
-    endforeach()
-
-    # nethost.dll must sit next to each exe so get_hostfxr_path resolves at startup.
-    if(WIN32 AND AETHER_NETHOST_DLL)
-        foreach(_aether_runtime_target IN ITEMS Editor GameRuntime)
-            add_custom_command(TARGET ${_aether_runtime_target} POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                    "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:${_aether_runtime_target}>"
-            COMMENT "Copying nethost.dll to app output"
-            VERBATIM)
-        endforeach()
-    endif()
+    # (managed assemblies + nethost.dll are staged into the shared app bundle once by
+    # StageAppBundle below, not copied per target.)
 endif()
 
 if(NVIDIA_AFTERMATH_FOUND)
@@ -242,46 +224,56 @@ if(TARGET CompileShaders)
 endif()
 add_dependencies(EngineAssetsPak AssetPacker)
 
-# Copy the shared engine.pak (+ sidecars) and shipped settings next to a target's exe.
-# Packing happens once in EngineAssetsPak; this only copies.
-function(aethercore_add_runtime_payload target_name)
-    add_dependencies(${target_name} EngineAssetsPak)
-    add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/engine.pak"
-            "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/engine.pak.log"
-            "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak.log"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/engine.pak.manifest"
-            "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak.manifest"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data/config"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
-            "$<TARGET_FILE_DIR:${target_name}>/data/config/EngineSettings.toml"
-        COMMENT "Deploying engine.pak + shipped settings next to ${target_name}"
-        VERBATIM
-    )
+# ── App bundle staging ──────────────────────────────────────────────────────
+# Editor, GameRuntime and Launcher share one output directory - the "editor bundle" the
+# publisher ships wholesale (EditorProjectPublisher copies the exe dir as a unit). The
+# runtime payload is staged into it exactly ONCE here, not copied per target; that removes
+# the old 3x-redundant copies and the copy-race serialisation between the apps.
+set(_aether_app_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
 
-    # Aftermath DLL - dev-only GPU crash diagnostics, editor-only (VulkanContext.cpp gate +
-    # Engine's /DELAYLOAD). GameRuntime never enables it, so it must not carry the DLL.
-    if(NVIDIA_AFTERMATH_FOUND AND target_name STREQUAL "Editor")
-        add_custom_command(TARGET ${target_name} POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:${target_name}>"
-            COMMENT "Copying GFSDK_Aftermath_Lib.x64.dll to build output"
-            VERBATIM
-        )
-    endif()
-endfunction()
+set(_aether_stage_cmds
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_aether_app_bundle_dir}/data/config"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/engine.pak" "${_aether_app_bundle_dir}/data/engine.pak"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml" "${_aether_app_bundle_dir}/data/config/EngineSettings.toml"
+)
+if(AETHER_HAS_DOTNET)
+    list(APPEND _aether_stage_cmds
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_BINARY_DIR}/data/scripts/managed" "${_aether_app_bundle_dir}/data/scripts/managed")
+endif()
+if(WIN32 AND AETHER_NETHOST_DLL)
+    list(APPEND _aether_stage_cmds
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${AETHER_NETHOST_DLL}" "${_aether_app_bundle_dir}/nethost.dll")
+endif()
+
+add_custom_target(StageAppBundle ${_aether_stage_cmds}
+    COMMENT "Staging the app bundle (engine.pak, settings, managed, nethost)"
+    VERBATIM)
+add_dependencies(StageAppBundle EngineAssetsPak)
+if(AETHER_HAS_DOTNET)
+    add_dependencies(StageAppBundle ManagedAssemblies)
+endif()
+add_dependencies(Editor StageAppBundle)
+add_dependencies(GameRuntime StageAppBundle)
+
+# Aftermath's DLL is dev-only + editor-only (VulkanContext gate + Engine's /DELAYLOAD);
+# only the editor gets it, and the publisher explicitly skips it.
+if(NVIDIA_AFTERMATH_FOUND)
+    add_custom_command(TARGET Editor POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:Editor>"
+        COMMENT "Copying GFSDK_Aftermath_Lib.x64.dll to the editor"
+        VERBATIM)
+endif()
 
 if(AETHERCORE_PROJECT_DIR AND NOT EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
     message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; skipping data/project.pak")
 endif()
 
-aethercore_add_runtime_payload(Editor)
-aethercore_add_runtime_payload(GameRuntime)
+# The editor's publish flow packages AetherGame.exe from its own (shared) dir, so the
+# runtime must be built and co-located whenever the editor is.
 add_dependencies(Editor GameRuntime)
 
 # ── Launcher ────────────────────────────────────────────────────────────────
@@ -299,11 +291,13 @@ if(WIN32)
     target_sources(Launcher PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/AetherCoreEditor.rc")
 endif()
 
-# Tooling app (imgui) but NOT a scene app: no ECS systems, no CoreCLR. AETHER_EDITOR_EXE_NAME
-# lets it spawn the editor; the AETHER_* paths let ProjectCommon scaffold new projects.
+# Tooling app (imgui) but NOT a scene app: no ECS systems, no CoreCLR. The editor name +
+# build-injected dev path feed ResolveToolExecutable so the launcher can spawn the editor;
+# the AETHER_* paths let ProjectCommon scaffold new projects.
 target_compile_definitions(Launcher PRIVATE
     AETHERCORE_WITH_IMGUI=1
     AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
+    AETHER_EDITOR_EXE_PATH="${_aether_app_bundle_dir}/$<TARGET_FILE_NAME:Editor>"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 
@@ -311,9 +305,9 @@ aethercore_target_defaults(Launcher)
 aethercore_enable_dead_strip_report(Launcher)
 set_target_properties(Launcher PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
-# The launcher draws ImGui so it needs engine.pak beside it; it deploys no managed
-# assemblies (never boots CoreCLR) and spawns Editor.exe, so it depends on Editor.
-aethercore_add_runtime_payload(Launcher)
+# The launcher shares the app bundle (engine.pak etc. staged by StageAppBundle) and spawns
+# Editor.exe, so it depends on both.
+add_dependencies(Launcher StageAppBundle)
 add_dependencies(Launcher Editor)
 
 # ── Redistributable package ─────────────────────────────────────────────────

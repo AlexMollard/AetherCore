@@ -21,9 +21,9 @@ option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for f
 option(AETHERCORE_DEAD_STRIP_REPORT
     "Emit link map files (and per-section gc log) for Editor and AssetPacker" OFF)
 
-# Project root packaged into the shipped game by PackageGame. Empty = skip project.pak.
+# Project root baked into the shipped game by PackageGame. Empty = skip project.pak.
 set(AETHERCORE_PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/projects/TestingProject"
-    CACHE PATH "Aether project directory packed to data/project.pak")
+    CACHE PATH "Aether project baked into the game package by PackageGame (publish-only)")
 
 include(Dependencies)
 include(DotNet)

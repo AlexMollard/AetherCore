@@ -1,44 +1,13 @@
+# Engine/tooling unit tests. Test sources are globbed (CONFIGURE_DEPENDS) like the rest of
+# the build; the app-side TUs below live in src/app and are listed explicitly since they
+# can't be globbed from here.
+file(GLOB_RECURSE ENGINE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+
 add_executable(EngineTests
-    TestMain.cpp
-    scene/HierarchyTests.cpp
-    scene/WorldTests.cpp
-    scene/SceneSerializerTests.cpp
-    scene/SceneWorkflowTests.cpp
-    scene/TransformEditTests.cpp
-    scene/TransformUtilsTests.cpp
-    utils/RayTests.cpp
-    utils/FuzzyMatchTests.cpp
-    utils/LogRingBufferTests.cpp
-    utils/LayoutPresetStoreTests.cpp
-    utils/EngineSettingsTests.cpp
-    utils/SettingsServiceTests.cpp
-    utils/TomlConfigTests.cpp
-    material/MaterialDescribeTests.cpp
-    material/PackMaterialTests.cpp
-    material/MaterialRegistryTests.cpp
-    material/MaterialSystemTests.cpp
-    material/DeferredSlotFreeListTests.cpp
-    material/MaterialInstanceTests.cpp
-    material/MaterialAuthoringTests.cpp
-    material/PipelineCacheTests.cpp
-    material/EffectParamBufferTests.cpp
-    material/TextureRegistryTests.cpp
-    ui/UiLayoutTests.cpp
-    ui/UiEntitiesTests.cpp
-    ui/UiDrawBuilderTests.cpp
-    ui/FontShapingTests.cpp
-    imgui/ImguiFrameDataTests.cpp
-    assetpack/AssetPipelineTests.cpp
-    assetpack/PakFormatTests.cpp
-    assetpack/MaterialProcessorShaderTests.cpp
-    assetpack/SpirvStripTests.cpp
-    io/ProcessTests.cpp
-    io/OverlayBackendTests.cpp
-    io/FileSystemShaderOverlayTests.cpp
-    app/ProjectCliTests.cpp
-    # App-side TUs under test: EngineTests links Engine only, so the scene serializer
-    # (plus the reflection TUs that populate the component registry at static-init) and
-    # the ImguiFrameData type its test exercises are compiled straight in here.
+    ${ENGINE_TEST_SOURCES}
+    # App-side TUs under test: EngineTests links Engine only, so the scene serializer (plus
+    # the reflection TUs that populate the component registry at static-init) and the
+    # ImguiFrameData type its test exercises are compiled straight in here.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"

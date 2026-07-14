@@ -125,6 +125,26 @@ namespace aether::io
 		return exePath.empty() ? std::string{} : exePath.stem().string();
 	}
 
+	std::filesystem::path PlatformPaths::ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName)
+	{
+		std::error_code ec;
+		if (!envVar.empty())
+		{
+			if (const std::string envValue = EnvironmentString(std::string(envVar).c_str()); !envValue.empty() && std::filesystem::exists(envValue, ec))
+			{
+				return std::filesystem::path(envValue);
+			}
+		}
+		if (!devHint.empty())
+		{
+			if (std::filesystem::path hinted{std::string(devHint)}; std::filesystem::exists(hinted, ec))
+			{
+				return hinted;
+			}
+		}
+		return GetExecutableDir() / std::filesystem::path(std::string(fileName));
+	}
+
 	std::filesystem::path PlatformPaths::GetUserConfigDir()
 	{
 		std::filesystem::path root;

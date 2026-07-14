@@ -28,6 +28,12 @@ namespace aether::io
 		// other's caches. Returns an empty string if the OS query fails.
 		[[nodiscard]] static std::string GetExecutableName();
 
+		// Locate a sibling tool/runtime executable without hardcoding "next to me".
+		// Resolve order: env override (envVar) -> build-injected dev path (devHint, empty
+		// in shipped builds) -> <this exe's dir>/fileName. Returns the first that exists,
+		// else <exe dir>/fileName as a best-effort default (caller reports launch failure).
+		[[nodiscard]] static std::filesystem::path ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName);
+
 		// Per-user writable directory for this application's settings, created on
 		// demand:
 		//   Windows: %LOCALAPPDATA%\AetherCore

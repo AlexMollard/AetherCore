@@ -1,4 +1,8 @@
 option(AETHERCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party targets" OFF)
+# Fast (non-IEEE) floating point. OFF by default so engine-side math stays reproducible -
+# fast-math would undermine the cross-platform determinism Jolt is built for (lockstep /
+# rollback networking). Turn ON when you want the speed and don't need determinism.
+option(AETHERCORE_ENABLE_FAST_MATH "Use fast, non-IEEE floating point (/fp:fast, -ffast-math)" OFF)
 
 # Apply project-wide compiler/linker flags to a first-party target. Call after the
 # target's sources are declared.
@@ -19,7 +23,7 @@ function(aethercore_target_defaults target)
             -fms-compatibility-version=19.40
             /MP
             /FS
-            /fp:fast
+            $<$<BOOL:${AETHERCORE_ENABLE_FAST_MATH}>:/fp:fast>
             /Gy
             /external:anglebrackets
             /external:W0
@@ -60,7 +64,7 @@ function(aethercore_target_defaults target)
             /we4715
             /MP
             /FS
-            /fp:fast
+            $<$<BOOL:${AETHERCORE_ENABLE_FAST_MATH}>:/fp:fast>
             /Gy
             /jumptablerdata
             /external:anglebrackets
@@ -83,7 +87,6 @@ function(aethercore_target_defaults target)
             endif()
         endif()
 
-        target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:/GS->)
         target_compile_options(${target} PRIVATE /guard:cf)
         target_link_options(${target} PRIVATE /guard:cf /CETCOMPAT)
 
@@ -103,7 +106,7 @@ function(aethercore_target_defaults target)
             -Wpedantic
             -Werror=switch-enum
             -Werror=return-type
-            -ffast-math
+            $<$<BOOL:${AETHERCORE_ENABLE_FAST_MATH}>:-ffast-math>
             -ffunction-sections
             -fdata-sections
             $<$<CONFIG:Debug>:-g3>

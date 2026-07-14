@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "io/PlatformPaths.hpp"
 #include "utils/Logger.hpp"
 
 #ifdef _WIN32
@@ -9,34 +10,26 @@
 #	include <windows.h>
 #endif
 
-// The Editor executable file name, injected by CMake ($<TARGET_FILE_NAME:Editor>).
-// Only the Launcher target defines it; a fallback keeps this translation unit compiling
-// in the Editor/GameRuntime targets (where SpawnEditor is never called).
+// Editor executable name + build-injected dev path (CMake sets both on the Launcher
+// target). Fallbacks keep this TU compiling in the Editor/GameRuntime targets, where
+// SpawnEditor is never called; an empty dev path just means "no hint", so the resolver
+// falls back to the launcher's own directory (the shipped layout).
 #ifndef AETHER_EDITOR_EXE_NAME
 #	define AETHER_EDITOR_EXE_NAME "Editor.exe"
+#endif
+#ifndef AETHER_EDITOR_EXE_PATH
+#	define AETHER_EDITOR_EXE_PATH ""
 #endif
 
 namespace aether::app::launcher
 {
 #ifdef _WIN32
-	namespace
-	{
-		std::filesystem::path ExecutableDir()
-		{
-			char buffer[MAX_PATH]{};
-			const DWORD len = GetModuleFileNameA(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
-			if (len == 0 || len >= std::size(buffer))
-			{
-				return {};
-			}
-			return std::filesystem::path(std::string(buffer, len)).parent_path();
-		}
-	} // namespace
-
 	bool SpawnEditor(const std::filesystem::path& projectRoot, int controlPort)
 	{
-		const std::filesystem::path dir = ExecutableDir();
-		const std::filesystem::path editorExe = dir / AETHER_EDITOR_EXE_NAME;
+		// Resolve the editor without assuming it sits next to us: env override
+		// (AETHER_EDITOR_EXE) -> build-injected dev path -> our own directory.
+		const std::filesystem::path editorExe = io::PlatformPaths::ResolveToolExecutable("AETHER_EDITOR_EXE", AETHER_EDITOR_EXE_PATH, AETHER_EDITOR_EXE_NAME);
+		const std::filesystem::path dir = editorExe.parent_path();
 		// CreateProcessA needs a mutable command-line buffer.
 		std::string command = "\"" + editorExe.string() + "\" --project \"" + projectRoot.string() + "\"";
 

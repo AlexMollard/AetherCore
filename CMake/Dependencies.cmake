@@ -276,8 +276,7 @@ if(TARGET enet)
 endif()
 
 # ── Solution folder organisation (Visual Studio only) ─────────────────────────
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
+# USE_FOLDERS / PREDEFINED_TARGETS_FOLDER are set once in the root CMakeLists.
 foreach(_dep IN ITEMS
     glfw update_mappings
     glm vk-bootstrap volk
@@ -295,8 +294,6 @@ foreach(_dep IN ITEMS
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")
     endif()
 endforeach()
-
-set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
 # ── Unit test framework ───────────────────────────────────────────────────────
 CPMAddPackage(

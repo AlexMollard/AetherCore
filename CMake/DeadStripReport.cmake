@@ -36,7 +36,6 @@ function(aethercore_enable_dead_strip_report target)
         )
         # CMake can't redirect a single command's stderr without re-linking, so drop a
         # sentinel pointer file the parser locates the log by.
-        find_program(GEN_NUL NAMES "nul" "/dev/null" "true")
         add_custom_command(TARGET ${target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_FILE_DIR:${target}>/../dead-strip-report"
