@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -319,10 +320,31 @@ namespace aether
 		std::string screenshotPath;
 		std::uint64_t screenshotFrame = 120;
 		bool screenshotRequested = false;
-		if (const char* envPath = std::getenv("AETHER_SCREENSHOT"); envPath != nullptr && *envPath != '\0')
+		const auto readEnvironmentVariable = [](const char* name) -> std::string
+		{
+#ifdef _MSC_VER
+			char* value = nullptr;
+			std::size_t size = 0;
+			if (_dupenv_s(&value, &size, name) != 0 || value == nullptr)
+			{
+				return {};
+			}
+
+			std::string result(value);
+			std::free(value);
+			return result;
+#else
+			const char* value = std::getenv(name);
+			return value != nullptr ? value : "";
+#endif
+		};
+
+		const std::string envPath = readEnvironmentVariable("AETHER_SCREENSHOT");
+		if (!envPath.empty())
 		{
 			screenshotPath = envPath;
-			if (const char* envFrame = std::getenv("AETHER_SCREENSHOT_FRAME"); envFrame != nullptr && *envFrame != '\0')
+			const std::string envFrame = readEnvironmentVariable("AETHER_SCREENSHOT_FRAME");
+			if (!envFrame.empty())
 			{
 				try
 				{

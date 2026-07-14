@@ -34,6 +34,10 @@ function(aethercore_target_defaults target)
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
+            # CMake enables incremental linking for RelWithDebInfo by default,
+            # but /OPT:ICF disables it. Make the intended non-incremental link
+            # explicit so every first-party target links without LNK4075.
+            $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
             $<$<CONFIG:Debug>:/DEBUG:FULL>
         )
@@ -74,6 +78,10 @@ function(aethercore_target_defaults target)
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
+            # CMake enables incremental linking for RelWithDebInfo by default,
+            # but /OPT:ICF disables it. Make the intended non-incremental link
+            # explicit so every first-party target links without LNK4075.
+            $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
         )
 

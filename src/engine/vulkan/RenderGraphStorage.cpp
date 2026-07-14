@@ -192,7 +192,7 @@ namespace aether
 		{
 			if (m_vulkanContext != nullptr)
 			{
-				m_vulkanContext->WaitIdle();
+				AE_EXPECT_OR_THROW_VOID(m_vulkanContext->WaitIdle());
 			}
 			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to wait for compute fence."));
 		}

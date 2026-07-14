@@ -147,7 +147,10 @@ if(AETHER_HAS_DOTNET)
     set(_aether_interop_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Interop/${_aether_managed_cfgdir}")
 
     add_custom_target(ManagedAssemblies ALL
-        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_interop_proj}"
+        # MSVC's LIB environment variable can contain optional toolset paths that
+        # are absent on some installations. They are irrelevant to C# compilation
+        # but cause CSC to emit CS1668, so do not propagate LIB to dotnet.
+        COMMAND "${CMAKE_COMMAND}" -E env --unset=LIB "${AETHER_DOTNET_EXE}" build "${_aether_interop_proj}"
                 -c ${_aether_managed_cfg} --nologo -v:m
                 -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts/managed"
