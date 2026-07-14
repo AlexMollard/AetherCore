@@ -115,12 +115,14 @@ namespace aether
 		io.ConfigDpiScaleFonts = true;
 		io.ConfigDpiScaleViewports = true;
 
-		// Force every floating (undocked) window - including the project launcher -
-		// into its own OS window instead of merging into the main window when it
-		// overlaps. The per-window NoAutoMerge window class alone did not promote the
-		// launcher to its own viewport here, so drive it globally. Docked panels are
-		// unaffected; only undocked windows become their own OS windows.
-		io.ConfigViewportsNoAutoMerge = true;
+		// Leave ConfigViewportsNoAutoMerge at its ImGui default (false): a floating
+		// window that overlaps the main window stays merged into it and only pops into
+		// its own OS window when dragged outside the main window's bounds (standard
+		// tear-out behaviour). Forcing it true was a launcher-era experiment - the
+		// launcher now disables multi-viewport entirely (LauncherLayer::OnAttach), so it
+		// is no longer needed here, and it had a bad side effect: ImGuizmo::BeginFrame()
+		// submits a transparent, full-viewport-sized helper window named "gizmo", which
+		// NoAutoMerge promoted into its own black OS window floating over the editor.
 
 		// Windows (including a torn-out Viewport) move only by their title bar.
 		io.ConfigWindowsMoveFromTitleBarOnly = true;
