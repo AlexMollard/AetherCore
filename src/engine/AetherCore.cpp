@@ -227,8 +227,14 @@ namespace aether
 		m_services.Get<AssetSubsystem>().Shutdown();
 		// SceneSubsystem has no shutdown work.
 
-		// Animation systems (reverse of init order).
-		m_animationBlend->Shutdown();
+		// Animation systems (reverse of init order). Only constructed in the Full
+		// profile (see the fullRuntime guard in Init); the UiShell launcher never
+		// creates it, so guard the teardown like the optional subsystems above -
+		// otherwise closing the launcher dereferences a null AnimationBlendSystem.
+		if (m_animationBlend)
+		{
+			m_animationBlend->Shutdown();
+		}
 
 		// GPU shutdown destroys internal Vulkan resources.
 		m_gpu->Shutdown();
