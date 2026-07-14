@@ -513,30 +513,13 @@ namespace aether::editor
 			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
 			ImGui::Text(ICON_FA_CUBE "  %s", sceneName);
 			ImGui::PopStyleColor();
-			divider();
 
 			{
 				const char* label = playing ? ICON_FA_PLAY "  PLAYING" : (compiling ? ICON_FA_GEAR "  COMPILING" : ICON_FA_STOP "  EDITING");
 				const ImVec2 textSize = ImGui::CalcTextSize(label);
-				const ImVec2 pad(7.0f, 1.0f);
-				const ImVec2 p = ImGui::GetCursorScreenPos();
-				const ImVec2 pillMin(p.x, p.y + (ImGui::GetFrameHeight() - (textSize.y + pad.y * 2.0f)) * 0.5f);
-				const ImVec2 pillMax(pillMin.x + textSize.x + pad.x * 2.0f, pillMin.y + textSize.y + pad.y * 2.0f);
-				if (playing)
-				{
-					drawList->AddRectFilled(pillMin, pillMax, U32(kAccent), 3.0f);
-					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kOnAccent), label);
-				}
-				else if (compiling)
-				{
-					drawList->AddRect(pillMin, pillMax, U32(WithAlpha(kAccent, 0.7f)), 3.0f, 0, 1.0f);
-					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kAccentHi), label);
-				}
-				else
-				{
-					drawList->AddText(ImVec2(pillMin.x + pad.x, pillMin.y + pad.y), U32(kMuted), label);
-				}
-				ImGui::Dummy(ImVec2(textSize.x + pad.x * 2.0f, 0.0f));
+				const ImVec4 color = (playing || compiling) ? kAccentHi : kMuted;
+				const ImVec2 textPos(barMin.x + (barW - textSize.x) * 0.5f, barMin.y + (ImGui::GetWindowHeight() - textSize.y) * 0.5f);
+				drawList->AddText(textPos, U32(color), label);
 			}
 
 			// scripts on a worker thread (project open / F5), show what's happening with
@@ -972,14 +955,6 @@ namespace aether::editor
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, chrome::WithAlpha(chrome::kAccent, 0.36f));
 		if (showMenuBar && ImGui::BeginMenuBar())
 		{
-			if (const std::uint64_t logoTextureId = m_projects.LogoTextureId(); logoTextureId != 0)
-			{
-				const float logoSize = ImGui::GetTextLineHeight();
-				const ImVec2 logoMin = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(logoTextureId)), logoMin, ImVec2(logoMin.x + logoSize, logoMin.y + logoSize), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), chrome::U32(chrome::kAccent));
-				ImGui::Dummy(ImVec2(logoSize + 2.0f, logoSize));
-				ImGui::SameLine(0.0f, 6.0f);
-			}
 			if (ImGui::BeginMenu("File"))
 			{
 				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher..."))
@@ -1155,10 +1130,9 @@ namespace aether::editor
 			{
 				using namespace chrome;
 				const auto* playState = context.TryGet<app::PlayState>();
-				const bool playing = playState != nullptr && playState->IsPlaying();
 				const bool compiling = playState != nullptr && playState->IsCompiling();
-				const char* chip = playing ? ICON_FA_PLAY "  LIVE" : (compiling ? ICON_FA_GEAR "  BUILD" : "AETHERCORE");
-				const ImVec4 chipColor = playing ? kAccentHi : (compiling ? kAccentHi : kFaint);
+				const char* chip = compiling ? ICON_FA_GEAR "  BUILD" : "AETHERCORE";
+				const ImVec4 chipColor = compiling ? kAccentHi : kFaint;
 				const float chipW = ImGui::CalcTextSize(chip).x;
 				const float avail = ImGui::GetContentRegionAvail().x;
 				if (avail > chipW + 16.0f)

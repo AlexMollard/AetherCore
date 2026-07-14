@@ -137,21 +137,6 @@ namespace aether::editor
 			}
 		}
 
-		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 p = ImGui::GetCursorScreenPos();
-			const float bandW = ImGui::GetContentRegionAvail().x;
-			drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + 13.0f), chrome::U32(chrome::kAccent));
-			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), chrome::kMuted, "CONSOLE");
-			char totalText[32]{};
-			std::snprintf(totalText, sizeof(totalText), "%zu MESSAGES", records.size());
-			const float totalW = chrome::MeasureSized(12.0f, totalText).x;
-			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + bandW - totalW, p.y), chrome::kFaint, totalText);
-			ImGui::Dummy(ImVec2(0.0f, 16.0f));
-			chrome::AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
-			ImGui::Dummy(ImVec2(0.0f, 4.0f));
-		}
-
 		LevelBadge("ERR", nErr, &m_showError, LevelColor(LogLevel::Error));
 		ImGui::SameLine();
 		LevelBadge("WRN", nWarn, &m_showWarn, LevelColor(LogLevel::Warn));

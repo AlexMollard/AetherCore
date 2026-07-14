@@ -682,6 +682,7 @@ namespace aether::editor
 	void HierarchyPanel::DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem)
 	{
 		const KindBadge badge = EntityKindBadge(world, e);
+		ImGui::AlignTextToFramePadding();
 		if (continuePreviousItem)
 		{
 			ImGui::SameLine();
@@ -1118,19 +1119,9 @@ namespace aether::editor
 			{
 				const auto* scenes = context.TryGet<aether::SceneSubsystem>();
 				const char* sceneName = (scenes != nullptr && !scenes->GetCurrentScene().empty()) ? scenes->GetCurrentScene().c_str() : "Untitled";
-				ImDrawList* drawList = ImGui::GetWindowDrawList();
-				const ImVec2 p = ImGui::GetCursorScreenPos();
-				const float bandW = ImGui::GetContentRegionAvail().x;
-				drawList->AddRectFilled(ImVec2(p.x, p.y + 3.0f), ImVec2(p.x + 3.0f, p.y + 30.0f), chrome::U32(chrome::kAccent));
-				chrome::TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), chrome::kMuted, "SCENE");
-				chrome::TextSized(drawList, 17.0f, ImVec2(p.x + 10.0f, p.y + 14.0f), chrome::kText, sceneName);
 				char countText[32]{};
 				std::snprintf(countText, sizeof(countText), "%zu ENTITIES", count);
-				const float countW = chrome::MeasureSized(12.0f, countText).x;
-				chrome::TextSized(drawList, 12.0f, ImVec2(p.x + bandW - countW, p.y + 1.0f), chrome::kFaint, countText);
-				ImGui::Dummy(ImVec2(0.0f, 34.0f));
-				chrome::AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
-				ImGui::Dummy(ImVec2(0.0f, 5.0f));
+				chrome::PanelHeader(sceneName, countText);
 			}
 
 			const float tbBtnH = ImGui::GetFrameHeight();

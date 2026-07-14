@@ -382,24 +382,14 @@ namespace aether::editor
 			return;
 		}
 
+		char idText[64]{};
+		if (selection.All().size() > 1)
 		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 p = ImGui::GetCursorScreenPos();
-			const float bandW = ImGui::GetContentRegionAvail().x;
-			drawList->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + 3.0f, p.y + 13.0f), chrome::U32(chrome::kAccent));
-			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + 10.0f, p.y), chrome::kMuted, "ENTITY");
-			char idText[64]{};
-			if (selection.All().size() > 1)
-			{
-				std::snprintf(idText, sizeof(idText), "#%u \xC2\xB7 %zu SELECTED", entity.id, selection.All().size());
-			}
-			else
-			{
-				std::snprintf(idText, sizeof(idText), "#%u", entity.id);
-			}
-			const float idW = chrome::MeasureSized(12.0f, idText).x;
-			chrome::TextSized(drawList, 12.0f, ImVec2(p.x + bandW - idW, p.y), chrome::kFaint, idText);
-			ImGui::Dummy(ImVec2(0.0f, 17.0f));
+			std::snprintf(idText, sizeof(idText), "#%u \xC2\xB7 %zu SELECTED", entity.id, selection.All().size());
+		}
+		else
+		{
+			std::snprintf(idText, sizeof(idText), "#%u", entity.id);
 		}
 		const KindBadge badge = EntityKindBadge(world, entity);
 		{
@@ -438,6 +428,7 @@ namespace aether::editor
 			ImGui::SameLine();
 
 			ImGui::PushFont(nullptr, 18.0f);
+			const float idW = ImGui::CalcTextSize(idText).x;
 			ImGui::AlignTextToFramePadding();
 			ImGui::TextColored(badge.color, "%s", badge.icon);
 			ImGui::SameLine();
@@ -448,7 +439,7 @@ namespace aether::editor
 			{
 				char buf[128];
 				std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
-				ImGui::SetNextItemWidth(-1.0f);
+				ImGui::SetNextItemWidth(-(idW + ImGui::GetStyle().ItemSpacing.x));
 				if (ImGui::InputText("##name", buf, sizeof(buf)))
 				{
 					nc->name = buf;
@@ -458,6 +449,8 @@ namespace aether::editor
 			{
 				world.Emplace<NameComponent>(entity, NameComponent{.name = "Entity"});
 			}
+			ImGui::SameLine(ImGui::GetContentRegionMax().x - idW);
+			ImGui::TextDisabled("%s", idText);
 			ImGui::PopStyleColor(3);
 			ImGui::PopFont();
 		}

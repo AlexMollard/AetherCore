@@ -613,7 +613,15 @@ namespace aether::editor
 			return;
 		}
 
-		const ImVec2 available(std::max(1.0f, ImGui::GetContentRegionAvail().x), std::max(1.0f, ImGui::GetContentRegionAvail().y));
+		const ImVec2 contentAvailable(std::max(1.0f, ImGui::GetContentRegionAvail().x), std::max(1.0f, ImGui::GetContentRegionAvail().y));
+		const ImVec2 toolbarMin = ImGui::GetCursorScreenPos();
+		const float btnH = ImGui::GetFrameHeight();
+		const ImVec2 pillPad(4.0f, 4.0f);
+		const float pillH = btnH + pillPad.y * 2.0f;
+		const float toolbarH = pillH + 8.0f;
+		const ImVec2 available(contentAvailable.x, std::max(1.0f, contentAvailable.y - toolbarH));
+		const ImVec2 imageAreaMin(toolbarMin.x, toolbarMin.y + toolbarH);
+		const ImVec2 imageAreaMax(imageAreaMin.x + available.x, imageAreaMin.y + available.y);
 
 		gpu::Extent2D extent = post.GetExtent();
 		if (extent.width == 0 || extent.height == 0)
@@ -691,17 +699,19 @@ namespace aether::editor
 		}
 
 		const ImVec2 imageCursorStart = ImGui::GetCursorPos();
-		ImGui::SetCursorPos(ImVec2(imageCursorStart.x + (available.x - imageSize.x) * 0.5f, imageCursorStart.y + (available.y - imageSize.y) * 0.5f));
+		ImGui::SetCursorPos(ImVec2(imageCursorStart.x + (available.x - imageSize.x) * 0.5f, imageCursorStart.y + toolbarH + (available.y - imageSize.y) * 0.5f));
 
 		const ImVec2 imageMin = ImGui::GetCursorScreenPos();
 		const ImVec2 imageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+		ImGui::PushClipRect(imageAreaMin, imageAreaMax, true);
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 		const bool gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 
 		// highlight, drags never start). While a handle is hovered the button is
 		const ImVec2 gizmoMouse = ImGui::GetIO().MousePos;
-		const bool mouseOverImage = gizmoMouse.x >= imageMin.x && gizmoMouse.x < imageMax.x && gizmoMouse.y >= imageMin.y && gizmoMouse.y < imageMax.y;
+		const bool mouseOverImage =
+		        gizmoMouse.x >= std::max(imageMin.x, imageAreaMin.x) && gizmoMouse.x < std::min(imageMax.x, imageAreaMax.x) && gizmoMouse.y >= std::max(imageMin.y, imageAreaMin.y) && gizmoMouse.y < std::min(imageMax.y, imageAreaMax.y);
 		const bool gizmoActive = gizmoDrawn && mouseOverImage && ImGuizmo::IsUsingAny() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
 		const bool gizmoHovered = gizmoDrawn && mouseOverImage && ImGuizmo::IsOver() && !ImGui::IsMouseDown(ImGuiMouseButton_Right);
 		const ImVec2 inputViewportOrigin = ImGui::GetWindowViewport() != nullptr ? ImGui::GetWindowViewport()->Pos : ImGui::GetMainViewport()->Pos;
@@ -771,7 +781,7 @@ namespace aether::editor
 					labelW = std::max(labelW, chrome::MeasureSized(kLabelSize, rows[i].label).x);
 					valueW = std::max(valueW, chrome::MeasureSized(kValueSize, rows[i].value.c_str()).x);
 				}
-				const ImVec2 rectMin(imageMin.x + 10.0f, imageMin.y + 54.0f);
+				const ImVec2 rectMin(imageMin.x + 10.0f, imageMin.y + 10.0f);
 				const ImVec2 rectMax(rectMin.x + pad.x * 2.0f + labelW + 14.0f + valueW, rectMin.y + pad.y * 2.0f + static_cast<float>(rowCount) * kRowH - 3.0f);
 				drawList->AddRectFilled(rectMin, rectMax, chrome::U32(chrome::WithAlpha(chrome::kPanel, 0.88f)), 4.0f);
 				drawList->AddRect(rectMin, rectMax, chrome::U32(chrome::kStroke), 4.0f, 0, 1.0f);
@@ -785,6 +795,7 @@ namespace aether::editor
 				}
 			}
 		}
+		ImGui::PopClipRect();
 
 		// ── Match Panel render resolution (functional; recomputed every frame so the
 		// scene target tracks the panel size + DPI) ────────────────────────────────
@@ -803,18 +814,13 @@ namespace aether::editor
 			}
 		}
 
-		// ── Floating toolbar: tools (left) · Play (center) · settings (right) ──────
-		// Three edge-anchored pills in the launcher chrome (warm surface, hairline
-		// stroke, amber accent). Each pill is its own child window, which also
-		// isolates hover so the camera-input fallback below stays off while the
-		// mouse is over the toolbar.
+		// ── Viewport toolbar: tools (left) · Play (center) · settings (right) ──────
+		// The toolbar owns a dedicated row above the scene image so editor controls
+		// never cover game UI. Each group remains an isolated child for clean hover.
 		auto* toolbarPlayState = context.TryGet<app::PlayState>();
 		const bool toolbarPlaying = toolbarPlayState != nullptr && toolbarPlayState->IsPlaying();
 		const bool toolbarCompiling = toolbarPlayState != nullptr && toolbarPlayState->IsCompiling();
-		const float btnH = ImGui::GetFrameHeight();
-		const ImVec2 pillPad(4.0f, 4.0f);
-		const float pillH = btnH + pillPad.y * 2.0f;
-		const float pillTop = imageMin.y + 8.0f;
+		const float pillTop = toolbarMin.y + 4.0f;
 		bool toolbarControlActive = false;
 
 		// Live-session hairline across the top edge of the scene image: solid amber
@@ -833,7 +839,7 @@ namespace aether::editor
 
 		// Left pill: gizmo tools + orientation. The active op is a filled amber
 		// segment; idle ops are ghosts.
-		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, pillTop));
+		ImGui::SetCursorScreenPos(ImVec2(toolbarMin.x, pillTop));
 		ImGui::BeginChild(
 		        "##vpTools", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
@@ -867,11 +873,11 @@ namespace aether::editor
 		}
 		ImGui::EndChild();
 
-		// Center pill: Play/Stop, horizontally centered over the scene.
+		// Center pill: Play/Stop, horizontally centered in the toolbar row.
 		const char* playSizeLabel = toolbarPlaying ? ICON_FA_STOP " Stop" : (toolbarCompiling ? ICON_FA_GEAR " Compiling" : ICON_FA_PLAY " Play");
 		const float playBtnW = ImGui::CalcTextSize(playSizeLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 		const float playPillW = playBtnW + pillPad.x * 2.0f;
-		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - playPillW) * 0.5f, pillTop));
+		ImGui::SetCursorScreenPos(ImVec2(toolbarMin.x + (contentAvailable.x - playPillW) * 0.5f, pillTop));
 		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
 			DrawPlayControls(context);
@@ -883,7 +889,7 @@ namespace aether::editor
 		// FA advance so the glyph centers (see the tool buttons above).
 		const float gearBtnW = std::max(btnH, ImGui::CalcTextSize(ICON_FA_GEAR).x + ImGui::GetStyle().FramePadding.x * 2.0f);
 		const float gearPillW = gearBtnW + pillPad.x * 2.0f;
-		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - gearPillW - 8.0f, pillTop));
+		ImGui::SetCursorScreenPos(ImVec2(toolbarMin.x + contentAvailable.x - gearPillW, pillTop));
 		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
 			if (chrome::GhostIconButton(ICON_FA_GEAR, "##viewportGear", ImVec2(gearBtnW, btnH)))
