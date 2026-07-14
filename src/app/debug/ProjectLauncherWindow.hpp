@@ -17,8 +17,8 @@ namespace aether::app
 	// the smallest window the responsive hub layout stays usable at (LauncherLayer
 	// applies it as the OS window's minimum size). The hub itself is fluid - it
 	// fills and re-flows to whatever window hosts it (see ProjectLauncherWindow::Draw).
-	inline constexpr int kProjectLauncherDefaultWidth = 1450;
-	inline constexpr int kProjectLauncherDefaultHeight = 880;
+	inline constexpr int kProjectLauncherDefaultWidth = 1920;
+	inline constexpr int kProjectLauncherDefaultHeight = 1080;
 	inline constexpr int kProjectLauncherMinWidth = 720;
 	inline constexpr int kProjectLauncherMinHeight = 540;
 

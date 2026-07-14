@@ -23,11 +23,130 @@ namespace aether::app
 		// debug/EditorChrome.hpp so every panel adopting the look moves with it.
 		using namespace aether::editor::chrome;
 
-		// Launcher-specific aliases on top of the shared tokens (kError now comes
-		// from chrome:: too - it is themeable).
-		const ImVec4 kBgTop = kBg;
-		const ImVec4 kBgBottom = kPanel; // gradient lifts into the panel tone
-		const ImVec4 kBtnText = kOnAccent;
+		const ImVec4 kBgTop = kBg;         // window gradient: near-black at the top,
+		const ImVec4 kBgBottom = kPanel;   // lifting into the panel tone at the bottom
+
+		// ── DPI scaling ─────────────────────────────────────────────────────────────
+		// Every dimension below is authored in "design pixels" (1x). This launcher
+		// paints its own text/chrome with drawList->AddText, whose pixel sizes ImGui
+		// does NOT DPI-scale (unlike GetFontSize(), which every other panel sizes off
+		// and which ImGui grows per-monitor via io.ConfigDpiScaleFonts). So on a scaled
+		// display the hub used to render smaller than the rest of the editor. Px is the
+		// single place the monitor scale enters: dp(v) / dp(x, y) convert design pixels
+		// to physical ones, and every call site stays in readable, un-multiplied numbers.
+		constexpr float kBaseFontPx = 15.0f; // ImguiSubsystem loads the UI font at 15px
+		struct Px
+		{
+			float scale = 1.0f;
+			[[nodiscard]] float operator()(const float v) const { return v * scale; }
+			[[nodiscard]] ImVec2 operator()(const float x, const float y) const { return ImVec2(x * scale, y * scale); }
+		};
+		[[nodiscard]] Px MakeScale()
+		{
+			return Px{ImGui::GetFontSize() / kBaseFontPx};
+		}
+
+		// ── Layout metrics (design pixels) ──────────────────────────────────────────
+		// One home for every number the hub is built from. Grouped by the thing it
+		// sizes; scaled through dp() at the point of use.
+		namespace m
+		{
+			// Type sizes.
+			inline constexpr float kWordmarkMin = 28.0f, kWordmarkMax = 42.0f; // clamps vs window
+			inline constexpr float kSubtitle = 14.5f;
+			inline constexpr float kSectionLabel = 13.0f;
+			inline constexpr float kContinueName = 17.0f;
+			inline constexpr float kBodyPath = 13.0f;   // continue path + card path
+			inline constexpr float kCardTitle = 16.0f;
+			inline constexpr float kBadge = 12.0f;      // "3 days ago"
+			inline constexpr float kChip = 12.0f;       // EDITOR / OPEN
+			inline constexpr float kMissing = 11.0f;    // MISSING tag
+			inline constexpr float kFooter = 14.0f;
+			inline constexpr float kPlaceholderIcon = 34.0f;
+			inline constexpr float kEmptyTitle = 15.0f, kEmptyBody = 14.0f;
+
+			// Responsive content band.
+			inline constexpr float kContentWidthCap = 1720.0f;   // column stops widening here
+			inline constexpr float kMarginMin = 20.0f, kMarginMax = 84.0f;
+			inline constexpr float kBandTopMin = 18.0f, kBandTopMax = 64.0f;
+			inline constexpr float kBandBottomMin = 16.0f, kBandBottomMax = 56.0f;
+			inline constexpr float kSingleColumnBelow = 980.0f; // stack the columns under this width
+			inline constexpr float kColumnsTopGap = 62.0f;       // wordmark block -> columns
+			inline constexpr float kFooterBand = 30.0f;
+
+			// Actions panel + its vertical rhythm.
+			inline constexpr float kActionsWidthNarrow = 520.0f;               // single-column cap
+			inline constexpr float kActionsWidthMin = 380.0f, kActionsWidthMax = 460.0f;
+			inline constexpr float kPanelPad = 22.0f;
+			inline constexpr float kPanelCorner = 4.0f;
+			inline constexpr float kAccentCap = 2.0f;          // top accent bar
+			inline constexpr float kSectionLabelGap = 28.0f;   // label -> first control
+			inline constexpr float kContinueNameGap = 24.0f;   // name line -> path line
+			inline constexpr float kContinuePathGap = 28.0f;   // path line -> button
+			inline constexpr float kLineClip = 18.0f;          // clip height for a single body line
+			inline constexpr float kFieldStride = 44.0f;       // input-row height + gap
+			inline constexpr float kButtonTall = 40.0f;        // Continue
+			inline constexpr float kButtonStd = 38.0f;         // Open / Create
+			inline constexpr float kButtonToDivider = 54.0f;   // full-width button -> divider
+			inline constexpr float kAfterDivider = 20.0f;      // divider -> next section
+			inline constexpr float kBrowseGap = 8.0f;          // field <-> browse button
+			inline constexpr float kErrorGap = 12.0f;          // error text -> divider
+			inline constexpr float kDividerToToggle = 16.0f;   // divider -> startup checkbox
+			inline constexpr float kInputRounding = 3.0f;
+			inline constexpr float kInputPadX = 12.0f, kInputPadY = 9.0f;
+
+			// Recent-projects grid + its cards.
+			inline constexpr float kGridGap = 16.0f;
+			inline constexpr float kCardMinWidth = 210.0f;
+			inline constexpr float kCardTextBlock = 64.0f;     // name+path region height below the thumb
+			inline constexpr float kGridBleed = 6.0f;          // scroll-child inset that gives hover brackets room
+			inline constexpr float kLabelToGrid = 30.0f;       // section label -> grid
+			inline constexpr float kGridMinHeight = 96.0f, kGridMinWidth = 220.0f; // below this the grid is skipped
+			inline constexpr float kEmptyTextX = 2.0f;         // empty-state left nudge
+			inline constexpr float kEmptyTitleY = 8.0f, kEmptyBodyY = 34.0f;
+
+			inline constexpr float kCardCorner = 4.0f;
+			inline constexpr float kCardBorder = 1.0f;
+			inline constexpr float kSelectedBar = 3.0f;        // top edge of a selected card
+			inline constexpr float kBracketArm = 12.0f;
+			inline constexpr float kBracketThickness = 2.0f;
+			inline constexpr float kBracketBleed = 3.0f;       // how far the reticle bleeds past the card
+			inline constexpr float kThumbInset = 1.0f;         // thumbnail vs card border
+			inline constexpr float kCardTextInset = 12.0f;     // name/path left inset
+			inline constexpr float kCardTitleTop = 10.0f;      // below the thumbnail
+			inline constexpr float kCardPathClipTop = 32.0f;
+			inline constexpr float kCardPathTextTop = 33.0f;
+			inline constexpr float kCardPathBottomInset = 8.0f;
+			inline constexpr float kBadgeInset = 10.0f;        // badge from the thumbnail's bottom-left
+			inline constexpr float kChipInset = 16.0f;         // OPEN/MISSING from the thumbnail's top-right
+			inline constexpr float kChipTop = 12.0f;
+			inline constexpr float kChipCorner = 2.0f;
+			inline constexpr float kChipPadX = 6.0f, kChipPadY = 4.0f;   // scrim padding, quiet chips
+			inline constexpr float kOpenPadX = 8.0f, kOpenPadY = 5.0f;   // scrim padding, the OPEN chip
+
+			// Wordmark composition.
+			inline constexpr float kWordmarkScale = 0.032f;    // of content width
+			inline constexpr float kLogoExtra = 16.0f;         // logo size = wordmark + this
+			inline constexpr float kLogoGap = 14.0f;
+			inline constexpr float kTagGap = 16.0f;            // "CORE" -> EDITOR chip
+			inline constexpr float kTagTop = 10.0f;
+			inline constexpr float kTagPadX = 8.0f, kTagPadY = 5.0f;
+			inline constexpr float kUnderlineInset = 2.0f, kUnderlineWidth = 58.0f;
+			inline constexpr float kUnderlineTop = 10.0f, kUnderlineBottom = 13.0f; // below the wordmark
+			inline constexpr float kSubtitleTop = 24.0f;
+			inline constexpr float kLaunchingTop = 46.0f;
+
+			// Background flourishes.
+			inline constexpr float kGridPitch = 56.0f;
+			inline constexpr float kGridAlpha = 0.16f;
+			inline constexpr float kWashHeight = 240.0f;
+			inline constexpr float kWashWidthFrac = 0.55f;
+			inline constexpr float kWashAlpha = 0.05f;
+			inline constexpr float kHairline = 2.0f;
+			inline constexpr float kSlashInset = 96.0f, kSlashTop = 44.0f;
+			inline constexpr float kSlashStride = 18.0f, kSlashRun = 14.0f, kSlashDrop = 26.0f;
+			inline constexpr float kSlashThickness = 3.0f;
+		} // namespace m
 
 		[[nodiscard]] ImU32 ToU32(const ImVec4& color)
 		{
@@ -44,8 +163,6 @@ namespace aether::app
 			return ImVec2(a.x - b.x, a.y - b.y);
 		}
 
-		// WithAlpha comes from chrome::.
-
 		[[nodiscard]] std::string DisplayPath(const std::filesystem::path& path)
 		{
 			return path.empty() ? std::string{} : path.lexically_normal().string();
@@ -57,63 +174,27 @@ namespace aether::app
 			std::snprintf(buffer.data(), buffer.size(), "%s", DisplayPath(path).c_str());
 		}
 
-		// TextSized / MeasureSized come from chrome::; brackets forward to the
-		// shared primitive (the launcher's call sites predate the extraction).
-		void DrawCornerBrackets(ImDrawList* drawList, const ImVec2 min, const ImVec2 max, const float arm, const float thickness, const ImVec4& color)
+		// A rounded scrim behind a bit of overlaid text (badges, MISSING/OPEN chips) so
+		// it reads on any thumbnail. `pad` is the inset from the text box on each side.
+		void ScrimBehind(ImDrawList* drawList, const ImVec2 textPos, const ImVec2 textSize, const ImVec2 pad, const ImVec4& fill, const float corner)
 		{
-			CornerBrackets(drawList, min, max, arm, thickness, color);
+			drawList->AddRectFilled(Sub(textPos, pad), Add(textPos, Add(textSize, pad)), ToU32(fill), corner);
 		}
 
-		void DrawLauncherBackground(ImDrawList* drawList, const ImVec2 min, const ImVec2 max)
+		// Micro section label: small amber tick + spaced uppercase muted text.
+		void SectionLabel(ImDrawList* drawList, const ImVec2 pos, const char* label, const Px& dp)
 		{
-			// Vertical near-black gradient.
-			drawList->AddRectFilledMultiColor(min, max, ToU32(kBgTop), ToU32(kBgTop), ToU32(kBgBottom), ToU32(kBgBottom));
-
-			// Fine grid, barely-there. Structure without noise.
-			constexpr float kPitch = 56.0f;
-			const ImU32 gridColor = ToU32(WithAlpha(kStroke, 0.16f));
-			for (float x = min.x + kPitch; x < max.x; x += kPitch)
-			{
-				drawList->AddLine(ImVec2(x, min.y), ImVec2(x, max.y), gridColor, 1.0f);
-			}
-			for (float y = min.y + kPitch; y < max.y; y += kPitch)
-			{
-				drawList->AddLine(ImVec2(min.x, y), ImVec2(max.x, y), gridColor, 1.0f);
-			}
-
-			// Soft amber wash behind the header band, fading right.
-			const float bandBottom = min.y + 200.0f;
-			drawList->AddRectFilledMultiColor(min, ImVec2(min.x + (max.x - min.x) * 0.55f, bandBottom), ToU32(WithAlpha(kAccent, 0.045f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.03f)));
-
-			// Bottom edge: 2px accent hairline fading out to the right.
-			drawList->AddRectFilledMultiColor(ImVec2(min.x, max.y - 2.0f), max, ToU32(WithAlpha(kAccent, 0.85f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.85f)));
-
-			// HUD stripe motif: three diagonal slashes in the top-right corner.
-			const float slashBaseX = max.x - 96.0f;
-			const float slashY = min.y + 44.0f;
-			for (int i = 0; i < 3; ++i)
-			{
-				const float x = slashBaseX + static_cast<float>(i) * 18.0f;
-				drawList->AddLine(ImVec2(x + 14.0f, slashY), ImVec2(x, slashY + 26.0f), ToU32(WithAlpha(kAccent, 0.65f - static_cast<float>(i) * 0.2f)), 3.0f);
-			}
+			drawList->AddRectFilled(pos, Add(pos, dp(3.0f, 12.0f)), ToU32(kAccent));
+			TextSized(drawList, dp(m::kSectionLabel), Add(pos, dp(10.0f, -1.0f)), kMuted, label);
 		}
-
-		// Micro section label: small amber tick + spaced uppercase text.
-		void SectionLabel(ImDrawList* drawList, ImVec2 pos, const char* label)
-		{
-			drawList->AddRectFilled(pos, Add(pos, ImVec2(3.0f, 12.0f)), ToU32(kAccent));
-			TextSized(drawList, 13.0f, Add(pos, ImVec2(10.0f, -1.0f)), kMuted, label);
-		}
-
-		// PrimaryButton / OutlineButton / GhostButton come from chrome::.
 
 		// A project tile in the recents grid: a scene-preview thumbnail on top (or a
 		// cube placeholder when the project has no <root>/.aether/preview.png yet),
-		// then the name and path. Hover lifts the fill + adds corner brackets; a
-		// project whose ProjectSettings.toml is gone renders muted with a MISSING tag.
-		// Returns true when clicked (the caller opens it, which reports the error for
-		// a missing project).
-		bool DrawProjectCard(const EditorProjectContext& project, std::uint64_t previewTextureId, const std::string& modifiedLabel, bool selected, bool missing, const ImVec2& cardSize)
+		// then the name and path. Hover lifts the fill + frames the card with reticle
+		// brackets; a project whose ProjectSettings.toml is gone renders muted with a
+		// MISSING tag. Returns true when clicked (the caller opens it, which reports the
+		// error for a missing project).
+		bool DrawProjectCard(const EditorProjectContext& project, std::uint64_t previewTextureId, const std::string& modifiedLabel, bool selected, bool missing, const ImVec2& cardSize, const Px& dp)
 		{
 			const ImVec2 start = ImGui::GetCursorScreenPos();
 			ImGui::PushID(DisplayPath(project.root).c_str());
@@ -122,62 +203,66 @@ namespace aether::app
 			const ImVec2 end = Add(start, cardSize);
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const bool lit = hovered && !missing;
+			const float corner = dp(m::kCardCorner);
 
-			// Card body.
-			drawList->AddRectFilled(start, end, ToU32(lit ? kPanelHi : kPanel), 4.0f);
-			drawList->AddRect(start, end, ToU32(lit ? WithAlpha(kAccent, 0.5f) : kStroke), 4.0f, 0, 1.0f);
+			// Card body + border, an accent lip when selected, reticle brackets on hover.
+			drawList->AddRectFilled(start, end, ToU32(lit ? kPanelHi : kPanel), corner);
+			drawList->AddRect(start, end, ToU32(lit ? WithAlpha(kAccent, 0.5f) : kStroke), corner, 0, dp(m::kCardBorder));
 			if (selected && !missing)
 			{
-				drawList->AddRectFilled(start, ImVec2(end.x, start.y + 3.0f), ToU32(kAccent), 4.0f, ImDrawFlags_RoundCornersTop);
+				drawList->AddRectFilled(start, ImVec2(end.x, start.y + dp(m::kSelectedBar)), ToU32(kAccent), corner, ImDrawFlags_RoundCornersTop);
 			}
 			if (lit)
 			{
-				DrawCornerBrackets(drawList, Add(start, ImVec2(-3.0f, -3.0f)), Add(end, ImVec2(3.0f, 3.0f)), 12.0f, 2.0f, kAccent);
+				// The brackets bleed a few px past the card; the grid's scroll child pads its
+				// interior by the same amount (see PaintRecentsGrid) so perimeter cards get
+				// the room rather than having the reticle sliced off by the child's clip rect.
+				const float bleed = dp(m::kBracketBleed);
+				CornerBrackets(drawList, Add(start, ImVec2(-bleed, -bleed)), Add(end, ImVec2(bleed, bleed)), dp(m::kBracketArm), dp(m::kBracketThickness), kAccent);
 			}
 
-			// Thumbnail region (top), 16:9.
+			// Thumbnail (top), 16:9. A real preview, else a centred cube placeholder.
 			const float thumbHeight = std::floor(cardSize.x * 9.0f / 16.0f);
-			const ImVec2 thumbMin = Add(start, ImVec2(1.0f, 1.0f));
-			const ImVec2 thumbMax(end.x - 1.0f, start.y + thumbHeight);
+			const ImVec2 thumbMin = Add(start, dp(m::kThumbInset, m::kThumbInset));
+			const ImVec2 thumbMax(end.x - dp(m::kThumbInset), start.y + thumbHeight);
 			if (previewTextureId != 0 && !missing)
 			{
-				drawList->AddImageRounded(ImTextureRef(static_cast<ImTextureID>(previewTextureId)), thumbMin, thumbMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255), 4.0f, ImDrawFlags_RoundCornersTop);
+				drawList->AddImageRounded(ImTextureRef(static_cast<ImTextureID>(previewTextureId)), thumbMin, thumbMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255), corner, ImDrawFlags_RoundCornersTop);
 			}
 			else
 			{
-				drawList->AddRectFilled(thumbMin, thumbMax, ToU32(kBg), 4.0f, ImDrawFlags_RoundCornersTop);
-				const ImVec2 iconSize = MeasureSized(34.0f, ICON_FA_CUBE);
+				drawList->AddRectFilled(thumbMin, thumbMax, ToU32(kBg), corner, ImDrawFlags_RoundCornersTop);
+				const ImVec2 iconSize = MeasureSized(dp(m::kPlaceholderIcon), ICON_FA_CUBE);
 				const ImVec2 iconPos((thumbMin.x + thumbMax.x - iconSize.x) * 0.5f, (thumbMin.y + thumbMax.y - iconSize.y) * 0.5f);
-				TextSized(drawList, 34.0f, iconPos, missing ? kFaint : WithAlpha(kAccent, 0.5f), ICON_FA_CUBE);
+				TextSized(drawList, dp(m::kPlaceholderIcon), iconPos, missing ? kFaint : WithAlpha(kAccent, 0.5f), ICON_FA_CUBE);
 			}
 			drawList->AddLine(ImVec2(thumbMin.x, thumbMax.y), ImVec2(thumbMax.x, thumbMax.y), ToU32(kStroke), 1.0f);
 
-			// "Last edited" badge, pinned to the thumbnail's bottom-left over a subtle
-			// scrim so it reads on both a bright scene preview and the dark placeholder.
+			// "Last edited" badge, pinned to the thumbnail's bottom-left over a scrim.
 			if (!modifiedLabel.empty() && !missing)
 			{
-				const ImVec2 badgeSize = MeasureSized(11.5f, modifiedLabel.c_str());
-				const ImVec2 badgePos(thumbMin.x + 10.0f, thumbMax.y - badgeSize.y - 10.0f);
-				drawList->AddRectFilled(Sub(badgePos, ImVec2(6.0f, 4.0f)), Add(badgePos, Add(badgeSize, ImVec2(6.0f, 4.0f))), ToU32(WithAlpha(kBg, 0.7f)), 2.0f);
-				TextSized(drawList, 11.5f, badgePos, kMuted, modifiedLabel.c_str());
+				const ImVec2 badgeSize = MeasureSized(dp(m::kBadge), modifiedLabel.c_str());
+				const ImVec2 badgePos(thumbMin.x + dp(m::kBadgeInset), thumbMax.y - badgeSize.y - dp(m::kBadgeInset));
+				ScrimBehind(drawList, badgePos, badgeSize, dp(m::kChipPadX, m::kChipPadY), WithAlpha(kBg, 0.7f), dp(m::kChipCorner));
+				TextSized(drawList, dp(m::kBadge), badgePos, kMuted, modifiedLabel.c_str());
 			}
 
-			// Name + path below the thumbnail.
-			const float textX = start.x + 12.0f;
-			TextSized(drawList, 16.0f, ImVec2(textX, thumbMax.y + 10.0f), missing ? kMuted : kText, project.name.c_str());
+			// Name + path below the thumbnail (path clipped to the card width).
+			const float textX = start.x + dp(m::kCardTextInset);
+			TextSized(drawList, dp(m::kCardTitle), ImVec2(textX, thumbMax.y + dp(m::kCardTitleTop)), missing ? kMuted : kText, project.name.c_str());
 			const std::string path = DisplayPath(project.root);
-			ImGui::PushClipRect(ImVec2(textX, thumbMax.y + 32.0f), Sub(end, ImVec2(12.0f, 8.0f)), true);
-			TextSized(drawList, 12.5f, ImVec2(textX, thumbMax.y + 33.0f), missing ? kFaint : kMuted, path.c_str());
+			ImGui::PushClipRect(ImVec2(textX, thumbMax.y + dp(m::kCardPathClipTop)), Sub(end, dp(m::kCardTextInset, m::kCardPathBottomInset)), true);
+			TextSized(drawList, dp(m::kBodyPath), ImVec2(textX, thumbMax.y + dp(m::kCardPathTextTop)), missing ? kFaint : kMuted, path.c_str());
 			ImGui::PopClipRect();
 
-			// Overlays on the thumbnail: MISSING tag, or an OPEN chip on hover.
+			// Thumbnail overlay: a MISSING tag, or an OPEN chip on hover (top-right).
 			if (missing)
 			{
 				const char* tag = "MISSING";
-				const ImVec2 tagSize = MeasureSized(11.0f, tag);
-				const ImVec2 tp(thumbMax.x - tagSize.x - 16.0f, thumbMin.y + 12.0f);
-				drawList->AddRectFilled(Sub(tp, ImVec2(6.0f, 4.0f)), Add(tp, Add(tagSize, ImVec2(6.0f, 4.0f))), ToU32(WithAlpha(kBg, 0.82f)), 2.0f);
-				TextSized(drawList, 11.0f, tp, kError, tag);
+				const ImVec2 tagSize = MeasureSized(dp(m::kMissing), tag);
+				const ImVec2 tp(thumbMax.x - tagSize.x - dp(m::kChipInset), thumbMin.y + dp(m::kChipTop));
+				ScrimBehind(drawList, tp, tagSize, dp(m::kChipPadX, m::kChipPadY), WithAlpha(kBg, 0.82f), dp(m::kChipCorner));
+				TextSized(drawList, dp(m::kMissing), tp, kError, tag);
 				if (hovered)
 				{
 					ImGui::SetTooltip("ProjectSettings.toml no longer exists at\n%s", path.c_str());
@@ -186,20 +271,20 @@ namespace aether::app
 			else if (hovered)
 			{
 				const char* hint = "OPEN";
-				const ImVec2 hintSize = MeasureSized(12.0f, hint);
-				const ImVec2 hp(thumbMax.x - hintSize.x - 16.0f, thumbMin.y + 12.0f);
-				drawList->AddRectFilled(Sub(hp, ImVec2(8.0f, 5.0f)), Add(hp, Add(hintSize, ImVec2(8.0f, 5.0f))), ToU32(WithAlpha(kAccent, 0.9f)), 2.0f);
-				TextSized(drawList, 12.0f, hp, kOnAccent, hint);
+				const ImVec2 hintSize = MeasureSized(dp(m::kChip), hint);
+				const ImVec2 hp(thumbMax.x - hintSize.x - dp(m::kChipInset), thumbMin.y + dp(m::kChipTop));
+				ScrimBehind(drawList, hp, hintSize, dp(m::kOpenPadX, m::kOpenPadY), WithAlpha(kAccent, 0.9f), dp(m::kChipCorner));
+				TextSized(drawList, dp(m::kChip), hp, kOnAccent, hint);
 				ImGui::SetTooltip("%s", path.c_str());
 			}
 			ImGui::PopID();
 			return pressed;
 		}
 
-		void PushInputStyles()
+		void PushInputStyles(const Px& dp)
 		{
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 9.0f));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, dp(m::kInputRounding));
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, dp(m::kInputPadX, m::kInputPadY));
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4{0.043f, 0.047f, 0.055f, 1.0f});
 			ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4{0.055f, 0.059f, 0.071f, 1.0f});
@@ -215,17 +300,359 @@ namespace aether::app
 			ImGui::PopStyleColor(7);
 			ImGui::PopStyleVar(3);
 		}
+
+		// Everything the section painters share for one frame: the window draw list, the
+		// DPI scale, and the responsive rects resolved from the current window size.
+		struct Frame
+		{
+			ImDrawList* drawList = nullptr;
+			Px dp;
+			ImVec2 contentMin, contentMax; // the centred content band
+			float contentX = 0.0f, contentWidth = 0.0f;
+			bool singleColumn = false;     // actions panel stacked above the recents grid
+			float wordmarkSize = 0.0f;
+			float columnsTop = 0.0f, columnsBottom = 0.0f;
+			ImVec2 rightMin, rightMax;     // the actions panel column
+			float panelPad = 0.0f;         // dp(kPanelPad), reused throughout the panel
+			float innerWidth = 0.0f;       // usable width inside the panel padding
+		};
+
+		void PaintBackground(const Frame& f, const ImVec2 min, const ImVec2 max)
+		{
+			ImDrawList* dl = f.drawList;
+			const Px& dp = f.dp;
+
+			// Vertical near-black gradient.
+			dl->AddRectFilledMultiColor(min, max, ToU32(kBgTop), ToU32(kBgTop), ToU32(kBgBottom), ToU32(kBgBottom));
+
+			// Fine grid, barely-there. Structure without noise.
+			const float pitch = dp(m::kGridPitch);
+			const ImU32 gridColor = ToU32(WithAlpha(kStroke, m::kGridAlpha));
+			for (float x = min.x + pitch; x < max.x; x += pitch)
+			{
+				dl->AddLine(ImVec2(x, min.y), ImVec2(x, max.y), gridColor, 1.0f);
+			}
+			for (float y = min.y + pitch; y < max.y; y += pitch)
+			{
+				dl->AddLine(ImVec2(min.x, y), ImVec2(max.x, y), gridColor, 1.0f);
+			}
+
+			// Soft amber wash bleeding down-and-right out of the top-left corner. All
+			// three trailing corners fall to zero alpha so the wash dissolves into the
+			// background instead of ending on a hard rectangular seam.
+			const ImVec2 washMax(min.x + (max.x - min.x) * m::kWashWidthFrac, min.y + dp(m::kWashHeight));
+			dl->AddRectFilledMultiColor(min, washMax,
+			        ToU32(WithAlpha(kAccent, m::kWashAlpha)), // upper-left  - the glow's origin
+			        ToU32(WithAlpha(kAccent, 0.0f)),          // upper-right - faded across the top
+			        ToU32(WithAlpha(kAccent, 0.0f)),          // lower-right
+			        ToU32(WithAlpha(kAccent, 0.0f)));         // lower-left  - faded away downward
+
+			// Bottom edge: accent hairline fading out toward both ends.
+			dl->AddRectFilledMultiColor(ImVec2(min.x, max.y - dp(m::kHairline)), max, ToU32(WithAlpha(kAccent, 0.85f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.85f)));
+
+			// HUD stripe motif: three fading diagonal slashes in the top-right corner.
+			const float slashBaseX = max.x - dp(m::kSlashInset);
+			const float slashY = min.y + dp(m::kSlashTop);
+			for (int i = 0; i < 3; ++i)
+			{
+				const float x = slashBaseX + static_cast<float>(i) * dp(m::kSlashStride);
+				dl->AddLine(ImVec2(x + dp(m::kSlashRun), slashY), ImVec2(x, slashY + dp(m::kSlashDrop)), ToU32(WithAlpha(kAccent, 0.65f - static_cast<float>(i) * 0.2f)), dp(m::kSlashThickness));
+			}
+		}
+
+		// Wordmark block: optional tinted logo, AETHER·CORE, an EDITOR chip, the accent
+		// underline, and the subtitle / "Starting editor…" line.
+		void PaintHeader(const Frame& f, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowState& state)
+		{
+			ImDrawList* dl = f.drawList;
+			const Px& dp = f.dp;
+			const float wordmark = f.wordmarkSize;
+
+			const bool hasLogo = model.logoTextureId != 0;
+			const float logoSize = wordmark + dp(m::kLogoExtra);
+			if (hasLogo)
+			{
+				dl->AddImage(ImTextureRef(static_cast<ImTextureID>(model.logoTextureId)), f.contentMin, Add(f.contentMin, ImVec2(logoSize, logoSize)), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), ToU32(kAccent));
+			}
+
+			const ImVec2 wordmarkPos = Add(f.contentMin, ImVec2(hasLogo ? logoSize + dp(m::kLogoGap) : 0.0f, 0.0f));
+			const ImVec2 aetherSize = MeasureSized(wordmark, "AETHER");
+			TextSized(dl, wordmark, wordmarkPos, kText, "AETHER");
+			TextSized(dl, wordmark, Add(wordmarkPos, ImVec2(aetherSize.x, 0.0f)), kAccent, "CORE");
+			const ImVec2 coreSize = MeasureSized(wordmark, "CORE");
+
+			// EDITOR tag: small outlined chip after the wordmark.
+			const ImVec2 tagText = MeasureSized(dp(m::kChip), "EDITOR");
+			const ImVec2 tagMin = Add(wordmarkPos, ImVec2(aetherSize.x + coreSize.x + dp(m::kTagGap), dp(m::kTagTop)));
+			const ImVec2 tagMax = Add(tagMin, Add(tagText, dp(m::kTagPadX * 2.0f, m::kTagPadY * 2.0f)));
+			dl->AddRect(tagMin, tagMax, ToU32(WithAlpha(kAccent, 0.5f)), dp(m::kChipCorner), 0, dp(m::kCardBorder));
+			TextSized(dl, dp(m::kChip), Add(tagMin, dp(m::kTagPadX, m::kTagPadY)), kAccentHi, "EDITOR");
+
+			// Accent underline + subtitle, sitting just under the wordmark baseline.
+			dl->AddRectFilled(Add(wordmarkPos, ImVec2(dp(m::kUnderlineInset), wordmark + dp(m::kUnderlineTop))), Add(wordmarkPos, ImVec2(dp(m::kUnderlineWidth), wordmark + dp(m::kUnderlineBottom))), ToU32(kAccent));
+			TextSized(dl, dp(m::kSubtitle), Add(wordmarkPos, ImVec2(dp(m::kUnderlineInset), wordmark + dp(m::kSubtitleTop))), kMuted, "Select a project to begin.");
+			if (state.launching)
+			{
+				TextSized(dl, dp(m::kSubtitle), Add(wordmarkPos, ImVec2(dp(m::kUnderlineInset), wordmark + dp(m::kLaunchingTop))), kAccentHi, "Starting editor…");
+			}
+		}
+
+		// The actions column (Continue / Open / New + startup toggle). Widgets draw on
+		// channel 1 first so the panel chrome can land behind them on channel 0 once the
+		// content height is known - the panel hugs its content. Returns the panel bottom.
+		float PaintActionsPanel(const Frame& f, ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
+		{
+			ImDrawList* dl = f.drawList;
+			const Px& dp = f.dp;
+			const float pad = f.panelPad;
+			const float labelX = f.rightMin.x + pad;
+			const float rightEdge = f.rightMax.x - pad;
+			const float innerWidth = f.innerWidth;
+
+			dl->ChannelsSplit(2);
+			dl->ChannelsSetCurrent(1);
+			float y = f.rightMin.y + pad;
+
+			PushInputStyles(dp);
+			// Square browse buttons: side == input-row height so the icon-only button is a
+			// true square that lines up with the field beside it.
+			const float browseSize = ImGui::GetFrameHeight();
+
+			const auto divider = [&](const float yy) { dl->AddLine(ImVec2(labelX, yy), ImVec2(rightEdge, yy), ToU32(kStroke), 1.0f); };
+
+			// Continue (only when a current project exists).
+			if (model.hasCurrentProject && model.currentProject != nullptr)
+			{
+				SectionLabel(dl, ImVec2(labelX, y), "CONTINUE", dp);
+				y += dp(m::kSectionLabelGap);
+				TextSized(dl, dp(m::kContinueName), ImVec2(labelX, y), kText, model.currentProject->name.c_str());
+				y += dp(m::kContinueNameGap);
+				ImGui::PushClipRect(ImVec2(labelX, y), ImVec2(rightEdge, y + dp(m::kLineClip)), true);
+				TextSized(dl, dp(m::kBodyPath), ImVec2(labelX, y), kMuted, DisplayPath(model.currentProject->root).c_str());
+				ImGui::PopClipRect();
+				y += dp(m::kContinuePathGap);
+				ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+				if (PrimaryButton(ICON_FA_PLAY "  Continue", ImVec2(innerWidth, dp(m::kButtonTall))) && actions.openProject)
+				{
+					actions.openProject(model.currentProject->root);
+				}
+				y += dp(m::kButtonToDivider);
+				divider(y);
+				y += dp(m::kAfterDivider);
+			}
+
+			// Open existing. Enter in the path field submits; the button disables until
+			// there is a path, so requirements read before the error does.
+			SectionLabel(dl, ImVec2(labelX, y), "OPEN PROJECT", dp);
+			y += dp(m::kSectionLabelGap);
+			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+			ImGui::SetNextItemWidth(innerWidth - browseSize - dp(m::kBrowseGap));
+			bool openSubmitted = ImGui::InputTextWithHint("##openProjectPath", "Path to ProjectSettings.toml...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+			ImGui::SameLine(0.0f, dp(m::kBrowseGap));
+			if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseProjectFile)
+			{
+				if (const auto file = actions.browseProjectFile())
+				{
+					CopyToBuffer(state.openPath, *file);
+				}
+			}
+			y += dp(m::kFieldStride);
+			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+			const bool openPathEmpty = state.openPath[0] == '\0';
+			ImGui::BeginDisabled(openPathEmpty);
+			openSubmitted = OutlineButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(innerWidth, dp(m::kButtonStd))) || openSubmitted;
+			ImGui::EndDisabled();
+			if (openSubmitted && !openPathEmpty && actions.openProject)
+			{
+				actions.openProject(std::filesystem::path(state.openPath.data()));
+			}
+			y += dp(m::kButtonToDivider);
+			divider(y);
+			y += dp(m::kAfterDivider);
+
+			// Create new. Enter in either field submits; Create disables until both the
+			// name and folder are present.
+			SectionLabel(dl, ImVec2(labelX, y), "NEW PROJECT", dp);
+			y += dp(m::kSectionLabelGap);
+			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+			ImGui::SetNextItemWidth(innerWidth);
+			bool createSubmitted = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+			y += dp(m::kFieldStride);
+			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+			ImGui::SetNextItemWidth(innerWidth - browseSize - dp(m::kBrowseGap));
+			createSubmitted = ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || createSubmitted;
+			ImGui::SameLine(0.0f, dp(m::kBrowseGap));
+			if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize)) && actions.browseFolder)
+			{
+				if (const auto folder = actions.browseFolder())
+				{
+					CopyToBuffer(state.newPath, *folder);
+				}
+			}
+			y += dp(m::kFieldStride);
+			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+			const bool createIncomplete = state.newName[0] == '\0' || state.newPath[0] == '\0';
+			ImGui::BeginDisabled(createIncomplete);
+			createSubmitted = PrimaryButton(ICON_FA_PLUS "  Create", ImVec2(innerWidth, dp(m::kButtonStd))) || createSubmitted;
+			ImGui::EndDisabled();
+			if (createSubmitted && !createIncomplete && actions.createProject)
+			{
+				actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data());
+			}
+			y += dp(m::kButtonToDivider);
+
+			// Error (if any), a hairline, then the startup toggle - all inline so the
+			// panel keeps hugging its content.
+			if (!state.error.empty())
+			{
+				ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+				ImGui::PushStyleColor(ImGuiCol_Text, kError);
+				ImGui::PushTextWrapPos(rightEdge);
+				ImGui::TextWrapped("%s", state.error.c_str());
+				ImGui::PopTextWrapPos();
+				ImGui::PopStyleColor();
+				y = ImGui::GetItemRectMax().y + dp(m::kErrorGap);
+			}
+
+			divider(y);
+			y += dp(m::kDividerToToggle);
+			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
+			if (ImGui::Checkbox("Open last project on startup", &state.openLastProject) && actions.saveSettings)
+			{
+				actions.saveSettings();
+			}
+			ImGui::PopStyleColor();
+			y = ImGui::GetItemRectMax().y + pad;
+
+			PopInputStyles();
+
+			// Panel chrome behind the content, now that the height is known.
+			const ImVec2 panelMax{f.rightMax.x, std::min(y, f.rightMax.y)};
+			const float corner = dp(m::kPanelCorner);
+			dl->ChannelsSetCurrent(0);
+			dl->AddRectFilled(f.rightMin, panelMax, ToU32(kPanel), corner);
+			dl->AddRect(f.rightMin, panelMax, ToU32(kStroke), corner, 0, dp(m::kCardBorder));
+			dl->AddRectFilled(f.rightMin, ImVec2(panelMax.x, f.rightMin.y + dp(m::kAccentCap)), ToU32(WithAlpha(kAccent, 0.9f)), corner, ImDrawFlags_RoundCornersTop);
+			dl->ChannelsMerge();
+			return panelMax.y;
+		}
+
+		// The recents card grid. Beside the panel normally; below it on narrow windows
+		// (hence panelBottom). Skipped when the window leaves no meaningful room.
+		void PaintRecentsGrid(const Frame& f, const float panelBottom, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
+		{
+			ImDrawList* dl = f.drawList;
+			const Px& dp = f.dp;
+
+			const ImVec2 leftMin = f.singleColumn ? ImVec2(f.contentMin.x, panelBottom + dp(m::kLabelToGrid)) : ImVec2(f.contentMin.x, f.columnsTop);
+			const ImVec2 leftMax = f.singleColumn ? ImVec2(f.contentMax.x, f.columnsBottom) : ImVec2(f.rightMin.x - dp(m::kGridGap * 2.0f), f.columnsBottom);
+			if (leftMax.y - leftMin.y <= dp(m::kGridMinHeight) || leftMax.x - leftMin.x <= dp(m::kGridMinWidth))
+			{
+				return;
+			}
+
+			const float gridWidth = leftMax.x - leftMin.x;
+			SectionLabel(dl, leftMin, "RECENT PROJECTS", dp);
+
+			// The hover reticle bleeds past each card and the scroll child clips its own
+			// draw list, so perimeter cards used to get sliced. Bleed the child a matching
+			// margin past the content band on every side and pad its interior by the same,
+			// so cards still align edge-to-edge with the label while the brackets get room.
+			const float bleed = dp(m::kGridBleed);
+			ImGui::SetCursorScreenPos(Add(leftMin, ImVec2(-bleed, dp(m::kLabelToGrid))));
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(bleed, bleed));
+			ImGui::BeginChild("##launcherRecentProjects", ImVec2(gridWidth + bleed * 2.0f, leftMax.y - leftMin.y - dp(m::kLabelToGrid) + bleed), ImGuiChildFlags_AlwaysUseWindowPadding);
+
+			if (model.recentProjects.empty())
+			{
+				const ImVec2 emptyPos = ImGui::GetCursorScreenPos();
+				ImDrawList* childList = ImGui::GetWindowDrawList();
+				TextSized(childList, dp(m::kEmptyTitle), Add(emptyPos, dp(m::kEmptyTextX, m::kEmptyTitleY)), kMuted, "Nothing here yet.");
+				TextSized(childList, dp(m::kEmptyBody), Add(emptyPos, dp(m::kEmptyTextX, m::kEmptyBodyY)), kMuted, "Open an existing project or create a new one to get started.");
+			}
+			else
+			{
+				// Responsive card grid: fit as many ~kCardMinWidth cards across as the child
+				// allows, then widen them to fill the row evenly. A 16:9 thumbnail makes the
+				// row height follow the card width.
+				const float gridGap = dp(m::kGridGap);
+				const float avail = ImGui::GetContentRegionAvail().x;
+				const int columns = std::max(1, static_cast<int>((avail + gridGap) / (dp(m::kCardMinWidth) + gridGap)));
+				const float cardWidth = std::floor((avail - gridGap * static_cast<float>(columns - 1)) / static_cast<float>(columns));
+				const float cardHeight = std::floor(cardWidth * 9.0f / 16.0f) + dp(m::kCardTextBlock);
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gridGap, gridGap));
+				for (std::size_t i = 0; i < model.recentProjects.size(); ++i)
+				{
+					const EditorProjectContext& project = model.recentProjects[i];
+					if (i % static_cast<std::size_t>(columns) != 0)
+					{
+						ImGui::SameLine(0.0f, gridGap);
+					}
+					const bool selected = model.currentProject != nullptr && model.currentProject->root == project.root;
+					std::error_code existsEc;
+					const bool missing = !std::filesystem::exists(project.root / "ProjectSettings.toml", existsEc);
+					const std::uint64_t preview = model.previewTextureId ? model.previewTextureId(project) : 0;
+					const std::string edited = model.modifiedLabel ? model.modifiedLabel(project) : std::string{};
+					if (DrawProjectCard(project, preview, edited, selected, missing, ImVec2(cardWidth, cardHeight), dp) && actions.openProject)
+					{
+						actions.openProject(project.root);
+					}
+				}
+				ImGui::PopStyleVar();
+			}
+			ImGui::EndChild();
+			ImGui::PopStyleVar();   // WindowPadding
+			ImGui::PopStyleColor(); // ChildBg
+		}
+
+		void PaintFooter(const Frame& f)
+		{
+			// Muted (not faint) so the app name actually reads at the bottom-left.
+			TextSized(f.drawList, f.dp(m::kFooter), ImVec2(f.contentMin.x, f.contentMax.y - f.dp(m::kFooter + 4.0f)), kMuted, "AetherCore Editor");
+		}
+
+		// Resolve the responsive layout for the current window size into a Frame.
+		[[nodiscard]] Frame ResolveFrame(ImDrawList* drawList, const Px& dp, const ImVec2 windowMin, const ImVec2 windowMax)
+		{
+			Frame f;
+			f.drawList = drawList;
+			f.dp = dp;
+
+			const float width = windowMax.x - windowMin.x;
+			const float height = windowMax.y - windowMin.y;
+
+			// Side margins scale with the window; the content column caps at
+			// kContentWidthCap and centres itself on ultra-wide windows.
+			const float marginX = std::clamp(width * 0.05f, dp(m::kMarginMin), dp(m::kMarginMax));
+			f.contentWidth = std::min(width - marginX * 2.0f, dp(m::kContentWidthCap));
+			f.contentX = windowMin.x + (width - f.contentWidth) * 0.5f;
+			f.contentMin = ImVec2(f.contentX, windowMin.y + std::clamp(height * 0.06f, dp(m::kBandTopMin), dp(m::kBandTopMax)));
+			f.contentMax = ImVec2(f.contentX + f.contentWidth, windowMax.y - std::clamp(height * 0.05f, dp(m::kBandBottomMin), dp(m::kBandBottomMax)));
+
+			// Below this width the two columns cannot both breathe: stack them.
+			f.singleColumn = f.contentWidth < dp(m::kSingleColumnBelow);
+			f.wordmarkSize = std::clamp(f.contentWidth * m::kWordmarkScale, dp(m::kWordmarkMin), dp(m::kWordmarkMax));
+
+			f.columnsTop = f.contentMin.y + f.wordmarkSize + dp(m::kColumnsTopGap);
+			f.columnsBottom = f.contentMax.y - dp(m::kFooterBand);
+
+			const float rightWidth = f.singleColumn ? std::min(f.contentWidth, dp(m::kActionsWidthNarrow)) : std::clamp(f.contentWidth * 0.32f, dp(m::kActionsWidthMin), dp(m::kActionsWidthMax));
+			f.rightMin = f.singleColumn ? ImVec2(f.contentX + (f.contentWidth - rightWidth) * 0.5f, f.columnsTop) : ImVec2(f.contentMax.x - rightWidth, f.columnsTop);
+			f.rightMax = ImVec2(f.rightMin.x + rightWidth, f.columnsBottom);
+			f.panelPad = dp(m::kPanelPad);
+			f.innerWidth = rightWidth - f.panelPad * 2.0f;
+			return f;
+		}
 	} // namespace
 
 	void ProjectLauncherWindow::Draw(ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
 	{
-		// The hub FILLS its host window - the standalone Launcher's own OS window, or
-		// the editor's main window when shown there as an overlay - and lays itself
-		// out responsively: the content column caps + centers on ultra-wide windows,
-		// and below a width breakpoint the actions panel and recents list stack into
-		// a single column. It tracks resizes every frame, so there is no fixed design
-		// size; kProjectLauncherDefault{Width,Height} (header) is only the standalone
-		// Launcher's initial window size.
+		// The hub FILLS its host window - the standalone Launcher's own OS window, or the
+		// editor's main window when shown there as an overlay - and re-flows responsively
+		// every frame (see ResolveFrame); kProjectLauncherDefault{Width,Height} (header)
+		// is only the standalone Launcher's initial window size.
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
 		ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
@@ -240,257 +667,15 @@ namespace aether::app
 
 		const ImVec2 windowMin = ImGui::GetWindowPos();
 		const ImVec2 windowMax = Add(windowMin, ImGui::GetWindowSize());
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		DrawLauncherBackground(drawList, windowMin, windowMax);
+		const Frame f = ResolveFrame(ImGui::GetWindowDrawList(), MakeScale(), windowMin, windowMax);
 
-		const float width = windowMax.x - windowMin.x;
-		const float height = windowMax.y - windowMin.y;
-
-		// ── Responsive content band ─────────────────────────────────────────────
-		// Side margins scale with the window; the content column caps at
-		// kMaxContentWidth and centers itself on ultra-wide windows.
-		constexpr float kMaxContentWidth = 1720.0f;
-		const float marginX = std::clamp(width * 0.05f, 20.0f, 84.0f);
-		const float contentWidth = std::min(width - marginX * 2.0f, kMaxContentWidth);
-		const float contentX = windowMin.x + (width - contentWidth) * 0.5f;
-		const ImVec2 contentMin(contentX, windowMin.y + std::clamp(height * 0.06f, 18.0f, 64.0f));
-		const ImVec2 contentMax(contentX + contentWidth, windowMax.y - std::clamp(height * 0.05f, 16.0f, 56.0f));
-
-		// Below this content width the two columns cannot both breathe: stack the
-		// actions panel above the recents list instead.
-		const bool singleColumn = contentWidth < 980.0f;
-
-		// ── Wordmark (scales down with the window) ──────────────────────────────
-		const float wordmarkSize = std::clamp(contentWidth * 0.032f, 28.0f, 42.0f);
-		const float logoSize = wordmarkSize + 16.0f;
-		constexpr float kLogoGap = 14.0f;
-		const bool hasLogo = model.logoTextureId != 0;
-		if (hasLogo)
-		{
-			drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(model.logoTextureId)), contentMin, Add(contentMin, ImVec2(logoSize, logoSize)), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), ToU32(kAccent));
-		}
-		const ImVec2 wordmarkPos = Add(contentMin, ImVec2(hasLogo ? logoSize + kLogoGap : 0.0f, 0.0f));
-		const ImVec2 aetherSize = MeasureSized(wordmarkSize, "AETHER");
-		TextSized(drawList, wordmarkSize, wordmarkPos, kText, "AETHER");
-		TextSized(drawList, wordmarkSize, Add(wordmarkPos, ImVec2(aetherSize.x, 0.0f)), kAccent, "CORE");
-		const ImVec2 coreSize = MeasureSized(wordmarkSize, "CORE");
-		// EDITOR tag: small outlined chip after the wordmark.
-		{
-			const ImVec2 tagTextSize = MeasureSized(12.0f, "EDITOR");
-			const ImVec2 tagMin = Add(wordmarkPos, ImVec2(aetherSize.x + coreSize.x + 16.0f, 10.0f));
-			const ImVec2 tagMax = Add(tagMin, Add(tagTextSize, ImVec2(16.0f, 10.0f)));
-			drawList->AddRect(tagMin, tagMax, ToU32(WithAlpha(kAccent, 0.5f)), 2.0f, 0, 1.0f);
-			TextSized(drawList, 12.0f, Add(tagMin, ImVec2(8.0f, 5.0f)), kAccentHi, "EDITOR");
-		}
-		// Accent underline + subtitle.
-		drawList->AddRectFilled(Add(wordmarkPos, ImVec2(2.0f, wordmarkSize + 10.0f)), Add(wordmarkPos, ImVec2(58.0f, wordmarkSize + 13.0f)), ToU32(kAccent));
-		TextSized(drawList, 14.5f, Add(wordmarkPos, ImVec2(2.0f, wordmarkSize + 24.0f)), kMuted, "Select a project to begin.");
-		if (state.launching)
-		{
-			TextSized(drawList, 14.5f, Add(wordmarkPos, ImVec2(2.0f, wordmarkSize + 46.0f)), kAccentHi, "Starting editor…");
-		}
+		PaintBackground(f, windowMin, windowMax);
+		PaintHeader(f, model, state);
 
 		ImGui::BeginDisabled(state.launching);
-
-		// ── Layout rects ────────────────────────────────────────────────────────
-		const float columnsTop = contentMin.y + wordmarkSize + 62.0f;
-		const float footerH = 30.0f;
-		const float columnsBottom = contentMax.y - footerH;
-
-		// Actions panel: right column normally; a centered column on narrow windows.
-		const float rightWidth = singleColumn ? std::min(contentWidth, 520.0f) : std::clamp(contentWidth * 0.32f, 380.0f, 460.0f);
-		const ImVec2 rightMin = singleColumn ? ImVec2(contentX + (contentWidth - rightWidth) * 0.5f, columnsTop) : ImVec2(contentMax.x - rightWidth, columnsTop);
-		const ImVec2 rightMax(rightMin.x + rightWidth, columnsBottom);
-
-		// ── Actions panel ───────────────────────────────────────────────────────
-		// Drawn BEFORE the recents list: on narrow windows the list flows below the
-		// panel, so its measured height decides where the list starts. The panel
-		// hugs its content: widgets draw on channel 1 first, then the panel chrome
-		// lands behind them on channel 0 once the height is known.
-		drawList->ChannelsSplit(2);
-		drawList->ChannelsSetCurrent(1);
-
-		constexpr float kPad = 22.0f;
-		float cursorY = rightMin.y + kPad;
-		const float innerWidth = rightWidth - kPad * 2.0f;
-
-		PushInputStyles();
-		// Square browse buttons: width == the input-row height so the icon-only button
-		// is a true square that still lines up with the field beside it.
-		const float browseSize = ImGui::GetFrameHeight();
-
-		// Continue (only when a current project exists).
-		if (model.hasCurrentProject && model.currentProject != nullptr)
-		{
-			SectionLabel(drawList, ImVec2(rightMin.x + kPad, cursorY), "CONTINUE");
-			cursorY += 28.0f;
-			TextSized(drawList, 17.0f, ImVec2(rightMin.x + kPad, cursorY), kText, model.currentProject->name.c_str());
-			cursorY += 24.0f;
-			ImGui::PushClipRect(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY + 18.0f), true);
-			TextSized(drawList, 13.0f, ImVec2(rightMin.x + kPad, cursorY), kMuted, DisplayPath(model.currentProject->root).c_str());
-			ImGui::PopClipRect();
-			cursorY += 28.0f;
-			ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-			if (PrimaryButton(ICON_FA_PLAY "  Continue", ImVec2(innerWidth, 40.0f)) && actions.openProject)
-			{
-				actions.openProject(model.currentProject->root);
-			}
-			cursorY += 54.0f;
-			drawList->AddLine(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY), ToU32(kStroke), 1.0f);
-			cursorY += 20.0f;
-		}
-
-		// Open existing. Enter in the path field submits; the button disables
-		// until there is a path, so requirements read before the error does.
-		SectionLabel(drawList, ImVec2(rightMin.x + kPad, cursorY), "OPEN PROJECT");
-		cursorY += 28.0f;
-		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-		ImGui::SetNextItemWidth(innerWidth - browseSize - 8.0f);
-		bool openSubmitted = ImGui::InputTextWithHint("##openProjectPath", "Path to ProjectSettings.toml...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
-		ImGui::SameLine(0.0f, 8.0f);
-		if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseProjectFile)
-		{
-			if (const auto file = actions.browseProjectFile())
-			{
-				CopyToBuffer(state.openPath, *file);
-			}
-		}
-		cursorY += 44.0f;
-		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-		const bool openPathEmpty = state.openPath[0] == '\0';
-		ImGui::BeginDisabled(openPathEmpty);
-		openSubmitted = OutlineButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(innerWidth, 38.0f)) || openSubmitted;
-		ImGui::EndDisabled();
-		if (openSubmitted && !openPathEmpty && actions.openProject)
-		{
-			actions.openProject(std::filesystem::path(state.openPath.data()));
-		}
-		cursorY += 56.0f;
-		drawList->AddLine(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY), ToU32(kStroke), 1.0f);
-		cursorY += 20.0f;
-
-		// Create new. Enter in either field submits; Create disables until both
-		// the name and folder are present.
-		SectionLabel(drawList, ImVec2(rightMin.x + kPad, cursorY), "NEW PROJECT");
-		cursorY += 28.0f;
-		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-		ImGui::SetNextItemWidth(innerWidth);
-		bool createSubmitted = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
-		cursorY += 44.0f;
-		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-		ImGui::SetNextItemWidth(innerWidth - browseSize - 8.0f);
-		createSubmitted = ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || createSubmitted;
-		ImGui::SameLine(0.0f, 8.0f);
-		if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize)) && actions.browseFolder)
-		{
-			if (const auto folder = actions.browseFolder())
-			{
-				CopyToBuffer(state.newPath, *folder);
-			}
-		}
-		cursorY += 44.0f;
-		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-		const bool createIncomplete = state.newName[0] == '\0' || state.newPath[0] == '\0';
-		ImGui::BeginDisabled(createIncomplete);
-		createSubmitted = PrimaryButton(ICON_FA_PLUS "  Create", ImVec2(innerWidth, 38.0f)) || createSubmitted;
-		ImGui::EndDisabled();
-		if (createSubmitted && !createIncomplete && actions.createProject)
-		{
-			actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data());
-		}
-		cursorY += 54.0f;
-
-		// Error (if any), a hairline, then the startup toggle - all inline so the
-		// panel can hug its content.
-		if (!state.error.empty())
-		{
-			ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-			ImGui::PushStyleColor(ImGuiCol_Text, kError);
-			ImGui::PushTextWrapPos(rightMax.x - kPad);
-			ImGui::TextWrapped("%s", state.error.c_str());
-			ImGui::PopTextWrapPos();
-			ImGui::PopStyleColor();
-			cursorY = ImGui::GetItemRectMax().y + 12.0f;
-		}
-
-		drawList->AddLine(ImVec2(rightMin.x + kPad, cursorY), ImVec2(rightMax.x - kPad, cursorY), ToU32(kStroke), 1.0f);
-		cursorY += 16.0f;
-		ImGui::SetCursorScreenPos(ImVec2(rightMin.x + kPad, cursorY));
-		ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-		if (ImGui::Checkbox("Open last project on startup", &state.openLastProject) && actions.saveSettings)
-		{
-			actions.saveSettings();
-		}
-		ImGui::PopStyleColor();
-		cursorY = ImGui::GetItemRectMax().y + kPad;
-
-		PopInputStyles();
-
-		// Panel chrome behind the content, now that the height is known.
-		const ImVec2 panelMax{rightMax.x, std::min(cursorY, rightMax.y)};
-		drawList->ChannelsSetCurrent(0);
-		drawList->AddRectFilled(rightMin, panelMax, ToU32(kPanel), 4.0f);
-		drawList->AddRect(rightMin, panelMax, ToU32(kStroke), 4.0f, 0, 1.0f);
-		drawList->AddRectFilled(rightMin, ImVec2(panelMax.x, rightMin.y + 2.0f), ToU32(WithAlpha(kAccent, 0.9f)), 4.0f, ImDrawFlags_RoundCornersTop);
-		drawList->ChannelsMerge();
-
-		// ── Recent projects ─────────────────────────────────────────────────────
-		// Beside the panel normally; below it on narrow windows. Skipped entirely
-		// when the window leaves no meaningful room (the list scrolls, but a
-		// sliver-sized list is worse than none).
-		const ImVec2 leftMin = singleColumn ? ImVec2(contentMin.x, panelMax.y + 30.0f) : ImVec2(contentMin.x, columnsTop);
-		const ImVec2 leftMax = singleColumn ? ImVec2(contentMax.x, columnsBottom) : ImVec2(rightMin.x - 32.0f, columnsBottom);
-		if (leftMax.y - leftMin.y > 96.0f && leftMax.x - leftMin.x > 220.0f)
-		{
-			const float gridWidth = leftMax.x - leftMin.x;
-			SectionLabel(drawList, leftMin, "RECENT PROJECTS");
-			ImGui::SetCursorScreenPos(Add(leftMin, ImVec2(0.0f, 30.0f)));
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
-			ImGui::BeginChild("##launcherRecentProjects", ImVec2(gridWidth, leftMax.y - leftMin.y - 30.0f), false);
-			if (model.recentProjects.empty())
-			{
-				const ImVec2 emptyPos = ImGui::GetCursorScreenPos();
-				ImDrawList* childDrawList = ImGui::GetWindowDrawList();
-				TextSized(childDrawList, 15.0f, Add(emptyPos, ImVec2(2.0f, 8.0f)), kFaint, "Nothing here yet.");
-				TextSized(childDrawList, 14.0f, Add(emptyPos, ImVec2(2.0f, 34.0f)), kFaint, "Open an existing project or create a new one to get started.");
-			}
-			else
-			{
-				// Responsive card grid: fit as many ~kMinCardWidth cards across as the
-				// child allows, then widen them to fill the row evenly. Cards keep a
-				// 16:9 thumbnail, so the row height follows the card width.
-				constexpr float kGridGap = 16.0f;
-				constexpr float kMinCardWidth = 210.0f;
-				const float avail = ImGui::GetContentRegionAvail().x;
-				const int columns = std::max(1, static_cast<int>((avail + kGridGap) / (kMinCardWidth + kGridGap)));
-				const float cardWidth = std::floor((avail - kGridGap * static_cast<float>(columns - 1)) / static_cast<float>(columns));
-				const float cardHeight = std::floor(cardWidth * 9.0f / 16.0f) + 64.0f;
-				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kGridGap, kGridGap));
-				for (std::size_t i = 0; i < model.recentProjects.size(); ++i)
-				{
-					const EditorProjectContext& project = model.recentProjects[i];
-					if (i % static_cast<std::size_t>(columns) != 0)
-					{
-						ImGui::SameLine(0.0f, kGridGap);
-					}
-					const bool selected = model.currentProject != nullptr && model.currentProject->root == project.root;
-					std::error_code existsEc;
-					const bool missing = !std::filesystem::exists(project.root / "ProjectSettings.toml", existsEc);
-					const std::uint64_t preview = model.previewTextureId ? model.previewTextureId(project) : 0;
-					const std::string edited = model.modifiedLabel ? model.modifiedLabel(project) : std::string{};
-					if (DrawProjectCard(project, preview, edited, selected, missing, ImVec2(cardWidth, cardHeight)) && actions.openProject)
-					{
-						actions.openProject(project.root);
-					}
-				}
-				ImGui::PopStyleVar();
-			}
-			ImGui::EndChild();
-			ImGui::PopStyleColor(); // ChildBg
-		}
-
-		// ── Footer ──────────────────────────────────────────────────────────────
-		TextSized(drawList, 13.0f, ImVec2(contentMin.x, contentMax.y - 16.0f), kFaint, "AetherCore Editor");
+		const float panelBottom = PaintActionsPanel(f, state, model, actions);
+		PaintRecentsGrid(f, panelBottom, model, actions);
+		PaintFooter(f);
 		ImGui::EndDisabled();
 
 		ImGui::End();
