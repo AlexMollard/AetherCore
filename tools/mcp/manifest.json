@@ -60,6 +60,50 @@
       "tool": "create_entity"
     },
     {
+      "description": "Add a model file to the live scene as one operation - the seamless equivalent of dragging a glTF into the editor. Bakes the raw glTF if it hasn't been imported yet, then spawns the correct layout: a lone static mesh sits on a single entity, while a multi-primitive or skinned model becomes a root with one child per primitive (each carrying its own material and skin). 'path' is a project:// or absolute model path; optional 'name', 'position', 'rotationEuler' (degrees) and 'scale' place it (skinned models authored in centimetres usually want scale ~0.01). Returns the root id and primitive count.",
+      "mutates": true,
+      "name": "scene.add_model",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "add_model"
+    },
+    {
       "description": "Rename an entity by id.",
       "mutates": true,
       "name": "scene.rename",
@@ -201,7 +245,53 @@
       "tool": "remove_component"
     },
     {
-      "description": "List every component the ComponentCatalog can add (name + category) - the same set as the editor Add-Component menu.",
+      "description": "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a component name (call list_component_types for the set and each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
+      "mutates": false,
+      "name": "scene.get_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "get_component"
+    },
+    {
+      "description": "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
+      "mutates": true,
+      "name": "scene.set_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "values"
+        ],
+        "type": "object"
+      },
+      "tool": "set_component"
+    },
+    {
+      "description": "List every component (name + category), plus, for components with editable fields, the field list get_component / set_component accept.",
       "mutates": false,
       "name": "scene.component_types",
       "paramsSchema": {
