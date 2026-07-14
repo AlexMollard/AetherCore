@@ -1,23 +1,16 @@
 # ── .NET (CoreCLR) hosting detection ──────────────────────────────────────────
+# AetherCore hosts .NET in-process for C# gameplay scripts. This locates the `dotnet`
+# SDK (builds the managed assemblies) and the nethost static lib + hostfxr headers
+# (bootstrap CoreCLR from C++). Everything is gated on AETHER_HAS_DOTNET; when .NET is
+# absent the flag stays OFF and DotNetHost compiles as a stub - the build never fails.
 #
-# AetherCore hosts the .NET runtime in-process to run C# gameplay scripts. This
-# module locates the `dotnet` SDK (to build the managed assemblies) and the
-# `nethost` static library + hostfxr headers (to bootstrap CoreCLR from C++).
-#
-# Everything downstream is gated on AETHER_HAS_DOTNET. When the SDK or nethost
-# pack is missing (e.g. a bare CI runner), the flag stays OFF and the engine
-# compiles a stubbed DotNetHost that reports scripting as unavailable - the build
-# never fails just because .NET is absent.
-#
-# Result variables:
-#   AETHER_HAS_DOTNET   BOOL   TRUE when dotnet + nethost + headers were found
-#   AETHER_DOTNET_EXE   PATH   the `dotnet` driver (used by the managed build step)
-#   DotNet::NetHost     TARGET imported static lib carrying the include dir + defines
+#   AETHER_HAS_DOTNET  BOOL   TRUE when dotnet + nethost + headers were found
+#   AETHER_DOTNET_EXE  PATH   the `dotnet` driver (used by the managed build step)
+#   DotNet::NetHost    TARGET imported lib carrying the include dir + defines
 
 set(AETHER_HAS_DOTNET FALSE)
 
-# ── 1. The `dotnet` driver (needed to build the C# projects) ──────────────────
-# Honor an explicit DOTNET_ROOT before falling back to PATH.
+# 1. The `dotnet` driver. Honor DOTNET_ROOT before falling back to PATH.
 if(DEFINED ENV{DOTNET_ROOT})
     find_program(AETHER_DOTNET_EXE
         NAMES dotnet
@@ -26,12 +19,9 @@ if(DEFINED ENV{DOTNET_ROOT})
 endif()
 find_program(AETHER_DOTNET_EXE NAMES dotnet)
 
-# ── 2. Locate the newest nethost pack (static lib + hostfxr headers) ──────────
-# The host pack ships nethost.lib/.a and the hostfxr/coreclr headers under a
-# versioned directory. We pick the highest version available.
-# On Windows we link nethost.dll via its import lib (nethost.lib) and ship the
-# DLL - the static libnethost.lib is built with the static CRT (/MT) and clashes
-# with AetherCore's dynamic CRT (/MD). On Unix the static archive links cleanly.
+# 2. Locate the newest nethost pack (static lib + hostfxr headers). On Windows we link
+# nethost.dll via its import lib and ship the DLL: the static libnethost.lib is /MT and
+# clashes with AetherCore's /MD; the Unix static archive links cleanly.
 if(WIN32)
     set(_aether_host_rid "win-x64")
     set(_aether_host_implib "nethost.lib") # import lib for nethost.dll
@@ -71,7 +61,7 @@ foreach(_root IN LISTS _aether_host_search_roots)
     endif()
 endforeach()
 
-# ── 3. Validate and build the imported target ─────────────────────────────────
+# 3. Validate and build the imported target.
 set(_aether_nethost_ok FALSE)
 if(WIN32)
     if(_aether_nethost_native_dir

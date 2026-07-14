@@ -7,7 +7,7 @@ else()
     set(CMAKE_CXX_STANDARD 23)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # for clangd / tooling (ignored by VS generator)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -17,20 +17,13 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
-# Build-speed knobs (especially useful with Visual Studio generator).
 option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for faster iterative builds" ON)
-
 option(AETHERCORE_DEAD_STRIP_REPORT
     "Emit link map files (and per-section gc log) for Editor and AssetPacker" OFF)
 
-# Project content is packed separately from engine/editor runtime resources.
-# Set this cache path to another project root, or leave it empty to skip
-# generating data/project.pak during Editor builds.
+# Project root packaged into the shipped game by PackageGame. Empty = skip project.pak.
 set(AETHERCORE_PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/projects/TestingProject"
     CACHE PATH "Aether project directory packed to data/project.pak")
-
-# Generate compile_commands.json for clangd / tooling (ignored by VS generator).
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(Dependencies)
 include(DotNet)
@@ -58,13 +51,11 @@ if(AETHERCORE_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# Editor is the thing you actually run - make it the default F5 target.
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT Editor)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT Editor)   # F5 default
 
-# ── Solution Explorer organization (Visual Studio folders) ──────────────────
-# Runs after every add_subdirectory so all first-party targets exist. Each group is
-# guarded with if(TARGET ...) so optional or not-yet-added targets (e.g. Launcher until
-# the process split lands) do not error.
+# ── Solution Explorer folders ───────────────────────────────────────────────
+# Runs after every add_subdirectory so all targets exist; if(TARGET) guards skip
+# optional/not-yet-added ones.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 

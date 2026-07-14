@@ -2,25 +2,19 @@ file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c
 file(GLOB_RECURSE APP_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
 # ── Editor sources ──────────────────────────────────────────────────────────
-# The full editor. Excludes only launcher/, whose LauncherMain.cpp would be a
-# second main() - the editor neither spawns nor embeds the launcher.
+# The full editor. Excludes only launcher/ (its LauncherMain.cpp is a second main()).
 set(APP_EDITOR_SOURCES ${APP_SOURCES})
 list(FILTER APP_EDITOR_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
 
 # ── GameRuntime sources ─────────────────────────────────────────────────────
-# The shipped runtime: no editor UI, no imgui, no launcher, no in-app project
-# tooling (project/ scaffolds/enumerates projects - an editor/launcher concern).
+# Shipped runtime: no editor UI, no imgui (tooling-only; see rendering/IUiOverlay.hpp +
+# the AETHERCORE_WITH_IMGUI gate in Application.cpp), no launcher, no project/ tooling.
 set(APP_RUNTIME_SOURCES ${APP_SOURCES})
 set(APP_RUNTIME_HEADERS ${APP_HEADERS})
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
-# Dear ImGui integration (src/app/imgui/) is tooling-only: GameRuntime must
-# neither link nor initialize imgui (see rendering/IUiOverlay.hpp in Engine
-# and the AETHERCORE_WITH_IMGUI-gated construction in Application.cpp).
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
-# Launcher + project tooling are editor-family only; GameRuntime never spawns
-# editors nor scaffolds projects.
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]project[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
@@ -31,13 +25,10 @@ list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]project[/\\\\]")
 
 # ── Launcher sources ────────────────────────────────────────────────────────
-# The slim project-hub front end: its own entry (launcher/LauncherMain.cpp), the
-# LauncherLayer hub, the shared ProjectCommon, the app framework, and imgui. It
-# deliberately excludes the editor (panels, publisher, shader compiler, control
-# server, project manager), the C# scripting host, the app-level scene systems,
-# and scene serialization - it runs on a UiShell engine and only spawns Editor
-# processes. From debug/ it keeps only ProjectLauncherWindow (the hub widget,
-# whose other deps - Icons/EditorChrome/Color - are header-only).
+# Slim project-hub front end (own entry launcher/LauncherMain.cpp + LauncherLayer + shared
+# ProjectCommon + app framework + imgui). Excludes the editor, C# host, scene systems, and
+# serialization - it runs on a UiShell engine and only spawns Editor. From debug/ it keeps
+# only ProjectLauncherWindow (its other deps are header-only).
 set(APP_LAUNCHER_SOURCES ${APP_SOURCES})
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]main\\.cpp$")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]PlaySession\\.cpp$")
@@ -81,12 +72,9 @@ target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(Editor PRIVATE Engine AssetPipeline imgui)
 target_link_libraries(GameRuntime PRIVATE Engine)
 
-# ── Editor control endpoint deps (ENet transport + JSON) ────────────────────
-# ControlServer (src/app/editor) exposes a localhost JSON-over-ENet control
-# endpoint that the AetherCore MCP / aether-ctl drive. Both deps come from CPM
-# (see CMake/Dependencies.cmake) and are linked ONLY into Editor: the editor/
-# directory is excluded from GameRuntime's source list, so a shipped game links
-# neither ENet nor the JSON library.
+# Editor control endpoint (localhost JSON-over-ENet for the AetherCore MCP / aether-ctl).
+# Linked ONLY into Editor - editor/ is excluded from GameRuntime, so a shipped game links
+# neither ENet nor JSON.
 target_link_libraries(Editor PRIVATE nlohmann_json::nlohmann_json enet)
 if(WIN32)
     target_link_libraries(Editor PRIVATE ws2_32 winmm)
@@ -100,8 +88,7 @@ aethercore_enable_dead_strip_report(GameRuntime)
 
 set_target_properties(Editor PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-    # F5 boots straight into TestingProject (bypassing the launcher) - the editor is
-    # always project-scoped. The Launcher passes --project when it spawns the editor.
+    # F5 boots straight into TestingProject; the Launcher passes --project when it spawns.
     VS_DEBUGGER_COMMAND_ARGUMENTS "--project \"${AETHERCORE_PROJECT_DIR}\""
 )
 set_target_properties(GameRuntime PROPERTIES
@@ -109,13 +96,10 @@ set_target_properties(GameRuntime PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
-# In dev builds, let the scene serializer save/load committable scene and prefab
-# files directly from the source tree.
 target_compile_definitions(Editor PRIVATE
     AETHERCORE_EDITOR_APP=1
-    # Scene app: wire ECS scene systems (Application.cpp). Tooling app: build the Dear
-    # ImGui overlay. Both hold for the editor; the launcher is tooling but NOT a scene
-    # app; the game runtime is a scene app but NOT tooling.
+    # SCENE_APP wires ECS scene systems; WITH_IMGUI builds the overlay. Editor is both;
+    # launcher is tooling-only; GameRuntime is scene-only.
     AETHERCORE_SCENE_APP=1
     AETHERCORE_WITH_IMGUI=1
     AETHER_ENGINE_RESOURCES_DIR="${CMAKE_SOURCE_DIR}/resources"
@@ -124,19 +108,13 @@ target_compile_definitions(Editor PRIVATE
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
-    # The editor's own file name, so the publish verifier rejects a game package
-    # that wrongly bundles the editor executable (EditorProjectPublisher).
+    # So the publish verifier can reject a package that bundles the editor exe.
     AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
 )
 
-# Dev-only project shader compilation (ShaderCompiler, src/app/editor). Only
-# defined when CMake found slangc (aethercore_enable_slang_shader_compilation
-# above populates the SLANGC_EXECUTABLE cache var) - absent in a shipped editor
-# or on a machine without the Vulkan SDK, where ShaderCompiler::CanCompileShaders()
-# degrades to a graceful no-op, mirroring the AETHER_HAS_DOTNET gating below for
-# the C# rebuild-from-source path. GameRuntime never gets this define (or the
-# ShaderCompiler translation unit at all - it lives under src/app/editor, which
-# GameRuntime's source list excludes).
+# Dev-only project shader compilation (ShaderCompiler, src/app/editor). Defined only when
+# CMake found slangc; otherwise ShaderCompiler::CanCompileShaders() is a graceful no-op.
+# GameRuntime never gets it (editor/ is excluded from its sources).
 if(SLANGC_EXECUTABLE)
     target_compile_definitions(Editor PRIVATE
         AETHER_SLANGC_EXE="${SLANGC_EXECUTABLE}"
@@ -144,7 +122,6 @@ if(SLANGC_EXECUTABLE)
 endif()
 
 target_compile_definitions(GameRuntime PRIVATE
-    # Scene app (wires ECS scene systems) but NOT a tooling app (no imgui overlay).
     AETHERCORE_SCENE_APP=1
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
@@ -152,36 +129,19 @@ target_compile_definitions(GameRuntime PRIVATE
 )
 
 # ── Managed (C#) assemblies ────────────────────────────────────────────────
-# Build the C# projects with `dotnet build` and deploy the assemblies next to the
-# app's data/ so DotNetHost can load them at startup. ArtifactsPath keeps all
-# obj/bin output inside the CMake build tree (never in the source tree).
-# Gated on AETHER_HAS_DOTNET so a machine without the .NET SDK still builds.
-#
-# Projects:
-#   AetherCore          engine SDK, the public gameplay API   -> AetherCore.dll
-#   AetherCore.Interop  ABI + host boot (what DotNetHost binds) -> AetherCore.Interop.dll (+ runtimeconfig)
-#   AetherGame          game scripts (collectible, hot-reloaded) -> AetherGame.dll (+ deps.json)
-#
-# The build invokes `dotnet build` on the two leaf .csproj DIRECTLY (each pulls in
-# the AetherCore SDK via ProjectReference). It deliberately does NOT build the
-# checked-in managed/AetherCore.slnx: the solution is only an IDE convenience (VS + Rider),
-# so the CMake build stays generator-agnostic and cross-platform and never depends
-# on a solution file. The C# projects are likewise NOT bolted onto this generated
-# C++ solution via include_external_msproject - editing happens in managed/AetherCore.slnx.
-# (CMake cannot generate SDK-style .csproj, so those are hand-authored source.)
+# Build the engine C# projects and deploy them next to the app's data/ so DotNetHost can
+# load them at startup. ArtifactsPath keeps obj/bin in the build tree; gated on
+# AETHER_HAS_DOTNET so a machine without the .NET SDK still builds. We `dotnet build` the
+# leaf AetherCore.Interop.csproj directly (it pulls in the SDK via ProjectReference), NOT
+# the checked-in .slnx, so the build stays generator-agnostic. Project game scripts
+# (AetherGame) are NOT built here - the editor builds them at runtime and publish bakes them.
 if(AETHER_HAS_DOTNET)
     set(_aether_interop_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Interop/AetherCore.Interop.csproj")
     set(_aether_managed_cfg "$<IF:$<CONFIG:Debug>,Debug,Release>")
     set(_aether_managed_cfgdir "$<IF:$<CONFIG:Debug>,debug,release>")
-    # AetherCore.Interop's output carries the boot assembly + runtimeconfig AND the
-    # SDK dll it references. Project game scripts (AetherGame) are deliberately NOT
-    # built here: they belong to a project, so the editor builds them at runtime from
-    # the OPEN project (CSharpScriptingSubsystem) and publish bakes them into the
-    # shipped package. This keeps the engine build free of any single project.
+    # Interop's output dir carries both the boot assembly (+runtimeconfig) and the SDK dll.
     set(_aether_interop_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Interop/${_aether_managed_cfgdir}")
 
-    # Build ONLY the engine managed code: AetherCore.Interop (boot) pulls in the
-    # AetherCore SDK via ProjectReference, so its output dir carries both dlls.
     add_custom_target(ManagedAssemblies ALL
         COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_interop_proj}"
                 -c ${_aether_managed_cfg} --nologo -v:m
@@ -197,12 +157,9 @@ if(AETHER_HAS_DOTNET)
         target_link_libraries(${_aether_runtime_target} PRIVATE DotNet::NetHost)
     endforeach()
 
-    # Build-machine facts the editor + publisher use to build a PROJECT's game
-    # scripts at runtime (CSharpScriptingSubsystem::RebuildFromSource /
-    # EditorProjectPublisher). No project path is baked in: the editor supplies the
-    # open project's scripts/AetherGame.csproj at runtime. Editor-only - GameRuntime
-    # never builds scripts (it loads the deployed/baked assembly), and a packaged
-    # build leaves these undefined so a source rebuild is a no-op (reload-only).
+    # Build-machine facts the editor/publisher use to build a project's scripts at runtime
+    # (CSharpScriptingSubsystem::RebuildFromSource / EditorProjectPublisher). Editor-only; a
+    # packaged build leaves these undefined so a source rebuild is a reload-only no-op.
     target_compile_definitions(Editor PRIVATE
         AETHER_DOTNET_EXE="${AETHER_DOTNET_EXE}"
         AETHER_MANAGED_CONFIG="$<IF:$<CONFIG:Debug>,Debug,Release>"
@@ -218,8 +175,7 @@ if(AETHER_HAS_DOTNET)
         VERBATIM)
     endforeach()
 
-    # nethost.dll must sit next to each executable (loader search path) so
-    # get_hostfxr_path resolves at startup.
+    # nethost.dll must sit next to each exe so get_hostfxr_path resolves at startup.
     if(WIN32 AND AETHER_NETHOST_DLL)
         foreach(_aether_runtime_target IN ITEMS Editor GameRuntime)
             add_custom_command(TARGET ${_aether_runtime_target} POST_BUILD
@@ -236,18 +192,14 @@ if(NVIDIA_AFTERMATH_FOUND)
 endif()
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
-# engine.pak (fonts + branding + compiled engine shaders) is engine-owned content
-# that every runtime target needs. It is packed exactly ONCE by the EngineAssetsPak
-# target below; each runtime target then only COPIES it (and the shipped settings)
-# next to its executable. It used to be re-packed in every target's POST_BUILD - i.e.
-# 2-3x per build, to the same output. Do not pack the whole resources/ tree: it may
-# hold legacy/sample project content, whereas engine.pak must stay engine-owned.
+# engine.pak (fonts + branding + compiled engine shaders) is engine-owned content every
+# runtime target needs. EngineAssetsPak packs it exactly ONCE; each target then only COPIES
+# it next to its exe. Do not pack the whole resources/ tree (may hold sample project
+# content) - engine.pak stays engine-owned.
 #
-# project.pak (a project's baked content) is deliberately NOT built by any normal
-# target: the editor mounts project:// at the RAW project folder and bakes assets on
-# demand, and the launcher loads no project at all - so nothing in the dev build needs
-# a pre-baked project.pak. It is a shipping artifact, built only by PackageGame (below)
-# for the standalone GameRuntime redistributable.
+# project.pak (a project's baked content) is NOT built by any normal target: the editor
+# mounts project:// at the raw project folder + bakes on demand, and the launcher loads no
+# project. It is a shipping artifact, built only by PackageGame (below).
 add_custom_target(EngineAssetsPak
     COMMAND "${CMAKE_COMMAND}" -E remove_directory
         "${CMAKE_BINARY_DIR}/engine_assets"
@@ -261,13 +213,9 @@ add_custom_target(EngineAssetsPak
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/branding/aethercore-icon-white.png"
         "${CMAKE_BINARY_DIR}/engine_assets/branding/aethercore-icon-white.png"
-    # Engine .spv shaders ship inside engine.pak (under shaders/) so a published game
-    # needs no loose .spv next to the exe - see shaders:// in FileSystem::Initialize
-    # DefaultMounts. The make_directory keeps this working even when shader compilation
-    # was skipped (no slangc / AETHERCORE_ENABLE_SLANG=OFF / no .slang sources - all
-    # graceful early-returns in SlangShaders.cmake): copy_directory would otherwise
-    # hard-fail on a missing source. An empty source copies nothing, so engine.pak just
-    # ships without shaders in that case.
+    # .spv ship inside engine.pak (shaders://, see FileSystem::InitializeDefaultMounts). The
+    # make_directory keeps this working when shader compilation was skipped (no slangc / no
+    # .slang) - copy_directory would otherwise hard-fail on a missing source.
     COMMAND "${CMAKE_COMMAND}" -E make_directory
         "${AETHERCORE_SHADER_OUTPUT_DIR}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory
@@ -278,9 +226,8 @@ add_custom_target(EngineAssetsPak
     COMMAND "$<TARGET_FILE:AssetPacker>"
         "${CMAKE_BINARY_DIR}/engine_assets"
         "${CMAKE_BINARY_DIR}/data/engine.pak"
-    # Shipped default settings (layer 2). Staged in build-root data/config so every
-    # runtime target AND PackageGame copy from one place; the runtime resolves it
-    # executable-relative at load, independent of CMake and the working directory.
+    # Shipped default settings (layer 2), staged in build-root data/config so every target
+    # and PackageGame copy from one place.
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
@@ -288,18 +235,15 @@ add_custom_target(EngineAssetsPak
     COMMENT "Packing engine runtime assets to data/engine.pak (once)"
     VERBATIM
 )
-# CompileShaders is the only Slang compile target (registered on Editor); engine.pak
-# embeds the compiled .spv, so wait for it. AssetPacker is referenced via a genex in
-# the commands, but make the tool dependency explicit for custom-target robustness.
+# engine.pak embeds compiled .spv, so wait for CompileShaders. AssetPacker is a genex ref
+# in the commands; make the tool dependency explicit for custom-target robustness.
 if(TARGET CompileShaders)
     add_dependencies(EngineAssetsPak CompileShaders)
 endif()
 add_dependencies(EngineAssetsPak AssetPacker)
 
-# Deploy the shared engine.pak (+ its sidecar log/manifest) and shipped settings next
-# to a runtime target's executable. Packing happens once, in EngineAssetsPak; this step
-# only copies, so building Editor + GameRuntime + Launcher packs engine.pak a single
-# time instead of once per target.
+# Copy the shared engine.pak (+ sidecars) and shipped settings next to a target's exe.
+# Packing happens once in EngineAssetsPak; this only copies.
 function(aethercore_add_runtime_payload target_name)
     add_dependencies(${target_name} EngineAssetsPak)
     add_custom_command(TARGET ${target_name} POST_BUILD
@@ -321,11 +265,8 @@ function(aethercore_add_runtime_payload target_name)
         VERBATIM
     )
 
-    # NVIDIA Aftermath DLL - dev-only GPU crash diagnostics, editor-only (see the
-    # vendor/editor runtime gate in VulkanContext.cpp + the /DELAYLOAD link
-    # option on Engine in src/engine/CMakeLists.txt). Only Editor calls into it, so
-    # only Editor gets the DLL copied next to it; GameRuntime never enables
-    # Aftermath and must not carry the DLL into a shipped game.
+    # Aftermath DLL - dev-only GPU crash diagnostics, editor-only (VulkanContext.cpp gate +
+    # Engine's /DELAYLOAD). GameRuntime never enables it, so it must not carry the DLL.
     if(NVIDIA_AFTERMATH_FOUND AND target_name STREQUAL "Editor")
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:${target_name}>"
@@ -344,28 +285,22 @@ aethercore_add_runtime_payload(GameRuntime)
 add_dependencies(Editor GameRuntime)
 
 # ── Launcher ────────────────────────────────────────────────────────────────
-# The project hub is its own process, built from its OWN slim source set
-# (APP_LAUNCHER_SOURCES above): its own entry (launcher/LauncherMain.cpp), the
-# LauncherLayer hub, the shared ProjectCommon, the app framework, and imgui. It runs
-# on a UiShell engine (window + Vulkan + Dear ImGui only) and, on open/create, spawns
-# a separate full-engine Editor process for the chosen project - which gives a real
-# separate OS window that the ImGui multi-viewport path could not. It links neither
-# the editor, the C# scripting host, nor the scene systems.
+# The project hub, its own process built from APP_LAUNCHER_SOURCES (above). Runs on a
+# UiShell engine and, on open/create, spawns a full-engine Editor process for the chosen
+# project. Links neither the editor, the C# host, nor the scene systems.
 add_executable(Launcher)
 target_sources(Launcher PRIVATE ${APP_LAUNCHER_SOURCES} ${APP_HEADERS})
 target_include_directories(Launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(Launcher PRIVATE Engine imgui)
 
-# Give the Launcher the same Windows icon as the Editor by reusing the .rc
-# configured above (WIN32 block near the top). 101 ICON is the Explorer/taskbar
-# executable icon; GLFW_ICON is loaded by GLFW for the runtime window icon.
+# Same Windows icon as the Editor (reuse the .rc configured above). 101 ICON is the
+# Explorer/taskbar icon; GLFW_ICON is the runtime window icon GLFW loads.
 if(WIN32)
     target_sources(Launcher PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/AetherCoreEditor.rc")
 endif()
 
-# Tooling app (imgui overlay) but NOT a scene app: no ECS scene systems, no CoreCLR.
-# AETHER_EDITOR_EXE_NAME lets LauncherProcess spawn the editor; the two AETHER_* paths
-# let ProjectCommon scaffold a new project (scripts .csproj + seed scene).
+# Tooling app (imgui) but NOT a scene app: no ECS systems, no CoreCLR. AETHER_EDITOR_EXE_NAME
+# lets it spawn the editor; the AETHER_* paths let ProjectCommon scaffold new projects.
 target_compile_definitions(Launcher PRIVATE
     AETHERCORE_WITH_IMGUI=1
     AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
@@ -376,16 +311,14 @@ aethercore_target_defaults(Launcher)
 aethercore_enable_dead_strip_report(Launcher)
 set_target_properties(Launcher PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
-# The launcher draws ImGui, so it needs engine.pak (fonts + the branding logo) beside
-# it - exactly like the editor. It does NOT deploy the managed assemblies or nethost:
-# it never boots CoreCLR. It spawns Editor.exe at runtime, so it depends on Editor.
+# The launcher draws ImGui so it needs engine.pak beside it; it deploys no managed
+# assemblies (never boots CoreCLR) and spawns Editor.exe, so it depends on Editor.
 aethercore_add_runtime_payload(Launcher)
 add_dependencies(Launcher Editor)
 
 # ── Redistributable package ─────────────────────────────────────────────────
-# The build output directory is a developer run tree and may contain stale files,
-# import libraries, or PDBs. PackageGame creates a clean folder that can be handed
-# to another PC: runtime executable + runtime DLLs + data/ payload only.
+# PackageGame creates a clean handoff folder (runtime exe + runtime DLLs + data/ only),
+# separate from the developer build tree.
 set(_aether_package_dir "${CMAKE_BINARY_DIR}/package/$<CONFIG>/AetherCore")
 set(_aether_package_expect_project_pak OFF)
 
@@ -412,9 +345,8 @@ set(_aether_package_commands
 
 if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
     set(_aether_package_expect_project_pak ON)
-    # project.pak is built HERE (publish-only): no normal build produces it, since the
-    # editor uses the raw project folder + on-demand baking. Bake it straight into the
-    # package so the standalone GameRuntime redistributable carries its content.
+    # project.pak is built HERE (publish-only): no normal build produces it. Bake it
+    # straight into the package so the standalone GameRuntime carries its content.
     list(APPEND _aether_package_commands
         COMMAND "$<TARGET_FILE:AssetPacker>"
             "--project"
@@ -439,11 +371,8 @@ if(WIN32 AND AETHER_NETHOST_DLL)
             "${_aether_package_dir}/nethost.dll")
 endif()
 
-# NVIDIA Aftermath's DLL is deliberately NOT packaged here: PackageGame builds
-# a GameRuntime redistributable, and GameRuntime never enables Aftermath (dev-
-# only diagnostics, editor-gated - see VulkanContext.cpp + Engine's /DELAYLOAD
-# link option) and does not need the DLL to launch. VerifyAppPackage.cmake
-# fails the build if a GFSDK_Aftermath* file ever ends up in the package.
+# Aftermath's DLL is NOT packaged: GameRuntime never enables it, and VerifyAppPackage.cmake
+# fails the build if a GFSDK_Aftermath* file ends up in the package.
 
 list(APPEND _aether_package_commands
     COMMAND "${CMAKE_COMMAND}"
@@ -460,8 +389,8 @@ list(APPEND _aether_package_commands
 
 add_custom_target(PackageGame
     ${_aether_package_commands}
-    # GameRuntime (the shipped exe) + EngineAssetsPak (build-root engine.pak/config this
-    # copies) + AssetPacker (used above to bake project.pak into the package).
+    # GameRuntime (shipped exe) + EngineAssetsPak (build-root engine.pak/config) +
+    # AssetPacker (bakes project.pak above).
     DEPENDS GameRuntime EngineAssetsPak AssetPacker
     COMMENT "Creating redistributable package at ${_aether_package_dir}"
     VERBATIM USES_TERMINAL)

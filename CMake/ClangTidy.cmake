@@ -1,20 +1,14 @@
-# AetherCore - clang-tidy custom target
-#
-# Adds a `clang-tidy` target that lints only first-party sources, using the
-# `compile_commands.json` produced by the `clangd` CMake preset.
-#
-# Configure: cmake --preset clangd
-# Run:       cmake --build --preset clangd --target clang-tidy
-#
-# Override the file filter to lint everything (e.g. when auditing third-party):
-#   cmake -DAETHERCORE_CLANG_TIDY_FILE_FILTER=".*" --preset clangd
+# clang-tidy target: lints first-party sources using the compile_commands.json from the
+# `clangd` CMake preset.
+#   Configure: cmake --preset clangd
+#   Run:       cmake --build --preset clangd --target clang-tidy
+# Lint everything (e.g. auditing third-party): -DAETHERCORE_CLANG_TIDY_FILE_FILTER=".*"
 
 set(AETHERCORE_CLANG_TIDY_BUILD_DIR
     "${CMAKE_SOURCE_DIR}/build/ninja-clang"
     CACHE PATH "Build dir providing compile_commands.json for clang-tidy")
 
-# Build default file filter from CMAKE_SOURCE_DIR so it works cross-platform.
-# On Windows, os.path.abspath uses backslashes, so the regex must handle both.
+# Default filter from CMAKE_SOURCE_DIR; handle both / and \ so it works on Windows.
 file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" _clang_tidy_src_dir)
 string(REPLACE "/" "[/\\\\]" _clang_tidy_src_re "${_clang_tidy_src_dir}")
 set(_clang_tidy_default_filter "${_clang_tidy_src_re}[/\\\\](src|include|tools)[/\\\\]")
@@ -40,9 +34,8 @@ endif()
 set(AETHERCORE_CLANG_TIDY_COMPILE_DB
     "${AETHERCORE_CLANG_TIDY_BUILD_DIR}/compile_commands.json")
 
-# The LLVM Windows install ships run-clang-tidy as an extension-less Python
-# script (e.g. C:/Program Files/LLVM/bin/run-clang-tidy). Copy it next to the
-# build dir with a .py extension so Python can resolve it as a module.
+# LLVM/Windows ships run-clang-tidy as an extension-less Python script; copy it with a
+# .py extension so Python can resolve it.
 set(_clang_tidy_runner_src "${AETHERCORE_CLANG_TIDY_RUNNER}")
 get_filename_component(_clang_tidy_runner_stem "${_clang_tidy_runner_src}" NAME_WLE)
 set(_clang_tidy_runner_dst

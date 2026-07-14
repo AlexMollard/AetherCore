@@ -1,16 +1,13 @@
 option(AETHERCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party targets" OFF)
 
-# aethercore_target_defaults(<target>)
-#
-# Applies project-wide compiler flags to a first-party target.
-# Call this on every Engine / App target after its sources are declared.
+# Apply project-wide compiler/linker flags to a first-party target. Call after the
+# target's sources are declared.
 function(aethercore_target_defaults target)
-    # clang-cl on Windows: CMAKE_CXX_COMPILER_ID=Clang AND MSVC=TRUE.
-    # Check Clang first so clang-cl gets Clang-style flags, not MSVC ones.
+    # Check Clang first: clang-cl on Windows is COMPILER_ID=Clang AND MSVC=TRUE and wants
+    # Clang-style flags, not MSVC ones.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32)
         # ── Clang-cl on Windows ──────────────────────────────────────────────
         target_compile_options(${target} PRIVATE
-            # --- Warning level & conformance ---
             -W4
             -Wno-c++98-compat
             -Wno-c++98-compat-pedantic
@@ -19,22 +16,17 @@ function(aethercore_target_defaults target)
             -Wno-unused-command-line-argument
             -Wno-missing-designated-field-initializers
             -Wno-missing-field-initializers
-
-            # --- Code generation ---
             -fms-compatibility-version=19.40
             /MP
             /FS
             /fp:fast
             /Gy
-
-            # --- External header suppression ---
             /external:anglebrackets
             /external:W0
         )
 
-        # /OPT:REF,ICF: dead-strip unreferenced functions/data and fold identical
-        # COMDATs. Required for "what can we delete" audits via the link map.
-        # Works alongside /DEBUG - the link is still debuggable.
+        # /OPT:REF,ICF dead-strips unreferenced code + folds identical COMDATs (for
+        # link-map audits); still debuggable alongside /DEBUG.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
@@ -42,11 +34,9 @@ function(aethercore_target_defaults target)
             $<$<CONFIG:Debug>:/DEBUG:FULL>
         )
 
-        # Control Flow Guard (Clang-cl supports /guard:cf)
-        target_compile_options(${target} PRIVATE /guard:cf)
+        target_compile_options(${target} PRIVATE /guard:cf)   # Control Flow Guard
         target_link_options(${target} PRIVATE /guard:cf /CETCOMPAT)
 
-        # Windows.h guard
         target_compile_definitions(${target} PRIVATE
             NOMINMAX
             WIN32_LEAN_AND_MEAN
@@ -57,36 +47,26 @@ function(aethercore_target_defaults target)
             target_link_options(${target} PRIVATE -fsanitize=address)
         endif()
     elseif(MSVC)
-        # --- Pure MSVC compiler ---
+        # ── Pure MSVC ────────────────────────────────────────────────────────
         target_compile_options(${target} PRIVATE
-            # --- Warning level & conformance ---
             /W4
             /permissive-
             /Zc:preprocessor
             /Zc:__cplusplus
             /Zc:inline
             /Zc:templateScope
-
-            # --- Promoted warnings -> errors ---
             /we4062
             /we4063
             /we4715
-
-            # --- Code generation ---
             /MP
             /FS
             /fp:fast
             /Gy
             /jumptablerdata
-
-            # --- External header suppression ---
             /external:anglebrackets
             /external:W0
         )
 
-        # /OPT:REF,ICF: dead-strip unreferenced functions/data and fold identical
-        # COMDATs. Required for "what can we delete" audits via the link map.
-        # Works alongside /DEBUG - the link is still debuggable.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
@@ -116,7 +96,7 @@ function(aethercore_target_defaults target)
             target_compile_options(${target} PRIVATE /fsanitize=address)
         endif()
     else()
-        # --- GCC/Clang on Linux/macOS ---
+        # ── GCC/Clang on Linux/macOS ─────────────────────────────────────────
         target_compile_options(${target} PRIVATE
             -Wall
             -Wextra

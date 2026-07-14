@@ -36,30 +36,21 @@ add_executable(EngineTests
     io/OverlayBackendTests.cpp
     io/FileSystemShaderOverlayTests.cpp
     app/ProjectCliTests.cpp
-    # App-side translation units under test: EngineTests links Engine only, so
-    # the scene serializer and the app pieces it needs compile in directly.
+    # App-side TUs under test: EngineTests links Engine only, so the scene serializer
+    # (plus the reflection TUs that populate the component registry at static-init) and
+    # the ImguiFrameData type its test exercises are compiled straight in here.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
-    # Component reflection: the serializer resolves reflected components through the
-    # registry, which the declaration TUs populate at static-init.
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
-    # ImguiFrameData (src/app/imgui/, editor-only) is not part of Engine - see
-    # rendering/IUiOverlay.hpp - but imgui/ImguiFrameDataTests.cpp above still
-    # exercises its ImDrawList-pool safety invariant directly, so compile the
-    # concrete type in here too (this test binary links imgui below, unlike
-    # GameRuntime/Engine).
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
-# xxHash headers so format tests can recompute a pak's index hash.
-target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")
-# Mirror the App target's scenes dir so ReadSceneFile("default") resolves the
-# committed template from within the headless test binary (SceneSerializer.cpp
-# reads it via std::ifstream on this absolute path).
+target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests
+# Mirror App's scenes dir so ReadSceneFile("default") resolves the committed template.
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest imgui)
 aethercore_target_defaults(EngineTests)

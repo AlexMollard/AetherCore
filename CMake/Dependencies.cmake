@@ -116,15 +116,9 @@ option(AETHERCORE_ENABLE_TRACY_GPU "Enable Tracy Vulkan GPU timeline instrumenta
 option(AETHERCORE_ENABLE_TRACY_PLOTS "Enable Tracy plot/counter streams" ON)
 option(AETHERCORE_ENABLE_TRACY_MEMORY "Enable Tracy CPU and named-pool memory reporting" ON)
 
-# Tracy is a developer-only profiler. The TracyClient library is compiled with
-# profiling support so its symbols exist, but Engine links it ONLY in Debug /
-# RelWithDebInfo (see src/engine/CMakeLists.txt) - the exact configs whose
-# Defines.hpp sets TRACY_ENABLE. Ship (Release) and Retail therefore never link
-# or ship Tracy: every <tracy/...> include is TRACY_ENABLE-gated, so a shipping
-# build references no Tracy symbol and needs no dead-strip. EXCLUDE_FROM_ALL
-# below keeps TracyClient out of the default ALL target; single-config Release
-# builds then skip it entirely, while multi-config generators (VS) may still
-# compile it as a build-order dependency but never link it into the game.
+# Dev-only profiler. TracyClient is built with profiling on, but Engine links it only in
+# Debug/RelWithDebInfo (the TRACY_ENABLE configs); Ship/Retail reference no Tracy symbol.
+# EXCLUDE_FROM_ALL keeps it out of ALL so single-config Release skips it entirely.
 CPMAddPackage(
     NAME Tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
