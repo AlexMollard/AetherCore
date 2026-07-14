@@ -236,54 +236,73 @@ if(NVIDIA_AFTERMATH_FOUND)
 endif()
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
-# Pack engine runtime resources into engine.pak. Project content is packed
-# separately below so user assets keep their project-relative paths. Do not pack
-# the whole resources/ tree here: that directory may still contain legacy/sample
-# project content, while engine.pak should stay engine-owned.
-function(aethercore_add_runtime_payload target_name)
-    # Shaders are compiled by the CompileShaders target (the only Slang
-    # compile target registered - see aethercore_enable_slang_shader_compilation(Editor)
-    # above). Both Editor and GameRuntime bake engine.pak in their own POST_BUILD
-    # step, so both must wait for shaders to exist before this step's
-    # copy_directory below runs, not just Editor.
-    if(TARGET CompileShaders)
-        add_dependencies(${target_name} CompileShaders)
-    endif()
+# engine.pak (fonts + branding + compiled engine shaders) is engine-owned content
+# that every runtime target needs. It is packed exactly ONCE by the EngineAssetsPak
+# target below; each runtime target then only COPIES it (and the shipped settings)
+# next to its executable. It used to be re-packed in every target's POST_BUILD - i.e.
+# 2-3x per build, to the same output. Do not pack the whole resources/ tree: it may
+# hold legacy/sample project content, whereas engine.pak must stay engine-owned.
+#
+# project.pak (a project's baked content) is deliberately NOT built by any normal
+# target: the editor mounts project:// at the RAW project folder and bakes assets on
+# demand, and the launcher loads no project at all - so nothing in the dev build needs
+# a pre-baked project.pak. It is a shipping artifact, built only by PackageGame (below)
+# for the standalone GameRuntime redistributable.
+add_custom_target(EngineAssetsPak
+    COMMAND "${CMAKE_COMMAND}" -E remove_directory
+        "${CMAKE_BINARY_DIR}/engine_assets"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${CMAKE_BINARY_DIR}/engine_assets/fonts"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/fonts"
+        "${CMAKE_BINARY_DIR}/engine_assets/fonts"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${CMAKE_BINARY_DIR}/engine_assets/branding"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/resources/branding/aethercore-icon-white.png"
+        "${CMAKE_BINARY_DIR}/engine_assets/branding/aethercore-icon-white.png"
+    # Engine .spv shaders ship inside engine.pak (under shaders/) so a published game
+    # needs no loose .spv next to the exe - see shaders:// in FileSystem::Initialize
+    # DefaultMounts. The make_directory keeps this working even when shader compilation
+    # was skipped (no slangc / AETHERCORE_ENABLE_SLANG=OFF / no .slang sources - all
+    # graceful early-returns in SlangShaders.cmake): copy_directory would otherwise
+    # hard-fail on a missing source. An empty source copies nothing, so engine.pak just
+    # ships without shaders in that case.
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${AETHERCORE_SHADER_OUTPUT_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${CMAKE_BINARY_DIR}/engine_assets/shaders"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${AETHERCORE_SHADER_OUTPUT_DIR}"
+        "${CMAKE_BINARY_DIR}/engine_assets/shaders"
+    COMMAND "$<TARGET_FILE:AssetPacker>"
+        "${CMAKE_BINARY_DIR}/engine_assets"
+        "${CMAKE_BINARY_DIR}/data/engine.pak"
+    # Shipped default settings (layer 2). Staged in build-root data/config so every
+    # runtime target AND PackageGame copy from one place; the runtime resolves it
+    # executable-relative at load, independent of CMake and the working directory.
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
+        "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
+    COMMENT "Packing engine runtime assets to data/engine.pak (once)"
+    VERBATIM
+)
+# CompileShaders is the only Slang compile target (registered on Editor); engine.pak
+# embeds the compiled .spv, so wait for it. AssetPacker is referenced via a genex in
+# the commands, but make the tool dependency explicit for custom-target robustness.
+if(TARGET CompileShaders)
+    add_dependencies(EngineAssetsPak CompileShaders)
+endif()
+add_dependencies(EngineAssetsPak AssetPacker)
 
-    # Note: $<TARGET_FILE:AssetPacker> creates an implicit dependency on
-    # AssetPacker, so an explicit add_dependencies() is not needed.
+# Deploy the shared engine.pak (+ its sidecar log/manifest) and shipped settings next
+# to a runtime target's executable. Packing happens once, in EngineAssetsPak; this step
+# only copies, so building Editor + GameRuntime + Launcher packs engine.pak a single
+# time instead of once per target.
+function(aethercore_add_runtime_payload target_name)
+    add_dependencies(${target_name} EngineAssetsPak)
     add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E remove_directory
-            "${CMAKE_BINARY_DIR}/engine_assets"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${CMAKE_BINARY_DIR}/engine_assets/fonts"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-            "${CMAKE_SOURCE_DIR}/resources/fonts"
-            "${CMAKE_BINARY_DIR}/engine_assets/fonts"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${CMAKE_BINARY_DIR}/engine_assets/branding"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/resources/branding/aethercore-icon-white.png"
-            "${CMAKE_BINARY_DIR}/engine_assets/branding/aethercore-icon-white.png"
-        # Engine .spv shaders ship inside engine.pak (under shaders/) so a
-        # published game does not depend on loose .spv files next to the exe -
-        # see shaders:// OverlayBackend in FileSystem::InitializeDefaultMounts.
-        # The source make_directory ensures AETHERCORE_SHADER_OUTPUT_DIR exists
-        # even when shader compilation was skipped (no slangc / AETHERCORE_ENABLE_SLANG=OFF
-        # / no .slang sources - all graceful early-returns in SlangShaders.cmake).
-        # Without it, copy_directory would hard-fail on a missing source and break
-        # the build on any machine without the Vulkan SDK. An empty source copies
-        # nothing, so engine.pak simply ships without shaders in that case.
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${AETHERCORE_SHADER_OUTPUT_DIR}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${CMAKE_BINARY_DIR}/engine_assets/shaders"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-            "${AETHERCORE_SHADER_OUTPUT_DIR}"
-            "${CMAKE_BINARY_DIR}/engine_assets/shaders"
-        COMMAND "$<TARGET_FILE:AssetPacker>"
-            "${CMAKE_BINARY_DIR}/engine_assets"
-            "${CMAKE_BINARY_DIR}/data/engine.pak"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${CMAKE_BINARY_DIR}/data/engine.pak"
@@ -294,44 +313,13 @@ function(aethercore_add_runtime_payload target_name)
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${CMAKE_BINARY_DIR}/data/engine.pak.manifest"
             "$<TARGET_FILE_DIR:${target_name}>/data/engine.pak.manifest"
-        # Shipped default settings (layer 2). Source lives under resources/config/,
-        # not the repo root. Deployed beside the exe (data/config/) as a dev
-        # convenience so running from the build tree finds it; the runtime resolves it
-        # executable-relative, independent of CMake and the working directory. For a
-        # packaged build, install this same file next to the shipped executable.
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
-            "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data/config"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
+            "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
             "$<TARGET_FILE_DIR:${target_name}>/data/config/EngineSettings.toml"
-        COMMENT "Packing engine runtime assets to data/engine.pak"
+        COMMENT "Deploying engine.pak + shipped settings next to ${target_name}"
         VERBATIM
     )
-
-    if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
-        add_custom_command(TARGET ${target_name} POST_BUILD
-            COMMAND "$<TARGET_FILE:AssetPacker>"
-                "--project"
-                "--import-materials"
-                "${AETHERCORE_PROJECT_DIR}"
-                "${CMAKE_BINARY_DIR}/data/project.pak"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data"
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_BINARY_DIR}/data/project.pak"
-                "$<TARGET_FILE_DIR:${target_name}>/data/project.pak"
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_BINARY_DIR}/data/project.pak.log"
-                "$<TARGET_FILE_DIR:${target_name}>/data/project.pak.log"
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                "${CMAKE_BINARY_DIR}/data/project.pak.manifest"
-                "$<TARGET_FILE_DIR:${target_name}>/data/project.pak.manifest"
-            COMMENT "Packing project content to data/project.pak"
-            VERBATIM
-        )
-    endif()
 
     # NVIDIA Aftermath DLL - dev-only GPU crash diagnostics, editor-only (see the
     # vendor/editor runtime gate in VulkanContext.cpp + the /DELAYLOAD link
@@ -424,9 +412,14 @@ set(_aether_package_commands
 
 if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
     set(_aether_package_expect_project_pak ON)
+    # project.pak is built HERE (publish-only): no normal build produces it, since the
+    # editor uses the raw project folder + on-demand baking. Bake it straight into the
+    # package so the standalone GameRuntime redistributable carries its content.
     list(APPEND _aether_package_commands
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_BINARY_DIR}/data/project.pak"
+        COMMAND "$<TARGET_FILE:AssetPacker>"
+            "--project"
+            "--import-materials"
+            "${AETHERCORE_PROJECT_DIR}"
             "${_aether_package_dir}/data/project.pak")
 endif()
 
@@ -467,6 +460,8 @@ list(APPEND _aether_package_commands
 
 add_custom_target(PackageGame
     ${_aether_package_commands}
-    DEPENDS GameRuntime
+    # GameRuntime (the shipped exe) + EngineAssetsPak (build-root engine.pak/config this
+    # copies) + AssetPacker (used above to bake project.pak into the package).
+    DEPENDS GameRuntime EngineAssetsPak AssetPacker
     COMMENT "Creating redistributable package at ${_aether_package_dir}"
     VERBATIM USES_TERMINAL)
