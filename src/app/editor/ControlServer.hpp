@@ -3,10 +3,13 @@
 #include <atomic>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "editor/ControlMethods.hpp"
 
 namespace aether
 {
@@ -15,13 +18,10 @@ namespace aether
 
 namespace aether::editor
 {
-	// Editor-only localhost control endpoint. Lets an external agent (the
-	// AetherCore MCP server, or the aether-ctl CLI) drive the LIVE editor over a
-	// small JSON-over-ENet protocol: query engine state, list / create / delete
-	// entities, edit transforms, and dump the render graph. It exists only in the
-	// editor build (this whole directory is excluded from GameRuntime) and stays
-	// dormant unless a port is supplied via the AETHER_CONTROL_PORT environment
-	// variable, so a normal editor session never opens a socket.
+	// Localhost control endpoint shared by the Editor and the Launcher. The caller
+	// supplies the method table, keeping the transport independent from scene,
+	// scripting, and project-hub behaviour. It stays dormant unless a port is
+	// supplied via AETHER_CONTROL_PORT, so normal sessions never open a socket.
 	//
 	// Protocol: each request is one reliable ENet packet carrying a JSON object
 	//   { "id": <n>, "method": "<name>", "params": { ... } }
@@ -37,7 +37,9 @@ namespace aether::editor
 	class ControlServer
 	{
 	public:
-		explicit ControlServer(ServiceContainer& services);
+		using MethodBuilder = std::function<std::vector<ControlMethod>()>;
+
+		ControlServer(ServiceContainer& services, MethodBuilder methodBuilder, std::string endpointName);
 		~ControlServer();
 
 		ControlServer(const ControlServer&) = delete;
@@ -96,6 +98,8 @@ namespace aether::editor
 		std::string Dispatch(const std::string& method, const std::string& paramsJson);
 
 		ServiceContainer& m_services;
+		MethodBuilder m_methodBuilder;
+		std::string m_endpointName;
 		std::unique_ptr<Impl> m_impl;
 		std::atomic<std::uint64_t> m_frameIndex{0};
 		std::atomic<double> m_fps{0.0};

@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 #endif
 	}
 #ifdef AETHERCORE_EDITOR_APP
-	else
+	if (project.empty())
 	{
 		// The editor is always project-scoped: launch it from the Launcher, or pass
 		// --project directly (Visual Studio F5 does). Refuse a launcher-less editor.

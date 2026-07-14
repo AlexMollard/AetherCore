@@ -40,6 +40,9 @@ list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scene[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]ScriptedSceneLayer\\.cpp$")
 list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug/ProjectLauncherWindow.cpp")
+# Shared localhost ENet transport only. The Launcher supplies its own small method
+# table in LauncherLayer.cpp; the editor-only ControlMethods.cpp stays excluded.
+list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/editor/ControlServer.cpp")
 
 add_executable(Editor)
 add_executable(GameRuntime)
@@ -280,11 +283,15 @@ add_dependencies(Editor GameRuntime)
 # ── Launcher ────────────────────────────────────────────────────────────────
 # The project hub, its own process built from APP_LAUNCHER_SOURCES (above). Runs on a
 # UiShell engine and, on open/create, spawns a full-engine Editor process for the chosen
-# project. Links neither the editor, the C# host, nor the scene systems.
+# project. It reuses only the generic local control transport; no editor methods, C# host,
+# or scene systems are linked into the hub.
 add_executable(Launcher)
 target_sources(Launcher PRIVATE ${APP_LAUNCHER_SOURCES} ${APP_HEADERS})
 target_include_directories(Launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(Launcher PRIVATE Engine imgui)
+target_link_libraries(Launcher PRIVATE Engine imgui nlohmann_json::nlohmann_json enet)
+if(WIN32)
+    target_link_libraries(Launcher PRIVATE ws2_32 winmm)
+endif()
 
 # Same Windows icon as the Editor (reuse the .rc configured above). 101 ICON is the
 # Explorer/taskbar icon; GLFW_ICON is the runtime window icon GLFW loads.

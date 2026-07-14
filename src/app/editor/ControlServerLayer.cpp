@@ -4,6 +4,7 @@
 #include <string>
 
 #include "editor/ControlServer.hpp"
+#include "editor/ControlMethods.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -18,7 +19,7 @@ namespace aether::editor
 		// panel can manage it (start/stop, port, live stats). It only opens a
 		// socket once Start() is called - either from the env var below, or from
 		// the panel.
-		m_server = std::make_unique<ControlServer>(context.services);
+		m_server = std::make_unique<ControlServer>(context.services, BuildControlMethods, "editor");
 		context.services.Register<ControlServer>(*m_server);
 
 		// Auto-start when AETHER_CONTROL_PORT names a port (scripted / headless

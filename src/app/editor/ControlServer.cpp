@@ -76,8 +76,10 @@ namespace aether::editor
 		std::queue<Outbound> outQueue;
 	};
 
-	ControlServer::ControlServer(ServiceContainer& services)
-	      : m_services(services)
+	ControlServer::ControlServer(ServiceContainer& services, MethodBuilder methodBuilder, std::string endpointName)
+	      : m_services(services),
+	        m_methodBuilder(std::move(methodBuilder)),
+	        m_endpointName(std::move(endpointName))
 	{
 	}
 
@@ -129,11 +131,11 @@ namespace aether::editor
 
 		m_impl = std::make_unique<Impl>();
 		m_impl->host = host;
-		m_impl->methods = BuildControlMethods();
+		m_impl->methods = m_methodBuilder();
 		m_port = port;
 		m_impl->running.store(true);
 		m_impl->thread = std::thread([this]() { ServiceLoop(); });
-		AE_INFO(LogCategory::App, "ControlServer: listening on enet://127.0.0.1:{} ({} methods; editor control endpoint).", port, m_impl->methods.size());
+		AE_INFO(LogCategory::App, "ControlServer: listening on enet://127.0.0.1:{} ({} methods; {} control endpoint).", port, m_impl->methods.size(), m_endpointName);
 	}
 
 	void ControlServer::Stop()

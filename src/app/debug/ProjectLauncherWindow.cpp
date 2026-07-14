@@ -55,7 +55,6 @@ namespace aether::app
 			inline constexpr float kWordmarkMin = 28.0f, kWordmarkMax = 42.0f; // clamps vs window
 			inline constexpr float kSubtitle = 14.5f;
 			inline constexpr float kSectionLabel = 13.0f;
-			inline constexpr float kContinueName = 17.0f;
 			inline constexpr float kBodyPath = 13.0f;   // continue path + card path
 			inline constexpr float kCardTitle = 16.0f;
 			inline constexpr float kBadge = 12.0f;      // "3 days ago"
@@ -70,28 +69,13 @@ namespace aether::app
 			inline constexpr float kMarginMin = 20.0f, kMarginMax = 84.0f;
 			inline constexpr float kBandTopMin = 18.0f, kBandTopMax = 64.0f;
 			inline constexpr float kBandBottomMin = 16.0f, kBandBottomMax = 56.0f;
-			inline constexpr float kSingleColumnBelow = 980.0f; // stack the columns under this width
 			inline constexpr float kColumnsTopGap = 62.0f;       // wordmark block -> columns
 			inline constexpr float kFooterBand = 30.0f;
 
-			// Actions panel + its vertical rhythm.
-			inline constexpr float kActionsWidthNarrow = 520.0f;               // single-column cap
-			inline constexpr float kActionsWidthMin = 380.0f, kActionsWidthMax = 460.0f;
-			inline constexpr float kPanelPad = 22.0f;
-			inline constexpr float kPanelCorner = 4.0f;
-			inline constexpr float kAccentCap = 2.0f;          // top accent bar
-			inline constexpr float kSectionLabelGap = 28.0f;   // label -> first control
-			inline constexpr float kContinueNameGap = 24.0f;   // name line -> path line
-			inline constexpr float kContinuePathGap = 28.0f;   // path line -> button
-			inline constexpr float kLineClip = 18.0f;          // clip height for a single body line
+			// Compact project-dialog controls.
 			inline constexpr float kFieldStride = 44.0f;       // input-row height + gap
-			inline constexpr float kButtonTall = 40.0f;        // Continue
 			inline constexpr float kButtonStd = 38.0f;         // Open / Create
-			inline constexpr float kButtonToDivider = 54.0f;   // full-width button -> divider
-			inline constexpr float kAfterDivider = 20.0f;      // divider -> next section
 			inline constexpr float kBrowseGap = 8.0f;          // field <-> browse button
-			inline constexpr float kErrorGap = 12.0f;          // error text -> divider
-			inline constexpr float kDividerToToggle = 16.0f;   // divider -> startup checkbox
 			inline constexpr float kInputRounding = 3.0f;
 			inline constexpr float kInputPadX = 12.0f, kInputPadY = 9.0f;
 
@@ -309,12 +293,8 @@ namespace aether::app
 			Px dp;
 			ImVec2 contentMin, contentMax; // the centred content band
 			float contentX = 0.0f, contentWidth = 0.0f;
-			bool singleColumn = false;     // actions panel stacked above the recents grid
 			float wordmarkSize = 0.0f;
-			float columnsTop = 0.0f, columnsBottom = 0.0f;
-			ImVec2 rightMin, rightMax;     // the actions panel column
-			float panelPad = 0.0f;         // dp(kPanelPad), reused throughout the panel
-			float innerWidth = 0.0f;       // usable width inside the panel padding
+			float gridTop = 0.0f, gridBottom = 0.0f;
 		};
 
 		void PaintBackground(const Frame& f, const ImVec2 min, const ImVec2 max)
@@ -397,156 +377,110 @@ namespace aether::app
 			}
 		}
 
-		// The actions column (Continue / Open / New + startup toggle). Widgets draw on
-		// channel 1 first so the panel chrome can land behind them on channel 0 once the
-		// content height is known - the panel hugs its content. Returns the panel bottom.
-		float PaintActionsPanel(const Frame& f, ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
+		void DrawProjectDialog(ProjectLauncherWindowState& state, const ProjectLauncherWindowActions& actions, const Px& dp)
 		{
-			ImDrawList* dl = f.drawList;
-			const Px& dp = f.dp;
-			const float pad = f.panelPad;
-			const float labelX = f.rightMin.x + pad;
-			const float rightEdge = f.rightMax.x - pad;
-			const float innerWidth = f.innerWidth;
+			if (state.dialog == ProjectLauncherDialog::None)
+			{
+				return;
+			}
 
-			dl->ChannelsSplit(2);
-			dl->ChannelsSetCurrent(1);
-			float y = f.rightMin.y + pad;
+			const bool opening = state.dialog == ProjectLauncherDialog::Open;
+			const char* popupName = opening ? "Open Project" : "Create Project";
+			ImGui::OpenPopup(popupName);
+			ImGui::SetNextWindowSize(dp(520.0f, 0.0f), ImGuiCond_Appearing);
+			if (!ImGui::BeginPopupModal(popupName, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+			{
+				return;
+			}
 
 			PushInputStyles(dp);
-			// Square browse buttons: side == input-row height so the icon-only button is a
-			// true square that lines up with the field beside it.
+			const float width = ImGui::GetContentRegionAvail().x;
 			const float browseSize = ImGui::GetFrameHeight();
-
-			const auto divider = [&](const float yy) { dl->AddLine(ImVec2(labelX, yy), ImVec2(rightEdge, yy), ToU32(kStroke), 1.0f); };
-
-			// Continue (only when a current project exists).
-			if (model.hasCurrentProject && model.currentProject != nullptr)
+			bool submit = false;
+			if (opening)
 			{
-				SectionLabel(dl, ImVec2(labelX, y), "CONTINUE", dp);
-				y += dp(m::kSectionLabelGap);
-				TextSized(dl, dp(m::kContinueName), ImVec2(labelX, y), kText, model.currentProject->name.c_str());
-				y += dp(m::kContinueNameGap);
-				ImGui::PushClipRect(ImVec2(labelX, y), ImVec2(rightEdge, y + dp(m::kLineClip)), true);
-				TextSized(dl, dp(m::kBodyPath), ImVec2(labelX, y), kMuted, DisplayPath(model.currentProject->root).c_str());
-				ImGui::PopClipRect();
-				y += dp(m::kContinuePathGap);
-				ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-				if (PrimaryButton(ICON_FA_PLAY "  Continue", ImVec2(innerWidth, dp(m::kButtonTall))) && actions.openProject)
+				ImGui::TextUnformatted("Open an existing AetherCore project");
+				ImGui::TextDisabled("Choose its ProjectSettings.toml file.");
+				ImGui::Spacing();
+				ImGui::SetNextItemWidth(width - browseSize - dp(m::kBrowseGap));
+				submit = ImGui::InputTextWithHint("##openProjectPath", "Path to ProjectSettings.toml...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SameLine(0.0f, dp(m::kBrowseGap));
+				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseProjectFile)
 				{
-					actions.openProject(model.currentProject->root);
-				}
-				y += dp(m::kButtonToDivider);
-				divider(y);
-				y += dp(m::kAfterDivider);
-			}
-
-			// Open existing. Enter in the path field submits; the button disables until
-			// there is a path, so requirements read before the error does.
-			SectionLabel(dl, ImVec2(labelX, y), "OPEN PROJECT", dp);
-			y += dp(m::kSectionLabelGap);
-			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-			ImGui::SetNextItemWidth(innerWidth - browseSize - dp(m::kBrowseGap));
-			bool openSubmitted = ImGui::InputTextWithHint("##openProjectPath", "Path to ProjectSettings.toml...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
-			ImGui::SameLine(0.0f, dp(m::kBrowseGap));
-			if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseProjectFile)
-			{
-				if (const auto file = actions.browseProjectFile())
-				{
-					CopyToBuffer(state.openPath, *file);
+					if (const auto file = actions.browseProjectFile())
+					{
+						CopyToBuffer(state.openPath, *file);
+					}
 				}
 			}
-			y += dp(m::kFieldStride);
-			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-			const bool openPathEmpty = state.openPath[0] == '\0';
-			ImGui::BeginDisabled(openPathEmpty);
-			openSubmitted = OutlineButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(innerWidth, dp(m::kButtonStd))) || openSubmitted;
-			ImGui::EndDisabled();
-			if (openSubmitted && !openPathEmpty && actions.openProject)
+			else
 			{
-				actions.openProject(std::filesystem::path(state.openPath.data()));
-			}
-			y += dp(m::kButtonToDivider);
-			divider(y);
-			y += dp(m::kAfterDivider);
-
-			// Create new. Enter in either field submits; Create disables until both the
-			// name and folder are present.
-			SectionLabel(dl, ImVec2(labelX, y), "NEW PROJECT", dp);
-			y += dp(m::kSectionLabelGap);
-			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-			ImGui::SetNextItemWidth(innerWidth);
-			bool createSubmitted = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
-			y += dp(m::kFieldStride);
-			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-			ImGui::SetNextItemWidth(innerWidth - browseSize - dp(m::kBrowseGap));
-			createSubmitted = ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || createSubmitted;
-			ImGui::SameLine(0.0f, dp(m::kBrowseGap));
-			if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize)) && actions.browseFolder)
-			{
-				if (const auto folder = actions.browseFolder())
+				ImGui::TextUnformatted("Create a new AetherCore project");
+				ImGui::TextDisabled("Choose a name and an empty project folder.");
+				ImGui::Spacing();
+				ImGui::SetNextItemWidth(width);
+				submit = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SetNextItemWidth(width - browseSize - dp(m::kBrowseGap));
+				submit = ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || submit;
+				ImGui::SameLine(0.0f, dp(m::kBrowseGap));
+				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize)) && actions.browseFolder)
 				{
-					CopyToBuffer(state.newPath, *folder);
+					if (const auto folder = actions.browseFolder())
+					{
+						CopyToBuffer(state.newPath, *folder);
+					}
 				}
 			}
-			y += dp(m::kFieldStride);
-			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-			const bool createIncomplete = state.newName[0] == '\0' || state.newPath[0] == '\0';
-			ImGui::BeginDisabled(createIncomplete);
-			createSubmitted = PrimaryButton(ICON_FA_PLUS "  Create", ImVec2(innerWidth, dp(m::kButtonStd))) || createSubmitted;
-			ImGui::EndDisabled();
-			if (createSubmitted && !createIncomplete && actions.createProject)
-			{
-				actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data());
-			}
-			y += dp(m::kButtonToDivider);
 
-			// Error (if any), a hairline, then the startup toggle - all inline so the
-			// panel keeps hugging its content.
 			if (!state.error.empty())
 			{
-				ImGui::SetCursorScreenPos(ImVec2(labelX, y));
+				ImGui::Spacing();
 				ImGui::PushStyleColor(ImGuiCol_Text, kError);
-				ImGui::PushTextWrapPos(rightEdge);
 				ImGui::TextWrapped("%s", state.error.c_str());
-				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
-				y = ImGui::GetItemRectMax().y + dp(m::kErrorGap);
 			}
 
-			divider(y);
-			y += dp(m::kDividerToToggle);
-			ImGui::SetCursorScreenPos(ImVec2(labelX, y));
-			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			if (ImGui::Checkbox("Open last project on startup", &state.openLastProject) && actions.saveSettings)
+			ImGui::Spacing();
+			const bool incomplete = opening ? state.openPath[0] == '\0' : state.newName[0] == '\0' || state.newPath[0] == '\0';
+			const float cancelWidth = dp(100.0f);
+			ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - cancelWidth - dp(116.0f));
+			if (OutlineButton("Cancel", ImVec2(cancelWidth, dp(m::kButtonStd))))
 			{
-				actions.saveSettings();
+				state.dialog = ProjectLauncherDialog::None;
+				state.error.clear();
+				ImGui::CloseCurrentPopup();
 			}
-			ImGui::PopStyleColor();
-			y = ImGui::GetItemRectMax().y + pad;
-
+			ImGui::SameLine(0.0f, dp(m::kBrowseGap));
+			ImGui::BeginDisabled(incomplete);
+			const char* actionLabel = opening ? ICON_FA_FOLDER_OPEN "  Open" : ICON_FA_PLUS "  Create";
+			submit = PrimaryButton(actionLabel, ImVec2(dp(108.0f), dp(m::kButtonStd))) || submit;
+			ImGui::EndDisabled();
+			if (submit && !incomplete)
+			{
+				if (opening && actions.openProject)
+				{
+					actions.openProject(std::filesystem::path(state.openPath.data()));
+				}
+				else if (!opening && actions.createProject)
+				{
+					actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data());
+				}
+				state.dialog = ProjectLauncherDialog::None;
+				ImGui::CloseCurrentPopup();
+			}
 			PopInputStyles();
-
-			// Panel chrome behind the content, now that the height is known.
-			const ImVec2 panelMax{f.rightMax.x, std::min(y, f.rightMax.y)};
-			const float corner = dp(m::kPanelCorner);
-			dl->ChannelsSetCurrent(0);
-			dl->AddRectFilled(f.rightMin, panelMax, ToU32(kPanel), corner);
-			dl->AddRect(f.rightMin, panelMax, ToU32(kStroke), corner, 0, dp(m::kCardBorder));
-			dl->AddRectFilled(f.rightMin, ImVec2(panelMax.x, f.rightMin.y + dp(m::kAccentCap)), ToU32(WithAlpha(kAccent, 0.9f)), corner, ImDrawFlags_RoundCornersTop);
-			dl->ChannelsMerge();
-			return panelMax.y;
+			ImGui::EndPopup();
 		}
 
-		// The recents card grid. Beside the panel normally; below it on narrow windows
-		// (hence panelBottom). Skipped when the window leaves no meaningful room.
-		void PaintRecentsGrid(const Frame& f, const float panelBottom, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
+		// The projects grid owns the hub's main visual field. Open/Create are compact
+		// header actions that reveal a modal only when the user asks for them.
+		void PaintRecentsGrid(const Frame& f, ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
 		{
 			ImDrawList* dl = f.drawList;
 			const Px& dp = f.dp;
 
-			const ImVec2 leftMin = f.singleColumn ? ImVec2(f.contentMin.x, panelBottom + dp(m::kLabelToGrid)) : ImVec2(f.contentMin.x, f.columnsTop);
-			const ImVec2 leftMax = f.singleColumn ? ImVec2(f.contentMax.x, f.columnsBottom) : ImVec2(f.rightMin.x - dp(m::kGridGap * 2.0f), f.columnsBottom);
+			const ImVec2 leftMin(f.contentMin.x, f.gridTop);
+			const ImVec2 leftMax(f.contentMax.x, f.gridBottom);
 			if (leftMax.y - leftMin.y <= dp(m::kGridMinHeight) || leftMax.x - leftMin.x <= dp(m::kGridMinWidth))
 			{
 				return;
@@ -554,16 +488,38 @@ namespace aether::app
 
 			const float gridWidth = leftMax.x - leftMin.x;
 			SectionLabel(dl, leftMin, "RECENT PROJECTS", dp);
+			const float newWidth = dp(132.0f);
+			const float openWidth = dp(112.0f);
+			const float actionGap = dp(m::kBrowseGap);
+			ImGui::SetCursorScreenPos(ImVec2(leftMax.x - newWidth - actionGap - openWidth, leftMin.y - dp(8.0f)));
+			if (OutlineButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(openWidth, dp(m::kButtonStd))))
+			{
+				state.dialog = ProjectLauncherDialog::Open;
+				state.error.clear();
+			}
+			ImGui::SameLine(0.0f, actionGap);
+			if (PrimaryButton(ICON_FA_PLUS "  New Project", ImVec2(newWidth, dp(m::kButtonStd))))
+			{
+				state.dialog = ProjectLauncherDialog::Create;
+				state.error.clear();
+			}
+
+			float gridStart = leftMin.y + dp(m::kLabelToGrid);
+			if (!state.error.empty())
+			{
+				TextSized(dl, dp(m::kBodyPath), ImVec2(leftMin.x, gridStart), kError, state.error.c_str());
+				gridStart += dp(m::kFieldStride);
+			}
 
 			// The hover reticle bleeds past each card and the scroll child clips its own
 			// draw list, so perimeter cards used to get sliced. Bleed the child a matching
 			// margin past the content band on every side and pad its interior by the same,
 			// so cards still align edge-to-edge with the label while the brackets get room.
 			const float bleed = dp(m::kGridBleed);
-			ImGui::SetCursorScreenPos(Add(leftMin, ImVec2(-bleed, dp(m::kLabelToGrid))));
+			ImGui::SetCursorScreenPos(ImVec2(leftMin.x - bleed, gridStart));
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(bleed, bleed));
-			ImGui::BeginChild("##launcherRecentProjects", ImVec2(gridWidth + bleed * 2.0f, leftMax.y - leftMin.y - dp(m::kLabelToGrid) + bleed), ImGuiChildFlags_AlwaysUseWindowPadding);
+			ImGui::BeginChild("##launcherRecentProjects", ImVec2(gridWidth + bleed * 2.0f, leftMax.y - gridStart + bleed), ImGuiChildFlags_AlwaysUseWindowPadding);
 
 			if (model.recentProjects.empty())
 			{
@@ -607,10 +563,20 @@ namespace aether::app
 			ImGui::PopStyleColor(); // ChildBg
 		}
 
-		void PaintFooter(const Frame& f)
+		void PaintFooter(const Frame& f, ProjectLauncherWindowState& state, const ProjectLauncherWindowActions& actions)
 		{
-			// Muted (not faint) so the app name actually reads at the bottom-left.
+			// Muted (not faint) so the app name actually reads at the bottom-left. Keep
+			// the startup preference here as quiet chrome, not a competing content panel.
 			TextSized(f.drawList, f.dp(m::kFooter), ImVec2(f.contentMin.x, f.contentMax.y - f.dp(m::kFooter + 4.0f)), kMuted, "AetherCore Editor");
+			const char* label = "Open last project on startup";
+			const float controlWidth = ImGui::GetFrameHeight() + ImGui::CalcTextSize(label).x;
+			ImGui::SetCursorScreenPos(ImVec2(f.contentMax.x - controlWidth, f.contentMax.y - f.dp(m::kFooter + 8.0f)));
+			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
+			if (ImGui::Checkbox(label, &state.openLastProject) && actions.saveSettings)
+			{
+				actions.saveSettings();
+			}
+			ImGui::PopStyleColor();
 		}
 
 		// Resolve the responsive layout for the current window size into a Frame.
@@ -631,18 +597,10 @@ namespace aether::app
 			f.contentMin = ImVec2(f.contentX, windowMin.y + std::clamp(height * 0.06f, dp(m::kBandTopMin), dp(m::kBandTopMax)));
 			f.contentMax = ImVec2(f.contentX + f.contentWidth, windowMax.y - std::clamp(height * 0.05f, dp(m::kBandBottomMin), dp(m::kBandBottomMax)));
 
-			// Below this width the two columns cannot both breathe: stack them.
-			f.singleColumn = f.contentWidth < dp(m::kSingleColumnBelow);
 			f.wordmarkSize = std::clamp(f.contentWidth * m::kWordmarkScale, dp(m::kWordmarkMin), dp(m::kWordmarkMax));
 
-			f.columnsTop = f.contentMin.y + f.wordmarkSize + dp(m::kColumnsTopGap);
-			f.columnsBottom = f.contentMax.y - dp(m::kFooterBand);
-
-			const float rightWidth = f.singleColumn ? std::min(f.contentWidth, dp(m::kActionsWidthNarrow)) : std::clamp(f.contentWidth * 0.32f, dp(m::kActionsWidthMin), dp(m::kActionsWidthMax));
-			f.rightMin = f.singleColumn ? ImVec2(f.contentX + (f.contentWidth - rightWidth) * 0.5f, f.columnsTop) : ImVec2(f.contentMax.x - rightWidth, f.columnsTop);
-			f.rightMax = ImVec2(f.rightMin.x + rightWidth, f.columnsBottom);
-			f.panelPad = dp(m::kPanelPad);
-			f.innerWidth = rightWidth - f.panelPad * 2.0f;
+			f.gridTop = f.contentMin.y + f.wordmarkSize + dp(m::kColumnsTopGap);
+			f.gridBottom = f.contentMax.y - dp(m::kFooterBand);
 			return f;
 		}
 	} // namespace
@@ -673,10 +631,10 @@ namespace aether::app
 		PaintHeader(f, model, state);
 
 		ImGui::BeginDisabled(state.launching);
-		const float panelBottom = PaintActionsPanel(f, state, model, actions);
-		PaintRecentsGrid(f, panelBottom, model, actions);
-		PaintFooter(f);
+		PaintRecentsGrid(f, state, model, actions);
+		PaintFooter(f, state, actions);
 		ImGui::EndDisabled();
+		DrawProjectDialog(state, actions, f.dp);
 
 		ImGui::End();
 	}

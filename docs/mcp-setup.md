@@ -34,15 +34,18 @@ cmake --build --preset default --target Editor aether-ctl
 # Or limit registration, for example: ./scripts/Install-Mcp.ps1 -Targets codex
 ```
 
-For live-editor tools, start the editor with a matching port. The endpoint binds
-to `127.0.0.1` only and is editor-only; `GameRuntime` never includes it.
+For live tools, start the Launcher: its small hub endpoint binds to `127.0.0.1`
+on `8787` by default and exposes hub status, recent projects, and screenshots.
+When you open a project, the Launcher hands that same port to the full Editor
+endpoint automatically. `GameRuntime` never includes either endpoint.
 
 ```powershell
-$env:AETHER_CONTROL_PORT = "8787"
-.\build\src\app\RelWithDebInfo\Editor.exe
+.\build\default\src\app\RelWithDebInfo\Launcher.exe
 ```
 
-Alternatively, use the editor's **Control Server** panel to start or stop the
-endpoint and choose its port. `run_gauntlet` needs no editor; every live-editor
-tool does. The complete tool catalog, manual registration examples, and
-environment variables are in [tools/mcp/README.md](../tools/mcp/README.md).
+Alternatively, start a project-scoped Editor directly with a matching port:
+`$env:AETHER_CONTROL_PORT = "8787"; .\build\default\src\app\RelWithDebInfo\Editor.exe --project <path>`.
+You can also use the editor's **Control Server** panel to start or stop its
+endpoint and choose its port. `run_gauntlet` needs no live app. The complete
+tool catalog, manual registration examples, and environment variables are in
+[tools/mcp/README.md](../tools/mcp/README.md).

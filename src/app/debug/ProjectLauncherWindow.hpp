@@ -13,6 +13,13 @@
 
 namespace aether::app
 {
+	enum class ProjectLauncherDialog
+	{
+		None,
+		Open,
+		Create,
+	};
+
 	// Default OS-window size for the standalone Launcher process (LauncherMain) and
 	// the smallest window the responsive hub layout stays usable at (LauncherLayer
 	// applies it as the OS window's minimum size). The hub itself is fluid - it
@@ -28,6 +35,7 @@ namespace aether::app
 		std::array<char, 260> openPath{};
 		std::array<char, 260> newPath{};
 		std::array<char, 96> newName{};
+		ProjectLauncherDialog dialog = ProjectLauncherDialog::None;
 		bool launching = false;
 		std::string error;
 	};

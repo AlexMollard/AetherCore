@@ -2,13 +2,16 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include "layers/AppLayer.hpp"
+#include "editor/ControlServer.hpp"
 #include "launcher/LauncherProcess.hpp"
 #include "debug/ProjectLauncherWindow.hpp"
 #include "editor/EditorProjectContext.hpp"
@@ -31,10 +34,15 @@ namespace aether::app
 	class LauncherLayer final : public AppLayer
 	{
 	public:
+		~LauncherLayer() override;
+
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
 		void OnUpdate(LayerContext& context) override;
 		void OnImGui(LayerContext& context) override;
+
+		[[nodiscard]] std::span<const EditorProjectContext> RecentProjects() const;
+		[[nodiscard]] bool IsLaunchingEditor() const noexcept;
 
 	private:
 		// Both spawn a separate Editor for the chosen project (CreateProject scaffolds
@@ -44,6 +52,8 @@ namespace aether::app
 		// Spawns the Editor for `root`, assigning it the next MCP control port (see
 		// m_controlBasePort) so the AetherCore MCP can drive it.
 		void SpawnEditorFor(const std::filesystem::path& root);
+		void StartControlServer();
+		void StopControlServer();
 		void RememberRecent(const std::filesystem::path& root);
 		void PersistSettings();
 
@@ -63,6 +73,7 @@ namespace aether::app
 		Texture m_logoTexture;
 		std::uint64_t m_logoTextureId = 0;
 		ServiceContainer* m_services = nullptr;
+		std::unique_ptr<editor::ControlServer> m_controlServer;
 
 		// Loaded preview thumbnails, keyed by normalized project root. A cached entry
 		// with textureId == 0 records "no preview" so it is not retried every frame.
@@ -74,13 +85,11 @@ namespace aether::app
 
 		std::unordered_map<std::string, PreviewEntry> m_previews;
 
-		// MCP integration: each spawned Editor gets AETHER_CONTROL_PORT so its
-		// ControlServer auto-starts and the AetherCore MCP / aether-ctl can drive it.
-		// m_controlBasePort is resolved once at attach from the AETHER_CONTROL_PORT env
-		// (unset -> 8787 zero-setup default; a valid port -> that; "0"/"off"/"none" ->
-		// disabled). Editor N gets base + N so multiple open editors never collide.
+		// MCP integration: the Launcher owns the configured port while its hub is
+		// visible. It stops its endpoint immediately before spawning an Editor, which
+		// then inherits the same port. This keeps aether-ctl/MCP attached to 8787 (or
+		// the configured override) throughout the handoff without a bind collision.
 		int m_controlBasePort = 0;
-		int m_spawnCount = 0;
 		std::optional<launcher::EditorLaunch> m_pendingEditor;
 		double m_editorStartupSeconds = 0.0;
 	};

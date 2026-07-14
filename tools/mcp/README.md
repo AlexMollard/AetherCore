@@ -69,31 +69,30 @@ endpoint, pick the port, toggle auto-start, and watch live request stats.
 # 1. Build the editor and the control client
 cmake --build build/vs2022-msvc --config Debug --target Editor aether-ctl
 
-# 2. For the live-editor tools, launch the hub and open a project. The Launcher
-#    forwards an MCP control port to every Editor it spawns automatically (default
-#    base 8787, matching the MCP), so the Editor's ControlServer auto-starts - no
-#    env setup needed:
+# 2. Launch the hub. Its localhost MCP endpoint starts on 8787 by default, so
+#    launcher_info, list_projects, and screenshot are available immediately. Open
+#    a project and that same port is handed to the spawned Editor automatically:
 .\build\vs2022-msvc\src\app\Debug\Launcher.exe   # run from the build-tree root; open a project in the hub
 ```
 
 `run_gauntlet` works without step 2.
 
-### Launcher → MCP control-port forwarding
+### Launcher → Editor MCP handoff
 
-The Launcher runs on a slim UiShell engine and has **no** control server of its own -
-it stays decoupled from the editor. Instead, when it spawns an Editor it hands that
-process an `AETHER_CONTROL_PORT` so the *editor's* ControlServer auto-starts and the
-MCP can drive it. Resolution (read once at launcher startup from `AETHER_CONTROL_PORT`):
+The Launcher runs a small localhost control endpoint on its UiShell runtime. It exposes
+only hub-safe methods: `launcher_info`, `list_projects`, and `screenshot`. When the user
+opens or creates a project, the Launcher stops that endpoint immediately before spawning
+the Editor; the Editor inherits the same `AETHER_CONTROL_PORT`. The MCP client therefore
+stays on one port across the handoff. Resolution (read once at launcher startup from
+`AETHER_CONTROL_PORT`):
 
 | `AETHER_CONTROL_PORT` on the Launcher | Behaviour |
 |---------------------------------------|-----------|
-| unset (default)                       | base **8787** - launcher-spawned editors are MCP-ready with zero setup |
-| a port, e.g. `9000`                   | that value is the base |
-| `off` / `none` / `0`                  | disabled - spawned editors start no control endpoint |
+| unset (default)                       | **8787** - Launcher endpoint, then the spawned Editor |
+| a port, e.g. `9000`                   | Launcher endpoint, then spawned Editor, on that port |
+| `off` / `none` / `0`                  | disabled - no Launcher or spawned-Editor endpoint |
 
-The **Nth** editor opened from the hub gets `base + N` (8787, 8788, …), so several
-open editors never collide - point the MCP's `AETHER_CONTROL_PORT` at whichever one
-you want to drive. You can still bypass the launcher and run the editor directly:
+You can still bypass the Launcher and run the Editor directly:
 `$env:AETHER_CONTROL_PORT="8787"; .\build\vs2022-msvc\src\app\Debug\Editor.exe --project <path>`.
 
 ## Install into Codex / OpenCode / Claude Code (one command)

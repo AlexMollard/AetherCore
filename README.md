@@ -130,19 +130,21 @@ Each project is rooted by `ProjectSettings.toml` and owns its assets, scenes, pr
 ## Engine MCP
 
 AetherCore includes its own MCP server, so a coding agent can run the test
-gauntlet or work with a live editor: inspect and edit scenes, manage editor
-panels, query the render graph, capture textures and screenshots, and enter play
-mode. The live-control endpoint is editor-only and listens on `127.0.0.1`.
+gauntlet, inspect the Launcher hub, or work with a live editor: inspect and edit
+scenes, manage editor panels, query the render graph, capture textures and
+screenshots, and enter play mode. The live-control endpoint listens only on
+`127.0.0.1`.
 
 ```powershell
 cmake --build --preset default --target Editor aether-ctl
 ./scripts/Install-Mcp.ps1 -Targets codex
 ```
 
-The Launcher automatically assigns a control port to every Editor it spawns (base
-`8787` by default, incremented for additional editors). For a directly started
-Editor, set `AETHER_CONTROL_PORT=8787` or enable it from the **Control Server**
-panel. The port must match the MCP configuration. See the [MCP setup guide](docs/mcp-setup.md#aethercore-mcp) for the short setup path and the [full engine MCP reference](tools/mcp/README.md) for all tools and options.
+The Launcher owns the control port while its hub is open (`8787` by default), offering
+hub status, project listing, and screenshots. When it launches an Editor, it releases
+that same port for the Editor's full control endpoint, so MCP tools follow the handoff
+without reconfiguration. For a directly started Editor, set `AETHER_CONTROL_PORT=8787`
+or enable it from the **Control Server** panel. See the [MCP setup guide](docs/mcp-setup.md#aethercore-mcp) for the short setup path and the [full engine MCP reference](tools/mcp/README.md) for all tools and options.
 
 ## Architecture
 
