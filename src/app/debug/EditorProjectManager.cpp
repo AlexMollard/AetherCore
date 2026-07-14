@@ -19,6 +19,7 @@
 #include "editor/EditorProjectPublisher.hpp"
 #include "editor/ModelBake.hpp"
 #include "editor/ShaderCompiler.hpp"
+#include "editor/VisualStudioScriptDebug.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/DirectoryBackend.hpp"
@@ -185,6 +186,28 @@ namespace aether::editor
 		m_actions.publishProject = [](const app::EditorProjectContext& project, const EditorProjectPublishOptions& options)
 		{
 			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options);
+		};
+		m_actions.visualStudioInstallations = FindVisualStudioInstallations();
+		m_actions.debugScripts = [this](const std::filesystem::path& visualStudioInstall) -> EditorProjectActionResult
+		{
+			if (!m_currentProject.IsLoaded())
+			{
+				return {.succeeded = false, .message = "No project is open."};
+			}
+
+			const std::filesystem::path scriptsProject = m_currentProject.scriptsDir / "AetherGame.csproj";
+			if (auto* scripting = m_services != nullptr ? m_services->TryGet<app::scripting::CSharpScriptingSubsystem>() : nullptr)
+			{
+				// The editor's script pipeline builds a portable-symbol Debug assembly.
+				scripting->BeginRebuildFromSource();
+			}
+
+			EditorProjectActionResult result = OpenVisualStudioAndAttachScriptDebugger(scriptsProject, visualStudioInstall);
+			if (result.succeeded)
+			{
+				result.message += " Debug script build is queued in the background.";
+			}
+			return result;
 		};
 		if (CanBakeEnginePak())
 		{

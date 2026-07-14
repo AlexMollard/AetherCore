@@ -48,6 +48,7 @@ namespace aether::editor
 		std::vector<SceneEntry> m_scenes;
 		std::string m_startupScene;
 		std::string m_status;
+		std::filesystem::path m_visualStudioInstall;
 		std::filesystem::path m_lastPackPath;
 		std::string m_packStatus;
 		bool m_packSucceeded = false;

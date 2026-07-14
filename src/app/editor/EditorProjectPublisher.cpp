@@ -865,7 +865,7 @@ namespace aether::editor
 		const std::filesystem::path scriptsProject = project.scriptsDir / "AetherGame.csproj";
 		if (options.buildProjectScripts && io::file_util::Exists(scriptsProject))
 		{
-			if (config.dotnetExe.empty() || config.managedConfig.empty() || config.managedConfigDir.empty())
+			if (config.dotnetExe.empty())
 			{
 				return {.succeeded = false, .message = "Project has scripts, but this editor build was not configured with dotnet publishing support.", .outputPath = publishDir};
 			}
@@ -876,7 +876,11 @@ namespace aether::editor
 			{
 				return {.succeeded = false, .message = "Could not clean script publish intermediates: " + ec.message(), .outputPath = publishDir};
 			}
-			const std::string command = "\"" + config.dotnetExe.string() + "\" build \"" + scriptsProject.string() + "\" -c " + config.managedConfig + " --nologo -v:m -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
+			// Publishing is intentionally independent from the editor's active build
+			// tier. A package always receives an optimized, symbol-free Release script
+			// assembly; verification below also rejects any accidental PDB sidecars.
+			const std::string command =
+			        "\"" + config.dotnetExe.string() + "\" build \"" + scriptsProject.string() + "\" -c Release --nologo -v:m -p:DebugSymbols=false -p:DebugType=none -p:Optimize=true -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 			if (const int rc = io::RunProcessToLog(command, publishLog); rc != 0)
 			{
 				std::string message = "Project script build failed (exit " + std::to_string(rc) + ").";
@@ -887,7 +891,7 @@ namespace aether::editor
 				}
 				return {.succeeded = false, .message = std::move(message), .outputPath = publishDir};
 			}
-			const std::filesystem::path gameOutDir = artifactsDir / "bin" / "AetherGame" / config.managedConfigDir;
+			const std::filesystem::path gameOutDir = artifactsDir / "bin" / "AetherGame" / "release";
 			if (!CopyDirectoryRecursive(gameOutDir, publishDir / "data" / "scripts" / "managed", error))
 			{
 				return {.succeeded = false, .message = "Could not publish project scripts: " + error, .outputPath = publishDir};

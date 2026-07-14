@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace aether::app
 {
@@ -16,6 +17,17 @@ namespace aether::editor
 		bool succeeded = false;
 		std::string message;
 		std::filesystem::path outputPath;
+	};
+
+	// A Visual Studio IDE found on this machine. Build Tools instances are not
+	// included because they cannot open a project or attach a debugger.
+	struct VisualStudioInstallation
+	{
+		std::filesystem::path installPath;
+		std::string displayName;
+		int majorVersion = 0;
+		bool supportsDotNet10 = false;
+		bool hasDebuggerAutomation = false;
 	};
 
 	struct EditorProjectPublishOptions
@@ -36,6 +48,8 @@ namespace aether::editor
 		std::function<void()> reloadProject;
 		std::function<EditorProjectActionResult(const app::EditorProjectContext&)> packProject;
 		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishOptions&)> publishProject;
+		std::vector<VisualStudioInstallation> visualStudioInstallations;
+		std::function<EditorProjectActionResult(const std::filesystem::path& visualStudioInstall)> debugScripts;
 		std::function<EditorProjectActionResult()> rebuildEnginePak;
 		// Manual shader-recompile trigger (ShaderCompiler::CompileProject on the
 		// current project, then refreshes the shaders:// overlay's project

@@ -519,6 +519,45 @@ namespace aether::editor
 				actions->reloadProject();
 				Refresh(*project);
 			}
+			const auto& visualStudios = actions->visualStudioInstallations;
+			const auto selected = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
+			if (selected == visualStudios.end() && !visualStudios.empty())
+			{
+				const auto compatible = std::ranges::find_if(visualStudios, [](const VisualStudioInstallation& installation) { return installation.supportsDotNet10 && installation.hasDebuggerAutomation; });
+				m_visualStudioInstall = (compatible != visualStudios.end() ? compatible : visualStudios.begin())->installPath;
+			}
+
+			ImGui::TextDisabled("C# debugger");
+			ImGui::SameLine();
+			const auto current = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
+			const char* preview = current != visualStudios.end() ? current->displayName.c_str() : "No Visual Studio IDE found";
+			ImGui::SetNextItemWidth(360.0f);
+			if (ImGui::BeginCombo("##scriptDebugger", preview))
+			{
+				for (const VisualStudioInstallation& installation: visualStudios)
+				{
+					const bool isSelected = installation.installPath == m_visualStudioInstall;
+					const std::string label = installation.displayName + (installation.supportsDotNet10 ? "" : " (.NET 10 unsupported)") + (installation.hasDebuggerAutomation ? "" : " (debugger automation unavailable)");
+					if (ImGui::Selectable(label.c_str(), isSelected))
+					{
+						m_visualStudioInstall = installation.installPath;
+					}
+					if (isSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::SameLine();
+			const bool canDebugScripts = actions->debugScripts && current != visualStudios.end() && current->supportsDotNet10 && current->hasDebuggerAutomation;
+			ImGui::BeginDisabled(!canDebugScripts);
+			if (chrome::PrimaryButton(ICON_FA_BUG " Debug C#"))
+			{
+				const EditorProjectActionResult result = actions->debugScripts(m_visualStudioInstall);
+				m_status = result.message;
+			}
+			ImGui::EndDisabled();
 		}
 		ImGui::SameLine();
 		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Root"))

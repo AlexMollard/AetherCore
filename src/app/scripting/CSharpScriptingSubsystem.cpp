@@ -79,6 +79,9 @@ namespace aether::app::scripting
 	namespace
 	{
 #if defined(AETHER_DOTNET_EXE)
+		constexpr std::string_view kEditorScriptBuildProfile = "Debug";
+		constexpr std::string_view kEditorScriptBuildProfileFile = ".aethercore-script-profile";
+
 		bool IsScriptBuildInput(const std::filesystem::path& path)
 		{
 			if (!path.has_extension())
@@ -168,8 +171,14 @@ namespace aether::app::scripting
 			return !ec;
 		}
 
-		bool IsScriptBuildRequired(const std::filesystem::path& gameProject, const std::filesystem::path& managedDir)
+		bool IsScriptBuildRequired(const std::filesystem::path& gameProject, const std::filesystem::path& managedDir, const std::filesystem::path& artifactsDir)
 		{
+			const auto profile = io::file_util::ReadText(artifactsDir / kEditorScriptBuildProfileFile);
+			if (!profile || *profile != std::string(kEditorScriptBuildProfile) + "\n")
+			{
+				return true;
+			}
+
 			const std::filesystem::path deployedAssembly = managedDir / "AetherGame.dll";
 			if (!std::filesystem::exists(managedDir / "AetherGame.deps.json"))
 			{
@@ -195,24 +204,25 @@ namespace aether::app::scripting
 			return latestInput && *latestInput > *deployedTime;
 		}
 
-		// Core build step shared by the sync (F5) and async (Play) paths: runs
-		// `dotnet build` and redeploys the assembly. Pure file IO with no engine or
-		// managed-runtime access, so it is safe to run on a worker thread. Returns
-		// true on success (or a no-op when scripts are current); fills `error` on
-		// failure.
+		// Core build step shared by the sync (F5) and async (Play) paths: runs a
+		// portable-symbol Debug build and redeploys the assembly. Script compilation
+		// is intentionally independent from the C++ Dev configuration: authoring in
+		// the Editor must have predictable stepping and locals. Pure file IO with no
+		// engine or managed-runtime access, so it is safe on a worker thread.
 		bool PerformScriptBuild(const std::filesystem::path& managedDir, const std::filesystem::path& gameProject, const std::filesystem::path& artifactsDir, std::string& error)
 		{
 			namespace fs = std::filesystem;
-			if (!IsScriptBuildRequired(gameProject, managedDir))
+			if (!IsScriptBuildRequired(gameProject, managedDir, artifactsDir))
 			{
-				AE_VERBOSE(LogCategory::App, "C# scripts are current; skipping dotnet build.");
+				AE_VERBOSE(LogCategory::App, "C# debug scripts are current; skipping dotnet build.");
 				return true;
 			}
 
 			// `-p:UseSharedCompilation=false` keeps the Roslyn build server from
 			// spawning; with MSBUILDDISABLENODEREUSE (set at startup) no persistent
 			// child outlives the build to hold our capture handle.
-			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string() + "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:UseSharedCompilation=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
+			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string()
+			                          + "\" -c Debug --nologo -v:m -p:UseSharedCompilation=false -p:DebugSymbols=true -p:DebugType=portable -p:Optimize=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 
 			std::string output;
 			const int rc = io::RunProcessCapture(inner, output);
@@ -230,7 +240,7 @@ namespace aether::app::scripting
 			// Redeploy the freshly built game assembly into the load dir. The scripts
 			// ALC loads from bytes (see ScriptRegistry.Load), so overwriting the
 			// on-disk dll mid-run is safe.
-			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / AETHER_MANAGED_CONFIGDIR;
+			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / "debug";
 			for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
 			{
 				const fs::path src = buildOut / name;
@@ -245,6 +255,11 @@ namespace aether::app::scripting
 					error = std::string("failed to deploy ") + name + ": " + ec.message();
 					return false;
 				}
+			}
+
+			if (auto result = io::file_util::WriteText(artifactsDir / kEditorScriptBuildProfileFile, std::string(kEditorScriptBuildProfile) + "\n"); !result)
+			{
+				AE_WARN(LogCategory::App, "Could not record the C# script build profile: {}", result.error().message);
 			}
 			return true;
 		}
