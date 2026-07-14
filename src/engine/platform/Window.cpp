@@ -92,6 +92,14 @@ namespace aether
 		return glfwWindowShouldClose(m_window);
 	}
 
+	void Window::RequestClose()
+	{
+		if (m_window != nullptr)
+		{
+			glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+		}
+	}
+
 	void Window::PollEvents()
 	{
 		AE_PROFILE_ZONE();

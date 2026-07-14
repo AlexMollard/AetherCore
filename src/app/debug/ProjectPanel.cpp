@@ -1,16 +1,19 @@
 #include "debug/ProjectPanel.hpp"
 #include "debug/EditorChrome.hpp"
+#include "debug/InspectorWidgets.hpp"
 
 #include <algorithm>
-#include <cstdio>
+#include <cfloat>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <system_error>
 
 #include <imgui.h>
+#include <misc/cpp/imgui_stdlib.h>
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -94,19 +97,67 @@ namespace aether::editor
 #endif
 		}
 
-		template<std::size_t N>
-		void CopyToBuffer(std::array<char, N>& buffer, std::string_view text)
+		// Status colours ride the runtime theme (recoloured by the Theme panel)
+		// instead of the hand-mixed RGB literals the panel used to scatter around.
+		ImVec4 StatusColor(bool succeeded)
 		{
-			buffer.fill('\0');
-			const std::size_t count = std::min(text.size(), N - 1);
-			std::copy_n(text.data(), count, buffer.data());
+			return succeeded ? chrome::kSuccess : chrome::kError;
 		}
 
-		template<std::size_t N>
-		std::string BufferText(const std::array<char, N>& buffer)
+		// A themed status line that wraps rather than running off the panel edge.
+		void StatusText(const std::string& message, bool succeeded)
 		{
-			return std::string(buffer.data());
+			if (message.empty())
+			{
+				return;
+			}
+			ImGui::PushTextWrapPos(0.0f);
+			ImGui::TextColored(StatusColor(succeeded), "%s", message.c_str());
+			ImGui::PopTextWrapPos();
 		}
+
+		// A muted, wrapping caption (paths, sizes) - long values fold onto the next
+		// line instead of clipping on a narrow panel.
+		void MutedWrapped(const std::string& text)
+		{
+			if (text.empty())
+			{
+				return;
+			}
+			ImGui::PushTextWrapPos(0.0f);
+			ImGui::TextDisabled("%s", text.c_str());
+			ImGui::PopTextWrapPos();
+		}
+
+		// Lays a row of buttons left-to-right, breaking to a new line before any
+		// button that would cross the panel's right edge - so toolbars reflow on
+		// narrow windows instead of overflowing off-screen.
+		struct ButtonRow
+		{
+			float rightEdge = 0.0f;
+			bool started = false;
+
+			ButtonRow()
+			{
+				rightEdge = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+			}
+
+			// Call immediately before drawing each button, passing the exact label so
+			// the row can measure it and decide whether it still fits on this line.
+			void Item(const char* label)
+			{
+				const float width = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+				if (started)
+				{
+					const float nextX = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
+					if (nextX + width <= rightEdge)
+					{
+						ImGui::SameLine();
+					}
+				}
+				started = true;
+			}
+		};
 	} // namespace
 
 	void ProjectPanel::Refresh(const app::EditorProjectContext& project)
@@ -244,9 +295,9 @@ namespace aether::editor
 			return;
 		}
 
-		CopyToBuffer(m_publishProductName, config.GetString("publish.productname", BufferText(m_publishProductName)));
-		CopyToBuffer(m_publishPlatformName, config.GetString("publish.platformname", BufferText(m_publishPlatformName)));
-		CopyToBuffer(m_publishOutputRoot, config.GetString("publish.outputroot", BufferText(m_publishOutputRoot)));
+		m_publishProductName = config.GetString("publish.productname", m_publishProductName);
+		m_publishPlatformName = config.GetString("publish.platformname", m_publishPlatformName);
+		m_publishOutputRoot = config.GetString("publish.outputroot", m_publishOutputRoot);
 		m_publishCleanOutput = config.GetBool("publish.cleanoutput", m_publishCleanOutput);
 		m_publishBuildScripts = config.GetBool("publish.buildscripts", m_publishBuildScripts);
 		m_publishUsePackageTemplate = config.GetBool("publish.usepackagetemplate", m_publishUsePackageTemplate);
@@ -275,9 +326,9 @@ namespace aether::editor
 			}
 		}
 
-		config.Set("publish.productName", BufferText(m_publishProductName));
-		config.Set("publish.platformName", BufferText(m_publishPlatformName));
-		config.Set("publish.outputRoot", BufferText(m_publishOutputRoot));
+		config.Set("publish.productName", m_publishProductName);
+		config.Set("publish.platformName", m_publishPlatformName);
+		config.Set("publish.outputRoot", m_publishOutputRoot);
 		config.Set("publish.cleanOutput", m_publishCleanOutput);
 		config.Set("publish.buildScripts", m_publishBuildScripts);
 		config.Set("publish.usePackageTemplate", m_publishUsePackageTemplate);
@@ -301,9 +352,9 @@ namespace aether::editor
 	void ProjectPanel::ResetPublishSettings(const app::EditorProjectContext& project)
 	{
 		const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
-		CopyToBuffer(m_publishProductName, defaults.productName);
-		CopyToBuffer(m_publishPlatformName, defaults.platformName);
-		CopyToBuffer(m_publishOutputRoot, DisplayPath(defaults.outputRoot));
+		m_publishProductName = defaults.productName;
+		m_publishPlatformName = defaults.platformName;
+		m_publishOutputRoot = DisplayPath(defaults.outputRoot);
 		m_publishCleanOutput = defaults.cleanOutput;
 		m_publishBuildScripts = defaults.buildProjectScripts;
 		m_publishUsePackageTemplate = defaults.usePackageTemplate;
@@ -314,23 +365,24 @@ namespace aether::editor
 
 	void ProjectPanel::DrawFolderRow(const char* label, const std::filesystem::path& path)
 	{
+		const bool exists = FolderExists(path);
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
+		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted(label);
 		ImGui::TableSetColumnIndex(1);
-		const bool exists = FolderExists(path);
-		ImGui::TextColored(exists ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.68f, 0.32f, 1.0f), "%s", exists ? "Ready" : "Missing");
+		ImGui::TextColored(exists ? chrome::kSuccess : chrome::kWarning, "%s", exists ? "Ready" : "Missing");
 		ImGui::TableSetColumnIndex(2);
 		ImGui::TextDisabled("%s", DisplayPath(path).c_str());
 		ImGui::TableSetColumnIndex(3);
-		ImGui::BeginDisabled(!exists);
 		ImGui::PushID(label);
-		if (ImGui::SmallButton(ICON_FA_FOLDER_OPEN))
+		ImGui::BeginDisabled(!exists);
+		if (chrome::GhostIconButton(ICON_FA_FOLDER_OPEN, "##open", ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight())))
 		{
 			OpenFolderInShell(path);
 		}
-		ImGui::PopID();
 		ImGui::EndDisabled();
+		ImGui::PopID();
 	}
 
 	void ProjectPanel::DrawSceneTable()
@@ -341,7 +393,7 @@ namespace aether::editor
 		}
 
 		ImGui::TableSetupColumn("Scene");
-		ImGui::TableSetupColumn("Startup", ImGuiTableColumnFlags_WidthFixed, 74.0f);
+		ImGui::TableSetupColumn("Startup", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 8.0f);
 		ImGui::TableSetupColumn("Path");
 		ImGui::TableHeadersRow();
 
@@ -350,6 +402,7 @@ namespace aether::editor
 			ImGui::PushID(scene.path.generic_string().c_str());
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
 			ImGui::TextUnformatted(scene.name.c_str());
 			ImGui::TableSetColumnIndex(1);
 			const bool selected = m_startupScene == scene.name;
@@ -368,31 +421,35 @@ namespace aether::editor
 
 	void ProjectPanel::DrawPublishDialog(app::LayerContext& context, const app::EditorProjectContext& project)
 	{
-		ImGui::SetNextWindowSize(ImVec2(620.0f, 0.0f), ImGuiCond_Appearing);
+		// A minimum width keeps the auto-resized modal from collapsing around its
+		// full-width fields; it still grows to fit content and the viewport.
+		ImGui::SetNextWindowSizeConstraints(ImVec2(480.0f, 0.0f), ImVec2(FLT_MAX, FLT_MAX));
 		if (!ImGui::BeginPopupModal("Publish Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
 			return;
 		}
 
 		ImGui::SeparatorText("Output");
-		ImGui::SetNextItemWidth(260.0f);
-		ImGui::InputText("Product", m_publishProductName.data(), m_publishProductName.size());
-		ImGui::SetNextItemWidth(180.0f);
-		ImGui::InputText("Platform", m_publishPlatformName.data(), m_publishPlatformName.size());
-		ImGui::SetNextItemWidth(440.0f);
-		ImGui::InputText("Output Root", m_publishOutputRoot.data(), m_publishOutputRoot.size());
+		iw::PropInputText("Product", m_publishProductName);
+		iw::PropInputText("Platform", m_publishPlatformName);
+
+		iw::LabelColumn("Output Root");
+		const float resetWidth = ImGui::GetFrameHeight();
+		ImGui::SetNextItemWidth(-(resetWidth + ImGui::GetStyle().ItemSpacing.x));
+		ImGui::InputText("##outputRoot", &m_publishOutputRoot);
 		ImGui::SameLine();
-		if (ImGui::SmallButton(ICON_FA_ROTATE))
+		if (chrome::GhostIconButton(ICON_FA_ROTATE, "##resetRoot", ImVec2(resetWidth, ImGui::GetFrameHeight())))
 		{
 			const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
-			CopyToBuffer(m_publishOutputRoot, DisplayPath(defaults.outputRoot));
+			m_publishOutputRoot = DisplayPath(defaults.outputRoot);
 		}
 
-		const std::filesystem::path outputRoot = BufferText(m_publishOutputRoot);
-		const std::string platform = BufferText(m_publishPlatformName).empty() ? std::string{"Windows"} : BufferText(m_publishPlatformName);
-		const std::string product = BufferText(m_publishProductName).empty() ? project.name : BufferText(m_publishProductName);
+		const std::filesystem::path outputRoot = m_publishOutputRoot;
+		const std::string platform = m_publishPlatformName.empty() ? std::string{"Windows"} : m_publishPlatformName;
+		const std::string product = m_publishProductName.empty() ? project.name : m_publishProductName;
 		const std::filesystem::path finalFolder = outputRoot / platform / product;
-		ImGui::TextDisabled("%s", DisplayPath(finalFolder).c_str());
+		iw::LabelColumn("Destination");
+		MutedWrapped(DisplayPath(finalFolder));
 
 		ImGui::SeparatorText("Build");
 		if (ImGui::BeginTable("##publishSettings", 2, ImGuiTableFlags_SizingStretchSame))
@@ -408,22 +465,21 @@ namespace aether::editor
 			ImGui::EndTable();
 		}
 
-		if (!m_publishStatus.empty())
-		{
-			const ImVec4 color = m_publishSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
-			ImGui::TextColored(color, "%s", m_publishStatus.c_str());
-		}
+		StatusText(m_publishStatus, m_publishSucceeded);
 
 		ImGui::Separator();
 		const auto* actions = context.TryGet<EditorProjectActions>();
-		const bool canPublish = actions != nullptr && actions->publishProject && !BufferText(m_publishProductName).empty() && !BufferText(m_publishPlatformName).empty() && !BufferText(m_publishOutputRoot).empty();
-		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Defaults", ImVec2(140.0f, 0.0f)))
+		const bool canPublish = actions != nullptr && actions->publishProject && !m_publishProductName.empty() && !m_publishPlatformName.empty() && !m_publishOutputRoot.empty();
+
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		const float buttonWidth = (ImGui::GetContentRegionAvail().x - 2.0f * spacing) / 3.0f;
+		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Defaults", ImVec2(buttonWidth, 0.0f)))
 		{
 			SavePublishSettings(project);
 		}
 		ImGui::SameLine();
 		ImGui::BeginDisabled(!canPublish);
-		if (chrome::PrimaryButton(ICON_FA_ROCKET " Publish", ImVec2(140.0f, 0.0f)))
+		if (chrome::PrimaryButton(ICON_FA_ROCKET " Publish", ImVec2(buttonWidth, 0.0f)))
 		{
 			if (m_dirtySettings)
 			{
@@ -433,8 +489,8 @@ namespace aether::editor
 
 			EditorProjectPublishOptions options;
 			options.outputRoot = outputRoot;
-			options.productName = BufferText(m_publishProductName);
-			options.platformName = BufferText(m_publishPlatformName);
+			options.productName = m_publishProductName;
+			options.platformName = m_publishPlatformName;
 			options.cleanOutput = m_publishCleanOutput;
 			options.buildProjectScripts = m_publishBuildScripts;
 			options.usePackageTemplate = m_publishUsePackageTemplate;
@@ -459,7 +515,7 @@ namespace aether::editor
 		}
 		ImGui::EndDisabled();
 		ImGui::SameLine();
-		if (ImGui::Button("Cancel", ImVec2(100.0f, 0.0f)))
+		if (chrome::GhostButton("Cancel", ImVec2(buttonWidth, 0.0f)))
 		{
 			ImGui::CloseCurrentPopup();
 		}
@@ -474,17 +530,32 @@ namespace aether::editor
 		ImGui::Begin("Project", VisiblePtr());
 
 		const auto* project = context.TryGet<app::EditorProjectContext>();
+		auto* actions = context.TryGet<EditorProjectActions>();
+
 		if (project == nullptr || !project->IsLoaded())
 		{
 			chrome::PanelHeader("PROJECT");
-			ImGui::TextDisabled("No project is open.");
-			if (auto* actions = context.TryGet<EditorProjectActions>())
+
+			const char* icon = ICON_FA_CUBE;
+			ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.32f));
+			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(icon).x) * 0.5f);
+			ImGui::TextDisabled("%s", icon);
+			const char* message = "No project is open.";
+			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(message).x) * 0.5f);
+			ImGui::TextDisabled("%s", message);
+
+			if (actions != nullptr && actions->openLauncher)
 			{
-				if (actions->openLauncher && chrome::OutlineButton(ICON_FA_CUBE " Open Launcher"))
+				const char* button = ICON_FA_CUBE " Open Launcher";
+				const float width = ImGui::CalcTextSize(button).x + ImGui::GetStyle().FramePadding.x * 2.0f + 16.0f;
+				ImGui::Dummy(ImVec2(0.0f, 4.0f));
+				ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - width) * 0.5f);
+				if (chrome::OutlineButton(button, ImVec2(width, 0.0f)))
 				{
 					actions->openLauncher();
 				}
 			}
+
 			ImGui::End();
 			return;
 		}
@@ -494,31 +565,57 @@ namespace aether::editor
 			Refresh(*project);
 		}
 
-		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 bp = ImGui::GetCursorScreenPos();
-			const float bandW = ImGui::GetContentRegionAvail().x;
-			drawList->AddRectFilled(ImVec2(bp.x, bp.y + 3.0f), ImVec2(bp.x + 3.0f, bp.y + 30.0f), chrome::U32(chrome::kAccent));
-			chrome::TextSized(drawList, 12.0f, ImVec2(bp.x + 10.0f, bp.y), chrome::kMuted, "PROJECT");
-			chrome::TextSized(drawList, 17.0f, ImVec2(bp.x + 10.0f, bp.y + 14.0f), chrome::kText, project->name.c_str());
-			ImGui::Dummy(ImVec2(0.0f, 34.0f));
-			ImGui::TextDisabled("%s", DisplayPath(project->root).c_str());
-			chrome::AccentHairline(drawList, ImGui::GetCursorScreenPos(), bandW, 0.30f);
-			ImGui::Dummy(ImVec2(0.0f, 4.0f));
-		}
+		// ── Header ────────────────────────────────────────────────────────────────
+		const std::string sceneStat = std::to_string(m_scenes.size()) + (m_scenes.size() == 1 ? " scene" : " scenes");
+		chrome::PanelHeader("PROJECT", sceneStat.c_str());
+		ImGui::TextUnformatted(project->name.c_str());
+		MutedWrapped(DisplayPath(project->root));
+		ImGui::Dummy(ImVec2(0.0f, 2.0f));
 
-		if (auto* actions = context.TryGet<EditorProjectActions>())
+		// ── Toolbar (reflows on narrow panels) ──────────────────────────────────────
 		{
-			if (actions->openLauncher && chrome::GhostButton(ICON_FA_CUBE " Launcher"))
+			ButtonRow toolbar;
+			if (actions != nullptr && actions->openLauncher)
 			{
-				actions->openLauncher();
+				const char* label = ICON_FA_CUBE " Launcher";
+				toolbar.Item(label);
+				if (chrome::GhostButton(label))
+				{
+					actions->openLauncher();
+				}
 			}
-			ImGui::SameLine();
-			if (actions->reloadProject && chrome::GhostButton(ICON_FA_ROTATE " Reload"))
+			if (actions != nullptr && actions->reloadProject)
 			{
-				actions->reloadProject();
-				Refresh(*project);
+				const char* label = ICON_FA_ROTATE " Reload";
+				toolbar.Item(label);
+				if (chrome::GhostButton(label))
+				{
+					actions->reloadProject();
+					Refresh(*project);
+				}
 			}
+			{
+				const char* label = ICON_FA_FOLDER_OPEN " Open Root";
+				toolbar.Item(label);
+				if (chrome::GhostButton(label))
+				{
+					OpenFolderInShell(project->root);
+				}
+			}
+			{
+				const char* label = ICON_FA_FOLDER_OPEN " Repair Folders";
+				toolbar.Item(label);
+				if (chrome::GhostButton(label))
+				{
+					EnsureStandardFolders(*project);
+				}
+			}
+		}
+		MutedWrapped(m_status);
+
+		// ── Scripting ───────────────────────────────────────────────────────────────
+		if (actions != nullptr)
+		{
 			const auto& visualStudios = actions->visualStudioInstallations;
 			const auto selected = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
 			if (selected == visualStudios.end() && !visualStudios.empty())
@@ -526,12 +623,14 @@ namespace aether::editor
 				const auto compatible = std::ranges::find_if(visualStudios, [](const VisualStudioInstallation& installation) { return installation.supportsDotNet10 && installation.hasDebuggerAutomation; });
 				m_visualStudioInstall = (compatible != visualStudios.end() ? compatible : visualStudios.begin())->installPath;
 			}
-
-			ImGui::TextDisabled("C# debugger");
-			ImGui::SameLine();
 			const auto current = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
+
+			ImGui::SeparatorText("Scripting");
+			iw::LabelColumn("C# Debugger");
+			const char* debugLabel = ICON_FA_BUG " Debug C#";
+			const float debugWidth = ImGui::CalcTextSize(debugLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+			ImGui::SetNextItemWidth(-(debugWidth + ImGui::GetStyle().ItemSpacing.x));
 			const char* preview = current != visualStudios.end() ? current->displayName.c_str() : "No Visual Studio IDE found";
-			ImGui::SetNextItemWidth(360.0f);
 			if (ImGui::BeginCombo("##scriptDebugger", preview))
 			{
 				for (const VisualStudioInstallation& installation: visualStudios)
@@ -552,36 +651,22 @@ namespace aether::editor
 			ImGui::SameLine();
 			const bool canDebugScripts = actions->debugScripts && current != visualStudios.end() && current->supportsDotNet10 && current->hasDebuggerAutomation;
 			ImGui::BeginDisabled(!canDebugScripts);
-			if (chrome::PrimaryButton(ICON_FA_BUG " Debug C#"))
+			if (chrome::PrimaryButton(debugLabel))
 			{
 				const EditorProjectActionResult result = actions->debugScripts(m_visualStudioInstall);
 				m_status = result.message;
 			}
 			ImGui::EndDisabled();
 		}
-		ImGui::SameLine();
-		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Root"))
-		{
-			OpenFolderInShell(project->root);
-		}
-		ImGui::SameLine();
-		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Repair Folders"))
-		{
-			EnsureStandardFolders(*project);
-		}
 
-		if (!m_status.empty())
-		{
-			ImGui::TextDisabled("%s", m_status.c_str());
-		}
-
+		// ── Folders ──────────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Folders");
 		if (ImGui::BeginTable("##projectFolders", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
 		{
 			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 82.0f);
 			ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 64.0f);
 			ImGui::TableSetupColumn("Path");
-			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 32.0f);
+			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 4.0f);
 			DrawFolderRow("Assets", project->assetsDir);
 			DrawFolderRow("Models", project->assetsDir / "models");
 			DrawFolderRow("Materials", project->assetsDir / "materials");
@@ -594,6 +679,7 @@ namespace aether::editor
 			ImGui::EndTable();
 		}
 
+		// ── Startup scene ────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Startup Scene");
 		if (m_scenes.empty())
 		{
@@ -604,27 +690,38 @@ namespace aether::editor
 			DrawSceneTable();
 		}
 
-		const bool hasStartup = !m_startupScene.empty();
-		ImGui::BeginDisabled(!hasStartup);
-		if (chrome::GhostButton(ICON_FA_XMARK " Clear Startup"))
 		{
-			m_startupScene.clear();
-			m_dirtySettings = true;
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		ImGui::BeginDisabled(!m_dirtySettings);
-		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Project Settings"))
-		{
-			SaveProjectSettings(*project);
-		}
-		ImGui::EndDisabled();
+			ButtonRow row;
+			const char* clearLabel = ICON_FA_XMARK " Clear Startup";
+			row.Item(clearLabel);
+			ImGui::BeginDisabled(m_startupScene.empty());
+			if (chrome::GhostButton(clearLabel))
+			{
+				m_startupScene.clear();
+				m_dirtySettings = true;
+			}
+			ImGui::EndDisabled();
 
-		ImGui::SeparatorText("Packaging");
-		if (auto* actions = context.TryGet<EditorProjectActions>())
+			const char* saveLabel = ICON_FA_FLOPPY_DISK " Save Project Settings";
+			row.Item(saveLabel);
+			ImGui::BeginDisabled(!m_dirtySettings);
+			if (chrome::OutlineButton(saveLabel))
+			{
+				SaveProjectSettings(*project);
+			}
+			ImGui::EndDisabled();
+		}
+
+		// ── Build & publish ──────────────────────────────────────────────────────────
+		ImGui::SeparatorText("Build & Publish");
+		if (actions != nullptr)
 		{
+			ButtonRow row;
+
+			const char* packLabel = ICON_FA_BOX_OPEN " Pack Project";
+			row.Item(packLabel);
 			ImGui::BeginDisabled(!actions->packProject);
-			if (chrome::GhostButton(ICON_FA_BOX_OPEN " Pack Project"))
+			if (chrome::GhostButton(packLabel))
 			{
 				if (m_dirtySettings)
 				{
@@ -636,29 +733,47 @@ namespace aether::editor
 				m_lastPackPath = result.outputPath;
 			}
 			ImGui::EndDisabled();
-			ImGui::SameLine();
+
 			if (actions->rebuildEnginePak)
 			{
-				if (chrome::GhostButton(ICON_FA_GEAR " Rebuild Engine Pak"))
+				const char* label = ICON_FA_GEAR " Rebuild Engine Pak";
+				row.Item(label);
+				if (chrome::GhostButton(label))
 				{
 					const EditorProjectActionResult result = actions->rebuildEnginePak();
 					m_packSucceeded = result.succeeded;
 					m_packStatus = result.message;
 				}
-				ImGui::SameLine();
 			}
+
 			if (actions->recompileShaders)
 			{
-				if (ImGui::Button(ICON_FA_BOLT "  Recompile Shaders"))
+				const char* label = ICON_FA_BOLT " Recompile Shaders";
+				row.Item(label);
+				if (chrome::GhostButton(label))
 				{
 					const EditorProjectActionResult result = actions->recompileShaders();
 					m_shaderSucceeded = result.succeeded;
 					m_shaderStatus = result.message;
 				}
-				ImGui::SameLine();
 			}
+
+			if (!m_lastPackPath.empty())
+			{
+				const char* label = ICON_FA_FOLDER_OPEN " Output";
+				row.Item(label);
+				ImGui::BeginDisabled(!FolderExists(m_lastPackPath.parent_path()));
+				if (chrome::GhostButton(label))
+				{
+					OpenFolderInShell(m_lastPackPath.parent_path());
+				}
+				ImGui::EndDisabled();
+			}
+
+			const char* publishLabel = ICON_FA_ROCKET " Publish...";
+			row.Item(publishLabel);
 			ImGui::BeginDisabled(!actions->publishProject);
-			if (ImGui::Button(ICON_FA_ROCKET "  Publish..."))
+			if (chrome::PrimaryButton(publishLabel))
 			{
 				ResetPublishSettings(*project);
 				LoadPublishSettings(*project);
@@ -668,44 +783,28 @@ namespace aether::editor
 			}
 			ImGui::EndDisabled();
 		}
+
 		DrawPublishDialog(context, *project);
+
 		if (!m_lastPackPath.empty())
 		{
-			ImGui::SameLine();
-			ImGui::BeginDisabled(!FolderExists(m_lastPackPath.parent_path()));
-			if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Output"))
-			{
-				OpenFolderInShell(m_lastPackPath.parent_path());
-			}
-			ImGui::EndDisabled();
-			ImGui::TextDisabled("%s", DisplayPath(m_lastPackPath).c_str());
-			ImGui::TextDisabled("%s", FileSummary(m_lastPackPath).c_str());
+			MutedWrapped(DisplayPath(m_lastPackPath));
+			MutedWrapped(FileSummary(m_lastPackPath));
 		}
-		if (!m_packStatus.empty())
-		{
-			const ImVec4 color = m_packSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
-			ImGui::TextColored(color, "%s", m_packStatus.c_str());
-		}
-		if (!m_shaderStatus.empty())
-		{
-			const ImVec4 color = m_shaderSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
-			ImGui::TextColored(color, "%s", m_shaderStatus.c_str());
-		}
+		StatusText(m_packStatus, m_packSucceeded);
+		StatusText(m_shaderStatus, m_shaderSucceeded);
+
 		if (!m_lastPublishPath.empty())
 		{
 			ImGui::BeginDisabled(!FolderExists(m_lastPublishPath));
-			if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Published Build"))
+			if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Published Build"))
 			{
 				OpenFolderInShell(m_lastPublishPath);
 			}
 			ImGui::EndDisabled();
-			ImGui::TextDisabled("%s", DisplayPath(m_lastPublishPath).c_str());
+			MutedWrapped(DisplayPath(m_lastPublishPath));
 		}
-		if (!m_publishStatus.empty())
-		{
-			const ImVec4 color = m_publishSucceeded ? ImVec4(0.55f, 0.85f, 0.62f, 1.0f) : ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
-			ImGui::TextColored(color, "%s", m_publishStatus.c_str());
-		}
+		StatusText(m_publishStatus, m_publishSucceeded);
 
 		ImGui::End();
 	}

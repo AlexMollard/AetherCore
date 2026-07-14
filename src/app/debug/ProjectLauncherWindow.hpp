@@ -28,6 +28,7 @@ namespace aether::app
 		std::array<char, 260> openPath{};
 		std::array<char, 260> newPath{};
 		std::array<char, 96> newName{};
+		bool launching = false;
 		std::string error;
 	};
 

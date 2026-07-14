@@ -153,6 +153,43 @@ namespace aether::app
 		m_services = nullptr;
 	}
 
+	void LauncherLayer::OnUpdate(LayerContext& context)
+	{
+		if (!m_pendingEditor.has_value())
+		{
+			return;
+		}
+
+		switch (m_pendingEditor->Poll())
+		{
+			case launcher::EditorStartupState::Ready:
+				AE_INFO(LogCategory::App, "Editor confirmed healthy; closing Launcher.");
+				if (auto* window = context.services.TryGet<Window>())
+				{
+					window->RequestClose();
+				}
+				return;
+			case launcher::EditorStartupState::Exited:
+				m_pendingEditor.reset();
+				m_editorStartupSeconds = 0.0;
+				m_windowState.launching = false;
+				m_windowState.error = "Editor exited while starting. The launcher is still open.";
+				return;
+			case launcher::EditorStartupState::Pending:
+				break;
+		}
+
+		m_editorStartupSeconds += context.deltaTimeSeconds;
+		if (m_editorStartupSeconds >= 20.0)
+		{
+			m_pendingEditor.reset();
+			m_editorStartupSeconds = 0.0;
+			m_windowState.launching = false;
+			m_windowState.error = "Editor is taking longer than expected to start. The launcher is still open.";
+			AE_WARN(LogCategory::App, "Editor did not confirm healthy startup within 20 seconds; keeping Launcher open.");
+		}
+	}
+
 	void LauncherLayer::LoadPreview(const EditorProjectContext& project)
 	{
 		if (m_services == nullptr)
@@ -296,10 +333,24 @@ namespace aether::app
 
 	void LauncherLayer::SpawnEditorFor(const std::filesystem::path& root)
 	{
+		if (m_pendingEditor.has_value())
+		{
+			return;
+		}
 		// Hand each spawned editor a distinct control port (base + N) so several open
 		// editors never fight over one port; 0 when forwarding is disabled.
 		const int controlPort = m_controlBasePort > 0 ? m_controlBasePort + m_spawnCount++ : 0;
-		launcher::SpawnEditor(root, controlPort);
+		if (auto editor = launcher::SpawnEditor(root, controlPort))
+		{
+			m_pendingEditor = std::move(*editor);
+			m_editorStartupSeconds = 0.0;
+			m_windowState.launching = true;
+			m_windowState.error.clear();
+		}
+		else
+		{
+			m_windowState.error = "Could not start the editor. Check the log for details.";
+		}
 	}
 
 	void LauncherLayer::RememberRecent(const std::filesystem::path& root)

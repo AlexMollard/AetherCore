@@ -2,12 +2,14 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include "layers/AppLayer.hpp"
+#include "launcher/LauncherProcess.hpp"
 #include "debug/ProjectLauncherWindow.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "material/Texture.hpp"
@@ -31,6 +33,7 @@ namespace aether::app
 	public:
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
+		void OnUpdate(LayerContext& context) override;
 		void OnImGui(LayerContext& context) override;
 
 	private:
@@ -78,5 +81,7 @@ namespace aether::app
 		// disabled). Editor N gets base + N so multiple open editors never collide.
 		int m_controlBasePort = 0;
 		int m_spawnCount = 0;
+		std::optional<launcher::EditorLaunch> m_pendingEditor;
+		double m_editorStartupSeconds = 0.0;
 	};
 } // namespace aether::app

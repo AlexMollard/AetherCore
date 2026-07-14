@@ -44,12 +44,21 @@ int main(int argc, char** argv)
 	// AETHER_PROJECT_DIR - the shared env var the editor boot and the FileSystem project
 	// mount already read - so nothing has to thread through the engine config.
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
+	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
 	if (!project.empty())
 	{
 #ifdef _WIN32
 		_putenv_s("AETHER_PROJECT_DIR", project.c_str());
 #else
 		setenv("AETHER_PROJECT_DIR", project.c_str(), 1);
+#endif
+	}
+	if (!readyEvent.empty())
+	{
+#ifdef _WIN32
+		_putenv_s("AETHER_EDITOR_READY_EVENT", readyEvent.c_str());
+#else
+		setenv("AETHER_EDITOR_READY_EVENT", readyEvent.c_str(), 1);
 #endif
 	}
 #ifdef AETHERCORE_EDITOR_APP

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -57,9 +56,9 @@ namespace aether::editor
 		std::filesystem::path m_lastPublishPath;
 		std::string m_publishStatus;
 		bool m_publishSucceeded = false;
-		std::array<char, 128> m_publishProductName{};
-		std::array<char, 64> m_publishPlatformName{};
-		std::array<char, 260> m_publishOutputRoot{};
+		std::string m_publishProductName;
+		std::string m_publishPlatformName;
+		std::string m_publishOutputRoot;
 		bool m_publishCleanOutput = true;
 		bool m_publishBuildScripts = true;
 		bool m_publishUsePackageTemplate = true;

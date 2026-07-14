@@ -11,6 +11,7 @@
 
 #include <glm/glm.hpp>
 #include <imgui.h>
+#include <misc/cpp/imgui_stdlib.h>
 
 #include "Color.hpp"
 
@@ -306,6 +307,17 @@ namespace aether::editor::iw
 		ImGui::PushID(label);
 		PropLabel(label);
 		const bool changed = hint != nullptr ? ImGui::InputTextWithHint("##txt", hint, buf, size) : ImGui::InputText("##txt", buf, size);
+		ImGui::PopID();
+		return changed;
+	}
+
+	// std::string-backed sibling: binds straight to the field (auto-resizing) so
+	// callers don't juggle fixed char buffers. Same full-width, label-column layout.
+	inline bool PropInputText(const char* label, std::string& str, const char* hint = nullptr)
+	{
+		ImGui::PushID(label);
+		PropLabel(label);
+		const bool changed = hint != nullptr ? ImGui::InputTextWithHint("##txt", hint, &str) : ImGui::InputText("##txt", &str);
 		ImGui::PopID();
 		return changed;
 	}

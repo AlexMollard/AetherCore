@@ -4,6 +4,13 @@
 #include <cstdlib>
 #include <filesystem>
 
+#ifdef _WIN32
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	include <Windows.h>
+#endif
+
 #include "animation/AnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
 // Dear ImGui is used by every tooling front end (editor AND launcher) but never by
@@ -44,6 +51,27 @@ namespace aether::app
 {
 	namespace
 	{
+		void SignalEditorReady()
+		{
+#ifdef _WIN32
+			const char* eventName = std::getenv("AETHER_EDITOR_READY_EVENT");
+			if (eventName == nullptr || *eventName == '\0')
+			{
+				return;
+			}
+			if (const HANDLE eventHandle = OpenEventA(EVENT_MODIFY_STATE, FALSE, eventName))
+			{
+				SetEvent(eventHandle);
+				CloseHandle(eventHandle);
+				AE_INFO(LogCategory::App, "Editor startup readiness confirmed to Launcher.");
+			}
+			else
+			{
+				AE_WARN(LogCategory::App, "Could not signal Editor startup readiness (GetLastError={}).", GetLastError());
+			}
+#endif
+		}
+
 #ifdef AETHERCORE_EDITOR_APP
 		// Editor boot window size: the project launcher always opens at a fixed
 		// 1920x1080; a project reopened at boot (open_last) uses the user's last
@@ -331,6 +359,7 @@ namespace aether::app
 		// file values actually take effect; VSync/resolution were already applied
 		// during device/window setup and no-op here.
 		m_settingsService.ApplyAll();
+		SignalEditorReady();
 
 		// Hand control to the engine-owned frame loop. This Application supplies
 		// per-frame game logic, UI, and target invalidation through EngineClient

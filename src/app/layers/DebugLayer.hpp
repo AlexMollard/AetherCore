@@ -55,7 +55,8 @@ namespace aether::editor
 		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
 		// by SceneSubsystem), falling back to the Scene Outliner's Save-As popup
 		// when there isn't one yet (or the quick-save failed).
-		void SaveCurrentScene(app::LayerContext& context);
+		bool SaveCurrentScene(app::LayerContext& context);
+		void SaveAndReturnToLauncher(app::LayerContext& context);
 
 		// Transient confirmation toast (e.g. Ctrl+S save feedback): a fading pill in
 		// the editor chrome, so an action that otherwise only writes a log line still

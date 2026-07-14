@@ -29,7 +29,7 @@ struct SkelHeaderDisk
 	uint32_t boneCount = 0;
 	uint16_t nameLen = 0;
 	uint64_t skeletonHash = 0; // XXH3-64 on sorted bone payload
-	// Total: 4+4+4+2+8 = 22 bytes
+	                           // Total: 4+4+4+2+8 = 22 bytes
 };
 
 struct BoneEntryHeaderDisk
@@ -68,7 +68,7 @@ struct SubMeshHeaderDisk
 	uint32_t firstIndex;    // index into the merged index buffer
 	uint32_t indexCount;    // number of indices in this submesh
 	uint32_t materialIndex; // index into the material paths array
-	// Total: 12 bytes
+	                        // Total: 12 bytes
 };
 
 // Disk vertex - 96 bytes, aligned to 16/32-byte cache lines.
@@ -86,7 +86,7 @@ struct DiskMeshVertex
 	uint8_t _pad[4];          // 4 bytes - explicit alignment padding
 	uint32_t jointIndices[4]; // 16 bytes - 0xFFFFFFFF = unused slot
 	float jointWeights[4];    // 16 bytes
-	// Total: 12+12+16+8+4+8+4+16+16 = 96 bytes
+	                          // Total: 12+12+16+8+4+8+4+16+16 = 96 bytes
 };
 
 static_assert(sizeof(DiskMeshVertex) == 96);
@@ -122,8 +122,8 @@ struct AnimHeaderDisk
 	uint32_t channelCount = 0;
 	uint16_t nameLen = 0;
 	uint16_t flags = 0; // v2+: bit 0 = HasBoneNames
-	// v1 layout: 4+4+4+2 = 14 bytes (no flags field)
-	// v2 layout: 4+4+4+2+2 = 16 bytes
+	                    // v1 layout: 4+4+4+2 = 14 bytes (no flags field)
+	                    // v2 layout: 4+4+4+2+2 = 16 bytes
 };
 
 struct ChannelHeaderDisk
@@ -150,7 +150,7 @@ struct AnimSetHeaderDisk
 	uint32_t animCount = 0;
 	uint64_t skeletonHash = 0; // XXH3-64 from .skel
 	uint32_t _pad = 0;         // explicit padding to 24
-	// Total: 4+4+4+8+4 = 24 bytes
+	                           // Total: 4+4+4+8+4 = 24 bytes
 };
 
 // ============================================================================
@@ -183,7 +183,7 @@ struct MaterialHeaderDisk
 	uint8_t alphaMask = 0;                   // 1 byte
 	uint8_t texturePathCount = 0;            // 1 byte
 	uint8_t _pad[12] = {0};                  // 12 bytes → 64 total
-	// Total: 4+4+16+4+4+12+4+1+1+1+1+12 = 64 bytes
+	                                         // Total: 4+4+16+4+4+12+4+1+1+1+1+12 = 64 bytes
 };
 
 // Trailing sections after MaterialHeaderDisk (not reflected in MATL_VERSION,

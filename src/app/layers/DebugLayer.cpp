@@ -10,6 +10,13 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef _WIN32
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	include <Windows.h>
+#endif
+
 using namespace std::string_view_literals;
 
 #include <ImGuizmo.h>
@@ -65,6 +72,36 @@ namespace aether::editor
 {
 	namespace
 	{
+#ifndef AETHER_LAUNCHER_EXE_NAME
+#	define AETHER_LAUNCHER_EXE_NAME "Launcher.exe"
+#endif
+#ifndef AETHER_LAUNCHER_EXE_PATH
+#	define AETHER_LAUNCHER_EXE_PATH ""
+#endif
+
+		bool SpawnStandaloneLauncher()
+		{
+#ifdef _WIN32
+			const std::filesystem::path launcherExe = io::PlatformPaths::ResolveToolExecutable("AETHER_LAUNCHER_EXE", AETHER_LAUNCHER_EXE_PATH, AETHER_LAUNCHER_EXE_NAME);
+			std::string command = "\"" + launcherExe.string() + "\"";
+			STARTUPINFOA startupInfo{};
+			startupInfo.cb = sizeof(startupInfo);
+			PROCESS_INFORMATION processInfo{};
+			const std::string workingDirectory = launcherExe.parent_path().string();
+			if (!CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDirectory.empty() ? nullptr : workingDirectory.c_str(), &startupInfo, &processInfo))
+			{
+				AE_ERROR(LogCategory::App, "Editor failed to start Launcher (GetLastError={})", GetLastError());
+				return false;
+			}
+			CloseHandle(processInfo.hThread);
+			CloseHandle(processInfo.hProcess);
+			return true;
+#else
+			AE_ERROR(LogCategory::App, "Starting the standalone Launcher is only implemented on Windows.");
+			return false;
+#endif
+		}
+
 		// 12 wireframe edges of a local AABB under an arbitrary affine transform
 		// (AddDebugBox's quat form cannot represent non-uniform scale or shear).
 		void AppendObbEdges(std::vector<DebugVertex>& out, const glm::mat4& m, const glm::vec3& mn, const glm::vec3& mx, const glm::vec4& color)
@@ -769,7 +806,7 @@ namespace aether::editor
 		return nullptr;
 	}
 
-	void DebugLayer::SaveCurrentScene(app::LayerContext& context)
+	bool DebugLayer::SaveCurrentScene(app::LayerContext& context)
 	{
 		auto* scenes = context.TryGet<SceneSubsystem>();
 		const std::string currentName = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
@@ -796,6 +833,25 @@ namespace aether::editor
 			// No scene name yet (or the quick-save failed) - fall back to the
 			// named Save-As prompt instead of silently doing nothing.
 			m_hierarchyPanel->RequestSaveAsPopup();
+		}
+		return saved;
+	}
+
+	void DebugLayer::SaveAndReturnToLauncher(app::LayerContext& context)
+	{
+		if (!SaveCurrentScene(context))
+		{
+			ShowToast(ICON_FA_CIRCLE_INFO "  Save the scene before returning to the launcher.", true);
+			return;
+		}
+		if (!SpawnStandaloneLauncher())
+		{
+			ShowToast(ICON_FA_CIRCLE_INFO "  Could not open the project launcher.", true);
+			return;
+		}
+		if (auto* window = context.services.TryGet<Window>())
+		{
+			window->RequestClose();
 		}
 	}
 
@@ -1019,9 +1075,9 @@ namespace aether::editor
 			}
 			if (ImGui::BeginMenu("File"))
 			{
-				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Project Launcher..."))
+				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher..."))
 				{
-					m_projects.OpenLauncher();
+					SaveAndReturnToLauncher(context);
 				}
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_PLUS "  New Scene"))

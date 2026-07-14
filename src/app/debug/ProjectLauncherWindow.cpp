@@ -285,15 +285,12 @@ namespace aether::app
 		// Accent underline + subtitle.
 		drawList->AddRectFilled(Add(wordmarkPos, ImVec2(2.0f, wordmarkSize + 10.0f)), Add(wordmarkPos, ImVec2(58.0f, wordmarkSize + 13.0f)), ToU32(kAccent));
 		TextSized(drawList, 14.5f, Add(wordmarkPos, ImVec2(2.0f, wordmarkSize + 24.0f)), kMuted, "Select a project to begin.");
-
-		if (model.projectLoaded)
+		if (state.launching)
 		{
-			ImGui::SetCursorScreenPos(ImVec2(contentMax.x - 150.0f, contentMin.y + 4.0f));
-			if (GhostButton(ICON_FA_XMARK "  Back to Editor", ImVec2(150.0f, 32.0f)) && actions.closeLauncher)
-			{
-				actions.closeLauncher();
-			}
+			TextSized(drawList, 14.5f, Add(wordmarkPos, ImVec2(2.0f, wordmarkSize + 46.0f)), kAccentHi, "Starting editor…");
 		}
+
+		ImGui::BeginDisabled(state.launching);
 
 		// ── Layout rects ────────────────────────────────────────────────────────
 		const float columnsTop = contentMin.y + wordmarkSize + 62.0f;
@@ -494,6 +491,7 @@ namespace aether::app
 
 		// ── Footer ──────────────────────────────────────────────────────────────
 		TextSized(drawList, 13.0f, ImVec2(contentMin.x, contentMax.y - 16.0f), kFaint, "AetherCore Editor");
+		ImGui::EndDisabled();
 
 		ImGui::End();
 	}

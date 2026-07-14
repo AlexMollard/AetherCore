@@ -32,6 +32,8 @@ namespace aether
 
 		[[nodiscard]] GLFWwindow* GetHandle() const;
 		[[nodiscard]] bool ShouldClose() const;
+		// Requests a clean application-loop exit on the next close check. Main thread only.
+		void RequestClose();
 		static void PollEvents();
 
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
