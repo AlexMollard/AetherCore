@@ -46,7 +46,7 @@ namespace aether
 
 	std::uint32_t EffectParamBuffer::AllocateSlot()
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_slotAllocator.Allocate();
 	}
 
@@ -56,13 +56,13 @@ namespace aether
 		{
 			return;
 		}
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_slotAllocator.Free(slot);
 	}
 
 	void EffectParamBuffer::AdvanceFrame(std::uint64_t frameIndex)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_slotAllocator.AdvanceFrame(frameIndex);
 	}
 

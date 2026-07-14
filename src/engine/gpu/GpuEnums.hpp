@@ -5,21 +5,8 @@
 
 #include "gpu/GpuFormat.hpp"
 
-// -------------------------------------------------------------------------
-// GpuEnums - Vulkan-free engine-facing RHI enums
-// -------------------------------------------------------------------------
-// Engine-facing RHI enums for pipeline stages, access flags, shader stages,
-// descriptor types, image layouts, and related types. Each enum lives in
-// namespace aether::gpu and is mapped to its Vk* equivalent in
-// vulkan/GpuEnumConversions.cpp via ToVk() / FromVk().
-
 namespace aether::gpu
 {
-	// ---------------------------------------------------------------------
-	// GENERIC BITWISE OPERATORS
-	// ---------------------------------------------------------------------
-	// Automatically handles 32-bit and 64-bit enums safely without manual casts.
-	// (Requires C++17 for std::is_enum_v.)
 
 	template<typename Enum>
 	constexpr Enum operator|(Enum lhs, Enum rhs) noexcept
@@ -61,19 +48,12 @@ namespace aether::gpu
 		return static_cast<Enum>(~static_cast<Underlying>(rhs));
 	}
 
-	// ---------------------------------------------------------------------
-	// ENUMS & STRUCTS
-	// ---------------------------------------------------------------------
-
 	enum class IndexType : std::uint32_t
 	{
 		U16 = 0,
 		U32 = 1,
 	};
 
-	// Pipeline stage bits for memory barriers.
-	// Mapped to VkPipelineStageFlags2 in the backend. Enumerates the
-	// subset of VkPipelineStageFlagBits2 the engine actually uses.
 	enum class PipelineStage : std::uint64_t
 	{
 		None = 0,
@@ -87,9 +67,6 @@ namespace aether::gpu
 		Transfer = 1ull << 12,
 	};
 
-	// Memory access bits for barriers.
-	// Mapped to VkAccessFlags2 in the backend. Enumerates the
-	// subset of VkAccessFlagBits2 the engine actually uses.
 	enum class AccessFlags : std::uint64_t
 	{
 		None = 0,
@@ -105,7 +82,6 @@ namespace aether::gpu
 		ShaderStorageWrite = 1ull << 34,
 	};
 
-	// Depth / stencil compare operations. Mapped to VkCompareOp.
 	enum class CompareOp : std::uint32_t
 	{
 		Never = 0,
@@ -118,8 +94,6 @@ namespace aether::gpu
 		Always = 7,
 	};
 
-	// Load operation for color / depth attachments.
-	// Mirrors VkAttachmentLoadOp.
 	enum class LoadOp : std::uint32_t
 	{
 		Load = 0,
@@ -127,15 +101,12 @@ namespace aether::gpu
 		DontCare = 2,
 	};
 
-	// Store operation for color / depth attachments.
-	// Mirrors VkAttachmentStoreOp.
 	enum class StoreOp : std::uint32_t
 	{
 		Store = 0,
 		DontCare = 1,
 	};
 
-	// Buffer usage flags. Mirrors VkBufferUsageFlagBits. Bitwise-OR-able.
 	enum class BufferUsage : std::uint32_t
 	{
 		None = 0,
@@ -149,13 +120,9 @@ namespace aether::gpu
 		Vertex = 1u << 7,
 		Indirect = 1u << 8,
 		ShaderDeviceAddress = 1u << 17,
-		// VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT (0x10000000). Heap backing
-		// buffer for VK_EXT_descriptor_heap - host-visible, persistently mapped,
-		// read by the GPU via BDA when bound as a resource/sampler heap.
 		DescriptorHeap = 1u << 28,
 	};
 
-	// Image usage flags. Mirrors VkImageUsageFlags. Bitwise-OR-able.
 	enum class ImageUsage : std::uint32_t
 	{
 		None = 0,
@@ -166,12 +133,9 @@ namespace aether::gpu
 		ColorAttachment = 1u << 4,
 		DepthStencilAttachment = 1u << 5,
 		// Required for vkCopyMemoryToImage / vkTransitionImageLayout
-		// (Vulkan 1.4 host image copy). Opt-in at the call site that intends
-		// to do a host-side upload via those entry points.
 		HostTransfer = 1u << 6,
 	};
 
-	// Image aspect flags. Mirrors VkImageAspectFlags. Bitwise-OR-able.
 	enum class ImageAspect : std::uint32_t
 	{
 		None = 0,
@@ -181,8 +145,6 @@ namespace aether::gpu
 	};
 
 	// Image layout. Mirrors VkImageLayout. Only the layouts the engine's
-	// barrier solver emits are enumerated; new layouts force a switch-case
-	// compile error in the backend conversion.
 	enum class ImageLayout : std::uint32_t
 	{
 		Undefined = 0,
@@ -194,12 +156,6 @@ namespace aether::gpu
 		TransferDst = 6,
 	};
 
-	// Component swizzle applied at view-creation time. Mirrors
-	// VkComponentSwizzle. Identity preserves the format; Zero returns 0
-	// in that channel; One returns 1; R/G/B/A select a specific source
-	// channel. Used to expand R8_UNORM to RGBA8 in bindless descriptors
-	// (e.g. font SDF atlases). The ToVk() conversion lives in
-	// vulkan/GpuEnumConversions.hpp.
 	enum class ComponentSwizzle : std::uint32_t
 	{
 		Identity = 0,
@@ -211,12 +167,6 @@ namespace aether::gpu
 		A = 6,
 	};
 
-	// Mapped buffer memory usage. Selects the backing memory pool and the
-	// VMA host-access flag pattern. Mirrors a subset of VmaMemoryUsage:
-	//   - GpuToCpu: device-local memory with host access (readback)
-	//   - CpuToGpu: host-visible memory optimized for CPU writes (upload)
-	//   - Auto:     let VMA pick (default for the existing CreateMappedBuffer
-	//               usage: ASSET_UPLOAD with HOST_ACCESS_SEQUENTIAL_WRITE)
 	enum class MappedMemoryUsage : std::uint32_t
 	{
 		Auto = 0,
@@ -224,24 +174,18 @@ namespace aether::gpu
 		GpuToCpu = 2,
 	};
 
-	// Texture filter. Mirrors VkFilter. Only the values BindlessManager's
-	// sampler cache emits are enumerated; new filters force a switch-case
-	// compile error in the backend conversion.
 	enum class Filter : std::uint32_t
 	{
 		Nearest = 0,
 		Linear = 1,
 	};
 
-	// Sampler mipmap mode. Mirrors VkSamplerMipmapMode.
 	enum class SamplerMipmapMode : std::uint32_t
 	{
 		Nearest = 0,
 		Linear = 1,
 	};
 
-	// Sampler address mode (UVW wrap mode). Mirrors VkSamplerAddressMode.
-	// Only the values BindlessManager's sampler cache emits are enumerated.
 	enum class SamplerAddressMode : std::uint32_t
 	{
 		Repeat = 0,
@@ -250,9 +194,7 @@ namespace aether::gpu
 		ClampToBorder = 3,
 	};
 
-	// Clear value for a color or depth/stencil attachment. Mirrors
 	// VkClearValue's union layout. Construct with gpu::ClearColor(r,g,b,a) or
-	// gpu::ClearDepth(depth, stencil) factory helpers.
 	struct ClearValue
 	{
 		float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -278,12 +220,6 @@ namespace aether::gpu
 		return v;
 	}
 
-	// 2D extent (width, height). Mirrors VkExtent2D. Constructible from any
-	// type exposing .width/.height (including VkExtent2D and the legacy
-	// aether::GpuExtent2D typedef). The templated converting constructor
-	// is intentionally non-explicit so engine code can pass
-	// GpuDevice::GetSwapchainExtent() (which returns GpuExtent2D)
-	// directly to functions that take gpu::Extent2D.
 	struct Extent2D
 	{
 		std::uint32_t width = 0;
@@ -303,8 +239,6 @@ namespace aether::gpu
 		}
 	};
 
-	// Primitive topology. Mirrors VkPrimitiveTopology. Only the topologies the
-	// engine's pipeline factory emits are enumerated.
 	enum class PrimitiveTopology : std::uint32_t
 	{
 		PointList = 0,
@@ -312,14 +246,12 @@ namespace aether::gpu
 		TriangleList = 2,
 	};
 
-	// Polygon fill mode. Mirrors VkPolygonMode.
 	enum class PolygonMode : std::uint32_t
 	{
 		Fill = 0,
 		Line = 1,
 	};
 
-	// Triangle cull mode. Mirrors VkCullModeFlagBits.
 	enum class CullMode : std::uint32_t
 	{
 		None = 0,
@@ -328,18 +260,13 @@ namespace aether::gpu
 		FrontAndBack = 3,
 	};
 
-	// Per-vertex input binding description. Mirrors
-	// VkVertexInputBindingDescription. The engine does not expose vertex-input
-	// rate enums in the gpu/ layer; just use 0 for per-vertex, 1 for per-instance
-	// (matching the VK_VERTEX_INPUT_RATE_* values).
 	struct VertexInputBinding
 	{
 		std::uint32_t binding = 0;
 		std::uint32_t stride = 0;
-		std::uint32_t inputRate = 0; // 0=VERTEX, 1=INSTANCE
+		std::uint32_t inputRate = 0;
 	};
 
-	// Per-vertex attribute description. Mirrors VkVertexInputAttributeDescription.
 	struct VertexInputAttribute
 	{
 		std::uint32_t location = 0;
@@ -351,12 +278,9 @@ namespace aether::gpu
 
 namespace aether
 {
-	// Engine-side texture filter.
-	// so engine code can include GpuEnums.hpp without dragging in the
-	// Vulkan backend.
 	enum class TextureFilter
 	{
 		Linear,
 		Nearest,
 	};
-} // namespace aether
+}

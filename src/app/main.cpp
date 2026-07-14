@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <print>
 #include <string>
 
 #include "ProjectCli.hpp"
@@ -34,14 +35,16 @@ namespace
 			aether::CrashHandler::Uninstall();
 			aether::Logger::Shutdown();
 		}
+
+		RuntimeSystemsGuard(const RuntimeSystemsGuard&) = delete;
+		RuntimeSystemsGuard& operator=(const RuntimeSystemsGuard&) = delete;
+		RuntimeSystemsGuard(RuntimeSystemsGuard&&) = delete;
+		RuntimeSystemsGuard& operator=(RuntimeSystemsGuard&&) = delete;
 	};
 } // namespace
 
 int main(int argc, char** argv)
 {
-	// --project <path> (passed by the Launcher when it spawns the editor, or by Visual
-	// Studio for direct F5 debugging) boots straight into that project. Surface it as
-	// AETHER_PROJECT_DIR - the shared env var the editor boot and the FileSystem project
 	// mount already read - so nothing has to thread through the engine config.
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
 	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
@@ -66,7 +69,7 @@ int main(int argc, char** argv)
 	{
 		// The editor is always project-scoped: launch it from the Launcher, or pass
 		// --project directly (Visual Studio F5 does). Refuse a launcher-less editor.
-		std::fprintf(stderr, "Editor requires --project <path>. Launch it from the Launcher.\n");
+		std::println(stderr, "Editor requires --project <path>. Launch it from the Launcher.");
 		return 2;
 	}
 #endif
@@ -75,7 +78,7 @@ int main(int argc, char** argv)
 	// (a 1440p @ 133% display would otherwise render + present at 1080p and upscale).
 	aether::Window::EnableHighDpiAwareness();
 
-	RuntimeSystemsGuard runtimeSystemsGuard;
+	const RuntimeSystemsGuard runtimeSystemsGuard;
 
 	try
 	{
@@ -85,7 +88,7 @@ int main(int argc, char** argv)
 		// on for an editor build - see the vendor + editor gate in
 		// VulkanContext.cpp. GameRuntime leaves this false, so a shipped game
 		// never enables it (and never needs GFSDK_Aftermath_Lib.x64.dll).
-		aether::AetherCore::Config engineConfig{};
+		aether::AetherCore::Config engineConfig{}; // NOLINT(misc-const-correctness): mutated only in the editor build below.
 #ifdef AETHERCORE_EDITOR_APP
 		engineConfig.enableGpuDiagnostics = true;
 #endif
@@ -112,7 +115,7 @@ int main(int argc, char** argv)
 	}
 	catch (const std::exception& exception)
 	{
-		const auto engineError = dynamic_cast<const aether::EngineError*>(&exception);
+		const auto* const engineError = dynamic_cast<const aether::EngineError*>(&exception);
 		const aether::LogCategory category = engineError != nullptr ? engineError->Category() : aether::LogCategory::Std;
 		if (category == aether::LogCategory::Vulkan)
 		{

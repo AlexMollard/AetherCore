@@ -8,10 +8,6 @@
 
 namespace aether::vkutil
 {
-	// RAII wrapper for VkShaderModule. Move-only; destructor calls
-	// vkDestroyShaderModule. Used to guarantee shader modules are freed on
-	// every path (including error/exception) between creation and pipeline
-	// build. Once a VkPipeline is created, the module is no longer needed.
 	class UniqueShaderModule
 	{
 	public:

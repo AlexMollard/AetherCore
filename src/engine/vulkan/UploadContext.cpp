@@ -44,7 +44,7 @@ namespace aether::gpu
 	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry)
 	{
 		AE_PROFILE_ZONE();
-		auto vkDevice = static_cast<VkDevice>(device);
+		auto* vkDevice = static_cast<VkDevice>(device);
 
 		const VkCommandPoolCreateInfo poolInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -78,7 +78,7 @@ namespace aether::gpu
 			return;
 		}
 
-		Impl* impl = static_cast<Impl*>(m_impl);
+		const Impl* impl = static_cast<Impl*>(m_impl);
 		if (impl->device != VK_NULL_HANDLE && impl->commandPool != VK_NULL_HANDLE)
 		{
 			vkDestroyCommandPool(impl->device, impl->commandPool, nullptr);
@@ -96,11 +96,11 @@ namespace aether::gpu
 			return;
 		}
 
-		Impl* impl = static_cast<Impl*>(m_impl);
+		const Impl* impl = static_cast<Impl*>(m_impl);
 		AE_ASSERT(impl->backendRegistry != nullptr, "UploadContext: backendRegistry is null.");
 
-		const auto srcEntry = impl->backendRegistry->Resolve(src);
-		const auto dstEntry = impl->backendRegistry->Resolve(dst);
+		const auto* const srcEntry = impl->backendRegistry->Resolve(src);
+		const auto* const dstEntry = impl->backendRegistry->Resolve(dst);
 		if (srcEntry == nullptr || dstEntry == nullptr)
 		{
 			AE_ERROR(LogCategory::Vulkan, "UploadContext::CopyBuffer: failed to resolve src or dst buffer.");
@@ -128,7 +128,7 @@ namespace aether::gpu
 		{
 			return nullptr;
 		}
-		Impl* impl = static_cast<Impl*>(m_impl);
+		const Impl* impl = static_cast<Impl*>(m_impl);
 		return static_cast<void*>(impl->commandPool);
 	}
 } // namespace aether::gpu

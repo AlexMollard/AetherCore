@@ -30,7 +30,7 @@ namespace aether::editor
 		}
 		if (!m_undo.empty() && m_undo.back().key == entry.key)
 		{
-			return; // nothing changed since the last undo point
+			return;
 		}
 		m_undo.push_back(std::move(entry));
 		if (m_undo.size() > kMaxDepth)
@@ -47,7 +47,6 @@ namespace aether::editor
 		{
 			return false;
 		}
-		// Discard no-op entries (a speculative push with no edit after it).
 		while (!m_undo.empty() && m_undo.back().key == current.key)
 		{
 			m_undo.pop_back();

@@ -7,7 +7,6 @@
 
 namespace
 {
-	// Count the live entities in a world (SwitchScene load/clear assertions).
 	std::size_t LiveEntityCount(aether::World& world)
 	{
 		auto& reg = world.GetRegistry();
@@ -21,17 +20,9 @@ namespace
 		}
 		return count;
 	}
-} // namespace
+}
 
-// Loads the actual committed resources/scenes/default.scene.toml through the real
-// ReadSceneFile path (the headless-safe core NewScene builds on), so the template
-// and this test cannot silently drift.
-//
-// The template is a living, editor-editable file (New Scene -> author -> Save
 // writes straight back over it), so this asserts the essential invariant - a
-// static platform under a dynamic falling cube - by searching for the two
-// physics entities rather than assuming an exact entity count or fixed indices.
-// Extra entities (lights, scripts, etc.) added via the editor must not break it.
 TEST_CASE("default scene template loads: static platform + falling dynamic cube")
 {
 	using aether::PhysicsMotionType;
@@ -57,20 +48,14 @@ TEST_CASE("default scene template loads: static platform + falling dynamic cube"
 		}
 	}
 
-	// Platform: static box, scale matches half-extents (renders == collides).
 	REQUIRE(platform != nullptr);
 	CHECK(platform->scale.x == doctest::Approx(platform->physics->halfExtents.x * 2.0f));
 	CHECK(platform->scale.z == doctest::Approx(platform->physics->halfExtents.z * 2.0f));
 
-	// Cube: dynamic box, dropped above the platform.
 	REQUIRE(cube != nullptr);
 	CHECK(cube->position.y > platform->position.y);
 }
 
-// SwitchScene is the "active project changed" primitive: it replaces the live
-// scene (tearing the previous one down) and only clears the world when there is
-// nothing to load. This is what makes opening a second project drop the first
-// project's scene instead of leaving it running.
 TEST_CASE("SwitchScene loads a scene and tears down the previous world")
 {
 	using namespace aether;
@@ -81,7 +66,6 @@ TEST_CASE("SwitchScene loads a scene and tears down the previous world")
 	const bool loaded = app::scene::SwitchScene("default", world, app::scene::ApplySceneDeps{});
 
 	CHECK(loaded);
-	// The prior scene's entity is gone and the default template populated the world.
 	CHECK(!world.GetRegistry().valid(World::ToEntt(stale)));
 	CHECK(LiveEntityCount(world) > 0);
 }

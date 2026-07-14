@@ -62,8 +62,6 @@
 namespace aether
 {
 
-	// -- Object / broadphase layer definitions ------------------------------------
-
 	namespace Layers
 	{
 		static constexpr JPH::ObjectLayer kNonMoving = 0;
@@ -78,8 +76,6 @@ namespace aether
 		static constexpr JPH::BroadPhaseLayer kMoving{1};
 		static constexpr uint32_t kNumLayers = 2;
 	} // namespace BroadPhaseLayers
-
-	// -- PhysicsSystem internal Jolt interface implementations --------------------
 
 	struct BPLayerInterface final : public JPH::BroadPhaseLayerInterface
 	{
@@ -147,16 +143,14 @@ namespace aether
 				case Layers::kNonMoving:
 					return b == Layers::kMoving;
 				case Layers::kMoving:
-					return true; // Moving collides with everything
+					return true;
 				case Layers::kSensor:
-					return b == Layers::kMoving; // Sensors detect movers only
+					return b == Layers::kMoving;
 				default:
 					return false;
 			}
 		}
 	};
-
-	// -- Helpers -------------------------------------------------------------------
 
 	static JPH::ObjectLayer ToJoltLayer(PhysicsLayer layer)
 	{
@@ -221,9 +215,6 @@ namespace aether
 		return glm::scale(glm::translate(glm::mat4(1.f), pos) * glm::mat4_cast(rot), scale);
 	}
 
-	// -- Shape cache helpers -------------------------------------------------------
-	//
-	// Keys are tagged with the shape type in the top 3 bits so different shapes
 	// with numerically-equal dimension packing never alias in the shared cache.
 
 	static uint64_t BoxKey(glm::vec3 half)
@@ -258,7 +249,7 @@ namespace aether
 	public:
 		JoltRuntime()
 		{
-			std::lock_guard lock(s_mutex);
+			const std::lock_guard lock(s_mutex);
 			if (s_refCount++ == 0)
 			{
 				JPH::RegisterDefaultAllocator();
@@ -269,7 +260,7 @@ namespace aether
 
 		~JoltRuntime()
 		{
-			std::lock_guard lock(s_mutex);
+			const std::lock_guard lock(s_mutex);
 			--s_refCount;
 			if (s_refCount == 0)
 			{
@@ -288,9 +279,6 @@ namespace aether
 	};
 
 	// Buffers contact events off the physics thread (Jolt calls these from several
-	// worker threads at once, hence the mutex) so the game thread can drain them
-	// into CollisionEventsComponents after the step completes. Body user-data is
-	// the owning entity id, set at body creation.
 	class ContactCollector final : public JPH::ContactListener
 	{
 	public:
@@ -347,13 +335,8 @@ namespace aether
 		std::unique_ptr<ContactCollector> contactCollector;
 		std::unordered_map<uint64_t, JPH::ShapeRefC> shapeCache;
 
-		// Shared group filter: joints with collideConnected == false disable the
-		// specific body-index pair here so the two connected bodies stop colliding
-		// (the ragdoll pattern). Bodies only join a group once such a joint needs it.
 		JPH::Ref<JPH::GroupFilterTable> groupFilter;
 
-		// Live joint constraints, keyed by JointComponent::constraintId. Records the
-		// disabled collision pair so it can be re-enabled when the joint goes away.
 		struct LiveConstraint
 		{
 			JPH::Ref<JPH::Constraint> constraint;
@@ -365,12 +348,9 @@ namespace aether
 		std::unordered_map<std::uint32_t, LiveConstraint> constraints;
 		std::uint32_t nextConstraintId = 1;
 
-		// Reused drain scratch so the per-frame event drain allocates nothing.
 		std::vector<ContactCollector::Added> addedScratch;
 		std::vector<ContactCollector::Removed> removedScratch;
 	};
-
-	// -- PhysicsSystem -------------------------------------------------------------
 
 	PhysicsSystem::PhysicsSystem()
 	      : m_impl(std::make_unique<Impl>())
@@ -426,7 +406,7 @@ namespace aether
 			}
 
 			StepPhysics();
-			m_stepDone.release(); // signal completion
+			m_stepDone.release();
 		}
 	}
 
@@ -455,11 +435,9 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_impl->runtime = std::make_unique<JoltRuntime>();
 
-		// 10 MB scratch for per-step allocations; does not persist between steps.
 		m_impl->tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
 
 		// One worker thread per logical CPU minus the calling thread and the
-		// dedicated physics thread (which kicks Jolt jobs but doesn't run them).
 		const int workerThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 2);
 		m_impl->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, workerThreads);
 
@@ -470,7 +448,7 @@ namespace aether
 		m_impl->physics = std::make_unique<JPH::PhysicsSystem>();
 		m_impl->physics->Init(
 		        /*maxBodies*/ 64'536,
-		        /*numBodyMutexes*/ 0, // 0 = auto
+		        /*numBodyMutexes*/ 0,
 		        /*maxBodyPairs*/ 64'536,
 		        /*maxContactConstraints*/ 10'240,
 		        *m_impl->bpLayerInterface,
@@ -479,21 +457,12 @@ namespace aether
 
 		m_impl->physics->SetGravity(JPH::Vec3(0.f, -9.81f, 0.f));
 
-		// Collision/trigger events: the collector buffers contacts during the step
-		// for DrainContactEvents to hand out to CollisionEventsComponents.
 		m_impl->contactCollector = std::make_unique<ContactCollector>();
 		m_impl->physics->SetContactListener(m_impl->contactCollector.get());
 
-		// Group filter for joint collision disabling. Sub-group ids are body
-		// indices, so it is sized for the body budget above.
 		m_impl->groupFilter = new JPH::GroupFilterTable(64'536);
 
-		// Auto-cleanup: when an entity with RigidBodyComponent is destroyed, the
-		// backing physics body is removed and freed so it doesn't leak into the next
-		// scene load. This fires for every destruction path (world.Destroy(),
-		// registry.remove<RigidBodyComponent>(), etc.).
 		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBodyComponent>().connect<&PhysicsSystem::OnRigidBodyDestroyed>(this);
-		// Same for joints: destroying a JointComponent frees its Jolt constraint.
 		m_jointDestroyConn = world.GetRegistry().on_destroy<JointComponent>().connect<&PhysicsSystem::OnJointDestroyed>(this);
 
 		AE_INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, {} worker threads, fixed dt = {:.4f} s, dedicated physics thread)", workerThreads, kFixedTimestep);
@@ -519,23 +488,16 @@ namespace aether
 		m_impl->runtime.reset();
 	}
 
-	// -- Fixed-step update ---------------------------------------------------------
-
 	void PhysicsSystem::Update(World& world, float dt)
 	{
 		AE_PROFILE_ZONE();
 
-		// 1. Wait for the previous frame's async step to complete.
 		WaitForStep();
 
-		// 2. Sync transforms from the completed step.
-		//    One frame of latency - same pipelining pattern as RenderThread.
 		SyncTransforms(world, m_lastAlpha);
 
-		// 2b. Hand the completed step's contact events to gameplay.
 		DrainContactEvents(world);
 
-		// 3. Flush pending bodies then joints (safe: no step is running).
 		FlushPendingBodies(world);
 		FlushPendingJoints(world);
 
@@ -545,8 +507,6 @@ namespace aether
 		int stepsThisFrame = 0;
 		while (m_accumulator >= kFixedTimestep)
 		{
-			// Extra steps (spiral-of-death catch-up): wait for the in-flight
-			// step before saving prev state and kicking the next one.
 			if (m_stepInFlight)
 			{
 				WaitForStep();
@@ -556,22 +516,16 @@ namespace aether
 			m_accumulator -= kFixedTimestep;
 
 			// Kick the step to the physics thread.  The last step in the loop
-			// runs async and overlaps with subsequent game-thread work.
 			m_stepKick.release();
 			m_stepInFlight = true;
 			++stepsThisFrame;
 		}
 
-		// 5. Save alpha for next frame's sync.
 		m_lastAlpha = m_accumulator / kFixedTimestep;
 
 		AE_PROFILE_PLOT("Phys.StepsPerFrame", static_cast<int64_t>(stepsThisFrame));
 		AE_PROFILE_PLOT("Phys.AccumulatorMs", static_cast<int64_t>(m_accumulator * 1000.0f));
 		AE_PROFILE_PLOT("Phys.RigidBodyCount", static_cast<int64_t>(world.View<RigidBodyComponent>().size()));
-
-		// Step is in flight - other systems now run concurrently with the
-		// physics step until WaitForStep() is called (next Update or a physics
-		// API call).
 	}
 
 	void PhysicsSystem::StepPhysics()
@@ -579,31 +533,24 @@ namespace aether
 		AE_PROFILE_ZONE_N("Phys.Step");
 		AE_PROFILE_PLOT("Phys.TotalBodies", static_cast<int64_t>(m_impl->physics->GetNumBodies()));
 		AE_PROFILE_PLOT("Phys.ActiveBodies", static_cast<int64_t>(m_impl->physics->GetNumActiveBodies(JPH::EBodyType::RigidBody)));
-		// collision_steps = 1 is fine for most games at 60 Hz.
 		m_impl->physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
 	}
 
 	void PhysicsSystem::SyncTransforms(World& world, float alpha)
 	{
 		AE_PROFILE_ZONE_N("Phys.SyncTransforms");
-		// WaitForStep() has already run; no step is in flight, NoLock is safe.
-		// Non-const: disabled bodies are deactivated in the loop below.
 		auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
 
 		int64_t synced = 0;
 		for (const auto& [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
 		{
-			(void) transform; // written through ecs::SetWorldTransform below
+			(void) transform;
 			const JPH::BodyID id = ToJolt(rigid.body);
 			if (id.IsInvalid())
 			{
 				continue;
 			}
 
-			// Disabled entities (and their subtree) freeze: deactivate the body so
-			// it stops simulating (won't fall under gravity while disabled) and skip
-			// propagating its transform. Deactivate is idempotent on an already
-			// inactive body. Re-enabling leaves the body asleep until disturbed.
 			if (ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
 			{
 				if (bi.IsActive(id))
@@ -613,35 +560,26 @@ namespace aether
 				continue;
 			}
 
-			// Skip sleeping bodies - prev == curr, no update needed.
 			if (!bi.IsActive(id))
 			{
 				continue;
 			}
 
-			// Read current physics state (single call instead of two).
 			JPH::RVec3 pos;
 			JPH::Quat rot;
 			bi.GetPositionAndRotation(id, pos, rot);
 			state.currPosition = FromJolt(pos);
 			state.currRotation = FromJolt(rot);
 
-			// Interpolate for smooth rendering at any framerate.
 			const glm::vec3 renderPos = glm::mix(state.prevPosition, state.currPosition, alpha);
 			const glm::quat renderRot = glm::slerp(state.prevRotation, state.currRotation, alpha);
 
-			// Delta-propagating write: children ride the body (a physics-driven
-			// parent used to abandon its subtree - a body on a multi-part model
-			// root scattered the mesh parts). Children with their own bodies
-			// re-sync from those bodies in this same loop, so order is moot.
 			ecs::SetWorldTransform(world, World::FromEntt(entity), ToTransform(renderPos, renderRot, state.scale));
 			++synced;
 		}
 
 		AE_PROFILE_PLOT("Phys.SyncedBodies", synced);
 	}
-
-	// -- Body factory --------------------------------------------------------------
 
 	static glm::vec3 ExtractPosition(const TransformComponent& t)
 	{
@@ -650,7 +588,6 @@ namespace aether
 
 	static glm::quat ExtractRotation(const TransformComponent& t)
 	{
-		// Extract upper-left 3x3, normalise out scale, then build quat.
 		glm::mat3 rot(t.localToWorld);
 		rot[0] = glm::normalize(rot[0]);
 		rot[1] = glm::normalize(rot[1]);
@@ -658,8 +595,6 @@ namespace aether
 		return glm::quat_cast(rot);
 	}
 
-	// Fetches (or builds and caches) the Jolt shape for a collider. Returns null
-	// on a shape-build error (already logged).
 	static JPH::ShapeRefC GetOrCreateColliderShape(std::unordered_map<uint64_t, JPH::ShapeRefC>& cache, const ColliderComponent& c)
 	{
 		uint64_t key = 0;
@@ -707,9 +642,6 @@ namespace aether
 		return cache.emplace(key, result.Get()).first->second;
 	}
 
-	// Maps a RigidBodyComponent's body-level tunables onto Jolt's creation
-	// settings (damping, gravity factor, CCD, allowed DOFs, mass override). Built
-	// with operator| only, so it needs no bitwise-not on the EAllowedDOFs enum.
 	static void ApplyRigidBodyTunables(JPH::BodyCreationSettings& bcs, const RigidBodyComponent& rb)
 	{
 		bcs.mLinearDamping = rb.linearDamping;
@@ -754,8 +686,6 @@ namespace aether
 		}
 	}
 
-	// Full world-space scale the collider imposes on the entity transform, so the
-	// mesh and debug wireframe track the collider dimensions.
 	static glm::vec3 ColliderVisualScale(const ColliderComponent& c)
 	{
 		switch (c.shape)
@@ -772,9 +702,6 @@ namespace aether
 		return glm::vec3(1.0f);
 	}
 
-	// Builds the Jolt constraint for a joint between two live bodies (b2 may be
-	// JPH::Body::sFixedToWorld). Settings are authored in world space at the
-	// joint's anchor/axis. Returns a ref-counted constraint (0 refs) or null.
 	static JPH::Constraint* CreateJointConstraint(const JointComponent& j, JPH::Body& b1, JPH::Body& b2)
 	{
 		const JPH::RVec3 anchor(j.anchor.x, j.anchor.y, j.anchor.z);
@@ -786,7 +713,7 @@ namespace aether
 			case JointType::Fixed:
 			{
 				JPH::FixedConstraintSettings s;
-				s.mAutoDetectPoint = true; // derive the weld frame from the current poses
+				s.mAutoDetectPoint = true;
 				return s.Create(b1, b2);
 			}
 			case JointType::Point:
@@ -854,27 +781,22 @@ namespace aether
 
 		AE_PROFILE_PLOT("Phys.Colliders", static_cast<int64_t>(world.View<ColliderComponent>().size()));
 
-		// A collider with no live body yet gets a Jolt body baked from it. Motion
-		// and body-level tunables come from RigidBodyComponent; if the entity has
-		// none (a bare static collider) one is added as the body-handle holder.
 		for (const auto& [enttEntity, collider]: world.View<ColliderComponent>().each())
 		{
 			auto* rb = reg.try_get<RigidBodyComponent>(enttEntity);
 			if (rb != nullptr && rb->body.IsValid())
 			{
-				continue; // already baked
+				continue;
 			}
 
 			JPH::ShapeRefC shape = GetOrCreateColliderShape(m_impl->shapeCache, collider);
 			if (shape == nullptr)
 			{
-				continue; // shape error already logged; leave the collider for editing
+				continue;
 			}
-			// Non-zero collider offset wraps the (cached) base shape in a cheap
-			// translated shape so the collider sits off the entity origin.
 			if (glm::dot(collider.center, collider.center) > 1e-8f)
 			{
-				JPH::RotatedTranslatedShapeSettings offsetSettings{ToJolt(collider.center), JPH::Quat::sIdentity(), shape};
+				const JPH::RotatedTranslatedShapeSettings offsetSettings{ToJolt(collider.center), JPH::Quat::sIdentity(), shape};
 				if (auto offsetResult = offsetSettings.Create(); !offsetResult.HasError())
 				{
 					shape = offsetResult.Get();
@@ -882,7 +804,7 @@ namespace aether
 			}
 
 			const Entity entity{static_cast<uint32_t>(entt::to_integral(enttEntity))};
-			const auto tc = reg.try_get<TransformComponent>(enttEntity);
+			auto* const tc = reg.try_get<TransformComponent>(enttEntity);
 			const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
 			const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
 
@@ -890,7 +812,7 @@ namespace aether
 			const PhysicsLayer layer = collider.isSensor ? PhysicsLayer::Sensor : collider.layer;
 
 			JPH::BodyCreationSettings bcs{shape, JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(motion), ToJoltLayer(layer)};
-			bcs.mUserData = static_cast<JPH::uint64>(entity.id); // entity id for contact/query lookups
+			bcs.mUserData = static_cast<JPH::uint64>(entity.id);
 			bcs.mFriction = collider.friction;
 			bcs.mRestitution = collider.restitution;
 			bcs.mIsSensor = collider.isSensor;
@@ -906,21 +828,16 @@ namespace aether
 				continue;
 			}
 			const JPH::BodyID id = body->GetID();
-			// A body baked while its entity (or an ancestor) is already disabled is
 			// added inactive, so it never simulates a step before SyncTransforms
-			// would deactivate it - matching the disabled-body freeze there.
 			const bool disabled = ecs::HasDisabledAncestor(world, entity);
 			const bool startActive = (rb != nullptr ? rb->startActive : true) && !disabled;
 			bi.AddBody(id, startActive ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
 
-			// Ensure the RigidBodyComponent exists as the body-handle holder.
 			RigidBodyComponent& rbc = rb != nullptr ? *rb : world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Static});
 			rbc.body = FromJolt(id);
 			rbc.motionType = motion;
 
 			const glm::vec3 visualScale = ColliderVisualScale(collider);
-			// GetPosition (body origin), not the centre-of-mass, so an offset
-			// collider shifts the shape without dragging the entity transform.
 			const glm::vec3 wpos = FromJolt(bi.GetPosition(id));
 			const glm::quat wrot = FromJolt(bi.GetRotation(id));
 			reg.emplace_or_replace<PhysicsStateComponent>(enttEntity, wpos, wrot, wpos, wrot, visualScale);
@@ -957,28 +874,26 @@ namespace aether
 		{
 			if (joint.constraintId != 0)
 			{
-				continue; // already created
+				continue;
 			}
 			const auto* rbSelf = reg.try_get<RigidBodyComponent>(enttE);
 			if (rbSelf == nullptr || !rbSelf->body.IsValid())
 			{
-				continue; // this body not baked yet
+				continue;
 			}
 			const JPH::BodyID selfId = ToJolt(rbSelf->body);
 
-			JPH::BodyID otherId; // invalid = attach to the world
+			JPH::BodyID otherId;
 			if (joint.target.IsValid() && reg.valid(World::ToEntt(joint.target)))
 			{
 				const auto* rbOther = reg.try_get<RigidBodyComponent>(World::ToEntt(joint.target));
 				if (rbOther == nullptr || !rbOther->body.IsValid())
 				{
-					continue; // target not baked yet - retry next frame
+					continue;
 				}
 				otherId = ToJolt(rbOther->body);
 			}
 
-			// Puts a body in the shared group filter (sub-group = its index) so a
-			// specific pair can be excluded from collision. Idempotent per body.
 			auto joinGroup = [&](JPH::Body& body)
 			{
 				if (body.GetCollisionGroup().GetGroupFilter() != m_impl->groupFilter.GetPtr())
@@ -991,7 +906,7 @@ namespace aether
 			bool collisionDisabled = false;
 			if (otherId.IsInvalid())
 			{
-				JPH::BodyLockWrite lock(bli, selfId);
+				const JPH::BodyLockWrite lock(bli, selfId);
 				if (lock.Succeeded())
 				{
 					created = CreateJointConstraint(joint, lock.GetBody(), JPH::Body::sFixedToWorld);
@@ -1000,14 +915,12 @@ namespace aether
 			else
 			{
 				const JPH::BodyID ids[2] = {selfId, otherId};
-				JPH::BodyLockMultiWrite locks(bli, ids, 2);
+				const JPH::BodyLockMultiWrite locks(bli, ids, 2);
 				JPH::Body* b1 = locks.GetBody(0);
 				JPH::Body* b2 = locks.GetBody(1);
 				if (b1 != nullptr && b2 != nullptr)
 				{
 					created = CreateJointConstraint(joint, *b1, *b2);
-					// Disable collision between the two connected bodies unless asked
-					// to keep it - both join the shared group and the pair is excluded.
 					if (created != nullptr && !joint.collideConnected)
 					{
 						joinGroup(*b1);
@@ -1044,7 +957,6 @@ namespace aether
 		}
 
 		auto& reg = world.GetRegistry();
-		// Clear the per-frame enter/exit lists on every listener (keep overlapping).
 		for (auto&& [enttE, ev]: reg.view<CollisionEventsComponent>().each())
 		{
 			ev.collisionEnter.clear();
@@ -1103,7 +1015,7 @@ namespace aether
 		{
 			if (!bi.IsAdded(r.body1) || !bi.IsAdded(r.body2))
 			{
-				continue; // a body already left the world; its entity is gone too
+				continue;
 			}
 			const Entity a{static_cast<std::uint32_t>(bi.GetUserData(r.body1))};
 			const Entity b{static_cast<std::uint32_t>(bi.GetUserData(r.body2))};
@@ -1146,7 +1058,6 @@ namespace aether
 			RemoveJointConstraint(joint->constraintId);
 			joint->constraintId = 0;
 		}
-		// FlushPendingJoints re-creates the constraint on the next tick.
 	}
 
 	void PhysicsSystem::OnJointDestroyed(entt::registry& registry, entt::entity enttEntity)
@@ -1169,7 +1080,7 @@ namespace aether
 	{
 		WaitForStep();
 
-		auto rigid = world.TryGet<RigidBodyComponent>(entity);
+		auto* rigid = world.TryGet<RigidBodyComponent>(entity);
 		if (!rigid || !rigid->body.IsValid())
 		{
 			return;
@@ -1178,8 +1089,6 @@ namespace aether
 		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
 		const JPH::BodyID id = ToJolt(rigid->body);
 
-		// Invalidate BEFORE Remove fires on_destroy - otherwise
-		// OnRigidBodyDestroyed re-enters and double-destroys the body.
 		rigid->body = {};
 
 		bodyInterface.RemoveBody(id);
@@ -1199,14 +1108,12 @@ namespace aether
 			return;
 		}
 
-		auto rigid = registry.try_get<RigidBodyComponent>(enttEntity);
+		auto* rigid = registry.try_get<RigidBodyComponent>(enttEntity);
 		if (!rigid || !rigid->body.IsValid())
 		{
 			return;
 		}
 
-		// Remove any constraint that references this body (as joint owner or target)
-		// FIRST - Jolt forbids destroying a body still held by a live constraint.
 		if (!m_impl->constraints.empty())
 		{
 			for (auto&& [je, joint]: registry.view<JointComponent>().each())
@@ -1230,8 +1137,6 @@ namespace aether
 		bodyInterface.RemoveBody(id);
 		bodyInterface.DestroyBody(id);
 	}
-
-	// -- Body control --------------------------------------------------------------
 
 	void PhysicsSystem::SetLinearVelocity(PhysicsBodyHandle body, glm::vec3 v)
 	{
@@ -1411,16 +1316,12 @@ namespace aether
 		auto* rb = world.TryGet<RigidBodyComponent>(entity);
 		if (rb == nullptr || !world.Has<ColliderComponent>(entity))
 		{
-			return; // nothing to rebuild from
+			return;
 		}
 
 		WaitForStep();
-		// Preserve current velocity so a shape/property tweak doesn't stall a mover;
-		// it is re-applied as the body's initial velocity when it re-bakes.
 		if (rb->body.IsValid())
 		{
-			// Drop constraints referencing this body first (Jolt forbids destroying a
-			// constrained body); they re-create in FlushPendingJoints once it re-bakes.
 			auto& reg = world.GetRegistry();
 			const entt::entity enttEntity = World::ToEntt(entity);
 			for (auto&& [je, joint]: reg.view<JointComponent>().each())
@@ -1441,12 +1342,10 @@ namespace aether
 			auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
 			const JPH::BodyID id = ToJolt(rb->body);
 			rb->initialVelocity = FromJolt(bi.GetLinearVelocity(id));
-			rb->body = {}; // invalidate before destroy so no on_destroy re-entry
+			rb->body = {};
 			bi.RemoveBody(id);
 			bi.DestroyBody(id);
 		}
-		// Drop the interpolation state; the next FlushPendingBodies re-bakes the
-		// body from the (persistent) Collider + RigidBody and reseeds it.
 		world.Remove<PhysicsStateComponent>(entity);
 	}
 
@@ -1458,14 +1357,11 @@ namespace aether
 	void PhysicsSystem::FlushPendingOnly(World& world)
 	{
 		AE_PROFILE_ZONE();
-		// No step is kicked while the editor is paused, but an in-flight step
 		// from the frame Play toggled off must still be waited out once.
 		WaitForStep();
 		FlushPendingBodies(world);
 		FlushPendingJoints(world);
 	}
-
-	// -- Raycasting --------------------------------------------------------------
 
 	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance)
 	{
@@ -1480,9 +1376,7 @@ namespace aether
 
 		direction = glm::normalize(direction);
 
-		// RRayCast: RVec3 (double) origin, Vec3 (float) direction+length.
-		// The direction vector's length IS the maxDistance in Jolt's convention.
-		JPH::RRayCast ray(JPH::RVec3(origin.x, origin.y, origin.z), maxDistance * JPH::Vec3(direction.x, direction.y, direction.z));
+		const JPH::RRayCast ray(JPH::RVec3(origin.x, origin.y, origin.z), maxDistance * JPH::Vec3(direction.x, direction.y, direction.z));
 
 		JPH::RayCastResult joltResult;
 
@@ -1495,12 +1389,11 @@ namespace aether
 			result.entity = static_cast<std::uint32_t>(m_impl->physics->GetBodyInterfaceNoLock().GetUserData(joltResult.mBodyID));
 			result.fraction = joltResult.mFraction;
 
-			// Hit position: mOrigin + fraction * mDirection (both in RVec3/double).
-			JPH::RVec3 hitPosR = ray.GetPointOnRay(joltResult.mFraction);
+			const JPH::RVec3 hitPosR = ray.GetPointOnRay(joltResult.mFraction);
 			result.position = {hitPosR.GetX(), hitPosR.GetY(), hitPosR.GetZ()};
 
 			// Surface normal: lock the body and query the shape.
-			JPH::BodyLockRead lock(m_impl->physics->GetBodyLockInterface(), joltResult.mBodyID);
+			const JPH::BodyLockRead lock(m_impl->physics->GetBodyLockInterface(), joltResult.mBodyID);
 			if (lock.Succeeded())
 			{
 				const JPH::Body& body = lock.GetBody();
@@ -1527,10 +1420,10 @@ namespace aether
 		direction = glm::normalize(direction);
 
 		JPH::SphereShape sphere(radius);
-		sphere.SetEmbedded(); // stack shape: don't let the ref-count free it
+		sphere.SetEmbedded();
 
 		const JPH::RShapeCast cast(&sphere, JPH::Vec3::sReplicate(1.0f), JPH::RMat44::sTranslation(JPH::RVec3(origin.x, origin.y, origin.z)), maxDistance * JPH::Vec3(direction.x, direction.y, direction.z));
-		JPH::ShapeCastSettings settings;
+		const JPH::ShapeCastSettings settings;
 		JPH::ClosestHitCollisionCollector<JPH::CastShapeCollector> collector;
 		m_impl->physics->GetNarrowPhaseQuery().CastShape(cast, settings, JPH::RVec3::sZero(), collector);
 

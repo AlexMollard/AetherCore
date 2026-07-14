@@ -9,6 +9,7 @@
 #	include <ctime>
 #	include <filesystem>
 #	include <fstream>
+#	include <iterator>
 #	include <string>
 #	include <unordered_map>
 #	include <vector>
@@ -23,15 +24,6 @@ namespace aether
 {
 	namespace
 	{
-		// Set true only while an AftermathContext instance has successfully
-		// enabled GPU crash dumps (editor build + NVIDIA device - see the
-		// vendor/editor gate in VulkanContext.cpp). RegisterShaderBinary is
-		// called unconditionally from every pipeline/shader-object creation
-		// site (ComputePipelineFactory, GraphicsPipelineFactory, ShaderUtils)
-		// whenever AETHER_ENABLE_NVIDIA_AFTERMATH is compiled in - i.e. on
-		// GameRuntime too, and on any vendor. Gating on this flag is what
-		// stops GameRuntime / non-NVIDIA processes from calling into the
-		// Aftermath SDK and writing .spv shader dumps to disk when Aftermath
 		// was never actually turned on for this process.
 		std::atomic<bool> s_gpuDiagnosticsActive{false};
 
@@ -110,7 +102,7 @@ namespace aether
 			constexpr char kHexDigits[] = "0123456789abcdef";
 			char buffer[(sizeof(identifier.id) * 2) + 1] = {};
 
-			for (std::size_t i = 0; i < sizeof(identifier.id); ++i)
+			for (std::size_t i = 0; i < std::size(identifier.id); ++i)
 			{
 				const auto value = static_cast<unsigned char>(identifier.id[i]);
 				buffer[i * 2] = kHexDigits[value >> 4];
@@ -172,9 +164,6 @@ namespace aether
 				const std::filesystem::path baseDir = s_shaderArtifactBaseDir.empty() ? std::filesystem::current_path() : s_shaderArtifactBaseDir;
 				std::filesystem::create_directories(baseDir);
 
-				// Write directly to the crash dump directory (not a subdirectory)
-				// so the Aftermath GPU Crash Dump Viewer finds the .spv files in
-				// its default search path (same directory as the .nv-gpudmp).
 				const auto path = baseDir / (ShaderBinaryHashString(hash) + ".spv");
 				std::ofstream out(path, std::ios::binary);
 				out.write(static_cast<const char*>(pSpirv), static_cast<std::streamsize>(spirvSize));
@@ -219,7 +208,7 @@ namespace aether
 		{
 			try
 			{
-				std::filesystem::path baseDir = ResolveCrashDumpBaseDir(dir);
+				const std::filesystem::path baseDir = ResolveCrashDumpBaseDir(dir);
 				std::filesystem::create_directories(baseDir);
 
 				auto path = BuildDumpPath(baseDir, "crash", ".nv-gpudmp");
@@ -317,27 +306,12 @@ namespace aether
 		}
 
 #	ifdef _WIN32
-		// GFSDK_Aftermath_Lib.x64.dll is /DELAYLOAD-ed (see the App target's
-		// link options), so the first GFSDK_Aftermath_* call below would
-		// otherwise be what triggers the OS to resolve it. On a dev machine
-		// that doesn't have the DLL (e.g. no NVIDIA Aftermath redistributable
-		// installed), that lazy resolve raises an unhandled SEH exception
-		// (0xC06D007E / ERROR_MOD_NOT_FOUND) instead of returning a normal
-		// failure, crashing the whole editor process mid-session. Probe for
-		// the DLL explicitly before making any Aftermath SDK call so a
-		// missing DLL degrades to "Aftermath disabled" instead.
 		bool IsAftermathDllLoadable()
 		{
 			const HMODULE module = ::LoadLibraryW(L"GFSDK_Aftermath_Lib.x64.dll");
-			if (module == nullptr)
-			{
-				return false;
-			}
-			// Leave it loaded - the delay-load thunk will reuse this module
-			// handle for the real SDK calls that follow.
-			return true;
+			return module != nullptr;
 		}
-#	endif // _WIN32
+#	endif
 	} // namespace
 
 	void AftermathContext::RegisterShaderBinary(const void* pSpirv, uint32_t spirvSize)
@@ -348,7 +322,7 @@ namespace aether
 	void GFSDK_AFTERMATH_CALL AftermathContext::OnCrashDump(const void* pGpuCrashDump, std::uint32_t gpuCrashDumpSize, void* pUserData)
 	{
 		AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dump received ({} bytes)", gpuCrashDumpSize);
-		auto self = static_cast<AftermathContext*>(pUserData);
+		auto* self = static_cast<AftermathContext*>(pUserData);
 		WriteCrashDumpToDisk(self->m_crashDumpDir, pGpuCrashDump, gpuCrashDumpSize);
 	}
 
@@ -357,8 +331,8 @@ namespace aether
 		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: shader debug info received ({} bytes)", shaderDebugInfoSize);
 		if (pShaderDebugInfo && shaderDebugInfoSize > 0)
 		{
-			auto self = static_cast<AftermathContext*>(pUserData);
-			std::filesystem::path baseDir = ResolveCrashDumpBaseDir(self->m_crashDumpDir);
+			auto* self = static_cast<AftermathContext*>(pUserData);
+			const std::filesystem::path baseDir = ResolveCrashDumpBaseDir(self->m_crashDumpDir);
 			WriteShaderDebugInfoToDisk(baseDir, pShaderDebugInfo, shaderDebugInfoSize);
 		}
 	}
@@ -388,14 +362,12 @@ namespace aether
 		}
 
 #	ifdef _WIN32
-		// Check before the first Aftermath SDK call (below) reaches into the
-		// delay-loaded DLL - see IsAftermathDllLoadable's comment.
 		if (!IsAftermathDllLoadable())
 		{
 			AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath DLL not found; GPU crash dumps disabled");
 			return false;
 		}
-#	endif // _WIN32
+#	endif
 
 		if (crashDumpDir != nullptr)
 		{
@@ -430,12 +402,6 @@ namespace aether
 		{
 			return false;
 		}
-
-		// Per-command-buffer tracking and checkpoints are configured via
-		// VK_NV_device_diagnostics_config / VK_NV_device_diagnostic_checkpoints
-		// at device creation time.  The Aftermath SDK (2025.5.0) does not expose
-		// a separate VK_InitializeDevice for Vulkan - the equivalent is handled
-		// through the VkDeviceDiagnosticsConfigCreateInfoNV pNext chain.
 
 		m_device = device;
 		m_initialized = true;
@@ -474,4 +440,4 @@ namespace aether
 	}
 } // namespace aether
 
-#endif // AETHER_ENABLE_NVIDIA_AFTERMATH
+#endif

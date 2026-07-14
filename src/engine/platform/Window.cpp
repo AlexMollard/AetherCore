@@ -24,9 +24,6 @@ namespace aether
 	void Window::EnableHighDpiAwareness()
 	{
 #ifdef _WIN32
-		// Per-monitor-v2: correct framebuffer + non-client scaling on every monitor.
-		// SetProcessDpiAwarenessContext returns FALSE (harmless) if awareness was
-		// already set - so calling it first thing in main wins over any later default.
 		SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 #endif
 	}
@@ -36,7 +33,7 @@ namespace aether
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
 
-		if (!glfwInit())
+		if (glfwInit() == 0)
 		{
 			throw WindowError("Failed to initialize GLFW.");
 		}
@@ -89,7 +86,7 @@ namespace aether
 
 	bool Window::ShouldClose() const
 	{
-		return glfwWindowShouldClose(m_window);
+		return glfwWindowShouldClose(m_window) != 0;
 	}
 
 	void Window::RequestClose()

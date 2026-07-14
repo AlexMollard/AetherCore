@@ -14,19 +14,6 @@ namespace aether::app::scripting
 
 namespace aether::app
 {
-	// Scene-bootstrap layer.
-	//
-	// World content comes from the startup scene file (engine.toml
-	// app.startupScene) and behavior from entity scripts (ScriptComponent, run by
-	// ScriptComponentSystem through C#). This layer owns the per-scene
-	// SceneContext, registers effects, boots the startup scene, and services F5
-	// hot-reload (reload the managed assembly + re-apply the scene).
-	//
-	// Lifecycle:
-	//   OnAttach  -> build pipeline cache, register effects, publish SceneContext,
-	//                load the startup scene
-	//   OnUpdate  -> handle hot-reload if requested
-	//   OnDetach  -> destroy scene entities, unpublish SceneContext
 	class ScriptedSceneLayer final : public AppLayer
 	{
 	public:
@@ -39,9 +26,6 @@ namespace aether::app
 	private:
 		void DestroySceneEntities(LayerContext& context);
 		void DoReload(LayerContext& context);
-		// Startup-scene boot: additive load of settings->app.startupScene, or
-		// auto-generate it from the current world on first run. Called from
-		// OnAttach AND after every F5 reload (DoReload destroys the loaded scene
 		// entities, so the file must re-apply or the world comes back empty).
 		void LoadStartupScene(LayerContext& context);
 

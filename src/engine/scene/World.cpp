@@ -18,26 +18,9 @@ namespace aether
 		return Entity{static_cast<std::uint32_t>(entt::to_integral(entity))};
 	}
 
-	// -- Entity lifecycle ------------------------------------------------------
-
 	World::World()
 	{
-		// entt hands out entity index 0 / version 0 as the very first entity in a
-		// fresh registry. Its full integral value is 0 - precisely the value
-		// aether::Entity reserves for the null / invalid entity (Entity{}.IsValid()
-		// == false, ToEntt/FromEntt keep the whole index+version integral). Left
-		// untouched, the first real Create() would return a live entity that reports
-		// IsValid() == false, silently breaking every IsValid()-gated path - e.g.
 		// ecs::SetParent, which then never links the children of a raw-0 parent (the
-		// bug that kept a scene's first-loaded UI canvas empty and rendered nothing).
-		//
-		// Retire that null slot once, here: create index 0 (version 0) and destroy
-		// it immediately. entt bumps index 0's version to 1, so the next Create()
-		// recycles it as (index 0, version 1) whose integral is (1u << 20) != 0 =>
-		// IsValid() == true. The destroy leaves the registry with zero live entities,
-		// so there is NO phantom entity: component iteration, entity counts and
-		// CaptureScene (which already filters !reg.valid handles) are all untouched,
-		// and raw value 0 stays permanently reserved for the null entity.
 		const entt::entity nullSlot = m_registry.create();
 		m_registry.destroy(nullSlot);
 	}

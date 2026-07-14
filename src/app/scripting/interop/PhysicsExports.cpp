@@ -8,13 +8,9 @@
 #include <cstdint>
 #include <vector>
 
-// Physics control exported to C#: a Collider (+ RigidBody) is emplaced for
-// PhysicsSystem to bake, velocity/state go through the live rigid body.
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
-// Blittable raycast result matching AetherCore.RaycastHit on the managed side.
 struct RaycastHit
 {
 	std::int32_t hit = 0;
@@ -26,7 +22,6 @@ struct RaycastHit
 
 namespace
 {
-	// Live rigid-body handle for an entity, or an invalid handle.
 	aether::PhysicsBodyHandle BodyOf(std::uint32_t id)
 	{
 		if (const auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
@@ -47,8 +42,6 @@ namespace
 
 namespace
 {
-	// Emplace a collider (+ a rigid body for the requested motion) so the physics
-	// system bakes the body next flush. Mirrors the editor's Add Component flow.
 	void AddCollider(std::uint32_t id, const aether::ColliderComponent& collider, std::int32_t dynamic)
 	{
 		auto& world = ActiveWorld();
@@ -120,8 +113,6 @@ AE_SCRIPT_API std::int32_t aether_physics_is_debug_enabled()
 	return aether::IsPhysicsDebugShapesEnabled() ? 1 : 0;
 }
 
-// ── Forces / velocity ────────────────────────────────────────────────────────
-
 AE_SCRIPT_API void aether_physics_set_angular_velocity(std::uint32_t id, Vec3 velocity)
 {
 	if (auto* phys = ActiveContext().physics)
@@ -171,8 +162,6 @@ AE_SCRIPT_API void aether_physics_add_angular_impulse(std::uint32_t id, Vec3 imp
 	}
 }
 
-// Locks/unlocks the body's rotation axes (e.g. keep a character capsule upright)
-// and rebuilds it so the change takes effect.
 AE_SCRIPT_API void aether_physics_freeze_rotation(std::uint32_t id, std::int32_t x, std::int32_t y, std::int32_t z)
 {
 	auto* phys = ActiveContext().physics;
@@ -184,8 +173,6 @@ AE_SCRIPT_API void aether_physics_freeze_rotation(std::uint32_t id, std::int32_t
 	rb->lockRotation = glm::bvec3(x != 0, y != 0, z != 0);
 	phys->RebuildBody(ActiveWorld(), aether::Entity{id});
 }
-
-// ── Queries ──────────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API RaycastHit aether_physics_raycast(Vec3 origin, Vec3 direction, float maxDistance)
 {
@@ -219,10 +206,8 @@ AE_SCRIPT_API RaycastHit aether_physics_spherecast(Vec3 origin, Vec3 direction, 
 
 namespace
 {
-	// Cache for the two-call OverlapSphere -> [At] idiom (per managed call, single-
-	// threaded, so a plain static is safe).
 	std::vector<std::uint32_t> g_overlapCache;
-} // namespace
+}
 
 AE_SCRIPT_API std::int32_t aether_physics_overlap_sphere(Vec3 center, float radius)
 {
@@ -243,8 +228,6 @@ AE_SCRIPT_API std::uint32_t aether_physics_overlap_at(std::int32_t index)
 	return g_overlapCache[static_cast<std::size_t>(index)];
 }
 
-// ── Collision / trigger events ───────────────────────────────────────────────
-
 AE_SCRIPT_API void aether_physics_enable_events(std::uint32_t id)
 {
 	auto& world = ActiveWorld();
@@ -257,7 +240,6 @@ AE_SCRIPT_API void aether_physics_enable_events(std::uint32_t id)
 
 namespace
 {
-	// kind: 0 collisionEnter, 1 collisionExit, 2 triggerEnter, 3 triggerExit, 4 overlapping.
 	const std::vector<aether::Entity>* EventList(std::uint32_t id, std::int32_t kind)
 	{
 		const auto* ev = ActiveWorld().TryGet<aether::CollisionEventsComponent>(aether::Entity{id});

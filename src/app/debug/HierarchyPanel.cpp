@@ -4,13 +4,14 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include <entt/entt.hpp>
 #include <imgui.h>
-#include <imgui_internal.h> // IsMouseDragPastThreshold / IsDragDropActive
+#include <imgui_internal.h>
 
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
@@ -72,7 +73,7 @@ namespace aether::editor
 		void ReleaseMaterialAssetTextures(AssetManager& assets, const MaterialAsset& material)
 		{
 			auto& textures = assets.GetTextureRegistry();
-			for (TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
+			for (const TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
 			{
 				if (h.IsValid())
 				{
@@ -93,7 +94,7 @@ namespace aether::editor
 			{
 				return false;
 			}
-			MaterialAsset material = std::move(loaded.value());
+			const MaterialAsset material = loaded.value();
 			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
 			ReleaseMaterialAssetTextures(*assets, material);
 			if (auto* db = context.TryGet<AssetDatabase>())
@@ -110,7 +111,7 @@ namespace aether::editor
 			{
 				return false;
 			}
-			TextureHandle texture = assets->GetTextureRegistry().Acquire(path);
+			const TextureHandle texture = assets->GetTextureRegistry().Acquire(path);
 			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), texture);
 			if (texture.IsValid())
 			{
@@ -141,9 +142,6 @@ namespace aether::editor
 			{
 				return false;
 			}
-			// Bake the .mesh the loader needs (no-op if already baked) before
-			// assigning - project:// is the raw project folder in the editor, which
-			// holds only the .gltf.
 			if (const auto* project = context.TryGet<app::EditorProjectContext>())
 			{
 				std::string bakeError;
@@ -189,6 +187,9 @@ namespace aether::editor
 					return AssignMaterialPreset(context, world, entity, payload.path);
 				case dragdrop::FileKind::Texture:
 					return AssignTextureToEntity(context, world, entity, payload.path);
+				case dragdrop::FileKind::Unknown:
+				case dragdrop::FileKind::Script:
+				case dragdrop::FileKind::Scene:
 				default:
 					return false;
 			}
@@ -199,7 +200,6 @@ namespace aether::editor
 			return payload.kind == dragdrop::FileKind::Prefab || payload.kind == dragdrop::FileKind::Material || payload.kind == dragdrop::FileKind::Texture || payload.kind == dragdrop::FileKind::Model;
 		}
 
-		// Small icon toggle used for the kind-filter chips.
 		void FilterChip(const char* icon, const char* tooltip, const ImVec4& accent, bool& state)
 		{
 			ImGui::PushStyleColor(ImGuiCol_Text, state ? accent : ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
@@ -241,8 +241,6 @@ namespace aether::editor
 			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x + nameSize.x, textPos.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), idText.c_str());
 		}
 
-		// Selection ROOTS: drop any entity whose ancestor is also selected (it
-		// rides along with the ancestor). Shared by duplicate, copy and cut.
 		std::vector<Entity> CollectSelectionRoots(World& world, const SceneSelection& selection)
 		{
 			std::vector<Entity> roots;
@@ -278,8 +276,6 @@ namespace aether::editor
 			return roots;
 		}
 
-		// Origin-spawned primitive for the "+" menu; mirrors das create_mesh/add_mesh
-		// defaults (neutral two-sided material) via the same AssignMaterial path.
 		void CreatePrimitive(app::LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name, const char* kindName)
 		{
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
@@ -288,7 +284,7 @@ namespace aether::editor
 			{
 				return;
 			}
-			Entity e = world.Create();
+			const Entity e = world.Create();
 			world.Emplace<NameComponent>(e, NameComponent{.name = name});
 			world.Emplace<TransformComponent>(e);
 			world.Emplace<MeshComponent>(e, MeshComponent{.mesh = &primitives->Get(kind)});
@@ -317,8 +313,6 @@ namespace aether::editor
 		}
 	} // namespace
 
-	// Subtle stripes plus the two juice overlays (spawn flash, selection pulse),
-	// drawn behind the row before its widgets so highlights and text sit on top.
 	void HierarchyPanel::DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex)
 	{
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -342,7 +336,7 @@ namespace aether::editor
 			const float t = static_cast<float>((now - it->second) / 0.75);
 			if (t < 1.0f)
 			{
-				const float eased = (1.0f - t) * (1.0f - t); // quadratic fade-out
+				const float eased = (1.0f - t) * (1.0f - t);
 				drawList->AddRectFilled(rowMin, rowMax, chrome::U32(chrome::WithAlpha(chrome::kSuccess, eased * 0.30f)));
 			}
 		}
@@ -375,8 +369,6 @@ namespace aether::editor
 			if (!io.KeyCtrl && !io.KeyShift && inMultiSelection)
 			{
 				// Pressing a row that is part of a multi-selection must NOT
-				// collapse it yet - the press may start a multi-entity drag. The
-				// collapse happens on release, only if no drag occurred.
 				m_pendingCollapse = e;
 				m_pendingClick = {};
 			}
@@ -459,7 +451,7 @@ namespace aether::editor
 			const float relY = ImGui::GetMousePos().y - extendedDropRect.Min.y;
 			const float rowH = extendedDropRect.GetHeight();
 
-			DropZone zone;
+			DropZone zone{};
 			if (ImGui::GetIO().KeyCtrl)
 			{
 				zone = DropZone::Inside;
@@ -501,7 +493,6 @@ namespace aether::editor
 			const bool canReorderHere = !hasEntityPayload || (dragged != e && (!targetParent.IsValid() || (targetParent != dragged && !ecs::IsAncestor(world, targetParent, dragged))));
 			const bool canDropHere = zone == DropZone::Inside ? canParentHere : canReorderHere;
 
-			// Visual feedback while dragging over this item.
 			if (ImGui::IsDragDropActive() && (hasScriptPayload || hasFilePayload || canDropHere))
 			{
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -553,7 +544,10 @@ namespace aether::editor
 				const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
 				const Entity draggedEntity{draggedId};
 				const bool canParentOnRelease = draggedEntity != e && !ecs::IsAncestor(world, e, draggedEntity);
-				const bool canReorderOnRelease = draggedEntity != e && (!targetParent.IsValid() || (targetParent != draggedEntity && !ecs::IsAncestor(world, targetParent, draggedEntity)));
+				const bool canReorderOnRelease =
+				        draggedEntity != e
+				        && (!targetParent.IsValid()
+				                || (targetParent != draggedEntity && !ecs::IsAncestor(world, targetParent, draggedEntity))); // NOLINT(readability-suspicious-call-argument): tests whether the dragged entity is an ancestor of the prospective parent.
 				if ((zone == DropZone::Inside && canParentOnRelease) || (zone != DropZone::Inside && canReorderOnRelease))
 				{
 					m_pendingReparent = PendingReparent{draggedEntity, e, zone};
@@ -577,7 +571,7 @@ namespace aether::editor
 		}
 		if (ImGui::MenuItem(ICON_FA_PLUS "  Create child"))
 		{
-			Entity child = world.Create();
+			const Entity child = world.Create();
 			world.Emplace<NameComponent>(child, NameComponent{.name = "Entity"});
 			ecs::SetParent(world, child, e);
 			selection.Select(child);
@@ -588,7 +582,7 @@ namespace aether::editor
 			{
 				selection.Select(e);
 			}
-			m_pendingDuplicate = true; // applied after the walk (creates entities)
+			m_pendingDuplicate = true;
 		}
 		if (ImGui::MenuItem(ICON_FA_CLONE "  Copy", "Ctrl+C"))
 		{
@@ -612,8 +606,6 @@ namespace aether::editor
 		}
 		if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Save as Prefab"))
 		{
-			// The name popup is begun at window level after the tree walk
-			// (opening it from inside the row's context popup would nest).
 			m_prefabSaveTarget = e;
 			std::snprintf(m_prefabNameBuf, sizeof(m_prefabNameBuf), "%s", EntityDisplayName(world, e));
 			for (char* c = m_prefabNameBuf; *c != '\0'; ++c)
@@ -666,7 +658,6 @@ namespace aether::editor
 			}
 			else
 			{
-				// Root-level siblings: all root entities.
 				selection.Clear();
 				for (const Entity root: world.Roots())
 				{
@@ -696,8 +687,6 @@ namespace aether::editor
 			ImGui::SameLine();
 		}
 
-		// Inactive entities (self-disabled, or greyed by a disabled ancestor) are
-		// dimmed across icon, name and id so a disabled subtree reads as a unit.
 		const bool inactive = ecs::HasDisabledAncestor(world, e);
 		ImVec4 iconColor = badge.color;
 		if (inactive)
@@ -734,10 +723,10 @@ namespace aether::editor
 		else
 		{
 			ImGui::SameLine();
-			std::string name = EntityDisplayName(world, e);
+			const std::string name = EntityDisplayName(world, e);
 			if (searching && !needle.empty())
 			{
-				std::string lower = ToLower(name);
+				const std::string lower = ToLower(name);
 				const size_t pos = lower.find(needle);
 				if (pos != std::string::npos)
 				{
@@ -786,7 +775,7 @@ namespace aether::editor
 					std::uint64_t childOpenMask = openMask;
 					if (depth < 63)
 					{
-						const std::uint64_t siblingBit = 1ULL << static_cast<unsigned>(depth);
+						const std::uint64_t siblingBit = 1ull << static_cast<unsigned>(depth);
 						if (i + 1 < h->children.size())
 						{
 							childOpenMask |= siblingBit;
@@ -804,7 +793,6 @@ namespace aether::editor
 
 	void HierarchyPanel::DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const
 	{
-		// ArrowButton is drawn with FramePadding=(0,0), so its width is the font size.
 		const float arrowCenter = ImGui::GetFontSize() * 0.5f;
 		const float indentSp = ImGui::GetStyle().IndentSpacing + 6.0f;
 		const ImU32 lineCol = chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.55f));
@@ -812,7 +800,7 @@ namespace aether::editor
 
 		for (int d = 0; d + 1 < entry.depth; ++d)
 		{
-			if (entry.openMask & (1ULL << d))
+			if ((entry.openMask & (1ull << d)) != 0u)
 			{
 				const float vx = rowMin.x + static_cast<float>(d) * indentSp + arrowCenter;
 				drawList->AddLine(ImVec2(vx, rowMin.y), ImVec2(vx, rowMax.y), lineCol, 1.25f);
@@ -822,7 +810,7 @@ namespace aether::editor
 		{
 			const float vx = rowMin.x + static_cast<float>(entry.depth - 1) * indentSp + arrowCenter;
 			const float hxEnd = rowMin.x + static_cast<float>(entry.depth) * indentSp;
-			const bool parentHasMoreSiblings = (entry.openMask & (1ULL << static_cast<unsigned>(entry.depth - 1))) != 0;
+			const bool parentHasMoreSiblings = (entry.openMask & (1ull << static_cast<unsigned>(entry.depth - 1))) != 0;
 			drawList->AddLine(ImVec2(vx, rowMin.y), ImVec2(vx, parentHasMoreSiblings ? rowMax.y : cx), lineCol, 1.25f);
 			drawList->AddLine(ImVec2(vx, cx), ImVec2(hxEnd, cx), lineCol, 1.25f);
 		}
@@ -849,19 +837,16 @@ namespace aether::editor
 		const ImGuiStyle& style = ImGui::GetStyle();
 
 		const bool selfDisabled = world.Has<DisabledComponent>(e);
-		const bool inactive = ecs::HasDisabledAncestor(world, e); // self or ancestor
+		const bool inactive = ecs::HasDisabledAncestor(world, e);
 		const bool hidden = world.Has<HiddenTag>(e);
 		const bool notPickable = world.Has<NotPickableTag>(e);
 
-		// Active/disable (power), visibility (eye) and pickability (padlock). The
-		// power icon is red when this entity is explicitly disabled, muted when it
-		// is only greyed by a disabled ancestor, and normal when active.
 		struct Toggle
 		{
 			const char* icon;
 			ImVec4 color;
 			const char* tip;
-			int kind; // 0 = disable, 1 = hidden, 2 = pickable
+			int kind;
 		};
 
 		const Toggle toggles[3] = {
@@ -873,7 +858,6 @@ namespace aether::editor
 		        {notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK, notPickable ? chrome::WithAlpha(chrome::kFaint, 0.45f) : chrome::WithAlpha(chrome::kMuted, 0.9f), notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View", 2},
 		};
 
-		// Right-align the group so the three buttons hug the row's trailing edge.
 		float totalWidth = style.ItemSpacing.x * 2.0f;
 		for (const Toggle& t: toggles)
 		{
@@ -936,12 +920,10 @@ namespace aether::editor
 		}
 	}
 
-	// One row of the outliner: flat Selectable row with depth-based indent,
-	// expand/collapse arrow, badge, name and muted id drawn inline.
 	void HierarchyPanel::DrawNode(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle)
 	{
 		const auto* h = world.TryGet<HierarchyComponent>(e);
-		const bool hasKids = h && !h->children.empty();
+		const bool hasKids = (h != nullptr) && !h->children.empty();
 		const bool isExpanded = hasKids && m_expandedNodes.contains(e.id);
 		const int rowIndex = flatTreeIndex;
 
@@ -1007,7 +989,6 @@ namespace aether::editor
 			DrawRowContent(world, e, searching, needle, false);
 		}
 
-		// Tree guide lines.
 		if (!m_flatTree.empty())
 		{
 			const std::size_t idx = static_cast<std::size_t>(flatTreeIndex);
@@ -1039,7 +1020,6 @@ namespace aether::editor
 			}
 		}
 
-		// Right-aligned utility toggles (eye / padlock).
 		if (!destroyed)
 		{
 			DrawRowUtilityToggles(world, e);
@@ -1072,18 +1052,14 @@ namespace aether::editor
 		m_rowsPrev = std::move(m_rowsCur);
 		m_rowsCur.clear();
 
-		// A release anywhere retires any pending collapse the row handlers did
-		// not consume this frame (e.g. the mouse was released off-row or after a
 		// drag) so a stale press can never collapse a later selection.
 		if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && m_pendingCollapse.IsValid())
 		{
 			m_pendingCollapse = {};
 		}
 
-		// ── Juice bookkeeping ──────────────────────────────────────────────────
 		const double now = ImGui::GetTime();
 		{
-			// Rebuilding the id set each frame keeps recycled ids flashing too.
 			m_knownIdsScratch.clear();
 			m_knownIdsScratch.reserve(m_knownIds.size());
 			for (const auto handle: reg.storage<entt::entity>())
@@ -1119,9 +1095,6 @@ namespace aether::editor
 
 		ImGui::Begin("Scene", VisiblePtr());
 		{
-			// External requests (File > Open / Save As, Ctrl+S fallback) open the
-			// same popups the toolbar buttons below do, from this window's ID scope
-			// so BeginPopup(...) below actually sees them.
 			if (m_requestSaveAsPopup)
 			{
 				m_requestSaveAsPopup = false;
@@ -1134,7 +1107,6 @@ namespace aether::editor
 				ImGui::OpenPopup("LoadScene");
 			}
 
-			// ── Header band: SCENE eyebrow + name + live entity count ───────────
 			std::size_t count = 0;
 			for (const auto handle: reg.storage<entt::entity>())
 			{
@@ -1161,15 +1133,12 @@ namespace aether::editor
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 			}
 
-			// Ghost toolbar icons (FA advance can exceed a square's inner width - size
-			// from the measured icon so the glyph centres).
 			const float tbBtnH = ImGui::GetFrameHeight();
 			const auto tbIconW = [&](const char* icon)
 			{
 				return std::max(tbBtnH, ImGui::CalcTextSize(icon).x + ImGui::GetStyle().FramePadding.x * 2.0f);
 			};
 
-			// ── Toolbar ────────────────────────────────────────────────────────
 			if (chrome::GhostIconButton(ICON_FA_PLUS, "##addEntity", ImVec2(tbIconW(ICON_FA_PLUS), tbBtnH), chrome::kAccentHi))
 			{
 				ImGui::OpenPopup("CreateEntity");
@@ -1182,7 +1151,7 @@ namespace aether::editor
 			{
 				if (ImGui::MenuItem(ICON_FA_CIRCLE "  Empty entity"))
 				{
-					Entity e = world.Create();
+					const Entity e = world.Create();
 					world.Emplace<NameComponent>(e, NameComponent{.name = "Entity"});
 					selection.Select(e);
 				}
@@ -1214,16 +1183,12 @@ namespace aether::editor
 				}
 				if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light"))
 				{
-					// Spawn aimed forward-down so the cone lands in front of you.
 					selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
 				}
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera"))
 				{
-					// Spawn back-and-up looking toward the origin, so it frames the
-					// scene the way the default editor view does.
 					const Entity cam = ecs::CreateCameraEntity(world, {0.0f, 3.0f, 8.0f}, {0.0f, -0.35f, -1.0f}, CameraComponent{});
-					// First camera created becomes the main camera for convenience.
 					if (!ecs::GetMainCameraEntity(world).IsValid())
 					{
 						ecs::SetMainCameraEntity(world, cam);
@@ -1249,11 +1214,6 @@ namespace aether::editor
 				}
 				ImGui::EndPopup();
 			}
-
-			// Scene Save / Save As / Open live in the main menu bar (File menu), which
-			// owns the SaveScene/LoadScene popups below via RequestSaveAsPopup /
-			// RequestOpenPopup. Keeping them out of this panel de-clutters the toolbar,
-			// which is scoped to scene-tree actions (create entity, search, filter).
 
 			if (ImGui::BeginPopup("SaveScene"))
 			{
@@ -1292,8 +1252,6 @@ namespace aether::editor
 				auto* settingsService = context.TryGet<aether::SettingsService>();
 
 				// Fixed name-column width keeps the row layout (and thus the popup
-				// width) stable. Deriving the button X from GetContentRegionMax()
-				// inside an auto-sizing popup feedback-loops the window wider each frame.
 				float nameColWidth = ImGui::CalcTextSize("startup").x;
 				for (const std::string& name: m_sceneList)
 				{
@@ -1309,10 +1267,6 @@ namespace aether::editor
 				{
 					ImGui::PushID(name.c_str());
 					const bool isStartup = settingsService != nullptr && settingsService->Get().app.startupScene == name;
-					// A full-width MenuItem swallowed clicks meant for the trailing
-					// startup button. A fixed-width Selectable with AllowOverlap keeps
-					// the button clickable and the popup a stable width; Selectable does
-					// not auto-close, so do it here.
 					if (ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowOverlap, ImVec2(nameColWidth, 0.0f)))
 					{
 						if (app::scene::LoadSceneFile(name, world, app::scene::MakeApplySceneDeps(context.services)))
@@ -1336,9 +1290,6 @@ namespace aether::editor
 						{
 							if (ImGui::SmallButton(ICON_FA_PLAY "##startup"))
 							{
-								// Edit through the single source of truth and persist the
-								// user delta immediately (startupScene has no live effect;
-								// it takes hold on next launch).
 								settingsService->Values().app.startupScene = name;
 								settingsService->ApplyField("app.startupScene");
 								settingsService->Save();
@@ -1354,8 +1305,6 @@ namespace aether::editor
 				ImGui::EndPopup();
 			}
 
-			// Save-as-prefab (armed by the row context menu during the walk;
-			// fires here at window level the next frame).
 			if (m_openPrefabSave)
 			{
 				ImGui::OpenPopup("SavePrefab");
@@ -1394,7 +1343,6 @@ namespace aether::editor
 			ImGui::SetNextItemWidth(-FLT_MIN);
 			ImGui::InputTextWithHint("##search", "Search name or #id...", m_search, sizeof(m_search));
 
-			// Kind chips + right-aligned live count on one row.
 			FilterChip(ICON_FA_CUBE, "Meshes", ImVec4(0.62f, 0.88f, 0.62f, 1.0f), m_filterMesh);
 			ImGui::SameLine();
 			FilterChip(ICON_FA_PERSON_RUNNING, "Skinned", ImVec4(0.55f, 0.75f, 1.00f, 1.0f), m_filterSkinned);
@@ -1403,16 +1351,13 @@ namespace aether::editor
 			ImGui::SameLine();
 			FilterChip(ICON_FA_WAND_MAGIC_SPARKLES, "Effects", ImVec4(0.80f, 0.55f, 1.00f, 1.0f), m_filterEffect);
 
-			// Sync persistent expansion from settings once the world is ready.
 			if (!m_expandedPathsLoaded)
 			{
 				SyncExpandedFromPaths(world);
 			}
 
-			// ── Breadcrumb trail ────────────────────────────────────────────────
 			DrawBreadcrumbTrail(world, selection);
 
-			// ── Body ───────────────────────────────────────────────────────────
 			const bool anyChip = m_filterMesh || m_filterSkinned || m_filterPhysics || m_filterEffect;
 			const bool searching = m_search[0] != '\0';
 			const bool filtering = searching || anyChip;
@@ -1432,7 +1377,6 @@ namespace aether::editor
 			UpdateKeyboardFocusScopeFromMouse(sceneListMin, sceneListMax);
 			if (filtering)
 			{
-				// Flat, clipper-friendly result list.
 				const std::string needle = ToLower(m_search);
 				m_filteredRowsScratch.clear();
 				m_filteredRowsScratch.reserve(count);
@@ -1451,7 +1395,7 @@ namespace aether::editor
 					{
 						char idText[16]{};
 						std::snprintf(idText, sizeof(idText), "#%u", e.id);
-						if (!ContainsCaseInsensitive(EntityDisplayName(world, e), needle) && std::string_view(idText).find(needle) == std::string::npos)
+						if (!ContainsCaseInsensitive(EntityDisplayName(world, e), needle) && !std::string_view(idText).contains(needle))
 						{
 							continue;
 						}
@@ -1482,8 +1426,6 @@ namespace aether::editor
 						const Entity e = m_filteredRowsScratch[static_cast<std::size_t>(i)];
 						ImGui::PushID(static_cast<int>(e.id));
 						DrawRowBackdrop(selection, e, i);
-						// Same interaction path as tree rows: modifier-aware click
-						// (ctrl/shift/deferred collapse) + multi-entity drag-drop.
 						ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
 						ImGui::Selectable("##row", selection.Contains(e), ImGuiSelectableFlags_SpanAllColumns);
 						ImGui::PopItemFlag();
@@ -1520,7 +1462,6 @@ namespace aether::editor
 			}
 			else
 			{
-				// Build flat visible tree for clipper-friendly iteration.
 				m_flatTree.clear();
 				const auto& roots = world.Roots();
 				for (std::size_t i = 0; i < roots.size(); ++i)
@@ -1528,7 +1469,7 @@ namespace aether::editor
 					const Entity e = roots[i];
 					if (e.IsValid() && reg.valid(World::ToEntt(e)))
 					{
-						const std::uint64_t openMask = (i + 1 < roots.size()) ? 1ULL : 0ULL;
+						const std::uint64_t openMask = (i + 1 < roots.size()) ? 1ull : 0ull;
 						FlattenNode(world, e, 0, openMask);
 					}
 				}
@@ -1567,8 +1508,6 @@ namespace aether::editor
 					}
 				}
 
-				// Small tail drop target: drop here to detach to root without
-				// consuming the asset browser area below the scene rows.
 				const float remaining = std::min(ImGui::GetFrameHeight(), ImGui::GetContentRegionAvail().y);
 				if (remaining > 4.0f)
 				{
@@ -1586,18 +1525,13 @@ namespace aether::editor
 			}
 			ImGui::EndChild();
 
-			// ── Keyboard navigation + type-to-jump ────────────────────────────
 			if (!filtering && SceneListOwnsKeyboard())
 			{
 				HandleKeyboardNavigation(selection);
 				HandleTypeToJump(world, selection);
 			}
 
-			// ── Clipboard + duplicate (EDITOR-GLOBAL edit shortcuts) ──────────
-			// The selection is the context, not window focus: Ctrl+D then a
 			// gizmo drag then Ctrl+D again must work without re-clicking the
-			// outliner. Only active text input suppresses them (this panel
-			// runs every frame, so evaluating global key state here is fine).
 			const bool panelKeys = !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl;
 			auto* clipAssets = context.TryGet<AssetManager>();
 			auto* undo = context.TryGet<UndoStack>();
@@ -1611,9 +1545,6 @@ namespace aether::editor
 			const bool pasteKey = m_pendingPaste || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_V, false));
 			m_pendingCopy = m_pendingCut = m_pendingPaste = false;
 
-			// Copy/cut put the selection roots on the OS CLIPBOARD as scene
-			// TOML - pasteable in this session, another session, or a text
-			// editor. Paste applies additively, nudged +1 X.
 			if ((copyKey || cutKey) && clipAssets != nullptr && !selection.All().empty())
 			{
 				const std::vector<Entity> roots = CollectSelectionRoots(world, selection);
@@ -1675,8 +1606,6 @@ namespace aether::editor
 				}
 			}
 
-			// Ctrl+D duplicates the selection (roots only; nested selected
-			// entities ride with their ancestor's copy).
 			if (m_pendingDuplicate)
 			{
 				m_pendingDuplicate = false;
@@ -1688,8 +1617,6 @@ namespace aether::editor
 					{
 						undo->Push(world, context.services);
 					}
-					// A duplicate is an in-memory prefab round trip: capture the
-					// subtree, instantiate nudged +1 X, select the copies.
 					bool first = true;
 					for (const Entity root: roots)
 					{
@@ -1717,19 +1644,12 @@ namespace aether::editor
 				}
 			}
 
-			// Apply the queued reparent now that no children vector is being
-			// walked. SetParent is cycle-guarded: bad drops are silent no-ops.
 			if (m_pendingReparent)
 			{
 				const PendingReparent pr = *m_pendingReparent;
 				m_pendingReparent.reset();
 				if (world.GetRegistry().valid(World::ToEntt(pr.child)))
 				{
-					// Dragging a selected row moves the WHOLE selection - but only
-					// its topmost roots: an entity whose ancestor is also selected
-					// follows that ancestor, preserving structure inside the
-					// selection (and the drop target itself is a no-op via the
-					// child==parent guard).
 					std::vector<Entity> moved;
 					if (selection.Contains(pr.child) && selection.All().size() > 1)
 					{
@@ -1827,9 +1747,6 @@ namespace aether::editor
 				}
 			}
 
-			// ── Keyboard ───────────────────────────────────────────────────────
-			// Delete is editor-global like the clipboard shortcuts: it acts on
-			// the shared selection from any window (undo covers slips).
 			if (!ImGui::GetIO().WantTextInput)
 			{
 				if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !selection.All().empty())
@@ -1838,8 +1755,6 @@ namespace aether::editor
 					{
 						undoStack->Push(world, context.services);
 					}
-					// Copy first: DestroyHierarchy mutates the selection source, and
-					// an earlier subtree delete may swallow later selected entities.
 					const std::vector<Entity> doomed = selection.All();
 					for (const Entity e: doomed)
 					{
@@ -1850,7 +1765,6 @@ namespace aether::editor
 					}
 					selection.Clear();
 				}
-				// F2 stays window-scoped: it opens the outliner's inline editor.
 				if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F2) && selection.Primary().IsValid())
 				{
 					BeginRename(world, selection.Primary());
@@ -1860,31 +1774,25 @@ namespace aether::editor
 		ImGui::End();
 	}
 
-	// ── AAA feature implementations ─────────────────────────────────────
-
-	// Walk up the parent chain building a "/Root/Child/Grandchild"-style path.
 	std::string HierarchyPanel::ComputeEntityPath(const World& world, Entity e) const
 	{
 		std::vector<std::string> segments;
 		Entity cur = e;
 		while (cur.IsValid())
 		{
-			segments.push_back(EntityDisplayName(world, cur));
+			segments.emplace_back(EntityDisplayName(world, cur));
 			const auto* h = world.TryGet<HierarchyComponent>(cur);
 			cur = h ? h->parent : Entity{};
 		}
 		std::string path;
-		for (auto it = segments.rbegin(); it != segments.rend(); ++it)
+		for (auto& segment: std::views::reverse(segments))
 		{
 			path += '/';
-			path += *it;
+			path += segment;
 		}
 		return path;
 	}
 
-	// Try to find an entity by walking from world root entities along the
-	// given path segments (e.g. {"Root", "Child", "Grandchild"}).
-	// Returns invalid entity on failure.
 	namespace
 	{
 		Entity FindEntityByPath(const World& world, const std::vector<std::string>& segments)
@@ -1893,7 +1801,6 @@ namespace aether::editor
 			{
 				return {};
 			}
-			// Search root-level entities for the first segment.
 			Entity cur{};
 			for (const Entity e: world.Roots())
 			{
@@ -1939,7 +1846,6 @@ namespace aether::editor
 		void SplitPath(std::string_view path, std::vector<std::string>& out)
 		{
 			out.clear();
-			// Strip leading '/'.
 			if (!path.empty() && path[0] == '/')
 			{
 				path = path.substr(1);
@@ -1958,8 +1864,6 @@ namespace aether::editor
 		}
 	} // namespace
 
-	// Populate m_expandedNodes from the path-based m_expandedPaths map.
-	// Should be called once after the scene is populated.
 	void HierarchyPanel::SyncExpandedFromPaths(World& world)
 	{
 		if (m_expandedPaths.empty())
@@ -1994,7 +1898,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Collect ancestor chain from root to leaf.
 		std::vector<Entity> chain;
 		Entity cur = primary;
 		while (cur.IsValid())
@@ -2080,13 +1983,11 @@ namespace aether::editor
 		const double now = ImGui::GetTime();
 		constexpr double kTypeTimeout = 0.8;
 
-		// Reset on timeout.
 		if (!m_typeJumpText.empty() && (now - m_typeJumpTime) > kTypeTimeout)
 		{
 			m_typeJumpText.clear();
 		}
 
-		// Accumulate printable characters.
 		for (int ch = ImGuiKey_A; ch <= ImGuiKey_Z; ++ch)
 		{
 			if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(ch), false))
@@ -2102,27 +2003,24 @@ namespace aether::editor
 			return;
 		}
 
-		// Find first entity whose name starts with the typed text.
 		const auto& rows = m_rowsCur;
-		for (std::size_t i = 0; i < rows.size(); ++i)
+		for (auto row: rows)
 		{
-			const std::string name = EntityDisplayName(world, rows[i]);
+			const std::string name = EntityDisplayName(world, row);
 			std::string lower;
 			lower.reserve(name.size());
-			for (unsigned char c: name)
+			for (const unsigned char c: name)
 			{
 				lower.push_back(static_cast<char>(std::tolower(c)));
 			}
 			if (lower.starts_with(m_typeJumpText))
 			{
-				selection.Select(rows[i]);
-				m_scrollToEntity = rows[i];
+				selection.Select(row);
+				m_scrollToEntity = row;
 				break;
 			}
 		}
 	}
-
-	// --- Settings persistence ---
 
 	void HierarchyPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
@@ -2140,13 +2038,10 @@ namespace aether::editor
 			std::snprintf(key, sizeof(key), "debug.hierarchy.expanded.%d", i);
 			if (config.Has(key))
 			{
-				// Store a flag so we'll look this up later when the scene is loaded.
-				// The path string is embedded in the key itself for this simple
-				// flat config system.
 				m_expandedPaths[std::string(key)] = true;
 			}
 		}
-		m_expandedPathsLoaded = false; // will be synced on first OnImGui with a valid world
+		m_expandedPathsLoaded = false;
 	}
 
 	void HierarchyPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const

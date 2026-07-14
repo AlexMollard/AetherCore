@@ -151,7 +151,7 @@ namespace aether
 	Expected<std::uint32_t> RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const gpu::Extent2D extent)
 	{
 		AE_PROFILE_ZONE();
-		AE_ASSERT_ALWAYS(m_context != nullptr && m_graph != nullptr && m_bindlessManager != nullptr, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
+		AE_ASSERT_ALWAYS(m_context && m_graph && m_bindlessManager, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
 
 		const std::uint32_t id = m_nextId++;
 		Entry rt{};
@@ -237,7 +237,7 @@ namespace aether
 
 	bool RenderTargetService::HasTarget(const std::uint32_t id) const
 	{
-		return m_targets.find(id) != m_targets.end();
+		return m_targets.contains(id);
 	}
 
 	void RenderTargetService::RegisterPassFor(const std::uint32_t id)
@@ -257,7 +257,7 @@ namespace aether
 		const RGImage color = it->second.rgColor;
 		const RGImage depth = it->second.rgDepth;
 		const gpu::Extent2D extent = it->second.extent;
-		const gpu::Pipeline cullPipeline = m_cullPass->GetSinglePipeline();
+		const gpu::PipelineView cullPipeline = m_cullPass->GetSinglePipeline();
 		it->second.drawList = m_graph->CreatePreparedDrawList("CameraRTDraws_" + idStr);
 
 		auto cullPass = m_graph->AddComputePass("$CullDraws_RTT_" + idStr);
@@ -272,7 +272,7 @@ namespace aether
 				                return;
 			                }
 
-			                Camera* cam = m_cameraManager->TryGet(CameraHandle{rit->second.cameraHandleRaw});
+			                const Camera* cam = m_cameraManager->TryGet(CameraHandle{rit->second.cameraHandleRaw});
 			                if (cam == nullptr || !rit->second.constants)
 			                {
 				                rit->second.renderQueue->DiscardPending(ctx.frameSlot);
@@ -296,8 +296,6 @@ namespace aether
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
 			                const auto frameIdx = ctx.frameSlot;
-			                // Bin local lights against THIS camera's frustum (the main
-			                // view's screen-space tile lists are wrong from any other POV).
 			                if (rit->second.lightViewId == kInvalidLightView)
 			                {
 				                rit->second.lightViewId = m_lightingManager->RegisterView(rit->second.debugName);
@@ -340,7 +338,6 @@ namespace aether
 			                }
 
 			                const auto frameIdx = ctx.frameSlot;
-			                // Shade with THIS target's per-view tile lists (bound during prepare).
 			                auto lightingAddr = m_lightingManager && rit->second.lightViewId != kInvalidLightView ? m_lightingManager->GetLightingAddresses(rit->second.lightViewId, frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);

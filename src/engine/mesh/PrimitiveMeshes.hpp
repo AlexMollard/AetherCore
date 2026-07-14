@@ -11,11 +11,10 @@ namespace aether
 		Triangle,
 		Quad,
 		Cube,
-		Plane,  // 20x20 subdivided grid; UVs tile 20x per axis via REPEAT sampler
-		Sphere, // UV sphere, radius 0.5, 32 slices x 16 stacks
+		Plane,
+		Sphere,
 	};
 
-	// Engine-owned cache of built-in primitive meshes.
 	class PrimitiveMeshes
 	{
 	public:

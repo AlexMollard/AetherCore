@@ -15,10 +15,6 @@ namespace aether
 	class ImguiFrameData;
 
 	// Render-thread-owned renderer for ImGui secondary (torn-out OS-window) viewports.
-	// Owns one ImGui pipeline (built from ImGui's own shaders, layout-compatible with the
-	// backend's AddTexture descriptor sets) and one ImGui_ImplVulkanH_Window per viewport.
-	// All methods run on the render thread EXCEPT RetireViewports, which the producer calls
-	// inside a RunExclusive quiesce (render thread parked, GPU idle).
 	class ImguiViewportRenderer
 	{
 	public:
@@ -29,14 +25,12 @@ namespace aether
 		ImguiViewportRenderer& operator=(const ImguiViewportRenderer&) = delete;
 
 		// colorFormat MUST equal the main swapchain format so secondary swapchains share
-		// this pipeline.
 		void Init(VulkanContext& vk, VkFormat colorFormat);
 		void Shutdown();
 
 		// Render + present every secondary viewport in the snapshot (render thread).
 		void Render(const ImguiFrameData& frame);
 
-		// Destroy swapchains/surfaces for viewports whose ids are no longer present.
 		// Producer thread, inside RunExclusive only.
 		void RetireViewports(const std::vector<ImGuiID>& departedIds);
 
@@ -46,7 +40,6 @@ namespace aether
 		}
 
 	private:
-		// Host-visible vertex/index buffers for one swapchain image.
 		struct FrameBuffers
 		{
 			VkDeviceMemory vtxMem = VK_NULL_HANDLE;
@@ -61,7 +54,7 @@ namespace aether
 		{
 			ImGui_ImplVulkanH_Window window{};
 			bool created = false;
-			std::vector<FrameBuffers> ring; // one entry per swapchain image, indexed by acquired image
+			std::vector<FrameBuffers> ring;
 		};
 
 		void CreatePipeline(VkFormat colorFormat);
@@ -75,10 +68,10 @@ namespace aether
 		VkFormat m_colorFormat = VK_FORMAT_UNDEFINED;
 
 		VkSampler m_sampler = VK_NULL_HANDLE;
-		VkDescriptorSetLayout m_texSetLayout = VK_NULL_HANDLE;     // set 0 (SAMPLED_IMAGE), matches AddTexture
-		VkDescriptorSetLayout m_samplerSetLayout = VK_NULL_HANDLE; // set 1 (SAMPLER)
+		VkDescriptorSetLayout m_texSetLayout = VK_NULL_HANDLE;
+		VkDescriptorSetLayout m_samplerSetLayout = VK_NULL_HANDLE;
 		VkDescriptorPool m_samplerPool = VK_NULL_HANDLE;
-		VkDescriptorSet m_samplerDS = VK_NULL_HANDLE; // shared sampler set, bound at set 1
+		VkDescriptorSet m_samplerDS = VK_NULL_HANDLE;
 		VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 		VkPipeline m_pipeline = VK_NULL_HANDLE;
 

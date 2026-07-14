@@ -7,24 +7,14 @@
 
 namespace aether
 {
-	// A slot allocator that defers reuse of a freed slot until several frames
 	// have elapsed, so the slot's backing GPU memory is never handed out again
-	// while an in-flight frame may still reference it. Mirrors the deferred-free
-	// idiom used by BindlessManager / ImguiSubsystem for the same reason.
-	//
-	// Thread safety: NOT thread-safe. The owner (MaterialBuffer) serializes all
-	// calls under its own mutex.
 	class DeferredSlotFreeList
 	{
 	public:
 		static constexpr std::uint32_t kInvalidSlot = 0xFFFFFFFFu;
 
-		// A slot freed on frame F becomes reusable once the frame index advances
-		// to F + kReuseDelayFrames. kMaxFramesInFlight covers the frames whose
-		// command buffers may still reference the slot; +1 is a guard frame.
 		static constexpr std::uint64_t kReuseDelayFrames = kMaxFramesInFlight + 1u;
 
-		// Populate the free list with slots [0, capacity) and clear all state.
 		void Reset(std::uint32_t capacity)
 		{
 			m_free.clear();
@@ -37,7 +27,6 @@ namespace aether
 			}
 		}
 
-		// Release all bookkeeping (used on shutdown).
 		void Clear()
 		{
 			m_free.clear();
@@ -56,15 +45,11 @@ namespace aether
 			return slot;
 		}
 
-		// Queue a slot for reuse kReuseDelayFrames from the current frame. The
-		// slot is NOT immediately available to Allocate().
 		void Free(std::uint32_t slot)
 		{
 			m_retire.push_back(Retired{slot, m_frameIndex + kReuseDelayFrames});
 		}
 
-		// Advance to frameIndex and return any slots whose delay has elapsed to
-		// the free list.
 		void AdvanceFrame(std::uint64_t frameIndex)
 		{
 			m_frameIndex = frameIndex;

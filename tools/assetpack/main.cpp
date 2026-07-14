@@ -1,11 +1,3 @@
-// AssetPacker - build-time tool that bundles a source-asset directory into a
-// single binary (.pak) file consumed by the runtime PakBackend.
-//
-// Usage:
-//   AssetPacker [--project] [--import-materials] [--compress-level N] <source-dir> <output.pak>
-//   AssetPacker import-materials <source-dir>
-//   AssetPacker bake-font <ttf> <outDir>
-
 #include <charconv>
 #include <filesystem>
 #include <iostream>

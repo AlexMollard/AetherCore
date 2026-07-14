@@ -16,7 +16,6 @@ namespace aether
 
 namespace aether::gpu
 {
-	// Backend-agnostic command-buffer wrapper. Lives for one frame; created
 	// by GpuDevice or AsyncComputeContext, never stored.
 	class CommandList
 	{
@@ -41,17 +40,15 @@ namespace aether::gpu
 			return out;
 		}
 
-		// Backend-only: returns the raw command-buffer handle for the few
-		// engine-side sites that need it (Tracy GPU zones).
 		[[nodiscard]] gpu::CommandBuffer GetCommandBuffer() const noexcept
 		{
 			return m_cmd;
 		}
 
-		void BindPipeline(void* pipeline) noexcept;
+		void BindPipeline(PipelineView pipeline) noexcept;
 		void BindPipeline(GraphicsPipeline& pipeline);
 
-		void BindComputePipeline(void* pipeline) noexcept;
+		void BindComputePipeline(PipelineView pipeline) noexcept;
 
 		void BindIndexBuffer(void* buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
 		void BindIndexBuffer(BufferHandle buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
@@ -109,8 +106,6 @@ namespace aether::gpu
 		        std::int32_t imageOffsetX = 0,
 		        std::int32_t imageOffsetY = 0) noexcept;
 
-		// Wire the debug-label function pointers. Called once at engine init
-		// by the backend. Pass null to disable.
 		static void SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept;
 		static void SetDiagnosticEngine(DiagnosticEngine* engine) noexcept;
 		static void SetAlphaToOneDynamicStateSupported(bool supported) noexcept;

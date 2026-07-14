@@ -13,17 +13,14 @@ namespace aether
 {
 	namespace
 	{
-		// Transform a local-space bounding sphere (xyz=center, w=radius) to world space.
-		// The center is transformed by the model matrix; the radius is scaled by the
-		// maximum axis scale extracted from the matrix.
 		glm::vec4 TransformBoundingSphere(glm::vec4 localSphere, const glm::mat4& model)
 		{
-			glm::vec3 center = glm::vec3(model * glm::vec4(localSphere.x, localSphere.y, localSphere.z, 1.0f));
+			const glm::vec3 center = glm::vec3(model * glm::vec4(localSphere.x, localSphere.y, localSphere.z, 1.0f));
 
-			glm::vec3 col0(model[0]);
-			glm::vec3 col1(model[1]);
-			glm::vec3 col2(model[2]);
-			float maxScale = std::max({glm::length(col0), glm::length(col1), glm::length(col2)});
+			const glm::vec3 col0(model[0]);
+			const glm::vec3 col1(model[1]);
+			const glm::vec3 col2(model[2]);
+			const float maxScale = std::max({glm::length(col0), glm::length(col1), glm::length(col2)});
 
 			return glm::vec4(center, localSphere.w * maxScale);
 		}
@@ -44,28 +41,24 @@ namespace aether
 				continue;
 			}
 
-			// Disabled entities (and their subtree) are not drawn.
 			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttEntity)))
 			{
 				continue;
 			}
 
-			// A MeshRenderer toggled invisible hides its mesh in every pass; one
-			// with castShadows==false still draws in color passes but is skipped
-			// for the shadow-map queues.
 			if (const auto* mr = world.GetRegistry().try_get<MeshRendererComponent>(enttEntity); mr != nullptr && (!mr->visible || (shadowPass && !mr->castShadows)))
 			{
 				continue;
 			}
 
 			std::uint32_t materialIndex = 0xFFFFFFFFu;
-			if (const auto material = world.GetRegistry().try_get<MaterialComponent>(enttEntity))
+			if (const auto* const material = world.GetRegistry().try_get<MaterialComponent>(enttEntity))
 			{
 				materialIndex = material->gpuSlot;
 			}
 
 			std::uint32_t effectParamIndex = 0xFFFFFFFFu;
-			if (const auto fx = world.GetRegistry().try_get<EffectParamsComponent>(enttEntity))
+			if (const auto* const fx = world.GetRegistry().try_get<EffectParamsComponent>(enttEntity))
 			{
 				effectParamIndex = fx->paramSlot;
 			}
@@ -75,7 +68,7 @@ namespace aether
 			std::uint32_t animClipIndex = 0;
 			float animTime = 0.f;
 			const AnimationDatabase* animDb = nullptr;
-			if (const auto smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
+			if (const auto* const smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
 				if (smc->animDb && smc->animDb->IsAlive() && smc->animDb->IsValid())
 				{
@@ -87,8 +80,6 @@ namespace aether
 				}
 			}
 
-			// Skinned meshes animate beyond their bind-pose bounding sphere.
-			// Apply a conservative margin to prevent false culling during animation.
 			constexpr float kSkinnedMeshSphereMargin = 2.0f;
 			glm::vec4 localSphere = meshComp.mesh->GetBoundingSphere();
 			if (world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity) && localSphere.w > 0.0f)

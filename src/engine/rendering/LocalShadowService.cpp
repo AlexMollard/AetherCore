@@ -30,27 +30,11 @@
 namespace
 {
 	constexpr std::uint32_t kPointLightFaceCount = 6u;
-	// Max atlas entries rendered per frame. Each point light needs 6 (one per
-	// cube face), each spot needs 1. At 24 this truncated to 4 point lights, and
-	// because candidates are sorted by camera distance, *which* lights cast
-	// shadows flipped as the camera moved - shadows popped on/off frame to frame.
-	// 48 fits 8 point lights (or 6 points + 12 spots) with headroom; the 8192²
-	// atlas holds far more (48 * 384² ≈ 7M of 67M texels).
 	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 48u;
 	// EVSM exponential warp constant. Must match kEvsmExponent in
-	// local_shadow_depth.slang and LocalShadow.slangh. Empty atlas texels must
-	// read as "occluder at max range", i.e. exp(c*1), or everything outside a
-	// caster's silhouette would be treated as shadowed by a phantom at d=0.
 	constexpr float kEvsmExponent = 40.0f;
 	constexpr std::uint32_t kPointShadowFaceRes = 384u;
-	// Per-face FOV for cube-style point shadows. 90 deg exactly tiles the cube:
-	// SelectPointShadowFace assigns a direction to its dominant-axis face, and
-	// that face's +-45-deg square covers the whole quadrant INCLUDING the corner
-	// (the corner sits at 45 deg per-axis; the 54.7-deg figure is the DIAGONAL,
 	// which needs no separate coverage). Radial depth is face-invariant, so the
-	// faces join seamlessly. Wider FOVs (100/120) only add perspective
-	// distortion that stretches and pinches shadows toward the frustum edge -
-	// this was the "warped further from the caster / narrow arm" artifact.
 	constexpr float kPointLightFovDeg = 90.0f;
 	constexpr float kSpotShadowFovPaddingRad = glm::radians(4.0f);
 
@@ -100,16 +84,15 @@ namespace aether
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
-		auto device = static_cast<gpu::Device>(context.GetDevice().device);
+		auto* device = static_cast<gpu::Device>(context.GetDevice().device);
 
 		m_atlasManager.Initialize(bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
 		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u, .debugName = "LocalShadow"});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
-		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
+		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu);
 
-		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
 		const gpu::Format depthFormat = swapchain.GetDepthFormat();
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
@@ -120,12 +103,6 @@ namespace aether
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
-		                        // Render only the faces pointing AWAY from the light (the standard
-		                        // VSM anti-acne setup). The light projections do not Y-flip like the
-		                        // main camera (Camera.cpp proj[1][1] *= -1), which mirrors screen-space
-		                        // winding in atlas space - so with frontFace=CCW, Back here culls the
-		                        // light-facing faces. CullMode::Front would keep them and re-introduce
-		                        // self-shadow banding at grazing angles.
 		                        .cullMode = gpu::CullMode::Back,
 		                        .debugName = "LocalShadow.Depth",
 		                }));
@@ -134,7 +111,6 @@ namespace aether
 		m_perLightShadows.reserve(kMaxLocalShadows);
 		m_lightShadowIndices.reserve(4096);
 
-		// Allocate per-frame GPU buffers for per-light shadow data and light constants (double-buffered).
 		constexpr gpu::BufferUsage kSsboBda = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
@@ -167,7 +143,6 @@ namespace aether
 			}
 		}
 
-		// -- Create VSM blur buffer (BDA) -----------------------------------
 		{
 			constexpr gpu::DeviceSize kBlurBufSize = static_cast<gpu::DeviceSize>(ShadowAtlasManager::kAtlasWidth) * ShadowAtlasManager::kAtlasHeight * sizeof(float) * 2u;
 			constexpr gpu::BufferUsage kBlurBufUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferSrc | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
@@ -190,7 +165,6 @@ namespace aether
 			AE_ASSERT_ALWAYS(m_blurScratchBufferAddr != 0, "LocalShadowService: blur scratch buffer address is 0");
 		}
 
-		// -- Create VSM blur compute pipeline (BDA, no descriptors) ---------
 		{
 			m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
 			        gpu::ComputePipelineDesc{
@@ -204,7 +178,6 @@ namespace aether
 			}
 		}
 
-		// -- Create persistent atlas depth attachment ----------------------
 		{
 			const gpu::TextureDesc desc{
 			        .format = depthFormat,
@@ -219,7 +192,6 @@ namespace aether
 			m_atlasDepthView = gpu::ResourceRegistry::ResolveTexture(m_atlasDepthHandle).view;
 		}
 
-		// Descriptor pool.
 		{
 		}
 	}
@@ -295,7 +267,6 @@ namespace aether
 		m_atlasManager.Reset();
 		m_perLightShadows.clear();
 
-		// Collect and prioritize shadow-casting lights.
 		const Camera* mainCam = cameraManager.TryGetMainCamera();
 		const glm::vec3 camPos = (mainCam != nullptr) ? mainCam->GetPosition() : glm::vec3(0.0f);
 
@@ -307,15 +278,14 @@ namespace aether
 			glm::vec3 position;
 			float radius;
 			std::uint32_t lightIndex;
-			std::uint32_t lightType; // 0=point, 1=spot
+			std::uint32_t lightType;
 			float distanceSq;
 		};
 
 		std::vector<ShadowCandidate> candidates;
 
-		// Gather point lights (type 0 on CPU = point).
 		{
-			std::span<const Renderer::PointLight> ptLights = packet.pointLights;
+			const std::span<const Renderer::PointLight> ptLights = packet.pointLights;
 			for (std::size_t i = 0; i < ptLights.size() && candidates.size() < kMaxLocalShadows; ++i)
 			{
 				if (!ptLights[i].castsShadow)
@@ -334,9 +304,8 @@ namespace aether
 			}
 		}
 
-		// Gather spot lights (type 1 on CPU = spot).
 		{
-			std::span<const Renderer::SpotLight> spLights = packet.spotLights;
+			const std::span<const Renderer::SpotLight> spLights = packet.spotLights;
 			for (std::size_t i = 0; i < spLights.size() && candidates.size() < kMaxLocalShadows; ++i)
 			{
 				if (!spLights[i].castsShadow)
@@ -355,8 +324,6 @@ namespace aether
 			}
 		}
 
-		// Sort by distance (closest first = highest priority), with a stable
-		// tie-break so the shadow budget does not reshuffle equal candidates.
 		std::ranges::sort(candidates,
 		        [](const ShadowCandidate& a, const ShadowCandidate& b)
 		        {
@@ -371,21 +338,14 @@ namespace aether
 			        return a.lightIndex < b.lightIndex;
 		        });
 
-		// Clamp to budget.
 		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
 
-		// Initialize shadow index mapping - entries are filled during the
-		// allocation loop below. Lights not in the budget stay at -1.
 		const std::uint32_t totalLights = pointCount + spotCount;
 		m_lightShadowIndices.assign(totalLights, glm::vec2(-1.0f, 1.0f));
 
-		// Allocate atlas regions and build per-light data.
-		// Track the running index into m_perLightShadows so that the
-		// shadow-index mapping below points to the correct entries.
 		std::uint32_t shadowDataIdx = 0;
 
 		// Fixed resolution for all shadows - avoids atlas layout shifts when
-		// camera distance changes, which causes flickering.
 		constexpr std::uint32_t kShadowRes = 512u;
 
 		for (std::uint32_t i = 0; i < budget; ++i)
@@ -394,13 +354,11 @@ namespace aether
 
 			if (c.lightType == 0u)
 			{
-				if (shadowDataIdx + kPointLightFaceCount > kMaxRenderedLocalShadowEntries || shadowDataIdx + kPointLightFaceCount > kMaxLocalShadows)
+				if (shadowDataIdx + kPointLightFaceCount > kMaxRenderedLocalShadowEntries)
 				{
 					continue;
 				}
 
-				// Point light: six fixed cube-style faces. The small FOV overlap
-				// avoids receiver shadows popping at face boundaries.
 				const std::uint32_t faceRes = kPointShadowFaceRes;
 				std::array<ShadowAtlasManager::Region, kPointLightFaceCount> regions{};
 				bool allocatedAllFaces = true;
@@ -429,25 +387,23 @@ namespace aether
 					});
 				}
 
-				// Map this point light to the first of its consecutive face entries.
 				m_lightShadowIndices[c.lightIndex] = glm::vec2(static_cast<float>(shadowDataIdx), 1.0f);
 				shadowDataIdx += kPointLightFaceCount;
 			}
 			else
 			{
-				if (shadowDataIdx + 1u > kMaxRenderedLocalShadowEntries || shadowDataIdx + 1u > kMaxLocalShadows)
+				if (shadowDataIdx + 1u > kMaxRenderedLocalShadowEntries)
 				{
 					break;
 				}
 
-				// Spot light: single perspective region.
-				ShadowAtlasManager::Region r = m_atlasManager.Allocate(kShadowRes, kShadowRes);
+				const ShadowAtlasManager::Region r = m_atlasManager.Allocate(kShadowRes, kShadowRes);
 				if (!r.IsValid())
 				{
 					break;
 				}
 
-				std::span<const Renderer::SpotLight> spLights = packet.spotLights;
+				const std::span<const Renderer::SpotLight> spLights = packet.spotLights;
 				const Renderer::SpotLight& src = spLights[c.lightIndex];
 				const glm::vec3 lightDir = glm::normalize(src.direction);
 				const glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.95f) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
@@ -460,20 +416,18 @@ namespace aether
 				        .region = r,
 				        .depthBias = 0.01f,
 				        .normalBias = 0.03f,
-				        .lightType = 0u, // spot
+				        .lightType = 0u,
 				        .lightPosRange = glm::vec4(src.position, src.radius),
 				});
 
-				// Map this spot light to its single entry.
 				m_lightShadowIndices[pointCount + c.lightIndex] = glm::vec2(static_cast<float>(shadowDataIdx), 1.0f);
 				shadowDataIdx += 1u;
 			}
 		}
 
-		// Write ShadowLightData to per-frame GPU buffer.
 		const auto shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
 		const std::uint32_t bufSlot = frameIdx % kMaxFramesInFlight;
-		auto mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
+		auto* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			const PerLightShadow& pls = m_perLightShadows[i];
@@ -489,19 +443,15 @@ namespace aether
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_shadowDataBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(ShadowLightData));
 
-		// Write per-light frame constants (just viewProj) for atlas rendering.
-		auto lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
+		auto* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
-			// local_shadow_depth.slang reads this as light position (xyz) + range (w)
-			// to write linear radial depth; the "camera" of the atlas pass is the light.
 			lightFc[i].cameraWorldPos = m_perLightShadows[i].lightPosRange;
 			lightFc[i].RefreshDerived();
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));
 
-		// Fill FrameConstants for the shader.
 		fc.shadowLightCount = shadowCount;
 		fc.shadowLightDataAddr = m_shadowDataBuffer[bufSlot].address;
 	}
@@ -515,14 +465,11 @@ namespace aether
 
 	void LocalShadowService::SetupPassResources(RenderGraph& graph)
 	{
-		// Register the atlas as an external image in the render graph.
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
 
-		// Register the blur BDA buffer.
 		m_blurBufferRG = graph.RegisterBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer));
 		m_blurScratchBufferRG = graph.RegisterBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurScratchBuffer));
 
-		// Create a persistent depth attachment for the atlas render pass.
 		m_atlasDepthImage = graph.RegisterImage(m_atlasDepthImageVk, m_atlasDepthView, gpu::ImageAspect::Depth);
 		(void) graph.GetBlackboard().DeclareGraphProduct<LocalShadowProduct>(std::string{kFrameProductLocalShadows},
 		        LocalShadowProduct{
@@ -536,7 +483,6 @@ namespace aether
 
 	void LocalShadowService::RegisterComputePasses(RenderGraph& graph, CullPass& cullPass)
 	{
-		// Compute pass: cull draws for local shadow casters.
 		m_shadowDrawList = graph.CreatePreparedDrawList("LocalShadowDraws");
 		auto pass = graph.AddComputePass("$CullLocalShadowDraws");
 		pass.DisableAsyncCompute()
@@ -545,12 +491,7 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
-			                // Cull shadow casters per light. This was pinned to force-visible
-			                // (no culling) during shadow bring-up, which makes the atlas render
-			                // every caster into every light region - fine for a static scene, but
 			                // it cliffs into a render-thread wedge the moment a shadow-caster is
-			                // added at runtime (the GPU shadow workload explodes). Restore proper
-			                // culling; the atlas then only renders casters each light can see.
 			                m_shadowRenderQueue.SetDebugForceVisible(false);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), ctx.frameSlot);
 		                })
@@ -559,7 +500,6 @@ namespace aether
 
 	void LocalShadowService::RegisterGraphicsPasses(RenderGraph& graph)
 	{
-		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
 		graph.AddPass("$LocalShadowAtlasRender")
 		        .ConsumesDrawList(m_shadowDrawList)
 		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(std::exp(kEvsmExponent), std::exp(2.0f * kEvsmExponent), 0.0f, 0.0f))
@@ -601,10 +541,6 @@ namespace aether
 			                }
 		                });
 
-		// -- VSM blur passes (BDA, no descriptors) ---------------------------
-		// Flow: copy atlas → buffer, H-blur (in-place via LDS), V-blur (in-place via LDS), copy buffer → atlas.
-		// All synchronization is handled by the render graph via transfer access types.
-
 		graph.AddComputePass("$VSMCopyToBuffer")
 		        .ReadImageTransfer(m_atlasImage)
 		        .WriteBufferTransfer(m_blurBufferRG)
@@ -617,8 +553,8 @@ namespace aether
 				                return;
 			                }
 
-			                const auto atlasImage = m_atlasManager.GetAtlasImage();
-			                const auto blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
+			                auto* const atlasImage = m_atlasManager.GetAtlasImage();
+			                auto* const blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.CopyImageToBuffer(atlasImage, blurVkBuf, gpu::ImageLayout::TransferSrc, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
@@ -641,7 +577,7 @@ namespace aether
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
+			                cmd.BindComputePipeline(blurPipeline.state);
 			                for (const PerLightShadow& pls: m_perLightShadows)
 			                {
 				                if (!pls.region.IsValid())
@@ -683,7 +619,7 @@ namespace aether
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
+			                cmd.BindComputePipeline(blurPipeline.state);
 			                for (const PerLightShadow& pls: m_perLightShadows)
 			                {
 				                if (!pls.region.IsValid())
@@ -721,8 +657,8 @@ namespace aether
 				                return;
 			                }
 
-			                const auto atlasImage = m_atlasManager.GetAtlasImage();
-			                const auto blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
+			                auto* const atlasImage = m_atlasManager.GetAtlasImage();
+			                auto* const blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.CopyBufferToImage(blurVkBuf, atlasImage, gpu::ImageLayout::TransferDst, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));

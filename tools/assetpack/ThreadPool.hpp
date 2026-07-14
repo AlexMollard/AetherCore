@@ -11,7 +11,6 @@
 namespace aether::assetpipeline
 {
 	// Lightweight thread pool with task submission and result collection via futures.
-	// Tasks are executed by a fixed number of worker threads.
 	class ThreadPool
 	{
 	public:
@@ -32,7 +31,7 @@ namespace aether::assetpipeline
 		~ThreadPool()
 		{
 			{
-				std::lock_guard<std::mutex> lock(m_mutex);
+				const std::lock_guard<std::mutex> lock(m_mutex);
 				m_stop = true;
 			}
 			m_cv.notify_all();
@@ -49,7 +48,7 @@ namespace aether::assetpipeline
 			auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
 			std::future<return_type> res = task->get_future();
 			{
-				std::lock_guard<std::mutex> lock(m_mutex);
+				const std::lock_guard<std::mutex> lock(m_mutex);
 				if (m_stop)
 				{
 					throw std::runtime_error("submit on stopped ThreadPool");

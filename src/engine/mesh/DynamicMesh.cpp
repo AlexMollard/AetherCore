@@ -37,7 +37,6 @@ namespace aether
 	bool DynamicMesh::Rebuild(const void* vertexData, std::uint32_t vertexCount, std::uint32_t vertexStride, const std::uint32_t* indices, std::uint32_t indexCount, MeshArena& arena, MeshUploadQueue& uploadQueue)
 	{
 		AE_PROFILE_ZONE();
-		// Release the old allocation back to the arena.
 		FreeAlloc();
 		m_arena = &arena;
 
@@ -47,17 +46,12 @@ namespace aether
 		m_alloc = arena.Allocate(vertexBytes, vertexCount, indexBytes, indexCount);
 		if (!m_alloc.IsValid())
 		{
-			// Arena exhausted this frame; caller should retry later after capacity
-			// is increased or other chunks are unloaded.
 			return false;
 		}
 
 		const bool queued = uploadQueue.Upload(vertexData, vertexBytes, arena.GetVertexBufferRaw(), m_alloc.vertexByteOffset, indices, indexBytes, arena.GetIndexBufferRaw(), m_alloc.indexByteOffset);
 		if (!queued)
 		{
-			// Staging ring full this frame - release the arena slot immediately so
-			// no stale / uninitialised geometry is submitted, and signal the caller
-			// to retry next frame.
 			arena.Free(m_alloc);
 			m_alloc = {};
 			return false;

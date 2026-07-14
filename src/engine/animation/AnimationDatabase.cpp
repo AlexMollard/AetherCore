@@ -9,8 +9,6 @@
 
 namespace aether
 {
-	// Helper: upload a non-empty CPU array into the heap and return its device address.
-	// Returns 0 when the input span is empty (no allocation made).
 	template<typename T>
 	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, gpu::Device device, gpu::Queue queue, gpu::CommandPool pool)
 	{
@@ -18,7 +16,7 @@ namespace aether
 		{
 			return 0;
 		}
-		GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
+		const GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
 		assert(span.IsValid() && "GpuHeap allocation failed - heap capacity insufficient");
 		heap.Upload(span, std::span<const T>(data), device, queue, pool);
 		return span.address;
@@ -37,7 +35,6 @@ namespace aether
 			return db;
 		}
 
-		// Validate animation channel node indices before building GPU data.
 		const auto numNodes = static_cast<std::uint32_t>(asset.nodes.size());
 		std::uint32_t clampedChannels = 0;
 		for (const auto& clip: asset.animations)
@@ -60,7 +57,6 @@ namespace aether
 			AE_VERBOSE(LogCategory::Engine, "AnimationDatabase: all channels valid (numNodes={}, {} clips, {} skins)", numNodes, asset.animations.size(), asset.skins.size());
 		}
 
-		// -- Build CPU arrays -------------------------------------------------
 		std::vector<GpuClip> gpuClips;
 		std::vector<GpuChannel> gpuChannels;
 		std::vector<float> allTimes;
@@ -72,7 +68,7 @@ namespace aether
 		std::vector<GpuSkinMeta> skinMetas;
 		std::vector<std::uint32_t> skinJoints;
 		std::vector<glm::mat4> skinInverseBinds;
-		std::string allStrings; // last - may have non-4-multiple byte count
+		std::string allStrings;
 
 		std::uint32_t currentChannelOffset = 0;
 
@@ -126,7 +122,6 @@ namespace aether
 		{
 			std::int32_t parent = n.parentIndex;
 
-			// Clamp invalid parent indices to -1 (root) to prevent GPU OOB reads
 			if (parent > maxValidParent || parent < -1)
 			{
 				AE_WARN(LogCategory::Engine, "AnimationDatabase: node parentIndex {} out of range (numNodes={}). Clamping to -1.", parent, asset.nodes.size());
@@ -139,14 +134,12 @@ namespace aether
 			bindScales.emplace_back(n.scale, 0.0f);
 		}
 
-		// -- Store node names for cross-skeleton remapping ------------------
 		db.m_nodeNames.reserve(asset.nodes.size());
 		for (const auto& n: asset.nodes)
 		{
 			db.m_nodeNames.push_back(n.name);
 		}
 
-		// -- Compute node depths for level-by-level flatten ------------------
 		static constexpr std::uint32_t kUnsetDepth = UINT32_MAX;
 		std::vector<std::uint32_t> nodeDepth(nodeParents.size(), kUnsetDepth);
 		for (std::size_t i = 0; i < nodeParents.size(); ++i)
@@ -227,9 +220,7 @@ namespace aether
 			skinMetas.push_back(meta);
 		}
 
-		// -- Size the heap and upload all arrays ------------------------------
 		// GpuHeap::AllocBytes enforces a 16-byte minimum alignment, so each term
-		// must be rounded up to a 16-byte boundary to guarantee enough capacity.
 		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
 			return (v + 15) & ~static_cast<gpu::DeviceSize>(15);
@@ -251,8 +242,8 @@ namespace aether
 
 		db.m_heap->Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
-		auto device = static_cast<gpu::Device>(ctx.GetDevice().device);
-		auto queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
+		auto* device = static_cast<gpu::Device>(ctx.GetDevice().device);
+		auto* queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
 
 		db.m_clipsAddr = UploadArray(*db.m_heap, gpuClips, device, queue, uploadPool);
 		db.m_channelsAddr = UploadArray(*db.m_heap, gpuChannels, device, queue, uploadPool);
@@ -273,7 +264,6 @@ namespace aether
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
 		db.m_skinInverseBindsAddr = UploadArray(*db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
 
-		// Log bone hierarchy for debugging
 		for (std::uint32_t i = 1; i < asset.nodes.size() && i < 5; ++i)
 		{
 			const auto& n = asset.nodes[i];
@@ -323,15 +313,13 @@ namespace aether
 		        db.m_depthSortedNodesAddr,
 		        db.m_depthRangesAddr);
 
-		// Strings: upload as raw bytes using char specialisation.
 		if (!allStrings.empty())
 		{
-			GpuSpan<char> span = db.m_heap->Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
+			const GpuSpan<char> span = db.m_heap->Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
 			db.m_heap->Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
 			db.m_stringsAddr = span.address;
 		}
 
-		// Store CPU copies for AppendAnimations rebuild (after GPU upload so locals are intact).
 		db.m_channels = std::move(gpuChannels);
 		db.m_times = std::move(allTimes);
 		db.m_values = std::move(allValues);
@@ -387,7 +375,6 @@ namespace aether
 
 		const auto firstClipIdx = static_cast<std::uint32_t>(m_clips.size());
 
-		// -- Adjust and append clip data --------------------------------
 		const auto channelBase = static_cast<std::uint32_t>(m_channels.size());
 		const auto timesBase = static_cast<std::uint32_t>(m_times.size());
 		const auto valuesBase = static_cast<std::uint32_t>(m_values.size());
@@ -414,9 +401,8 @@ namespace aether
 		m_values.insert(m_values.end(), newValues.begin(), newValues.end());
 		m_clipNames += newClipNames;
 
-		// -- Rebuild GPU heap with combined data ------------------------
-		auto device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
-		auto queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
+		auto* device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
+		auto* queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
 
 		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
@@ -460,7 +446,7 @@ namespace aether
 
 		if (!m_clipNames.empty())
 		{
-			GpuSpan<char> span = m_heap->Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
+			const GpuSpan<char> span = m_heap->Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
 			m_heap->Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, uploadPool);
 			m_stringsAddr = span.address;
 		}

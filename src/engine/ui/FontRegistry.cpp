@@ -9,12 +9,11 @@ namespace aether::ui
 {
 	namespace
 	{
-		// One shaped line's glyph range in the output vector, for post-hoc
 		// horizontal alignment once the line's total width is known.
 		struct LineRange
 		{
 			std::size_t begin = 0;
-			std::size_t end = 0; // exclusive
+			std::size_t end = 0;
 			float width = 0.f;
 		};
 	} // namespace
@@ -65,7 +64,6 @@ namespace aether::ui
 			const float advance = glyph->advance * scale;
 
 			// Wrap before placing a glyph that would overflow the box - but never
-			// wrap the very first glyph of a line (it always fits by definition).
 			if (wrap && pen.x > boxRect.x && pen.x + advance > boxRect.x + boxRect.z)
 			{
 				newLine();
@@ -85,7 +83,7 @@ namespace aether::ui
 		// Horizontal alignment: shift each line's glyphs by its own slack.
 		if (hAlign != 0)
 		{
-			const float factor = hAlign == 1 ? 0.5f : 1.0f; // 1=Center, 2=Right
+			const float factor = hAlign == 1 ? 0.5f : 1.0f;
 			for (const LineRange& lineRange: lines)
 			{
 				const float shift = (boxRect.z - lineRange.width) * factor;
@@ -100,7 +98,7 @@ namespace aether::ui
 		if (vAlign != 0 && !lines.empty())
 		{
 			const float blockHeight = static_cast<float>(lines.size()) * font.lineHeight * scale;
-			const float factor = vAlign == 1 ? 0.5f : 1.0f; // 1=Middle, 2=Bottom
+			const float factor = vAlign == 1 ? 0.5f : 1.0f;
 			const float shift = (boxRect.w - blockHeight) * factor;
 			for (ShapedGlyph& shaped: out)
 			{
@@ -171,9 +169,6 @@ namespace aether::ui
 			asset.glyphs.emplace(glyph.codepoint, glyph);
 		}
 
-		// atlasBindlessSlot stays invalid here: this class only parses metrics.
-		// The GPU-owning caller (UiRenderer) loads "<name>-Regular.fontatlas",
-		// uploads it as a bindless R8 texture, and fills the slot in afterward.
 		const auto [it, inserted] = m_fonts.emplace(std::string(name), std::move(asset));
 		return &it->second;
 	}

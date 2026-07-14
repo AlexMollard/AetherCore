@@ -10,13 +10,6 @@
 
 namespace aether
 {
-	// Per-frame CPU-written SSBO holding the engine's animation blend jobs.
-	//
-	// Storage path: stores a single gpu::BufferHandle (8 bytes, typed,
-	// generation-checked). Allocated through gpu::ResourceRegistry::
-	// CreateMappedBuffer which uses the registry's 3-frame deferred-
-	// destruction ring. CPU writes go through ResolveMappedBuffer().mappedPtr;
-	// GPU addresses through ResolveBuffer().deviceAddress.
 	class AnimationBlendSystem
 	{
 	public:

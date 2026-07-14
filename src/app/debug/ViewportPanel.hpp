@@ -27,47 +27,32 @@ namespace aether::editor
 	private:
 		void ReleaseSceneViewportTexture(app::LayerContext& context);
 		// Click-to-select. Must be called while the viewport InvisibleButton is
-		// still ImGui's last item (hover/click state reads from it).
 		void HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
-		// ImGuizmo manipulator on the primary selection, drawn over the image.
-		// Returns true when a gizmo was actually submitted this frame (valid
-		// selection + camera), so the caller can trust ImGuizmo's IsOver/IsUsing
 		// state - those are stale leftovers on frames where Manipulate never ran.
 		bool DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
-		// Play/Stop toolbar buttons (snapshot on Play, restore on Stop).
 		void DrawPlayControls(app::LayerContext& context);
-		// Wireframe frustums for every entity camera, drawn over the scene image
-		// (main camera highlighted, selected brightened). Purely an overlay.
 		void DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
-		// "Look through selected camera" overlay button + exit control. Toggling
 		// sets m_lookThroughEntityId, which OnUpdate uses to lock the editor camera.
 		void DrawCameraPreviewControls(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
 
 		std::uint64_t m_sceneViewportTextureId = 0;
 		gpu::ImageView m_sceneViewportImageView = nullptr;
 
-		// Cached ImGui descriptor for the live camera-preview thumbnail (re-registered
-		// when the view changes, like the scene image above).
 		std::uint64_t m_cameraPreviewTextureId = 0;
 		gpu::ImageView m_cameraPreviewImageView = nullptr;
 
-		int m_viewportDisplayMode = 0; // Fit, fill, actual, integer
-		int m_viewportAspectMode = 0;  // Render, free, 16:9, 16:10, 4:3, 1:1
+		int m_viewportDisplayMode = 0;
+		int m_viewportAspectMode = 0;
 		bool m_viewportShowStats = true;
 		bool m_viewportShowMouse = true;
 
-		int m_gizmoOp = 0;         // 0 translate, 1 rotate, 2 scale
-		bool m_gizmoLocal = false; // world-space handles by default
+		int m_gizmoOp = 0;
+		bool m_gizmoLocal = false;
 
-		// Editor free-fly camera: takes over as main while Editing (seeded from
-		// the game camera's view), hands back on Play. Stored as raw ids to keep
-		// this header camera-include-free.
 		std::uint32_t m_editorCamId = 0;
 		std::uint32_t m_gameCamId = 0;
 		bool m_editorCamActive = false;
 
-		// While Editing, locks the editor camera to this camera entity's pose+fov
-		// each frame (live "look through" preview). 0 = not previewing.
 		std::uint32_t m_lookThroughEntityId = 0;
 	};
 } // namespace aether::editor

@@ -36,7 +36,7 @@ namespace aether
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())
 			{
-				engine->SetVsync(m_values.graphics.vsync); // no-op when unchanged
+				engine->SetVsync(m_values.graphics.vsync);
 			}
 		}
 		else if (key == "graphics.imguiViewports")
@@ -55,11 +55,7 @@ namespace aether
 		}
 		else if (key == "window.width" || key == "window.height")
 		{
-			// Window size is a scene-app setting (the game/editor resolution). A
-			// UiShell tool front end (the Launcher) sizes its own window to its
 			// content at the entry point and must not be stretched to the configured
-			// resolution here - mirrors Application::BuildConfigFromSettings' UiShell
-			// branch, which likewise keeps the entry point's size.
 			if (const auto* engine = m_services.TryGet<AetherCore>(); engine != nullptr && engine->GetProfile() != RuntimeProfile::Full)
 			{
 				return;
@@ -74,8 +70,6 @@ namespace aether
 				}
 			}
 		}
-		// graphics.asyncCompute, app.startupScene, app.autoplay have no live effect;
-		// they persist and take effect on next launch.
 	}
 
 	void SettingsService::ApplyField(std::string_view key)

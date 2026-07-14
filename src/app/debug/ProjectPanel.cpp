@@ -97,14 +97,11 @@ namespace aether::editor
 #endif
 		}
 
-		// Status colours ride the runtime theme (recoloured by the Theme panel)
-		// instead of the hand-mixed RGB literals the panel used to scatter around.
 		ImVec4 StatusColor(bool succeeded)
 		{
 			return succeeded ? chrome::kSuccess : chrome::kError;
 		}
 
-		// A themed status line that wraps rather than running off the panel edge.
 		void StatusText(const std::string& message, bool succeeded)
 		{
 			if (message.empty())
@@ -116,8 +113,6 @@ namespace aether::editor
 			ImGui::PopTextWrapPos();
 		}
 
-		// A muted, wrapping caption (paths, sizes) - long values fold onto the next
-		// line instead of clipping on a narrow panel.
 		void MutedWrapped(const std::string& text)
 		{
 			if (text.empty())
@@ -129,9 +124,6 @@ namespace aether::editor
 			ImGui::PopTextWrapPos();
 		}
 
-		// Lays a row of buttons left-to-right, breaking to a new line before any
-		// button that would cross the panel's right edge - so toolbars reflow on
-		// narrow windows instead of overflowing off-screen.
 		struct ButtonRow
 		{
 			float rightEdge = 0.0f;
@@ -142,8 +134,6 @@ namespace aether::editor
 				rightEdge = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
 			}
 
-			// Call immediately before drawing each button, passing the exact label so
-			// the row can measure it and decide whether it still fits on this line.
 			void Item(const char* label)
 			{
 				const float width = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
@@ -421,8 +411,6 @@ namespace aether::editor
 
 	void ProjectPanel::DrawPublishDialog(app::LayerContext& context, const app::EditorProjectContext& project)
 	{
-		// A minimum width keeps the auto-resized modal from collapsing around its
-		// full-width fields; it still grows to fit content and the viewport.
 		ImGui::SetNextWindowSizeConstraints(ImVec2(480.0f, 0.0f), ImVec2(FLT_MAX, FLT_MAX));
 		if (!ImGui::BeginPopupModal("Publish Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
@@ -565,14 +553,12 @@ namespace aether::editor
 			Refresh(*project);
 		}
 
-		// ── Header ────────────────────────────────────────────────────────────────
 		const std::string sceneStat = std::to_string(m_scenes.size()) + (m_scenes.size() == 1 ? " scene" : " scenes");
 		chrome::PanelHeader("PROJECT", sceneStat.c_str());
 		ImGui::TextUnformatted(project->name.c_str());
 		MutedWrapped(DisplayPath(project->root));
 		ImGui::Dummy(ImVec2(0.0f, 2.0f));
 
-		// ── Toolbar (reflows on narrow panels) ──────────────────────────────────────
 		{
 			ButtonRow toolbar;
 			if (actions != nullptr && actions->openLauncher)
@@ -613,7 +599,6 @@ namespace aether::editor
 		}
 		MutedWrapped(m_status);
 
-		// ── Scripting ───────────────────────────────────────────────────────────────
 		if (actions != nullptr)
 		{
 			const auto& visualStudios = actions->visualStudioInstallations;
@@ -659,7 +644,6 @@ namespace aether::editor
 			ImGui::EndDisabled();
 		}
 
-		// ── Folders ──────────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Folders");
 		if (ImGui::BeginTable("##projectFolders", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
 		{
@@ -679,7 +663,6 @@ namespace aether::editor
 			ImGui::EndTable();
 		}
 
-		// ── Startup scene ────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Startup Scene");
 		if (m_scenes.empty())
 		{
@@ -712,7 +695,6 @@ namespace aether::editor
 			ImGui::EndDisabled();
 		}
 
-		// ── Build & publish ──────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Build & Publish");
 		if (actions != nullptr)
 		{

@@ -10,9 +10,6 @@ namespace aether::assetpipeline
 {
 	namespace fs = std::filesystem;
 
-	// Scans a directory tree for PBR texture folders and generates (or refreshes)
-	// a properties.toml for each one.  Future expansion: add texture compression,
-	// mip generation, or custom metadata injection through this namespace.
 	namespace MaterialImporter
 	{
 		struct TextureFile
@@ -23,16 +20,10 @@ namespace aether::assetpipeline
 			std::vector<std::string> tokens;
 		};
 
-		// Process every subdirectory under sourceDir, generating or refreshing a
-		// properties.toml for any folder that contains image files.
-		// Returns the number of files written, or -1 on error.
 		int ImportDirectory(const fs::path& sourceDir);
 
-		// Returns true if the given folder had a file generated/updated.
 		bool GeneratePropertiesForFolder(const fs::path& folder);
 
-		// Returns true if outPath does not yet exist or was previously auto-generated
-		// and is safe to overwrite.
 		bool ShouldWrite(const fs::path& outPath);
 
 		std::string ToLowerAscii(std::string s);

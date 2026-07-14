@@ -41,30 +41,24 @@ namespace aether::app
 			return json{{"type", "string"}};
 		}
 
-		// The launcher persists its recent-projects list separately from the editor's
-		// EditorState.toml: the hub owns the recent list; the editor is spawned for a
 		// single project via --project and never reads it.
 		std::filesystem::path LauncherStatePath()
 		{
 			return io::PlatformPaths::GetUserConfigDir() / "LauncherState.toml";
 		}
 
-		// Base MCP control port forwarded to spawned editors, from AETHER_CONTROL_PORT:
-		//   unset              -> 8787 (zero-setup: launcher-spawned editors are MCP-ready)
-		//   a valid port 1-65535-> that value
-		//   "0"/"off"/"none"/"disabled"/"false" -> 0 (disabled; editors start no endpoint)
 		int ResolveControlBasePort()
 		{
 			constexpr int kDefaultPort = 8787;
-			const char* env = std::getenv("AETHER_CONTROL_PORT");
-			if (env == nullptr || *env == '\0')
+			const std::string env = io::PlatformPaths::ReadEnvironmentVariable("AETHER_CONTROL_PORT");
+			if (env.empty())
 			{
 				return kDefaultPort;
 			}
 			std::string lowered;
-			for (const char* p = env; *p != '\0'; ++p)
+			for (const char character: env)
 			{
-				lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+				lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
 			}
 			if (lowered == "off" || lowered == "none" || lowered == "disabled" || lowered == "false")
 			{
@@ -91,12 +85,7 @@ namespace aether::app
 			        false,
 			        Obj(),
 			        [&launcher](const json&, editor::MethodContext& ctx) -> json
-			        {
-				        return json{{"frame", ctx.frameIndex},
-				                {"fps", ctx.fps},
-				                {"recentProjectCount", launcher.RecentProjects().size()},
-				                {"launchingEditor", launcher.IsLaunchingEditor()}};
-			        }});
+			        { return json{{"frame", ctx.frameIndex}, {"fps", ctx.fps}, {"recentProjectCount", launcher.RecentProjects().size()}, {"launchingEditor", launcher.IsLaunchingEditor()}}; }});
 
 			methods.push_back({"launcher.projects",
 			        "list_projects",
@@ -161,27 +150,17 @@ namespace aether::app
 	{
 		m_services = &context.services;
 
-		// The launcher is a single-window hub in its own OS process, so ImGui
-		// multi-viewport (tear-out windows) is unnecessary. Worse, with the shared
-		// overlay's ConfigViewportsNoAutoMerge, the floating hub would be promoted to
-		// its own platform window - leaving the MAIN swapchain empty (the engine's
-		// ScreenshotService, which captures that swapchain, would only see the clear
-		// colour). Disabling viewports keeps the hub in the main window.
 		if (auto* imgui = context.services.TryGet<ImguiSubsystem>())
 		{
 			imgui->SetViewportsEnabled(false);
 		}
 
 		// The hub layout is responsive down to its documented minimum; stop the OS
-		// window from shrinking below it.
 		if (auto* window = context.services.TryGet<Window>())
 		{
 			window->SetMinimumSize(kProjectLauncherMinWidth, kProjectLauncherMinHeight);
 		}
 
-		// Optional hub logo. AssetManager + the Dear ImGui overlay both exist in a
-		// UiShell runtime (AssetSubsystem is initialized; the overlay is installed by
-		// the launcher entry point), so the load path mirrors the editor's.
 		if (auto* assets = context.services.TryGet<AssetManager>())
 		{
 			auto logo = assets->CreateTexture(kEditorLogoPath);
@@ -211,14 +190,11 @@ namespace aether::app
 			LoadPreview(recent);
 		}
 
-		// Seed the hub's open/create text fields with a sensible default location.
 		const std::filesystem::path cwd = project::NormalizePath(std::filesystem::current_path());
 		std::snprintf(m_windowState.openPath.data(), m_windowState.openPath.size(), "%s", project::DisplayPath(cwd).c_str());
 		std::snprintf(m_windowState.newPath.data(), m_windowState.newPath.size(), "%s", project::DisplayPath(cwd / "AetherProject").c_str());
 		std::snprintf(m_windowState.newName.data(), m_windowState.newName.size(), "%s", "AetherProject");
 
-		// The Launcher owns the port while its hub is visible, then hands the same
-		// port to the Editor it launches. This keeps the MCP client on one endpoint.
 		m_controlBasePort = ResolveControlBasePort();
 		if (m_controlBasePort > 0)
 		{
@@ -303,7 +279,7 @@ namespace aether::app
 		const std::string key = project::NormalizePath(project.root).string();
 		if (m_previews.contains(key))
 		{
-			return; // already loaded (or known-absent)
+			return;
 		}
 		PreviewEntry entry;
 		const std::filesystem::path previewPath = project::PreviewImagePath(project.root);
@@ -329,7 +305,7 @@ namespace aether::app
 				}
 			}
 		}
-		m_previews.emplace(key, std::move(entry)); // cache even a 0 id so we don't retry
+		m_previews.emplace(key, std::move(entry));
 	}
 
 	std::uint64_t LauncherLayer::PreviewTextureFor(const EditorProjectContext& project) const
@@ -370,11 +346,11 @@ namespace aether::app
 		};
 
 		ProjectLauncherWindowActions actions;
-		actions.openProject = [this](std::filesystem::path root)
+		actions.openProject = [this](const std::filesystem::path& root)
 		{
 			OpenProject(root);
 		};
-		actions.createProject = [this](std::filesystem::path root, std::string_view name)
+		actions.createProject = [this](const std::filesystem::path& root, std::string_view name)
 		{
 			CreateProject(root, name);
 		};
@@ -386,7 +362,7 @@ namespace aether::app
 		{
 			return project::PickProjectFile();
 		};
-		actions.closeLauncher = []() {}; // no-op: the hub IS the launcher; quit via the OS window
+		actions.closeLauncher = []() {};
 		actions.saveSettings = [this]()
 		{
 			PersistSettings();
@@ -441,8 +417,6 @@ namespace aether::app
 		{
 			return;
 		}
-		// Release the Launcher endpoint before the child binds the same port. The
-		// Launcher stays open during the child's health check but no longer owns MCP.
 		StopControlServer();
 		const int controlPort = m_controlBasePort;
 		if (auto editor = launcher::SpawnEditor(root, controlPort))
@@ -493,7 +467,7 @@ namespace aether::app
 		EditorProjectContext entry;
 		entry.root = resolved;
 		entry.name = project::ReadProjectName(resolved);
-		LoadPreview(entry); // may not exist yet (editor writes it on save) - cached as absent then
+		LoadPreview(entry);
 		m_recentProjects.insert(m_recentProjects.begin(), std::move(entry));
 		if (m_recentProjects.size() > static_cast<std::size_t>(project::kMaxRecentProjects))
 		{

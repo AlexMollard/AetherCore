@@ -33,7 +33,7 @@ namespace aether
 
 	void LogRingBuffer::Push(LogLevel level, std::string_view category, std::string_view message, std::string_view file, int line, std::time_t timestamp)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_records.push_back(Record{
 		        .level = level,
 		        .category = std::string(category),
@@ -51,13 +51,13 @@ namespace aether
 
 	void LogRingBuffer::Snapshot(std::vector<Record>& out) const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		out.assign(m_records.begin(), m_records.end());
 	}
 
 	void LogRingBuffer::Clear()
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_records.clear();
 	}
 
@@ -72,7 +72,7 @@ namespace aether
 				CollapsedRecord& prev = out.back();
 				if (prev.record.level == r.level && prev.record.category == r.category && prev.record.message == r.message)
 				{
-					prev.record = r; // keep the most recent occurrence as the row
+					prev.record = r;
 					++prev.count;
 					continue;
 				}

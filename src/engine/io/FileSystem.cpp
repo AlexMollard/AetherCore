@@ -20,7 +20,7 @@
 #include "utils/Expected.hpp"
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
-#include "IOThread.hpp" // IoExecutor
+#include "IOThread.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 #include "OverlayBackend.hpp"
@@ -32,27 +32,16 @@ namespace aether::io
 	{
 		struct FileSystemBackend
 		{
-			// std::less<> enables heterogeneous lookup so string_view keys work without
-			// allocation.
 			std::map<std::string, std::shared_ptr<IFileBackend>, std::less<>> mounts;
 			std::mutex mountsMutex;
 			std::unique_ptr<IoExecutor> ioThread;
 
-			// The engine shader layer InitializeDefaultMounts() resolved (pak or
-			// dir, mirroring engine://'s choice). Remembered so
-			// FileSystem::MountShaderOverlay() can rebuild the shaders:// overlay
-			// with a project layer prepended without re-deriving the engine
-			// pak-vs-dir logic.
-			// Write-once: only InitializeDefaultMounts() ever assigns this, and it
 			// does so before any other thread can be touching s_backend. Every
-			// later read (MountShaderOverlay() and its callers) is therefore safe
-			// without taking mountsMutex - it's not protecting this field.
 			std::optional<OverlayBackend::Layer> engineShaderLayer;
 		};
 
 		FileSystemBackend* s_backend = nullptr;
 
-		// Splits "mountpoint://relative/path" -> { "mountpoint", "relative/path" }
 		std::pair<std::string_view, std::string_view> ParseVirtualPath(std::string_view virtualPath)
 		{
 			constexpr std::string_view separator = "://";
@@ -66,7 +55,7 @@ namespace aether::io
 
 		std::shared_ptr<IFileBackend> ResolveBackend(std::string_view mountPoint)
 		{
-			std::scoped_lock lock(s_backend->mountsMutex);
+			const std::scoped_lock lock(s_backend->mountsMutex);
 			auto it = s_backend->mounts.find(mountPoint);
 			if (it == s_backend->mounts.end())
 			{
@@ -75,11 +64,6 @@ namespace aether::io
 			return it->second;
 		}
 
-		// Register a prebuilt backend (e.g. an OverlayBackend composed from other
-		// already-mounted backends) under a mount point. FileSystem::Mount()/MountPak()
-		// only cover the "build one DirectoryBackend/PakBackend from a path" case;
-		// this is the lower-level entry point for mounts assembled in code, used by
-		// InitializeDefaultMounts for shaders://.
 		void MountBackend(std::string_view mountPoint, std::shared_ptr<IFileBackend> backend)
 		{
 			if (s_backend == nullptr)
@@ -88,7 +72,7 @@ namespace aether::io
 			}
 
 			AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> <composite backend>", mountPoint);
-			std::scoped_lock lock(s_backend->mountsMutex);
+			const std::scoped_lock lock(s_backend->mountsMutex);
 			s_backend->mounts.insert_or_assign(std::string(mountPoint), std::move(backend));
 		}
 
@@ -285,7 +269,7 @@ namespace aether::io
 		{
 			return false;
 		}
-		std::scoped_lock lock(s_backend->mountsMutex);
+		const std::scoped_lock lock(s_backend->mountsMutex);
 		return s_backend->mounts.contains(std::string(mountPoint));
 	}
 
@@ -295,21 +279,7 @@ namespace aether::io
 
 		const auto workingDirectory = std::filesystem::current_path();
 
-		// -- engine:// ---------------------------------------------------------
-		// Engine/editor runtime assets only (fonts and other built-ins). Game
-		// models/materials/textures/animations belong under project:// so a
-		// project pak can publish without duplicating engine resources.
-		// Selection is intentionally deterministic:
-		//   AETHER_ENGINE_MODE=pak|dir|auto
-		//   AETHER_ENGINE_PAK=<pak path>   overrides pak candidates
-		//   AETHER_ENGINE_DIR=<directory>  overrides loose directory fallback
-		// Legacy AETHER_ASSET_* env vars are still accepted as local override aliases.
 		// Default pak candidates are run-directory data/ first (ship layout),
-		// then the CMake build data dir (dev layout).
-		// engineUsesPak records which branch below actually won, so the
-		// shaders:// overlay further down can mirror it exactly (both pak or
-		// both dir - see the shaders:// section for why this must never diverge
-		// from engine://'s choice).
 		bool engineUsesPak = false;
 		const std::string engineMode = EnvironmentStringFirst("AETHER_ENGINE_MODE", "AETHER_ASSET_MODE");
 		if (EqualsIgnoreCase(engineMode, "dir"))
@@ -360,15 +330,6 @@ namespace aether::io
 			}
 		}
 
-		// -- project:// --------------------------------------------------------
-		// Project content is separate from engine/editor assets. Packaged runs
-		// should use data/project.pak; editor sessions can remount project:// to
-		// the opened loose project root.
-		// projectUsesPak records whether project:// resolved to project.pak (as
-		// opposed to a loose directory, or nothing at all when no project is
-		// mounted yet) - the shaders:// section below uses it to decide whether
-		// to prepend a project.pak shader layer (shipped) up front, matching
-		// how engineUsesPak steers the engine shader layer.
 		bool projectUsesPak = false;
 		const std::string projectMode = EnvironmentString("AETHER_PROJECT_MODE");
 		if (EqualsIgnoreCase(projectMode, "dir"))
@@ -416,26 +377,10 @@ namespace aether::io
 			}
 		}
 
-		// -- shaders:// --------------------------------------------------------
-		// Compiled engine .spv shaders ship inside engine.pak (under "shaders/")
-		// rather than as loose files beside the executable - a published game
 		// that only ships engine.pak must still be able to resolve shaders://,
-		// which loose files can't guarantee. shaders:// therefore MUST track
-		// whichever mode engine:// resolved to above (engineUsesPak): both pak
-		// or both dir, never mixed, or dev and shipped runs would disagree on
-		// where shaders come from.
-		//
-		// The engine layer is remembered on s_backend so FileSystem::
-		// MountShaderOverlay() can later rebuild shaders:// with a project
-		// layer prepended as layer 0 (highest priority) - see
-		// EditorProjectManager, which calls it on project load/switch with a
-		// DirectoryBackend over "<project>/Builds/Intermediate/shaders" so a
-		// project shader overrides an engine shader of the same name.
 		OverlayBackend::Layer engineShaderLayer;
 		if (engineUsesPak)
 		{
-			// Reuse the already-mounted engine.pak backend (already parsed above)
-			// instead of opening a second PakBackend on the same file.
 			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// from engine.pak ('shaders/' prefix)");
 			engineShaderLayer = OverlayBackend::Layer{ResolveBackend("engine"), "shaders/"};
 		}
@@ -454,17 +399,7 @@ namespace aether::io
 		}
 		s_backend->engineShaderLayer = engineShaderLayer;
 
-		// A shipped run mounted project:// from project.pak above - reuse that
-		// same backend (no reparsing) as the shaders:// project layer, prefix
-		// "shaders/", so project shaders (packed by EditorProjectPublisher::
-		// PublishProject via PackOptions::shaderSpirvDir) override engine
-		// shaders of the same name from first boot, with no editor involved
 		// (GameRuntime never calls MountShaderOverlay itself - see
-		// FileSystem.hpp). When project:// is a loose directory or unmounted
-		// (dev editor, no project published yet), stay engine-only here; the
-		// dev editor's EditorProjectManager rebuilds shaders:// again once a
-		// project is opened, layering its compiled-shader intermediate dir
-		// instead (see UpdateProjectShaderOverlay).
 		if (projectUsesPak)
 		{
 			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// with the project.pak layer prepended ('shaders/' prefix)");
@@ -475,8 +410,6 @@ namespace aether::io
 			MountShaderOverlay(std::nullopt);
 		}
 
-		// -- config:// ---------------------------------------------------------
-		// Settings/config files are deployed to data/config at build time.
 		const auto configDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/config",
 		        workingDirectory / "../data/config",
@@ -487,8 +420,6 @@ namespace aether::io
 		});
 		Mount("config", configDirectory);
 
-		// -- data:// ------------------------------------------------------------
-		// Game data files (JSON configs, NPC definitions, dialogues, etc.)
 		const auto dataDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/data",
 		        workingDirectory / "../data/data",
@@ -496,9 +427,6 @@ namespace aether::io
 		});
 		Mount("data", dataDirectory);
 
-		// -- scripts:// ----------------------------------------------------------
-		// Managed C# assemblies are deployed here (data/scripts/managed) by the
-		// ManagedAssemblies build target.
 		const auto scriptsDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/scripts",
 		        workingDirectory / "../data/scripts",
@@ -506,7 +434,6 @@ namespace aether::io
 		});
 		Mount("scripts", scriptsDirectory);
 
-		// -- logs:// -----------------------------------------------------------
 		Mount("logs", workingDirectory / "logs");
 	}
 
@@ -517,11 +444,10 @@ namespace aether::io
 			return;
 		}
 
-		// Drain all pending IO before tearing down.
 		s_backend->ioThread->Flush();
 		s_backend->ioThread.reset();
 		{
-			std::scoped_lock lock(s_backend->mountsMutex);
+			const std::scoped_lock lock(s_backend->mountsMutex);
 			s_backend->mounts.clear();
 		}
 
@@ -540,7 +466,7 @@ namespace aether::io
 		}
 
 		AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
-		std::scoped_lock lock(s_backend->mountsMutex);
+		const std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<DirectoryBackend>(std::move(physicalPath)));
 	}
 
@@ -553,7 +479,7 @@ namespace aether::io
 		}
 
 		AE_INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
-		std::scoped_lock lock(s_backend->mountsMutex);
+		const std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
 	}
 
@@ -626,7 +552,7 @@ namespace aether::io
 
 	Expected<void> FileSystem::WriteFileText(std::string_view virtualPath, std::string_view text)
 	{
-		std::span<const std::byte> data(reinterpret_cast<const std::byte*>(text.data()), text.size());
+		const std::span<const std::byte> data(reinterpret_cast<const std::byte*>(text.data()), text.size());
 		return WriteFile(virtualPath, data);
 	}
 
@@ -702,7 +628,6 @@ namespace aether::io
 	{
 		while (handle->GetState() == FileRequest::State::Pending)
 		{
-			// Yield to avoid spinning at 100% on one core.
 			std::this_thread::yield();
 		}
 	}

@@ -18,15 +18,11 @@
 #include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
 
-// Skeletal animation control exported to C#, including the .anim binary loader
-// and bone-name remapping.
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
 namespace
 {
-	// Resolve the SkinnedMeshComponent on the entity or its first spawned child.
 	aether::SkinnedMeshComponent* FindSmcOrSpawned(aether::World& w, std::uint32_t id)
 	{
 		const aether::Entity e{id};
@@ -88,13 +84,13 @@ namespace
 		for (std::uint32_t i = 0; i < jointCount; ++i)
 		{
 			const auto nodeIdx = skinJoints[i];
-			std::string nodeName(animDb->GetNodeName(nodeIdx));
+			const std::string nodeName(animDb->GetNodeName(nodeIdx));
 			if (nodeName.empty())
 			{
 				continue;
 			}
 			boneMap[nodeName] = nodeIdx;
-			std::string stripped = StripBonePrefix(nodeName);
+			const std::string stripped = StripBonePrefix(nodeName);
 			if (stripped != nodeName)
 			{
 				boneMap.try_emplace(stripped, nodeIdx);
@@ -130,7 +126,7 @@ namespace
 				ch.nodeIndex = it->second;
 				continue;
 			}
-			std::string animBare = StripBonePrefix(ch.boneName);
+			const std::string animBare = StripBonePrefix(ch.boneName);
 			if (animBare != ch.boneName)
 			{
 				it = boneNameToJointIndex.find(animBare);
@@ -277,8 +273,6 @@ namespace
 	}
 } // namespace
 
-// ── Loading / compile ─────────────────────────────────────────────────────────
-
 AE_SCRIPT_API std::int32_t aether_anim_add(std::uint32_t id, const char* animPath, std::int32_t lockRoot)
 {
 	return AddAnimationImpl(ActiveWorld(), id, animPath, lockRoot != 0);
@@ -298,8 +292,6 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 		return;
 	}
 
-	// Nothing to compile if the entity has no animator with pending clips. Guards
-	// against a script calling compile on the wrong / SMC-less entity.
 	auto& world = ActiveWorld();
 	if (FindSmcOrSpawned(world, id) == nullptr)
 	{
@@ -308,9 +300,6 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 	}
 
 	// AppendAnimations reallocates GPU animation buffers the render thread reads.
-	// Running it bare on the game thread races in-flight frames -> device-lost ->
-	// a hung GPU (which can take the whole machine down). Quiesce the render thread
-	// for the duration, exactly like hot-reload's teardown does.
 	auto* uploadPool = ctx.uploadPool;
 	if (ctx.engineRuntime != nullptr)
 	{
@@ -335,8 +324,6 @@ AE_SCRIPT_API void aether_anim_clear_pending(std::uint32_t id)
 	}
 	ForEachSpawnedSmc(w, id, clearFn);
 }
-
-// ── Playback ──────────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API void aether_anim_set_clip(std::uint32_t id, std::int32_t clipIndex)
 {
@@ -395,8 +382,6 @@ AE_SCRIPT_API float aether_anim_get_time(std::uint32_t id)
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	return smc != nullptr ? smc->animTime : 0.0f;
 }
-
-// ── Clip queries ──────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API std::int32_t aether_anim_get_count(std::uint32_t id)
 {
@@ -514,8 +499,6 @@ AE_SCRIPT_API std::int32_t aether_anim_get_entities_with_animator(std::uint32_t*
 	}
 	return n;
 }
-
-// ── Blend + root motion ───────────────────────────────────────────────────────
 
 AE_SCRIPT_API void aether_anim_set_blend(std::uint32_t id, std::int32_t secondaryClipIndex, float transitionSpeed)
 {

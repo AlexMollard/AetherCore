@@ -5,7 +5,7 @@
 namespace aether
 {
 	class World;
-} // namespace aether
+}
 
 namespace aether::ui
 {

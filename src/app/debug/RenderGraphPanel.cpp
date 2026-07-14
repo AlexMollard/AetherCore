@@ -59,56 +59,56 @@ namespace aether::editor
 			{
 				return true;
 			}
-			if (LowerCopy(pass.name).find(lowerFilter) != std::string::npos)
+			if (LowerCopy(pass.name).contains(lowerFilter))
 			{
 				return true;
 			}
-			if (LowerCopy(pass.declaredFile).find(lowerFilter) != std::string::npos)
+			if (LowerCopy(pass.declaredFile).contains(lowerFilter))
 			{
 				return true;
 			}
-			if (LowerCopy(pass.sideEffectReason).find(lowerFilter) != std::string::npos)
+			if (LowerCopy(pass.sideEffectReason).contains(lowerFilter))
 			{
 				return true;
 			}
 			for (const std::string& dependency: pass.logicalDependencies)
 			{
-				if (LowerCopy(dependency).find(lowerFilter) != std::string::npos)
+				if (LowerCopy(dependency).contains(lowerFilter))
 				{
 					return true;
 				}
 			}
 			for (const std::string& drawList: pass.producedDrawLists)
 			{
-				if (LowerCopy(drawList).find(lowerFilter) != std::string::npos)
+				if (LowerCopy(drawList).contains(lowerFilter))
 				{
 					return true;
 				}
 			}
 			for (const std::string& drawList: pass.consumedDrawLists)
 			{
-				if (LowerCopy(drawList).find(lowerFilter) != std::string::npos)
+				if (LowerCopy(drawList).contains(lowerFilter))
 				{
 					return true;
 				}
 			}
 			for (const std::string& product: pass.producedFrameProducts)
 			{
-				if (LowerCopy(product).find(lowerFilter) != std::string::npos)
+				if (LowerCopy(product).contains(lowerFilter))
 				{
 					return true;
 				}
 			}
 			for (const std::string& product: pass.consumedFrameProducts)
 			{
-				if (LowerCopy(product).find(lowerFilter) != std::string::npos)
+				if (LowerCopy(product).contains(lowerFilter))
 				{
 					return true;
 				}
 			}
 			for (const std::string& warning: pass.contractWarnings)
 			{
-				if (LowerCopy(warning).find(lowerFilter) != std::string::npos)
+				if (LowerCopy(warning).contains(lowerFilter))
 				{
 					return true;
 				}
@@ -178,14 +178,12 @@ namespace aether::editor
 			FormatToBuffer(buffer, fmt, std::forward<Args>(args)...);
 			DrawMetricRow(label, buffer.data(), color);
 		}
-	} // anonymous namespace
+	} // namespace
 
 	void RenderGraphPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
-		// Self-windowing like every other panel (no longer wrapped by DebugLayer),
-		// so it is closable via the window's X and the Window menu.
 		if (!ImGui::Begin("Render Graph", VisiblePtr()))
 		{
 			ImGui::End();
@@ -194,7 +192,7 @@ namespace aether::editor
 
 		chrome::PanelHeader("RENDER GRAPH");
 
-		if (auto rg = context.TryGet<aether::RenderGraph>())
+		if (auto* rg = context.TryGet<aether::RenderGraph>())
 		{
 			DrawRenderGraphDebugger(context, *rg);
 		}

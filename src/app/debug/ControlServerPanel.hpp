@@ -6,10 +6,6 @@
 
 namespace aether::editor
 {
-	// Editor window for managing the ControlServer - the localhost endpoint that
-	// the AetherCore MCP and the aether-ctl CLI drive. Start/stop the server,
-	// choose the port, toggle auto-start, and watch live request stats. Starts
-	// hidden (niche developer tool; enable via Window menu).
 	class ControlServerPanel final : public DebugPanel
 	{
 	public:
@@ -31,6 +27,6 @@ namespace aether::editor
 	private:
 		int m_port = 8787;
 		bool m_autoStart = false;
-		bool m_didAutoStart = false; // one-shot guard for the deferred auto-start
+		bool m_didAutoStart = false;
 	};
 } // namespace aether::editor

@@ -1,74 +1,58 @@
 #pragma once
 
-// Font Awesome 6 Free-Solid codepoints used by the debug UI, as UTF-8 string
-// literals. The glyphs are merged into the ImGui font atlas by ImguiSubsystem
-// (resources/fonts/fa-solid-900.ttf, PUA range 0xE000-0xF8FF) so these can be
-// embedded directly in any ImGui text, e.g.:
-//
-//     ImGui::Button(ICON_FA_PLUS "  Create");
-//
-// Deliberately a hand-picked subset - add codepoints as the tooling needs them
-// (https://fontawesome.com/icons, "free" + "solid" filters).
+#define ICON_FA_CUBE "\xef\x86\xb2"
+#define ICON_FA_PERSON_RUNNING "\xef\x9c\x8c"
+#define ICON_FA_WEIGHT_HANGING "\xef\x97\x8d"
+#define ICON_FA_WAND_MAGIC_SPARKLES "\xee\x8b\x8a"
+#define ICON_FA_CIRCLE "\xef\x84\x91"
+#define ICON_FA_VIDEO "\xef\x80\xbd"
+#define ICON_FA_CIRCLE_INFO "\xef\x81\x9a"
+#define ICON_FA_HASHTAG "\xef\x8a\x92"
 
-// Entity kinds
-#define ICON_FA_CUBE "\xef\x86\xb2"                    // U+F1B2 mesh
-#define ICON_FA_PERSON_RUNNING "\xef\x9c\x8c"          // U+F70C skinned mesh
-#define ICON_FA_WEIGHT_HANGING "\xef\x97\x8d"          // U+F5CD physics body
-#define ICON_FA_WAND_MAGIC_SPARKLES "\xee\x8b\x8a"     // U+E2CA effect-driven
-#define ICON_FA_CIRCLE "\xef\x84\x91"                  // U+F111 plain entity
-#define ICON_FA_VIDEO "\xef\x80\xbd"                   // U+F03D camera entity
-#define ICON_FA_CIRCLE_INFO "\xef\x81\x9a"             // U+F05A info / empty state
-#define ICON_FA_HASHTAG "\xef\x8a\x92"                 // U+F292 entity id
+#define ICON_FA_MAGNIFYING_GLASS "\xef\x80\x82"
+#define ICON_FA_PLUS "\xef\x81\xa7"
+#define ICON_FA_TRASH "\xef\x87\xb8"
+#define ICON_FA_PEN "\xef\x8c\x84"
+#define ICON_FA_XMARK "\xef\x80\x8d"
+#define ICON_FA_FILTER "\xef\x82\xb0"
+#define ICON_FA_FLOPPY_DISK "\xef\x83\x87"
+#define ICON_FA_FOLDER_OPEN "\xef\x81\xbc"
+#define ICON_FA_PLAY "\xef\x81\x8b"
+#define ICON_FA_STOP "\xef\x81\x8d"
+#define ICON_FA_ROCKET "\xef\x84\xb5"
 
-// Toolbar / actions
-#define ICON_FA_MAGNIFYING_GLASS "\xef\x80\x82"        // U+F002 search
-#define ICON_FA_PLUS "\xef\x81\xa7"                    // U+F067 create
-#define ICON_FA_TRASH "\xef\x87\xb8"                   // U+F1F8 delete
-#define ICON_FA_PEN "\xef\x8c\x84"                     // U+F304 rename
-#define ICON_FA_XMARK "\xef\x80\x8d"                   // U+F00D close/remove
-#define ICON_FA_FILTER "\xef\x82\xb0"                  // U+F0B0 type filters
-#define ICON_FA_FLOPPY_DISK "\xef\x83\x87"             // U+F0C7 save scene
-#define ICON_FA_FOLDER_OPEN "\xef\x81\xbc"             // U+F07C load scene
-#define ICON_FA_PLAY "\xef\x81\x8b"                    // U+F04B play simulation
-#define ICON_FA_STOP "\xef\x81\x8d"                    // U+F04D stop + restore
-#define ICON_FA_ROCKET "\xef\x84\xb5"                  // U+F135 publish
+#define ICON_FA_UP_DOWN_LEFT_RIGHT "\xef\x82\xb2"
+#define ICON_FA_PALETTE "\xef\x94\xbf"
+#define ICON_FA_FILM "\xef\x80\x88"
+#define ICON_FA_SITEMAP "\xef\x83\xa8"
+#define ICON_FA_TAG "\xef\x80\xab"
+#define ICON_FA_BOLT "\xef\x83\xa7"
+#define ICON_FA_GEARS "\xef\x82\x85"
+#define ICON_FA_GEAR "\xef\x80\x93"
+#define ICON_FA_IMAGE "\xef\x80\xbe"
+#define ICON_FA_LINK "\xef\x83\x81"
+#define ICON_FA_EYE "\xef\x81\xae"
+#define ICON_FA_ROTATE "\xef\x8b\xb1"
+#define ICON_FA_EXPAND "\xef\x81\xa5"
+#define ICON_FA_DIAGRAM_PROJECT "\xef\x95\x82"
 
-// Inspector sections
-#define ICON_FA_UP_DOWN_LEFT_RIGHT "\xef\x82\xb2"      // U+F0B2 transform
-#define ICON_FA_PALETTE "\xef\x94\xbf"                 // U+F53F material
-#define ICON_FA_FILM "\xef\x80\x88"                    // U+F008 animation
-#define ICON_FA_SITEMAP "\xef\x83\xa8"                 // U+F0E8 hierarchy
-#define ICON_FA_TAG "\xef\x80\xab"                     // U+F02B tags
-#define ICON_FA_BOLT "\xef\x83\xa7"                    // U+F0E7 effect params
-#define ICON_FA_GEARS "\xef\x82\x85"                   // U+F085 pipeline/render
-#define ICON_FA_GEAR "\xef\x80\x93"                    // U+F013 view settings
-#define ICON_FA_IMAGE "\xef\x80\xbe"                   // U+F03E texture
-#define ICON_FA_LINK "\xef\x83\x81"                    // U+F0C1 parent link
-#define ICON_FA_EYE "\xef\x81\xae"                     // U+F06E visibility
-#define ICON_FA_ROTATE "\xef\x8b\xb1"                  // U+F2F1 reset/refresh/rotate op
-#define ICON_FA_EXPAND "\xef\x81\xa5"                  // U+F065 scale op
-#define ICON_FA_DIAGRAM_PROJECT "\xef\x95\x82"         // U+F542 render graph
+#define ICON_FA_WAVE_SQUARE "\xef\xa0\xbe"
+#define ICON_FA_CIRCLE_NOTCH "\xef\x87\x8e"
+#define ICON_FA_HEART_PULSE "\xef\x88\x9e"
+#define ICON_FA_GHOST "\xef\x9b\xa2"
+#define ICON_FA_LIGHTBULB "\xef\x83\xab"
+#define ICON_FA_BOX_OPEN "\xef\x92\x9e"
+#define ICON_FA_CODE "\xef\x84\xa1"
+#define ICON_FA_CLONE                   "\xef\x89\x8d"
+#define ICON_FA_LOCK                    "\xef\x80\xa3"
+#define ICON_FA_UNLOCK                  "\xef\x82\x9c"
+#define ICON_FA_POWER_OFF               "\xef\x80\x91"
 
-// Behavior components + editor markers
-#define ICON_FA_WAVE_SQUARE "\xef\xa0\xbe"             // U+F83E bob
-#define ICON_FA_CIRCLE_NOTCH "\xef\x87\x8e"            // U+F1CE orbit
-#define ICON_FA_HEART_PULSE "\xef\x88\x9e"             // U+F21E material pulse
-#define ICON_FA_GHOST "\xef\x9b\xa2"                   // U+F6E2 scene transient
-#define ICON_FA_LIGHTBULB "\xef\x83\xab"               // U+F0EB lights
-#define ICON_FA_BOX_OPEN "\xef\x92\x9e"                // U+F49E prefabs
-#define ICON_FA_CODE "\xef\x84\xa1"                    // U+F121 entity scripts
-#define ICON_FA_CLONE                   "\xef\x89\x8d"  // U+F24D duplicate
-#define ICON_FA_LOCK                    "\xef\x80\xa3"  // U+F023 not pickable
-#define ICON_FA_UNLOCK                  "\xef\x82\x9c"  // U+F09C pickable
-#define ICON_FA_POWER_OFF               "\xef\x80\x91"  // U+F011 active/disabled toggle
+#define ICON_FA_BUG "\xef\x86\x88"
+#define ICON_FA_GAUGE_HIGH "\xef\x98\xa5"
+#define ICON_FA_CLOUD_SUN "\xef\x9b\x84"
 
-// Window menu categories / panels
-#define ICON_FA_BUG "\xef\x86\x88"                     // U+F188 debug tools
-#define ICON_FA_GAUGE_HIGH "\xef\x98\xa5"              // U+F625 performance
-#define ICON_FA_CLOUD_SUN "\xef\x9b\x84"               // U+F6C4 day / night
-
-// File explorer
-#define ICON_FA_FOLDER "\xef\x81\xbb"                  // U+F07B closed folder
-#define ICON_FA_FILE "\xef\x85\x9b"                    // U+F15B generic file
-#define ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "\xef\x82\x8e" // U+F08E open externally
-#define ICON_FA_COPY "\xef\x83\x85"                    // U+F0C5 copy path
+#define ICON_FA_FOLDER "\xef\x81\xbb"
+#define ICON_FA_FILE "\xef\x85\x9b"
+#define ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "\xef\x82\x8e"
+#define ICON_FA_COPY "\xef\x83\x85"

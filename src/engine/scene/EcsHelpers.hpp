@@ -16,13 +16,10 @@
 namespace aether
 {
 	class PipelineCache;
-} // namespace aether
+}
 
 namespace aether::ecs
 {
-	// Creates a single entity from an explicit mesh + an already-resolved pipeline,
-	// without a material (renders via the shader's vertex-colour fallback). Used for
-	// glTF primitives with no material; the caller resolves the pipeline via the cache.
 	inline aether::Entity SpawnMesh(aether::World& world, const aether::GraphicsPipeline* pipeline, const aether::Mesh& mesh, const glm::mat4& transform = glm::mat4(1.0f))
 	{
 		aether::Entity e = world.Create();
@@ -32,9 +29,6 @@ namespace aether::ecs
 		return e;
 	}
 
-	// Creates a single entity from an explicit mesh + material asset. AssignMaterial
-	// acquires the registry material AND resolves the pipeline through the cache, so
-	// the entity gets both a MaterialComponent and a PipelineComponent.
 	inline aether::Entity SpawnMesh(aether::World& world, const aether::Mesh& mesh, aether::MaterialRegistry& materials, aether::PipelineCache& pipelineCache, const aether::MaterialAsset& asset, const glm::mat4& transform = glm::mat4(1.0f))
 	{
 		aether::Entity e = world.Create();
@@ -44,10 +38,6 @@ namespace aether::ecs
 		return e;
 	}
 
-	// Spawns all primitives of a LoadedModel and tags every entity with the provided
-	// tag list. SkinnedMeshComponent is attached automatically by AssetManager::SpawnModel
-	// when the model has animation data. Pipelines are resolved per-primitive via the
-	// PipelineCache inside SpawnModel.
 	template<typename... Tags>
 	inline std::size_t SpawnModel(aether::World& world, aether::AssetManager& assets, aether::LoadedModel& model, float scale, Tags... tags)
 	{

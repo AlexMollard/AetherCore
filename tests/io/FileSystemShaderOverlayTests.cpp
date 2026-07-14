@@ -1,11 +1,4 @@
-// End-to-end proof for the Phase 4 shipped shaders:// overlay wiring:
-// FileSystem::InitializeDefaultMounts(), when project:// resolves to a real
 // project.pak (AETHER_PROJECT_PAK / pak mode), must prepend that pak's
-// "shaders/" prefix as the highest-priority shaders:// layer - so a project
-// shader of the same name overrides the engine shader, a project-only shader
-// still resolves, and an engine-only shader still falls through. No editor
-// involved: this is exactly the code path a shipped GameRuntime hits on
-// first boot.
 
 #include <doctest/doctest.h>
 
@@ -36,8 +29,6 @@ namespace
 		out << contents;
 	}
 
-	// Windows-only env helpers matching FileSystem.cpp's own _dupenv_s/_putenv_s
-	// usage; setting an empty value removes the variable for later tests.
 	void SetEnv(const char* name, const std::filesystem::path& value)
 	{
 #ifdef _MSC_VER
@@ -55,7 +46,7 @@ namespace
 		unsetenv(name);
 #endif
 	}
-} // namespace
+}
 
 TEST_CASE("InitializeDefaultMounts prepends a shipped project.pak shader layer over engine.pak")
 {
@@ -64,7 +55,6 @@ TEST_CASE("InitializeDefaultMounts prepends a shipped project.pak shader layer o
 		io::FileSystem::Shutdown();
 	}
 
-	// -- Build a fake engine.pak: shaders/common.spv + shaders/onlyengine.spv --
 	const std::filesystem::path engineRoot = MakeTempDir("engine_root");
 	WriteFile(engineRoot / "shaders" / "common.spv", "ENGINE_COMMON");
 	WriteFile(engineRoot / "shaders" / "onlyengine.spv", "ENGINE_ONLY");
@@ -72,9 +62,6 @@ TEST_CASE("InitializeDefaultMounts prepends a shipped project.pak shader layer o
 	std::filesystem::remove(enginePak);
 	REQUIRE(assetpipeline::PackDirectory(engineRoot, enginePak, {}).ok);
 
-	// -- Build a fake project.pak via the same shaderSpirvDir path the real
-	// publisher uses: an (otherwise empty) project root packed with a compiled
-	// -shader directory folded in under "shaders/" (PackWriter::AddDirectoryAs). --
 	const std::filesystem::path projectRoot = MakeTempDir("project_root");
 	std::filesystem::create_directories(projectRoot);
 	const std::filesystem::path projectShaders = MakeTempDir("project_shaders");
@@ -89,23 +76,19 @@ TEST_CASE("InitializeDefaultMounts prepends a shipped project.pak shader layer o
 
 	io::FileSystem::InitializeDefaultMounts();
 
-	// Project overrides engine for a same-named shader.
 	CHECK(io::FileSystem::Exists("shaders://common.spv"));
 	const auto common = io::FileSystem::ReadFileText("shaders://common.spv");
 	REQUIRE(common.has_value());
 	CHECK(*common == "PROJECT_COMMON");
 
-	// A project-only shader resolves.
 	const auto projectOnly = io::FileSystem::ReadFileText("shaders://onlyproject.spv");
 	REQUIRE(projectOnly.has_value());
 	CHECK(*projectOnly == "PROJECT_ONLY");
 
-	// An engine-only shader still falls through when the project layer misses.
 	const auto engineOnly = io::FileSystem::ReadFileText("shaders://onlyengine.spv");
 	REQUIRE(engineOnly.has_value());
 	CHECK(*engineOnly == "ENGINE_ONLY");
 
-	// Glob unions and de-dups: 3 distinct shader names, not 4.
 	const auto glob = io::FileSystem::Glob("shaders://*.spv");
 	REQUIRE(glob.has_value());
 	CHECK(glob->size() == 3);

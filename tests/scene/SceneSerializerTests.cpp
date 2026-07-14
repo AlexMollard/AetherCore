@@ -27,17 +27,12 @@ using namespace aether::app::scene;
 
 namespace
 {
-    // A fresh World retires entt's raw-0 null slot in its constructor, so the
-    // first Create() is already valid (no "burn entity 0" needed) and capture
-    // sees exactly the entities the tests create - no phantom placeholder.
     World MakeWorld()
     {
         return World{};
     }
 
-    // entt's entity storage iterates newest-first, so captured order is not
     // creation order (and is not required to be - parent indices are file-local).
-    // Tests locate records and applied entities by name.
     int IndexOf(const SceneDescription& scene, std::string_view name)
     {
         for (std::size_t i = 0; i < scene.entities.size(); ++i)
@@ -62,7 +57,7 @@ namespace
         const int i = IndexOf(scene, name);
         return i >= 0 ? created[static_cast<std::size_t>(i)] : Entity{};
     }
-} // namespace
+}
 
 TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     FakeSlotSink sink(8);
@@ -71,7 +66,6 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     MaterialRegistry mreg(sink, treg);
     World world = MakeWorld();
 
-    // Floor: named, tagged, transformed, static box physics, primitive mesh source.
     Entity floor = world.Create();
     world.Emplace<NameComponent>(floor, NameComponent{.name = "Floor"});
     const std::uint32_t groundTag = TagCreate("serializer_test_ground");
@@ -81,7 +75,6 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     world.Emplace<RigidBodyComponent>(floor, RigidBodyComponent{.motionType = PhysicsMotionType::Static});
     world.Emplace<MeshSourceComponent>(floor, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "cube", .primitiveIndex = 0});
 
-    // Child: parented under floor, dynamic sphere, textured material instance.
     Entity child = world.Create();
     world.Emplace<NameComponent>(child, NameComponent{.name = "Toy"});
     world.Emplace<TransformComponent>(child, TransformComponent{.localToWorld = ComposeTransform({1, 2, 3}, {10, 20, 30}, {2, 2, 2})});
@@ -96,10 +89,8 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     asset.albedoTex = treg.Acquire("brick.png");
     REQUIRE(asset.albedoTex.IsValid());
     world.Emplace<MaterialInstanceComponent>(child, MaterialInstanceComponent{asset});
-    world.Emplace<MaterialComponent>(child, MaterialComponent{}); // capture keys off its presence
+    world.Emplace<MaterialComponent>(child, MaterialComponent{});
 
-    // Orb: effect-driven with skinned state (animDb rebuild is model-side; the
-    // record only carries playback state).
     Entity orb = world.Create();
     world.Emplace<NameComponent>(orb, NameComponent{.name = "Plasma Orb"});
     world.Emplace<TransformComponent>(orb, TransformComponent{});
@@ -141,7 +132,7 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     CHECK(c.material->asset.baseColorFactor.r == doctest::Approx(0.9f));
     CHECK(c.material->asset.metallicFactor == doctest::Approx(0.7f));
     CHECK(c.material->asset.doubleSided);
-    CHECK(!c.material->albedoPath.empty()); // resolved path round-tripped
+    CHECK(!c.material->albedoPath.empty());
     CHECK(c.material->normalPath.empty());
 
     const EntityRecord& o = RecordOf(*parsed, "Plasma Orb");
@@ -187,7 +178,7 @@ TEST_CASE("Behavior components round-trip through capture, TOML and apply") {
     CHECK(o.bob->amplitude == doctest::Approx(1.5f));
     CHECK(o.bob->frequency == doctest::Approx(0.8f));
     CHECK(o.bob->phase == doctest::Approx(2.1f));
-    CHECK(!o.bob->baseCaptured); // transient state resets through the round-trip
+    CHECK(!o.bob->baseCaptured);
     CHECK(o.bob->time == doctest::Approx(0.0f));
 
     const EntityRecord& s = RecordOf(*parsed, "Spinner");
@@ -202,7 +193,7 @@ TEST_CASE("Behavior components round-trip through capture, TOML and apply") {
     REQUIRE(f.orbit.has_value());
     CHECK(f.orbit->center.x == doctest::Approx(14.0f));
     CHECK(f.orbit->radius == doctest::Approx(6.0f));
-    CHECK(f.orbit->angleDeg == doctest::Approx(123.0f)); // resumes in place
+    CHECK(f.orbit->angleDeg == doctest::Approx(123.0f));
     CHECK(f.orbit->yawOffsetDeg == doctest::Approx(90.0f));
 
     World fresh = MakeWorld();
@@ -269,7 +260,6 @@ TEST_CASE("Lights and environment records round-trip through TOML") {
 }
 
 TEST_CASE("ApplyScene rebuilds names, tags, transforms, physics descs and hierarchy") {
-    // No GPU-facing deps: mesh/material/effect resolution is skipped gracefully,
     // everything value-typed must round-trip into a fresh world.
     FakeSlotSink sink(8);
     FakeTextureSink tsink;
@@ -324,8 +314,6 @@ TEST_CASE("ApplyScene rebuilds names, tags, transforms, physics descs and hierar
 }
 
 TEST_CASE("Effect records apply through the real effect path on load") {
-    // Record-level scene: one effect-driven orb. The effect path needs no
-    // mesh/material - it resolves the pipeline and params independently.
     SceneDescription scene;
     EntityRecord orb;
     orb.name = "Orb";
@@ -343,8 +331,6 @@ TEST_CASE("Effect records apply through the real effect path on load") {
     REQUIRE(parsed.has_value());
     CHECK(parsed->version == kSceneFormatVersion);
 
-    // Real EffectManager + pipeline cache over the fake factory. The param
-    // buffer stays uninitialized (no GPU): slot allocation fails SAFELY and
     // the components must still apply with the saved override params.
     aether::effects::EffectManager effects;
     aether::effects::EffectDef molten;
@@ -369,7 +355,6 @@ TEST_CASE("Effect records apply through the real effect path on load") {
     CHECK(ref->name == "molten");
     const auto* ep = world.TryGet<EffectParamsComponent>(e);
     REQUIRE(ep != nullptr);
-    // Saved params override the effect's defaults on load.
     CHECK(ep->params.speed == doctest::Approx(3.5f));
     CHECK(ep->params.intensity == doctest::Approx(2.0f));
     CHECK(ep->params.tint.x == doctest::Approx(1.0f));
@@ -392,7 +377,6 @@ TEST_CASE("Pre-versioning scene files parse as format v1") {
 TEST_CASE("ReplaceScene spares transient subtrees (script-owned actors)") {
     World world = MakeWorld();
 
-    // Player-like transient root with a mesh child, plus a normal prop.
     const Entity player = world.Create();
     world.Emplace<NameComponent>(player, NameComponent{.name = "Player"});
     world.Emplace<TransformComponent>(player, TransformComponent{});
@@ -428,7 +412,7 @@ TEST_CASE("Light entities round-trip through capture, TOML and apply (v3)") {
     const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
     REQUIRE(parsed.has_value());
     CHECK(parsed->version == kSceneFormatVersion);
-    CHECK(parsed->lights.empty()); // no legacy list emitted for entity lights
+    CHECK(parsed->lights.empty());
 
     const EntityRecord& p = RecordOf(*parsed, "Plaza Light");
     REQUIRE(p.pointLight.has_value());
@@ -447,7 +431,6 @@ TEST_CASE("Light entities round-trip through capture, TOML and apply (v3)") {
     const Entity spot = AppliedOf(*parsed, created, "Stage Spot");
     REQUIRE(spot.IsValid());
     REQUIRE(fresh.TryGet<SpotLightComponent>(spot) != nullptr);
-    // Aim survives the TRS round trip: local -Z still points along spotDir.
     const glm::mat4& m = fresh.Get<TransformComponent>(spot).localToWorld;
     const glm::vec3 fwd = -glm::normalize(glm::vec3(m[2]));
     CHECK(glm::dot(fwd, spotDir) == doctest::Approx(1.0f).epsilon(1e-3));
@@ -507,7 +490,6 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     world.Emplace<NameComponent>(root, NameComponent{.name = "Rig"});
     world.Emplace<TransformComponent>(root, TransformComponent{.localToWorld = ComposeTransform({2, 0, 0}, {0, 0, 0}, {1, 1, 1})});
     // A transient marker must NOT exclude prefab capture (the player is the
-    // flagship prefab case) - prefabs take exactly what you point them at.
     world.GetRegistry().emplace<SceneTransientComponent>(World::ToEntt(root));
 
     Entity arm = world.Create();
@@ -518,7 +500,7 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
 
     const auto parsed = ParseToml(WriteToml(CapturePrefab(world, root, mreg, treg)));
     REQUIRE(parsed.has_value());
-    REQUIRE(parsed->entities.size() == 2); // root + arm, bystander excluded
+    REQUIRE(parsed->entities.size() == 2);
     CHECK(parsed->entities[0].name == "Rig");
     CHECK(parsed->entities[0].parentIndex == -1);
     CHECK(IndexOf(*parsed, "Outside") == -1);
@@ -526,7 +508,6 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     CHECK(armRec.parentIndex == 0);
     REQUIRE(armRec.spin.has_value());
 
-    // Instantiate re-rooted at x=12: the arm keeps its (+1, +1) offset.
     World fresh = MakeWorld();
     const Entity newRoot = InstantiatePrefab(*parsed, fresh, ApplySceneDeps{}, ComposeTransform({12, 0, 0}, {0, 0, 0}, {1, 1, 1}));
     REQUIRE(newRoot.IsValid());
@@ -565,7 +546,7 @@ TEST_CASE("Script components round-trip through capture, TOML and apply") {
     REQUIRE(sc != nullptr);
     REQUIRE(sc->scripts.size() == 1);
     CHECK(sc->scripts[0].path == "Spinner");
-    CHECK(!sc->scripts[0].attached); // runtime state resets: scripts re-attach on the next play tick
+    CHECK(!sc->scripts[0].attached);
 }
 
 TEST_CASE("CaptureSubtrees copies multiple roots with local parent links") {
@@ -600,13 +581,6 @@ TEST_CASE("CaptureSubtrees copies multiple roots with local parent links") {
 }
 
 TEST_CASE("UI components round-trip through TOML") {
-    // Value-typed records only - no World/Entity involved, so this exercises
-    // just Write/Parse (Capture/Apply's ui:: mapping is covered indirectly by
-    // the other round-trip tests once entities carry the components). Every
-    // field is set NON-DEFAULT so a wrong TOML key or missing parse line fails
-    // here rather than silently reading back the record's default. texturePath
-    // is a plain string (WriteToml emits "texture" when non-empty, ParseToml
-    // reads it back), so it round-trips with no texture/registry involved.
     SceneDescription in;
     in.version = 6;
 
@@ -730,13 +704,6 @@ TEST_CASE("Scene and prefab file helpers read and list through mounted project V
 }
 
 TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting") {
-    // Regression for the Stop wedge: RestoreSceneInPlace resets each surviving
-    // entity then re-applies the snapshot. If ResetRestorableEntity misses a
-    // component the snapshot re-emplaces, entt asserts on the duplicate (which in
-    // a debug editor pops a modal dialog that reads like a hang). This exercises
-    // the exact component shapes that were missed - orbit camera, disabled subtree,
-    // mesh/sprite renderers - plus reparenting a snapshot entity under a runtime
-    // entity, which is the messy state scripts leave behind at Stop.
     FakeSlotSink sink(8);
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
@@ -744,7 +711,6 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
 
     World world = MakeWorld();
 
-    // An orbit main-camera entity: the exact shape that tripped the double-emplace.
     Entity cam = world.Create();
     world.Emplace<NameComponent>(cam, NameComponent{.name = "Camera"});
     world.Emplace<TransformComponent>(cam, TransformComponent{});
@@ -752,7 +718,6 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     world.Emplace<OrbitCameraComponent>(cam, OrbitCameraComponent{.target = {0, 1, 0}, .yaw = 15.0f, .pitch = 25.0f, .distance = 8.0f});
     world.Emplace<MainCameraComponent>(cam, MainCameraComponent{});
 
-    // A disabled parent with an enabled child (inactive subtree), plus a mesh
     // renderer and a sprite - the render/active markers reset must also strip.
     Entity disabledParent = world.Create();
     world.Emplace<NameComponent>(disabledParent, NameComponent{.name = "DisabledParent"});
@@ -768,46 +733,36 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     world.Emplace<TransformComponent>(sprite, TransformComponent{});
     world.Emplace<SpriteRendererComponent>(sprite);
 
-    // Snapshot exactly as StartPlaySession does (direct capture; entityId matters).
     const SceneDescription snapshot = CaptureScene(world, mreg, treg);
     const std::uint32_t camIdBefore = cam.id;
 
-    // "Play": spawn a runtime entity, reparent a snapshot entity under it, and flip
-    // the disabled state - the kind of mess scripts leave for Stop to clean up.
     Entity spawned = world.Create();
     world.Emplace<NameComponent>(spawned, NameComponent{.name = "SpawnedOrb"});
     world.Emplace<TransformComponent>(spawned, TransformComponent{});
-    ecs::SetParent(world, sprite, spawned);            // snapshot root now under a runtime entity
-    world.Remove<DisabledComponent>(disabledParent);   // re-enabled during play
-    world.EmplaceOrReplace<DisabledComponent>(sprite); // newly disabled during play
+    ecs::SetParent(world, sprite, spawned);
+    world.Remove<DisabledComponent>(disabledParent);
+    world.EmplaceOrReplace<DisabledComponent>(sprite);
 
-    // Stop: this is where the double-emplace assert used to fire.
     const std::vector<Entity> restored = RestoreSceneInPlace(snapshot, world, ApplySceneDeps{});
     REQUIRE(restored.size() == snapshot.entities.size());
 
-    // In-place restore: the camera keeps its id and its components come back.
     const Entity camAfter = AppliedOf(snapshot, restored, "Camera");
     CHECK(camAfter.id == camIdBefore);
     REQUIRE(world.TryGet<OrbitCameraComponent>(camAfter) != nullptr);
     CHECK(world.Get<OrbitCameraComponent>(camAfter).distance == doctest::Approx(8.0f));
     CHECK(world.Has<MainCameraComponent>(camAfter));
 
-    // Disabled state matches the snapshot again (parent disabled, sprite enabled).
     const Entity dp = AppliedOf(snapshot, restored, "DisabledParent");
     const Entity sp = AppliedOf(snapshot, restored, "Sprite");
     CHECK(world.Has<DisabledComponent>(dp));
     CHECK(!world.Has<DisabledComponent>(sp));
 
-    // The sprite is re-rooted (snapshot had it at root), not left under the
-    // now-destroyed runtime entity.
     const auto* sh = world.TryGet<HierarchyComponent>(sp);
     CHECK((sh == nullptr || !sh->parent.IsValid()));
 
-    // Mesh-renderer visibility restored from the snapshot.
     const Entity ch = AppliedOf(snapshot, restored, "Child");
     REQUIRE(world.TryGet<MeshRendererComponent>(ch) != nullptr);
     CHECK(world.Get<MeshRendererComponent>(ch).visible == false);
 
-    // The runtime-spawned entity is gone.
     CHECK(world.GetRegistry().valid(World::ToEntt(spawned)) == false);
 }

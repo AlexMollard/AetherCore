@@ -1,14 +1,35 @@
 param(
     # Directory (relative to repo root) or absolute path to analyse.
-    [string]$Path = 'src'
+    [string]$Path = 'src',
+
+    # Export fixes without applying them.
+    [switch]$NoApply
 )
 
 $ErrorActionPreference = 'Continue'
-# Derive the repo root from the script location so this works in any checkout
-# or git worktree (previously hardcoded to a single clone).
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$clangTidy = 'C:\Program Files\LLVM\bin\clang-tidy.exe'
 $buildDir = "$repoRoot\build\ninja-clang"
+
+$clangTidyCommand = Get-Command 'clang-tidy.exe' -ErrorAction SilentlyContinue
+if (-not $clangTidyCommand) {
+    $candidates = @(
+        "${env:ProgramFiles}\LLVM\bin\clang-tidy.exe"
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\VC\Tools\Llvm\bin\clang-tidy.exe"
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { $clangTidyCommand = $candidate; break }
+    }
+}
+if (-not $clangTidyCommand) {
+    Write-Error 'clang-tidy not found. Install via: winget install LLVM'
+    exit 1
+}
+$clangTidy = $clangTidyCommand.Source ?? $clangTidyCommand
+
+if (-not (Test-Path "$buildDir\compile_commands.json")) {
+    Write-Error 'compile_commands.json is missing. Run: cmake --preset clangd'
+    exit 1
+}
 
 # Organized output directories
 $outDir = "$repoRoot\audit"
@@ -21,57 +42,24 @@ Remove-Item "$outDir\*.txt" -ErrorAction SilentlyContinue
 Remove-Item "$fixesDir\*.yaml" -ErrorAction SilentlyContinue
 Set-Location $repoRoot
 
-# 1. C++23 & Vulkan 1.4 Optimized Checks
+# Audit-only additions to the canonical .clang-tidy policy.
 $checks = @(
-    # 🧹 Dead code & Unused
     'misc-unused-*', 'bugprone-unused-*', 'readability-redundant-*',
     'clang-analyzer-deadcode.*', 'clang-analyzer-core.uninitialized.*',
 
-    # 🔊 Surface the compiler -W diagnostics injected below. The leading '-*'
-    # disables the whole clang-diagnostic-* group, so without these the
-    # --extra-arg=-W flags are emitted by the compiler then dropped by tidy.
+    # Surface the compiler -W diagnostics injected below.
     'clang-diagnostic-unused-function', 'clang-diagnostic-unused-member-function',
     'clang-diagnostic-unused-variable', 'clang-diagnostic-unused-label',
     'clang-diagnostic-unused-macros', 'clang-diagnostic-unused-private-field',
     'clang-diagnostic-unused-local-typedef', 'clang-diagnostic-old-style-cast',
     'clang-diagnostic-non-virtual-dtor', 'clang-diagnostic-shadow',
     'clang-diagnostic-implicit-fallthrough', 'clang-diagnostic-deprecated-declarations',
-    'clang-diagnostic-header-hygiene',
-
-    # 🛡️ Core Guidelines (Memory Safety & Architecture)
-    'cppcoreguidelines-special-member-functions', # Rule of 5 enforcement
-    'cppcoreguidelines-slicing',                  # Catches silent object slicing
-    'cppcoreguidelines-pro-type-cstyle-cast',     # Bans dangerous C-style casts (Use // NOLINT for Vulkan pNext)
-    
-    # 🧵 Concurrency
-    'concurrency-mt-unsafe',                      # Flags non-thread-safe C functions
-    
-    # 🚀 C++23 Modernization & Performance
-    'modernize-use-std-print',                    # Replaces printf/cout with C++23 std::print (LLVM 18+)
-    'modernize-use-std-numbers',                  # Replaces 3.14f with std::numbers::pi_v
-    'bugprone-unchecked-optional-access',         # Prevents crashes on std::optional/expected
-    'modernize-use-nodiscard',                    # Prevents ignoring error codes/VkResult
-    'modernize-pass-by-value',                    # Optimizes unnecessary const-ref copies
-    'performance-noexcept-move-constructor',      # Ensures fast vector reallocations
-    'modernize-use-using',                        # typedef -> using
-    'modernize-loop-convert',                     # C-for -> range-based for
-    
-    # 🧹 Deep Readability
-    'readability-convert-member-functions-to-static', 
-    'readability-container-size-empty',           
-    
-    # ❌ EXPLICITLY DISABLED FOR VULKAN / ENGINES
-    '-readability-qualified-auto',                # Stops the auto VkDevice handle issue
-    '-cppcoreguidelines-owning-memory',           # CRITICAL: Stops it from demanding unique_ptr for VkHandles
-    '-modernize-use-auto',                        # Stops aggressive type stripping
-    '-cppcoreguidelines-pro-bounds-pointer-arithmetic', # Allows custom allocator math
-    '-readability-magic-numbers',                 # Allows math/rendering constants
-    '-cppcoreguidelines-avoid-magic-numbers'      # Allows math/rendering constants
+    'clang-diagnostic-header-hygiene'
 ) -join ','
 
-$checkArg = '-*,' + $checks
+$checkArg = $checks
 
-# 2. Inject Compiler Warnings for C++23
+# 2. Inject compiler warnings; the language standard comes from the compile database.
 $extraArgs = @(
     # Note: the C++ standard comes from compile_commands.json (project is C++26);
     # do NOT override it here or newer-standard code fails to parse.
@@ -196,5 +184,18 @@ $runspacePool.Dispose()
 
 Write-Host "All done. Output: $summaryPath"
 Write-Host "Fixes exported to: $fixesDir"
-Write-Host "To apply fixes automatically, run:"
-Write-Host "clang-apply-replacements $fixesDir"
+
+if (-not $NoApply) {
+    $applyReplacements = Join-Path (Split-Path -Parent $clangTidy) 'clang-apply-replacements.exe'
+    if (-not (Test-Path $applyReplacements)) {
+        $applyReplacements = (Get-Command 'clang-apply-replacements.exe' -ErrorAction SilentlyContinue).Source
+    }
+    if (-not $applyReplacements) {
+        Write-Error 'clang-apply-replacements not found; fixes were exported but not applied.'
+        exit 1
+    }
+
+    & $applyReplacements --ignore-insert-conflict --format --style=file $fixesDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host 'Applied exported fixes. Re-run clang-tidy to catch unresolved conflicts.'
+}

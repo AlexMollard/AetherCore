@@ -8,8 +8,6 @@ struct GLFWwindow;
 
 namespace aether
 {
-	// Key codes that mirror GLFW_KEY_* values exactly, enabling
-	// zero-cost casting between Key and the raw int GLFW expects.
 	enum class Key : int
 	{
 		Space = 32,
@@ -131,9 +129,6 @@ namespace aether
 		B8 = 7,
 	};
 
-	// Input manager - updated once per frame by AetherCore::BeginFrame().
-	// Provides edge-triggered pressed/released queries so callers do not
-	// need to track previous-frame state themselves.
 	class Input
 	{
 	public:
@@ -143,39 +138,24 @@ namespace aether
 		Input(const Input&) = delete;
 		Input& operator=(const Input&) = delete;
 
-		// Called once during engine construction.
 		void Init(GLFWwindow* window);
 
-		// Called every frame by AetherCore::BeginFrame() before layers run.
 		void Update();
 
-		// -- Keyboard ---------------------------------------------------------
-
-		// True every frame the key is physically held down.
 		[[nodiscard]] bool IsKeyDown(Key key) const;
 
-		// True only on the first frame the key transitions from up to down.
 		[[nodiscard]] bool IsKeyPressed(Key key) const;
 
-		// True only on the first frame the key transitions from down to up.
 		[[nodiscard]] bool IsKeyReleased(Key key) const;
-
-		// -- Mouse buttons -----------------------------------------------------
 
 		[[nodiscard]] bool IsMouseButtonDown(MouseButton btn) const;
 		[[nodiscard]] bool IsMouseButtonPressed(MouseButton btn) const;
 		[[nodiscard]] bool IsMouseButtonReleased(MouseButton btn) const;
 
-		// -- Mouse cursor ------------------------------------------------------
-
-		// Cursor position in screen-space pixels, origin at top-left.
 		[[nodiscard]] glm::vec2 GetMousePos() const;
 
-		// Frame-over-frame cursor displacement in pixels.
 		[[nodiscard]] glm::vec2 GetMouseDelta() const;
 
-		// Remap OS-window mouse coordinates into an editor viewport's render-target
-		// pixel space. Used when the game is rendered inside an ImGui viewport.
 		void SetMouseViewportTransform(glm::vec2 viewportMin, glm::vec2 viewportSize, glm::vec2 targetSize);
 		void ClearMouseViewportTransform();
 
@@ -189,23 +169,11 @@ namespace aether
 			return m_mouseViewportInputActive;
 		}
 
-		// -- Scroll wheel ------------------------------------------------------
-
-		// Scroll offset accumulated since the last frame (zeroed each Update).
-		// x = horizontal, y = vertical.
 		[[nodiscard]] glm::vec2 GetScrollDelta() const;
 
-		// -- Text input --------------------------------------------------------
-
-		// Returns printable Unicode characters typed this frame as a UTF-8 string.
-		// Populated by GLFW's character callback, which correctly handles keyboard
 		// layout, dead keys, and IME - far more reliable than manual key->char mapping.
 		[[nodiscard]] const std::string& GetTypedChars() const;
 
-		// -- Mouse capture ------------------------------------------------------
-		// Set by ImGui/tooling when UI is actively consuming mouse input.
-		// Camera and other systems should skip their own mouse processing
-		// while this is true to prevent conflicts (e.g. orbiting while dragging a panel).
 		void SetMouseCaptured(bool captured)
 		{
 			m_mouseCaptured = captured;
@@ -220,9 +188,7 @@ namespace aether
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
 		static void OnChar(GLFWwindow* window, unsigned int codepoint);
 
-		// GLFW_KEY_LAST = 348  ->  349 slots cover every defined key code.
 		static constexpr int kMaxKeys = 349;
-		// GLFW_MOUSE_BUTTON_LAST = 7  ->  8 buttons.
 		static constexpr int kMaxMouseButtons = 8;
 
 		GLFWwindow* m_window = nullptr;
@@ -235,11 +201,11 @@ namespace aether
 		glm::vec2 m_mousePos{};
 		glm::vec2 m_prevMousePos{};
 
-		glm::vec2 m_scrollDelta{};   // exposed to callers this frame
-		glm::vec2 m_pendingScroll{}; // accumulated from GLFW callback
+		glm::vec2 m_scrollDelta{};
+		glm::vec2 m_pendingScroll{};
 
-		std::string m_typedChars;   // exposed to callers this frame
-		std::string m_pendingChars; // accumulated from char callback before frame boundary
+		std::string m_typedChars;
+		std::string m_pendingChars;
 
 		bool m_firstUpdate = true;
 		bool m_mouseCaptured = false;

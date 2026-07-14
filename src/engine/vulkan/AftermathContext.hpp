@@ -7,8 +7,6 @@
 #	include "utils/Assert.hpp"
 #	include "vulkan/volk.hpp"
 
-// volk.h includes vulkan_core.h but not vulkan.h. The Aftermath SDK guards
-// SpirvCode / GetShaderHashSpirv behind VULKAN_H_ (from vulkan.h umbrella).
 #	include <vulkan/vulkan.h>
 
 #	include <GFSDK_Aftermath.h>
@@ -17,23 +15,6 @@
 
 namespace aether
 {
-	// Lightweight wrapper around NVIDIA Aftermath SDK for GPU crash diagnostics.
-	//
-	// Vulkan path:
-	//   - Feature flags are configured via VK_NV_device_diagnostics_config
-	//     (VkDeviceDiagnosticsConfigCreateInfoNV in the device pNext chain).
-	//   - Event markers use VK_NV_device_diagnostic_checkpoints (vkCmdSetCheckpointNV).
-	//   - There is no separate GFSDK_Aftermath_VK_InitializeDevice in this SDK version.
-	//
-	// Usage:
-	//   1. Call EnableGpuCrashDumps(crashDumpDir) once, before VkDevice creation.
-	//   2. Add VK_NV_device_diagnostics_config to device extension list
-	//      with VkDeviceDiagnosticsConfigCreateInfoNV in pNext.
-	//   3. Add VK_NV_device_diagnostic_checkpoints to device extension list
-	//      for per-command-buffer event markers.
-	//   4. After creating VkDevice, call Initialize(VkDevice, VkPhysicalDevice).
-	//   5. Call SetEventMarker() on command buffers to add checkpoint breadcrumbs.
-	//   6. Before shutdown call Shutdown() / DisableGpuCrashDumps().
 	class AftermathContext
 	{
 	public:
@@ -50,8 +31,6 @@ namespace aether
 		[[nodiscard]] bool EnableGpuCrashDumps(const char* crashDumpDir);
 		[[nodiscard]] bool Initialize(VkDevice device, VkPhysicalDevice physicalDevice);
 
-		// Insert an event marker via vkCmdSetCheckpointNV.
-		// Requires VK_NV_device_diagnostic_checkpoints to be enabled at device creation.
 		void SetEventMarker(VkCommandBuffer cmd, std::string_view markerName) const;
 
 		void Shutdown();
@@ -67,7 +46,6 @@ namespace aether
 			return m_crashDumpDir;
 		}
 
-		// Register SPIR-V binary for shader lookup during GPU crash dump decoding.
 		// Must be called with the exact bytes passed to vkCreateShaderModule.
 		static void RegisterShaderBinary(const void* pSpirv, uint32_t spirvSize);
 
@@ -130,4 +108,4 @@ namespace aether
 	};
 } // namespace aether
 
-#endif // AETHER_ENABLE_NVIDIA_AFTERMATH
+#endif

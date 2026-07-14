@@ -27,7 +27,6 @@ namespace aether
 
 	void MaterialSystem::DisconnectLifecycle(World& world)
 	{
-		// Disconnect-all: the engine is the only listener on this signal.
 		world.GetRegistry().on_destroy<MaterialComponent>().disconnect();
 	}
 
@@ -35,25 +34,15 @@ namespace aether
 	{
 		auto& r = world.GetRegistry();
 		const entt::entity e = World::ToEntt(entity);
-		// Acquire BEFORE releasing the old handle: a same-content reassignment
-		// then dedups onto the live slot (refcount 1->2->1, no GPU write, no
-		// slot churn) instead of freeing and immediately rewriting a slot that
-		// in-flight frames may still be reading.
 		MaterialHandle old{};
 		if (const auto* existing = r.try_get<MaterialComponent>(e))
 		{
 			old = existing->handle;
 		}
 		const MaterialHandle h = registry.Acquire(asset);
-		registry.Release(old); // no-op for an invalid handle
-		// emplace_or_replace fires on_update (not on_destroy) for an existing
-		// component, so the release above is the only one.
+		registry.Release(old);
 		r.emplace_or_replace<MaterialComponent>(e, MaterialComponent{h, registry.ResolveSlot(h)});
 
-		// -- pipeline resolution (phase 3) --
-		// Effect-override: if the entity is effect-driven, set_entity_effect owns
-		// its PipelineComponent; leave it intact so a stray set_material repaints
-		// colour without dropping the effect program (spec §4.D).
 		if (r.all_of<EffectParamsComponent>(e))
 		{
 			return;
@@ -68,12 +57,6 @@ namespace aether
 
 	namespace
 	{
-		// Get the entity's instance component, seeding one if absent. The seed is
-		// the entity's CURRENT registry material (TryDescribe) so a single-field
-		// edit tints what is on screen instead of resetting everything - textures
-		// included - to a default asset; entities with no material seed a default.
-		// Returns {ref, created}; a newly created instance is always assigned by
-		// the caller so the entity gains a MaterialComponent even on a no-op value.
 		struct InstanceRef
 		{
 			MaterialInstanceComponent& inst;
@@ -89,7 +72,7 @@ namespace aether
 			MaterialAsset seed{};
 			if (const auto* mc = r.try_get<MaterialComponent>(e))
 			{
-				registry.TryDescribe(mc->handle, seed); // default-constructed seed on failure
+				registry.TryDescribe(mc->handle, seed);
 			}
 			return {r.emplace<MaterialInstanceComponent>(e, MaterialInstanceComponent{seed}), true};
 		}
@@ -157,8 +140,6 @@ namespace aether
 		{
 			return;
 		}
-		// AssignMaterial re-acquires the material slot: the new slot's cascade takes
-		// a ref on this texture, and the old slot's Release drops the previous one -
 		// so texture ownership follows the material with no extra bookkeeping here.
 		ref.inst.asset.albedoTex = texture;
 		AssignMaterial(world, entity, registry, pipelineCache, ref.inst.asset);

@@ -10,7 +10,6 @@ namespace aether
 
 namespace aether
 {
-	// Owns the camera manager and lighting manager.
 	class CameraSubsystem
 	{
 	public:

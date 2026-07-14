@@ -35,18 +35,17 @@ namespace aether
 		AE_PROFILE_ZONE();
 		const gpu::DeviceSize size = sizeof(Vertex) * vertices.size();
 
-		// Staging mapped buffer
 		gpu::MappedBufferDesc stagingDesc{};
 		stagingDesc.size = size;
 		stagingDesc.usage = gpu::BufferUsage::TransferSrc;
 		stagingDesc.debugName = "Mesh.Staging";
-		gpu::BufferHandle stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(stagingDesc);
+		const gpu::BufferHandle stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(stagingDesc);
 		if (!stagingHandle.IsValid())
 		{
 			return {};
 		}
 
-		gpu::MappedBufferView stagingView = gpu::ResourceRegistry::ResolveMappedBuffer(stagingHandle);
+		const gpu::MappedBufferView stagingView = gpu::ResourceRegistry::ResolveMappedBuffer(stagingHandle);
 		if (stagingView.mappedPtr == nullptr)
 		{
 			gpu::ResourceRegistry::Destroy(stagingHandle);
@@ -56,24 +55,22 @@ namespace aether
 		std::memcpy(stagingView.mappedPtr, vertices.data(), static_cast<std::size_t>(size));
 		gpu::ResourceRegistry::FlushMappedBuffer(stagingHandle, 0, size);
 
-		// Device-local buffer with BDA
 		gpu::BufferDesc bufferDesc{};
 		bufferDesc.size = size;
 		bufferDesc.usage = gpu::BufferUsage::Vertex | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
 		bufferDesc.debugName = "Mesh.Vertex";
-		gpu::BufferHandle bufferHandle = gpu::ResourceRegistry::CreateBuffer(bufferDesc);
+		const gpu::BufferHandle bufferHandle = gpu::ResourceRegistry::CreateBuffer(bufferDesc);
 		if (!bufferHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(stagingHandle);
 			return {};
 		}
 
-		// Copy staging -> device-local
 		uploadContext.CopyBuffer(stagingHandle, bufferHandle, size);
 
 		gpu::ResourceRegistry::Destroy(stagingHandle);
 
-		gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
+		const gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
 
 		Mesh mesh;
 		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
@@ -91,18 +88,17 @@ namespace aether
 
 		const gpu::DeviceSize indexSize = sizeof(std::uint32_t) * indices.size();
 
-		// Staging mapped buffer for indices
 		gpu::MappedBufferDesc stagingDesc{};
 		stagingDesc.size = indexSize;
 		stagingDesc.usage = gpu::BufferUsage::TransferSrc;
 		stagingDesc.debugName = "Mesh.IndexStaging";
-		gpu::BufferHandle stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(stagingDesc);
+		const gpu::BufferHandle stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(stagingDesc);
 		if (!stagingHandle.IsValid())
 		{
 			return mesh;
 		}
 
-		gpu::MappedBufferView stagingView = gpu::ResourceRegistry::ResolveMappedBuffer(stagingHandle);
+		const gpu::MappedBufferView stagingView = gpu::ResourceRegistry::ResolveMappedBuffer(stagingHandle);
 		if (stagingView.mappedPtr == nullptr)
 		{
 			gpu::ResourceRegistry::Destroy(stagingHandle);
@@ -116,7 +112,7 @@ namespace aether
 		bufferDesc.size = indexSize;
 		bufferDesc.usage = gpu::BufferUsage::Index | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
 		bufferDesc.debugName = "Mesh.Index";
-		gpu::BufferHandle bufferHandle = gpu::ResourceRegistry::CreateBuffer(bufferDesc);
+		const gpu::BufferHandle bufferHandle = gpu::ResourceRegistry::CreateBuffer(bufferDesc);
 		if (!bufferHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(stagingHandle);
@@ -126,7 +122,7 @@ namespace aether
 		uploadContext.CopyBuffer(stagingHandle, bufferHandle, indexSize);
 		gpu::ResourceRegistry::Destroy(stagingHandle);
 
-		gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
+		const gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
 
 		mesh.m_indexBuffer = bufferHandle;
 		mesh.m_indexDeviceAddress = resolved.deviceAddress;

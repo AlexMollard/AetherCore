@@ -28,7 +28,6 @@ namespace aether
 		m_context = &context;
 		m_renderer = nullptr;
 
-		// View 0 is permanently the main camera.
 		m_views[kMainLightView].registered = true;
 		m_views[kMainLightView].debugName = "Main";
 
@@ -94,7 +93,6 @@ namespace aether
 
 	LightViewId LightingManager::RegisterView(std::string debugName)
 	{
-		// View 0 is reserved for the main camera.
 		for (LightViewId id = 1; id < kMaxLightViews; ++id)
 		{
 			if (!m_views[id].registered)
@@ -151,8 +149,6 @@ namespace aether
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
 		auto& frame = m_lightBuffers[slot];
 
-		// Retire stale buffers from kMaxFramesInFlight frames ago - this slot is
-		// guaranteed to have completed all GPU work referencing them.
 		for (auto& stale: frame.staleBuffers)
 		{
 			if (stale.IsValid())
@@ -211,7 +207,6 @@ namespace aether
 			}
 			capacity = std::max(safeRequired, capacity * 2u);
 
-			// Device-local: these are GPU-written by binLights and GPU-read by the
 			// forward passes - the CPU never touches them.
 			const auto newHandle = gpu::ResourceRegistry::CreateBuffer({
 			        .size = static_cast<gpu::DeviceSize>(stride * capacity),
@@ -224,7 +219,6 @@ namespace aether
 			}
 			if (handle.IsValid())
 			{
-				// Defer destruction on the shared per-slot retire list.
 				frame.staleBuffers.push_back(handle);
 			}
 			handle = newHandle;
@@ -264,9 +258,6 @@ namespace aether
 
 		EnsureViewBuffers(view, slot, tileCount, tileCount * static_cast<std::size_t>(m_maxLightsPerTile));
 
-		// The shader culls in eye space: it needs the view matrix plus the signed
-		// inverse projection scales to build per-tile frustum planes (1/proj[1][1]
-		// carries the Vulkan Y flip). Perspective projections only.
 		vs.push.lightDataAddr = frame.lightsDeviceAddr;
 		vs.push.tileHeadersAddr = vs.headersAddr;
 		vs.push.tileLightIndicesAddr = vs.indicesAddr;
@@ -289,11 +280,10 @@ namespace aether
 			return;
 		}
 
-		const auto device = m_context->GetDevice().device;
+		auto* const device = m_context->GetDevice().device;
 		m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://tiled_light_cull.spv",
-		                // The module has a single entry point; slangc emits it as "main".
 		                .shaderEntry = "main",
 		                .debugName = "LightCull.BinLights",
 		        });
@@ -335,11 +325,11 @@ namespace aether
 
 		const std::size_t lightCount = frame.lightCount;
 		const std::size_t applyCount = std::min(lightCount, shadowIndices.size());
-		auto mapped = static_cast<GpuLight*>(frame.lightsMapped);
+		auto* mapped = static_cast<GpuLight*>(frame.lightsMapped);
 		for (std::size_t i = 0; i < applyCount; ++i)
 		{
-			mapped[i].shadowIndex.x = shadowIndices[i].x; // shadowIndex
-			mapped[i].shadowIndex.y = shadowIndices[i].y; // shadowStrength
+			mapped[i].shadowIndex.x = shadowIndices[i].x;
+			mapped[i].shadowIndex.y = shadowIndices[i].y;
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(applyCount) * sizeof(GpuLight));
 	}
@@ -354,7 +344,6 @@ namespace aether
 	{
 		EnsureComputePipeline();
 
-		// Register external buffer handles. Actual buffers are updated per-frame via UpdateBufferHandles.
 		m_rgLights = graph.RegisterBuffer(nullptr);
 		m_rgTileHeaders = graph.RegisterBuffer(nullptr);
 		m_rgTileIndices = graph.RegisterBuffer(nullptr);
@@ -367,10 +356,6 @@ namespace aether
 
 		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
 
-		// One pass bins every prepared view this frame (main + camera preview +
-		// any secondary view not recorded inline via RecordBinLights). All views
-		// share the light-data upload; each dispatch culls against its own frustum
-		// into its own tile buffers.
 		graph.AddComputeBufferPass({
 		                                   .name = "$Lighting.BinLights",
 		                                   .reads = {m_rgLights},
@@ -379,7 +364,7 @@ namespace aether
 		                                   .produces = {RenderGraph::Product<LightBuffersProduct>(kFrameProductLightBuffers)},
 		                           })
 		        .ExecuteCompute(
-		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
+		                [this, cullPipeline = cullResolved.state](PassContext& ctx)
 		                {
 			                const std::uint32_t slot = ctx.frameSlot;
 			                if (!m_lightDataReady[slot])
@@ -407,8 +392,6 @@ namespace aether
 			                }
 			                if (bound)
 			                {
-				                // Secondary views' tile buffers are not graph-tracked;
-				                // make the binning writes visible to their consumers.
 				                cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader,
 				                        gpu::AccessFlags::ShaderStorageWrite,
 				                        gpu::PipelineStage::FragmentShader | gpu::PipelineStage::ComputeShader,
@@ -490,14 +473,12 @@ namespace aether
 		{
 			return;
 		}
-		vs.ready = false; // consume so $Lighting.BinLights won't dispatch it again
+		vs.ready = false;
 
 		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
 
-		// The shared light upload is a host write from earlier this frame; the
-		// caller's pass may run before $Lighting.BinLights emits its barrier.
 		cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
-		cmd.BindComputePipeline(const_cast<void*>(cullResolved.state));
+		cmd.BindComputePipeline(cullResolved.state);
 		cmd.PushDataRaw(0, gpu::AsPushConstantBytes(vs.push));
 		cmd.Dispatch(vs.tilesX, vs.tilesY, 1);
 		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::FragmentShader | gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderStorageRead);

@@ -23,13 +23,11 @@
 namespace aether
 {
 	class BindlessManager;
-	class DiagnosticEngine; // forward decl for breadcrumb injection
+	class DiagnosticEngine;
 
-	// Forward declarations - live in vulkan/RenderGraphStorage.hpp
 	struct RenderGraphStorage;
 	struct FrameStats;
 
-	// Frame graph with pass/resource declarations and automatic image barriers.
 	class RenderGraph
 	{
 	public:
@@ -38,7 +36,7 @@ namespace aether
 			gpu::Format format = gpu::Format::Undefined;
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
-			gpu::Extent2D extent; // {0,0} = match FrameTarget extent at Execute()
+			gpu::Extent2D extent;
 		};
 
 		struct FrameProductRef
@@ -58,7 +56,7 @@ namespace aether
 		{
 			std::string name;
 			RGImage color{};
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			gpu::LoadOp loadOp = gpu::LoadOp::Load;
 			gpu::StoreOp storeOp = gpu::StoreOp::Store;
 			gpu::ClearValue clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
@@ -71,7 +69,7 @@ namespace aether
 			std::string name;
 			RGImage depth{};
 			PreparedDrawList draws{};
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			gpu::LoadOp loadOp = gpu::LoadOp::Clear;
 			gpu::StoreOp storeOp = gpu::StoreOp::Store;
 			gpu::ClearValue clearValue = ClearDepthValue(1.0f);
@@ -85,7 +83,7 @@ namespace aether
 			RGImage color{};
 			RGImage depth{};
 			PreparedDrawList draws{};
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			gpu::LoadOp colorLoadOp = gpu::LoadOp::Load;
 			gpu::StoreOp colorStoreOp = gpu::StoreOp::Store;
 			gpu::LoadOp depthLoadOp = gpu::LoadOp::Load;
@@ -109,7 +107,7 @@ namespace aether
 		{
 			std::string name;
 			RGImage image{};
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			bool readsStorageImage = false;
 			bool writesStorageImage = true;
 			QueueClass queueClass = QueueClass::Graphics;
@@ -123,7 +121,7 @@ namespace aether
 			std::vector<RGBuffer> reads;
 			std::vector<RGBuffer> writes;
 			std::vector<RGBuffer> readWrites;
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			QueueClass queueClass = QueueClass::Graphics;
 			std::vector<FrameProductRef> consumes;
 			std::vector<FrameProductRef> produces;
@@ -145,12 +143,8 @@ namespace aether
 		RenderGraph& operator=(RenderGraph&&) noexcept;
 
 		void Initialize(gpu::Device device, gpu::Allocator allocator);
-		// Set the VulkanContext for device-loss routing. Delegates to
-		// RenderGraphStorage::SetVulkanContext.
 		void SetVulkanContext(class VulkanContext* ctx);
 
-		// Register a DiagnosticEngine for breadcrumb injection before each
-		// render pass. Safe to call with nullptr (no-ops). Not owned.
 		void SetDiagnosticEngine(class DiagnosticEngine* de)
 		{
 			m_diagnosticEngine = de;
@@ -159,10 +153,8 @@ namespace aether
 		void Shutdown();
 
 		// Begin a new frame - must be called before Execute() to process
-		// deferred destructions from frames the GPU has finished.
 		void BeginFrame(std::uint32_t frameIndex);
 
-		// Fluent pass builder; use immediately, do not store.
 		class PassBuilder
 		{
 		public:
@@ -200,27 +192,17 @@ namespace aether
 
 			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
 
-			// Optional housekeeping callback used when the debugger disables a pass.
-			// Keep this lightweight: release frame handshakes, consume queues, or
-			// publish fallback state without recording the pass's normal GPU work.
 			PassBuilder& OnDebugDisabled(std::function<void(PassContext&)> fn);
 
-			// Override pass extent (for render-to-texture and non-swapchain targets).
 			PassBuilder& SetExtent(gpu::Extent2D extent);
 
-			// Assign this pass to a specific hardware queue. Only meaningful for
-			// compute passes; graphics passes always run on the graphics queue.
 			PassBuilder& SetQueueClass(QueueClass qc);
 
-			// Keep this compute pass on the graphics queue even when async
-			// compute auto-promotion is enabled.
 			PassBuilder& DisableAsyncCompute();
 
 			// Declare non-resource work that must not be culled or reordered
-			// as if it were pure graph-local GPU resource work.
 			PassBuilder& HasSideEffects(std::string reason = {});
 
-			// Add a logical ordering edge to a previously declared pass. The
 			// name must match the stable user-facing pass name, e.g. "$CullDraws".
 			PassBuilder& DependsOn(std::string passNamePrefix);
 
@@ -271,12 +253,11 @@ namespace aether
 				        },
 				};
 
-				std::scoped_lock lock(m_graph.m_debugStateMutex);
+				const std::scoped_lock lock(m_graph.m_debugStateMutex);
 				m_graph.m_passes[m_passIndex].shaderResourceBindings.push_back(std::move(binding));
 				return *this;
 			}
 
-			// Convenience: mark this compute pass for the async compute queue.
 			PassBuilder& SetAsyncCompute()
 			{
 				return SetQueueClass(QueueClass::AsyncCompute);
@@ -300,35 +281,21 @@ namespace aether
 			return RGImage{kSwapchainDepthId};
 		}
 
-		// Register an externally-owned image and return an RGImage handle.
-		// image/view are opaque engine handles (gpu::Image / gpu::ImageView) cast
-		// to the underlying Vulkan type at the seam.
 		[[nodiscard]] RGImage RegisterImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect = gpu::ImageAspect::Color);
 
-		// Register an externally-owned buffer and return an RGBuffer handle.
-		// buffer is an opaque engine handle (gpu::Buffer) cast to VkBuffer at the seam.
 		[[nodiscard]] RGBuffer RegisterBuffer(gpu::Buffer buffer);
 
-		// Update the Vulkan buffer backing an existing RGBuffer handle.
-		// Used when per-frame buffers change (e.g. triple-buffered lighting data).
 		void UpdateExternalBuffer(RGBuffer buffer, gpu::Buffer newBuffer);
 
-		// Create a render-graph-owned transient image.
 		[[nodiscard]] RGImage CreateTransientImage(const TransientImageDesc& desc);
 
-		// Convenience helpers for transient color/depth attachments.
 		[[nodiscard]] RGImage CreateTransientColor(gpu::Format format, gpu::Extent2D extent = {}, gpu::ImageUsage extraUsage = gpu::ImageUsage::None);
 		[[nodiscard]] RGImage CreateTransientDepth(gpu::Format format, gpu::Extent2D extent = {}, gpu::ImageUsage extraUsage = gpu::ImageUsage::None);
 
-		// Ensure a transient image is registered for bindless sampled access.
-		// Returns 0xFFFFFFFF when image is invalid/non-transient/not allocatable.
 		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 
-		// Returns bindless slot for a transient image if already registered.
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(RGImage image) const;
 
-		// Release a registered image handle from the graph.
-		// For transients this also destroys owned GPU memory.
 		void ReleaseImage(RGImage image);
 
 		[[nodiscard]] PassBuilder AddPass(std::string name, std::source_location loc = std::source_location::current());
@@ -348,7 +315,6 @@ namespace aether
 		void RemovePass(const std::string& name);
 		void Clear();
 
-		// Per-frame allocation and execution statistics.
 		[[nodiscard]] const FrameStats& GetFrameStats() const;
 
 		[[nodiscard]] const FrameResourceContext& GetLastFrameContext() const
@@ -426,30 +392,17 @@ namespace aether
 		void ClearDebugDisabledPasses();
 		void PopulateResourceTable(std::span<ResourceEntry> entries) const;
 
-		// Execute the compiled frame graph for the current frame.
-		void Execute(gpu::CommandList& recorder, const FrameResourceContext& frame);
+		void Execute(gpu::CommandList& cmdList, const FrameResourceContext& frame);
 
-		// Enable async compute scheduling. Call once after Initialize() when a
-		// dedicated compute queue is available. computeQueue is an opaque engine
-		// handle (gpu::Queue) cast to VkQueue at the seam.
 		void EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily);
 
-		// Returns true if any compiled passes were assigned to the async compute
-		// queue during the most recent Compile().
 		[[nodiscard]] bool HasAsyncComputeWork() const;
 
-		// Timeline semaphore handle (void* = VkSemaphore) and signal value that the
 		// compute queue submission signals. The graphics queue submission must wait
-		// on this semaphore at this value. Only valid after Execute() when
-		// HasAsyncComputeWork() returns true.
 		[[nodiscard]] gpu::TimelineSemaphoreHandle GetComputeTimelineSemaphore() const;
 		[[nodiscard]] std::uint64_t GetComputeTimelineValue() const;
 
-		// Submit the async compute command buffer to the dedicated compute queue.
 		// Must be called after Execute() and before the graphics queue submission.
-		// Signals the cross-queue timeline semaphore at the next value. The caller
-		// must pass the returned semaphore + value to the graphics submission as a
-		// wait to ensure proper ordering.
 		void SubmitComputeWork(std::uint32_t frameIndex);
 
 	private:
@@ -459,7 +412,6 @@ namespace aether
 		static constexpr uint32_t kFirstExternalBufferId = 0x20000000u;
 		static constexpr uint32_t kFirstTransientId = 0x40000000u;
 
-		// Attachment reference using engine-side enums (Vulkan-free).
 		struct AttachmentRef
 		{
 			RGImage image{};
@@ -468,7 +420,6 @@ namespace aether
 			gpu::ClearValue clearValue{};
 		};
 
-		// Per-resource access type for image barrier compilation.
 		enum class ImageAccessType
 		{
 			SampledRead,
@@ -478,7 +429,6 @@ namespace aether
 			TransferWrite,
 		};
 
-		// Per-resource access type for buffer barrier compilation.
 		enum class BufferAccessType : uint8_t
 		{
 			StorageRead,
@@ -500,10 +450,6 @@ namespace aether
 			BufferAccessType type = BufferAccessType::StorageRead;
 		};
 
-		// Barrier description with engine-side enums.
-		// Stage/access bits use raw uint64_t (set from VkPipelineStageFlags2 /
-		// VkAccessFlags2 values at compile time) to avoid depending on Vulkan
-		// types in the header.
 		struct CompiledBarrier
 		{
 			uint32_t resourceId = 0;
@@ -517,7 +463,6 @@ namespace aether
 			bool isWAR = false;
 		};
 
-		// Buffer barrier - image-free, just stage/access tracking.
 		struct CompiledBufferBarrier
 		{
 			uint32_t resourceId = 0;
@@ -528,7 +473,6 @@ namespace aether
 			bool isWAR = false;
 		};
 
-		// A set of wait barriers sharing a single event.
 		struct CompiledWait
 		{
 			std::uint32_t eventIndex = UINT32_MAX;
@@ -539,14 +483,13 @@ namespace aether
 		{
 			std::size_t passIndex = 0;
 			QueueClass queueClass = QueueClass::Graphics;
-			std::vector<CompiledBarrier> preBarriers;          // non-split barriers
-			std::vector<CompiledBufferBarrier> bufferBarriers; // buffer barriers for this pass
-			std::vector<CompiledBarrier> signalBarriers;       // emitted as the set-event backend call at end of producer
-			std::uint32_t splitEventIndex = UINT32_MAX;        // event this pass signals (index in storage)
-			std::vector<CompiledWait> waits;                   // events/barriers to wait on at start of consumer
+			std::vector<CompiledBarrier> preBarriers;
+			std::vector<CompiledBufferBarrier> bufferBarriers;
+			std::vector<CompiledBarrier> signalBarriers;
+			std::uint32_t splitEventIndex = UINT32_MAX;
+			std::vector<CompiledWait> waits;
 		};
 
-		// Tracking state for barrier compilation (engine-side enums + raw bits).
 		struct ResourceState
 		{
 			gpu::ImageLayout layout = gpu::ImageLayout::Undefined;
@@ -555,7 +498,6 @@ namespace aether
 			std::uint64_t readStages = 0;
 		};
 
-		// Tracking state for buffer barriers.
 		struct BufferState
 		{
 			std::uint64_t writeStage = 0;
@@ -606,7 +548,6 @@ namespace aether
 			bool retired = false;
 		};
 
-		// External image entry (typed engine handles).
 		struct ExternalImageEntry
 		{
 			gpu::Image image = nullptr;
@@ -657,14 +598,11 @@ namespace aether
 			return resourceId - kFirstTransientId;
 		}
 
-		// Opaque storage for all Vulkan-internal state.
 		std::unique_ptr<RenderGraphStorage> m_storage;
 		mutable std::mutex m_debugStateMutex;
 
-		// Diagnostic breadcrumb injection (nullable, not owned).
 		class DiagnosticEngine* m_diagnosticEngine = nullptr;
 
-		// Pass graph state (Vulkan-free).
 		std::vector<PassRecord> m_passes;
 		std::vector<CompiledPass> m_compiled;
 		std::vector<bool> m_lastCulledPasses;

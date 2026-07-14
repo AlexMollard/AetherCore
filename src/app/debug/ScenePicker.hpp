@@ -23,7 +23,5 @@ namespace aether::editor
 	};
 
 	// Nearest entity under the world-space ray (dir must be normalized): exact
-	// OBB test against every mesh entity's local AABB, merged with a physics
-	// raycast when `physics` is provided - the closer hit wins.
 	PickHit PickEntity(World& world, PhysicsSystem* physics, const Ray& ray, float maxDist);
 } // namespace aether::editor

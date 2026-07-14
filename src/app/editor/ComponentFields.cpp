@@ -14,12 +14,6 @@
 #include "scene/World.hpp"
 #include "utils/ServiceContainer.hpp"
 
-// Legacy field registry. Component reflection (scene/reflection/) is the successor
-// and covers most components via one declaration each; this now holds only the
-// components not yet migrated because they need bespoke access - currently just
-// Material (copy-on-write via MaterialInstanceComponent + MaterialSystem). The MCP
-// checks reflection first and falls back here.
-
 namespace aether::editor
 {
 	namespace
@@ -54,9 +48,6 @@ namespace aether::editor
 			return json::array({v.x, v.y, v.z, v.w});
 		}
 
-		// --- Material (copy-on-write via MaterialInstanceComponent) ----------------
-		// Mirrors DrawMaterial: edits land on a per-entity instance seeded from the
-		// registry material, then MaterialSystem::AssignMaterial re-commits it.
 		bool DescribeMaterial(const World& w, Entity e, ServiceContainer& services, MaterialAsset& out)
 		{
 			if (const auto* inst = w.TryGet<MaterialInstanceComponent>(e))

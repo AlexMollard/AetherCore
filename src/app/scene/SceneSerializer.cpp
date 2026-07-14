@@ -40,8 +40,6 @@ namespace aether::app::scene
 	namespace
 	{
 
-		// ── enum <-> string ────────────────────────────────────────────────────
-
 		const char* ShapeName(PhysicsShapeType t)
 		{
 			switch (t)
@@ -52,6 +50,7 @@ namespace aether::app::scene
 					return "capsule";
 				case PhysicsShapeType::Cylinder:
 					return "cylinder";
+				case PhysicsShapeType::Box:
 				default:
 					return "box";
 			}
@@ -86,6 +85,7 @@ namespace aether::app::scene
 					return "distance";
 				case JointType::Slider:
 					return "slider";
+				case JointType::Fixed:
 				default:
 					return "fixed";
 			}
@@ -120,6 +120,7 @@ namespace aether::app::scene
 					return "static";
 				case PhysicsMotionType::Kinematic:
 					return "kinematic";
+				case PhysicsMotionType::Dynamic:
 				default:
 					return "dynamic";
 			}
@@ -163,8 +164,6 @@ namespace aether::app::scene
 			return std::nullopt;
 		}
 
-		// ── toml helpers ───────────────────────────────────────────────────────
-
 		toml::array Vec2ToToml(const glm::vec2& v)
 		{
 			return toml::array{v.x, v.y};
@@ -207,12 +206,6 @@ namespace aether::app::scene
 			return fallback;
 		}
 
-		// ── Generic component <-> TOML via the reflection registry ────────────────
-		// A migrated component's sub-table is written/read from its declared fields
-		// (scene/reflection/) instead of a hand-written block. Field names are the
-		// TOML keys and the value formats match the helpers above, so a migrated
-		// component round-trips byte-for-byte with the legacy path. `comp` points at
-		// the live/record component value.
 		toml::table WriteReflectedToToml(std::string_view typeName, const void* comp)
 		{
 			toml::table tbl;
@@ -231,7 +224,6 @@ namespace aether::app::scene
 				const reflect::FieldValue v = f.get(comp);
 				switch (f.type)
 				{
-					// Angle fields are exposed in degrees but persist in radians.
 					case reflect::FieldType::Float:
 						tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num);
 						break;
@@ -268,7 +260,6 @@ namespace aether::app::scene
 		}
 
 		// `comp` must point at a value pre-initialized to the component's defaults;
-		// missing keys keep that default (mirrors the legacy value_or(default)).
 		void ReadReflectedFromToml(std::string_view typeName, const toml::table& src, void* comp)
 		{
 			const reflect::ComponentType* rt = reflect::FindComponentType(typeName);
@@ -288,7 +279,6 @@ namespace aether::app::scene
 				reflect::FieldValue v = f.get(comp);
 				switch (f.type)
 				{
-					// Persisted in radians; f.set re-applies the degrees<->radians round-trip.
 					case reflect::FieldType::Float:
 						v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(glm::radians(v.num))) : node.value_or(v.num);
 						break;
@@ -334,11 +324,6 @@ namespace aether::app::scene
 			}
 		}
 
-		// ── Script property (de)serialization ─────────────────────────────────────
-		// Each property is an inline table with an explicit type tag so values
-		// round-trip unambiguously (int vs float, enum vs int):
-		//   WalkSpeed = { t = "float", v = 12.0 }
-		//   Tint      = { t = "vec3",  v = [1.0, 0.5, 0.0] }
 		const char* ScriptPropTypeTag(ScriptPropertyValue::Type type)
 		{
 			switch (type)
@@ -383,9 +368,7 @@ namespace aether::app::scene
 						entry.insert("v", static_cast<std::int64_t>(value.i64));
 						break;
 					case ScriptPropertyValue::Type::Component:
-						// v = referenced entity (scene index, remapped like Entity);
 						// c = required component's catalog name (self-describing so the
-						// inspector can validate after load without the managed default).
 						entry.insert("v", static_cast<std::int64_t>(value.i64));
 						entry.insert("c", value.str);
 						break;
@@ -505,8 +488,6 @@ namespace aether::app::scene
 
 	} // namespace
 
-	// ── Capture ─────────────────────────────────────────────────────────────────
-
 	namespace
 	{
 		void AppendCaptureOrder(World& world, Entity entity, std::vector<Entity>& order, std::unordered_set<std::uint32_t>& seen)
@@ -527,9 +508,6 @@ namespace aether::app::scene
 			}
 		}
 
-		// One EntityRecord per entity in `order` (parent refs resolve through
-		// `indexOf`; parents outside the map record -1). Shared by full-scene
-		// capture and prefab (subtree) capture.
 		void AppendEntityRecords(SceneDescription& scene, World& world, const std::vector<Entity>& order, const std::unordered_map<std::uint32_t, int>& indexOf, const MaterialRegistry& materials, const TextureRegistry& textures)
 		{
 			scene.entities.reserve(scene.entities.size() + order.size());
@@ -662,8 +640,6 @@ namespace aether::app::scene
 					UIImageRecord ir;
 					ir.color = im->color;
 					ir.cornerRadius = im->cornerRadius;
-					// Same handle -> stable-path resolution as the material texture
-					// capture above: broken/invalid handles capture as empty (solid fill).
 					if (im->texture.IsValid() && im->texture.index != TextureHandle::kBrokenIndex)
 					{
 						textures.TryGetPath(im->texture, ir.texturePath);
@@ -687,7 +663,7 @@ namespace aether::app::scene
 				if (const auto* bob = world.TryGet<BobComponent>(e))
 				{
 					BobComponent clean = *bob;
-					clean.baseCaptured = false; // re-base from the restored transform
+					clean.baseCaptured = false;
 					clean.time = 0.0f;
 					rec.bob = clean;
 				}
@@ -708,7 +684,7 @@ namespace aether::app::scene
 				if (const auto* scale = world.TryGet<ScalePulseComponent>(e))
 				{
 					ScalePulseComponent clean = *scale;
-					clean.baseCaptured = false; // re-base from the restored transform
+					clean.baseCaptured = false;
 					clean.time = 0.0f;
 					rec.scalePulse = clean;
 				}
@@ -747,8 +723,6 @@ namespace aether::app::scene
 				scene.entities.push_back(std::move(rec));
 			}
 
-			// Build the asset manifest from the records just captured (meshes +
-			// material/UI textures), deduped by stable id.
 			std::unordered_set<std::string> seenAssetIds;
 			const auto addManifest = [&](const AssetSource& src)
 			{
@@ -789,7 +763,6 @@ namespace aether::app::scene
 		auto& reg = world.GetRegistry();
 
 		// Punctual lights are entities now (LightComponents.hpp) and serialize
-		// per-entity below; only the environment rig is renderer-level state.
 		if (renderer != nullptr)
 		{
 			EnvironmentRecord env;
@@ -803,9 +776,7 @@ namespace aether::app::scene
 			scene.environment = env;
 		}
 
-		// Transient entities (and their subtrees) are script-owned runtime state
 		// - excluded so boot auto-generation and Play snapshots never duplicate
-		// them when the script respawns its own actors.
 		std::vector<Entity> order;
 		std::unordered_set<std::uint32_t> seen;
 		for (const Entity root: world.Roots())
@@ -843,11 +814,6 @@ namespace aether::app::scene
 
 	SceneDescription CaptureSubtrees(World& world, const std::vector<Entity>& roots, const MaterialRegistry& materials, const TextureRegistry& textures)
 	{
-		// Each subtree in parent-before-child order. A root's own parent (if
-		// any) is outside the index map, so its record naturally gets
-		// parentIndex -1. Unlike scene capture there is NO transient
-		// exclusion: subtree capture takes exactly what you point it at (the
-		// scripted player prefab is the flagship case).
 		SceneDescription desc;
 		std::vector<Entity> order;
 		for (const Entity root: roots)
@@ -881,8 +847,6 @@ namespace aether::app::scene
 		return prefab;
 	}
 
-	// ── TOML write ──────────────────────────────────────────────────────────────
-
 	std::string WriteToml(const SceneDescription& scene)
 	{
 		toml::table root;
@@ -905,7 +869,6 @@ namespace aether::app::scene
 			root.insert("environment", std::move(e));
 		}
 
-		// Legacy [[lights]] only survives a parse -> write round trip of an old
 		// file that was never applied; fresh captures serialize per-entity.
 		if (!scene.lights.empty())
 		{
@@ -1105,7 +1068,6 @@ namespace aether::app::scene
 				f.insert("intensity", rec.effect->params.intensity);
 				t.insert("effect", std::move(f));
 			}
-			// Behavior components: written generically from the reflection registry.
 			if (rec.bob)
 			{
 				t.insert("bob", WriteReflectedToToml("Bob", &*rec.bob));
@@ -1141,7 +1103,7 @@ namespace aether::app::scene
 			if (rec.camera)
 			{
 				toml::table c = WriteReflectedToToml("Camera", &*rec.camera);
-				c.insert("main", rec.mainCamera); // 'main' is a separate record field (the MainCameraComponent tag)
+				c.insert("main", rec.mainCamera);
 				t.insert("camera", std::move(c));
 			}
 			if (rec.orbitCamera)
@@ -1167,7 +1129,6 @@ namespace aether::app::scene
 		}
 		root.insert("entities", std::move(entities));
 
-		// Asset manifest: stable id -> source for every referenced mesh/texture.
 		if (!scene.assetManifest.empty())
 		{
 			toml::array assets;
@@ -1194,8 +1155,6 @@ namespace aether::app::scene
 		out << "# AetherCore scene - generated by the debug editor\n" << root << "\n";
 		return out.str();
 	}
-
-	// ── TOML parse ──────────────────────────────────────────────────────────────
 
 	std::optional<SceneDescription> ParseToml(std::string_view text)
 	{
@@ -1261,7 +1220,6 @@ namespace aether::app::scene
 			}
 		}
 
-		// Asset manifest (optional; absent in scenes that predate it).
 		if (const auto* assets = root["assets"].as_array())
 		{
 			for (const auto& node: *assets)
@@ -1287,7 +1245,7 @@ namespace aether::app::scene
 		const auto* entities = root["entities"].as_array();
 		if (entities == nullptr)
 		{
-			return scene; // empty scene is legal
+			return scene;
 		}
 
 		for (const auto& node: *entities)
@@ -1455,8 +1413,6 @@ namespace aether::app::scene
 				fx.params.intensity = static_cast<float>(fv["intensity"].value_or(1.0));
 				rec.effect = std::move(fx);
 			}
-			// Behavior components: read generically into a default-seeded component
-			// (missing keys keep the struct default, matching the old value_or defaults).
 			if (const auto* b = tv["bob"].as_table())
 			{
 				BobComponent c{};
@@ -1557,8 +1513,6 @@ namespace aether::app::scene
 		return scene;
 	}
 
-	// ── Files ───────────────────────────────────────────────────────────────────
-
 	namespace
 	{
 		std::filesystem::path g_projectScenesDirectory;
@@ -1614,7 +1568,7 @@ namespace aether::app::scene
 
 			for (const std::string& match: *matches)
 			{
-				std::string file = std::filesystem::path(match).filename().generic_string();
+				const std::string file = std::filesystem::path(match).filename().generic_string();
 				if (file.size() > suffix.size() && file.ends_with(suffix))
 				{
 					names.push_back(file.substr(0, file.size() - suffix.size()));
@@ -1715,7 +1669,7 @@ namespace aether::app::scene
 			{
 				continue;
 			}
-			std::string file = entry.path().filename().string();
+			const std::string file = entry.path().filename().string();
 			constexpr std::string_view kSuffix = kPrefabSuffix;
 			if (file.size() > kSuffix.size() && file.ends_with(kSuffix))
 			{
@@ -1778,7 +1732,7 @@ namespace aether::app::scene
 			{
 				continue;
 			}
-			std::string file = entry.path().filename().string();
+			const std::string file = entry.path().filename().string();
 			constexpr std::string_view kSuffix = kSceneSuffix;
 			if (file.size() > kSuffix.size() && file.ends_with(kSuffix))
 			{
@@ -1788,8 +1742,6 @@ namespace aether::app::scene
 		std::sort(names.begin(), names.end());
 		return names;
 	}
-
-	// ── Apply / load ────────────────────────────────────────────────────────────
 
 	ApplySceneDeps MakeApplySceneDeps(ServiceContainer& services)
 	{
@@ -1805,8 +1757,6 @@ namespace aether::app::scene
 		deps.physics = services.TryGet<PhysicsSystem>();
 		deps.renderer = services.TryGet<Renderer>();
 		deps.assetDatabase = services.TryGet<AssetDatabase>();
-		// Editor-only auto-import: present when the editor registered a bake hook,
-		// absent (null) in the shipped runtime where models are already baked.
 		if (const auto* bakeHook = services.TryGet<ModelBakeHook>(); bakeHook != nullptr)
 		{
 			deps.ensureModelBaked = bakeHook->ensureBaked;
@@ -1873,10 +1823,6 @@ namespace aether::app::scene
 			RemoveIf<OrbitCameraComponent>(world, entity);
 			RemoveIf<MainCameraComponent>(world, entity);
 			RemoveIf<ScriptComponent>(world, entity);
-			// Render-visibility + active-state components are re-emplaced by
-			// ApplySceneToEntities too; clearing them keeps in-place restore
-			// idempotent. A missed one double-emplaces and trips ENTT_ASSERT, which
-			// in a debug build pops a modal dialog that wedges the whole editor.
 			RemoveIf<MeshRendererComponent>(world, entity);
 			RemoveIf<SpriteRendererComponent>(world, entity);
 			RemoveIf<DisabledComponent>(world, entity);
@@ -1884,8 +1830,6 @@ namespace aether::app::scene
 
 		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities)
 		{
-			// Seed the asset catalog from the manifest so the picker lists the whole
-			// scene's assets deterministically (idempotent with per-record registration).
 			if (deps.assetDatabase != nullptr)
 			{
 				for (const AssetManifestEntry& a: scene.assetManifest)
@@ -1899,9 +1843,6 @@ namespace aether::app::scene
 				}
 			}
 
-			// Environment rig (sun/ambient/sky) is renderer-level state; punctual
-			// lights are entities and arrive with the records below (or migrate
-			// from the legacy [[lights]] list at the end).
 			if (deps.renderer != nullptr && scene.environment)
 			{
 				const EnvironmentRecord& env = *scene.environment;
@@ -1912,9 +1853,6 @@ namespace aether::app::scene
 				deps.renderer->SetSkyVoidColor(env.skyVoid);
 			}
 
-			// Apply-health counters: surfaced in the summary log below so a load
-			// that silently degrades (missing deps, unknown effects, old file
-			// format) is visible in the log instead of just "looking wrong".
 			std::size_t behaviorCount = 0;
 			std::size_t effectCount = 0;
 
@@ -1952,8 +1890,6 @@ namespace aether::app::scene
 					world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = ComposeTransform(rec.position, rec.eulerDeg, rec.scale)});
 				}
 
-				// Physics: emplace the Collider + Rigid Body that PhysicsSystem bakes
-				// into a live body on the next flush.
 				if (rec.physics)
 				{
 					const PhysicsRecord& phys = *rec.physics;
@@ -2018,9 +1954,6 @@ namespace aether::app::scene
 					ui::UIImage im;
 					im.color = rec.uiImage->color;
 					im.cornerRadius = rec.uiImage->cornerRadius;
-					// Same acquire-by-path mechanism as the material texture apply
-					// below; unlike MaterialAsset there is no registry cascade for
-					// UI, so the component's handle IS the owning reference.
 					if (!rec.uiImage->texturePath.empty() && deps.assets != nullptr)
 					{
 						im.texture = deps.assets->GetTextureRegistry().Acquire(rec.uiImage->texturePath);
@@ -2037,8 +1970,6 @@ namespace aether::app::scene
 					        e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
 				}
 
-				// Mesh (and, for model primitives, the skinned setup that needs the
-				// model's AnimationDatabase).
 				if (rec.mesh)
 				{
 					const Mesh* resolved = nullptr;
@@ -2063,10 +1994,6 @@ namespace aether::app::scene
 						else if (deps.assets != nullptr)
 						{
 							auto result = deps.assets->LoadModel(rec.mesh->path);
-							// Not baked yet? In the editor, import it on demand and
-							// retry - a hand-authored or freshly checked-out scene then
-							// resolves without a manual bake step. No-op in the runtime
-							// (hook null), where models are already baked in the pak.
 							if (!result && deps.ensureModelBaked)
 							{
 								std::string bakeError;
@@ -2101,8 +2028,6 @@ namespace aether::app::scene
 					{
 						world.Emplace<MeshComponent>(e, MeshComponent{.mesh = resolved});
 						world.Emplace<MeshSourceComponent>(e, *rec.mesh);
-						// Populate the asset catalog so the picker lists this scene's
-						// meshes right after load, not only once an entity is inspected.
 						if (deps.assetDatabase != nullptr)
 						{
 							deps.assetDatabase->Register(rec.mesh->kind == MeshSourceComponent::Kind::Primitive ? MakePrimitiveMeshSource(rec.mesh->path) : MakeModelMeshSource(rec.mesh->path, static_cast<int>(rec.mesh->primitiveIndex)));
@@ -2134,9 +2059,6 @@ namespace aether::app::scene
 					}
 				}
 
-				// Material before effect: AssignMaterial resolves the material
-				// pipeline, then an effect (if any) overrides it - final state matches
-				// the original authoring order.
 				if (rec.material && deps.assets != nullptr)
 				{
 					MaterialAsset asset = rec.material->asset;
@@ -2150,7 +2072,6 @@ namespace aether::app::scene
 					acquire(rec.material->metallicRoughnessPath, asset.metallicRoughnessTex);
 					acquire(rec.material->occlusionPath, asset.occlusionTex);
 					acquire(rec.material->emissivePath, asset.emissiveTex);
-					// Catalogue the scene's textures so the picker lists them on load.
 					if (deps.assetDatabase != nullptr)
 					{
 						for (const std::string& texPath: {rec.material->albedoPath, rec.material->normalPath, rec.material->metallicRoughnessPath, rec.material->occlusionPath, rec.material->emissivePath})
@@ -2162,9 +2083,7 @@ namespace aether::app::scene
 						}
 					}
 					MaterialSystem::AssignMaterial(world, e, deps.assets->GetMaterialRegistry(), deps.assets->GetPipelineCache(), asset);
-					// Registry Acquire (inside AssignMaterial's cascade) now owns the
-					// texture refs; drop the ones this scope took.
-					for (TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
+					for (const TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
 					{
 						if (h.IsValid())
 						{
@@ -2241,8 +2160,6 @@ namespace aether::app::scene
 				}
 				if (!rec.scripts.empty())
 				{
-					// attached stays false: the script system re-attaches on the
-					// next play tick (loads and Stop-restores restart scripts).
 					ScriptComponent component;
 					component.scripts.reserve(rec.scripts.size());
 					for (const ScriptRecord& script: rec.scripts)
@@ -2253,8 +2170,6 @@ namespace aether::app::scene
 				}
 			}
 
-			// Legacy [[lights]] (pre-v3 files): promote each record to a light
-			// entity so it shows in the outliner and re-saves in the new format.
 			std::vector<Entity> migratedLights;
 			for (const LightRecord& light: scene.lights)
 			{
@@ -2275,7 +2190,6 @@ namespace aether::app::scene
 				AE_INFO(LogCategory::App, "Scene load: migrated {} legacy light record(s) to light entities - re-save to upgrade the file", migratedLights.size());
 			}
 
-			// Hierarchy after every entity exists.
 			for (std::size_t i = 0; i < scene.entities.size(); ++i)
 			{
 				const int parent = scene.entities[i].parentIndex;
@@ -2291,7 +2205,6 @@ namespace aether::app::scene
 				{
 					deps.sceneContext->sceneEntities.push_back(e);
 				}
-				// Migrated legacy lights are scene content too - F5 teardown owns them.
 				for (const Entity e: migratedLights)
 				{
 					deps.sceneContext->sceneEntities.push_back(e);
@@ -2376,8 +2289,6 @@ namespace aether::app::scene
 
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
-		// Collect first (Destroy mutates storage), then destroy - on_destroy
-		// hooks release physics bodies, material slots, effect slots. Body
 		// removal must not race the async physics step.
 		if (deps.physics != nullptr)
 		{
@@ -2395,11 +2306,7 @@ namespace aether::app::scene
 				{
 					continue;
 				}
-				// Transient subtrees are the mirror image of capture's
-				// exclusion: the snapshot deliberately left them out (script-
 				// owned actors like the player), so replace-all must leave
-				// them ALIVE - destroying them here left no player until the
-				// script next respawned it, and their das-held ids went stale.
 				if (ecs::HasSceneTransientAncestor(world, e))
 				{
 					spared.push_back(e);
@@ -2419,7 +2326,6 @@ namespace aether::app::scene
 		}
 		if (deps.sceneContext != nullptr)
 		{
-			// Spared entities stay registered so F5's teardown still owns them.
 			deps.sceneContext->sceneEntities.clear();
 			for (const Entity e: spared)
 			{
@@ -2446,10 +2352,6 @@ namespace aether::app::scene
 	{
 		const std::vector<Entity> created = ApplyScene(prefab, world, deps);
 
-		// Re-root: the capture order guarantees exactly one parentless record
-		// (the subtree root, always first, but search to stay robust to
-		// hand-edited files). The subtree keeps its internal offsets via the
-		// delta-propagating transform write.
 		for (std::size_t i = 0; i < prefab.entities.size() && i < created.size(); ++i)
 		{
 			if (prefab.entities[i].parentIndex < 0)

@@ -13,22 +13,6 @@
 namespace aether::coro
 {
 
-	// ---------------------------------------------------------------------------
-	// async<T> - a lazy coroutine return type.
-	//
-	// Functions returning async<T> use co_await / co_return.  Execution is lazy:
-	// the coroutine does NOT start until someone co_awaits the returned async
-	// value.  When the coroutine completes (via co_return) the awaiter is resumed
-	// with the produced value.
-	//
-	// Example:
-	//   async<Texture> LoadTextureAsync(std::string_view path) {
-	//       auto data = co_await FileSystem::ReadFileAsync(path);
-	//       co_return ProcessOnGpu(data);
-	//   }
-	//   // Caller:
-	//   Texture tex = co_await LoadTextureAsync("path");
-	// ---------------------------------------------------------------------------
 	template<typename T>
 	class async
 	{
@@ -37,7 +21,7 @@ namespace aether::coro
 		{
 			T m_value{};
 			std::exception_ptr m_exception;
-			std::coroutine_handle<> m_caller; // resumed on co_return
+			std::coroutine_handle<> m_caller;
 
 			auto initial_suspend() noexcept
 			{
@@ -123,7 +107,6 @@ namespace aether::coro
 			}
 		}
 
-		// Awaitable: starts the coroutine lazily and resumes the caller on completion.
 		class awaiter
 		{
 		public:
@@ -134,13 +117,13 @@ namespace aether::coro
 
 			[[nodiscard]] bool await_ready() const noexcept
 			{
-				return false; // always suspend - the coroutine hasn't started yet
+				return false;
 			}
 
 			std::coroutine_handle<> await_suspend(std::coroutine_handle<> caller) noexcept
 			{
 				m_handle.promise().m_caller = caller;
-				return m_handle; // start the coroutine
+				return m_handle;
 			}
 
 			T await_resume()
@@ -175,20 +158,7 @@ namespace aether::coro
 		std::coroutine_handle<promise_type> m_handle{nullptr};
 	};
 
-	// ---------------------------------------------------------------------------
-	// task<T> / task_source<T> - manual async future (NOT a coroutine return type)
-	//
-	// Used when you want to create a future and fulfill it at a later time from
 	// a different thread.  The task is created via task<T>::create(), which
-	// returns a (task, source) pair.  The source is moved to the producer thread;
-	// the task is returned to the consumer.  The consumer uses co_await task to
-	// suspend until the producer calls source.set_value().
-	//
-	// Example:
-	//   auto [t, s] = task<int>::create();
-	//   ioThread->Submit([s = std::move(s)] { s.set_value(42); });
-	//   int result = co_await t;
-	// ---------------------------------------------------------------------------
 
 	template<typename T>
 	class task;
@@ -230,6 +200,7 @@ namespace aether::coro
 			std::coroutine_handle<> continuation;
 
 			task_state() = default;
+			~task_state() = default;
 			task_state(const task_state&) = delete;
 			task_state& operator=(const task_state&) = delete;
 			task_state(task_state&&) = delete;

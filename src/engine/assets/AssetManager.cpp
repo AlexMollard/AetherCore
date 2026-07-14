@@ -38,16 +38,9 @@ namespace aether
 			MaterialAsset material{};
 			std::string albedoPath;
 			std::string normalPath;
-			std::string metallicRoughnessPath; // glTF ORM: G=roughness, B=metallic
+			std::string metallicRoughnessPath;
 			std::string occlusionPath;
 			std::string emissivePath;
-			// Optional per-material shader override (e.g. "shaders://myeffect.spv"),
-			// authored verbatim -- unlike the texture paths above, it is NOT
-			// resolved relative to the preset's folder since shaders:// is its own
-			// mount. Empty -> keep the MaterialAsset default templateDesc. Kept as
-			// an owned std::string (not directly written into material.templateDesc,
-			// which is a string_view) so the caller can intern it into storage that
-			// outlives the PipelineCache before assigning.
 			std::string shaderVfsPath;
 		};
 
@@ -67,7 +60,7 @@ namespace aether
 				return {};
 			}
 
-			if (resourcePath.find("://") != std::string::npos)
+			if (resourcePath.contains("://"))
 			{
 				return resourcePath;
 			}
@@ -92,7 +85,7 @@ namespace aether
 			{
 				return {};
 			}
-			if (resourcePath.find("://") != std::string::npos)
+			if (resourcePath.contains("://"))
 			{
 				return resourcePath;
 			}
@@ -107,12 +100,12 @@ namespace aether
 				return {};
 			}
 
-			if (stem.find("://") != std::string::npos)
+			if (stem.contains("://"))
 			{
 				return io::FileSystem::Exists(stem) ? stem : std::string();
 			}
 
-			const std::string direct = ResolvePathInFolder(folderPath, stem);
+			std::string direct = ResolvePathInFolder(folderPath, stem);
 			if (io::FileSystem::Exists(direct))
 			{
 				return direct;
@@ -231,7 +224,6 @@ namespace aether
 				        }
 				        if (entry.fullKey == "material.shader" || entry.fullKey == "shader")
 				        {
-					        // Verbatim VFS path, no relative resolution (unlike textures.*).
 					        spec.shaderVfsPath = entry.value;
 					        return;
 				        }
@@ -314,7 +306,7 @@ namespace aether
 			const TextureHandle handles[5] = {mat.albedoTex, mat.normalTex, mat.metallicRoughnessTex, mat.occlusionTex, mat.emissiveTex};
 			for (const TextureHandle h: handles)
 			{
-				m_textureRegistry->Release(h); // generation-guarded no-op on invalid/stale
+				m_textureRegistry->Release(h);
 			}
 			mat.albedoTex = {};
 			mat.normalTex = {};
@@ -357,8 +349,6 @@ namespace aether
 		auto fileData = co_await io::FileSystem::ReadFileAsync(pathStr);
 
 		// GPU upload must happen on the game thread (owns the Vulkan context).
-		// After co_await resumes, we're back on the game thread via the default
-		// executor, so this is safe.
 		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool());
 	}
 
@@ -374,8 +364,6 @@ namespace aether
 			return {};
 		}
 		// unordered_set never relocates existing elements on insert, so the
-		// returned view stays valid for the AssetManager's lifetime even as more
-		// paths are interned later.
 		const auto [it, inserted] = m_internedShaderVfsPaths.insert(std::move(path));
 		return *it;
 	}
@@ -399,7 +387,6 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Asset("file/folder not found: " + requestedPath));
 		}
 
-		// Try binary .material first, fall back to TOML.
 		const bool isBinary = presetPath.ends_with(".material");
 		if (isBinary)
 		{
@@ -420,15 +407,12 @@ namespace aether
 					material.alphaBlend = hdr.alphaBlend != 0;
 					material.alphaMask = hdr.alphaMask != 0;
 
-					// Resolve texture paths.
 					for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 					{
 						auto type = reader.Read<uint8_t>();
-						std::string texRelPath = reader.ReadString();
-						std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
+						const std::string texRelPath = reader.ReadString();
+						const std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
 
-						// The registry sink owns .texture-sibling resolution; Acquire
-						// dedups + ref-counts and returns an invalid handle on failure.
 						const TextureHandle tex = m_textureRegistry->Acquire(texPath);
 
 						auto texType = static_cast<TextureTypeDisk>(type);
@@ -452,9 +436,6 @@ namespace aether
 						}
 					}
 
-					// Optional trailing per-material shader override (see the
-					// BinaryFormats.hpp comment above MaterialHeaderDisk). Absent
-					// or empty -> keep MaterialAsset's default templateDesc.
 					std::string shaderVfsPath = reader.ReadString();
 					if (!shaderVfsPath.empty())
 					{
@@ -467,7 +448,6 @@ namespace aether
 			}
 		}
 
-		// TOML fallback.
 		AE_TRY(text, ReadTextFile(presetPath));
 		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
 		MaterialAsset material = spec.material;
@@ -476,8 +456,6 @@ namespace aether
 			material.templateDesc.shaderVfsPath = InternShaderVfsPath(spec.shaderVfsPath);
 		}
 
-		// The sink owns .texture-sibling resolution; Acquire dedups + ref-counts.
-		// Empty path or load failure -> invalid handle (optional map not set).
 		auto acquireTexture = [this](std::string_view texturePath) -> TextureHandle
 		{
 			if (texturePath.empty())
@@ -534,9 +512,7 @@ namespace aether
 
 		AE_VERBOSE(LogCategory::Engine, "Model parsed: {} nodes, {} primitives, {} skins, {} materials, {} animations", source->nodes.size(), source->primitives.size(), source->skins.size(), source->materials.size(), source->animations.size());
 
-		// New format: materials have texture paths, not embedded images.
-		// Textures are loaded in FinaliseModelLoad.
-		std::vector<TextureHandle> imageHandles;
+		const std::vector<TextureHandle> imageHandles;
 
 		FinaliseModelLoad(loaded, *source, imageHandles, path);
 		return std::move(loaded);
@@ -547,7 +523,6 @@ namespace aether
 		AE_PROFILE_ZONE();
 		const std::string pathStr(path);
 
-		// Resolve the .mesh path (same logic as GltfAsset::LoadFromVfsPath).
 		std::string meshPath = assets::GltfAsset::ResolveMeshPath(pathStr);
 		if (meshPath.empty() || !io::FileSystem::Exists(meshPath))
 		{
@@ -558,15 +533,14 @@ namespace aether
 		auto meshData = co_await io::FileSystem::ReadFileAsync(meshPath);
 
 		// Parse from memory on the game thread (after resumption).
-		auto source = assets::GltfAsset::LoadFromMemory(std::move(meshData), meshPath);
+		auto source = assets::GltfAsset::LoadFromMemory(meshData, meshPath);
 		if (!source.has_value())
 		{
 			co_return std::unexpected(source.error());
 		}
 		LoadedModel loaded;
 
-		// New format: textures are loaded in FinaliseModelLoad from material paths.
-		std::vector<TextureHandle> imageHandles;
+		const std::vector<TextureHandle> imageHandles;
 
 		FinaliseModelLoad(loaded, *source, imageHandles, pathStr);
 		co_return std::move(loaded);
@@ -606,9 +580,6 @@ namespace aether
 			worldNodeTransforms[nodeIndex] = transform;
 		}
 
-		// Helper: acquire a ref-counted texture handle from the registry (dedup +
-		// deferred free; the sink owns .texture-sibling resolution). Empty path ->
-		// invalid handle (optional map not set).
 		auto acquireTexture = [this](std::string_view texturePath) -> TextureHandle
 		{
 			if (texturePath.empty())
@@ -655,18 +626,12 @@ namespace aether
 				mat.alphaBlend = srcMat.alphaBlend;
 				mat.alphaMask = srcMat.alphaMask;
 
-				// Optional per-material shader override authored in the mesh
 				// material's properties.toml. Intern into AssetManager-lifetime
-				// storage (templateDesc.shaderVfsPath is a string_view the
-				// PipelineCache holds for its lifetime); empty -> keep the
-				// MaterialAsset default ("shaders://gltf_mesh.spv").
 				if (!srcMat.shaderVfsPath.empty())
 				{
 					mat.templateDesc.shaderVfsPath = InternShaderVfsPath(srcMat.shaderVfsPath);
 				}
 
-				// New format: resolve texture paths from GltfMaterial.
-				// Old format: resolve via imageHandles index chain.
 				if (imageHandles.empty())
 				{
 					mat.albedoTex = acquireTexture(srcMat.albedoPath);
@@ -750,10 +715,6 @@ namespace aether
 
 		const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
 
-		// Default pipeline for material-less primitives (vertex-colour fallback),
-		// resolved once through the cache. Two-sided (CullMode::None) to match the
-		// pre-phase-3 default pipeline, since a material-less primitive carries no
-		// authored doubleSided intent and may be single-sided.
 		MaterialTemplate defaultTemplate{.shaderVfsPath = "shaders://gltf_mesh.spv"};
 		defaultTemplate.cullMode = gpu::CullMode::None;
 		const GraphicsPipeline* defaultPipeline = m_pipelineCache->Acquire(defaultTemplate);

@@ -16,7 +16,7 @@ namespace aether::assetpipeline
 {
 	namespace MaterialProcessor
 	{
-		ByteBuffer Process(std::span<const std::byte> tomlData, const std::filesystem::path& sourcePath, const std::filesystem::path& sourceDir)
+		ByteBuffer Process(std::span<const std::byte> tomlData, const std::filesystem::path& sourcePath, const std::filesystem::path& /*sourceDir*/)
 		{
 			const std::string_view text(reinterpret_cast<const char*>(tomlData.data()), tomlData.size());
 
@@ -33,7 +33,7 @@ namespace aether::assetpipeline
 
 			auto readFloats = [&](const char* section, const char* key, float* out, int count, const std::vector<double>& fallback)
 			{
-				const auto arr = tbl[section][key].as_array();
+				auto* const arr = tbl[section][key].as_array();
 				if (!arr)
 				{
 					for (int i = 0; i < count && i < static_cast<int>(fallback.size()); ++i)
@@ -44,7 +44,7 @@ namespace aether::assetpipeline
 				}
 				for (int i = 0; i < count && i < static_cast<int>(arr->size()); ++i)
 				{
-					const auto v = arr->get(i)->as_floating_point();
+					auto* const v = arr->get(i)->as_floating_point();
 					if (v)
 					{
 						out[i] = static_cast<float>(v->get());
@@ -62,21 +62,21 @@ namespace aether::assetpipeline
 			readFloats("material", "emissiveFactor", emissive, 3, {0.0, 0.0, 0.0});
 
 			{
-				const auto v = tbl["material"]["metallicFactor"].as_floating_point();
+				auto* const v = tbl["material"]["metallicFactor"].as_floating_point();
 				if (v)
 				{
 					metallic = static_cast<float>(v->get());
 				}
 			}
 			{
-				const auto v = tbl["material"]["roughnessFactor"].as_floating_point();
+				auto* const v = tbl["material"]["roughnessFactor"].as_floating_point();
 				if (v)
 				{
 					roughness = static_cast<float>(v->get());
 				}
 			}
 			{
-				const auto v = tbl["material"]["alphaCutoff"].as_floating_point();
+				auto* const v = tbl["material"]["alphaCutoff"].as_floating_point();
 				if (v)
 				{
 					alphaCutoff = static_cast<float>(v->get());
@@ -85,25 +85,23 @@ namespace aether::assetpipeline
 
 			const bool doubleSided = [&]() -> bool
 			{
-				const auto v = tbl["material"]["doubleSided"].as_boolean();
+				auto* const v = tbl["material"]["doubleSided"].as_boolean();
 				return v && v->get();
 			}();
 			const bool alphaBlend = [&]() -> bool
 			{
-				const auto v = tbl["material"]["alphaBlend"].as_boolean();
+				auto* const v = tbl["material"]["alphaBlend"].as_boolean();
 				return v && v->get();
 			}();
 			const bool alphaMask = [&]() -> bool
 			{
-				const auto v = tbl["material"]["alphaMask"].as_boolean();
+				auto* const v = tbl["material"]["alphaMask"].as_boolean();
 				return v && v->get();
 			}();
 
-			// Optional per-material shader override, e.g. "shaders://myeffect.spv".
-			// Absent -> empty string -> runtime keeps the default template shader.
 			std::string shaderVfsPath;
 			{
-				const auto v = tbl["material"]["shader"].as_string();
+				auto* const v = tbl["material"]["shader"].as_string();
 				if (v)
 				{
 					shaderVfsPath = v->get();
@@ -120,7 +118,7 @@ namespace aether::assetpipeline
 
 			auto addTex = [&](const char* key, TextureTypeDisk type)
 			{
-				const auto v = tbl["textures"][key].as_string();
+				auto* const v = tbl["textures"][key].as_string();
 				if (v)
 				{
 					textures.push_back({static_cast<uint8_t>(type), std::string(v->get())});
@@ -147,7 +145,7 @@ namespace aether::assetpipeline
 			std::vector<std::byte> out;
 			auto append = [&](const void* data, std::size_t n)
 			{
-				const auto p = reinterpret_cast<const std::byte*>(data);
+				const auto* const p = reinterpret_cast<const std::byte*>(data);
 				out.insert(out.end(), p, p + n);
 			};
 
@@ -161,10 +159,6 @@ namespace aether::assetpipeline
 				append(tex.path.data(), tex.path.size());
 			}
 
-			// Trailing optional shader-path override (see BinaryFormats.hpp comment
-			// above MaterialHeaderDisk). Always write the length prefix so the
-			// runtime reader's ReadString() call has a well-formed field to read;
-			// 0 means "no override".
 			{
 				const uint16_t shaderPathLen = static_cast<uint16_t>(shaderVfsPath.size());
 				append(&shaderPathLen, sizeof(shaderPathLen));

@@ -35,7 +35,7 @@ namespace aether
 	Expected<void> BindlessManager::Initialize(const VulkanContext& context, const Config& config)
 	{
 		AE_PROFILE_ZONE();
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		if (m_device != nullptr)
 		{
 			return {};
@@ -57,7 +57,6 @@ namespace aether
 			m_freeSlots.push_back(m_capacity - 1 - slot);
 		}
 
-		// ── Descriptor heaps (VK_EXT_descriptor_heap) ──────────────────────────
 		const auto& heapProps = context.GetDescriptorHeapProperties();
 		m_imageDescriptorSize = heapProps.imageDescriptorSize;
 		m_imageDescriptorAlignment = heapProps.imageDescriptorAlignment;
@@ -77,7 +76,6 @@ namespace aether
 		const VmaAllocator allocator = context.GetAllocator();
 		const VkBufferUsageFlags2 heapUsage = VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
 
-		// Resource heap (SAMPLED_IMAGE descriptors)
 		const VkDeviceSize resourceDescriptorBytes = static_cast<VkDeviceSize>(m_capacity) * m_imageDescriptorStride;
 		const VkDeviceSize resourceReservedAlignment = std::lcm(heapProps.bufferDescriptorAlignment, heapProps.imageDescriptorAlignment);
 		m_resourceHeapReservedRangeOffset = AlignUp(resourceDescriptorBytes, resourceReservedAlignment);
@@ -120,7 +118,6 @@ namespace aether
 			m_resourceHeapMapped = allocDetail.pMappedData;
 			AE_ASSERT(m_resourceHeapMapped != nullptr, "VMA_MAPPED_BIT should yield persistent mapped pointer");
 
-			// Query device address
 			const VkBufferDeviceAddressInfo addrInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr, .buffer = buffer};
 			m_resourceHeapAddr = vkGetBufferDeviceAddress(static_cast<VkDevice>(m_device), &addrInfo);
 			if (m_memoryTracker != nullptr && m_resourceHeapAddr != 0)
@@ -129,7 +126,6 @@ namespace aether
 			}
 		}
 
-		// Sampler heap (one immutable linear SAMPLER)
 		m_samplerHeapReservedRangeOffset = AlignUp(m_samplerDescriptorSize, m_samplerDescriptorAlignment);
 		m_samplerHeapSize = m_samplerHeapReservedRangeOffset + m_samplerHeapReservedRangeSize;
 
@@ -182,11 +178,9 @@ namespace aether
 
 		WriteLinearSamplerUnlocked();
 
-		// ── Pipeline mapping info ─────────────────────────────────────────────
 		{
 			auto* pm = new DescriptorHeapMappings;
 
-			// Set 0 binding 0: g_textures[] → resource heap (SAMPLED_IMAGE array).
 			pm->mappings[0] = {
 			        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
 			        .pNext = nullptr,
@@ -204,7 +198,6 @@ namespace aether
 			        .samplerHeapArrayStride = 0,
 			};
 
-			// Set 0 binding 1: g_linearSampler → sampler heap (SAMPLER).
 			pm->mappings[1] = {
 			        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
 			        .pNext = nullptr,
@@ -238,7 +231,7 @@ namespace aether
 	void BindlessManager::Shutdown()
 	{
 		AE_PROFILE_ZONE();
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		ShutdownUnlocked();
 	}
 
@@ -249,7 +242,6 @@ namespace aether
 			return;
 		}
 
-		// Descriptor heaps
 		if (m_resourceHeapBuffer != nullptr)
 		{
 			if (m_memoryTracker != nullptr && m_resourceHeapAddr != 0)
@@ -288,9 +280,6 @@ namespace aether
 
 		if (m_shaderMappingInfo != nullptr)
 		{
-			// The DescriptorHeapMappings struct (containing mappings + shaderMappingInfo)
-			// was allocated as a single block; the pointer points to the embedded
-			// VkShaderDescriptorSetAndBindingMappingInfoEXT inside it.
 			auto* pm = reinterpret_cast<DescriptorHeapMappings*>(reinterpret_cast<std::byte*>(m_shaderMappingInfo) - offsetof(DescriptorHeapMappings, shaderMappingInfo));
 			delete pm;
 			m_shaderMappingInfo = nullptr;
@@ -307,13 +296,13 @@ namespace aether
 
 	std::uint32_t BindlessManager::GetCapacity() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_capacity;
 	}
 
 	Expected<gpu::Sampler> BindlessManager::CreateSampler(const gpu::Filter filter, const gpu::SamplerMipmapMode mipmap, const gpu::SamplerAddressMode address) const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		if (m_device == nullptr)
 		{
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
@@ -345,7 +334,7 @@ namespace aether
 
 	Expected<std::uint32_t> BindlessManager::AllocateSampledImageSlot()
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		if (m_device == nullptr)
 		{
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
@@ -364,7 +353,7 @@ namespace aether
 
 	void BindlessManager::FreeSampledImageSlot(const std::uint32_t slot)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		if (m_device == nullptr)
 		{
 			return;
@@ -375,7 +364,7 @@ namespace aether
 
 	void BindlessManager::FreeSampledImageSlotDeferred(const std::uint32_t slot)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		if (m_device == nullptr)
 		{
 			return;
@@ -398,7 +387,7 @@ namespace aether
 	void BindlessManager::AdvanceFrame(const std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_currentFrame = frameIndex;
 		if (m_device == nullptr || m_pendingSlotFrees.empty())
 		{
@@ -431,35 +420,33 @@ namespace aether
 		m_freeSlots.push_back(slot);
 	}
 
-	// ── Descriptor-heap API ───────────────────────────────────────────────────
-
 	gpu::DeviceAddress BindlessManager::GetResourceHeapAddress() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_resourceHeapAddr;
 	}
 
 	gpu::DeviceAddress BindlessManager::GetSamplerHeapAddress() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_samplerHeapAddr;
 	}
 
 	gpu::DeviceSize BindlessManager::GetResourceHeapSize() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_resourceHeapSize;
 	}
 
 	gpu::DeviceSize BindlessManager::GetSamplerHeapSize() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_samplerHeapSize;
 	}
 
 	gpu::DeviceSize BindlessManager::GetImageDescriptorSize() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_imageDescriptorSize;
 	}
 
@@ -470,7 +457,7 @@ namespace aether
 
 	Expected<void> BindlessManager::WriteSampledImage(const std::uint32_t slot, const void* viewCreateInfo, const gpu::ImageLayout layout)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		if (m_device == nullptr)
 		{
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
@@ -522,7 +509,7 @@ namespace aether
 
 	void BindlessManager::WriteLinearSampler()
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		WriteLinearSamplerUnlocked();
 	}
 
@@ -565,7 +552,7 @@ namespace aether
 			return;
 		}
 
-		const auto vkCmd = static_cast<VkCommandBuffer>(cmd.GetCommandBuffer());
+		auto* const vkCmd = static_cast<VkCommandBuffer>(cmd.GetCommandBuffer());
 
 		const VkBindHeapInfoEXT resourceBindInfo{
 		        .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,

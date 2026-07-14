@@ -47,11 +47,7 @@
 
 namespace aether::editor
 {
-	// Shared inspector toolkit (Color-token property rows, section headers,
-	// vector rows, accent/danger buttons). Kept as short aliases so the drawers
-	// read cleanly and every component gets the same consistent styling.
 	using iw::AccentButton;
-	using iw::DangerButton;
 	using iw::PropCheckbox;
 	using iw::PropColor3;
 	using iw::PropColor4;
@@ -68,7 +64,6 @@ namespace aether::editor
 
 	namespace
 	{
-		// Back-compat name for the shared axis-chip vector row.
 		inline bool DrawVec3Row(const char* label, glm::vec3& value, float resetValue, float speed)
 		{
 			return iw::Vec3Row(label, value, resetValue, speed);
@@ -217,7 +212,6 @@ namespace aether::editor
 		ImGui::TextDisabled(script.attached ? "Attached (running while playing)" : "Attaches on the next Play tick");
 		if (script.attached && ImGui::SmallButton("Re-attach"))
 		{
-			// Next play tick re-runs OnAttach (handy after editing setup code).
 			script.attached = false;
 		}
 
@@ -233,8 +227,6 @@ namespace aether::editor
 			return;
 		}
 
-		// A live instance (while playing) is the source of truth; otherwise the
-		// value is the stored override, falling back to the type default.
 		std::uint64_t handle = 0;
 		if (auto* runner = context.TryGet<app::ScriptComponentSystem>())
 		{
@@ -346,7 +338,7 @@ namespace aether::editor
 				{
 					const Entity target{static_cast<std::uint32_t>(value.i64)};
 					const bool targetAlive = target.IsValid() && world.GetRegistry().valid(World::ToEntt(target));
-					std::string label = targetAlive ? std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
+					const std::string label = targetAlive ? std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
 					const std::string buttonId = label + "##entityField" + info.name;
 					ImGui::AlignTextToFramePadding();
 					ImGui::TextUnformatted(info.name.c_str());
@@ -394,16 +386,13 @@ namespace aether::editor
 				}
 				case ScriptPropertyValue::Type::Component:
 				{
-					// A component reference: an entity slot constrained to entities
 					// that carry the required component (value.str = its catalog
-					// name). Dropping an entity links its component; drops that lack
-					// it are rejected so the field can never point at the wrong thing.
 					const std::string& componentName = value.str;
 					const editor::ComponentCatalogEntry* catEntry = editor::FindComponent(componentName);
 					const Entity target{static_cast<std::uint32_t>(value.i64)};
 					const bool targetAlive = target.IsValid() && world.GetRegistry().valid(World::ToEntt(target));
 					const std::string prefix = catEntry != nullptr ? catEntry->icon + "  " : std::string();
-					std::string label = targetAlive ? prefix + std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
+					const std::string label = targetAlive ? prefix + std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
 					const std::string buttonId = label + "##compField" + info.name;
 					ImGui::AlignTextToFramePadding();
 					ImGui::TextUnformatted(info.name.c_str());
@@ -455,10 +444,10 @@ namespace aether::editor
 			if (edited)
 			{
 				value.type = info.type;
-				script.properties[info.name] = value; // persist the override
+				script.properties[info.name] = value;
 				if (handle != 0)
 				{
-					cs->SetPropertyValue(handle, i, value); // live-apply while playing
+					cs->SetPropertyValue(handle, i, value);
 				}
 			}
 		}
@@ -473,9 +462,6 @@ namespace aether::editor
 
 	KindBadge EntityKindBadge(const World& world, Entity entity)
 	{
-		// Icon tints route through the shared palette (Color.hpp) so entity kinds
-		// stay distinct but on-brand: UI/camera = info blue, lights = yellow,
-		// effects = mauve, physics = amber, meshes = green.
 		using iw::ToImVec4;
 		if (world.Has<ui::UICanvas>(entity))
 		{
@@ -526,15 +512,8 @@ namespace aether::editor
 		{
 			return;
 		}
-		// Children keep their RELATIVE offsets: the edit's world-space delta
-		// cascades through the whole subtree (grandchildren included).
 		ecs::SetWorldTransform(world, entity, localToWorld);
 
-		// True physics teleport for every body the edit moved (the entity and
-		// any descendant with one): set the Jolt body AND rewrite the
-		// interpolation state (prev == curr), otherwise the next sync stomps
-		// the edit or the renderer lerps across the jump. Quat order mirrors
-		// ComposeTransform (YXZ).
 		auto* physics = context.TryGet<PhysicsSystem>();
 		std::vector<Entity> subtree{entity};
 		for (std::size_t i = 0; i < subtree.size(); ++i)
@@ -597,13 +576,9 @@ namespace aether::editor
 			return;
 		}
 
-		scale = glm::max(scale, glm::vec3(0.001f)); // zero scale breaks decompose
+		scale = glm::max(scale, glm::vec3(0.001f));
 		ApplyWorldTransform(context, world, entity, ComposeTransform(pos, euler, scale));
 
-		// Multi-select: propagate this edit as a per-channel delta to the rest of
-		// the selection so a drag moves/rotates/scales the whole group together,
-		// each entity keeping its own pose. Entities already carried by a selected
-		// ancestor's cascade are skipped so they are not moved twice.
 		const auto* selection = context.TryGet<SceneSelection>();
 		if (selection != nullptr && selection->All().size() > 1)
 		{
@@ -630,12 +605,6 @@ namespace aether::editor
 			return;
 		}
 
-		// A multi-mesh model spawns one entity per primitive, each with its
-		// own SkinnedMeshComponent - editing just the selected part desyncs
-		// the model (parts on different clips/phases). Edits drive the whole
-		// group: the part's parent (its model root) scopes the subtree, and
-		// the shared animation database filters out other skinned models that
-		// happen to sit under the same root. Mirrors das set_animation.
 		std::vector<SkinnedMeshComponent*> group;
 		{
 			Entity groupRoot = entity;
@@ -667,7 +636,7 @@ namespace aether::editor
 			for (auto* part: group)
 			{
 				part->clipIndex = clipIndex;
-				part->animTime = 0.0f; // restart together so parts stay in phase
+				part->animTime = 0.0f;
 			}
 		}
 		if (PropFloat("Speed", &smc->playbackSpeed, 0.01f, -4.0f, 4.0f, "%.2f", "Playback rate (negative reverses)"))
@@ -698,13 +667,10 @@ namespace aether::editor
 		}
 	}
 
-	// Forward declaration: the shared asset-picker helper is defined further down
-	// with the other asset helpers, but DrawMaterial (below) already uses it. The
-	// default argument lives here, on the first declaration.
 	namespace
 	{
 		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel = nullptr);
-	} // namespace
+	}
 
 	void DrawMaterial(app::LayerContext& context, World& world, Entity entity)
 	{
@@ -723,9 +689,6 @@ namespace aether::editor
 		MaterialRegistry& registry = assets->GetMaterialRegistry();
 		std::vector<TextureHandle> transientTextureRefs;
 
-		// Copy-on-write: edits go through a per-entity instance seeded from the
-		// entity's current registry material, so the fox keeps its textures when
-		// a single factor is dragged.
 		auto* inst = world.TryGet<MaterialInstanceComponent>(entity);
 		if (!inst)
 		{
@@ -742,8 +705,6 @@ namespace aether::editor
 
 		bool changed = false;
 
-		// Material preset: replace this material with a catalogued .mat preset
-		// (presets are catalogued when dropped from the File Explorer).
 		iw::PropLabel("Preset");
 		if (const AssetId pk = AssetPickerButton("##matPresetPicker", assetDb, AssetType::Material, AssetId{}, "Load a preset..."); pk.IsValid() && assetDb != nullptr)
 		{
@@ -752,7 +713,7 @@ namespace aether::editor
 			{
 				if (auto loaded = assets->LoadMaterialPreset(src.path))
 				{
-					asset = std::move(loaded.value());
+					asset = loaded.value();
 					for (const TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
 					{
 						if (h.IsValid())
@@ -824,7 +785,6 @@ namespace aether::editor
 				}
 				ImGui::EndDragDropTarget();
 			}
-			// Pick a catalogued texture (resolves through the TextureRegistry).
 			if (assetDb != nullptr)
 			{
 				ImGui::SameLine();
@@ -879,10 +839,8 @@ namespace aether::editor
 		}
 		if (changed)
 		{
-			// One dedup-safe reassign per edited frame; flag changes re-resolve the
-			// pipeline (two-sided/blend), and effect-driven entities keep theirs.
 			MaterialSystem::AssignMaterial(world, entity, registry, assets->GetPipelineCache(), asset);
-			for (TextureHandle h: transientTextureRefs)
+			for (const TextureHandle h: transientTextureRefs)
 			{
 				if (h.IsValid())
 				{
@@ -1026,10 +984,6 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_BOLT "  Effect Params", ICON_FA_XMARK "##removeEffect", removeEffect, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removeEffect)
 		{
-			// The param slot frees through the on_destroy hook. The material
-			// pipeline the effect was overriding comes back via a plain
-			// re-assign (AssignMaterial's effect guard no longer trips once
-			// EffectParamsComponent is gone).
 			world.Remove<EffectParamsComponent>(entity);
 			world.Remove<EffectRefComponent>(entity);
 			auto* assets = context.TryGet<AssetManager>();
@@ -1041,7 +995,7 @@ namespace aether::editor
 			}
 			else
 			{
-				world.Remove<PipelineComponent>(entity); // effect-only pipeline: nothing to restore
+				world.Remove<PipelineComponent>(entity);
 			}
 			return;
 		}
@@ -1060,8 +1014,6 @@ namespace aether::editor
 		changed |= PropFloat("Scale", &ep->params.scale, 0.02f, 0.0f, 10.0f, "%.2f");
 		changed |= PropFloat("Intensity", &ep->params.intensity, 0.02f, 0.0f, 10.0f, "%.2f");
 
-		// Same path as the das set_effect_* bindings: mutate the CPU-authoritative
-		// copy, one buffer write. GPU reads it next frame.
 		if (changed && ep->paramSlot != 0xFFFFFFFFu)
 		{
 			if (auto* buffer = context.TryGet<EffectParamBuffer>())
@@ -1085,14 +1037,12 @@ namespace aether::editor
 		auto* physics = context.TryGet<PhysicsSystem>();
 		bool rebuild = false;
 
-		// ── Collider: shape + dimensions + surface material ────────────────────
 		if (collider != nullptr)
 		{
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_CUBE "  Collider", ICON_FA_XMARK "##removeCollider", removed, ImGuiTreeNodeFlags_DefaultOpen);
 			if (removed)
 			{
-				// Removing the collider removes the whole body (collider + rigid body).
 				if (physics != nullptr)
 				{
 					physics->RemoveBody(world, entity);
@@ -1105,7 +1055,7 @@ namespace aether::editor
 			}
 			if (open)
 			{
-				const char* kShapes[] = {"Box", "Sphere", "Capsule", "Cylinder"};
+				const char* const kShapes[] = {"Box", "Sphere", "Capsule", "Cylinder"};
 				int shapeIdx = static_cast<int>(collider->shape);
 				if (PropCombo("Shape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes)))
 				{
@@ -1150,21 +1100,19 @@ namespace aether::editor
 			}
 		}
 
-		// ── Rigid Body: motion + body-level tunables + runtime controls ────────
 		if (rb != nullptr)
 		{
 			bool removed = false;
 			const bool open = RemovableSection(ICON_FA_WEIGHT_HANGING "  Rigid Body", ICON_FA_XMARK "##removeRigidBody", removed, ImGuiTreeNodeFlags_DefaultOpen);
 			if (removed)
 			{
-				// Drop the rigid body; a remaining collider re-bakes as a static body.
-				world.Remove<RigidBodyComponent>(entity); // on_destroy hook frees the Jolt body
+				world.Remove<RigidBodyComponent>(entity);
 				world.Remove<PhysicsStateComponent>(entity);
 				return;
 			}
 			if (open)
 			{
-				const char* kMotions[] = {"Static", "Kinematic", "Dynamic"};
+				const char* const kMotions[] = {"Static", "Kinematic", "Dynamic"};
 				int motionIdx = static_cast<int>(rb->motionType);
 				if (PropCombo("Motion", &motionIdx, kMotions, IM_ARRAYSIZE(kMotions)))
 				{
@@ -1310,7 +1258,7 @@ namespace aether::editor
 		auto* physics = context.TryGet<PhysicsSystem>();
 		bool rebuild = false;
 
-		const char* kTypes[] = {"Fixed", "Point", "Hinge", "Distance", "Slider"};
+		const char* const kTypes[] = {"Fixed", "Point", "Hinge", "Distance", "Slider"};
 		int typeIdx = static_cast<int>(joint->type);
 		if (PropCombo("Type", &typeIdx, kTypes, IM_ARRAYSIZE(kTypes)))
 		{
@@ -1318,7 +1266,6 @@ namespace aether::editor
 			rebuild = true;
 		}
 
-		// Target body: drag an entity from the hierarchy, or leave empty for world.
 		const bool targetAlive = joint->target.IsValid() && world.GetRegistry().valid(World::ToEntt(joint->target));
 		const std::string targetLabel = targetAlive ? std::string(EntityDisplayName(world, joint->target)) + "  #" + std::to_string(joint->target.id) : "World (fixed)";
 		iw::PropLabel("Target");
@@ -1380,8 +1327,6 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_VIDEO "  Camera", ICON_FA_XMARK "##removeCamera", removed, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removed)
 		{
-			// CameraSystem reaps the backing pool camera next tick once the
-			// component (and its MainCamera tag) are gone.
 			world.Remove<CameraComponent>(entity);
 			if (world.Has<MainCameraComponent>(entity))
 			{
@@ -1421,8 +1366,6 @@ namespace aether::editor
 		cam->nearPlane = std::max(0.001f, cam->nearPlane);
 		cam->farPlane = std::max(cam->nearPlane + 0.01f, cam->farPlane);
 
-		// Orbit cameras drive their own transform from these params (CameraSystem
-		// recomputes the pose each tick), so the -Z hint below doesn't apply to them.
 		if (auto* orbit = world.TryGet<OrbitCameraComponent>(entity))
 		{
 			ImGui::SeparatorText("Orbit");
@@ -1553,15 +1496,12 @@ namespace aether::editor
 		        {"Triangle", "triangle", PrimitiveMesh::Triangle},
 		};
 
-		// Basename of a model/texture path for a compact display label.
 		std::string PathBasename(const std::string& path)
 		{
 			const auto slash = path.find_last_of("/\\");
 			return slash == std::string::npos ? path : path.substr(slash + 1);
 		}
 
-		// Give a mesh entity a neutral two-sided material + pipeline when it has
-		// none, so a freshly swapped primitive is actually drawable.
 		void EnsureDefaultMaterial(AssetManager& assets, World& world, Entity entity)
 		{
 			if (world.Has<MaterialComponent>(entity) && world.Has<PipelineComponent>(entity))
@@ -1575,16 +1515,8 @@ namespace aether::editor
 			MaterialSystem::AssignMaterial(world, entity, assets.GetMaterialRegistry(), assets.GetPipelineCache(), asset);
 		}
 
-		// Full-width asset-reference field: a button labelled with the current
-		// asset's name that opens a popup listing every catalogued asset of `type`.
-		// Returns the picked id (invalid if nothing was picked this frame). This is
-		// the one handle-based control shared by the mesh, texture and material
-		// pickers, so they all read from the same AssetDatabase.
 		AssetId AssetPickerButton(const char* popupId, AssetDatabase* db, AssetType type, AssetId current, const char* emptyLabel, const char* explicitLabel)
 		{
-			// Textures/materials are referenced by a runtime handle, not an AssetId,
-			// so the caller passes the button text explicitly; meshes derive it from
-			// the current id.
 			std::string label;
 			if (explicitLabel != nullptr)
 			{
@@ -1634,7 +1566,6 @@ namespace aether::editor
 	void DrawMeshRenderer(app::LayerContext& context, World& world, Entity entity)
 	{
 		const bool hasMesh = world.Has<MeshComponent>(entity);
-		// Sprites carry a mesh too but own the "Sprite Renderer" panel instead.
 		if ((!hasMesh && !world.Has<MeshRendererComponent>(entity)) || world.Has<SpriteRendererComponent>(entity))
 		{
 			return;
@@ -1652,15 +1583,12 @@ namespace aether::editor
 		bool isModel = source != nullptr && source->kind == MeshSourceComponent::Kind::Model;
 
 		auto* assetDb = context.TryGet<AssetDatabase>();
-		// Component pointers are invalidated by EmplaceOrReplace below; re-fetch
-		// after every mutation before touching `source` again.
 		const auto refetchSource = [&]()
 		{
 			source = world.TryGet<MeshSourceComponent>(entity);
 			isModel = source != nullptr && source->kind == MeshSourceComponent::Kind::Model;
 		};
 
-		// Apply a picked mesh asset onto this entity's mesh + stable source identity.
 		const auto applyMeshAsset = [&](AssetId picked)
 		{
 			AssetSource src;
@@ -1696,8 +1624,6 @@ namespace aether::editor
 			}
 		};
 
-		// Register the current mesh (and, for a model, its sibling primitives) so the
-		// picker lists them, then resolve its stable id.
 		AssetId currentId{};
 		if (source != nullptr && assetDb != nullptr)
 		{
@@ -1708,8 +1634,6 @@ namespace aether::editor
 			currentId = assetDb->Register(isModel ? MakeModelMeshSource(source->path, static_cast<int>(source->primitiveIndex)) : MakePrimitiveMeshSource(source->path));
 		}
 
-		// Mesh asset field: the handle-based front door - pick any mesh asset
-		// (built-in primitives + loaded model meshes) from the shared catalog.
 		iw::PropLabel("Mesh");
 		if (const AssetId picked = AssetPickerButton("##meshAssetPicker", assetDb, AssetType::Mesh, currentId, "None"); picked.IsValid())
 		{
@@ -1718,8 +1642,6 @@ namespace aether::editor
 		iw::ItemTooltip("Pick a mesh asset from the project");
 		refetchSource();
 
-		// glTF model slot: drop a .gltf/.glb/.mesh file to (re)load a model onto
-		// this entity; the model + its primitives are registered as assets.
 		iw::PropLabel("Model");
 		const std::string modelLabel = isModel ? PathBasename(source->path) : "Drop .gltf / .glb here";
 		ImGui::Button((modelLabel + "##modelSlot").c_str(), ImVec2(-FLT_MIN, 0.0f));
@@ -1732,8 +1654,6 @@ namespace aether::editor
 					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
 					if (file->kind == dragdrop::FileKind::Model && assets != nullptr && sceneCtx != nullptr)
 					{
-						// Bake the .mesh the loader needs (no-op if already baked) before
-						// assigning - project:// is the raw project folder in the editor.
 						if (const auto* project = context.TryGet<app::EditorProjectContext>())
 						{
 							std::string bakeError;
@@ -1755,7 +1675,6 @@ namespace aether::editor
 		iw::ItemTooltip("Drag a model file from the File Explorer onto this slot");
 		refetchSource();
 
-		// Hot-reload: re-read the model file and re-point every mesh referencing it.
 		if (isModel && assets != nullptr && sceneCtx != nullptr && assetDb != nullptr)
 		{
 			iw::PropLabel("Source");
@@ -1766,8 +1685,6 @@ namespace aether::editor
 			iw::ItemTooltip("Re-read the model file; the resolve pass re-points meshes next frame (hot-reload)");
 		}
 
-		// Primitive picker: a model can hold several meshes. Scrub which one this
-		// renderer references (re-resolves the shared mesh + its material).
 		if (isModel && assets != nullptr && sceneCtx != nullptr)
 		{
 			const int primCount = app::scene::ModelPrimitiveCount(*assets, *sceneCtx, source->path);
@@ -1785,8 +1702,6 @@ namespace aether::editor
 			}
 		}
 
-		// Visibility + shadow casting. Lazily created so a plain mesh entity is
-		// unaffected until you actually toggle something.
 		auto* mr = world.TryGet<MeshRendererComponent>(entity);
 		bool visible = mr == nullptr || mr->visible;
 		bool castShadows = mr == nullptr || mr->castShadows;
@@ -1832,8 +1747,6 @@ namespace aether::editor
 		auto* assets = context.TryGet<AssetManager>();
 		const auto* inst = world.TryGet<MaterialInstanceComponent>(entity);
 
-		// Texture slot: pick a catalogued texture, or drop a texture file. Both
-		// resolve through the TextureRegistry - no second texture cache.
 		auto* assetDb = context.TryGet<AssetDatabase>();
 		const auto setSpriteTexture = [&](const std::string& path)
 		{
@@ -1841,7 +1754,7 @@ namespace aether::editor
 			{
 				return;
 			}
-			TextureHandle h = assets->GetTextureRegistry().Acquire(path);
+			const TextureHandle h = assets->GetTextureRegistry().Acquire(path);
 			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), h);
 			if (h.IsValid())
 			{
@@ -1882,8 +1795,6 @@ namespace aether::editor
 			}
 		}
 
-		// Tint drives the material base colour (rgb); alpha lives in the Material
-		// section (sprites default to an alpha-blended two-sided material).
 		glm::vec3 tint = inst != nullptr ? glm::vec3(inst->asset.baseColorFactor) : glm::vec3(1.0f);
 		if (PropColor3("Tint", &tint.x) && assets != nullptr)
 		{
@@ -1900,8 +1811,6 @@ namespace aether::editor
 			return;
 		}
 		const bool open = SectionHeader(ICON_FA_SITEMAP "  Hierarchy", ImGuiTreeNodeFlags_AllowOverlap);
-		// Removable only when the link is inert - removing a live link would
-		// orphan parent/children bookkeeping.
 		if (!h->parent.IsValid() && h->children.empty())
 		{
 			ImGui::SameLine();
@@ -1986,7 +1895,7 @@ namespace aether::editor
 			        ImGui::SameLine();
 			        if (ImGui::SmallButton(ICON_FA_XMARK))
 			        {
-				        pendingRemove = id; // defer: don't mutate while enumerating
+				        pendingRemove = id;
 			        }
 			        ImGui::PopID();
 		        });

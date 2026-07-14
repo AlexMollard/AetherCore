@@ -23,8 +23,6 @@ namespace aether
 	class GraphicsPipeline;
 	class Mesh;
 
-	// Shared compute pipelines used by every RenderQueue instance.
-	// Create one, initialize it once, then pass a const reference to each RenderQueue::Initialize().
 	struct RenderQueueSharedPipelines
 	{
 		gpu::PipelineHandle skinCopy;
@@ -37,32 +35,24 @@ namespace aether
 		void Shutdown();
 	};
 
-	// Per-draw submission payload.
 	struct DrawCommand
 	{
 		const GraphicsPipeline* pipeline = nullptr;
 		const Mesh* mesh = nullptr; // must be indexed; null draws are not supported
 		std::uint32_t instanceCount = 1;
-		glm::mat4 modelMatrix{1.0f};                  // per-object world transform
-		std::uint32_t materialIndex = 0xFFFFFFFFu;    // index into MaterialBuffer; 0xFFFF... = fallback
-		std::uint32_t effectParamIndex = 0xFFFFFFFFu; // per-entity EffectParams slot; 0xFFFF... = no effect
-		std::int32_t skinIndex = -1;                  // skin index in AnimationDatabase; -1 = not skinned
-		std::uint32_t skinJointCount = 0;             // number of joints in the skin
-		std::uint32_t animClipIndex = 0;              // active clip for GPU sampling
-		float animTime = 0.0f;                        // active clip time for GPU sampling
-		glm::vec4 worldBoundingSphere{};              // xyz=world center, w=radius; w<=0 = skip culling
-		const AnimationDatabase* animDb = nullptr;    // per-draw animation database for GPU sampling
-		std::uint32_t animDbGeneration = 0;           // generation counter for validity check
-		std::uint32_t meshGeneration = 0;             // generation counter for mesh validity check
+		glm::mat4 modelMatrix{1.0f};
+		std::uint32_t materialIndex = 0xFFFFFFFFu;
+		std::uint32_t effectParamIndex = 0xFFFFFFFFu;
+		std::int32_t skinIndex = -1;
+		std::uint32_t skinJointCount = 0;
+		std::uint32_t animClipIndex = 0;
+		float animTime = 0.0f;
+		glm::vec4 worldBoundingSphere{};
+		const AnimationDatabase* animDb = nullptr;
+		std::uint32_t animDbGeneration = 0;
+		std::uint32_t meshGeneration = 0;
 	};
 
-	// Collects draws, runs cull/animation compute, then emits indirect draws.
-	// Configuration struct for Initialize - replaces multiple parameters.
-	// maxAnimationDraws controls animation pool sizes separately from total draw capacity.
-	// Pass 0 to disable all animation/skin buffers (for non-skinned queues).
-	// UINT32_MAX (default) derives a sane cap from total draws using kDefaultMaxAnimationDraws.
-	// outputDrawCapacity overrides per-frame indirect output buffer capacity (0 = equals maxDraws).
-	// Use e.g. maxDraws * 3 for multi-frustum shadow queues writing 3 cascade regions.
 	struct RenderQueueConfig
 	{
 		std::uint32_t maxDraws = 8192;
@@ -90,17 +80,14 @@ namespace aether
 		RenderQueue(RenderQueue&&) = delete;
 		RenderQueue& operator=(RenderQueue&&) = delete;
 
-		// Initialize with configuration struct.
 		void Initialize(const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config = {});
 		void Shutdown();
 
-		// Optional animation database for GPU sampling.
 		void SetAnimationDatabase(const AnimationDatabase* db)
 		{
 			m_animationDb = db;
 		}
 
-		// Select the frame slot used by Submit.
 		void SetWriteSlot(std::uint32_t slot)
 		{
 			m_writeSlot = slot;
@@ -143,33 +130,19 @@ namespace aether
 			m_debugAnimPassMask = mask;
 		}
 
-		// Log all skin/animation job parameters for the next N frames to the engine log.
-		// Use to verify addresses, counts, and indices are sane before they hit the GPU.
 		void SetDebugLogSkinJobs(std::uint32_t frameCount)
 		{
 			m_debugLogSkinJobsFramesLeft = frameCount;
 		}
 
-		// Optional Tracy GPU context for CPU-correlated GPU timeline zones.
-		// Wired through the engine-side GpuProfiler singleton - no
-		// Tracy type or `Vk*` token is exposed on the public API.
-
-		// Optional animation extension systems. When set, the blend/root-motion
-		// passes are dispatched after the standard animation pipeline.
 		void SetAnimationBlendSystem(AnimationBlendSystem* sys)
 		{
 			m_animationBlendSystem = sys;
 		}
 
-		// Write inputs and dispatch animation/cull compute.
-		// For multi-frustum queues (outputDrawCapacity > maxDraws), call
-		// SetMultiCullFrameAddrs() beforehand to supply the 3 cascade frame
 		// constants addresses; the computePipeline/layout must then be compatible
-		// with CullMultiPushConstants.
-		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, std::uint32_t frameIndex);
+		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, gpu::PipelineView computePipeline, std::uint32_t frameIndex);
 
-		// For multi-frustum queues: provides the 3 cascade frame constant BDAs
-		// used by PrepareAndDispatch to build CullMultiPushConstants.
 		void SetMultiCullFrameAddrs(const gpu::DeviceAddress addrs[3])
 		{
 			m_multiFrameAddrs[0] = addrs[0];
@@ -189,14 +162,9 @@ namespace aether
 
 		[[nodiscard]] gpu::DeviceAddress GetSkinPaletteBufferAddress() const
 		{
-			// Per-slot device-local buffer; return slot 0's address as a
-			// representative handle (used only for diagnostic logging).
 			return m_skinPalette[0].address;
 		}
 
-		// Emit graphics draws from indirect output.
-		// cascadeOffset is added to the output buffer offset (in gpu::DrawIndexedIndirectCommand units);
-		// used by multi-frustum queues to select one cascade's output region.
 		void FlushDraw(gpu::CommandList& cmd,
 		        std::uint32_t frameIndex,
 		        const DrawContracts::LightingAddresses* lighting = nullptr,
@@ -206,9 +174,6 @@ namespace aether
 		void FlushDrawPush(
 		        gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0, const gpu::CullMode* cullModeOverride = nullptr);
 
-		// Same as FlushDraw but overrides the frame constants BDA in push constants
-		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
-		// (e.g., local shadow atlas where each light has a different VP matrix).
 		void FlushDrawWithFrameAddr(gpu::CommandList& cmd,
 		        std::uint32_t frameIndex,
 		        const DrawContracts::LightingAddresses* lighting,
@@ -217,7 +182,6 @@ namespace aether
 		        std::uint32_t cascadeOffset = 0,
 		        const gpu::CullMode* cullModeOverride = nullptr);
 
-		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
 		void DiscardPending(std::uint32_t slot);
 		void DiscardAllPending();
@@ -225,34 +189,18 @@ namespace aether
 		[[nodiscard]] bool IsEmpty(std::uint32_t slot) const;
 
 	private:
-		// Per-frame queued draw commands.
 		// Each slot is protected by m_slotMutexes[slot]. The game thread
-		// (Clear/Submit) and render thread (PrepareAndDispatch) can access
-		// the same slot concurrently when the render thread is kFramesInFlight
-		// behind. Clear() waits until the render thread consumes the slot; lifecycle
-		// paths that skip graph execution must explicitly retire their queues.
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::array<std::mutex, kFramesInFlight> m_slotMutexes;
 		std::array<std::condition_variable, kFramesInFlight> m_slotCv;
 		std::array<bool, kFramesInFlight> m_slotConsumed{};
 		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
 
-		// ------------------------------------------------------------------------
-		// Buffer storage
-		//
-		// All buffers are owned by gpu::ResourceRegistry and live as
-		// gpu::BufferHandle slots (8 bytes each, generation-checked). Per-frame
-		// data is mirrored by std::array<Handle, kFramesInFlight>. The cached
-		// pointers / device-addresses are refreshed after CreateMappedBuffer /
-		// ResolveBuffer so the hot path doesn't need to re-resolve every frame.
-		// ------------------------------------------------------------------------
-
-		// Per-frame CPU-written mapped SSBOs.
 		struct MappedPerFrame
 		{
 			gpu::BufferHandle handle{};
-			void* mapped = nullptr;         // CPU write pointer
-			gpu::DeviceAddress address = 0; // GPU read pointer
+			void* mapped = nullptr;
+			gpu::DeviceAddress address = 0;
 		};
 
 		std::array<MappedPerFrame, kFramesInFlight> m_instanceData;
@@ -261,7 +209,6 @@ namespace aether
 		std::array<MappedPerFrame, kFramesInFlight> m_skinCopyJobs;
 		std::array<MappedPerFrame, kFramesInFlight> m_animationSampleJobs;
 
-		// Per-frame device-local buffers (GPU-written outputs, no mapped ptr).
 		struct DevicePerFrame
 		{
 			gpu::BufferHandle handle{};
@@ -273,7 +220,6 @@ namespace aether
 		std::array<DevicePerFrame, kFramesInFlight> m_nodeGlobalTransforms;
 		std::array<DevicePerFrame, kFramesInFlight> m_skinPalette;
 
-		// CPU-write typed view cached on Init for hot-path access.
 		DrawContracts::InstanceData* m_instanceDataMapped = nullptr;
 		CullContracts::DrawInput* m_cullInputMapped = nullptr;
 		CullContracts::Batch* m_batchDescMapped = nullptr;
@@ -281,21 +227,20 @@ namespace aether
 		AnimationContracts::AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
 
 		std::uint32_t m_maxDraws = 0;
-		std::uint32_t m_outputDrawCapacity = 0; // indirect buffer capacity per frame slot (defaults to m_maxDraws)
+		std::uint32_t m_outputDrawCapacity = 0;
 		std::uint32_t m_maxBatches = 0;
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
 		std::string m_debugName = "RenderQueue";
 
-		// Batch metadata consumed by FlushDraw.
 		struct BatchRenderInfo
 		{
 			const GraphicsPipeline* pipeline = nullptr;
 			const Mesh* mesh = nullptr;
 			std::uint32_t meshGeneration = 0;
-			std::uint32_t outputStart = 0; // first slot in output indirect buffer
-			std::uint32_t drawCount = 0;   // capacity = max surviving draws
+			std::uint32_t outputStart = 0;
+			std::uint32_t drawCount = 0;
 		};
 
 		struct PreparedFrame
@@ -322,15 +267,13 @@ namespace aether
 
 		std::array<PreparedFrame, kFramesInFlight> m_preparedFrames;
 
-		// Cached per-frame addresses/state for FlushDraw.
 		gpu::DeviceAddress m_multiFrameAddrs[3] = {};
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
 		bool m_debugDisableAnimation = false;
-		std::uint32_t m_debugAnimPassMask = 0xFFFFFFFFu; // bit 0=PoseInit, 1=AnimSample, 2=NodeFlatten, 3=SkinCopy
+		std::uint32_t m_debugAnimPassMask = 0xFFFFFFFFu;
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
-		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
 		void FlushDrawImpl(gpu::CommandList& cmd,
 		        std::uint32_t frameIndex,
 		        gpu::DeviceAddress frameAddr,

@@ -17,44 +17,17 @@ namespace aether
 {
 	class World;
 
-	// -- PhysicsSystem ---------------------------------------------------------
-	//
-	// Owns the Jolt physics world and drives it with a fixed timestep on a
 	// dedicated background thread.
-	// Using a fixed step (kFixedTimestep = 1/60 s) is essential for:
-	//   - determinism across machines (required for lockstep networking)
-	//   - stable simulation regardless of render framerate
-	//
-	// Threading model (pipelined, 1 frame of latency - same pattern as RenderThread):
-	//   Game thread:   FlushPendingBodies → Kick step N → [other systems overlap] → ...
-	//   Physics thread:                      Run step N → Done
-	//   Game thread (next frame): Wait for step N → SyncTransforms(N-1) → ...
-	//
-	// All public methods that touch the physics body interface call WaitForStep()
-	// internally, so the first physics API call after a kick becomes the sync
-	// point.  This gives maximum overlap when no physics API is called during the
-	// overlap window, and safe serialisation when one is.
-	//
-	// Usage:
-	//   world.RegisterSystem(std::make_unique<PhysicsSystem>());
-	//
-	//   // Spawn a physics-backed entity by emplacing a Collider (+ RigidBody):
-	//   auto e = world.Create();
-	//   world.Emplace<TransformComponent>(e, ...);        // position only, no scale
-	//   world.Emplace<ColliderComponent>(e, ColliderComponent{.shape = PhysicsShapeType::Box, .halfExtents = {1, 1, 1}});
-	//   world.Emplace<RigidBodyComponent>(e, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
-	//
-	//   // PhysicsSystem bakes the Jolt body from the Collider + RigidBody on the
-	//   // next Update, sets the correct scaled transform, and fills in the handle.
-	//   // A Collider with no RigidBody bakes as a static body.
-	//
 	class PhysicsSystem final : public System
 	{
 	public:
 		PhysicsSystem();
 		~PhysicsSystem() override;
+		PhysicsSystem(const PhysicsSystem&) = delete;
+		PhysicsSystem& operator=(const PhysicsSystem&) = delete;
+		PhysicsSystem(PhysicsSystem&&) = delete;
+		PhysicsSystem& operator=(PhysicsSystem&&) = delete;
 
-		// System interface
 		void OnRegister(World& world) override;
 		void Update(World& world, float dt) override;
 		void OnUnregister(World& world) override;
@@ -64,16 +37,10 @@ namespace aether
 			return "PhysicsSystem";
 		}
 
-		// Remove the physics body associated with an entity and strip the
-		// RigidBodyComponent / PhysicsStateComponent from it.
 		void RemoveBody(World& world, Entity entity);
 
-		// Called via entt sink when a RigidBodyComponent is destroyed.
 		// Removes and destroys the backing physics body so we never leak physics
-		// bodies when entities are destroyed outside of RemoveBody().
 		void OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity);
-
-		// -- Body control ------------------------------------------------------
 
 		void SetLinearVelocity(PhysicsBodyHandle body, glm::vec3 velocity);
 		[[nodiscard]] glm::vec3 GetLinearVelocity(PhysicsBodyHandle body);
@@ -84,97 +51,61 @@ namespace aether
 		void AddTorque(PhysicsBodyHandle body, glm::vec3 torque);
 		void AddAngularImpulse(PhysicsBodyHandle body, glm::vec3 angularImpulse);
 
-		// Teleport a body (does not generate contacts for the move).
 		void SetPosition(PhysicsBodyHandle body, glm::vec3 position);
 		void SetRotation(PhysicsBodyHandle body, glm::quat rotation);
 
-		// -- Live material edits (no rebuild needed) ---------------------------
 		void SetFriction(PhysicsBodyHandle body, float friction);
 		void SetRestitution(PhysicsBodyHandle body, float restitution);
 		void SetGravityFactor(PhysicsBodyHandle body, float factor);
 
-		// Wake / sleep a body, and query whether it is currently simulating.
 		void SetBodyActive(PhysicsBodyHandle body, bool active);
 		[[nodiscard]] bool IsBodyActive(PhysicsBodyHandle body);
 
-		// Destroy an entity's live body so the next flush re-bakes it from its
-		// (persistent) ColliderComponent + RigidBodyComponent, preserving velocity.
-		// Used by the inspector for changes Jolt cannot apply in place - shape,
-		// dimensions, motion type, mass, damping, sensor flag, CCD, or axis locks.
-		// Safe to call while Editing; steps nothing, just re-bakes.
 		void RebuildBody(World& world, Entity entity);
 
-		// Destroy an entity's joint constraint so FlushPendingJoints recreates it
-		// from the (edited) JointComponent next tick. Used by the inspector.
 		void RebuildJoint(World& world, Entity entity);
 
-		// Block until no async physics step is in flight. Callers that destroy
 		// bodies outside Update (scene replace-all, editor stop-restore) MUST
-		// call this first - Jolt body removal must not race the stepping thread.
 		void WaitForStepIdle();
 
-		// Editor-paused variant of Update: consume pending *BodyDesc components
-		// into live bodies (so loaded/created entities are pickable and
-		// teleportable) without stepping the simulation.
 		void FlushPendingOnly(World& world);
 
-		// -- Raycasting ----------------------------------------------------------
-
-		// Result of a single raycast query.
 		struct RaycastResult
 		{
-			bool hit = false;                  // true if a surface was hit
-			glm::vec3 position{0.f, 0.f, 0.f}; // world-space hit point
-			glm::vec3 normal{0.f, 0.f, 0.f};   // surface normal at hit point
-			float fraction = 1.f;              // hit distance / maxDistance
-			PhysicsBodyHandle body;            // Body that was hit
-			std::uint32_t entity = 0;          // entity id of the hit body (0 = none)
+			bool hit = false;
+			glm::vec3 position{0.f, 0.f, 0.f};
+			glm::vec3 normal{0.f, 0.f, 0.f};
+			float fraction = 1.f;
+			PhysicsBodyHandle body;
+			std::uint32_t entity = 0;
 		};
 
-		// Cast a ray against the physics world.
 		// direction must be normalized. maxDistance is the ray length.
-		// Only collides with bodies on the specified layer.
-		// Returns immediately with hit=false if no surface is found within maxDistance.
 		RaycastResult CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance);
 
-		// Cast a downward ray (direction = {0,-1,0}) from origin, find ground.
-		// Convenience wrapper for IK foot planting. maxDistance is the maximum
-		// trace height above the expected floor (e.g. step height).
 		RaycastResult CastGround(glm::vec3 origin, float maxDistance = 2.0f)
 		{
 			return CastRay(origin, {0.f, -1.f, 0.f}, maxDistance);
 		}
 
-		// Sweep a sphere of `radius` from origin along direction for maxDistance.
-		// Like CastRay but with thickness - useful for character/projectile moves.
 		RaycastResult SphereCast(glm::vec3 origin, glm::vec3 direction, float radius, float maxDistance);
 
-		// Entity ids of every body overlapping a sphere at `center`. Reads each hit
-		// body's user-data (its entity id); the calling code maps them to entities.
 		[[nodiscard]] std::vector<std::uint32_t> OverlapSphere(glm::vec3 center, float radius);
 
 		static constexpr float kFixedTimestep = 1.0f / 60.0f;
 
-	public:
-		// Called via entt sink when a JointComponent is destroyed - removes the
 		// backing Jolt constraint so constraints never leak.
 		void OnJointDestroyed(entt::registry& registry, entt::entity enttEntity);
 
 	private:
-		// Consume pending Collider components and create Jolt bodies for them.
-		// Called at the top of every Update before the physics step.
 		void FlushPendingBodies(World& world);
-		// Create constraints for JointComponents whose bodies are now both live.
 		void FlushPendingJoints(World& world);
-		// Remove one joint constraint by id (re-enabling any disabled collision pair).
 		void RemoveJointConstraint(std::uint32_t constraintId);
-		// Move buffered contact-listener events into CollisionEventsComponents.
 		void DrainContactEvents(World& world);
 
 		void StepPhysics();
 		void SyncTransforms(World& world, float alpha);
 
-		// Save prev = curr for all PhysicsStateComponents (called between steps).
 		void SavePrevState(World& world);
 
 		// -- Dedicated physics thread ------------------------------------------------
@@ -182,9 +113,6 @@ namespace aether
 		// Thread entry point: waits on m_stepKick, runs StepPhysics, signals m_stepDone.
 		void PhysicsThreadLoop();
 
-		// Block until the in-flight step (if any) completes.  Called by Update
-		// at the top of each frame and by every public Jolt-touching method so
-		// the first API call after a kick becomes the natural sync point.
 		void WaitForStep();
 
 		void StartPhysicsThread();
@@ -196,21 +124,16 @@ namespace aether
 		float m_accumulator = 0.0f;
 
 		// Dedicated physics thread - runs m_physics->Update() off the game thread.
-		// Ping-pong semaphores: Kick signals "start a step", Done signals "step finished".
 		std::thread m_physicsThread;
 		std::binary_semaphore m_stepKick{0};
 		std::binary_semaphore m_stepDone{0};
 		std::atomic<bool> m_physicsThreadRunning{false};
 
 		// Game-thread-only flag: true between Kick and Wait.  Not atomic - only
-		// ever read/written on the game thread.
 		bool m_stepInFlight = false;
 
-		// Alpha saved at end of each Update for the next frame's SyncTransforms.
 		float m_lastAlpha = 0.0f;
 
-		// Auto-disconnects in the destructor (declared last so they disconnect
-		// before m_impl is destroyed - reverse member destruction order).
 		entt::scoped_connection m_rigidBodyDestroyConn;
 		entt::scoped_connection m_jointDestroyConn;
 	};

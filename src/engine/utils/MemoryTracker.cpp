@@ -83,4 +83,4 @@ void operator delete[](void* ptr, const std::nothrow_t&) noexcept
 	std::free(ptr);
 }
 
-#endif // TRACY_ENABLE
+#endif

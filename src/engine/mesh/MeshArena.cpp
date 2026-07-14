@@ -34,7 +34,7 @@ namespace aether
 			return {};
 		}
 
-		GpuSpan<std::byte> is = m_indexHeap.Alloc<std::byte>(static_cast<std::uint32_t>(indexBytes));
+		const GpuSpan<std::byte> is = m_indexHeap.Alloc<std::byte>(static_cast<std::uint32_t>(indexBytes));
 		if (!is.IsValid())
 		{
 			m_vertexHeap.Free(vs);

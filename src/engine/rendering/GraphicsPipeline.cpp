@@ -73,8 +73,8 @@ namespace aether
 		return out;
 	}
 
-	gpu::Pipeline GraphicsPipeline::GetPipeline() const
+	gpu::PipelineView GraphicsPipeline::GetPipeline() const
 	{
-		return const_cast<void*>(gpu::ResourceRegistry::ResolvePipeline(m_handle).state);
+		return gpu::ResourceRegistry::ResolvePipeline(m_handle).state;
 	}
 } // namespace aether

@@ -9,8 +9,6 @@
 
 namespace aether
 {
-	// Safe binary reader for deserializing packed disk formats.
-	// Prevents out-of-bounds reads and handles unaligned data via memcpy.
 	class BinaryReader
 	{
 	public:
@@ -24,7 +22,6 @@ namespace aether
 		{
 		}
 
-		// Read a POD type via memcpy. Returns default-constructed T if insufficient data.
 		template<typename T>
 		T Read()
 		{
@@ -38,7 +35,6 @@ namespace aether
 			return val;
 		}
 
-		// Read a fixed-size array into a caller-provided buffer.
 		template<std::size_t N>
 		void ReadArray(float* out)
 		{
@@ -52,7 +48,6 @@ namespace aether
 			m_pos += bytes;
 		}
 
-		// Read a length-prefixed string (uint16_t length + raw bytes).
 		std::string ReadString()
 		{
 			const auto len = Read<uint16_t>();
@@ -69,7 +64,6 @@ namespace aether
 			return s;
 		}
 
-		// Read raw bytes into a buffer.
 		void ReadRaw(void* out, std::size_t bytes)
 		{
 			if (!CanRead(bytes))
@@ -101,13 +95,11 @@ namespace aether
 			return static_cast<std::size_t>(m_end - m_pos);
 		}
 
-		// Current position as raw pointer (for bulk memcpy of known-safe regions).
 		[[nodiscard]] const std::byte* Data() const
 		{
 			return m_pos;
 		}
 
-		// Advance position manually (use after bulk memcpy).
 		void Advance(std::size_t n)
 		{
 			m_pos += n;

@@ -18,9 +18,6 @@ namespace aether
 {
 	namespace
 	{
-		// Parses a raw TOML value string into a typed setting field. The type is
-		// resolved at compile time from the field, so one branch per supported type
-		// covers every current and future setting of that type.
 		template<class T>
 		void AssignField(T& field, std::string_view raw)
 		{
@@ -55,7 +52,6 @@ namespace aether
 			}
 		}
 
-		// Formats a typed setting field back to its TOML value string.
 		template<class T>
 		std::string FormatField(const T& field)
 		{
@@ -85,8 +81,6 @@ namespace aether
 		text::ParseToml(tomlText,
 		        [&settings](const text::IniEntry& entry)
 		        {
-			        // ParseToml lower-cases entry.fullKey; match our (readable, mixed
-			        // case) reflection keys case-insensitively.
 			        ForEachSettingField(settings,
 			                [&entry](std::string_view key, auto& field)
 			                {
@@ -100,8 +94,6 @@ namespace aether
 
 	void EngineSettingsIO::Sanitize(EngineSettings& settings)
 	{
-		// Non-positive window dimensions are invalid (they break swapchain sizing);
-		// fall back to the compiled defaults rather than a useless 1px window.
 		const EngineSettings defaults{};
 		if (settings.window.width < 1)
 		{
@@ -137,9 +129,6 @@ namespace aether
 
 	std::string EngineSettingsIO::SerializeOverrides(const EngineSettings& settings, const EngineSettings& base)
 	{
-		// Format every field of both instances (identical field order), then emit
-		// only those whose formatted value differs. Comparing formatted strings
-		// also sidesteps float-equality pitfalls.
 		struct FieldLine
 		{
 			std::string_view section;
@@ -180,7 +169,7 @@ namespace aether
 
 	std::filesystem::path EngineSettingsIO::ResolvePath(std::string_view fileName)
 	{
-		const std::filesystem::path requested(fileName);
+		std::filesystem::path requested(fileName);
 		if (requested.is_absolute())
 		{
 			return requested;
@@ -191,16 +180,12 @@ namespace aether
 		const auto cwd = std::filesystem::current_path(ec);
 
 		std::vector<std::filesystem::path> candidates;
-		// Executable-relative first: shipped data is deployed beside the exe, so
-		// this resolves correctly in a shipped install regardless of the working
-		// directory (and also when running from the dev build tree).
 		if (!exeDir.empty())
 		{
 			candidates.push_back(exeDir / "data" / "config" / requested);
 			candidates.push_back(exeDir / "config" / requested);
 			candidates.push_back(exeDir / requested);
 		}
-		// Working-directory-relative fallbacks for dev launches from repo/build root.
 		if (!ec)
 		{
 			candidates.push_back(cwd / "data" / "config" / requested);
@@ -225,9 +210,8 @@ namespace aether
 	LoadedEngineSettings EngineSettingsIO::LoadLayered(std::string_view shippedFile, const std::filesystem::path& projectFile, std::string_view userFile)
 	{
 		AE_PROFILE_ZONE();
-		LoadedEngineSettings result; // layer 1: compiled-in defaults
+		LoadedEngineSettings result;
 
-		// Layer 2: shipped project defaults (read-only, beside the executable).
 		const auto shippedPath = ResolvePath(shippedFile);
 		if (auto text = io::file_util::ReadText(shippedPath))
 		{
@@ -239,8 +223,6 @@ namespace aether
 			AE_INFO(LogCategory::Engine, "No shipped settings file at {}; using compiled-in defaults.", shippedPath.string());
 		}
 
-		// Layer 3: per-project overrides (the open project's ProjectSettings.toml,
-		// passed by the editor; empty in headless/engine-only runs).
 		if (!projectFile.empty())
 		{
 			if (auto text = io::file_util::ReadText(projectFile))
@@ -251,9 +233,8 @@ namespace aether
 		}
 
 		Sanitize(result.values);
-		result.base = result.values; // base = layers 1 + 2 + 3
+		result.base = result.values;
 
-		// Layer 4: per-user overrides (writable, OS user-config dir).
 		if (const auto userDir = io::PlatformPaths::GetUserConfigDir(); !userDir.empty())
 		{
 			const auto userPath = userDir / userFile;

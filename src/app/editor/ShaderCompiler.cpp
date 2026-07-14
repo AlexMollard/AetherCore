@@ -27,11 +27,6 @@ namespace aether::editor
 			return time;
 		}
 
-		// True when `output` needs to be (re)built from `source`: missing, or
-		// older than the source file, or older than `newestSourceMTime` (see
-		// NewestShaderSourceMTime below). Mirrors the mtime-comparison stale
-		// check CSharpScriptingSubsystem::RebuildFromSource uses for the C#
-		// build, extended with the header heuristic.
 		bool IsOutputStale(const fs::path& source, const fs::path& output, const std::optional<fs::file_time_type>& newestSourceMTime)
 		{
 			const auto outputTime = LatestWriteTime(output);
@@ -47,13 +42,6 @@ namespace aether::editor
 			return newestSourceMTime.has_value() && *newestSourceMTime > *outputTime;
 		}
 
-		// slangc doesn't report #include dependencies here, so a .slang file's
-		// own mtime alone can't tell us whether a shared header it includes
-		// (.slangh, or an .hlsl/.h shared snippet) changed. Conservative
-		// heuristic: treat the newest mtime among ALL shader-source files in
-		// the project's shader source directory as a floor for every output in
-		// that directory - editing any header invalidates every .spv there, not
-		// just the one whose own .slang happened to change. Overcompiles on a
 		// header edit, but never under-compiles (stale binary shipped).
 		bool IsShaderHeaderExtension(const fs::path& extension)
 		{
@@ -100,11 +88,6 @@ namespace aether::editor
 			return result;
 		}
 
-		// Quote a path for the shell command line, matching the
-		// CSharpScriptingSubsystem::RebuildFromSource / EditorProjectPublisher
-		// dotnet-invocation quoting convention (io::RunProcessToLog/Capture wrap
-		// the whole command an extra time for cmd.exe's quote-stripping - see
-		// io::WrapShellCommand).
 		std::string Quoted(const fs::path& path)
 		{
 			return "\"" + path.string() + "\"";
@@ -141,8 +124,6 @@ namespace aether::editor
 			return false;
 		}
 
-		// Mirrors the CMake custom command in CMake/SlangShaders.cmake:
-		// slangc <args> -o <out> <in>.
 		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS " -o " + Quoted(outFile) + " " + Quoted(slangFile);
 		const fs::path logFile = outDir / (slangFile.stem().string() + ".slangc.log");
 		const int rc = io::RunProcessToLog(command, logFile);
@@ -163,7 +144,7 @@ namespace aether::editor
 		(void) slangFile;
 		(void) outDir;
 		(void) error;
-		return true; // no slangc wired into this build: graceful no-op
+		return true;
 #endif
 	}
 
@@ -189,8 +170,6 @@ namespace aether::editor
 		const fs::path outDir = ProjectShaderIntermediateDir(projectRoot);
 		std::vector<std::string> failures;
 
-		// Computed once per project: every .slang in `sourceDir` shares the
-		// same header-dependency floor (see NewestShaderSourceMTime).
 		const auto newestSourceMTime = NewestShaderSourceMTime(sourceDir);
 
 		for (const auto& entry: fs::directory_iterator(sourceDir, ec))

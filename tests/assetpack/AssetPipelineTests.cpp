@@ -60,7 +60,7 @@ TEST_CASE("PakWriter::AddDirectoryAs packs a directory's files under a virtual p
 
 	assetpipeline::PakWriter writer(/*compressionLevel=*/0);
 	writer.AddDirectoryAs(shaderDir, "shaders");
-	CHECK(writer.FileCount() == 2); // the .slangc.log build log is excluded, only .spv ships
+	CHECK(writer.FileCount() == 2);
 
 	const std::filesystem::path pak = std::filesystem::temp_directory_path() / "aepak_test_adddiras.pak";
 	std::filesystem::remove(pak);

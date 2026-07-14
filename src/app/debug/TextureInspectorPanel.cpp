@@ -35,7 +35,6 @@ namespace aether::editor
 			return (static_cast<Underlying>(value) & static_cast<Underlying>(flag)) != 0;
 		}
 
-		// Toolbar "Usage" dropdown: 0=All, then a few common buckets.
 		bool PassesUsageFilter(gpu::ImageUsage usage, gpu::ImageAspect aspect, int filter)
 		{
 			switch (filter)
@@ -53,8 +52,6 @@ namespace aether::editor
 			}
 		}
 
-		// Sort the (already-filtered) view by the clicked column. columnId matches
-		// the user id passed to TableSetupColumn.
 		void SortTextures(std::vector<const gpu::DebugTextureInfo*>& list, ImGuiID columnId, bool ascending)
 		{
 			const auto less = [columnId](const gpu::DebugTextureInfo* a, const gpu::DebugTextureInfo* b)
@@ -74,7 +71,6 @@ namespace aether::editor
 			std::stable_sort(list.begin(), list.end(), [&](const gpu::DebugTextureInfo* a, const gpu::DebugTextureInfo* b) { return ascending ? less(a, b) : less(b, a); });
 		}
 
-		// Transparency backdrop tiled across the visible preview region.
 		void DrawCheckerboard(ImDrawList* drawList, ImVec2 origin, ImVec2 size)
 		{
 			constexpr float cell = 12.0f;
@@ -96,11 +92,10 @@ namespace aether::editor
 			*result.out = '\0';
 			DrawMetricRow(label, buffer.data());
 		}
-	} // anonymous namespace
+	} // namespace
 
 	TextureInspectorPanel::~TextureInspectorPanel()
 	{
-		// Textures are released in OnDetach, which is called before destruction.
 	}
 
 	void TextureInspectorPanel::OnDetach(app::LayerContext& context)
@@ -112,12 +107,6 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
-		// Runs every frame even while the panel is hidden (unlike OnImGui). Disable
-		// the GPU preview request here; OnImGui re-enables it with a live bindless
-		// slot only when the panel is actually drawn. Without this, hiding the panel
-		// (e.g. via the Window menu) leaves the request stuck on a slot that a later
-		// target recreation frees, so the $TexturePreview pass samples freed memory
-		// (GPU DMA page fault).
 		if (auto* rendering = context.TryGet<RenderingSubsystem>())
 		{
 			rendering->SetTexturePreviewRequest(0xFFFFFFFFu, gpu::Extent2D{}, 0, 1.0f, 0, 0, false);
@@ -139,8 +128,7 @@ namespace aether::editor
 			return;
 		}
 
-		// Drop cached ImGui descriptors for textures that no longer exist.
-		if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+		if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 		{
 			for (auto it = m_textureInspectorTextureIds.begin(); it != m_textureInspectorTextureIds.end();)
 			{
@@ -157,19 +145,17 @@ namespace aether::editor
 			}
 		}
 
-		// Keep a valid selection in the full list (independent of the filter below).
 		const auto selectedIt = std::ranges::find_if(textures, [this](const gpu::DebugTextureInfo& texture) { return texture.handle.bits == m_selectedTextureBits; });
 		if (selectedIt == textures.end())
 		{
 			m_selectedTextureBits = textures.front().handle.bits;
 		}
 
-		// ── Search + usage filter ──────────────────────────────────────────────
 		ImGui::SetNextItemWidth(-170.0f);
 		ImGui::InputTextWithHint("##texsearch", ICON_FA_MAGNIFYING_GLASS "  Filter textures", m_texSearch, sizeof(m_texSearch));
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth(160.0f);
-		const char* usageFilters[] = {"All usages", "Sampled", "Color target", "Depth / Stencil", "Storage"};
+		const char* const usageFilters[] = {"All usages", "Sampled", "Color target", "Depth / Stencil", "Storage"};
 		ImGui::Combo("##texusage", &m_texUsageFilter, usageFilters, static_cast<int>(std::size(usageFilters)));
 
 		std::vector<const gpu::DebugTextureInfo*> filtered;
@@ -187,7 +173,6 @@ namespace aether::editor
 			filtered.push_back(&candidate);
 		}
 
-		// ── Sortable list ──────────────────────────────────────────────────────
 		constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortTristate;
 		if (ImGui::BeginTable("TextureList", 5, tableFlags, ImVec2(0.0f, 200.0f)))
 		{
@@ -239,9 +224,8 @@ namespace aether::editor
 		const auto currentIt = std::ranges::find_if(textures, [this](const gpu::DebugTextureInfo& texture) { return texture.handle.bits == m_selectedTextureBits; });
 		const gpu::DebugTextureInfo& texture = (currentIt == textures.end()) ? textures.front() : *currentIt;
 
-		// ── Preview: channel tint, fit / 1:1, zoom, checkerboard ───────────────
 		ImGui::SeparatorText("Preview");
-		const char* channelNames[] = {"RGBA", "Red", "Green", "Blue"};
+		const char* const channelNames[] = {"RGBA", "Red", "Green", "Blue"};
 		m_texturePreviewChannel = std::clamp(m_texturePreviewChannel, 0, static_cast<int>(std::size(channelNames)) - 1);
 		ImGui::SetNextItemWidth(84.0f);
 		ImGui::Combo("##channel", &m_texturePreviewChannel, channelNames, static_cast<int>(std::size(channelNames)));
@@ -265,8 +249,6 @@ namespace aether::editor
 		ImGui::SameLine();
 		ImGui::Checkbox("Checker", &m_texturePreviewCheckerboard);
 
-		// Channel isolation / exposure / tonemap render through the $TexturePreview
-		// GPU pass when the source has a bindless slot; else fall back to a tint.
 		auto* rendering = context.TryGet<RenderingSubsystem>();
 		const bool canShaderPreview = rendering != nullptr && texture.hasBindlessSampled && HasFlag(texture.usage, gpu::ImageUsage::Sampled) && HasFlag(texture.aspect, gpu::ImageAspect::Color);
 		const bool shaderPreview = m_useGpuPreview && canShaderPreview;
@@ -286,22 +268,20 @@ namespace aether::editor
 		}
 		if (rendering != nullptr)
 		{
-			const std::uint32_t flags = m_previewTonemap ? 1u : 0u; // bit0 = tonemap
+			const std::uint32_t flags = m_previewTonemap ? 1u : 0u;
 			rendering->SetTexturePreviewRequest(shaderPreview ? texture.bindlessSampledSlot : 0xFFFFFFFFu, texture.extent, static_cast<std::uint32_t>(m_texturePreviewChannel), m_previewExposure, flags, 0u, shaderPreview);
 		}
 
 		const bool canPreview = texture.view != nullptr && HasFlag(texture.usage, gpu::ImageUsage::Sampled) && HasFlag(texture.aspect, gpu::ImageAspect::Color);
 		if (canPreview)
 		{
-			// Shader path samples the $TexturePreview target; fallback samples the
-			// source directly. UV clamps to the source's region of the fixed target.
 			std::uint64_t cachedTextureId = 0;
 			ImVec2 uvMax(1.0f, 1.0f);
 			if (shaderPreview)
 			{
 				if (m_previewTextureId == 0)
 				{
-					if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+					if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 					{
 						const ImTextureID textureId = imgui->RegisterTexture(rendering->GetTexturePreviewView(), gpu::ImageLayout::ShaderReadOnly);
 						if (textureId != ImTextureID_Invalid)
@@ -319,7 +299,7 @@ namespace aether::editor
 				std::uint64_t& sourceId = m_textureInspectorTextureIds[texture.handle.bits];
 				if (sourceId == 0)
 				{
-					if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+					if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 					{
 						const ImTextureID textureId = imgui->RegisterTexture(texture.view, gpu::ImageLayout::ShaderReadOnly);
 						if (textureId != ImTextureID_Invalid)
@@ -344,10 +324,8 @@ namespace aether::editor
 					m_texturePreviewZoom = std::clamp(std::min(viewRegion.x / texW, viewRegion.y / texH), 0.02f, 32.0f);
 				}
 
-				// Top-left of the (scrolled) content in screen space; the image is drawn here.
 				const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
 
-				// Wheel zoom, anchored on the texel under the cursor.
 				const float wheel = ImGui::GetIO().MouseWheel;
 				if (ImGui::IsWindowHovered() && wheel != 0.0f && m_texturePreviewZoom > 0.0f)
 				{
@@ -375,7 +353,6 @@ namespace aether::editor
 				drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(cachedTextureId)), contentOrigin, ImVec2(contentOrigin.x + imgSize.x, contentOrigin.y + imgSize.y), ImVec2(0.0f, 0.0f), uvMax, tint);
 				ImGui::Dummy(imgSize); // reserve layout space so the child scrolls
 
-				// Drag-to-pan while zoomed in.
 				if (ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
 				{
 					const ImVec2 drag = ImGui::GetIO().MouseDelta;
@@ -383,7 +360,6 @@ namespace aether::editor
 					ImGui::SetScrollY(ImGui::GetScrollY() - drag.y);
 				}
 
-				// Pixel + UV readout under the cursor.
 				bool hovering = false;
 				int hoverPx = 0;
 				int hoverPy = 0;
@@ -455,11 +431,7 @@ namespace aether::editor
 
 	void TextureInspectorPanel::OnRenderTargetsInvalidated(app::LayerContext& context)
 	{
-		// Preview descriptors may reference render targets that were just
-		// recreated; drop the whole cache so each is re-registered on demand.
 		ReleaseTextures(context);
-		// The preview pass's source slot may now point at a freed target; disable
-		// it until the panel re-selects a live texture next frame.
 		if (auto* rendering = context.TryGet<RenderingSubsystem>())
 		{
 			rendering->SetTexturePreviewRequest(0xFFFFFFFFu, gpu::Extent2D{}, 0, 1.0f, 0, 0, false);
@@ -468,7 +440,7 @@ namespace aether::editor
 
 	void TextureInspectorPanel::ReleaseTextures(app::LayerContext& context)
 	{
-		if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+		if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 		{
 			for (const auto& [_, textureId]: m_textureInspectorTextureIds)
 			{

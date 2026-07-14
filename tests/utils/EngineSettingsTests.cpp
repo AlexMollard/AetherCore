@@ -10,22 +10,22 @@
 using namespace aether;
 
 TEST_CASE("Apply overlays only the keys present in the document") {
-    EngineSettings s; // compiled-in defaults
+    EngineSettings s;
     EngineSettingsIO::Apply("[graphics]\nfxaa = true\n", s);
 
-    CHECK(s.graphics.fxaa == true);          // changed
-    CHECK(s.graphics.vsync == true);         // untouched default
-    CHECK(s.graphics.asyncCompute == true);  // untouched default
-    CHECK(s.window.width == 2560);           // untouched default (QHD)
+    CHECK(s.graphics.fxaa == true);
+    CHECK(s.graphics.vsync == true);
+    CHECK(s.graphics.asyncCompute == true);
+    CHECK(s.window.width == 2560);
 }
 
 TEST_CASE("Apply merges layers in order: later documents win") {
     EngineSettings s;
-    EngineSettingsIO::Apply("[window]\nwidth = 1920\nheight = 1080\n", s); // shipped
-    EngineSettingsIO::Apply("[window]\nwidth = 3840\n", s);                // user override
+    EngineSettingsIO::Apply("[window]\nwidth = 1920\nheight = 1080\n", s);
+    EngineSettingsIO::Apply("[window]\nwidth = 3840\n", s);
 
-    CHECK(s.window.width == 3840);   // user layer wins
-    CHECK(s.window.height == 1080);  // still from shipped layer
+    CHECK(s.window.width == 3840);
+    CHECK(s.window.height == 1080);
 }
 
 TEST_CASE("Sanitize resets invalid dimensions to defaults and clamps targetFps") {
@@ -36,9 +36,9 @@ TEST_CASE("Sanitize resets invalid dimensions to defaults and clamps targetFps")
 
     EngineSettingsIO::Sanitize(s);
 
-    CHECK(s.window.width == 2560);   // reset to compiled default (QHD)
-    CHECK(s.window.height == 1440);  // reset to compiled default (QHD)
-    CHECK(s.app.targetFps == doctest::Approx(0.0f)); // clamped
+    CHECK(s.window.width == 2560);
+    CHECK(s.window.height == 1440);
+    CHECK(s.app.targetFps == doctest::Approx(0.0f));
 }
 
 TEST_CASE("Serialize round-trips through Apply for every field (no save/load drift)") {
@@ -53,7 +53,7 @@ TEST_CASE("Serialize round-trips through Apply for every field (no save/load dri
     original.app.autoplay = true;
 
     const std::string toml = EngineSettingsIO::Serialize(original);
-    EngineSettings rebuilt; // defaults
+    EngineSettings rebuilt;
     EngineSettingsIO::Apply(toml, rebuilt);
 
     CHECK(rebuilt.window.width == original.window.width);
@@ -67,7 +67,7 @@ TEST_CASE("Serialize round-trips through Apply for every field (no save/load dri
 }
 
 TEST_CASE("SerializeOverrides emits only keys that differ from the base") {
-    EngineSettings base; // defaults
+    EngineSettings base;
     EngineSettings current = base;
     current.graphics.fxaa = true;
     current.window.width = 3840;
@@ -113,25 +113,22 @@ TEST_CASE("SerializeOverrides with no changes writes no key lines") {
 
     const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
 
-    CHECK(toml.find('[') == std::string::npos); // no section headers => nothing changed
+    CHECK(toml.find('[') == std::string::npos);
 }
 
 TEST_CASE("Full cascade: user value overrides shipped which overrides compiled default") {
-    // Layer 1: compiled default vsync = true.
     EngineSettings s;
     CHECK(s.graphics.vsync == true);
 
-    // Layer 2: shipped flips it off.
     EngineSettingsIO::Apply("[graphics]\nvsync = false\n", s);
     CHECK(s.graphics.vsync == false);
 
-    // Layer 3: user turns it back on.
     EngineSettingsIO::Apply("[graphics]\nvsync = true\n", s);
     CHECK(s.graphics.vsync == true);
 }
 
 TEST_CASE("imguiViewports defaults on and round-trips through Apply") {
-    EngineSettings s; // compiled-in defaults
+    EngineSettings s;
     CHECK(s.graphics.imguiViewports == true);
 
     EngineSettingsIO::Apply("[graphics]\nimguiViewports = false\n", s);
@@ -152,29 +149,26 @@ TEST_CASE("uiScale defaults to 1 and Sanitize clamps to [0.5, 3.0]") {
 
     s.graphics.uiScale = 10.0f;
     EngineSettingsIO::Sanitize(s);
-    CHECK(s.graphics.uiScale == doctest::Approx(3.0f)); // clamped high
+    CHECK(s.graphics.uiScale == doctest::Approx(3.0f));
 
     s.graphics.uiScale = 0.1f;
     EngineSettingsIO::Sanitize(s);
-    CHECK(s.graphics.uiScale == doctest::Approx(0.5f)); // clamped low
+    CHECK(s.graphics.uiScale == doctest::Approx(0.5f));
 }
 
 TEST_CASE("LoadLayered applies the project file as a layer and includes it in base") {
-    // Write a temp ProjectSettings.toml and load it through the real LoadLayered.
     const auto projectPath =
         std::filesystem::temp_directory_path() / "aethercore_projectsettings_xyztest.toml";
     REQUIRE(io::file_util::WriteText(projectPath, "[window]\nwidth = 1600\n[graphics]\nvsync = false\n").has_value());
 
     // Use shipped/user filenames that will NOT resolve on disk, so only compiled
-    // defaults + the temp project file participate (independent of the real
-    // user-config dir / build tree).
     const auto loaded = EngineSettingsIO::LoadLayered(
         "nonexistent_shipped_xyztest.toml", projectPath, "nonexistent_user_xyztest.toml");
 
-    CHECK(loaded.values.window.width == 1600);    // project layer applied by LoadLayered
-    CHECK(loaded.base.window.width == 1600);      // base INCLUDES the project layer (regression guard)
-    CHECK(loaded.values.graphics.vsync == false); // project override took effect
-    CHECK(loaded.values.window.height == 1440);   // compiled default (QHD) not in project file is untouched
+    CHECK(loaded.values.window.width == 1600);
+    CHECK(loaded.base.window.width == 1600);
+    CHECK(loaded.values.graphics.vsync == false);
+    CHECK(loaded.values.window.height == 1440);
 
     std::error_code ec;
     std::filesystem::remove(projectPath, ec);

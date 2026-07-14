@@ -6,22 +6,11 @@
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 
-// Camera control exported to C#. A camera handle (managed CameraId) is the id of
-// the ENTITY that carries the CameraComponent, so every script camera is a
-// first-class node in the scene hierarchy. Orbit cameras additionally carry an
-// OrbitCameraComponent that CameraSystem uses to drive their pose each frame.
-// There is no longer any entity-less camera on the scripting side: the
-// CameraManager pool is an engine-internal backing store CameraSystem mirrors
-// into, so "you cannot have a scene camera that isn't an entity" holds by
-// construction.
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
 namespace
 {
-	// Camera-forward from a world matrix: local -Z, normalized. Matches
-	// CameraSystem::ForwardOf and the retired Camera::GetForward convention.
 	glm::vec3 ForwardOf(const glm::mat4& m)
 	{
 		const glm::vec3 fwd = -glm::vec3(m[2]);
@@ -37,8 +26,6 @@ AE_SCRIPT_API std::uint32_t aether_camera_create_orbit(Vec3 pos, Vec3 target, fl
 	const float distance = glm::length(ToGlm(pos) - t);
 	aether::CameraComponent cam{};
 	cam.fovDegrees = fovDeg;
-	// Seed framing the way the old raw orbit camera did: yaw 0 (camera on +Z of
-	// the target), pitch 20 degrees up. The passed-in `pos` only sets distance.
 	return aether::ecs::CreateOrbitCameraEntity(world, t, 0.0f, 20.0f, distance, cam).id;
 }
 
@@ -47,8 +34,6 @@ AE_SCRIPT_API std::uint32_t aether_camera_create_free(Vec3 pos, float fovDeg)
 	auto& world = ActiveWorld();
 	aether::CameraComponent cam{};
 	cam.fovDegrees = fovDeg;
-	// No OrbitCameraComponent: a free camera's pose is whatever the script sets
-	// through SetPosition / SetYawPitch. Start at `pos` looking down -Z.
 	return aether::ecs::CreateCameraEntity(world, ToGlm(pos), glm::vec3(0.0f, 0.0f, -1.0f), cam).id;
 }
 
@@ -57,7 +42,6 @@ AE_SCRIPT_API void aether_camera_set_main(std::uint32_t id)
 	aether::ecs::SetMainCameraEntity(ActiveWorld(), aether::Entity{id});
 }
 
-// The scene's current main-camera entity (0 if none tagged).
 AE_SCRIPT_API std::uint32_t aether_camera_get_main()
 {
 	return aether::ecs::GetMainCameraEntity(ActiveWorld()).id;
@@ -74,15 +58,11 @@ AE_SCRIPT_API void aether_camera_set_mode(std::uint32_t id, std::int32_t mode)
 		return;
 	}
 
-	// Managed CameraMode: Orbit = 0, Free = 1. Switching modes adds or removes the
-	// OrbitCameraComponent; CameraSystem drives the pose only while it is present.
 	constexpr std::int32_t kOrbit = 0;
 	if (mode == kOrbit)
 	{
 		if (world.TryGet<aether::OrbitCameraComponent>(e) == nullptr)
 		{
-			// Seed orbit params from the current pose so the switch doesn't jump:
-			// orbit a target one default distance ahead of the current forward.
 			const auto* tc = world.TryGet<aether::TransformComponent>(e);
 			const glm::vec3 eye = tc != nullptr ? glm::vec3(tc->localToWorld[3]) : glm::vec3(0.0f);
 			const glm::vec3 fwd = tc != nullptr ? ForwardOf(tc->localToWorld) : glm::vec3(0.0f, 0.0f, -1.0f);
@@ -107,7 +87,6 @@ AE_SCRIPT_API void aether_camera_set_position(std::uint32_t id, Vec3 pos)
 	const aether::Entity e{id};
 	if (auto* orbit = world.TryGet<aether::OrbitCameraComponent>(e))
 	{
-		// Reinterpret the requested eye as an orbit position around the same
 		// target: keeps the target lock and re-derives yaw / pitch / distance.
 		const glm::vec3 offset = ToGlm(pos) - orbit->target;
 		orbit->distance = glm::max(0.1f, glm::length(offset));
@@ -117,7 +96,6 @@ AE_SCRIPT_API void aether_camera_set_position(std::uint32_t id, Vec3 pos)
 	}
 	if (auto* tc = world.TryGet<aether::TransformComponent>(e))
 	{
-		// Free camera: translate, keep orientation.
 		tc->localToWorld[3] = glm::vec4(ToGlm(pos), 1.0f);
 	}
 }
@@ -134,8 +112,6 @@ AE_SCRIPT_API void aether_camera_set_yaw_pitch(std::uint32_t id, float yaw, floa
 	}
 	if (auto* tc = world.TryGet<aether::TransformComponent>(e))
 	{
-		// Free camera: yaw / pitch set the look direction (yaw=0, pitch=0 -> -Z)
-		// about the current eye. Inverse of CameraSystem's forward->yaw/pitch.
 		const float yr = glm::radians(yaw);
 		const float pr = glm::radians(pitch);
 		const glm::vec3 forward{
@@ -188,7 +164,6 @@ AE_SCRIPT_API Vec3 aether_camera_get_forward(std::uint32_t id)
 	if (const auto* orbit = world.TryGet<aether::OrbitCameraComponent>(e))
 	{
 		// Compute from live orbit params so camera-relative movement never lags a
-		// frame behind CameraSystem's transform write.
 		const glm::mat4 pose = aether::ecs::OrbitCameraMatrix(orbit->target, orbit->yaw, orbit->pitch, orbit->distance);
 		return FromGlm(ForwardOf(pose));
 	}

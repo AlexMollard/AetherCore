@@ -66,7 +66,7 @@ TEST_CASE("TryDescribe rejects invalid and stale handles") {
     a.baseColorFactor = {1, 0, 0, 1};
     const MaterialHandle h = reg.Acquire(a);
     REQUIRE(h.IsValid());
-    reg.Release(h); // refcount 1 -> 0: slot freed, generation bumped
+    reg.Release(h);
     CHECK(!reg.TryDescribe(h, out));
 }
 
@@ -79,7 +79,6 @@ TEST_CASE("Instance setters seed from the entity's CURRENT material, not default
     World world;
     Entity e = world.Create();
 
-    // Entity starts with a textured, tinted material (a glTF-spawn stand-in).
     MaterialAsset authored;
     authored.baseColorFactor = {0.9f, 0.2f, 0.1f, 1.0f};
     authored.roughnessFactor = 0.35f;
@@ -88,7 +87,6 @@ TEST_CASE("Instance setters seed from the entity's CURRENT material, not default
     MaterialSystem::AssignMaterial(world, e, reg, cache, authored);
 
     // First single-field edit must preserve everything else - the old
-    // default-seed behavior silently wiped textures and tint here.
     MaterialSystem::SetMetallic(world, e, reg, cache, 0.7f);
 
     const MaterialAsset& inst = world.Get<MaterialInstanceComponent>(e).asset;
@@ -97,7 +95,6 @@ TEST_CASE("Instance setters seed from the entity's CURRENT material, not default
     CHECK(inst.roughnessFactor == doctest::Approx(0.35f));
     CHECK(inst.albedoTex == authored.albedoTex);
 
-    // And the reassigned registry material carries the texture too.
     MaterialAsset described;
     REQUIRE(reg.TryDescribe(world.Get<MaterialComponent>(e).handle, described));
     CHECK(described.albedoTex == authored.albedoTex);

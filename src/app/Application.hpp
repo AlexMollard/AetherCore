@@ -15,10 +15,7 @@
 
 namespace aether::app
 {
-	// The application is now a thin EngineClient: it owns layers and game/editor
-	// policy, and plugs into the engine-owned frame loop via hooks. The engine
 	// (AetherCore) owns the render thread, frame scheduling, and resource
-	// lifecycle.
 	class Application : public aether::EngineClient
 	{
 	public:
@@ -28,11 +25,8 @@ namespace aether::app
 		Application(const Application&) = delete;
 		Application& operator=(const Application&) = delete;
 
-		// Push a layer that does not need to be looked up by service-locator.
 		void PushLayer(std::unique_ptr<AppLayer> layer);
 
-		// Construct a layer in place from the given args and push it.
-		// Saves the caller from wrapping in std::make_unique.
 		template<typename T, typename... Args>
 		    requires std::is_base_of_v<AppLayer, T> && std::constructible_from<T, Args&&...>
 		T& PushLayer(Args&&... args)
@@ -40,9 +34,6 @@ namespace aether::app
 			return PushOwnedLayer(std::make_unique<T>(std::forward<Args>(args)...));
 		}
 
-		// Push a layer and register it in the ServiceContainer under its concrete type.
-		// Use when a layer needs to be reachable via TryGet<T>() (e.g. by a script
-		// binding, a script's SceneContext, or another layer).
 		template<typename T>
 		    requires std::is_base_of_v<AppLayer, T>
 		T& PushOwnedLayer(std::unique_ptr<T> layer)
@@ -53,7 +44,6 @@ namespace aether::app
 			return ref;
 		}
 
-		// Register a pre-existing service instance (e.g. a stack-allocated subsystem).
 		template<typename T>
 		void AddService(T& service)
 		{
@@ -75,14 +65,12 @@ namespace aether::app
 		[[nodiscard]] aether::AetherCore& GetEngine();
 		[[nodiscard]] const aether::AetherCore& GetEngine() const;
 
-		// --- EngineClient hooks (called by AetherCore::RunFrameLoop) -----------
 		void OnFrameBegin() override;
 		double GetTimeScale() override;
 		void OnUpdate(double gameDt, std::uint64_t frameIndex) override;
 		void OnBuildUI(double gameDt, std::uint64_t frameIndex) override;
 		void OnRenderTargetsInvalidated() override;
 
-		// Shortcut to the engine's ServiceContainer.
 		[[nodiscard]] aether::ServiceContainer& Services()
 		{
 			return m_engine.GetServiceContainer();
@@ -91,15 +79,9 @@ namespace aether::app
 	private:
 		Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded);
 
-		// Builds a LayerContext for the given per-frame timing. Layers do not read
-		// elapsedTimeSeconds, so it is left at 0.
 		[[nodiscard]] LayerContext MakeLayerContext(double dtSeconds, std::uint64_t frameIndex);
 
-		// Declared before the service so the service can bind the engine's
-		// ServiceContainer; destroyed after it.
 		aether::AetherCore m_engine;
-		// Single source of truth for runtime settings; owns values + base, applies
-		// live changes to subsystems, and persists the user delta on shutdown.
 		aether::SettingsService m_settingsService;
 		aether::coro::queued_executor m_coroExecutor;
 		LayerStack m_layers;

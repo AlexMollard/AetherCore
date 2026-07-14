@@ -10,7 +10,7 @@
 .PARAMETER Fix
     Apply suggested fixes automatically (clang-tidy -fix).
 .PARAMETER Checks
-    Comma-separated checks to enable (default: project-wide sensible set).
+    Optional comma-separated checks to append to the project .clang-tidy policy.
 .PARAMETER Refresh
     Regenerate compile_commands.json before analysing (use after adding/removing
     source files or changing build flags, so clang-tidy sees current commands).
@@ -92,25 +92,16 @@ if ($Files.Count -eq 0) {
 
 Write-Host "Analysing $($Files.Count) file(s) with clang-tidy..." -ForegroundColor Cyan
 
-# --- Default checks if not specified -------------------------------------
-if (-not $Checks) {
-    $Checks = @(
-        'clang-analyzer-*',
-        'bugprone-*',
-        'performance-*',
-        'modernize-*',
-        '-modernize-use-trailing-return-type',
-        '-modernize-pass-by-value',
-        'readability-*',
-        '-readability-identifier-length',
-        '-readability-magic-numbers',
-        '-readability-convert-member-functions-to-static'
-    ) -join ','
-}
-
 # --- Run clang-tidy ------------------------------------------------------
 $DoFix = [bool]$Fix
 $issueFiles = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
+
+# A translation unit can cause clang-tidy to rewrite an included project header.
+# Concurrent --fix invocations therefore race on shared headers and can corrupt them.
+$ThrottleLimit = if ($DoFix) { 1 } else { 8 }
+if ($DoFix) {
+	Write-Host "Fix mode runs serially to protect shared headers." -ForegroundColor Yellow
+}
 
 $elapsed = Measure-Command {
     $Files | ForEach-Object -Parallel {
@@ -129,7 +120,8 @@ $elapsed = Measure-Command {
         # behaviour when -Fix was off) made clang-tidy treat it as an extra source
         # path - the current directory - and emit spurious "expected exactly one
         # compiler job" errors, so only append --fix when actually fixing.
-        $tidyArgs = @("--checks=$checks", "-p=$db")
+        $tidyArgs = @("-p=$db")
+        if ($checks) { $tidyArgs += "--checks=$checks" }
         if ($doFix) { $tidyArgs += '--fix' }
         $tidyArgs += $file
 
@@ -149,7 +141,7 @@ $elapsed = Measure-Command {
         } else {
             Write-Host "[ ] $file" -ForegroundColor DarkGreen
         }
-    } -ThrottleLimit 8
+    } -ThrottleLimit $ThrottleLimit
 }
 
 $count = $issueFiles.Count

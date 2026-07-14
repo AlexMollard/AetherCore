@@ -26,9 +26,7 @@ TEST_CASE("RayVsAabb: box behind the origin is rejected") {
 
 TEST_CASE("RayVsAabb: parallel offset ray misses; parallel on-boundary ray hits (no NaN)") {
     float t = -1.0f;
-    // dir.y == 0, origin.y outside the slab -> miss
     CHECK(!RayVsAabb(Ray{{-5, 2, 0}, {1, 0, 0}}, glm::vec3(-1), glm::vec3(1), t));
-    // dir.y == 0, origin.y exactly ON the slab boundary -> naive slab math NaNs
     CHECK(RayVsAabb(Ray{{-5, 1, 0}, {1, 0, 0}}, glm::vec3(-1), glm::vec3(1), t));
     CHECK(t == doctest::Approx(4.0f));
 }
@@ -43,10 +41,6 @@ TEST_CASE("RayVsAabb: diagonal and negative-direction hits") {
 }
 
 TEST_CASE("BuildCameraRay round-trips points projected by the real camera") {
-    // The whole picking chain hinges on pixel-UV -> ray matching the renderer's
-    // projection (Vulkan Y-flip included). Project world points with the exact
-    // Camera matrices, feed the resulting UV back through BuildCameraRay, and
-    // require the ray to pass through the point.
     CameraDesc desc;
     desc.mode = CameraMode::Free;
     desc.position = {3.0f, 4.0f, 10.0f};
@@ -64,16 +58,16 @@ TEST_CASE("BuildCameraRay round-trips points projected by the real camera") {
         for (const glm::vec3& p: points)
         {
             const glm::vec4 clip = vp * glm::vec4(p, 1.0f);
-            REQUIRE(clip.w > 0.0f); // all sample points sit in front of this camera
+            REQUIRE(clip.w > 0.0f);
             const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-            const glm::vec2 uv = (glm::vec2(ndc) + 1.0f) * 0.5f; // image-space UV
+            const glm::vec2 uv = (glm::vec2(ndc) + 1.0f) * 0.5f;
 
             const Ray ray = BuildCameraRay(invVp, uv, cam.GetPosition());
             const glm::vec3 toP = p - ray.origin;
             const float along = glm::dot(toP, ray.dir);
             const glm::vec3 closest = ray.origin + ray.dir * along;
 
-            CHECK(along > 0.0f); // in front of the camera
+            CHECK(along > 0.0f);
             CHECK(glm::length(p - closest) < 1e-3f * std::max(1.0f, glm::length(toP)));
         }
     }

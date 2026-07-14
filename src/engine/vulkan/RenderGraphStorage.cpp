@@ -20,12 +20,7 @@
 
 namespace aether
 {
-	// Maximum number of barriers converted inline on the stack before falling
-	// back to heap allocation. Render-graph passes rarely exceed a handful of
-	// image/buffer barriers per call, so 16 covers virtually all cases.
 	static constexpr std::size_t kMaxInlineBarriers = 16;
-
-	// Engine-side forwarders: cast opaque gpu:: types to Vk* and delegate.
 
 	void RenderGraphStorage::Initialize(gpu::Device device, gpu::Allocator allocator)
 	{
@@ -302,11 +297,9 @@ namespace aether
 		m_lastFrameStats = FrameStats{};
 	}
 
-	// -- External images ------------------------------------------------------
-
 	uint32_t RenderGraphStorage::RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect)
 	{
-		uint32_t idx;
+		uint32_t idx = 0;
 		if (!m_freeExternalSlots.empty())
 		{
 			idx = m_freeExternalSlots.back();
@@ -384,8 +377,6 @@ namespace aether
 		m_freeExternalSlots.clear();
 	}
 
-	// -- External buffers -----------------------------------------------------
-
 	uint32_t RenderGraphStorage::RegisterExternalBuffer(VkBuffer buffer)
 	{
 		if (!m_freeExternalBufferSlots.empty())
@@ -438,8 +429,6 @@ namespace aether
 		m_freeExternalBufferSlots.clear();
 	}
 
-	// -- Transient images -----------------------------------------------------
-
 	uint32_t RenderGraphStorage::AddTransientSlot(gpu::Format format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
@@ -465,7 +454,7 @@ namespace aether
 		entry.usage = usage;
 		entry.aspect = aspect;
 		entry.extent = extent;
-		m_transientImages.push_back(std::move(entry));
+		m_transientImages.push_back(entry);
 		return static_cast<uint32_t>(m_transientImages.size() - 1);
 	}
 
@@ -556,8 +545,6 @@ namespace aether
 		return entry.image.IsValid() || entry.aliasedEntryIndex < m_transientImages.size();
 	}
 
-	// -- Bindless -------------------------------------------------------------
-
 	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, VkImageLayout descriptorLayout)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
@@ -617,8 +604,6 @@ namespace aether
 		return gpu::ResourceRegistry::GetBindlessSampledSlot(entry.image);
 	}
 
-	// -- Release / cache ------------------------------------------------------
-
 	void RenderGraphStorage::ReleaseTransient(uint32_t idx)
 	{
 		if (idx >= m_transientImages.size())
@@ -667,8 +652,6 @@ namespace aether
 		entry.extent = {};
 		m_freeTransientSlots.push_back(idx);
 	}
-
-	// -- Cache helpers --------------------------------------------------------
 
 	RenderGraphStorage::ImageCacheKey RenderGraphStorage::MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent)
 	{
@@ -749,8 +732,6 @@ namespace aether
 		}
 	}
 
-	// -- Split barrier events --------------------------------------------------
-
 	std::uint32_t RenderGraphStorage::AllocateEvent()
 	{
 		if (m_device == VK_NULL_HANDLE)
@@ -807,9 +788,6 @@ namespace aether
 
 	void RenderGraphStorage::ResetEvents()
 	{
-		// Device-only events are reset explicitly via vkCmdResetEvent2 before each
-		// vkCmdSetEvent2 in CmdSetEvent2 (vkCmdWaitEvents2 does not reset events).
-		// No host-side reset needed.
 		m_freeEventSlots.clear();
 		m_freeEventSlots.reserve(m_events.size());
 		for (std::uint32_t i = 0; i < m_events.size(); ++i)
@@ -824,20 +802,12 @@ namespace aether
 		{
 			return;
 		}
-		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
-		auto vkEvent = static_cast<VkEvent>(event);
+		auto* vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto* vkEvent = static_cast<VkEvent>(event);
 
-		// Device-only events retain their signaled state across frames
-		// (vkCmdWaitEvents2 does NOT reset the event - it stays signaled).
-		// Explicitly reset the event before setting it to avoid the 'already
 		// signaled' validation warning and ensure the dependency info in
-		// vkCmdSetEvent2 is honored. vkCmdResetEvent2 on an already-unsignaled
-		// event is a defined no-op, so the first frame is fine too.
 		vkCmdResetEvent2(vkCmd, vkEvent, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
-		// Execution barrier between vkCmdResetEvent2 and vkCmdSetEvent2 on the
-		// same event. The Vulkan spec requires an intervening execution dependency
-		// (a pipeline barrier or event) between reset and set.
 		{
 			const VkMemoryBarrier2 execBarrier{
 			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -860,9 +830,6 @@ namespace aether
 			vkCmdPipelineBarrier2(vkCmd, &execDep);
 		}
 
-		// Convert gpu::ImageMemoryBarrier span to VkImageMemoryBarrier2 array.
-		// barrier.image is the pre-resolved VkImage (opaque gpu::Image == VkImage);
-		// the caller populated it via resolveImage() before invoking this method.
 		VkImageMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
 		std::vector<VkImageMemoryBarrier2> vkBarriersHeap;
 		auto* vkBarriers = vkBarriersInline;
@@ -891,8 +858,8 @@ namespace aether
 		{
 			return;
 		}
-		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
-		auto vkEvent = static_cast<VkEvent>(event);
+		auto* vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto* vkEvent = static_cast<VkEvent>(event);
 
 		VkImageMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
 		std::vector<VkImageMemoryBarrier2> vkBarriersHeap;
@@ -921,7 +888,7 @@ namespace aether
 		{
 			return;
 		}
-		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto* vkCmd = static_cast<VkCommandBuffer>(cmd);
 
 		VkBufferMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
 		std::vector<VkBufferMemoryBarrier2> vkBarriersHeap;
@@ -950,7 +917,7 @@ namespace aether
 		{
 			return;
 		}
-		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto* vkCmd = static_cast<VkCommandBuffer>(cmd);
 
 		VkImageMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
 		std::vector<VkImageMemoryBarrier2> vkBarriersHeap;
@@ -972,8 +939,6 @@ namespace aether
 		};
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
-
-	// -- Transient heap -------------------------------------------------------
 
 	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment)
 	{
@@ -1026,8 +991,6 @@ namespace aether
 		}
 	}
 
-	// -- Two-pass transient heap preparation ----------------------------------
-
 	void RenderGraphStorage::PrepareTransientAllocations(const FrameTarget& target)
 	{
 		AE_PROFILE_ZONE();
@@ -1036,7 +999,6 @@ namespace aether
 			return;
 		}
 
-		// Reset all transient entries' heap state from previous frame.
 		for (auto& entry: m_transientImages)
 		{
 			entry.fromHeap = false;
@@ -1054,7 +1016,6 @@ namespace aether
 			entry.memReqAlignment = 0;
 		}
 
-		// Query memory requirements for transient images.
 		for (auto& entry: m_transientImages)
 		{
 			if (entry.image.IsValid())
@@ -1098,7 +1059,6 @@ namespace aether
 			entry.memReqAlignment = reqs2.memoryRequirements.alignment;
 		}
 
-		// Query memory requirements for transient buffers.
 		for (auto& entry: m_transientBuffers)
 		{
 			if (entry.buffer.IsValid())
@@ -1132,10 +1092,6 @@ namespace aether
 		}
 
 		// Calculate total size needed. Process entries in alignment-descending
-		// order so high-alignment sub-allocations establish a well-aligned
-		// running offset; lower-alignment entries then pack into the gaps
-		// with no per-entry padding. Original indices are preserved because
-		// other code accesses transient slots by their insertion index.
 		auto collectCandidates = [](std::vector<std::uint32_t>& indices, const auto& entries, auto&& isValid, auto&& isAllocatable)
 		{
 			indices.clear();
@@ -1190,7 +1146,6 @@ namespace aether
 			maxAlignment = std::max(maxAlignment, entry.memReqAlignment);
 		}
 
-		// Allocate heap and virtual block if needed.
 		if (totalSize > m_transientHeapCapacity || maxAlignment > m_transientHeapAlignment)
 		{
 			AllocateTransientHeap(totalSize * 3 / 2, maxAlignment);
@@ -1202,17 +1157,14 @@ namespace aether
 
 		if (m_virtualBlock == VK_NULL_HANDLE)
 		{
-			return; // heap allocation failed; everything falls back to VMA
+			return;
 		}
 
-		// Allocate virtual offsets for each resource from the virtual block.
 		// Process in the same alignment-descending order as the size
-		// accumulation so the per-entry offsets are predictable and the
-		// layout matches the size estimate.
 		for (const auto idx: imageIndices)
 		{
 			auto& entry = m_transientImages[idx];
-			VmaVirtualAllocationCreateInfo allocInfo{
+			const VmaVirtualAllocationCreateInfo allocInfo{
 			        .size = entry.memReqSize,
 			        .alignment = entry.memReqAlignment,
 			};
@@ -1227,7 +1179,7 @@ namespace aether
 		for (const auto idx: bufferIndices)
 		{
 			auto& entry = m_transientBuffers[idx];
-			VmaVirtualAllocationCreateInfo allocInfo{
+			const VmaVirtualAllocationCreateInfo allocInfo{
 			        .size = entry.memReqSize,
 			        .alignment = entry.memReqAlignment,
 			};
@@ -1269,8 +1221,6 @@ namespace aether
 		        m_lastFrameStats.cacheSize);
 	}
 
-	// -- EnsureTransientImages ------------------------------------------------
-
 	void RenderGraphStorage::EnsureTransientImages(const FrameTarget& target)
 	{
 		AE_PROFILE_ZONE();
@@ -1301,7 +1251,7 @@ namespace aether
 			}
 
 			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
-			gpu::TextureHandle cached = TryPullFromCache(key);
+			const gpu::TextureHandle cached = TryPullFromCache(key);
 			if (cached.IsValid())
 			{
 				entry.image = cached;
@@ -1313,7 +1263,6 @@ namespace aether
 				continue;
 			}
 
-			// Heap-aliased allocation.
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
 				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
@@ -1373,8 +1322,6 @@ namespace aether
 		}
 	}
 
-	// -- Transient buffers ----------------------------------------------------
-
 	uint32_t RenderGraphStorage::AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags2 usage)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
@@ -1396,7 +1343,7 @@ namespace aether
 		TransientBufferEntry entry{};
 		entry.size = size;
 		entry.usage = usage;
-		m_transientBuffers.push_back(std::move(entry));
+		m_transientBuffers.push_back(entry);
 		return static_cast<uint32_t>(m_transientBuffers.size() - 1);
 	}
 
@@ -1421,7 +1368,6 @@ namespace aether
 				continue;
 			}
 
-			// Heap-aliased allocation.
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
 				const std::string entryName = std::format("RenderGraph.Transient.Buffer.Aliased[{}]", idx);

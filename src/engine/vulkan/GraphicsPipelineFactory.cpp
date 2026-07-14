@@ -15,28 +15,20 @@
 
 namespace aether::vkutil
 {
-	// Builds graphics VkShaderEXT handles via vkCreateShadersEXT. Vertex and
-	// fragment shaders are linked (VK_SHADER_CREATE_LINK_STAGE_BIT_EXT) and
-	// tagged VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT so they consume push data
-	// via vkCmdPushDataEXT. No VkPipeline / VkPipelineLayout is created - all
-	// fixed-function state (topology, rasterizer, depth, blend) is cached on
-	// the returned PipelineEntry and re-applied through vkCmdSet* on each bind.
 	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, const GraphicsPipeline::Desc& desc) noexcept
 	{
 		AE_PROFILE_ZONE();
-		auto device = static_cast<VkDevice>(gpuDevice);
+		auto* device = static_cast<VkDevice>(gpuDevice);
 		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
 		const VkCompareOp vkDepthCompareOp = gpu::ToVk(desc.depthCompareOp);
 		const bool hasColorAttachment = vkColorFormat != VK_FORMAT_UNDEFINED;
 
-		// Load vertex SPIR-V.
 		AE_TRY(vertSpirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (vertSpirv->empty())
 		{
 			AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath)));
 		}
 
-		// Load fragment SPIR-V (separate file when provided, otherwise the same module).
 		std::vector<std::byte> fragSpirvStorage;
 		const std::vector<std::byte>* fragSpirv = &*vertSpirv;
 		const bool hasSeparateFragment = !desc.fragmentVfsPath.empty();
@@ -57,10 +49,9 @@ namespace aether::vkutil
 		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
 
 		// Shader-object create flags: layout-free (descriptor heap) + link the
-		// two stages so the driver can cross-optimize vert/frag.
 		const VkShaderCreateFlagsEXT shaderFlags = VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT | VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
 
-		VkShaderCreateInfoEXT vertInfo{
+		const VkShaderCreateInfoEXT vertInfo{
 		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
 		        .pNext = mappings,
 		        .flags = shaderFlags,
@@ -77,7 +68,7 @@ namespace aether::vkutil
 		        .pSpecializationInfo = nullptr,
 		};
 
-		VkShaderCreateInfoEXT fragInfo{
+		const VkShaderCreateInfoEXT fragInfo{
 		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
 		        .pNext = mappings,
 		        .flags = shaderFlags,
@@ -112,7 +103,6 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create graphics shaders for " + std::string(desc.shaderVfsPath)));
 		}
 
-		// Name the shaders for debugging.
 		if (desc.debugName != nullptr)
 		{
 			const std::string vertName = std::string(desc.debugName) + ".vert";
@@ -128,7 +118,6 @@ namespace aether::vkutil
 			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragShader), VK_OBJECT_TYPE_SHADER_EXT, fragName.c_str());
 		}
 
-		// -- Build the entry with cached dynamic state -----------------------
 		ResourceRegistry::PipelineEntry entry{};
 		entry.device = device;
 		entry.isGraphics = true;
@@ -164,7 +153,6 @@ namespace aether::vkutil
 			entry.colorWriteMask = 0;
 		}
 
-		// Vertex input (dynamic). Empty for BDA-only pipelines.
 		if (!desc.vertexBindings.empty())
 		{
 			entry.vertexBindings.reserve(desc.vertexBindings.size());

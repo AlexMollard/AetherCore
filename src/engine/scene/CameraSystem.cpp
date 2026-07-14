@@ -16,7 +16,6 @@ namespace aether
 {
 	namespace
 	{
-		// Local -Z of the world transform, normalized (strips the transform's scale).
 		glm::vec3 ForwardOf(const glm::mat4& localToWorld)
 		{
 			const glm::vec3 fwd = -glm::vec3(localToWorld[2]);
@@ -33,9 +32,6 @@ namespace aether
 		m_seenScratch.clear();
 		m_mainBacking = {};
 
-		// Orbit cameras drive their own entity pose: recompute the transform from
-		// the orbit params first, so the CameraComponent mirror below (and the
-		// hierarchy, gizmos and "look through" preview) all read a live transform.
 		for (auto&& [handle, orbit, tc]: reg.view<OrbitCameraComponent, TransformComponent>().each())
 		{
 			if (ecs::HasDisabledAncestor(world, World::FromEntt(handle)))
@@ -47,8 +43,6 @@ namespace aether
 
 		for (const entt::entity handle: reg.view<CameraComponent, TransformComponent>())
 		{
-			// Disabled cameras (and subtrees) drop out: their backing camera is
-			// reaped below and recreated when re-enabled.
 			if (ecs::HasDisabledAncestor(world, World::FromEntt(handle)))
 			{
 				continue;
@@ -57,8 +51,6 @@ namespace aether
 			auto& cam = reg.get<CameraComponent>(handle);
 			const auto& tc = reg.get<TransformComponent>(handle);
 
-			// Ensure a live backing camera (recreate if the id went stale, e.g. a
-			// scene load reset the pool but kept the component's cached id).
 			CameraHandle backing{cam.backingCamera};
 			if (!backing.IsValid() || m_cameras.TryGet(backing) == nullptr)
 			{
@@ -77,8 +69,6 @@ namespace aether
 				continue;
 			}
 
-			// Pose from the entity: position + forward -> Manual yaw/pitch (matching
-			// Camera::GetForward's convention, same math the editor camera uses).
 			const glm::vec3 position = glm::vec3(tc.localToWorld[3]);
 			const glm::vec3 forward = ForwardOf(tc.localToWorld);
 			const float pitch = glm::degrees(std::asin(glm::clamp(forward.y, -1.0f, 1.0f)));
@@ -97,7 +87,6 @@ namespace aether
 			}
 		}
 
-		// Reap backing cameras whose entity lost the component or was destroyed.
 		std::vector<std::uint32_t> stale;
 		for (const auto& [entityId, backing]: m_backing)
 		{
@@ -112,11 +101,6 @@ namespace aether
 			m_backing.erase(entityId);
 		}
 
-		// The scene's main-camera entity IS the active render camera in the shipped
-		// runtime and while Playing. The editor clears m_applyMainCamera while Editing
-		// so the free-look editor camera owns the viewport - otherwise the scene
-		// camera would reclaim the view every frame and the editor camera would be
-		// un-controllable. When no entity is tagged, leave the current main alone.
 		if (m_applyMainCamera && m_mainBacking.IsValid())
 		{
 			m_cameras.SetMainCamera(m_mainBacking);

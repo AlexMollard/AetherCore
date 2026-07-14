@@ -20,7 +20,7 @@ namespace aether
 			auto& smc = view.get<SkinnedMeshComponent>(entity);
 			if (ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
 			{
-				continue; // disabled entities freeze their animation time
+				continue;
 			}
 			if (!smc.animDb || !smc.animDb->IsValid())
 			{

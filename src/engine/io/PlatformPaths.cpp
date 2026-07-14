@@ -18,8 +18,6 @@
 
 #	include <shlobj.h>
 
-// Link the shell + COM allocator for SHGetKnownFolderPath / CoTaskMemFree.
-// #pragma comment(lib) is honoured by both MSVC (link.exe) and clang-cl
 // (lld-link), so no CMakeLists change is required.
 #	pragma comment(lib, "Shell32.lib")
 #	pragma comment(lib, "Ole32.lib")
@@ -32,14 +30,13 @@ namespace aether::io
 {
 	namespace
 	{
-		// Reads an environment variable without tripping MSVC's deprecation of
-		// std::getenv. Returns an empty string when unset.
-		std::string EnvironmentString(const char* name)
+		std::string EnvironmentString(std::string_view name)
 		{
 #ifdef _MSC_VER
 			char* value = nullptr;
 			std::size_t size = 0;
-			if (_dupenv_s(&value, &size, name) != 0 || value == nullptr)
+			const std::string nameString(name);
+			if (_dupenv_s(&value, &size, nameString.c_str()) != 0 || value == nullptr)
 			{
 				return {};
 			}
@@ -47,7 +44,8 @@ namespace aether::io
 			std::free(value);
 			return result;
 #else
-			if (const char* value = std::getenv(name); value != nullptr)
+			const std::string nameString(name);
+			if (const char* value = std::getenv(nameString.c_str()); value != nullptr)
 			{
 				return value;
 			}
@@ -70,10 +68,6 @@ namespace aether::io
 			return dir;
 		}
 
-		// Full path (directory + filename) to the running executable. Shared by
-		// GetExecutableDir (parent_path()) and GetExecutableName (stem()) so the
-		// OS-specific query lives in exactly one place. Returns an empty path if
-		// the OS query fails.
 		std::filesystem::path ResolveExecutablePath()
 		{
 #if defined(_WIN32)
@@ -90,7 +84,6 @@ namespace aether::io
 					buffer.resize(length);
 					return std::filesystem::path(buffer);
 				}
-				// Truncated: grow and retry.
 				buffer.resize(buffer.size() * 2);
 			}
 #elif defined(__linux__)
@@ -106,6 +99,11 @@ namespace aether::io
 		}
 	} // namespace
 
+	std::string PlatformPaths::ReadEnvironmentVariable(std::string_view name)
+	{
+		return EnvironmentString(name);
+	}
+
 	std::filesystem::path PlatformPaths::GetExecutableDir()
 	{
 		if (const std::filesystem::path exePath = ResolveExecutablePath(); !exePath.empty())
@@ -113,7 +111,6 @@ namespace aether::io
 			return exePath.parent_path();
 		}
 
-		// Fallback: better to resolve relative to the CWD than to return nothing.
 		std::error_code ec;
 		auto cwd = std::filesystem::current_path(ec);
 		return ec ? std::filesystem::path{} : cwd;
@@ -130,7 +127,7 @@ namespace aether::io
 		std::error_code ec;
 		if (!envVar.empty())
 		{
-			if (const std::string envValue = EnvironmentString(std::string(envVar).c_str()); !envValue.empty() && std::filesystem::exists(envValue, ec))
+			if (const std::string envValue = EnvironmentString(envVar); !envValue.empty() && std::filesystem::exists(envValue, ec))
 			{
 				return std::filesystem::path(envValue);
 			}

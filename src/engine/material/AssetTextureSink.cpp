@@ -15,8 +15,6 @@ namespace aether
 
 	std::string AssetTextureSink::ResolvePath(std::string_view path) const
 	{
-		// Same resolution LoadFromFile uses, so the registry dedups on the exact
-		// string that will actually be read.
 		return Texture::ResolveTexturePath(path);
 	}
 

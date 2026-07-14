@@ -63,20 +63,12 @@ namespace aether::editor
 			return value;
 		}
 
-		// NVIDIA Aftermath is a dev-only GPU-crash-diagnostics tool, gated at
-		// runtime to editor builds on an NVIDIA device (see VulkanContext.cpp).
 		// A published game must not carry GFSDK_Aftermath_Lib.x64.dll (or any
-		// GFSDK_Aftermath* file).
 		bool IsAftermathRuntimeFile(const std::filesystem::path& path)
 		{
 			return LowerAscii(path.stem().generic_string()).starts_with("gfsdk_aftermath");
 		}
 
-		// Debug CRT DLLs (msvcp140d.dll, msvcp140d_atomic_wait.dll, vcruntime140d.dll,
-		// vcruntime140_1d.dll, ucrtbased.dll, ...) are NOT redistributable - Microsoft
-		// licenses only the release CRT - and appear only in a Debug build. Detecting
-		// one means the whole package is Debug: unshippable (it also enables the Vulkan
-		// validation layer and runs unoptimised). Release / RelWithDebInfo link the
 		// redistributable release CRT (msvcp140.dll, no trailing 'd') and never emit these.
 		bool IsDebugCrtDll(const std::filesystem::path& path)
 		{
@@ -98,8 +90,6 @@ namespace aether::editor
 			{
 				return false;
 			}
-			// Debug variants append 'd' to the numeric version segment (msvcp140d,
-			// vcruntime140_1d, msvcp140d_atomic_wait): a 'd' right after a digit, then '.'/'_'.
 			for (std::size_t i = 1; i + 1 < name.size(); ++i)
 			{
 				if (name[i] == 'd' && (std::isdigit(static_cast<unsigned char>(name[i - 1])) != 0) && (name[i + 1] == '.' || name[i + 1] == '_'))
@@ -110,8 +100,6 @@ namespace aether::editor
 			return false;
 		}
 
-		// Packer sidecars (engine.pak.log / engine.pak.manifest / project.pak.*): the
-		// human-readable pack log + incremental-repack cache. Build intermediates with
 		// no runtime purpose that leak dev paths - never ship them.
 		bool IsPakSidecarFile(const std::filesystem::path& path)
 		{
@@ -175,9 +163,6 @@ namespace aether::editor
 
 		std::string EditorExecutableName()
 		{
-			// Single source of truth: the editor target's actual file name, injected by
-			// CMake (AETHER_EDITOR_EXE_NAME = $<TARGET_FILE_NAME:Editor>). The literal
-			// fallbacks track the current target name should the define ever be absent.
 #ifdef AETHER_EDITOR_EXE_NAME
 			return AETHER_EDITOR_EXE_NAME;
 #elif defined(_WIN32)
@@ -310,14 +295,6 @@ namespace aether::editor
 			return true;
 		}
 
-		// Shaders now ship inside engine.pak's "shaders/" prefix (the overlay
-		// pipeline - see FileSystem::InitializeDefaultMounts) rather than as a
-		// loose shaders/ folder beside the executable, so a file-existence check
-		// alone can't catch a shaderless publish (e.g. a dev editor built without
-		// AETHER_SHADER_BUILD_DIR baking a fonts-only engine.pak - see
-		// EditorEnginePak::CanBakeEnginePak). Mount the shipped engine.pak and
-		// glob its "shaders/" prefix directly so verification fails loudly
-		// instead of shipping a game that access-violates in BindlessManager.
 		bool VerifyPublishedGameShaders(const std::filesystem::path& enginePakPath, std::string& error)
 		{
 			try
@@ -338,28 +315,7 @@ namespace aether::editor
 			return true;
 		}
 
-		// The shipped data/config/EngineSettings.toml is a byte-for-byte copy of
-		// the engine's generic resources/config/EngineSettings.toml template (see
-		// aethercore_add_runtime_payload in src/app/CMakeLists.txt) - it knows
 		// nothing about the project being published. The editor never ships this
-		// gap: EditorProjectManager::RefreshServices() re-loads settings with the
-		// open project's ProjectSettings.toml layered on top
-		// (EngineSettingsIO::LoadLayered's layer 3) before ScriptedSceneLayer ever
-		// attaches. GameRuntime has no EditorProjectManager - Application always
-		// constructs SettingsService from layers 1+2+4 only (see
-		// Application::Application(engineConfig) in src/app/Application.cpp) - so
-		// without this bake step the published app.startupScene stays whatever
-		// the generic template shipped with (empty), and the game boots into an
-		// empty world.
-		//
-		// Bake layers 1 (compiled defaults) + 2 (the just-copied shipped file) +
-		// 3 (the project's ProjectSettings.toml) into the published
-		// EngineSettings.toml, exactly mirroring what the editor resolves at
-		// runtime. Deliberately uses LoadedEngineSettings::base (pre layer-4)
-		// rather than .values: baking the *publishing developer's own*
-		// UserSettings.toml (layer 4, read from this machine's LocalAppData)
-		// into the shipped defaults would leak that developer's local window
-		// size/vsync/etc. preferences into every player's fresh install.
 		bool BakePublishedEngineSettings(const std::filesystem::path& publishedSettingsPath, const std::filesystem::path& projectFile, std::string& error)
 		{
 			if (auto dirResult = io::file_util::CreateDirectories(publishedSettingsPath.parent_path()); !dirResult)
@@ -372,11 +328,6 @@ namespace aether::editor
 			aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, projectFile);
 
 			// A shipped game runtime has no editor and no Play button, so it must boot
-			// straight into Play mode: Application maps app.autoplay -> app::PlayState, and
-			// only Play mode ticks the C# scripts + animation. The editor default is
-			// false (the editor opens in Edit mode and the user presses Play), so force
-			// it true for the published build. Without this the game loads the startup
-			// scene but sits frozen in Edit mode - nothing updates.
 			loaded.base.app.autoplay = true;
 
 			const std::string merged = aether::EngineSettingsIO::Serialize(loaded.base);
@@ -389,13 +340,6 @@ namespace aether::editor
 			return true;
 		}
 
-		// Reads back the just-baked published settings and, if a startup scene is
-		// configured, confirms the scene file is actually present in the shipped
-		// project.pak - the same project:// lookup ScriptedSceneLayer::
-		// LoadStartupScene / app::scene::ReadSceneFile perform at boot (see
-		// kProjectScenesVfsDir in src/app/scene/SceneSerializer.cpp). Catches a
-		// published build that would silently boot into an empty world instead
-		// of shipping one.
 		bool VerifyPublishedStartupScene(const std::filesystem::path& packageDir, std::string& error)
 		{
 			const std::filesystem::path settingsPath = packageDir / "data" / "config" / "EngineSettings.toml";
@@ -410,8 +354,6 @@ namespace aether::editor
 			aether::EngineSettingsIO::Apply(*text, settings);
 			if (settings.app.startupScene.empty())
 			{
-				// No startup scene configured is a deliberate project choice
-				// (e.g. a purely script-driven bootstrap) - nothing to verify.
 				return true;
 			}
 
@@ -436,7 +378,7 @@ namespace aether::editor
 
 		bool VerifyPublishedGame(const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
-			std::vector<std::filesystem::path> requiredFiles{
+			const std::vector<std::filesystem::path> requiredFiles{
 			        std::filesystem::path(runtimeExecutableName),
 			        "data/config/EngineSettings.toml",
 			        "data/engine.pak",
@@ -546,10 +488,6 @@ namespace aether::editor
 			return std::nullopt;
 		}
 
-		// exeDir here is the running editor's (App.exe's) own executable
-		// directory - App and GameRuntime share a build-tree output directory,
-		// so App's copy of GFSDK_Aftermath_Lib.x64.dll sits right next to it and
-		// would otherwise get swept up by the loop below (see
 		// IsAftermathRuntimeFile). A published game must not carry it.
 		bool CopyRuntimeFromExecutableDir(const std::filesystem::path& exeDir, const std::filesystem::path& packageDir, std::string_view runtimeExecutableName, std::string& error)
 		{
@@ -616,14 +554,14 @@ namespace aether::editor
 			return std::nullopt;
 		}
 
-		std::filesystem::path AbsolutePath(std::filesystem::path path)
+		std::filesystem::path AbsolutePath(const std::filesystem::path& path)
 		{
 			if (path.empty())
 			{
 				return {};
 			}
 			std::error_code ec;
-			std::filesystem::path absolute = std::filesystem::absolute(path, ec);
+			const std::filesystem::path absolute = std::filesystem::absolute(path, ec);
 			return ec ? path.lexically_normal() : absolute.lexically_normal();
 		}
 	} // namespace
@@ -674,17 +612,6 @@ namespace aether::editor
 			}
 
 			// Compile the project's Slang shaders before packing so their .spv
-			// output can be pulled into project.pak's "shaders/" prefix (see
-			// PakWriter::AddDirectoryAs / PackOptions::shaderSpirvDir). Unlike
-			// the dev hot-reload compile (CompileProjectShadersAndRefreshOverlay,
-			// which stays incremental for fast iteration), this is a CLEAN
-			// compile - the intermediate dir is wiped first, mirroring the
-			// project-scripts dotnet build below, so a .slang source deleted
-			// since the last compile can't leave an orphaned .spv behind for
-			// AddDirectoryAs to ship into project.pak. When this build has no
-			// slangc wired in (CanCompileShaders() == false), this is a
-			// graceful no-op and project.pak simply ships with no project
-			// shader layer; the published game still runs on engine shaders.
 			std::filesystem::path shaderSpirvDir;
 			if (CanCompileShaders())
 			{
@@ -793,13 +720,6 @@ namespace aether::editor
 				return {.succeeded = false, .message = "Could not copy package template: " + error, .outputPath = publishDir};
 			}
 
-			// Guard against shipping a stale runtime binary. PackageGame stages
-			// AetherGame.exe and engine.pak together from one build, so the template
-			// pak's pipeline version is a faithful proxy for the version the runtime
-			// EXE expects. BakeEnginePak below rewrites engine.pak at THIS editor's
-			// PAK_PIPELINE_VERSION; if the packaged runtime predates it, the fresh pak
-			// and the stale exe disagree and the published game rejects its own pak at
-			// launch. Fail loudly with an actionable message instead of shipping it.
 			const std::filesystem::path templatePak = config.packageTemplateDir / "data" / "engine.pak";
 			std::optional<std::uint32_t> runtimePakVersion;
 			try
@@ -836,18 +756,12 @@ namespace aether::editor
 			}
 		}
 
-		// Bake the project's ProjectSettings.toml (app.startupScene and friends)
-		// into the just-copied published EngineSettings.toml so GameRuntime -
 		// which never opens a project the way the editor does - still resolves
-		// the same startup scene. Must run after the copy above populates
-		// data/config/EngineSettings.toml, and before VerifyPublishedGame.
 		if (!BakePublishedEngineSettings(publishDir / "data" / "config" / "EngineSettings.toml", project.projectFile, error))
 		{
 			return {.succeeded = false, .message = "Could not bake published settings: " + error, .outputPath = publishDir};
 		}
 
-		// Prefer a freshly baked engine.pak over the (possibly stale) build-tree copy
-		// when this dev editor can bake one. A shipped editor keeps the copied pak.
 		if (CanBakeEnginePak())
 		{
 			const EditorProjectActionResult bake = BakeEnginePak(publishDir / "data" / "engine.pak");
@@ -876,9 +790,6 @@ namespace aether::editor
 			{
 				return {.succeeded = false, .message = "Could not clean script publish intermediates: " + ec.message(), .outputPath = publishDir};
 			}
-			// Publishing is intentionally independent from the editor's active build
-			// tier. A package always receives an optimized, symbol-free Release script
-			// assembly; verification below also rejects any accidental PDB sidecars.
 			const std::string command =
 			        "\"" + config.dotnetExe.string() + "\" build \"" + scriptsProject.string() + "\" -c Release --nologo -v:m -p:DebugSymbols=false -p:DebugType=none -p:Optimize=true -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 			if (const int rc = io::RunProcessToLog(command, publishLog); rc != 0)

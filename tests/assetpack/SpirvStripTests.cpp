@@ -12,10 +12,6 @@
 using namespace aether;
 
 // Hand-assembled SPIR-V fixtures for SpirvProcessor::Strip. The strip must keep
-// OpName (the Khronos validation layer null-derefs on nameless push-constant
-// variables) and must remove the NonSemantic.Shader.DebugInfo block COHERENTLY
-// (import + OpExtInst + the OpStrings it references) or the module fails
-// spirv-val (VUID-VkShaderCreateInfoEXT-pCode-08737).
 namespace
 {
 	constexpr uint32_t kOpSource = 3;
@@ -47,7 +43,7 @@ namespace
 				shift = 0;
 			}
 		}
-		encoded.push_back(current); // terminating NUL always fits (shift < 32 here)
+		encoded.push_back(current);
 		return encoded;
 	}
 
@@ -58,10 +54,6 @@ namespace
 		EmitInstruction(words, opcode, leadingOperands);
 	}
 
-	// Builds a minimal module: header, one debug-info import (id 1), one GLSL.std.450
-	// import (id 2), an OpString (id 3), OpSource, an OpName on id 4, a debug-info
-	// OpExtInst referencing the OpString, and an OpLine. Optionally also a
-	// NonSemantic.DebugPrintf import (id 5) to exercise the keep-strings path.
 	std::vector<uint32_t> BuildModule(bool withDebugPrintfImport)
 	{
 		std::vector<uint32_t> words{0x07230203u, 0x00010600u, 0u, 64u, 0u};
@@ -74,9 +66,7 @@ namespace
 		EmitInstructionWithString(words, kOpString, {3u}, "shader.slang");
 		EmitInstruction(words, kOpSource, {0u, 0u});
 		EmitInstructionWithString(words, kOpName, {4u}, "g_pushConstants");
-		// OpExtInst %void(9) %result(10) set=1 inst=35 operand=%3 (DebugSource-style ref)
 		EmitInstruction(words, kOpExtInst, {9u, 10u, 1u, 35u, 3u});
-		// slangc names debug-info results too; this one dangles once %10 is stripped.
 		EmitInstructionWithString(words, kOpName, {10u}, "dbgSource");
 		EmitInstruction(words, kOpLine, {3u, 12u, 1u});
 		return words;
@@ -124,7 +114,7 @@ namespace
 	{
 		return {reinterpret_cast<const std::byte*>(words.data()), words.size() * sizeof(uint32_t)};
 	}
-} // namespace
+}
 
 TEST_CASE("Strip removes the debug-info block coherently and keeps OpName")
 {
@@ -133,15 +123,13 @@ TEST_CASE("Strip removes the debug-info block coherently and keeps OpName")
 	REQUIRE(!stripped.empty());
 
 	const auto instructions = Disassemble(stripped);
-	CHECK(ContainsOpcode(instructions, kOpName));    // names kept for the validation layer
+	CHECK(ContainsOpcode(instructions, kOpName));
 	CHECK_FALSE(ContainsOpcode(instructions, kOpString));
 	CHECK_FALSE(ContainsOpcode(instructions, kOpSource));
 	CHECK_FALSE(ContainsOpcode(instructions, kOpLine));
-	CHECK_FALSE(ContainsOpcode(instructions, kOpExtInst)); // debug-info OpExtInst gone with its import
+	CHECK_FALSE(ContainsOpcode(instructions, kOpExtInst));
 
-	// The OpName on the real id (4) survives; the OpName that targeted the
 	// stripped debug-info result (10) must go too or it dangles (spirv-val:
-	// "forward referenced IDs have not been defined").
 	bool sawNameOnRealId = false;
 	bool sawNameOnStrippedId = false;
 	for (const Instruction& instr: instructions)
@@ -155,7 +143,6 @@ TEST_CASE("Strip removes the debug-info block coherently and keeps OpName")
 	CHECK(sawNameOnRealId);
 	CHECK_FALSE(sawNameOnStrippedId);
 
-	// The debug-info import (id 1) is gone; GLSL.std.450 (id 2) survives.
 	bool sawDebugInfoImport = false;
 	bool sawGlslImport = false;
 	for (const Instruction& instr: instructions)
@@ -177,7 +164,7 @@ TEST_CASE("Strip keeps OpString when a surviving non-semantic set may reference 
 	REQUIRE(!stripped.empty());
 
 	const auto instructions = Disassemble(stripped);
-	CHECK(ContainsOpcode(instructions, kOpString)); // DebugPrintf format strings stay valid
+	CHECK(ContainsOpcode(instructions, kOpString));
 	CHECK(ContainsOpcode(instructions, kOpName));
 
 	bool sawPrintfImport = false;

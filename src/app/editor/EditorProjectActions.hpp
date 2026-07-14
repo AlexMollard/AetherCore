@@ -19,8 +19,6 @@ namespace aether::editor
 		std::filesystem::path outputPath;
 	};
 
-	// A Visual Studio IDE found on this machine. Build Tools instances are not
-	// included because they cannot open a project or attach a debugger.
 	struct VisualStudioInstallation
 	{
 		std::filesystem::path installPath;
@@ -51,10 +49,6 @@ namespace aether::editor
 		std::vector<VisualStudioInstallation> visualStudioInstallations;
 		std::function<EditorProjectActionResult(const std::filesystem::path& visualStudioInstall)> debugScripts;
 		std::function<EditorProjectActionResult()> rebuildEnginePak;
-		// Manual shader-recompile trigger (ShaderCompiler::CompileProject on the
-		// current project, then refreshes the shaders:// overlay's project
-		// layer). Compile-on-project-load is the other trigger; there is no
-		// filesystem watch for .slang changes yet.
 		std::function<EditorProjectActionResult()> recompileShaders;
 	};
 } // namespace aether::editor

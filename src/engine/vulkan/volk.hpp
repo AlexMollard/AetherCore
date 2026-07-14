@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(_WIN32)
+#ifdef _WIN32
 #	ifndef VK_USE_PLATFORM_WIN32_KHR
 #		define VK_USE_PLATFORM_WIN32_KHR
 #	endif

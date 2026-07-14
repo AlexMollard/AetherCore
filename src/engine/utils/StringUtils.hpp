@@ -7,7 +7,6 @@
 
 namespace aether::utils
 {
-	// Case-insensitive ASCII comparison of two strings.
 	inline bool IEq(std::string_view a, std::string_view b)
 	{
 		if (a.size() != b.size())
@@ -24,7 +23,6 @@ namespace aether::utils
 		return true;
 	}
 
-	// Levenshtein distance -- used for fuzzy "Did you mean?" suggestions.
 	inline int Levenshtein(std::string_view a, std::string_view b)
 	{
 		const std::size_t m = a.size();

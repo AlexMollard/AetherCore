@@ -43,9 +43,6 @@ namespace aether::editor
 {
 	void ViewportPanel::OnUpdate(app::LayerContext& context)
 	{
-		// Editor camera policy: while Editing the viewport is driven by a
-		// free-fly editor camera (RMB-fly chord); the game's camera - whatever
-		// the script made main - is remembered and restored on Play.
 		auto* playState = context.TryGet<app::PlayState>();
 		auto* cameras = context.TryGet<CameraManager>();
 		if (playState == nullptr || cameras == nullptr)
@@ -56,8 +53,6 @@ namespace aether::editor
 		const bool editing = !playState->IsPlaying();
 		const CameraHandle main = cameras->GetMainCamera();
 
-		// F5 script reload re-runs set_main_camera while Editing: the game took
-		// the view back. Drop our claim so the block below re-seeds and reswaps.
 		if (editing && m_editorCamActive && main.IsValid() && main.id != m_editorCamId)
 		{
 			m_editorCamActive = false;
@@ -69,25 +64,18 @@ namespace aether::editor
 			{
 				m_gameCamId = main.id;
 			}
-			// Create the editor camera once. On later edit re-entries (e.g. after
-			// Stop) keep its existing pose so it doesn't jump each play cycle.
 			const bool justCreated = (m_editorCamId == 0);
 			if (justCreated)
 			{
 				CameraDesc desc;
 				desc.mode = CameraMode::Free;
-				desc.moveSpeed = 15.0f; // the sandbox plaza is ~100 units across
+				desc.moveSpeed = 15.0f;
 				m_editorCamId = cameras->Create(desc).id;
 			}
 			if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
 			{
-				// Restore free-fly + default lens in case a prior look-through preview
-				// left this camera in Manual mode with the entity camera's projection.
 				editorCam->SetMode(CameraMode::Free);
 				editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
-				// Seed a BRAND-NEW editor camera from the scene's main camera (nice
-				// starting framing), falling back to the last game camera. Existing
-				// editor cameras keep their own pose across Play/Stop.
 				if (justCreated)
 				{
 					CameraHandle seedFrom{};
@@ -116,11 +104,6 @@ namespace aether::editor
 		}
 		else if (!editing && m_editorCamActive)
 		{
-			// A script OnAttach runs in UpdateSystems (before this layer), so if it
-			// claimed the view this first Play frame, main is already its camera -
-			// keep it. Otherwise prefer the scene's main-camera entity (CameraSystem
-			// synced its backing this same frame), then fall back to the remembered
-			// game camera.
 			CameraHandle entityMain{};
 			if (auto* cameraSystem = context.TryGet<CameraSystem>())
 			{
@@ -140,13 +123,10 @@ namespace aether::editor
 				cameras->SetMainCamera(CameraHandle{m_gameCamId});
 			}
 			m_editorCamActive = false;
-			m_lookThroughEntityId = 0; // preview is an edit-only affordance
+			m_lookThroughEntityId = 0;
 		}
 
 		// Live "look through" preview: while Editing, lock the editor camera to the
-		// selected camera entity's pose + projection each frame (Manual mode so its
-		// own fly input is ignored). Exiting the preview leaves the editor camera
-		// exactly where the entity camera was looking, then re-enables free-fly.
 		if (editing && m_editorCamActive && m_editorCamId != 0)
 		{
 			Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId});
@@ -169,7 +149,6 @@ namespace aether::editor
 			}
 			else
 			{
-				// Target gone or not a camera: end the preview and restore free-fly.
 				if (m_lookThroughEntityId != 0 && editorCam != nullptr)
 				{
 					editorCam->SetMode(CameraMode::Free);
@@ -188,10 +167,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Night Amber state language: Play is a quiet amber ghost (ready), Compiling
-		// an amber outline (in flight), Stop a filled amber primary (live). Compiling
-		// means the async C# build kicked off by Play is still running; the editor
-		// stays fully interactive meanwhile.
 		const bool playing = playState->IsPlaying();
 		const bool compiling = playState->IsCompiling();
 		const ImVec2 size(0.0f, ImGui::GetFrameHeight());
@@ -218,8 +193,6 @@ namespace aether::editor
 
 	bool ViewportPanel::DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
-		// W/E/R switch ops while the mouse is over the viewport - but not while
-		// the right button is down, which is the free-camera's WASD-fly chord.
 		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
 		{
 			if (ImGui::IsKeyPressed(ImGuiKey_W))
@@ -258,9 +231,6 @@ namespace aether::editor
 		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 		ImGuizmo::SetRect(imageMin.x, imageMin.y, imageSize.x, imageSize.y);
 
-		// One axis convention: the gizmo takes its colours from the same tokens the
-		// inspector's Vec3 chips use (engine/Color.hpp AxisX/Y/Z), and the engaged
-		// state carries the editor's amber accent instead of ImGuizmo's defaults.
 		{
 			auto& gizmoStyle = ImGuizmo::GetStyle();
 			const auto axis = [](const glm::vec4& c, const float a)
@@ -278,13 +248,11 @@ namespace aether::editor
 
 		const glm::mat4 view = camera->GetViewMatrix();
 		glm::mat4 proj = camera->GetProjectionMatrix(renderAspect);
-		proj[1][1] *= -1.0f; // undo the Vulkan Y-flip: ImGuizmo assumes GL clip conventions
+		proj[1][1] *= -1.0f;
 
 		const ImGuizmo::OPERATION op = m_gizmoOp == 0 ? ImGuizmo::TRANSLATE : m_gizmoOp == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
-		// ImGuizmo scales in local space only; WORLD+SCALE misbehaves.
 		const ImGuizmo::MODE mode = (op == ImGuizmo::SCALE || m_gizmoLocal) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
-		// Ctrl-hold snapping: half-metre steps, 15 degrees, 0.1 scale.
 		float snapValues[3] = {0.5f, 0.5f, 0.5f};
 		if (op == ImGuizmo::ROTATE)
 		{
@@ -299,9 +267,6 @@ namespace aether::editor
 		glm::mat4 model = tc->localToWorld;
 		if (ImGuizmo::Manipulate(&view[0][0], &proj[0][0], op, mode, &model[0][0], nullptr, snap))
 		{
-			// World-space delta of the primary's edit (captured before
-			// ApplyWorldTransform mutates it) so the rest of a multi-selection
-			// transforms around the gizmo pivot together.
 			const glm::mat4 worldDelta = model * glm::inverse(tc->localToWorld);
 			ApplyWorldTransform(context, world, primary, model);
 			if (selection.All().size() > 1)
@@ -324,7 +289,6 @@ namespace aether::editor
 
 	void ViewportPanel::HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
-		// The gizmo owns the mouse while hovered or dragging.
 		if (ImGuizmo::IsOver() || ImGuizmo::IsUsingAny())
 		{
 			return;
@@ -335,7 +299,6 @@ namespace aether::editor
 			return;
 		}
 		// A click is a release that never dragged: camera orbits/looks move past
-		// the threshold and never select.
 		if (!ImGui::IsItemHovered() || !ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f))
 		{
 			return;
@@ -354,8 +317,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Identical matrices to the renderer (projection at render-target
-		// aspect), so letterboxed/stretched display modes pick what is shown.
 		const glm::mat4 viewProj = camera->GetProjectionMatrix(renderAspect) * camera->GetViewMatrix();
 		const Ray ray = BuildCameraRay(glm::inverse(viewProj), uv, camera->GetPosition());
 
@@ -381,7 +342,6 @@ namespace aether::editor
 
 	void ViewportPanel::DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
-		// Overlay is an editing aid; while Playing the viewport shows the game.
 		if (auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && playState->IsPlaying())
 		{
 			return;
@@ -399,8 +359,6 @@ namespace aether::editor
 		}
 		auto* selection = context.TryGet<SceneSelection>();
 
-		// GL-convention view-projection (undo the Vulkan Y-flip) so the manual
-		// world->screen map below matches the displayed image, same as the gizmo.
 		const glm::mat4 view = viewCam->GetViewMatrix();
 		glm::mat4 proj = viewCam->GetProjectionMatrix(renderAspect);
 		proj[1][1] *= -1.0f;
@@ -421,8 +379,6 @@ namespace aether::editor
 			        const glm::vec3 up = glm::normalize(glm::vec3(tc.localToWorld[1]));
 			        const glm::vec3 fwd = -glm::normalize(glm::vec3(tc.localToWorld[2]));
 
-			        // Draw the near plane and a modest preview-far plane so the wedge
-			        // stays readable regardless of the (often huge) real far distance.
 			        const float nearD = std::max(0.02f, cam.nearPlane);
 			        const float farD = std::clamp(cam.farPlane, nearD + 0.5f, nearD + 9.0f);
 			        const float tanHalf = std::tan(glm::radians(cam.fovDegrees) * 0.5f);
@@ -432,10 +388,10 @@ namespace aether::editor
 				        const float h = tanHalf * dist;
 				        const float w = h * renderAspect;
 				        const glm::vec3 c = pos + fwd * dist;
-				        out[0] = c - right * w + up * h; // top-left
-				        out[1] = c + right * w + up * h; // top-right
-				        out[2] = c + right * w - up * h; // bottom-right
-				        out[3] = c - right * w - up * h; // bottom-left
+				        out[0] = c - right * w + up * h;
+				        out[1] = c + right * w + up * h;
+				        out[2] = c + right * w - up * h;
+				        out[3] = c - right * w - up * h;
 			        };
 			        glm::vec3 nearC[4];
 			        glm::vec3 farC[4];
@@ -447,7 +403,7 @@ namespace aether::editor
 				        const glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
 				        if (clip.w <= 1e-4f)
 				        {
-					        return false; // behind the viewing camera
+					        return false;
 				        }
 				        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
 				        out = ImVec2(imageMin.x + (ndc.x * 0.5f + 0.5f) * imageSize.x, imageMin.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * imageSize.y);
@@ -468,11 +424,10 @@ namespace aether::editor
 			        for (int i = 0; i < 4; ++i)
 			        {
 				        const int j = (i + 1) % 4;
-				        line(nearC[i], nearC[j]); // near rectangle
-				        line(farC[i], farC[j]);   // far rectangle
-				        line(nearC[i], farC[i]);  // connecting edge
+				        line(nearC[i], nearC[j]);
+				        line(farC[i], farC[j]);
+				        line(nearC[i], farC[i]);
 			        }
-			        // A small nub toward the apex so the facing direction reads at a glance.
 			        line(pos, nearC[0]);
 			        line(pos, nearC[1]);
 			        line(pos, nearC[2]);
@@ -496,7 +451,6 @@ namespace aether::editor
 		const bool selectedIsCamera = editing && primary.IsValid() && world.GetRegistry().valid(World::ToEntt(primary)) && world.Has<CameraComponent>(primary);
 		const bool previewing = m_lookThroughEntityId != 0;
 
-		// Drive the live preview render from the selected camera's synced backing pose.
 		bool enabled = false;
 		if (selectedIsCamera)
 		{
@@ -520,8 +474,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Bottom-right: camera-feed card in the launcher chrome. The corner
-		// brackets are the reticle flourish - thematically at home on a camera feed.
 		const float thumbW = 240.0f;
 		const float thumbH = thumbW * static_cast<float>(CameraPreviewService::kHeight) / static_cast<float>(CameraPreviewService::kWidth);
 		const ImVec2 pillPad(8.0f, 8.0f);
@@ -539,13 +491,12 @@ namespace aether::editor
 
 		chrome::SectionTag(previewing ? "CAMERA VIEW · LIVE" : "CAMERA VIEW");
 
-		// Lazily (re-)register the preview colour target as an ImGui texture.
 		if (enabled)
 		{
 			const gpu::ImageView pv = preview.GetColorView();
 			if (pv != m_cameraPreviewImageView)
 			{
-				if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+				if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 				{
 					if (m_cameraPreviewTextureId != 0)
 					{
@@ -567,7 +518,6 @@ namespace aether::editor
 			ImGui::Dummy(ImVec2(thumbW, thumbH));
 		}
 		{
-			// Hairline frame + reticle brackets over the feed.
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImVec2 thumbMax(thumbMin.x + thumbW, thumbMin.y + thumbH);
 			drawList->AddRect(thumbMin, thumbMax, chrome::U32(chrome::kStroke), 0.0f, 0, 1.0f);
@@ -580,7 +530,6 @@ namespace aether::editor
 		{
 			if (previewing)
 			{
-				// End look-through: hand free-fly back to the editor camera in place.
 				if (auto* cameras = context.TryGet<CameraManager>())
 				{
 					if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
@@ -615,10 +564,6 @@ namespace aether::editor
 
 	void ViewportPanel::OnRenderTargetsInvalidated(app::LayerContext& context)
 	{
-		// The post-process final-color image (and its view) were just destroyed
-		// and recreated. Drop our cached ImGui descriptor AND cached view so the
-		// lazy re-register in OnImGui fires next frame even if the allocator
-		// recycled the same VkImageView handle value for the new image.
 		ReleaseSceneViewportTexture(context);
 	}
 
@@ -626,7 +571,7 @@ namespace aether::editor
 	{
 		if (m_sceneViewportTextureId != 0)
 		{
-			if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 			{
 				imgui->UnregisterTexture(static_cast<ImTextureID>(m_sceneViewportTextureId));
 			}
@@ -649,7 +594,7 @@ namespace aether::editor
 		if (imageView != m_sceneViewportImageView)
 		{
 			ReleaseSceneViewportTexture(context);
-			if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 			{
 				const ImTextureID textureId = imgui->RegisterTexture(imageView, gpu::ImageLayout::ShaderReadOnly);
 				if (textureId != ImTextureID_Invalid)
@@ -668,8 +613,6 @@ namespace aether::editor
 			return;
 		}
 
-		// The toolbar is a floating top overlay now, so the scene image uses the full
-		// content region (no reserved bottom bar). Clamp so imageSize stays valid.
 		const ImVec2 available(std::max(1.0f, ImGui::GetContentRegionAvail().x), std::max(1.0f, ImGui::GetContentRegionAvail().y));
 
 		gpu::Extent2D extent = post.GetExtent();
@@ -704,7 +647,7 @@ namespace aether::editor
 		ImVec2 imageSize = available;
 		switch (m_viewportDisplayMode)
 		{
-			case 1: // Fill
+			case 1:
 				if (imageSize.x < imageSize.y * targetAspect)
 				{
 					imageSize.x = imageSize.y * targetAspect;
@@ -714,10 +657,10 @@ namespace aether::editor
 					imageSize.y = imageSize.x / targetAspect;
 				}
 				break;
-			case 2: // Actual
+			case 2:
 				imageSize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
 				break;
-			case 3: // Integer
+			case 3:
 			{
 				const float sx = extent.width > 0 ? std::floor(available.x / static_cast<float>(extent.width)) : 1.0f;
 				const float sy = extent.height > 0 ? std::floor(available.y / static_cast<float>(extent.height)) : 1.0f;
@@ -725,7 +668,7 @@ namespace aether::editor
 				imageSize = ImVec2(static_cast<float>(extent.width) * scale, static_cast<float>(extent.height) * scale);
 				break;
 			}
-			default: // Fit
+			default:
 				if (m_viewportAspectMode != 1)
 				{
 					if (imageSize.x > imageSize.y * targetAspect)
@@ -750,32 +693,13 @@ namespace aether::editor
 		const ImVec2 imageCursorStart = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(imageCursorStart.x + (available.x - imageSize.x) * 0.5f, imageCursorStart.y + (available.y - imageSize.y) * 0.5f));
 
-		// Image + gizmo submit before any input item so Manipulate sees this
-		// frame's mouse first.
 		const ImVec2 imageMin = ImGui::GetCursorScreenPos();
 		const ImVec2 imageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 		const bool gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 
-		// ImGuizmo's CanActivate() consults ImGui::IsAnyItemHovered(), which
-		// includes the PREVIOUS frame's hovered item - so merely submitting the
-		// gizmo before the viewport's InvisibleButton is not enough: the button
-		// hovered last frame still vetoes this frame's grab, forever (handles
 		// highlight, drags never start). While a handle is hovered the button is
-		// therefore NOT SUBMITTED AT ALL; the hovered-id drains for a frame and
-		// the grab activates. RMB is carved out (the gizmo only activates from
-		// an LMB press) so flying across a handle never stalls the camera.
-		// IsOver/IsUsing are only trusted on frames the gizmo actually drew -
-		// they go stale when the selection clears.
-		// Reporting the viewport as input-inactive while actively dragging also flips the
-		// engine's per-frame mouse capture on (Tick recomputes captured =
-		// WantsInputCapture && !viewportActive BEFORE cameras update), so no
-		// camera mode fights the drag.
-		// Gate the gizmo's "using" state on the left button actually being down: a
-		// stale ImGuizmo drag state (which can linger after a multi-viewport window
-		// move) otherwise keeps the gizmo "hot" forever and permanently steals mouse
-		// input from the camera.
 		const ImVec2 gizmoMouse = ImGui::GetIO().MousePos;
 		const bool mouseOverImage = gizmoMouse.x >= imageMin.x && gizmoMouse.x < imageMax.x && gizmoMouse.y >= imageMin.y && gizmoMouse.y < imageMax.y;
 		const bool gizmoActive = gizmoDrawn && mouseOverImage && ImGuizmo::IsUsingAny() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
@@ -789,8 +713,6 @@ namespace aether::editor
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
-		// F frames the primary selection with the editor camera (keeps the
-		// current view direction, moves back far enough to see the object).
 		if (m_editorCamActive && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F, false) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
 		{
 			auto& selection = context.Get<SceneSelection>();
@@ -807,8 +729,6 @@ namespace aether::editor
 						const float sy = glm::length(glm::vec3(tc->localToWorld[1]));
 						const float sz = glm::length(glm::vec3(tc->localToWorld[2]));
 						const float dist = glm::max(4.0f, 2.5f * glm::max(sx, glm::max(sy, sz)));
-						// Frame it AND set it as the orbit/dolly pivot (Alt+LMB / scroll
-						// now revolve around what you just focused).
 						cam->FocusOn(target, dist);
 					}
 				}
@@ -816,8 +736,6 @@ namespace aether::editor
 		}
 		if (m_viewportShowStats || m_viewportShowMouse)
 		{
-			// Micro HUD card in the launcher language: hairline panel, faint uppercase
-			// labels in a fixed column, warm-white values.
 			struct StatRow
 			{
 				const char* label;
@@ -982,7 +900,7 @@ namespace aether::editor
 				toolbarControlActive = true;
 				chrome::SectionTag("VIEW SETTINGS");
 				ImGui::Spacing();
-				const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
+				const char* const resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
 				int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
 				ImGui::SetNextItemWidth(150.0f);
 				if (ImGui::Combo("Resolution", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes))))
@@ -1001,10 +919,10 @@ namespace aether::editor
 						viewportSettingsChanged = true;
 					}
 				}
-				const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
+				const char* const displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
 				ImGui::SetNextItemWidth(150.0f);
 				ImGui::Combo("Display", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
-				const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
+				const char* const aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
 				ImGui::SetNextItemWidth(150.0f);
 				ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
 				ImGui::Spacing();

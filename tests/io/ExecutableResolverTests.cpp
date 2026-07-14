@@ -25,7 +25,7 @@ namespace
 		}
 #endif
 	}
-} // namespace
+}
 
 TEST_CASE("ResolveToolExecutable resolves env override -> dev hint -> exe dir")
 {

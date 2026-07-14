@@ -21,8 +21,6 @@ namespace aether
 			return m_world;
 		}
 
-		// Name of the most recently loaded scene (without extension), for editor UI
-		// such as the status bar. Empty until the first scene is applied.
 		[[nodiscard]] const std::string& GetCurrentScene() const
 		{
 			return m_currentScene;

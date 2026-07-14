@@ -24,7 +24,6 @@ namespace aether
 		inline constexpr std::uint32_t kGenerationWrap = 65536u;
 
 #ifndef NDEBUG
-		// Build a multi-line frame list from the slot's ring buffer.
 		template<typename Slot>
 		static std::string FormatAllocFrames(const Slot& slot) noexcept
 		{
@@ -61,7 +60,7 @@ namespace aether
 			}
 			return result;
 		}
-#endif // !NDEBUG
+#endif
 
 		[[nodiscard]] VmaAllocationCreateInfo MakeMappedAllocInfo(gpu::MappedMemoryUsage memUsage) noexcept
 		{
@@ -92,7 +91,6 @@ namespace aether
 			return info;
 		}
 
-		// Deduces the canonical VkImageAspectFlags for a given format.
 		[[nodiscard]] VkImageAspectFlags DeduceAspect(VkFormat format)
 		{
 #ifdef __clang__
@@ -134,7 +132,6 @@ namespace aether
 		}
 		m_shutdown = true;
 
-		// Drain pending destruction first, then warn-and-tear-down any slots still holding entries.
 		DrainAll();
 
 		for (auto& slot: m_textures)
@@ -421,7 +418,7 @@ namespace aether
 			return {};
 		}
 
-		const auto entry = Resolve(handle);
+		const auto* const entry = Resolve(handle);
 		if (!entry)
 		{
 			return {};
@@ -441,7 +438,7 @@ namespace aether
 			return;
 		}
 
-		const auto entry = Resolve(handle);
+		const auto* const entry = Resolve(handle);
 		if (!entry || entry->allocation == VK_NULL_HANDLE)
 		{
 			return;
@@ -457,7 +454,7 @@ namespace aether
 			return;
 		}
 
-		const auto entry = Resolve(handle);
+		const auto* const entry = Resolve(handle);
 		if (!entry || entry->allocation == VK_NULL_HANDLE)
 		{
 			return;
@@ -680,7 +677,6 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Vulkan(0, "EnsureBindlessSampled: no image backing handle"));
 		}
 
-		// Use existing view or create one
 		const bool makeView = (entry->view == VK_NULL_HANDLE);
 		VkImageView view = entry->view;
 
@@ -843,7 +839,6 @@ namespace aether
 			m_textures.push_back(TextureSlot{});
 			return i;
 		}
-		// Exhausted - caller will see an invalid handle and AE_ASSERT.
 		AE_ASSERT(false, "ResourceRegistry: out of TextureSlot indices (16-bit index space exhausted).");
 		return kIndexInvalid;
 	}
@@ -984,15 +979,9 @@ namespace aether
 		{
 			return;
 		}
-		// The handle is invalidated for CPU resolve immediately (slot is
-		// reset and the generation is bumped below). The actual GPU/VkImage
-		// destruction is deferred to kMaxFramesInFlight frames from now via
-		// the queued destroyer; the WaitIdle at the matching frame boundary
-		// guarantees the GPU is no longer reading from this texture.
 		const TextureEntry entry = *slot.entry;
 		--m_liveTextureCount;
 		slot.entry.reset();
-		// Bump generation on reuse so subsequent handles to this slot fail IsValid().
 		slot.generation = (slot.generation + 1u) % kGenerationWrap;
 		if (slot.generation == kGenerationInvalid)
 		{
@@ -1205,12 +1194,6 @@ namespace aether
 	void ResourceRegistry::AdvanceFrame()
 	{
 		AE_PROFILE_ZONE();
-		// The "next" frame becomes the current. The ring slot we are about
-		// to retire (m_currentFrame after the increment) holds destroyers
-		// queued kMaxFramesInFlight frames ago, when the GPU was given the
-		// corresponding submission. By the time we reach it, the engine
-		// has called vkDeviceWaitIdle (or the fence/semaphore for that
-		// frame has signalled), so destruction is safe.
 		const std::uint32_t nextFrame = (m_currentFrame + 1u) % kMaxFramesInFlight;
 		RunDestroyersInRing(m_pendingDestructions[nextFrame]);
 		m_currentFrame = nextFrame;
@@ -1218,9 +1201,6 @@ namespace aether
 
 	void ResourceRegistry::DrainAll()
 	{
-		// After Shutdown we are guaranteed the GPU is idle (GpuDevice::
-		// Shutdown calls m_gfx->Shutdown() which itself calls
-		// vkDeviceWaitIdle), so running *all* queued destroyers is safe.
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			RunDestroyersInRing(m_pendingDestructions[i]);
@@ -1229,7 +1209,6 @@ namespace aether
 
 	void ResourceRegistry::RunDestroyersInRing(std::vector<PendingDestruction>& ring)
 	{
-		// Move out first so a destructor that chains Destroy() into the registry does not invalidate iteration.
 		std::vector<PendingDestruction> local;
 		local.swap(ring);
 		for (auto& d: local)
@@ -1306,7 +1285,6 @@ namespace aether
 
 } // namespace aether
 
-// === gpu::ResourceRegistry facade forwarding ===
 namespace
 {
 	::aether::ResourceRegistry* s_reg = nullptr;
@@ -1393,7 +1371,7 @@ namespace aether::gpu
 
 	PipelineHandle ResourceRegistry::CreateGraphicsPipeline(Device device, const GraphicsPipelineDesc& desc) noexcept
 	{
-		GraphicsPipeline::Desc vkDesc{
+		const GraphicsPipeline::Desc vkDesc{
 		        .shaderVfsPath = desc.shaderVfsPath,
 		        .fragmentVfsPath = desc.fragmentVfsPath != nullptr ? std::string_view(desc.fragmentVfsPath) : std::string_view{},
 		        .vertexEntry = desc.vertexEntry,

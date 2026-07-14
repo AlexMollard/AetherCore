@@ -26,9 +26,6 @@ namespace aether::io
 {
 	namespace
 	{
-		// Converts a VFS glob pattern (*, ?, **) to a std::regex string.
-		// Mirrors the implementation in DirectoryBackend.cpp so the two backends
-		// behave identically when callers use Glob().
 		std::string GlobToRegex(std::string_view pattern)
 		{
 			std::string regex;
@@ -100,7 +97,6 @@ namespace aether::io
 			throw FileSystemError("Unsupported pak version (" + std::to_string(header.version) + ", expected " + std::to_string(PAK_VERSION) + ") in: " + m_pakPath.string());
 		}
 
-		// Validate the index against the real file size before trusting any offset.
 		std::error_code sizeEc;
 		const std::uintmax_t fileSize = std::filesystem::file_size(m_pakPath, sizeEc);
 		if (sizeEc)
@@ -108,26 +104,22 @@ namespace aether::io
 			throw FileSystemError("Cannot stat pak file: " + m_pakPath.string());
 		}
 
-		constexpr uint32_t kMaxEntries = 8u * 1024u * 1024u; // 8M entries sanity cap
+		constexpr uint32_t kMaxEntries = 8u * 1024u * 1024u;
 		if (header.numEntries > kMaxEntries)
 		{
 			throw FileSystemError("Corrupt pak index (entry count out of range) in: " + m_pakPath.string());
 		}
 		const uint64_t entryTableSize = static_cast<uint64_t>(header.numEntries) * sizeof(PakEntry);
 		const uint64_t indexEnd = sizeof(PakHeader) + entryTableSize;
-		// Overflow-safe, ORDER-DEPENDENT: each term relies on the earlier terms
-		// being false so every subtraction stays non-wrapping.
 		if (indexEnd > fileSize || header.pathDataOffset != indexEnd || header.pathDataSize > fileSize - header.pathDataOffset || header.assetDataOffset != header.pathDataOffset + header.pathDataSize || header.assetDataOffset > fileSize
 		        || header.assetDataSize > fileSize - header.assetDataOffset)
 		{
 			throw FileSystemError("Corrupt pak index (offsets out of range) in: " + m_pakPath.string());
 		}
 
-		// Read entry table.
 		std::vector<PakEntry> entries(header.numEntries);
 		pak.read(reinterpret_cast<char*>(entries.data()), static_cast<std::streamsize>(entryTableSize));
 
-		// Read path-data section.
 		std::vector<char> pathData(static_cast<std::size_t>(header.pathDataSize));
 		pak.seekg(static_cast<std::streamoff>(header.pathDataOffset));
 		pak.read(pathData.data(), static_cast<std::streamsize>(header.pathDataSize));
@@ -137,7 +129,6 @@ namespace aether::io
 			throw FileSystemError("Failed to read pak index from: " + m_pakPath.string());
 		}
 
-		// Verify the index hash covers the entry table + path blob unmodified.
 		{
 			XXH3_state_t* xstate = XXH3_createState();
 			XXH3_64bits_reset(xstate);
@@ -156,7 +147,6 @@ namespace aether::io
 
 		for (const auto& e: entries)
 		{
-			// Subtraction form (guarded by the size fields validated above) avoids uint64 overflow.
 			if (static_cast<uint64_t>(e.pathOffset) + e.pathLen > header.pathDataSize || e.dataOffset > header.assetDataSize || e.dataSize > header.assetDataSize - e.dataOffset)
 			{
 				throw FileSystemError("Corrupt pak entry (range out of bounds) in: " + m_pakPath.string());
@@ -174,8 +164,6 @@ namespace aether::io
 
 		const std::string manifestText(reinterpret_cast<const char*>(manifest->data()), manifest->size());
 
-		// Parse the declared "pipelineVersion=N" so callers can report a mismatch
-		// (not just reject the pak). Kept even when enforcing, so DeclaredPipelineVersion() is populated.
 		if (const auto pos = manifestText.find("pipelineVersion="); pos != std::string::npos)
 		{
 			std::size_t cursor = pos + std::string_view("pipelineVersion=").size();
@@ -206,7 +194,6 @@ namespace aether::io
 			return true;
 		}
 
-		// Also return true if the path is a virtual folder prefix.
 		const std::string prefix = std::string(relativePath) + '/';
 		for (const auto& [key, _]: m_index)
 		{
@@ -267,7 +254,7 @@ namespace aether::io
 			AE_UNEXPECTED(AetherError::FileSystem("read error for asset: " + std::string(relativePath)));
 		}
 
-		if (!(info.flags & PAK_FLAG_ZSTD))
+		if ((info.flags & PAK_FLAG_ZSTD) == 0u)
 		{
 			const uint64_t actual = XXH3_64bits(onDisk.data(), onDisk.size());
 			if (actual != info.hash)
@@ -277,7 +264,6 @@ namespace aether::io
 			return onDisk;
 		}
 
-		// Decompress: ask the zstd frame header for the original content size.
 		const unsigned long long decompSize = ZSTD_getFrameContentSize(onDisk.data(), onDisk.size());
 		if (decompSize == ZSTD_CONTENTSIZE_ERROR || decompSize == ZSTD_CONTENTSIZE_UNKNOWN)
 		{
@@ -287,7 +273,7 @@ namespace aether::io
 		std::vector<std::byte> result(static_cast<std::size_t>(decompSize));
 		const std::size_t written = ZSTD_decompress(result.data(), result.size(), onDisk.data(), onDisk.size());
 
-		if (ZSTD_isError(written))
+		if (ZSTD_isError(written) != 0u)
 		{
 			AE_UNEXPECTED(AetherError::FileSystem(std::string("zstd decompress failed for '") + std::string(relativePath) + "': " + ZSTD_getErrorName(written)));
 		}
@@ -328,14 +314,12 @@ namespace aether::io
 
 	PakBackend::Index::const_iterator PakBackend::FindInsensitive(std::string_view path, std::string* bestMatch) const
 	{
-		// Exact match (O(1) fast path).
 		auto it = m_index.find(std::string(path));
 		if (it != m_index.end())
 		{
 			return it;
 		}
 
-		// Case-insensitive scan (O(n) on miss).
 		for (auto ci = m_index.begin(); ci != m_index.end(); ++ci)
 		{
 			if (utils::IEq(ci->first, path))
@@ -348,7 +332,6 @@ namespace aether::io
 			}
 		}
 
-		// Fuzzy (Levenshtein) -- only on explicit request.
 		if (bestMatch)
 		{
 			*bestMatch = {};

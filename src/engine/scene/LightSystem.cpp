@@ -63,7 +63,6 @@ namespace aether
 		{
 			const auto& tc = reg.get<TransformComponent>(e);
 			const auto& l = reg.get<SpotLightComponent>(e);
-			// Local -Z in world space; normalize strips the transform's scale.
 			const glm::vec3 forward = -glm::normalize(glm::vec3(tc.localToWorld[2]));
 			m_renderer.AddSpotLight(Renderer::SpotLight{
 			        .position = glm::vec3(tc.localToWorld[3]),

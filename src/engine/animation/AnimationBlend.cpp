@@ -62,7 +62,7 @@ namespace aether
 				break;
 			}
 
-			AnimationBlendComponent* blendComp = reg.try_get<AnimationBlendComponent>(entity);
+			const AnimationBlendComponent* blendComp = reg.try_get<AnimationBlendComponent>(entity);
 			if (blendComp == nullptr || !blendComp->inTransition)
 			{
 				++jobIdx;

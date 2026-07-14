@@ -13,8 +13,6 @@ TEST_CASE("LayoutPresetStore serialize/deserialize round-trips the ini verbatim"
     LayoutPreset p;
     p.name = "My Layout";
     p.visibility = {{"Scene", true}, {"Console", false}, {"Day / Night", true}};
-    // Deliberately full of the characters that would break a naive key=value store:
-    // '[' ']' section headers, '=' pairs, blank lines and newlines.
     p.imguiIni =
         "[Window][Debug]\nPos=60,60\nSize=400,300\n\n"
         "[Docking][Data]\nDockNode ID=0x01 Pos=0,0 Size=1280,720 Split=X\n";
@@ -28,7 +26,7 @@ TEST_CASE("LayoutPresetStore serialize/deserialize round-trips the ini verbatim"
     CHECK(back->visibility[0] == std::pair<std::string, bool>{"Scene", true});
     CHECK(back->visibility[1] == std::pair<std::string, bool>{"Console", false});
     CHECK(back->visibility[2] == std::pair<std::string, bool>{"Day / Night", true});
-    CHECK(back->imguiIni == p.imguiIni); // exact: brackets, '=' and newlines preserved
+    CHECK(back->imguiIni == p.imguiIni);
 }
 
 TEST_CASE("LayoutPresetStore deserialize rejects text with no [imgui] marker") {
@@ -44,8 +42,8 @@ TEST_CASE("LayoutPresetStore deserialize accepts an empty ini tail") {
 }
 
 TEST_CASE("LayoutPresetStore SlugFor produces a filesystem-safe stem") {
-    CHECK(LayoutPresetStore::SlugFor("Day / Night") == "Day__Night"); // spaces->_, '/' dropped
-    CHECK(LayoutPresetStore::SlugFor("Alpha_1-2") == "Alpha_1-2");    // safe chars kept
+    CHECK(LayoutPresetStore::SlugFor("Day / Night") == "Day__Night");
+    CHECK(LayoutPresetStore::SlugFor("Alpha_1-2") == "Alpha_1-2");
     CHECK(LayoutPresetStore::SlugFor("***") == "layout");             // never empty
 }
 
@@ -69,7 +67,7 @@ TEST_CASE("LayoutPresetStore Save/LoadAll/Remove on disk") {
 
     auto all = LayoutPresetStore::LoadAll(dir);
     REQUIRE(all.size() == 2);
-    CHECK(all[0].name == "Alpha"); // sorted by name
+    CHECK(all[0].name == "Alpha");
     CHECK(all[1].name == "Beta");
     CHECK(all[0].imguiIni == a.imguiIni);
 

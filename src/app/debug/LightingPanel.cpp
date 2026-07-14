@@ -99,7 +99,7 @@ namespace aether::editor
 
 			for (const Renderer::SpotLight& light: renderer.GetSpotLights())
 			{
-				glm::vec3 dir = glm::length(light.direction) > 0.0001f ? glm::normalize(light.direction) : glm::vec3{0.0f, -1.0f, 0.0f};
+				const glm::vec3 dir = glm::length(light.direction) > 0.0001f ? glm::normalize(light.direction) : glm::vec3{0.0f, -1.0f, 0.0f};
 				const float radius = std::max(light.radius * options.scale, 0.05f);
 				const glm::vec4 color = LightDebugColor(light.color, light.intensity, light.castsShadow);
 				const glm::vec3 coneCenter = light.position + dir * radius;
@@ -146,11 +146,9 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
-		// The light-gizmo toggle lives on this panel's checkbox; the editor keeps
-		// only scene-manipulation keybinds.
 		if (m_lightGizmos && aether::IsDebugRenderingEnabled())
 		{
-			if (auto engine = context.TryGet<aether::AetherCore>())
+			if (auto* engine = context.TryGet<aether::AetherCore>())
 			{
 				AddLightGizmos(engine->GetPendingDebugVertices(),
 				        context.Get<Renderer>(),
@@ -173,7 +171,7 @@ namespace aether::editor
 		ImGui::Begin("Lighting", VisiblePtr());
 		chrome::PanelHeader("LIGHTING");
 		{
-			Renderer& renderer = context.Get<Renderer>();
+			const Renderer& renderer = context.Get<Renderer>();
 			ImGui::Text("Point lights: %zu", renderer.GetPointLights().size());
 			ImGui::Text("Spot lights: %zu", renderer.GetSpotLights().size());
 			ImGui::Text("Sun intensity: %.2f", renderer.GetDirectionalLightIntensity());

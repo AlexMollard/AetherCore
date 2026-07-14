@@ -12,15 +12,11 @@
 
 namespace aether
 {
-	// Persistently-mapped SSBO of per-entity EffectParams. Second instance of the
-	// MaterialBuffer pattern (spec §4.E), but NOT content-addressed: AllocateSlot
 	// hands out a unique slot per effect entity so two same-effect entities never
-	// share params. FreeSlot defers reuse via DeferredSlotFreeList for GPU-in-flight
-	// safety, identical to MaterialBuffer.
 	class EffectParamBuffer
 	{
 	public:
-		static constexpr std::uint32_t kMaxEffects = 4096; // effect entities are few; matches MaterialBuffer capacity
+		static constexpr std::uint32_t kMaxEffects = 4096;
 		static constexpr std::uint32_t kInvalidSlot = 0xFFFFFFFFu;
 
 		EffectParamBuffer() = default;

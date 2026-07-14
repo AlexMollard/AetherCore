@@ -23,9 +23,6 @@ namespace aether::assetpipeline
 	{
 		namespace
 		{
-			// -------------------------------------------------------------------------
-			// Index helpers
-			// -------------------------------------------------------------------------
 
 			int32_t ToIndex(const cgltf_node* value, const cgltf_data& data)
 			{
@@ -50,13 +47,10 @@ namespace aether::assetpipeline
 				return s ? s : "";
 			}
 
-			// Strip common mixamo/rig prefixes from a bone name so that
-			// skeletons and animations from different exports use consistent
-			// bare names (e.g. "mixamorig:Hips" and "mixamorig_Hips" both → "Hips").
 			std::string StripBonePrefix(const std::string& name)
 			{
 				static constexpr const char* kPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
-				for (const auto prefix: kPrefixes)
+				for (const auto* const prefix: kPrefixes)
 				{
 					const std::size_t plen = std::strlen(prefix);
 					if (name.size() > plen && name.compare(0, plen, prefix) == 0)
@@ -66,10 +60,6 @@ namespace aether::assetpipeline
 				}
 				return name;
 			}
-
-			// -------------------------------------------------------------------------
-			// Attribute lookup
-			// -------------------------------------------------------------------------
 
 			const cgltf_accessor* FindAttr(const cgltf_primitive& prim, cgltf_attribute_type type, int idx = 0)
 			{
@@ -83,10 +73,6 @@ namespace aether::assetpipeline
 				}
 				return nullptr;
 			}
-
-			// -------------------------------------------------------------------------
-			// Skin resolution
-			// -------------------------------------------------------------------------
 
 			const cgltf_skin* FindSkinForPrimitive(const cgltf_node& node, const cgltf_primitive& prim, const cgltf_data& data)
 			{
@@ -132,10 +118,6 @@ namespace aether::assetpipeline
 				return nullptr;
 			}
 
-			// -------------------------------------------------------------------------
-			// Normal generation (angle-weighted)
-			// -------------------------------------------------------------------------
-
 			void GenerateNormals(std::vector<DiskMeshVertex>& verts, const std::vector<uint32_t>& idx)
 			{
 				for (auto& v: verts)
@@ -151,29 +133,29 @@ namespace aether::assetpipeline
 						continue;
 					}
 
-					Vec3 a{verts[ia].position[0], verts[ia].position[1], verts[ia].position[2]};
-					Vec3 b{verts[ib].position[0], verts[ib].position[1], verts[ib].position[2]};
-					Vec3 c{verts[ic].position[0], verts[ic].position[1], verts[ic].position[2]};
+					const Vec3 a{verts[ia].position[0], verts[ia].position[1], verts[ia].position[2]};
+					const Vec3 b{verts[ib].position[0], verts[ib].position[1], verts[ib].position[2]};
+					const Vec3 c{verts[ic].position[0], verts[ic].position[1], verts[ic].position[2]};
 
 					Vec3 edge1 = b - a;
 					Vec3 edge2 = c - a;
-					Vec3 n = glm::cross(edge1, edge2);
+					const Vec3 n = glm::cross(edge1, edge2);
 
-					float eLen = glm::length(edge1);
-					float fLen = glm::length(edge2);
-					float angleA = (eLen > 1e-8f && fLen > 1e-8f) ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (eLen * fLen), -1.f, 1.f)) : 1.f;
+					const float eLen = glm::length(edge1);
+					const float fLen = glm::length(edge2);
+					const float angleA = (eLen > 1e-8f && fLen > 1e-8f) ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (eLen * fLen), -1.f, 1.f)) : 1.f;
 
 					edge1 = a - b;
 					edge2 = c - b;
-					float gLen = glm::length(edge1);
-					float hLen = glm::length(edge2);
-					float angleB = (gLen > 1e-8f && hLen > 1e-8f) ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (gLen * hLen), -1.f, 1.f)) : 1.f;
+					const float gLen = glm::length(edge1);
+					const float hLen = glm::length(edge2);
+					const float angleB = (gLen > 1e-8f && hLen > 1e-8f) ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (gLen * hLen), -1.f, 1.f)) : 1.f;
 
 					edge1 = a - c;
 					edge2 = b - c;
-					float iLen = glm::length(edge1);
-					float jLen = glm::length(edge2);
-					float angleC = (iLen > 1e-8f && jLen > 1e-8f) ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (iLen * jLen), -1.f, 1.f)) : 1.f;
+					const float iLen = glm::length(edge1);
+					const float jLen = glm::length(edge2);
+					const float angleC = (iLen > 1e-8f && jLen > 1e-8f) ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (iLen * jLen), -1.f, 1.f)) : 1.f;
 
 					verts[ia].normal[0] += n.x * angleA;
 					verts[ia].normal[1] += n.y * angleA;
@@ -196,22 +178,16 @@ namespace aether::assetpipeline
 				}
 			}
 
-			// -------------------------------------------------------------------------
 			// Color packing: float[4] -> RGBA8 uint32
-			// -------------------------------------------------------------------------
 
 			uint32_t PackColorRGBA8(const float rgba[4])
 			{
-				uint32_t r = static_cast<uint32_t>(std::clamp(rgba[0], 0.f, 1.f) * 255.f);
-				uint32_t g = static_cast<uint32_t>(std::clamp(rgba[1], 0.f, 1.f) * 255.f);
-				uint32_t b = static_cast<uint32_t>(std::clamp(rgba[2], 0.f, 1.f) * 255.f);
-				uint32_t a = static_cast<uint32_t>(std::clamp(rgba[3], 0.f, 1.f) * 255.f);
+				const uint32_t r = static_cast<uint32_t>(std::clamp(rgba[0], 0.f, 1.f) * 255.f);
+				const uint32_t g = static_cast<uint32_t>(std::clamp(rgba[1], 0.f, 1.f) * 255.f);
+				const uint32_t b = static_cast<uint32_t>(std::clamp(rgba[2], 0.f, 1.f) * 255.f);
+				const uint32_t a = static_cast<uint32_t>(std::clamp(rgba[3], 0.f, 1.f) * 255.f);
 				return (r << 0) | (g << 8) | (b << 16) | (a << 24);
 			}
-
-			// -------------------------------------------------------------------------
-			// 4x4 column-major matrix helpers
-			// -------------------------------------------------------------------------
 
 			void Mat4MulVec3(const float m[16], Vec3 in, Vec3& out)
 			{
@@ -241,10 +217,6 @@ namespace aether::assetpipeline
 				out.z = (C * in.x + F * in.y + I * in.z) * invDet;
 			}
 
-			// -------------------------------------------------------------------------
-			// Bounding volume computation
-			// -------------------------------------------------------------------------
-
 			struct Bounds
 			{
 				float aabbMin[3] = {0, 0, 0};
@@ -261,7 +233,7 @@ namespace aether::assetpipeline
 					return bounds;
 				}
 
-				Vec3 p0{verts[0].position[0], verts[0].position[1], verts[0].position[2]};
+				const Vec3 p0{verts[0].position[0], verts[0].position[1], verts[0].position[2]};
 				bounds.aabbMin[0] = bounds.aabbMax[0] = p0.x;
 				bounds.aabbMin[1] = bounds.aabbMax[1] = p0.y;
 				bounds.aabbMin[2] = bounds.aabbMax[2] = p0.z;
@@ -292,15 +264,11 @@ namespace aether::assetpipeline
 				return bounds;
 			}
 
-			// -------------------------------------------------------------------------
-			// Bone sorting and remap
-			// -------------------------------------------------------------------------
-
 			struct BoneInfo
 			{
 				std::string name;
 				int32_t originalIndex;
-				int32_t parentIndex; // original
+				int32_t parentIndex;
 				std::array<float, 16> ibm;
 			};
 
@@ -311,21 +279,14 @@ namespace aether::assetpipeline
 
 				for (const auto& bone: sortedBones)
 				{
-					// name bytes (no null terminator)
 					XXH3_64bits_update(&state, bone.name.data(), bone.name.size());
-					// remapped parent index
 					const int32_t remappedParent = (bone.parentIndex >= 0) ? static_cast<int32_t>(remapTable[static_cast<std::size_t>(bone.parentIndex)]) : -1;
 					XXH3_64bits_update(&state, &remappedParent, sizeof(remappedParent));
-					// ibm[16] column-major
 					XXH3_64bits_update(&state, bone.ibm.data(), sizeof(float) * 16);
 				}
 
 				return XXH3_64bits_digest(&state);
 			}
-
-			// -------------------------------------------------------------------------
-			// Collect bones from all skins
-			// -------------------------------------------------------------------------
 
 			std::vector<BoneInfo> CollectBones(const cgltf_data& data)
 			{
@@ -349,7 +310,6 @@ namespace aether::assetpipeline
 						info.originalIndex = nodeIdx;
 						info.parentIndex = (data.nodes[static_cast<std::size_t>(nodeIdx)].parent) ? ToIndex(data.nodes[static_cast<std::size_t>(nodeIdx)].parent, data) : -1;
 
-						// Read inverse bind matrix
 						if (skin.inverse_bind_matrices && ji < skin.inverse_bind_matrices->count)
 						{
 							cgltf_accessor_read_float(skin.inverse_bind_matrices, ji, info.ibm.data(), 16);
@@ -366,10 +326,6 @@ namespace aether::assetpipeline
 				return bones;
 			}
 
-			// -------------------------------------------------------------------------
-			// Material name extraction
-			// -------------------------------------------------------------------------
-
 			std::string GetMaterialName(const cgltf_data& data, int32_t materialIndex)
 			{
 				if (materialIndex < 0 || static_cast<std::size_t>(materialIndex) >= data.materials_count)
@@ -379,10 +335,6 @@ namespace aether::assetpipeline
 				const std::string name = SafeStr(data.materials[static_cast<std::size_t>(materialIndex)].name);
 				return name.empty() ? "material_" + std::to_string(materialIndex) : name;
 			}
-
-			// -------------------------------------------------------------------------
-			// Skeleton processing
-			// -------------------------------------------------------------------------
 
 			struct SkeletonResult
 			{
@@ -405,10 +357,8 @@ namespace aether::assetpipeline
 
 				out.bones = std::move(bones);
 
-				// Build remap table
 				out.remapTable.assign(data->nodes_count, static_cast<uint32_t>(-1));
 
-				// Sort bones by name for deterministic hash
 				std::stable_sort(out.bones.begin(), out.bones.end(), [](const BoneInfo& a, const BoneInfo& b) { return a.name < b.name; });
 
 				for (std::size_t i = 0; i < out.bones.size(); ++i)
@@ -419,7 +369,6 @@ namespace aether::assetpipeline
 				out.skelHash = ComputeSkeletonHash(out.bones, out.remapTable);
 				out.skelHashStr = std::to_string(out.skelHash);
 
-				// Write .skel file
 				const std::string skelName = Stem(sourcePath);
 				SkelHeaderDisk hdr;
 				hdr.boneCount = static_cast<uint32_t>(out.bones.size());
@@ -444,10 +393,6 @@ namespace aether::assetpipeline
 				out.valid = true;
 				return out;
 			}
-
-			// -------------------------------------------------------------------------
-			// Material path collection
-			// -------------------------------------------------------------------------
 
 			std::vector<std::string> CollectMaterialPaths(cgltf_data* data, const std::filesystem::path& sourceDir)
 			{
@@ -478,10 +423,6 @@ namespace aether::assetpipeline
 				return paths;
 			}
 
-			// -------------------------------------------------------------------------
-			// Auto-generate binary .material data from glTF material data
-			// -------------------------------------------------------------------------
-
 			struct GltfMatResult
 			{
 				std::string vfsPath;
@@ -492,12 +433,11 @@ namespace aether::assetpipeline
 			{
 				const std::string matName = GetMaterialName(data, static_cast<int32_t>(&mat - data.materials));
 
-				// Material VFS path: <gltf-dir>/materials/<name>.material
 				const fs::path gltfRel = fs::path(gltfVfsPath).parent_path();
 				const std::string matVfsPath = (gltfRel / "materials" / (matName + ".material")).generic_string();
 
 				MaterialHeaderDisk hdr;
-				if (mat.has_pbr_metallic_roughness)
+				if (mat.has_pbr_metallic_roughness != 0)
 				{
 					std::memcpy(hdr.baseColorFactor, mat.pbr_metallic_roughness.base_color_factor, sizeof(hdr.baseColorFactor));
 					hdr.metallicFactor = mat.pbr_metallic_roughness.metallic_factor;
@@ -505,7 +445,7 @@ namespace aether::assetpipeline
 				}
 				std::memcpy(hdr.emissiveFactor, mat.emissive_factor, sizeof(hdr.emissiveFactor));
 				hdr.alphaCutoff = mat.alpha_cutoff;
-				hdr.doubleSided = mat.double_sided ? 1 : 0;
+				hdr.doubleSided = (mat.double_sided != 0) ? 1 : 0;
 				hdr.alphaBlend = (mat.alpha_mode == cgltf_alpha_mode_blend) ? 1 : 0;
 				hdr.alphaMask = (mat.alpha_mode == cgltf_alpha_mode_mask) ? 1 : 0;
 
@@ -516,7 +456,7 @@ namespace aether::assetpipeline
 				};
 
 				std::vector<TexSlot> slots;
-				if (mat.has_pbr_metallic_roughness)
+				if (mat.has_pbr_metallic_roughness != 0)
 				{
 					if (mat.pbr_metallic_roughness.base_color_texture.texture)
 					{
@@ -540,27 +480,24 @@ namespace aether::assetpipeline
 					slots.push_back({TextureTypeDisk::Emissive, mat.emissive_texture});
 				}
 
-				// Resolve image URI to mount-relative VFS path
 				auto imageVfsPath = [&](const cgltf_image* img) -> std::string
 				{
 					if (!img || !img->uri)
 					{
 						return {};
 					}
-					// Image URI is relative to the glTF file
-					fs::path imgPath = fs::path(gltfVfsPath).parent_path() / img->uri;
+					const fs::path imgPath = fs::path(gltfVfsPath).parent_path() / img->uri;
 					return imgPath.lexically_normal().generic_string();
 				};
 
 				std::vector<std::byte> matData;
 				auto append = [&](const void* p, std::size_t n)
 				{
-					const auto bytes = reinterpret_cast<const std::byte*>(p);
+					const auto* const bytes = reinterpret_cast<const std::byte*>(p);
 					matData.insert(matData.end(), bytes, bytes + n);
 				};
 
 				hdr.texturePathCount = 0;
-				// First pass: count valid textures
 				for (const auto& slot: slots)
 				{
 					if (slot.view.texture && slot.view.texture->image && slot.view.texture->image->uri)
@@ -571,7 +508,6 @@ namespace aether::assetpipeline
 
 				append(&hdr, sizeof(hdr));
 
-				// Second pass: write textures
 				for (const auto& slot: slots)
 				{
 					if (!slot.view.texture || !slot.view.texture->image || !slot.view.texture->image->uri)
@@ -593,15 +529,11 @@ namespace aether::assetpipeline
 				return {matVfsPath, std::move(matData)};
 			}
 
-			// -------------------------------------------------------------------------
-			// Mesh primitive extraction
-			// -------------------------------------------------------------------------
-
 			struct SubMeshInfo
 			{
 				uint32_t firstIndex;
 				uint32_t indexCount;
-				int32_t materialIndex; // glTF material index, -1 = none
+				int32_t materialIndex;
 			};
 
 			struct MeshExtractResult
@@ -700,7 +632,7 @@ namespace aether::assetpipeline
 								cgltf_accessor_read_float(normAcc, v, dst.normal, 3);
 								if (!isSkinned)
 								{
-									Vec3 normIn{dst.normal[0], dst.normal[1], dst.normal[2]};
+									const Vec3 normIn{dst.normal[0], dst.normal[1], dst.normal[2]};
 									Vec3 normOut;
 									Mat3InverseTransposeMulVec3(worldMat, normIn, normOut);
 									dst.normal[0] = normOut.x;
@@ -783,7 +715,7 @@ namespace aether::assetpipeline
 							{
 								cgltf_accessor_read_float(weightsAcc, v, dst.jointWeights, 4);
 
-								float wsum = dst.jointWeights[0] + dst.jointWeights[1] + dst.jointWeights[2] + dst.jointWeights[3];
+								const float wsum = dst.jointWeights[0] + dst.jointWeights[1] + dst.jointWeights[2] + dst.jointWeights[3];
 								if (wsum > 1e-6f)
 								{
 									const float inv = 1.f / wsum;
@@ -797,7 +729,6 @@ namespace aether::assetpipeline
 
 						WarnEightInfluences(prim, SafeStr(node.name) + " primitive " + std::to_string(pi));
 
-						// Build index buffer
 						std::vector<uint32_t> indices;
 						if (prim.indices)
 						{
@@ -833,10 +764,9 @@ namespace aether::assetpipeline
 					}
 				}
 
-				// Compute bounds
 				if (!out.verts.empty())
 				{
-					Vec3 p0{out.verts[0].position[0], out.verts[0].position[1], out.verts[0].position[2]};
+					const Vec3 p0{out.verts[0].position[0], out.verts[0].position[1], out.verts[0].position[2]};
 					out.bounds.aabbMin[0] = out.bounds.aabbMax[0] = p0.x;
 					out.bounds.aabbMin[1] = out.bounds.aabbMax[1] = p0.y;
 					out.bounds.aabbMin[2] = out.bounds.aabbMax[2] = p0.z;
@@ -851,53 +781,52 @@ namespace aether::assetpipeline
 						out.bounds.aabbMax[2] = std::max(out.bounds.aabbMax[2], v.position[2]);
 					}
 
-					// Ritter's bounding sphere
 					{
 						const auto& verts = out.verts;
 						const std::size_t n = verts.size();
 						if (n > 0)
 						{
-							Vec3 P{verts[0].position[0], verts[0].position[1], verts[0].position[2]};
+							const Vec3 P{verts[0].position[0], verts[0].position[1], verts[0].position[2]};
 							std::size_t Q = 0;
 							float maxDistSq = 0.f;
 							for (std::size_t r = 1; r < n; ++r)
 							{
-								Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
-								float d = glm::dot(vr - P, vr - P);
+								const Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
+								const float d = glm::dot(vr - P, vr - P);
 								if (d > maxDistSq)
 								{
 									maxDistSq = d;
 									Q = r;
 								}
 							}
-							Vec3 Qp{verts[Q].position[0], verts[Q].position[1], verts[Q].position[2]};
+							const Vec3 Qp{verts[Q].position[0], verts[Q].position[1], verts[Q].position[2]};
 							std::size_t R = 0;
 							maxDistSq = 0.f;
 							for (std::size_t r = 0; r < n; ++r)
 							{
-								Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
-								float d = glm::dot(vr - Qp, vr - Qp);
+								const Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
+								const float d = glm::dot(vr - Qp, vr - Qp);
 								if (d > maxDistSq)
 								{
 									maxDistSq = d;
 									R = r;
 								}
 							}
-							Vec3 Rp{verts[R].position[0], verts[R].position[1], verts[R].position[2]};
+							const Vec3 Rp{verts[R].position[0], verts[R].position[1], verts[R].position[2]};
 							out.bounds.sphereCenter[0] = (Qp.x + Rp.x) * 0.5f;
 							out.bounds.sphereCenter[1] = (Qp.y + Rp.y) * 0.5f;
 							out.bounds.sphereCenter[2] = (Qp.z + Rp.z) * 0.5f;
 							out.bounds.sphereRadius = glm::length(Rp - Vec3{out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2]});
 							for (std::size_t r = 0; r < n; ++r)
 							{
-								Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
-								Vec3 currentCenter{out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2]};
-								float d = glm::length(vr - currentCenter);
+								const Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
+								const Vec3 currentCenter{out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2]};
+								const float d = glm::length(vr - currentCenter);
 								if (d > out.bounds.sphereRadius)
 								{
 									const float half = (d - out.bounds.sphereRadius) * 0.5f;
 									out.bounds.sphereRadius += half;
-									Vec3 dir = (vr - currentCenter) / d;
+									const Vec3 dir = (vr - currentCenter) / d;
 									out.bounds.sphereCenter[0] += half * dir.x;
 									out.bounds.sphereCenter[1] += half * dir.y;
 									out.bounds.sphereCenter[2] += half * dir.z;
@@ -907,7 +836,6 @@ namespace aether::assetpipeline
 					}
 				}
 
-				// Skin ref path
 				const std::string skinRefDir = std::filesystem::path(virtualPath).parent_path().generic_string();
 				const bool hasBones = !remapTable.empty();
 				out.skinRefPath = hasBones ? (skinRefDir.empty() ? (Stem(sourcePath) + ".skel") : (skinRefDir + "/" + Stem(sourcePath) + ".skel")) : "";
@@ -915,14 +843,10 @@ namespace aether::assetpipeline
 				return out;
 			}
 
-			// -------------------------------------------------------------------------
-			// Animation processing
-			// -------------------------------------------------------------------------
-
 			struct AnimResult
 			{
 				std::vector<std::pair<std::string, std::vector<std::byte>>> files;
-				std::vector<std::string> paths; // for .animset
+				std::vector<std::string> paths;
 			};
 
 			AnimResult ProcessAnimations(cgltf_data* data, const std::vector<uint32_t>& remapTable, const std::string& sourcePath, bool nameBased = false)
@@ -933,7 +857,6 @@ namespace aether::assetpipeline
 					return out;
 				}
 
-				// For animation-only glTFs: build virtual remap from animated nodes
 				std::vector<uint32_t> virtualRemap;
 				std::vector<std::string> virtualBoneNames;
 				if (nameBased && remapTable.empty())
@@ -948,7 +871,7 @@ namespace aether::assetpipeline
 							{
 								continue;
 							}
-							int32_t idx = ToIndex(ch.target_node, *data);
+							const int32_t idx = ToIndex(ch.target_node, *data);
 							if (idx >= 0 && std::find(animatedNodes.begin(), animatedNodes.end(), idx) == animatedNodes.end())
 							{
 								animatedNodes.push_back(idx);
@@ -1026,7 +949,7 @@ namespace aether::assetpipeline
 							continue;
 						}
 
-						AnimPathDisk path;
+						AnimPathDisk path{};
 						switch (ch.target_path)
 						{
 							case cgltf_animation_path_type_rotation:
@@ -1043,7 +966,7 @@ namespace aether::assetpipeline
 								break;
 						}
 
-						AnimInterpDisk interp;
+						AnimInterpDisk interp{};
 						switch (ch.sampler->interpolation)
 						{
 							case cgltf_interpolation_type_step:
@@ -1075,7 +998,7 @@ namespace aether::assetpipeline
 							{
 								std::cerr << "  WARNING: empty bone name for remappedNode=" << remappedNode << " in " << fileName << "\n";
 							}
-							uint16_t nameLen = static_cast<uint16_t>(boneName.size());
+							const uint16_t nameLen = static_cast<uint16_t>(boneName.size());
 							Append(animData, nameLen);
 							AppendStringData(animData, boneName);
 						}
@@ -1119,11 +1042,9 @@ namespace aether::assetpipeline
 
 		} // namespace
 
-		// -------------------------------------------------------------------------
-
 		ProcessedResult Process(std::span<const std::byte> gltfData, const std::filesystem::path& sourcePath, const std::string& virtualPath, const std::filesystem::path& sourceDir)
 		{
-			cgltf_options options{};
+			const cgltf_options options{};
 			cgltf_data* data = nullptr;
 
 			if (cgltf_parse(&options, gltfData.data(), gltfData.size(), &data) != cgltf_result_success)
@@ -1149,7 +1070,6 @@ namespace aether::assetpipeline
 
 			ProcessedResult result;
 
-			// ── Skeleton ────────────────────────────────────────────────────────────
 			auto skel = ProcessSkeleton(data, sourcePath.string());
 			if (skel.valid)
 			{
@@ -1157,10 +1077,8 @@ namespace aether::assetpipeline
 				result.skeletonHash = skel.skelHashStr;
 			}
 
-			// ── Material paths ──────────────────────────────────────────────────────
 			auto materialPaths = CollectMaterialPaths(data, sourceDir);
 
-			// Find glTF materials not covered by existing .material files and auto-generate them
 			{
 				std::vector<bool> hasMat(data->materials_count, false);
 				for (const auto& mp: materialPaths)
@@ -1191,7 +1109,6 @@ namespace aether::assetpipeline
 				}
 			}
 
-			// ── Mesh extraction ─────────────────────────────────────────────────────
 			auto mesh = ExtractMeshes(data, skel.remapTable, virtualPath, sourcePath.string());
 
 			if (!mesh.verts.empty())
@@ -1205,7 +1122,6 @@ namespace aether::assetpipeline
 					}
 				}
 
-				// Build glTF material index → materialPaths index mapping
 				std::vector<int> matToPathIdx(data->materials_count, -1);
 				for (cgltf_size mi = 0; mi < data->materials_count; ++mi)
 				{
@@ -1249,7 +1165,6 @@ namespace aether::assetpipeline
 					AppendBytes(result.meshData, idx16.data(), idx16.size() * sizeof(uint16_t));
 				}
 
-				// Write submesh headers (v3+)
 				for (const auto& sm: mesh.subMeshes)
 				{
 					SubMeshHeaderDisk smHdr;
@@ -1273,7 +1188,6 @@ namespace aether::assetpipeline
 				}
 			}
 
-			// ── Animations ──────────────────────────────────────────────────────────
 			const bool nameBased = !skel.valid && data->animations_count > 0;
 			auto anims = ProcessAnimations(data, skel.remapTable, sourcePath.string(), nameBased);
 			if (!anims.files.empty())

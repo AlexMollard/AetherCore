@@ -45,8 +45,6 @@ namespace aether::editor
 {
 	namespace
 	{
-		// Rescan cadence for the cached tree: cheap insurance against external
-		// changes (builds, git, other tools) without a directory watcher.
 		constexpr double kAutoRescanSeconds = 4.0;
 		constexpr int kMaxScanDepth = 24;
 
@@ -86,15 +84,15 @@ namespace aether::editor
 			if (ext == ".toml")
 			{
 				const std::string generic = path.generic_string();
-				if (generic.find(".prefab.toml") != std::string::npos)
+				if (generic.contains(".prefab.toml"))
 				{
 					return dragdrop::FileKind::Prefab;
 				}
-				if (generic.find(".scene.toml") != std::string::npos)
+				if (generic.contains(".scene.toml"))
 				{
 					return dragdrop::FileKind::Scene;
 				}
-				if (generic.find("/materials/") != std::string::npos || generic.find("\\materials\\") != std::string::npos || path.filename() == "properties.toml")
+				if (generic.contains("/materials/") || generic.contains("\\materials\\") || path.filename() == "properties.toml")
 				{
 					return dragdrop::FileKind::Material;
 				}
@@ -140,12 +138,13 @@ namespace aether::editor
 					return dragdrop::FileKind::Prefab;
 				case SceneSelection::AssetKind::Scene:
 					return dragdrop::FileKind::Scene;
+				case SceneSelection::AssetKind::None:
+				case SceneSelection::AssetKind::File:
 				default:
 					return dragdrop::FileKind::Unknown;
 			}
 		}
 
-		// One icon + warm tint per kind, matching the Hierarchy's category chips
 		// (semantic identity in a quiet tint, never generic-editor primaries).
 		const char* KindIcon(dragdrop::FileKind kind, bool isScript)
 		{
@@ -191,6 +190,8 @@ namespace aether::editor
 					return ImVec4(0.78f, 0.62f, 0.92f, 1.0f);
 				case dragdrop::FileKind::Material:
 					return ImVec4(0.92f, 0.62f, 0.55f, 1.0f);
+				case dragdrop::FileKind::Script:
+					return chrome::kAccentHi;
 				case dragdrop::FileKind::Unknown:
 				default:
 					return chrome::kFaint;
@@ -244,8 +245,6 @@ namespace aether::editor
 			return buf;
 		}
 
-		// Directories that only ever hold generated noise (dotnet build output,
-		// VCS / IDE metadata). Hidden from the tree to keep it about the project.
 		bool IsIgnoredDirectory(const std::string& name)
 		{
 			return name == "bin" || name == "obj" || name == ".git" || name == ".vs" || name == ".idea" || name == ".vscode";
@@ -599,8 +598,6 @@ namespace aether::editor
 			std::error_code sizeEc;
 			e.sizeBytes = file.file_size(sizeEc);
 
-			// Assets travel as project:// (the editor VFS mount); scripts stay
-			// absolute so tooling (VS Code) can open them directly.
 			e.payloadPath = ToUtf8Path(e.path);
 			if (e.kind != dragdrop::FileKind::Script && !m_root.empty())
 			{
@@ -616,8 +613,6 @@ namespace aether::editor
 		}
 	}
 
-	// ── File operations ────────────────────────────────────────────────────────
-
 	void FileExplorerPanel::BeginRename(const Entry& entry)
 	{
 		m_renameTarget = entry.path;
@@ -628,7 +623,7 @@ namespace aether::editor
 	bool FileExplorerPanel::ApplyRename(const std::filesystem::path& target, std::string_view newName)
 	{
 		const std::string trimmed = TrimCopy(newName);
-		if (trimmed.empty() || trimmed.find('/') != std::string::npos || trimmed.find('\\') != std::string::npos)
+		if (trimmed.empty() || trimmed.contains('/') || trimmed.contains('\\'))
 		{
 			m_opError = "Enter a plain file name (no path separators).";
 			return false;
@@ -665,7 +660,10 @@ namespace aether::editor
 		for (int i = 1; i <= 32; ++i)
 		{
 			const std::string suffix = (i == 1) ? " Copy" : (" Copy " + std::to_string(i));
-			copyPath = parent / (stem + suffix + ext);
+			std::string copyName = stem;
+			copyName += suffix;
+			copyName += ext;
+			copyPath = parent / copyName;
 			std::error_code existsEc;
 			if (!std::filesystem::exists(copyPath, existsEc))
 			{
@@ -716,8 +714,6 @@ namespace aether::editor
 		return true;
 	}
 
-	// ── Drawing ────────────────────────────────────────────────────────────────
-
 	void FileExplorerPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -743,8 +739,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Mirror an asset selected elsewhere (e.g. the asset.select control
-		// method) so the preview card follows the editor-wide selection.
 		if (auto* selection = context.TryGet<SceneSelection>(); selection != nullptr && selection->HasAsset())
 		{
 			const auto& asset = selection->SelectedAsset();
@@ -761,7 +755,6 @@ namespace aether::editor
 			}
 		}
 
-		// Cached tree: rescan on demand, after file operations, and when stale.
 		if (!m_treeDirty && ImGui::GetTime() - m_lastScanTime > kAutoRescanSeconds)
 		{
 			m_treeDirty = true;
@@ -778,11 +771,9 @@ namespace aether::editor
 			ImGui::TextColored(chrome::C(colors::Error), "%s", !m_opError.empty() ? m_opError.c_str() : m_scanError.c_str());
 		}
 
-		// Row surface: selection + hover speak the shared amber language.
 		ImGui::PushStyleColor(ImGuiCol_Header, chrome::kSelectionBg);
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, chrome::kHoverBg);
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, chrome::WithAlpha(chrome::kAccent, 0.35f));
-		// Leave room for the preview card when a file is selected.
 		const bool showPreview = !m_selectedPath.empty() && !m_selectedIsDirectory;
 		constexpr float kPreviewCardH = 205.0f;
 		ImGui::BeginChild("##feRows", ImVec2(0.0f, showPreview ? -(kPreviewCardH + 6.0f) : 0.0f), ImGuiChildFlags_Borders);
@@ -846,7 +837,6 @@ namespace aether::editor
 			ImGui::TextDisabled("in %s", (!relEc && IsSubpath(rel)) ? rel.generic_string().c_str() : m_projectName.c_str());
 			ImGui::Spacing();
 
-			// C# script.
 			ImGui::SetNextItemWidth(220.0f);
 			const bool scriptEntered = ImGui::InputTextWithHint("##feScript", "Script class name...", m_newScriptNameBuf, sizeof(m_newScriptNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
 			ImGui::SameLine();
@@ -875,12 +865,11 @@ namespace aether::editor
 				ImGui::TextDisabled("Use a C# class name, e.g. PlayerMotor");
 			}
 
-			// Folder.
 			ImGui::SetNextItemWidth(220.0f);
 			const bool folderEntered = ImGui::InputTextWithHint("##feFolder", "Folder name...", m_newFolderNameBuf, sizeof(m_newFolderNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
 			ImGui::SameLine();
 			const std::string folderName = TrimCopy(m_newFolderNameBuf);
-			const bool validFolder = !folderName.empty() && folderName.find('/') == std::string::npos && folderName.find('\\') == std::string::npos;
+			const bool validFolder = !folderName.empty() && !folderName.contains('/') && !folderName.contains('\\');
 			ImGui::BeginDisabled(!validFolder);
 			if (chrome::GhostButton(ICON_FA_FOLDER " Folder") || (folderEntered && validFolder))
 			{
@@ -919,7 +908,6 @@ namespace aether::editor
 		(void) depth;
 		ImGui::PushID(entry.path.generic_string().c_str());
 
-		// Inline rename replaces the whole row.
 		if (m_renameTarget == entry.path)
 		{
 			ImGui::SetNextItemWidth(-1.0f);
@@ -949,8 +937,6 @@ namespace aether::editor
 		}
 		const bool open = ImGui::TreeNodeEx("##dir", flags);
 
-		// Manual label overlay: amber-tinted folder icon, warm name, faint child
-		// count on the right (TreeNodeEx alone cannot tint the icon separately).
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImVec2 rowMin = ImGui::GetItemRectMin();
@@ -1030,7 +1016,6 @@ namespace aether::editor
 		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
 		ImGui::Selectable("##feRow", selected, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_AllowOverlap);
 
-		// Manual overlay: tinted kind icon, name, size micro-stat on the right.
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImVec2 rowMin = ImGui::GetItemRectMin();
@@ -1120,7 +1105,6 @@ namespace aether::editor
 				}
 				++matches;
 				DrawFileRow(context, child);
-				// Faint project-relative parent path under the row (search context).
 				std::error_code relEc;
 				const std::filesystem::path rel = std::filesystem::relative(child.path.parent_path(), m_root, relEc);
 				if (!relEc)
@@ -1147,7 +1131,6 @@ namespace aether::editor
 		if (ImGui::BeginPopupContextItem("##fectx"))
 		{
 			m_selectedPath = ToUtf8Path(entry.path);
-			// Models get a one-click add - the menu equivalent of dragging the file
 			// into the viewport. Handles baking + the multi-primitive/skinned layout.
 			if (entry.kind == dragdrop::FileKind::Model && ImGui::MenuItem(ICON_FA_PLUS "  Add to Scene"))
 			{
@@ -1256,8 +1239,6 @@ namespace aether::editor
 		}
 	}
 
-	// ── Preview card ───────────────────────────────────────────────────────────
-
 	void FileExplorerPanel::ReleasePreview(app::LayerContext& context)
 	{
 		if (m_previewImGuiId != 0)
@@ -1310,9 +1291,6 @@ namespace aether::editor
 		const std::filesystem::path path(m_selectedPath);
 		if (m_selectedKind == dragdrop::FileKind::Texture)
 		{
-			// Make the image resident via the texture registry (VFS-aware, ref
-			// counted), then display its live image view directly - the same path
-			// the Textures panel uses. Fallback-slot results mean the decode failed.
 			auto* assets = context.TryGet<AssetManager>();
 			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
 			if (assets == nullptr || imgui == nullptr)
@@ -1349,8 +1327,6 @@ namespace aether::editor
 
 		if (m_selectedKind == dragdrop::FileKind::Model)
 		{
-			// Turntable 3D thumbnail: bake raw glTF if needed (same as the drop
-			// path), then stage the model in the isolated preview renderer.
 			auto* assets = context.TryGet<AssetManager>();
 			auto* rendering = context.TryGet<aether::RenderingSubsystem>();
 			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
@@ -1403,7 +1379,6 @@ namespace aether::editor
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
 		ImGui::BeginChild("##fePreview", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
 
-		// Mini band: PREVIEW eyebrow + the file kind right-aligned in faint caps.
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImVec2 bp = ImGui::GetCursorScreenPos();
@@ -1422,7 +1397,6 @@ namespace aether::editor
 		const float contentH = ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing();
 		if ((m_previewIsImage || m_previewIsModel) && m_previewImGuiId != 0 && m_previewExtent.width > 0 && m_previewExtent.height > 0)
 		{
-			// Fit into the card, preserving aspect.
 			const float availW = ImGui::GetContentRegionAvail().x;
 			const float scale = std::min(availW / static_cast<float>(m_previewExtent.width), std::max(40.0f, contentH) / static_cast<float>(m_previewExtent.height));
 			const ImVec2 size(static_cast<float>(m_previewExtent.width) * std::min(scale, 1.0f), static_cast<float>(m_previewExtent.height) * std::min(scale, 1.0f));
@@ -1444,7 +1418,6 @@ namespace aether::editor
 			ImGui::TextDisabled(m_previewFailed ? "Preview could not be loaded." : "No preview for this file type.");
 		}
 
-		// Meta line: extent for images, primitive count for models, payload identity.
 		if (m_previewIsModel)
 		{
 			if (auto* rendering = context.TryGet<aether::RenderingSubsystem>())

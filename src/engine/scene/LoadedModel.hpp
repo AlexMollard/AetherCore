@@ -12,9 +12,6 @@ namespace aether
 	struct LoadedModelPrimitive
 	{
 		Mesh mesh;
-		// Authoring data only; a registry handle is acquired per spawned entity.
-		// hasMaterial=false spawns without a MaterialComponent (shader falls back
-		// to vertex colour), matching primitives with no glTF material.
 		MaterialAsset material{};
 		bool hasMaterial = false;
 		glm::mat4 localTransform{1.0f};

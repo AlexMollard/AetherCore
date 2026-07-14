@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <ranges>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -46,8 +47,8 @@ namespace aether::editor
 			ui::UIRect* rect = nullptr;
 			glm::vec4 canvasRect{0.f};
 			glm::vec4 parentRect{0.f};
-			ImVec2 min{};
-			ImVec2 max{};
+			ImVec2 min;
+			ImVec2 max;
 		};
 
 		struct ResizeHit
@@ -413,14 +414,14 @@ namespace aether::editor
 
 			{
 				const float gridStep = 10.f;
-				float startX = std::floor((visualRect.x - threshold) / gridStep) * gridStep;
-				float endX = visualRect.x + visualRect.z + threshold;
+				const float startX = std::floor((visualRect.x - threshold) / gridStep) * gridStep;
+				const float endX = visualRect.x + visualRect.z + threshold;
 				for (float x = startX; x <= endX; x += gridStep)
 				{
 					xCandidates.push_back(x);
 				}
-				float startY = std::floor((visualRect.y - threshold) / gridStep) * gridStep;
-				float endY = visualRect.y + visualRect.w + threshold;
+				const float startY = std::floor((visualRect.y - threshold) / gridStep) * gridStep;
+				const float endY = visualRect.y + visualRect.w + threshold;
 				for (float y = startY; y <= endY; y += gridStep)
 				{
 					yCandidates.push_back(y);
@@ -498,14 +499,14 @@ namespace aether::editor
 
 			{
 				const float gridStep = 10.f;
-				float startX = std::floor((visualRect.x - threshold) / gridStep) * gridStep;
-				float endX = visualRect.x + visualRect.z + threshold;
+				const float startX = std::floor((visualRect.x - threshold) / gridStep) * gridStep;
+				const float endX = visualRect.x + visualRect.z + threshold;
 				for (float x = startX; x <= endX; x += gridStep)
 				{
 					xCandidates.push_back(x);
 				}
-				float startY = std::floor((visualRect.y - threshold) / gridStep) * gridStep;
-				float endY = visualRect.y + visualRect.w + threshold;
+				const float startY = std::floor((visualRect.y - threshold) / gridStep) * gridStep;
+				const float endY = visualRect.y + visualRect.w + threshold;
 				for (float y = startY; y <= endY; y += gridStep)
 				{
 					yCandidates.push_back(y);
@@ -1028,11 +1029,11 @@ namespace aether::editor
 		m_hoveredEntity = {};
 		if (surfaceHovered && m_drag.kind == DragKind::None && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
 		{
-			for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+			for (auto& element: std::views::reverse(elements))
 			{
-				if (Contains(io.MousePos, it->min, it->max))
+				if (Contains(io.MousePos, element.min, element.max))
 				{
-					m_hoveredEntity = it->entity;
+					m_hoveredEntity = element.entity;
 					break;
 				}
 			}
@@ -1202,26 +1203,26 @@ namespace aether::editor
 			}
 			if (newDrag.kind == DragKind::None)
 			{
-				for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+				for (auto& element: std::views::reverse(elements))
 				{
-					if (Contains(mouse, it->min, it->max))
+					if (Contains(mouse, element.min, element.max))
 					{
 						if (selection != nullptr)
 						{
-							if (!selection->Contains(it->entity))
+							if (!selection->Contains(element.entity))
 							{
 								if (io.KeyShift)
 								{
-									selection->AddToSelection(it->entity);
+									selection->AddToSelection(element.entity);
 								}
 								else
 								{
-									selection->Select(it->entity);
+									selection->Select(element.entity);
 								}
 							}
 						}
 						newDrag.kind = DragKind::Move;
-						newDrag.entity = it->entity;
+						newDrag.entity = element.entity;
 						break;
 					}
 				}
@@ -1528,7 +1529,6 @@ namespace aether::editor
 		DrawSnapGuides(drawList, snapGuides, origin, m_pan, m_zoom, extent);
 		DrawGapGuides(drawList, gapGuides, origin, m_pan, m_zoom);
 
-		// Context menus
 		if (surfaceHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 		{
 			if (m_hoveredEntity.IsValid())

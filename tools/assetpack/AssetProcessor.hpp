@@ -75,7 +75,7 @@ namespace aether::assetpipeline
 		std::vector<std::byte> data;
 		std::string outExt;
 		std::vector<PakFileData> extraFiles;
-		bool skipSource = false; // true = don't pack the source file (extras still emitted)
+		bool skipSource = false;
 	};
 
 	inline ProcessAssetResult ProcessAsset(const std::vector<std::byte>& raw, const fs::path& diskPath, const std::string& virtualPath, const fs::path& sourceDir)
@@ -123,7 +123,6 @@ namespace aether::assetpipeline
 		{
 			auto meshResult = MeshProcessor::Process(raw, diskPath, virtualPath, sourceDir);
 
-			// Emit extra files (anim, skel, material) even when meshData is empty (animation-only glTFs).
 			const std::string stem = Stem(diskPath);
 			const std::string dir = fs::path(virtualPath).parent_path().generic_string();
 
@@ -159,11 +158,9 @@ namespace aether::assetpipeline
 				return {std::move(meshResult.meshData), ".mesh", std::move(extraFiles)};
 			}
 
-			// Animation-only (no mesh): emit extras, skip the source .gltf in the PAK.
 			return {{}, {}, std::move(extraFiles), /*skipSource=*/true};
 		}
 
-		// .bin files are only used as glTF buffer data, already consumed by cgltf during mesh processing.
 		if (ext == ".bin")
 		{
 			return {{}, {}, {}, /*skipSource=*/true};
@@ -180,7 +177,7 @@ namespace aether::assetpipeline
 		uint64_t rawSize = 0;
 		uint64_t contentHash = 0;
 		bool ok = false;
-		bool hasPrimary = true; // false = skip the primary file entry (extras still emitted)
+		bool hasPrimary = true;
 		std::string errorMsg;
 		std::vector<PakFileData> extraFiles;
 	};
@@ -215,7 +212,6 @@ namespace aether::assetpipeline
 
 		if (procResult.skipSource)
 		{
-			// Don't pack the source file - only emit extra files (anims, materials, etc.).
 			result.hasPrimary = false;
 			result.ok = true;
 
@@ -232,7 +228,7 @@ namespace aether::assetpipeline
 					const std::size_t bound = ZSTD_compressBound(extra.rawSize);
 					std::vector<std::byte> compressed(bound);
 					const std::size_t compressedSize = ZSTD_compressCCtx(cctx, compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
-					if (!ZSTD_isError(compressedSize) && compressedSize < extra.rawSize)
+					if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < extra.rawSize)
 					{
 						compressed.resize(compressedSize);
 						extra.data = std::move(compressed);
@@ -288,7 +284,7 @@ namespace aether::assetpipeline
 				const std::size_t bound = ZSTD_compressBound(extra.rawSize);
 				std::vector<std::byte> compressed(bound);
 				const std::size_t compressedSize = ZSTD_compressCCtx(cctx, compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
-				if (!ZSTD_isError(compressedSize) && compressedSize < extra.rawSize)
+				if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < extra.rawSize)
 				{
 					compressed.resize(compressedSize);
 					extra.data = std::move(compressed);
@@ -311,7 +307,7 @@ namespace aether::assetpipeline
 
 			const std::size_t compressedSize = ZSTD_compressCCtx(cctx, compressed.data(), bound, rawData.data(), processedSize, compressionLevel);
 
-			if (!ZSTD_isError(compressedSize) && compressedSize < rawSize)
+			if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < rawSize)
 			{
 				compressed.resize(compressedSize);
 				result.data = std::move(compressed);

@@ -7,21 +7,6 @@
 
 namespace aether::gpu
 {
-	// -------------------------------------------------------------------------
-	// Opaque resource handles
-	// -------------------------------------------------------------------------
-	// Engine-facing replacements for raw Vk* handles at the public API.
-	// Each handle pairs a 16-bit slot index with a 16-bit generation counter
-	// incremented on slot reuse. The generation check makes stale-handle use
-	// fail loudly in IsValid() / Resolve*() instead of silently re-allocating
-	// over a live resource (a classic source of "the wrong texture is
-	// showing" / "buffer got freed mid-frame" bugs).
-	//
-	// The handle struct is 32 bits so handles fit cleanly in a single
-	// push-constant / draw-contract slot. The high 16 bits hold the
-	// generation; the low 16 bits hold the slot index. This caps total
-	// tracked resources per type at 65,535, which is far more than any
-	// practical engine needs.
 	namespace detail
 	{
 		inline constexpr std::uint32_t kInvalidIndex = 0x0000FFFFu;

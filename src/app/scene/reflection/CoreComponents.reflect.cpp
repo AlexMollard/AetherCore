@@ -1,11 +1,4 @@
-// Core component reflection declarations (lights, cameras, skinned, transform,
-//
-// One AE_COMPONENT block per component replaces its hand-written entries in the
-// MCP field registry, ComponentCatalog, (later) SceneSerializer and inspector.
-// Field names match the existing scene-TOML keys so the serializer migration
 // preserves the on-disk format. Runtime/cached fields are omitted by not listing
-// them. Follow-up batches add the remaining components (physics, effects,
-// material, UI, custom-widget components) as their own *.reflect.cpp files.
 
 #include "scene/reflection/Reflection.hpp"
 
@@ -20,7 +13,6 @@ using namespace aether;
 using aether::reflect::FieldType;
 using aether::reflect::FieldValue;
 
-// ── Lights ──────────────────────────────────────────────────────────────────
 AE_COMPONENT(PointLightComponent, "Point Light", "Rendering", ICON_FA_LIGHTBULB)
 AE_FIELD_N("color", color, Color3)
 AE_FIELD_R(intensity, Float, 0.0f, 1000.0f)
@@ -37,7 +29,6 @@ AE_FIELD_ANGLE_AS("outer_angle_deg", outerAngleRad, "outer_rad")
 AE_FIELD_N("shadow", castsShadow, Bool)
 AE_COMPONENT_END()
 
-// ── Rendering / animation ───────────────────────────────────────────────────
 AE_COMPONENT(CameraComponent, "Camera", "Rendering", ICON_FA_VIDEO)
 AE_FIELD_N("fov", fovDegrees, Float)
 AE_FIELD_N("near", nearPlane, Float)
@@ -49,12 +40,10 @@ AE_FIELD_N("clip", clipIndex, UInt)
 AE_FIELD_N("time", animTime, Float)
 AE_FIELD_N("speed", playbackSpeed, Float)
 AE_FIELD_N("looping", looping, Bool)
-AE_NOT_ADDABLE() // comes with a skinned model (needs an AnimationDatabase)
+AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
-// Transform is stored as a matrix; expose the authored TRS as computed fields.
 AE_COMPONENT(TransformComponent, "Transform", "Core", ICON_FA_UP_DOWN_LEFT_RIGHT)
-// Lambdas wrapped in () so their internal commas aren't read as macro args.
 AE_FIELD_CUSTOM(
         "position",
         Vec3,
@@ -117,7 +106,6 @@ AE_FIELD_CUSTOM(
         })
 AE_COMPONENT_END()
 
-// ── Behaviors (procedural motion) ───────────────────────────────────────────
 AE_COMPONENT(SpinComponent, "Spin", "Behaviors", ICON_FA_ROTATE)
 AE_FIELD_N("euler_deg_per_sec", eulerDegPerSec, Vec3)
 AE_COMPONENT_END()

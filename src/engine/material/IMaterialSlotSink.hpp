@@ -6,8 +6,6 @@
 
 namespace aether
 {
-	// Backend that owns GPU material slots. MaterialBuffer is the production impl;
-	// tests inject a fake. No Vulkan types leak through this interface.
 	class IMaterialSlotSink
 	{
 	public:

@@ -6,11 +6,6 @@
 
 #include "Color.hpp"
 
-// The editor's shared chrome language, extracted from the project launcher
-// (ProjectLauncherWindow defined it; panels adopting the look include this so
-// the whole editor moves together). "Night Amber": warm near-black surfaces,
-// hairline strokes, a single amber accent, spaced micro-labels, ghost/outline
-// buttons, and corner brackets as the one overtly "gamer" flourish.
 namespace aether::editor::chrome
 {
 	[[nodiscard]] inline ImVec4 C(const glm::vec4& v)
@@ -29,10 +24,6 @@ namespace aether::editor::chrome
 		return color;
 	}
 
-	// ── Runtime theme ───────────────────────────────────────────────────────────
-	// The editor palette is runtime-editable (the Theme panel). Every chrome token
-	// AND the ImGui widget style derive from it, so changing the accent recolours
-	// the whole editor at once. Defaults are the "Night Amber" world (Color.hpp).
 	struct EditorTheme
 	{
 		ImVec4 background;
@@ -77,8 +68,6 @@ namespace aether::editor::chrome
 		return theme;
 	}
 
-	// Palette tokens - rewritten from ActiveTheme() by RefreshTokens(). Initialised
-	// to Night Amber so any read before the first RefreshTokens() is still valid.
 	inline ImVec4 kBg = C(colors::Background);
 	inline ImVec4 kPanel = C(colors::Surface);
 	inline ImVec4 kPanelHi = C(colors::SurfaceElevated);
@@ -94,9 +83,6 @@ namespace aether::editor::chrome
 	inline ImVec4 kWarning = C(colors::Warn);
 	inline ImVec4 kError = C(colors::Error);
 
-	// ── Interaction tokens (derived from the accent) ───────────────────────────
-	// Selection, hover, drop targets and drag ghosts all speak the single accent
-	// so every panel matches (no per-panel blues/grays).
 	inline ImVec4 kSelectionBg = WithAlpha(C(colors::Primary), 0.28f);
 	inline ImVec4 kSelectionBar = C(colors::PrimaryHover);
 	inline ImVec4 kHoverBg = WithAlpha(C(colors::TextPrimary), 0.06f);
@@ -105,7 +91,6 @@ namespace aether::editor::chrome
 	inline ImVec4 kDragGhostBg = WithAlpha(C(colors::SurfaceElevated), 0.94f);
 	inline ImVec4 kDragGhostBorder = WithAlpha(C(colors::Primary), 0.72f);
 
-	// Recompute every token from the active palette (base first, then derived).
 	inline void RefreshTokens()
 	{
 		const EditorTheme& t = ActiveTheme();
@@ -132,8 +117,6 @@ namespace aether::editor::chrome
 		kDragGhostBorder = WithAlpha(kAccent, 0.72f);
 	}
 
-	// Map the active palette onto the ImGui widget style (colours only; the
-	// rounding/spacing setup stays in ImguiSubsystem). Call after any theme change.
 	inline void ApplyImGuiColors(ImGuiStyle& style)
 	{
 		const EditorTheme& t = ActiveTheme();
@@ -225,7 +208,6 @@ namespace aether::editor::chrome
 		c[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	// Set the active theme, refresh chrome tokens, and restyle ImGui widgets.
 	inline void ApplyTheme(const EditorTheme& theme)
 	{
 		ActiveTheme() = theme;
@@ -233,7 +215,6 @@ namespace aether::editor::chrome
 		ApplyImGuiColors(ImGui::GetStyle());
 	}
 
-	// Crisp arbitrary-size text (imgui 1.92 dynamic fonts bake per size).
 	inline void TextSized(ImDrawList* drawList, const float size, const ImVec2 pos, const ImVec4& color, const char* text)
 	{
 		drawList->AddText(ImGui::GetFont(), size, pos, U32(color), text);
@@ -244,8 +225,6 @@ namespace aether::editor::chrome
 		return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
 	}
 
-	// Targeting-reticle corner brackets - reserved for the focal element
-	// (the launcher's hovered project row, the viewport's camera feed).
 	inline void CornerBrackets(ImDrawList* drawList, const ImVec2 min, const ImVec2 max, const float arm, const float thickness, const ImVec4& color)
 	{
 		const ImU32 c = U32(color);
@@ -259,7 +238,6 @@ namespace aether::editor::chrome
 		drawList->AddLine(ImVec2(max.x - arm, max.y), ImVec2(max.x, max.y), c, thickness);
 	}
 
-	// 2px accent hairline fading out toward both ends - the launcher's edge motif.
 	inline void AccentHairline(ImDrawList* drawList, const ImVec2 min, const float width, const float alpha = 0.85f)
 	{
 		const float midX = min.x + width * 0.5f;
@@ -269,17 +247,11 @@ namespace aether::editor::chrome
 		drawList->AddRectFilledMultiColor(ImVec2(midX, min.y), ImVec2(min.x + width, min.y + 2.0f), solid, clear, clear, solid);
 	}
 
-	// Standard panel header band: amber tick + uppercase eyebrow + an optional
-	// right-aligned micro-stat, over a fading hairline. Call first thing after
-	// ImGui::Begin so every panel opens with the same composition.
 	inline void PanelHeader(const char* eyebrow, const char* stat = nullptr)
 	{
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const ImVec2 p = ImGui::GetCursorScreenPos();
 		const float bandW = ImGui::GetContentRegionAvail().x;
-		// Sizes derive from the body font (was a tiny fixed 12px, hard to read). The
-		// panel eyebrow reads at full body size so it's a clear title; the micro-stat
-		// stays smaller.
 		const float labelSize = ImGui::GetFontSize();
 		const float statSize = ImGui::GetFontSize() * 0.82f;
 		const float th = MeasureSized(labelSize, eyebrow).y;
@@ -295,8 +267,6 @@ namespace aether::editor::chrome
 		ImGui::Dummy(ImVec2(0.0f, 4.0f));
 	}
 
-	// Micro section label: amber tick + uppercase muted text, sized from the body
-	// font (DPI-aware). Draws at the current cursor and advances it (widget-flow friendly).
 	inline void SectionTag(const char* label)
 	{
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -308,7 +278,6 @@ namespace aether::editor::chrome
 		ImGui::Dummy(ImVec2(11.0f + MeasureSized(size, label).x, th + 2.0f));
 	}
 
-	// Amber-filled call-to-action (dark text).
 	inline bool PrimaryButton(const char* label, const ImVec2 size = ImVec2(0.0f, 0.0f))
 	{
 		ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
@@ -322,7 +291,6 @@ namespace aether::editor::chrome
 		return pressed;
 	}
 
-	// Amber outline, transparent fill - the secondary action.
 	inline bool OutlineButton(const char* label, const ImVec2 size = ImVec2(0.0f, 0.0f))
 	{
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
@@ -338,17 +306,11 @@ namespace aether::editor::chrome
 		return pressed;
 	}
 
-	// Draw `icon` ink-centred over the most-recently-submitted item (a label-less
-	// button frame). Uses the glyph's true ink box (ImFontGlyph X0..Y1 from the current
-	// baked font, ImGui 1.92) so it is exact on both axes regardless of the glyph's
-	// advance/bearing - unlike ImGui::Button, which aligns the whole text run and thus
-	// leaves a Font Awesome glyph visually off-centre.
 	inline void CenterIconOnLastItem(const char* icon, const ImVec4& tint)
 	{
 		const ImVec2 bMin = ImGui::GetItemRectMin();
 		const ImVec2 bMax = ImGui::GetItemRectMax();
 		const ImVec2 centre((bMin.x + bMax.x) * 0.5f, (bMin.y + bMax.y) * 0.5f);
-		// Decode the icon's first UTF-8 codepoint (Font Awesome glyphs are 3 bytes).
 		const unsigned char b0 = static_cast<unsigned char>(icon[0]);
 		unsigned int codepoint = b0;
 		if (b0 >= 0xF0u)
@@ -363,18 +325,15 @@ namespace aether::editor::chrome
 		{
 			codepoint = ((b0 & 0x1Fu) << 6) | (static_cast<unsigned char>(icon[1]) & 0x3Fu);
 		}
-		ImFontBaked* baked = ImGui::GetFontBaked(); // current-size baked font (ImGui 1.92 dynamic fonts)
+		ImFontBaked* baked = ImGui::GetFontBaked();
 		const ImFontGlyph* glyph = baked != nullptr ? baked->FindGlyph(static_cast<ImWchar>(codepoint)) : nullptr;
 		if (glyph != nullptr)
 		{
-			// AddText draws the glyph ink at pos + (X0,Y0)..(X1,Y1); put its midpoint on
-			// the item centre.
 			const ImVec2 pos(std::floor(centre.x - (glyph->X0 + glyph->X1) * 0.5f), std::floor(centre.y - (glyph->Y0 + glyph->Y1) * 0.5f));
 			ImGui::GetWindowDrawList()->AddText(pos, ImGui::GetColorU32(tint), icon);
 		}
 	}
 
-	// Quiet control: transparent until hovered (amber wash), muted text.
 	inline bool GhostButton(const char* label, const ImVec2 size = ImVec2(0.0f, 0.0f), const ImVec4& textColor = kMuted)
 	{
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
@@ -388,10 +347,6 @@ namespace aether::editor::chrome
 		return pressed;
 	}
 
-	// Icon-only outline button (e.g. a "browse" affordance beside an input). `icon` is
-	// the glyph, `strId` a "##unique" id. Renders a plain label-less OutlineButton
-	// frame (so the ambient FramePadding can't shove the glyph) with the glyph drawn
-	// exactly centred on it.
 	inline bool OutlineIconButton(const char* icon, const char* strId, const ImVec2 size, const ImVec4& tint = kAccentHi)
 	{
 		const bool pressed = OutlineButton(strId, size);
@@ -399,8 +354,6 @@ namespace aether::editor::chrome
 		return pressed;
 	}
 
-	// Icon-only ghost button - the icon-only sibling of GhostButton, with the same
-	// exact glyph centring. `strId` is a "##unique" id; `tint` colours the glyph.
 	inline bool GhostIconButton(const char* icon, const char* strId, const ImVec2 size, const ImVec4& tint = kMuted)
 	{
 		const bool pressed = GhostButton(strId, size, tint);
@@ -408,7 +361,6 @@ namespace aether::editor::chrome
 		return pressed;
 	}
 
-	// Selected state for a segmented control / tool button: amber fill.
 	inline bool ActiveToolButton(const char* label, const ImVec2 size)
 	{
 		return PrimaryButton(label, size);

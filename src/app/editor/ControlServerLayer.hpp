@@ -9,10 +9,6 @@ namespace aether::editor
 	class ControlServer;
 
 	// Owns the editor ControlServer across the app lifetime: starts it on attach
-	// (only when the AETHER_CONTROL_PORT environment variable names a port),
-	// drains its request queue every frame on the main thread, and stops it on
-	// detach. Editor-only - lives under src/app/editor, which GameRuntime's source
-	// list excludes, so a shipped game never carries the control endpoint.
 	class ControlServerLayer : public app::AppLayer
 	{
 	public:

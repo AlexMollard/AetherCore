@@ -14,12 +14,7 @@
 
 namespace aether::io
 {
-	// -----------------------------------------------------------------------
 	// IoExecutor - dedicated background I/O thread that runs both plain jobs
-	// (for backward compatibility) and coroutine tasks.  It also implements
-	// the coro::executor interface so coroutines can be scheduled onto the
-	// I/O thread directly.
-	// -----------------------------------------------------------------------
 	class IoExecutor final : public coro::executor
 	{
 	public:
@@ -29,7 +24,6 @@ namespace aether::io
 		IoExecutor(const IoExecutor&) = delete;
 		IoExecutor& operator=(const IoExecutor&) = delete;
 
-		// ---- coro::executor -----------------------------------------------
 		void schedule(std::coroutine_handle<> h) override;
 
 		[[nodiscard]] const char* name() const noexcept override
@@ -37,16 +31,10 @@ namespace aether::io
 			return "IoExecutor";
 		}
 
-		// ---- Job-based API (backward-compatible) ---------------------------
-
-		// Submit a plain callable with a priority level.
 		void Submit(IOPriority priority, std::function<void()> job);
 
-		// Blocks until all submitted jobs AND scheduled coroutines have
-		// completed.
 		void Flush();
 
-		// Convenience: wrap a job as a coroutine task.
 		template<typename F>
 		coro::task<std::invoke_result_t<F>> Run([[maybe_unused]] IOPriority priority, F&& fn)
 		{

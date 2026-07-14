@@ -17,13 +17,7 @@ namespace aether::io
 			return prefix.empty() ? std::string(relativePath) : prefix + std::string(relativePath);
 		}
 
-		// Strip `prefix` off the front of `path` case-insensitively. Backends
-		// like DirectoryBackend::Glob match case-insensitively by default
-		// (FileGlobOptions::caseSensitive == false), so a path returned from a
-		// layer can be cased differently than the layer's configured prefix
 		// (e.g. prefix "shaders/" vs an on-disk "Shaders/" folder). A
-		// case-sensitive starts_with would fail to strip that path, leaking an
-		// un-relativized path into the merged results.
 		std::string StripPrefix(const std::string& prefix, const std::string& path)
 		{
 			if (prefix.empty() || path.size() < prefix.size())

@@ -17,10 +17,6 @@ namespace aether::app
 		return {};
 	}
 
-	// Returns the value following "--project" on the command line, or "" if the flag is
-	// absent or missing its value. The Editor uses this to boot straight into a project:
-	// the Launcher passes it when spawning the editor process, and Visual Studio passes
-	// it (VS_DEBUGGER_COMMAND_ARGUMENTS) for direct F5 debugging.
 	[[nodiscard]] inline std::string ParseProjectArg(int argc, char** argv)
 	{
 		return ParseOptionArg(argc, argv, "--project");

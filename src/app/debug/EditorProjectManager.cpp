@@ -10,7 +10,7 @@
 #ifdef _WIN32
 #	include <Windows.h>
 #	include <shobjidl.h>
-#	undef CopyFile // Windows.h defines CopyFile as CopyFileA/CopyFileW macro, conflicts with file_util::CopyFile
+#	undef CopyFile
 #endif
 
 #include "PlayState.hpp"
@@ -23,6 +23,7 @@
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/DirectoryBackend.hpp"
+#include "io/PlatformPaths.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "io/OverlayBackend.hpp"
@@ -44,25 +45,13 @@ using namespace std::string_view_literals;
 
 namespace aether::editor
 {
-	// Project descriptor/scaffold/picker/recents helpers live in the engine-agnostic
-	// ProjectCommon (shared with the standalone Launcher). Pull its names into scope
-	// so the unqualified calls below resolve to the shared implementations.
 	using namespace aether::app::project;
 
 	namespace
 	{
-		// kMaxRecentProjects comes from ProjectCommon (app::project::) via the using-directive above.
 		constexpr std::string_view kEditorLogoPath = "engine://branding/aethercore-icon-white.png";
 
-		// (Re)builds the shaders:// overlay's project layer for `projectRoot`:
-		// prepends a DirectoryBackend over its compiled-shader intermediate dir
-		// (ShaderCompiler::ProjectShaderIntermediateDir) when that dir exists,
-		// so a project shader overrides an engine shader of the same name;
-		// falls back to engine-only otherwise (project has no assets/shaders,
-		// or this build has no slangc so nothing was ever compiled). Called
-		// after every compile attempt - project load, project switch, and the
 		// manual "Recompile Shaders" action - so the overlay never serves a
-		// stale project layer.
 		void UpdateProjectShaderOverlay(const std::filesystem::path& projectRoot)
 		{
 			if (projectRoot.empty())
@@ -82,19 +71,12 @@ namespace aether::editor
 				io::FileSystem::MountShaderOverlay(std::nullopt);
 			}
 
-			// Diagnostic: prove shaders:// actually resolves through the freshly
-			// (re)mounted overlay - cheap enough to run on every project
-			// load/switch/recompile, and useful for debugging a shader that fails
-			// to resolve at runtime.
 			if (const auto shaderGlob = io::FileSystem::Glob("shaders://**/*.spv"); shaderGlob.has_value())
 			{
 				AE_INFO(LogCategory::App, "shaders:// overlay resolves {} shader(s) after project shader compile.", shaderGlob->size());
 			}
 		}
 
-		// Compiles `projectRoot`'s Slang shaders and refreshes the shaders://
-		// overlay to match the result. Shared by OpenProject and the manual
-		// "Recompile Shaders" action so both go through the same path.
 		ShaderCompileResult CompileProjectShadersAndRefreshOverlay(const std::filesystem::path& projectRoot)
 		{
 			const ShaderCompileResult result = CompileProject(projectRoot);
@@ -138,8 +120,6 @@ namespace aether::editor
 		services.Register<EditorProjectActions>(m_actions);
 		services.Register<app::EditorProjectContext>(m_currentProject);
 
-		// Let scene load bake a not-yet-imported model against the live project.
-		// Reads m_currentProject at call time, so it tracks project switches.
 		m_bakeHook.ensureBaked = [this](const std::string& vfsModelPath, std::string& error) -> bool
 		{
 			return editor::EnsureModelBaked(vfsModelPath, m_currentProject, error);
@@ -172,10 +152,6 @@ namespace aether::editor
 		{
 			if (!m_currentProject.root.empty())
 			{
-				// Reload re-reads the project descriptor/settings for the SAME
-				// project; leave the working scene alone so in-editor edits aren't
-				// discarded (project switching, which does swap scenes, goes through
-				// the launcher's OpenProject instead).
 				OpenProject(m_currentProject.root, /*reloadScene=*/false);
 			}
 		};
@@ -198,7 +174,6 @@ namespace aether::editor
 			const std::filesystem::path scriptsProject = m_currentProject.scriptsDir / "AetherGame.csproj";
 			if (auto* scripting = m_services != nullptr ? m_services->TryGet<app::scripting::CSharpScriptingSubsystem>() : nullptr)
 			{
-				// The editor's script pipeline builds a portable-symbol Debug assembly.
 				scripting->BeginRebuildFromSource();
 			}
 
@@ -267,12 +242,8 @@ namespace aether::editor
 		std::snprintf(m_launcherState.newPath.data(), m_launcherState.newPath.size(), "%s", DisplayPath(cwd / "AetherProject").c_str());
 		std::snprintf(m_launcherState.newName.data(), m_launcherState.newName.size(), "%s", "AetherProject");
 
-		// A project passed on the command line (--project, surfaced as
-		// AETHER_PROJECT_DIR by main - the Launcher passes it when it spawns the
-		// editor) boots straight into that project; otherwise fall back to the
-		// persisted open-last-project behaviour.
 		std::filesystem::path bootProject;
-		if (const char* env = std::getenv("AETHER_PROJECT_DIR"); env != nullptr && *env != '\0')
+		if (const std::string env = io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"); !env.empty())
 		{
 			bootProject = NormalizePath(env);
 		}
@@ -283,8 +254,6 @@ namespace aether::editor
 
 		if (!bootProject.empty())
 		{
-			// Boot-time reopen: ScriptedSceneLayer attaches after this and loads the
-			// startup scene itself, so don't drive a (duplicate) scene load here.
 			OpenProject(bootProject, /*reloadScene=*/false);
 		}
 	}
@@ -353,26 +322,18 @@ namespace aether::editor
 		std::error_code ec;
 		if (!std::filesystem::exists(scriptsProject, ec))
 		{
-			// No game scripts in this project: clear any prior project's build config
-			// so switching away from a scripted project stops rebuilding it.
 			scripting->SetScriptProject({}, {});
 			return;
 		}
 
 		scripting->SetScriptProject(scriptsProject, m_currentProject.root / "Builds" / "Intermediate" / "managed");
 		// Kick the dotnet build onto a worker thread so opening a project never blocks
-		// the UI (a cold build can take tens of seconds). UpdateScriptBuild(), ticked
-		// from DebugLayer, polls it to completion and reloads the assembly; the status
-		// bar shows a "compiling C# scripts" progress bar until then. Scripts don't
-		// tick in edit mode, so the scene can load before the build finishes.
 		scripting->BeginRebuildFromSource();
 		m_scriptBuildPending = true;
 	}
 
 	void EditorProjectManager::UpdateScriptBuild()
 	{
-		// One-shot preview capture, scheduled on opening a preview-less project so the
-		// scene has a few frames to render before we grab it.
 		if (m_previewCaptureCountdown > 0 && --m_previewCaptureCountdown == 0)
 		{
 			CaptureProjectPreview();
@@ -389,9 +350,6 @@ namespace aether::editor
 			return;
 		}
 
-		// If the user pressed Play while the open-build was still running, the play
-		// session adopts the in-flight build and drives it to Playing - stop tracking
-		// it here so completion isn't double-handled.
 		if (const auto* play = m_services->TryGet<app::PlayState>(); play != nullptr && play->IsCompiling())
 		{
 			m_scriptBuildPending = false;
@@ -403,7 +361,7 @@ namespace aether::editor
 		switch (scripting->PollRebuildStatus(error))
 		{
 			case BuildStatus::Running:
-				return; // keep the "compiling C# scripts" indicator up
+				return;
 			case BuildStatus::Succeeded:
 				scripting->ClearRebuild();
 				if (scripting->IsAvailable())
@@ -436,9 +394,8 @@ namespace aether::editor
 		{
 			return;
 		}
-		// The scene viewport's post-tonemap output - what the editor viewport shows.
 		const auto textures = gpu::ResourceRegistry::ListDebugTextures();
-		const auto it = std::ranges::find_if(textures, [](const gpu::DebugTextureInfo& t) { return t.debugName.find("PostProcess") != std::string::npos && t.debugName.find("FinalColor") != std::string::npos; });
+		const auto it = std::ranges::find_if(textures, [](const gpu::DebugTextureInfo& t) { return t.debugName.contains("PostProcess") && t.debugName.contains("FinalColor"); });
 		if (it == textures.end())
 		{
 			return;
@@ -474,32 +431,17 @@ namespace aether::editor
 		m_currentProject = *std::move(projectResult);
 		m_currentProject.loaded = true;
 		io::FileSystem::Mount("project", m_currentProject.root);
-		// Compile this project's Slang shaders (dev-only, no-op without slangc -
-		// see ShaderCompiler::CanCompileShaders) and (re)mount shaders:// so the
-		// project's compiled shaders take priority over engine shaders of the
-		// same name. Runs on every OpenProject - including project switches, so
-		// a switch away from a project drops its shader layer instead of
-		// leaking it into the newly opened project.
 		CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
-		// Build this project's C# game scripts and load them, so opening a project
-		// makes its scripts live - the runtime replacement for the old CMake
-		// build-time game-scripts staging. Runs on every OpenProject, including
-		// switches, so a switch drops the previous project's scripts.
 		BuildAndReloadProjectScripts();
 		app::scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
 		RefreshServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
 		m_projectLoaded = true;
 		m_launcherOpen = false;
-		// Swap the live world over to this project's startup scene. Skipped only at
-		// boot-time reopen, where the scene layer has not attached yet and performs
-		// the initial load itself once it does.
 		if (reloadScene)
 		{
 			LoadProjectStartupScene();
 		}
-		// Give a brand-new (preview-less) project a first thumbnail: capture once the
-		// scene has had a moment to render. Existing previews refresh on save.
 		std::error_code previewEc;
 		if (!std::filesystem::exists(PreviewImagePath(m_currentProject.root), previewEc))
 		{
@@ -526,8 +468,6 @@ namespace aether::editor
 			sceneName = settings->Get().app.startupScene;
 		}
 
-		// SwitchScene tears down the previously loaded scene (ReplaceScene) before
-		// applying the new one, and clears the world when the project has no
 		// startup scene - so switching projects never leaves the old scene live.
 		const bool loaded = app::scene::SwitchScene(sceneName, *world, app::scene::MakeApplySceneDeps(*m_services));
 		if (auto* scenes = m_services->TryGet<aether::SceneSubsystem>())

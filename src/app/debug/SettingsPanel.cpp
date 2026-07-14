@@ -15,9 +15,6 @@ namespace aether::editor
 {
 	namespace
 	{
-		// Draws the type-appropriate widget for a setting field and returns true on
-		// edit. Resolved at compile time from the field type, so a new setting of an
-		// existing type needs no code here.
 		template<class T>
 		bool DrawSettingWidget(const char* label, T& field)
 		{
@@ -81,8 +78,6 @@ namespace aether::editor
 			        const std::string label(name);
 			        if (DrawSettingWidget(label.c_str(), field))
 			        {
-				        // The service applies the change to its owning subsystem (if
-				        // live) and marks it dirty for the shutdown save.
 				        settingsService->ApplyField(key);
 			        }
 		        });

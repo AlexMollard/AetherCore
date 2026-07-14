@@ -30,10 +30,10 @@ namespace aether::editor
 				case LogLevel::Warn:
 					return ImVec4(0.96f, 0.80f, 0.35f, 1.0f);
 				case LogLevel::Info:
-					return ImVec4(0.88f, 0.85f, 0.79f, 1.0f); // warm near-white (Night Amber, not blue)
+					return ImVec4(0.88f, 0.85f, 0.79f, 1.0f);
 				case LogLevel::Verbose:
 				default:
-					return ImVec4(0.59f, 0.55f, 0.50f, 1.0f); // warm muted gray
+					return ImVec4(0.59f, 0.55f, 0.50f, 1.0f);
 			}
 		}
 
@@ -62,11 +62,6 @@ namespace aether::editor
 			return std::filesystem::path(path).filename().string();
 		}
 
-		// Collapse newlines so each log row is a single, uniform-height line. The row
-		// list renders through an ImGuiListClipper, which assumes every row is the same
-		// height; a multi-line entry (e.g. a build-error dump) otherwise breaks its
-		// scroll math and the list becomes unscrollable. The full multi-line text stays
-		// available via the row's "Copy message" action.
 		std::string ToSingleLine(const std::string& text)
 		{
 			std::string out;
@@ -91,8 +86,6 @@ namespace aether::editor
 			return out;
 		}
 
-		// Toggleable "TAG N" chip in the tinted-ghost language: the severity tint
-		// fills quietly while shown; filtered-off chips drop to faint text, no fill.
 		void LevelBadge(const char* tag, int count, bool* shown, ImVec4 color)
 		{
 			char label[48];
@@ -118,7 +111,6 @@ namespace aether::editor
 		std::vector<LogRingBuffer::Record> records;
 		LogRingBuffer::Get().Snapshot(records);
 
-		// Header counts + distinct categories in one pass over the snapshot.
 		int nErr = 0, nWarn = 0, nInfo = 0, nVerbose = 0;
 		std::set<std::string> categories;
 		for (const auto& r: records)
@@ -145,7 +137,6 @@ namespace aether::editor
 			}
 		}
 
-		// ── Header band ──
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -161,7 +152,6 @@ namespace aether::editor
 			ImGui::Dummy(ImVec2(0.0f, 4.0f));
 		}
 
-		// ── Row 1: clickable level count badges ──
 		LevelBadge("ERR", nErr, &m_showError, LevelColor(LogLevel::Error));
 		ImGui::SameLine();
 		LevelBadge("WRN", nWarn, &m_showWarn, LevelColor(LogLevel::Warn));

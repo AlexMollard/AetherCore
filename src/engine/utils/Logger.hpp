@@ -37,12 +37,7 @@ namespace aether
 	class Logger
 	{
 	public:
-		// filePath: log file to write to. Empty (the default) resolves to
-		// %LOCALAPPDATA%/AetherCore/logs/<exe-name>.log (io::PlatformPaths) so a
 		// shipped game never writes a "logs" folder into its own install
-		// directory, and the editor/game don't append to the same file. Pass an
-		// explicit path to override (e.g. tooling that wants a build-tree-local
-		// log).
 		static void Initialize(std::string_view filePath = {});
 		static void Shutdown();
 		static void Flush();

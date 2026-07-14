@@ -60,8 +60,6 @@ namespace aether
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;
 			std::unique_ptr<RenderQueue> renderQueue;
-			// Per-target light-binning view: local lights are culled against THIS
-			// camera's frustum (registered lazily on first prepare).
 			LightViewId lightViewId = kInvalidLightView;
 		};
 

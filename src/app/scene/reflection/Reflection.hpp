@@ -1,23 +1,10 @@
 #pragma once
 
-// Component reflection core.
-//
-// One AE_COMPONENT declaration per component type describes its authored fields;
-// every per-component surface (MCP get/set, ComponentCatalog, SceneSerializer,
-// inspector) reads the resulting ComponentType table instead of hand-wiring each
-// component four times. Fields convert to a NEUTRAL FieldValue - not json / TOML /
-// ImGui - so this core carries no serialization or UI dependency and compiles into
-// GameRuntime (the scene loader needs it). Each consumer adapts FieldValue to its
-// own format.
-//
-// The data model (FieldValue / FieldDesc / ComponentType) is deliberately separate
-// from the macro DSL that populates it: when C++26 static reflection is available
-// on all compilers, only the declaration layer changes - consumers are untouched.
-
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -36,8 +23,8 @@ namespace aether::reflect
 		Vec2,
 		Vec3,
 		Vec4,
-		Color3, // glm::vec3 shown as an RGB colour
-		Color4, // glm::vec4 shown as an RGBA colour
+		Color3,
+		Color4,
 		Enum,
 		String,
 		EntityRef,
@@ -53,29 +40,25 @@ namespace aether::reflect
 	struct FieldMeta
 	{
 		float min = 0.0f;
-		float max = 0.0f;            // min==max==0 => unbounded
-		float speed = 0.0f;          // 0 => a sensible default per type
-		bool isAngleDegrees = false; // member stored in radians, exposed/edited in degrees
-		bool serialize = true;       // editable-but-not-persisted fields set false
+		float max = 0.0f;
+		float speed = 0.0f;
+		bool isAngleDegrees = false;
+		bool serialize = true;
 		const EnumTable* enumTable = nullptr;
 		std::string tooltip;
 		// TOML key to serialize under, when it differs from the field name (e.g. an
-		// angle field exposed as "inner_angle_deg" that persists as "inner_rad").
-		// Empty => the field name is the key. Angle fields (isAngleDegrees) always
-		// serialize in radians regardless.
 		std::string serializeName;
 	};
 
-	// A neutral field value. Consumers read the member matching `type`.
 	struct FieldValue
 	{
 		FieldType type = FieldType::Float;
-		double num = 0.0;         // Float / Int / UInt
-		bool boolean = false;     // Bool
-		glm::vec4 vec{0.0f};      // Vec2 / Vec3 / Vec4 / Color3 / Color4
-		int enumValue = 0;        // Enum
-		std::uint64_t entity = 0; // EntityRef
-		std::string str;          // String
+		double num = 0.0;
+		bool boolean = false;
+		glm::vec4 vec{0.0f};
+		int enumValue = 0;
+		std::uint64_t entity = 0;
+		std::string str;
 	};
 
 	struct FieldDesc
@@ -88,20 +71,17 @@ namespace aether::reflect
 	};
 
 	// Bespoke TOML for the components whose on-disk shape isn't a flat field list
-	// (Mesh source, Material textures). Null members => use the generic field loop.
 	struct CustomSerializeFns
 	{
-		// The types are opaque here (toml++ is an app/scene dep, not a core one); the
-		// serializer casts. Kept as void* to keep this header toml-free.
 		std::function<void(const void* component, void* tomlTable)> write;
 		std::function<void(void* component, const void* tomlTable)> read;
 	};
 
 	struct ComponentType
 	{
-		std::string name;     // "Point Light" - matches catalog + MCP type
-		std::string category; // "Rendering", "Physics", "Behaviors", ...
-		std::string icon;     // ICON_FA_* string (no ImGui dependency)
+		std::string name;
+		std::string category;
+		std::string icon;
 		std::vector<FieldDesc> fields;
 
 		std::function<bool(const World&, Entity)> has;
@@ -110,22 +90,19 @@ namespace aether::reflect
 		std::function<void*(World&, Entity)> tryGetRaw;
 		std::function<const void*(const World&, Entity)> tryGetRawConst;
 
-		bool addable = true;      // false = reference-only, never added to an arbitrary entity
-		bool serializable = true; // false = runtime/editor-only component (not persisted)
+		bool addable = true; // false = reference-only, never added to an arbitrary entity
+		bool serializable = true;
 
-		std::function<void(World&, Entity)> postSet; // e.g. Material -> AssignMaterial after a field write
+		std::function<void(World&, Entity)> postSet;
 		CustomSerializeFns customSerialize;
 
-		// Convenience: current value of a field by name (null get => component absent).
 		[[nodiscard]] const FieldDesc* FindField(std::string_view fieldName) const;
 	};
 
-	// The registry. Populated by AE_COMPONENT declarations at static-init.
 	const std::vector<ComponentType>& ComponentTypes();
 	const ComponentType* FindComponentType(std::string_view name);
-	void RegisterComponent(ComponentType type); // used by the DSL; safe to call directly
+	void RegisterComponent(ComponentType type);
 
-	// ── FieldValue <-> C++ conversions (member-type driven) ─────────────────────
 	inline FieldValue MakeValue(float v)
 	{
 		FieldValue f;
@@ -243,7 +220,6 @@ namespace aether::reflect
 		out = Entity{static_cast<std::uint32_t>(f.entity)};
 	}
 
-	// ── Builder used by the DSL ─────────────────────────────────────────────────
 	class ComponentBuilder
 	{
 	public:
@@ -282,10 +258,8 @@ namespace aether::reflect
 			};
 		}
 
-		// A plain member field. `Tag` is the semantic FieldType (Color3 vs Vec3 etc.);
-		// the actual member type drives the value conversion.
 		template<typename C, typename M>
-		ComponentBuilder& Field(const char* name, FieldType tag, M C::* member, FieldMeta meta = {})
+		ComponentBuilder& Field(const char* name, FieldType tag, M C::* member, const FieldMeta& meta = {})
 		{
 			FieldDesc f;
 			f.name = name;
@@ -315,21 +289,18 @@ namespace aether::reflect
 			return *this;
 		}
 
-		// A computed field (e.g. Transform position/euler/scale over a matrix). The
-		// caller supplies value get/set directly against the component pointer.
 		ComponentBuilder& CustomField(const char* name, FieldType tag, std::function<FieldValue(const void*)> get, std::function<void(void*, const FieldValue&)> set, FieldMeta meta = {})
 		{
 			FieldDesc f;
 			f.name = name;
 			f.type = tag;
-			f.meta = meta;
+			f.meta = std::move(meta);
 			f.get = std::move(get);
 			f.set = std::move(set);
 			m_type.fields.push_back(std::move(f));
 			return *this;
 		}
 
-		// An enum member. `table` maps names <-> values (define it as a C++ static in
 		// the declaration file - see AE_FIELD_ENUM). Must outlive the registry (statics do).
 		template<typename C, typename E>
 		ComponentBuilder& EnumField(const char* name, E C::* member, const EnumTable& table)
@@ -381,13 +352,6 @@ namespace aether::reflect
 	};
 } // namespace aether::reflect
 
-// ── Declaration DSL ─────────────────────────────────────────────────────────
-// AE_COMPONENT(CppType, "Display Name", "Category", ICON_FA_*)
-//     AE_FIELD(member, TypeTag)
-//     AE_FIELD_R(member, TypeTag, lo, hi)   // ranged
-//     AE_FIELD_ANGLE(member)                // float radians <-> exposed degrees
-//     AE_FIELD_CUSTOM("name", TypeTag, getLambda, setLambda)
-// AE_COMPONENT_END()
 #define AE_COMPONENT(CppType, DisplayName, Category, Icon)                            \
 	namespace aether::reflect::detail                                                \
 	{                                                                                \
@@ -399,8 +363,6 @@ namespace aether::reflect
 
 #define AE_FIELD(member, TypeTag) b.Field(#member, ::aether::reflect::FieldType::TypeTag, &C::member);
 
-// Same as AE_FIELD but with an explicit field name (used to match existing scene
-// TOML keys, e.g. member castsShadow -> key "shadow").
 #define AE_FIELD_N(name, member, TypeTag) b.Field(name, ::aether::reflect::FieldType::TypeTag, &C::member);
 
 #define AE_FIELD_R(member, TypeTag, lo, hi) \
@@ -409,22 +371,16 @@ namespace aether::reflect
 #define AE_FIELD_ANGLE(member) \
 	b.Field(#member, ::aether::reflect::FieldType::Float, &C::member, ::aether::reflect::FieldMeta{.min = 1.0f, .max = 89.0f, .isAngleDegrees = true});
 
-// Angle field exposed in degrees under `name` but persisted (in radians) under the
 // TOML key `tomlKey` - reconciles a nice editor unit with an existing on-disk format.
 #define AE_FIELD_ANGLE_AS(name, member, tomlKey) \
-	b.Field(name, ::aether::reflect::FieldType::Float, &C::member, ::aether::reflect::FieldMeta{.min = 1.0f, .max = 89.0f, .isAngleDegrees = true, .serializeName = tomlKey});
+	b.Field(name, ::aether::reflect::FieldType::Float, &C::member, ::aether::reflect::FieldMeta{.min = 1.0f, .max = 89.0f, .isAngleDegrees = true, .serializeName = (tomlKey)});
 
 #define AE_FIELD_CUSTOM(name, TypeTag, getLambda, setLambda) \
 	b.CustomField(name, ::aether::reflect::FieldType::TypeTag, getLambda, setLambda);
 
-// An enum field. `tableRef` is a reference to a reflect::EnumTable defined as a
-// static in the declaration file (its name<->value pairs written as normal C++
 // so the preprocessor never sees their commas).
 #define AE_FIELD_ENUM(name, member, tableRef) b.EnumField(name, &C::member, tableRef);
 
-// Marks the component as not addable from the Add-Component palette (it comes with
-// an entity or model - e.g. Skinned Mesh, Orbit Camera - and would be broken or
-// redundant if slapped onto an arbitrary entity). It stays fully get/set-able.
 #define AE_NOT_ADDABLE() b.Addable(false);
 
 #define AE_COMPONENT_END()                                                           \

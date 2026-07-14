@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -88,7 +89,7 @@ namespace aether::editor
 			startupInfo.cb = sizeof(startupInfo);
 			PROCESS_INFORMATION processInfo{};
 			const std::string workingDirectory = launcherExe.parent_path().string();
-			if (!CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDirectory.empty() ? nullptr : workingDirectory.c_str(), &startupInfo, &processInfo))
+			if (CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDirectory.empty() ? nullptr : workingDirectory.c_str(), &startupInfo, &processInfo) == 0)
 			{
 				AE_ERROR(LogCategory::App, "Editor failed to start Launcher (GetLastError={})", GetLastError());
 				return false;
@@ -102,14 +103,12 @@ namespace aether::editor
 #endif
 		}
 
-		// 12 wireframe edges of a local AABB under an arbitrary affine transform
-		// (AddDebugBox's quat form cannot represent non-uniform scale or shear).
 		void AppendObbEdges(std::vector<DebugVertex>& out, const glm::mat4& m, const glm::vec3& mn, const glm::vec3& mx, const glm::vec4& color)
 		{
 			glm::vec3 corners[8];
 			for (int i = 0; i < 8; ++i)
 			{
-				const glm::vec3 local{(i & 1) ? mx.x : mn.x, (i & 2) ? mx.y : mn.y, (i & 4) ? mx.z : mn.z};
+				const glm::vec3 local{((i & 1) != 0) ? mx.x : mn.x, ((i & 2) != 0) ? mx.y : mn.y, ((i & 4) != 0) ? mx.z : mn.z};
 				corners[i] = glm::vec3(m * glm::vec4(local, 1.0f));
 			}
 			static constexpr int kEdges[12][2] = {{0, 1}, {1, 3}, {3, 2}, {2, 0}, {4, 5}, {5, 7}, {7, 6}, {6, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
@@ -119,8 +118,6 @@ namespace aether::editor
 			}
 		}
 
-		// Font-Awesome glyph shown next to each window in the Window menu. Falls back
-		// to a neutral dot for anything unmapped.
 		const char* WindowMenuIcon(std::string_view panelName)
 		{
 			if (panelName == "Scene Outliner")
@@ -194,14 +191,12 @@ namespace aether::editor
 			return ICON_FA_CIRCLE;
 		}
 
-		// Slugifies a panel name into a stable config key ("Render Graph" ->
-		// "debug.window.render_graph") for persisting per-panel visibility.
 		std::string PanelVisibilityKey(std::string_view panelName)
 		{
 			std::string key = "debug.window.";
 			for (const char c: panelName)
 			{
-				key += std::isalnum(static_cast<unsigned char>(c)) ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '_';
+				key += (std::isalnum(static_cast<unsigned char>(c)) != 0) ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '_';
 			}
 			return key;
 		}
@@ -247,7 +242,6 @@ namespace aether::editor
 		m_projects.SaveSettings(m_debugConfig);
 
 		// Persist the editor window size (guarded so an unchanged size never dirties
-		// the config and triggers a redundant save).
 		if (m_editorWindowW > 0 && static_cast<int>(m_debugConfig.GetFloat("editor.window_width", -1.0f)) != m_editorWindowW)
 		{
 			m_debugConfig.Set("editor.window_width", static_cast<float>(m_editorWindowW));
@@ -266,9 +260,6 @@ namespace aether::editor
 		m_projects.Attach(context.services);
 		LoadSettings(context);
 
-		// Editor window size: seed from the user's last saved size, defaulting to the
-		// configured resolution. Updated each frame by CaptureEditorWindowSize and
-		// persisted to EditorState (editor.window_*).
 		int defW = 2560;
 		int defH = 1440;
 		if (auto* settings = context.services.TryGet<SettingsService>())
@@ -279,11 +270,8 @@ namespace aether::editor
 		m_editorWindowW = static_cast<int>(m_debugConfig.GetFloat("editor.window_width", static_cast<float>(defW)));
 		m_editorWindowH = static_cast<int>(m_debugConfig.GetFloat("editor.window_height", static_cast<float>(defH)));
 
-		// Shared selection service: registered before panels attach so every
 		// panel can resolve it for its whole lifetime.
 		context.services.Register<SceneSelection>(m_selection);
-		// Editor undo: panels push explicit points for keyboard-driven edits;
-		// mouse gestures are covered by the per-click push in OnImGui.
 		context.services.Register<UndoStack>(m_undoStack);
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
@@ -318,8 +306,6 @@ namespace aether::editor
 			panel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(panel->GetName()), panel->DefaultVisible()));
 		}
 
-		// Expose window control to the control endpoint / MCP (list + show/hide by
-		// name). Registered after panels exist; cleared in OnDetach. Runs on the
 		// main thread (same as OnImGui), so mutating visibility here is race-free.
 		EditorWindowActions windowActions;
 		windowActions.list = [this]()
@@ -361,8 +347,6 @@ namespace aether::editor
 		};
 		windowActions.focusInspectorComponent = [this](std::string_view component)
 		{
-			// Make sure the Inspector is visible, then hand the drawer-focus token to
-			// the shared section header (iw::BeginSection consumes it next frame).
 			if (DebugPanel* inspector = FindPanelByName("Inspector"))
 			{
 				inspector->SetVisible(true);
@@ -381,7 +365,7 @@ namespace aether::editor
 		{
 			panel->OnDetach(context);
 		}
-		context.services.Unregister<EditorWindowActions>(); // callbacks capture m_panels; drop before clearing
+		context.services.Unregister<EditorWindowActions>();
 		m_windowActions = {};
 		m_panels.clear();
 		m_hierarchyPanel = nullptr;
@@ -403,7 +387,7 @@ namespace aether::editor
 
 		if (input.IsKeyPressed(aether::Key::F5))
 		{
-			if (auto scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
+			if (auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
 			{
 				scripting->RequestReload();
 			}
@@ -411,8 +395,6 @@ namespace aether::editor
 
 		m_scriptErrors.Poll(context);
 
-		// Drive the async project-script build (kicked off on project open) to
-		// completion and reload the assembly when it finishes.
 		m_projects.UpdateScriptBuild();
 
 		if (!m_projects.IsProjectLoaded())
@@ -420,12 +402,8 @@ namespace aether::editor
 			return;
 		}
 
-		// Entities can be destroyed by scripts/physics at any point; keep the
-		// shared selection free of dangling ids before panels read it.
 		m_selection.Prune(context.Get<World>());
 
-		// Selection outlines: world-space wireframe boxes through the debug-line
-		// pass (same submission path as the light gizmos).
 		if (IsDebugRenderingEnabled() && !m_selection.All().empty())
 		{
 			if (auto* engine = context.TryGet<AetherCore>())
@@ -436,7 +414,7 @@ namespace aether::editor
 					m_outlinePulseStart = context.elapsedTimeSeconds;
 				}
 				const float pulseT = m_outlinePulseStart >= 0.0 ? std::clamp(static_cast<float>((context.elapsedTimeSeconds - m_outlinePulseStart) / 0.5), 0.0f, 1.0f) : 1.0f;
-				const float brightness = 1.6f - 0.6f * pulseT; // eases back to 1.0
+				const float brightness = 1.6f - 0.6f * pulseT;
 
 				auto& verts = engine->GetPendingDebugVertices();
 				World& world = context.Get<World>();
@@ -448,8 +426,6 @@ namespace aether::editor
 					{
 						continue;
 					}
-					// Mesh bounds when present, else a small marker box so empty
-					// entities are still visibly selected.
 					glm::vec3 mn{-0.125f};
 					glm::vec3 mx{0.125f};
 					if (const auto* mc = world.TryGet<MeshComponent>(e); mc != nullptr && mc->mesh != nullptr && mc->mesh->GetAABBMin() != mc->mesh->GetAABBMax())
@@ -481,9 +457,6 @@ namespace aether::editor
 	void DebugLayer::DrawStatusBar(app::LayerContext& context)
 	{
 		using namespace chrome;
-		// A child that fills the row reserved below the DockSpace. Drawn inside the
-		// (NoBackground) host window; the warm surface tone matches the launcher
-		// chrome rather than the default menu-bar grey.
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, kPanel);
 		if (ImGui::BeginChild("##StatusBar", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
 		{
@@ -495,8 +468,6 @@ namespace aether::editor
 			const ImVec2 barMin = ImGui::GetWindowPos();
 			const float barW = ImGui::GetWindowWidth();
 
-			// Live-session accent hairline along the TOP edge of the bar (mirrors the
-			// viewport's), fading in from both ends; dimmed while compiling.
 			if (playing || compiling)
 			{
 				AccentHairline(drawList, barMin, barW, playing ? 0.85f : 0.35f);
@@ -504,7 +475,6 @@ namespace aether::editor
 
 			ImGui::AlignTextToFramePadding();
 
-			// Amber tick + spaced item, then a faint hairline divider between groups.
 			const auto tick = [&](const ImVec4& color)
 			{
 				const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -526,7 +496,6 @@ namespace aether::editor
 			ImGui::Dummy(ImVec2(2.0f, 0.0f));
 			ImGui::SameLine();
 
-			// Project.
 			if (m_projects.HasCurrentProject())
 			{
 				tick(kAccent);
@@ -536,7 +505,6 @@ namespace aether::editor
 				divider();
 			}
 
-			// Scene.
 			const char* sceneName = "-";
 			if (const auto* scenes = context.TryGet<SceneSubsystem>(); scenes != nullptr && !scenes->GetCurrentScene().empty())
 			{
@@ -547,8 +515,6 @@ namespace aether::editor
 			ImGui::PopStyleColor();
 			divider();
 
-			// Play-state pill: filled amber while live, amber-outline compiling,
-			// quiet muted while editing - the viewport's state language, miniaturised.
 			{
 				const char* label = playing ? ICON_FA_PLAY "  PLAYING" : (compiling ? ICON_FA_GEAR "  COMPILING" : ICON_FA_STOP "  EDITING");
 				const ImVec2 textSize = ImGui::CalcTextSize(label);
@@ -573,9 +539,7 @@ namespace aether::editor
 				ImGui::Dummy(ImVec2(textSize.x + pad.x * 2.0f, 0.0f));
 			}
 
-			// Script-build indicator: while the editor builds the open project's C#
 			// scripts on a worker thread (project open / F5), show what's happening with
-			// an indeterminate progress bar - distinct from the Play-compile pill above.
 			if (const auto* buildScripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>(); buildScripting != nullptr && buildScripting->IsBuilding() && !compiling)
 			{
 				divider();
@@ -584,10 +548,6 @@ namespace aether::editor
 				ImGui::TextUnformatted(ICON_FA_GEAR "  Compiling C# scripts");
 				ImGui::PopStyleColor();
 				ImGui::SameLine(0.0f, 10.0f);
-				// A slim indeterminate marquee drawn into the bar's own draw list so it
-				// sits flush and vertically centered (ImGui::ProgressBar carries frame
-				// padding that overflows the status row). A highlight segment sweeps
-				// across a faint track, animated off ImGui's clock.
 				const float trackW = 120.0f;
 				const float trackH = 3.0f;
 				const float segW = trackW * 0.34f;
@@ -595,15 +555,13 @@ namespace aether::editor
 				const float trackY = curPos.y + (ImGui::GetFrameHeight() - trackH) * 0.5f;
 				const float radius = trackH * 0.5f;
 				drawList->AddRectFilled(ImVec2(curPos.x, trackY), ImVec2(curPos.x + trackW, trackY + trackH), U32(WithAlpha(kAccent, 0.20f)), radius);
-				const double sweep = ImGui::GetTime() * 0.8;                               // ~1.25s per pass
-				const float u = static_cast<float>(sweep - static_cast<long long>(sweep)); // 0..1 sawtooth
+				const double sweep = ImGui::GetTime() * 0.8;
+				const float u = static_cast<float>(sweep - std::floor(sweep));
 				const float segX = curPos.x + u * (trackW - segW);
 				drawList->AddRectFilled(ImVec2(segX, trackY), ImVec2(segX + segW, trackY + trackH), U32(kAccentHi), radius);
 				ImGui::Dummy(ImVec2(trackW, 0.0f));
 			}
 
-			// Right (aligned): resolution / FPS / frame time as faint micro-caps with
-			// a warm-white gauge value, right-anchored.
 			const ImGuiIO& io = ImGui::GetIO();
 			gpu::Extent2D extent{};
 			if (const auto* swapchain = context.TryGet<Swapchain>())
@@ -659,7 +617,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Build the action list fresh each frame the palette is open (a dozen-ish entries).
 		struct Action
 		{
 			std::string label;
@@ -724,9 +681,6 @@ namespace aether::editor
 		}
 
 		ImGui::Separator();
-		// One opaque highlight for the keyboard-selected row so the "selected"
-		// (Header) tint and the "hovered" (HeaderHovered) tint don't stack into a
-		// double band on the row under the cursor.
 		ImVec4 paletteSel = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
 		paletteSel.w = 1.0f;
 		ImGui::PushStyleColor(ImGuiCol_Header, paletteSel);
@@ -822,16 +776,11 @@ namespace aether::editor
 
 		if (saved)
 		{
-			// Quick-save writes silently (only a log line otherwise) - surface an
-			// on-screen confirmation so Ctrl+S visibly does something.
 			ShowToast(std::string(ICON_FA_FLOPPY_DISK "  Saved  ") + currentName);
-			// Refresh the project's launcher thumbnail from the current scene view.
 			m_projects.CaptureProjectPreview();
 		}
 		else if (m_hierarchyPanel != nullptr)
 		{
-			// No scene name yet (or the quick-save failed) - fall back to the
-			// named Save-As prompt instead of silently doing nothing.
 			m_hierarchyPanel->RequestSaveAsPopup();
 		}
 		return saved;
@@ -862,8 +811,6 @@ namespace aether::editor
 		{
 			return;
 		}
-		// The editor window owns its size; just remember valid (non-degenerate) sizes
-		// so they persist (editor.window_*) and reopen next launch. No forcing, and no
 		// launcher-size exclusion - the launcher never resizes the OS window anymore.
 		const auto size = window->GetWindowSize();
 		if (size.width >= 640 && size.height >= 480 && (size.width != m_editorWindowW || size.height != m_editorWindowH))
@@ -886,7 +833,7 @@ namespace aether::editor
 		{
 			return;
 		}
-		constexpr float kLifetime = 2.4f; // seconds on screen
+		constexpr float kLifetime = 2.4f;
 		constexpr float kFadeIn = 0.12f;
 		constexpr float kFadeOut = 0.5f;
 		const auto age = static_cast<float>(ImGui::GetTime() - m_toastStart);
@@ -915,8 +862,6 @@ namespace aether::editor
 		constexpr float padY = 10.0f;
 		const float w = textSize.x + padX * 2.0f;
 		const float h = textSize.y + padY * 2.0f;
-		// Bottom-centre, floating just above the status bar. A small rise as it
-		// fades in gives it a bit of life without being distracting.
 		const float rise = (1.0f - alpha) * 8.0f;
 		const float cx = vp->Pos.x + vp->Size.x * 0.5f;
 		const float bottom = vp->Pos.y + vp->Size.y - ImGui::GetFrameHeight() - 18.0f + rise;
@@ -924,14 +869,12 @@ namespace aether::editor
 		const ImVec2 p1(cx + w * 0.5f, bottom);
 		const ImVec4 accent = m_toastError ? chrome::kError : chrome::kSuccess;
 
-		// Flat left edge (only the right corners round) so the accent spine reads as a
-		// clean flush bar rather than fighting a rounded corner.
 		constexpr float rounding = 9.0f;
 		constexpr ImDrawFlags roundRight = ImDrawFlags_RoundCornersRight;
-		dl->AddRectFilled(ImVec2(p0.x, p0.y + 3.0f), ImVec2(p1.x, p1.y + 3.0f), chrome::U32(chrome::WithAlpha(chrome::kBg, 0.55f * alpha)), rounding, roundRight); // drop shadow
+		dl->AddRectFilled(ImVec2(p0.x, p0.y + 3.0f), ImVec2(p1.x, p1.y + 3.0f), chrome::U32(chrome::WithAlpha(chrome::kBg, 0.55f * alpha)), rounding, roundRight);
 		dl->AddRectFilled(p0, p1, chrome::U32(chrome::WithAlpha(chrome::kPanelHi, 0.98f * alpha)), rounding, roundRight);
 		dl->AddRect(p0, p1, chrome::U32(chrome::WithAlpha(accent, 0.75f * alpha)), rounding, roundRight, 1.5f);
-		dl->AddRectFilled(p0, ImVec2(p0.x + 3.0f, p1.y), chrome::U32(chrome::WithAlpha(accent, alpha))); // square accent spine, flush with the flat left edge
+		dl->AddRectFilled(p0, ImVec2(p0.x + 3.0f, p1.y), chrome::U32(chrome::WithAlpha(accent, alpha)));
 		chrome::TextSized(dl, kFont, ImVec2(p0.x + padX, p0.y + padY), chrome::WithAlpha(chrome::kText, alpha), m_toastText.c_str());
 	}
 
@@ -939,16 +882,11 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
-		// Record the editor window's current size so it persists (editor.window_*) and
-		// reopens at that size next launch. The editor window owns its size - nothing
-		// forces it (the launcher no longer resizes the OS window).
 		CaptureEditorWindowSize(context);
 
-		// Once per ImGui frame, before any panel might call Manipulate.
 		ImGuizmo::BeginFrame();
 
 		// A layout preset queued last frame is applied here, before any window
-		// Begin(), so ImGui reloads dock/window settings for this frame's panels.
 		if (m_pendingLayoutApply)
 		{
 			ImGui::LoadIniSettingsFromMemory(m_pendingLayoutIni.c_str(), m_pendingLayoutIni.size());
@@ -964,9 +902,6 @@ namespace aether::editor
 
 		if (!m_projects.IsProjectLoaded() || m_projects.IsLauncherOpen())
 		{
-			// The launcher is now its own OS window (a dedicated viewport). Fill the
-			// main editor window with a neutral backdrop behind it so it doesn't show
-			// stale swapchain pixels while the launcher is up.
 			if (m_dockspaceBuilt)
 			{
 				ImGuiViewport* mainViewport = ImGui::GetMainViewport();
@@ -978,13 +913,6 @@ namespace aether::editor
 			return;
 		}
 
-		// Fill the main viewport's backbuffer with an opaque editor background behind
-		// every window. The passthrough dockspace otherwise exposes the swapchain,
-		// which shows stale pixels where the central node is empty (e.g. all panels
-		// torn out to other monitors). Every window - including the Viewport panel's
-		// scene image - draws on top, so the normal docked view is unchanged. Gated to
-		// frame 1+ like the menu/status bars: submitting ImGui geometry on frame 0,
-		// before the first real UI frame, faults in this threaded frame-0 setup.
 		if (m_dockspaceBuilt)
 		{
 			ImGuiViewport* mainViewport = ImGui::GetMainViewport();
@@ -992,10 +920,6 @@ namespace aether::editor
 			ImGui::GetBackgroundDrawList(mainViewport)->AddRectFilled(mainViewport->Pos, ImVec2(mainViewport->Pos.x + mainViewport->Size.x, mainViewport->Pos.y + mainViewport->Size.y), editorBg);
 		}
 
-		// ── Editor undo (edit mode only) ──────────────────────────────────────
-		// Every LMB press records a pre-gesture snapshot (deduped against the
-		// stack top), so a whole gizmo drag, slider drag or destructive click
-		// coalesces into ONE undo step - no per-widget instrumentation.
 		if (const auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && !playState->IsPlaying())
 		{
 			const ImGuiIO& io = ImGui::GetIO();
@@ -1013,17 +937,12 @@ namespace aether::editor
 					const bool did = redoCombo ? m_undoStack.Redo(context.Get<World>(), context.services) : m_undoStack.Undo(context.Get<World>(), context.services);
 					if (did)
 					{
-						// Restored entities have fresh ids.
 						m_selection.Clear();
 					}
 				}
 			}
 		}
 
-		// ── Quick save (Ctrl+S) ─────────────────────────────────────────────────
-		// Mirrors File > Save; available in both Editing and Playing mode (same
-		// as the Scene Outliner's Save button). Suppressed while a text field is
-		// focused so typing 's' into a name box can't trigger a save.
 		{
 			const ImGuiIO& io = ImGui::GetIO();
 			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_S, false))
@@ -1034,31 +953,19 @@ namespace aether::editor
 
 		m_scriptErrors.Draw();
 
-		// Root dockspace: invisible full-screen window for docking
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->WorkPos);
 		ImGui::SetNextWindowSize(viewport->WorkSize);
 		ImGui::SetNextWindowViewport(viewport->ID);
-		// The menu bar is withheld on the very first frame: it shrinks the docked
-		// Viewport by one row, and resizing the scene render target before the first
-		// scene render has established it crashes the renderer. Letting frame 0 lay
-		// out at full size, then adding the bar on frame 1, makes it an ordinary
-		// (already-handled) resize.
 		const bool showMenuBar = m_dockspaceBuilt;
-		ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
-		                             | ImGuiWindowFlags_NoBackground | (showMenuBar ? ImGuiWindowFlags_MenuBar : 0);
+		const ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus
+		                                   | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground | (showMenuBar ? ImGuiWindowFlags_MenuBar : 0);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 		ImGui::Begin("DebugDockSpace", nullptr, hostFlags);
 		ImGui::PopStyleVar(3);
 
-		// Menu bar lives INSIDE the dockspace host window (the canonical Dear ImGui
-		// dockspace pattern). A separate BeginMainMenuBar() shrinks the viewport
-		// work-area, which collided with this full-viewport host and crashed the
-		// renderer on the first frame.
-		// Menu bar in the launcher chrome: warm surface, amber hover/accent, and a
-		// right-aligned live-session chip echoing the status bar's play state.
 		ImGui::PushStyleColor(ImGuiCol_MenuBarBg, chrome::kPanel);
 		ImGui::PushStyleColor(ImGuiCol_Header, chrome::WithAlpha(chrome::kAccent, 0.20f));
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, chrome::WithAlpha(chrome::kAccent, 0.28f));
@@ -1082,10 +989,6 @@ namespace aether::editor
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_PLUS "  New Scene"))
 				{
-					// A non-empty return is purely NewScene's success signal (it's the
-					// template's cosmetic display name). A freshly created scene has no
-					// file yet, so track it as UNNAMED - empty is the "unsaved" sentinel
-					// SaveCurrentScene() checks to route Save/Ctrl+S to the Save-As prompt.
 					const std::string name = app::scene::NewScene(context.Get<World>(), app::scene::MakeApplySceneDeps(context.services));
 					if (!name.empty())
 					{
@@ -1119,8 +1022,6 @@ namespace aether::editor
 			}
 			if (ImGui::BeginMenu("Window"))
 			{
-				// Renders one window's toggle (icon + name + checkmark) by resolving
-				// its panel from m_panels.
 				auto windowToggle = [this](std::string_view name)
 				{
 					for (auto& panel: m_panels)
@@ -1171,7 +1072,6 @@ namespace aether::editor
 				}
 
 				// Safety net: any panel not assigned to a group still gets a toggle so
-				// no window can become unreachable.
 				const bool hasUngrouped = std::ranges::any_of(m_panels, [&](const auto& panel) { return !grouped.contains(panel->GetName()); });
 				if (hasUngrouped && ImGui::BeginMenu(ICON_FA_CIRCLE "  Other"))
 				{
@@ -1252,7 +1152,6 @@ namespace aether::editor
 				ImGui::EndMenu();
 			}
 
-			// Right-aligned session chip: brand-tinted app name + a live-state dot.
 			{
 				using namespace chrome;
 				const auto* playState = context.TryGet<app::PlayState>();
@@ -1304,22 +1203,10 @@ namespace aether::editor
 			ImGui::EndPopup();
 		}
 
-		// V6: project file explorer sits under the outliner, with Inspector right
-		// and Viewport/UI Canvas center. The id bump retires layouts where File
-		// Explorer was absent or hidden by the old hierarchy asset browser.
-		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV6");
+		const ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV6");
 		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
-		// Reserve a row at the bottom of the dockspace for the status bar (frame 1+;
-		// withheld on frame 0 for the same reason as the menu bar). Keeping it inside
-		// the host window - rather than a separate BeginViewportSideBar, which
-		// reserved viewport work-area and black-screened the render - matches the
-		// menu bar's working approach.
 		const bool showStatusBar = m_dockspaceBuilt;
 		const float statusBarHeight = showStatusBar ? ImGui::GetFrameHeight() : 0.0f;
-		// Zero the vertical item spacing between the DockSpace and the status bar so
-		// the bar sits flush against the windows above it. Otherwise an ItemSpacing.y
-		// strip is left uncovered and, with no swapchain clear, flashes stale
-		// swapchain contents through the NoBackground host window.
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, -statusBarHeight), ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -1331,10 +1218,10 @@ namespace aether::editor
 
 			ImGuiID remaining = dockspace_id;
 			ImGuiID dock_left = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Left, 0.20f, nullptr, &remaining);
-			ImGuiID dock_left_files = ImGui::DockBuilderSplitNode(dock_left, ImGuiDir_Down, 0.42f, nullptr, &dock_left);
+			const ImGuiID dock_left_files = ImGui::DockBuilderSplitNode(dock_left, ImGuiDir_Down, 0.42f, nullptr, &dock_left);
 			ImGuiID dock_right = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.27f, nullptr, &remaining);
-			ImGuiID dock_right_tools = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.38f, nullptr, &dock_right);
-			ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.28f, nullptr, &remaining);
+			const ImGuiID dock_right_tools = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.38f, nullptr, &dock_right);
+			const ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.28f, nullptr, &remaining);
 
 			ImGui::DockBuilderDockWindow("Scene", dock_left);
 			ImGui::DockBuilderDockWindow("Project", dock_left_files);
@@ -1362,14 +1249,12 @@ namespace aether::editor
 		if (showStatusBar)
 		{
 			DrawStatusBar(context);
-			DrawToasts(); // transient confirmations (e.g. Ctrl+S), on top via the foreground draw list
+			DrawToasts();
 		}
-		ImGui::PopStyleVar(); // ItemSpacing
+		ImGui::PopStyleVar();
 
 		ImGui::End();
 
-		// Every panel manages its own window (including Render Graph now); draw only
-		// the ones the user has left visible.
 		for (auto& panel: m_panels)
 		{
 			if (panel->IsVisible())

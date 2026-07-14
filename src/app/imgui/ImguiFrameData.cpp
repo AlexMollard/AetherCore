@@ -4,9 +4,6 @@
 namespace aether
 {
 
-	// ---------------------------------------------------------------------------
-	// Global Object Pool for ImguiFrameData
-	// ---------------------------------------------------------------------------
 	namespace
 	{
 		std::mutex s_imguiPoolMutex;
@@ -15,7 +12,7 @@ namespace aether
 
 	std::unique_ptr<ImguiFrameData> ImguiFrameData::AcquirePooled()
 	{
-		std::lock_guard lock(s_imguiPoolMutex);
+		const std::lock_guard lock(s_imguiPoolMutex);
 		if (!s_imguiPool.empty())
 		{
 			std::unique_ptr<ImguiFrameData> frame = std::move(s_imguiPool.back());
@@ -31,14 +28,12 @@ namespace aether
 		{
 			return;
 		}
-		frame->Clear(); // Resets draw data but keeps internal ImDrawList pools warm
-		std::lock_guard lock(s_imguiPoolMutex);
+		frame->Clear();
+		const std::lock_guard lock(s_imguiPoolMutex);
 		s_imguiPool.push_back(std::move(frame));
 	}
 
-	// ---------------------------------------------------------------------------
 	// Lifetime
-	// ---------------------------------------------------------------------------
 
 	ImguiFrameData::~ImguiFrameData()
 	{
@@ -52,10 +47,6 @@ namespace aether
 		}
 	}
 
-	// ---------------------------------------------------------------------------
-	// Clear
-	// ---------------------------------------------------------------------------
-
 	void ImguiFrameData::Clear()
 	{
 		m_drawData.Clear();
@@ -67,10 +58,6 @@ namespace aether
 
 		m_secondary.clear();
 	}
-
-	// ---------------------------------------------------------------------------
-	// CloneInto
-	// ---------------------------------------------------------------------------
 
 	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& pool, std::size_t poolOffset, bool copyTextures)
 	{
@@ -89,8 +76,6 @@ namespace aether
 		dst.OwnerViewport = source->OwnerViewport;
 
 		// Texture updates are handled on the producer thread before capture.
-		// Do not carry ImTextureData* pointers across to the render thread:
-		// ImGui owns them in the live context/platform texture list.
 		dst.Textures = nullptr;
 
 		const int count = source->CmdListsCount;
@@ -103,12 +88,6 @@ namespace aether
 			for (std::size_t i = oldSize; i < requiredSize; ++i)
 			{
 				// Null shared data on purpose: these are render-thread copies that
-				// only carry vertex/index/command buffers. Constructing them against
-				// the live context's ImDrawListSharedData would register them in its
-				// DrawLists registry, and because the frame pool is process-lifetime
-				// (kept warm in a static pool), they outlive ImGui::DestroyContext()
-				// and trip ~ImDrawListSharedData's `DrawLists.Size == 0` assertion at
-				// shutdown. Keeping _Data null decouples the snapshot from the context.
 				pool[i] = IM_NEW(ImDrawList)(nullptr);
 			}
 		}
@@ -139,21 +118,12 @@ namespace aether
 
 			dstList->Flags = srcList->Flags;
 			// Deliberately NOT copying srcList->_Data: the clone must stay detached
-			// from the live context's shared data (see the IM_NEW(nullptr) above).
-			// The Vulkan backend renders from the buffers only and never reads _Data.
-
-			// NO manual TexRef stripping. The Vulkan backend resolves textures via
-			// dst.Textures during RenderDrawData.
 
 			dst.CmdLists[i] = dstList;
 			dst.TotalVtxCount += dstList->VtxBuffer.Size;
 			dst.TotalIdxCount += dstList->IdxBuffer.Size;
 		}
 	}
-
-	// ---------------------------------------------------------------------------
-	// Capture
-	// ---------------------------------------------------------------------------
 
 	void ImguiFrameData::Capture(const ImDrawData* source)
 	{

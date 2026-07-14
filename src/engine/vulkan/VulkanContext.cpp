@@ -2,11 +2,6 @@
 
 #include "Defines.hpp"
 
-// Derived from the user-facing VULKAN_CPU_DEBUG / VULKAN_GPU_DEBUG macros in
-// Defines.hpp. Those two are mutually exclusive (enforced there).
-//   VULKAN_CPU_DEBUG  -> CPU=1, GPU=0
-//   VULKAN_GPU_DEBUG  -> CPU=1, GPU=1
-//   neither defined   -> CPU=0, GPU=0
 #if defined(VULKAN_GPU_DEBUG)
 #	define VK_VALIDATION_CPU 1
 #	define VK_VALIDATION_GPU 1
@@ -45,9 +40,6 @@
 
 namespace
 {
-	// Set by GraphicsDevice::Init so the VK_EXT_device_address_binding_report
-	// events delivered through the debug messenger can register/unregister GPU
-	// memory ranges in a single place (including driver-internal allocations).
 	aether::GpuMemoryTracker* g_addressBindingTracker = nullptr;
 
 	const char* ObjectTypeToString(VkObjectType type)
@@ -99,54 +91,36 @@ namespace
 		}
 	}
 
-	// Substrings of known-noisy validation messages that we suppress before
-	// they reach the logger. Content-based matching is more robust than
-	// message-ID hashing because the IDs are not stable across SDK versions
-	// and are not documented. All of these are status/adjustment notices, not
-	// actual validation errors.
 	bool IsSuppressedMessage(const char* message)
 	{
 		if (message == nullptr)
 		{
 			return false;
 		}
-		std::string_view msg(message);
-		// "DebugPrintf logs to the Information message severity, enabling..."
-		if (msg.find("DebugPrintf logs to the Information") != std::string_view::npos)
+		const std::string_view msg(message);
+		if (msg.contains("DebugPrintf logs to the Information"))
 		{
 			return true;
 		}
-		// "Khronos Validation Layer Active: Current Enables: ..."
-		if (msg.find("Khronos Validation Layer Active") != std::string_view::npos)
+		if (msg.contains("Khronos Validation Layer Active"))
 		{
 			return true;
 		}
-		// "vkCreateDevice(): Cannot open shader validation cache at ... for reading
-		//  (it may not exist yet)" -- the layer bootstrapping its own internal
-		// cache file on first run; layer housekeeping, not an engine finding.
-		if (msg.find("Cannot open shader validation cache") != std::string_view::npos)
+		if (msg.contains("Cannot open shader validation cache"))
 		{
 			return true;
 		}
 		// "vkCreateDevice(): Warning that validation is adjusting settings:
-		//  Forcing fragmentStoresAndAtomics to VK_TRUE ..."
-		// "vkCreateDevice(): Warning that validation is adjusting settings:
-		//  Ray Query validation option was enabled, but the rayQuery feature
-		//  is not supported. ..."
-		if (msg.find("validation is adjusting settings") != std::string_view::npos)
+		if (msg.contains("validation is adjusting settings"))
 		{
 			return true;
 		}
 		// Non-actionable "Internal Warning" diagnostics from the validation
-		// layer itself (e.g. driver-reported property values that the layer
-		// finds unusual but are harmless).
-		if (msg.find("Internal Warning") != std::string_view::npos)
+		if (msg.contains("Internal Warning"))
 		{
 			return true;
 		}
-		// "vkBindBufferMemory() ... should be sub-allocated from larger memory blocks"
-		// VMA handles sub-allocation internally; this performance hint is noise.
-		if (msg.find("should be sub-allocated") != std::string_view::npos)
+		if (msg.contains("should be sub-allocated"))
 		{
 			return true;
 		}
@@ -189,11 +163,7 @@ namespace
 			objects += ")";
 		}
 
-		// Walk the pNext chain to surface structured diagnostic data that the
-		// driver / layers attach, notably VK_EXT_device_address_binding_report
-		// callbacks (VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_REPORT_CALLBACK_DATA_EXT)
-		// which report every BDA bind/unbind for resource-leak tracking.
-		std::string extra;
+		const std::string extra;
 		if (callbackData != nullptr)
 		{
 			for (const VkBaseInStructure* pNext = static_cast<const VkBaseInStructure*>(callbackData->pNext); pNext != nullptr; pNext = pNext->pNext)
@@ -228,10 +198,7 @@ namespace
 		}
 		else if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0 && (messageType & (VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)) != 0)
 		{
-			// INFO-severity VALIDATION/PERFORMANCE messages are real findings (e.g.
 			// best-practices advisories) and must surface in the log. INFO-severity
-			// GENERAL messages are loader/driver enumeration chatter (layer
-			// manifests, PnP registry scans) and stay verbose with the rest.
 			aether::Logger::InfoAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
 		}
 		else
@@ -242,21 +209,12 @@ namespace
 		return VK_FALSE;
 	}
 
-	// Per-user, per-app writable directory for runtime-generated GPU caches
-	// (Vulkan pipeline cache, Aftermath crash/shader-debug dumps) so a shipped
 	// game never writes into its own install directory. Lives under
-	// PlatformPaths::GetUserConfigDir() (%LOCALAPPDATA%/AetherCore on Windows),
-	// keyed by executable name so the editor (App) and a published game
-	// (AetherGame) don't share -- and potentially stomp -- each other's cache.
-	// Falls back to the current working directory only if the OS has no
-	// resolvable per-user location at all (matches PlatformPaths' own policy).
 	std::filesystem::path ResolveGpuCacheDir(std::string_view subdir)
 	{
 		std::filesystem::path base = aether::io::PlatformPaths::GetUserConfigDir();
 		if (base.empty())
 		{
-			// Non-throwing overload: an unresolvable LocalAppData plus an invalid
-			// CWD degrades to an empty path rather than throwing.
 			std::error_code cwdError;
 			base = std::filesystem::current_path(cwdError);
 		}
@@ -295,8 +253,8 @@ namespace aether
 		instanceBuilder.require_api_version(1, 4, 0);
 #if VK_VALIDATION_CPU
 		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-		VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+		const VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		const VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
 		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
 		instanceBuilder.request_validation_layers();
 		instanceBuilder.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -306,35 +264,17 @@ namespace aether
 		instanceBuilder.set_debug_messenger_type(debugTypes);
 
 #	if defined(VULKAN_BEST_PRACTICES)
-		// Best-practices checks are opt-in (see Defines.hpp): SDK 1.4.350's layer
-		// null-derefs in BestPractices::ValidateImageInQueue on the first imgui
-		// texture-upload submit, crashing the editor before any message is emitted.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
 #	endif
 #	if VK_VALIDATION_GPU
-		// GPU-AV is incompatible with sync validation: the two inject conflicting
-		// tracking into pipeline/descriptor state (LunarG docs). Skip sync-val.
-		// Debug printf routes shader debugPrintfEXT() calls through the debug
-		// messenger. It is GPU shader instrumentation (like GPU-AV) and is therefore
-		// incompatible with VK_EXT_descriptor_heap, so it belongs to the GPU tier only
-		// -- enabling it under CPU-only validation crashes at pipeline creation.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
 		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (GPU-AV, debug printf + best practices).");
 #	else
-		// CPU-only validation: core checks + synchronization validation + best
-		// practices. No GPU shader instrumentation (no debug printf / GPU-AV), so it
-		// is compatible with VK_EXT_descriptor_heap.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
 		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + best practices).");
 #	endif
 #endif
 #if VK_VALIDATION_GPU
-		// GPU-AV + VK_EXT_descriptor_heap: empirically verified COMPATIBLE on SDK
-		// 1.4.350 / NVIDIA (previously believed mutually exclusive). Proven by a
-		// full instrumented editor session plus a shader debugPrintfEXT probe
-		// surfacing through the debug messenger (instrumentation demonstrably
-		// live), with zero validation findings. Expect ~20s startup overhead
-		// while every pipeline is instrumented.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT);
 		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
@@ -359,14 +299,13 @@ namespace aether
 
 		VkPhysicalDeviceVulkan11Features requiredFeatures11{};
 		requiredFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-		// shaderDrawParameters is core in 1.1+ but kept for SDK / pre-1.4 validation compatibility.
 		requiredFeatures11.shaderDrawParameters = VK_TRUE;
 
 		VkPhysicalDeviceVulkan12Features requiredFeatures12{};
 		requiredFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 		requiredFeatures12.bufferDeviceAddress = VK_TRUE;
 		requiredFeatures12.descriptorIndexing = VK_TRUE;
-		requiredFeatures12.scalarBlockLayout = VK_TRUE; // allows tight-packed structs in BDA/SSBO
+		requiredFeatures12.scalarBlockLayout = VK_TRUE;
 		requiredFeatures12.runtimeDescriptorArray = VK_TRUE;
 		requiredFeatures12.descriptorBindingPartiallyBound = VK_TRUE;
 		requiredFeatures12.descriptorBindingVariableDescriptorCount = VK_TRUE;
@@ -393,7 +332,7 @@ namespace aether
 		vkb::PhysicalDeviceSelector selector{*m_instance};
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);
 		{
-			VkPhysicalDeviceVulkan14Features features14{
+			const VkPhysicalDeviceVulkan14Features features14{
 			        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
 			        .hostImageCopy = VK_TRUE,
 			        .pushDescriptor = VK_TRUE,
@@ -402,51 +341,19 @@ namespace aether
 		}
 #ifdef TRACY_ENABLE
 		// VK_EXT_calibrated_timestamps is required for Tracy host-calibrated GPU zones.
-		// It is promoted to core in Vulkan 1.4 under the KHR name, but we request the EXT
-		// extension explicitly so vkb enables it and the function pointers are available.
 		selector.add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
 #endif
 		// VK_KHR_maintenance9: optional device extension. Required by this renderer
-		// for compatible queue-family ownership transfer behavior.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
-		// Push descriptors are represented in Vulkan 1.4 core structures, but
-		// requesting the legacy extension keeps extension-suffixed entry points
-		// and driver paths explicit for this renderer.
 		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 		// VK_EXT_shader_object: layout-free shaders bound directly via vkCmdBindShadersEXT.
-		// Still a device extension, not Vulkan 1.4 core. Required explicitly.
 		selector.add_required_extension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
-		// Extended dynamic state v1/v2 functionality is available through Vulkan 1.3/core
-		// entry points for the states used here. VK_EXT_extended_dynamic_state3 is still
 		// an extension and is required explicitly below because shader objects use EDS3
-		// rasterization and blend dynamic states.
-		// VK_EXT_descriptor_heap: explicit descriptor memory management using one
-		// resource heap and one sampler heap. This is an extension, not Vulkan 1.4 core.
-		// It can replace descriptor sets/pipeline layouts for heap-based binding while
-		// still allowing set/binding shader decorations to map to heap offsets.
 		selector.add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
 		selector.add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
-		// VK_EXT_device_fault: on device loss, vkGetDeviceFaultInfoEXT returns
-		// detailed fault addresses (memory + instruction), vendor-specific data,
-		// and a description string. Near-zero cost when no fault occurs -
-		// enabled unconditionally.
 		selector.add_required_extension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
-		// VK_EXT_device_address_binding_report: the driver reports every bind/
-		// unbind of a device address range through the debug messenger pNext
-		// chain (VkDeviceAddressBindingCallbackDataEXT). Used by the
-		// DiagnosticEngine to maintain a BDA -> resource-name registry for
-		// post-mortem address resolution.
 		selector.add_required_extension(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
-		// NVIDIA Aftermath's VK_NV_device_diagnostics_config / _checkpoints are
-		// NOT requested here. They are NVIDIA-only extensions, and the vendor of
-		// the physical device isn't known until AFTER selector.select() below
 		// picks one. Requesting them as *required* selector extensions this
-		// early (the previous approach) would make select() reject every
-		// candidate device that doesn't expose them - i.e. it would fail to
-		// find ANY suitable device on a non-NVIDIA GPU (AMD, Intel). See the
-		// vendor + editor gate right after select() succeeds, which enables
-		// them post-hoc via PhysicalDevice::enable_extension_if_present only
-		// when appropriate.
 
 		auto physicalDeviceResult = selector.select();
 
@@ -455,22 +362,9 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to select a suitable Vulkan physical device."));
 		}
 
-		// -- NVIDIA Aftermath vendor + editor gate ---------------------------
-		// AETHER_ENABLE_NVIDIA_AFTERMATH only controls whether Aftermath is
-		// *compiled* into Engine (and therefore into both App and GameRuntime).
-		// Whether it's actually turned ON for this process is a runtime decision
 		// gated on two independent conditions, both required:
-		//   1. enableGpuDiagnostics - true only for an editor build (App, under
-		//      AETHERCORE_EDITOR_APP; see src/app/main.cpp). GameRuntime always
-		//      passes false, so a shipped game never enables a dev GPU-crash tool.
-		//   2. physical device vendorID == 0x10DE (NVIDIA) - VK_NV_device_diagnostics_config
-		//      and VK_NV_device_diagnostic_checkpoints are NVIDIA-only. This check
-		//      MUST happen after physical device selection (vendor is now known)
-		//      and BEFORE any Aftermath extension/feature is requested on the
-		//      device - that ordering is what makes a non-NVIDIA device (e.g. AMD)
-		//      safe: it never has an NVIDIA-only extension requested at all.
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		bool aftermathDeviceExtensionsEnabled = false;
+		const bool aftermathDeviceExtensionsEnabled = false;
 		{
 			const std::uint32_t vendorId = physicalDeviceResult.value().properties.vendorID;
 			constexpr std::uint32_t kVendorIdNvidia = 0x10DE;
@@ -485,20 +379,13 @@ namespace aether
 			else
 			{
 #	if VK_VALIDATION_CPU
-				// The Vulkan validation layers and NVIDIA Aftermath both instrument the
-				// device and are mutually incompatible (per NVIDIA Nsight Aftermath docs):
-				// running them together access-violates at pipeline creation. When any
-				// validation tier is compiled in (VULKAN_CPU_DEBUG / VULKAN_GPU_DEBUG),
-				// skip Aftermath -- use validation OR Aftermath, not both.
 				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled because the Vulkan validation layer is active (mutually incompatible; enable one or the other).");
 #	else
 				const bool diagnosticsConfigPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
 				const bool checkpointsPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 				if (diagnosticsConfigPresent && checkpointsPresent)
 				{
-					// Crash dumps, shader debug info, and the .spv shader binaries Aftermath
 					// writes alongside them must not land in the game's install directory
-					// (see ResolveGpuCacheDir above) -- redirect them under LocalAppData.
 					const std::string crashDumpDir = ResolveGpuCacheDir("gpu-crash-dumps").string();
 					aftermathDeviceExtensionsEnabled = m_aftermathContext.EnableGpuCrashDumps(crashDumpDir.c_str());
 					if (aftermathDeviceExtensionsEnabled)
@@ -518,26 +405,10 @@ namespace aether
 		}
 #endif
 
-		// Non-core extension feature structs chained into the vkb::DeviceBuilder
-		// pNext. The core 1.1/1.2/1.3/1.4 features above are handled by vkb
-		// internally; only the hardware-specific extension features need to be
 		// chained here. vkb owns the lifetime of the core feature structs it
-		// copied during select(), so these locals only need to outlive build().
-		// Each struct is added via its own add_pNext call: vkb builds the pNext
-		// chain internally by overwriting each struct's pNext field, so a
-		// manual chain must NOT be set up here.
 		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
 #if defined(VULKAN_BEST_PRACTICES)
-		        // SDK 1.4.350 layer bug: with maintenance9 enabled, BestPractices::
-		        // ValidateImageInQueue computes qf_count = last_usage.queue_family_index
-		        // + 1 on an image's FIRST use, where the index is the UINT32_MAX
-		        // sentinel -> overflows to 0 -> qf_props.back() on an empty vector ->
-		        // access violation (bp_image.cpp:280-281, vulkan-sdk-1.4.350.0). Keep
-		        // the extension but drop the feature bit for best-practices lint runs;
-		        // the buggy branch is feature-gated, and the feature bit only grants
-		        // API permission (same driver behavior on this hardware). QFOT-related
-		        // best-practice findings may differ from production accordingly.
 		        .maintenance9 = VK_FALSE,
 #else
 		        .maintenance9 = VK_TRUE,
@@ -554,10 +425,6 @@ namespace aether
 		        .descriptorHeap = VK_TRUE,
 		};
 
-		// Query supported fault features on this physical device so we only
-		// request what the hardware actually supports. deviceFaultVendorBinary
-		// is optional - NVIDIA beta drivers (and some production drivers) may
-		// not support it.
 		VkPhysicalDeviceFaultFeaturesEXT supportedFaultFeatures{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT,
 		};
@@ -654,9 +521,6 @@ namespace aether
 
 		volkLoadDevice(m_device->device);
 
-		// Probe active Vulkan tools (RenderDoc, Nsight Graphics, Steam overlay, etc.)
-		// via VK_EXT_tooling_info so the developer knows what is injecting into the
-		// instance/device. volk loads the function pointer at instance load time.
 		if (vkGetPhysicalDeviceToolPropertiesEXT != nullptr)
 		{
 			uint32_t toolCount = 0;
@@ -675,19 +539,6 @@ namespace aether
 		}
 
 #if VK_VALIDATION_CPU
-		// Create the persistent debug messenger that includes DEVICE_ADDRESS_BINDING.
-		// VK_EXT_device_address_binding_report is a device extension, so this can
-		// only be done after device creation. Stored in m_debugMessenger and
-		// destroyed manually in the destructor.
-		// The device-address-binding report messenger is intentionally NOT created
-		// while the validation layer is active: the driver's
-		// VK_EXT_device_address_binding_report callbacks, delivered through the debug
-		// messenger while the Khronos validation layer simultaneously wraps the
-		// descriptor-buffer bindless path, fault (near-null deref) inside the
-		// layer/driver at the first buffer bind. The BDA->resource-name registry it
-		// feeds is a post-mortem nicety; drop it so the rest of validation (core + sync
-		// + best practices) can run. Without validation, this messenger is created
-		// below via the else branch (no layer in the chain, no crash).
 		(void) debugTypesWithAddressBinding;
 		m_debugMessenger = VK_NULL_HANDLE;
 #endif
@@ -726,7 +577,6 @@ namespace aether
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
 		vkutil::SetObjectNameFunction(setObjectNameFn);
 
-		// Graphics and compute may be the same queue on some hardware; guard against double-naming.
 		vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_graphicsQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
 		if (m_computeQueue != m_graphicsQueue)
 		{
@@ -737,9 +587,6 @@ namespace aether
 			vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_presentQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
 		}
 
-		// Validate push constant size against hardware limits. Vulkan 1.0 guarantees
-		// at least 128 bytes, but explicit verification catches drivers that may
-		// report less for unusual virtualized/adapter configurations.
 		{
 			VkPhysicalDeviceProperties props{};
 			vkGetPhysicalDeviceProperties(m_device->physical_device, &props);
@@ -753,15 +600,11 @@ namespace aether
 			}
 			AE_INFO(LogCategory::Vulkan, "Physical device: {}, maxPushConstantsSize={}", props.deviceName, props.limits.maxPushConstantsSize);
 
-			// Stamp the adapter + driver into any future crash report: "which GPU"
 			// is the first question when a fault lands in a driver DLL, and it must
-			// survive even after the startup log has scrolled out of the ring buffer.
 			CrashHandler::SetContext(
 			        "GPU", std::format("{} (Vulkan {}.{}.{}, driver 0x{:X})", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion), props.driverVersion));
 		}
 
-		// Query VK_EXT_descriptor_heap properties. Used by BindlessManager to
-		// size/align the resource and sampler heap backing buffers.
 		{
 			m_descriptorHeapProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
 			VkPhysicalDeviceProperties2 props2{
@@ -782,12 +625,7 @@ namespace aether
 			        m_descriptorHeapProps.maxPushDataSize);
 		}
 
-		// Pipeline cache for faster pipeline creation across runs. Lives under
 		// LocalAppData (never CWD/the game's install directory -- a shipped game
-		// must not write into its own program directory).
-		// Attempt to load cached data from a previous session; fall back to empty
-		// if the file is missing or the driver rejects the data (e.g. after a
-		// driver update where the cache UUID no longer matches).
 		{
 			m_pipelineCachePath = ResolveGpuCacheDir("pipeline") / "pipeline_cache.bin";
 
@@ -813,8 +651,6 @@ namespace aether
 			VkResult cacheResult = vkCreatePipelineCache(m_device->device, &cacheInfo, nullptr, &m_pipelineCache);
 			if (cacheResult != VK_SUCCESS && cacheResult != VK_ERROR_OUT_OF_HOST_MEMORY)
 			{
-				// Driver rejected cached data (driver update, device mismatch, etc.).
-				// Retry with an empty cache.
 				AE_INFO(LogCategory::Vulkan, "Pipeline cache data rejected; creating fresh cache.");
 				const VkPipelineCacheCreateInfo emptyInfo{
 				        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
@@ -828,8 +664,6 @@ namespace aether
 			}
 		}
 
-		// Report GPU (VkDeviceMemory) allocations to Tracy as the "GPU" named pool
-		// and optionally to GpuMemoryTracker for address resolution.
 		static const VmaDeviceMemoryCallbacks kVmaCallbacks{
 		        .pfnAllocate =
 		                [](VmaAllocator, uint32_t memoryType, VkDeviceMemory memory, VkDeviceSize size, void*)
@@ -882,9 +716,7 @@ namespace aether
 			}
 
 			m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
-			// Build the engine-side pImpl via the vulkan-side factory
 			// and hand it to the engine singleton. Engine code never
-			// sees `tracy::VkCtx*` or any other `Vk*`-named type.
 			m_tracyProfilerHandle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
 			gpu::GpuProfiler::Get().Initialize({m_tracyProfilerHandle});
 			gpu::GpuProfiler::Get().SetName("AetherCore GPU");
@@ -940,9 +772,6 @@ namespace aether
 #if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_tracyVkCtx)
 		{
-			// Drop the engine-side reference before destroying the
-			// Tracy context so any in-flight GpuZoneScope sees a
-			// null context and becomes a no-op.
 			gpu::GpuProfiler::Get().Shutdown();
 			aether::vulkan::DestroyTracyGpuProfilerContext(m_tracyProfilerHandle);
 			m_tracyProfilerHandle = nullptr;
@@ -1057,7 +886,6 @@ namespace aether
 	void VulkanContext::QueryDeviceFaultInfo() const
 	{
 		AE_PROFILE_ZONE();
-		// Pass 1: query the number of fault address and vendor records.
 		VkDeviceFaultCountsEXT counts{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT,
 		};
@@ -1073,7 +901,6 @@ namespace aether
 			return;
 		}
 
-		// Pass 2: allocate arrays and fetch full fault info.
 		std::vector<VkDeviceFaultAddressInfoEXT> addrInfos(counts.addressInfoCount);
 		std::vector<VkDeviceFaultVendorInfoEXT> vendorInfos(counts.vendorInfoCount);
 		VkDeviceFaultInfoEXT info{
@@ -1092,46 +919,36 @@ namespace aether
 		AE_ERROR(LogCategory::Vulkan, "=================== VK_EXT_device_fault report ===================");
 		AE_ERROR(LogCategory::Vulkan, "  description: {}", info.description);
 
-		// Memory (MMU) fault address infos.
 		for (uint32_t i = 0; i < counts.addressInfoCount; ++i)
 		{
 			const auto& ai = addrInfos[i];
-			const char* typeStr = "";
-			switch (ai.addressType)
+			const char* typeStr = [&]() -> const char*
 			{
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:
-					typeStr = "ReadInvalid";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:
-					typeStr = "WriteInvalid";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:
-					typeStr = "ExecuteInvalid";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:
-					typeStr = "InstrPtrUnknown";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:
-					typeStr = "InstrPtrInvalid";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
-					typeStr = "InstrPtrFault";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:
-					typeStr = "None";
-					break;
-				// Enum sentinel (0x7FFFFFFF), never a real address type. Listed
-				// explicitly so the exhaustive-switch check (-Wswitch-enum, active under
-				// clang-cl) is satisfied; shares the default's "unknown" handling.
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
-				default:
-					typeStr = "Unknown";
-					break;
-			}
+				switch (ai.addressType)
+				{
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:
+						return "ReadInvalid";
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:
+						return "WriteInvalid";
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:
+						return "ExecuteInvalid";
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:
+						return "InstrPtrUnknown";
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:
+						return "InstrPtrInvalid";
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
+						return "InstrPtrFault";
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:
+						return "None";
+					// Enum sentinel (0x7FFFFFFF), never a real address type. Listed
+					case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
+					default:
+						return "Unknown";
+				}
+			}();
 			AE_ERROR(LogCategory::Vulkan, "  addressInfo[{}]: type={} reportedAddress=0x{:016X} precision={}", i, typeStr, ai.reportedAddress, ai.addressPrecision);
 		}
 
-		// Vendor-specific fault info.
 		for (uint32_t i = 0; i < counts.vendorInfoCount; ++i)
 		{
 			const auto& vi = vendorInfos[i];

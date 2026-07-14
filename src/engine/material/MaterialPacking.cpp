@@ -38,9 +38,6 @@ namespace aether
 		}
 		g.flags = flags;
 
-		// Optional map not set (default-constructed handle) -> kNoTexture so the
-		// shader skips the sample. Otherwise the registry resolves to the live
-		// heap slot, or the fallback default for a stale handle.
 		auto slotFor = [&textures](const TextureHandle h) -> std::uint32_t
 		{
 			return h.IsValid() ? textures.ResolveSlot(h) : GpuMaterial::kNoTexture;

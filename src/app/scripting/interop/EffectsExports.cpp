@@ -7,10 +7,6 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 
-// Entity effect control exported to C#: set_entity_effect resolves the effect
-// pipeline + params slot; the param setters do a CPU read-modify-write then one
-// EffectParamBuffer::Write.
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 

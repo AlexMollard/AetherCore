@@ -20,10 +20,7 @@ namespace aether
 {
 	namespace
 	{
-		// Encode top-down 8-bit RGBA to a compressed PNG (stb_image_write, already a
-		// CPM dependency). Replaces the old raw-BMP writer: PNG is ~an order of
 		// magnitude smaller on disk and viewable/inline-loadable everywhere, so the
-		// capture is a single step - no separate BMP->PNG conversion.
 		bool WritePng(const std::string& path, const std::uint8_t* rgba, std::uint32_t w, std::uint32_t h)
 		{
 			std::error_code ec;
@@ -46,8 +43,19 @@ namespace aether
 				case gpu::Format::R16G16B16A16Sfloat:
 				case gpu::Format::R32G32Sfloat:
 					return 8;
+				case gpu::Format::Undefined:
+				case gpu::Format::R32G32B32Sfloat:
+				case gpu::Format::R32G32B32A32Sfloat:
+				case gpu::Format::D16Unorm:
+				case gpu::Format::D24UnormS8Uint:
+				case gpu::Format::X8D24UnormPack32:
+				case gpu::Format::D16UnormS8Uint:
+				case gpu::Format::D32SfloatS8Uint:
+				case gpu::Format::BC4UnormBlock:
+				case gpu::Format::BC7UnormBlock:
+				case gpu::Format::BC7SrgbBlock:
 				default:
-					return 0; // unsupported for capture
+					return 0;
 			}
 		}
 
@@ -88,9 +96,6 @@ namespace aether
 			return r;
 		}
 
-		// Convert a raw readback of any supported format to top-down 8-bit RGBA
-		// (the order stb_image_write expects): depth -> normalized grayscale, HDR ->
-		// Reinhard tonemap + gamma. Empty on an unsupported format.
 		std::vector<std::uint8_t> ConvertToRgba(gpu::Format f, const std::uint8_t* src, std::uint32_t w, std::uint32_t h)
 		{
 			const std::size_t n = static_cast<std::size_t>(w) * h;
@@ -105,15 +110,15 @@ namespace aether
 			{
 				case gpu::Format::R8G8B8A8Unorm:
 				case gpu::Format::R8G8B8A8Srgb:
-					std::memcpy(out.data(), src, n * 4u); // already RGBA
+					std::memcpy(out.data(), src, n * 4u);
 					break;
 				case gpu::Format::B8G8R8A8Unorm:
 				case gpu::Format::B8G8R8A8Srgb:
 					for (std::size_t i = 0; i < n; ++i)
 					{
-						out[i * 4] = src[i * 4 + 2]; // R <- B
+						out[i * 4] = src[i * 4 + 2];
 						out[i * 4 + 1] = src[i * 4 + 1];
-						out[i * 4 + 2] = src[i * 4]; // B <- R
+						out[i * 4 + 2] = src[i * 4];
 						out[i * 4 + 3] = src[i * 4 + 3];
 					}
 					break;
@@ -130,7 +135,7 @@ namespace aether
 					float mx = -1e30f;
 					for (std::size_t i = 0; i < n; ++i)
 					{
-						if (d[i] < 1.0f) // ignore the far-plane clear so contrast is visible
+						if (d[i] < 1.0f)
 						{
 							mn = std::min(mn, d[i]);
 							mx = std::max(mx, d[i]);
@@ -177,6 +182,17 @@ namespace aether
 					}
 					break;
 				}
+				case gpu::Format::Undefined:
+				case gpu::Format::R32G32B32Sfloat:
+				case gpu::Format::R32G32B32A32Sfloat:
+				case gpu::Format::D16Unorm:
+				case gpu::Format::D24UnormS8Uint:
+				case gpu::Format::X8D24UnormPack32:
+				case gpu::Format::D16UnormS8Uint:
+				case gpu::Format::D32SfloatS8Uint:
+				case gpu::Format::BC4UnormBlock:
+				case gpu::Format::BC7UnormBlock:
+				case gpu::Format::BC7SrgbBlock:
 				default:
 					return {};
 			}
@@ -197,6 +213,8 @@ namespace aether
 					return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 				case gpu::ImageLayout::TransferDst:
 					return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+				case gpu::ImageLayout::Undefined:
+				case gpu::ImageLayout::DepthAttachment:
 				default:
 					return VK_IMAGE_LAYOUT_GENERAL;
 			}
@@ -218,7 +236,7 @@ namespace aether
 			vkDestroyCommandPool(static_cast<VkDevice>(m_device), static_cast<VkCommandPool>(m_pool), nullptr);
 			m_pool = nullptr;
 		}
-		std::lock_guard<std::mutex> lock(m_mutex);
+		const std::lock_guard<std::mutex> lock(m_mutex);
 		if (m_pending)
 		{
 			m_pending->promise.set_value("");
@@ -231,10 +249,10 @@ namespace aether
 	{
 		std::promise<std::string> promise;
 		std::future<std::string> fut = promise.get_future();
-		std::lock_guard<std::mutex> lock(m_mutex);
+		const std::lock_guard<std::mutex> lock(m_mutex);
 		if (m_pending)
 		{
-			m_pending->promise.set_value(""); // supersede a still-pending request
+			m_pending->promise.set_value("");
 		}
 		m_pending = Pending{.path = std::move(absolutePath), .promise = std::move(promise)};
 		return fut;
@@ -244,7 +262,7 @@ namespace aether
 	{
 		std::promise<std::string> promise;
 		std::future<std::string> fut = promise.get_future();
-		std::lock_guard<std::mutex> lock(m_mutex);
+		const std::lock_guard<std::mutex> lock(m_mutex);
 		if (m_pending)
 		{
 			m_pending->promise.set_value("");
@@ -260,10 +278,8 @@ namespace aether
 			return;
 		}
 
-		// Claim a pending whole-frame request (image == nullptr). Specific-image
-		// requests are serviced by ProcessPending's one-shot path instead.
 		{
-			std::lock_guard<std::mutex> lock(m_mutex);
+			const std::lock_guard<std::mutex> lock(m_mutex);
 			if (!m_pending || m_pending->image != nullptr || m_frameCapture)
 			{
 				return;
@@ -286,8 +302,8 @@ namespace aether
 		}
 		const std::uint32_t byteSize = width * height * bpp;
 
-		gpu::MappedBufferDesc bufDesc{.size = byteSize, .usage = gpu::BufferUsage::TransferDst, .memoryUsage = gpu::MappedMemoryUsage::Auto, .debugName = "Screenshot"};
-		gpu::BufferHandle bufHandle = gpu::ResourceRegistry::CreateMappedBuffer(bufDesc);
+		const gpu::MappedBufferDesc bufDesc{.size = byteSize, .usage = gpu::BufferUsage::TransferDst, .memoryUsage = gpu::MappedMemoryUsage::Auto, .debugName = "Screenshot"};
+		const gpu::BufferHandle bufHandle = gpu::ResourceRegistry::CreateMappedBuffer(bufDesc);
 		if (!bufHandle.IsValid())
 		{
 			m_frameCapture->promise.set_value(std::string{});
@@ -295,13 +311,13 @@ namespace aether
 			return;
 		}
 
-		auto cmd = static_cast<VkCommandBuffer>(cmdV);
-		auto image = static_cast<VkImage>(imageV);
-		auto buffer = static_cast<VkBuffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(bufHandle));
+		auto* cmd = static_cast<VkCommandBuffer>(cmdV);
+		auto* image = static_cast<VkImage>(imageV);
+		auto* buffer = static_cast<VkBuffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(bufHandle));
 
 		const auto barrier = [&](VkImageLayout oldL, VkImageLayout newL, VkAccessFlags srcA, VkAccessFlags dstA, VkPipelineStageFlags srcS, VkPipelineStageFlags dstS)
 		{
-			VkImageMemoryBarrier b{
+			const VkImageMemoryBarrier b{
 			        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 			        .srcAccessMask = srcA,
 			        .dstAccessMask = dstA,
@@ -315,10 +331,9 @@ namespace aether
 			vkCmdPipelineBarrier(cmd, srcS, dstS, 0, 0, nullptr, 0, nullptr, 1, &b);
 		};
 
-		// The image is in COLOR_ATTACHMENT here (just before the present transition).
 		barrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-		VkBufferImageCopy region{
+		const VkBufferImageCopy region{
 		        .bufferOffset = 0,
 		        .bufferRowLength = 0,
 		        .bufferImageHeight = 0,
@@ -328,7 +343,6 @@ namespace aether
 		};
 		vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &region);
 
-		// Restore COLOR_ATTACHMENT so the following present transition sees its
 		// expected old layout.
 		barrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
@@ -351,8 +365,6 @@ namespace aether
 		bool ok = false;
 		if (fc.buffer.IsValid() && fc.mapped != nullptr)
 		{
-			// The copy was recorded into the frame that has since been submitted; wait
-			// for it to retire before reading the mapped buffer.
 			vkQueueWaitIdle(static_cast<VkQueue>(m_queue));
 			const std::uint32_t byteSize = fc.width * fc.height * BytesPerPixel(fc.format);
 			std::vector<std::uint8_t> raw(byteSize);
@@ -377,18 +389,14 @@ namespace aether
 		(void) swapchainExtent;
 		(void) swapchainFormat;
 
-		// Finish any whole-frame capture whose copy was recorded before present.
 		CompleteFrameCapture();
 
-		// Specific-image (non-swapchain) requests are safe to capture with a
-		// self-contained one-shot: those targets are owned by us, not in the
-		// swapchain acquire/present lifecycle.
 		Pending pending;
 		{
-			std::lock_guard<std::mutex> lock(m_mutex);
+			const std::lock_guard<std::mutex> lock(m_mutex);
 			if (!m_pending || m_pending->image == nullptr)
 			{
-				return; // nothing, or a whole-frame request the pre-present hook will claim
+				return;
 			}
 			pending = std::move(*m_pending);
 			m_pending.reset();
@@ -412,32 +420,32 @@ namespace aether
 		}
 		const VkImageAspectFlags vkAspect = (aspect == gpu::ImageAspect::Depth) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 		const auto srcLayout = static_cast<VkImageLayout>(vkSrcLayout);
-		auto device = static_cast<VkDevice>(m_device);
-		auto image = static_cast<VkImage>(colorImage);
+		auto* device = static_cast<VkDevice>(m_device);
+		auto* image = static_cast<VkImage>(colorImage);
 		const std::uint32_t byteSize = width * height * bpp;
 
-		gpu::MappedBufferDesc bufDesc{.size = byteSize, .usage = gpu::BufferUsage::TransferDst, .memoryUsage = gpu::MappedMemoryUsage::Auto, .debugName = "Screenshot"};
-		gpu::BufferHandle bufHandle = gpu::ResourceRegistry::CreateMappedBuffer(bufDesc);
+		const gpu::MappedBufferDesc bufDesc{.size = byteSize, .usage = gpu::BufferUsage::TransferDst, .memoryUsage = gpu::MappedMemoryUsage::Auto, .debugName = "Screenshot"};
+		const gpu::BufferHandle bufHandle = gpu::ResourceRegistry::CreateMappedBuffer(bufDesc);
 		if (!bufHandle.IsValid())
 		{
 			return false;
 		}
-		auto buffer = static_cast<VkBuffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(bufHandle));
-		void* mapped = gpu::ResourceRegistry::ResolveMappedBuffer(bufHandle).mappedPtr;
+		auto* buffer = static_cast<VkBuffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(bufHandle));
+		const void* mapped = gpu::ResourceRegistry::ResolveMappedBuffer(bufHandle).mappedPtr;
 
-		VkCommandBufferAllocateInfo ai{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, .commandPool = static_cast<VkCommandPool>(m_pool), .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, .commandBufferCount = 1};
+		const VkCommandBufferAllocateInfo ai{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, .commandPool = static_cast<VkCommandPool>(m_pool), .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, .commandBufferCount = 1};
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		if (vkAllocateCommandBuffers(device, &ai, &cmd) != VK_SUCCESS)
 		{
 			gpu::ResourceRegistry::Destroy(bufHandle);
 			return false;
 		}
-		VkCommandBufferBeginInfo bi{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+		const VkCommandBufferBeginInfo bi{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
 		vkBeginCommandBuffer(cmd, &bi);
 
 		const auto barrier = [&](VkImageLayout oldL, VkImageLayout newL, VkAccessFlags srcA, VkAccessFlags dstA, VkPipelineStageFlags srcS, VkPipelineStageFlags dstS)
 		{
-			VkImageMemoryBarrier b{
+			const VkImageMemoryBarrier b{
 			        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 			        .srcAccessMask = srcA,
 			        .dstAccessMask = dstA,
@@ -453,7 +461,7 @@ namespace aether
 
 		barrier(srcLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-		VkBufferImageCopy region{
+		const VkBufferImageCopy region{
 		        .bufferOffset = 0,
 		        .bufferRowLength = 0,
 		        .bufferImageHeight = 0,
@@ -467,14 +475,14 @@ namespace aether
 
 		vkEndCommandBuffer(cmd);
 
-		VkFenceCreateInfo fi{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+		const VkFenceCreateInfo fi{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
 		VkFence fence = VK_NULL_HANDLE;
 		vkCreateFence(device, &fi, nullptr, &fence);
-		VkSubmitInfo si{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &cmd};
+		const VkSubmitInfo si{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &cmd};
 		bool ok = vkQueueSubmit(static_cast<VkQueue>(m_queue), 1, &si, fence) == VK_SUCCESS;
 		if (ok)
 		{
-			ok = vkWaitForFences(device, 1, &fence, VK_TRUE, 2'000'000'000ULL) == VK_SUCCESS; // 2s
+			ok = vkWaitForFences(device, 1, &fence, VK_TRUE, 2'000'000'000ull) == VK_SUCCESS; // 2s
 		}
 
 		if (ok && mapped != nullptr)

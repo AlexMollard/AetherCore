@@ -42,7 +42,7 @@ namespace aether::editor
 			cmd = "code \"" + resolved + "\"";
 		}
 
-		int ret = system(("where code >nul 2>&1 && " + cmd).c_str());
+		const int ret = system(("where code >nul 2>&1 && " + cmd).c_str());
 		if (ret == 0)
 		{
 			return;

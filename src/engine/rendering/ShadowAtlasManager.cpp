@@ -64,7 +64,6 @@ namespace aether
 			return {};
 		}
 
-		// Try to fit into an existing shelf.
 		for (Shelf& shelf: m_shelves)
 		{
 			if (shelf.height >= height && shelf.cursorX + width <= kAtlasWidth)
@@ -72,7 +71,6 @@ namespace aether
 				Region r{.x = shelf.cursorX, .y = shelf.y, .width = width, .height = height};
 				shelf.cursorX += width;
 
-				// Update used bounds
 				if (m_usedBounds.width == 0)
 				{
 					m_usedBounds = r;
@@ -90,7 +88,6 @@ namespace aether
 			}
 		}
 
-		// Check if we can start a new shelf.
 		const std::uint32_t nextY = m_shelves.empty() ? 0 : (m_shelves.back().y + m_shelves.back().height);
 		if (nextY + height > kAtlasHeight)
 		{
@@ -100,7 +97,6 @@ namespace aether
 		m_shelves.push_back(Shelf{.y = nextY, .height = height, .cursorX = width});
 		Region r{.x = 0, .y = nextY, .width = width, .height = height};
 
-		// Update used bounds
 		if (m_usedBounds.width == 0)
 		{
 			m_usedBounds = r;

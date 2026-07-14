@@ -17,10 +17,8 @@ namespace aether
 		void Shutdown();
 		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {}, PreparedDrawList drawList = {});
 
-		// Bound each frame in PrepareAndDispatch. Returns the opaque
-		// pipeline state for the single-pass / multi-pass cull shaders.
-		[[nodiscard]] gpu::Pipeline GetSinglePipeline() const;
-		[[nodiscard]] gpu::Pipeline GetMultiPipeline() const;
+		[[nodiscard]] gpu::PipelineView GetSinglePipeline() const;
+		[[nodiscard]] gpu::PipelineView GetMultiPipeline() const;
 
 	private:
 		Expected<void> EnsureSinglePipeline();

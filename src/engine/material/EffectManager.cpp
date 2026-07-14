@@ -36,15 +36,10 @@ namespace aether::effects
 		const GraphicsPipeline* pipeline = pipelineCache.Acquire(def->templateDesc);
 		if (pipeline == nullptr)
 		{
-			// Applied anyway (params/ref stay correct for re-save), but say so:
-			// a null pipeline draws nothing, which reads as "the effect is gone"
-			// with no other symptom.
 			AE_WARN(LogCategory::Scene, "ApplyEntityEffect: pipeline for '{}' ({}) failed to resolve - entity will not draw", nameStr, def->templateDesc.shaderVfsPath);
 		}
 		world.EmplaceOrReplace<PipelineComponent>(entity, PipelineComponent{.pipeline = pipeline});
 
-		// Reuse an existing slot (re-applying an effect) so we neither leak nor
-		// double-allocate; otherwise allocate one.
 		std::uint32_t slot = EffectParamBuffer::kInvalidSlot;
 		if (const auto* existing = world.TryGet<EffectParamsComponent>(entity))
 		{
@@ -56,8 +51,6 @@ namespace aether::effects
 		}
 		if (slot == EffectParamBuffer::kInvalidSlot)
 		{
-			// The renderer treats the invalid slot as "no effect", so the mesh
-			// draws with the effect pipeline but default-initialized params.
 			AE_WARN(LogCategory::Scene, "ApplyEntityEffect: '{}' got no param slot (buffer uninitialized or exhausted) - effect will not animate", nameStr);
 		}
 

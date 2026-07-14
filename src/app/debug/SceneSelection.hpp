@@ -10,9 +10,6 @@
 
 namespace aether::editor
 {
-	// Shared editor selection state (multi-select + a "primary" for the inspector).
-	// Registered in the ServiceContainer by DebugLayer; read by the outliner, the
-	// inspector, and (Spec 2) viewport picking.
 	class SceneSelection
 	{
 	public:
@@ -72,7 +69,7 @@ namespace aether::editor
 			{
 				return;
 			}
-			const auto it = std::find(m_selected.begin(), m_selected.end(), e);
+			const auto it = std::ranges::find(m_selected, e);
 			if (it != m_selected.end())
 			{
 				m_selected.erase(it);
@@ -109,7 +106,7 @@ namespace aether::editor
 			{
 				selected.erase(std::remove(it + 1, selected.end(), *it), selected.end());
 			}
-			if (!primary.IsValid() || std::find(selected.begin(), selected.end(), primary) == selected.end())
+			if (!primary.IsValid() || std::ranges::find(selected, primary) == selected.end())
 			{
 				primary = selected.empty() ? Entity{} : selected.back();
 			}
@@ -132,7 +129,7 @@ namespace aether::editor
 			{
 				displayName = path;
 			}
-			Asset next{kind, std::move(path), std::move(displayName)};
+			Asset next{.kind = kind, .path = std::move(path), .displayName = std::move(displayName)};
 			if (!m_selected.empty() || m_primary.IsValid() || m_asset.kind != next.kind || m_asset.path != next.path || m_asset.displayName != next.displayName)
 			{
 				m_selected.clear();
@@ -159,7 +156,7 @@ namespace aether::editor
 
 		[[nodiscard]] bool Contains(Entity e) const
 		{
-			return std::find(m_selected.begin(), m_selected.end(), e) != m_selected.end();
+			return std::ranges::find(m_selected, e) != m_selected.end();
 		}
 
 		[[nodiscard]] Entity Primary() const
@@ -172,14 +169,11 @@ namespace aether::editor
 			return m_selected;
 		}
 
-		// Bumps on every selection mutation; panels compare it to drive
-		// selection-change animations without polling entity lists.
 		[[nodiscard]] std::uint64_t ChangeSerial() const
 		{
 			return m_lastChangeSerial;
 		}
 
-		// Drops entities that are no longer alive (call once per frame).
 		void Prune(const World& world)
 		{
 			const auto dead = [&](Entity e)

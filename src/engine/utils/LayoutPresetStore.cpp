@@ -51,7 +51,7 @@ namespace aether
 		}
 		out += kImguiMarker;
 		out += "\n";
-		out += preset.imguiIni; // verbatim tail
+		out += preset.imguiIni;
 		return out;
 	}
 
@@ -76,7 +76,6 @@ namespace aether
 
 			if (line == kImguiMarker)
 			{
-				// Everything after this line is the ImGui ini, stored verbatim.
 				preset.imguiIni.assign(text.substr(nextPos));
 				sawImgui = true;
 				break;
@@ -106,7 +105,7 @@ namespace aether
 
 		if (!sawImgui)
 		{
-			return std::nullopt; // malformed: no ini section
+			return std::nullopt;
 		}
 		return preset;
 	}
@@ -125,7 +124,6 @@ namespace aether
 			{
 				slug += '_';
 			}
-			// other characters are dropped
 		}
 		if (slug.empty())
 		{

@@ -2,7 +2,6 @@
 #include <vector>
 #include "material/IMaterialSlotSink.hpp"
 
-// In-memory slot backend for registry tests. No GPU.
 class FakeSlotSink final : public aether::IMaterialSlotSink
 {
 public:

@@ -2,7 +2,7 @@
 #include <exception>
 
 #include "Application.hpp"
-#include "debug/ProjectLauncherWindow.hpp" // kProjectLauncherDefault{Width,Height}
+#include "debug/ProjectLauncherWindow.hpp"
 #include "launcher/LauncherLayer.hpp"
 #include "platform/CrashHandler.hpp"
 #include "platform/Window.hpp"
@@ -25,21 +25,19 @@ namespace
 			aether::CrashHandler::Uninstall();
 			aether::Logger::Shutdown();
 		}
+
+		RuntimeSystemsGuard(const RuntimeSystemsGuard&) = delete;
+		RuntimeSystemsGuard& operator=(const RuntimeSystemsGuard&) = delete;
+		RuntimeSystemsGuard(RuntimeSystemsGuard&&) = delete;
+		RuntimeSystemsGuard& operator=(RuntimeSystemsGuard&&) = delete;
 	};
 } // namespace
 
-// Entry point for the AetherCore project Launcher - a Unity-Hub-style project picker.
-// It is a UiShell app (window + Vulkan + Dear ImGui only; see RuntimeProfile.hpp),
-// deliberately separate from the editor's main.cpp: no C# scripting host and no scene
-// layers, just the LauncherLayer hub, which spawns a separate full-engine Editor
-// process per project.
 int main(int /*argc*/, char** /*argv*/)
 {
-	// Before any windowing/GLFW init so a high-DPI monitor isn't virtualized down -
-	// mirrors the editor entry (see Window::EnableHighDpiAwareness).
 	aether::Window::EnableHighDpiAwareness();
 
-	RuntimeSystemsGuard runtimeSystemsGuard;
+	const RuntimeSystemsGuard runtimeSystemsGuard;
 
 	try
 	{
@@ -47,17 +45,9 @@ int main(int /*argc*/, char** /*argv*/)
 
 		aether::AetherCore::Config engineConfig{};
 		engineConfig.appName = "AetherCore Launcher";
-		// The hub fills and re-flows to whatever window hosts it; this is just the
-		// pleasant default size (the UiShell branches in Application::BuildConfigFrom
-		// Settings and SettingsService keep it instead of overriding it from the
-		// configured game/editor resolution). LauncherLayer clamps the OS window to
-		// the hub's minimum usable size on attach.
 		engineConfig.width = aether::app::kProjectLauncherDefaultWidth;
 		engineConfig.height = aether::app::kProjectLauncherDefaultHeight;
-		// Dev-only GPU crash diagnostics, as for the editor (vendor/tooling gated in
-		// VulkanContext.cpp; auto-disabled when the validation layer is active).
 		engineConfig.enableGpuDiagnostics = true;
-		// The whole point: bring up only window + device + ImGui overlay, no scene.
 		engineConfig.profile = aether::RuntimeProfile::UiShell;
 
 		aether::app::Application application(engineConfig);
@@ -67,7 +57,7 @@ int main(int /*argc*/, char** /*argv*/)
 	}
 	catch (const std::exception& exception)
 	{
-		const auto engineError = dynamic_cast<const aether::EngineError*>(&exception);
+		const auto* const engineError = dynamic_cast<const aether::EngineError*>(&exception);
 		const aether::LogCategory category = engineError != nullptr ? engineError->Category() : aether::LogCategory::Std;
 		if (category == aether::LogCategory::Vulkan)
 		{

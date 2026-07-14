@@ -10,7 +10,6 @@ namespace aether::app
 
 namespace aether::editor
 {
-	// Polls C# script diagnostics and renders the non-blocking bottom error toast.
 	class ScriptErrorOverlay final
 	{
 	public:

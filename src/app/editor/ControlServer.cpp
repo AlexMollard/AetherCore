@@ -18,9 +18,6 @@ namespace aether::editor
 {
 	using nlohmann::json;
 
-	// ENet needs one process-wide initialize/deinitialize. Guarded so multiple
-	// ControlServer start/stop cycles (or, hypothetically, multiple servers) don't
-	// deinitialize the library out from under a live one.
 	namespace
 	{
 		std::mutex g_enetInitMutex;
@@ -28,7 +25,7 @@ namespace aether::editor
 
 		bool AcquireEnet()
 		{
-			std::lock_guard<std::mutex> lock(g_enetInitMutex);
+			const std::lock_guard<std::mutex> lock(g_enetInitMutex);
 			if (g_enetRefCount == 0 && enet_initialize() != 0)
 			{
 				return false;
@@ -39,7 +36,7 @@ namespace aether::editor
 
 		void ReleaseEnet()
 		{
-			std::lock_guard<std::mutex> lock(g_enetInitMutex);
+			const std::lock_guard<std::mutex> lock(g_enetInitMutex);
 			if (g_enetRefCount > 0 && --g_enetRefCount == 0)
 			{
 				enet_deinitialize();
@@ -53,7 +50,6 @@ namespace aether::editor
 		std::thread thread;
 		std::atomic<bool> running{false};
 
-		// The method table (single source of truth; see ControlMethods.cpp).
 		std::vector<ControlMethod> methods;
 
 		struct Inbound
@@ -77,9 +73,7 @@ namespace aether::editor
 	};
 
 	ControlServer::ControlServer(ServiceContainer& services, MethodBuilder methodBuilder, std::string endpointName)
-	      : m_services(services),
-	        m_methodBuilder(std::move(methodBuilder)),
-	        m_endpointName(std::move(endpointName))
+	      : m_services(services), m_methodBuilder(std::move(methodBuilder)), m_endpointName(std::move(endpointName))
 	{
 	}
 
@@ -101,7 +95,7 @@ namespace aether::editor
 
 	std::vector<ControlServer::RequestLogEntry> ControlServer::RecentRequests() const
 	{
-		std::lock_guard<std::mutex> lock(m_logMutex);
+		const std::lock_guard<std::mutex> lock(m_logMutex);
 		return {m_log.begin(), m_log.end()};
 	}
 
@@ -167,7 +161,7 @@ namespace aether::editor
 			// Flush replies the main thread produced since the last iteration.
 			std::queue<Impl::Outbound> outLocal;
 			{
-				std::lock_guard<std::mutex> lock(m_impl->outMutex);
+				const std::lock_guard<std::mutex> lock(m_impl->outMutex);
 				std::swap(outLocal, m_impl->outQueue);
 			}
 			while (!outLocal.empty())
@@ -179,7 +173,6 @@ namespace aether::editor
 			}
 			enet_host_flush(m_impl->host);
 
-			// Pump incoming events (blocks up to 20ms, so Stop() is responsive).
 			while (m_impl->running.load() && enet_host_service(m_impl->host, &event, 20) > 0)
 			{
 				if (event.type == ENET_EVENT_TYPE_CONNECT)
@@ -201,7 +194,7 @@ namespace aether::editor
 						in.reqId = parsed.value("id", static_cast<std::uint64_t>(0));
 						in.method = parsed.value("method", std::string{});
 						in.params = parsed.contains("params") ? parsed["params"].dump() : std::string("{}");
-						std::lock_guard<std::mutex> lock(m_impl->inMutex);
+						const std::lock_guard<std::mutex> lock(m_impl->inMutex);
 						m_impl->inQueue.push(std::move(in));
 					}
 					enet_packet_destroy(event.packet);
@@ -218,12 +211,12 @@ namespace aether::editor
 		}
 		std::queue<Impl::Inbound> inLocal;
 		{
-			std::lock_guard<std::mutex> lock(m_impl->inMutex);
+			const std::lock_guard<std::mutex> lock(m_impl->inMutex);
 			std::swap(inLocal, m_impl->inQueue);
 		}
 		while (!inLocal.empty())
 		{
-			Impl::Inbound& in = inLocal.front();
+			const Impl::Inbound& in = inLocal.front();
 			std::string resultBody;
 			try
 			{
@@ -253,10 +246,9 @@ namespace aether::editor
 				envelope["result"] = result;
 			}
 
-			// Stats for the editor's Control Server panel.
 			m_requestCount.fetch_add(1, std::memory_order_relaxed);
 			{
-				std::lock_guard<std::mutex> lock(m_logMutex);
+				const std::lock_guard<std::mutex> lock(m_logMutex);
 				m_log.push_back(RequestLogEntry{in.method, ok});
 				while (m_log.size() > kMaxLog)
 				{
@@ -265,7 +257,7 @@ namespace aether::editor
 			}
 
 			{
-				std::lock_guard<std::mutex> lock(m_impl->outMutex);
+				const std::lock_guard<std::mutex> lock(m_impl->outMutex);
 				m_impl->outQueue.push(Impl::Outbound{in.peer, envelope.dump()});
 			}
 			inLocal.pop();
@@ -280,9 +272,6 @@ namespace aether::editor
 			params = json::object();
 		}
 
-		// Self-description: the MCP calls "describe" to generate its tool list, so a
-		// new capability is exactly one entry in BuildControlMethods() and zero lines
-		// of Python. Keep it out of the table (it needs the table itself).
 		if (method == "describe")
 		{
 			json arr = json::array();

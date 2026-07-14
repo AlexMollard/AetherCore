@@ -11,7 +11,12 @@ namespace aether::editor
 	class TextureInspectorPanel final : public DebugPanel
 	{
 	public:
+		TextureInspectorPanel() = default;
 		~TextureInspectorPanel() override;
+		TextureInspectorPanel(const TextureInspectorPanel&) = delete;
+		TextureInspectorPanel& operator=(const TextureInspectorPanel&) = delete;
+		TextureInspectorPanel(TextureInspectorPanel&&) = delete;
+		TextureInspectorPanel& operator=(TextureInspectorPanel&&) = delete;
 
 		std::string_view GetName() const override
 		{
@@ -42,7 +47,7 @@ namespace aether::editor
 		int m_texUsageFilter = 0;
 		float m_previewExposure = 1.0f;
 		bool m_previewTonemap = false;
-		bool m_useGpuPreview = false; // opt-in: GPU channel/exposure pass vs direct display
+		bool m_useGpuPreview = false;
 		std::uint64_t m_previewTextureId = 0;
 	};
 } // namespace aether::editor

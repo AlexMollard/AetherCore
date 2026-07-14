@@ -42,18 +42,12 @@ namespace aether::assets
 		std::int32_t occlusionTexture = -1;
 		std::int32_t emissiveTexture = -1;
 
-		// Texture paths from binary .material files (resolved at runtime).
 		std::string albedoPath;
 		std::string normalPath;
 		std::string metallicRoughnessPath;
 		std::string occlusionPath;
 		std::string emissivePath;
 
-		// Optional per-material shader override authored in the material's
-		// properties.toml (e.g. "shaders://myeffect.spv"). Empty = none, keep the
-		// engine default template. Read from the trailing string in a binary
-		// .material (see BinaryFormats.hpp), threaded to
-		// MaterialTemplate::shaderVfsPath in AssetManager::FinaliseModelLoad.
 		std::string shaderVfsPath;
 	};
 
@@ -87,7 +81,6 @@ namespace aether::assets
 		std::vector<Mesh::Vertex> vertices;
 		std::vector<std::uint32_t> indices;
 
-		// Bounding volume (from mesh header).
 		float aabbMin[3] = {0, 0, 0};
 		float aabbMax[3] = {0, 0, 0};
 		float sphereCenter[3] = {0, 0, 0};
@@ -112,7 +105,7 @@ namespace aether::assets
 	struct GltfAnimationChannel
 	{
 		std::uint32_t nodeIndex = 0;
-		std::string boneName; // v2+: bone name for cross-skeleton remapping
+		std::string boneName;
 		GltfAnimationPath path = GltfAnimationPath::Translation;
 		GltfInterpolation interpolation = GltfInterpolation::Linear;
 		std::vector<float> times;
@@ -123,7 +116,7 @@ namespace aether::assets
 	{
 		std::string name;
 		std::vector<GltfAnimationChannel> channels;
-		bool rootLocked = false; // when true, root bone translation is stripped during compile
+		bool rootLocked = false;
 	};
 
 	struct GltfAsset
@@ -138,12 +131,8 @@ namespace aether::assets
 
 		[[nodiscard]] static Expected<GltfAsset> LoadFromVfsPath(std::string_view path);
 
-		// Load from raw .mesh file data (already read from disk).
-		// Useful after an async I/O operation.
 		[[nodiscard]] static Expected<GltfAsset> LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath);
 
-		// Resolve the VFS path of the .mesh file for a given model path.
-		// Returns an empty string if the path has no VFS mount.
 		[[nodiscard]] static std::string ResolveMeshPath(std::string_view vfsPath);
 	};
 } // namespace aether::assets

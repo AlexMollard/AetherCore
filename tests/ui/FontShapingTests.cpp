@@ -23,33 +23,33 @@ TEST_CASE("ShapeText advances left-to-right at the glyph advance") {
     const auto g = ShapeText(f, "AB", 48.f, {0, 0, 1000, 100}, false, 0, 0);
     REQUIRE(g.size() == 2);
     CHECK(g[0].rect.x == doctest::Approx(0.f));
-    CHECK(g[0].rect.y == doctest::Approx(10.f)); // baseline 40 - bearingY 30
+    CHECK(g[0].rect.y == doctest::Approx(10.f));
     CHECK(g[0].rect.z == doctest::Approx(20.f));
     CHECK(g[1].rect.x - g[0].rect.x == doctest::Approx(24.f));
 }
 
 TEST_CASE("ShapeText scales by pixelSize/bakeSize") {
     const auto f = MakeMonoFont();
-    const auto g = ShapeText(f, "AB", 24.f, {0, 0, 1000, 100}, false, 0, 0); // scale 0.5
+    const auto g = ShapeText(f, "AB", 24.f, {0, 0, 1000, 100}, false, 0, 0);
     CHECK(g[1].rect.x - g[0].rect.x == doctest::Approx(12.f));
     CHECK(g[0].rect.z == doctest::Approx(10.f));
 }
 
 TEST_CASE("ShapeText wraps at the box width") {
     const auto f = MakeMonoFont();
-    const auto g = ShapeText(f, "AAAAA", 48.f, {0, 0, 50, 200}, true, 0, 0); // advance 24, box 50 wide
+    const auto g = ShapeText(f, "AAAAA", 48.f, {0, 0, 50, 200}, true, 0, 0);
     REQUIRE(g.size() == 5);
-    CHECK(g.back().rect.y > g.front().rect.y); // later glyphs on a lower line
+    CHECK(g.back().rect.y > g.front().rect.y);
 }
 
 TEST_CASE("ShapeText center-aligns a line") {
     const auto f = MakeMonoFont();
-    const auto g = ShapeText(f, "AB", 48.f, {0, 0, 1000, 100}, false, 1, 0); // line width 48
-    CHECK(g[0].rect.x == doctest::Approx(476.f));                           // (1000-48)/2
+    const auto g = ShapeText(f, "AB", 48.f, {0, 0, 1000, 100}, false, 1, 0);
+    CHECK(g[0].rect.x == doctest::Approx(476.f));
 }
 
 TEST_CASE("ShapeText middle-valigns a single line") {
     const auto f = MakeMonoFont();
-    const auto g = ShapeText(f, "A", 48.f, {0, 0, 100, 100}, false, 0, 1); // block height 50
-    CHECK(g[0].rect.y == doctest::Approx(35.f));                          // top y 10 + (100-50)/2
+    const auto g = ShapeText(f, "A", 48.f, {0, 0, 100, 100}, false, 0, 1);
+    CHECK(g[0].rect.y == doctest::Approx(35.f));
 }

@@ -4,9 +4,7 @@
 #include "utils/Profiler.hpp"
 #include "vulkan/Swapchain.hpp"
 
-// ---------------------------------------------------------------------------
 // Platform thread configuration
-// ---------------------------------------------------------------------------
 #if defined(_WIN32)
 #	include <windows.h>
 #elif defined(__linux__)
@@ -17,7 +15,6 @@ namespace aether
 {
 	RenderThread::RenderThread()
 	      : m_channel(Swapchain::kMaxFramesInFlight) // match swapchain depth: game thread can write
-	                                                 // up to 3 frames ahead before backpressure kicks in
 	{
 	}
 
@@ -30,7 +27,7 @@ namespace aether
 	void RenderThread::Stop()
 	{
 		{
-			std::lock_guard lock(m_reloadMutex);
+			const std::lock_guard lock(m_reloadMutex);
 			m_shutdown = true;
 		}
 		m_reloadCv.notify_one();
@@ -47,10 +44,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 
-		// Write to the channel and return immediately.
 		// The render thread picks up the packet asynchronously.
-		// If all channel slots are occupied (render thread is 3 frames behind),
-		// this blocks until a slot frees up -- natural backpressure.
 		m_channel.write(std::move(packet));
 	}
 
@@ -69,7 +63,7 @@ namespace aether
 	void RenderThread::WaitIdle()
 	{
 		{
-			std::lock_guard lock(m_reloadMutex);
+			const std::lock_guard lock(m_reloadMutex);
 			if (!m_shutdown)
 			{
 				m_shutdown = true;
@@ -106,13 +100,9 @@ namespace aether
 	{
 #if defined(_WIN32)
 		// Boost the render thread to time-critical priority so that kernel
-		// DPCs, ISRs, and other system threads are far less likely to preempt
-		// it. This is the primary mitigation for intermittent GPU-backpressure
-		// stutter caused by Windows scheduler preemption.
 		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
 		// Name the thread for debugger / ETW / crash-dump visibility.
-		// SetThreadDescription is available since Windows 10 1607.
 		SetThreadDescription(GetCurrentThread(), L"AetherCore RenderThread");
 #elif defined(__linux__)
 		// Name the thread (limited to 16 bytes including null-terminator).
@@ -128,11 +118,8 @@ namespace aether
 
 		while (!m_shutdown)
 		{
-			// Check reload flag BEFORE reading new frame.
-			// This ensures we don't start a new frame while reload is in progress.
 			if (IsReloadInProgress())
 			{
-				// Wait for any in-flight frame to complete before going idle.
 				// This prevents threading errors when main thread calls WaitIdle().
 				if (!m_isIdle.load(std::memory_order_acquire))
 				{
@@ -141,9 +128,6 @@ namespace aether
 					m_reloadCv.notify_all();
 				}
 
-				// Block until reload completes instead of busy-waiting.
-				// The condition variable avoids wasting CPU and provides
-				// immediate wakeup when SetReloadInProgress(false) is called.
 				{
 					std::unique_lock lock(m_reloadMutex);
 					m_reloadCv.wait(lock, [this] { return !IsReloadInProgress() || m_shutdown; });
@@ -172,8 +156,6 @@ namespace aether
 				break;
 			}
 
-			// Execute the frame. This blocks on the GPU fence internally and
-			// includes all command recording and submission.
 			try
 			{
 				m_engine->ExecuteRenderFrame(packet);
@@ -181,11 +163,10 @@ namespace aether
 			catch (const std::exception& e)
 			{
 				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
-				// Return warm UI-overlay draw-list pools even on failure paths.
 				m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 				m_engine->DiscardAllPendingFrameQueues();
 				{
-					std::lock_guard lock(m_reloadMutex);
+					const std::lock_guard lock(m_reloadMutex);
 					m_shutdown = true;
 				}
 				m_reloadCv.notify_one();
@@ -194,10 +175,8 @@ namespace aether
 				break;
 			}
 
-			// Recycle the overlay's frame-data pool so the next Capture reuses capacity.
 			m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 
-			// Publish the completed frame index (for statistics / shutdown).
 			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);
 			m_completionCv.notify_all();
 			m_isIdle.store(true, std::memory_order_release);

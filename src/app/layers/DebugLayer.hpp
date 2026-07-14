@@ -37,9 +37,7 @@ namespace aether::editor
 		void OnRenderTargetsInvalidated(app::LayerContext& context) override;
 
 	private:
-		// Bottom-of-viewport status bar (scene, play state, resolution, FPS). Only
 		// drawn from the second frame on, so it never resizes the docked viewport
-		// before its render targets exist.
 		void DrawStatusBar(app::LayerContext& context);
 		// Ctrl+P fuzzy command palette (panel toggles, play, layout).
 		void DrawCommandPalette(app::LayerContext& context);
@@ -52,51 +50,35 @@ namespace aether::editor
 		void LoadSettings(app::LayerContext& context);
 		void SaveSettings(app::LayerContext& context);
 		void PersistSettings(app::LayerContext& context);
-		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
-		// by SceneSubsystem), falling back to the Scene Outliner's Save-As popup
-		// when there isn't one yet (or the quick-save failed).
 		bool SaveCurrentScene(app::LayerContext& context);
 		void SaveAndReturnToLauncher(app::LayerContext& context);
 
-		// Transient confirmation toast (e.g. Ctrl+S save feedback): a fading pill in
-		// the editor chrome, so an action that otherwise only writes a log line still
-		// reads on-screen. ShowToast raises it; DrawToasts renders + expires it.
 		void ShowToast(std::string text, bool isError = false);
 		void DrawToasts();
 		std::string m_toastText;
-		double m_toastStart = -1.0; // ImGui::GetTime() when raised; < 0 => inactive
+		double m_toastStart = -1.0;
 		bool m_toastError = false;
 
-		// The editor window owns its own size - nothing forces it. Each frame we simply
-		// record the current size so it persists to EditorState (editor.window_*) and
-		// reopens at that size next launch. The launcher no longer resizes the OS
-		// window, so there is no launcher-vs-editor sizing policy.
 		void CaptureEditorWindowSize(app::LayerContext& context);
-		int m_editorWindowW = 0; // last editor window size (0 = not yet loaded)
+		int m_editorWindowW = 0;
 		int m_editorWindowH = 0;
 
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
-		// Window show/hide facade handed to the control endpoint (ServiceContainer
 		// registers a reference to this, so it must outlive the registration).
 		EditorWindowActions m_windowActions;
-		// Selection-outline pulse bookkeeping (brightness eases after changes).
 		std::uint64_t m_outlineSeenSerial = 0;
 		double m_outlinePulseStart = -1.0;
 		TomlConfig m_debugConfig;
 		ScriptErrorOverlay m_scriptErrors;
 		bool m_dockspaceBuilt = false;
 		// Set by the Window > Reset Layout menu item; forces the default dock layout
-		// to be rebuilt on the next frame.
 		bool m_resetLayout = false;
 
-		// Command palette (Ctrl+P) state.
 		char m_paletteQuery[128] = {};
 		int m_paletteSelected = 0;
 
 		// Named layout presets (persisted under the user config dir) and the
-		// deferred-apply state: a preset's ini is loaded at the top of the next
-		// frame, before any window Begin(), so docking settings take effect cleanly.
 		std::vector<LayoutPreset> m_layoutPresets;
 		bool m_pendingLayoutApply = false;
 		std::string m_pendingLayoutIni;
@@ -107,9 +89,6 @@ namespace aether::editor
 		EditorProjectManager m_projects;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
-		// Non-owning: observes the HierarchyPanel instance owned by m_panels, so
-		// the File menu / Ctrl+S can drive its Save-As / Open popups instead of
-		// duplicating them. Set in OnAttach, cleared in OnDetach.
 		HierarchyPanel* m_hierarchyPanel = nullptr;
 	};
 } // namespace aether::editor

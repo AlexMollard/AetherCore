@@ -41,7 +41,7 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
-#include "vulkan/RenderGraphStorage.hpp" // FrameStats definition (GetFrameStats)
+#include "vulkan/RenderGraphStorage.hpp"
 
 namespace aether::editor
 {
@@ -49,10 +49,9 @@ namespace aether::editor
 
 	namespace
 	{
-		// ── JSON-Schema helpers (kept terse so method entries read cleanly) ──────
 		const json kVec3 = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}};
 
-		json Obj(json properties = json::object(), std::vector<std::string> required = {})
+		json Obj(json properties = json::object(), const std::vector<std::string>& required = {})
 		{
 			json schema{{"type", "object"}, {"properties", std::move(properties)}};
 			if (!required.empty())
@@ -72,7 +71,6 @@ namespace aether::editor
 			return json{{"type", "string"}};
 		}
 
-		// Registry debug names are "<logical> (file:line)"; the logical prefix is the
 		// stable, unique id the endpoint exposes (callers never pass the source site).
 		std::string LogicalTexName(const std::string& debugName)
 		{
@@ -80,7 +78,6 @@ namespace aether::editor
 			return paren == std::string::npos ? debugName : debugName.substr(0, paren);
 		}
 
-		// ── value helpers ────────────────────────────────────────────────────────
 		std::uint32_t IdOf(const json& p, const char* key = "id")
 		{
 			return static_cast<std::uint32_t>(p.value(key, static_cast<std::uint32_t>(0)));
@@ -202,7 +199,7 @@ namespace aether::editor
 			        {
 				        if (storage.contains(enttEntity))
 				        {
-					        comps.push_back(std::string(storage.type().name()));
+					        comps.push_back(std::string(storage.info().name()));
 				        }
 			        }
 			        j["components"] = comps;
@@ -389,7 +386,6 @@ namespace aether::editor
 			        return json{{"id", entity.id}, {"deleted", true}};
 		        }});
 
-		// Component add/remove drives the shared ComponentCatalog - the same source
 		// the Inspector's Add-Component palette uses, so the two never drift.
 		const auto componentOp = [](bool add)
 		{
@@ -455,8 +451,6 @@ namespace aether::editor
 				        return ErrNoEntity();
 			        }
 			        const std::string type = p.value("type", std::string{});
-			        // Reflection-driven (covers every migrated component); falls back to the
-			        // legacy ComponentFields registry for not-yet-migrated types.
 			        if (const auto* rt = reflect::FindComponentType(type))
 			        {
 				        const void* comp = rt->tryGetRawConst(world, entity);
@@ -468,7 +462,6 @@ namespace aether::editor
 				        for (const auto& f: rt->fields)
 				        {
 					        const reflect::FieldValue fv = f.get(comp);
-					        // Enums read out as their name string (set accepts name or int).
 					        if (f.type == reflect::FieldType::Enum && f.meta.enumTable != nullptr)
 					        {
 						        out[f.name] = f.meta.enumTable->NameOf(fv.enumValue);
@@ -560,7 +553,6 @@ namespace aether::editor
 		        Obj(),
 		        [](const json&, MethodContext&) -> json
 		        {
-			        // Build a "name:type, ..." hint from a reflected component's fields.
 			        const auto reflectedHint = [](const reflect::ComponentType& rt) -> std::string
 			        {
 				        std::string h;
@@ -577,7 +569,7 @@ namespace aether::editor
 				        if (!e.addable)
 				        {
 					        continue;
-				        } // reference-only entries can't be added
+				        }
 				        json entry = {{"name", e.name}, {"category", e.category}};
 				        if (const auto* rt = reflect::FindComponentType(e.name))
 				        {
@@ -590,8 +582,6 @@ namespace aether::editor
 				        arr.push_back(entry);
 				        listed.push_back(e.name);
 			        }
-			        // Reflected components not in the add-palette (e.g. Transform, Skinned Mesh)
-			        // are still get/set-able - list them so agents can discover their fields.
 			        for (const reflect::ComponentType& rt: reflect::ComponentTypes())
 			        {
 				        if (std::find(listed.begin(), listed.end(), rt.name) != listed.end())
@@ -670,8 +660,6 @@ namespace aether::editor
 			        return json{{"scene", name}, {"ok", !name.empty()}};
 		        }});
 
-		// Play/stop share the PlaySession free functions; each is its own entry so
-		// each appears as a distinct MCP tool.
 		const auto playHandler = [](const char* which)
 		{
 			return [which](const json&, MethodContext& ctx) -> json
@@ -697,9 +685,7 @@ namespace aether::editor
 				{
 					state = playState->IsPlaying() ? "playing" : (playState->IsCompiling() ? "compiling" : "editing");
 				}
-				// Play is async: entering it returns state="compiling" immediately while
 				// the C# build runs on a worker thread. Poll `info`.playState until it
-				// reads "playing".
 				return json{{"ok", ok}, {"playing", playState != nullptr && playState->IsPlaying()}, {"state", state}};
 			};
 		};
@@ -822,7 +808,6 @@ namespace aether::editor
 			        }
 			        std::future<std::string> fut = shot->Request(path);
 			        // The render thread fulfils this within a queued frame; a short wait is
-			        // safe (frames stay in flight). On timeout the file may still land.
 			        if (fut.wait_for(std::chrono::seconds(8)) != std::future_status::ready)
 			        {
 				        return json{{"path", path}, {"status", "requested (still saving)"}};
@@ -873,7 +858,6 @@ namespace aether::editor
 			        }
 			        const std::string name = p.value("name", std::string{});
 			        const auto textures = gpu::ResourceRegistry::ListDebugTextures();
-			        // Match the logical name (preferred) or the full debug string, so callers pass e.g. "Scene.Depth".
 			        auto it = std::ranges::find_if(textures, [&](const gpu::DebugTextureInfo& t) { return LogicalTexName(t.debugName) == name; });
 			        if (it == textures.end())
 			        {
@@ -926,7 +910,7 @@ namespace aether::editor
 			        json counts = json::object();
 			        for (auto&& [id, storage]: world.GetRegistry().storage())
 			        {
-				        counts[std::string(storage.type().name())] = storage.size();
+				        counts[std::string(storage.info().name())] = storage.size();
 			        }
 			        std::size_t total = 0;
 			        for ([[maybe_unused]] auto e: world.View<NameComponent>())
@@ -984,7 +968,7 @@ namespace aether::editor
 				        if (const auto* t = world.TryGet<TransformComponent>(e))
 				        {
 					        j["position"] = Vec3ToJson(glm::vec3(t->localToWorld[3]));
-					        j["direction"] = Vec3ToJson(-glm::normalize(glm::vec3(t->localToWorld[2]))); // aims along local -Z
+					        j["direction"] = Vec3ToJson(-glm::normalize(glm::vec3(t->localToWorld[2])));
 				        }
 				        arr.push_back(std::move(j));
 			        }
@@ -1027,11 +1011,6 @@ namespace aether::editor
 			        return json{{"width", s.window.width}, {"height", s.window.height}, {"vsync", s.graphics.vsync}, {"targetFps", s.app.targetFps}};
 		        }});
 
-		// ── Editor windows + selection ───────────────────────────────────────────
-		// Drive the editor's ImGui panels + entity selection so an agent can set the
-		// editor up to SEE what it is working on: select an entity, open the
-		// inspector, then viewport.screenshot. Editor-only (no EditorWindowActions in
-		// GameRuntime).
 		methods.push_back({"editor.windows",
 		        "list_windows",
 		        "List every editor panel/window and whether it is currently open. Names feed set_window.",
@@ -1112,7 +1091,6 @@ namespace aether::editor
 			        {
 				        return json{{"error", "path is required"}};
 			        }
-			        // Infer the asset kind from the extension (mirrors the File Explorer).
 			        std::string ext = std::filesystem::path(path).extension().generic_string();
 			        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 			        SceneSelection::AssetKind kind = SceneSelection::AssetKind::File;
@@ -1128,11 +1106,11 @@ namespace aether::editor
 			        {
 				        kind = SceneSelection::AssetKind::Texture;
 			        }
-			        else if (path.find(".prefab.toml") != std::string::npos)
+			        else if (path.contains(".prefab.toml"))
 			        {
 				        kind = SceneSelection::AssetKind::Prefab;
 			        }
-			        else if (path.find(".scene.toml") != std::string::npos)
+			        else if (path.contains(".scene.toml"))
 			        {
 				        kind = SceneSelection::AssetKind::Scene;
 			        }

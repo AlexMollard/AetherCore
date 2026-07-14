@@ -21,6 +21,7 @@
 #   modernize-avoid-c-arrays              fixed-size arrays are idiomatic
 #   modernize-use-trailing-return-type    style preference
 #   modernize-pass-by-value               conflicts with arena/pool allocation patterns
+#   readability-uppercase-literal-suffix  lowercase numeric suffixes are project style
 #   hicpp-* cert-* fuchsia-* google-* llvm-* abseil-* android-* objc-*
 
 Checks: >-
@@ -28,26 +29,33 @@ Checks: >-
 
   bugprone-assert-side-effect,
   bugprone-bool-pointer-implicit-conversion,
+  bugprone-copy-constructor-init,
   bugprone-dangling-handle,
-  bugprone-exception-escape,
+  bugprone-empty-catch,
   bugprone-fold-init-type,
   bugprone-forward-declaration-namespace,
+  bugprone-forwarding-reference-overload,
+  bugprone-implicit-widening-of-multiplication-result,
   bugprone-inaccurate-erase,
   bugprone-incorrect-roundings,
-  bugprone-integer-overflow,
+  bugprone-infinite-loop,
+  bugprone-macro-parentheses,
   bugprone-misplaced-operator-in-strlen-in-alloc,
   bugprone-misplaced-pointer-arithmetic-in-alloc,
   bugprone-misplaced-widening-cast,
   bugprone-move-forwarding-reference,
+  bugprone-multi-level-implicit-pointer-conversion,
   bugprone-multiple-statement-macro,
   bugprone-narrowing-conversions,
+  bugprone-nondeterministic-pointer-iteration-order,
   bugprone-no-escape,
   bugprone-not-null-terminated-result,
   bugprone-parent-virtual-call,
   bugprone-posix-return,
   bugprone-redundant-branch-condition,
   bugprone-reserved-identifier,
-  bugprone-shared-ptr-array-mode,
+  bugprone-return-const-ref-from-parameter,
+  bugprone-shared-ptr-array-mismatch,
   bugprone-signed-char-misuse,
   bugprone-sizeof-container,
   bugprone-sizeof-expression,
@@ -59,6 +67,7 @@ Checks: >-
   bugprone-suspicious-include,
   bugprone-suspicious-memory-comparison,
   bugprone-suspicious-missing-comma,
+  bugprone-suspicious-realloc-usage,
   bugprone-suspicious-semicolon,
   bugprone-suspicious-string-compare,
   bugprone-swapped-arguments,
@@ -66,7 +75,7 @@ Checks: >-
   bugprone-too-small-loop-variable,
   bugprone-undefined-memory-manipulation,
   bugprone-undelegated-constructor,
-  bugprone-unhandled-exception-at-new,
+  bugprone-unique-ptr-array-mismatch,
   bugprone-unhandled-self-assignment,
   bugprone-unused-raii,
   bugprone-unused-return-value,
@@ -82,20 +91,22 @@ Checks: >-
   clang-analyzer-core.uninitialized.ArraySubscript,
   clang-analyzer-core.uninitialized.Assign,
   clang-analyzer-core.uninitialized.Branch,
+  clang-analyzer-core.uninitialized.CapturedBlockVariable,
+  clang-analyzer-core.uninitialized.NewArraySize,
   clang-analyzer-core.uninitialized.UndefReturn,
   clang-analyzer-cplusplus.InnerPointer,
   clang-analyzer-cplusplus.Move,
+  clang-analyzer-cplusplus.NewDelete,
   clang-analyzer-cplusplus.NewDeleteLeaks,
   clang-analyzer-cplusplus.PlacementNew,
   clang-analyzer-cplusplus.PureVirtualCall,
-  clang-analyzer-cplusplus.STLAlgorithmModeling,
   clang-analyzer-cplusplus.SelfAssignment,
   clang-analyzer-cplusplus.SmartPtrModeling,
   clang-analyzer-deadcode.DeadStores,
   clang-analyzer-nullability.NullPassedToNonnull,
   clang-analyzer-nullability.NullReturnedFromNonnull,
   clang-analyzer-nullability.NullableDereferenced,
-  clang-analyzer-security.FloatLoopCounter,
+  clang-analyzer-security.VAList,
   clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   clang-analyzer-security.insecureAPI.UncheckedReturn,
   clang-analyzer-security.insecureAPI.gets,
@@ -105,14 +116,18 @@ Checks: >-
   clang-analyzer-unix.Malloc,
   clang-analyzer-unix.MallocSizeof,
   clang-analyzer-unix.MismatchedDeallocator,
+  clang-analyzer-unix.BlockInCriticalSection,
+  clang-analyzer-unix.Errno,
+  clang-analyzer-unix.Stream,
   clang-analyzer-unix.cstring.BadSizeArg,
   clang-analyzer-unix.cstring.NullArg,
 
-  concurrency-mt-unsafe,
-
+  cppcoreguidelines-avoid-capturing-lambda-coroutines,
+  cppcoreguidelines-avoid-reference-coroutine-parameters,
   cppcoreguidelines-init-variables,
   cppcoreguidelines-interfaces-global-init,
   cppcoreguidelines-narrowing-conversions,
+  cppcoreguidelines-no-suspend-with-lock,
   cppcoreguidelines-prefer-member-initializer,
   cppcoreguidelines-pro-type-const-cast,
   cppcoreguidelines-pro-type-cstyle-cast,
@@ -122,10 +137,8 @@ Checks: >-
   cppcoreguidelines-special-member-functions,
   cppcoreguidelines-virtual-class-destructor,
 
-  # Enable misc-const-correctness incrementally on large codebases;
-  # suppress with // NOLINT(misc-const-correctness) on legacy translation units
   misc-const-correctness,
-  misc-misplaced-const,
+  misc-coroutine-hostile-raii,
   misc-misleading-bidirectional,
   misc-misleading-identifier,
   misc-redundant-expression,
@@ -153,7 +166,7 @@ Checks: >-
   performance-inefficient-algorithm,
   performance-inefficient-string-concatenation,
   performance-inefficient-vector-operation,
-  performance-move-const-result,
+  performance-move-const-arg,
   performance-move-constructor-init,
   performance-no-automatic-move,
   performance-noexcept-destructor,
@@ -171,7 +184,6 @@ Checks: >-
   readability-duplicate-include,
   readability-else-after-return,
   readability-implicit-bool-conversion,
-  readability-inconsistent-declaration-parameter-name,
   readability-misleading-indentation,
   readability-misplaced-array-index,
   readability-non-const-parameter,
@@ -187,21 +199,29 @@ Checks: >-
   readability-simplify-subscript-expr,
   readability-static-accessed-through-instance,
   readability-string-compare,
+  readability-suspicious-call-argument,
   readability-uniqueptr-delete-release,
-  readability-use-anyofallof,
 
 # Hard errors: these are UB, crashes, or silent data corruption
 WarningsAsErrors: >-
   bugprone-dangling-handle,
+  bugprone-shared-ptr-array-mismatch,
   bugprone-undefined-memory-manipulation,
+  bugprone-unique-ptr-array-mismatch,
   bugprone-use-after-move,
   clang-analyzer-core.NullDereference,
   clang-analyzer-core.StackAddressEscape,
+  clang-analyzer-core.uninitialized.NewArraySize,
   clang-analyzer-core.uninitialized.UndefReturn,
+  clang-analyzer-cplusplus.NewDelete,
   clang-analyzer-cplusplus.NewDeleteLeaks,
   clang-analyzer-cplusplus.PlacementNew,
   clang-analyzer-cplusplus.PureVirtualCall,
+  clang-analyzer-unix.MismatchedDeallocator,
+  cppcoreguidelines-avoid-reference-coroutine-parameters,
   cppcoreguidelines-pro-type-cstyle-cast,
+  cppcoreguidelines-avoid-capturing-lambda-coroutines,
+  cppcoreguidelines-no-suspend-with-lock,
   cppcoreguidelines-slicing,
   modernize-use-nullptr,
 
@@ -238,7 +258,7 @@ CheckOptions:
   # Warn on all auto copies in range-for (not just large types)
   - key: performance-for-range-copy.WarnOnAllAutoCopies
     value: 'true'
-  - key: performance-move-const-result.CheckTriviallyCopyableMove
+  - key: performance-move-const-arg.CheckTriviallyCopyableMove
     value: 'true'
 
   # Const-correctness: transform local values and refs but NOT raw pointer pointees

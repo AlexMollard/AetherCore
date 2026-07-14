@@ -59,19 +59,18 @@ TEST_CASE("PackMaterial resolves handles to heap slots and freezes the 80-byte l
 
     GpuMaterial g = PackMaterial(a, tex);
     CHECK(g.albedoSlot == expected);
-    CHECK(g.normalSlot == GpuMaterial::kNoTexture); // default-constructed handle -> skip sample
+    CHECK(g.normalSlot == GpuMaterial::kNoTexture);
 }
 
 TEST_CASE("PackMaterial distinguishes a broken (requested-but-missing) map from an absent one") {
     FakeTextureSink texSink(8);
     TextureRegistry tex(texSink);
-    tex.InitializeDefault(TextureResource{99u}); // magenta fallback lives at slot 99
+    tex.InitializeDefault(TextureResource{99u});
 
     MaterialAsset a;
-    a.albedoTex = TextureHandle::Broken(); // texture requested, load failed
-    // normalTex left default-constructed = "no normal map requested"
+    a.albedoTex = TextureHandle::Broken();
 
     GpuMaterial g = PackMaterial(a, tex);
-    CHECK(g.albedoSlot == 99u);                     // broken -> VISIBLE magenta default
-    CHECK(g.normalSlot == GpuMaterial::kNoTexture); // absent -> skip the sample (base response)
+    CHECK(g.albedoSlot == 99u);
+    CHECK(g.normalSlot == GpuMaterial::kNoTexture);
 }

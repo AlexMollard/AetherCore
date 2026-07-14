@@ -6,18 +6,14 @@
 
 namespace aether
 {
-	// Per-entity animated effect inputs. Mutable per-entity state (NOT content-
-	// addressed, unlike GpuMaterial) stored in EffectParamBuffer, one slot per
-	// effect entity. Replaces the PBR-field smuggling in the old plasma path
-	// (tint<-emissive, speed<-metallic, scale<-roughness, intensity<-occlusion).
 	// Must stay binary-compatible with EffectParams in shaders/include/EffectParams.slangh.
 	struct EffectParams
 	{
-		glm::vec4 tint{1.0f};   // offset 0
-		float speed = 1.0f;     // offset 16
-		float scale = 1.0f;     // offset 20
-		float intensity = 1.0f; // offset 24
-		std::uint32_t _pad = 0; // offset 28
+		glm::vec4 tint{1.0f};
+		float speed = 1.0f;
+		float scale = 1.0f;
+		float intensity = 1.0f;
+		std::uint32_t _pad = 0;
 	};
 
 	static_assert(sizeof(EffectParams) == 32, "EffectParams size changed - update shaders/include/EffectParams.slangh.");

@@ -50,10 +50,10 @@ namespace aether
 		const std::uint64_t totalBytes = vertexBytes + indexBytes;
 		if (m_ringHead + totalBytes > kStagingCapacity)
 		{
-			return false; // staging full - retry next frame
+			return false;
 		}
 
-		auto mapped = static_cast<std::uint8_t*>(m_stagingMapped);
+		auto* mapped = static_cast<std::uint8_t*>(m_stagingMapped);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
 		m_pendingCopies.push_back({.srcBuffer = m_stagingBuffer, .srcOffset = m_ringHead, .dstBuffer = destVertexBuffer, .dstOffset = destVertexOffset, .size = vertexBytes});
@@ -74,7 +74,6 @@ namespace aether
 			return;
 		}
 
-		// Flush the host-written staging bytes before the GPU reads them.
 		gpu::ResourceRegistry::FlushMappedBuffer(m_stagingHandle, 0, m_ringHead);
 
 		for (const PendingCopy& copy: m_pendingCopies)
@@ -82,7 +81,6 @@ namespace aether
 			cmdList.CopyBuffer(copy.srcBuffer, copy.dstBuffer, copy.srcOffset, copy.dstOffset, copy.size);
 		}
 
-		// Barrier: transfer-write -> vertex-attribute-read and index-read.
 		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::VertexInput, gpu::AccessFlags::VertexAttributeRead | gpu::AccessFlags::IndexRead);
 
 		m_pendingCopies.clear();

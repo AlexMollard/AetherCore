@@ -27,8 +27,6 @@ namespace aether
 	class RenderingSubsystem;
 
 	// Owns the whole frame lifecycle: the render thread, the producer/game-thread
-	// frame loop, swapchain/viewport recreation, and the exclusive-mutation
-	// primitive. The application injects behaviour through EngineClient hooks.
 	class AetherCore : public IEngineRuntime
 	{
 	public:
@@ -39,19 +37,9 @@ namespace aether
 			int height = 720;
 			bool enableVsync = true;
 			const char* settingsFile = "EngineSettings.toml";
-			// Enables dev-only GPU diagnostics (NVIDIA Aftermath crash dumps),
-			// and only then on an NVIDIA device - see the vendor gate in
-			// VulkanContext.cpp. Set true only by an editor build (App, under
-			// AETHERCORE_EDITOR_APP; see src/app/main.cpp). The shipped
 			// GameRuntime must leave this false: Aftermath is a dev tool (dumps
-			// every shader's .spv, needs GFSDK_Aftermath_Lib.x64.dll) that a
-			// shipped game should not carry or enable.
 			bool enableGpuDiagnostics = false;
 
-			// Selects the engine bring-up profile. Full initializes the complete
-			// scene runtime; UiShell brings up only window + Vulkan device + the
-			// Dear ImGui overlay for tool front-ends such as the project Launcher.
-			// See RuntimeProfile.hpp.
 			RuntimeProfile profile = RuntimeProfile::Full;
 		};
 
@@ -74,29 +62,18 @@ namespace aether
 			return m_services;
 		}
 
-		// The bring-up profile this instance was constructed with. Full is the
-		// complete scene runtime; UiShell is a window + device + ImGui overlay tool
-		// front-end (no scene systems, cameras, or scene render passes). The
-		// application layer uses this to decide whether to wire ECS systems. See
-		// RuntimeProfile.hpp.
 		[[nodiscard]] RuntimeProfile GetProfile() const
 		{
 			return m_profile;
 		}
 
-		// --- Engine-owned frame lifecycle -------------------------------------
 		// Start/stop the dedicated render thread. Start registers the render-thread
-		// and IEngineRuntime services; call before layers that consume them attach.
-		// Stop joins the thread and waits the GPU idle (call before destroying any
-		// GPU-referenced resources, e.g. layer detach).
 		void StartRenderThread();
 		void StopRenderThread();
 
 		// Run the producer/game-thread frame loop until the window closes. The
-		// EngineClient supplies per-frame game logic, UI, and target invalidation.
 		int RunFrameLoop(EngineClient& client);
 
-		// IEngineRuntime: quiesce the pipeline, run a mutation exclusively, resume.
 		void RunExclusive(QuiesceMode mode, std::function<void()> mutation) override;
 
 		void SetTargetFps(float fps)
@@ -109,9 +86,7 @@ namespace aether
 			return m_framePacer.GetTargetFps();
 		}
 
-		// Toggles VSync at runtime: updates the setting and forces a swapchain
 		// recreate (present-mode change) on the next producer-thread poll. No-op
-		// when unchanged.
 		void SetVsync(bool enabled);
 
 		[[nodiscard]] bool IsVsyncEnabled() const
@@ -120,22 +95,15 @@ namespace aether
 		}
 
 		// Enables/disables ImGui multi-viewport at runtime (producer thread); forwards to
-		// the ImGui subsystem's ViewportsEnable config flag.
 		void SetImguiViewportsEnabled(bool enabled);
 
 		// Applies the manual editor UI scale at runtime (producer thread).
 		void SetUiScale(float uiScale);
 
-		// Installs the optional UI overlay (Dear ImGui in the editor). Only an
-		// editor build (App, under AETHERCORE_EDITOR_APP) calls this, right
-		// after constructing AetherCore - see Application.cpp. The shipped
 		// GameRuntime never calls it, so the engine never links or initializes
-		// any UI-toolkit code. Calls overlay->Init(GetServiceContainer()).
 		void SetUiOverlay(std::unique_ptr<IUiOverlay> overlay);
 
-		// Returns a just-consumed frame's UI-overlay draw data to the overlay's
 		// pool (render thread, RenderThread::ThreadLoop). No-op when no overlay
-		// is installed or frame is null (always true for GameRuntime).
 		void RecycleUiOverlayFrameData(std::unique_ptr<IUiOverlayFrameData> frame);
 
 		// Frame lifecycle steps (used by the loop and the render thread).
@@ -149,11 +117,6 @@ namespace aether
 		void WaitIdle();
 
 		// --- Main-thread quiesced swapchain / scene-viewport recreate ----------
-		// The producer (main) thread polls NeedsSwapchainOrViewportRecreate() each
-		// iteration; when true it drains + parks the render thread, waits the GPU
-		// idle, invalidates retained references, then calls RecreateSwapchainAnd
-		// Resources() single-threaded. This replaces the old render-thread-inline
-		// recreate that raced ImGui's retained viewport-texture descriptors.
 		[[nodiscard]] bool NeedsSwapchainOrViewportRecreate();
 		void RecreateSwapchainAndResources();
 		void FlushImguiPendingTextureReleases();
@@ -189,20 +152,16 @@ namespace aether
 
 		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
 
-		// Engine bring-up profile (Full scene runtime vs. UiShell tool front-end).
-		// Gates scene-subsystem creation in the constructor and scene work in the
-		// per-frame path. See RuntimeProfile.hpp.
 		RuntimeProfile m_profile = RuntimeProfile::Full;
 
 		// Producer/game-thread frame loop state (distinct from the render-side
-		// m_frameIndex below, which is stamped from the packet on the render thread).
 		RenderThread m_renderThread;
 		FramePacer m_framePacer;
 		std::uint64_t m_producerFrameIndex = 0;
 		double m_gameElapsedSeconds = 0.0;
 
 		gpu::CommandList m_currentCmdList;
-		std::uint64_t m_frameIndex = 0; // render/consumer-side, set from packet.frameIndex
+		std::uint64_t m_frameIndex = 0;
 
 		EngineSettings m_settings{};
 	};

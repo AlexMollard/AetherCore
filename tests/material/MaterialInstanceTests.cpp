@@ -21,9 +21,8 @@ TEST_CASE("First instance setter seeds a default and assigns a material") {
     World world;
     Entity e = world.Create();
 
-    MaterialSystem::SetMetallic(world, e, reg, cache, 0.0f); // value equals the default
+    MaterialSystem::SetMetallic(world, e, reg, cache, 0.0f);
     // Even though 0.0 matches the seeded default, a freshly created instance must
-    // still assign so the entity gains a material.
     CHECK(world.TryGet<MaterialInstanceComponent>(e) != nullptr);
     CHECK(world.TryGet<MaterialComponent>(e) != nullptr);
     CHECK(sink.allocCount == 1);
@@ -43,7 +42,7 @@ TEST_CASE("No-op instance edit does not re-acquire or churn the slot") {
     const int allocs = sink.allocCount;
     const int writes = sink.writeCount;
 
-    MaterialSystem::SetRoughness(world, e, reg, cache, 0.3f); // same value -> gated out
+    MaterialSystem::SetRoughness(world, e, reg, cache, 0.3f);
     CHECK(sink.allocCount == allocs);
     CHECK(sink.writeCount == writes);
     CHECK(sink.freeCount == 0);
@@ -61,11 +60,10 @@ TEST_CASE("Changed instance field re-acquires a new material") {
     MaterialSystem::SetMetallic(world, e, reg, cache, 0.2f);
     const std::uint32_t firstSlot = world.Get<MaterialComponent>(e).gpuSlot;
 
-    MaterialSystem::SetMetallic(world, e, reg, cache, 0.9f); // different -> new content
+    MaterialSystem::SetMetallic(world, e, reg, cache, 0.9f);
     CHECK(world.Get<MaterialComponent>(e).gpuSlot != firstSlot);
     CHECK(sink.allocCount == 2);
 
-    // Instance retains the other fields; only metallic changed.
     CHECK(world.Get<MaterialInstanceComponent>(e).asset.metallicFactor == doctest::Approx(0.9f));
 }
 
@@ -83,5 +81,5 @@ TEST_CASE("Edits accumulate on the same instance, not a fresh default each time"
 
     const MaterialAsset& a = world.Get<MaterialInstanceComponent>(e).asset;
     CHECK(a.baseColorFactor.r == doctest::Approx(1.0f));
-    CHECK(a.metallicFactor == doctest::Approx(0.5f)); // base color survived the metallic edit
+    CHECK(a.metallicFactor == doctest::Approx(0.5f));
 }

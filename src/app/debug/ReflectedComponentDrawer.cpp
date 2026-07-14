@@ -19,9 +19,6 @@ namespace aether::editor
 	{
 		using reflect::FieldType;
 
-		// One editable row per field, chosen by FieldType. Reads the current value,
-		// renders the widget seeded with it, and on change writes back through the
-		// field's type-erased setter.
 		bool DrawField(const reflect::FieldDesc& f, void* comp)
 		{
 			reflect::FieldValue v = f.get(comp);

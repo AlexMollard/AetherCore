@@ -24,27 +24,16 @@ namespace aether
 	class PostProcessStack;
 	class VulkanContext;
 
-	// Renders a model file as a turntable thumbnail into a small offscreen target
-	// (File Explorer preview card). Same second-POV skeleton as
-	// CameraPreviewService - own queue, frame constants, cull + lit forward +
-	// tonemap passes, fully additive - but the scene source is a PRIVATE world
-	// holding one entity per model primitive, and the service OWNS the
-	// LoadedModel (meshes by value), so nothing couples to the live scene or the
-	// scripting SceneContext.
-	//
 	// Threading: ShowModel / ClearModel / PrepareQueue run on the game thread;
-	// BuildFrameConstants runs on the render thread and reads the turntable
-	// camera under a mutex (the CameraPreviewService request pattern).
 	class ModelPreviewService
 	{
 	public:
-		static constexpr std::uint32_t kSize = 384u; // square thumbnail
+		static constexpr std::uint32_t kSize = 384u;
 
 		void Initialize(VulkanContext& context, BindlessManager& bindless, const RenderQueueSharedPipelines& pipelines, gpu::Format colorFormat, gpu::Format depthFormat);
 		void Shutdown(AssetManager* assets);
 
 		// Game thread: load `path` (VFS-aware; the caller bakes raw glTF first)
-		// and stage it for the turntable. Replaces any previous model.
 		bool ShowModel(AssetManager& assets, const std::string& path, std::string& outError);
 		void ClearModel(AssetManager& assets);
 
@@ -62,14 +51,11 @@ namespace aether
 		void PrepareQueue(std::uint32_t drawSlot);
 
 		// Render thread: preview frame constants (copy the main fc, override the
-		// camera, disable scene shadows/local lights - they belong to the live
-		// scene, not this isolated model).
 		void BuildFrameConstants(const FrameConstants& mainFc, std::uint32_t frameIdx);
 
 		void RegisterComputePasses(RenderGraph& graph, CullPass& cullPass);
 		void RegisterGraphicsPasses(RenderGraph& graph, BindlessManager& bindless, const PostProcessStack& postProcess);
 
-		// Tonemapped LDR view for ImGui display.
 		[[nodiscard]] gpu::ImageView GetColorView() const
 		{
 			return m_colorLdrView;
@@ -110,7 +96,7 @@ namespace aether
 		// The isolated model scene (game thread only).
 		World m_world;
 		LoadedModel m_model;
-		glm::vec4 m_bounds{0.0f, 0.0f, 0.0f, 1.0f}; // merged sphere: xyz centre, w radius
+		glm::vec4 m_bounds{0.0f, 0.0f, 0.0f, 1.0f};
 		float m_turntableAngle = 0.0f;
 		std::atomic<bool> m_hasModel{false};
 

@@ -8,7 +8,7 @@
 #ifdef _WIN32
 #	include <Windows.h>
 #	include <shobjidl.h>
-#	undef CopyFile // Windows.h defines CopyFile as CopyFileA/CopyFileW, conflicts with file_util::CopyFile
+#	undef CopyFile
 #endif
 
 #include "io/FileUtil.hpp"
@@ -79,20 +79,17 @@ namespace aether::app::project
 			return out;
 		}
 
-		std::filesystem::path AbsolutePath(std::filesystem::path path)
+		std::filesystem::path AbsolutePath(const std::filesystem::path& path)
 		{
 			if (path.empty())
 			{
 				return {};
 			}
 			std::error_code ec;
-			std::filesystem::path absolute = std::filesystem::absolute(path, ec);
+			const std::filesystem::path absolute = std::filesystem::absolute(path, ec);
 			return ec ? path.lexically_normal() : absolute.lexically_normal();
 		}
 
-		// The engine SDK .csproj a new project's scripts reference. Supplied by the
-		// build (AETHER_MANAGED_SDK_PROJECT); empty when a target does not define it,
-		// in which case the created csproj carries an empty reference (still scaffolds).
 		std::filesystem::path ManagedSdkProjectPath()
 		{
 #ifdef AETHER_MANAGED_SDK_PROJECT
@@ -236,7 +233,6 @@ namespace aether::app::project
 			const long long weeks = days / 7;
 			return std::format("{} week{} ago", weeks, weeks == 1 ? "" : "s");
 		}
-		// Older than a month: an absolute date reads better than "10 weeks ago".
 		return std::format("{:%b %d, %Y}", std::chrono::floor<std::chrono::days>(when));
 	}
 
@@ -354,7 +350,7 @@ namespace aether::app::project
 			return false;
 		}
 
-		for (std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv})
+		for (const std::string_view dir: {"assets"sv, "assets/models"sv, "assets/materials"sv, "assets/textures"sv, "assets/animations"sv, "assets/prefabs"sv, "data"sv, "scenes"sv, "scripts"sv})
 		{
 			if (auto dirResult = io::file_util::CreateDirectories(root / std::filesystem::path(dir)); !dirResult)
 			{
@@ -386,7 +382,7 @@ namespace aether::app::project
 		const bool uninitialize = SUCCEEDED(coInit);
 
 		IFileDialog* dialog = nullptr;
-		HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+		HRESULT const hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
 		if (FAILED(hr) || dialog == nullptr)
 		{
 			if (uninitialize)
@@ -433,7 +429,7 @@ namespace aether::app::project
 		const bool uninitialize = SUCCEEDED(coInit);
 
 		IFileDialog* dialog = nullptr;
-		HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+		HRESULT const hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
 		if (FAILED(hr) || dialog == nullptr)
 		{
 			if (uninitialize)

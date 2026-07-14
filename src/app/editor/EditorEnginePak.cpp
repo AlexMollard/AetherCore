@@ -12,27 +12,16 @@ namespace aether::editor
 {
 	namespace
 	{
-		// Engine-owned resource subdirs that go into engine.pak, staged from
-		// AETHER_ENGINE_RESOURCES_DIR. Mirrors the CMake POST_BUILD step
-		// (aethercore_add_runtime_payload in src/app/CMakeLists.txt), which stages
-		// resources/fonts and packs it.
 		constexpr std::string_view kEngineAssetSubdirs[] = {"fonts"};
 		constexpr std::string_view kEngineAssetFiles[] = {"branding/aethercore-icon-white.png"};
 
-		// Compiled engine .spv shaders, staged from AETHER_SHADER_BUILD_DIR into
-		// engine.pak under this same subdir name (so shaders:// can point an
-		// OverlayBackend prefix of "shaders/" at engine.pak - see
-		// FileSystem::InitializeDefaultMounts). Defined only in dev builds of the
-		// editor (App), where AETHERCORE_SHADER_OUTPUT_DIR is compiled in as
-		// AETHER_SHADER_BUILD_DIR; absent in a shipped editor, so shaders are
-		// simply skipped rather than failing the bake.
 		constexpr std::string_view kEngineShaderSubdir = "shaders";
 
 		std::optional<std::filesystem::path> EngineShaderDir()
 		{
 #ifdef AETHER_SHADER_BUILD_DIR
 			std::error_code ec;
-			const std::filesystem::path dir = AETHER_SHADER_BUILD_DIR;
+			std::filesystem::path dir = AETHER_SHADER_BUILD_DIR;
 			if (std::filesystem::is_directory(dir, ec))
 			{
 				return dir;
@@ -50,12 +39,6 @@ namespace aether::editor
 		}
 
 #ifdef AETHER_SHADER_BUILD_DIR
-		// This dev editor was built with shader compilation wired in (App), so
-		// require the compiled shader dir too - otherwise a baked engine.pak
-		// would silently ship without shaders while engine:// and shaders://
-		// are expected to agree on pak-vs-dir mode. Editors built without
-		// AETHER_SHADER_BUILD_DIR (e.g. a shipped editor) skip this check and
-		// bake fonts-only, same as before this pipeline existed.
 		if (!EngineShaderDir().has_value())
 		{
 			return false;
@@ -69,7 +52,7 @@ namespace aether::editor
 	{
 #ifdef AETHER_ENGINE_RESOURCES_DIR
 		std::error_code ec;
-		const std::filesystem::path dir = AETHER_ENGINE_RESOURCES_DIR;
+		std::filesystem::path dir = AETHER_ENGINE_RESOURCES_DIR;
 		if (std::filesystem::is_directory(dir, ec))
 		{
 			return dir;
@@ -86,8 +69,6 @@ namespace aether::editor
 			return {.succeeded = false, .message = "Engine resources are not available in this build; cannot bake engine.pak."};
 		}
 
-		// Stage the engine-owned subdirs into a temp dir so packed virtual paths are
-		// prefixed correctly (e.g. "fonts/Roboto.ttf").
 		std::error_code ec;
 		const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec);
 		if (ec)
@@ -134,10 +115,6 @@ namespace aether::editor
 			}
 		}
 
-		// Compiled engine shaders live in a separate build-output tree (not under
-		// AETHER_ENGINE_RESOURCES_DIR), so they are staged from AETHER_SHADER_BUILD_DIR
-		// instead of kEngineAssetSubdirs. Skipped (not a failure) when this editor
-		// build has no compiled shader dir - see EngineShaderDir().
 		if (const std::optional<std::filesystem::path> shaders = EngineShaderDir())
 		{
 			std::filesystem::copy(*shaders, staging / kEngineShaderSubdir, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);

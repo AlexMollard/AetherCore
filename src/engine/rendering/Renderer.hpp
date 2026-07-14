@@ -13,7 +13,6 @@ namespace aether
 	class PostProcessStack;
 	enum class TonemapMode : std::uint32_t;
 
-	// Renderer service - owns all rendering configuration and post-processing.
 	class Renderer
 	{
 	public:
@@ -41,22 +40,17 @@ namespace aether
 		Renderer() = default;
 		~Renderer() = default;
 
-		// Initialize with dependencies (called by AetherCore).
 		void Initialize(PostProcessStack* postProcessStack);
 
-		// Tonemap mode control.
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
 
-		// FXAA control.
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 
-		// Runtime rasterization controls for scene draw queues.
 		void SetCullMode(gpu::CullMode mode);
 		[[nodiscard]] gpu::CullMode GetCullMode() const;
 
-		// Directional light (key light) controls.
 		void SetDirectionalLight(glm::vec3 direction, float intensity);
 		[[nodiscard]] glm::vec3 GetDirectionalLightDirection() const;
 		[[nodiscard]] float GetDirectionalLightIntensity() const;
@@ -74,7 +68,6 @@ namespace aether
 			return m_sunColor;
 		}
 
-		// Ambient light controls.
 		void SetAmbientLight(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetAmbientLight() const;
 
@@ -83,7 +76,6 @@ namespace aether
 			return m_ambientColor;
 		}
 
-		// Sky color controls used by the skybox pass.
 		void SetSkyGradient(glm::vec3 horizonColor, glm::vec3 zenithColor);
 		[[nodiscard]] glm::vec3 GetSkyHorizonColor() const;
 		[[nodiscard]] glm::vec3 GetSkyZenithColor() const;
@@ -106,7 +98,6 @@ namespace aether
 			return m_skyVoidColor;
 		}
 
-		// Local lights for tiled forward shading.
 		void SetPointLights(std::vector<PointLight> lights);
 		void AddPointLight(PointLight light);
 		void SetPointLightPosition(std::uint32_t idx, glm::vec3 position);
@@ -131,7 +122,6 @@ namespace aether
 			return m_spotLights;
 		}
 
-		// Swapchain format queries for pipeline creation.
 		[[nodiscard]] static gpu::Format GetColorFormat();
 		[[nodiscard]] static gpu::Format GetDepthFormat();
 		[[nodiscard]] static gpu::Extent2D GetExtent();
@@ -139,7 +129,6 @@ namespace aether
 	private:
 		PostProcessStack* m_postProcessStack = nullptr;
 
-		// Cached light parameters (also written to frame constants).
 		gpu::CullMode m_cullMode = gpu::CullMode::Back;
 		glm::vec4 m_sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f};
 		glm::vec4 m_sunColor{1.0f, 0.96f, 0.90f, 1.0f};

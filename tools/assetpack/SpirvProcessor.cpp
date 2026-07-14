@@ -27,8 +27,6 @@ namespace aether::assetpipeline
 			constexpr uint32_t kOpNoLine = 317u;
 			constexpr uint32_t kOpModuleProcessed = 330u;
 
-			// Decodes a SPIR-V literal string (packed 4 chars per word, little-endian,
-			// null-terminated) starting at `words[first]`.
 			std::string DecodeLiteralString(const std::vector<uint32_t>& words, std::size_t first, std::size_t end)
 			{
 				std::string text;
@@ -48,23 +46,7 @@ namespace aether::assetpipeline
 				return text;
 			}
 
-			// Returns true for instructions that carry only heavy debug/source metadata
 			// and have no semantic effect on execution or interface layout.
-			//
-			// OpName / OpMemberName (variable and struct-member names) are deliberately
-			// KEPT. The Khronos validation layer's shader-object SPIR-V analysis
-			// (spirv::VariableBase::FindDebugName, reached via vkCreateShadersEXT)
-			// null-dereferences when a push-constant variable has no OpName, which makes
-			// a name-stripped engine impossible to run under the validation layer. The
-			// names are tiny and also make RenderDoc / validation output readable.
-			//
-			// OpString handling is conditional: OpStrings are referenced by the
-			// NonSemantic.Shader.DebugInfo.100 OpExtInst block (DebugSource et al), so
-			// they may only be removed together with that block; and if any OTHER
-			// non-semantic set (e.g. NonSemantic.DebugPrintf format strings) survives,
-			// OpStrings must be kept or the module would contain dangling references --
-			// exactly the spirv-val failure (VUID-VkShaderCreateInfoEXT-pCode-08737)
-			// this processor previously shipped.
 			bool IsAlwaysStrippable(uint32_t opcode)
 			{
 				switch (opcode)
@@ -99,11 +81,6 @@ namespace aether::assetpipeline
 				return {};
 			}
 
-			// -- Pass 1: find non-semantic instruction-set imports --------------------
-			// Debug-info sets are stripped wholesale (their OpExtInst results are only
-			// consumed by other instructions of the same set, so removal is coherent).
-			// Any other surviving non-semantic set (DebugPrintf) forces OpStrings to be
-			// kept because its instructions reference them.
 			std::vector<uint32_t> strippedSetIds;
 			bool keepStrings = false;
 			{
@@ -115,7 +92,7 @@ namespace aether::assetpipeline
 					const uint32_t opcode = word0 & 0xFFFFu;
 					if (instrLen == 0 || i + instrLen > numWords)
 					{
-						return {}; // malformed SPIR-V
+						return {};
 					}
 					if (opcode == kOpExtInstImport && instrLen >= 3)
 					{
@@ -145,12 +122,6 @@ namespace aether::assetpipeline
 				return false;
 			};
 
-			// -- Pass 2: collect the result IDs of every instruction being removed ----
-			// slangc also emits OpName for the debug-info instructions themselves; once
-			// those instructions are stripped, an OpName pointing at one would be a
-			// forward reference to an undefined ID (spirv-val: "forward referenced IDs
-			// have not been defined"). Track removed result IDs so pass 3 can drop the
-			// names that refer to them.
 			std::unordered_set<uint32_t> removedResultIds;
 			{
 				std::size_t i = kHeaderWords;
@@ -161,7 +132,7 @@ namespace aether::assetpipeline
 					const uint32_t opcode = word0 & 0xFFFFu;
 					if (opcode == kOpString && !keepStrings && instrLen >= 2)
 					{
-						removedResultIds.insert(words[i + 1]); // OpString: word1 = result id
+						removedResultIds.insert(words[i + 1]);
 					}
 					else if (opcode == kOpExtInstImport && instrLen >= 2 && isStrippedSet(words[i + 1]))
 					{
@@ -169,13 +140,12 @@ namespace aether::assetpipeline
 					}
 					else if (opcode == kOpExtInst && instrLen >= 4 && isStrippedSet(words[i + 3]))
 					{
-						removedResultIds.insert(words[i + 2]); // OpExtInst: word2 = result id
+						removedResultIds.insert(words[i + 2]);
 					}
 					i += instrLen;
 				}
 			}
 
-			// -- Pass 3: copy every instruction that survives the strip ---------------
 			std::vector<uint32_t> out;
 			out.reserve(numWords);
 
@@ -193,7 +163,7 @@ namespace aether::assetpipeline
 
 				if (instrLen == 0 || i + instrLen > numWords)
 				{
-					return {}; // malformed SPIR-V
+					return {};
 				}
 
 				bool strip = IsAlwaysStrippable(opcode);
@@ -207,14 +177,10 @@ namespace aether::assetpipeline
 				}
 				else if (!strip && opcode == kOpExtInst && instrLen >= 4)
 				{
-					// OpExtInst: result-type, result-id, SET-ID, instruction, operands...
 					strip = isStrippedSet(words[i + 3]);
 				}
 				else if (!strip && (opcode == kOpName || opcode == kOpMemberName) && instrLen >= 2)
 				{
-					// Drop names whose target instruction was removed above; a kept
-					// OpName pointing at a stripped debug-info id is a dangling forward
-					// reference and fails spirv-val.
 					strip = removedResultIds.contains(words[i + 1]);
 				}
 

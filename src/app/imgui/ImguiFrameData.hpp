@@ -10,10 +10,6 @@
 
 namespace aether
 {
-	// Concrete Dear ImGui implementation of the engine's opaque per-frame
-	// overlay snapshot (IUiOverlayFrameData). Lives in the editor-only
-	// src/app/imgui/ module - the engine core (AetherCore, RenderFramePacket,
-	// RenderThread) only ever touches instances of this through the abstract
 	// base, so it never needs to know Dear ImGui exists.
 	class ImguiFrameData : public IUiOverlayFrameData
 	{
@@ -41,10 +37,7 @@ namespace aether
 		void Capture(const ImDrawData* source);
 		void CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle);
 
-		// --- Object Pooling API ---
-		// Pool stores heap-owned instances (not by-value) so a pooled frame's
 		// identity - and its warm ImDrawList* pools - never moves; handing one
-		// out/back is just a pointer transfer.
 		[[nodiscard]] static std::unique_ptr<ImguiFrameData> AcquirePooled();
 		static void RecyclePooled(std::unique_ptr<ImguiFrameData> frame);
 
@@ -73,7 +66,6 @@ namespace aether
 
 		ImDrawData m_drawData;
 
-		// Persistent pools to avoid heap allocations every frame.
 		std::vector<ImDrawList*> m_mainPool;
 		std::vector<ImDrawList*> m_secondaryPool;
 

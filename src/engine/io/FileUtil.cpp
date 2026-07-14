@@ -17,7 +17,7 @@ namespace aether::io::file_util
 			return std::unexpected(AetherError::FileSystem(std::format("File not found: {}", path.string())));
 		}
 
-		std::ifstream in(path, std::ios::binary);
+		const std::ifstream in(path, std::ios::binary);
 		if (!in.is_open())
 		{
 			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for reading: {}", path.string())));
@@ -88,7 +88,7 @@ namespace aether::io::file_util
 		in.seekg(0, std::ios::beg);
 
 		std::vector<std::byte> data(static_cast<std::size_t>(size));
-		if (!in.read(reinterpret_cast<char*>(data.data()), data.size()))
+		if (!in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size())))
 		{
 			return std::unexpected(AetherError::FileSystem(std::format("Failed to read file: {}", path.string())));
 		}

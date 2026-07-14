@@ -28,12 +28,9 @@ namespace aether
 		m_colorFormat = colorFormat;
 		m_depthFormat = depthFormat;
 
-		// A small, self-contained queue mirroring the scene draws for the preview POV.
 		m_queue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 8192u, .debugName = "CameraPreview"});
 		m_constants.Initialize();
 
-		// HDR colour target (forward format so the scene's material pipelines can draw
-		// into it) + depth. Bindless-sample the colour so a UI panel can show it.
 		m_colorHandle = gpu::ResourceRegistry::CreateTexture({
 		        .format = colorFormat,
 		        .extent = {kWidth, kHeight},
@@ -55,9 +52,6 @@ namespace aether
 			m_colorBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_colorHandle);
 		}
 
-		// LDR resolve target: the preview tonemap pass writes here (matching the main
-		// view exposure + operator) and ImGui samples it. R8 so it is display-ready and
-		// matches the reused tonemap pipeline colour format.
 		m_colorLdrHandle = gpu::ResourceRegistry::CreateTexture({
 		        .format = gpu::Format::R8G8B8A8Unorm,
 		        .extent = {kWidth, kHeight},
@@ -76,7 +70,7 @@ namespace aether
 	void CameraPreviewService::Shutdown()
 	{
 		m_queue.DiscardAllPending();
-		m_queue.Shutdown(); // release the queue's persistent GPU buffers now, while the ResourceRegistry is alive - else they leak to ResourceRegistry::Shutdown
+		m_queue.Shutdown();
 		m_constants.Shutdown();
 		if (m_colorHandle.IsValid())
 		{
@@ -108,7 +102,7 @@ namespace aether
 	void CameraPreviewService::SetRequest(bool enabled, const glm::mat4& view, const glm::mat4& proj, glm::vec3 cameraPos, float nearPlane)
 	{
 		{
-			std::lock_guard<std::mutex> lock(m_requestMutex);
+			const std::lock_guard<std::mutex> lock(m_requestMutex);
 			m_reqView = view;
 			m_reqProj = proj;
 			m_reqCameraPos = cameraPos;
@@ -123,9 +117,6 @@ namespace aether
 		{
 			return;
 		}
-		// Always prepare + (below) let the cull consume the slot so the producer/
-		// consumer lifecycle stays balanced every frame; only pay the mesh walk when
-		// the preview is actually on.
 		m_queue.SetWriteSlot(drawSlot);
 		m_queue.Clear(drawSlot);
 		if (m_enabled.load(std::memory_order_relaxed))
@@ -140,13 +131,10 @@ namespace aether
 		{
 			return;
 		}
-		// Copy the main frame constants (keeps shadow / resource-table addresses
-		// valid) and override only the camera so culling + shading run from the
-		// preview POV.
 		FrameConstants fc = mainFc;
 		float nearPlane = 0.1f;
 		{
-			std::lock_guard<std::mutex> lock(m_requestMutex);
+			const std::lock_guard<std::mutex> lock(m_requestMutex);
 			fc.view = m_reqView;
 			fc.proj = m_reqProj;
 			fc.viewProj = m_reqProj * m_reqView;
@@ -154,9 +142,6 @@ namespace aether
 			nearPlane = m_reqNearPlane;
 		}
 
-		// Bin local lights against the PREVIEW frustum: register a light view on
-		// first use and stage its dispatch for the shared $Lighting.BinLights pass
-		// (runs after the main-view prepare, so the frame's light list is uploaded).
 		if (lighting != nullptr && m_lightView == kInvalidLightView)
 		{
 			m_lightView = lighting->RegisterView("CameraPreview");
@@ -165,13 +150,11 @@ namespace aether
 		const bool lit = lighting != nullptr && m_lightView != kInvalidLightView && m_enabled.load(std::memory_order_relaxed) && lighting->PrepareView(m_lightView, frameIdx, fc.view, fc.proj, nearPlane, {kWidth, kHeight}, fc);
 		if (!lit)
 		{
-			// Hide the main view's grid info the fc copy carried: its tile lists are
-			// only valid for the main camera.
 			fc.tiledLightGridInfo = glm::uvec4(0u);
 			fc.tiledLightBufferOffsets = glm::uvec4(0u);
 		}
 
-		fc.RefreshDerived(); // preview frustum planes + invViewProj
+		fc.RefreshDerived();
 		m_constants.Write(frameIdx, fc);
 	}
 
@@ -196,35 +179,22 @@ namespace aether
 		RegisterImages(graph);
 		m_draws = graph.CreatePreparedDrawList("CameraPreviewDraws");
 
-		// Cull the preview queue against the PREVIEW frustum (its own frame
-		// constants), producing the preview draw list. Always registered; when the
-		// preview is off it just discards the (empty) queue slot.
 		graph.AddQueuePreparePass({
 		                                  .name = "$CameraPreviewCull",
 		                                  .produces = m_draws,
 		                                  .sideEffectReason = "prepares camera-preview draw queue",
 		                          })
-		        .ExecuteCompute(
-		                [this, &cullPass](PassContext& ctx)
-		                {
-			                // Always dispatch so the slot is consumed each frame (the
-			                // queue is empty when the preview is off => 0 draws).
-			                m_queue.PrepareAndDispatch(ctx.recorder, m_constants.GetDeviceAddress(ctx.frameSlot), cullPass.GetSinglePipeline(), ctx.frameSlot);
-		                })
+		        .ExecuteCompute([this, &cullPass](PassContext& ctx) { m_queue.PrepareAndDispatch(ctx.recorder, m_constants.GetDeviceAddress(ctx.frameSlot), cullPass.GetSinglePipeline(), ctx.frameSlot); })
 		        .OnDebugDisabled([this](PassContext& ctx) { m_queue.DiscardPending(ctx.frameSlot); });
 	}
 
-	void CameraPreviewService::RegisterGraphicsPasses(RenderGraph& graph, LightingManager* lighting, BindlessManager& bindless, const PostProcessStack& postProcess, gpu::Pipeline skyboxPipeline)
+	void CameraPreviewService::RegisterGraphicsPasses(RenderGraph& graph, LightingManager* lighting, BindlessManager& bindless, const PostProcessStack& postProcess, gpu::PipelineView skyboxPipeline)
 	{
 		if (!m_initialized)
 		{
 			return;
 		}
 
-		// Sky first, from the preview POV, so the thumbnail shares the main view's
-		// backdrop instead of black. Fullscreen + no depth (mirrors the main $Skybox);
-		// the forward pass then Loads over it. Pushes the PREVIEW frame constants so the
-		// sky is rendered from the preview camera (its invViewProj drives the rays).
 		graph.AddFullscreenPass({
 		                                .name = "$CameraPreviewSkybox",
 		                                .color = m_color,
@@ -236,7 +206,7 @@ namespace aether
 		                {
 			                if (!m_enabled.load(std::memory_order_relaxed))
 			                {
-				                return; // colour stays cleared to black
+				                return;
 			                }
 			                gpu::CommandList& cmd = ctx.recorder;
 			                cmd.BindPipeline(skyboxPipeline);
@@ -247,10 +217,6 @@ namespace aether
 			                cmd.Draw(3);
 		                });
 
-		// Lit forward pass from the preview POV into the preview colour+depth. Depends
-		// on the shadow atlases + light buffers so they are produced first; the
-		// per-draw material pipelines shade using the preview frame constants (which
-		// carry the same lighting/shadow/resource-table addresses as the main view).
 		std::vector<RenderGraph::FrameProductRef> consumes;
 		if (lighting != nullptr)
 		{
@@ -262,7 +228,7 @@ namespace aether
 		        .depth = m_depth,
 		        .draws = m_draws,
 		        .extent = {kWidth, kHeight},
-		        .colorLoadOp = gpu::LoadOp::Load, // keep the sky the skybox pass drew
+		        .colorLoadOp = gpu::LoadOp::Load,
 		        .depthLoadOp = gpu::LoadOp::Clear,
 		        .consumes = std::move(consumes),
 		});
@@ -279,17 +245,13 @@ namespace aether
 		        {
 			        if (!m_enabled.load(std::memory_order_relaxed))
 			        {
-				        return; // colour/depth still clear to black
+				        return;
 			        }
-			        // Shade with the preview view's own tile lists (culled against the
-			        // preview frustum by $Lighting.BinLights).
 			        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr && m_lightView != kInvalidLightView ? lighting->GetLightingAddresses(m_lightView, ctx.frameSlot) : DrawContracts::LightingAddresses{};
 			        bindless.CmdBindHeaps(ctx.recorder);
 			        m_queue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, &lightingAddr, m_constants.GetDeviceAddress(ctx.frameSlot), nullptr, 0, nullptr);
 		        });
 
-		// Resolve the preview HDR to LDR with the SAME tonemap operator + exposure as the
-		// main view, so the thumbnail matches instead of showing raw (dark) HDR.
 		graph.AddFullscreenPass({
 		                                .name = "$CameraPreviewTonemap",
 		                                .color = m_colorLdr,
@@ -328,7 +290,6 @@ namespace aether
 			                cmd.Draw(3, 1, 0, 0);
 		                });
 
-		// A no-op read leaves the LDR resolve ShaderReadOnly so the UI panel can sample it.
 		graph.AddPass("$CameraPreviewReady").ReadTexture(m_colorLdr).Execute([](PassContext&) {});
 	}
 } // namespace aether

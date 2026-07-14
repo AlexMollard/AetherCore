@@ -10,15 +10,10 @@
 #include "scene/World.hpp"
 #include "utils/ServiceContainer.hpp"
 
-// Entity & scene manipulation exported to C# (Module 01: the Unity-style
 // foundation). Everything here runs on the producer/game thread inside a managed
-// call, so structural changes (create/destroy/reparent) are safe: the render
-// thread reads only the RenderFramePacket, never the live ECS.
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
-
-// ── Hierarchy ───────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API void aether_entity_set_parent(std::uint32_t child, std::uint32_t parent)
 {
@@ -47,8 +42,6 @@ AE_SCRIPT_API std::uint32_t aether_entity_child_at(std::uint32_t id, std::int32_
 	return h->children[static_cast<std::size_t>(index)].id;
 }
 
-// ── Active (enable / disable) ─────────────────────────────────────────────────
-
 AE_SCRIPT_API void aether_entity_set_active(std::uint32_t id, std::int32_t active)
 {
 	auto& world = ActiveWorld();
@@ -59,7 +52,7 @@ AE_SCRIPT_API void aether_entity_set_active(std::uint32_t id, std::int32_t activ
 	}
 	if (active != 0)
 	{
-		world.Remove<aether::DisabledComponent>(e); // safe if absent
+		world.Remove<aether::DisabledComponent>(e);
 	}
 	else
 	{
@@ -67,7 +60,6 @@ AE_SCRIPT_API void aether_entity_set_active(std::uint32_t id, std::int32_t activ
 	}
 }
 
-// Active in hierarchy: false if the entity or any ancestor is disabled.
 AE_SCRIPT_API std::int32_t aether_entity_is_active(std::uint32_t id)
 {
 	const auto& world = ActiveWorld();
@@ -78,8 +70,6 @@ AE_SCRIPT_API std::int32_t aether_entity_is_active(std::uint32_t id)
 	}
 	return aether::ecs::IsActiveInHierarchy(world, e) ? 1 : 0;
 }
-
-// ── Find ──────────────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API std::uint32_t aether_scene_find_by_name(const char* name)
 {
@@ -99,8 +89,6 @@ AE_SCRIPT_API std::uint32_t aether_scene_find_by_name(const char* name)
 	return 0;
 }
 
-// ── Create / instantiate ──────────────────────────────────────────────────────
-
 AE_SCRIPT_API std::uint32_t aether_scene_create_entity(const char* name, Vec3 pos)
 {
 	auto& world = ActiveWorld();
@@ -110,9 +98,6 @@ AE_SCRIPT_API std::uint32_t aether_scene_create_entity(const char* name, Vec3 po
 	return e.id;
 }
 
-// Instantiate a prefab (.prefab.toml) into the live scene, placing its root at
-// `pos`. Returns the root entity id (0 if the prefab is missing/empty). The
-// instantiated entities are registered for scene cleanup by ApplySceneDeps.
 AE_SCRIPT_API std::uint32_t aether_scene_instantiate_prefab(const char* name, Vec3 pos)
 {
 	if (name == nullptr)

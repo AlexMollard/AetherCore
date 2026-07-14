@@ -12,23 +12,8 @@
 
 namespace aether
 {
-	// Forward-declared in Renderer.hpp as `enum class TonemapMode : std::uint32_t`.
-	// Full definition lives in passes/TonemapDefs.hpp.
 
-	// Owns the offscreen images and pipelines for the engine's post-processing
-	// chain: forward HDR buffer -> tonemap -> FXAA -> swapchain.
-	//
 	// Lifetime contract
-	// -----------------
-	//  1. Create()         - allocates GPU resources, registers images with the
-	//  graph
-	//  2. RegisterPasses() - adds $PostProcess and $FXAA passes to the graph;
-	//                        must be called every time the graph is rebuilt
-	//  3. Destroy()        - releases all GPU resources; call before or during
-	//                        swapchain recreation
-	//
-	// The stack is non-copyable and move-only.  After a move it is in a valid
-	// but empty state; calling Destroy() on an empty stack is a no-op.
 	class PostProcessStack
 	{
 	public:
@@ -37,11 +22,12 @@ namespace aether
 			gpu::Device device = nullptr;
 			gpu::Extent2D extent;
 			gpu::Format swapchainFormat = gpu::Format::Undefined;
-			BindlessManager* bindlessManager = nullptr; // non-owning
-			RenderGraph* renderGraph = nullptr;         // non-owning
+			BindlessManager* bindlessManager = nullptr;
+			RenderGraph* renderGraph = nullptr;
 		};
 
 		PostProcessStack() = default;
+		~PostProcessStack() = default;
 
 		PostProcessStack(const PostProcessStack&) = delete;
 		PostProcessStack& operator=(const PostProcessStack&) = delete;
@@ -53,14 +39,11 @@ namespace aether
 		void Destroy();
 
 		// Format the engine's forward pass must use when writing the HDR buffer.
-		// Game-layer pipelines that render scene geometry must match this format.
 		[[nodiscard]] static constexpr gpu::Format GetForwardColorFormat()
 		{
 			return gpu::Format::R16G16B16A16Sfloat;
 		}
 
-		// RenderGraph handle for the HDR buffer - pass to the forward pass's
-		// WriteColor() so the graph tracks the write->read dependency.
 		[[nodiscard]] RGImage GetHdrColor() const
 		{
 			return m_hdrColor;
@@ -96,7 +79,6 @@ namespace aether
 			return m_outputToTexture;
 		}
 
-		// Select the tonemap curve applied in $PostProcess (default: Reinhard).
 		void SetTonemapMode(TonemapMode mode)
 		{
 			m_tonemapMode = mode;
@@ -107,7 +89,6 @@ namespace aether
 			return m_tonemapMode;
 		}
 
-		// Pre-tonemap exposure multiplier (default: 1.0 = no change).
 		void SetExposure(float exposure)
 		{
 			m_exposure = exposure;
@@ -118,16 +99,11 @@ namespace aether
 			return m_exposure;
 		}
 
-		// The tonemap HDR->LDR pipeline (R8G8B8A8_UNORM target). Reused by the camera
-		// preview to resolve its own offscreen HDR with the same operator + exposure
-		// as the main view, so the thumbnail matches instead of showing raw HDR.
-		[[nodiscard]] gpu::Pipeline GetTonemapPipeline() const
+		[[nodiscard]] gpu::PipelineView GetTonemapPipeline() const
 		{
 			return m_tonemapPipeline.GetPipeline();
 		}
 
-		// FXAA toggle.  When disabled the $FXAA pass becomes a passthrough
-		// (no blurring) so graph topology stays stable across toggles.
 		void SetFxaaEnabled(bool enabled)
 		{
 			m_fxaaEnabled = enabled;
@@ -138,8 +114,6 @@ namespace aether
 			return m_fxaaEnabled;
 		}
 
-		// Debug side-by-side tonemap comparison. When enabled the shader splits
-		// the screen into vertical strips, one operator per strip.
 		void SetDebugCompare(bool enabled)
 		{
 			m_debugCompare = enabled;
@@ -160,7 +134,6 @@ namespace aether
 			return m_debugModeCount;
 		}
 
-		// Luminance histogram access (debug)
 		void SetHistogramCaptureEnabled(bool enabled)
 		{
 			if (m_histogramCaptureEnabled == enabled)
@@ -234,31 +207,26 @@ namespace aether
 			return kHistogramLogMax;
 		}
 
-		// Adds the $PostProcess (tonemap) and $FXAA passes to the render graph.
 		// bindless must outlive the graph (it is captured by the pass lambdas).
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
 
-		// Update the render graph's external buffer handles for the current frame
-		// and read back completed histogram data from kMaxFramesInFlight frames
-		// ago (guaranteed complete by frame pacing). Call once per frame before
-		// the graph executes, alongside LightingManager::UpdateBufferHandles.
 		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot);
 
 	private:
-		gpu::TextureHandle m_hdrColorHandle; // R16G16B16A16_SFLOAT - forward output
+		gpu::TextureHandle m_hdrColorHandle;
 		RGImage m_hdrColor{};
 		std::uint32_t m_hdrBindlessSlot = 0xFFFFFFFFu;
-		GraphicsPipeline m_tonemapPipeline; // HDR -> LDR
+		GraphicsPipeline m_tonemapPipeline;
 
-		gpu::TextureHandle m_ldrColorHandle; // R8G8B8A8_UNORM - tonemap output
+		gpu::TextureHandle m_ldrColorHandle;
 		RGImage m_ldrColor{};
 		std::uint32_t m_ldrBindlessSlot = 0xFFFFFFFFu;
-		GraphicsPipeline m_fxaaPipeline;       // LDR -> swapchain (FXAA, can passthrough when disabled)
-		gpu::TextureHandle m_finalColorHandle; // swapchain-format final color for ImGui viewport mode
+		GraphicsPipeline m_fxaaPipeline;
+		gpu::TextureHandle m_finalColorHandle;
 		RGImage m_finalColor{};
 		gpu::ImageView m_finalColorView = nullptr;
 		gpu::Format m_swapchainFormat = gpu::Format::Undefined;
-		gpu::Extent2D m_extent{};
+		gpu::Extent2D m_extent;
 
 		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
 		float m_exposure = 1.0f;
@@ -267,7 +235,6 @@ namespace aether
 		bool m_debugCompare = false;
 		std::uint32_t m_debugModeCount = 0;
 
-		// Luminance histogram (debug)
 		void ReadbackHistogram(std::uint32_t frameSlot);
 		[[nodiscard]] bool ShouldRecordHistogram(std::uint32_t frameIndex) const;
 		static constexpr std::uint32_t kHistogramBins = 256;
@@ -275,8 +242,8 @@ namespace aether
 		static constexpr float kHistogramLogMax = 10.0f;
 
 		gpu::PipelineHandle m_histogramPipeline;
-		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{}; // per-frame mapped, 512 uint32 each
-		RGBuffer m_histogramOutputRG{};                                        // graph handle; backing buffer updated per frame via UpdateBufferHandles
+		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{};
+		RGBuffer m_histogramOutputRG{};
 		bool m_perFrameHistogramReady[kMaxFramesInFlight]{};
 		float m_histogramBins[kHistogramBins]{};
 		float m_ldrHistogramBins[kHistogramBins]{};

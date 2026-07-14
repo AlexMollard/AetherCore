@@ -26,13 +26,13 @@ namespace aether
 		}
 
 		int score = 0;
-		std::size_t hi = 0;     // haystack cursor
-		int previousMatch = -2; // haystack index of the previous matched char
+		std::size_t hi = 0;
+		int previousMatch = -2;
 		bool firstMatch = true;
 
-		for (std::size_t ni = 0; ni < needle.size(); ++ni)
+		for (const char ni: needle)
 		{
-			const char want = LowerAscii(needle[ni]);
+			const char want = LowerAscii(ni);
 			bool found = false;
 			for (; hi < haystack.size(); ++hi)
 			{
@@ -47,18 +47,18 @@ namespace aether
 				return std::nullopt;
 			}
 
-			score += 1; // base per matched char
+			score += 1;
 			if (static_cast<int>(hi) == previousMatch + 1)
 			{
-				score += 15; // consecutive run
+				score += 15;
 			}
 			if (hi == 0 || IsBoundary(haystack[hi - 1]))
 			{
-				score += 10; // word boundary
+				score += 10;
 			}
 			if (firstMatch)
 			{
-				score -= static_cast<int>(hi); // penalise a late first match
+				score -= static_cast<int>(hi);
 				firstMatch = false;
 			}
 

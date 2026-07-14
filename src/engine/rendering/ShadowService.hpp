@@ -24,11 +24,6 @@ namespace aether
 	class VulkanContext;
 	class World;
 
-	// Owns and orchestrates directional CSM resources and passes.
-	//
-	// Uses multi-frustum culling: one cull dispatch tests each draw against
-	// all 3 cascade view-proj matrices, writing 3 independent output regions.
-	// This replaces 3x per-cascade queues that each duplicated the same draw data.
 	class ShadowService
 	{
 	public:
@@ -37,7 +32,6 @@ namespace aether
 
 		void RecreatePipeline(gpu::Device device, gpu::Format depthFormat);
 
-		// Set the double-buffer write slot and clear it on the single shadow queue.
 		void PrepareWriteSlot(std::uint32_t drawSlot);
 
 		void PrepareQueues(std::uint32_t drawSlot, World& world);
@@ -90,8 +84,6 @@ namespace aether
 		}
 
 	private:
-		// Single queue replaces the per-cascade arrays - multi-frustum culling
-		// handles all 3 cascades in one dispatch on shared draw data.
 		RenderQueue m_shadowRenderQueue;
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
@@ -103,9 +95,6 @@ namespace aether
 		BindlessManager* m_bindless = nullptr;
 		bool m_directionalShadowEnabled = true;
 		std::array<bool, kMaxFramesInFlight> m_directionalShadowFrameEnabled{true, true, true};
-		// C0 4096 (crisp near), C1 2048, C2 2048 (raised from 1024 so distant
-		// shadows do not dissolve when the camera zooms out - the cheapest bump
-		// that addresses the far-fade without the fill-rate hit of a 4096 C1).
 		std::array<gpu::Extent2D, kShadowCascadeCount> m_shadowMapExtents{
 		        gpu::Extent2D{4096u, 4096u},
 		        gpu::Extent2D{2048u, 2048u},

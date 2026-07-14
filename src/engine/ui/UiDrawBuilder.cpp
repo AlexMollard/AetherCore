@@ -9,20 +9,16 @@
 
 namespace aether::ui
 {
-	// Emits one UiDrawCommand for `img`, using `rect`'s already-resolved pixel
-	// rect. Invalid texture -> solid fill (rounded when cornerRadius > 0); valid
-	// texture -> full-UV textured rect with its live bindless slot when the
-	// renderer supplies the texture registry.
 	static void EmitImage(const UIRect& rect, const UIImage& img, const TextureRegistry* textures, int layer, std::vector<UiDrawCommand>& out)
 	{
 		UiDrawCommand cmd;
-		cmd.data0 = rect.resolvedRect; // x,y,w,h
+		cmd.data0 = rect.resolvedRect;
 		cmd.color = img.color;
 		cmd.layer = layer;
 		if (img.texture.IsValid())
 		{
 			cmd.type = kShapeTexturedRect;
-			cmd.data1 = {0.f, 0.f, 1.f, 1.f}; // full UVs
+			cmd.data1 = {0.f, 0.f, 1.f, 1.f};
 			cmd.textureSlot = textures != nullptr ? textures->ResolveSlot(img.texture) : 0xFFFFFFFFu;
 		}
 		else
@@ -59,13 +55,9 @@ namespace aether::ui
 		}
 	}
 
-	// Pre-order walk of the HierarchyComponent subtree rooted at `entity`: emits
-	// a command for `entity` itself (if it carries both UIRect and UIImage),
-	// then recurses into its children. `layer` is the running emission index
 	// shared across the whole canvas, so it must be threaded through by reference.
 	static void Walk(World& world, Entity entity, FontRegistry* fonts, const TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out)
 	{
-		// A disabled entity prunes the whole subtree from the UI: the top-down
 		// walk simply stops recursing, so its children never emit either.
 		if (world.Has<DisabledComponent>(entity))
 		{

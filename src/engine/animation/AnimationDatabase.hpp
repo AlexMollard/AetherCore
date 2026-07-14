@@ -16,35 +16,29 @@ namespace aether
 {
 	class VulkanContext;
 
-	// GPU-friendly animation database.
-	// Flattens all animation clip data (keyframes, times, channels) into dense GPU buffers
-	// and maintains lookup tables for efficient per-frame sampling on compute shader.
-	//
-	// All data lives in a single device-local GpuHeap (one VkBuffer per database).
-	// Individual array addresses are exposed as gpu::DeviceAddress for push-constant use.
 	class AnimationDatabase
 	{
 	public:
 		struct GpuChannel
 		{
 			std::uint32_t nodeIndex;
-			std::uint8_t animPath;      // GltfAnimationPath
-			std::uint8_t interpolation; // GltfInterpolation
+			std::uint8_t animPath;
+			std::uint8_t interpolation;
 			std::uint16_t padding0;
-			std::uint32_t timesOffset; // byte offset into times buffer
+			std::uint32_t timesOffset;
 			std::uint32_t timesCount;
-			std::uint32_t valuesOffset; // byte offset into values buffer
+			std::uint32_t valuesOffset;
 			std::uint32_t valuesCount;
-			std::uint64_t padding1; // Align to 32 bytes
+			std::uint64_t padding1;
 		};
 
 		static_assert(sizeof(GpuChannel) == 32);
 
 		struct GpuClip
 		{
-			std::uint32_t nameOffset; // byte offset into strings buffer
+			std::uint32_t nameOffset;
 			std::uint32_t nameLength;
-			std::uint32_t channelOffset; // index into channels buffer
+			std::uint32_t channelOffset;
 			std::uint32_t channelCount;
 			float duration;
 			std::uint32_t padding0;
@@ -56,7 +50,7 @@ namespace aether
 		{
 			std::uint32_t jointOffset;
 			std::uint32_t jointCount;
-			std::uint32_t inverseBindOffset; // byte offset into inverse-bind buffer
+			std::uint32_t inverseBindOffset;
 			std::uint32_t _pad0;
 		};
 
@@ -64,8 +58,8 @@ namespace aether
 
 		struct DepthRange
 		{
-			std::uint32_t startIndex; // index into depthSortedNodes
-			std::uint32_t count;      // nodes at this depth
+			std::uint32_t startIndex;
+			std::uint32_t count;
 		};
 
 		AnimationDatabase() = default;
@@ -89,21 +83,15 @@ namespace aether
 			return m_aliveSentinel == kAliveSentinel;
 		}
 
-		// Build database from a glTF asset's animation collection.
 		// ctx / uploadPool must outlive the Create call (not stored).
 		static AnimationDatabase Create(const VulkanContext& ctx, gpu::CommandPool uploadPool, const assets::GltfAsset& asset);
 
-		// Append runtime-loaded animation clips to this database.
 		// The channels must already be remapped to this skeleton's node indices.
-		// Destroys and recreates the GPU heap to accommodate the combined data.
-		// Returns the clip index of the first newly-added clip.
-		// uploadPool must be a valid compute-capable command pool.
 		Expected<std::uint32_t> AppendAnimations(
 		        gpu::CommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
 
 		void Destroy();
 
-		// GPU buffer addresses (device addressable).
 		[[nodiscard]] gpu::DeviceAddress GetClipsAddr() const
 		{
 			return m_clipsAddr;
@@ -189,7 +177,6 @@ namespace aether
 			return m_depthRanges[index];
 		}
 
-		// CPU accessors for validation/debugging.
 		[[nodiscard]] std::uint32_t GetClipCount() const
 		{
 			return static_cast<std::uint32_t>(m_clips.size());
@@ -230,7 +217,6 @@ namespace aether
 			return !m_clips.empty();
 		}
 
-		// CPU accessors for bind pose data (debug/validation).
 		[[nodiscard]] const std::vector<glm::vec4>& GetBindTranslations() const
 		{
 			return m_bindTranslations;
@@ -290,17 +276,17 @@ namespace aether
 		gpu::DeviceAddress m_depthSortedNodesAddr = 0;
 		gpu::DeviceAddress m_depthRangesAddr = 0;
 
-		std::vector<GpuClip> m_clips;              // CPU-side copy for GetClipName()/GetClipDuration()
-		std::vector<GpuChannel> m_channels;        // CPU-side copy for AppendAnimations rebuild
-		std::vector<float> m_times;                // CPU-side copy for AppendAnimations rebuild
-		std::vector<glm::vec4> m_values;           // CPU-side copy for AppendAnimations rebuild
-		std::vector<GpuSkinMeta> m_skinMetas;      // CPU-side copy for GetSkinJointCount()
-		std::vector<glm::vec4> m_bindTranslations; // CPU-side copy for debug
-		std::vector<glm::vec4> m_bindRotations;    // CPU-side copy for debug
-		std::vector<glm::vec4> m_bindScales;       // CPU-side copy for debug
-		std::vector<std::int32_t> m_nodeParents;   // CPU-side copy for debug
-		std::vector<glm::mat4> m_skinInverseBinds; // CPU-side copy for debug
-		std::vector<std::uint32_t> m_skinJoints;   // CPU-side copy for debug
+		std::vector<GpuClip> m_clips;
+		std::vector<GpuChannel> m_channels;
+		std::vector<float> m_times;
+		std::vector<glm::vec4> m_values;
+		std::vector<GpuSkinMeta> m_skinMetas;
+		std::vector<glm::vec4> m_bindTranslations;
+		std::vector<glm::vec4> m_bindRotations;
+		std::vector<glm::vec4> m_bindScales;
+		std::vector<std::int32_t> m_nodeParents;
+		std::vector<glm::mat4> m_skinInverseBinds;
+		std::vector<std::uint32_t> m_skinJoints;
 		std::string m_clipNames;
 		std::vector<std::string> m_nodeNames;
 		std::vector<std::uint32_t> m_depthSortedNodes;

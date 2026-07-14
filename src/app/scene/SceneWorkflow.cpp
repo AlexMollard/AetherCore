@@ -33,7 +33,6 @@ namespace aether::app::scene
 		{
 			return true;
 		}
-		// Nothing to load: clear the previous scene rather than leaving it live.
 		ReplaceScene(SceneDescription{}, world, deps);
 		return false;
 	}

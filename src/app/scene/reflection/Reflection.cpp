@@ -6,9 +6,6 @@ namespace aether::reflect
 {
 	namespace
 	{
-		// Function-local so AE_COMPONENT static initializers (which run before main,
-		// single-threaded) can append in any translation-unit order without a
-		// static-init-order problem.
 		std::vector<ComponentType>& Registry()
 		{
 			static std::vector<ComponentType> registry;
@@ -61,7 +58,6 @@ namespace aether::reflect
 	void RegisterComponent(ComponentType type)
 	{
 		auto& registry = Registry();
-		// Last declaration wins if a name is registered twice (keeps the table unique).
 		const auto it = std::find_if(registry.begin(), registry.end(), [&](const ComponentType& t) { return t.name == type.name; });
 		if (it != registry.end())
 		{

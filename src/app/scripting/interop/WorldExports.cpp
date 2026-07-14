@@ -16,17 +16,10 @@
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 
-// Entity lifecycle + TransformComponent access exported to C#: setting a
-// transform true-teleports physics bodies and propagates the delta through the
-// entity's subtree.
-
 using namespace aether::app::scripting::interop;
 
 namespace
 {
-	// Carry a physics body with a script-driven transform change, exactly as the
-	// editor's ApplyWorldTransform does - otherwise a body simulates away from the
-	// visuals and the two owners fight over the transform each frame.
 	void TeleportBodyToTransform(aether::World& w, aether::Entity e)
 	{
 		auto* ps = w.TryGet<aether::PhysicsStateComponent>(e);
@@ -55,14 +48,11 @@ namespace
 	}
 } // namespace
 
-// ── Entity lifecycle ──────────────────────────────────────────────────────────
-
 AE_SCRIPT_API std::uint32_t aether_entity_create()
 {
 	aether::World& w = ActiveWorld();
 	const aether::Entity e = w.Create();
 	w.Emplace<aether::NameComponent>(e, aether::NameComponent{.name = "Entity"});
-	// Track as scene-owned so the layer tears it down on unload/reload.
 	aether::app::scripting::ActiveContext().sceneEntities.push_back(e);
 	return e.id;
 }
@@ -87,16 +77,11 @@ AE_SCRIPT_API void aether_mark_transient(std::uint32_t id)
 	}
 }
 
-// ── Name ──────────────────────────────────────────────────────────────────────
-
 AE_SCRIPT_API void aether_set_name(std::uint32_t id, const char* name)
 {
 	ActiveWorld().EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = name != nullptr ? name : ""});
 }
 
-// Writes the entity name into a caller-provided UTF-8 buffer, returning the byte
-// length (excluding the null terminator), or 0 when unnamed. Buffer-fill avoids
-// allocating a managed string owner across the boundary.
 AE_SCRIPT_API std::int32_t aether_get_name(std::uint32_t id, char* buf, std::int32_t bufLen)
 {
 	const auto* nc = ActiveWorld().TryGet<aether::NameComponent>(aether::Entity{id});
@@ -110,8 +95,6 @@ AE_SCRIPT_API std::int32_t aether_get_name(std::uint32_t id, char* buf, std::int
 	buf[copy] = '\0';
 	return copy;
 }
-
-// ── TransformComponent ────────────────────────────────────────────────────────
 
 AE_SCRIPT_API void aether_add_transform(std::uint32_t id)
 {
@@ -199,8 +182,6 @@ AE_SCRIPT_API void aether_set_transform(std::uint32_t id, Vec3 pos, Vec3 euler, 
 	TeleportBodyToTransform(w, e);
 }
 
-// ── Data-driven behaviors (advanced by BehaviorSystem while playing) ──────────
-
 AE_SCRIPT_API void aether_add_bob(std::uint32_t id, float amplitude, float frequency, float phase)
 {
 	ActiveWorld().EmplaceOrReplace<aether::BobComponent>(aether::Entity{id}, aether::BobComponent{.amplitude = amplitude, .frequency = frequency, .phase = phase});
@@ -221,9 +202,6 @@ AE_SCRIPT_API void aether_add_material_pulse(std::uint32_t id, Vec3 emissiveA, V
 	ActiveWorld().EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id}, aether::MaterialPulseComponent{.emissiveA = ToGlm(emissiveA), .emissiveB = ToGlm(emissiveB), .frequency = frequency});
 }
 
-// ── Entity scripts ────────────────────────────────────────────────────────────
-
-// Attach a script component by type name; runs while playing and serializes.
 AE_SCRIPT_API void aether_add_script(std::uint32_t id, const char* typeName)
 {
 	auto& world = ActiveWorld();
@@ -240,8 +218,6 @@ AE_SCRIPT_API std::int32_t aether_scene_file_exists(const char* name)
 {
 	return aether::app::scene::ReadSceneFile(name != nullptr ? name : "").has_value() ? 1 : 0;
 }
-
-// ── Dynamic tags ──────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API std::uint32_t aether_tag_create(const char* name)
 {
@@ -268,10 +244,6 @@ AE_SCRIPT_API void aether_tag_remove(std::uint32_t entityId, std::uint32_t tagId
 	aether::TagRemove(&ActiveWorld(), entityId, tagId);
 }
 
-// ── Iteration (buffer-fill; no per-item boundary crossings) ───────────────────
-
-// Fills `buf` with up to `cap` entity ids that carry a TransformComponent;
-// returns the number written.
 AE_SCRIPT_API std::int32_t aether_world_get_entities_with_transform(std::uint32_t* buf, std::int32_t cap)
 {
 	if (buf == nullptr || cap <= 0)
@@ -290,7 +262,6 @@ AE_SCRIPT_API std::int32_t aether_world_get_entities_with_transform(std::uint32_
 	return n;
 }
 
-// Fills `buf` with up to `cap` entity ids that carry `tagId`; returns count written.
 AE_SCRIPT_API std::int32_t aether_tag_get_entities(std::uint32_t tagId, std::uint32_t* buf, std::int32_t cap)
 {
 	if (buf == nullptr || cap <= 0)

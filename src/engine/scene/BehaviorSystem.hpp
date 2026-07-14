@@ -6,10 +6,6 @@ namespace aether
 {
 	class AssetManager;
 
-	// Advances the data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse -
-	// scene/BehaviorComponents.hpp). Registered with the World's system list,
-	// so the editor's play gate (Application::OnUpdate skipping UpdateSystems
-	// while Editing) freezes it together with physics and animation.
 	class BehaviorSystem final : public System
 	{
 	public:

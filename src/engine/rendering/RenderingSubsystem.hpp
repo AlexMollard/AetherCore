@@ -42,7 +42,7 @@ namespace aether
 		Fixed1080p,
 		Fixed1440p,
 		Custom,
-		MatchPanel, // render at the Viewport panel's physical pixel size (logical x DPI)
+		MatchPanel,
 	};
 
 	struct SceneViewportSettings
@@ -51,22 +51,13 @@ namespace aether
 		gpu::Extent2D customExtent{1280, 720};
 	};
 
-	// Owns all rendering passes and the render graph. Depends on Vulkan context,
-	// camera, lighting, and material services from the container.
 	class RenderingSubsystem
 	{
 	public:
-		// profile selects how much of the subsystem is brought up. Full initializes
-		// every scene resource (shadows, cull, GTAO, post-process, previews,
-		// pipelines) and RegisterPasses wires the whole scene chain. UiShell
-		// initializes only the render graph, frame-constants/resource-table buffers,
-		// and the UI renderer; RegisterPasses then registers a single swapchain-clear
-		// pass. See RuntimeProfile.hpp.
 		void Init(ServiceContainer& services, RuntimeProfile profile = RuntimeProfile::Full);
 		void Shutdown();
 		void RegisterPasses(ServiceContainer& services);
 
-		// Called on swapchain recreation to rebuild extent-dependent resources.
 		void RecreateSwapchainResources(ServiceContainer& services);
 		void SetSceneViewportEnabled(ServiceContainer& services, bool enabled);
 		void SetSceneViewportSettings(ServiceContainer& services, const SceneViewportSettings& settings);
@@ -74,8 +65,6 @@ namespace aether
 		void ApplyPendingSceneViewportChanges(ServiceContainer& services);
 
 		// Non-consuming peek used by the main-thread quiesced recreate to decide
-		// whether a rebuild is pending. CommitPendingSceneViewportSettings is the
-		// sole consumer of the flag.
 		[[nodiscard]] bool IsSceneViewportRebuildPending() const
 		{
 			return m_sceneViewportRebuildPending.load(std::memory_order_acquire);
@@ -86,8 +75,6 @@ namespace aether
 		[[nodiscard]] SceneViewportSettings GetSceneViewportSettings() const;
 		[[nodiscard]] gpu::Extent2D ResolveRequestedSceneViewportExtent(gpu::Extent2D swapchainExtent) const;
 
-		// Set by AetherCore after construction to provide the current frame index
-		// for RTT queue preparation and pass callbacks.
 		void SetFrameIndexProvider(std::function<std::uint64_t()> provider)
 		{
 			m_frameIndexProvider = std::move(provider);
@@ -155,12 +142,9 @@ namespace aether
 			return m_postProcessStack;
 		}
 
-		// Fixed square edge of the debug texture-preview render target.
 		static constexpr std::uint32_t kTexturePreviewSize = 2048;
 
-		// Textures panel: request a processed preview of the source at `bindlessSlot`
 		// (enabled=false / slot 0xFFFFFFFF disables). Read on the render thread each
-		// frame by the $TexturePreview pass.
 		void SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled);
 
 		[[nodiscard]] gpu::ImageView GetTexturePreviewView() const
@@ -201,12 +185,7 @@ namespace aether
 		void DestroySceneViewportDepth();
 		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless);
 
-		// Re-registers the persistent, swapchain-independent texture-preview image
-		// as an external render-graph resource. The backing GPU image lives for the
 		// lifetime of the subsystem, but RenderGraph::Clear() (on every scene-viewport
-		// rebuild) drops all external registrations, so the cached m_texturePreview
-		// handle must be refreshed whenever the graph topology is rebuilt or it will
-		// dangle and alias whichever resource next claims its old external slot.
 		void RegisterTexturePreviewImage();
 
 		struct PerFrameResourceTable
@@ -216,8 +195,6 @@ namespace aether
 			gpu::DeviceAddress address = 0;
 		};
 
-		// Bring-up profile, set in Init. Gates scene-resource creation and the
-		// per-frame / RegisterPasses / RecreateSwapchainResources scene paths.
 		RuntimeProfile m_profile = RuntimeProfile::Full;
 
 		RenderQueueSharedPipelines m_renderQueuePipelines;
@@ -241,14 +218,12 @@ namespace aether
 		BindlessManager* m_bindlessManager = nullptr;
 		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 
-		// Debug texture-preview pass (Textures panel). Request scalars are set on the
 		// producer thread and read in the render-thread Execute (a torn read just
-		// yields a one-frame-stale preview).
 		GraphicsPipeline m_texturePreviewPipeline;
 		gpu::TextureHandle m_texturePreviewHandle;
 		RGImage m_texturePreview;
 		gpu::ImageView m_texturePreviewView = nullptr;
-		gpu::Extent2D m_previewSrcExtent{};
+		gpu::Extent2D m_previewSrcExtent;
 		std::uint32_t m_previewSrcSlot = 0xFFFFFFFFu;
 		std::uint32_t m_previewChannel = 0;
 		float m_previewExposure = 1.0f;

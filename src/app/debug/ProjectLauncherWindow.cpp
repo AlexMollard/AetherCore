@@ -18,109 +18,100 @@ namespace aether::app
 {
 	namespace
 	{
-		// The palette IS the editor palette ("Night Amber", engine/Color.hpp). The
-		// launcher defined this language; the shared primitives now live in
-		// debug/EditorChrome.hpp so every panel adopting the look moves with it.
 		using namespace aether::editor::chrome;
 
-		const ImVec4 kBgTop = kBg;         // window gradient: near-black at the top,
-		const ImVec4 kBgBottom = kPanel;   // lifting into the panel tone at the bottom
+		const ImVec4 kBgTop = kBg;
+		const ImVec4 kBgBottom = kPanel;
 
-		// ── DPI scaling ─────────────────────────────────────────────────────────────
-		// Every dimension below is authored in "design pixels" (1x). This launcher
-		// paints its own text/chrome with drawList->AddText, whose pixel sizes ImGui
-		// does NOT DPI-scale (unlike GetFontSize(), which every other panel sizes off
-		// and which ImGui grows per-monitor via io.ConfigDpiScaleFonts). So on a scaled
-		// display the hub used to render smaller than the rest of the editor. Px is the
-		// single place the monitor scale enters: dp(v) / dp(x, y) convert design pixels
-		// to physical ones, and every call site stays in readable, un-multiplied numbers.
-		constexpr float kBaseFontPx = 15.0f; // ImguiSubsystem loads the UI font at 15px
+		constexpr float kBaseFontPx = 15.0f;
+
 		struct Px
 		{
 			float scale = 1.0f;
-			[[nodiscard]] float operator()(const float v) const { return v * scale; }
-			[[nodiscard]] ImVec2 operator()(const float x, const float y) const { return ImVec2(x * scale, y * scale); }
+
+			[[nodiscard]] float operator()(const float v) const
+			{
+				return v * scale;
+			}
+
+			[[nodiscard]] ImVec2 operator()(const float x, const float y) const
+			{
+				return ImVec2(x * scale, y * scale);
+			}
 		};
+
 		[[nodiscard]] Px MakeScale()
 		{
 			return Px{ImGui::GetFontSize() / kBaseFontPx};
 		}
 
 		// ── Layout metrics (design pixels) ──────────────────────────────────────────
-		// One home for every number the hub is built from. Grouped by the thing it
-		// sizes; scaled through dp() at the point of use.
 		namespace m
 		{
-			// Type sizes.
-			inline constexpr float kWordmarkMin = 28.0f, kWordmarkMax = 42.0f; // clamps vs window
+			inline constexpr float kWordmarkMin = 28.0f, kWordmarkMax = 42.0f;
 			inline constexpr float kSubtitle = 14.5f;
 			inline constexpr float kSectionLabel = 13.0f;
-			inline constexpr float kBodyPath = 13.0f;   // continue path + card path
+			inline constexpr float kBodyPath = 13.0f;
 			inline constexpr float kCardTitle = 16.0f;
-			inline constexpr float kBadge = 12.0f;      // "3 days ago"
-			inline constexpr float kChip = 12.0f;       // EDITOR / OPEN
-			inline constexpr float kMissing = 11.0f;    // MISSING tag
+			inline constexpr float kBadge = 12.0f;
+			inline constexpr float kChip = 12.0f;
+			inline constexpr float kMissing = 11.0f;
 			inline constexpr float kFooter = 14.0f;
 			inline constexpr float kPlaceholderIcon = 34.0f;
 			inline constexpr float kEmptyTitle = 15.0f, kEmptyBody = 14.0f;
 
-			// Responsive content band.
-			inline constexpr float kContentWidthCap = 1720.0f;   // column stops widening here
+			inline constexpr float kContentWidthCap = 1720.0f;
 			inline constexpr float kMarginMin = 20.0f, kMarginMax = 84.0f;
 			inline constexpr float kBandTopMin = 18.0f, kBandTopMax = 64.0f;
 			inline constexpr float kBandBottomMin = 16.0f, kBandBottomMax = 56.0f;
-			inline constexpr float kColumnsTopGap = 62.0f;       // wordmark block -> columns
+			inline constexpr float kColumnsTopGap = 62.0f;
 			inline constexpr float kFooterBand = 30.0f;
 
-			// Compact project-dialog controls.
-			inline constexpr float kFieldStride = 44.0f;       // input-row height + gap
-			inline constexpr float kButtonStd = 38.0f;         // Open / Create
-			inline constexpr float kBrowseGap = 8.0f;          // field <-> browse button
+			inline constexpr float kFieldStride = 44.0f;
+			inline constexpr float kButtonStd = 38.0f;
+			inline constexpr float kBrowseGap = 8.0f;
 			inline constexpr float kInputRounding = 3.0f;
 			inline constexpr float kInputPadX = 12.0f, kInputPadY = 9.0f;
 
-			// Recent-projects grid + its cards.
 			inline constexpr float kGridGap = 16.0f;
 			inline constexpr float kCardMinWidth = 210.0f;
-			inline constexpr float kCardTextBlock = 64.0f;     // name+path region height below the thumb
-			inline constexpr float kGridBleed = 6.0f;          // scroll-child inset that gives hover brackets room
-			inline constexpr float kLabelToGrid = 30.0f;       // section label -> grid
-			inline constexpr float kGridMinHeight = 96.0f, kGridMinWidth = 220.0f; // below this the grid is skipped
-			inline constexpr float kEmptyTextX = 2.0f;         // empty-state left nudge
+			inline constexpr float kCardTextBlock = 64.0f;
+			inline constexpr float kGridBleed = 6.0f;
+			inline constexpr float kLabelToGrid = 30.0f;
+			inline constexpr float kGridMinHeight = 96.0f, kGridMinWidth = 220.0f;
+			inline constexpr float kEmptyTextX = 2.0f;
 			inline constexpr float kEmptyTitleY = 8.0f, kEmptyBodyY = 34.0f;
 
 			inline constexpr float kCardCorner = 4.0f;
 			inline constexpr float kCardBorder = 1.0f;
-			inline constexpr float kSelectedBar = 3.0f;        // top edge of a selected card
+			inline constexpr float kSelectedBar = 3.0f;
 			inline constexpr float kBracketArm = 12.0f;
 			inline constexpr float kBracketThickness = 2.0f;
-			inline constexpr float kBracketBleed = 3.0f;       // how far the reticle bleeds past the card
-			inline constexpr float kThumbInset = 1.0f;         // thumbnail vs card border
-			inline constexpr float kCardTextInset = 12.0f;     // name/path left inset
-			inline constexpr float kCardTitleTop = 10.0f;      // below the thumbnail
+			inline constexpr float kBracketBleed = 3.0f;
+			inline constexpr float kThumbInset = 1.0f;
+			inline constexpr float kCardTextInset = 12.0f;
+			inline constexpr float kCardTitleTop = 10.0f;
 			inline constexpr float kCardPathClipTop = 32.0f;
 			inline constexpr float kCardPathTextTop = 33.0f;
 			inline constexpr float kCardPathBottomInset = 8.0f;
-			inline constexpr float kBadgeInset = 10.0f;        // badge from the thumbnail's bottom-left
-			inline constexpr float kChipInset = 16.0f;         // OPEN/MISSING from the thumbnail's top-right
+			inline constexpr float kBadgeInset = 10.0f;
+			inline constexpr float kChipInset = 16.0f;
 			inline constexpr float kChipTop = 12.0f;
 			inline constexpr float kChipCorner = 2.0f;
-			inline constexpr float kChipPadX = 6.0f, kChipPadY = 4.0f;   // scrim padding, quiet chips
-			inline constexpr float kOpenPadX = 8.0f, kOpenPadY = 5.0f;   // scrim padding, the OPEN chip
+			inline constexpr float kChipPadX = 6.0f, kChipPadY = 4.0f;
+			inline constexpr float kOpenPadX = 8.0f, kOpenPadY = 5.0f;
 
-			// Wordmark composition.
-			inline constexpr float kWordmarkScale = 0.032f;    // of content width
-			inline constexpr float kLogoExtra = 16.0f;         // logo size = wordmark + this
+			inline constexpr float kWordmarkScale = 0.032f;
+			inline constexpr float kLogoExtra = 16.0f;
 			inline constexpr float kLogoGap = 14.0f;
-			inline constexpr float kTagGap = 16.0f;            // "CORE" -> EDITOR chip
+			inline constexpr float kTagGap = 16.0f;
 			inline constexpr float kTagTop = 10.0f;
 			inline constexpr float kTagPadX = 8.0f, kTagPadY = 5.0f;
 			inline constexpr float kUnderlineInset = 2.0f, kUnderlineWidth = 58.0f;
-			inline constexpr float kUnderlineTop = 10.0f, kUnderlineBottom = 13.0f; // below the wordmark
+			inline constexpr float kUnderlineTop = 10.0f, kUnderlineBottom = 13.0f;
 			inline constexpr float kSubtitleTop = 24.0f;
 			inline constexpr float kLaunchingTop = 46.0f;
 
-			// Background flourishes.
 			inline constexpr float kGridPitch = 56.0f;
 			inline constexpr float kGridAlpha = 0.16f;
 			inline constexpr float kWashHeight = 240.0f;
@@ -158,26 +149,17 @@ namespace aether::app
 			std::snprintf(buffer.data(), buffer.size(), "%s", DisplayPath(path).c_str());
 		}
 
-		// A rounded scrim behind a bit of overlaid text (badges, MISSING/OPEN chips) so
-		// it reads on any thumbnail. `pad` is the inset from the text box on each side.
 		void ScrimBehind(ImDrawList* drawList, const ImVec2 textPos, const ImVec2 textSize, const ImVec2 pad, const ImVec4& fill, const float corner)
 		{
 			drawList->AddRectFilled(Sub(textPos, pad), Add(textPos, Add(textSize, pad)), ToU32(fill), corner);
 		}
 
-		// Micro section label: small amber tick + spaced uppercase muted text.
 		void SectionLabel(ImDrawList* drawList, const ImVec2 pos, const char* label, const Px& dp)
 		{
 			drawList->AddRectFilled(pos, Add(pos, dp(3.0f, 12.0f)), ToU32(kAccent));
 			TextSized(drawList, dp(m::kSectionLabel), Add(pos, dp(10.0f, -1.0f)), kMuted, label);
 		}
 
-		// A project tile in the recents grid: a scene-preview thumbnail on top (or a
-		// cube placeholder when the project has no <root>/.aether/preview.png yet),
-		// then the name and path. Hover lifts the fill + frames the card with reticle
-		// brackets; a project whose ProjectSettings.toml is gone renders muted with a
-		// MISSING tag. Returns true when clicked (the caller opens it, which reports the
-		// error for a missing project).
 		bool DrawProjectCard(const EditorProjectContext& project, std::uint64_t previewTextureId, const std::string& modifiedLabel, bool selected, bool missing, const ImVec2& cardSize, const Px& dp)
 		{
 			const ImVec2 start = ImGui::GetCursorScreenPos();
@@ -189,7 +171,6 @@ namespace aether::app
 			const bool lit = hovered && !missing;
 			const float corner = dp(m::kCardCorner);
 
-			// Card body + border, an accent lip when selected, reticle brackets on hover.
 			drawList->AddRectFilled(start, end, ToU32(lit ? kPanelHi : kPanel), corner);
 			drawList->AddRect(start, end, ToU32(lit ? WithAlpha(kAccent, 0.5f) : kStroke), corner, 0, dp(m::kCardBorder));
 			if (selected && !missing)
@@ -198,14 +179,10 @@ namespace aether::app
 			}
 			if (lit)
 			{
-				// The brackets bleed a few px past the card; the grid's scroll child pads its
-				// interior by the same amount (see PaintRecentsGrid) so perimeter cards get
-				// the room rather than having the reticle sliced off by the child's clip rect.
 				const float bleed = dp(m::kBracketBleed);
 				CornerBrackets(drawList, Add(start, ImVec2(-bleed, -bleed)), Add(end, ImVec2(bleed, bleed)), dp(m::kBracketArm), dp(m::kBracketThickness), kAccent);
 			}
 
-			// Thumbnail (top), 16:9. A real preview, else a centred cube placeholder.
 			const float thumbHeight = std::floor(cardSize.x * 9.0f / 16.0f);
 			const ImVec2 thumbMin = Add(start, dp(m::kThumbInset, m::kThumbInset));
 			const ImVec2 thumbMax(end.x - dp(m::kThumbInset), start.y + thumbHeight);
@@ -222,7 +199,6 @@ namespace aether::app
 			}
 			drawList->AddLine(ImVec2(thumbMin.x, thumbMax.y), ImVec2(thumbMax.x, thumbMax.y), ToU32(kStroke), 1.0f);
 
-			// "Last edited" badge, pinned to the thumbnail's bottom-left over a scrim.
 			if (!modifiedLabel.empty() && !missing)
 			{
 				const ImVec2 badgeSize = MeasureSized(dp(m::kBadge), modifiedLabel.c_str());
@@ -231,7 +207,6 @@ namespace aether::app
 				TextSized(drawList, dp(m::kBadge), badgePos, kMuted, modifiedLabel.c_str());
 			}
 
-			// Name + path below the thumbnail (path clipped to the card width).
 			const float textX = start.x + dp(m::kCardTextInset);
 			TextSized(drawList, dp(m::kCardTitle), ImVec2(textX, thumbMax.y + dp(m::kCardTitleTop)), missing ? kMuted : kText, project.name.c_str());
 			const std::string path = DisplayPath(project.root);
@@ -239,7 +214,6 @@ namespace aether::app
 			TextSized(drawList, dp(m::kBodyPath), ImVec2(textX, thumbMax.y + dp(m::kCardPathTextTop)), missing ? kFaint : kMuted, path.c_str());
 			ImGui::PopClipRect();
 
-			// Thumbnail overlay: a MISSING tag, or an OPEN chip on hover (top-right).
 			if (missing)
 			{
 				const char* tag = "MISSING";
@@ -285,13 +259,11 @@ namespace aether::app
 			ImGui::PopStyleVar(3);
 		}
 
-		// Everything the section painters share for one frame: the window draw list, the
-		// DPI scale, and the responsive rects resolved from the current window size.
 		struct Frame
 		{
 			ImDrawList* drawList = nullptr;
 			Px dp;
-			ImVec2 contentMin, contentMax; // the centred content band
+			ImVec2 contentMin, contentMax;
 			float contentX = 0.0f, contentWidth = 0.0f;
 			float wordmarkSize = 0.0f;
 			float gridTop = 0.0f, gridBottom = 0.0f;
@@ -302,10 +274,8 @@ namespace aether::app
 			ImDrawList* dl = f.drawList;
 			const Px& dp = f.dp;
 
-			// Vertical near-black gradient.
 			dl->AddRectFilledMultiColor(min, max, ToU32(kBgTop), ToU32(kBgTop), ToU32(kBgBottom), ToU32(kBgBottom));
 
-			// Fine grid, barely-there. Structure without noise.
 			const float pitch = dp(m::kGridPitch);
 			const ImU32 gridColor = ToU32(WithAlpha(kStroke, m::kGridAlpha));
 			for (float x = min.x + pitch; x < max.x; x += pitch)
@@ -317,20 +287,11 @@ namespace aether::app
 				dl->AddLine(ImVec2(min.x, y), ImVec2(max.x, y), gridColor, 1.0f);
 			}
 
-			// Soft amber wash bleeding down-and-right out of the top-left corner. All
-			// three trailing corners fall to zero alpha so the wash dissolves into the
-			// background instead of ending on a hard rectangular seam.
 			const ImVec2 washMax(min.x + (max.x - min.x) * m::kWashWidthFrac, min.y + dp(m::kWashHeight));
-			dl->AddRectFilledMultiColor(min, washMax,
-			        ToU32(WithAlpha(kAccent, m::kWashAlpha)), // upper-left  - the glow's origin
-			        ToU32(WithAlpha(kAccent, 0.0f)),          // upper-right - faded across the top
-			        ToU32(WithAlpha(kAccent, 0.0f)),          // lower-right
-			        ToU32(WithAlpha(kAccent, 0.0f)));         // lower-left  - faded away downward
+			dl->AddRectFilledMultiColor(min, washMax, ToU32(WithAlpha(kAccent, m::kWashAlpha)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)));
 
-			// Bottom edge: accent hairline fading out toward both ends.
 			dl->AddRectFilledMultiColor(ImVec2(min.x, max.y - dp(m::kHairline)), max, ToU32(WithAlpha(kAccent, 0.85f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.0f)), ToU32(WithAlpha(kAccent, 0.85f)));
 
-			// HUD stripe motif: three fading diagonal slashes in the top-right corner.
 			const float slashBaseX = max.x - dp(m::kSlashInset);
 			const float slashY = min.y + dp(m::kSlashTop);
 			for (int i = 0; i < 3; ++i)
@@ -340,8 +301,6 @@ namespace aether::app
 			}
 		}
 
-		// Wordmark block: optional tinted logo, AETHER·CORE, an EDITOR chip, the accent
-		// underline, and the subtitle / "Starting editor…" line.
 		void PaintHeader(const Frame& f, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowState& state)
 		{
 			ImDrawList* dl = f.drawList;
@@ -361,14 +320,12 @@ namespace aether::app
 			TextSized(dl, wordmark, Add(wordmarkPos, ImVec2(aetherSize.x, 0.0f)), kAccent, "CORE");
 			const ImVec2 coreSize = MeasureSized(wordmark, "CORE");
 
-			// EDITOR tag: small outlined chip after the wordmark.
 			const ImVec2 tagText = MeasureSized(dp(m::kChip), "EDITOR");
 			const ImVec2 tagMin = Add(wordmarkPos, ImVec2(aetherSize.x + coreSize.x + dp(m::kTagGap), dp(m::kTagTop)));
 			const ImVec2 tagMax = Add(tagMin, Add(tagText, dp(m::kTagPadX * 2.0f, m::kTagPadY * 2.0f)));
 			dl->AddRect(tagMin, tagMax, ToU32(WithAlpha(kAccent, 0.5f)), dp(m::kChipCorner), 0, dp(m::kCardBorder));
 			TextSized(dl, dp(m::kChip), Add(tagMin, dp(m::kTagPadX, m::kTagPadY)), kAccentHi, "EDITOR");
 
-			// Accent underline + subtitle, sitting just under the wordmark baseline.
 			dl->AddRectFilled(Add(wordmarkPos, ImVec2(dp(m::kUnderlineInset), wordmark + dp(m::kUnderlineTop))), Add(wordmarkPos, ImVec2(dp(m::kUnderlineWidth), wordmark + dp(m::kUnderlineBottom))), ToU32(kAccent));
 			TextSized(dl, dp(m::kSubtitle), Add(wordmarkPos, ImVec2(dp(m::kUnderlineInset), wordmark + dp(m::kSubtitleTop))), kMuted, "Select a project to begin.");
 			if (state.launching)
@@ -472,8 +429,6 @@ namespace aether::app
 			ImGui::EndPopup();
 		}
 
-		// The projects grid owns the hub's main visual field. Open/Create are compact
-		// header actions that reveal a modal only when the user asks for them.
 		void PaintRecentsGrid(const Frame& f, ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
 		{
 			ImDrawList* dl = f.drawList;
@@ -511,10 +466,6 @@ namespace aether::app
 				gridStart += dp(m::kFieldStride);
 			}
 
-			// The hover reticle bleeds past each card and the scroll child clips its own
-			// draw list, so perimeter cards used to get sliced. Bleed the child a matching
-			// margin past the content band on every side and pad its interior by the same,
-			// so cards still align edge-to-edge with the label while the brackets get room.
 			const float bleed = dp(m::kGridBleed);
 			ImGui::SetCursorScreenPos(ImVec2(leftMin.x - bleed, gridStart));
 			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
@@ -530,9 +481,6 @@ namespace aether::app
 			}
 			else
 			{
-				// Responsive card grid: fit as many ~kCardMinWidth cards across as the child
-				// allows, then widen them to fill the row evenly. A 16:9 thumbnail makes the
-				// row height follow the card width.
 				const float gridGap = dp(m::kGridGap);
 				const float avail = ImGui::GetContentRegionAvail().x;
 				const int columns = std::max(1, static_cast<int>((avail + gridGap) / (dp(m::kCardMinWidth) + gridGap)));
@@ -559,14 +507,12 @@ namespace aether::app
 				ImGui::PopStyleVar();
 			}
 			ImGui::EndChild();
-			ImGui::PopStyleVar();   // WindowPadding
-			ImGui::PopStyleColor(); // ChildBg
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor();
 		}
 
 		void PaintFooter(const Frame& f, ProjectLauncherWindowState& state, const ProjectLauncherWindowActions& actions)
 		{
-			// Muted (not faint) so the app name actually reads at the bottom-left. Keep
-			// the startup preference here as quiet chrome, not a competing content panel.
 			TextSized(f.drawList, f.dp(m::kFooter), ImVec2(f.contentMin.x, f.contentMax.y - f.dp(m::kFooter + 4.0f)), kMuted, "AetherCore Editor");
 			const char* label = "Open last project on startup";
 			const float controlWidth = ImGui::GetFrameHeight() + ImGui::CalcTextSize(label).x;
@@ -589,8 +535,6 @@ namespace aether::app
 			const float width = windowMax.x - windowMin.x;
 			const float height = windowMax.y - windowMin.y;
 
-			// Side margins scale with the window; the content column caps at
-			// kContentWidthCap and centres itself on ultra-wide windows.
 			const float marginX = std::clamp(width * 0.05f, dp(m::kMarginMin), dp(m::kMarginMax));
 			f.contentWidth = std::min(width - marginX * 2.0f, dp(m::kContentWidthCap));
 			f.contentX = windowMin.x + (width - f.contentWidth) * 0.5f;
@@ -607,10 +551,6 @@ namespace aether::app
 
 	void ProjectLauncherWindow::Draw(ProjectLauncherWindowState& state, const ProjectLauncherWindowModel& model, const ProjectLauncherWindowActions& actions)
 	{
-		// The hub FILLS its host window - the standalone Launcher's own OS window, or the
-		// editor's main window when shown there as an overlay - and re-flows responsively
-		// every frame (see ResolveFrame); kProjectLauncherDefault{Width,Height} (header)
-		// is only the standalone Launcher's initial window size.
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
 		ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);

@@ -16,28 +16,7 @@ namespace aether
 	class VulkanContext;
 	class GpuMemoryTracker;
 
-	// A device-local GPU memory arena backed by a single large VkBuffer.
-	// Suballocates typed regions via a VmaVirtualBlock (VMA's virtual
 	// allocator: best-fit, coalescing, alignment - same pattern as
-	// RenderGraphStorage's transient heap).
-	//
-	// Think of it as GPU malloc: Alloc<T> is new[], Free<T> is delete[].
-	// All allocations return a GpuSpan<T> whose DeviceAddress() is directly
-	// usable in shaders via buffer device address.
-	//
-	// Two instances are the typical setup: one for vertex data, one for index
-	// data (mirrors the separate-heap design of MeshArena).
-	//
-	// Thread safety: NOT thread-safe. All Alloc/Free calls must occur on the
-	// same thread. Use external synchronization if concurrent access is required.
-	// In AetherCore, GpuHeap is only used during asset loading (single-threaded).
-	//
-	// Usage:
-	//   heap.Initialize(ctx, { .capacityBytes = 256 << 20 });
-	//   GpuSpan<Mesh::Vertex> verts = heap.Alloc<Mesh::Vertex>(count);
-	//   heap.Upload(verts, cpuData, device, queue, pool);  // synchronous, one-time
-	//   // verts.DeviceAddress() is now ready for DrawInstanceData.vertexBufferAddr
-	//   heap.Free(verts);
 	class GpuHeap
 	{
 	public:
@@ -75,7 +54,7 @@ namespace aether
 				return {};
 			}
 			GpuSpan<T> span;
-			span.data = nullptr; // device-local, no CPU pointer
+			span.data = nullptr;
 			span.address = m_baseAddress + offset;
 			span.count = count;
 			return span;
@@ -92,16 +71,12 @@ namespace aether
 			span = {};
 		}
 
-		// Synchronous upload: creates a transient staging buffer, copies, submits, waits idle.
-		// Intended for static load-time geometry. For streaming uploads use MeshUploadQueue instead.
-		// Engine-side overload: opaque gpu::Device / gpu::Queue / gpu::CommandPool.
 		template<typename T>
 		void Upload(GpuSpan<T> dst, std::span<const T> src, gpu::Device device, gpu::Queue queue, gpu::CommandPool pool)
 		{
 			UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), static_cast<VkDevice>(device), static_cast<VkQueue>(queue), static_cast<VkCommandPool>(pool));
 		}
 
-		// Vulkan-internal overload: raw Vk* for callers that already have them.
 		template<typename T>
 		void Upload(GpuSpan<T> dst, std::span<const T> src, VkDevice device, VkQueue queue, VkCommandPool pool)
 		{
@@ -118,8 +93,6 @@ namespace aether
 			return m_baseAddress;
 		}
 
-		// Returns the byte offset of a span's start within this heap's buffer.
-		// Use this when you need a VkDeviceSize offset for vkCmdBindIndexBuffer.
 		template<typename T>
 		[[nodiscard]] VkDeviceSize GetOffset(GpuSpan<T> span) const
 		{
@@ -138,9 +111,6 @@ namespace aether
 		VkDevice m_deviceRef = VK_NULL_HANDLE;
 		GpuMemoryTracker* m_memoryTracker = nullptr;
 		std::string m_debugName;
-		// Maps each allocation's device address to its VmaVirtualAllocation
-		// handle so Free() can call vmaVirtualFree without coupling GpuSpan
-		// to VMA. Load-time only, not a hot-path structure.
 		std::unordered_map<gpu::DeviceAddress, VmaVirtualAllocation> m_allocations;
 
 		VkDeviceSize AllocBytes(VkDeviceSize bytes);

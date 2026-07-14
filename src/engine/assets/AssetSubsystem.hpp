@@ -29,15 +29,12 @@ namespace aether
 	class VulkanContext;
 	class World;
 
-	// Owns the asset loading and GPU resource creation services.
 	class AssetSubsystem
 	{
 	public:
 		void Init(ServiceContainer& services);
 		void Shutdown();
 
-		// Called after RenderingSubsystem init to wire up rendering deps
-		// for the AssetManager (needed for animation database registration).
 		void LinkRenderingDeps(ServiceContainer& services);
 
 		[[nodiscard]] AssetManager& GetAssetManager()
@@ -85,8 +82,6 @@ namespace aether
 			return m_effectParamBuffer;
 		}
 
-		// Initialize the pipeline cache's frame-graph-constant Context + factory.
-		// Called by the app layer once color/depth formats + heap mappings are known.
 		void InitializePipelineCache(PipelineCache::Context context);
 
 		[[nodiscard]] PrimitiveMeshes& GetPrimitiveMeshes()
@@ -104,11 +99,8 @@ namespace aether
 			return m_uploadContext;
 		}
 
-		// Flush pending mesh uploads via a one-shot command buffer.
 		void FlushMeshUploads();
 
-		// Advance per-frame GPU bookkeeping (material slot deferred-free clock).
-		// Called once per frame from the render loop.
 		void AdvanceFrame(std::uint64_t frameIndex);
 
 	private:
@@ -116,20 +108,13 @@ namespace aether
 		MeshArena m_meshArena;
 		MeshUploadQueue m_meshUploadQueue;
 		MaterialBuffer m_materialBuffer;
-		// Declared before m_materialRegistry: PackMaterial + the material->texture
-		// cascade reference the TextureRegistry. Sink declared before the registry.
 		AssetTextureSink m_textureSink;
 		TextureRegistry m_textureRegistry{m_textureSink};
-		// Declared after m_materialBuffer + m_textureRegistry: the registry's sink
-		// reference binds to a constructed buffer and it forwards the texture registry.
 		MaterialRegistry m_materialRegistry{m_materialBuffer, m_textureRegistry};
 		PipelineCache m_pipelineCache;
 		EffectParamBuffer m_effectParamBuffer;
-		// Declared after the registry + cache: the authoring layer references both.
 		MaterialAuthoring m_materialAuthoring{m_materialRegistry, m_pipelineCache};
 		PrimitiveMeshes m_primitiveMeshes;
-		// Central asset catalog; references PrimitiveMeshes for built-in resolution,
-		// so it is declared after it. The app layer injects the model-mesh resolver.
 		AssetDatabase m_assetDatabase{m_primitiveMeshes};
 		gpu::UploadContext m_uploadContext;
 		VulkanContext* m_context = nullptr;

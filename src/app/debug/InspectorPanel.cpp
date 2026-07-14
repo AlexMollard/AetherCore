@@ -51,7 +51,6 @@ namespace aether::editor
 {
 	namespace
 	{
-		// One filterable row of the add-component palette.
 		bool PaletteEntry(const char* label, const char* filter, bool alreadyPresent)
 		{
 			if (alreadyPresent)
@@ -71,7 +70,7 @@ namespace aether::editor
 				{
 					c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 				}
-				if (lower.find(needle) == std::string::npos)
+				if (!lower.contains(needle))
 				{
 					return false;
 				}
@@ -82,7 +81,7 @@ namespace aether::editor
 		void ReleaseMaterialAssetTextures(AssetManager& assets, const MaterialAsset& material)
 		{
 			auto& textures = assets.GetTextureRegistry();
-			for (TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
+			for (const TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
 			{
 				if (h.IsValid())
 				{
@@ -103,10 +102,9 @@ namespace aether::editor
 			{
 				return false;
 			}
-			MaterialAsset material = std::move(loaded.value());
+			const MaterialAsset material = loaded.value();
 			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
 			ReleaseMaterialAssetTextures(*assets, material);
-			// Catalogue the preset so the Material panel's preset picker can re-apply it.
 			if (auto* db = context.TryGet<AssetDatabase>())
 			{
 				db->Register(MakeMaterialPresetSource(std::string(path)));
@@ -121,7 +119,7 @@ namespace aether::editor
 			{
 				return false;
 			}
-			TextureHandle texture = assets->GetTextureRegistry().Acquire(path);
+			const TextureHandle texture = assets->GetTextureRegistry().Acquire(path);
 			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), texture);
 			if (texture.IsValid())
 			{
@@ -138,9 +136,6 @@ namespace aether::editor
 			{
 				return false;
 			}
-			// The editor mounts project:// to the raw project folder, which has only
-			// the .gltf; bake the .mesh the loader needs (no-op if already baked)
-			// before assigning, so dropping a model just works.
 			if (const auto* project = context.TryGet<app::EditorProjectContext>())
 			{
 				std::string bakeError;
@@ -206,6 +201,9 @@ namespace aether::editor
 					return AssignMaterialPreset(context, world, entity, payload.path);
 				case dragdrop::FileKind::Texture:
 					return AssignTextureToEntity(context, world, entity, payload.path);
+				case dragdrop::FileKind::Unknown:
+				case dragdrop::FileKind::Script:
+				case dragdrop::FileKind::Scene:
 				default:
 					return false;
 			}
@@ -295,7 +293,7 @@ namespace aether::editor
 			{
 				if (ImGui::Button(ICON_FA_PLUS "  Instantiate"))
 				{
-					if (Entity root = InstantiatePrefabAsset(context, world, asset.path); root.IsValid())
+					if (const Entity root = InstantiatePrefabAsset(context, world, asset.path); root.IsValid())
 					{
 						selection.Select(root);
 					}
@@ -305,7 +303,7 @@ namespace aether::editor
 					ImGui::SameLine();
 					if (ImGui::Button(ICON_FA_SITEMAP "  Instantiate Under Target"))
 					{
-						if (Entity root = InstantiatePrefabAsset(context, world, asset.path, target); root.IsValid())
+						if (const Entity root = InstantiatePrefabAsset(context, world, asset.path, target); root.IsValid())
 						{
 							selection.Select(root);
 						}
@@ -384,7 +382,6 @@ namespace aether::editor
 			return;
 		}
 
-		// ── Eyebrow band + header card ─────
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -406,9 +403,6 @@ namespace aether::editor
 		}
 		const KindBadge badge = EntityKindBadge(world, entity);
 		{
-			// Active toggle: unchecking adds DisabledComponent, which stops the
-			// entity (and its whole subtree) from rendering, updating, simulating
-			// and ticking scripts. Applies to the whole selection when multi-editing.
 			bool active = !world.Has<DisabledComponent>(entity);
 			ImGui::AlignTextToFramePadding();
 			if (ImGui::Checkbox("##active", &active))
@@ -443,8 +437,6 @@ namespace aether::editor
 			ImGui::SetItemTooltip("Active - uncheck to disable this entity and its children");
 			ImGui::SameLine();
 
-			// Title treatment: the entity name IS the panel title (launcher rows lead
-			// with a display-size title; the field chrome only shows on hover).
 			ImGui::PushFont(nullptr, 18.0f);
 			ImGui::AlignTextToFramePadding();
 			ImGui::TextColored(badge.color, "%s", badge.icon);
@@ -470,9 +462,6 @@ namespace aether::editor
 			ImGui::PopFont();
 		}
 
-		// ── Add Component / Delete ─────────────────────────────────────────────
-		// One amber call-to-action; deleting the entity is deliberately quiet
-		// (ghost trash, red only when engaged) instead of a competing slab.
 		const float trashW = ImGui::GetFrameHeight() + 8.0f;
 		const float toolWidth = ImGui::GetContentRegionAvail().x - trashW - ImGui::GetStyle().ItemSpacing.x;
 		if (iw::AccentButton(ICON_FA_PLUS "  Add Component", ImVec2(toolWidth, 0.0f)))
@@ -516,8 +505,6 @@ namespace aether::editor
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
 			auto* sceneCtx = context.TryGet<app::scripting::SceneContext>();
 
-			// Current pose seeds the smarter defaults (orbit resumes in place,
-			// physics shapes match the visual scale).
 			glm::vec3 curPos{}, curEuler{}, curScale{1.0f};
 			if (const auto* tc = world.TryGet<TransformComponent>(entity))
 			{
@@ -560,7 +547,6 @@ namespace aether::editor
 					asset.doubleSided = true;
 					MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 				}
-				// Mark it a Mesh Renderer so the inspector shows the unified panel.
 				world.EmplaceOrReplace<MeshRendererComponent>(entity);
 			};
 			addPrimitive(PrimitiveMesh::Cube, ICON_FA_CUBE "  Mesh Renderer - Cube", "cube");
@@ -569,7 +555,6 @@ namespace aether::editor
 			addPrimitive(PrimitiveMesh::Quad, ICON_FA_IMAGE "  Mesh Renderer - Quad", "quad");
 			addPrimitive(PrimitiveMesh::Triangle, ICON_FA_PLAY "  Mesh Renderer - Triangle", "triangle");
 
-			// 2D sprite: a flat quad with an alpha-blended, two-sided material.
 			if (PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer (2D)", m_addFilter, world.Has<SpriteRendererComponent>(entity)) && primitives != nullptr && assets != nullptr)
 			{
 				if (!world.Has<TransformComponent>(entity))
@@ -588,7 +573,6 @@ namespace aether::editor
 				world.EmplaceOrReplace<SpriteRendererComponent>(entity);
 			}
 
-			// Models can't be picked from a menu; they load by dragging a file.
 			if (m_addFilter[0] == '\0')
 			{
 				ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
@@ -661,8 +645,6 @@ namespace aether::editor
 			}
 			if (PaletteEntry(ICON_FA_CIRCLE_NOTCH "  Orbit", m_addFilter, world.Has<OrbitComponent>(entity)))
 			{
-				// Seed so the first tick resumes exactly where the entity
-				// stands: radius/angle derived from its position around origin.
 				const float radius = std::max(std::sqrt(curPos.x * curPos.x + curPos.z * curPos.z), 3.0f);
 				const float angleDeg = glm::degrees(std::atan2(curPos.z, curPos.x));
 				world.Emplace<OrbitComponent>(entity, OrbitComponent{.center = {0.0f, 0.0f, 0.0f}, .radius = radius, .angularSpeedDeg = 30.0f, .angleDeg = angleDeg, .yawOffsetDeg = 0.0f, .height = curPos.y});
@@ -677,7 +659,6 @@ namespace aether::editor
 			}
 			if (PaletteEntry(ICON_FA_EYE "  Look At", m_addFilter, world.Has<LookAtComponent>(entity)))
 			{
-				// Aim at the world origin by default; drag the target in the section.
 				world.Emplace<LookAtComponent>(entity, LookAtComponent{.target = {0.0f, 0.0f, 0.0f}});
 			}
 
@@ -685,8 +666,6 @@ namespace aether::editor
 			const bool hasCollider = world.Has<ColliderComponent>(entity);
 			const bool hasRigidBody = world.Has<RigidBodyComponent>(entity);
 
-			// Rigid Body drives motion; a Collider is what actually forms the body.
-			// A collider with no rigid body bakes as a static collider.
 			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Rigid Body", m_addFilter, hasRigidBody))
 			{
 				world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
@@ -710,7 +689,6 @@ namespace aether::editor
 			addCollider(PhysicsShapeType::Cylinder, ICON_FA_WEIGHT_HANGING "  Cylinder Collider");
 			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Trigger Volume (box sensor)", m_addFilter, hasCollider))
 			{
-				// A box collider marked as a sensor: reports overlaps, no response.
 				ColliderComponent c{};
 				c.shape = PhysicsShapeType::Box;
 				c.halfExtents = curScale * 0.5f;
@@ -720,7 +698,6 @@ namespace aether::editor
 			}
 			if (PaletteEntry(ICON_FA_LINK "  Joint", m_addFilter, world.Has<JointComponent>(entity)))
 			{
-				// Anchor at the entity's current position; edit type/target in the section.
 				world.Emplace<JointComponent>(entity, JointComponent{.anchor = curPos});
 			}
 			if (PaletteEntry(ICON_FA_BOLT "  Collision Events", m_addFilter, world.Has<CollisionEventsComponent>(entity)))
@@ -731,18 +708,12 @@ namespace aether::editor
 			ImGui::SeparatorText("Editor");
 			if (PaletteEntry(ICON_FA_GHOST "  Scene Transient", m_addFilter, world.Has<SceneTransientComponent>(entity)))
 			{
-				// Empty entt component: World::Emplace can't return a reference
-				// to it, so go through the registry directly.
 				world.GetRegistry().emplace<SceneTransientComponent>(World::ToEntt(entity));
 			}
 			ImGui::EndPopup();
 		}
 		ImGui::Separator();
 
-		// ── Component sections ─────────────────────────────────────────────────
-		// The editor's global ItemSpacing.y is tight (3px) for dense list panels;
-		// property rows need more vertical air so stacked sliders/inputs don't
-		// touch. Taller frames + roomier row gaps just for the inspector body.
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 6.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
 		DrawTransform(context, world, entity);
@@ -755,8 +726,6 @@ namespace aether::editor
 		DrawUiText(world, entity);
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
-		// Behavior components are now drawn generically from the reflection registry
-		// (scene/reflection/) instead of a hand-written per-component drawer.
 		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name"});
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
@@ -766,7 +735,7 @@ namespace aether::editor
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);
-		ImGui::PopStyleVar(2); // ItemSpacing + FramePadding for the component body
+		ImGui::PopStyleVar(2);
 
 		if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload != nullptr && (activePayload->IsDataType(dragdrop::kScriptPayload) || activePayload->IsDataType(dragdrop::kFilePayload)))
 		{

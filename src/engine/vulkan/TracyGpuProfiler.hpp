@@ -1,25 +1,11 @@
 #pragma once
 
-// Vulkan-side factory for the GPU profiler pImpl.
-//
-// This is the ONLY way to build a `aether::gpu::ProfilerContextHandle`
-// from a `tracy::VkCtx*`. The handle is the engine-side pImpl that
-// hides Tracy's types. Lives in vulkan/ because it is the only place
-// that names `tracy::VkCtx*`.
-//
-// Usage from `vulkan/VulkanContext.cpp`:
-//
-//   auto handle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
-//   aether::gpu::GpuProfiler::Get().Initialize({ handle });
-//   ...
-//   aether::vulkan::DestroyTracyGpuProfilerContext(handle);
-
 #include "gpu/GpuProfiler.hpp"
 
 namespace tracy
 {
 	struct VkCtx;
-} // namespace tracy
+}
 
 namespace aether::vulkan
 {

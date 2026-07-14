@@ -1,9 +1,5 @@
 #pragma once
 
-// Adapts the reflection core's neutral FieldValue to/from JSON for the MCP control
-// server. Editor-only (JSON is a control-server dependency; the reflection core
-// stays JSON-free so it can compile into GameRuntime).
-
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -106,7 +102,6 @@ namespace aether::editor
 		return v;
 	}
 
-	// "name:type" hint string for list_component_types / discovery.
 	inline std::string FieldTypeName(reflect::FieldType t)
 	{
 		using FT = reflect::FieldType;

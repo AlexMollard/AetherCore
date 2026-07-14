@@ -1,5 +1,3 @@
-// pImpl data and `reinterpret_cast<VkCommandBuffer>` live in this file.
-
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/TracyGpuProfiler.hpp"
 
@@ -90,8 +88,7 @@ namespace aether::gpu
 		{
 			return {};
 		}
-		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle.
-		auto scopeData = new detail::ProfilerScopeData(m_context->ctx, line, file, std::strlen(file), func, std::strlen(func), name.data(), static_cast<std::size_t>(name.size()), reinterpret_cast<VkCommandBuffer>(cmd));
+		auto* scopeData = new detail::ProfilerScopeData(m_context->ctx, line, file, std::strlen(file), func, std::strlen(func), name.data(), static_cast<std::size_t>(name.size()), reinterpret_cast<VkCommandBuffer>(cmd));
 		return GpuZoneScope(scopeData);
 #else
 		(void) cmd;
@@ -121,7 +118,6 @@ namespace aether::gpu
 #if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_handle != nullptr)
 		{
-			// Explicit dtor call writes the end timestamp and queues the end marker.
 			delete m_handle;
 			m_handle = nullptr;
 		}

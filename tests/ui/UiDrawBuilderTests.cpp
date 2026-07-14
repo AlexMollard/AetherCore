@@ -28,7 +28,7 @@ static ui::FontAsset MakeMonoFont()
 
 TEST_CASE("Builder emits a rect command for a UIImage child, none for the canvas")
 {
-	World w; // fresh World retires the raw-0 null slot, so the canvas below is a valid parent
+	World w;
 
 	Entity canvas = w.Create();
 	w.Emplace<ui::UICanvas>(canvas);
@@ -47,7 +47,7 @@ TEST_CASE("Builder emits a rect command for a UIImage child, none for the canvas
 	std::vector<ui::UiDrawCommand> cmds;
 	ui::BuildDrawCommands(w, cmds);
 
-	REQUIRE(cmds.size() == 1); // canvas has no UIImage; only the panel emits
+	REQUIRE(cmds.size() == 1);
 	CHECK(cmds[0].type == ui::kShapeRect);
 	CHECK(cmds[0].data0.x == doctest::Approx(100));
 	CHECK(cmds[0].data0.z == doctest::Approx(200));

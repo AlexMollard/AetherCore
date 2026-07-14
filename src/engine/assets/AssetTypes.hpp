@@ -12,10 +12,10 @@ namespace aether
 	enum class AssetType : std::uint8_t
 	{
 		Unknown = 0,
-		Mesh,     // one drawable mesh: a built-in primitive OR one glTF model primitive
-		Model,    // a whole glTF model (a multi-primitive container)
-		Texture,  // a 2D texture
-		Material, // a material preset
+		Mesh,
+		Model,
+		Texture,
+		Material,
 	};
 
 	[[nodiscard]] inline const char* AssetTypeName(AssetType type) noexcept
@@ -36,18 +36,12 @@ namespace aether
 		}
 	}
 
-	// Canonical description of where an asset comes from. Hashing this yields a
-	// stable AssetId, so an identical source always maps to the same id. Plain data
-	// so it serializes trivially (used by the scene asset manifest).
 	struct AssetSource
 	{
 		AssetType type = AssetType::Unknown;
-		// A built-in primitive kind name ("cube") when `builtin`, otherwise a VFS
-		// path ("project://.../foo.glb", "shaders://...").
 		std::string path;
-		// Sub-resource index (a glTF model primitive index); -1 for whole-file assets.
 		std::int32_t subIndex = -1;
-		bool builtin = false; // path is a built-in primitive kind name, not a VFS path
+		bool builtin = false;
 
 		[[nodiscard]] bool operator==(const AssetSource& o) const
 		{
@@ -55,19 +49,17 @@ namespace aether
 		}
 	};
 
-	// Deterministic content hash of a source descriptor (FNV-1a 64-bit, the same
-	// idiom the material/texture registries use for content-addressed dedup). The
 	// invalid id (0) is never produced.
 	[[nodiscard]] inline AssetId ComputeAssetId(const AssetSource& source) noexcept
 	{
-		std::uint64_t h = 1469598103934665603ull; // FNV offset basis
+		std::uint64_t h = 1469598103934665603ull;
 		const auto mix = [&h](const void* data, std::size_t n)
 		{
 			const auto* bytes = static_cast<const unsigned char*>(data);
 			for (std::size_t i = 0; i < n; ++i)
 			{
 				h ^= bytes[i];
-				h *= 1099511628211ull; // FNV prime
+				h *= 1099511628211ull;
 			}
 		};
 
@@ -80,8 +72,6 @@ namespace aether
 
 		return AssetId{h == 0 ? 1ull : h}; // never collide with the invalid sentinel
 	}
-
-	// Source constructors for the common asset kinds.
 
 	[[nodiscard]] inline AssetSource MakePrimitiveMeshSource(std::string kindName)
 	{

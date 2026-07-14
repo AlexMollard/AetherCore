@@ -53,7 +53,7 @@ namespace aether
 	std::uint32_t MaterialBuffer::AllocateSlot()
 	{
 		AE_PROFILE_ZONE();
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_slotAllocator.Allocate();
 	}
 
@@ -63,15 +63,13 @@ namespace aether
 		{
 			return;
 		}
-		std::scoped_lock lock(m_mutex);
-		// Deferred: the slot's GPU bytes may still be read by in-flight frames,
-		// so it is not returned to circulation until AdvanceFrame retires it.
+		const std::scoped_lock lock(m_mutex);
 		m_slotAllocator.Free(slot);
 	}
 
 	void MaterialBuffer::AdvanceFrame(std::uint64_t frameIndex)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_slotAllocator.AdvanceFrame(frameIndex);
 	}
 

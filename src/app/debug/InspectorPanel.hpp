@@ -8,12 +8,10 @@
 namespace aether
 {
 	class World;
-} // namespace aether
+}
 
 namespace aether::editor
 {
-	// The entity editor: header (name/id/kind), add-component palette, and one
-	// collapsing section per present component (see debug/ComponentDrawers.hpp).
 	class InspectorPanel final : public DebugPanel
 	{
 	public:

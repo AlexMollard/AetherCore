@@ -1,5 +1,7 @@
 #include "rendering/ShadowService.hpp"
 
+#include <math.h>
+
 #include <algorithm>
 #include <cmath>
 #include <glm/common.hpp>
@@ -27,22 +29,12 @@ namespace
 	constexpr float kFarPlanePadding = 64.0f;
 	constexpr float kCascadeRangePadding = 140.0f;
 
-	// PSSM (practical split) blend factor.
-	// 0.0 = uniform split in view-space distance, 1.0 = logarithmic split.
-	// 0.65 gives a good balance: the first two cascades cover near-to-mid
-	// range where perspective aliasing is most visible, while the last
-	// cascade still reaches the shadow far cap.
 	constexpr float kPssmLambda = 0.65f;
 
-	// Minimum orthographic half-extent for each cascade.
 	constexpr float kOrthoHalfMin = 20.0f;
 
-	// Base orthographic half-extent = cascadeFar * kOrthoHalfViewRangeRatio.
 	constexpr float kOrthoHalfViewRangeRatio = 0.60f;
 
-	// Extra extent multiplier that forces cascade frustums to overlap. Beyond
-	// hiding the boundary seam, overlap keeps a caster fully inside a cascade's
-	// ortho box instead of being clipped at the edge ("half a shadow").
 	constexpr float kCascadeOverlap = 1.30f;
 
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
@@ -96,11 +88,10 @@ namespace aether
 			}
 		}
 
-		// Single shadow queue with 3x output capacity for multi-frustum culling.
 		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount, .debugName = "DirectionalShadow"});
 		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
-		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
+		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu);
 
 		RecreatePipeline(context.GetDevice().device, depthFormat);
 	}
@@ -270,9 +261,7 @@ namespace aether
 		const float camFar = (mainCamForShadows != nullptr) ? std::min(mainCamForShadows->GetFarPlane(), kShadowFarCap) : kShadowFarCap;
 		const float viewRange = std::max(camFar - camNear, 1.0f);
 
-		// Practical split (PSSM) - mixes logarithmic and uniform to balance
-		// perspective aliasing against cascade count.
-		float split0, split1, split2;
+		float split0 = NAN, split1 = NAN, split2 = NAN;
 		{
 			const float uni0 = camNear + viewRange * (1.0f / 3.0f);
 			const float uni1 = camNear + viewRange * (2.0f / 3.0f);
@@ -285,7 +274,7 @@ namespace aether
 
 		fc.shadowCascadeSplits = glm::vec4(split0, split1, split2, 0.0f);
 		fc.shadowParams = glm::vec4(0.0014f, 0.0030f, 1.0f, 2.0f);
-		glm::vec3 camPos = packet.hasCameraData ? glm::vec3(packet.cameraWorldPos) : glm::vec3(0.0f);
+		const glm::vec3 camPos = packet.hasCameraData ? glm::vec3(packet.cameraWorldPos) : glm::vec3(0.0f);
 		glm::vec3 camForward(0.0f, 0.0f, -1.0f);
 		if (packet.hasCameraData)
 		{
@@ -295,8 +284,8 @@ namespace aether
 
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			const float cascadeNear = (cascade == 0u) ? camNear : fc.shadowCascadeSplits[cascade - 1u];
-			const float cascadeFar = fc.shadowCascadeSplits[cascade];
+			const float cascadeNear = (cascade == 0u) ? camNear : fc.shadowCascadeSplits[static_cast<glm::length_t>(cascade - 1u)];
+			const float cascadeFar = fc.shadowCascadeSplits[static_cast<glm::length_t>(cascade)];
 			const float cascadeMid = 0.5f * (cascadeNear + cascadeFar);
 			const float cascadeRange = std::max(cascadeFar - cascadeNear, 1.0f);
 

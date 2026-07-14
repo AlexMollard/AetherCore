@@ -15,15 +15,12 @@
 
 namespace aether
 {
-	// Which hardware queue a pass executes on.
 	enum class QueueClass : uint8_t
 	{
-		Graphics,     // main graphics queue (all rendering, inline compute)
-		AsyncCompute, // dedicated async compute queue (culling, lighting)
+		Graphics,
+		AsyncCompute,
 	};
 
-	// Opaque handle to a render-graph-managed image resource.
-	// Acquired from RenderGraph::GetSwapchainColor/Depth or CreateTransient*.
 	struct RGImage
 	{
 		static constexpr uint32_t kInvalid = ~0u;
@@ -35,7 +32,6 @@ namespace aether
 		}
 	};
 
-	// Opaque handle to a render-graph-managed buffer resource.
 	struct RGBuffer
 	{
 		static constexpr uint32_t kInvalid = ~0u;
@@ -68,7 +64,7 @@ namespace aether
 
 	struct MainViewProduct
 	{
-		gpu::Extent2D extent{};
+		gpu::Extent2D extent;
 		std::uint64_t frameIndex = 0;
 		std::uint32_t frameSlot = 0;
 		std::uint64_t frameConstantsAddr = 0;
@@ -77,7 +73,7 @@ namespace aether
 	struct FrameTextureProduct
 	{
 		RGImage image{};
-		gpu::Extent2D extent{};
+		gpu::Extent2D extent;
 		gpu::Format format = gpu::Format::Undefined;
 		std::uint32_t bindlessSlot = UINT32_MAX;
 	};
@@ -95,7 +91,7 @@ namespace aether
 		RGImage atlasImage{};
 		RGImage atlasDepthImage{};
 		std::uint32_t atlasBindlessSlot = UINT32_MAX;
-		gpu::Extent2D atlasExtent{};
+		gpu::Extent2D atlasExtent;
 		gpu::Format atlasFormat = gpu::Format::Undefined;
 	};
 
@@ -359,7 +355,6 @@ namespace aether
 		}
 	};
 
-	// Backward-compatible shims. Prefer gpu::ClearColor / gpu::ClearDepth.
 	[[nodiscard]] inline gpu::ClearValue ClearColorValue(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f) noexcept
 	{
 		return gpu::ClearColor(r, g, b, a);
@@ -373,14 +368,13 @@ namespace aether
 	struct FrameResourceContext
 	{
 		FrameTarget target{};
-		gpu::Extent2D extent{};
+		gpu::Extent2D extent;
 		std::uint64_t frameIndex = 0;
 		std::uint32_t frameSlot = 0;
 		std::uint32_t swapchainImageIndex = UINT32_MAX;
 		std::uint64_t frameConstantsAddr = 0;
 	};
 
-	// Data made available inside pass execute callbacks.
 	struct PassContext
 	{
 		gpu::CommandList& recorder;

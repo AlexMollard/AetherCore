@@ -19,8 +19,6 @@ namespace aether::editor
 	namespace
 	{
 
-		// ── CPU-side tonemap helpers (mirror include/Tonemap/*.slangh) ───────────
-
 		float Reinhard(float x)
 		{
 			return x / (x + 1.0f);
@@ -65,7 +63,7 @@ namespace aether::editor
 
 		float FilmicDice(float x)
 		{
-			float v = (std::max) (x, 0.0f);
+			const float v = (std::max) (x, 0.0f);
 			return (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
 		}
 
@@ -76,7 +74,7 @@ namespace aether::editor
 
 		float RomBinDaHouse(float x)
 		{
-			float v = x * (x * 0.26f + 0.68f) / (x * (x * 0.26f + 1.14f) + 0.14f);
+			const float v = x * (x * 0.26f + 0.68f) / (x * (x * 0.26f + 1.14f) + 0.14f);
 			return (std::min) ((std::max) (v, 0.0f), 1.0f);
 		}
 
@@ -114,21 +112,20 @@ namespace aether::editor
 			}
 		}
 
-		// Colour palette for curves - slot order matches kTonemapDefs.
 		constexpr ImU32 kCurveColors[] = {
-		        IM_COL32(200, 100, 100, 220), // Reinhard
-		        IM_COL32(100, 200, 100, 220), // ACES Filmic
-		        IM_COL32(100, 100, 200, 220), // Uncharted 2
-		        IM_COL32(200, 200, 80, 220),  // Hejl Richard
-		        IM_COL32(120, 120, 120, 220), // Linear
-		        IM_COL32(200, 120, 200, 220), // Exponential
-		        IM_COL32(80, 200, 200, 220),  // Filmic Dice
-		        IM_COL32(200, 150, 80, 220),  // Lottes
-		        IM_COL32(80, 200, 150, 220),  // RomBinDaHouse
-		        IM_COL32(200, 200, 200, 220), // Vanilla
+		        IM_COL32(200, 100, 100, 220),
+		        IM_COL32(100, 200, 100, 220),
+		        IM_COL32(100, 100, 200, 220),
+		        IM_COL32(200, 200, 80, 220),
+		        IM_COL32(120, 120, 120, 220),
+		        IM_COL32(200, 120, 200, 220),
+		        IM_COL32(80, 200, 200, 220),
+		        IM_COL32(200, 150, 80, 220),
+		        IM_COL32(80, 200, 150, 220),
+		        IM_COL32(200, 200, 200, 220),
 		};
 
-	} // anonymous namespace
+	} // namespace
 
 	void TonemapPanel::OnImGui(app::LayerContext& context)
 	{
@@ -144,7 +141,6 @@ namespace aether::editor
 		stack.SetHistogramCaptureEnabled(true);
 		chrome::PanelHeader("TONEMAP");
 
-		// ── Tonemap selection ──────────────────────────────────────────────
 		const char* preview = kTonemapDefs[static_cast<std::size_t>(stack.GetTonemapMode())].name;
 		if (ImGui::BeginCombo("Operator", preview))
 		{
@@ -163,14 +159,12 @@ namespace aether::editor
 			ImGui::EndCombo();
 		}
 
-		// ── Exposure ───────────────────────────────────────────────────────
 		float exposure = stack.GetExposure();
 		if (ImGui::SliderFloat("Exposure", &exposure, 0.01f, 10.0f, "%.2f"))
 		{
 			stack.SetExposure(exposure);
 		}
 
-		// ── Debug comparison ───────────────────────────────────────────────
 		bool debugCompare = stack.IsDebugCompareEnabled();
 		if (ImGui::Checkbox("Side-by-side comparison", &debugCompare))
 		{
@@ -192,7 +186,6 @@ namespace aether::editor
 				stack.SetDebugModeCount(static_cast<std::uint32_t>(modeCount));
 			}
 
-			// ── Color legend matching shader header bars ────────────────────
 			ImGui::Separator();
 			ImGui::TextUnformatted("Strip legend");
 			if (ImGui::BeginTable("##stripLegend", 2, ImGuiTableFlags_RowBg))
@@ -204,8 +197,8 @@ namespace aether::editor
 				{
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
-					ImVec2 barMin = ImGui::GetCursorScreenPos();
-					ImVec2 barMax = ImVec2(barMin.x + 24, barMin.y + 14);
+					const ImVec2 barMin = ImGui::GetCursorScreenPos();
+					const ImVec2 barMax = ImVec2(barMin.x + 24, barMin.y + 14);
 					ImGui::GetWindowDrawList()->AddRectFilled(barMin, barMax, kCurveColors[i]);
 					ImGui::Dummy(ImVec2(28, 14));
 					ImGui::TableSetColumnIndex(1);
@@ -219,7 +212,6 @@ namespace aether::editor
 
 		ImGui::Separator();
 
-		// ── Tonemap curve plot ─────────────────────────────────────────────
 		{
 			const float plotW = ImGui::GetContentRegionAvail().x;
 			const float plotH = 220.0f;
@@ -233,10 +225,8 @@ namespace aether::editor
 			constexpr std::size_t kSamples = 256;
 			constexpr float kXMax = 10.0f;
 
-			// Background.
 			dl->AddRectFilled(plotPos, ImVec2(plotPos.x + plotSize.x, plotPos.y + plotSize.y), IM_COL32(20, 20, 25, 220));
 
-			// Grid lines.
 			for (int i = 0; i <= 10; ++i)
 			{
 				const float x = plotPos.x + (static_cast<float>(i) / 10.0f) * plotSize.x;
@@ -248,11 +238,9 @@ namespace aether::editor
 				dl->AddLine(ImVec2(plotPos.x, y), ImVec2(plotPos.x + plotSize.x, y), IM_COL32(50, 50, 60, 180));
 			}
 
-			// Axis labels.
 			dl->AddText(ImVec2(plotPos.x + 2, plotPos.y + 2), IM_COL32(180, 180, 180, 200), "1.0");
 			dl->AddText(ImVec2(plotPos.x + plotSize.x - 30, plotPos.y + plotSize.y - 14), IM_COL32(180, 180, 180, 200), "10");
 
-			// Curves.
 			for (std::size_t m = 0; m < kTonemapCount; ++m)
 			{
 				ImVec2 pts[kSamples];
@@ -265,7 +253,6 @@ namespace aether::editor
 				}
 				dl->AddPolyline(pts, kSamples, kCurveColors[m], ImDrawFlags_None, 2.0f);
 
-				// Legend label (right side of plot).
 				const float legendX = plotPos.x + plotSize.x + 8.0f;
 				const float legendY = plotPos.y + 4.0f + static_cast<float>(m) * 18.0f;
 				dl->AddRectFilled(ImVec2(legendX, legendY), ImVec2(legendX + 10, legendY + 10), kCurveColors[m]);
@@ -275,7 +262,6 @@ namespace aether::editor
 
 		ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
-		// ── HDR probe ──────────────────────────────────────────────────────
 		{
 			ImGui::TextUnformatted("HDR Probe");
 			ImGui::Separator();
@@ -307,7 +293,6 @@ namespace aether::editor
 
 		ImGui::Separator();
 
-		// Luminance histograms
 		{
 			int updatePeriod = static_cast<int>(stack.GetHistogramUpdatePeriod());
 			ImGui::SetNextItemWidth(120.0f);

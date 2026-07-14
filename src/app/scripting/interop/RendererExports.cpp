@@ -7,9 +7,6 @@
 #include "scene/World.hpp"
 #include "systems/DayNightSystem.hpp"
 
-// Lighting, sky, and day/night control exported to C#. Lights are entities
-// (LightSystem republishes them each frame).
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
@@ -110,8 +107,6 @@ AE_SCRIPT_API void aether_render_set_sky_void(Vec3 color)
 {
 	ActiveContext().renderer->SetSkyVoidColor(ToGlm(color));
 }
-
-// ── Day/night cycle ──────────────────────────────────────────────────────────
 
 AE_SCRIPT_API void aether_daynight_set_enabled(std::int32_t enabled)
 {

@@ -2,8 +2,6 @@
 #include <string>
 #include "material/ITextureSlotSink.hpp"
 
-// In-memory texture backend for registry tests. No GPU. ResolvePath() maps two
-// spellings ("a.png", "a.texture") to one canonical string so dedup can be tested.
 class FakeTextureSink final : public aether::ITextureSlotSink
 {
 public:
@@ -14,8 +12,6 @@ public:
 
 	std::string ResolvePath(std::string_view path) const override
 	{
-		// Collapse a ".png"/".texture" pair to the same canonical stem, mirroring
-		// Texture.cpp's .texture-sibling resolution.
 		std::string s(path);
 		const auto dot = s.find_last_of('.');
 		if (dot != std::string::npos)

@@ -75,7 +75,6 @@ namespace aether::editor
 		std::snprintf(perfStat, sizeof(perfStat), "%.0f FPS Â· %.2f MS", m_titleFps, m_titleMs);
 		chrome::PanelHeader("PERFORMANCE", perfStat);
 
-		// Compact 4-column stats grid
 		if (ImGui::BeginTable("PerfStats", 4, ImGuiTableFlags_SizingStretchProp))
 		{
 			ImGui::TableNextRow();
@@ -101,7 +100,7 @@ namespace aether::editor
 			ImGui::TextUnformatted("Render CPU");
 			ImGui::SameLine();
 			float renderCpuMs = -1.0f;
-			if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 			{
 				renderCpuMs = imgui->GetLastRenderCpuTimeMs();
 			}
@@ -143,7 +142,6 @@ namespace aether::editor
 			ImGui::EndTable();
 		}
 
-		// Frame time distribution histogram
 		if (m_frameSampleCount > 0)
 		{
 			constexpr int kBucketCount = 8;
@@ -202,7 +200,6 @@ namespace aether::editor
 			ImGui::Dummy(ImVec2(0.0f, 60.0f + 20.0f));
 		}
 
-		// Frame time plot filling remaining panel space
 		{
 			const float minPlot = 0.0f;
 			const float maxPlot = std::max(33.333f, maxMs * 1.1f);

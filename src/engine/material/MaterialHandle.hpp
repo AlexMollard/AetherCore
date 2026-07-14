@@ -4,8 +4,6 @@
 
 namespace aether
 {
-	// Opaque, ref-counted material reference. index = GPU slot; generation guards
-	// against use-after-release. Default-constructed handles are invalid.
 	struct MaterialHandle
 	{
 		static constexpr std::uint32_t kInvalidIndex = 0xFFFFFFFFu;

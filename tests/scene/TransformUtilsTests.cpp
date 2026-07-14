@@ -27,7 +27,7 @@ namespace
             }
         }
     }
-} // namespace
+}
 
 TEST_CASE("Compose->Decompose round-trips pos/euler/scale for regular angles") {
     const glm::vec3 poses[] = {{0, 0, 0}, {1.5f, -2.0f, 30.0f}};
@@ -67,15 +67,13 @@ TEST_CASE("ApplyTransformDelta with a zero delta preserves the matrix") {
 
 TEST_CASE("ApplyTransformDelta clamps scale away from zero") {
     const glm::mat4 base = ComposeTransform({0, 0, 0}, {0, 0, 0}, {1, 1, 1});
-    const TransformDelta delta{{}, {}, {-5.0f, -5.0f, -5.0f}}; // would drive scale negative
+    const TransformDelta delta{{}, {}, {-5.0f, -5.0f, -5.0f}};
     glm::vec3 pos{}, euler{}, scale{};
     DecomposeTRS(ApplyTransformDelta(base, delta), pos, euler, scale);
     CheckVec3(scale, {0.001f, 0.001f, 0.001f});
 }
 
 TEST_CASE("At and near gimbal lock the recomposed matrix still matches even if angles fold") {
-    // At |X| == 90 deg the YXZ extraction folds Z into Y (merged-angle recovery
-    // from column 0); angle equality is not guaranteed, but the decomposed
     // angles must recompose to the same matrix.
     const glm::vec3 cases[] = {{90, 30, 40}, {-90, 10, -20}, {90, 0, 55}, {89.99f, -45, 15}};
     for (const auto& e: cases)

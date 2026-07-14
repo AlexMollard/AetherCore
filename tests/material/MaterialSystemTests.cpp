@@ -29,7 +29,6 @@ TEST_CASE("AssignMaterial same-content reassign dedups instead of freeing") {
     const MaterialHandle first = world.Get<MaterialComponent>(e).handle;
 
     // Re-assign identical content: must be a pure dedup hit - the live slot
-    // never drops to refcount zero, so no free, no realloc, no GPU rewrite.
     MaterialSystem::AssignMaterial(world, e, reg, cache, a);
     CHECK(sink.freeCount == 0);
     CHECK(sink.allocCount == 1);
@@ -53,8 +52,6 @@ TEST_CASE("AssignMaterial changed content acquires before releasing the old slot
     MaterialAsset blue; blue.baseColorFactor = {0,0,1,1};
     MaterialSystem::AssignMaterial(world, e, reg, cache, blue);
 
-    // The new slot was allocated while the old one was still alive, so the
-    // just-freed slot's bytes were not rewritten by this reassignment.
     CHECK(world.Get<MaterialComponent>(e).gpuSlot != oldSlot);
     CHECK(sink.allocCount == 2);
     CHECK(sink.freeCount == 1);
@@ -69,8 +66,6 @@ TEST_CASE("Destroying an entity releases its material handle via the hook") {
     World world;
     MaterialSystem::ConnectLifecycle(world, reg);
 
-    // A fresh World retires entt's raw-0 null slot in its constructor, so the
-    // first Create() is a valid, destroyable entity.
     Entity e = world.Create();
     MaterialAsset a; a.baseColorFactor = {0,1,0,1};
     MaterialSystem::AssignMaterial(world, e, reg, cache, a);

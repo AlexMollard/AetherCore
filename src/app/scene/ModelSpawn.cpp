@@ -80,8 +80,6 @@ namespace aether::app::scene
 
 	Entity SpawnModelEntity(World& world, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, const glm::mat4& localToWorld)
 	{
-		// Reuse the shared model cache (same one das load_model and the scene
-		// loader use) so repeated spawns of one model load it once.
 		LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
 		if (modelPtr == nullptr)
 		{
@@ -103,9 +101,7 @@ namespace aether::app::scene
 			{
 				tc->localToWorld = localToWorld * tc->localToWorld;
 			}
-			// SpawnModel already linked meshEntity under root via ecs::SetParent.
 			world.EmplaceOrReplace<NameComponent>(meshEntity, NameComponent{.name = stem + " mesh"});
-			// Stable identity for serialization: one entity per primitive, in order.
 			world.EmplaceOrReplace<MeshSourceComponent>(meshEntity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i)});
 			RememberSceneEntity(ctx, meshEntity);
 		}
@@ -160,8 +156,6 @@ namespace aether::app::scene
 		}
 		RememberSceneEntity(ctx, root);
 
-		// Single static mesh: reference it directly on the entity as a shared mesh
-		// (Unity-style MeshRenderer) instead of nesting a one-child container.
 		if (modelPtr->primitives.size() == 1 && modelPtr->primitives[0].skinIndex < 0)
 		{
 			return AssignModelMeshToEntity(world, assets, ctx, root, path, 0);
@@ -228,7 +222,7 @@ namespace aether::app::scene
 		{
 			return false;
 		}
-		LoadedModelPrimitive& primitive = modelPtr->primitives[static_cast<std::size_t>(primitiveIndex)];
+		const LoadedModelPrimitive& primitive = modelPtr->primitives[static_cast<std::size_t>(primitiveIndex)];
 
 		if (!world.Has<TransformComponent>(entity))
 		{
@@ -239,9 +233,6 @@ namespace aether::app::scene
 			world.Emplace<NameComponent>(entity, NameComponent{.name = ModelDisplayName(path)});
 		}
 
-		// Shared mesh pointer into the cached model - the exact reference scene
-		// load resolves, so several entities can share one model's meshes with no
-		// duplication.
 		world.EmplaceOrReplace<MeshComponent>(entity, MeshComponent{.mesh = &primitive.mesh});
 		world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(primitiveIndex)});
 
@@ -251,8 +242,6 @@ namespace aether::app::scene
 		}
 		else
 		{
-			// Material-less primitive: vertex-colour fallback via the default
-			// two-sided gltf pipeline (mirrors AssetManager::SpawnModel).
 			MaterialTemplate tmpl{.shaderVfsPath = "shaders://gltf_mesh.spv"};
 			tmpl.cullMode = gpu::CullMode::None;
 			const GraphicsPipeline* pipeline = assets.GetPipelineCache().Acquire(tmpl);
@@ -261,7 +250,6 @@ namespace aether::app::scene
 			RemoveIfPresent<MaterialInstanceComponent>(world, entity);
 		}
 
-		// Skinned primitive: attach the model's animation database + skin.
 		if (modelPtr->animationDb.IsValid() && primitive.skinIndex >= 0)
 		{
 			const auto skinIdx = static_cast<std::uint32_t>(primitive.skinIndex);
@@ -282,9 +270,6 @@ namespace aether::app::scene
 
 	bool ReloadModelAssets(AssetDatabase& db, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
-		// Load into a FRESH slot first; only swap the cache pointer once it succeeds
-		// so a failed reload leaves the live model untouched. loadedModels is a
-		// deque, so existing element references stay valid across the push_back and
 		// live MeshComponent.mesh pointers into the old slot never dangle.
 		auto result = assets.LoadModel(path);
 		if (!result)
@@ -293,10 +278,8 @@ namespace aether::app::scene
 			return false;
 		}
 		ctx.loadedModels.push_back(std::move(result.value()));
-		ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1; // new resolutions hit the fresh slot
+		ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1;
 
-		// Ensure the (possibly changed) primitive set is catalogued, then bump the
-		// generation so ResolveWorldMeshes re-points meshes to the fresh slot.
 		RegisterModelAssets(db, assets, ctx, path);
 		db.TouchByPath(path);
 		return true;

@@ -19,12 +19,12 @@ TEST_CASE("Same resolved path dedups; two spellings still dedup") {
     TextureRegistry reg(sink);
 
     TextureHandle a = reg.Acquire("brick.png");
-    TextureHandle b = reg.Acquire("brick.png");     // exact same string
-    TextureHandle c = reg.Acquire("brick.texture"); // different spelling, same resolved path
+    TextureHandle b = reg.Acquire("brick.png");
+    TextureHandle c = reg.Acquire("brick.texture");
 
     CHECK(a == b);
-    CHECK(a == c);              // deduped because ResolvePath runs BEFORE hashing
-    CHECK(sink.loadCount == 1); // loaded exactly once
+    CHECK(a == c);
+    CHECK(sink.loadCount == 1);
     CHECK(reg.ResolveSlot(a) == reg.ResolveSlot(c));
 }
 
@@ -40,7 +40,6 @@ TEST_CASE("TryGetPath returns the resolved path for live handles only") {
     CHECK(!path.empty());
 
     // Re-acquiring by the returned path must dedup onto the same entry - the
-    // path IS the texture's stable identity for scene serialization.
     CHECK(reg.Acquire(path) == h);
 
     CHECK(!reg.TryGetPath(TextureHandle{}, path));
@@ -64,23 +63,23 @@ TEST_CASE("Refcount: shared entry survives one release, frees at zero") {
     TextureRegistry reg(sink);
 
     TextureHandle a = reg.Acquire("brick.png");
-    TextureHandle b = reg.Acquire("brick.png"); // refcount 2, same entry
+    TextureHandle b = reg.Acquire("brick.png");
     reg.Release(a);
-    CHECK(reg.ResolveSlot(b) != TextureResource::kInvalidSlot); // still resident
+    CHECK(reg.ResolveSlot(b) != TextureResource::kInvalidSlot);
     reg.Release(b);
-    CHECK(reg.ResolveSlot(b) == reg.ResolveSlot(reg.DefaultHandle())); // now stale -> default
+    CHECK(reg.ResolveSlot(b) == reg.ResolveSlot(reg.DefaultHandle()));
 }
 
 TEST_CASE("Generation invalidates stale handles after free + reload") {
     FakeTextureSink sink(8);
     TextureRegistry reg(sink);
     TextureHandle stale = reg.Acquire("brick.png");
-    reg.Release(stale); // entry 0 dead, generation bumped
+    reg.Release(stale);
 
-    TextureHandle fresh = reg.Acquire("moss.png"); // reuses entry 0, new generation
+    TextureHandle fresh = reg.Acquire("moss.png");
     CHECK(fresh.index == stale.index);
     CHECK(fresh.generation != stale.generation);
-    CHECK(reg.ResolveSlot(stale) == reg.ResolveSlot(reg.DefaultHandle())); // stale -> default
+    CHECK(reg.ResolveSlot(stale) == reg.ResolveSlot(reg.DefaultHandle()));
     CHECK(reg.ResolveSlot(fresh) != reg.ResolveSlot(reg.DefaultHandle()));
 }
 
@@ -96,20 +95,18 @@ TEST_CASE("Default handle resolves; invalid handle falls back to default") {
 TEST_CASE("InitializeDefault(TextureResource) installs a synthesized fallback without touching the sink") {
     FakeTextureSink sink(8);
     TextureRegistry reg(sink);
-    reg.InitializeDefault(TextureResource{42u}); // code-synthesized, no path load
+    reg.InitializeDefault(TextureResource{42u});
 
     CHECK(reg.DefaultHandle().IsValid());
     CHECK(reg.ResolveSlot(reg.DefaultHandle()) == 42u);
-    CHECK(reg.ResolveSlot(TextureHandle{}) == 42u);   // invalid handle -> default
+    CHECK(reg.ResolveSlot(TextureHandle{}) == 42u);
     CHECK(sink.loadCount == 0);                        // never hit the sink
 
-    // The synthesized default is not a dedup target: a real Acquire still loads.
     TextureHandle a = reg.Acquire("brick.png");
     CHECK(a.IsValid());
     CHECK(sink.loadCount == 1);
     CHECK(reg.ResolveSlot(a) != 42u);
 
-    // A stale handle resolves to the synthesized default, not its old slot.
     reg.Release(a);
     CHECK(reg.ResolveSlot(a) == 42u);
 }
@@ -118,26 +115,26 @@ TEST_CASE("AddRef bumps an existing entry so it survives an extra release") {
     FakeTextureSink sink(8);
     TextureRegistry reg(sink);
 
-    TextureHandle a = reg.Acquire("brick.png"); // refcount 1
-    reg.AddRef(a);                              // refcount 2 (no reload)
+    TextureHandle a = reg.Acquire("brick.png");
+    reg.AddRef(a);
     CHECK(sink.loadCount == 1);
-    reg.Release(a);                             // -> 1, still resident
+    reg.Release(a);
     CHECK(reg.ResolveSlot(a) != reg.ResolveSlot(reg.DefaultHandle()));
-    reg.Release(a);                             // -> 0, freed
+    reg.Release(a);
     CHECK(reg.ResolveSlot(a) == reg.ResolveSlot(reg.DefaultHandle()));
 }
 
 TEST_CASE("Failed Acquire returns a broken handle that resolves to the default; Release is a no-op") {
     FakeTextureSink sink(1);
     TextureRegistry reg(sink);
-    reg.InitializeDefault("magenta.png"); // consumes the only slot
+    reg.InitializeDefault("magenta.png");
 
-    TextureHandle h = reg.Acquire("brick.png"); // sink full -> load fails
-    CHECK(h.IsValid());                          // broken is VALID (routes to magenta), unlike "no texture"
+    TextureHandle h = reg.Acquire("brick.png");
+    CHECK(h.IsValid());
     CHECK(h == TextureHandle::Broken());
-    CHECK(reg.ResolveSlot(h) == reg.ResolveSlot(reg.DefaultHandle())); // visible magenta fallback
+    CHECK(reg.ResolveSlot(h) == reg.ResolveSlot(reg.DefaultHandle()));
     reg.Release(h); // must be a safe no-op (touches no live refcount)
-    CHECK(reg.ResolveSlot(reg.DefaultHandle()) != TextureResource::kInvalidSlot); // default intact
+    CHECK(reg.ResolveSlot(reg.DefaultHandle()) != TextureResource::kInvalidSlot);
 }
 
 TEST_CASE("Broken handle is distinct from invalid: valid, resolves to default, ref-op-safe") {
@@ -146,19 +143,17 @@ TEST_CASE("Broken handle is distinct from invalid: valid, resolves to default, r
     reg.InitializeDefault(TextureResource{7u});
 
     const TextureHandle broken = TextureHandle::Broken();
-    const TextureHandle absent{}; // "no texture requested"
+    const TextureHandle absent{};
 
     CHECK(broken.IsValid());     // -> packing routes through ResolveSlot -> magenta default
     CHECK_FALSE(absent.IsValid()); // -> packing emits kNoTexture (base colour)
     CHECK(reg.ResolveSlot(broken) == 7u);
 
     // Ref ops on a broken handle never touch a live entry, so they cannot corrupt
-    // the default or any real texture's refcount.
     reg.AddRef(broken);
     reg.Release(broken);
     CHECK(reg.ResolveSlot(reg.DefaultHandle()) == 7u);
 
-    // A real texture acquired alongside is unaffected.
     TextureHandle a = reg.Acquire("brick.png");
     CHECK(a.IsValid());
     CHECK(reg.ResolveSlot(a) != 7u);

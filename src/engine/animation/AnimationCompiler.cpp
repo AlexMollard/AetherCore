@@ -23,7 +23,7 @@ namespace aether
 			return;
 		}
 
-		const auto hier = world.TryGet<HierarchyComponent>(Entity{entityId});
+		auto* const hier = world.TryGet<HierarchyComponent>(Entity{entityId});
 
 		auto compileOne = [&uploadPool](SkinnedMeshComponent& smc)
 		{
@@ -38,7 +38,6 @@ namespace aether
 				return;
 			}
 
-			// Cache root bones once for all clips that need locking.
 			struct RootLockInfo
 			{
 				bool any = false;
@@ -56,7 +55,6 @@ namespace aether
 
 			for (const auto& anim: smc.pendingExternalAnims)
 			{
-				// Lazily build root bone list on first clip that needs it.
 				if (anim.rootLocked && !rootInfo.any)
 				{
 					const auto& parents = smc.animDb->GetNodeParents();
@@ -147,7 +145,7 @@ namespace aether
 			smc.pendingExternalAnims.clear();
 		};
 
-		if (auto smc = world.TryGet<SkinnedMeshComponent>(Entity{entityId}))
+		if (auto* smc = world.TryGet<SkinnedMeshComponent>(Entity{entityId}))
 		{
 			compileOne(*smc);
 		}
@@ -156,7 +154,7 @@ namespace aether
 		{
 			for (const Entity child: hier->children)
 			{
-				if (auto smc = world.TryGet<SkinnedMeshComponent>(child))
+				if (auto* smc = world.TryGet<SkinnedMeshComponent>(child))
 				{
 					compileOne(*smc);
 				}

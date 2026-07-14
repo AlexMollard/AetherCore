@@ -7,7 +7,6 @@
 
 namespace aether::gpu
 {
-	// Timeline-semaphore pImpl; the engine only sees a pointer.
 	namespace detail
 	{
 		struct TimelineSemaphoreData

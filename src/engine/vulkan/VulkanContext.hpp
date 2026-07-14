@@ -10,10 +10,6 @@
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
 
-// Forward declaration of Tracy's context type so the raw pointer
-// can be stored as a member without dragging TracyVulkan.hpp into
-// every TU that includes this header. The full type is needed only
-// in VulkanContext.cpp.
 namespace tracy
 {
 	struct VkCtx;
@@ -37,18 +33,7 @@ namespace aether
 	public:
 		~VulkanContext();
 
-		// Factory: create and initialize a VulkanContext. Returns an error
-		// on failure instead of throwing, so callers can propagate via
-		// Expected / AE_TRY.
-		//
-		// enableGpuDiagnostics: gates NVIDIA Aftermath (dev-only GPU crash
-		// diagnostics). Only set true by an editor build (AETHERCORE_EDITOR_APP -
-		// see src/app/main.cpp); the shipped GameRuntime always passes false.
-		// Aftermath is only actually turned on when this is true AND the
-		// selected physical device is NVIDIA (vendorID 0x10DE) - see the
-		// vendor gate in VulkanContext.cpp, which runs strictly after physical
 		// device selection so a non-NVIDIA device never has its NVIDIA-only
-		// extensions requested.
 		[[nodiscard]] static Expected<std::unique_ptr<VulkanContext>> Create(const Window& window, const char* appName, bool enableGpuDiagnostics = false);
 
 		VulkanContext(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
@@ -69,25 +54,12 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 
-		// Descriptor-heap properties (VK_EXT_descriptor_heap). Queried once
-		// during init; used by BindlessManager to size/align the resource and
-		// sampler heap backing buffers and to compute per-descriptor strides.
 		[[nodiscard]] const VkPhysicalDeviceDescriptorHeapPropertiesEXT& GetDescriptorHeapProperties() const;
 
-		// Block until the device finishes all in-flight work. Returns an
-		// error on backend failure. If the device is lost, queries and logs
-		// fault info via VK_EXT_device_fault before returning the error.
 		[[nodiscard]] Expected<void> WaitIdle() const;
 
-		// Query and log device fault information via VK_KHR_device_fault.
-		// Called automatically on device loss; can also be called manually
-		// after observing VK_ERROR_DEVICE_LOST from any Vulkan call.
 		void QueryDeviceFaultInfo() const;
 
-		// Set an external diagnostic callback invoked on device loss. When
-		// set, WaitIdle() calls this instead of the built-in QueryDeviceFaultInfo
-		// so the full DiagnosticEngine (with address resolution + flight
-		// recorder) can run. Pass nullptr to revert to the built-in query.
 		using FaultCallback = void (*)();
 
 		void SetFaultCallback(FaultCallback callback)
@@ -95,8 +67,6 @@ namespace aether
 			m_faultCallback = callback;
 		}
 
-		// Forward to the file-static address binding tracker so GraphicsDevice
-		// can wire up the debug-messenger-driven alloc tracking.
 		static void SetGlobalAddressBindingTracker(GpuMemoryTracker* tracker);
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
@@ -119,7 +89,6 @@ namespace aether
 		std::optional<vkb::Device> m_device;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
-		// Resolved once at Create() time: %LOCALAPPDATA%/AetherCore/cache/<exe>/pipeline/pipeline_cache.bin
 		// (never CWD/exe-dir-relative -- see ResolveGpuCacheDir in VulkanContext.cpp).
 		std::filesystem::path m_pipelineCachePath;
 		VkSurfaceKHR m_surface = VK_NULL_HANDLE;

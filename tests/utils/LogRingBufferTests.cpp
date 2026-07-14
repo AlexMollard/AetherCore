@@ -51,15 +51,15 @@ TEST_CASE("CollapseConsecutive folds runs of identical level+category+message") 
         {LogLevel::Info, "A", "m1", "", 0, "", 1},
         {LogLevel::Info, "A", "m1", "", 0, "", 2},
         {LogLevel::Info, "A", "m1", "", 0, "", 3},
-        {LogLevel::Warn, "A", "m1", "", 0, "", 4}, // level differs -> new group
-        {LogLevel::Info, "B", "m1", "", 0, "", 5}, // category differs
-        {LogLevel::Info, "B", "m2", "", 0, "", 6}, // message differs
+        {LogLevel::Warn, "A", "m1", "", 0, "", 4},
+        {LogLevel::Info, "B", "m1", "", 0, "", 5},
+        {LogLevel::Info, "B", "m2", "", 0, "", 6},
         {LogLevel::Info, "B", "m2", "", 0, "", 7},
     };
     const auto out = CollapseConsecutive(in);
     REQUIRE(out.size() == 4);
     CHECK(out[0].count == 3);
-    CHECK(out[0].record.seq == 3); // representative = most recent in the run
+    CHECK(out[0].record.seq == 3);
     CHECK(out[1].count == 1);
     CHECK(out[1].record.level == LogLevel::Warn);
     CHECK(out[2].count == 1);

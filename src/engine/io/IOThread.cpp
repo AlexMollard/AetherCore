@@ -12,7 +12,7 @@ namespace aether::io
 	IoExecutor::~IoExecutor()
 	{
 		{
-			std::scoped_lock lock(m_mutex);
+			const std::scoped_lock lock(m_mutex);
 			m_shutdown = true;
 		}
 		m_workCv.notify_one();
@@ -22,7 +22,7 @@ namespace aether::io
 	void IoExecutor::Submit(IOPriority priority, std::function<void()> job)
 	{
 		{
-			std::scoped_lock lock(m_mutex);
+			const std::scoped_lock lock(m_mutex);
 			++m_pendingCount;
 			m_queue.push({.priority = priority, .work = std::move(job)});
 		}
@@ -32,7 +32,7 @@ namespace aether::io
 	void IoExecutor::schedule(std::coroutine_handle<> h)
 	{
 		{
-			std::scoped_lock lock(m_mutex);
+			const std::scoped_lock lock(m_mutex);
 			++m_pendingCount;
 			m_coroQueue.push_back(h);
 		}
@@ -50,7 +50,6 @@ namespace aether::io
 		AE_PROFILE_THREAD("IoExecutor");
 		while (true)
 		{
-			// --- Dequeue one unit of work (job or coroutine) ----------------
 			std::function<void()> work;
 			std::coroutine_handle<> coro = nullptr;
 
@@ -63,9 +62,6 @@ namespace aether::io
 					return;
 				}
 
-				// Prefer coroutine handles over jobs (coroutines are typically
-				// higher-value cancellation boundaries).  Within each category
-				// we respect priority order.
 				if (!m_coroQueue.empty())
 				{
 					coro = m_coroQueue.back();
@@ -78,7 +74,6 @@ namespace aether::io
 				}
 			}
 
-			// --- Execute ---------------------------------------------------
 			if (coro)
 			{
 				AE_PROFILE_ZONE();
@@ -90,9 +85,8 @@ namespace aether::io
 				work();
 			}
 
-			// --- Decrement pending count and notify idle waiters -----------
 			{
-				std::scoped_lock lock(m_mutex);
+				const std::scoped_lock lock(m_mutex);
 				--m_pendingCount;
 			}
 			m_idleCv.notify_all();

@@ -5,26 +5,18 @@
 
 #include <glm/glm.hpp>
 
-// Runtime mirror of the baked font format written by
-// tools/assetpack/FontProcessor.{hpp,cpp} (AssetPacker's "bake-font"
-// subcommand). Deliberately NOT #including the tool header - the tool is a
-// build-time-only executable, and redeclaring here means any future drift
-// between the baker and the runtime is caught by the static_asserts below
-// (byte-for-byte size match) rather than silently misreading the file.
 namespace aether::ui
 {
 	// On-disk glyph record - MUST match FontProcessor::GlyphMeta byte-for-byte
-	// (tools/assetpack/FontProcessor.hpp). Packed to 1 so the runtime reader
-	// can safely memcpy raw .fontmeta bytes straight into an array of these.
 #pragma pack(push, 1)
 
 	struct GlyphMeta
 	{
 		std::uint32_t codepoint;
-		float u0, v0, u1, v1;     // UV rect in [0,1]
-		float sizeX, sizeY;       // glyph bitmap size in px (at bakeSize em)
-		float bearingX, bearingY; // left/top bearing in px (at bakeSize em)
-		float advance;            // horizontal advance in px (at bakeSize em)
+		float u0, v0, u1, v1;
+		float sizeX, sizeY;
+		float bearingX, bearingY;
+		float advance;
 	};
 
 #pragma pack(pop)
@@ -32,8 +24,6 @@ namespace aether::ui
 	static_assert(sizeof(GlyphMeta) == 40, "must match FontProcessor::GlyphMeta - runtime/baker format drift");
 
 	// On-disk headers - MUST match FontProcessor::FontAtlasHeader / FontMetaHeader
-	// byte-for-byte (tools/assetpack/FontProcessor.hpp). Redeclared here so the
-	// runtime loader parses .fontatlas/.fontmeta without depending on the tool.
 #pragma pack(push, 1)
 
 	struct FontAtlasHeader
@@ -66,9 +56,6 @@ namespace aether::ui
 	inline constexpr std::uint32_t kFontMetaMagic = static_cast<std::uint32_t>('A') | (static_cast<std::uint32_t>('F') << 8) | (static_cast<std::uint32_t>('M') << 16) | (static_cast<std::uint32_t>('T') << 24);
 	inline constexpr std::uint32_t kFontMetaVersion = 2;
 
-	// Runtime-resident font: parsed .fontmeta metrics + glyph table, plus the
-	// bindless slot of the uploaded .fontatlas SDF texture. Populated by
-	// FontRegistry::Load (or FontRegistry::InjectForTest for pure-shaping unit
 	// tests that never touch the GPU).
 	struct FontAsset
 	{
@@ -84,10 +71,9 @@ namespace aether::ui
 		}
 	};
 
-	// One shaped glyph quad, in output pixels relative to the shaping box origin.
 	struct ShapedGlyph
 	{
-		glm::vec4 rect; // x,y,w,h
-		glm::vec4 uv;   // u0,v0,u1,v1
+		glm::vec4 rect;
+		glm::vec4 uv;
 	};
 } // namespace aether::ui

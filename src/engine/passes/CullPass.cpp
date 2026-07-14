@@ -89,13 +89,13 @@ namespace aether
 		        .OnDebugDisabled([&renderQueue](PassContext& ctx) { renderQueue.DiscardPending(ctx.frameSlot); });
 	}
 
-	gpu::Pipeline CullPass::GetSinglePipeline() const
+	gpu::PipelineView CullPass::GetSinglePipeline() const
 	{
-		return const_cast<void*>(gpu::ResourceRegistry::ResolvePipeline(m_singleHandle).state);
+		return gpu::ResourceRegistry::ResolvePipeline(m_singleHandle).state;
 	}
 
-	gpu::Pipeline CullPass::GetMultiPipeline() const
+	gpu::PipelineView CullPass::GetMultiPipeline() const
 	{
-		return const_cast<void*>(gpu::ResourceRegistry::ResolvePipeline(m_multiHandle).state);
+		return gpu::ResourceRegistry::ResolvePipeline(m_multiHandle).state;
 	}
 } // namespace aether

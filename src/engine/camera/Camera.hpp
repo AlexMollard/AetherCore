@@ -8,12 +8,11 @@ namespace aether
 
 	enum class CameraMode
 	{
-		Free,   // WASD + right-mouse-drag to look (Unreal/Unity editor style)
-		Orbit,  // Left-mouse-drag to orbit a target; scroll wheel to zoom
-		Manual, // No automatic input processing - caller sets pose each frame
+		Free,
+		Orbit,
+		Manual,
 	};
 
-	// Initial configuration for a Camera.
 	struct CameraDesc
 	{
 		CameraMode mode = CameraMode::Orbit;
@@ -21,37 +20,30 @@ namespace aether
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 
-		// -- Free mode starting pose -------------------------------------------
 		glm::vec3 position = {0.0f, 3.0f, 7.0f};
-		float yaw = 0.0f;     // degrees, rotation around world Y axis
-		float pitch = -20.0f; // degrees, up/down tilt (+-89 clamped)
+		float yaw = 0.0f;
+		float pitch = -20.0f;
 
-		// -- Orbit mode starting pose ------------------------------------------
 		glm::vec3 orbitTarget = {0.0f, 0.0f, 0.0f};
 		float orbitDistance = 7.0f;
-		float orbitYaw = 0.0f;    // degrees around target's Y axis
-		float orbitPitch = 20.0f; // degrees above/below horizon
+		float orbitYaw = 0.0f;
+		float orbitPitch = 20.0f;
 
-		// -- Control speeds ----------------------------------------------------
-		float moveSpeed = 5.0f;  // world units / second (Free)
-		float lookSpeed = 0.15f; // degrees per pixel delta (Free RMB drag)
-		float orbitSpeed = 0.3f; // degrees per pixel delta (Orbit LMB drag)
-		float zoomSpeed = 0.5f;  // world units per scroll tick (Orbit)
+		float moveSpeed = 5.0f;
+		float lookSpeed = 0.15f;
+		float orbitSpeed = 0.3f;
+		float zoomSpeed = 0.5f;
 	};
 
-	// Controllable camera supporting Free (FPS) and Orbit modes.
-	// Call Update() once per frame - done automatically by CameraManager.
 	class Camera
 	{
 	public:
 		explicit Camera(const CameraDesc& desc = {});
 
-		// -- View / projection matrices ----------------------------------------
 		[[nodiscard]] glm::mat4 GetViewMatrix() const;
 		[[nodiscard]] glm::mat4 GetProjectionMatrix(float aspect) const;
 		[[nodiscard]] glm::mat4 GetViewProjectionMatrix(float aspect) const;
 
-		// -- Free mode pose ----------------------------------------------------
 		[[nodiscard]] glm::vec3 GetPosition() const;
 
 		[[nodiscard]] glm::vec3 GetForward() const;
@@ -64,14 +56,6 @@ namespace aether
 
 		void SetYawPitch(float yaw, float pitch);
 
-		// -- Unified editor navigation (Free mode) -----------------------------
-		// Free mode is a full scene-view camera: hold RMB to fly (look + WASD/QE,
-		// scroll = speed); Alt+LMB orbits the focus point; MMB pans; scroll (no
-		// button) dollies toward the focus point. The focus point is `position +
-		// forward * focusDistance` - orbit and dolly pivot around it, F reframes it.
-
-		// Frame `target` at `distance`: places the eye `distance` back along the
-		// current view direction and makes `target` the orbit/dolly pivot.
 		void FocusOn(glm::vec3 target, float distance);
 
 		[[nodiscard]] float GetFocusDistance() const
@@ -79,7 +63,6 @@ namespace aether
 			return m_focusDistance;
 		}
 
-		// -- Orbit mode pose ---------------------------------------------------
 		[[nodiscard]] glm::vec3 GetOrbitTarget() const
 		{
 			return m_orbitTarget;
@@ -103,9 +86,6 @@ namespace aether
 		void SetOrbitDistance(float dist);
 		void SetOrbitYawPitch(float yaw, float pitch);
 
-		// -- Projection params -------------------------------------------------
-		// Overrides the perspective frustum (e.g. driving a Manual camera from an
-		// entity's CameraComponent). Aspect stays a per-frame render-target input.
 		void SetPerspective(float fovDegrees, float nearPlane, float farPlane)
 		{
 			m_fovDeg = fovDegrees;
@@ -128,38 +108,31 @@ namespace aether
 			return m_far;
 		}
 
-		// -- Mode --------------------------------------------------------------
 		void SetMode(CameraMode mode)
 		{
 			m_mode = mode;
 		}
 
-		// Called once per frame by CameraManager::Update. No-ops for Manual cameras.
 		void Update(const Input& input, float dt);
 
 	private:
 		CameraMode m_mode;
 
-		// Free camera pose
 		glm::vec3 m_position;
-		float m_yaw;   // degrees, Y-axis rotation
-		float m_pitch; // degrees, up/down
+		float m_yaw;
+		float m_pitch;
 
-		// Distance from the eye to the orbit/dolly pivot along forward (Free mode).
 		float m_focusDistance = 10.0f;
 
-		// Orbit camera pose
 		glm::vec3 m_orbitTarget;
 		float m_orbitDistance;
 		float m_orbitYaw;
 		float m_orbitPitch;
 
-		// Projection
 		float m_fovDeg;
 		float m_near;
 		float m_far;
 
-		// Control speeds
 		float m_moveSpeed;
 		float m_lookSpeed;
 		float m_orbitSpeed;

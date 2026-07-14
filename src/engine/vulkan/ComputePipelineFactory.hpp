@@ -8,8 +8,6 @@
 
 namespace aether::vkutil
 {
-	// Builds a compute VkShaderEXT. Produces a ResourceRegistry::PipelineEntry;
-	// the caller hands it to ResourceRegistry::RegisterPipeline for handle + deferred destruction.
 	struct ComputePipelineDesc
 	{
 		const char* shaderVfsPath = nullptr;

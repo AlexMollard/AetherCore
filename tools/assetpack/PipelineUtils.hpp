@@ -18,10 +18,7 @@ namespace aether::assetpipeline
 {
 	namespace fs = std::filesystem;
 
-	// Canonical owned binary buffer type.
 	using ByteBuffer = std::vector<std::byte>;
-
-	// Shared formatting and path utilities used by multiple asset processors.
 
 	inline std::string Stem(const fs::path& p)
 	{
@@ -32,15 +29,15 @@ namespace aether::assetpipeline
 	{
 		std::ostringstream ss;
 		ss << std::fixed << std::setprecision(1);
-		if (bytes >= 1024ULL * 1024 * 1024)
+		if (bytes >= 1024ull * 1024 * 1024)
 		{
 			ss << static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0) << " GB";
 		}
-		else if (bytes >= 1024ULL * 1024)
+		else if (bytes >= 1024ull * 1024)
 		{
 			ss << static_cast<double>(bytes) / (1024.0 * 1024.0) << " MB";
 		}
-		else if (bytes >= 1024ULL)
+		else if (bytes >= 1024ull)
 		{
 			ss << static_cast<double>(bytes) / 1024.0 << " KB";
 		}
@@ -73,18 +70,16 @@ namespace aether::assetpipeline
 		return ss.str();
 	}
 
-	// Binary buffer append helpers
-
 	template<typename T>
 	inline void Append(std::vector<std::byte>& buf, const T& value)
 	{
-		const auto p = reinterpret_cast<const std::byte*>(&value);
+		const auto* const p = reinterpret_cast<const std::byte*>(&value);
 		buf.insert(buf.end(), p, p + sizeof(T));
 	}
 
 	inline void AppendBytes(std::vector<std::byte>& buf, const void* src, std::size_t n)
 	{
-		const auto p = reinterpret_cast<const std::byte*>(src);
+		const auto* const p = reinterpret_cast<const std::byte*>(src);
 		buf.insert(buf.end(), p, p + n);
 	}
 
@@ -105,7 +100,6 @@ namespace aether::assetpipeline
 	using Vec3 = glm::vec3;
 	using Vec4 = glm::vec4;
 
-	// Simple logger callback - defaults to stderr. Redirect by passing a custom LogFn.
 	using LogFn = void (*)(std::string_view);
 
 	inline void DefaultLog(std::string_view msg)

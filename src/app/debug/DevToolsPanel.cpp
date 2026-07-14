@@ -52,7 +52,7 @@ namespace aether::editor
 
 			if (ImGui::Button("Reload Scripts"))
 			{
-				if (auto scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
+				if (auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
 				{
 					scripting->RequestReload();
 				}
@@ -64,9 +64,9 @@ namespace aether::editor
 	void DevToolsPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		(void) context;
-		bool overlay = config.GetBool("debug.debugoverlay", aether::IsDebugRenderingEnabled());
+		const bool overlay = config.GetBool("debug.debugoverlay", aether::IsDebugRenderingEnabled());
 		aether::SetDebugRenderingEnabled(overlay);
-		bool physicsShapes = config.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
+		const bool physicsShapes = config.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
 		aether::SetPhysicsDebugShapesEnabled(physicsShapes);
 	}
 

@@ -8,15 +8,8 @@
 
 namespace aether
 {
-	// Number of shadow cascades for multi-frustum culling.
 	// Must match kShadowCascadeCount in FrameConstants.hpp.
 	inline constexpr std::uint32_t kCullMultiFrustumCount = 3u;
-
-	// -------------------------------------------------------------------------
-	// Draw Contracts
-	// -------------------------------------------------------------------------
-	// Per-instance payload and push constants for mesh rendering.
-	// Sync with shaders/include/RenderContracts.slangh.
 
 	namespace DrawContracts
 	{
@@ -33,7 +26,7 @@ namespace aether
 			std::uint32_t materialIndex = 0;
 			std::uint32_t skinPaletteOffset = 0;
 			std::uint32_t skinJointCount = 0;
-			std::uint32_t effectParamIndex = 0xFFFFFFFFu; // per-entity EffectParams slot; 0xFFFF... = no effect
+			std::uint32_t effectParamIndex = 0xFFFFFFFFu;
 			glm::vec4 worldBoundingSphere{};
 			gpu::DeviceAddress vertexBufferAddr = 0;
 		};
@@ -65,12 +58,6 @@ namespace aether
 		static_assert(offsetof(PushConstants, tileHeadersAddr) == 32);
 		static_assert(offsetof(PushConstants, tileLightIndicesAddr) == 40);
 	} // namespace DrawContracts
-
-	// -------------------------------------------------------------------------
-	// Cull Contracts
-	// -------------------------------------------------------------------------
-	// Compute-based frustum culling input/output and push constants.
-	// Sync with shaders/cull_draws.slang and cull_draws_multi.slang.
 
 	namespace CullContracts
 	{
@@ -160,12 +147,6 @@ namespace aether
 
 		inline constexpr std::uint32_t kDebugForceVisibleBit = 1u << 0;
 	} // namespace CullContracts
-
-	// -------------------------------------------------------------------------
-	// Animation Contracts
-	// -------------------------------------------------------------------------
-	// GPU-driven animation skinning: clip sampling, pose flattening, skin palette.
-	// Sync with shaders/include/AnimationContracts.slangh.
 
 	namespace AnimationContracts
 	{
@@ -324,18 +305,13 @@ namespace aether
 		static_assert(offsetof(PoseInitPush, jobCount) == 40);
 		static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
 
-		// Extended sample job with secondary-clip blending support.
-		// primaryClipIndex/primaryTime sample the base animation.
-		// When secondaryClipIndex is non-zero and blendWeight < 1.0, the GPU
-		// samples secondaryClipIndex/secondaryTime and lerps the resulting
-		// translations by (1 - blendWeight), leaving rotations slerped.
 		struct AnimatorBlendJob
 		{
 			std::uint32_t primaryClipIndex = 0;
 			float primaryTime = 0.0f;
 			std::uint32_t secondaryClipIndex = 0;
 			float secondaryTime = 0.0f;
-			float blendWeight = 1.0f; // 1.0=fully primary, 0.0=fully secondary
+			float blendWeight = 1.0f;
 			std::uint32_t nodePoseOffset = 0;
 			std::uint32_t nodeCount = 0;
 			gpu::DeviceAddress clipsAddr = 0;
@@ -348,9 +324,6 @@ namespace aether
 
 		static_assert(sizeof(AnimatorBlendJob) == 72, "AnimatorBlendJob layout changed - update shaders/include/AnimationContracts.slangh.");
 
-		// Push constant for the anim blend compute pass.
-		// The blend pass reads AnimatorBlendJob entries from a GPU buffer, samples
-		// two clip poses and lerps them, writing flat node poses to sampledPosesAddr.
 		struct AnimationBlendPush
 		{
 			gpu::DeviceAddress animDbClipsAddr = 0;
@@ -370,13 +343,6 @@ namespace aether
 
 	} // namespace AnimationContracts
 
-	// -------------------------------------------------------------------------
-	// Resource Table Contracts
-	// -------------------------------------------------------------------------
-	// GPU resource table: flat array of ResourceEntry entries addressed by
-	// FrameResourceId. Accessed via fc.resourceTableAddr in shaders.
-	// Sync with shaders/include/ResourceTable.slangh.
-	//
 	inline constexpr std::uint32_t kFrameResourceCount = 16;
 
 	enum class FrameResourceId : std::uint32_t
@@ -388,7 +354,7 @@ namespace aether
 		DirectionalShadowC1 = 4,
 		DirectionalShadowC2 = 5,
 		LocalShadowAtlas = 6,
-		Count,
+		Count = 7,
 	};
 
 	inline constexpr std::uint32_t kResourceTypeInvalid = 0xFFFFFFFFu;
@@ -397,11 +363,11 @@ namespace aether
 
 	struct ResourceEntry
 	{
-		std::uint64_t address = 0; // bindless slot or BDA
+		std::uint64_t address = 0;
 		std::uint32_t type = kResourceTypeInvalid;
-		std::uint32_t width = 0;  // resource width in texels
-		std::uint32_t height = 0; // resource height in texels
-		std::uint32_t format = 0; // resource format (VkFormat)
+		std::uint32_t width = 0;
+		std::uint32_t height = 0;
+		std::uint32_t format = 0;
 		std::uint32_t _pad0 = 0;
 		std::uint32_t _pad1 = 0; // explicit tail padding; shader pointer indexing must use 32-byte stride
 	};

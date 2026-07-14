@@ -1,6 +1,7 @@
 #include "debug/ThemePanel.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -28,7 +29,7 @@ namespace aether::editor
 		{
 			const auto ch = [](float v)
 			{
-				return static_cast<int>(v * 255.0f + 0.5f) & 0xFF;
+				return static_cast<int>(std::lround(v * 255.0f)) & 0xFF;
 			};
 			char buf[10];
 			std::snprintf(buf, sizeof(buf), "#%02X%02X%02X%02X", ch(c.x), ch(c.y), ch(c.z), ch(c.w));
@@ -37,7 +38,6 @@ namespace aether::editor
 
 		ImVec4 FromHex(const std::string& hex, const ImVec4& fallback)
 		{
-			// "#RRGGBB" or "#RRGGBBAA".
 			if ((hex.size() != 7 && hex.size() != 9) || hex[0] != '#')
 			{
 				return fallback;
@@ -73,9 +73,6 @@ namespace aether::editor
 			return ImVec4(static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f, static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f);
 		}
 
-		// An accent preset keeps Night Amber's warm surfaces + text and swaps only
-		// the accent triad (the common "I don't want amber" request). onAccent is
-		// dark or light to stay legible on the accent fill.
 		EditorTheme AccentPreset(const ImVec4& accent, const ImVec4& hover, const ImVec4& active, const ImVec4& onAccent)
 		{
 			EditorTheme t = chrome::NightAmberTheme();
@@ -88,7 +85,6 @@ namespace aether::editor
 
 		EditorTheme GraphitePreset()
 		{
-			// A fully cool, neutral alternative (non-warm surfaces + steel accent).
 			EditorTheme t;
 			t.background = ImVec4(0.055f, 0.058f, 0.066f, 1.0f);
 			t.surface = ImVec4(0.086f, 0.090f, 0.102f, 1.0f);
@@ -132,8 +128,6 @@ namespace aether::editor
 		{
 			m_loaded = true;
 		}
-		// Apply on attach so a persisted theme takes hold at startup (ImguiSubsystem
-		// already themed to the Night Amber default; this overrides it if saved).
 		Apply();
 	}
 
@@ -193,7 +187,7 @@ namespace aether::editor
 
 	void ThemePanel::Apply()
 	{
-		chrome::ApplyTheme(m_theme); // rewrites chrome tokens + restyles ImGui widgets
+		chrome::ApplyTheme(m_theme);
 	}
 
 	void ThemePanel::OnImGui(app::LayerContext& /*context*/)
@@ -202,13 +196,12 @@ namespace aether::editor
 		ImGui::Begin(GetName().data(), VisiblePtr());
 		chrome::PanelHeader("THEME", m_loaded ? "CUSTOM" : "NIGHT AMBER");
 
-		// ── Presets ─────────────────────────────────────────────────────────────
 		chrome::SectionTag("PRESETS");
 		ImGui::Spacing();
 		{
 			const auto presets = Presets();
-			float avail = ImGui::GetContentRegionAvail().x;
-			int perRow = 3;
+			const float avail = ImGui::GetContentRegionAvail().x;
+			const int perRow = 3;
 			const float btnW = (avail - ImGui::GetStyle().ItemSpacing.x * (perRow - 1)) / static_cast<float>(perRow);
 			for (std::size_t i = 0; i < presets.size(); ++i)
 			{
@@ -227,9 +220,6 @@ namespace aether::editor
 		}
 		ImGui::Spacing();
 
-		// ── Palette editors ─────────────────────────────────────────────────────
-		// `changed` fires every frame while a swatch is being dragged (live recolour);
-		// `commit` fires once, on release, so the file write happens only when the edit
 		// is finished - never per frame (see the no-per-frame-save-spam project rule).
 		bool changed = false;
 		bool commit = false;
@@ -278,11 +268,11 @@ namespace aether::editor
 		if (changed)
 		{
 			m_loaded = true;
-			Apply(); // in-memory recolour for instant feedback while dragging
+			Apply();
 		}
 		if (commit)
 		{
-			Persist(); // flush to EditorTheme.toml once, when the edit is released
+			Persist();
 		}
 
 		ImGui::Spacing();
@@ -294,7 +284,7 @@ namespace aether::editor
 			m_loaded = false;
 			Apply();
 			std::error_code ec;
-			std::filesystem::remove(ThemePath(), ec); // back to the shipped default on next launch
+			std::filesystem::remove(ThemePath(), ec);
 		}
 
 		ImGui::End();

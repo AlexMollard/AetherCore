@@ -17,8 +17,6 @@ namespace aether::app::scripting
 {
 	namespace
 	{
-		// Locate the deployed managed assemblies (data/scripts/managed) relative to
-		// the working directory.
 		std::filesystem::path ResolveManagedDir()
 		{
 			const auto cwd = std::filesystem::current_path();
@@ -204,11 +202,7 @@ namespace aether::app::scripting
 			return latestInput && *latestInput > *deployedTime;
 		}
 
-		// Core build step shared by the sync (F5) and async (Play) paths: runs a
-		// portable-symbol Debug build and redeploys the assembly. Script compilation
-		// is intentionally independent from the C++ Dev configuration: authoring in
 		// the Editor must have predictable stepping and locals. Pure file IO with no
-		// engine or managed-runtime access, so it is safe on a worker thread.
 		bool PerformScriptBuild(const std::filesystem::path& managedDir, const std::filesystem::path& gameProject, const std::filesystem::path& artifactsDir, std::string& error)
 		{
 			namespace fs = std::filesystem;
@@ -218,9 +212,6 @@ namespace aether::app::scripting
 				return true;
 			}
 
-			// `-p:UseSharedCompilation=false` keeps the Roslyn build server from
-			// spawning; with MSBUILDDISABLENODEREUSE (set at startup) no persistent
-			// child outlives the build to hold our capture handle.
 			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string()
 			                          + "\" -c Debug --nologo -v:m -p:UseSharedCompilation=false -p:DebugSymbols=true -p:DebugType=portable -p:Optimize=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 
@@ -237,8 +228,6 @@ namespace aether::app::scripting
 				return false;
 			}
 
-			// Redeploy the freshly built game assembly into the load dir. The scripts
-			// ALC loads from bytes (see ScriptRegistry.Load), so overwriting the
 			// on-disk dll mid-run is safe.
 			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / "debug";
 			for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
@@ -265,9 +254,6 @@ namespace aether::app::scripting
 		}
 #endif
 
-		// Stop `dotnet` spawning persistent build-server children that would inherit
-		// our output handle and outlive the build. Set once and inherited by every
-		// child process. Harmless when no .NET SDK is present.
 		void ConfigureDotnetEnvironmentOnce()
 		{
 			static const bool done = []()
@@ -289,9 +275,7 @@ namespace aether::app::scripting
 		}
 	} // namespace
 
-	// Background build job: the detached worker fills `error` then flips `done` with
 	// release ordering; the main thread reads them with acquire. `ok` and `error`
-	// are only meaningful once `done` is true.
 	struct ScriptBuildJob
 	{
 		std::atomic<bool> done{false};
@@ -299,35 +283,25 @@ namespace aether::app::scripting
 		std::string error;
 	};
 
-	// Set the project whose game scripts get built/reloaded at runtime. The editor
-	// calls this on project open; empty paths (GameRuntime / no project) leave the
-	// source rebuild a no-op.
 	void CSharpScriptingSubsystem::SetScriptProject(std::filesystem::path scriptsProject, std::filesystem::path artifactsDir)
 	{
 		m_scriptProject = std::move(scriptsProject);
 		m_scriptArtifactsDir = std::move(artifactsDir);
 	}
 
-	// Dev-only. Rebuilds the open project's AetherGame scripts from source and
-	// redeploys them before a reload so F5 reflects source edits with no separate
-	// build step. The project is supplied at runtime via SetScriptProject (the editor
-	// does this on project open); with none set - GameRuntime, a packaged build
-	// without AETHER_DOTNET_EXE, or a project with no scripts - this is a no-op
-	// (reload-only). SDK/Interop edits are NOT hot-reloadable and still need a full
-	// rebuild + restart; only the collectible game assembly is swapped here.
 	bool CSharpScriptingSubsystem::RebuildFromSource(std::string& error)
 	{
 #if defined(AETHER_DOTNET_EXE)
 		if (m_scriptProject.empty())
 		{
 			(void) error;
-			return true; // no project set: reload-only
+			return true;
 		}
 		ConfigureDotnetEnvironmentOnce();
 		return PerformScriptBuild(m_managedDir, m_scriptProject, m_scriptArtifactsDir, error);
 #else
 		(void) error;
-		return true; // packaged build / no SDK: reload-only
+		return true;
 #endif
 	}
 
@@ -336,8 +310,6 @@ namespace aether::app::scripting
 #if defined(AETHER_DOTNET_EXE)
 		if (!m_scriptProject.empty())
 		{
-			// Adopt an in-flight build instead of starting a second: two dotnet builds
-			// racing on the same output dll would clobber each other.
 			if (m_buildJob && !m_buildJob->done.load(std::memory_order_acquire))
 			{
 				return;
@@ -362,9 +334,6 @@ namespace aether::app::scripting
 			return;
 		}
 #endif
-		// No SDK / packaged build / no project set: nothing to build. Present an
-		// immediately-successful job so the play orchestration transitions straight
-		// to Playing.
 		auto job = std::make_shared<ScriptBuildJob>();
 		job->ok.store(true, std::memory_order_relaxed);
 		job->done.store(true, std::memory_order_release);
@@ -391,9 +360,7 @@ namespace aether::app::scripting
 
 	void CSharpScriptingSubsystem::ClearRebuild()
 	{
-		// Drop our reference only; a still-running worker keeps its own shared_ptr,
 		// so this never blocks (unlike joining a thread or destroying a std::async
-		// future). Callers invoke this after a terminal poll.
 		m_buildJob.reset();
 	}
 

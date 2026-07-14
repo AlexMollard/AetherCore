@@ -35,9 +35,9 @@ TEST_CASE("Identical assets dedup to one slot; distinct assets do not") {
     MaterialHandle h2 = reg.Acquire(red2);
     MaterialHandle h3 = reg.Acquire(blue);
 
-    CHECK(h1 == h2);            // deduped
-    CHECK(h1.index != h3.index); // distinct
-    CHECK(sink.allocCount == 2); // only 2 slots used for 3 acquires
+    CHECK(h1 == h2);
+    CHECK(h1.index != h3.index);
+    CHECK(sink.allocCount == 2);
 }
 
 TEST_CASE("Refcount: shared slot survives one release, frees at zero") {
@@ -48,26 +48,26 @@ TEST_CASE("Refcount: shared slot survives one release, frees at zero") {
     MaterialAsset a; a.baseColorFactor = {1,0,0,1};
 
     MaterialHandle h1 = reg.Acquire(a);
-    MaterialHandle h2 = reg.Acquire(a); // refcount 2, same slot
+    MaterialHandle h2 = reg.Acquire(a);
     reg.Release(h1);
-    CHECK(sink.freeCount == 0);         // still referenced
+    CHECK(sink.freeCount == 0);
     CHECK(reg.ResolveSlot(h2) == h2.index);
     reg.Release(h2);
-    CHECK(sink.freeCount == 1);         // now freed
+    CHECK(sink.freeCount == 1);
 }
 
 TEST_CASE("Generation invalidates stale handles after free+realloc") {
-    FakeSlotSink sink(1); // single slot forces reuse
+    FakeSlotSink sink(1);
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
 
     MaterialAsset red; red.baseColorFactor = {1,0,0,1};
     MaterialHandle stale = reg.Acquire(red);
-    reg.Release(stale); // slot 0 freed, generation bumped
+    reg.Release(stale);
 
     MaterialAsset blue; blue.baseColorFactor = {0,0,1,1};
-    MaterialHandle fresh = reg.Acquire(blue); // reuses slot 0, new generation
+    MaterialHandle fresh = reg.Acquire(blue);
 
     CHECK(fresh.IsValid());
     CHECK(fresh.index == stale.index);
@@ -95,13 +95,13 @@ TEST_CASE("Acquiring a material bumps its textures' refcounts; release drops the
     MaterialRegistry mat(matSink, tex);
 
     MaterialAsset a;
-    a.albedoTex = tex.Acquire("brick.png"); // refcount 1 (loader ref)
-    MaterialHandle m = mat.Acquire(a);       // material-slot ref bumps albedoTex -> 2
+    a.albedoTex = tex.Acquire("brick.png");
+    MaterialHandle m = mat.Acquire(a);
 
     CHECK(tex.ResolveSlot(a.albedoTex) != tex.ResolveSlot(tex.DefaultHandle()));
-    mat.Release(m);                          // drops albedoTex -> 1
-    CHECK(tex.ResolveSlot(a.albedoTex) != tex.ResolveSlot(tex.DefaultHandle())); // loader ref keeps it
-    tex.Release(a.albedoTex);                // -> 0, freed
+    mat.Release(m);
+    CHECK(tex.ResolveSlot(a.albedoTex) != tex.ResolveSlot(tex.DefaultHandle()));
+    tex.Release(a.albedoTex);
     CHECK(tex.ResolveSlot(a.albedoTex) == tex.ResolveSlot(tex.DefaultHandle()));
 }
 
@@ -112,30 +112,30 @@ TEST_CASE("Two entities sharing one textured material hold one texture ref (per-
     MaterialRegistry mat(matSink, tex);
 
     MaterialAsset a;
-    a.albedoTex = tex.Acquire("brick.png"); // loader ref (1)
-    MaterialHandle m1 = mat.Acquire(a);      // fresh slot: +1 texture ref (2)
-    MaterialHandle m2 = mat.Acquire(a);      // dedup hit: NO extra texture ref (still 2)
+    a.albedoTex = tex.Acquire("brick.png");
+    MaterialHandle m1 = mat.Acquire(a);
+    MaterialHandle m2 = mat.Acquire(a);
 
-    mat.Release(m1);                         // slot refcount 2->1, no texture drop
+    mat.Release(m1);
     CHECK(tex.ResolveSlot(a.albedoTex) != tex.ResolveSlot(tex.DefaultHandle()));
-    mat.Release(m2);                         // slot frees: drops the one texture ref (1)
-    tex.Release(a.albedoTex);                // loader ref -> 0, freed
+    mat.Release(m2);
+    tex.Release(a.albedoTex);
     CHECK(tex.ResolveSlot(a.albedoTex) == tex.ResolveSlot(tex.DefaultHandle()));
 }
 
 TEST_CASE("Buffer-full Acquire does not corrupt the default material") {
-    FakeSlotSink sink(1); // capacity 1 -> only the default fits
+    FakeSlotSink sink(1);
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
     MaterialAsset def; def.baseColorFactor = {0.5f, 0.5f, 0.5f, 1};
-    reg.InitializeDefault(def); // consumes the only slot
+    reg.InitializeDefault(def);
 
     MaterialAsset other; other.baseColorFactor = {1, 0, 0, 1};
-    MaterialHandle h = reg.Acquire(other); // sink full -> fallback
+    MaterialHandle h = reg.Acquire(other);
 
-    CHECK_FALSE(h.IsValid());                                  // invalid handle on buffer-full
-    CHECK(reg.ResolveSlot(h) == reg.DefaultHandle().index);    // resolves to the default slot
+    CHECK_FALSE(h.IsValid());
+    CHECK(reg.ResolveSlot(h) == reg.DefaultHandle().index);
     reg.Release(h);                                            // must be a safe no-op
     // Default must still be intact after releasing the fallback handle:
     CHECK(reg.ResolveSlot(reg.DefaultHandle()) == reg.DefaultHandle().index);

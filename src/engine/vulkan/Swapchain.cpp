@@ -13,7 +13,6 @@
 #include "vulkan/VulkanUtils.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
-#include "vulkan/VulkanUtils.hpp"
 #include "platform/Window.hpp"
 
 namespace aether
@@ -54,8 +53,6 @@ namespace aether
 			        .add_fallback_format({.format = VK_FORMAT_R8G8B8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
 			        .set_desired_present_mode(presentMode)
 			        .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
-			        // TRANSFER_SRC lets the screenshot service copy the composited image
-			        // (with UI) straight out of the swapchain before present.
 			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
 			        .build();
 		};
@@ -176,7 +173,6 @@ namespace aether
 			}
 		}
 
-		// Name swapchain images and per-frame command buffers for RenderDoc / validation.
 		for (std::size_t i = 0; i < m_images.size(); ++i)
 		{
 			const std::string imgName = std::format("Swapchain.Color[{}]", i);
@@ -245,7 +241,7 @@ namespace aether
 		}
 		m_renderFinishedSemaphores.clear();
 
-		for (auto view: m_imageViews)
+		for (auto* view: m_imageViews)
 		{
 			vkDestroyImageView(device, view, nullptr);
 		}
@@ -259,7 +255,7 @@ namespace aether
 	{
 		m_frameValid = false;
 
-		FrameSync& frame = m_frames[m_currentFrame];
+		const FrameSync& frame = m_frames[m_currentFrame];
 
 		{
 			const auto fenceStart = std::chrono::steady_clock::now();
@@ -271,7 +267,7 @@ namespace aether
 			AE_PROFILE_PLOT("Swapchain/FenceWaitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - fenceStart).count()));
 		}
 
-		VkResult acquireResult;
+		VkResult acquireResult = VK_SUCCESS;
 		{
 			const auto acquireStart = std::chrono::steady_clock::now();
 			AE_PROFILE_ZONE();
@@ -288,8 +284,6 @@ namespace aether
 
 		if (acquireResult == VK_SUBOPTIMAL_KHR)
 		{
-			// Suboptimal: we can still present this frame, but request recreation
-			// afterwards.
 			AE_WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
 			m_needsRecreation.store(true, std::memory_order_release);
 		}
@@ -312,7 +306,6 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to begin commands buffer."));
 		}
 
-		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL.
 		vkutil::TransitionImage(frame.commandBuffer,
 		        m_images[m_imageIndex],
 		        VK_IMAGE_LAYOUT_UNDEFINED,
@@ -323,10 +316,6 @@ namespace aether
 		        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 		// Depth layout transition. On the first frame the image is truly UNDEFINED;
-		// on subsequent frames the prior render pass left it as DEPTH_ATTACHMENT_OPTIMAL.
-		// Using the tracked layout avoids a spec violation (UNDEFINED with non-TOP_OF_PIPE
-		// src stages) and satisfies sync validation's write-after-write hazard check
-		// for the single shared depth image.
 		const bool depthIsFirstFrame = (m_depthLayout == VK_IMAGE_LAYOUT_UNDEFINED);
 		const VkPipelineStageFlags2 depthSrcStage = depthIsFirstFrame ? VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT : (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
 		const VkAccessFlags2 depthSrcAccess = depthIsFirstFrame ? VK_ACCESS_2_NONE : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -346,8 +335,7 @@ namespace aether
 
 	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore, std::uint64_t extraWaitValue)
 	{
-		// Resolve gpu::TimelineSemaphoreHandle pImpl -> VkSemaphore at the seam.
-		auto vkExtraWait = extraWaitSemaphore ? extraWaitSemaphore->semaphore : VK_NULL_HANDLE;
+		auto* vkExtraWait = extraWaitSemaphore ? extraWaitSemaphore->semaphore : VK_NULL_HANDLE;
 
 		if (!m_frameValid)
 		{
@@ -355,12 +343,9 @@ namespace aether
 			return;
 		}
 
-		FrameSync& frame = m_frames[m_currentFrame];
+		const FrameSync& frame = m_frames[m_currentFrame];
 		VkCommandBuffer cmd = frame.commandBuffer;
 
-		// While the image is still owned + in COLOR_ATTACHMENT, let a consumer copy
-		// the composited frame out of it (e.g. the screenshot service). Doing this
-		// before the present transition avoids touching a presented/unacquired image.
 		if (m_prePresentCapture)
 		{
 			m_prePresentCapture(static_cast<void*>(cmd), static_cast<void*>(m_images[m_imageIndex]), GetExtent());
@@ -387,14 +372,14 @@ namespace aether
 
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
 
-		VkSemaphoreSubmitInfo imageWait{
+		const VkSemaphoreSubmitInfo imageWait{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 		        .semaphore = frame.imageAvailable,
 		        .value = 0,
 		        .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 		};
 
-		VkSemaphoreSubmitInfo extraWait{
+		const VkSemaphoreSubmitInfo extraWait{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 		        .semaphore = vkExtraWait,
 		        .value = extraWaitValue,
@@ -408,19 +393,19 @@ namespace aether
 			waitCount = 2;
 		}
 
-		VkCommandBufferSubmitInfo cmdInfo{
+		const VkCommandBufferSubmitInfo cmdInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
 		        .commandBuffer = cmd,
 		};
 
-		VkSemaphoreSubmitInfo signalInfo{
+		const VkSemaphoreSubmitInfo signalInfo{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 		        .semaphore = renderFinished,
 		        .value = 0,
 		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		};
 
-		VkSubmitInfo2 submit{
+		const VkSubmitInfo2 submit{
 		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		        .waitSemaphoreInfoCount = waitCount,
 		        .pWaitSemaphoreInfos = waitInfos,

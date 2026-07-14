@@ -7,7 +7,6 @@
 
 namespace aether
 {
-	// -- PassBuilder ----------------------------------------------------------
 
 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
 	      : m_graph(graph), m_passIndex(passIndex)
@@ -16,7 +15,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteColor(RGImage image, gpu::LoadOp loadOp, gpu::StoreOp storeOp, gpu::ClearValue clearValue)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].colorWrites.push_back(AttachmentRef{
 		        .image = image,
 		        .loadOp = loadOp,
@@ -28,7 +27,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteDepth(RGImage image, gpu::LoadOp loadOp, gpu::StoreOp storeOp, gpu::ClearValue clearValue)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].depthWrite = AttachmentRef{
 		        .image = image,
 		        .loadOp = loadOp,
@@ -40,7 +39,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadTexture(RGImage image)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::SampledRead,
@@ -50,7 +49,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadStorageImage(RGImage image)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::StorageRead,
@@ -60,7 +59,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteStorageImage(RGImage image)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::StorageWrite,
@@ -70,7 +69,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadBuffer(RGBuffer buffer)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::StorageRead,
@@ -80,7 +79,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteBuffer(RGBuffer buffer)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::StorageWrite,
@@ -90,7 +89,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadWriteBuffer(RGBuffer buffer)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::StorageReadWrite,
@@ -100,7 +99,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadImageTransfer(RGImage image)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::TransferRead,
@@ -110,7 +109,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteImageTransfer(RGImage image)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::TransferWrite,
@@ -120,7 +119,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadBufferTransfer(RGBuffer buffer)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::TransferRead,
@@ -130,7 +129,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteBufferTransfer(RGBuffer buffer)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::TransferWrite,
@@ -140,14 +139,14 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::Execute(std::function<void(PassContext&)> fn)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].execute = std::move(fn);
 		return *this;
 	}
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ExecuteCompute(std::function<void(PassContext&)> fn)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		m_graph.m_passes[m_passIndex].execute = std::move(fn);
 		return *this;
@@ -155,21 +154,21 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::OnDebugDisabled(std::function<void(PassContext&)> fn)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].debugDisabledExecute = std::move(fn);
 		return *this;
 	}
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(gpu::Extent2D extent)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].extentOverride = gpu::Extent2D{extent.width, extent.height};
 		return *this;
 	}
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetQueueClass(QueueClass qc)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].queueClass = qc;
 		m_graph.m_passes[m_passIndex].allowAsyncCompute = qc == QueueClass::AsyncCompute;
 		return *this;
@@ -177,7 +176,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::DisableAsyncCompute()
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].allowAsyncCompute = false;
 		m_graph.m_passes[m_passIndex].queueClass = QueueClass::Graphics;
 		return *this;
@@ -185,7 +184,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::HasSideEffects(std::string reason)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		PassRecord& pass = m_graph.m_passes[m_passIndex];
 		pass.hasSideEffects = true;
 		pass.sideEffectReason = std::move(reason);
@@ -195,7 +194,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::DependsOn(std::string passNamePrefix)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].logicalDependencies.push_back(std::move(passNamePrefix));
 		m_graph.m_compileDirty = true;
 		return *this;
@@ -203,7 +202,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ProducesDrawList(PreparedDrawList drawList)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		if (!drawList.IsValid() || drawList.id >= m_graph.m_preparedDrawLists.size() || m_graph.m_preparedDrawLists[drawList.id].retired)
 		{
 			AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' tried to produce an invalid PreparedDrawList.", m_graph.m_passes[m_passIndex].name);
@@ -223,7 +222,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ConsumesDrawList(PreparedDrawList drawList)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		if (!drawList.IsValid() || drawList.id >= m_graph.m_preparedDrawLists.size() || m_graph.m_preparedDrawLists[drawList.id].retired)
 		{
 			AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' tried to consume an invalid PreparedDrawList.", m_graph.m_passes[m_passIndex].name);
@@ -242,7 +241,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ProducesProductRef(const FrameProductRef& product)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		PassRecord& pass = m_graph.m_passes[m_passIndex];
 		pass.producedFrameProducts.push_back(product);
 		m_graph.m_blackboard.MarkProduced(product.type, product.name, pass.name);
@@ -252,7 +251,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ConsumesProductRef(const FrameProductRef& product)
 	{
-		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		const std::scoped_lock lock(m_graph.m_debugStateMutex);
 		PassRecord& pass = m_graph.m_passes[m_passIndex];
 		pass.consumedFrameProducts.push_back(product);
 		m_graph.m_blackboard.MarkConsumed(product.type, product.name, pass.name);
@@ -262,7 +261,7 @@ namespace aether
 
 	void RenderGraph::PopulateResourceTable(std::span<ResourceEntry> entries) const
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		for (const PassRecord& pass: m_passes)
 		{
 			for (const ShaderResourceBinding& binding: pass.shaderResourceBindings)
@@ -272,11 +271,9 @@ namespace aether
 		}
 	}
 
-	// -- Pass management ------------------------------------------------------
-
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		PassRecord rec{};
 #ifndef NDEBUG
 		rec.declaredAt = loc;
@@ -291,7 +288,7 @@ namespace aether
 
 	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name, std::source_location loc)
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		PassRecord rec{};
 #ifndef NDEBUG
 		rec.declaredAt = loc;
@@ -308,10 +305,6 @@ namespace aether
 	RenderGraph::PassBuilder RenderGraph::AddFullscreenPass(FullscreenPassDesc desc, std::source_location loc)
 	{
 		PassBuilder pass = AddPass(std::move(desc.name), loc);
-		// A zero extent means "cover the whole target": leave extentOverride unset
-		// so the pass resolves to the render-time target (swapchain) extent instead
-		// of recording a degenerate 0x0 renderArea/viewport. Passes that render to a
-		// smaller off-screen target still pass their explicit extent.
 		if (desc.extent.width != 0 && desc.extent.height != 0)
 		{
 			pass.SetExtent(desc.extent);
@@ -475,7 +468,7 @@ namespace aether
 
 	PreparedDrawList RenderGraph::CreatePreparedDrawList(std::string name)
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		const auto id = static_cast<std::uint32_t>(m_preparedDrawLists.size());
 		m_preparedDrawLists.push_back(PreparedDrawListRecord{.name = std::move(name)});
 		PreparedDrawList drawList{id};
@@ -486,7 +479,7 @@ namespace aether
 
 	void RenderGraph::RemovePreparedDrawList(PreparedDrawList drawList)
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		if (!drawList.IsValid() || drawList.id >= m_preparedDrawLists.size())
 		{
 			return;

@@ -17,7 +17,6 @@
 
 namespace aether
 {
-	// -- Lifecycle ------------------------------------------------------------
 
 	RenderGraph::RenderGraph()
 	      : m_storage(std::make_unique<RenderGraphStorage>())
@@ -27,22 +26,22 @@ namespace aether
 	RenderGraph::~RenderGraph() = default;
 
 	RenderGraph::RenderGraph(RenderGraph&& other) noexcept
+	      : m_storage(std::move(other.m_storage)),
+	        m_asyncComputeEnabled(other.m_asyncComputeEnabled),
+	        m_blackboard(std::move(other.m_blackboard)),
+	        m_compileDirty(other.m_compileDirty),
+	        m_compiled(std::move(other.m_compiled)),
+	        m_diagnosticEngine(other.m_diagnosticEngine),
+	        m_externalBuffers(std::move(other.m_externalBuffers)),
+	        m_externalImages(std::move(other.m_externalImages)),
+	        m_frameIndex(other.m_frameIndex),
+	        m_lastBufferStates(std::move(other.m_lastBufferStates)),
+	        m_lastCulledPasses(std::move(other.m_lastCulledPasses)),
+	        m_lastImageStates(std::move(other.m_lastImageStates)),
+	        m_passes(std::move(other.m_passes)),
+	        m_preparedDrawLists(std::move(other.m_preparedDrawLists))
 	{
-		std::scoped_lock lock(other.m_debugStateMutex);
-		m_storage = std::move(other.m_storage);
-		m_diagnosticEngine = other.m_diagnosticEngine;
-		m_passes = std::move(other.m_passes);
-		m_compiled = std::move(other.m_compiled);
-		m_lastCulledPasses = std::move(other.m_lastCulledPasses);
-		m_externalImages = std::move(other.m_externalImages);
-		m_externalBuffers = std::move(other.m_externalBuffers);
-		m_preparedDrawLists = std::move(other.m_preparedDrawLists);
-		m_blackboard = std::move(other.m_blackboard);
-		m_lastImageStates = std::move(other.m_lastImageStates);
-		m_lastBufferStates = std::move(other.m_lastBufferStates);
-		m_frameIndex = other.m_frameIndex;
-		m_compileDirty = other.m_compileDirty;
-		m_asyncComputeEnabled = other.m_asyncComputeEnabled;
+		const std::scoped_lock lock(other.m_debugStateMutex);
 	}
 
 	RenderGraph& RenderGraph::operator=(RenderGraph&& other) noexcept
@@ -52,7 +51,7 @@ namespace aether
 			return *this;
 		}
 
-		std::scoped_lock lock(m_debugStateMutex, other.m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex, other.m_debugStateMutex);
 		m_storage = std::move(other.m_storage);
 		m_diagnosticEngine = other.m_diagnosticEngine;
 		m_passes = std::move(other.m_passes);
@@ -82,7 +81,7 @@ namespace aether
 
 	void RenderGraph::Shutdown()
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		m_storage->Shutdown();
 		m_externalImages.clear();
 		m_passes.clear();
@@ -96,9 +95,6 @@ namespace aether
 	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
 	{
 		m_frameIndex = frameIndex;
-		// Barrier source stages depend on the previous submitted frame's terminal
-		// resource states. Recompile each frame so persistent external resources
-		// such as shadow atlases and blur buffers get correct cross-submit barriers.
 		m_compileDirty = true;
 		if (m_diagnosticEngine != nullptr)
 		{
@@ -114,7 +110,7 @@ namespace aether
 
 	void RenderGraph::RemovePass(const std::string& name)
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		const auto it = std::ranges::find_if(m_passes, [&](const PassRecord& p) { return p.name == name; });
 		if (it != m_passes.end())
 		{
@@ -162,7 +158,7 @@ namespace aether
 
 	void RenderGraph::Clear()
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		for (auto& [id, state]: m_lastImageStates)
 		{
 			if (IsTransientId(id))
@@ -190,7 +186,7 @@ namespace aether
 
 	std::vector<RenderGraph::PassInfo> RenderGraph::GetPasses() const
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		auto imageAccessName = [](ImageAccessType type) noexcept -> const char*
 		{
 			switch (type)
@@ -368,7 +364,7 @@ namespace aether
 
 	void RenderGraph::SetPassDebugDisabled(std::string_view name, bool disabled)
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		for (PassRecord& pass: m_passes)
 		{
 			if (pass.name == name)
@@ -382,14 +378,14 @@ namespace aether
 
 	bool RenderGraph::IsPassDebugDisabled(std::string_view name) const
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		const auto it = std::ranges::find_if(m_passes, [&](const PassRecord& pass) { return pass.name == name; });
 		return it != m_passes.end() && it->debugDisabled;
 	}
 
 	void RenderGraph::ClearDebugDisabledPasses()
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		for (PassRecord& pass: m_passes)
 		{
 			pass.debugDisabled = false;
@@ -436,8 +432,6 @@ namespace aether
 		}
 	}
 
-	// -- Image registration ---------------------------------------------------
-
 	RGImage RenderGraph::RegisterImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect)
 	{
 		const uint32_t idx = m_storage->RegisterExternalImage(image, view, aspect);
@@ -474,9 +468,6 @@ namespace aether
 		{
 			m_externalBuffers[idx] = newBuffer;
 		}
-		// Reset buffer state - the backing buffer has been replaced, so the
-		// previous frame's barrier tracking is stale. The next Compile() will
-		// emit a fresh TOP_OF_PIPE barrier for this buffer.
 		m_lastBufferStates.erase(buffer.id);
 	}
 
@@ -506,8 +497,6 @@ namespace aether
 		        .extent = extent,
 		});
 	}
-
-	// -- Bindless -------------------------------------------------------------
 
 	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, gpu::ImageLayout descriptorLayout)
 	{
@@ -553,11 +542,9 @@ namespace aether
 		}
 	}
 
-	// -- Compilation ----------------------------------------------------------
-
 	void RenderGraph::Compile()
 	{
-		std::scoped_lock lock(m_debugStateMutex);
+		const std::scoped_lock lock(m_debugStateMutex);
 		if (!m_compileDirty)
 		{
 			return;
@@ -909,23 +896,18 @@ namespace aether
 
 			[[nodiscard]] bool operator()(std::size_t a, std::size_t b) const
 			{
-				// Async compute passes have highest priority - run all AC work
-				// before any graphics work to maximize GPU queue overlap.
 				const bool aAC = passes[a].queueClass == QueueClass::AsyncCompute;
 				const bool bAC = passes[b].queueClass == QueueClass::AsyncCompute;
 				if (aAC != bAC)
 				{
-					return bAC; // true → b has higher priority
+					return bAC;
 				}
 
-				// Stable declaration order is part of the pass contract for
-				// side-effect-only work such as RenderQueue preparation. Resource
-				// edges still enforce all true producer/consumer dependencies.
 				return a > b;
 			}
 		};
 
-		ReadyCompare readyCmp{.passes = m_passes, .adj = adj};
+		const ReadyCompare readyCmp{.passes = m_passes, .adj = adj};
 		std::priority_queue<std::size_t, std::vector<std::size_t>, ReadyCompare> ready(readyCmp);
 		for (std::size_t i = 0; i < N; ++i)
 		{
@@ -954,9 +936,6 @@ namespace aether
 		if (sortedIndices.size() != N)
 		{
 #ifndef NDEBUG
-			// Find first pass involved in the cycle for diagnostic output.
-			// sortedIndices contains whatever made it through; the first gap
-			// or the first unsorted pass are good candidates to report.
 			for (std::size_t i = 0; i < N; ++i)
 			{
 				const auto it = std::find(sortedIndices.begin(), sortedIndices.end(), static_cast<uint32_t>(i));
@@ -979,15 +958,10 @@ namespace aether
 			std::ranges::iota(sortedIndices, 0);
 		}
 
-		// -- Dead Store Elimination -----------------------------------------------
-		// A pass is dead if none of its image outputs are read by any later pass,
-		// and it has no side effects (swapchain writes, external image writes).
-		// Culled passes are skipped entirely - no barriers are compiled for them,
 		// and Execute() never dispatches their work.
 
 		std::vector<bool> passCulledByPassIdx(N, false);
 		{
-			// Build map: resourceId → sorted positions of passes that read it
 			std::unordered_map<uint32_t, std::vector<std::size_t>> resourceReaders;
 			for (std::size_t i = 0; i < N; ++i)
 			{
@@ -1055,7 +1029,6 @@ namespace aether
 					continue;
 				}
 
-				// Collect write targets
 				std::vector<uint32_t> writeTargets;
 				writeTargets.reserve(pass.colorWrites.size());
 				for (const AttachmentRef& a: pass.colorWrites)
@@ -1081,7 +1054,6 @@ namespace aether
 					}
 				}
 
-				// No tracked image writes → can't prove no side effects (buffers, external state)
 				if (writeTargets.empty())
 				{
 					continue;
@@ -1094,7 +1066,7 @@ namespace aether
 				};
 
 				bool hasSideEffect = false;
-				for (uint32_t resId: writeTargets)
+				for (const uint32_t resId: writeTargets)
 				{
 					if (isSideEffect(resId))
 					{
@@ -1107,9 +1079,8 @@ namespace aether
 					continue;
 				}
 
-				// Check if any write is read by a later pass
 				bool anyReaderFound = false;
-				for (uint32_t resId: writeTargets)
+				for (const uint32_t resId: writeTargets)
 				{
 					const auto it = resourceReaders.find(resId);
 					if (it != resourceReaders.end())
@@ -1150,11 +1121,6 @@ namespace aether
 		m_lastCulledPasses = passCulledByPassIdx;
 
 		// Validate queue grouping: all async-compute passes must come before
-		// all graphics passes in topological order. Interleaving would require
-		// multiple submissions per queue per frame, which we intentionally avoid.
-		// The priority-queue topological sort already maximizes AC grouping;
-		// this pass only demotes AC passes that were interleaved due to
-		// unavoidable dependency ordering.
 		{
 			bool seenGraphics = false;
 			for (const std::size_t idx: sortedIndices)
@@ -1175,7 +1141,6 @@ namespace aether
 					        "All async-compute passes must be declared before graphics passes for "
 					        "single-submission-per-queue scheduling. Falling back to graphics queue.",
 					        m_passes[idx].name);
-					// Demote to graphics queue to maintain correctness.
 					m_passes[idx].queueClass = QueueClass::Graphics;
 				}
 			}
@@ -1207,7 +1172,6 @@ namespace aether
 		        .writeAccess = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT),
 		};
 
-		// Restore buffer state from the previous frame.
 		std::unordered_map<uint32_t, BufferState> bufferStates;
 		for (const auto& [id, s]: m_lastBufferStates)
 		{
@@ -1231,12 +1195,6 @@ namespace aether
 				const uint32_t resId = a.image.id;
 #ifndef NDEBUG
 				// A depth-format resource must never reach a color-attachment slot:
-				// the color-write path unconditionally uses COLOR aspect + COLOR
-				// layout, which is invalid for depth images. This most commonly
-				// signals a dangling external RGImage handle that has aliased a
-				// depth resource's slot (e.g. a cached handle not re-registered
-				// after RenderGraph::Clear()). Fail loudly in debug so the graph
-				// declaration is fixed rather than silently corrupting barriers.
 				{
 					gpu::ImageAspect attachmentAspect = gpu::ImageAspect::Color;
 					if (IsTransientId(resId))
@@ -1408,9 +1366,9 @@ namespace aether
 					continue;
 				}
 
-				std::uint64_t srcStage;
-				std::uint64_t srcAccess;
-				gpu::ImageLayout oldLayout;
+				std::uint64_t srcStage = 0;
+				std::uint64_t srcAccess = 0;
+				gpu::ImageLayout oldLayout = gpu::ImageLayout::Undefined;
 				bool isWAR = false;
 
 				if (it != states.end())
@@ -1487,7 +1445,6 @@ namespace aether
 				}
 			}
 
-			// -- Buffer barrier compilation ---------------------------------
 			for (const BufferAccessRef& r: pass.bufferAccesses)
 			{
 				const uint32_t resId = r.buffer.id;
@@ -1538,15 +1495,14 @@ namespace aether
 
 				auto it = bufferStates.find(resId);
 
-				// RAR: already in a read-only state → no barrier
 				if (isRead && it != bufferStates.end() && it->second.writeStage == 0)
 				{
 					it->second.readStages |= dstStage;
 					continue;
 				}
 
-				std::uint64_t srcStage;
-				std::uint64_t srcAccess;
+				std::uint64_t srcStage = 0;
+				std::uint64_t srcAccess = 0;
 				bool isWAR = false;
 
 				if (it != bufferStates.end())
@@ -1587,8 +1543,6 @@ namespace aether
 		std::swap(m_lastImageStates, states);
 		std::swap(m_lastBufferStates, bufferStates);
 
-		// -- Split barrier post-processing ---------------------------------
-		// Build a map: resource -> last compiled-pass index that wrote it.
 		std::unordered_map<uint32_t, std::size_t> resLastWriterCi;
 		for (std::size_t ci = 0; ci < m_compiled.size(); ++ci)
 		{
@@ -1617,7 +1571,6 @@ namespace aether
 		}
 
 		// Eligible barrier check: producers must be ≥2 apart, no intermediate
-		// writer, and not cross-frame / WAR.
 		for (std::size_t ci = 0; ci < m_compiled.size(); ++ci)
 		{
 			auto& cp = m_compiled[ci];
@@ -1627,7 +1580,6 @@ namespace aether
 
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
-				// WAR barriers cannot be split.
 				if (b.isWAR)
 				{
 					unsplittable.push_back(b);
@@ -1643,22 +1595,18 @@ namespace aether
 
 				const std::size_t producerCi = lwIt->second;
 
-				// Split barriers (VkEvent) cannot cross queue boundaries.
-				// Timeline semaphores handle cross-queue sync at submission level.
 				if (m_compiled[producerCi].queueClass != m_compiled[ci].queueClass)
 				{
 					unsplittable.push_back(b);
 					continue;
 				}
 
-				// Adjacent passes gain nothing from the event overhead.
 				if (producerCi + 1 >= ci)
 				{
 					unsplittable.push_back(b);
 					continue;
 				}
 
-				// Ensure no intermediate pass writes the same resource.
 				bool intermediateWrite = false;
 				for (std::size_t ic = producerCi + 1; ic < ci; ++ic)
 				{
@@ -1704,7 +1652,6 @@ namespace aether
 					continue;
 				}
 
-				// Barrier is eligible for splitting.
 				auto& producerCp = m_compiled[producerCi];
 				if (producerCp.splitEventIndex == UINT32_MAX)
 				{
@@ -1713,7 +1660,6 @@ namespace aether
 
 				producerCp.signalBarriers.push_back(b);
 
-				// Group waits by event to minimise cmdWaitEvents2 calls.
 				auto waitIt = std::ranges::find_if(cp.waits, [eventIdx = producerCp.splitEventIndex](const CompiledWait& w) { return w.eventIndex == eventIdx; });
 
 				if (waitIt != cp.waits.end())
@@ -1793,8 +1739,6 @@ namespace aether
 	}
 #endif
 
-	// -- Execution ------------------------------------------------------------
-
 	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameResourceContext& frame)
 	{
 		if (m_passes.empty())
@@ -1805,8 +1749,6 @@ namespace aether
 
 		Compile();
 
-		// Register breadcrumb labels for all compiled passes so the
-		// diagnostic engine can resolve marker values to pass names.
 		if (m_diagnosticEngine != nullptr)
 		{
 			for (std::size_t i = 0; i < m_compiled.size(); i++)
@@ -1815,13 +1757,11 @@ namespace aether
 			}
 		}
 
-		// Two-pass transient heap preparation: query memory requirements, allocate heap, assign virtual offsets.
 		const FrameTarget& target = frame.target;
 		const std::uint32_t frameIndex = frame.frameSlot;
 
 		m_storage->PrepareTransientAllocations(target);
 
-		// Allocate aliased VkImage/VkBuffer handles from the pre-computed heap offsets.
 		m_storage->EnsureTransientImages(target);
 		m_storage->EnsureTransientBuffers();
 
@@ -1829,9 +1769,6 @@ namespace aether
 
 		auto frameAddr = static_cast<gpu::DeviceAddress>(frame.frameConstantsAddr);
 
-		// Image resolution helper shared by pre-, wait-, and signal-barriers.
-		// Returns the opaque gpu::Image (the actual VkImage is obtained
-		// in the storage via static_cast at emit time). P5(d) barrier
 		// solver migration: the engine code never names VkImage.
 		auto resolveImage = [&](uint32_t resourceId) -> gpu::Image
 		{
@@ -1857,9 +1794,6 @@ namespace aether
 			return m_storage->GetExternalBuffer(extIdx);
 		};
 
-		// Execute a single compiled pass on the given command list.
-		// cmd is the opaque gpu::CommandBuffer (the actual VkCommandBuffer
-		// is obtained in the storage via static_cast at emit time). P5(d)
 		// barrier solver migration: the engine code never names VkCommandBuffer.
 		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer cmd, uint32_t breadcrumbValue)
 		{
@@ -1872,10 +1806,6 @@ namespace aether
 				m_diagnosticEngine->RecordEvent("Begin pass {}", pass.name);
 			}
 
-			// -- Split barrier waits (consume events from producers) -----------
-			// P5(d) barrier solver migration: all barriers are engine-side
-			// structs (gpu::ImageMemoryBarrier / gpu::BufferMemoryBarrier).
-			// The storage translates to Vk* and calls cmd*Event2.
 			auto& scratchEventBars = m_storage->GetScratchSignalBarriers();
 			for (const CompiledWait& w: cp.waits)
 			{
@@ -1914,11 +1844,10 @@ namespace aether
 
 				if (!scratchEventBars.empty())
 				{
-					m_storage->CmdWaitEvents2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars));
+					aether::RenderGraphStorage::CmdWaitEvents2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars));
 				}
 			}
 
-			// -- Barriers (unsplittable) ------------------------------------
 			auto& scratchBarriers = m_storage->GetScratchBarriers();
 			scratchBarriers.clear();
 			for (const CompiledBarrier& b: cp.preBarriers)
@@ -1961,9 +1890,8 @@ namespace aether
 				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdImageBarriers(cmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers));
+			aether::RenderGraphStorage::CmdImageBarriers(cmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers));
 
-			// -- Buffer barriers --------------------------------------------
 			auto& scratchBufBars = m_storage->GetScratchBufferBarriers();
 			scratchBufBars.clear();
 			for (const CompiledBufferBarrier& b: cp.bufferBarriers)
@@ -1977,19 +1905,15 @@ namespace aether
 				scratchBufBars.push_back(gpu::BufferMemoryBarrier{
 				        .buffer = buffer,
 				        .offset = 0,
-				        .size = static_cast<gpu::DeviceSize>(-1), // VK_WHOLE_SIZE
+				        .size = static_cast<gpu::DeviceSize>(-1),
 				        .srcStage = static_cast<gpu::PipelineStage>(b.srcStage),
 				        .srcAccess = static_cast<gpu::AccessFlags>(b.srcAccess),
 				        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage),
 				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdBufferBarriers(cmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars));
+			aether::RenderGraphStorage::CmdBufferBarriers(cmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars));
 
-			// -- Dynamic rendering -------------------------------------------
-			// P5(d) barrier solver migration: build engine-side
-			// gpu::RenderingAttachmentInfo + gpu::RenderingInfo. The storage
-			// translates to backend types.
 			auto& scratchColorInfos = m_storage->GetScratchColorInfos();
 			scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)
@@ -2047,15 +1971,11 @@ namespace aether
 			const gpu::Extent2D passExtent = pass.extentOverride.value_or(target.extent);
 			bool passDebugDisabled = false;
 			{
-				std::scoped_lock lock(m_debugStateMutex);
+				const std::scoped_lock lock(m_debugStateMutex);
 				passDebugDisabled = pass.debugDisabled;
 			}
 			const bool hasAttachments = pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || depthInfo.has_value());
-			// A graphics pass whose target resolves to a zero-sized extent cannot
 			// legally begin dynamic rendering (renderArea and viewport must be > 0).
-			// This is a degenerate state (e.g. a minimized/0x0 swapchain). Skip its
-			// GPU body exactly like a debug-disabled pass - preserving any
-			// housekeeping callback - instead of emitting invalid commands.
 			const bool degenerateExtent = hasAttachments && (passExtent.width == 0 || passExtent.height == 0);
 			const bool skipPassBody = passDebugDisabled || degenerateExtent;
 			const bool useDynamicRendering = !skipPassBody && hasAttachments;
@@ -2100,20 +2020,17 @@ namespace aether
 					PassContext ctx{.recorder = recorder, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 					pass.debugDisabledExecute(ctx);
 				}
-				std::scoped_lock lock(m_debugStateMutex);
+				const std::scoped_lock lock(m_debugStateMutex);
 				pass.lastCpuTimeMs = 0.0f;
 			}
 			else if (pass.execute)
 			{
-				// Tracy GPU zone. The engine-side macro captures
-				// __FILE__/__LINE__ at this call site; the cast and
-				// Tracy plumbing live in vulkan/GpuProfiler.cpp.
 				AE_GPU_ZONE_SCOPED(cmd, pass.name);
 				const auto t0 = std::chrono::high_resolution_clock::now();
 				PassContext ctx{.recorder = recorder, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
-				std::scoped_lock lock(m_debugStateMutex);
+				const std::scoped_lock lock(m_debugStateMutex);
 				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
 			}
 
@@ -2127,7 +2044,6 @@ namespace aether
 				recorder.EndRendering();
 			}
 
-			// -- Split barrier signals (set events for later consumers) --------
 			if (!cp.signalBarriers.empty())
 			{
 				const gpu::Event event = m_storage->GetEvent(cp.splitEventIndex);
@@ -2156,14 +2072,14 @@ namespace aether
 						        .aspect = b.aspect,
 						        .srcStage = static_cast<gpu::PipelineStage>(b.srcStage),
 						        .srcAccess = static_cast<gpu::AccessFlags>(b.srcAccess),
-						        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage), // ignored by set
-						        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess), // ignored by set
+						        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage),
+						        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 						});
 					}
 
 					if (!scratchEventBars.empty())
 					{
-						m_storage->CmdSetEvent2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars));
+						aether::RenderGraphStorage::CmdSetEvent2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars));
 					}
 				}
 			}
@@ -2174,7 +2090,6 @@ namespace aether
 		const bool hasAsyncCompute = HasAsyncComputeWork();
 		std::uint32_t passMarker = 0;
 
-		// Phase 1: Execute async-compute passes on the dedicated compute queue.
 		if (hasAsyncCompute)
 		{
 			m_storage->BeginComputeCommandBuffer(frameIndex);
@@ -2186,7 +2101,7 @@ namespace aether
 			{
 				if (cp.queueClass != QueueClass::AsyncCompute)
 				{
-					break; // validated: all async-compute passes precede graphics
+					break;
 				}
 				executePassOn(cp, computeRecorder, computeCmd, passMarker);
 				passMarker++;
@@ -2194,30 +2109,19 @@ namespace aether
 
 			computeRecorder.EndDebugLabel();
 			m_storage->EndComputeCommandBuffer(frameIndex);
-			// Compute queue submission is deferred to SubmitComputeWork(),
-			// called by the frame orchestrator right before graphics submission
-			// so both queues are submitted back-to-back for maximum GPU overlap.
 		}
 
-		// Phase 2: Execute graphics passes on the main graphics command list.
 		{
 			gpu::CommandList& gfxRecorder = cmdList;
-			// P5(d) barrier solver migration: pass the opaque
-			// gpu::CommandBuffer to executePassOn; the storage casts to
-			// VkCommandBuffer at emit time. The raw VkCommandBuffer is
-			// only needed for Tracy's GPU collection (audit §7.3.0
-			// allowlist exception).
 			const gpu::CommandBuffer gfxCmd = cmdList.GetCommandBuffer();
 			gfxRecorder.BeginDebugLabel("Frame.RenderGraph.Graphics", 0.35f, 0.55f, 0.95f, 1.0f);
 
-			bool foundGraphics = false;
 			for (const CompiledPass& cp: m_compiled)
 			{
 				if (cp.queueClass == QueueClass::AsyncCompute)
 				{
-					continue; // skip async-compute passes (already executed)
+					continue;
 				}
-				foundGraphics = true;
 				executePassOn(cp, gfxRecorder, gfxCmd, passMarker);
 				passMarker++;
 			}
@@ -2225,7 +2129,6 @@ namespace aether
 			gfxRecorder.EndDebugLabel();
 		}
 
-		// Transient heap trace logging.
 		const auto& stats = m_storage->GetLastFrameStats();
 		AE_VERBOSE(LogCategory::Render,
 		        "Frame {}: heap {:.1f}/{:.1f} MB, {} aliased images, {} aliased buffers, "

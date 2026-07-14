@@ -4,7 +4,6 @@
 
 namespace aether
 {
-	// Updates all skinned entities with animation data.
 	class AnimationSystem : public System
 	{
 	public:

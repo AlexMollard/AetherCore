@@ -13,19 +13,19 @@ namespace aether
 		{
 			return;
 		}
-		std::unique_lock lock(m_mutex);
+		const std::unique_lock lock(m_mutex);
 		m_ranges[addr] = Resource{.startAddress = addr, .size = size, .name = std::move(name), .type = type};
 	}
 
 	void GpuMemoryTracker::Unregister(VkDeviceAddress addr)
 	{
-		std::unique_lock lock(m_mutex);
+		const std::unique_lock lock(m_mutex);
 		m_ranges.erase(addr);
 	}
 
 	void GpuMemoryTracker::UnregisterRange(VkDeviceAddress addr, VkDeviceSize size)
 	{
-		std::unique_lock lock(m_mutex);
+		const std::unique_lock lock(m_mutex);
 		const auto end = addr + size;
 		for (auto it = m_ranges.begin(); it != m_ranges.end();)
 		{
@@ -42,14 +42,13 @@ namespace aether
 
 	void GpuMemoryTracker::Clear()
 	{
-		std::unique_lock lock(m_mutex);
+		const std::unique_lock lock(m_mutex);
 		m_ranges.clear();
 	}
 
 	std::optional<GpuMemoryTracker::ResolvedAddress> GpuMemoryTracker::Resolve(VkDeviceAddress addr) const
 	{
-		std::shared_lock lock(m_mutex);
-		// Find the first range whose start is <= addr.
+		const std::shared_lock lock(m_mutex);
 		auto it = m_ranges.upper_bound(addr);
 		if (it == m_ranges.begin())
 		{
@@ -57,9 +56,6 @@ namespace aether
 		}
 		--it;
 
-		// Collect all ranges that contain addr. Multiple ranges may overlap
-		// (e.g. a GpuHeap base buffer and its sub-allocations). Prefer the
-		// smallest containing range as the most specific match.
 		const Resource* best = nullptr;
 		VkDeviceSize bestSize = UINT64_MAX;
 		for (auto cur = it;; --cur)
@@ -73,7 +69,6 @@ namespace aether
 					best = &r;
 				}
 			}
-			// Stop once we walk past any range that could contain addr.
 			if (cur == m_ranges.begin())
 			{
 				break;
@@ -89,7 +84,7 @@ namespace aether
 
 	void GpuMemoryTracker::Dump() const
 	{
-		std::shared_lock lock(m_mutex);
+		const std::shared_lock lock(m_mutex);
 		AE_INFO(LogCategory::Vulkan, "GpuMemoryTracker: {} tracked range(s).", m_ranges.size());
 		for (const auto& [addr, r]: m_ranges)
 		{
@@ -100,7 +95,7 @@ namespace aether
 
 	std::size_t GpuMemoryTracker::Size() const
 	{
-		std::shared_lock lock(m_mutex);
+		const std::shared_lock lock(m_mutex);
 		return m_ranges.size();
 	}
 } // namespace aether

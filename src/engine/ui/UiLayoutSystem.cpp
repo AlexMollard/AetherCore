@@ -21,10 +21,6 @@ namespace aether::ui
 		return {rectMin.x, rectMin.y, size.x, size.y};
 	}
 
-	// Depth-first walk of the HierarchyComponent subtree rooted at `entity`,
-	// resolving each descendant UIRect against its parent's just-resolved rect.
-	// Entities without a UIRect (e.g. plain grouping nodes) pass parentRect
-	// through unchanged to their own children.
 	static void ResolveSubtree(World& world, Entity entity, const glm::vec4& parentRect)
 	{
 		glm::vec4 selfRect = parentRect;
@@ -45,16 +41,11 @@ namespace aether::ui
 
 	void ResolveCanvases(World& world, glm::vec2 outputExtent)
 	{
-		// v1 maps every canvas to raw output pixels (UICanvas::ScaleMode::ConstantPixel).
-		// UICanvas::scaleMode / referenceResolution are authored and serialized but NOT
-		// consumed here yet: ScaleWithReference (scaling UI units so referenceResolution
-		// fills the output) is a deferred CanvasScaler pass, so today it behaves
-		// identically to ConstantPixel. Not implemented - do not read it as such.
 		const glm::vec4 screenRect{0.f, 0.f, outputExtent.x, outputExtent.y};
 		world.View<UICanvas, UIRect>().each(
 		        [&](entt::entity canvasEntity, UICanvas&, UIRect& rect)
 		        {
-			        rect.resolvedRect = screenRect; // the canvas itself always fills the output
+			        rect.resolvedRect = screenRect;
 
 			        const Entity entity = World::FromEntt(canvasEntity);
 			        if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))

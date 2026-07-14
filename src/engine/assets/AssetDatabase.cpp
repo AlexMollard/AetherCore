@@ -11,8 +11,6 @@ namespace aether
 {
 	namespace
 	{
-		// The single canonical primitive kind-name <-> enum table (the mapping was
-		// previously duplicated across serializer, script exports and inspector).
 		struct PrimitiveKind
 		{
 			std::string_view name;
@@ -66,7 +64,7 @@ namespace aether
 		{
 			Entry entry;
 			entry.source = source;
-			entry.displayName = displayName.empty() ? source.path : std::move(displayName);
+			entry.displayName = displayName.empty() ? source.path : displayName;
 			m_entries.emplace(id, std::move(entry));
 			m_order.push_back(id);
 		}
@@ -137,13 +135,12 @@ namespace aether
 	{
 		for (auto&& [entity, mc]: world.GetRegistry().view<MeshComponent>().each())
 		{
-			// Back-fill the id from the stable MeshSource identity the first time.
 			if (!mc.asset.IsValid())
 			{
 				const auto* src = world.GetRegistry().try_get<MeshSourceComponent>(entity);
 				if (src == nullptr)
 				{
-					continue; // no stable identity to reference (e.g. a raw spawned mesh)
+					continue;
 				}
 				mc.asset = ComputeAssetId(src->kind == MeshSourceComponent::Kind::Primitive ? MakePrimitiveMeshSource(src->path) : MakeModelMeshSource(src->path, static_cast<int>(src->primitiveIndex)));
 			}
@@ -151,7 +148,7 @@ namespace aether
 			const std::uint32_t gen = Generation(mc.asset);
 			if (gen == 0 || gen == mc.resolvedGeneration)
 			{
-				continue; // unknown asset, or already up to date
+				continue;
 			}
 			if (const Mesh* resolved = ResolveMesh(mc.asset))
 			{
@@ -177,7 +174,6 @@ namespace aether
 			}
 			return nullptr;
 		}
-		// glTF model primitive: needs the app-layer model cache via the resolver.
 		if (m_modelMeshResolver)
 		{
 			return m_modelMeshResolver(source.path, source.subIndex);

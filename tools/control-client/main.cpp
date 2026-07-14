@@ -1,17 +1,4 @@
-// aether-ctl - a tiny one-shot client for the editor's JSON-over-ENet control
-// endpoint (src/app/editor/ControlServer). It connects, sends a single request,
-// prints the JSON result to stdout, and exits. The AetherCore MCP shells out to
-// this binary so ENet stays entirely on the C++ side (there is no maintained
 // Python ENet binding); the MCP itself never links ENet.
-//
-// Usage:
-//   aether-ctl [--port N] <method> [params-json]
-// Methods: info | scene.entities | scene.create | scene.transform |
-//          scene.delete | rendergraph
-// Port resolution: --port, else $AETHER_CONTROL_PORT, else 8787.
-//
-// Exit code 0 on success (result JSON on stdout); 1 on any error (message on
-// stderr), so subprocess callers can branch on the code.
 
 #include <cstdlib>
 #include <iostream>
@@ -105,7 +92,7 @@ int main(int argc, char** argv)
 	}
 
 	ENetEvent event;
-	bool connected = enet_host_service(client, &event, 3000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT;
+	const bool connected = enet_host_service(client, &event, 3000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT;
 	if (!connected)
 	{
 		enet_peer_reset(peer);
@@ -122,7 +109,6 @@ int main(int argc, char** argv)
 
 	std::string reply;
 	bool got = false;
-	// Generous: some methods (engine.play rebuilds the C# scripts on the main
 	// thread) take many seconds before the editor drains the command and replies.
 	int budgetMs = 30000;
 	while (budgetMs > 0)

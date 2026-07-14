@@ -9,9 +9,6 @@
 
 namespace aether::ecs
 {
-	// True if the entity or any of its ancestors carries SceneTransientComponent.
-	// Transient subtrees are script-owned runtime state: scene capture excludes
-	// them and replace-all restores spare them (the script respawns/keeps them).
 	inline bool HasSceneTransientAncestor(World& world, Entity entity)
 	{
 		Entity cur = entity;
@@ -27,11 +24,6 @@ namespace aether::ecs
 		return false;
 	}
 
-	// True if the entity or any of its ancestors carries DisabledComponent, i.e.
-	// the entity is effectively inactive. Every render/update system consults this
-	// to skip disabled entities and their whole subtree; the hierarchy panel greys
-	// such rows. Takes a const World so const-only call sites (the renderer) can
-	// use it too.
 	inline bool HasDisabledAncestor(const World& world, Entity entity)
 	{
 		Entity cur = entity;
@@ -47,14 +39,11 @@ namespace aether::ecs
 		return false;
 	}
 
-	// Convenience inverse of HasDisabledAncestor: the entity participates in
-	// simulation and rendering (neither it nor any ancestor is disabled).
 	inline bool IsActiveInHierarchy(const World& world, Entity entity)
 	{
 		return !HasDisabledAncestor(world, entity);
 	}
 
-	// True if `possibleAncestor` is `entity` itself or any ancestor of it.
 	inline bool IsAncestor(World& world, Entity entity, Entity possibleAncestor)
 	{
 		Entity cur = entity;
@@ -74,7 +63,6 @@ namespace aether::ecs
 		return false;
 	}
 
-	// Removes `child` from its current parent's child list and clears its parent.
 	inline void DetachFromParent(World& world, Entity child)
 	{
 		if (!child.IsValid() || !world.GetRegistry().valid(World::ToEntt(child)))
@@ -96,8 +84,6 @@ namespace aether::ecs
 		world.RegisterRoot(child);
 	}
 
-	// Re-parents `child` under `parent` (parent == {0} detaches to root).
-	// Returns false (no-op) if child == parent or it would create a cycle.
 	inline bool SetParent(World& world, Entity child, Entity parent)
 	{
 		if (!child.IsValid() || child == parent)
@@ -106,7 +92,7 @@ namespace aether::ecs
 		}
 		if (parent.IsValid() && IsAncestor(world, parent, child))
 		{
-			return false; // cycle: parent is a descendant of child
+			return false;
 		}
 
 		if (auto* old = world.TryGet<HierarchyComponent>(child); old != nullptr && old->parent.IsValid())
@@ -122,8 +108,6 @@ namespace aether::ecs
 			world.UnregisterRoot(child);
 		}
 
-		// Set the child side first; emplacing on the parent below may reallocate
-		// the HierarchyComponent pool and invalidate this pointer.
 		auto* ch = world.TryGet<HierarchyComponent>(child);
 		if (!ch)
 		{
@@ -148,9 +132,6 @@ namespace aether::ecs
 		return true;
 	}
 
-	// Same as SetParent but inserts `child` at a specific position in the
-	// parent's children list. A negative or out-of-range index appends.
-	// Returns false on failure (same guards as SetParent).
 	inline bool InsertChildAt(World& world, Entity child, Entity parent, int index)
 	{
 		if (!child.IsValid() || child == parent)
@@ -206,10 +187,9 @@ namespace aether::ecs
 		return true;
 	}
 
-	// Recursively destroys `entity` and its whole subtree, keeping parent links tidy.
 	inline void DestroyHierarchy(World& world, Entity entity)
 	{
-		std::vector<Entity> kids; // copy - the loop mutates the source vector
+		std::vector<Entity> kids;
 		if (const auto* h = world.TryGet<HierarchyComponent>(entity))
 		{
 			kids = h->children;

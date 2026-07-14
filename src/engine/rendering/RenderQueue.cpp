@@ -39,10 +39,6 @@ namespace aether
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 
-		// All buffers route through gpu::ResourceRegistry, which owns the
-		// deferred-destruction ring. Per-frame data is mirrored by
-		// std::array<Handle, kFramesInFlight> for the hot path.
-
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -202,8 +198,6 @@ namespace aether
 			m_outputIndirect[i].address = gpu::ResourceRegistry::ResolveBuffer(m_outputIndirect[i].handle).deviceAddress;
 		}
 
-		// Cache the frame-0 mapped pointers for hot-path access (the hot path
-		// uses frameIndex % kFramesInFlight to pick the slot).
 		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceData[0].mapped);
 		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInput[0].mapped);
 		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[0].mapped);
@@ -257,24 +251,19 @@ namespace aether
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
-		std::lock_guard lock(m_slotMutexes[m_writeSlot]);
+		const std::lock_guard lock(m_slotMutexes[m_writeSlot]);
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
-	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, std::uint32_t frameIndex)
+	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::PipelineView computePipeline, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		// Keep the raw command buffer for Tracy GPU zones and GpuTimestampPool.
-		// The cast to VkCommandBuffer at the Tracy call sites is the one
-		// documented allowlist exception (see gpu-abstraction-rendering-audit.md
-		// §7.3.0) - Tracy's API requires a raw Vulkan handle.
 		const gpu::CommandBuffer rawCmd = cmdList.GetCommandBuffer();
 		// Move the commands out of the slot under the lock. This gives the
-		// render thread its own copy that the game thread cannot touch.
 		const auto frameSlot = frameIndex % kFramesInFlight;
 		std::vector<DrawCommand> commands;
 		{
-			std::lock_guard lock(m_slotMutexes[frameSlot]);
+			const std::lock_guard lock(m_slotMutexes[frameSlot]);
 			commands = std::move(m_commandSlots[frameSlot]);
 			m_slotConsumed[frameSlot] = true;
 		}
@@ -291,17 +280,12 @@ namespace aether
 
 		const std::uint32_t animJobBase = 0;
 
-		// Update mapped pointers to the current slot's buffers since each slot
-		// has its own independent allocation (not one shared mega-buffer).
 		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceData[frameSlot].mapped);
 		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInput[frameSlot].mapped);
 		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[frameSlot].mapped);
 		m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobs[frameSlot].mapped);
 		m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobs[frameSlot].mapped);
 
-		// Clear device-local animation buffers on first use of each frame slot.
-		// Each slot is cleared individually so in-flight slots don't sit with garbage
-		// until the first animation sample writes their data.
 		if (!m_animationSlotCleared[frameSlot])
 		{
 			m_animationSlotCleared[frameSlot] = true;
@@ -372,7 +356,7 @@ namespace aether
 		const auto submittedDraws = static_cast<std::uint32_t>(commands.size());
 		AE_ASSERT_ALWAYS(submittedDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
 
-		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
+		std::uint32_t globalDrawIdx = 0;
 		std::uint32_t batchIdx = 0;
 
 		for (std::size_t i = 0; i < commands.size();)
@@ -400,7 +384,7 @@ namespace aether
 			{
 				const DrawCommand& dc = commands[j];
 
-				if (dc.mesh && (!dc.mesh->IsAlive() || !dc.mesh->IsValid() || dc.mesh->GetGeneration() != dc.meshGeneration || !dc.mesh->GetIndexBuffer().IsValid()))
+				if ((dc.mesh != nullptr) && (!dc.mesh->IsAlive() || !dc.mesh->IsValid() || dc.mesh->GetGeneration() != dc.meshGeneration || !dc.mesh->GetIndexBuffer().IsValid()))
 				{
 					continue;
 				}
@@ -498,7 +482,7 @@ namespace aether
 				        .instanceCount = 1u,
 				        .firstIndex = 0u,
 				        .vertexOffset = 0,
-				        .firstInstance = globalDrawIdx, // frame-relative; BDA base accounts for slot
+				        .firstInstance = globalDrawIdx,
 				        .batchIndex = batchIdx,
 				};
 
@@ -526,7 +510,6 @@ namespace aether
 			i = batchEnd;
 		}
 
-		// Flush only the packed ranges consumed by the cull and animation shaders.
 		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(globalDrawIdx) * sizeof(DrawContracts::InstanceData));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(globalDrawIdx) * sizeof(CullContracts::DrawInput));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(batchIdx) * sizeof(CullContracts::Batch));
@@ -539,22 +522,19 @@ namespace aether
 			gpu::ResourceRegistry::FlushMappedBuffer(m_animationSampleJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(sampleJobsThisFrame) * sizeof(AnimationContracts::AnimatorSampleJob));
 		}
 
-		// Ensure host writes are visible to subsequent shader reads.
 		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
 			AE_VERBOSE(LogCategory::Animation, "Animation dispatch enabled: {} sampleJobs, {} skinJobs", sampleJobsThisFrame, skinJobCount);
-			// -- Pass 0: Parallel bind-pose initialization --
-			// Dispatched before animation sampling to write all node bind poses
 			// in parallel (each thread handles one (job, node) pair).
-			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit.IsValid())
+			if (((m_debugAnimPassMask & 1u) != 0u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit.IsValid())
 			{
 				const auto poseInitPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->poseInit);
 				AE_PROFILE_ZONE();
 				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobs[frameSlot].address);
 
-				cmdList.BindComputePipeline(const_cast<void*>(poseInitPipe.state));
+				cmdList.BindComputePipeline(poseInitPipe.state);
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 				AE_GPU_ZONE_SCOPED(rawCmd, "Animation.PoseInit");
 
@@ -608,10 +588,10 @@ namespace aether
 
 			AE_PROFILE_ZONE();
 
-			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample.IsValid() && sampleJobsThisFrame > 0)
+			if (((m_debugAnimPassMask & 2u) != 0u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample.IsValid() && sampleJobsThisFrame > 0)
 			{
 				const auto animSamplePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animSample);
-				cmdList.BindComputePipeline(const_cast<void*>(animSamplePipe.state));
+				cmdList.BindComputePipeline(animSamplePipe.state);
 				cmdList.BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const AnimationContracts::AnimationSamplePush animPc{
@@ -636,13 +616,10 @@ namespace aether
 
 				cmdList.EndDebugLabel();
 
-				// Barrier: make GPU anim_sample writes visible to downstream
-				// compute passes (node_flatten, build_skin_palette).
 				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 			}
 
-			// -- Pass 1.3: Animation blend (cross-fade between two clips) -----------
-			if (m_animationBlendSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && (m_debugAnimPassMask & 2u))
+			if (m_animationBlendSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && ((m_debugAnimPassMask & 2u) != 0u))
 			{
 				const AnimationContracts::AnimationBlendPush& blendPc = m_animationBlendSystem->GetBlendPush();
 				const std::uint32_t blendJobCount = m_animationBlendSystem->GetBlendJobCount();
@@ -651,7 +628,7 @@ namespace aether
 				{
 					AE_PROFILE_ZONE();
 					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
-					cmdList.BindComputePipeline(const_cast<void*>(animBlendPipe.state));
+					cmdList.BindComputePipeline(animBlendPipe.state);
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
 					cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
@@ -711,14 +688,13 @@ namespace aether
 			}
 		}
 
-		// -- Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) --
-		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten.IsValid())
+		if (((m_debugAnimPassMask & 4u) != 0u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten.IsValid())
 		{
 			const auto nodeFlattenPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->nodeFlatten);
 			AE_PROFILE_ZONE();
 			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
-			cmdList.BindComputePipeline(const_cast<void*>(nodeFlattenPipe.state));
+			cmdList.BindComputePipeline(nodeFlattenPipe.state);
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 			AE_GPU_ZONE_SCOPED(rawCmd, "Animation.NodeFlatten");
 
@@ -768,7 +744,6 @@ namespace aether
 					const std::uint32_t groups = (totalWork + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 
-					// Barrier between depth levels: parent writes from this
 					// dispatch must be visible to the next level's reads.
 					if (di + 1 < depthCount)
 					{
@@ -781,12 +756,12 @@ namespace aether
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 		}
 
-		if ((m_debugAnimPassMask & 8u) && skinJobCount > 0 && !m_debugDisableAnimation)
+		if (((m_debugAnimPassMask & 8u) != 0u) && skinJobCount > 0 && !m_debugDisableAnimation)
 		{
 			AE_PROFILE_ZONE();
 
 			const auto skinPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->skinCopy);
-			cmdList.BindComputePipeline(const_cast<void*>(skinPipe.state));
+			cmdList.BindComputePipeline(skinPipe.state);
 			cmdList.BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
 
 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
@@ -833,15 +808,12 @@ namespace aether
 			return;
 		}
 
-		// -- Cull dispatch: single or multi-frustum --
 		const gpu::DeviceSize inputCmdOffset = 0;
 		const gpu::DeviceSize batchDescOffset = 0;
 
 		if (m_outputDrawCapacity > m_maxDraws)
 		{
-			// Multi-frustum mode (shadow cascades): test each draw against 3 VP matrices,
 			// write 3 independent output regions.  The 3 frame constant BDAs must have
-			// been set via SetMultiCullFrameAddrs() before this call.
 			const gpu::DeviceSize outputCmdOffset = 0;
 			const gpu::DeviceSize cascadeStride = static_cast<gpu::DeviceSize>(m_maxDraws) * sizeof(gpu::DrawIndexedIndirectCommand);
 
@@ -871,7 +843,6 @@ namespace aether
 		}
 		else
 		{
-			// Single-frustum mode (main camera, local shadows).
 			const gpu::DeviceSize outputCmdOffset = 0;
 			const CullContracts::PushConstants pc{
 			        .frameAddr = frameAddr,
@@ -898,7 +869,6 @@ namespace aether
 			}
 		}
 
-		// Ensure indirect args are visible before draw-indirect.
 		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::IndirectCommandRead);
 
 #ifdef TRACY_ENABLE
@@ -1045,7 +1015,7 @@ namespace aether
 	{
 		const auto idx = slot % kFramesInFlight;
 		{
-			std::lock_guard lock(m_slotMutexes[idx]);
+			const std::lock_guard lock(m_slotMutexes[idx]);
 			m_commandSlots[idx].clear();
 			m_slotConsumed[idx] = true;
 		}

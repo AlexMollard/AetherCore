@@ -8,9 +8,6 @@
 
 namespace aether::gpu::Factory
 {
-	// -----------------------------------------------------------------
-	// CommandPool
-	// -----------------------------------------------------------------
 
 	CommandPool CreateCommandPool(Device device, const CommandPoolDesc& desc) noexcept
 	{
@@ -48,10 +45,6 @@ namespace aether::gpu::Factory
 		}
 		vkDestroyCommandPool(static_cast<VkDevice>(device), static_cast<VkCommandPool>(pool), nullptr);
 	}
-
-	// -----------------------------------------------------------------
-	// QueryPool
-	// -----------------------------------------------------------------
 
 	QueryPool CreateQueryPool(Device device, const QueryPoolDesc& desc) noexcept
 	{
@@ -103,10 +96,6 @@ namespace aether::gpu::Factory
 		vkResetQueryPool(static_cast<VkDevice>(device), static_cast<VkQueryPool>(pool), firstQuery, queryCount);
 	}
 
-	// -----------------------------------------------------------------
-	// ShaderModule
-	// -----------------------------------------------------------------
-
 	Pipeline CreateShaderModule(Device device, const SpirvBlob& spirv, const char* debugName) noexcept
 	{
 		AE_ASSERT(device != nullptr, "CreateShaderModule: device is null");
@@ -138,10 +127,6 @@ namespace aether::gpu::Factory
 		}
 		vkDestroyShaderModule(static_cast<VkDevice>(device), static_cast<VkShaderModule>(shader), nullptr);
 	}
-
-	// -----------------------------------------------------------------
-	// Fence
-	// -----------------------------------------------------------------
 
 	Fence CreateFence(Device device, const FenceDesc& desc) noexcept
 	{
@@ -187,10 +172,6 @@ namespace aether::gpu::Factory
 		}
 		vkResetFences(static_cast<VkDevice>(device), 1, reinterpret_cast<VkFence*>(&fence));
 	}
-
-	// -----------------------------------------------------------------
-	// PhysicalDevice queries
-	// -----------------------------------------------------------------
 
 	PhysicalDeviceProperties GetPhysicalDeviceProperties(PhysicalDevice physicalDevice) noexcept
 	{

@@ -11,10 +11,7 @@
 
 namespace aether
 {
-	// Punctual lights as plain components: position comes from the entity's
-	// TransformComponent, so lights select, gizmo-move, parent (delta
 	// propagation carries them) and serialize like any other entity.
-	// LightSystem republishes the live set to the renderer every frame.
 	struct PointLightComponent
 	{
 		glm::vec3 color{1.0f};
@@ -23,8 +20,6 @@ namespace aether
 		bool castsShadow = false;
 	};
 
-	// A spot aims along the entity's LOCAL -Z (camera-forward convention):
-	// rotate the entity to aim the cone.
 	struct SpotLightComponent
 	{
 		glm::vec3 color{1.0f};
@@ -37,13 +32,9 @@ namespace aether
 
 	namespace ecs
 	{
-		// World matrix at `position` whose local -Z points along `direction` -
-		// bridges direction-vector light data (das bindings, legacy scene
-		// records) onto the entity convention.
 		inline glm::mat4 LightAimMatrix(const glm::vec3& position, const glm::vec3& direction)
 		{
 			const glm::vec3 dir = glm::normalize(direction);
-			// Near-vertical aims need a different up or quatLookAt degenerates.
 			const glm::vec3 up = glm::abs(glm::dot(dir, glm::vec3(0, 1, 0))) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
 			glm::mat4 m = glm::mat4_cast(glm::quatLookAt(dir, up));
 			m[3] = glm::vec4(position, 1.0f);

@@ -32,8 +32,6 @@ namespace aether
 		{
 			const char* appName = "AetherCore";
 			bool enableVsync = true;
-			// See AetherCore::Config::enableGpuDiagnostics - forwarded through
-			// unchanged to GraphicsDevice::Config -> VulkanContext::Create.
 			bool enableGpuDiagnostics = false;
 		};
 
@@ -62,11 +60,7 @@ namespace aether
 
 		void BeginSwapchainFrame();
 		void RecreateSwapchain(class Window& window, bool enableVsync);
-		// End-of-frame submission. The 3 timeline-semaphore handles are the
-		// opaque engine-side `gpu::TimelineSemaphoreHandle` typedef (a pImpl
-		// pointer). All casts to `VkSemaphore` happen in the swapchain
 		// implementation (`vulkan/Swapchain.cpp`); this TU never sees a
-		// `Vk*` token.
 		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr, std::uint64_t asyncComputeTimelineValue = 0);
 
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;
@@ -75,11 +69,7 @@ namespace aether
 
 		void AdvanceBindlessFrame(std::uint64_t frameIndex);
 
-		// Tick the ResourceRegistry deferred-destruction ring forward by one
 		// frame. Call once per frame from the engine thread at the same point
-		// as AdvanceBindlessFrame; the registry destroys resources that were
-		// scheduled for teardown kMaxFramesInFlight frames earlier, by which
-		// point the GPU is guaranteed done with them.
 		void AdvanceResourceRegistryFrame();
 
 		[[nodiscard]] Swapchain& GetSwapchain();
@@ -90,12 +80,6 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 
-		// Engine-side accessors that return opaque `gpu::*` types. These
-		// are the preferred way for engine code to obtain device, queue,
-		// and allocator handles; reaching through GetVulkanContext()
-		// pulls the raw Vk* types into the caller and forces a
-		// `static_cast<gpu::*>` back to opaque. Use these accessors
-		// instead.
 		[[nodiscard]] gpu::Device GetDevice() const noexcept;
 		[[nodiscard]] gpu::Queue GetGraphicsQueue() const noexcept;
 		[[nodiscard]] gpu::Queue GetComputeQueue() const noexcept;

@@ -16,7 +16,7 @@ namespace aether::editor
 	namespace
 	{
 		constexpr const char* kCullModeSettingKey = "debug.scene_cullmode";
-	} // namespace
+	}
 
 	void PostProcessingPanel::OnImGui(app::LayerContext& context)
 	{
@@ -27,10 +27,8 @@ namespace aether::editor
 		{
 			Renderer& renderer = context.Get<Renderer>();
 
-			// FXAA now lives in the Settings panel (single source of truth).
-
 			int cullMode = static_cast<int>(renderer.GetCullMode());
-			const char* cullModeNames[] = {"None", "Front", "Back", "Front + Back"};
+			const char* const cullModeNames[] = {"None", "Front", "Back", "Front + Back"};
 			if (ImGui::Combo("Cull mode", &cullMode, cullModeNames, static_cast<int>(std::size(cullModeNames))))
 			{
 				renderer.SetCullMode(static_cast<aether::gpu::CullMode>(cullMode));

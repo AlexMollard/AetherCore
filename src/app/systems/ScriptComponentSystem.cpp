@@ -30,8 +30,6 @@ namespace aether::app
 			return static_cast<std::uint32_t>(key & 0xffffffffu);
 		}
 
-		// Installs the active SceneContext for the duration of a managed call
-		// group, so the C# exports (which read scripting::ActiveContext()) resolve.
 		struct ActiveContextScope
 		{
 			explicit ActiveContextScope(scripting::SceneContext& ctx)
@@ -51,7 +49,6 @@ namespace aether::app
 
 	ScriptComponentSystem::~ScriptComponentSystem()
 	{
-		// Managed GCHandles are intentionally not freed here: at shutdown the host
 		// may already be gone and CoreCLR never unloads, so leaking them is inert.
 		m_instances.clear();
 	}
@@ -82,8 +79,6 @@ namespace aether::app
 			handle = it->second.handle;
 		}
 
-		// Re-play / re-attach (scene apply reset `attached`): discard the previous
-		// instance so the script restarts from fresh per-entity state.
 		if (!script.attached && handle != 0)
 		{
 			if (api->InvokeDetach != nullptr)
@@ -108,15 +103,12 @@ namespace aether::app
 				return false;
 			}
 			m_instances[key] = Instance{.handle = handle, .typeName = typeName};
-			// Apply serialized field overrides before OnAttach sees them.
 			cs.ApplyProperties(handle, typeName, script.properties);
 			script.attached = false; // a freshly created instance must attach
 		}
 
 		if (!script.attached)
 		{
-			// Flag first for parity with the das runner's no-retry contract
-			// (managed OnAttach also guards its own exceptions).
 			script.attached = true;
 			if (api->InvokeAttach != nullptr)
 			{
@@ -160,7 +152,7 @@ namespace aether::app
 			return;
 		}
 
-		ActiveContextScope scope(ctx);
+		const ActiveContextScope scope(ctx);
 		for (const std::uint64_t key: stale)
 		{
 			const std::uint64_t handle = m_instances[key].handle;
@@ -185,7 +177,7 @@ namespace aether::app
 			return;
 		}
 
-		ActiveContextScope scope(ctx);
+		const ActiveContextScope scope(ctx);
 		for (const auto& [key, instance]: m_instances)
 		{
 			if (api->InvokeDetach != nullptr)
@@ -214,14 +206,10 @@ namespace aether::app
 			return;
 		}
 
-		// Keep delta current for Input.DeltaTime, and advance the play-time clock
-		// + frame counter for the scripting Time API (once per frame while playing).
 		sceneCtx->deltaTime = dt;
 		sceneCtx->elapsedTime += dt;
 		++sceneCtx->frameCount;
 
-		// Snapshot first: scripts may create/destroy entities (spawns) which
-		// would invalidate a live view iteration.
 		std::vector<Entity> scripted;
 		for (const auto e: world.GetRegistry().view<ScriptComponent>())
 		{
@@ -233,11 +221,11 @@ namespace aether::app
 		{
 			if (!reg.valid(World::ToEntt(e)))
 			{
-				continue; // destroyed by an earlier script this tick
+				continue;
 			}
 			if (ecs::HasDisabledAncestor(world, e))
 			{
-				continue; // disabled entities (and subtrees) don't tick scripts
+				continue;
 			}
 			auto* sc = world.TryGet<ScriptComponent>(e);
 			if (sc == nullptr || sc->scripts.empty())
@@ -253,18 +241,16 @@ namespace aether::app
 					continue;
 				}
 
-				ActiveContextScope scope(*sceneCtx);
+				const ActiveContextScope scope(*sceneCtx);
 				UpdateCSharpEntity(*csScripting, *sceneCtx, e, static_cast<std::uint32_t>(i), script, dt);
 			}
 		}
 
-		// Detach C# instances whose entity/component went away this frame.
 		PurgeStaleCSharpInstances(world, *csScripting, *sceneCtx);
 	}
 
 	void ScriptComponentSystem::Invalidate(World& world)
 	{
-		// Tear down all live C# instances so a reload starts fresh.
 		if (auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>())
 		{
 			if (auto* sceneCtx = m_services.TryGet<scripting::SceneContext>())

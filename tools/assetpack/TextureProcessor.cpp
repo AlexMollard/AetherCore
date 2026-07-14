@@ -12,8 +12,6 @@
 
 #include <stb_image.h>
 
-// bc7enc.h + bc7enc.cpp - BC7 block encoder.
-// rgbcx.h + rgbcx.cpp - BC1/BC4/BC5 block encoders (compiled as separate TU).
 #include <bc7enc.h>
 #include <rgbcx.h>
 
@@ -47,7 +45,7 @@ namespace aether::assetpipeline
 								bc7enc_compress_block(dst, block.data(), &bc7Params);
 								break;
 							case BCnFmt::BC4:
-								rgbcx::encode_bc4(dst, block.data(), 4); // stride 4 -> red channel of RGBA
+								rgbcx::encode_bc4(dst, block.data(), 4);
 								break;
 						}
 						dst += bytesPerBlock;
@@ -55,10 +53,6 @@ namespace aether::assetpipeline
 				}
 				return out;
 			}
-
-			// -------------------------------------------------------------------------
-			// DDS output
-			// -------------------------------------------------------------------------
 
 			struct MipData
 			{
@@ -131,9 +125,6 @@ namespace aether::assetpipeline
 			using StbiImage = std::unique_ptr<uint8_t, StbiDeleter>;
 		} // namespace
 
-		// -------------------------------------------------------------------------
-
-		// One-time initialisation for bc7enc and rgbcx, guarded by call_once.
 		static void InitEncoders()
 		{
 			static std::once_flag s_flag;
@@ -149,8 +140,8 @@ namespace aether::assetpipeline
 		{
 			InitEncoders();
 
-			int width, height, srcChannels;
-			StbiImage pixels(stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &srcChannels, 0));
+			int width = 0, height = 0, srcChannels = 0;
+			const StbiImage pixels(stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &srcChannels, 0));
 
 			if (!pixels)
 			{
@@ -174,7 +165,6 @@ namespace aether::assetpipeline
 					break;
 			}
 
-			// Build mip chain
 			std::vector<MipData> mips;
 			int mipW = width, mipH = height;
 			const uint8_t* srcPixels = pixels.get();

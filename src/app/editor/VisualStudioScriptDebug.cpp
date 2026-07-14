@@ -26,7 +26,7 @@ namespace aether::editor
 	namespace
 	{
 #ifdef _WIN32
-		std::string Trim(std::string text)
+		std::string Trim(const std::string& text)
 		{
 			const auto first = text.find_first_not_of(" \t\r\n");
 			if (first == std::string::npos)
@@ -47,7 +47,7 @@ namespace aether::editor
 				return std::nullopt;
 			}
 
-			const std::filesystem::path vswhere = std::filesystem::path(programFiles) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe";
+			std::filesystem::path vswhere = std::filesystem::path(programFiles) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe";
 			if (!io::file_util::Exists(vswhere))
 			{
 				return std::nullopt;
@@ -129,14 +129,14 @@ namespace aether::editor
 			}
 
 			std::vector<std::byte> data(size);
-			if (!GetFileVersionInfoW(devenv.c_str(), 0, size, data.data()))
+			if (GetFileVersionInfoW(devenv.c_str(), 0, size, data.data()) == 0)
 			{
 				return 0;
 			}
 
 			VS_FIXEDFILEINFO* versionInfo = nullptr;
 			UINT versionInfoSize = 0;
-			if (!VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&versionInfo), &versionInfoSize) || versionInfo == nullptr || versionInfoSize < sizeof(VS_FIXEDFILEINFO))
+			if ((VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&versionInfo), &versionInfoSize) == 0) || versionInfo == nullptr || versionInfoSize < sizeof(VS_FIXEDFILEINFO))
 			{
 				return 0;
 			}
@@ -168,7 +168,7 @@ namespace aether::editor
 			return io::file_util::Exists(powershell) ? std::optional{powershell} : std::nullopt;
 		}
 
-		std::wstring PowerShellLiteral(std::wstring value)
+		std::wstring PowerShellLiteral(const std::wstring& value)
 		{
 			std::wstring escaped;
 			escaped.reserve(value.size() + 2);
@@ -234,9 +234,6 @@ namespace aether::editor
 			std::wstring command = L"$ErrorActionPreference='Stop';";
 			command += L"$dte=New-Object -ComObject " + PowerShellLiteral(DteProgId(installation.majorVersion)) + L";";
 			command += L"$dte.MainWindow.Visible=$true;";
-			// Load the SDK explicitly before the gameplay project. This makes the
-			// source project visible to Visual Studio's language service immediately,
-			// rather than waiting for it to infer/load the ProjectReference.
 			command += L"$dte.Solution.AddFromFile(" + PowerShellLiteral(managedSdkProject.wstring()) + L",$true);";
 			command += L"$dte.Solution.AddFromFile(" + PowerShellLiteral(scriptsProject.wstring()) + L",$false);";
 			command += L"$target=$null;for($attempt=0;$attempt -lt 40 -and $null -eq $target;$attempt++){foreach($candidate in $dte.Debugger.LocalProcesses){if($candidate.ProcessID -eq " + std::to_wstring(GetCurrentProcessId());

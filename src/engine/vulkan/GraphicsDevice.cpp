@@ -11,10 +11,6 @@ namespace aether
 {
 	namespace
 	{
-		// Thunk used by VulkanContext::WaitIdle to route device-loss diagnosis
-		// to the DiagnosticEngine. Stored as a file-static pointer because
-		// VulkanContext's FaultCallback is a plain function pointer (no
-		// capture).
 		DiagnosticEngine* g_activeDiagnosticEngine = nullptr;
 
 		void DiagnosticFaultThunk()
@@ -38,15 +34,11 @@ namespace aether
 		gpu::CommandList::SetDiagnosticEngine(&m_diagnosticEngine);
 		g_activeDiagnosticEngine = &m_diagnosticEngine;
 		m_vulkanContext->SetFaultCallback(&DiagnosticFaultThunk);
-		m_vulkanContext->SetGlobalAddressBindingTracker(&m_diagnosticEngine.GetMemoryTracker());
+		aether::VulkanContext::SetGlobalAddressBindingTracker(&m_diagnosticEngine.GetMemoryTracker());
 		m_swapchain.Initialize(*m_vulkanContext, window, config.enableVsync);
 		AE_TRY_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourceRegistry.SetBindlessManager(&m_bindlessManager);
 
-		// Wire diagnostic memory tracking to all GPU allocation sites.
-		// ResourceRegistry will register every buffer's BDA range; BindlessManager
-		// registers both descriptor heaps; GpuHeap instances (MeshArena, etc.)
-		// are wired independently when they initialize.
 		auto& memTracker = m_diagnosticEngine.GetMemoryTracker();
 		m_resourceRegistry.SetMemoryTracker(&memTracker);
 		m_bindlessManager.SetMemoryTracker(&memTracker);
@@ -58,10 +50,8 @@ namespace aether
 	void GraphicsDevice::Shutdown()
 	{
 		AE_PROFILE_ZONE();
-		// WaitIdle may throw VK_ERROR_DEVICE_LOST, which triggers the fault
-		// callback - keep it set until after the wait.
 		vkDeviceWaitIdle(m_vulkanContext->GetDevice().device);
-		m_vulkanContext->SetGlobalAddressBindingTracker(nullptr);
+		aether::VulkanContext::SetGlobalAddressBindingTracker(nullptr);
 		m_vulkanContext->SetFaultCallback(nullptr);
 		gpu::CommandList::SetDiagnosticEngine(nullptr);
 		g_activeDiagnosticEngine = nullptr;

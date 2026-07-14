@@ -21,7 +21,7 @@ TEST_CASE("PipelineCache dedups identical templates to one pipeline pointer") {
 	const GraphicsPipeline* b = cache.Acquire(GltfTemplate());
 
 	CHECK(a != nullptr);
-	CHECK(a == b);            // deduped
+	CHECK(a == b);
 	CHECK(factory.buildCount == 1);
 	CHECK(cache.Size() == 1);
 }
@@ -57,9 +57,8 @@ TEST_CASE("PipelineCache pointers stay stable as more templates are added") {
 	for (int i = 0; i < 32; ++i)
 	{
 		MaterialTemplate t; t.shaderVfsPath = "shaders://plasma.spv"; t.depthWriteEnable = (i % 2 == 0);
-		// force many distinct keys via fragment path variety
 		t.fragmentVfsPath = (i % 3 == 0) ? "a" : (i % 3 == 1) ? "b" : "c";
-		cache.Acquire(t);
+		CHECK(cache.Acquire(t) != nullptr);
 	}
 	// The original node's address must not have moved (node-stable container).
 	CHECK(cache.Acquire(GltfTemplate()) == first);

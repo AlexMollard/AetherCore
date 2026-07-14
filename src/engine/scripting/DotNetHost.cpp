@@ -20,8 +20,6 @@ namespace aether::scripting
 {
 	namespace
 	{
-		// The one live host, so the static C callbacks handed to managed code can
-		// route back into it. CoreCLR is a process singleton, so is this.
 		DotNetHost* g_host = nullptr;
 
 #	ifdef _WIN32
@@ -32,7 +30,6 @@ namespace aether::scripting
 			return p.wstring();
 		}
 
-		// hostfxr speaks UTF-16 on Windows; narrow to UTF-8 for the engine log.
 		std::string NarrowCharT(const char_t* wide)
 		{
 			if (wide == nullptr || *wide == 0)
@@ -82,7 +79,6 @@ namespace aether::scripting
 		}
 #	endif
 
-		// ── Native callbacks exposed to managed code ─────────────────────────────
 		LogLevel NormalizeManagedLogLevel(const std::int32_t level)
 		{
 			switch (static_cast<LogLevel>(level))
@@ -143,7 +139,6 @@ namespace aether::scripting
 	DotNetHost::~DotNetHost()
 	{
 		// CoreCLR is never torn down (it cannot be re-initialized in-process); we
-		// just detach the global so late callbacks are inert.
 		if (g_host == this)
 		{
 			g_host = nullptr;
@@ -176,7 +171,6 @@ namespace aether::scripting
 		m_initialized = true;
 		g_host = this;
 
-		// ── 1. Locate hostfxr via nethost ────────────────────────────────────
 		char_t hostfxrPath[1024];
 		size_t hostfxrPathLen = std::size(hostfxrPath);
 		if (const int rc = get_hostfxr_path(hostfxrPath, &hostfxrPathLen, nullptr); rc != 0)
@@ -208,12 +202,9 @@ namespace aether::scripting
 			setErrorWriter(&ForwardHostfxrError);
 		}
 
-		// ── 2. Initialize the runtime from AetherCore.Interop.runtimeconfig.json ─
 		const string_t configPath = ToCharT(managedDir / "AetherCore.Interop.runtimeconfig.json");
 		hostfxr_handle ctx = nullptr;
 		const int initRc = initForConfig(configPath.c_str(), nullptr, &ctx);
-		// Negative == failure (HRESULT-style); non-negative success codes include
-		// Success(0), Success_HostAlreadyInitialized(1), Success_DifferentRuntimeProperties(2).
 		if (initRc < 0 || ctx == nullptr)
 		{
 			AE_WARN(LogCategory::App, "hostfxr_initialize_for_runtime_config failed (0x{:08X}) for '{}' - C# scripting disabled", static_cast<unsigned>(initRc), (managedDir / "AetherCore.Interop.runtimeconfig.json").string());
@@ -224,7 +215,6 @@ namespace aether::scripting
 			return false;
 		}
 
-		// ── 3. Get the load-assembly delegate, then close the init context ───
 		void* loadAssemblyPtr = nullptr;
 		const int delRc = getDelegate(ctx, hdt_load_assembly_and_get_function_pointer, &loadAssemblyPtr);
 		closeCtx(ctx);
@@ -235,7 +225,6 @@ namespace aether::scripting
 		}
 		auto loadAssembly = reinterpret_cast<load_assembly_and_get_function_pointer_fn>(loadAssemblyPtr);
 
-		// ── 4. Resolve the managed Bootstrap.Init entry point ────────────────
 		const string_t assemblyPath = ToCharT(managedDir / "AetherCore.Interop.dll");
 		ManagedBootstrapFn bootstrapInit = nullptr;
 		const int fnRc = loadAssembly(assemblyPath.c_str(),
@@ -275,7 +264,7 @@ namespace aether::scripting
 	}
 } // namespace aether::scripting
 
-#else // !AETHER_HAS_DOTNET
+#else
 
 namespace aether::scripting
 {
@@ -299,4 +288,4 @@ namespace aether::scripting
 	}
 } // namespace aether::scripting
 
-#endif // AETHER_HAS_DOTNET
+#endif

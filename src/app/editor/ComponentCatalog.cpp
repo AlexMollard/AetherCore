@@ -25,7 +25,6 @@ namespace aether::editor
 {
 	namespace
 	{
-		// Transform-derived seeds (mirrors the Inspector palette's smarter defaults).
 		glm::vec3 EntityPosition(const World& w, Entity e)
 		{
 			if (const auto* t = w.TryGet<TransformComponent>(e))
@@ -94,9 +93,8 @@ namespace aether::editor
 			w.Emplace<ColliderComponent>(e, c);
 		}
 
-		// Simple entry for a plain, default-constructed (or fixed-value) component.
 		template<typename T>
-		ComponentCatalogEntry Simple(std::string name, std::string category, std::string icon, T value = T{})
+		ComponentCatalogEntry Simple(std::string name, std::string category, std::string icon, const T& value = T{})
 		{
 			return ComponentCatalogEntry{std::move(name),
 			        std::move(category),
@@ -106,7 +104,7 @@ namespace aether::editor
 			        {
 				        if constexpr (std::is_empty_v<T>)
 				        {
-					        (void) value; // tag component: emplace takes no value
+					        (void) value;
 					        w.EmplaceOrReplace<T>(e);
 				        }
 				        else
@@ -121,13 +119,9 @@ namespace aether::editor
 		{
 			std::vector<ComponentCatalogEntry> c;
 
-			// ── Core ────────────────────────────────────────────────────────────
-			// Transform is auto-included from the reflection registry below (its
-			// default is just identity, so no hand-written entry is needed).
 			c.push_back(Simple<NameComponent>("Name", "Core", ICON_FA_PEN, NameComponent{.name = "Entity"}));
 			c.push_back(Simple<HierarchyComponent>("Hierarchy", "Core", ICON_FA_SITEMAP));
 
-			// ── Rendering ───────────────────────────────────────────────────────
 			const auto meshEntry = [](std::string name, std::string icon, PrimitiveMesh kind, const char* path)
 			{
 				return ComponentCatalogEntry{std::move(name),
@@ -217,11 +211,7 @@ namespace aether::editor
 				        w.EmplaceOrReplace<CameraComponent>(e);
 			        },
 			        [](World& w, Entity e) { w.Remove<CameraComponent>(e); }});
-			// Reference-only (addable=false): UI text is authored as a UI ENTITY
 			// (Create > UI > Text / ui::CreateTextEntity), never slapped onto an
-			// arbitrary entity as a loose component. This entry exists purely so a
-			// script's UiTextRef field can drop-validate against real UI text
-			// entities through the `has` predicate - the single, Unity-style model.
 			c.push_back(ComponentCatalogEntry{"UI Text",
 			        "Rendering",
 			        ICON_FA_PEN,
@@ -230,7 +220,6 @@ namespace aether::editor
 			        nullptr,
 			        /*addable=*/false});
 
-			// ── Behaviors ───────────────────────────────────────────────────────
 			c.push_back(Simple<BobComponent>("Bob", "Behaviors", ICON_FA_WAVE_SQUARE, BobComponent{.amplitude = 1.5f, .frequency = 0.8f}));
 			c.push_back(Simple<SpinComponent>("Spin", "Behaviors", ICON_FA_ROTATE, SpinComponent{.eulerDegPerSec = {0.0f, 40.0f, 0.0f}}));
 			c.push_back(ComponentCatalogEntry{"Orbit",
@@ -248,7 +237,6 @@ namespace aether::editor
 			c.push_back(Simple<ScalePulseComponent>("Scale Pulse", "Behaviors", ICON_FA_EXPAND, ScalePulseComponent{.amplitude = 0.2f, .frequency = 2.0f}));
 			c.push_back(Simple<LookAtComponent>("Look At", "Behaviors", ICON_FA_EYE, LookAtComponent{.target = {0.0f, 0.0f, 0.0f}}));
 
-			// ── Physics ─────────────────────────────────────────────────────────
 			c.push_back(Simple<RigidBodyComponent>("Rigid Body", "Physics", ICON_FA_WEIGHT_HANGING, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic}));
 			const auto colliderEntry = [](std::string name, PhysicsShapeType shape)
 			{
@@ -285,14 +273,8 @@ namespace aether::editor
 			        [](World& w, Entity e) { w.Remove<JointComponent>(e); }});
 			c.push_back(Simple<CollisionEventsComponent>("Collision Events", "Physics", ICON_FA_BOLT));
 
-			// ── Editor ──────────────────────────────────────────────────────────
 			c.push_back(Simple<SceneTransientComponent>("Scene Transient", "Editor", ICON_FA_GHOST));
 
-			// Auto-include any addable reflected component (scene/reflection/) not
-			// hand-written above, so a new component needs only its AE_COMPONENT
-			// declaration to appear in the palette + MCP - its has/add/remove come
-			// from the registry. Hand-written entries win by name (they carry custom
-			// add behaviour / seeds / bundles). The &rt captures are stable: the
 			// registry is a program-lifetime static.
 			for (const reflect::ComponentType& rt: reflect::ComponentTypes())
 			{

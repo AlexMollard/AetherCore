@@ -24,10 +24,9 @@ namespace aether::io
 {
 	namespace
 	{
-		// Read a whole file into a string (empty if it can't be opened).
 		std::string SlurpFile(const std::filesystem::path& path)
 		{
-			std::ifstream in(path, std::ios::binary);
+			const std::ifstream in(path, std::ios::binary);
 			if (!in)
 			{
 				return {};
@@ -38,17 +37,12 @@ namespace aether::io
 		}
 
 #ifdef _WIN32
-		// Runs `command` via cmd.exe with stdout+stderr redirected to `outFile`,
-		// under a kill-on-close Job Object so the entire process tree (including any
-		// build-server grandchildren) dies when we're done or on timeout. Returns the
-		// exit code, kProcessLaunchFailed, or kProcessTimedOut.
 		int RunToFileWindows(const std::string& command, const std::filesystem::path& outFile, int timeoutMs)
 		{
 			SECURITY_ATTRIBUTES inheritable{};
 			inheritable.nLength = sizeof(inheritable);
 			inheritable.bInheritHandle = TRUE;
 
-			// The child writes combined stdout+stderr straight into this file.
 			HANDLE hOut = CreateFileW(outFile.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &inheritable, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 			if (hOut == INVALID_HANDLE_VALUE)
 			{
@@ -57,8 +51,6 @@ namespace aether::io
 			// Give the child a real (empty) stdin so it never blocks waiting on input.
 			HANDLE hIn = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &inheritable, OPEN_EXISTING, 0, nullptr);
 
-			// Kill-on-close job: closing our handle (below) terminates the child and
-			// every process it spawned - no orphaned dotnet/MSBuild/VBCSCompiler.
 			HANDLE job = CreateJobObjectW(nullptr, nullptr);
 			if (job != nullptr)
 			{
@@ -74,8 +66,6 @@ namespace aether::io
 			si.hStdError = hOut;
 			si.hStdInput = (hIn != INVALID_HANDLE_VALUE) ? hIn : nullptr;
 
-			// cmd.exe /c "<command>" - the extra quotes match WrapShellCommand so the
-			// /c quote-strip restores the command's own inner quotes.
 			std::string cmdLine = "cmd.exe /c " + WrapShellCommand(command);
 			std::vector<char> mutableCmd(cmdLine.begin(), cmdLine.end());
 			mutableCmd.push_back('\0');
@@ -88,7 +78,7 @@ namespace aether::io
 			{
 				if (job != nullptr)
 				{
-					AssignProcessToJobObject(job, pi.hProcess); // capture children before they spawn
+					AssignProcessToJobObject(job, pi.hProcess);
 				}
 				ResumeThread(pi.hThread);
 
@@ -97,7 +87,7 @@ namespace aether::io
 				{
 					if (job != nullptr)
 					{
-						TerminateJobObject(job, 1); // kill the whole tree
+						TerminateJobObject(job, 1);
 					}
 					else
 					{
@@ -118,27 +108,21 @@ namespace aether::io
 
 			if (job != nullptr)
 			{
-				CloseHandle(job); // kill-on-close reaps any lingering grandchildren
+				CloseHandle(job);
 			}
 			if (hIn != INVALID_HANDLE_VALUE)
 			{
 				CloseHandle(hIn);
 			}
-			CloseHandle(hOut); // flush + release so the file is readable
+			CloseHandle(hOut);
 			return result;
 		}
 #else
-		// POSIX fallback: redirect to the file through the shell. std::system waits
-		// only on the direct child, so detached build-server grandchildren can hold
-		// the file handle without wedging us (no pipe => no EOF dependency). The
-		// timeout is best-effort via coreutils `timeout` when available.
 		int RunToFilePosix(const std::string& command, const std::filesystem::path& outFile, int timeoutMs)
 		{
 			std::string inner = command + " > \"" + outFile.string() + "\" 2>&1";
 			if (timeoutMs > 0)
 			{
-				// `timeout -k` sends SIGKILL a bit after the soft deadline. If the
-				// binary is missing the shell reports 127; callers still get output.
 				const int secs = (timeoutMs + 999) / 1000;
 				inner = "timeout -k 5 " + std::to_string(secs) + " sh -c '" + command + "' > \"" + outFile.string() + "\" 2>&1";
 			}
@@ -147,7 +131,6 @@ namespace aether::io
 			{
 				return kProcessLaunchFailed;
 			}
-			// 124 is coreutils `timeout`'s exit code for a killed command.
 			if (timeoutMs > 0 && WIFEXITED(rc) && WEXITSTATUS(rc) == 124)
 			{
 				return kProcessTimedOut;
@@ -171,8 +154,6 @@ namespace aether::io
 	std::string WrapShellCommand(const std::string& command)
 	{
 #ifdef _WIN32
-		// cmd.exe /c strips the first and last quote of the command line. Wrapping
-		// the whole thing in an extra pair makes that strip restore the original.
 		return "\"" + command + "\"";
 #else
 		return command;
@@ -186,17 +167,12 @@ namespace aether::io
 
 	int RunProcessCapture(const std::string& command, std::string& output, int timeoutMs)
 	{
-		// Capture through a temp file rather than an inherited pipe: a pipe only
-		// reports EOF once ALL write handles close, and dotnet/MSBuild leave
-		// persistent build-server children holding that handle, so read-until-EOF
-		// hangs forever. A file has no such dependency.
 		std::error_code ec;
 		std::filesystem::path tmp = std::filesystem::temp_directory_path(ec);
 		if (ec)
 		{
-			tmp = std::filesystem::path("."); // last resort: cwd
+			tmp = std::filesystem::path(".");
 		}
-		// Unique-enough name without needing <random>: mix the address of a local.
 		std::ostringstream name;
 		name << "aether_proc_" << static_cast<const void*>(&output) << "_" << std::hash<std::string>{}(command) << ".log";
 		tmp /= name.str();

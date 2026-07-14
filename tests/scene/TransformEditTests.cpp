@@ -12,8 +12,6 @@ using namespace aether;
 
 namespace
 {
-    // A fresh World already retires entt's raw-0 null slot in its constructor, so
-    // world.Create() is valid from the first call - no "burn entity 0" needed.
     World MakeWorld()
     {
         return World{};
@@ -41,7 +39,7 @@ namespace
     {
         return glm::inverse(parent) * child;
     }
-} // namespace
+}
 
 TEST_CASE("SetWorldTransform moves the whole subtree, preserving relative offsets") {
     World world = MakeWorld();
@@ -54,7 +52,6 @@ TEST_CASE("SetWorldTransform moves the whole subtree, preserving relative offset
     const glm::mat4 childRel = RelativeTo(world.Get<TransformComponent>(parent).localToWorld, world.Get<TransformComponent>(child).localToWorld);
     const glm::mat4 grandRel = RelativeTo(world.Get<TransformComponent>(child).localToWorld, world.Get<TransformComponent>(grandchild).localToWorld);
 
-    // Move + rotate + scale the parent in one edit.
     const glm::mat4 target = ComposeTransform({-5.0f, 2.0f, 8.0f}, {0.0f, 90.0f, 0.0f}, glm::vec3(1.5f));
     ecs::SetWorldTransform(world, parent, target);
 
@@ -63,9 +60,7 @@ TEST_CASE("SetWorldTransform moves the whole subtree, preserving relative offset
     const glm::mat4& grandNow = world.Get<TransformComponent>(grandchild).localToWorld;
 
     CheckMatApprox(parentNow, target);
-    // The child sits where it used to, relative to the parent...
     CheckMatApprox(RelativeTo(parentNow, childNow), childRel);
-    // ...and the grandchild relative to the child (recursion, not flat copy).
     CheckMatApprox(RelativeTo(childNow, grandNow), grandRel);
 }
 
@@ -79,13 +74,12 @@ TEST_CASE("SetWorldTransform is a pure translation delta for a translated parent
     target[3] = glm::vec4(0.0f, 5.0f, 0.0f, 1.0f);
     ecs::SetWorldTransform(world, parent, target);
 
-    // Child slid up by the same +5 Y, keeping its own X offset.
     CheckMatApprox(world.Get<TransformComponent>(child).localToWorld, ComposeTransform({3.0f, 5.0f, 0.0f}, {}, glm::vec3(1.0f)));
 }
 
 TEST_CASE("SetWorldTransform without a TransformComponent is a no-op") {
     World world = MakeWorld();
-    const Entity parent = world.Create(); // no transform
+    const Entity parent = world.Create();
     const Entity child = MakeEntityAt(world, {1.0f, 2.0f, 3.0f});
     REQUIRE(ecs::SetParent(world, child, parent));
 
@@ -97,7 +91,7 @@ TEST_CASE("SetWorldTransform without a TransformComponent is a no-op") {
 TEST_CASE("SetWorldTransform cascades through a transformless middle link") {
     World world = MakeWorld();
     const Entity parent = MakeEntityAt(world, {0.0f, 0.0f, 0.0f});
-    const Entity middle = world.Create(); // grouping node, no transform
+    const Entity middle = world.Create();
     const Entity leaf = MakeEntityAt(world, {2.0f, 0.0f, 0.0f});
     REQUIRE(ecs::SetParent(world, middle, parent));
     REQUIRE(ecs::SetParent(world, leaf, middle));

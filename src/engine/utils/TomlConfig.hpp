@@ -15,21 +15,21 @@ namespace aether
 		void Save(std::ostream& out, std::string_view headerComment = {}) const;
 
 		[[nodiscard]] bool LoadFile(std::string_view fileName);
-		bool SaveFile(std::string_view fileName, std::string_view headerComment = {}) const;
+		[[nodiscard]] bool SaveFile(std::string_view fileName, std::string_view headerComment = {}) const;
 		bool SaveIfDirty(std::string_view fileName, std::string_view headerComment = {});
 
 		[[nodiscard]] bool LoadFromPath(const std::filesystem::path& path);
-		bool SaveToPath(const std::filesystem::path& path, std::string_view headerComment = {}) const;
+		[[nodiscard]] bool SaveToPath(const std::filesystem::path& path, std::string_view headerComment = {}) const;
 
-		bool GetBool(std::string_view key, bool defaultValue) const;
-		float GetFloat(std::string_view key, float defaultValue) const;
-		std::string GetString(std::string_view key, std::string_view defaultValue = {}) const;
+		[[nodiscard]] bool GetBool(std::string_view key, bool defaultValue) const;
+		[[nodiscard]] float GetFloat(std::string_view key, float defaultValue) const;
+		[[nodiscard]] std::string GetString(std::string_view key, std::string_view defaultValue = {}) const;
 
 		void Set(std::string_view key, bool value);
 		void Set(std::string_view key, float value);
 		void Set(std::string_view key, std::string_view value);
 
-		bool IsDirty() const
+		[[nodiscard]] bool IsDirty() const
 		{
 			return m_dirty;
 		}
@@ -39,7 +39,7 @@ namespace aether
 			m_dirty = false;
 		}
 
-		bool Has(std::string_view key) const;
+		[[nodiscard]] bool Has(std::string_view key) const;
 		void Clear();
 
 	private:

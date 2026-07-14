@@ -29,8 +29,6 @@ namespace aether
 			return;
 		}
 
-		// If this entity was bound to a different material, untrack it there so a
-		// later edit of that material no longer reasserts it onto the entity.
 		const auto prev = m_entityToId.find(entity.id);
 		if (prev != m_entityToId.end() && prev->second != id)
 		{
@@ -44,7 +42,6 @@ namespace aether
 
 		MaterialSystem::AssignMaterial(world, entity, m_registry, m_pipelineCache, entry->asset);
 
-		// Track for re-bind on edit; dedup so a later edit assigns each once.
 		for (const Entity bound: entry->boundEntities)
 		{
 			if (bound == entity)
@@ -58,7 +55,6 @@ namespace aether
 	void MaterialAuthoring::Rebind(World& world, Entry& entry)
 	{
 		auto& r = world.GetRegistry();
-		// Re-assign live bound entities; compact out any that were destroyed.
 		std::size_t kept = 0;
 		for (std::size_t i = 0; i < entry.boundEntities.size(); ++i)
 		{

@@ -21,6 +21,7 @@ namespace aether
 		};
 
 		GTAOPass() = default;
+		~GTAOPass() = default;
 		GTAOPass(const GTAOPass&) = delete;
 		GTAOPass& operator=(const GTAOPass&) = delete;
 		GTAOPass(GTAOPass&&) noexcept = default;
@@ -48,8 +49,8 @@ namespace aether
 
 	private:
 		gpu::Device m_device = nullptr;
-		gpu::Extent2D m_extent{};
-		gpu::Extent2D m_aoExtent{};
+		gpu::Extent2D m_extent;
+		gpu::Extent2D m_aoExtent;
 		BindlessManager* m_bindlessManager = nullptr;
 		RenderGraph* m_renderGraph = nullptr;
 

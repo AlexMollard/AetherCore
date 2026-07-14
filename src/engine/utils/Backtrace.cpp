@@ -31,8 +31,7 @@ namespace aether
 	int CaptureBacktrace(void** buffer, int maxDepth, int skipFrames) noexcept
 	{
 #ifdef _WIN32
-		// +1 to skip this CaptureBacktrace frame itself
-		return CaptureStackBackTrace(static_cast<DWORD>(skipFrames + 1), static_cast<DWORD>(maxDepth), buffer, nullptr);
+		return CaptureStackBackTrace(static_cast<DWORD>(skipFrames) + 1u, static_cast<DWORD>(maxDepth), buffer, nullptr);
 #else
 		(void) buffer;
 		(void) maxDepth;
@@ -47,7 +46,7 @@ namespace aether
 		const auto address = reinterpret_cast<std::uint64_t>(addr);
 
 		std::array<char, sizeof(SYMBOL_INFO) + MAX_SYM_NAME> symBuf{};
-		auto sym = reinterpret_cast<SYMBOL_INFO*>(symBuf.data());
+		auto* sym = reinterpret_cast<SYMBOL_INFO*>(symBuf.data());
 		sym->SizeOfStruct = sizeof(SYMBOL_INFO);
 		sym->MaxNameLen = MAX_SYM_NAME;
 

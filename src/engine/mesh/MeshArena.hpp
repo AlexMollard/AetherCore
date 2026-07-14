@@ -11,18 +11,6 @@ namespace aether
 {
 	class VulkanContext;
 
-	// A large pre-allocated pair of device-local buffers (vertex + index) that dynamic
-	// meshes suballocate from via a sorted free-list.
-	//
-	// Backed by two GpuHeap instances so the free-list logic lives in one place.
-	// The arena is vertex-format agnostic - callers supply byte sizes alongside counts.
-	//
-	// Usage:
-	//   1. Initialize(ctx)                                            - once, at startup.
-	//   2. alloc = Allocate(vBytes, vCount, iBytes, iCount)          - per chunk spawn.
-	//   3. mesh  = CreateView(alloc)                                  - non-owning Mesh view.
-	//   4. Free(alloc)                                                - when chunk is unloaded.
-	//   5. Shutdown()                                                 - once, at teardown.
 	class MeshArena
 	{
 	public:
@@ -42,7 +30,6 @@ namespace aether
 			gpu::DeviceSize indexByteOffset = 0;
 			std::uint32_t indexCount = 0;
 
-			// Internal accounting - keep these to hand the bytes back to the heap.
 			gpu::DeviceSize vertexByteSize = 0;
 			gpu::DeviceSize indexByteSize = 0;
 
@@ -60,15 +47,10 @@ namespace aether
 		MeshArena(MeshArena&&) = delete;
 		MeshArena& operator=(MeshArena&&) = delete;
 
-		// Allocate a contiguous sub-region from both pools.
-		// Returns an invalid Alloc ({}) when either pool is exhausted.
 		[[nodiscard]] Alloc Allocate(gpu::DeviceSize vertexBytes, std::uint32_t vertexCount, gpu::DeviceSize indexBytes, std::uint32_t indexCount);
 
-		// Return a sub-region to the free list and coalesce adjacent blocks.
 		void Free(Alloc& alloc);
 
-		// Create a non-owning Mesh view that points into the arena buffers at alloc's offsets.
-		// The view is invalidated the moment Free(alloc) is called.
 		[[nodiscard]] Mesh CreateView(const Alloc& alloc) const;
 
 		[[nodiscard]] gpu::BufferHandle GetVertexBuffer() const

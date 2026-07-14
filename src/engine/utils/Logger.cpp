@@ -47,6 +47,8 @@ namespace aether
 
 		struct LoggerBackend
 		{
+			LoggerBackend() = default;
+
 			std::mutex mutex;
 			std::mutex outputMutex;
 			std::condition_variable condition;
@@ -68,17 +70,13 @@ namespace aether
 			~LoggerBackend()
 			{
 				// Safety net for binaries that never call Logger::Shutdown()
-				// explicitly (e.g. the test harness and the assetpack tool).
-				// Running the full shutdown here stops and joins the worker
-				// thread while this object's members (fileStream) and the
-				// standard streams are still alive. Without it, static
-				// destruction tears down a still-joinable std::thread ->
-				// std::terminate() -> abort() (process exit code 3), and the
-				// worker races CRT teardown, intermittently tripping the debug
-				// heap. Shutdown() is idempotent, so an explicit prior call
-				// (the app's RuntimeSystemsGuard) makes this a no-op.
 				Logger::Shutdown();
 			}
+
+			LoggerBackend(const LoggerBackend&) = delete;
+			LoggerBackend& operator=(const LoggerBackend&) = delete;
+			LoggerBackend(LoggerBackend&&) = delete;
+			LoggerBackend& operator=(LoggerBackend&&) = delete;
 		};
 
 		std::atomic<bool> g_crashHandlerActive{false};
@@ -386,7 +384,7 @@ namespace aether
 				return;
 			}
 
-			std::scoped_lock writeLock(backend.outputMutex);
+			const std::scoped_lock writeLock(backend.outputMutex);
 			std::cerr.flush();
 			if (backend.fileStream.is_open())
 			{
@@ -402,7 +400,7 @@ namespace aether
 				Logger::Log(LogLevel::Error, LogCategory::Engine, "std::terminate called -- unhandled C++ exception", std::source_location::current());
 				CrashFlushBestEffort();
 			}
-			LoggerBackend& backend = GetBackend();
+			const LoggerBackend& backend = GetBackend();
 			if (backend.previousTerminateHandler)
 			{
 				backend.previousTerminateHandler();
@@ -418,7 +416,7 @@ namespace aether
 				Logger::Log(LogLevel::Error, LogCategory::Engine, "Abort signal -- CRT assert or explicit abort()", std::source_location::current());
 				CrashFlushBestEffort();
 			}
-			LoggerBackend& backend = GetBackend();
+			const LoggerBackend& backend = GetBackend();
 			std::signal(SIGABRT, backend.previousAbortHandler ? backend.previousAbortHandler : SIG_DFL);
 			std::raise(SIGABRT);
 		}
@@ -434,7 +432,7 @@ namespace aether
 				Logger::Log(LogLevel::Error, LogCategory::Engine, std::format("Unhandled exception 0x{:08X} ({}) at 0x{:016X}", code, ExceptionCodeToString(code), reinterpret_cast<std::uintptr_t>(address)), std::source_location::current());
 				CrashFlushBestEffort();
 			}
-			LoggerBackend& backend = GetBackend();
+			const LoggerBackend& backend = GetBackend();
 			if (backend.previousExceptionFilter)
 			{
 				return backend.previousExceptionFilter(pExceptionInfo);
@@ -468,7 +466,7 @@ namespace aether
 				}
 
 				{
-					std::scoped_lock writeLock(backend.outputMutex);
+					const std::scoped_lock writeLock(backend.outputMutex);
 					for (const LogEntry& entry: batch)
 					{
 						WriteEntry(entry, backend.fileStream);
@@ -481,7 +479,7 @@ namespace aether
 				}
 
 				{
-					std::scoped_lock lock(backend.mutex);
+					const std::scoped_lock lock(backend.mutex);
 					backend.completedSequence = processedSequence;
 				}
 
@@ -496,7 +494,7 @@ namespace aether
 
 		void EnsureInitialized()
 		{
-			LoggerBackend& backend = GetBackend();
+			const LoggerBackend& backend = GetBackend();
 			if (backend.initialized.load(std::memory_order_acquire))
 			{
 				return;
@@ -538,7 +536,7 @@ namespace aether
 
 			if (level == LogLevel::Error)
 			{
-				std::scoped_lock writeLock(backend.outputMutex);
+				const std::scoped_lock writeLock(backend.outputMutex);
 				WriteEntry(entry, backend.fileStream);
 				std::cerr.flush();
 				if (backend.fileStream.is_open())
@@ -549,7 +547,7 @@ namespace aether
 			}
 
 			{
-				std::scoped_lock lock(backend.mutex);
+				const std::scoped_lock lock(backend.mutex);
 				backend.pendingEntries.push_back(std::move(entry));
 				++backend.nextSequence;
 			}
@@ -573,12 +571,12 @@ namespace aether
 			}
 
 			DWORD mode = 0;
-			if (!GetConsoleMode(consoleHandle, &mode))
+			if (GetConsoleMode(consoleHandle, &mode) == 0)
 			{
 				return;
 			}
 
-			if (!SetConsoleMode(consoleHandle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+			if (SetConsoleMode(consoleHandle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) == 0)
 			{
 				return;
 			}
@@ -587,17 +585,7 @@ namespace aether
 #endif
 		}
 
-		// Default log destination when Initialize() is called with no explicit
-		// path. Resolves under the per-user LocalAppData directory so a shipped
 		// game never creates a "logs" folder inside its own install directory.
-		// Falls back to the old CWD-relative path only if the OS has no
-		// resolvable per-user location at all (degraded but still logging,
-		// rather than not logging).
-		//
-		// Keyed by executable name (App vs. AetherGame) so the editor and a
-		// published game -- which share the same LocalAppData/AetherCore folder
-		// but run as separate processes -- don't append to the same log file
-		// concurrently.
 		std::string ResolveDefaultLogPath()
 		{
 			std::string exeName = io::PlatformPaths::GetExecutableName();
@@ -620,7 +608,7 @@ namespace aether
 	{
 		LoggerBackend& backend = GetBackend();
 
-		std::scoped_lock lock(backend.mutex);
+		const std::scoped_lock lock(backend.mutex);
 		if (backend.initialized)
 		{
 			return;
@@ -657,7 +645,7 @@ namespace aether
 		LoggerBackend& backend = GetBackend();
 
 		{
-			std::scoped_lock lock(backend.mutex);
+			const std::scoped_lock lock(backend.mutex);
 			if (!backend.initialized.load(std::memory_order_acquire))
 			{
 				return;
@@ -676,7 +664,7 @@ namespace aether
 			backend.worker.detach();
 		}
 
-		std::scoped_lock lock(backend.mutex);
+		const std::scoped_lock lock(backend.mutex);
 		if (backend.fileStream.is_open())
 		{
 			backend.fileStream.close();
@@ -768,7 +756,7 @@ namespace aether
 
 		EnsureInitialized();
 		LoggerBackend& backend = GetBackend();
-		std::scoped_lock writeLock(backend.outputMutex);
+		const std::scoped_lock writeLock(backend.outputMutex);
 		WritePlainError(message, backend.fileStream);
 	}
 
@@ -786,7 +774,7 @@ namespace aether
 
 		EnsureInitialized();
 		LoggerBackend& backend = GetBackend();
-		std::scoped_lock writeLock(backend.outputMutex);
+		const std::scoped_lock writeLock(backend.outputMutex);
 		WritePlainInfo(message, color, backend.fileStream);
 	}
 

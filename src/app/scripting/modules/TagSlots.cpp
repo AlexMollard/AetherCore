@@ -73,7 +73,7 @@ namespace
 				return UINT32_MAX;
 			}
 
-			uint32_t id = m_nextTagId++;
+			const uint32_t id = m_nextTagId++;
 			m_nameToId[name] = id;
 			m_idToName[id] = name;
 			return id;

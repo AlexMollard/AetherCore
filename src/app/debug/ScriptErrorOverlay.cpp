@@ -18,10 +18,6 @@ namespace aether::editor
 		outPath.clear();
 		outLine = 0;
 
-		// .NET exception stack traces read "... in <path>\Script.cs:line 42".
-		// Anchor on the ".cs:" marker, then take the preceding path and the line
-		// number after an optional "line " token so the toast can offer to open
-		// the offending script.
 		std::size_t searchPos = 0;
 		while (searchPos < error.size())
 		{
@@ -45,7 +41,7 @@ namespace aether::editor
 			}
 
 			std::size_t lineEnd = lineStart;
-			while (lineEnd < error.size() && std::isdigit(static_cast<unsigned char>(error[lineEnd])))
+			while (lineEnd < error.size() && (std::isdigit(static_cast<unsigned char>(error[lineEnd])) != 0))
 			{
 				++lineEnd;
 			}
@@ -74,7 +70,7 @@ namespace aether::editor
 
 	void ScriptErrorOverlay::Poll(app::LayerContext& context)
 	{
-		auto scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
+		auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
 		if (!scripting)
 		{
 			return;
@@ -139,7 +135,7 @@ namespace aether::editor
 					{
 						lineEnd = singleErr.size();
 					}
-					std::string line = singleErr.substr(pos, lineEnd - pos);
+					const std::string line = singleErr.substr(pos, lineEnd - pos);
 
 					std::size_t first = line.find_first_not_of(" \t");
 					if (first != std::string::npos && !line.empty())

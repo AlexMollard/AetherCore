@@ -15,14 +15,8 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 
-// Model loading, primitive meshes, and materials exported to C#: model/mesh
-// caches live on the SceneContext, materials go through MaterialSystem
-// (per-entity) and MaterialAuthoring (shared).
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
-
-// ── Model loading ─────────────────────────────────────────────────────────────
 
 AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 {
@@ -60,7 +54,6 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 		modelPtr = &ctx.loadedModels[index];
 	}
 
-	// Name the logical entity after the model file stem.
 	std::string stem = path;
 	if (const auto slash = stem.find_last_of("/\\"); slash != std::string::npos)
 	{
@@ -76,7 +69,6 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 	}
 	w.EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = stem});
 
-	// Reloading onto the same entity re-links children instead of accumulating.
 	if (const auto* h = w.TryGet<aether::HierarchyComponent>(aether::Entity{id}))
 	{
 		const std::vector<aether::Entity> stale = h->children;
@@ -100,10 +92,6 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 	}
 }
 
-// ── Primitive meshes ──────────────────────────────────────────────────────────
-
-// create_mesh(type) -> handle; caches a primitive ("cube","sphere","plane",
-// "quad","triangle"). 0 is returned for an unknown type or missing primitives.
 AE_SCRIPT_API std::uint32_t aether_create_mesh(const char* typeC)
 {
 	auto& ctx = ActiveContext();
@@ -113,9 +101,7 @@ AE_SCRIPT_API std::uint32_t aether_create_mesh(const char* typeC)
 	}
 
 	aether::PrimitiveMesh primType{};
-	// Assigned together with primType in every branch below; the else path
-	// returns, so it is always set before the read.
-	const char* displayName;
+	const char* displayName = nullptr;
 	const std::string_view sv(typeC != nullptr ? typeC : "");
 	if (sv == "cube")
 	{
@@ -193,8 +179,6 @@ AE_SCRIPT_API void aether_add_mesh(std::uint32_t entityId, std::uint32_t meshHan
 	}
 }
 
-// ── Per-entity solid material paint ───────────────────────────────────────────
-
 AE_SCRIPT_API void aether_set_material(std::uint32_t id, Vec3 color, float metallic, float roughness)
 {
 	auto& ctx = ActiveContext();
@@ -216,8 +200,6 @@ AE_SCRIPT_API void aether_set_material_color(std::uint32_t id, Vec3 color)
 {
 	aether_set_material(id, color, 0.0f, 0.6f);
 }
-
-// ── Shared authoring materials ────────────────────────────────────────────────
 
 AE_SCRIPT_API std::uint32_t aether_make_material(Vec3 color, float metallic, float roughness)
 {
@@ -277,8 +259,6 @@ AE_SCRIPT_API void aether_material_set_emissive(std::uint32_t materialId, Vec3 c
 		ctx.assets->GetMaterialAuthoring().SetEmissive(ActiveWorld(), materialId, ToGlm(color));
 	}
 }
-
-// ── Per-entity material instance edits (copy-on-write) ────────────────────────
 
 AE_SCRIPT_API void aether_entity_material_set_color(std::uint32_t entityId, Vec3 color)
 {

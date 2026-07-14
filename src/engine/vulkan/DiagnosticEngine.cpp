@@ -96,8 +96,6 @@ namespace aether
 				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
 					return "Instruction pointer fault";
 				// Enum sentinel (0x7FFFFFFF), never a real address type. Listed
-				// explicitly so the exhaustive-switch check (-Wswitch-enum, active under
-				// clang-cl) is satisfied; shares the default's "unknown" handling.
 				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
 				default:
 					return std::format("Unknown({})", static_cast<int>(type));
@@ -159,7 +157,7 @@ namespace aether
 				return;
 			}
 			std::vector<VkExtensionProperties> exts(extCount);
-			VkResult extResult = vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, exts.data());
+			const VkResult extResult = vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, exts.data());
 			if (extResult != VK_SUCCESS && extResult != VK_INCOMPLETE)
 			{
 				return;
@@ -213,7 +211,7 @@ namespace aether
 		uint32_t memTypeIndex = UINT32_MAX;
 		for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i)
 		{
-			if ((memReqs.memoryTypeBits & (1u << i)) && (memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) && (memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+			if (((memReqs.memoryTypeBits & (1u << i)) != 0u) && ((memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0u) && ((memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0u))
 			{
 				memTypeIndex = i;
 				break;
@@ -298,7 +296,7 @@ namespace aether
 
 		m_memoryTracker.Clear();
 		{
-			std::lock_guard lock(m_labelMutex);
+			const std::lock_guard lock(m_labelMutex);
 			m_breadcrumbLabels.clear();
 		}
 		for (EventSlot& slot: m_eventSlots)
@@ -509,7 +507,7 @@ namespace aether
 
 	void DiagnosticEngine::RegisterBreadcrumbLabel(std::uint32_t markerValue, std::string_view label)
 	{
-		std::lock_guard lock(m_labelMutex);
+		const std::lock_guard lock(m_labelMutex);
 		m_breadcrumbLabels[markerValue] = std::string(label);
 	}
 
@@ -831,7 +829,7 @@ namespace aether
 
 	std::string DiagnosticEngine::GetLabel(std::uint32_t markerValue) const
 	{
-		std::lock_guard lock(m_labelMutex);
+		const std::lock_guard lock(m_labelMutex);
 		auto it = m_breadcrumbLabels.find(markerValue);
 		if (it == m_breadcrumbLabels.end())
 		{
@@ -906,35 +904,35 @@ namespace aether
 			if (resolved.has_value())
 			{
 				analysis.possibleCauses.push_back(std::format("Shader read/write out of bounds inside '{}'", resolved->resource->name));
-				analysis.possibleCauses.push_back("Bindless descriptor heap entry points to the wrong GPU address or byte range");
-				analysis.possibleCauses.push_back("Descriptor heap update wrote a valid resource with an incorrect offset/size");
-				analysis.possibleCauses.push_back("Resource layout or format does not match what the shader expects");
+				analysis.possibleCauses.emplace_back("Bindless descriptor heap entry points to the wrong GPU address or byte range");
+				analysis.possibleCauses.emplace_back("Descriptor heap update wrote a valid resource with an incorrect offset/size");
+				analysis.possibleCauses.emplace_back("Resource layout or format does not match what the shader expects");
 				analysis.nextSteps.push_back(std::format("Inspect shader BDA/bindless indexing in '{}'", analysis.location));
-				analysis.nextSteps.push_back("Dump bindless descriptor heap entries and verify BDA ranges before the faulting pass");
-				analysis.nextSteps.push_back("Check buffer/image bounds for this frame");
+				analysis.nextSteps.emplace_back("Dump bindless descriptor heap entries and verify BDA ranges before the faulting pass");
+				analysis.nextSteps.emplace_back("Check buffer/image bounds for this frame");
 			}
 			else
 			{
-				analysis.possibleCauses.push_back("Shader computed a stale or invalid BDA from bindless descriptor data");
-				analysis.possibleCauses.push_back("Bindless descriptor heap entry points to a destroyed or stale allocation");
-				analysis.possibleCauses.push_back("Descriptor heap update race, bad byte offset, or bad stride");
-				analysis.possibleCauses.push_back("Driver-internal shader-code address fault");
+				analysis.possibleCauses.emplace_back("Shader computed a stale or invalid BDA from bindless descriptor data");
+				analysis.possibleCauses.emplace_back("Bindless descriptor heap entry points to a destroyed or stale allocation");
+				analysis.possibleCauses.emplace_back("Descriptor heap update race, bad byte offset, or bad stride");
+				analysis.possibleCauses.emplace_back("Driver-internal shader-code address fault");
 				analysis.nextSteps.push_back(std::format("Verify bindless descriptor heap writes and resource lifetimes before '{}'", analysis.location));
-				analysis.nextSteps.push_back("Inspect shader code for invalid BDA/address calculations");
-				analysis.nextSteps.push_back("Add shader debug printf or sentinel-buffer asserts around the suspected access");
+				analysis.nextSteps.emplace_back("Inspect shader code for invalid BDA/address calculations");
+				analysis.nextSteps.emplace_back("Add shader debug printf or sentinel-buffer asserts around the suspected access");
 			}
 		}
 		else if (f.hasInstructionFault)
 		{
-			analysis.possibleCauses.push_back("Shader object instruction fetch fault");
-			analysis.possibleCauses.push_back("Invalid or corrupted shader object/code path");
-			analysis.possibleCauses.push_back("Driver-internal shader-code address is not resolvable to a CPU resource");
-			analysis.nextSteps.push_back("Rebuild shaders with debug info and inspect the faulting shader object");
-			analysis.nextSteps.push_back("Use debug printf or sentinel-buffer asserts in the faulting shader");
+			analysis.possibleCauses.emplace_back("Shader object instruction fetch fault");
+			analysis.possibleCauses.emplace_back("Invalid or corrupted shader object/code path");
+			analysis.possibleCauses.emplace_back("Driver-internal shader-code address is not resolvable to a CPU resource");
+			analysis.nextSteps.emplace_back("Rebuild shaders with debug info and inspect the faulting shader object");
+			analysis.nextSteps.emplace_back("Use debug printf or sentinel-buffer asserts in the faulting shader");
 		}
 
-		analysis.nextSteps.push_back("Enable synchronization validation for this run");
-		analysis.nextSteps.push_back("Re-run with GPU-assisted validation if available");
+		analysis.nextSteps.emplace_back("Enable synchronization validation for this run");
+		analysis.nextSteps.emplace_back("Re-run with GPU-assisted validation if available");
 		return analysis;
 	}
 } // namespace aether

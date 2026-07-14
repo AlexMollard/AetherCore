@@ -7,9 +7,6 @@
 
 namespace aether
 {
-	// A typed view into a GPU buffer allocation.
-	// For device-local (GpuHeap) allocations, data is nullptr - access is GPU-only via address.
-	// For host-mapped allocations, data points to the persistently-mapped CPU memory.
 	template<typename T>
 	struct GpuSpan
 	{

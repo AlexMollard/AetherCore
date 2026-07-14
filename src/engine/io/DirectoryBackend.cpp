@@ -43,7 +43,6 @@ namespace aether::io
 						const bool followedBySlash = (i + 2 < pattern.size() && pattern[i + 2] == '/');
 						if (followedBySlash)
 						{
-							// "**/" should match zero or more directory segments.
 							regex += "(?:.*/)?";
 							i += 2;
 						}
@@ -264,20 +263,17 @@ namespace aether::io
 	{
 		auto fullPath = Resolve(relativePath);
 
-		// Exact match (fast path -- works on case-insensitive filesystems).
 		std::error_code ec;
 		if (std::filesystem::exists(fullPath, ec))
 		{
 			return fullPath;
 		}
 
-		// Case-insensitive fallback: scan the parent directory.
 		const auto parent = fullPath.parent_path();
 		const std::string targetFilename = std::filesystem::path(relativePath).filename().generic_string();
 
 		if (!std::filesystem::exists(parent, ec))
 		{
-			// Can't scan -- pass through to fuzzy search below via bestMatch.
 			if (bestMatch)
 			{
 				*bestMatch = {};
@@ -304,7 +300,6 @@ namespace aether::io
 			}
 		}
 
-		// Fuzzy (Levenshtein) -- only on explicit request.
 		if (bestMatch)
 		{
 			*bestMatch = {};

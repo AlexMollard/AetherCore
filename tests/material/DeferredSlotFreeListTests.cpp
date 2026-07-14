@@ -14,17 +14,17 @@ TEST_CASE("Allocate hands out distinct slots and reports exhaustion") {
     CHECK(s0 != s1);
     CHECK(s1 != s2);
     CHECK(s0 != s2);
-    CHECK(a.Allocate() == DeferredSlotFreeList::kInvalidSlot); // exhausted
+    CHECK(a.Allocate() == DeferredSlotFreeList::kInvalidSlot);
 }
 
 TEST_CASE("A freed slot is not reused until the in-flight window elapses") {
     DeferredSlotFreeList a;
-    a.Reset(1); // single slot forces reuse-or-nothing
+    a.Reset(1);
 
     const std::uint32_t slot = a.Allocate();
     CHECK(slot != DeferredSlotFreeList::kInvalidSlot);
 
-    a.Free(slot); // freed on frame 0 -> reusable at frame kReuseDelayFrames
+    a.Free(slot);
     CHECK(a.PendingCount() == 1);
 
     // Still within the window: the slot must NOT come back yet.
@@ -34,7 +34,6 @@ TEST_CASE("A freed slot is not reused until the in-flight window elapses") {
         CHECK(a.Allocate() == DeferredSlotFreeList::kInvalidSlot);
     }
 
-    // Window elapsed: the slot returns to circulation.
     a.AdvanceFrame(DeferredSlotFreeList::kReuseDelayFrames);
     CHECK(a.PendingCount() == 0);
     CHECK(a.Allocate() == slot);
@@ -47,12 +46,11 @@ TEST_CASE("Multiple frees retire independently by their own free frame") {
     const std::uint32_t s0 = a.Allocate();
     const std::uint32_t s1 = a.Allocate();
 
-    a.Free(s0);                 // retire at kReuseDelayFrames
+    a.Free(s0);
     a.AdvanceFrame(2);
-    a.Free(s1);                 // retire at 2 + kReuseDelayFrames (later)
+    a.Free(s1);
 
     a.AdvanceFrame(DeferredSlotFreeList::kReuseDelayFrames);
-    // s0 matured, s1 has not.
     CHECK(a.Allocate() == s0);
     CHECK(a.Allocate() == DeferredSlotFreeList::kInvalidSlot);
 

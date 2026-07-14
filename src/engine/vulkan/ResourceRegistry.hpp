@@ -23,28 +23,12 @@ namespace aether
 
 namespace aether
 {
-	// Owns opaque handles for engine-facing GPU resources and centralizes
-	// deferred destruction (kMaxFramesInFlight ring, WaitIdle-aware).
-	//
-	// Slot tables: TextureSlot, BufferSlot, PipelineSlot. Each slot is
-	// {generation, std::optional<Entry>}. Generation increments on slot reuse
-	// so stale handles fail validation in Resolve*().
-	//
-	// Deferred destruction: callers schedule destruction with Destroy(handle);
-	// the entry is queued in the *current* frame's ring slot. AdvanceFrame()
-	// promotes the ring by one slot and runs destroyers whose target frame has
-	// retired (GpuDevice::WaitIdle at the matching point guarantees GPU done).
-	//
 	// Thread safety: none. Create / Destroy / AdvanceFrame / DrainAll /
-	// Shutdown mutate internal slot tables and the pending-destruction ring
-	// without locking. All calls must be externally serialized to a single
-	// thread (the engine's main thread / dedicated render thread).
 	class ResourceRegistry
 	{
 	public:
 		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
-		// Debug backtrace constants.
 		static constexpr int kAllocFrames = 4;
 		static constexpr int kBacktraceDepth = 9;
 
@@ -65,10 +49,6 @@ namespace aether
 			bool ownsStorageView = false;
 			std::uint32_t mipLevels = 1;
 			std::uint32_t arrayLayers = 1;
-			// Recipe for VK_EXT_descriptor_heap: vkWriteResourceDescriptorsEXT
-			// takes a const VkImageViewCreateInfo* (the recipe, not the view
-			// handle). Stored here at view-creation time so the bindless
-			// manager can re-issue it when registering the texture into the
 			// resource heap. Stable for the texture's lifetime.
 			VkImageViewCreateInfo viewCreateInfo{
 			        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -91,25 +71,16 @@ namespace aether
 			VkDeviceAddress deviceAddress = 0;
 		};
 
-		// A pipeline is a set of VK_EXT_shader_object shader handles plus the
-		// rasterization / depth / blend / topology state that was previously
-		// baked into a VkPipeline. CommandList::BindPipeline re-applies the
-		// cached state via vkCmdSet* on every bind (shader objects are fully
-		// dynamic - no static pipeline state survives the migration).
 		struct PipelineEntry
 		{
 			VkDevice device = VK_NULL_HANDLE;
 
-			// Shader handles. For graphics: vertexShader is set, fragmentShader
-			// is set unless the pipeline is depth-only (no fragment stage).
-			// For compute: computeShader is set, the graphics fields are null.
 			VkShaderEXT vertexShader = VK_NULL_HANDLE;
 			VkShaderEXT fragmentShader = VK_NULL_HANDLE;
 			VkShaderEXT computeShader = VK_NULL_HANDLE;
 
 			bool isGraphics = false;
 
-			// -- Cached dynamic state (graphics only) -------------------------
 			VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 			VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
 			VkCullModeFlags cullMode = VK_CULL_MODE_NONE;
@@ -126,8 +97,6 @@ namespace aether
 			VkLogicOp logicOp = VK_LOGIC_OP_COPY;
 			float blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 			VkSampleCountFlags rasterizationSampleCount = VK_SAMPLE_COUNT_1_BIT;
-			// Sample mask + alpha-to-coverage / alpha-to-one. The engine uses 1
-			// sample (no MSAA), so the sample mask is all-ones and alpha-to-* is off.
 			VkSampleMask sampleMask = 0xFFFFFFFFu;
 			VkBool32 alphaToCoverageEnable = VK_FALSE;
 			VkBool32 alphaToOneEnable = VK_FALSE;
@@ -138,15 +107,12 @@ namespace aether
 			std::uint32_t viewportCount = 1;
 			VkViewport viewports[8] = {{0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f}};
 
-			// One color attachment's blend state (engine uses at most 1 RT per pipeline).
 			VkBool32 colorBlendEnable = VK_FALSE;
 			VkColorBlendEquationEXT colorBlendEquation{};
 			VkColorComponentFlags colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			float lineWidth = 1.0f;
 			bool hasLineWidth = false;
 
-			// Vertex input (vertex-input-dynamic-state). Empty for BDA-only pipelines
-			// (the common case); populated by debug renderers that bind vertex streams.
 			std::vector<VkVertexInputBindingDescription2EXT> vertexBindings;
 			std::vector<VkVertexInputAttributeDescription2EXT> vertexAttributes;
 		};
@@ -159,21 +125,16 @@ namespace aether
 
 		void Shutdown();
 
-		// Texture registration. Pass ownsAllocation=true to have the registry destroy on Destroy().
 		gpu::TextureHandle RegisterTexture(const TextureEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
-		// Buffer registration.
 		gpu::BufferHandle RegisterBuffer(const BufferEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
-		// Pipeline registration.
 		gpu::PipelineHandle RegisterPipeline(const PipelineEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
-		// Schedule destruction. Runs kMaxFramesInFlight frames later in AdvanceFrame.
 		void Destroy(gpu::TextureHandle handle);
 		void Destroy(gpu::BufferHandle handle);
 		void Destroy(gpu::PipelineHandle handle);
 
-		// Resolve handle -> entry, or nullptr if stale.
 		[[nodiscard]] const TextureEntry* Resolve(gpu::TextureHandle handle) const;
 		[[nodiscard]] const BufferEntry* Resolve(gpu::BufferHandle handle) const;
 		[[nodiscard]] const PipelineEntry* Resolve(gpu::PipelineHandle handle) const;
@@ -181,10 +142,8 @@ namespace aether
 		[[nodiscard]] TextureEntry* ResolveMutable(gpu::TextureHandle handle);
 		[[nodiscard]] BufferEntry* ResolveMutable(gpu::BufferHandle handle);
 
-		// Advance the deferred-destruction ring by one frame.
 		void AdvanceFrame();
 
-		// Run all queued destroyers while the device is still valid.
 		void DrainAll();
 
 		void Init(VkDevice device, VmaAllocator allocator) noexcept;
@@ -203,12 +162,8 @@ namespace aether
 		[[nodiscard]] gpu::BufferHandle CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags2 usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
 		[[nodiscard]] gpu::TextureHandle CreateAliasedTexture(const gpu::TextureDesc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
 
-		// Bindless registration. BindlessManager pointer is for deferred slot-free on Destroy().
 		void SetBindlessManager(BindlessManager* mgr);
 
-		// Diagnostic address tracking. GpuMemoryTracker pointer lets the
-		// registry auto-register every BDA range so the DiagnosticEngine can
-		// resolve raw GPU fault addresses back to resource names.
 		void SetMemoryTracker(GpuMemoryTracker* tracker);
 		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle, gpu::ImageAspect aspectMask = gpu::ImageAspect::Color, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 		[[nodiscard]] bool HasBindlessSampled(gpu::TextureHandle handle) const;
@@ -226,11 +181,7 @@ namespace aether
 		[[nodiscard]] const void* GetViewCreateInfo(gpu::TextureHandle handle) const noexcept;
 
 	private:
-		// A queued destructor. Holds a typed-owning variant of the resource
-		// payload (or a closure) so destruction is unambiguous regardless of
 		// ownership flags. We use a std::function to keep the type simple
-		// at the cost of a small heap allocation per Destroy() call; this is
-		// cold path (shaders/transients), not the steady-state hot loop.
 		using DestructionFn = std::function<void()>;
 
 		struct PendingDestruction
@@ -238,9 +189,7 @@ namespace aether
 			DestructionFn fn;
 		};
 
-		// Per-slot storage. std::optional so an empty slot costs only the
 		// size of the bool + alignment padding. Generation lives next to the
-		// payload so any reuse bumps the generation atomically.
 #ifndef NDEBUG
 		struct AllocFrame
 		{
@@ -257,7 +206,7 @@ namespace aether
 			std::string debugName;
 #ifndef NDEBUG
 			std::array<AllocFrame, kAllocFrames> allocFrames{};
-			int allocSiteCount = 0; // total pushes (may exceed kAllocFrames)
+			int allocSiteCount = 0;
 #endif
 		};
 
@@ -283,8 +232,6 @@ namespace aether
 #endif
 		};
 
-		// Find an empty slot, or pick a victim for reuse. Returns ~0u when
-		// the table is full (16-bit index space exhausted).
 		[[nodiscard]] std::uint32_t AcquireTextureSlot();
 		[[nodiscard]] std::uint32_t AcquireBufferSlot();
 		[[nodiscard]] std::uint32_t AcquirePipelineSlot();

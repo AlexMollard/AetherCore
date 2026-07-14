@@ -19,15 +19,12 @@ namespace aether::editor
 
 	namespace
 	{
-		// Drop the "<mount>://" prefix, leaving a project-relative path.
 		std::string StripMount(const std::string& vfs)
 		{
 			const auto ss = vfs.find("://");
 			return ss == std::string::npos ? vfs : vfs.substr(ss + 3);
 		}
 
-		// Write baked bytes straight to disk under the project root (project:// is
-		// not guaranteed writable through the VFS, but the raw project folder is).
 		bool WriteBaked(const fs::path& outPath, const assetpipeline::ByteBuffer& data, std::string& error)
 		{
 			std::error_code ec;
@@ -50,8 +47,6 @@ namespace aether::editor
 
 	bool EnsureModelBaked(const std::string& vfsModelPath, const app::EditorProjectContext& project, std::string& error)
 	{
-		// Already baked? The loader resolves a .mesh sibling through the VFS; if it's
-		// there (raw folder or pak), we're done. Same check the loader uses.
 		const std::string meshVfs = assets::GltfAsset::ResolveMeshPath(vfsModelPath);
 		if (!meshVfs.empty() && io::FileSystem::Exists(meshVfs))
 		{
@@ -64,7 +59,6 @@ namespace aether::editor
 			return false;
 		}
 
-		// Read the raw glTF/GLB through the VFS.
 		const auto raw = io::FileSystem::ReadFile(vfsModelPath);
 		if (!raw)
 		{
@@ -72,8 +66,8 @@ namespace aether::editor
 			return false;
 		}
 
-		const std::string rel = StripMount(vfsModelPath); // assets/models/Fox/Fox.gltf
-		const fs::path diskPath = project.root / rel;     // disk source (resolves external .bin URIs)
+		const std::string rel = StripMount(vfsModelPath);
+		const fs::path diskPath = project.root / rel;
 
 		const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, project.root);
 
@@ -84,7 +78,6 @@ namespace aether::editor
 		}
 
 		// Mirror AssetProcessor's pak layout, but under the project root on disk.
-		// These files then resolve immediately and get packed as-is on Publish.
 		const std::string stem = fs::path(rel).stem().generic_string();
 		const fs::path modelDir = (project.root / rel).parent_path();
 

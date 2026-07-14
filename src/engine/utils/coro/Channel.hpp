@@ -12,19 +12,7 @@
 namespace aether::coro
 {
 
-	// ---------------------------------------------------------------------------
-	// Bounded SPSC channel (single-producer, single-consumer) that supports both
-	// blocking and coroutine-await operations.
-	//
 	// Internal locking makes it thread-safe for the general case; the "SPSC" in
-	// the name refers to logical ownership (one writer, one reader), not a lock-
-	// free guarantee.
-	//
-	// When the channel is full (write side) or empty (read side):
-	//   - Blocking API  (write/wait_read) blocks the calling thread via condvar.
-	//   - Coroutine API (write_async/read_async) suspends the calling coroutine
-	//     and resumes it when space/data becomes available.
-	// ---------------------------------------------------------------------------
 	template<typename T>
 	class channel
 	{
@@ -40,9 +28,6 @@ namespace aether::coro
 		channel& operator=(channel&&) = delete;
 		~channel() = default;
 
-		// -- Blocking API -------------------------------------------------------
-
-		// Block until space is available, then write.
 		void write(T value)
 		{
 			std::unique_lock lock(m_mutex);
@@ -55,7 +40,6 @@ namespace aether::coro
 			m_notEmpty.notify_one();
 		}
 
-		// Block until data is available, then read.
 		T read()
 		{
 			std::unique_lock lock(m_mutex);
@@ -70,7 +54,6 @@ namespace aether::coro
 			return value;
 		}
 
-		// Read with timeout.  Returns nullopt on timeout.
 		template<typename Rep, typename Period>
 		std::optional<T> try_read_for(const std::chrono::duration<Rep, Period>& timeout)
 		{
@@ -89,7 +72,6 @@ namespace aether::coro
 			return value;
 		}
 
-		// Peek: get the next value without removing it (blocks).
 		[[nodiscard]] std::optional<T> peek()
 		{
 			std::unique_lock lock(m_mutex);
@@ -99,8 +81,6 @@ namespace aether::coro
 			}
 			return m_buffer.front();
 		}
-
-		// -- Coroutine API ------------------------------------------------------
 
 		class write_awaiter
 		{
@@ -122,7 +102,6 @@ namespace aether::coro
 				if (m_channel->m_buffer.size() < m_channel->m_capacity || m_channel->m_closed)
 				{
 					lock.unlock();
-					// Already have space - resume inline.
 					if (!m_channel->m_closed)
 					{
 						std::scoped_lock l2(m_channel->m_mutex);
@@ -198,9 +177,6 @@ namespace aether::coro
 			return read_awaiter{this};
 		}
 
-		// -- Write-side notification (for the producer to notify the consumer) --
-		// Called from the write side after producing data - resumes any awaiting
-		// read coroutine directly.
 		void notify_read_waiter()
 		{
 			std::coroutine_handle<> h = nullptr;
@@ -219,7 +195,7 @@ namespace aether::coro
 
 		void close()
 		{
-			std::scoped_lock l(m_mutex);
+			const std::scoped_lock l(m_mutex);
 			m_closed = true;
 			m_notEmpty.notify_all();
 			m_notFull.notify_all();
@@ -261,7 +237,6 @@ namespace aether::coro
 		std::condition_variable m_notEmpty;
 		std::condition_variable m_notFull;
 
-		// Single-slot coroutine waiters (SPSC: at most one waiter per direction)
 		std::coroutine_handle<> m_writeWaiter = nullptr;
 		T m_pendingWriteValue{};
 		std::coroutine_handle<> m_readWaiter = nullptr;

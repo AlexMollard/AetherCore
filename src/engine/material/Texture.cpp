@@ -81,9 +81,6 @@ namespace aether
 
 	namespace
 	{
-		// -------------------------------------------------------------------------
-		// DDS / BCn upload path
-		// -------------------------------------------------------------------------
 
 		constexpr uint32_t DDS_MAGIC = 0x20534444u;
 		constexpr uint32_t FOURCC_DX10 = 0x30315844u;
@@ -113,8 +110,6 @@ namespace aether
 
 #pragma pack(pop)
 
-		// DXGI -> gpu::Format. The result maps one-for-one through
-		// gpu::ToVk on the backend; the engine only sees the engine-side enum.
 		gpu::Format DxgiToGpuFormat(uint32_t dxgi)
 		{
 			switch (dxgi)
@@ -139,7 +134,7 @@ namespace aether
 			}
 
 			const std::byte* p = fileData.data();
-			p += sizeof(uint32_t); // skip magic
+			p += sizeof(uint32_t);
 
 			const auto& hdr = *reinterpret_cast<const DdsHeader*>(p);
 			p += sizeof(DdsHeader);
@@ -245,8 +240,6 @@ namespace aether
 
 	Expected<Texture> Texture::CreateSolidColor(std::array<std::uint8_t, 4> rgba, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 	{
-		// A 1x1 image samples identically at every UV, so a solid colour needs
-		// exactly one pixel regardless of how it is stretched over a mesh.
 		static_assert(sizeof(stbi_uc) == sizeof(std::uint8_t));
 		Texture texture;
 		texture.m_handle = UploadRgbaToGpuImage(rgba.data(), 1, 1, device, uploadQueue, uploadPool, "builtin:solid-color");
@@ -256,14 +249,12 @@ namespace aether
 
 	std::string Texture::ResolveTexturePath(std::string_view path)
 	{
-		// Derive the .texture sibling path (e.g. "project://assets/foo/bar.png" -> ".../bar.texture")
 		const std::string pathStr(path);
 		std::string texturePath;
 		{
 			const std::filesystem::path fp(pathStr);
 			const std::filesystem::path stem = fp.parent_path() / fp.stem();
 			texturePath = stem.generic_string() + ".texture";
-			// Preserve the VFS mount (everything before the first '/')
 			const std::size_t slashSlash = pathStr.find("://");
 			if (slashSlash != std::string::npos)
 			{
@@ -272,8 +263,6 @@ namespace aether
 				texturePath = mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
 			}
 		}
-		// Prefer the pre-transcoded .texture (DDS) sibling if present; else the
-		// original path (assets not processed by AssetPacker).
 		return io::FileSystem::Exists(texturePath) ? texturePath : pathStr;
 	}
 

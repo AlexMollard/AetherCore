@@ -14,16 +14,14 @@ namespace aether::ui
 		kShapeSdfGlyph = 4,
 	};
 
-	// Mirrors DrawCommandData in shaders/include/UIStructs.slangh. Uploaded verbatim
-	// to a device-address buffer the ui_shapes shader reads by instance index.
 	struct UiDrawCommand
 	{
-		glm::vec4 data0{0.f}; // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1
-		glm::vec4 data1{0.f}; // Rect/Line: cornerRadius/thickness | TexturedRect: u0,v0,u1,v1
-		glm::vec4 color{1.f}; // RGBA tint
+		glm::vec4 data0{0.f};
+		glm::vec4 data1{0.f};
+		glm::vec4 color{1.f};
 		std::uint32_t type = kShapeRect;
 		std::int32_t layer = 0;
-		std::uint32_t textureSlot = 0; // bindless slot (TexturedRect only)
+		std::uint32_t textureSlot = 0;
 		std::uint32_t pad1 = 0;
 	};
 

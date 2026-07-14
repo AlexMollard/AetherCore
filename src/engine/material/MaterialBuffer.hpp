@@ -13,14 +13,6 @@
 
 namespace aether
 {
-	// Persistently-mapped SSBO holding the engine's material table.
-	//
-	// Storage path: stores a single gpu::BufferHandle (8 bytes, typed,
-	// generation-checked). Allocated through gpu::ResourceRegistry::
-	// CreateMappedBuffer which uses the registry's 3-frame deferred-
-	// destruction ring. CPU writes go through ResolveMappedBuffer().mappedPtr;
-	// GPU addresses through ResolveBuffer().deviceAddress. No raw VkBuffer
-	// is held, no UniqueBuffer member, no engine-side vk* token.
 	class MaterialBuffer final : public IMaterialSlotSink
 	{
 	public:
@@ -28,7 +20,7 @@ namespace aether
 		static constexpr std::uint32_t kInvalidSlot = 0xFFFFFFFFu;
 
 		MaterialBuffer() = default;
-		~MaterialBuffer();
+		~MaterialBuffer() override;
 
 		MaterialBuffer(const MaterialBuffer&) = AE_DELETE_MSG("use std::move");
 		MaterialBuffer& operator=(const MaterialBuffer&) = AE_DELETE_MSG("use std::move");
@@ -52,9 +44,6 @@ namespace aether
 			return kMaxMaterials;
 		}
 
-		// Advance the deferred-free clock. Slots freed several frames ago (past
-		// the in-flight window) become reusable. Call once per frame from the
-		// render loop, alongside BindlessManager::AdvanceFrame.
 		void AdvanceFrame(std::uint64_t frameIndex);
 
 		[[nodiscard]] gpu::DeviceAddress GetDeviceAddress() const

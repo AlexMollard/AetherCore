@@ -12,9 +12,9 @@ TEST_CASE("FuzzyMatch: empty needle matches everything with score 0") {
 
 TEST_CASE("FuzzyMatch: subsequence matches, non-subsequence does not") {
     CHECK(FuzzyMatch("insp", "Inspector").has_value());
-    CHECK(FuzzyMatch("vp", "Viewport").has_value());              // scattered subsequence
+    CHECK(FuzzyMatch("vp", "Viewport").has_value());
     CHECK_FALSE(FuzzyMatch("xyz", "Inspector").has_value());
-    CHECK_FALSE(FuzzyMatch("inspector!", "Inspector").has_value()); // needle longer than a full match
+    CHECK_FALSE(FuzzyMatch("inspector!", "Inspector").has_value());
 }
 
 TEST_CASE("FuzzyMatch: is case-insensitive") {

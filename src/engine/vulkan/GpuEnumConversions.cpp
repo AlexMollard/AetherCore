@@ -4,10 +4,6 @@
 
 namespace aether::gpu
 {
-	// All Format enum values are enumerated explicitly to satisfy
-	// -Werror=switch-enum. Anything the engine does not (yet) use maps to
-	// VK_FORMAT_UNDEFINED. Extending Format will force a compile error here,
-	// prompting the engineer to decide on the VkFormat.
 	VkFormat ToVk(Format format) noexcept
 	{
 		switch (format)
@@ -54,11 +50,6 @@ namespace aether::gpu
 		return VK_FORMAT_UNDEFINED;
 	}
 
-	// VkFormat has ~250 entries and the engine only uses ~20 of them. The
-	// project's existing pattern (see GpuDevice.cpp) is to silence -Wswitch-enum
-	// for the VkFormat switch and funnel unknown values through Format::Undefined
-	// via a default arm. This is preferable to enumerating hundreds of cases
-	// that always return Undefined.
 	Format FromVk(VkFormat format) noexcept
 	{
 #ifdef __clang__
@@ -202,7 +193,6 @@ namespace aether::gpu
 
 	std::uint32_t BytesPerPixel(Format format) noexcept
 	{
-		// Block-compressed formats report 0 here - call sites that need
 		// exact block-size accounting must use a dedicated BCn helper.
 		switch (format)
 		{
@@ -585,9 +575,6 @@ namespace aether::gpu
 		return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	}
 
-	// -------------------------------------------------------------------------
-	// PolygonMode
-	// -------------------------------------------------------------------------
 	VkPolygonMode ToVk(PolygonMode mode) noexcept
 	{
 		switch (mode)
@@ -600,9 +587,6 @@ namespace aether::gpu
 		return VK_POLYGON_MODE_FILL;
 	}
 
-	// -------------------------------------------------------------------------
-	// CullMode
-	// -------------------------------------------------------------------------
 	VkCullModeFlags ToVk(CullMode mode) noexcept
 	{
 		switch (mode)
@@ -618,10 +602,6 @@ namespace aether::gpu
 		}
 		return VK_CULL_MODE_BACK_BIT;
 	}
-
-	// The engine-side barrier structs hold opaque gpu::Image / gpu::Buffer
-	// handles; the storage knows the actual VkImage / VkBuffer to plug in.
-	// The translation here is otherwise a one-for-one field copy.
 
 	VkImageMemoryBarrier2 ToVk(const ImageMemoryBarrier& barrier, VkImage resolvedImage) noexcept
 	{

@@ -74,7 +74,7 @@ namespace aether
 		SceneViewportSettings settings;
 		bool enabled = false;
 		{
-			std::lock_guard lock(m_sceneViewportMutex);
+			const std::lock_guard lock(m_sceneViewportMutex);
 			settings = m_requestedSceneViewportSettings;
 			enabled = m_requestedSceneViewportEnabled;
 		}
@@ -102,13 +102,13 @@ namespace aether
 
 	SceneViewportSettings RenderingSubsystem::GetSceneViewportSettings() const
 	{
-		std::lock_guard lock(m_sceneViewportMutex);
+		const std::lock_guard lock(m_sceneViewportMutex);
 		return m_requestedSceneViewportSettings;
 	}
 
 	bool RenderingSubsystem::IsSceneViewportEnabled() const
 	{
-		std::lock_guard lock(m_sceneViewportMutex);
+		const std::lock_guard lock(m_sceneViewportMutex);
 		return m_requestedSceneViewportEnabled;
 	}
 
@@ -170,8 +170,6 @@ namespace aether
 		auto& bindless = services.Get<BindlessManager>();
 		auto& gpu = services.Get<GpuDevice>();
 		m_bindlessManager = &bindless;
-		// Scene-only services (CameraManager/LightingManager) are resolved below, past
-		// the UiShell early-return - they are not registered in a UiShell runtime.
 
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
 		m_renderGraph.SetVulkanContext(&vk);
@@ -204,18 +202,9 @@ namespace aether
 		m_renderQueue.SetDebugDisableAnimation(false);
 		m_renderQueue.SetDebugAnimPassMask(0xFu);
 
-		// UiRenderer is core (both profiles): the shapes pipeline it owns backs any
-		// game-UI overlay. It resolves bindless (live above) plus the asset upload +
-		// texture registries. In UiShell the $UiOverlay game-UI pass is not registered
-		// (see RegisterPasses), but the renderer is cheap to keep initialized and lets
-		// the frame path stay uniform. Color format matches the swapchain since the
-		// overlay draws into the swapchain when no scene viewport exists.
 		auto& assets = services.Get<AssetSubsystem>();
 		m_uiRenderer.Init(gpu, assets.GetUploadContext(), assets.GetTextureRegistry(), swapchain.GetImageFormat());
 
-		// UiShell stops here: it allocates no scene GPU resources (shadow atlases,
-		// cull, GTAO, post-process, editor previews, scene pipelines). RegisterPasses
-		// registers a single swapchain-clear pass in place of the scene chain.
 		if (m_profile != RuntimeProfile::Full)
 		{
 			return;
@@ -251,7 +240,6 @@ namespace aether
 
 		m_renderer.Initialize(&m_postProcessStack);
 
-		// Debug texture-preview: fixed-size RGBA8 target the Textures panel samples.
 		{
 			const gpu::TextureDesc previewDesc{
 			        .format = gpu::Format::R8G8B8A8Unorm,
@@ -311,7 +299,7 @@ namespace aether
 		        .materials = &materials,
 		        .effectParams = &effectParams,
 		        .cullPass = &m_cullPass,
-		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
+		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ull; },
 		        .depthFormat = swapchain.GetDepthFormat(),
 		        .colorFormat = PostProcessStack::GetForwardColorFormat(),
 		        .featureFlags = {.forwardEnabled = IsForwardPassEnabled()},
@@ -324,9 +312,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 
-		// Scene resources only exist in a Full runtime (see Init). In UiShell they
 		// were never initialized, so their Destroy/Shutdown must be skipped - several
-		// dereference GPU handles that would be null.
 		if (m_profile == RuntimeProfile::Full)
 		{
 			DestroySceneViewportDepth();
@@ -342,8 +328,6 @@ namespace aether
 			m_skyboxPipeline.Destroy();
 			m_cullPass.Shutdown();
 			m_cameraPreview.Shutdown();
-			// The File Explorer clears any staged model on detach; a nullptr here only
-			// skips registry releases the registries' own shutdown handles anyway.
 			m_modelPreview.Shutdown(nullptr);
 			m_shadowService.Shutdown();
 			m_localShadowService.Shutdown();
@@ -351,7 +335,6 @@ namespace aether
 			m_physicsDebug.Shutdown();
 		}
 
-		// Core resources (initialized in both profiles).
 		m_frameConstantsBuffer.Shutdown();
 
 		for (auto& buf: m_resourceTableBuffers)
@@ -379,15 +362,8 @@ namespace aether
 		auto& swapchain = services.Get<Swapchain>();
 		auto& bindless = services.Get<BindlessManager>();
 
-		// Scene-viewport rebuilds can be requested independently of a swapchain
-		// recreate. Previous frames may still sample the old scene depth, GTAO,
-		// or postprocess textures through bindless descriptors, so retire GPU
-		// work before destroying and reusing those images/descriptors.
 		gpu.WaitIdle();
 
-		// UiShell owns no extent-dependent scene resources. A window resize only needs
-		// the graph topology rebuilt against the new swapchain, which RegisterPasses
-		// does by resolving GetSwapchainColor() afresh for its single clear pass.
 		if (m_profile != RuntimeProfile::Full)
 		{
 			m_renderGraph.Clear();
@@ -439,9 +415,6 @@ namespace aether
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
-		// RenderGraph::Clear() above dropped every external image registration,
-		// including the persistent texture-preview target. Re-register it so its
-		// cached RGImage handle does not dangle into another resource's slot.
 		RegisterTexturePreviewImage();
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
@@ -460,7 +433,7 @@ namespace aether
 	void RenderingSubsystem::SetSceneViewportEnabled(ServiceContainer& services, bool enabled)
 	{
 		{
-			std::lock_guard lock(m_sceneViewportMutex);
+			const std::lock_guard lock(m_sceneViewportMutex);
 			if (m_requestedSceneViewportEnabled == enabled)
 			{
 				return;
@@ -477,7 +450,7 @@ namespace aether
 		next.customExtent.width = std::clamp(next.customExtent.width, 64u, 8192u);
 		next.customExtent.height = std::clamp(next.customExtent.height, 64u, 8192u);
 		{
-			std::lock_guard lock(m_sceneViewportMutex);
+			const std::lock_guard lock(m_sceneViewportMutex);
 			if (m_requestedSceneViewportSettings.resolutionMode == next.resolutionMode && m_requestedSceneViewportSettings.customExtent.width == next.customExtent.width
 			        && m_requestedSceneViewportSettings.customExtent.height == next.customExtent.height)
 			{
@@ -497,7 +470,7 @@ namespace aether
 			return false;
 		}
 
-		std::lock_guard lock(m_sceneViewportMutex);
+		const std::lock_guard lock(m_sceneViewportMutex);
 		m_sceneViewportEnabled = m_requestedSceneViewportEnabled;
 		m_sceneViewportSettings = m_requestedSceneViewportSettings;
 		return true;
@@ -525,19 +498,13 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 
-		// UiShell: there is no scene chain. Register a single pass that clears the
-		// swapchain every frame. This is load-bearing, not cosmetic - the installed
-		// Dear ImGui overlay (ImguiSubsystem::RenderFrame) draws with LoadOp::Load and
-		// assumes the swapchain image is already in COLOR_ATTACHMENT. Without a graph
 		// pass that writes the swapchain, the image is never transitioned and its
-		// contents are undefined. The clear pass both establishes the background and
-		// performs that layout transition, so the overlay presents correctly.
 		if (m_profile != RuntimeProfile::Full)
 		{
 			m_renderGraph
 			        .AddFullscreenPass({
 			                .name = "$UiShellClear",
-			                .color = m_renderGraph.GetSwapchainColor(),
+			                .color = aether::RenderGraph::GetSwapchainColor(),
 			                .loadOp = gpu::LoadOp::Clear,
 			        })
 			        .Execute([](PassContext&) {});
@@ -558,7 +525,7 @@ namespace aether
 		        .materials = &services.Get<MaterialBuffer>(),
 		        .effectParams = &services.Get<EffectParamBuffer>(),
 		        .cullPass = &m_cullPass,
-		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
+		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ull; },
 		        .depthFormat = swapchain.GetDepthFormat(),
 		        .colorFormat = PostProcessStack::GetForwardColorFormat(),
 		        .featureFlags = {.forwardEnabled = IsForwardPassEnabled()},
@@ -673,7 +640,7 @@ namespace aether
 		}
 
 		{
-			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
+			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : aether::RenderGraph::GetSwapchainDepth();
 			std::vector<RenderGraph::FrameProductRef> forwardConsumes{
 			        RenderGraph::Product<MainViewProduct>(kFrameProductMainView),
 			};
@@ -725,9 +692,6 @@ namespace aether
 			        });
 		}
 
-		// Camera preview (editor thumbnail): a self-contained second POV render into
-		// its own target. Registered after the main forward so the shadow atlas +
-		// light buffers it consumes are already produced. Inert when disabled.
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline());
 		m_modelPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
@@ -737,12 +701,7 @@ namespace aether
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
 		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
-		// $UiOverlay: registered once here (topology), same as every other pass in
-		// this function; its Execute reads the LIVE ctx.frameSlot (see UiRenderer.cpp),
-		// and BuildFrame feeds fresh per-slot data every frame (driven from
-		// AetherCore::ExecuteRenderFrame, mirroring m_physicsDebug's SetWorld/
 		// SetFrameDebugVertices there). Must run before $SceneViewportReady below
-		// samples GetFinalColor().
 		m_uiRenderer.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{}, *frame.bindless);
 		if (m_sceneViewportEnabled)
 		{
@@ -751,15 +710,12 @@ namespace aether
 			m_renderGraph
 			        .AddFullscreenPass({
 			                .name = "$SceneViewportClearSwapchain",
-			                .color = m_renderGraph.GetSwapchainColor(),
+			                .color = aether::RenderGraph::GetSwapchainColor(),
 			                .loadOp = gpu::LoadOp::Clear,
 			        })
 			        .Execute([](PassContext&) {});
 		}
 
-		// Debug texture preview (Textures panel). Runs last so any source texture is
-		// already produced + ShaderReadOnly; samples it by bindless slot into the
-		// preview target, then a no-op read makes the target ImGui-sampleable.
 		if (m_texturePreview.IsValid())
 		{
 			m_renderGraph
@@ -861,7 +817,7 @@ namespace aether
 		{
 			for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 			{
-				const auto id = static_cast<std::size_t>(static_cast<std::uint32_t>(FrameResourceId::DirectionalShadowC0) + cascade);
+				const auto id = static_cast<std::size_t>(FrameResourceId::DirectionalShadowC0) + static_cast<std::size_t>(cascade);
 				resourceTable[id] = ResourceEntry{};
 			}
 		}

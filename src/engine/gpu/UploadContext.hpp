@@ -7,8 +7,6 @@
 
 namespace aether::gpu
 {
-	// RAII helper for one-shot GPU buffer-to-buffer copies. Backend owns
-	// the pool + command buffer; the engine just calls CopyBuffer.
 	class UploadContext
 	{
 	public:
@@ -30,10 +28,8 @@ namespace aether::gpu
 			return m_impl != nullptr;
 		}
 
-		// One-shot copy src -> dst, blocking until completion.
 		void CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size);
 
-		// Opaque handle to the backend command pool.
 		[[nodiscard]] void* GetCommandPool() const;
 
 	private:

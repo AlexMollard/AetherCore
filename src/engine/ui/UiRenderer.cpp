@@ -26,11 +26,9 @@ namespace aether::ui
 	namespace
 	{
 		// Push-constant layout - MUST match ShapesPush in shaders/ui_shapes.slang
-		// byte-for-byte: float4 screenSize (16B) + DevicePtr<DrawCommandData>
-		// (8B - a bare device address under the hood) + 2x uint32 padding (8B).
 		struct ShapesPush
 		{
-			glm::vec4 screenSize; // .xy = viewport dimensions
+			glm::vec4 screenSize;
 			std::uint64_t commandData;
 			std::uint32_t pad0;
 			std::uint32_t pad1;
@@ -50,14 +48,9 @@ namespace aether::ui
 		m_upload = &upload;
 		m_textures = &textures;
 
-		// ui_shapes.slang samples the bindless resource heap (g_textures[] /
-		// g_linearSampler at set 0, for textured rects + SDF glyphs), so the
-		// pipeline needs the descriptor-heap mapping info chained into the
-		// VkShaderCreateInfoEXT pNext, exactly like GTAOPass/PostProcessStack/
-		// TexturePreview do for their bindless-sampling pipelines.
 		const gpu::GraphicsPipelineDesc desc{
 		        .shaderVfsPath = "shaders://ui_shapes.spv",
-		        .fragmentVfsPath = nullptr, // shares the vertex module (single ui_shapes.spv has both stages)
+		        .fragmentVfsPath = nullptr,
 		        .vertexEntry = "vertexMain",
 		        .fragmentEntry = "fragmentMain",
 		        .colorFormat = colorFormat,
@@ -170,7 +163,7 @@ namespace aether::ui
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = debugName.c_str(),
 		};
-		gpu::TextureHandle atlas = gpu::ResourceRegistry::CreateTexture(desc);
+		const gpu::TextureHandle atlas = gpu::ResourceRegistry::CreateTexture(desc);
 		if (!atlas.IsValid())
 		{
 			AE_ERROR(LogCategory::UI, "UiRenderer: failed to create font atlas texture '{}'", atlasPath);
@@ -265,8 +258,6 @@ namespace aether::ui
 
 		Frame& frame = m_frames[frameSlot % kFrames];
 		frame.count = 0;
-		// Set the extent on the slot unconditionally (even with zero commands),
-		// so it always matches whatever this slot's buffer holds when the render
 		// thread later executes the pass.
 		frame.extent = outputExtent;
 
@@ -300,19 +291,9 @@ namespace aether::ui
 	{
 		if (!color.IsValid())
 		{
-			color = graph.GetSwapchainColor();
+			color = aether::RenderGraph::GetSwapchainColor();
 		}
 
-		// This pass is registered ONCE (render-graph build time, e.g. from
-		// RenderingSubsystem::RegisterPasses), not re-added every frame - matching
-		// every other pass in this codebase (ShadowService, PhysicsDebugRenderer,
-		// PostProcessStack, ...). It deliberately captures NO frame slot: a slot
-		// baked into the Execute closure here would be a single value frozen at
-		// registration, going stale the moment the real in-flight slot rotates
-		// (kMaxFramesInFlight == 3). Instead the Execute below reads the LIVE slot
-		// from PassContext, exactly like ShadowService's Execute lambdas use
-		// ctx.frameSlot - that is what makes this draw the SAME slot BuildFrame
-		// just uploaded, every frame.
 		auto pass = graph.AddPass("$UiOverlay");
 		if (extent.width != 0 && extent.height != 0)
 		{
@@ -332,7 +313,7 @@ namespace aether::ui
 			                gpu::CommandList& cmd = ctx.recorder;
 
 			                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_pipeline);
-			                cmd.BindPipeline(const_cast<void*>(resolved.state));
+			                cmd.BindPipeline(resolved.state);
 			                bindless.CmdBindHeaps(cmd);
 
 			                const ShapesPush push{

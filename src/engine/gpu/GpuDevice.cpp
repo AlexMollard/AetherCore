@@ -121,7 +121,7 @@ namespace aether
 	void GpuDevice::RecreateSwapchain(Window& window, bool enableVsync)
 	{
 		AE_PROFILE_ZONE();
-		VulkanContext& vk = m_gfx->GetVulkanContext();
+		const VulkanContext& vk = m_gfx->GetVulkanContext();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 
 		AE_EXPECT_OR_THROW_VOID(vk.WaitIdle());
@@ -141,14 +141,14 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
-		VulkanContext& vk = m_gfx->GetVulkanContext();
+		const VulkanContext& vk = m_gfx->GetVulkanContext();
 
 		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue);
 	}
 
 	FrameTarget GpuDevice::BuildFrameTarget() const
 	{
-		Swapchain& swapchain = m_gfx->GetSwapchain();
+		const Swapchain& swapchain = m_gfx->GetSwapchain();
 		return FrameTarget{
 		        .colorImage = static_cast<void*>(swapchain.GetCurrentImage()),
 		        .colorView = static_cast<void*>(swapchain.GetCurrentImageView()),

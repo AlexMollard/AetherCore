@@ -16,9 +16,7 @@ namespace aether
 {
 	namespace
 	{
-		// ParseToml strips quotes from string values. When saving a value that was
 		// loaded (not Set), we must re-quote bare strings to produce valid TOML.
-		// Booleans, numbers, and arrays are left as-is.
 		bool IsBareStringValue(std::string_view value)
 		{
 			if (value.empty())
@@ -27,24 +25,19 @@ namespace aether
 			}
 			if (value.front() == '"' || value.front() == '\'')
 			{
-				return false; // already quoted
+				return false;
 			}
 			if (value.front() == '[')
 			{
-				return false; // array
+				return false;
 			}
 			if (value == "true" || value == "false")
 			{
-				return false; // boolean
-			}
-			// Numbers
-			char* end = nullptr;
-			std::strtod(value.data(), &end);
-			if (end == value.data() + value.size())
-			{
 				return false;
 			}
-			return true; // bare word → needs quotes
+			char* end = nullptr;
+			std::strtod(value.data(), &end);
+			return end != value.data() + value.size();
 		}
 	} // namespace
 
@@ -80,17 +73,10 @@ namespace aether
 		}
 
 		// Section-less (top-level) keys MUST be emitted before any [section]
-		// header. In TOML a bare key that appears after a header belongs to that
-		// table, so a top-level key written mid-file would be silently reparented
-		// under the preceding section on reload - and if a correctly-sectioned key
-		// of the same name is then written, the file gains a duplicate key and the
-		// whole config is rejected on the next parse. m_values is sorted, so a
-		// top-level key does not necessarily precede every sectioned key; walk the
-		// top-level keys in an explicit first pass to guarantee correct ordering.
 		bool wroteAny = !headerComment.empty();
 		for (const auto& [fullKey, rawValue]: m_values)
 		{
-			if (fullKey.find('.') != std::string::npos)
+			if (fullKey.contains('.'))
 			{
 				continue;
 			}
@@ -269,7 +255,7 @@ namespace aether
 		auto& entry = m_values[lowerKey];
 		if (entry != str)
 		{
-			entry = std::move(str);
+			entry = str;
 			m_dirty = true;
 		}
 	}
@@ -297,7 +283,7 @@ namespace aether
 
 	bool TomlConfig::Has(std::string_view key) const
 	{
-		return m_values.find(text::ToLowerAscii(std::string(key))) != m_values.end();
+		return m_values.contains(text::ToLowerAscii(std::string(key)));
 	}
 
 	void TomlConfig::Clear()

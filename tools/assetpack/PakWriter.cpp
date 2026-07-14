@@ -16,10 +16,6 @@
 
 #include <PakFormat.hpp>
 
-// ---------------------------------------------------------------------------
-// PakWriter
-// ---------------------------------------------------------------------------
-
 namespace aether::assetpipeline
 {
 	namespace fs = std::filesystem;
@@ -54,9 +50,6 @@ namespace aether::assetpipeline
 			return first == ".project" && second == "publish.toml";
 		}
 
-		// Prepends a normalized prefix ("shaders", "shaders/", "" all accepted)
-		// to a directory-relative virtual path. Returns rel unchanged when
-		// prefix is empty.
 		std::string ApplyPrefix(std::string_view prefix, const fs::path& rel)
 		{
 			std::string relStr = rel.generic_string();
@@ -88,9 +81,6 @@ namespace aether::assetpipeline
 			}
 			if (entry.is_regular_file() && (IsExcludedProjectFile(rel) || rel.generic_string() == "ProjectSettings.toml" || rel.extension() == ".slang"))
 			{
-				// .slang sources are authoring-time only; the compiled .spv
-				// output ships instead (see AddDirectoryAs, called separately
-				// with the project's compiled-shader intermediate dir).
 				continue;
 			}
 			if (!entry.is_regular_file())
@@ -115,12 +105,7 @@ namespace aether::assetpipeline
 				continue;
 			}
 
-			// The only current caller is ShaderCompiler's compiled-shader
-			// intermediate dir, which also holds a "<stem>.slangc.log" build
-			// log per shader (see ShaderCompiler::CompileOne) - a dev-only
 			// diagnostic artifact that must not leak into the shipped pak.
-			// Restricting to .spv keeps this genuinely "only compiled shader
-			// binaries ship" rather than "whatever happens to be in the dir".
 			if (entry.path().extension() != ".spv")
 			{
 				continue;
@@ -139,7 +124,6 @@ namespace aether::assetpipeline
 		const auto manifestPath = fs::path(outPath.string() + ".manifest");
 		const auto logPath = fs::path(outPath.string() + ".log");
 
-		// --- Incremental check ---------------------------------------------------
 		const ManifestMap manifest = LoadManifest(manifestPath);
 		if (IsUpToDate(outPath, manifest, m_files))
 		{
@@ -147,7 +131,6 @@ namespace aether::assetpipeline
 			return true;
 		}
 
-		// --- Read + compress (parallel) ------------------------------------------
 		if (m_compressionLevel > 0)
 		{
 			std::cout << "AssetPacker: reading and compressing " << m_files.size() << " file(s) (zstd level " << m_compressionLevel << ")...\n";
@@ -165,7 +148,6 @@ namespace aether::assetpipeline
 			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = file.sourceDir, compressionLevel = m_compressionLevel]() { return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel); }));
 		}
 
-		// --- Collect results ----------------------------------------------------
 		std::vector<PakFileResult> allResults;
 		allResults.reserve(futures.size());
 		bool anyError = false;
@@ -181,7 +163,6 @@ namespace aether::assetpipeline
 			allResults.push_back(std::move(res));
 		}
 
-		// --- Flatten primary + extra files, sort by virtual path ----------------
 		struct PackItem
 		{
 			std::string virtualPath;
@@ -233,7 +214,6 @@ namespace aether::assetpipeline
 
 		std::sort(items.begin(), items.end(), [](const PackItem& a, const PackItem& b) { return a.virtualPath < b.virtualPath; });
 
-		// --- Build in-memory sections -------------------------------------------
 		std::vector<std::byte> pathData;
 		std::vector<std::byte> assetData;
 		std::vector<PakEntry> entries;
@@ -245,7 +225,7 @@ namespace aether::assetpipeline
 
 		auto PushPathString = [&](std::string_view s)
 		{
-			const auto p = reinterpret_cast<const std::byte*>(s.data());
+			const auto* const p = reinterpret_cast<const std::byte*>(s.data());
 			pathData.insert(pathData.end(), p, p + s.size());
 			pathData.push_back(std::byte{0});
 		};
@@ -271,7 +251,6 @@ namespace aether::assetpipeline
 			PushPathString(item.virtualPath);
 			assetData.insert(assetData.end(), item.data.begin(), item.data.end());
 
-			// Console line
 			const bool compressed = (item.flags & PAK_FLAG_ZSTD) != 0;
 			std::cout << "  + " << std::left << std::setw(52) << item.virtualPath;
 			if (compressed)
@@ -285,7 +264,6 @@ namespace aether::assetpipeline
 			}
 		}
 
-		// Build manifest from source files (mtime-based) + derived files (hash-only)
 		for (std::size_t ri = 0; ri < allResults.size(); ++ri)
 		{
 			const PakFileResult& res = allResults[ri];
@@ -311,12 +289,10 @@ namespace aether::assetpipeline
 			}
 		}
 
-		// --- Write pak file ------------------------------------------------------
 		const uint64_t entryTableSize = sizeof(PakEntry) * entries.size();
 		const uint64_t pathDataOffset = sizeof(PakHeader) + entryTableSize;
 		const uint64_t assetDataOffset = pathDataOffset + static_cast<uint64_t>(pathData.size());
 
-		// Index hash = XXH3-64 over the entry table bytes followed by the path blob.
 		XXH3_state_t* xstate = XXH3_createState();
 		XXH3_64bits_reset(xstate);
 		XXH3_64bits_update(xstate, entries.data(), static_cast<size_t>(entryTableSize));
@@ -339,7 +315,6 @@ namespace aether::assetpipeline
 
 		const uint64_t pakBytes = sizeof(PakHeader) + static_cast<uint64_t>(entryTableSize) + static_cast<uint64_t>(pathData.size()) + static_cast<uint64_t>(assetData.size());
 
-		// Write to a temp file first; rename on success for tear-free output
 		const fs::path tmpPath = outPath.string() + ".tmp";
 
 		std::cout << "AssetPacker: writing " << outPath.generic_string() << "...\n";
@@ -386,7 +361,6 @@ namespace aether::assetpipeline
 		SaveManifest(manifestPath, newManifest);
 		SaveLog(logPath, m_sourceDir, outPath, m_compressionLevel, logEntries, totalRawBytes, pakBytes, elapsedSecs);
 
-		// --- Console summary -----------------------------------------------------
 		const double savings = totalRawBytes > 0 ? 100.0 * (1.0 - static_cast<double>(pakBytes) / static_cast<double>(totalRawBytes)) : 0.0;
 
 		std::cout << "AssetPacker: done.\n";

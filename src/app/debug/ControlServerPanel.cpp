@@ -2,6 +2,7 @@
 #include "debug/EditorChrome.hpp"
 
 #include <algorithm>
+#include <ranges>
 
 #include <imgui.h>
 
@@ -22,10 +23,6 @@ namespace aether::editor
 
 	void ControlServerPanel::OnUpdate(app::LayerContext& context)
 	{
-		// Deferred one-shot auto-start: runs on the first frame (after settings
-		// are loaded and all layers - including the one that registers the server
-		// service - have attached). Start() is idempotent, so this composes with
-		// the AETHER_CONTROL_PORT env-var auto-start without double-binding.
 		if (m_didAutoStart)
 		{
 			return;
@@ -97,13 +94,13 @@ namespace aether::editor
 					ImGui::TableSetupColumn("Method");
 					ImGui::TableSetupColumn("Result");
 					ImGui::TableHeadersRow();
-					for (auto it = log.rbegin(); it != log.rend(); ++it) // newest first
+					for (const auto& it: std::views::reverse(log))
 					{
 						ImGui::TableNextRow();
 						ImGui::TableSetColumnIndex(0);
-						ImGui::TextUnformatted(it->method.c_str());
+						ImGui::TextUnformatted(it.method.c_str());
 						ImGui::TableSetColumnIndex(1);
-						ImGui::TextColored(ToImVec4(it->ok ? colors::Success : colors::Error), "%s", it->ok ? "ok" : "error");
+						ImGui::TextColored(ToImVec4(it.ok ? colors::Success : colors::Error), "%s", it.ok ? "ok" : "error");
 					}
 					ImGui::EndTable();
 				}

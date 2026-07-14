@@ -17,21 +17,19 @@ namespace aether::assetpipeline
 	{
 		namespace
 		{
-			constexpr std::uint32_t kBakeSizePx = 48;    // FreeType pixel size used to render each glyph.
-			constexpr std::uint32_t kAtlasWidthPx = 512; // Fixed shelf-packer width.
-			constexpr std::uint32_t kGlyphPaddingPx = 1; // Gutter between glyphs (avoids bilinear-filter bleed).
+			constexpr std::uint32_t kBakeSizePx = 48;
+			constexpr std::uint32_t kAtlasWidthPx = 512;
+			constexpr std::uint32_t kGlyphPaddingPx = 1;
 
-			// One rasterized glyph, copied out of FreeType's (reused) glyph-slot storage
-			// so it survives past the next FT_Load_Glyph call.
 			struct RawGlyph
 			{
 				std::uint32_t codepoint = 0;
-				std::uint32_t width = 0;  // bitmap width in px (0 for glyphs with no ink, e.g. space)
-				std::uint32_t height = 0; // bitmap height in px
+				std::uint32_t width = 0;
+				std::uint32_t height = 0;
 				float bearingX = 0.0f;
 				float bearingY = 0.0f;
 				float advance = 0.0f;
-				std::vector<std::uint8_t> pixels; // width*height, tightly packed row-major (own copy)
+				std::vector<std::uint8_t> pixels;
 			};
 
 			struct PackedRect
@@ -41,10 +39,14 @@ namespace aether::assetpipeline
 			};
 
 			// RAII wrappers - FreeType is a C API with manual lifetime management, and
-			// BakeFont has several early-return error paths.
 			struct FaceHandle
 			{
 				FT_Face face = nullptr;
+				FaceHandle() = default;
+				FaceHandle(const FaceHandle&) = delete;
+				FaceHandle& operator=(const FaceHandle&) = delete;
+				FaceHandle(FaceHandle&&) = delete;
+				FaceHandle& operator=(FaceHandle&&) = delete;
 
 				~FaceHandle()
 				{
@@ -58,6 +60,11 @@ namespace aether::assetpipeline
 			struct LibraryHandle
 			{
 				FT_Library library = nullptr;
+				LibraryHandle() = default;
+				LibraryHandle(const LibraryHandle&) = delete;
+				LibraryHandle& operator=(const LibraryHandle&) = delete;
+				LibraryHandle(LibraryHandle&&) = delete;
+				LibraryHandle& operator=(LibraryHandle&&) = delete;
 
 				~LibraryHandle()
 				{
@@ -68,26 +75,7 @@ namespace aether::assetpipeline
 				}
 			};
 
-			// Renders one codepoint via FreeType's SDF rasterizer, copying the bitmap out
-			// of the glyph slot into an owned buffer. Returns false if the font has no
-			// glyph for this codepoint (skip) - space (0x20) is always kept even though
-			// some fonts map it to glyph index 0.
-			//
 			// IMPORTANT: the glyph is loaded WITHOUT FT_LOAD_RENDER. If FT_LOAD_RENDER
-			// were used, FreeType would immediately rasterize using the *default* render
-			// mode (FT_RENDER_MODE_NORMAL, plain 8-bit coverage), which sets
-			// slot->format to FT_GLYPH_FORMAT_BITMAP. A subsequent
-			// FT_Render_Glyph(slot, FT_RENDER_MODE_SDF) call on an already-BITMAP slot
-			// looks for a renderer registered for BITMAP format (FreeType's "bsdf"
-			// module) instead of the outline "sdf" module; for a scalable outline font
-			// no such renderer matches, FT_Render_Glyph_Internal treats that as
-			// "nothing to do" and returns FT_Err_Ok WITHOUT touching the bitmap - so the
-			// atlas would silently end up full of plain antialiased coverage mislabeled
-			// as SDF (no error, but wrong: no smooth falloff beyond the glyph edge, and
-			// 0.5 would not represent the true edge). Loading with FT_LOAD_DEFAULT keeps
-			// slot->format == FT_GLYPH_FORMAT_OUTLINE, so the explicit
-			// FT_RENDER_MODE_SDF request below correctly dispatches to the "sdf"
-			// renderer.
 			bool RasterizeGlyph(FT_Face face, std::uint32_t codepoint, RawGlyph& out)
 			{
 				const FT_UInt glyphIndex = FT_Get_Char_Index(face, codepoint);
@@ -118,16 +106,9 @@ namespace aether::assetpipeline
 
 				if (out.width > 0 && out.height > 0)
 				{
-					// pixel_mode is FT_PIXEL_MODE_GRAY for FT_RENDER_MODE_SDF output (same
-					// tag as plain 8-bit AA - FreeType distinguishes by renderer, not pixel
-					// format). The byte value is FreeType's own SDF encoding: 0 = far
-					// outside, ~128 = edge, 255 = far inside - identical to what
-					// shaders/text_sdf.slangh expects, so rows are copied verbatim with no
-					// inversion or remap.
 					out.pixels.resize(static_cast<std::size_t>(out.width) * out.height);
 					for (std::uint32_t row = 0; row < out.height; ++row)
 					{
-						// pitch may be negative for a bottom-up bitmap; |pitch| >= width always.
 						const unsigned char* srcRow =
 						        bitmap.pitch >= 0 ? bitmap.buffer + static_cast<std::size_t>(row) * static_cast<std::size_t>(bitmap.pitch) : bitmap.buffer + static_cast<std::size_t>(out.height - 1 - row) * static_cast<std::size_t>(-bitmap.pitch);
 						std::memcpy(out.pixels.data() + static_cast<std::size_t>(row) * out.width, srcRow, out.width);
@@ -206,7 +187,6 @@ namespace aether::assetpipeline
 			std::vector<RawGlyph> glyphs;
 			glyphs.reserve(96 + 96);
 
-			// ASCII printable range.
 			for (std::uint32_t cp = 0x20; cp <= 0x7E; ++cp)
 			{
 				RawGlyph g;
@@ -215,7 +195,6 @@ namespace aether::assetpipeline
 					glyphs.push_back(std::move(g));
 				}
 			}
-			// Latin-1 supplement.
 			for (std::uint32_t cp = 0xA0; cp <= 0xFF; ++cp)
 			{
 				RawGlyph g;
@@ -231,9 +210,6 @@ namespace aether::assetpipeline
 				return result;
 			}
 
-			// Shelf/row pack: advance the pen by (width + pad); wrap to a new row when
-			// it would exceed the fixed atlas width, growing the atlas height as rows
-			// accumulate. Zero-size glyphs (e.g. space) don't need atlas space at all.
 			std::vector<PackedRect> rects(glyphs.size());
 			std::uint32_t penX = 0;
 			std::uint32_t penY = 0;
@@ -300,7 +276,7 @@ namespace aether::assetpipeline
 			metaHeader.atlasWidth = static_cast<float>(kAtlasWidthPx);
 			metaHeader.atlasHeight = static_cast<float>(atlasHeight);
 			metaHeader.ascent = static_cast<float>(sizeMetrics.ascender >> 6);
-			metaHeader.descent = static_cast<float>((-sizeMetrics.descender) >> 6); // descender is <= 0
+			metaHeader.descent = static_cast<float>((-sizeMetrics.descender) >> 6);
 			metaHeader.lineHeight = static_cast<float>(sizeMetrics.height >> 6);
 			metaHeader.bakeSize = static_cast<float>(kBakeSizePx);
 

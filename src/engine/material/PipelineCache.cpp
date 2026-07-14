@@ -6,7 +6,7 @@ namespace aether
 {
 	void PipelineCache::Initialize(Context context, Factory factory)
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		m_context = context;
 		m_factory = std::move(factory);
 	}
@@ -15,13 +15,13 @@ namespace aether
 	{
 		const std::uint64_t hash = HashMaterialTemplate(tmpl);
 
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		auto range = m_entries.equal_range(hash);
 		for (auto it = range.first; it != range.second; ++it)
 		{
 			if (it->second.tmpl == tmpl)
 			{
-				return &it->second.pipeline; // stable node address
+				return &it->second.pipeline;
 			}
 		}
 
@@ -56,7 +56,7 @@ namespace aether
 
 	void PipelineCache::Shutdown()
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		for (auto& [hash, entry]: m_entries)
 		{
 			entry.pipeline.Destroy();
@@ -67,7 +67,7 @@ namespace aether
 
 	std::size_t PipelineCache::Size() const
 	{
-		std::scoped_lock lock(m_mutex);
+		const std::scoped_lock lock(m_mutex);
 		return m_entries.size();
 	}
 } // namespace aether

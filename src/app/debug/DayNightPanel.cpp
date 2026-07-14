@@ -36,7 +36,7 @@ namespace aether::editor
 	{
 		ImGui::Begin("Day / Night", VisiblePtr());
 		chrome::PanelHeader("DAY / NIGHT CYCLE");
-		if (auto dayNight = context.TryGet<app::DayNightSystem>())
+		if (auto* dayNight = context.TryGet<app::DayNightSystem>())
 		{
 			bool enabled = dayNight->IsEnabled();
 			if (ImGui::Checkbox("Cycle enabled", &enabled))
@@ -96,7 +96,7 @@ namespace aether::editor
 	void DayNightPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
 		m_manualMode = config.GetBool("debug.daynightmanual", m_manualMode);
-		if (auto dayNight = context.TryGet<app::DayNightSystem>())
+		if (auto* dayNight = context.TryGet<app::DayNightSystem>())
 		{
 			dayNight->SetEnabled(!m_manualMode);
 			dayNight->SetTimeOfDay(config.GetFloat("debug.daynighttime", dayNight->GetTimeOfDay()));
@@ -107,12 +107,8 @@ namespace aether::editor
 	void DayNightPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		config.Set("debug.daynightmanual", m_manualMode);
-		if (auto dayNight = context.TryGet<app::DayNightSystem>())
+		if (auto* dayNight = context.TryGet<app::DayNightSystem>())
 		{
-			// Time of day auto-advances every frame while the cycle runs. SaveSettings
-			// is called each frame (SaveIfDirty), so persisting the live value would
-			// re-dirty the config and save EditorState.toml on every tick. Only remember it
-			// when the cycle is paused - a deliberate, stable value worth restoring.
 			if (!dayNight->IsEnabled())
 			{
 				config.Set("debug.daynighttime", dayNight->GetTimeOfDay());

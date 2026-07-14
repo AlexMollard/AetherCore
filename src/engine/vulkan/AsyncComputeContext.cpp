@@ -25,13 +25,19 @@ namespace aether
 	void AsyncComputeContext::Init(GpuDevice& gpu)
 	{
 		AE_PROFILE_ZONE();
-		VulkanContext& vk = gpu.GetVulkanContext();
+		const VulkanContext& vk = gpu.GetVulkanContext();
 		VkDevice device = vk.GetDevice().device;
 
 		m_gpu = &gpu;
 
 		struct InitCleanup
 		{
+			InitCleanup() = default;
+			InitCleanup(const InitCleanup&) = delete;
+			InitCleanup& operator=(const InitCleanup&) = delete;
+			InitCleanup(InitCleanup&&) = delete;
+			InitCleanup& operator=(InitCleanup&&) = delete;
+
 			VkDevice device = VK_NULL_HANDLE;
 			VkSemaphore timelineSemaphore = VK_NULL_HANDLE;
 			std::vector<VkCommandPool> commandPools;
@@ -43,14 +49,14 @@ namespace aether
 				{
 					return;
 				}
-				for (auto fence: fences)
+				for (auto* fence: fences)
 				{
 					if (fence != VK_NULL_HANDLE)
 					{
 						vkDestroyFence(device, fence, nullptr);
 					}
 				}
-				for (auto pool: commandPools)
+				for (auto* pool: commandPools)
 				{
 					if (pool != VK_NULL_HANDLE)
 					{

@@ -50,10 +50,6 @@ namespace aether::gpu
 			return (t == IndexType::U16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
 		}
 
-		// PFN_vkCmd*DebugUtilsLabelEXT are loaded by volk on demand. They
-		// are stored at file scope so the labels keep working when
-		// validation layers are enabled. Initialized lazily on first use;
-		// null is a no-op (debug extensions not enabled in this build).
 		PFN_vkCmdBeginDebugUtilsLabelEXT s_beginDebugLabel = nullptr;
 		PFN_vkCmdEndDebugUtilsLabelEXT s_endDebugLabel = nullptr;
 		DiagnosticEngine* s_diagnosticEngine = nullptr;
@@ -93,7 +89,7 @@ namespace aether::gpu
 		s_alphaToOneDynamicStateSupported = supported;
 	}
 
-	void CommandList::BindPipeline(void* pipeline) noexcept
+	void CommandList::BindPipeline(PipelineView pipeline) noexcept
 	{
 		if (m_cmd == nullptr || pipeline == nullptr)
 		{
@@ -102,7 +98,7 @@ namespace aether::gpu
 		const auto* entry = static_cast<const ::aether::ResourceRegistry::PipelineEntry*>(pipeline);
 		const VkCommandBuffer cmd = AsVkCmd(m_cmd);
 
-		VkShaderEXT shaders[2] = {entry->vertexShader, entry->fragmentShader};
+		const VkShaderEXT shaders[2] = {entry->vertexShader, entry->fragmentShader};
 		VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
 		const std::uint32_t shaderCount = (entry->fragmentShader != VK_NULL_HANDLE) ? 2u : 1u;
 		vkCmdBindShadersEXT(cmd, shaderCount, stages, shaders);
@@ -180,7 +176,7 @@ namespace aether::gpu
 		vkCmdDispatch(AsVkCmd(m_cmd), groupCountX, groupCountY, groupCountZ);
 	}
 
-	void CommandList::BindComputePipeline(void* pipeline) noexcept
+	void CommandList::BindComputePipeline(PipelineView pipeline) noexcept
 	{
 		if (m_cmd == nullptr || pipeline == nullptr)
 		{
@@ -189,8 +185,8 @@ namespace aether::gpu
 		const auto* entry = static_cast<const ::aether::ResourceRegistry::PipelineEntry*>(pipeline);
 		const VkCommandBuffer cmd = AsVkCmd(m_cmd);
 
-		VkShaderEXT shaders[1] = {entry->computeShader};
-		VkShaderStageFlagBits stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		const VkShaderEXT shaders[1] = {entry->computeShader};
+		const VkShaderStageFlagBits stage = VK_SHADER_STAGE_COMPUTE_BIT;
 		vkCmdBindShadersEXT(cmd, 1, &stage, shaders);
 	}
 
@@ -288,7 +284,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		VkViewport vkVp = ToVkViewport(viewport);
+		const VkViewport vkVp = ToVkViewport(viewport);
 		vkCmdSetViewportWithCount(AsVkCmd(m_cmd), 1, &vkVp);
 	}
 
@@ -298,9 +294,6 @@ namespace aether::gpu
 		{
 			return;
 		}
-		// Stage a contiguous array of VkViewport (trivial copy of the same
-		// fields) on the stack. The max is small enough (engine uses 1-2)
-		// that a heap allocation would be wasteful.
 		const std::size_t n = viewports.size();
 		VkViewport stackBuf[8];
 		VkViewport* buf = stackBuf;
@@ -330,7 +323,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		VkRect2D vkRect = ToVkRect2D(scissor);
+		const VkRect2D vkRect = ToVkRect2D(scissor);
 		vkCmdSetScissorWithCount(AsVkCmd(m_cmd), 1, &vkRect);
 	}
 
@@ -421,9 +414,6 @@ namespace aether::gpu
 		{
 			return;
 		}
-		// Engine-side stage / access bit flags map 1:1 to the underlying
-		// VkPipelineStageFlags2 / VkAccessFlags2 bitmask values, so the
-		// translation is a straight cast. ToVk(...) funnels through
 		// GpuEnumConversions so the engine code never sees Vk* constants.
 		const VkMemoryBarrier2 barrier{
 		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -494,7 +484,6 @@ namespace aether::gpu
 		{
 			return;
 		}
-		// Translate gpu::RenderingInfo + color/depth attachments to Vk* at the seam.
 		std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
 		vkColorAttachments.reserve(info.colorAttachments.size());
 		for (const auto& a: info.colorAttachments)

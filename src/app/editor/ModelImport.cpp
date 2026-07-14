@@ -28,9 +28,6 @@ namespace aether::editor
 			return {};
 		}
 
-		// Bake the .mesh the loader needs (no-op if already baked). project:// is the
-		// raw project folder in the editor, so a referenced .gltf may not be imported
-		// yet. No project loaded -> skip and let the load surface the error.
 		if (const auto* project = services.TryGet<app::EditorProjectContext>(); project != nullptr && project->IsLoaded())
 		{
 			if (!EnsureModelBaked(vfsModelPath, *project, error))
@@ -39,16 +36,14 @@ namespace aether::editor
 			}
 		}
 
-		const Entity root = world.Create(); // Create() registers it as a scene root
+		const Entity root = world.Create();
 		if (!name.empty())
 		{
 			world.Emplace<NameComponent>(root, NameComponent{.name = name});
 		}
 		world.Emplace<TransformComponent>(root, TransformComponent{.localToWorld = localToWorld});
 
-		// AssignModelToEntity preserves the name/transform set above and builds the
 		// Unity-style layout: single static mesh directly on `root`, multi-primitive
-		// or skinned model as root + per-primitive children.
 		if (!app::scene::AssignModelToEntity(world, *assets, *sceneCtx, root, vfsModelPath))
 		{
 			world.Destroy(root);

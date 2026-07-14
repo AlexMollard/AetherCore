@@ -14,25 +14,25 @@ namespace aether::text
 	{
 		std::string TomlNodeToValueString(const toml::node& node)
 		{
-			if (const auto v = node.as_string())
+			if (const auto* const v = node.as_string())
 			{
 				return std::string(v->get());
 			}
-			if (const auto v = node.as_boolean())
+			if (const auto* const v = node.as_boolean())
 			{
 				return v->get() ? "true" : "false";
 			}
-			if (const auto v = node.as_integer())
+			if (const auto* const v = node.as_integer())
 			{
 				return std::to_string(v->get());
 			}
-			if (const auto v = node.as_floating_point())
+			if (const auto* const v = node.as_floating_point())
 			{
 				std::ostringstream out;
 				out << v->get();
 				return out.str();
 			}
-			if (const auto arr = node.as_array())
+			if (const auto* const arr = node.as_array())
 			{
 				std::string value = "[";
 				for (std::size_t i = 0; i < arr->size(); ++i)
@@ -58,17 +58,22 @@ namespace aether::text
 			for (const auto& [key, node]: table)
 			{
 				const std::string keyStr = ToLowerAscii(std::string(key.str()));
-				if (const auto childTable = node.as_table())
+				std::string fullKey = sectionPrefix;
+				if (!fullKey.empty())
 				{
-					const std::string childPrefix = sectionPrefix.empty() ? keyStr : (sectionPrefix + "." + keyStr);
-					EmitTomlTable(*childTable, childPrefix, onEntry);
+					fullKey += '.';
+				}
+				fullKey += keyStr;
+				if (const auto* const childTable = node.as_table())
+				{
+					EmitTomlTable(*childTable, fullKey, onEntry);
 					continue;
 				}
 
 				IniEntry entry;
 				entry.section = sectionPrefix;
 				entry.key = keyStr;
-				entry.fullKey = sectionPrefix.empty() ? keyStr : (sectionPrefix + "." + keyStr);
+				entry.fullKey = std::move(fullKey);
 				entry.value = TomlNodeToValueString(node);
 				onEntry(entry);
 			}

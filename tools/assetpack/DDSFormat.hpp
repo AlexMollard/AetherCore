@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cctype>
 #include <cstring>
@@ -12,9 +13,8 @@
 
 namespace aether::assetpipeline
 {
-	// ── DDS constants (DirectX definitions, platform-independent) ────────────
 
-	inline constexpr uint32_t DDS_MAGIC = 0x20534444u; // "DDS "
+	inline constexpr uint32_t DDS_MAGIC = 0x20534444u;
 
 	inline constexpr uint32_t DDSD_CAPS = 0x00000001u;
 	inline constexpr uint32_t DDSD_HEIGHT = 0x00000002u;
@@ -29,9 +29,8 @@ namespace aether::assetpipeline
 	inline constexpr uint32_t DDSCAPS_COMPLEX = 0x00000008u;
 	inline constexpr uint32_t DDSCAPS_MIPMAP = 0x00400000u;
 
-	inline constexpr uint32_t FOURCC_DX10 = 0x30315844u; // "DX10"
+	inline constexpr uint32_t FOURCC_DX10 = 0x30315844u;
 
-	// DXGI formats for BCn
 	inline constexpr uint32_t DXGI_FORMAT_BC4_UNORM = 80u;
 	inline constexpr uint32_t DXGI_FORMAT_BC7_UNORM = 98u;
 	inline constexpr uint32_t DXGI_FORMAT_BC7_UNORM_SRGB = 99u;
@@ -86,21 +85,15 @@ namespace aether::assetpipeline
 	static_assert(sizeof(DDSHeader) == 124);
 	static_assert(sizeof(DDSHeaderDXT10) == 20);
 
-	// ── BCn format selection ─────────────────────────────────────────────────
-
 	enum class BCnFmt
 	{
-		BC4,        // single-channel linear
-		BC7_LINEAR, // multi-channel linear (normal maps, roughness, AO, metallic…)
-		BC7_SRGB,   // multi-channel sRGB   (albedo / colour textures)
+		BC4,
+		BC7_LINEAR,
+		BC7_SRGB,
 	};
-
-	// ── 4×4 pixel block type ────────────────────────────────────────────────
 
 	using Block4x4 = std::array<uint8_t, 64>;
 
-	// Gather a 4x4 pixel block from the decoded image into a flat RGBA8 array.
-	// Clamps to image edges so partial border blocks are handled correctly.
 	inline void GatherBlock(const uint8_t* pixels, int width, int height, int channels, int blockX, int blockY, Block4x4& out)
 	{
 		for (int py = 0; py < 4; ++py)
@@ -109,8 +102,8 @@ namespace aether::assetpipeline
 			{
 				const int sx = std::min(blockX * 4 + px, width - 1);
 				const int sy = std::min(blockY * 4 + py, height - 1);
-				const uint8_t* src = pixels + (sy * width + sx) * channels;
-				uint8_t* dst = out.data() + (py * 4 + px) * 4;
+				const uint8_t* src = pixels + static_cast<ptrdiff_t>((sy * width + sx) * channels);
+				uint8_t* dst = out.data() + static_cast<ptrdiff_t>((py * 4 + px) * 4);
 				dst[0] = channels > 0 ? src[0] : 0;
 				dst[1] = channels > 1 ? src[1] : 0;
 				dst[2] = channels > 2 ? src[2] : 0;
@@ -119,7 +112,6 @@ namespace aether::assetpipeline
 		}
 	}
 
-	// Detect linear-data textures by filename keywords.
 	inline BCnFmt ChooseFormat(const std::filesystem::path& path, int channels)
 	{
 		if (channels == 1)
@@ -130,7 +122,7 @@ namespace aether::assetpipeline
 		const std::string stem = path.stem().string();
 		std::string lower;
 		lower.reserve(stem.size());
-		for (char c: stem)
+		for (const char c: stem)
 		{
 			lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 		}
@@ -149,9 +141,9 @@ namespace aether::assetpipeline
 		        "height",
 		        "mask",
 		};
-		for (std::string_view kw: kLinearKeywords)
+		for (const std::string_view kw: kLinearKeywords)
 		{
-			if (lower.find(kw) != std::string::npos)
+			if (lower.contains(kw))
 			{
 				return BCnFmt::BC7_LINEAR;
 			}
@@ -160,7 +152,6 @@ namespace aether::assetpipeline
 		return BCnFmt::BC7_SRGB;
 	}
 
-	// Box-filter 2×2 downsample for mip chain generation.
 	inline void DownsampleBox2x2(const uint8_t* src, int srcW, int srcH, int channels, uint8_t* dst)
 	{
 		const int dstW = std::max(1, srcW / 2);

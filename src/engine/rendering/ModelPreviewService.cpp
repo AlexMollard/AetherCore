@@ -31,8 +31,6 @@ namespace aether
 {
 	namespace
 	{
-		// World-space bounding sphere of a local sphere under `model` (the
-		// WorldRenderer culling transform, replicated for camera fitting).
 		glm::vec4 TransformSphere(const glm::vec4& localSphere, const glm::mat4& model)
 		{
 			const glm::vec3 center = glm::vec3(model * glm::vec4(localSphere.x, localSphere.y, localSphere.z, 1.0f));
@@ -40,7 +38,6 @@ namespace aether
 			return glm::vec4(center, localSphere.w * maxScale);
 		}
 
-		// Minimal enclosing sphere of two spheres.
 		glm::vec4 MergeSpheres(const glm::vec4& a, const glm::vec4& b)
 		{
 			const glm::vec3 d = glm::vec3(b) - glm::vec3(a);
@@ -112,7 +109,7 @@ namespace aether
 			ClearModel(*assets);
 		}
 		m_queue.DiscardAllPending();
-		m_queue.Shutdown(); // release the queue's persistent GPU buffers now, while the ResourceRegistry is alive - else they leak to ResourceRegistry::Shutdown
+		m_queue.Shutdown();
 		m_constants.Shutdown();
 		for (gpu::TextureHandle* handle: {&m_colorHandle, &m_depthHandle, &m_colorLdrHandle})
 		{
@@ -130,8 +127,6 @@ namespace aether
 
 	void ModelPreviewService::DestroyModelEntities(AssetManager& assets)
 	{
-		// Release the registry material each entity acquired via AssignMaterial,
-		// then drop the entities themselves.
 		auto& registry = m_world.GetRegistry();
 		std::vector<Entity> entities;
 		for (const auto handle: registry.storage<entt::entity>())
@@ -177,10 +172,8 @@ namespace aether
 
 		glm::vec4 bounds(0.0f, 0.0f, 0.0f, 0.0f);
 		bool haveBounds = false;
-		for (std::size_t i = 0; i < m_model.primitives.size(); ++i)
+		for (auto& primitive: m_model.primitives)
 		{
-			LoadedModelPrimitive& primitive = m_model.primitives[i];
-
 			const Entity e = m_world.Create();
 			auto& transform = m_world.Emplace<TransformComponent>(e);
 			transform.localToWorld = primitive.localTransform;
@@ -188,15 +181,10 @@ namespace aether
 
 			if (primitive.hasMaterial)
 			{
-				// AssignMaterial acquires registry refs of its own (MaterialComponent
-				// + PipelineComponent); the asset-level texture refs LoadModel gave us
-				// are released below once every primitive has been assigned.
 				MaterialSystem::AssignMaterial(m_world, e, assets.GetMaterialRegistry(), assets.GetPipelineCache(), primitive.material);
 			}
 			else
 			{
-				// Vertex-colour fallback via the default two-sided gltf pipeline
-				// (mirrors ModelSpawn for material-less primitives).
 				MaterialTemplate tmpl{.shaderVfsPath = "shaders://gltf_mesh.spv"};
 				tmpl.cullMode = gpu::CullMode::None;
 				const GraphicsPipeline* pipeline = assets.GetPipelineCache().Acquire(tmpl);
@@ -208,7 +196,6 @@ namespace aether
 			haveBounds = true;
 		}
 
-		// The MaterialAssets only existed to hand to AssignMaterial - drop their
 		// texture refs now so ClearModel never has to reason about them.
 		auto& textures = assets.GetTextureRegistry();
 		for (LoadedModelPrimitive& primitive: m_model.primitives)
@@ -217,7 +204,7 @@ namespace aether
 			{
 				continue;
 			}
-			for (TextureHandle handle: {primitive.material.albedoTex, primitive.material.normalTex, primitive.material.metallicRoughnessTex, primitive.material.occlusionTex, primitive.material.emissiveTex})
+			for (const TextureHandle handle: {primitive.material.albedoTex, primitive.material.normalTex, primitive.material.metallicRoughnessTex, primitive.material.occlusionTex, primitive.material.emissiveTex})
 			{
 				if (handle.IsValid())
 				{
@@ -237,8 +224,6 @@ namespace aether
 	{
 		m_hasModel.store(false, std::memory_order_release);
 		DestroyModelEntities(assets);
-		// The meshes' GPU buffers free through the resource registry's deferred
-		// path, so dropping the LoadedModel is safe with frames in flight.
 		m_model = LoadedModel{};
 		m_bounds = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
@@ -256,7 +241,6 @@ namespace aether
 			return;
 		}
 
-		// Turntable: slow orbit around the merged bounds, slightly above centre.
 		m_turntableAngle += glm::radians(0.55f);
 		const glm::vec3 center = glm::vec3(m_bounds);
 		const float radius = m_bounds.w;
@@ -264,10 +248,10 @@ namespace aether
 		const glm::vec3 eye = center + glm::vec3(std::cos(m_turntableAngle) * distance, distance * 0.45f, std::sin(m_turntableAngle) * distance);
 		const glm::mat4 view = glm::lookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f));
 		glm::mat4 proj = glm::perspective(glm::radians(40.0f), 1.0f, std::max(0.02f, radius * 0.05f), std::max(10.0f, radius * 20.0f));
-		proj[1][1] *= -1.0f; // Vulkan clip-space Y flip (matches the engine's camera projections)
+		proj[1][1] *= -1.0f;
 
 		{
-			std::lock_guard<std::mutex> lock(m_cameraMutex);
+			const std::lock_guard<std::mutex> lock(m_cameraMutex);
 			m_camView = view;
 			m_camProj = proj;
 			m_camPos = eye;
@@ -284,14 +268,12 @@ namespace aether
 		}
 		FrameConstants fc = mainFc;
 		{
-			std::lock_guard<std::mutex> lock(m_cameraMutex);
+			const std::lock_guard<std::mutex> lock(m_cameraMutex);
 			fc.view = m_camView;
 			fc.proj = m_camProj;
 			fc.viewProj = m_camProj * m_camView;
 			fc.cameraWorldPos = glm::vec4(m_camPos, 1.0f);
 		}
-		// The live scene's tile lists / shadow maps have no meaning for this
-		// isolated model: keep sun + ambient shading, drop everything scene-local.
 		fc.tiledLightGridInfo = glm::uvec4(0u);
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);
 		fc.shadowParams.z = 0.0f; // shadow strength: never sample the scene's cascades
@@ -326,13 +308,7 @@ namespace aether
 		                                  .produces = m_draws,
 		                                  .sideEffectReason = "prepares model-preview draw queue",
 		                          })
-		        .ExecuteCompute(
-		                [this, &cullPass](PassContext& ctx)
-		                {
-			                // Always dispatch so the slot is consumed each frame (empty
-			                // queue => 0 draws when no model is staged).
-			                m_queue.PrepareAndDispatch(ctx.recorder, m_constants.GetDeviceAddress(ctx.frameSlot), cullPass.GetSinglePipeline(), ctx.frameSlot);
-		                })
+		        .ExecuteCompute([this, &cullPass](PassContext& ctx) { m_queue.PrepareAndDispatch(ctx.recorder, m_constants.GetDeviceAddress(ctx.frameSlot), cullPass.GetSinglePipeline(), ctx.frameSlot); })
 		        .OnDebugDisabled([this](PassContext& ctx) { m_queue.DiscardPending(ctx.frameSlot); });
 	}
 
@@ -356,17 +332,13 @@ namespace aether
 		        {
 			        if (!m_hasModel.load(std::memory_order_relaxed))
 			        {
-				        return; // colour stays cleared
+				        return;
 			        }
-			        // No scene lighting addresses: the fc disabled tiles/shadows, so
-			        // the shader shades sun + ambient only.
 			        const DrawContracts::LightingAddresses lightingAddr{};
 			        bindless.CmdBindHeaps(ctx.recorder);
 			        m_queue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, &lightingAddr, m_constants.GetDeviceAddress(ctx.frameSlot), nullptr, 0, nullptr);
 		        });
 
-		// Same tonemap treatment as the camera preview so thumbnails match the
-		// main view's exposure/operator.
 		graph.AddFullscreenPass({
 		                                .name = "$ModelPreviewTonemap",
 		                                .color = m_colorLdr,

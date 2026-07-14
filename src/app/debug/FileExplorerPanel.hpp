@@ -13,11 +13,7 @@
 
 namespace aether::editor
 {
-	// Project file browser. The directory tree is CACHED (rescanned on demand, on
 	// file operations, and on a staleness timer) - never walked per frame. Rows
-	// carry per-kind icons, drag-drop payloads, a context menu (open / show in
-	// OS / copy path / rename / duplicate / delete / new folder + script), and a
-	// flat search mode with project-relative paths.
 	class FileExplorerPanel final : public DebugPanel
 	{
 	public:
@@ -36,12 +32,11 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
-		// One cached filesystem entry. Children are only populated for directories.
 		struct Entry
 		{
 			std::filesystem::path path;
-			std::string name;        // filename, UTF-8
-			std::string payloadPath; // project://relative for assets, absolute for scripts
+			std::string name;
+			std::string payloadPath;
 			std::uint64_t sizeBytes = 0;
 			dragdrop::FileKind kind = dragdrop::FileKind::Unknown;
 			bool isDirectory = false;
@@ -57,11 +52,9 @@ namespace aether::editor
 		void DrawDirectoryNode(app::LayerContext& context, Entry& entry, int depth);
 		void DrawFileRow(app::LayerContext& context, const Entry& entry);
 		void DrawSearchResults(app::LayerContext& context, const Entry& entry);
-		bool DrawRowContextMenu(app::LayerContext& context, const Entry& entry); // true = tree mutated
+		bool DrawRowContextMenu(app::LayerContext& context, const Entry& entry);
 		void DrawPendingPopups(app::LayerContext& context);
 
-		// File operations (all rescan on success and surface errors in the status line).
-		// Preview card for the selected file (image thumbnail / text excerpt / meta).
 		void UpdatePreview(app::LayerContext& context);
 		void ReleasePreview(app::LayerContext& context);
 		void DrawPreviewCard(app::LayerContext& context);
@@ -76,46 +69,42 @@ namespace aether::editor
 		std::string m_projectName;
 		bool m_rootAvailable = false;
 
-		Entry m_tree;                // cached root
-		bool m_treeDirty = true;     // rescan before next draw
-		double m_lastScanTime = 0.0; // staleness timer (seconds, ImGui clock)
+		Entry m_tree;
+		bool m_treeDirty = true;
+		double m_lastScanTime = 0.0;
 		int m_fileCount = 0;
 		int m_dirCount = 0;
 		std::string m_scanError;
 
 		char m_search[96] = {};
-		std::string m_selectedPath;        // generic_string of the selected entry
-		std::string m_selectedPayloadPath; // project:// for assets, absolute for scripts
+		std::string m_selectedPath;
+		std::string m_selectedPayloadPath;
 		dragdrop::FileKind m_selectedKind = dragdrop::FileKind::Unknown;
-		std::string m_lastAdoptedAsset; // external SceneSelection asset we last mirrored
+		std::string m_lastAdoptedAsset;
 		bool m_selectedIsDirectory = false;
 
-		// Preview cache, valid while m_previewLoadedFor == m_selectedPath.
 		std::string m_previewLoadedFor = "<none>";
-		TextureHandle m_previewTexture{};   // registry ref held while an image preview is shown
-		std::uint64_t m_previewImGuiId = 0; // registered ImGui texture for the image view
-		gpu::Extent2D m_previewExtent{};
-		std::string m_previewText; // truncated text excerpt
+		TextureHandle m_previewTexture{};
+		std::uint64_t m_previewImGuiId = 0;
+		gpu::Extent2D m_previewExtent;
+		std::string m_previewText;
 		bool m_previewIsImage = false;
 		bool m_previewIsModel = false;
 		bool m_previewIsText = false;
 		bool m_previewFailed = false;
 
-		// Inline rename state (armed from the context menu).
 		std::filesystem::path m_renameTarget;
 		char m_renameBuf[128] = {};
 		bool m_renameFocusPending = false;
 
-		// Delete confirmation state.
 		std::filesystem::path m_deleteTarget;
 		bool m_deleteIsDirectory = false;
 		bool m_openDeletePopup = false;
 
-		// "+ New" popover state.
-		bool m_openNewPopup = false; // armed by "New here..." in a row context menu
+		bool m_openNewPopup = false;
 		char m_newScriptNameBuf[64] = {};
 		char m_newFolderNameBuf[64] = {};
-		std::filesystem::path m_createDir; // where New creates (selected dir or root)
-		std::string m_opError;             // last file-operation error, shown in the status line
+		std::filesystem::path m_createDir;
+		std::string m_opError;
 	};
 } // namespace aether::editor

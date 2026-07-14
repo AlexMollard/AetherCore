@@ -31,7 +31,7 @@ namespace
 	{
 		return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 	}
-} // namespace
+}
 
 TEST_CASE("reads from the only layer that has the file")
 {
@@ -64,7 +64,6 @@ TEST_CASE("higher-priority layer overrides a same-named file")
 	auto backendA = std::make_shared<io::DirectoryBackend>(dirA);
 	auto backendB = std::make_shared<io::DirectoryBackend>(dirB);
 
-	// Index 0 = highest priority: A should win.
 	io::OverlayBackend overlay(std::vector<io::OverlayBackend::Layer>{
 	        {.backend = backendA, .prefix = ""},
 	        {.backend = backendB, .prefix = ""},
@@ -107,7 +106,6 @@ TEST_CASE("Glob unions both layers and de-dups overlapping names")
 	}
 	CHECK(sharedCount == 1);
 
-	// Higher-priority layer (A) should win the de-dup for the shared name.
 	const auto bytes = overlay.Read("shared.txt");
 	REQUIRE(bytes.has_value());
 	CHECK(ToString(*bytes) == "from A");
@@ -132,12 +130,7 @@ TEST_CASE("a prefixed layer resolves rel under the prefix")
 
 TEST_CASE("Glob strips a layer prefix case-insensitively")
 {
-	// DirectoryBackend::Glob matches case-insensitively by default
-	// (FileGlobOptions::caseSensitive == false), so it can hand back a path
 	// whose on-disk directory casing ("Shaders/") differs from the layer's
-	// configured prefix ("shaders/"). OverlayBackend::Glob must still strip
-	// that prefix and yield a mount-relative name, not leak the
-	// still-prefixed, differently-cased path into the merged results.
 	const std::filesystem::path dirD = MakeTempDir("case_insensitive_prefix");
 	WriteFile(dirD / "Shaders" / "foo.spv", "spv bytes");
 
@@ -151,8 +144,6 @@ TEST_CASE("Glob strips a layer prefix case-insensitively")
 	REQUIRE(matches->size() == 1);
 	CHECK((*matches)[0] == "foo.spv");
 
-	// Prove the stripped name is genuinely mount-relative by resolving it
-	// back through the overlay.
 	CHECK(overlay.Exists("foo.spv"));
 	const auto bytes = overlay.Read("foo.spv");
 	REQUIRE(bytes.has_value());

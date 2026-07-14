@@ -8,69 +8,32 @@
 
 namespace aether
 {
-	// Per-frame constant data written once to a GPU buffer before any draws.
-	// Accessed via Buffer Device Address pushed per draw call.
-	//
-	// Usage Notes:
-	// - skyVoidColor: Active feature used by skybox.slang:208 for void/space rendering, set by DayNightSystem
-	// - tiledLightGridInfo/tiledLightBufferOffsets: Used by tiled_light_cull.slang for local lights
-	// - shadowViewProjCascades: Directional light cascade matrices (ShadowService)
-	// - Bindless slots (shadow, GTAO, etc.) are now accessed via fc.resourceTableAddr resource entries.
-	//
-	// Sync with shaders/include/FrameConstants.slangh - update both when modifying.
-	//
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
 	// Layout (768 bytes):
-	//   offset   0 : mat4     viewProj               (64)  Combined view-projection matrix
-	//   offset  64 : mat4     view                   (64)  View matrix
-	//   offset 128 : mat4     proj                   (64)  Projection matrix
-	//   offset 192 : uint64   materialBufferAddr      ( 8)  BDA of MaterialBuffer
-	//   offset 200 : float    elapsedTime             ( 4)  Frame elapsed time in seconds
-	//   offset 204 : uint32   _pad0                   ( 4)  Alignment padding
-	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world-space direction, w=intensity (directional light)
-	//   offset 224 : vec4     ambientColor            (16)  rgb=ambient term, a=unused
-	//   offset 240 : vec4     cameraWorldPos          (16)  xyz=camera position, w=1
-	//   offset 256 : vec4     sunColor                (16)  rgb=sun light color, a=unused
-	//   offset 272 : vec4     skyHorizonColor         (16)  rgb=sky horizon gradient, a=unused (skybox.slang)
-	//   offset 288 : vec4     skyZenithColor          (16)  rgb=sky zenith gradient, a=unused (skybox.slang)
-	//   offset 304 : vec4     skyVoidColor            (16)  rgb=void/space tint, a=unused (skybox.slang:208, DayNightSystem)
-	//   offset 320 : uvec4    tiledLightGridInfo      (16)  x=tilePx, y=tilesX, z=tilesY, w=lightCount (tiled lighting)
-	//   offset 336 : uvec4    tiledLightBufferOffsets (16)  x=lightBase, y=headerBase, z=indexBase, w=unused
-	//   offset 352 : mat4[3]  shadowViewProjCascades (192)  Light clip transforms for CSM cascades (ShadowService)
-	//   offset 544 : vec4     shadowCascadeSplits     (16)  xyz=split far distances for 3 cascades
-	//   offset 560 : vec4     shadowParams            (16)  x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
-	//   offset 576 : uint     shadowLightCount        ( 4)  Number of active shadow-casting lights
-	//   offset 580 : uint     _padShadowAlign         ( 4)  Alignment before uint64
-	//   offset 584 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
-	//   offset 592 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
-	//   offset 688 : mat4     invViewProj             (64)  Inverse view-projection for screen-space reconstruction
-	//   offset 752 : uint64   resourceTableAddr       ( 8)  BDA to ResourceEntry[kFrameResourceCount]
-	//   offset 760 : uint64   effectParamBufferAddr   ( 8)  BDA of EffectParamBuffer (0 = no effects active)
-	//   Total: 768 bytes
 	struct FrameConstants
 	{
-		glm::mat4 viewProj{1.0f};                                                                                                           // offset 0
-		glm::mat4 view{1.0f};                                                                                                               // offset 64
-		glm::mat4 proj{1.0f};                                                                                                               // offset 128
-		std::uint64_t materialBufferAddr = 0;                                                                                               // offset 192
-		float elapsedTime = 0.0f;                                                                                                           // offset 200
-		std::uint32_t _pad0 = 0;                                                                                                            // offset 204
-		glm::vec4 sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f}; // offset 208, directional light
-		glm::vec4 ambientColor{0.03f, 0.04f, 0.06f, 1.0f};                                                                                  // offset 224
-		glm::vec4 cameraWorldPos{0.0f, 0.0f, 0.0f, 1.0f};                                                                                   // offset 240
-		glm::vec4 sunColor{1.0f, 0.96f, 0.90f, 1.0f};                                                                                       // offset 256
-		glm::vec4 skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};                                                                               // offset 272, skybox.slang
-		glm::vec4 skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};                                                                                // offset 288, skybox.slang
-		glm::vec4 skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};                                                                               // offset 304, skybox.slang:208
-		glm::uvec4 tiledLightGridInfo{0u, 0u, 0u, 0u};                                                                                      // offset 320, tiled lighting
-		glm::uvec4 tiledLightBufferOffsets{0u, 0u, 0u, 0u};                                                                                 // offset 336, tiled lighting
-		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)};               // offset 352
-		glm::vec4 shadowCascadeSplits{24.0f, 80.0f, 220.0f, 0.0f};                                                                          // offset 544, CSM splits
-		glm::vec4 shadowParams{0.0014f, 0.0030f, 1.0f, 2.0f};                                                                               // offset 560, shadow params
-		std::uint32_t shadowLightCount = 0;                                                                                                 // offset 576
-		std::uint32_t _padShadowAlign = 0;                                                                                                  // offset 580, alignment before uint64
-		std::uint64_t shadowLightDataAddr = 0;                                                                                              // offset 584
+		glm::mat4 viewProj{1.0f};
+		glm::mat4 view{1.0f};
+		glm::mat4 proj{1.0f};
+		std::uint64_t materialBufferAddr = 0;
+		float elapsedTime = 0.0f;
+		std::uint32_t _pad0 = 0;
+		glm::vec4 sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f};
+		glm::vec4 ambientColor{0.03f, 0.04f, 0.06f, 1.0f};
+		glm::vec4 cameraWorldPos{0.0f, 0.0f, 0.0f, 1.0f};
+		glm::vec4 sunColor{1.0f, 0.96f, 0.90f, 1.0f};
+		glm::vec4 skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};
+		glm::vec4 skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};
+		glm::vec4 skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
+		glm::uvec4 tiledLightGridInfo{0u, 0u, 0u, 0u};
+		glm::uvec4 tiledLightBufferOffsets{0u, 0u, 0u, 0u};
+		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)};
+		glm::vec4 shadowCascadeSplits{24.0f, 80.0f, 220.0f, 0.0f};
+		glm::vec4 shadowParams{0.0014f, 0.0030f, 1.0f, 2.0f};
+		std::uint32_t shadowLightCount = 0;
+		std::uint32_t _padShadowAlign = 0; // offset 580, alignment before uint64
+		std::uint64_t shadowLightDataAddr = 0;
 		std::array<glm::vec4, 6> frustumPlanes{
 		        glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
 		        glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f),
@@ -78,10 +41,10 @@ namespace aether
 		        glm::vec4(0.0f, -1.0f, 0.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, 1.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, -1.0f, 1.0f),
-		}; // offset 592
-		glm::mat4 invViewProj{1.0f};             // offset 688
-		std::uint64_t resourceTableAddr = 0;     // offset 752
-		std::uint64_t effectParamBufferAddr = 0; // offset 760 : BDA of EffectParamBuffer (0 = no effects active)
+		};
+		glm::mat4 invViewProj{1.0f};
+		std::uint64_t resourceTableAddr = 0;
+		std::uint64_t effectParamBufferAddr = 0;
 
 		void RefreshDerived()
 		{

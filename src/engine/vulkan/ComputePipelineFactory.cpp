@@ -14,13 +14,11 @@
 
 namespace aether::vkutil
 {
-	// Builds a compute VkShaderEXT via vkCreateShadersEXT. The shader is
 	// layout-free (VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT) - all push data
-	// flows through vkCmdPushDataEXT and BDA; no VkPipelineLayout is involved.
 	Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device gpuDevice, const ComputePipelineDesc& desc) noexcept
 	{
 		AE_PROFILE_ZONE();
-		auto device = static_cast<VkDevice>(gpuDevice);
+		auto* device = static_cast<VkDevice>(gpuDevice);
 
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (spirv->empty())
@@ -33,7 +31,7 @@ namespace aether::vkutil
 
 		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
 
-		VkShaderCreateInfoEXT createInfo{
+		const VkShaderCreateInfoEXT createInfo{
 		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
 		        .pNext = mappings,
 		        .flags = VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT,

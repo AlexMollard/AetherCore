@@ -10,7 +10,6 @@
 
 namespace aether
 {
-	// GPU-resident vertex buffer. Created via AetherCore::CreateMesh - app code
 	// never touches VMA or backend buffer types directly.
 	class Mesh
 	{
@@ -19,9 +18,9 @@ namespace aether
 		{
 			glm::vec3 position;
 			glm::vec3 normal;
-			glm::vec4 tangent; // xyz = tangent direction, w = bitangent sign
+			glm::vec4 tangent;
 			glm::vec2 uv;
-			glm::vec2 uv2; // secondary UV (lightmaps, detail maps)
+			glm::vec2 uv2;
 			glm::vec3 color;
 			glm::uvec4 jointIndices{0u, 0u, 0u, 0u};
 			glm::vec4 jointWeights{1.0f, 0.0f, 0.0f, 0.0f};
@@ -58,9 +57,6 @@ namespace aether
 			return m_generation;
 		}
 
-		// Engine-internal factory used by AetherCore::CreateMesh.
-		// Uploads via a staging buffer to device-local memory; call after the upload
-		// pool is created (blocks until the queue is idle).
 		static Mesh Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices);
 		static Mesh Create(gpu::UploadContext& uploadContext,
 		        std::span<const Vertex> vertices,
@@ -70,9 +66,6 @@ namespace aether
 		        const float* sphereCenter = nullptr,
 		        float sphereRadius = 0.0f);
 
-		// Create a non-owning view into an externally managed buffer (e.g. MeshArena / GpuHeap).
-		// The returned Mesh does NOT free the backing memory when destroyed (allocator is null).
-		// Pass device addresses so the vertex shader can fetch vertices via BDA.
 		static Mesh CreateView(gpu::BufferHandle vertexBuffer,
 		        gpu::BufferHandle indexBuffer,
 		        std::uint32_t vertexCount,
@@ -114,37 +107,31 @@ namespace aether
 			return m_indexCount;
 		}
 
-		// Byte offset within the vertex buffer (for MeshArena views).
 		[[nodiscard]] gpu::DeviceSize GetVertexByteOffset() const
 		{
 			return m_vertexByteOffset;
 		}
 
-		// Byte offset within the index buffer (for MeshArena / GpuHeap views).
 		[[nodiscard]] gpu::DeviceSize GetIndexByteOffset() const
 		{
 			return m_indexByteOffset;
 		}
 
-		// Buffer device address of the vertex data - pass directly to DrawInstanceData.vertexBufferAddr.
 		[[nodiscard]] gpu::DeviceAddress GetVertexDeviceAddress() const
 		{
 			return m_vertexDeviceAddress;
 		}
 
-		// Buffer device address of the index data - pass to indirect draw structures.
 		[[nodiscard]] gpu::DeviceAddress GetIndexDeviceAddress() const
 		{
 			return m_indexDeviceAddress;
 		}
 
-		// Local-space bounding sphere (xyz=center, w=radius).
 		[[nodiscard]] glm::vec4 GetBoundingSphere() const
 		{
 			return m_boundingSphere;
 		}
 
-		// Local-space AABB (min/max).
 		[[nodiscard]] glm::vec3 GetAABBMin() const
 		{
 			return m_aabbMin;
@@ -166,10 +153,9 @@ namespace aether
 		gpu::DeviceAddress m_vertexDeviceAddress = 0;
 		gpu::DeviceAddress m_indexDeviceAddress = 0;
 
-		// Local-space bounding volume (from mesh header).
 		glm::vec3 m_aabbMin{0.0f};
 		glm::vec3 m_aabbMax{0.0f};
-		glm::vec4 m_boundingSphere{0.0f, 0.0f, 0.0f, 0.0f}; // xyz=center, w=radius
+		glm::vec4 m_boundingSphere{0.0f, 0.0f, 0.0f, 0.0f};
 		std::uint32_t m_aliveSentinel = kAliveSentinel;
 		std::uint32_t m_generation = 0;
 	};

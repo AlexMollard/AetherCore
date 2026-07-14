@@ -36,7 +36,6 @@ TEST_CASE("Many entities bound to one unedited material share a single slot") {
     {
         authoring.Bind(world, MakeEntity(world), id);
     }
-    // Content-addressed: 5 identical binds dedup onto one GPU slot.
     CHECK(sink.allocCount == 1);
 }
 
@@ -60,7 +59,6 @@ TEST_CASE("Editing a material re-binds every bound entity to the new content") {
     CHECK(world.Get<MaterialComponent>(b).gpuSlot == sharedSlot);
 
     authoring.SetMetallic(world, id, 0.8f);
-    // Both entities moved together to the new (still shared) slot.
     const std::uint32_t newSlot = world.Get<MaterialComponent>(a).gpuSlot;
     CHECK(newSlot != sharedSlot);
     CHECK(world.Get<MaterialComponent>(b).gpuSlot == newSlot);
@@ -83,9 +81,9 @@ TEST_CASE("Two ids with identical seeds dedup, then diverge on edit") {
     Entity eb = MakeEntity(world);
     authoring.Bind(world, ea, idA);
     authoring.Bind(world, eb, idB);
-    CHECK(sink.allocCount == 1); // identical content shares a slot
+    CHECK(sink.allocCount == 1);
 
-    authoring.SetRoughness(world, idB, 0.1f); // idB diverges
+    authoring.SetRoughness(world, idB, 0.1f);
     CHECK(world.Get<MaterialComponent>(ea).gpuSlot != world.Get<MaterialComponent>(eb).gpuSlot);
     CHECK(sink.allocCount == 2);
 }
@@ -104,7 +102,7 @@ TEST_CASE("No-op edit on a material does not churn slots") {
     authoring.Bind(world, MakeEntity(world), id);
     const int allocs = sink.allocCount;
 
-    authoring.SetMetallic(world, id, 0.4f); // unchanged
+    authoring.SetMetallic(world, id, 0.4f);
     CHECK(sink.allocCount == allocs);
     CHECK(sink.freeCount == 0);
 }
@@ -125,7 +123,7 @@ TEST_CASE("Re-binding an entity untracks it from the previous material") {
 
     Entity e = MakeEntity(world);
     authoring.Bind(world, e, idRed);
-    authoring.Bind(world, e, idBlue); // e is now on blue
+    authoring.Bind(world, e, idBlue);
     const std::uint32_t blueSlot = world.Get<MaterialComponent>(e).gpuSlot;
 
     // Editing the RED material (which e is no longer bound to) must NOT touch e.
@@ -148,7 +146,7 @@ TEST_CASE("ReleaseAll drops bookkeeping without touching the sink") {
     CHECK(authoring.Count() == 1);
 
     const int freesBefore = sink.freeCount;
-    authoring.ReleaseAll(); // pure CPU: entity handles are the hook's job
+    authoring.ReleaseAll();
     CHECK(authoring.Count() == 0);
     CHECK(sink.freeCount == freesBefore);
 }

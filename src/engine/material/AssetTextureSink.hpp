@@ -15,7 +15,6 @@ namespace aether
 		class UploadContext;
 	}
 
-	// Production ITextureSlotSink: resolves the .texture sibling and forwards to
 	// Texture::LoadFromFile on the game thread (which owns the Vulkan context).
 	class AssetTextureSink final : public ITextureSlotSink
 	{

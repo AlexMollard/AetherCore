@@ -7,18 +7,12 @@
 
 namespace aether
 {
-	// World- or object-space ray. dir need not be normalized for RayVsAabb (tHit
-	// is then in units of dir length); BuildCameraRay returns a normalized dir.
 	struct Ray
 	{
 		glm::vec3 origin{0.0f};
 		glm::vec3 dir{0.0f, 0.0f, -1.0f};
 	};
 
-	// Slab test. On hit, tHit >= 0 is the entry distance along dir (0 when the
-	// origin starts inside). Axis-parallel rays are handled explicitly - the
-	// naive (bound - origin) * (1/0) form produces NaN when the origin sits
-	// exactly on a slab plane.
 	inline bool RayVsAabb(const Ray& ray, const glm::vec3& mn, const glm::vec3& mx, float& tHit)
 	{
 		float tMin = 0.0f;
@@ -51,16 +45,6 @@ namespace aether
 		return true;
 	}
 
-	// Ray through a viewport pixel. ndc01 is the image-space UV in [0,1]^2 with
-	// (0,0) at the TOP-LEFT of the displayed image. The engine's projection
-	// carries the Vulkan Y-flip (proj[1][1] *= -1), so clip-space y already
-	// points down and no extra sign flip is needed here - the round-trip
-	// doctest in tests/utils/RayTests.cpp pins this convention.
-	//
-	// Any two distinct clip depths unproject to points on the same pixel ray
-	// (projective line), which makes this independent of the GLM depth-range
-	// convention; with a standard (non-reversed) projection the larger depth is
-	// farther, so the direction points away from the camera.
 	inline Ray BuildCameraRay(const glm::mat4& invViewProj, glm::vec2 ndc01, const glm::vec3& cameraPos)
 	{
 		const glm::vec2 ndc = ndc01 * 2.0f - 1.0f;

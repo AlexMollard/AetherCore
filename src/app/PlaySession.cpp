@@ -18,9 +18,7 @@ namespace aether::app
 {
 	namespace
 	{
-		// Snapshot the scene + selection and switch to Playing. Runs on the main
 		// thread once the async script build has succeeded and scripts are loaded,
-		// so the snapshot reflects exactly what the player sees when Play begins.
 		void EnterPlayingMode(LayerContext& context, PlayState& playState, AssetManager& assets)
 		{
 			World& world = context.Get<World>();
@@ -51,15 +49,11 @@ namespace aether::app
 		if (auto* scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
 		{
 			// Kick the rebuild off on a worker thread and enter Compiling. The editor
-			// keeps rendering and stays interactive; UpdatePlaySession finishes the
-			// transition to Playing (or back to Editing on a build error) once the
-			// build completes. The main thread never blocks on `dotnet build`.
 			scripting->BeginRebuildFromSource();
 			playState->SetMode(PlayState::Mode::Compiling);
 			return true;
 		}
 
-		// No scripting subsystem: nothing to build, so play immediately.
 		EnterPlayingMode(context, *playState, *assets);
 		return true;
 	}
@@ -76,7 +70,6 @@ namespace aether::app
 		auto* assets = context.TryGet<AssetManager>();
 		if (scripting == nullptr || assets == nullptr)
 		{
-			// Subsystem vanished mid-compile (shouldn't happen): fail safe to Editing.
 			playState->SetMode(PlayState::Mode::Editing);
 			return;
 		}
@@ -86,11 +79,9 @@ namespace aether::app
 		switch (scripting->PollRebuildStatus(buildError))
 		{
 			case BuildStatus::Running:
-				return; // still compiling - keep the editor interactive
+				return;
 
 			case BuildStatus::Idle:
-				// Nothing pending (build result was dropped elsewhere): bail out
-				// rather than getting stuck in Compiling forever.
 				playState->SetMode(PlayState::Mode::Editing);
 				return;
 
@@ -120,9 +111,6 @@ namespace aether::app
 			return false;
 		}
 
-		// Cancel a pending compile: return to Editing without ever having played. The
-		// background build finishes harmlessly (it only redeploys the dll); we just
-		// stop tracking its result.
 		if (playState->IsCompiling())
 		{
 			if (auto* scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
@@ -195,7 +183,6 @@ namespace aether::app
 		{
 			return false;
 		}
-		// Compiling counts as "engaged": toggling cancels the pending play.
 		return (playState->IsPlaying() || playState->IsCompiling()) ? StopPlaySession(context) : StartPlaySession(context);
 	}
 } // namespace aether::app

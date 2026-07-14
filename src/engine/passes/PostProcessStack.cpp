@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 
 #include <glm/glm.hpp>
@@ -99,7 +100,6 @@ namespace aether
 		                }));
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 
-		// Compute pipeline + per-frame mapped output buffers for GPU luminance histogram
 		{
 			stack.m_histogramPipeline = gpu::ResourceRegistry::CreateComputePipeline(desc.device,
 			        gpu::ComputePipelineDesc{
@@ -112,7 +112,7 @@ namespace aether
 				Throw(AetherError::Engine("PostProcessStack: LuminanceHistogram CreateComputePipeline failed"));
 			}
 
-			constexpr auto kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+			constexpr auto kHistogramBufferSize = static_cast<std::size_t>(kHistogramBins) * 2u * sizeof(std::uint32_t);
 			for (auto& buf: stack.m_histogramOutput)
 			{
 				buf = gpu::ResourceRegistry::CreateMappedBuffer({
@@ -192,7 +192,7 @@ namespace aether
 			return;
 		}
 
-		constexpr gpu::DeviceSize kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+		constexpr gpu::DeviceSize kHistogramBufferSize = static_cast<gpu::DeviceSize>(kHistogramBins) * 2u * sizeof(std::uint32_t);
 		gpu::ResourceRegistry::InvalidateMappedBuffer(m_histogramOutput[frameSlot % kMaxFramesInFlight], 0, kHistogramBufferSize);
 
 		const std::uint32_t* bins = static_cast<const std::uint32_t*>(view.mappedPtr);
@@ -223,16 +223,13 @@ namespace aether
 			}
 		};
 
-		normalise(bins, m_histogramBins, kHistogramBins);          // HDR first 256
-		normalise(bins + 256, m_ldrHistogramBins, kHistogramBins); // LDR next 256
+		normalise(bins, m_histogramBins, kHistogramBins);
+		normalise(bins + 256, m_ldrHistogramBins, kHistogramBins);
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
 	{
 		AE_PROFILE_ZONE();
-		// Tonemap -> LDR intermediate (always), then FXAA -> swapchain.
-		// FXAA toggling is handled at runtime via a push constant so the graph
-		// topology stays stable and toggles don't require a graph rebuild.
 		graph.AddFullscreenPass({
 		                                .name = "$PostProcess",
 		                                .color = m_ldrColor,
@@ -287,7 +284,7 @@ namespace aether
 		                });
 
 		auto fxaaPass = graph.AddPass("$FXAA");
-		fxaaPass.ReadTexture(m_ldrColor).WriteColor(m_outputToTexture ? m_finalColor : graph.GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {});
+		fxaaPass.ReadTexture(m_ldrColor).WriteColor(m_outputToTexture ? m_finalColor : aether::RenderGraph::GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {});
 		if (m_outputToTexture)
 		{
 			fxaaPass.SetExtent(m_extent);
@@ -324,10 +321,6 @@ namespace aether
 			        cmd.Draw(3, 1, 0, 0);
 		        });
 
-		// GPU luminance histogram (debug). The per-frame-slot output buffer is
-		// registered as an external graph buffer whose backing is swapped each
-		// frame via UpdateBufferHandles; clear and dispatch are separate passes
-		// so the graph owns all synchronization between them.
 		m_histogramOutputRG = graph.RegisterBuffer(nullptr);
 
 		graph.AddComputePass("$HistogramClear")
@@ -342,7 +335,7 @@ namespace aether
 			                }
 
 			                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
-			                constexpr gpu::DeviceSize kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+			                constexpr gpu::DeviceSize kHistogramBufferSize = static_cast<gpu::DeviceSize>(kHistogramBins) * 2u * sizeof(std::uint32_t);
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]), 0, kHistogramBufferSize, 0);
 		                });
@@ -354,7 +347,7 @@ namespace aether
 		        .ReadWriteBuffer(m_histogramOutputRG)
 		        .SetExtent(m_extent)
 		        .ExecuteCompute(
-		                [this, &bindless, histogramPipeline = const_cast<void*>(histogramResolved.state)](PassContext& ctx)
+		                [this, &bindless, histogramPipeline = histogramResolved.state](PassContext& ctx)
 		                {
 			                if (!ShouldRecordHistogram(ctx.frameIndex))
 			                {
@@ -411,8 +404,6 @@ namespace aether
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
 		graph.UpdateExternalBuffer(m_histogramOutputRG, gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]));
 
-		// Readback this slot's output from kMaxFramesInFlight frames ago
-		// (guaranteed complete by frame pacing).
 		if (m_histogramCaptureEnabled && m_perFrameHistogramReady[slot])
 		{
 			ReadbackHistogram(slot);

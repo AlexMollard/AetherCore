@@ -2,16 +2,9 @@
 
 #include "physics/PhysicsDebugRenderer.hpp"
 
-// Debug draw exported to C#. Appends immediate-mode world-space primitives to the
-// engine's per-frame debug-vertex list (extracted into the RenderFramePacket and
-// drawn by the $Debug pass when debug rendering is enabled - like Unity's
-// Debug.DrawLine showing with gizmos).
-
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
-// Master switch for immediate debug drawing (the $Debug pass). Off by default,
-// like Unity's gizmos - a script turns it on to see its Debug.Draw* output.
 AE_SCRIPT_API void aether_debug_set_enabled(std::int32_t enabled)
 {
 	aether::SetDebugRenderingEnabled(enabled != 0);

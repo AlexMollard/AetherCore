@@ -1,6 +1,4 @@
-// Physics component reflection declarations. Demonstrates enum fields: the
 // name<->value tables are plain C++ statics (so the preprocessor never sees their
-// commas), referenced by AE_FIELD_ENUM.
 
 #include "scene/reflection/Reflection.hpp"
 
@@ -57,7 +55,7 @@ AE_FIELD_N("center", center, Vec3)
 AE_FIELD_N("friction", friction, Float)
 AE_FIELD_N("restitution", restitution, Float)
 AE_FIELD_N("is_sensor", isSensor, Bool)
-AE_NOT_ADDABLE() // the catalog adds it via per-shape entries (Box/Sphere/... Collider)
+AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(JointComponent, "Joint", "Physics", ICON_FA_LINK)

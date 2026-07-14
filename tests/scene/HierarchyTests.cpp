@@ -25,13 +25,11 @@ namespace
         return std::find(h->children.begin(), h->children.end(), child) != h->children.end();
     }
 
-    // A fresh World already retires entt's raw-0 null slot in its constructor, so
-    // world.Create() is valid from the first call - no "burn entity 0" needed.
     World MakeWorld()
     {
         return World{};
     }
-} // namespace
+}
 
 TEST_CASE("SetParent links both sides and emplaces components on demand") {
     World world = MakeWorld();
@@ -62,14 +60,13 @@ TEST_CASE("SetParent rejects self-parenting and cycles without mutating") {
     Entity a = world.Create();
     Entity b = world.Create();
     Entity c = world.Create();
-    REQUIRE(ecs::SetParent(world, b, a)); // a -> b
-    REQUIRE(ecs::SetParent(world, c, b)); // a -> b -> c
+    REQUIRE(ecs::SetParent(world, b, a));
+    REQUIRE(ecs::SetParent(world, c, b));
 
     CHECK(!ecs::SetParent(world, a, a));
-    CHECK(!ecs::SetParent(world, a, c)); // would make a a child of its own grandchild
-    CHECK(!ecs::SetParent(world, b, c)); // direct parent<->child inversion... of b under its own child
+    CHECK(!ecs::SetParent(world, a, c));
+    CHECK(!ecs::SetParent(world, b, c));
 
-    // Tree unchanged.
     CHECK(world.Get<HierarchyComponent>(b).parent == a);
     CHECK(world.Get<HierarchyComponent>(c).parent == b);
     CHECK(!world.TryGet<HierarchyComponent>(a)->parent.IsValid());
@@ -86,9 +83,9 @@ TEST_CASE("IsAncestor: self, chain, and unrelated") {
     REQUIRE(ecs::SetParent(world, b, a));
     REQUIRE(ecs::SetParent(world, c, b));
 
-    CHECK(ecs::IsAncestor(world, c, c));        // an entity counts as its own ancestor
-    CHECK(ecs::IsAncestor(world, c, a));        // grandparent
-    CHECK(!ecs::IsAncestor(world, a, c));       // not the other way
+    CHECK(ecs::IsAncestor(world, c, c));
+    CHECK(ecs::IsAncestor(world, c, a));
+    CHECK(!ecs::IsAncestor(world, a, c));
     CHECK(!ecs::IsAncestor(world, c, stranger));
 }
 
@@ -103,7 +100,7 @@ TEST_CASE("Detach: explicit DetachFromParent and SetParent to null both root the
     ecs::DetachFromParent(world, c1);
     CHECK(!world.Get<HierarchyComponent>(c1).parent.IsValid());
     CHECK(!HasChild(world, parent, c1));
-    CHECK(HasChild(world, parent, c2)); // sibling untouched
+    CHECK(HasChild(world, parent, c2));
 
     CHECK(ecs::SetParent(world, c2, Entity{}));
     CHECK(!world.Get<HierarchyComponent>(c2).parent.IsValid());

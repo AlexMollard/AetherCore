@@ -46,9 +46,6 @@ namespace aether
 			return DebugYellow;
 		}
 
-		// Engine-side wrapper around gpu::ResourceRegistry::CreateMappedBuffer
-		// for a static vertex buffer. The buffer is host-visible and uploaded
-		// once at creation. Returns the handle (caller stores it as a member).
 		gpu::BufferHandle CreateStaticVertexBuffer(std::span<const DebugVertex> vertices, const char* debugName)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -68,7 +65,7 @@ namespace aether
 		}
 	} // namespace
 
-	static bool s_debugRenderingEnabled = false; // F6 toggles from DebugLayer
+	static bool s_debugRenderingEnabled = false;
 	static bool s_physicsDebugShapesEnabled = false;
 
 	void SetDebugRenderingEnabled(bool enabled)
@@ -254,7 +251,6 @@ namespace aether
 	void PhysicsDebugRenderer::CreateBoxGeometry()
 	{
 		const std::array<glm::vec3, 24> kBoxEdges = {
-		        // Bottom face (4 edges)
 		        glm::vec3{-0.5f, -0.5f, -0.5f},
 		        glm::vec3{0.5f, -0.5f, -0.5f},
 		        glm::vec3{0.5f, -0.5f, -0.5f},
@@ -263,7 +259,6 @@ namespace aether
 		        glm::vec3{-0.5f, -0.5f, 0.5f},
 		        glm::vec3{-0.5f, -0.5f, 0.5f},
 		        glm::vec3{-0.5f, -0.5f, -0.5f},
-		        // Top face (4 edges)
 		        glm::vec3{-0.5f, 0.5f, -0.5f},
 		        glm::vec3{0.5f, 0.5f, -0.5f},
 		        glm::vec3{0.5f, 0.5f, -0.5f},
@@ -272,7 +267,6 @@ namespace aether
 		        glm::vec3{-0.5f, 0.5f, 0.5f},
 		        glm::vec3{-0.5f, 0.5f, 0.5f},
 		        glm::vec3{-0.5f, 0.5f, -0.5f},
-		        // Vertical edges (4 edges)
 		        glm::vec3{-0.5f, -0.5f, -0.5f},
 		        glm::vec3{-0.5f, 0.5f, -0.5f},
 		        glm::vec3{0.5f, -0.5f, -0.5f},
@@ -338,18 +332,14 @@ namespace aether
 		constexpr float kHalfHeight = 0.5f;
 		constexpr float kTwoPi = 6.28318530718f;
 		constexpr float kHalfPi = 1.57079632679f;
-		// Meridian lines: north pole -> top dome -> cylinder -> bottom dome -> south pole.
 		for (int i = 0; i < kSegments; ++i)
 		{
 			const float theta = (static_cast<float>(i) * kTwoPi) / kSegments;
 			const float dx = std::cos(theta);
 			const float dz = std::sin(theta);
 
-			// Build waypoints: north pole, top dome points, bottom dome points, south pole.
-			// Cylinder top = domePoints[kDomeSteps-1], cylinder bottom = bottomDome[0].
-			glm::vec3 prev = glm::vec3{0.0f, kHalfHeight + kRadius, 0.0f}; // north pole
+			glm::vec3 prev = glm::vec3{0.0f, kHalfHeight + kRadius, 0.0f};
 
-			// Top hemisphere: north pole -> cylinder top.
 			for (int j = 1; j <= kDomeSteps; ++j)
 			{
 				const float phi = (static_cast<float>(j) * kHalfPi) / kDomeSteps;
@@ -359,7 +349,6 @@ namespace aether
 				prev = p;
 			}
 
-			// Cylinder: top -> bottom.
 			for (int j = 0; j < kDomeSteps; ++j)
 			{
 				const float y = kHalfHeight - static_cast<float>(j + 1) * (2.0f * kHalfHeight) / kDomeSteps;
@@ -369,7 +358,6 @@ namespace aether
 				prev = p;
 			}
 
-			// Bottom hemisphere: cylinder bottom -> south pole.
 			for (int j = 1; j <= kDomeSteps; ++j)
 			{
 				const float phi = kHalfPi + (static_cast<float>(j) * kHalfPi) / kDomeSteps;
@@ -379,13 +367,11 @@ namespace aether
 				prev = p;
 			}
 
-			// South pole (final point closing the meridian).
 			const glm::vec3 southPole{0.0f, -kHalfHeight - kRadius, 0.0f};
 			vertices.push_back(DebugVertex{.position = prev, .color = kWhite});
 			vertices.push_back(DebugVertex{.position = southPole, .color = kWhite});
 		}
 
-		// Horizontal rings at cylinder top and bottom.
 		for (int i = 0; i < kSegments; ++i)
 		{
 			const float theta1 = (static_cast<float>(i) * kTwoPi) / kSegments;
@@ -395,11 +381,9 @@ namespace aether
 			const float cx2 = kRadius * std::cos(theta2);
 			const float cz2 = kRadius * std::sin(theta2);
 
-			// Top ring.
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, kHalfHeight, cz1}, .color = kWhite});
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, kHalfHeight, cz2}, .color = kWhite});
 
-			// Bottom ring.
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, -kHalfHeight, cz1}, .color = kWhite});
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, -kHalfHeight, cz2}, .color = kWhite});
 		}
@@ -410,8 +394,6 @@ namespace aether
 
 	void PhysicsDebugRenderer::CreateCylinderGeometry()
 	{
-		// Unit cylinder: radius 0.5, half-height 0.5, axis along Y. Scaled per-body
-		// by the entity transform (radius*2, halfHeight*2, radius*2).
 		std::vector<DebugVertex> vertices;
 		constexpr glm::vec4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
 		constexpr int kSegments = 16;
@@ -428,13 +410,10 @@ namespace aether
 			const float cx2 = kRadius * std::cos(theta2);
 			const float cz2 = kRadius * std::sin(theta2);
 
-			// Top ring.
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, kHalfHeight, cz1}, .color = kWhite});
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, kHalfHeight, cz2}, .color = kWhite});
-			// Bottom ring.
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, -kHalfHeight, cz1}, .color = kWhite});
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, -kHalfHeight, cz2}, .color = kWhite});
-			// Vertical strut connecting the two rings.
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, kHalfHeight, cz1}, .color = kWhite});
 			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, -kHalfHeight, cz1}, .color = kWhite});
 		}
@@ -442,8 +421,6 @@ namespace aether
 		m_cylinderVertexCount = static_cast<std::uint32_t>(vertices.size());
 		m_cylinderVertexHandle = CreateStaticVertexBuffer(vertices, "PhysicsDebug.CylinderGeometry");
 	}
-
-	// -- Free-function debug primitive builders -------------------------------
 
 	void AddDebugLine(std::vector<DebugVertex>& out, const glm::vec3& a, const glm::vec3& b, const glm::vec4& color)
 	{
@@ -453,7 +430,6 @@ namespace aether
 
 	void AddDebugAabb(std::vector<DebugVertex>& out, const glm::vec3& min, const glm::vec3& max, const glm::vec4& color)
 	{
-		// 8 corners
 		const glm::vec3 c000{min.x, min.y, min.z};
 		const glm::vec3 c100{max.x, min.y, min.z};
 		const glm::vec3 c010{min.x, max.y, min.z};
@@ -463,17 +439,14 @@ namespace aether
 		const glm::vec3 c011{min.x, max.y, max.z};
 		const glm::vec3 c111{max.x, max.y, max.z};
 
-		// 4 bottom
 		AddDebugLine(out, c000, c100, color);
 		AddDebugLine(out, c100, c101, color);
 		AddDebugLine(out, c101, c001, color);
 		AddDebugLine(out, c001, c000, color);
-		// 4 top
 		AddDebugLine(out, c010, c110, color);
 		AddDebugLine(out, c110, c111, color);
 		AddDebugLine(out, c111, c011, color);
 		AddDebugLine(out, c011, c010, color);
-		// 4 verticals
 		AddDebugLine(out, c000, c010, color);
 		AddDebugLine(out, c100, c110, color);
 		AddDebugLine(out, c101, c111, color);
@@ -494,17 +467,14 @@ namespace aether
 		        center + rot * glm::vec3{-halfExtents.x, halfExtents.y, halfExtents.z},
 		};
 
-		// 4 bottom
 		AddDebugLine(out, corners[0], corners[1], color);
 		AddDebugLine(out, corners[1], corners[2], color);
 		AddDebugLine(out, corners[2], corners[3], color);
 		AddDebugLine(out, corners[3], corners[0], color);
-		// 4 top
 		AddDebugLine(out, corners[4], corners[5], color);
 		AddDebugLine(out, corners[5], corners[6], color);
 		AddDebugLine(out, corners[6], corners[7], color);
 		AddDebugLine(out, corners[7], corners[4], color);
-		// 4 verticals
 		AddDebugLine(out, corners[0], corners[4], color);
 		AddDebugLine(out, corners[1], corners[5], color);
 		AddDebugLine(out, corners[2], corners[6], color);
@@ -521,8 +491,8 @@ namespace aether
 		{
 			for (int i = 0; i < clamped; ++i)
 			{
-				const float t1 = static_cast<float>(i) * kTwoPi / clamped;
-				const float t2 = static_cast<float>(i + 1) * kTwoPi / clamped;
+				const float t1 = static_cast<float>(i) * kTwoPi / static_cast<float>(clamped);
+				const float t2 = static_cast<float>(i + 1) * kTwoPi / static_cast<float>(clamped);
 				const glm::vec3 p1 = center + radius * (axisA * std::cos(t1) + axisB * std::sin(t1));
 				const glm::vec3 p2 = center + radius * (axisA * std::cos(t2) + axisB * std::sin(t2));
 				AddDebugLine(out, p1, p2, color);
@@ -538,7 +508,6 @@ namespace aether
 	{
 		const glm::mat4 inv = glm::inverse(viewProj);
 
-		// NDC cube corners (clip space)
 		const std::array<glm::vec4, 8> ndc{
 		        glm::vec4{-1.0f, -1.0f, -1.0f, 1.0f},
 		        glm::vec4{1.0f, -1.0f, -1.0f, 1.0f},
@@ -557,17 +526,14 @@ namespace aether
 			world[i] = glm::vec3(h) / h.w;
 		}
 
-		// Near face (z=-1): 0,1,2,3
 		AddDebugLine(out, world[0], world[1], color);
 		AddDebugLine(out, world[1], world[2], color);
 		AddDebugLine(out, world[2], world[3], color);
 		AddDebugLine(out, world[3], world[0], color);
-		// Far face (z=+1): 4,5,6,7
 		AddDebugLine(out, world[4], world[5], color);
 		AddDebugLine(out, world[5], world[6], color);
 		AddDebugLine(out, world[6], world[7], color);
 		AddDebugLine(out, world[7], world[4], color);
-		// Connecting edges
 		AddDebugLine(out, world[0], world[4], color);
 		AddDebugLine(out, world[1], world[5], color);
 		AddDebugLine(out, world[2], world[6], color);
@@ -594,7 +560,6 @@ namespace aether
 			return;
 		}
 
-		// Grow geometrically to amortize realloc cost.
 		std::uint32_t newCapacity = m_immediateCapacity == 0 ? kInitialImmediateCapacity : m_immediateCapacity;
 		while (newCapacity < vertexCount)
 		{
@@ -634,7 +599,7 @@ namespace aether
 		{
 			return;
 		}
-		std::vector<DebugVertex>* drawList = const_cast<std::vector<DebugVertex>*>(m_frameDebugVertices);
+		const std::vector<DebugVertex>* drawList = m_frameDebugVertices;
 
 		const auto immediateCount = static_cast<std::uint32_t>(drawList->size());
 		EnsureImmediateBufferCapacity(immediateCount);
@@ -671,11 +636,7 @@ namespace aether
 
 	void PhysicsDebugRenderer::DrawPhysicsDebugShapes(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr) const
 	{
-		// Replays whatever the PRODUCER extracted into the packet - nothing more.
-		// The "is physics-debug on?" decision lives ENTIRELY on the extract side
-		// (ExtractShapes): if it's off, the list is empty and this loop draws
 		// nothing. The render thread checks no flag and reads no global state - the
-		// presence of data in the packet IS the toggle.
 		if (m_frameShapes == nullptr)
 		{
 			return;
@@ -726,11 +687,11 @@ namespace aether
 
 		if (!color.IsValid())
 		{
-			color = graph.GetSwapchainColor();
+			color = aether::RenderGraph::GetSwapchainColor();
 		}
 		if (!depth.IsValid())
 		{
-			depth = graph.GetSwapchainDepth();
+			depth = aether::RenderGraph::GetSwapchainDepth();
 		}
 
 		auto pass = graph.AddPass("$Debug");
@@ -760,7 +721,7 @@ namespace aether
 			                };
 			                static_assert(sizeof(DebugPc) == 88);
 
-			                cmd.BindPipeline(const_cast<void*>(resolved.state));
+			                cmd.BindPipeline(resolved.state);
 			                cmd.SetLineWidth(2.0f);
 
 			                DrawImmediateDebugPrimitives(cmd, ctx.frameConstantsAddr);

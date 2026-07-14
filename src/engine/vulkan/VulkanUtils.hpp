@@ -60,7 +60,7 @@ namespace aether::vkutil
 		        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
 		        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1},
 		};
-		VkResult result = vkTransitionImageLayout(device, 1, &transition);
+		const VkResult result = vkTransitionImageLayout(device, 1, &transition);
 		if (result != VK_SUCCESS)
 		{
 			return result;
@@ -85,18 +85,12 @@ namespace aether::vkutil
 		return vkCopyMemoryToImage(device, &copyInfo);
 	}
 
-	// Engine-side overload: opaque gpu::Device + gpu::ImageView. Translates
-	// at the seam so engine callers don't need to mention Vk* types.
-	// Returns the raw VkResult so callers can still throw AetherError::Vulkan.
 	inline std::int32_t HostCopyToImage(gpu::Device device, gpu::ImageView dstImage, const void* hostData, uint32_t width, uint32_t height)
 	{
 		return static_cast<std::int32_t>(HostCopyToImage(static_cast<VkDevice>(device), static_cast<VkImage>(dstImage), hostData, width, height));
 	}
 
-	// -- Debug object naming -----------------------------------------------------
-
 	// Thread-local storage for the debug-utils function pointer.
-	// Set once at engine init via SetObjectNameFunction.
 	inline PFN_vkSetDebugUtilsObjectNameEXT g_setObjectNameFn = nullptr;
 
 	inline void SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn)

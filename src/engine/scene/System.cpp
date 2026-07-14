@@ -17,8 +17,6 @@ namespace aether
 
 		AE_VERBOSE(LogCategory::Engine, "Registering system: {}", system->GetName());
 		m_systems.push_back(std::move(system));
-		// Note: OnRegister is called when the system is added to World via
-		// RegisterSystem()
 	}
 
 	void SystemRegistry::Unregister(const char* name)

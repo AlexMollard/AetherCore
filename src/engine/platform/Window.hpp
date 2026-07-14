@@ -16,12 +16,6 @@ namespace aether
 	{
 	public:
 		// Declare the process per-monitor DPI-aware. MUST be called before any GLFW
-		// or windowing init (i.e. first thing in main). Without it, Windows
-		// virtualizes a high-DPI monitor (e.g. a 2560x1440 display at 133% scaling
-		// reports 1920x1080 and upscales - blurry, and the swapchain is only 1080p).
-		// With it, GLFW reports the true framebuffer + content scale, and ImGui's
-		// ConfigDpiScaleFonts/Viewports keep the UI crisp and correctly sized.
-		// No-op off Windows. Safe to call once; extra calls are ignored.
 		static void EnableHighDpiAwareness();
 
 		Window(const char* title, int width, int height);
@@ -39,26 +33,17 @@ namespace aether
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
 		FramebufferSize WaitForValidFramebufferSize();
 
-		// Current window size in screen coordinates (what SetSize takes). Distinct
-		// from GetFramebufferSize() on HiDPI displays; use this to persist/restore size.
 		[[nodiscard]] FramebufferSize GetWindowSize() const;
 
-		// Requests a new window size. GLFW fires the framebuffer-size callback on the
 		// next PollEvents, which drives the main-thread swapchain recreate. Must be
-		// called from the main thread.
 		void SetSize(int width, int height);
 
-		// Clamps how small the user can resize the window (screen coordinates); the
 		// maximum stays unbounded. For tool front-ends whose layout has a smallest
-		// usable size (e.g. the Launcher hub). Main thread only.
 		void SetMinimumSize(int minWidth, int minHeight);
 
 		[[nodiscard]] int GetDisplayRefreshRate() const;
 
 		// Set by the GLFW framebuffer-size callback (fires on the main thread
-		// during PollEvents). Consume() clears the flag; Peek() does not. Used by
-		// the main-thread quiesced swapchain recreate so resize is detected on the
-		// producer thread rather than raced off the render thread.
 		[[nodiscard]] bool PeekFramebufferResized() const
 		{
 			return m_framebufferResized.load(std::memory_order_acquire);

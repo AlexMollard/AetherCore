@@ -10,7 +10,7 @@ namespace aether::gpu
 {
 	TimelineSemaphoreHandle CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept
 	{
-		auto device = static_cast<VkDevice>(desc.device);
+		auto* device = static_cast<VkDevice>(desc.device);
 		if (device == VK_NULL_HANDLE)
 		{
 			return nullptr;
@@ -26,7 +26,7 @@ namespace aether::gpu
 		        .pNext = &timelineTypeInfo,
 		};
 
-		auto data = new detail::TimelineSemaphoreData;
+		auto* data = new detail::TimelineSemaphoreData;
 		if (vkCreateSemaphore(device, &semInfo, nullptr, &data->semaphore) != VK_SUCCESS)
 		{
 			AE_ERROR(LogCategory::Vulkan, "gpu::CreateTimelineSemaphore: vkCreateSemaphore failed.");
@@ -44,7 +44,7 @@ namespace aether::gpu
 
 	bool WaitTimelineSemaphore(Device device, TimelineSemaphoreHandle sem, std::uint64_t value) noexcept
 	{
-		auto vkDevice = static_cast<VkDevice>(device);
+		auto* vkDevice = static_cast<VkDevice>(device);
 		if (sem == nullptr)
 		{
 			return false;
@@ -78,7 +78,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		auto vkDevice = static_cast<VkDevice>(device);
+		auto* vkDevice = static_cast<VkDevice>(device);
 		if (vkDevice != VK_NULL_HANDLE && sem->semaphore != VK_NULL_HANDLE)
 		{
 			vkDestroySemaphore(vkDevice, sem->semaphore, nullptr);
