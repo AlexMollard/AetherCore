@@ -33,6 +33,19 @@ internal static unsafe partial class Native
 	[LibraryImport(Lib)] internal static partial uint aether_sprite_get_flags(uint id);
 	[LibraryImport(Lib)] internal static partial void aether_sprite_set_flags(uint id, uint flags);
 
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_sprite_animator_set_animation(uint id, string path);
+    [LibraryImport(Lib)] internal static partial void aether_sprite_animator_play(uint id);
+    [LibraryImport(Lib)] internal static partial void aether_sprite_animator_pause(uint id);
+    [LibraryImport(Lib)] internal static partial void aether_sprite_animator_restart(uint id);
+    [LibraryImport(Lib)] internal static partial int aether_sprite_animator_is_playing(uint id);
+    [LibraryImport(Lib)] internal static partial uint aether_sprite_animator_get_current_frame(uint id);
+    [LibraryImport(Lib)] internal static partial float aether_sprite_animator_get_speed(uint id);
+    [LibraryImport(Lib)] internal static partial void aether_sprite_animator_set_speed(uint id, float value);
+    [LibraryImport(Lib)] internal static partial int aether_sprite_animator_get_loop_mode(uint id);
+    [LibraryImport(Lib)] internal static partial void aether_sprite_animator_set_loop_mode(uint id, int value);
+    [LibraryImport(Lib)] internal static unsafe partial int aether_sprite_animator_pop_event(uint id, byte* name, int nameCapacity, byte* payload, int payloadCapacity, uint* frameIndex);
+
     // Called once from AetherCore.Interop.Bootstrap.Init (before any script runs,
     // hence before the first P/Invoke) to point "AetherHost" at the running
     // executable. Reachable from the Interop assembly via InternalsVisibleTo.

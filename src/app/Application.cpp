@@ -12,7 +12,9 @@
 #endif
 
 #include "animation/AnimationSystem.hpp"
+#include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/SpriteAssetStore.hpp"
 // Dear ImGui is used by every tooling front end (editor AND launcher) but never by
 #ifdef AETHERCORE_WITH_IMGUI
 #	include "imgui/ImguiSubsystem.hpp"
@@ -203,6 +205,7 @@ namespace aether::app
 		context.Get<World>().UnregisterSystem("CameraSystem");
 		context.Get<World>().UnregisterSystem("LightSystem");
 		context.Get<World>().UnregisterSystem("DayNightSystem");
+		context.Get<World>().UnregisterSystem("SpriteAnimationSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
 		context.Get<World>().UnregisterSystem("PhysicsSystem");
 #endif
@@ -255,6 +258,10 @@ namespace aether::app
 #ifdef AETHERCORE_SCENE_APP
 			{
 				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
+				auto spriteAnimationSystem = std::make_unique<aether::SpriteAnimationSystem>(attachContext.Get<aether::SpriteAssetStore>());
+				auto* spriteAnimationPtr = spriteAnimationSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(spriteAnimationSystem));
+				services.Register<aether::SpriteAnimationSystem>(*spriteAnimationPtr);
 
 				auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
 				auto* physicsPtr = physicsSystem.get();

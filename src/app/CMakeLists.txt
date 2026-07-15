@@ -103,7 +103,9 @@ set_target_properties(GameRuntime PROPERTIES
 # GameRuntime shares a conventional `main` entry point with Editor. Preserve that
 # entry point while selecting the Windows GUI subsystem above.
 if(MSVC)
-    target_link_options(GameRuntime PRIVATE /ENTRY:mainCRTStartup)
+    target_compile_options(Editor PRIVATE /bigobj)
+    target_compile_options(GameRuntime PRIVATE /bigobj)
+	target_link_options(GameRuntime PRIVATE /ENTRY:mainCRTStartup)
 endif()
 
 target_compile_definitions(Editor PRIVATE

@@ -153,6 +153,7 @@ namespace aether::app::scene
 		std::vector<std::string> tags;
 		bool disabled = false;
 		std::optional<SpriteRendererComponent> sprite;
+		std::optional<SpriteAnimatorComponent> spriteAnimator;
 		bool meshRenderer = false;
 		bool meshRendererVisible = true;
 		bool meshRendererCastShadows = true;
@@ -211,7 +212,7 @@ namespace aether::app::scene
 		glm::vec3 skyVoid{0.05f};
 	};
 
-	inline constexpr int kSceneFormatVersion = 11;
+	inline constexpr int kSceneFormatVersion = 12;
 
 	struct AssetManifestEntry
 	{

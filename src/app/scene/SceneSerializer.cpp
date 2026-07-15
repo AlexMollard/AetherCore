@@ -658,6 +658,10 @@ namespace aether::app::scene
 				{
 					rec.sprite = *sprite;
 				}
+				if (const auto* animator = world.TryGet<SpriteAnimatorComponent>(e))
+				{
+					rec.spriteAnimator = *animator;
+				}
 				if (const auto* mr = world.TryGet<MeshRendererComponent>(e))
 				{
 					rec.meshRenderer = true;
@@ -1053,6 +1057,10 @@ namespace aether::app::scene
 				}
 				t.insert("sprite", std::move(sprite));
 			}
+			if (rec.spriteAnimator)
+			{
+				t.insert("sprite_animator", WriteReflectedToToml("Sprite Animator", &*rec.spriteAnimator));
+			}
 			if (rec.meshRenderer)
 			{
 				t.insert("mesh_renderer", true);
@@ -1424,6 +1432,12 @@ namespace aether::app::scene
 				ReadReflectedFromToml("Sprite Renderer", *sprite, &component);
 				component.spriteId.value = static_cast<std::uint64_t>(toml::node_view<const toml::node>{*sprite}["sprite_id"].value_or(std::int64_t{0}));
 				rec.sprite = std::move(component);
+			}
+			if (const auto* animator = tv["sprite_animator"].as_table())
+			{
+				SpriteAnimatorComponent component{};
+				ReadReflectedFromToml("Sprite Animator", *animator, &component);
+				rec.spriteAnimator = std::move(component);
 			}
 			rec.meshRenderer = tv["mesh_renderer"].value_or(false);
 			rec.meshRendererVisible = tv["mesh_renderer_visible"].value_or(true);
@@ -1984,6 +1998,7 @@ namespace aether::app::scene
 			RemoveIf<ScriptComponent>(world, entity);
 			RemoveIf<MeshRendererComponent>(world, entity);
 			RemoveIf<SpriteRendererComponent>(world, entity);
+			RemoveIf<SpriteAnimatorComponent>(world, entity);
 			RemoveIf<DisabledComponent>(world, entity);
 		}
 
@@ -2039,6 +2054,10 @@ namespace aether::app::scene
 				if (rec.sprite)
 				{
 					world.EmplaceOrReplace<SpriteRendererComponent>(e, *rec.sprite);
+				}
+				if (rec.spriteAnimator)
+				{
+					world.EmplaceOrReplace<SpriteAnimatorComponent>(e, *rec.spriteAnimator);
 				}
 				if (rec.meshRenderer)
 				{

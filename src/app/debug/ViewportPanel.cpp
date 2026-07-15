@@ -37,6 +37,7 @@
 #include "scene/CameraComponents.hpp"
 #include "scene/CameraSystem.hpp"
 #include "scene/Components.hpp"
+#include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/Ray.hpp"
@@ -326,19 +327,23 @@ namespace aether::editor
 		glm::mat4 proj = camera->GetProjectionMatrix(renderAspect);
 		proj[1][1] *= -1.0f;
 
-		const bool scene2D = world.GetSceneKind() == SceneKind::Scene2D;
-		const ImGuizmo::OPERATION op = scene2D
+		bool constrain2D = world.GetSceneKind() == SceneKind::Scene2D;
+		for (const Entity entity: selection.All())
+		{
+			constrain2D |= world.Has<SpriteRendererComponent>(entity);
+		}
+		const ImGuizmo::OPERATION op = constrain2D
 		        ? (m_gizmoOp == 0 ? static_cast<ImGuizmo::OPERATION>(ImGuizmo::TRANSLATE_X | ImGuizmo::TRANSLATE_Y)
 		                          : m_gizmoOp == 1 ? ImGuizmo::ROTATE_Z : static_cast<ImGuizmo::OPERATION>(ImGuizmo::SCALE_X | ImGuizmo::SCALE_Y))
 		        : (m_gizmoOp == 0 ? ImGuizmo::TRANSLATE : m_gizmoOp == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE);
-		const ImGuizmo::MODE mode = (op == ImGuizmo::SCALE || m_gizmoLocal) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+		const ImGuizmo::MODE mode = (m_gizmoOp == 2 || m_gizmoLocal) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
 		float snapValues[3] = {0.5f, 0.5f, 0.5f};
-		if (op == ImGuizmo::ROTATE)
+		if (m_gizmoOp == 1)
 		{
 			snapValues[0] = 15.0f;
 		}
-		else if (op == ImGuizmo::SCALE)
+		else if (m_gizmoOp == 2)
 		{
 			snapValues[0] = snapValues[1] = snapValues[2] = 0.1f;
 		}
@@ -347,6 +352,15 @@ namespace aether::editor
 		glm::mat4 model = tc->localToWorld;
 		if (ImGuizmo::Manipulate(&view[0][0], &proj[0][0], op, mode, &model[0][0], nullptr, snap))
 		{
+			if (constrain2D)
+			{
+				glm::vec3 position{}, rotation{}, scale{};
+				DecomposeTRS(model, position, rotation, scale);
+				rotation.x = 0.0f;
+				rotation.y = 0.0f;
+				scale.z = 1.0f;
+				model = ComposeTransform(position, rotation, scale);
+			}
 			const glm::mat4 worldDelta = model * glm::inverse(tc->localToWorld);
 			ApplyWorldTransform(context, world, primary, model);
 			if (selection.All().size() > 1)

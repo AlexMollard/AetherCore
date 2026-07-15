@@ -16,13 +16,17 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests
 # Mirror App's scenes dir so ReadSceneFile("default") resolves the committed template.
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 target_compile_definitions(EngineTests PRIVATE AETHER_TESTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
-target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest imgui)
+target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest imgui nlohmann_json::nlohmann_json)
 aethercore_target_defaults(EngineTests)
+if(MSVC)
+    target_compile_options(EngineTests PRIVATE /bigobj)
+endif()
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
 add_test(NAME EngineTests COMMAND EngineTests)

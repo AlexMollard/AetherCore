@@ -31,10 +31,22 @@ namespace
 		}};
 		return table;
 	}
+
+	const reflect::EnumTable& SpriteAnimationLoopEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"loop", static_cast<int>(SpriteAnimationLoopMode::Loop)},
+		        {"once", static_cast<int>(SpriteAnimationLoopMode::Once)},
+		        {"ping-pong", static_cast<int>(SpriteAnimationLoopMode::PingPong)},
+		        {"hold", static_cast<int>(SpriteAnimationLoopMode::Hold)},
+		}};
+		return table;
+	}
 } // namespace
 
 AE_COMPONENT(SpriteRendererComponent, "Sprite Renderer", "Rendering", ICON_FA_IMAGE)
 AE_FIELD_N("texture", texturePath, String)
+AE_FIELD_N("atlas", atlasPath, String)
 AE_FIELD_N("uv_rect", uvRect, Vec4)
 AE_FIELD_N("tint", tint, Color4)
 AE_FIELD_N("pixel_size", pixelSize, Vec2)
@@ -47,6 +59,15 @@ AE_FIELD_N("visible", visible, Bool)
 AE_FIELD_N("flip_x", flipX, Bool)
 AE_FIELD_N("flip_y", flipY, Bool)
 AE_FIELD_N("pixel_snap", pixelSnap, Bool)
+AE_COMPONENT_END()
+
+AE_COMPONENT(SpriteAnimatorComponent, "Sprite Animator", "Animation", ICON_FA_FILM)
+AE_FIELD_N("animation", animationPath, String)
+AE_FIELD_N("speed", speed, Float)
+AE_FIELD_N("start_frame", startFrame, UInt)
+AE_FIELD_ENUM("loop_mode", loopMode, SpriteAnimationLoopEnum())
+AE_FIELD_N("use_asset_loop_mode", useAssetLoopMode, Bool)
+AE_FIELD_N("autoplay", autoplay, Bool)
 AE_COMPONENT_END()
 
 AE_COMPONENT(PointLightComponent, "Point Light", "Rendering", ICON_FA_LIGHTBULB)

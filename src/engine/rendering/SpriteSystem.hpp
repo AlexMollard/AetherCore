@@ -8,13 +8,14 @@
 namespace aether
 {
 	class TextureRegistry;
+	class SpriteAssetStore;
 	class World;
 	struct Render2DFrameData;
 
 	class SpriteSystem
 	{
 	public:
-		void Initialize(TextureRegistry& textures);
+		void Initialize(TextureRegistry& textures, SpriteAssetStore& assets);
 		void Shutdown();
 		void Extract(World& world, Render2DFrameData& output);
 
@@ -22,6 +23,7 @@ namespace aether
 		[[nodiscard]] TextureHandle ResolveTexture(const std::string& path);
 
 		TextureRegistry* m_textures = nullptr;
+		SpriteAssetStore* m_assets = nullptr;
 		std::unordered_map<std::string, TextureHandle> m_textureCache;
 	};
 } // namespace aether

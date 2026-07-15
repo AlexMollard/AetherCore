@@ -5,6 +5,8 @@
 
 #include <glm/glm.hpp>
 
+#include "assets/SpriteAssetStore.hpp"
+#include "assets/SpriteAtlasAsset.hpp"
 #include "material/TextureRegistry.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "scene/Components.hpp"
@@ -30,9 +32,10 @@ namespace aether
 		}
 	} // namespace
 
-	void SpriteSystem::Initialize(TextureRegistry& textures)
+	void SpriteSystem::Initialize(TextureRegistry& textures, SpriteAssetStore& assets)
 	{
 		m_textures = &textures;
+		m_assets = &assets;
 	}
 
 	void SpriteSystem::Shutdown()
@@ -47,6 +50,7 @@ namespace aether
 		}
 		m_textureCache.clear();
 		m_textures = nullptr;
+		m_assets = nullptr;
 	}
 
 	TextureHandle SpriteSystem::ResolveTexture(const std::string& path)
@@ -80,7 +84,27 @@ namespace aether
 			}
 
 			const Entity entity = World::FromEntt(raw);
-			const TextureHandle texture = ResolveTexture(sprite.texturePath);
+			std::string_view texturePath = sprite.texturePath;
+			glm::vec4 uvRect = sprite.uvRect;
+			glm::vec2 pixelSize = sprite.pixelSize;
+			glm::vec2 pivot = sprite.pivot;
+			float pixelsPerUnit = sprite.pixelsPerUnit;
+			if (m_assets != nullptr && !sprite.atlasPath.empty() && sprite.spriteId.IsValid())
+			{
+				if (const auto atlasResult = m_assets->LoadAtlas(sprite.atlasPath); atlasResult.has_value())
+				{
+					const SpriteAtlasAsset& atlas = **atlasResult;
+					if (const SpriteRegion* region = atlas.Find(sprite.spriteId))
+					{
+						texturePath = atlas.texturePath;
+						uvRect = region->uvRect;
+						pixelSize = region->pixelSize;
+						pivot = region->pivot;
+						pixelsPerUnit = atlas.pixelsPerUnit;
+					}
+				}
+			}
+			const TextureHandle texture = ResolveTexture(std::string(texturePath));
 			std::uint32_t textureSlot = m_textures != nullptr ? m_textures->ResolveSlot(texture) : kInvalidTextureSlot;
 			if (textureSlot == kInvalidTextureSlot && m_textures != nullptr)
 			{
@@ -101,12 +125,12 @@ namespace aether
 				flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(flags) | static_cast<std::uint32_t>(SpriteInstanceFlags::PixelSnap));
 			}
 
-			const float ppu = std::max(sprite.pixelsPerUnit, 0.001f);
+			const float ppu = std::max(pixelsPerUnit, 0.001f);
 			output.sprites.push_back(SpriteRenderInstance{
 			        .world = transform.localToWorld,
-			        .uvRect = sprite.uvRect,
+			        .uvRect = uvRect,
 			        .color = sprite.tint,
-			        .sizeAndPivot = {sprite.pixelSize.x / ppu, sprite.pixelSize.y / ppu, sprite.pivot.x, sprite.pivot.y},
+			        .sizeAndPivot = {pixelSize.x / ppu, pixelSize.y / ppu, pivot.x, pivot.y},
 			        .sortKey = MakeSortKey(sprite, entity),
 			        .textureIndex = textureSlot,
 			        .entityId = entity.id,

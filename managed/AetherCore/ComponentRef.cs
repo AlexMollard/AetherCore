@@ -72,6 +72,25 @@ public readonly struct SpriteRendererRef : IComponentRef
     public bool PixelSnap { get => GetFlag(8); set => SetFlag(8, value); }
 }
 
+/// <summary>Reference to a deterministic fixed-step sprite animator.</summary>
+public readonly struct SpriteAnimatorRef : IComponentRef
+{
+    public static string ComponentType => "Sprite Animator";
+    public Entity Owner { get; }
+    public SpriteAnimatorRef(Entity owner) => Owner = owner;
+    public bool IsValid => Owner.IsValid;
+
+    public void SetAnimation(string path) => SpriteAnimator.SetAnimation(Owner, path);
+    public void Play() => SpriteAnimator.Play(Owner);
+    public void Pause() => SpriteAnimator.Pause(Owner);
+    public void Restart() => SpriteAnimator.Restart(Owner);
+    public bool IsPlaying => SpriteAnimator.IsPlaying(Owner);
+    public uint CurrentFrame => SpriteAnimator.CurrentFrame(Owner);
+    public float Speed { get => SpriteAnimator.GetSpeed(Owner); set => SpriteAnimator.SetSpeed(Owner, value); }
+    public SpriteAnimationLoopMode LoopMode { get => SpriteAnimator.GetLoopMode(Owner); set => SpriteAnimator.SetLoopMode(Owner, value); }
+    public bool TryPopEvent(out SpriteAnimationEvent animationEvent) => SpriteAnimator.TryPopEvent(Owner, out animationEvent);
+}
+
 /// <summary>Reference to a rigid body on an entity. Drop an entity that has a
 /// Rigid Body to link it, then read/write its motion through this wrapper.</summary>
 public readonly struct RigidBodyRef : IComponentRef

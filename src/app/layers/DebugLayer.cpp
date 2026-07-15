@@ -43,6 +43,8 @@ using namespace std::string_view_literals;
 #include "debug/ThemePanel.hpp"
 #include "debug/TonemapPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
+#include "debug/SpriteAnimationPanel.hpp"
+#include "debug/SpriteSlicerPanel.hpp"
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "AetherCore.hpp"
@@ -275,6 +277,8 @@ namespace aether::editor
 		context.services.Register<UndoStack>(m_undoStack);
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
+		m_panels.push_back(std::make_unique<SpriteSlicerPanel>());
+		m_panels.push_back(std::make_unique<SpriteAnimationPanel>());
 		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));

@@ -13,6 +13,7 @@
 
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/SpriteAssetStore.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "editor/ComponentCatalog.hpp"
@@ -569,7 +570,7 @@ namespace aether::editor
 		const glm::vec3 scale0 = scale;
 
 		bool changed = false;
-		const bool sprite2D = world.GetSceneKind() == SceneKind::Scene2D && world.Has<SpriteRendererComponent>(entity);
+		const bool sprite2D = world.Has<SpriteRendererComponent>(entity);
 		changed |= DrawVec3Row("Position", pos, 0.0f, 0.05f);
 		if (sprite2D)
 		{
@@ -1810,6 +1811,47 @@ namespace aether::editor
 			if (assetDb->Describe(pickedTex, src))
 			{
 				setSpriteTexture(src.path);
+			}
+		}
+
+		iw::PropLabel("Atlas");
+		const AssetId currentAtlas = sprite.atlasPath.empty() ? AssetId{} : ComputeAssetId(MakeSpriteAtlasSource(sprite.atlasPath));
+		const AssetId pickedAtlas = AssetPickerButton("##spriteAtlasPicker", assetDb, AssetType::SpriteAtlas, currentAtlas, "Pick a sprite atlas", sprite.atlasPath.empty() ? "No atlas" : sprite.atlasPath.c_str());
+		if (pickedAtlas.IsValid() && pickedAtlas != currentAtlas && assetDb != nullptr)
+		{
+			AssetSource source;
+			if (assetDb->Describe(pickedAtlas, source))
+			{
+				sprite.atlasPath = source.path;
+				sprite.spriteId = {};
+			}
+		}
+		if (!sprite.atlasPath.empty())
+		{
+			if (auto* store = context.TryGet<SpriteAssetStore>())
+			{
+				if (const auto atlasResult = store->LoadAtlas(sprite.atlasPath); atlasResult.has_value())
+				{
+					const SpriteAtlasAsset& atlas = **atlasResult;
+					const SpriteRegion* selectedRegion = atlas.Find(sprite.spriteId);
+					iw::PropLabel("Region");
+					if (ImGui::BeginCombo("##spriteAtlasRegion", selectedRegion != nullptr ? selectedRegion->name.c_str() : "Select region"))
+					{
+						for (const SpriteRegion& region: atlas.sprites)
+						{
+							if (ImGui::Selectable(region.name.c_str(), region.id == sprite.spriteId))
+							{
+								sprite.texturePath = atlas.texturePath;
+								sprite.spriteId = region.id;
+								sprite.uvRect = region.uvRect;
+								sprite.pixelSize = region.pixelSize;
+								sprite.pivot = region.pivot;
+								sprite.pixelsPerUnit = atlas.pixelsPerUnit;
+							}
+						}
+						ImGui::EndCombo();
+					}
+				}
 			}
 		}
 

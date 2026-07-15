@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "assets/SpriteAssetStore.hpp"
 #include "assets/SpriteAtlasAsset.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/TextureRegistry.hpp"
@@ -29,8 +30,9 @@ TEST_CASE("sprite extraction is packet-owned and deterministically sorted")
 	FakeTextureSink sink;
 	TextureRegistry textures(sink);
 	textures.InitializeDefault("fallback.png");
+	SpriteAssetStore assets;
 	SpriteSystem sprites;
-	sprites.Initialize(textures);
+	sprites.Initialize(textures, assets);
 	World world;
 
 	const Entity upper = world.Create();
@@ -84,6 +86,14 @@ TEST_CASE("authored sprite renderer survives scene serialization and legacy mark
 	        .blendMode = SpriteBlendMode::Additive,
 	        .flipY = true,
 	});
+	world.Emplace<SpriteAnimatorComponent>(entity, SpriteAnimatorComponent{
+	        .animationPath = "project://animations/hero-idle.spriteanim.toml",
+	        .speed = 1.25f,
+	        .startFrame = 2,
+	        .loopMode = SpriteAnimationLoopMode::PingPong,
+	        .useAssetLoopMode = false,
+	        .autoplay = false,
+	});
 
 	const auto captured = app::scene::CaptureScene(world, materials, textures);
 	const auto parsed = app::scene::ParseToml(app::scene::WriteToml(captured));
@@ -95,6 +105,13 @@ TEST_CASE("authored sprite renderer survives scene serialization and legacy mark
 	CHECK(parsed->entities[0].sprite->orderInLayer == -2);
 	CHECK(parsed->entities[0].sprite->blendMode == SpriteBlendMode::Additive);
 	CHECK(parsed->entities[0].sprite->flipY);
+	REQUIRE(parsed->entities[0].spriteAnimator.has_value());
+	CHECK(parsed->entities[0].spriteAnimator->animationPath == "project://animations/hero-idle.spriteanim.toml");
+	CHECK(parsed->entities[0].spriteAnimator->speed == doctest::Approx(1.25f));
+	CHECK(parsed->entities[0].spriteAnimator->startFrame == 2);
+	CHECK(parsed->entities[0].spriteAnimator->loopMode == SpriteAnimationLoopMode::PingPong);
+	CHECK_FALSE(parsed->entities[0].spriteAnimator->useAssetLoopMode);
+	CHECK_FALSE(parsed->entities[0].spriteAnimator->autoplay);
 
 	const auto clipboard = app::scene::ParseToml(app::scene::WriteToml(app::scene::CaptureSubtrees(world, {entity}, materials, textures)));
 	REQUIRE(clipboard.has_value());
@@ -102,6 +119,8 @@ TEST_CASE("authored sprite renderer survives scene serialization and legacy mark
 	REQUIRE(clipboard->entities[0].sprite.has_value());
 	CHECK(clipboard->entities[0].sprite->texturePath == "project://textures/hero.png");
 	CHECK(clipboard->entities[0].sprite->sortingLayer == 3);
+	REQUIRE(clipboard->entities[0].spriteAnimator.has_value());
+	CHECK(clipboard->entities[0].spriteAnimator->startFrame == 2);
 
 	const auto legacy = app::scene::ParseToml("version = 10\nname = 'Legacy'\n[[entities]]\nname = 'Old Sprite'\nsprite = true\n");
 	REQUIRE(legacy.has_value());

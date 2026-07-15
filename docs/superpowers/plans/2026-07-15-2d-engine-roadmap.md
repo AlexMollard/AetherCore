@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-15
 
-**Status:** In progress; Phases 0-1 complete
+**Status:** In progress; Phases 0-2 complete
 
 **Target:** A native 2D game workflow inside AetherCore, sharing the existing world, asset, scripting, editor, and rendering foundations without treating game-world sprites as UI.
 
@@ -437,13 +437,13 @@ Mixed scenes may continue using mesh quads intentionally; only the legacy marker
 
 **Outcome:** Sprite sheets can be sliced and animated entirely inside the editor.
 
-- [ ] Build the Sprite Slicer with grid, trim, manual editing, pivot, and preview tools.
-- [ ] Preserve stable sprite IDs across non-destructive edits where regions still correspond.
-- [ ] Implement `SpriteAnimationAsset` and `SpriteAnimatorComponent`.
-- [ ] Build the animation timeline with durations, playback, loop modes, and events.
-- [ ] Add deterministic fixed-step animation and managed animation controls.
-- [ ] Add import presets and reimport diagnostics.
-- [ ] Add optional Aseprite metadata import after the native workflow is stable.
+- [x] Build the Sprite Slicer with grid, trim, manual editing, pivot, and preview tools.
+- [x] Preserve stable sprite IDs across non-destructive edits where regions still correspond.
+- [x] Implement `SpriteAnimationAsset` and `SpriteAnimatorComponent`.
+- [x] Build the animation timeline with durations, playback, loop modes, and events.
+- [x] Add deterministic fixed-step animation and managed animation controls.
+- [x] Add import presets and reimport diagnostics.
+- [x] Add optional Aseprite metadata import after the native workflow is stable.
 
 **Exit gate:** A sprite sheet can be sliced, turned into multiple clips, reimported, edited, and played without losing valid scene or animation references.
 

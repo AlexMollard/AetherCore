@@ -8,6 +8,7 @@
 
 #include "animation/AnimationDatabase.hpp"
 #include "assets/AssetId.hpp"
+#include "assets/SpriteAnimationAsset.hpp"
 #include "assets/AssetTypes.hpp"
 #include "assets/GltfAsset.hpp"
 #include "material/EffectParams.hpp"
@@ -97,6 +98,7 @@ namespace aether
 	struct SpriteRendererComponent
 	{
 		std::string texturePath;
+		std::string atlasPath;
 		AssetObjectId spriteId{};
 		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};
 		glm::vec4 tint{1.0f};
@@ -110,6 +112,23 @@ namespace aether
 		bool flipX = false;
 		bool flipY = false;
 		bool pixelSnap = false;
+	};
+
+	struct SpriteAnimatorComponent
+	{
+		std::string animationPath;
+		float speed = 1.0f;
+		std::uint32_t startFrame = 0;
+		SpriteAnimationLoopMode loopMode = SpriteAnimationLoopMode::Loop;
+		bool useAssetLoopMode = true;
+		bool autoplay = true;
+
+		float frameTime = 0.0f;
+		float fixedAccumulator = 0.0f;
+		std::uint32_t currentFrame = 0;
+		std::int32_t direction = 1;
+		bool playing = false;
+		bool initialized = false;
 	};
 
 	struct EffectRefComponent
