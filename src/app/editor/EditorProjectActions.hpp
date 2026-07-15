@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace aether::app
@@ -40,12 +41,14 @@ namespace aether::editor
 		bool syncEditorRuntimeProjectPak = true;
 	};
 
+	using EditorProjectPublishProgress = std::function<void(float completion, std::string_view stage)>;
+
 	struct EditorProjectActions
 	{
 		std::function<void()> openLauncher;
 		std::function<void()> reloadProject;
 		std::function<EditorProjectActionResult(const app::EditorProjectContext&)> packProject;
-		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishOptions&)> publishProject;
+		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishOptions&, const EditorProjectPublishProgress&)> publishProject;
 		std::vector<VisualStudioInstallation> visualStudioInstallations;
 		std::function<EditorProjectActionResult(const std::filesystem::path& visualStudioInstall)> debugScripts;
 		std::function<EditorProjectActionResult()> rebuildEnginePak;

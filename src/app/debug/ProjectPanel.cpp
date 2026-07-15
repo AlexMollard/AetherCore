@@ -3,10 +3,14 @@
 #include "debug/InspectorWidgets.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cfloat>
 #include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <filesystem>
+#include <future>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -417,6 +421,38 @@ namespace aether::editor
 			return;
 		}
 
+		const bool publishing = m_publishFuture.valid();
+		if (publishing && m_publishFuture.wait_for(std::chrono::seconds{0}) == std::future_status::ready)
+		{
+			EditorProjectActionResult result;
+			try
+			{
+				result = m_publishFuture.get();
+			}
+			catch (const std::exception& ex)
+			{
+				result = {.succeeded = false, .message = std::string("Publishing failed: ") + ex.what()};
+			}
+			m_publishTask.reset();
+			m_publishSucceeded = result.succeeded;
+			m_publishStatus = result.message;
+			m_lastPublishPath = result.outputPath;
+			if (result.succeeded)
+			{
+				m_packSucceeded = true;
+				m_packStatus = "Project packed as part of publish.";
+				m_lastPackPath = result.outputPath / "data" / "project.pak";
+				if (m_publishOpenAfter)
+				{
+					OpenFolderInShell(result.outputPath);
+				}
+				ImGui::CloseCurrentPopup();
+			}
+		}
+
+		const bool publishingNow = m_publishFuture.valid();
+		ImGui::BeginDisabled(publishingNow);
+
 		ImGui::SeparatorText("Output");
 		iw::PropInputText("Product", m_publishProductName);
 		iw::PropInputText("Platform", m_publishPlatformName);
@@ -452,19 +488,34 @@ namespace aether::editor
 			ImGui::Checkbox("Open when done", &m_publishOpenAfter);
 			ImGui::EndTable();
 		}
+		ImGui::EndDisabled();
 
 		StatusText(m_publishStatus, m_publishSucceeded);
+		if (publishingNow && m_publishTask)
+		{
+			const float completion = std::clamp(m_publishTask->completion.load(std::memory_order_acquire), 0.0f, 1.0f);
+			std::string stage;
+			{
+				const std::scoped_lock lock(m_publishTask->mutex);
+				stage = m_publishTask->stage;
+			}
+			ImGui::Spacing();
+			ImGui::TextUnformatted(stage.empty() ? "Publishing..." : stage.c_str());
+			ImGui::ProgressBar(completion, ImVec2(-FLT_MIN, 0.0f));
+		}
 
 		ImGui::Separator();
 		const auto* actions = context.TryGet<EditorProjectActions>();
-		const bool canPublish = actions != nullptr && actions->publishProject && !m_publishProductName.empty() && !m_publishPlatformName.empty() && !m_publishOutputRoot.empty();
+		const bool canPublish = !publishingNow && actions != nullptr && actions->publishProject && !m_publishProductName.empty() && !m_publishPlatformName.empty() && !m_publishOutputRoot.empty();
 
 		const float spacing = ImGui::GetStyle().ItemSpacing.x;
 		const float buttonWidth = (ImGui::GetContentRegionAvail().x - 2.0f * spacing) / 3.0f;
+		ImGui::BeginDisabled(publishingNow);
 		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Defaults", ImVec2(buttonWidth, 0.0f)))
 		{
 			SavePublishSettings(project);
 		}
+		ImGui::EndDisabled();
 		ImGui::SameLine();
 		ImGui::BeginDisabled(!canPublish);
 		if (chrome::PrimaryButton(ICON_FA_ROCKET " Publish", ImVec2(buttonWidth, 0.0f)))
@@ -485,28 +536,37 @@ namespace aether::editor
 			options.verifyOutput = m_publishVerifyOutput;
 			options.syncEditorRuntimeProjectPak = m_publishSyncEditorPak;
 
-			const EditorProjectActionResult result = actions->publishProject(project, options);
-			m_publishSucceeded = result.succeeded;
-			m_publishStatus = result.message;
-			m_lastPublishPath = result.outputPath;
-			if (result.succeeded)
+			m_publishSucceeded = false;
+			m_publishStatus = "Publishing...";
+			m_publishTask = std::make_shared<PublishTask>();
 			{
-				m_packSucceeded = true;
-				m_packStatus = "Project packed as part of publish.";
-				m_lastPackPath = result.outputPath / "data" / "project.pak";
-				if (m_publishOpenAfter)
-				{
-					OpenFolderInShell(result.outputPath);
-				}
-				ImGui::CloseCurrentPopup();
+				const std::scoped_lock lock(m_publishTask->mutex);
+				m_publishTask->stage = "Preparing publish";
 			}
+			const auto publishAction = actions->publishProject;
+			const app::EditorProjectContext projectCopy = project;
+			const std::shared_ptr<PublishTask> task = m_publishTask;
+			m_publishFuture = std::async(std::launch::async,
+			        [publishAction, projectCopy, options, task]()
+			        {
+				        return publishAction(projectCopy,
+				                options,
+				                [task](const float completion, const std::string_view stage)
+				                {
+					                task->completion.store(completion, std::memory_order_release);
+					                const std::scoped_lock lock(task->mutex);
+					                task->stage = stage;
+				                });
+			        });
 		}
 		ImGui::EndDisabled();
 		ImGui::SameLine();
+		ImGui::BeginDisabled(publishingNow);
 		if (chrome::GhostButton("Cancel", ImVec2(buttonWidth, 0.0f)))
 		{
 			ImGui::CloseCurrentPopup();
 		}
+		ImGui::EndDisabled();
 
 		ImGui::EndPopup();
 	}

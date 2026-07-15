@@ -564,6 +564,14 @@ namespace aether::editor
 			const std::filesystem::path absolute = std::filesystem::absolute(path, ec);
 			return ec ? path.lexically_normal() : absolute.lexically_normal();
 		}
+
+		void ReportProgress(const EditorProjectPublishProgress& progress, const float completion, const std::string_view stage)
+		{
+			if (progress)
+			{
+				progress(completion, stage);
+			}
+		}
 	} // namespace
 
 	EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig()
@@ -681,8 +689,9 @@ namespace aether::editor
 		return PackProjectInternal(project, config, true);
 	}
 
-	EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options)
+	EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options, const EditorProjectPublishProgress& progress)
 	{
+		ReportProgress(progress, 0.02f, "Preparing publish");
 		if (std::optional<EditorProjectActionResult> validationError = ValidateProjectForPackaging(project))
 		{
 			return *validationError;
@@ -698,6 +707,7 @@ namespace aether::editor
 		std::error_code ec;
 		if (options.cleanOutput)
 		{
+			ReportProgress(progress, 0.08f, "Cleaning previous output");
 			std::filesystem::remove_all(publishDir, ec);
 			if (ec)
 			{
@@ -705,6 +715,7 @@ namespace aether::editor
 			}
 		}
 
+		ReportProgress(progress, 0.16f, "Packing project assets");
 		EditorProjectActionResult packResult = PackProjectInternal(project, config, options.syncEditorRuntimeProjectPak);
 		if (!packResult.succeeded)
 		{
@@ -713,6 +724,7 @@ namespace aether::editor
 
 		std::string error;
 		const std::filesystem::path exeDataDir = config.executableDir / "data";
+		ReportProgress(progress, 0.48f, "Staging game runtime");
 		if (options.usePackageTemplate && !config.packageTemplateDir.empty())
 		{
 			if (!CopyDirectoryRecursive(config.packageTemplateDir, publishDir, error))
@@ -757,6 +769,7 @@ namespace aether::editor
 		}
 
 		// which never opens a project the way the editor does - still resolves
+		ReportProgress(progress, 0.63f, "Baking game settings");
 		if (!BakePublishedEngineSettings(publishDir / "data" / "config" / "EngineSettings.toml", project.projectFile, error))
 		{
 			return {.succeeded = false, .message = "Could not bake published settings: " + error, .outputPath = publishDir};
@@ -764,6 +777,7 @@ namespace aether::editor
 
 		if (CanBakeEnginePak())
 		{
+			ReportProgress(progress, 0.70f, "Baking engine assets");
 			const EditorProjectActionResult bake = BakeEnginePak(publishDir / "data" / "engine.pak");
 			if (!bake.succeeded)
 			{
@@ -771,6 +785,7 @@ namespace aether::editor
 			}
 		}
 
+		ReportProgress(progress, 0.78f, "Adding project package");
 		if (!CopyIfExists(packResult.outputPath, publishDir / "data" / "project.pak", error))
 		{
 			return {.succeeded = false, .message = "Could not copy packed project: " + error, .outputPath = publishDir};
@@ -779,6 +794,7 @@ namespace aether::editor
 		const std::filesystem::path scriptsProject = project.scriptsDir / "AetherGame.csproj";
 		if (options.buildProjectScripts && io::file_util::Exists(scriptsProject))
 		{
+			ReportProgress(progress, 0.84f, "Building game scripts");
 			if (config.dotnetExe.empty())
 			{
 				return {.succeeded = false, .message = "Project has scripts, but this editor build was not configured with dotnet publishing support.", .outputPath = publishDir};
@@ -809,16 +825,19 @@ namespace aether::editor
 			}
 		}
 
+		ReportProgress(progress, 0.94f, "Finalizing package");
 		if (!PrunePublishedDevFiles(publishDir, error))
 		{
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}
+		ReportProgress(progress, 0.97f, "Verifying published game");
 		if (options.verifyOutput && !VerifyPublishedGame(publishDir, config.runtimeExecutableName, error))
 		{
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}
 
 		AE_INFO(LogCategory::App, "Published project '{}' to {}", project.name, DisplayPath(publishDir));
+		ReportProgress(progress, 1.0f, "Published");
 		return {.succeeded = true, .message = "Published game build.", .outputPath = publishDir};
 	}
 } // namespace aether::editor

@@ -1,11 +1,16 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
+#include <future>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "debug/DebugPanel.hpp"
+#include "editor/EditorProjectActions.hpp"
 #include "editor/EditorProjectContext.hpp"
 
 namespace aether::editor
@@ -30,6 +35,13 @@ namespace aether::editor
 		{
 			std::string name;
 			std::filesystem::path path;
+		};
+
+		struct PublishTask
+		{
+			std::atomic<float> completion = 0.0f;
+			std::mutex mutex;
+			std::string stage;
 		};
 
 		void Refresh(const app::EditorProjectContext& project);
@@ -65,6 +77,8 @@ namespace aether::editor
 		bool m_publishVerifyOutput = true;
 		bool m_publishSyncEditorPak = true;
 		bool m_publishOpenAfter = true;
+		std::future<EditorProjectActionResult> m_publishFuture;
+		std::shared_ptr<PublishTask> m_publishTask;
 		bool m_dirtySettings = false;
 	};
 } // namespace aether::editor

@@ -26,5 +26,5 @@ namespace aether::editor
 	[[nodiscard]] EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig();
 	[[nodiscard]] EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const app::EditorProjectContext& project);
 	[[nodiscard]] EditorProjectActionResult PackProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config);
-	[[nodiscard]] EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options);
+	[[nodiscard]] EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options, const EditorProjectPublishProgress& progress = {});
 } // namespace aether::editor

@@ -159,9 +159,9 @@ namespace aether::editor
 		{
 			return PackProject(project, MakeDefaultEditorProjectPublishConfig());
 		};
-		m_actions.publishProject = [](const app::EditorProjectContext& project, const EditorProjectPublishOptions& options)
+		m_actions.publishProject = [](const app::EditorProjectContext& project, const EditorProjectPublishOptions& options, const EditorProjectPublishProgress& progress)
 		{
-			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options);
+			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options, progress);
 		};
 		m_actions.visualStudioInstallations = FindVisualStudioInstallations();
 		m_actions.debugScripts = [this](const std::filesystem::path& visualStudioInstall) -> EditorProjectActionResult
