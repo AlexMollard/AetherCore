@@ -1,0 +1,15 @@
+[scene]
+name = "Legacy3D"
+version = 9
+kind = "3d"
+
+[[entities]]
+name = "Camera"
+position = [0.0, 3.0, 7.0]
+
+[entities.camera]
+projection = "perspective"
+fov_degrees = 60.0
+near = 0.1
+far = 1000.0
+main = true

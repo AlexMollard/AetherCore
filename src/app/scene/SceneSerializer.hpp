@@ -211,7 +211,7 @@ namespace aether::app::scene
 		glm::vec3 skyVoid{0.05f};
 	};
 
-	inline constexpr int kSceneFormatVersion = 9;
+	inline constexpr int kSceneFormatVersion = 10;
 
 	struct AssetManifestEntry
 	{
@@ -227,6 +227,7 @@ namespace aether::app::scene
 		std::string name;
 		int version = kSceneFormatVersion;
 		SceneKind kind = SceneKind::Scene3D;
+		SceneFeatureFlags features = DefaultSceneFeatures(SceneKind::Scene3D);
 		std::vector<EntityRecord> entities;
 		std::vector<LightRecord> lights;
 		std::optional<EnvironmentRecord> environment;

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-15
 
-**Status:** Proposed; ready for phased implementation
+**Status:** In progress; Phase 0 complete
 
 **Target:** A native 2D game workflow inside AetherCore, sharing the existing world, asset, scripting, editor, and rendering foundations without treating game-world sprites as UI.
 
@@ -404,14 +404,14 @@ Mixed scenes may continue using mesh quads intentionally; only the legacy marker
 
 **Outcome:** A Blank 2D project opens into a correctly configured 2D scene, with architectural seams ready for sprite rendering.
 
-- [ ] Add a data-driven project-template registry with Blank 3D and Blank 2D.
-- [ ] Persist `ProjectKind`, `SceneKind`, scene feature flags, and schema versions.
-- [ ] Add orthographic projection to camera data, extraction, and serialization.
-- [ ] Add 2D viewport mode, XY tools, grid, pan, zoom, and camera framing.
-- [ ] Define 2D asset types and stable asset/source identifiers.
-- [ ] Define `RenderFramePacket` 2D payload ownership and lifetime.
-- [ ] Register the `Renderer2D` subsystem and render-graph feature without changing `UiShell`.
-- [ ] Add serialization migration scaffolding and fixtures.
+- [x] Add a data-driven project-template registry with Blank 3D and Blank 2D.
+- [x] Persist `ProjectKind`, `SceneKind`, scene feature flags, and schema versions.
+- [x] Add orthographic projection to camera data, extraction, and serialization.
+- [x] Add 2D viewport mode, XY tools, grid, pan, zoom, and camera framing.
+- [x] Define 2D asset types and stable asset/source identifiers.
+- [x] Define `RenderFramePacket` 2D payload ownership and lifetime.
+- [x] Register the `Renderer2D` subsystem and render-graph feature without changing `UiShell`.
+- [x] Add serialization migration scaffolding and fixtures.
 
 **Exit gate:** Creating, closing, reopening, saving, and playing a Blank 2D project preserves its scene kind and orthographic camera; Blank 3D behavior is unchanged.
 

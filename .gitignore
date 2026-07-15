@@ -85,6 +85,9 @@ Thumbs.db
 # Mind memory protocol internal state
 /.mind/
 
+# OpenCode plugins and local tool state
+/.opencode/
+
 # Codebase memory MCP index artifact
 /.codebase-memory/
 

@@ -11,7 +11,8 @@ sun_intensity = 4.0
 [scene]
 kind = '3d'
 name = 'default'
-version = 9
+version = 10
+features = [ 'meshes_3d', 'lighting_3d', 'navigation' ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]

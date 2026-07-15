@@ -116,6 +116,16 @@ namespace aether
 			m_sceneKind = kind;
 		}
 
+		[[nodiscard]] SceneFeatureFlags GetSceneFeatures() const noexcept
+		{
+			return m_sceneFeatures;
+		}
+
+		void SetSceneFeatures(SceneFeatureFlags features) noexcept
+		{
+			m_sceneFeatures = features;
+		}
+
 		[[nodiscard]] static entt::entity ToEntt(Entity entity) noexcept;
 		[[nodiscard]] static Entity FromEntt(entt::entity entity) noexcept;
 
@@ -124,5 +134,6 @@ namespace aether
 		Registry m_registry;
 		std::vector<Entity> m_rootOrder;
 		SceneKind m_sceneKind = SceneKind::Scene3D;
+		SceneFeatureFlags m_sceneFeatures = DefaultSceneFeatures(SceneKind::Scene3D);
 	};
 } // namespace aether

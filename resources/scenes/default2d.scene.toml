@@ -2,7 +2,8 @@
 [scene]
 kind = '2d'
 name = 'default'
-version = 9
+version = 10
+features = [ 'sprites' ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]

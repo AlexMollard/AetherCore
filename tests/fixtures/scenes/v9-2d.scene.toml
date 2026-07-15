@@ -1,0 +1,15 @@
+[scene]
+name = "Legacy2D"
+version = 9
+kind = "2d"
+
+[[entities]]
+name = "Camera"
+position = [0.0, 0.0, 10.0]
+
+[entities.camera]
+projection = "orthographic"
+orthographic_height = 10.0
+near = 0.1
+far = 1000.0
+main = true

@@ -606,6 +606,7 @@ namespace aether
 		packet.renderExtent = extent;
 		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
 		packet.effectParamBufferAddr = effectParamBuffer.GetDeviceAddressU64();
+		packet.sceneFeatures = world.GetSceneFeatures();
 
 		if (const Camera* cam = cameras.TryGetMainCamera())
 		{
@@ -649,13 +650,22 @@ namespace aether
 		// INVARIANT: the render thread reads ONLY `packet`, never the live ECS. All
 		if (m_rendering)
 		{
+			m_rendering->SetSceneFeatures(packet.sceneFeatures);
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
 			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);
 			debugRenderer.SetFramePhysicsShapes(&packet.physicsDebugShapes);
 			debugRenderer.SetFrameDebugEnabled(packet.debugRenderingEnabled);
+			if (m_profile == RuntimeProfile::Full)
+			{
+				m_rendering->GetRenderer2D().BeginFrame(packet.render2D);
+			}
 		}
 
 		EndFrame(packet);
+		if (m_rendering && m_profile == RuntimeProfile::Full)
+		{
+			m_rendering->GetRenderer2D().EndFrame();
+		}
 
 		// (render thread owns the queue; the readback is self-contained).
 		if (m_screenshotService.IsInitialized())

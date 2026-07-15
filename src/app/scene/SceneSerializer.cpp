@@ -1,6 +1,7 @@
 #include "scene/SceneSerializer.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <unordered_map>
@@ -64,6 +65,105 @@ namespace aether::app::scene
 				return SceneKind::Mixed;
 			}
 			return SceneKind::Scene3D;
+		}
+
+		void AppendSceneFeature(toml::array& values, SceneFeatureFlags features, SceneFeatureFlags feature, std::string_view name)
+		{
+			if (HasSceneFeature(features, feature))
+			{
+				values.push_back(std::string{name});
+			}
+		}
+
+		toml::array SceneFeaturesToToml(SceneFeatureFlags features)
+		{
+			toml::array values;
+			AppendSceneFeature(values, features, SceneFeatureFlags::Sprites, "sprites");
+			AppendSceneFeature(values, features, SceneFeatureFlags::Tilemaps, "tilemaps");
+			AppendSceneFeature(values, features, SceneFeatureFlags::Physics2D, "physics_2d");
+			AppendSceneFeature(values, features, SceneFeatureFlags::Meshes3D, "meshes_3d");
+			AppendSceneFeature(values, features, SceneFeatureFlags::Lighting3D, "lighting_3d");
+			AppendSceneFeature(values, features, SceneFeatureFlags::Navigation, "navigation");
+			return values;
+		}
+
+		SceneFeatureFlags SceneFeaturesFromToml(const toml::array* values, SceneKind kind)
+		{
+			if (values == nullptr)
+			{
+				return DefaultSceneFeatures(kind);
+			}
+
+			SceneFeatureFlags features = SceneFeatureFlags::None;
+			for (const toml::node& value: *values)
+			{
+				const std::optional<std::string_view> name = value.value<std::string_view>();
+				if (!name.has_value())
+				{
+					continue;
+				}
+				if (*name == "sprites")
+				{
+					features |= SceneFeatureFlags::Sprites;
+				}
+				else if (*name == "tilemaps")
+				{
+					features |= SceneFeatureFlags::Tilemaps;
+				}
+				else if (*name == "physics_2d")
+				{
+					features |= SceneFeatureFlags::Physics2D;
+				}
+				else if (*name == "meshes_3d")
+				{
+					features |= SceneFeatureFlags::Meshes3D;
+				}
+				else if (*name == "lighting_3d")
+				{
+					features |= SceneFeatureFlags::Lighting3D;
+				}
+				else if (*name == "navigation")
+				{
+					features |= SceneFeatureFlags::Navigation;
+				}
+				else
+				{
+					AE_WARN(LogCategory::App, "Ignoring unknown scene feature '{}'.", *name);
+				}
+			}
+			return features;
+		}
+
+		void MigrateSceneFeaturesToV10(toml::table& root)
+		{
+			toml::table* scene = root["scene"].as_table();
+			if (scene == nullptr || scene->contains("features"))
+			{
+				return;
+			}
+			const SceneKind kind = SceneKindFromName((*scene)["kind"].value_or(std::string{"3d"}));
+			scene->insert("features", SceneFeaturesToToml(DefaultSceneFeatures(kind)));
+		}
+
+		struct SceneMigration
+		{
+			int targetVersion;
+			void (*apply)(toml::table&);
+		};
+
+		constexpr std::array kSceneMigrations{
+		        SceneMigration{.targetVersion = 10, .apply = MigrateSceneFeaturesToV10},
+		};
+
+		void ApplySceneMigrations(toml::table& root, int sourceVersion)
+		{
+			for (const SceneMigration& migration: kSceneMigrations)
+			{
+				if (sourceVersion < migration.targetVersion)
+				{
+					migration.apply(root);
+				}
+			}
 		}
 
 		const char* ShapeName(PhysicsShapeType t)
@@ -787,6 +887,7 @@ namespace aether::app::scene
 	{
 		SceneDescription scene;
 		scene.kind = world.GetSceneKind();
+		scene.features = world.GetSceneFeatures();
 		auto& reg = world.GetRegistry();
 
 		// Punctual lights are entities now (LightComponents.hpp) and serialize
@@ -881,6 +982,7 @@ namespace aether::app::scene
 		header.insert("version", kSceneFormatVersion);
 		header.insert("name", scene.name);
 		header.insert("kind", SceneKindName(scene.kind));
+		header.insert("features", SceneFeaturesToToml(scene.features));
 		root.insert("scene", std::move(header));
 
 		if (scene.environment)
@@ -1197,15 +1299,19 @@ namespace aether::app::scene
 			return std::nullopt;
 		}
 
+		const int sourceVersion = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
+		ApplySceneMigrations(root, sourceVersion);
+
 		SceneDescription scene;
 		scene.name = root["scene"]["name"].value_or(std::string{});
-		scene.version = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
+		scene.version = sourceVersion;
 		scene.kind = SceneKindFromName(root["scene"]["kind"].value_or(std::string{"3d"}));
+		scene.features = SceneFeaturesFromToml(root["scene"]["features"].as_array(), scene.kind);
 		if (scene.version < kSceneFormatVersion)
 		{
 			AE_WARN(LogCategory::App,
 			        "Scene file '{}' is format v{} (current v{}): records added since it was written are absent (v2 added behaviors + lights/environment; v3 made lights entities - legacy [[lights]] migrate on load). Re-save from the editor to "
-			        "upgrade.",
+			        "upgrade (v10 added persistent scene feature flags with kind-aware defaults).",
 			        scene.name,
 			        scene.version,
 			        kSceneFormatVersion);
@@ -2247,6 +2353,7 @@ namespace aether::app::scene
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
 		world.SetSceneKind(scene.kind);
+		world.SetSceneFeatures(scene.features);
 		std::vector<Entity> created;
 		created.reserve(scene.entities.size());
 		for (std::size_t i = 0; i < scene.entities.size(); ++i)
@@ -2259,6 +2366,7 @@ namespace aether::app::scene
 	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
 		world.SetSceneKind(scene.kind);
+		world.SetSceneFeatures(scene.features);
 		if (deps.physics != nullptr)
 		{
 			deps.physics->WaitForStepIdle();
@@ -2321,6 +2429,7 @@ namespace aether::app::scene
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
 		world.SetSceneKind(scene.kind);
+		world.SetSceneFeatures(scene.features);
 		// removal must not race the async physics step.
 		if (deps.physics != nullptr)
 		{

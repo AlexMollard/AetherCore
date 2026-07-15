@@ -602,7 +602,7 @@ namespace aether
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
-				                if (!IsForwardPassEnabled())
+				                if (!IsForwardPassEnabled() || !IsSceneFeatureEnabled(SceneFeatureFlags::Meshes3D))
 				                {
 					                return;
 				                }
@@ -623,6 +623,10 @@ namespace aether
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
+				                if (!IsSceneFeatureEnabled(SceneFeatureFlags::Lighting3D))
+				                {
+					                return;
+				                }
 				                gpu::CommandList& cmd = ctx.recorder;
 				                cmd.BindPipeline(m_skyboxPipeline.GetPipeline());
 				                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;
@@ -680,7 +684,7 @@ namespace aether
 			pass.Execute(
 			        [this, &m_renderQueue = m_renderQueue, bindless = frame.bindless, lighting = frame.lighting](PassContext& ctx)
 			        {
-				        if (!IsForwardPassEnabled())
+				        if (!IsForwardPassEnabled() || !IsSceneFeatureEnabled(SceneFeatureFlags::Meshes3D))
 				        {
 					        return;
 				        }
@@ -691,6 +695,8 @@ namespace aether
 				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr, nullptr, 0, &cullMode);
 			        });
 		}
+
+		m_renderer2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent);
 
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline());

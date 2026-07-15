@@ -369,9 +369,35 @@ TEST_CASE("Pre-versioning scene files parse as format v1") {
     const auto parsed = ParseToml(oldToml);
     REQUIRE(parsed.has_value());
     CHECK(parsed->version == 1);
+    CHECK(parsed->features == DefaultSceneFeatures(SceneKind::Scene3D));
     REQUIRE(parsed->entities.size() == 1);
     CHECK(parsed->entities[0].name == "Box");
     CHECK(!parsed->entities[0].orbit.has_value());
+}
+
+TEST_CASE("Scene feature flags round-trip and use kind-aware legacy defaults") {
+    SceneDescription scene;
+    scene.name = "Feature Flags";
+    scene.kind = SceneKind::Mixed;
+    scene.features = SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Meshes3D;
+
+    const auto parsed = ParseToml(WriteToml(scene));
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->version == kSceneFormatVersion);
+    CHECK(parsed->kind == SceneKind::Mixed);
+    CHECK(parsed->features == scene.features);
+
+    const auto legacy2D = ParseToml("[scene]\nname = 'legacy 2d'\nkind = '2d'\nversion = 9\nfeatures = ['sprites', 'physics_2d']\n");
+    REQUIRE(legacy2D.has_value());
+    CHECK(legacy2D->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D));
+
+    const auto missingFeatures = ParseToml("[scene]\nname = 'legacy 2d defaults'\nkind = '2d'\nversion = 9\n");
+    REQUIRE(missingFeatures.has_value());
+    CHECK(missingFeatures->features == DefaultSceneFeatures(SceneKind::Scene2D));
+
+    const auto explicitlyEmpty = ParseToml("[scene]\nname = 'no features'\nkind = 'mixed'\nversion = 10\nfeatures = []\n");
+    REQUIRE(explicitlyEmpty.has_value());
+    CHECK(explicitlyEmpty->features == SceneFeatureFlags::None);
 }
 
 #ifdef AETHER_SCENES_SOURCE_DIR
@@ -381,6 +407,7 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     const auto scene = ParseToml(*text);
     REQUIRE(scene.has_value());
     CHECK(scene->kind == SceneKind::Scene2D);
+    CHECK(scene->features == SceneFeatureFlags::Sprites);
     REQUIRE(scene->entities.size() == 1);
     REQUIRE(scene->entities[0].camera.has_value());
     CHECK(scene->entities[0].mainCamera);
@@ -391,6 +418,7 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     const auto created = ApplyScene(*scene, world, ApplySceneDeps{});
     REQUIRE(created.size() == 1);
     CHECK(world.GetSceneKind() == SceneKind::Scene2D);
+    CHECK(world.GetSceneFeatures() == SceneFeatureFlags::Sprites);
     CHECK(world.Get<CameraComponent>(created[0]).projection == CameraProjection::Orthographic);
 }
 #endif
@@ -732,6 +760,7 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
 
     World world = MakeWorld();
     world.SetSceneKind(SceneKind::Scene2D);
+    world.SetSceneFeatures(SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D);
 
     Entity cam = world.Create();
     world.Emplace<NameComponent>(cam, NameComponent{.name = "Camera"});
@@ -757,6 +786,7 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
 
     const SceneDescription snapshot = CaptureScene(world, mreg, treg);
     CHECK(snapshot.kind == SceneKind::Scene2D);
+    CHECK(snapshot.features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D));
     const auto serialized = ParseToml(WriteToml(snapshot));
     REQUIRE(serialized.has_value());
     CHECK(serialized->kind == SceneKind::Scene2D);
@@ -772,10 +802,12 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     world.Remove<DisabledComponent>(disabledParent);
     world.EmplaceOrReplace<DisabledComponent>(sprite);
     world.SetSceneKind(SceneKind::Scene3D);
+    world.SetSceneFeatures(DefaultSceneFeatures(SceneKind::Scene3D));
 
     const std::vector<Entity> restored = RestoreSceneInPlace(snapshot, world, ApplySceneDeps{});
     REQUIRE(restored.size() == snapshot.entities.size());
     CHECK(world.GetSceneKind() == SceneKind::Scene2D);
+    CHECK(world.GetSceneFeatures() == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D));
 
     const Entity camAfter = AppliedOf(snapshot, restored, "Camera");
     CHECK(camAfter.id == camIdBefore);
@@ -798,4 +830,27 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     CHECK(world.Get<MeshRendererComponent>(ch).visible == false);
 
     CHECK(world.GetRegistry().valid(World::ToEntt(spawned)) == false);
+}
+
+TEST_CASE("v9 scene fixtures migrate feature defaults without changing source version") {
+    const auto readFixture = [](std::string_view name)
+    {
+        return io::file_util::ReadText(std::filesystem::path{AETHER_TESTS_SOURCE_DIR} / "fixtures" / "scenes" / name);
+    };
+
+    const auto legacy2DText = readFixture("v9-2d.scene.toml");
+    REQUIRE(legacy2DText.has_value());
+    const auto legacy2D = ParseToml(*legacy2DText);
+    REQUIRE(legacy2D.has_value());
+    CHECK(legacy2D->version == 9);
+    CHECK(legacy2D->kind == SceneKind::Scene2D);
+    CHECK(legacy2D->features == SceneFeatureFlags::Sprites);
+
+    const auto legacy3DText = readFixture("v9-3d.scene.toml");
+    REQUIRE(legacy3DText.has_value());
+    const auto legacy3D = ParseToml(*legacy3DText);
+    REQUIRE(legacy3D.has_value());
+    CHECK(legacy3D->version == 9);
+    CHECK(legacy3D->kind == SceneKind::Scene3D);
+    CHECK(legacy3D->features == DefaultSceneFeatures(SceneKind::Scene3D));
 }

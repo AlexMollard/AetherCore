@@ -30,6 +30,8 @@ namespace aether::editor
 		void HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// state - those are stale leftovers on frames where Manipulate never ran.
 		bool DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		void Draw2DGrid(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		void Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void DrawPlayControls(app::LayerContext& context);
 		void DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// sets m_lookThroughEntityId, which OnUpdate uses to lock the editor camera.
@@ -45,6 +47,7 @@ namespace aether::editor
 		int m_viewportAspectMode = 0;
 		bool m_viewportShowStats = true;
 		bool m_viewportShowMouse = true;
+		bool m_viewportShow2DGrid = true;
 
 		int m_gizmoOp = 0;
 		bool m_gizmoLocal = false;
@@ -52,6 +55,7 @@ namespace aether::editor
 		std::uint32_t m_editorCamId = 0;
 		std::uint32_t m_gameCamId = 0;
 		bool m_editorCamActive = false;
+		bool m_editor2DMode = false;
 
 		std::uint32_t m_lookThroughEntityId = 0;
 	};

@@ -52,6 +52,7 @@ namespace aether::editor
 
 		const bool editing = !playState->IsPlaying();
 		const CameraHandle main = cameras->GetMainCamera();
+		const bool scene2D = context.Get<World>().GetSceneKind() == SceneKind::Scene2D;
 
 		if (editing && m_editorCamActive && main.IsValid() && main.id != m_editorCamId)
 		{
@@ -68,14 +69,25 @@ namespace aether::editor
 			if (justCreated)
 			{
 				CameraDesc desc;
-				desc.mode = CameraMode::Free;
+				desc.mode = scene2D ? CameraMode::Manual : CameraMode::Free;
+				desc.projection = scene2D ? CameraProjection::Orthographic : CameraProjection::Perspective;
+				desc.position = scene2D ? glm::vec3{0.0f, 0.0f, 10.0f} : desc.position;
 				desc.moveSpeed = 15.0f;
 				m_editorCamId = cameras->Create(desc).id;
 			}
 			if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
 			{
-				editorCam->SetMode(CameraMode::Free);
-				editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+				if (scene2D)
+				{
+					editorCam->SetMode(CameraMode::Manual);
+					editorCam->SetYawPitch(0.0f, 0.0f);
+					editorCam->SetOrthographic(10.0f, 0.1f, 1000.0f);
+				}
+				else
+				{
+					editorCam->SetMode(CameraMode::Free);
+					editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+				}
 				if (justCreated)
 				{
 					CameraHandle seedFrom{};
@@ -100,6 +112,7 @@ namespace aether::editor
 				}
 				cameras->SetMainCamera(CameraHandle{m_editorCamId});
 				m_editorCamActive = true;
+				m_editor2DMode = scene2D;
 			}
 		}
 		else if (!editing && m_editorCamActive)
@@ -131,6 +144,23 @@ namespace aether::editor
 		{
 			Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId});
 			World& world = context.Get<World>();
+			if (editorCam != nullptr && m_lookThroughEntityId == 0 && m_editor2DMode != scene2D)
+			{
+				m_editor2DMode = scene2D;
+				if (scene2D)
+				{
+					const glm::vec3 position = editorCam->GetPosition();
+					editorCam->SetMode(CameraMode::Manual);
+					editorCam->SetPosition({position.x, position.y, 10.0f});
+					editorCam->SetYawPitch(0.0f, 0.0f);
+					editorCam->SetOrthographic(10.0f, 0.1f, 1000.0f);
+				}
+				else
+				{
+					editorCam->SetMode(CameraMode::Free);
+					editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+				}
+			}
 			const Entity target{m_lookThroughEntityId};
 			const auto* targetCam = (m_lookThroughEntityId != 0 && world.GetRegistry().valid(World::ToEntt(target))) ? world.TryGet<CameraComponent>(target) : nullptr;
 			const auto* targetTc = targetCam != nullptr ? world.TryGet<TransformComponent>(target) : nullptr;
@@ -158,8 +188,16 @@ namespace aether::editor
 			{
 				if (m_lookThroughEntityId != 0 && editorCam != nullptr)
 				{
-					editorCam->SetMode(CameraMode::Free);
-					editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+					editorCam->SetMode(scene2D ? CameraMode::Manual : CameraMode::Free);
+					if (scene2D)
+					{
+						editorCam->SetYawPitch(0.0f, 0.0f);
+						editorCam->SetOrthographic(10.0f, 0.1f, 1000.0f);
+					}
+					else
+					{
+						editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+					}
 				}
 				m_lookThroughEntityId = 0;
 			}
@@ -257,7 +295,11 @@ namespace aether::editor
 		glm::mat4 proj = camera->GetProjectionMatrix(renderAspect);
 		proj[1][1] *= -1.0f;
 
-		const ImGuizmo::OPERATION op = m_gizmoOp == 0 ? ImGuizmo::TRANSLATE : m_gizmoOp == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
+		const bool scene2D = world.GetSceneKind() == SceneKind::Scene2D;
+		const ImGuizmo::OPERATION op = scene2D
+		        ? (m_gizmoOp == 0 ? static_cast<ImGuizmo::OPERATION>(ImGuizmo::TRANSLATE_X | ImGuizmo::TRANSLATE_Y)
+		                          : m_gizmoOp == 1 ? ImGuizmo::ROTATE_Z : static_cast<ImGuizmo::OPERATION>(ImGuizmo::SCALE_X | ImGuizmo::SCALE_Y))
+		        : (m_gizmoOp == 0 ? ImGuizmo::TRANSLATE : m_gizmoOp == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE);
 		const ImGuizmo::MODE mode = (op == ImGuizmo::SCALE || m_gizmoLocal) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
 		float snapValues[3] = {0.5f, 0.5f, 0.5f};
@@ -292,6 +334,88 @@ namespace aether::editor
 			}
 		}
 		return true;
+	}
+
+	void ViewportPanel::Draw2DGrid(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		World& world = context.Get<World>();
+		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		if (!m_viewportShow2DGrid || world.GetSceneKind() != SceneKind::Scene2D || camera == nullptr || camera->GetProjection() != CameraProjection::Orthographic)
+		{
+			return;
+		}
+
+		const glm::vec3 position = camera->GetPosition();
+		const float height = camera->GetOrthographicHeight();
+		const float width = height * renderAspect;
+		const float rawStep = height / 20.0f;
+		const float magnitude = std::pow(10.0f, std::floor(std::log10(glm::max(rawStep, 0.0001f))));
+		const float normalized = rawStep / magnitude;
+		const float step = (normalized < 2.0f ? 1.0f : normalized < 5.0f ? 2.0f : 5.0f) * magnitude;
+		const float minX = position.x - width * 0.5f;
+		const float maxX = position.x + width * 0.5f;
+		const float minY = position.y - height * 0.5f;
+		const float maxY = position.y + height * 0.5f;
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const auto toScreen = [&](glm::vec2 point)
+		{
+			return ImVec2{
+			        imageMin.x + (point.x - minX) / width * imageSize.x,
+			        imageMin.y + (maxY - point.y) / height * imageSize.y,
+			};
+		};
+		const ImU32 gridColor = IM_COL32(135, 145, 160, 42);
+		const ImU32 axisXColor = IM_COL32(225, 85, 85, 150);
+		const ImU32 axisYColor = IM_COL32(85, 205, 120, 150);
+		const int firstX = static_cast<int>(std::floor(minX / step));
+		const int lastX = static_cast<int>(std::ceil(maxX / step));
+		for (int i = firstX; i <= lastX; ++i)
+		{
+			const float x = static_cast<float>(i) * step;
+			drawList->AddLine(toScreen({x, minY}), toScreen({x, maxY}), i == 0 ? axisYColor : gridColor, i == 0 ? 1.5f : 1.0f);
+		}
+		const int firstY = static_cast<int>(std::floor(minY / step));
+		const int lastY = static_cast<int>(std::ceil(maxY / step));
+		for (int i = firstY; i <= lastY; ++i)
+		{
+			const float y = static_cast<float>(i) * step;
+			drawList->AddLine(toScreen({minX, y}), toScreen({maxX, y}), i == 0 ? axisXColor : gridColor, i == 0 ? 1.5f : 1.0f);
+		}
+	}
+
+	void ViewportPanel::Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		World& world = context.Get<World>();
+		Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		if (!m_editorCamActive || world.GetSceneKind() != SceneKind::Scene2D || camera == nullptr || camera->GetProjection() != CameraProjection::Orthographic || !ImGui::IsItemHovered())
+		{
+			return;
+		}
+
+		ImGuiIO& io = ImGui::GetIO();
+		const float oldHeight = camera->GetOrthographicHeight();
+		if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle) || (io.KeyAlt && ImGui::IsMouseDragging(ImGuiMouseButton_Left)))
+		{
+			glm::vec3 position = camera->GetPosition();
+			position.x -= io.MouseDelta.x / imageSize.x * oldHeight * renderAspect;
+			position.y += io.MouseDelta.y / imageSize.y * oldHeight;
+			camera->SetPosition(position);
+		}
+
+		if (io.MouseWheel != 0.0f)
+		{
+			const glm::vec2 uv{
+			        glm::clamp((io.MousePos.x - imageMin.x) / imageSize.x, 0.0f, 1.0f),
+			        glm::clamp((io.MousePos.y - imageMin.y) / imageSize.y, 0.0f, 1.0f),
+			};
+			glm::vec3 position = camera->GetPosition();
+			const glm::vec2 before{position.x + (uv.x - 0.5f) * oldHeight * renderAspect, position.y + (0.5f - uv.y) * oldHeight};
+			const float newHeight = glm::clamp(oldHeight * std::exp(-io.MouseWheel * 0.15f), 0.01f, 100000.0f);
+			const glm::vec2 after{position.x + (uv.x - 0.5f) * newHeight * renderAspect, position.y + (0.5f - uv.y) * newHeight};
+			position += glm::vec3{before - after, 0.0f};
+			camera->SetPosition(position);
+			camera->SetOrthographic(newHeight, camera->GetNearPlane(), camera->GetFarPlane());
+		}
 	}
 
 	void ViewportPanel::HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
@@ -716,6 +840,7 @@ namespace aether::editor
 		const ImVec2 imageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
 		ImGui::PushClipRect(imageAreaMin, imageAreaMax, true);
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+		Draw2DGrid(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		const bool gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 
@@ -731,6 +856,7 @@ namespace aether::editor
 		if (!gizmoActive && !gizmoHovered)
 		{
 			ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+			Handle2DNavigation(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
@@ -749,8 +875,17 @@ namespace aether::editor
 						const float sx = glm::length(glm::vec3(tc->localToWorld[0]));
 						const float sy = glm::length(glm::vec3(tc->localToWorld[1]));
 						const float sz = glm::length(glm::vec3(tc->localToWorld[2]));
-						const float dist = glm::max(4.0f, 2.5f * glm::max(sx, glm::max(sy, sz)));
-						cam->FocusOn(target, dist);
+						if (world.GetSceneKind() == SceneKind::Scene2D)
+						{
+							const glm::vec3 current = cam->GetPosition();
+							cam->SetPosition({target.x, target.y, current.z});
+							cam->SetOrthographic(glm::max(2.0f, 2.5f * glm::max(sx, sy)), cam->GetNearPlane(), cam->GetFarPlane());
+						}
+						else
+						{
+							const float dist = glm::max(4.0f, 2.5f * glm::max(sx, glm::max(sy, sz)));
+							cam->FocusOn(target, dist);
+						}
 					}
 				}
 			}
@@ -945,6 +1080,10 @@ namespace aether::editor
 				ImGui::Spacing();
 				chrome::SectionTag("OVERLAYS");
 				ImGui::Spacing();
+				if (context.Get<World>().GetSceneKind() == SceneKind::Scene2D)
+				{
+					ImGui::Checkbox("2D grid", &m_viewportShow2DGrid);
+				}
 				ImGui::Checkbox("Stats overlay", &m_viewportShowStats);
 				ImGui::Checkbox("Mouse overlay", &m_viewportShowMouse);
 				ImGui::EndPopup();

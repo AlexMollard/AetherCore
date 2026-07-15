@@ -73,7 +73,7 @@ def _ctl_path() -> str:
     fallback: Path | None = None
     for name in names:
         base = Path(name) if os.path.isabs(name) else (REPO / name)
-        for cfg in ("Debug", "Release", None):
+        for cfg in ("RelWithDebInfo", "Debug", "Release", None):
             cand = base / "tools" / "control-client" / cfg / exe if cfg else base / "tools" / "control-client" / exe
             fallback = fallback or cand
             if cand.exists():

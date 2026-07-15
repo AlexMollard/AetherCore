@@ -10,10 +10,43 @@
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "rendering/IUiOverlay.hpp"
 #include "rendering/Renderer.hpp"
+#include "scene/SceneKind.hpp"
 
 namespace aether
 {
+	enum class SpriteInstanceFlags : std::uint32_t
+	{
+		None = 0,
+		FlipX = 1u << 0u,
+		FlipY = 1u << 1u,
+		PixelSnap = 1u << 2u,
+		Masked = 1u << 3u,
+	};
+
+	struct SpriteRenderInstance
+	{
+		glm::mat4 world{1.0f};
+		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};
+		glm::vec4 color{1.0f};
+		glm::vec4 sizeAndPivot{1.0f, 1.0f, 0.5f, 0.5f};
+		std::uint64_t sortKey = 0;
+		std::uint32_t textureIndex = 0;
+		std::uint32_t entityId = 0;
+		SpriteInstanceFlags flags = SpriteInstanceFlags::None;
+	};
+
+	// Owned by RenderFramePacket and moved through the render-thread queue with
+	// it. The game thread finishes extraction before submission; the render
+	// thread may retain references only for the synchronous execution of that
+	// packet. It must never reach back into the ECS or asset authoring objects.
+	struct Render2DFrameData
+	{
+		std::vector<SpriteRenderInstance> sprites;
+		std::vector<SpriteRenderInstance> tileInstances;
+	};
+
 	// Per-frame render data snapshot produced by the game thread and consumed by
+	// the render thread. All dynamic arrays are packet-owned.
 	struct RenderFramePacket
 	{
 		glm::mat4 view{1.0f};
@@ -22,6 +55,7 @@ namespace aether
 		float cameraNearPlane = 0.1f;
 		gpu::Extent2D renderExtent;
 		bool hasCameraData = false;
+		SceneFeatureFlags sceneFeatures = DefaultSceneFeatures(SceneKind::Scene3D);
 
 		glm::vec4 sunDirectionIntensity{0.0f, -1.0f, 0.0f, 1.0f};
 		glm::vec4 ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
@@ -40,6 +74,8 @@ namespace aether
 
 		// (PhysicsDebugRenderer::ExtractShapes) so the $PhysicsDebug pass never reads
 		std::vector<PhysicsDebugInstance> physicsDebugShapes;
+
+		Render2DFrameData render2D;
 
 		// the debug toggle and puts the decision here; the render thread branches on
 		bool debugRenderingEnabled = false;

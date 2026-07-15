@@ -20,10 +20,12 @@
 #include "passes/PostProcessStack.hpp"
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
+#include "rendering/Renderer2D.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
+#include "scene/SceneKind.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "ui/UiRenderer.hpp"
 
@@ -105,6 +107,22 @@ namespace aether
 		[[nodiscard]] Renderer& GetRenderer()
 		{
 			return m_renderer;
+		}
+
+		void SetSceneFeatures(SceneFeatureFlags features)
+		{
+			m_sceneFeatures.store(static_cast<std::uint32_t>(features), std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] bool IsSceneFeatureEnabled(SceneFeatureFlags feature) const
+		{
+			const auto features = static_cast<SceneFeatureFlags>(m_sceneFeatures.load(std::memory_order_relaxed));
+			return HasSceneFeature(features, feature);
+		}
+
+		[[nodiscard]] Renderer2D& GetRenderer2D()
+		{
+			return m_renderer2D;
 		}
 
 		[[nodiscard]] FrameConstantsBuffer& GetFrameConstantsBuffer()
@@ -201,6 +219,7 @@ namespace aether
 		RenderGraph m_renderGraph;
 		RenderQueue m_renderQueue;
 		Renderer m_renderer;
+		Renderer2D m_renderer2D;
 		FrameConstantsBuffer m_frameConstantsBuffer;
 		std::array<PerFrameResourceTable, kMaxFramesInFlight> m_resourceTableBuffers{};
 		ShadowService m_shadowService;
@@ -234,6 +253,7 @@ namespace aether
 		PhysicsDebugRenderer m_physicsDebug;
 		ui::UiRenderer m_uiRenderer;
 		std::atomic_bool m_forwardPassEnabled = true;
+		std::atomic_uint32_t m_sceneFeatures{static_cast<std::uint32_t>(DefaultSceneFeatures(SceneKind::Scene3D))};
 		std::atomic_bool m_sceneViewportRebuildPending = false;
 		mutable std::mutex m_sceneViewportMutex;
 		bool m_sceneViewportEnabled = false;
