@@ -37,6 +37,8 @@ namespace aether
 		}
 
 		void Update(World& world, float dt) override;
+		void UpdatePreview(World& world, float dt);
+		void ResetForPlay(World& world);
 		[[nodiscard]] bool TryPopEvent(SpriteAnimationEventRecord& event);
 		[[nodiscard]] bool TryPopEvent(Entity entity, SpriteAnimationEventRecord& event);
 		[[nodiscard]] std::size_t PendingEventCount() const noexcept
@@ -46,8 +48,9 @@ namespace aether
 
 	private:
 		void ApplyFrame(SpriteRendererComponent& renderer, const SpriteAnimationAsset& animation, const SpriteAnimatorComponent& animator);
-		void EnterFrame(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, std::uint32_t frameIndex);
-		void Advance(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, float stepSeconds);
+		void UpdateAnimations(World& world, float dt, bool emitEvents);
+		void EnterFrame(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, std::uint32_t frameIndex, bool emitEvents);
+		void Advance(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, float stepSeconds, bool emitEvents);
 
 		SpriteAssetStore& m_assets;
 		std::deque<SpriteAnimationEventRecord> m_events;

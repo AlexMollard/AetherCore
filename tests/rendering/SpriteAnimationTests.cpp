@@ -163,3 +163,93 @@ TEST_CASE("sprite animation advances on fixed steps and buffers frame events")
 	std::filesystem::remove(atlasPath, error);
 	std::filesystem::remove(animationPath, error);
 }
+
+TEST_CASE("sprite animation preview advances the renderer without emitting gameplay events")
+{
+	const std::filesystem::path atlasPath = TestAssetPath("preview.spriteatlas.toml");
+	const std::filesystem::path animationPath = TestAssetPath("preview.spriteanim.toml");
+	SpriteAtlasAsset atlas = SpriteAtlasAsset::SliceGrid("assets://preview.png", 64, 32, SpriteSliceSettings{.cellWidth = 32, .cellHeight = 32});
+	REQUIRE(atlas.sprites.size() == 2);
+	SpriteAnimationAsset animation;
+	animation.atlasPath = atlasPath.string();
+	animation.frames = {{atlas.sprites[0].id, 0.05f}, {atlas.sprites[1].id, 0.05f}};
+	animation.events = {{1, "PreviewStep", "editor"}};
+
+	SpriteAssetStore store;
+	REQUIRE(store.SaveAtlas(atlasPath.string(), atlas).has_value());
+	REQUIRE(store.SaveAnimation(animationPath.string(), animation).has_value());
+	SpriteAnimationSystem system(store);
+	World world;
+	const Entity entity = world.Create();
+	world.Emplace<SpriteRendererComponent>(entity);
+	world.Emplace<SpriteAnimatorComponent>(entity, SpriteAnimatorComponent{.animationPath = animationPath.string()});
+
+	system.UpdatePreview(world, 0.02f);
+	CHECK(world.Get<SpriteRendererComponent>(entity).spriteId == atlas.sprites[0].id);
+	system.UpdatePreview(world, 0.05f);
+	CHECK(world.Get<SpriteAnimatorComponent>(entity).currentFrame == 1);
+	CHECK(world.Get<SpriteRendererComponent>(entity).spriteId == atlas.sprites[1].id);
+	CHECK(system.PendingEventCount() == 0);
+
+	std::error_code error;
+	std::filesystem::remove(atlasPath, error);
+	std::filesystem::remove(animationPath, error);
+}
+
+TEST_CASE("sprite animation autoplay restarts from its configured frame when play begins")
+{
+	const std::filesystem::path atlasPath = TestAssetPath("autoplay.spriteatlas.toml");
+	const std::filesystem::path animationPath = TestAssetPath("autoplay.spriteanim.toml");
+	SpriteAtlasAsset atlas = SpriteAtlasAsset::SliceGrid("assets://autoplay.png", 96, 32, SpriteSliceSettings{.cellWidth = 32, .cellHeight = 32});
+	REQUIRE(atlas.sprites.size() == 3);
+	SpriteAnimationAsset animation;
+	animation.atlasPath = atlasPath.string();
+	animation.frames = {{atlas.sprites[0].id, 0.05f}, {atlas.sprites[1].id, 0.05f}, {atlas.sprites[2].id, 0.05f}};
+
+	SpriteAssetStore store;
+	REQUIRE(store.SaveAtlas(atlasPath.string(), atlas).has_value());
+	REQUIRE(store.SaveAnimation(animationPath.string(), animation).has_value());
+	SpriteAnimationSystem system(store);
+	World world;
+	const Entity autoplayEntity = world.Create();
+	world.Emplace<SpriteRendererComponent>(autoplayEntity);
+	world.Emplace<SpriteAnimatorComponent>(autoplayEntity, SpriteAnimatorComponent{.animationPath = animationPath.string(), .startFrame = 1});
+	const Entity manualEntity = world.Create();
+	world.Emplace<SpriteRendererComponent>(manualEntity);
+	world.Emplace<SpriteAnimatorComponent>(manualEntity, SpriteAnimatorComponent{.animationPath = animationPath.string(), .autoplay = false});
+
+	// Reproduce stale editor-preview state: one animation has finished or been
+	// paused, while another has accumulated time before the Play transition.
+	auto& autoplay = world.Get<SpriteAnimatorComponent>(autoplayEntity);
+	autoplay.frameTime = 0.04f;
+	autoplay.fixedAccumulator = 0.2f;
+	autoplay.currentFrame = 2;
+	autoplay.direction = -1;
+	autoplay.playing = false;
+	autoplay.initialized = true;
+	auto& manual = world.Get<SpriteAnimatorComponent>(manualEntity);
+	manual.currentFrame = 2;
+	manual.playing = true;
+	manual.initialized = true;
+
+	system.ResetForPlay(world);
+	CHECK(autoplay.frameTime == 0.0f);
+	CHECK(autoplay.fixedAccumulator == 0.0f);
+	CHECK(autoplay.currentFrame == 1);
+	CHECK(autoplay.direction == 1);
+	CHECK_FALSE(autoplay.playing);
+	CHECK_FALSE(autoplay.initialized);
+
+	system.Update(world, 0.0f);
+	CHECK(autoplay.playing);
+	CHECK(autoplay.initialized);
+	CHECK(autoplay.currentFrame == 1);
+	CHECK(world.Get<SpriteRendererComponent>(autoplayEntity).spriteId == atlas.sprites[1].id);
+	CHECK_FALSE(manual.playing);
+	CHECK(manual.initialized);
+	CHECK(manual.currentFrame == 0);
+
+	std::error_code error;
+	std::filesystem::remove(atlasPath, error);
+	std::filesystem::remove(animationPath, error);
+}

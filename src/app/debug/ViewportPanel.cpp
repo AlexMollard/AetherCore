@@ -107,11 +107,26 @@ namespace aether::editor
 					{
 						const glm::mat4 inv = glm::inverse(from->GetViewMatrix());
 						const glm::vec3 eye = glm::vec3(inv[3]);
-						const glm::vec3 fwd = glm::normalize(-glm::vec3(inv[2]));
-						const float pitch = glm::degrees(std::asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
-						const float yaw = glm::degrees(std::atan2(-fwd.x, -fwd.z));
-						editorCam->SetPosition(eye);
-						editorCam->SetYawPitch(yaw, pitch);
+						if (scene2D)
+						{
+							// A 2D scene must always open square to the XY plane. Carry the
+							// game camera's framing across, but never inherit a small 3D yaw,
+							// pitch, or Z offset that makes sprites appear perspective-skewed.
+							editorCam->SetPosition({eye.x, eye.y, 10.0f});
+							editorCam->SetYawPitch(0.0f, 0.0f);
+							if (from->GetProjection() == CameraProjection::Orthographic)
+							{
+								editorCam->SetOrthographic(from->GetOrthographicHeight(), 0.1f, 1000.0f);
+							}
+						}
+						else
+						{
+							const glm::vec3 fwd = glm::normalize(-glm::vec3(inv[2]));
+							const float pitch = glm::degrees(std::asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
+							const float yaw = glm::degrees(std::atan2(-fwd.x, -fwd.z));
+							editorCam->SetPosition(eye);
+							editorCam->SetYawPitch(yaw, pitch);
+						}
 					}
 				}
 				cameras->SetMainCamera(CameraHandle{m_editorCamId});
@@ -409,9 +424,9 @@ namespace aether::editor
 			        imageMin.y + (maxY - point.y) / height * imageSize.y,
 			};
 		};
-		const ImU32 gridColor = IM_COL32(135, 145, 160, 42);
-		const ImU32 axisXColor = IM_COL32(225, 85, 85, 150);
-		const ImU32 axisYColor = IM_COL32(85, 205, 120, 150);
+		const ImU32 gridColor = chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.16f));
+		const ImU32 axisXColor = chrome::U32(chrome::WithAlpha(chrome::C(colors::AxisX), 0.60f));
+		const ImU32 axisYColor = chrome::U32(chrome::WithAlpha(chrome::C(colors::AxisY), 0.60f));
 		const int firstX = static_cast<int>(std::floor(minX / step));
 		const int lastX = static_cast<int>(std::ceil(maxX / step));
 		for (int i = firstX; i <= lastX; ++i)
@@ -529,6 +544,7 @@ namespace aether::editor
 			return;
 		}
 		World& world = context.Get<World>();
+		const bool scene2D = world.GetSceneKind() == SceneKind::Scene2D;
 		auto& reg = world.GetRegistry();
 		if (reg.view<CameraComponent, TransformComponent>().size_hint() == 0)
 		{
@@ -588,7 +604,8 @@ namespace aether::editor
 				        return true;
 			        };
 
-			        const ImU32 color = isSelected ? IM_COL32(255, 255, 255, 235) : isMain ? IM_COL32(255, 170, 60, 220) : IM_COL32(110, 180, 255, 190);
+			        const ImVec4 baseColor = isSelected ? chrome::kText : isMain ? chrome::kAccent : chrome::kMuted;
+			        const ImU32 color = chrome::U32(chrome::WithAlpha(baseColor, isSelected ? 0.92f : isMain ? 0.86f : 0.74f));
 			        const float thickness = (isSelected || isMain) ? 2.0f : 1.25f;
 
 			        auto line = [&](const glm::vec3& a, const glm::vec3& b)
@@ -599,6 +616,25 @@ namespace aether::editor
 					        drawList->AddLine(sa, sb, color, thickness);
 				        }
 			        };
+			        if (scene2D && orthographic)
+			        {
+				        // A 2D camera is a framing rectangle, not a near/far volume.
+				        // Draw it on the XY content plane so it cannot read as a cube.
+				        const float h = std::max(0.001f, cam.orthographicHeight) * 0.5f;
+				        const float w = h * renderAspect;
+				        const glm::vec3 center{pos.x, pos.y, 0.0f};
+				        const glm::vec3 frame[4]{
+				                center + glm::vec3{-w, h, 0.0f},
+				                center + glm::vec3{w, h, 0.0f},
+				                center + glm::vec3{w, -h, 0.0f},
+				                center + glm::vec3{-w, -h, 0.0f},
+				        };
+				        for (int i = 0; i < 4; ++i)
+				        {
+					        line(frame[i], frame[(i + 1) % 4]);
+				        }
+				        return;
+			        }
 			        for (int i = 0; i < 4; ++i)
 			        {
 				        const int j = (i + 1) % 4;
@@ -661,7 +697,7 @@ namespace aether::editor
 			}
 			if (valid)
 			{
-				drawList->AddPolyline(screen, 4, IM_COL32(255, 190, 55, 255), ImDrawFlags_Closed, 2.0f);
+				drawList->AddPolyline(screen, 4, chrome::U32(chrome::kAccentHi), ImDrawFlags_Closed, 2.0f);
 			}
 		}
 	}

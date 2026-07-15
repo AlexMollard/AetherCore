@@ -832,6 +832,98 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     CHECK(world.GetRegistry().valid(World::ToEntt(spawned)) == false);
 }
 
+TEST_CASE("2D sprite authoring fields survive a scene save and load round trip") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    World world = MakeWorld();
+    world.SetSceneKind(SceneKind::Scene2D);
+    world.SetSceneFeatures(SceneFeatureFlags::Sprites);
+    const Entity entity = world.Create();
+    world.Emplace<NameComponent>(entity, NameComponent{.name = "Saved Sprite"});
+    world.Emplace<TransformComponent>(entity, TransformComponent{});
+
+    SpriteRendererComponent sprite;
+    sprite.texturePath = "project://assets/hero.png";
+    sprite.atlasPath = "project://assets/hero.spriteatlas.toml";
+    sprite.spriteId = AssetObjectId{0x1234abcd};
+    sprite.uvRect = {0.125f, 0.25f, 0.375f, 0.5f};
+    sprite.tint = {0.2f, 0.4f, 0.6f, 0.8f};
+    sprite.pixelSize = {48.0f, 64.0f};
+    sprite.pivot = {0.25f, 0.75f};
+    sprite.pixelsPerUnit = 32.0f;
+    sprite.sortingLayer = 3;
+    sprite.orderInLayer = -7;
+    sprite.blendMode = SpriteBlendMode::Multiply;
+    sprite.visible = false;
+    sprite.flipX = true;
+    sprite.flipY = true;
+    sprite.pixelSnap = true;
+    world.Emplace<SpriteRendererComponent>(entity, sprite);
+
+    SpriteAnimatorComponent animator;
+    animator.animationPath = "project://assets/hero.spriteanim.toml";
+    animator.speed = 1.75f;
+    animator.startFrame = 4;
+    animator.loopMode = SpriteAnimationLoopMode::Hold;
+    animator.useAssetLoopMode = false;
+    animator.autoplay = false;
+    // Runtime preview state must never become authored scene state.
+    animator.frameTime = 0.42f;
+    animator.currentFrame = 9;
+    animator.playing = true;
+    animator.initialized = true;
+    world.Emplace<SpriteAnimatorComponent>(entity, animator);
+
+    const SceneDescription captured = CaptureScene(world, mreg, treg);
+    const auto parsed = ParseToml(WriteToml(captured));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    REQUIRE(parsed->entities[0].sprite.has_value());
+    REQUIRE(parsed->entities[0].spriteAnimator.has_value());
+
+    const SpriteRendererComponent& savedSprite = *parsed->entities[0].sprite;
+    CHECK(savedSprite.texturePath == sprite.texturePath);
+    CHECK(savedSprite.atlasPath == sprite.atlasPath);
+    CHECK(savedSprite.spriteId == sprite.spriteId);
+    CHECK(savedSprite.uvRect == sprite.uvRect);
+    CHECK(savedSprite.tint == sprite.tint);
+    CHECK(savedSprite.pixelSize == sprite.pixelSize);
+    CHECK(savedSprite.pivot == sprite.pivot);
+    CHECK(savedSprite.pixelsPerUnit == doctest::Approx(sprite.pixelsPerUnit));
+    CHECK(savedSprite.sortingLayer == sprite.sortingLayer);
+    CHECK(savedSprite.orderInLayer == sprite.orderInLayer);
+    CHECK(savedSprite.blendMode == sprite.blendMode);
+    CHECK(savedSprite.visible == sprite.visible);
+    CHECK(savedSprite.flipX == sprite.flipX);
+    CHECK(savedSprite.flipY == sprite.flipY);
+    CHECK(savedSprite.pixelSnap == sprite.pixelSnap);
+
+    const SpriteAnimatorComponent& savedAnimator = *parsed->entities[0].spriteAnimator;
+    CHECK(savedAnimator.animationPath == animator.animationPath);
+    CHECK(savedAnimator.speed == doctest::Approx(animator.speed));
+    CHECK(savedAnimator.startFrame == animator.startFrame);
+    CHECK(savedAnimator.loopMode == animator.loopMode);
+    CHECK(savedAnimator.useAssetLoopMode == animator.useAssetLoopMode);
+    CHECK(savedAnimator.autoplay == animator.autoplay);
+    CHECK(savedAnimator.frameTime == 0.0f);
+    CHECK(savedAnimator.currentFrame == 0);
+    CHECK_FALSE(savedAnimator.playing);
+    CHECK_FALSE(savedAnimator.initialized);
+
+    World loaded = MakeWorld();
+    const std::vector<Entity> applied = ApplyScene(*parsed, loaded, ApplySceneDeps{});
+    REQUIRE(applied.size() == 1);
+    CHECK(loaded.GetSceneKind() == SceneKind::Scene2D);
+    CHECK(loaded.GetSceneFeatures() == SceneFeatureFlags::Sprites);
+    REQUIRE(loaded.TryGet<SpriteRendererComponent>(applied[0]) != nullptr);
+    REQUIRE(loaded.TryGet<SpriteAnimatorComponent>(applied[0]) != nullptr);
+    CHECK(loaded.Get<SpriteRendererComponent>(applied[0]).blendMode == SpriteBlendMode::Multiply);
+    CHECK(loaded.Get<SpriteAnimatorComponent>(applied[0]).animationPath == animator.animationPath);
+}
+
 TEST_CASE("v9 scene fixtures migrate feature defaults without changing source version") {
     const auto readFixture = [](std::string_view name)
     {

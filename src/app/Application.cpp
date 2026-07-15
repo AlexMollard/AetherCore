@@ -111,6 +111,15 @@ namespace aether::app
 			{
 				projectRoot = env;
 			}
+			if (projectRoot.empty())
+			{
+				const std::filesystem::path publishedSettings = io::PlatformPaths::GetExecutableDir() / "data" / "config" / "ProjectSettings.toml";
+				std::error_code ec;
+				if (std::filesystem::exists(publishedSettings, ec))
+				{
+					return publishedSettings;
+				}
+			}
 #	ifdef AETHER_DEFAULT_PROJECT_DIR
 			if (projectRoot.empty())
 			{
@@ -354,6 +363,10 @@ namespace aether::app
 		}
 		else
 		{
+			if (auto* spriteAnimations = ctx.TryGet<aether::SpriteAnimationSystem>())
+			{
+				spriteAnimations->UpdatePreview(ctx.Get<World>(), static_cast<float>(gameDt));
+			}
 			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>())
 			{
 				physics->FlushPendingOnly(ctx.Get<World>());

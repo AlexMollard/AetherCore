@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <filesystem>
+
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/SpriteAtlasAsset.hpp"
 #include "material/MaterialRegistry.hpp"
@@ -62,6 +64,43 @@ TEST_CASE("sprite extraction is packet-owned and deterministically sorted")
 	CHECK((static_cast<std::uint32_t>(packet.sprites[1].flags) & static_cast<std::uint32_t>(SpriteInstanceFlags::FlipX)) != 0u);
 	sprites.Shutdown();
 	textures.ReleaseAll();
+}
+
+TEST_CASE("atlas sprite extraction samples inside the region texel borders")
+{
+	const std::filesystem::path atlasPath = std::filesystem::temp_directory_path() / "aethercore_sprite_uv_inset.spriteatlas.toml";
+	std::filesystem::remove(atlasPath);
+
+	FakeTextureSink sink;
+	TextureRegistry textures(sink);
+	textures.InitializeDefault("fallback.png");
+	SpriteAssetStore assets;
+	SpriteAtlasAsset atlas = SpriteAtlasAsset::WholeTexture("atlas.png", {8.0f, 4.0f});
+	REQUIRE(atlas.sprites.size() == 1);
+	const AssetObjectId spriteId = atlas.sprites[0].id;
+	REQUIRE(assets.SaveAtlas(atlasPath.string(), std::move(atlas)).has_value());
+
+	SpriteSystem sprites;
+	sprites.Initialize(textures, assets);
+	World world;
+	const Entity entity = world.Create();
+	world.Emplace<TransformComponent>(entity);
+	world.Emplace<SpriteRendererComponent>(entity, SpriteRendererComponent{
+	        .atlasPath = atlasPath.string(),
+	        .spriteId = spriteId,
+	});
+
+	Render2DFrameData packet;
+	sprites.Extract(world, packet);
+	REQUIRE(packet.sprites.size() == 1);
+	CHECK(packet.sprites[0].uvRect.x == doctest::Approx(0.0625f));
+	CHECK(packet.sprites[0].uvRect.y == doctest::Approx(0.125f));
+	CHECK(packet.sprites[0].uvRect.z == doctest::Approx(0.9375f));
+	CHECK(packet.sprites[0].uvRect.w == doctest::Approx(0.875f));
+
+	sprites.Shutdown();
+	textures.ReleaseAll();
+	std::filesystem::remove(atlasPath);
 }
 
 TEST_CASE("authored sprite renderer survives scene serialization and legacy marker migration")

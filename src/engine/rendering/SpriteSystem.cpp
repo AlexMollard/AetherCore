@@ -1,6 +1,7 @@
 #include "rendering/SpriteSystem.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 #include <glm/glm.hpp>
@@ -29,6 +30,26 @@ namespace aether
 			const std::uint64_t layer = static_cast<std::uint64_t>(BiasSigned(sprite.sortingLayer));
 			const std::uint64_t order = static_cast<std::uint64_t>(BiasSigned(sprite.orderInLayer));
 			return (layer << 48u) | (order << 32u) | static_cast<std::uint64_t>(entity.id);
+		}
+
+		void InsetUvRange(float& begin, float& end, float halfTexel) noexcept
+		{
+			const float midpoint = (begin + end) * 0.5f;
+			const float direction = end >= begin ? 1.0f : -1.0f;
+			const float halfSpan = std::max(std::abs(end - begin) * 0.5f - halfTexel, 0.0f);
+			begin = midpoint - direction * halfSpan;
+			end = midpoint + direction * halfSpan;
+		}
+
+		[[nodiscard]] glm::vec4 InsetAtlasUvRect(glm::vec4 uvRect, std::int32_t textureWidth, std::int32_t textureHeight) noexcept
+		{
+			if (textureWidth <= 0 || textureHeight <= 0)
+			{
+				return uvRect;
+			}
+			InsetUvRange(uvRect.x, uvRect.z, 0.5f / static_cast<float>(textureWidth));
+			InsetUvRange(uvRect.y, uvRect.w, 0.5f / static_cast<float>(textureHeight));
+			return uvRect;
 		}
 	} // namespace
 
@@ -89,6 +110,7 @@ namespace aether
 			glm::vec2 pixelSize = sprite.pixelSize;
 			glm::vec2 pivot = sprite.pivot;
 			float pixelsPerUnit = sprite.pixelsPerUnit;
+			glm::ivec2 atlasTextureSize{0};
 			if (m_assets != nullptr && !sprite.atlasPath.empty() && sprite.spriteId.IsValid())
 			{
 				if (const auto atlasResult = m_assets->LoadAtlas(sprite.atlasPath); atlasResult.has_value())
@@ -101,8 +123,16 @@ namespace aether
 						pixelSize = region->pixelSize;
 						pivot = region->pivot;
 						pixelsPerUnit = atlas.pixelsPerUnit;
+						atlasTextureSize = {atlas.textureWidth, atlas.textureHeight};
 					}
 				}
+			}
+			if (atlasTextureSize.x > 0 && atlasTextureSize.y > 0)
+			{
+				// Linear filtering at exact atlas-cell borders samples the neighbouring
+				// frame and shows up as a one-pixel ledge along part of a sprite edge.
+				// Keep atlas UVs on texel centres without changing the authored asset.
+				uvRect = InsetAtlasUvRect(uvRect, atlasTextureSize.x, atlasTextureSize.y);
 			}
 			const TextureHandle texture = ResolveTexture(std::string(texturePath));
 			std::uint32_t textureSlot = m_textures != nullptr ? m_textures->ResolveSlot(texture) : kInvalidTextureSlot;

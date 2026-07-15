@@ -13,8 +13,11 @@
 
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/SpriteAnimationAsset.hpp"
 #include "assets/SpriteAssetStore.hpp"
+#include "assets/SpriteAtlasAsset.hpp"
 #include "assets/AssetTypes.hpp"
+#include "debug/EditorChrome.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "editor/EditorProjectContext.hpp"
@@ -23,6 +26,7 @@
 #include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/SpriteAuthoringUi.hpp"
 #include "layers/AppLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
@@ -1776,102 +1780,213 @@ namespace aether::editor
 
 		auto& sprite = world.Get<SpriteRendererComponent>(entity);
 		auto* assetDb = context.TryGet<AssetDatabase>();
-		const auto setSpriteTexture = [&](const std::string& path)
+		auto* store = context.TryGet<SpriteAssetStore>();
+		const auto applyRegion = [&](const SpriteAtlasAsset& atlas, const SpriteRegion& region)
 		{
-			sprite.texturePath = path;
-			if (assetDb != nullptr)
-			{
-				assetDb->Register(MakeTextureSource(path));
-			}
+			sprite.texturePath = atlas.texturePath;
+			sprite.spriteId = region.id;
+			sprite.uvRect = region.uvRect;
+			sprite.pixelSize = region.pixelSize;
+			sprite.pivot = region.pivot;
+			sprite.pixelsPerUnit = atlas.pixelsPerUnit;
 		};
 
-		iw::PropLabel("Sprite");
-		const bool hasTex = !sprite.texturePath.empty();
-		const std::string texLabel = hasTex ? sprite.texturePath : std::string("Drop / pick a texture");
-		const AssetId pickedTex = AssetPickerButton("##spriteTexPicker", assetDb, AssetType::Texture, AssetId{}, "Drop / pick a texture", texLabel.c_str());
-		if (ImGui::BeginDragDropTarget())
+		ImGui::SeparatorText("Source");
+		if (const auto change = spriteui::DrawAssetSlot(context, "spriteTexture", ICON_FA_IMAGE, "Texture", sprite.texturePath, spriteui::AssetRole::Texture, "Choose or drop a texture", true); change.changed)
 		{
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload))
+			sprite.texturePath = change.path;
+			sprite.atlasPath.clear();
+			sprite.spriteId = {};
+			if (assetDb != nullptr && !change.path.empty())
 			{
-				if (payload->DataSize == sizeof(dragdrop::FilePayload))
-				{
-					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
-					if (file->kind == dragdrop::FileKind::Texture)
-					{
-						setSpriteTexture(file->path);
-					}
-				}
+				assetDb->Register(MakeTextureSource(change.path));
 			}
-			ImGui::EndDragDropTarget();
 		}
-		iw::ItemTooltip("Drag a texture onto this slot, or click to pick a catalogued one");
-		if (pickedTex.IsValid() && assetDb != nullptr)
+		if (const auto change = spriteui::DrawAssetSlot(context, "spriteAtlas", ICON_FA_IMAGE, "Atlas", sprite.atlasPath, spriteui::AssetRole::Atlas, "Optional sprite atlas", true); change.changed)
 		{
-			AssetSource src;
-			if (assetDb->Describe(pickedTex, src))
+			sprite.atlasPath = change.path;
+			sprite.spriteId = {};
+			if (store != nullptr && !change.path.empty())
 			{
-				setSpriteTexture(src.path);
+				if (const auto atlasResult = store->LoadAtlas(change.path); atlasResult.has_value() && !(**atlasResult).sprites.empty())
+				{
+					applyRegion(**atlasResult, (**atlasResult).sprites.front());
+				}
 			}
 		}
 
-		iw::PropLabel("Atlas");
-		const AssetId currentAtlas = sprite.atlasPath.empty() ? AssetId{} : ComputeAssetId(MakeSpriteAtlasSource(sprite.atlasPath));
-		const AssetId pickedAtlas = AssetPickerButton("##spriteAtlasPicker", assetDb, AssetType::SpriteAtlas, currentAtlas, "Pick a sprite atlas", sprite.atlasPath.empty() ? "No atlas" : sprite.atlasPath.c_str());
-		if (pickedAtlas.IsValid() && pickedAtlas != currentAtlas && assetDb != nullptr)
+		if (store != nullptr && !sprite.atlasPath.empty())
 		{
-			AssetSource source;
-			if (assetDb->Describe(pickedAtlas, source))
+			if (const auto atlasResult = store->LoadAtlas(sprite.atlasPath); atlasResult.has_value())
 			{
-				sprite.atlasPath = source.path;
-				sprite.spriteId = {};
-			}
-		}
-		if (!sprite.atlasPath.empty())
-		{
-			if (auto* store = context.TryGet<SpriteAssetStore>())
-			{
-				if (const auto atlasResult = store->LoadAtlas(sprite.atlasPath); atlasResult.has_value())
+				const SpriteAtlasAsset& atlas = **atlasResult;
+				const SpriteRegion* selectedRegion = atlas.Find(sprite.spriteId);
+				static char regionFilter[96]{};
+				iw::PropLabel("Region");
+				const char* regionLabel = selectedRegion != nullptr ? selectedRegion->name.c_str() : "Choose a region";
+				if (ImGui::Button(regionLabel, ImVec2(-FLT_MIN, 0.0f)))
 				{
-					const SpriteAtlasAsset& atlas = **atlasResult;
-					const SpriteRegion* selectedRegion = atlas.Find(sprite.spriteId);
-					iw::PropLabel("Region");
-					if (ImGui::BeginCombo("##spriteAtlasRegion", selectedRegion != nullptr ? selectedRegion->name.c_str() : "Select region"))
+					regionFilter[0] = '\0';
+					ImGui::OpenPopup("##spriteRegionPicker");
+				}
+				if (ImGui::BeginPopup("##spriteRegionPicker"))
+				{
+					ImGui::SetNextItemWidth(280.0f);
+					ImGui::InputTextWithHint("##regionFilter", "Search regions...", regionFilter, sizeof(regionFilter));
+					ImGui::Separator();
+					const std::string filter = spriteui::Lower(regionFilter);
+					bool any = false;
+					for (const SpriteRegion& region: atlas.sprites)
 					{
-						for (const SpriteRegion& region: atlas.sprites)
+						if (!filter.empty() && !spriteui::Lower(region.name).contains(filter))
 						{
-							if (ImGui::Selectable(region.name.c_str(), region.id == sprite.spriteId))
-							{
-								sprite.texturePath = atlas.texturePath;
-								sprite.spriteId = region.id;
-								sprite.uvRect = region.uvRect;
-								sprite.pixelSize = region.pixelSize;
-								sprite.pivot = region.pivot;
-								sprite.pixelsPerUnit = atlas.pixelsPerUnit;
-							}
+							continue;
 						}
-						ImGui::EndCombo();
+						any = true;
+						if (ImGui::Selectable(region.name.c_str(), region.id == sprite.spriteId))
+						{
+							applyRegion(atlas, region);
+							ImGui::CloseCurrentPopup();
+						}
 					}
+					if (!any)
+					{
+						ImGui::TextDisabled("No matching regions.");
+					}
+					ImGui::EndPopup();
 				}
+				iw::ItemTooltip("Click to search atlas regions by name");
 			}
 		}
 
+		ImGui::SeparatorText("Appearance");
 		PropColor4("Tint", &sprite.tint.x);
-		ImGui::DragFloat2("Pixel Size", &sprite.pixelSize.x, 1.0f, 1.0f, 16384.0f);
-		ImGui::DragFloat2("Pivot", &sprite.pivot.x, 0.01f, 0.0f, 1.0f);
-		ImGui::DragFloat("Pixels Per Unit", &sprite.pixelsPerUnit, 1.0f, 0.001f, 10000.0f);
-		ImGui::DragInt("Sorting Layer", &sprite.sortingLayer);
-		ImGui::DragInt("Order In Layer", &sprite.orderInLayer);
 		int blend = static_cast<int>(sprite.blendMode);
 		constexpr const char* kBlendNames[] = {"Alpha", "Additive", "Multiply", "Opaque"};
-		if (ImGui::Combo("Blend Mode", &blend, kBlendNames, static_cast<int>(std::size(kBlendNames))))
+		if (PropCombo("Blend Mode", &blend, kBlendNames, static_cast<int>(std::size(kBlendNames))))
 		{
 			sprite.blendMode = static_cast<SpriteBlendMode>(blend);
 		}
-		ImGui::Checkbox("Visible", &sprite.visible);
-		ImGui::Checkbox("Flip X", &sprite.flipX);
+		PropCheckbox("Visible", &sprite.visible, "Hide this sprite without disabling the entity");
+		PropCheckbox("Flip X", &sprite.flipX);
+		PropCheckbox("Flip Y", &sprite.flipY);
+		PropCheckbox("Pixel Snap", &sprite.pixelSnap, "Snap sprite placement to the pixel grid");
+
+		if (ImGui::TreeNodeEx("Layout & Sorting", ImGuiTreeNodeFlags_SpanAvailWidth))
+		{
+			PropDrag2("Pixel Size", &sprite.pixelSize.x, 1.0f, 1.0f, 16384.0f, "%.0f");
+			PropDrag2("Pivot", &sprite.pivot.x, 0.01f, 0.0f, 1.0f);
+			PropFloat("Pixels Per Unit", &sprite.pixelsPerUnit, 1.0f, 0.001f, 10000.0f, "%.1f");
+			PropInt("Sorting Layer", &sprite.sortingLayer);
+			PropInt("Order In Layer", &sprite.orderInLayer);
+			ImGui::TreePop();
+		}
+	}
+
+	void DrawSpriteAnimator(app::LayerContext& context, World& world, Entity entity)
+	{
+		if (!world.Has<SpriteAnimatorComponent>(entity))
+		{
+			return;
+		}
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_FILM "  Sprite Animator", ICON_FA_XMARK "##removeSpriteAnimator", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		if (removed)
+		{
+			world.Remove<SpriteAnimatorComponent>(entity);
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+
+		auto& animator = world.Get<SpriteAnimatorComponent>(entity);
+		auto* store = context.TryGet<SpriteAssetStore>();
+		const auto resetRuntime = [&](bool play)
+		{
+			animator.currentFrame = animator.startFrame;
+			animator.frameTime = 0.0f;
+			animator.fixedAccumulator = 0.0f;
+			animator.direction = 1;
+			animator.initialized = true;
+			animator.playing = play;
+		};
+
+		ImGui::SeparatorText("Animation Clip");
+		if (const auto change = spriteui::DrawAssetSlot(context, "spriteAnimation", ICON_FA_FILM, "Clip", animator.animationPath, spriteui::AssetRole::Animation, "Choose or drop an animation", true); change.changed)
+		{
+			animator.animationPath = change.path;
+			animator.initialized = false;
+			if (!world.Has<TransformComponent>(entity))
+			{
+				world.Emplace<TransformComponent>(entity);
+			}
+			if (!world.Has<SpriteRendererComponent>(entity))
+			{
+				world.Emplace<SpriteRendererComponent>(entity);
+			}
+		}
+
+		const SpriteAnimationAsset* clip = nullptr;
+		if (store != nullptr && !animator.animationPath.empty())
+		{
+			if (const auto result = store->LoadAnimation(animator.animationPath); result.has_value())
+			{
+				clip = *result;
+			}
+		}
+		if (clip != nullptr)
+		{
+			PropText("Clip Info", "%zu frames  -  %.2f seconds", clip->frames.size(), clip->DurationSeconds());
+		}
+		else if (!animator.animationPath.empty())
+		{
+			ImGui::TextColored(chrome::kError, ICON_FA_CIRCLE_INFO "  Animation clip could not be loaded.");
+		}
+
+		const float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+		if (chrome::OutlineButton(animator.playing ? ICON_FA_STOP "  Pause Preview" : ICON_FA_PLAY "  Preview", ImVec2(buttonWidth, 0.0f)))
+		{
+			if (!animator.initialized)
+			{
+				resetRuntime(true);
+			}
+			else
+			{
+				animator.playing = !animator.playing;
+			}
+		}
 		ImGui::SameLine();
-		ImGui::Checkbox("Flip Y", &sprite.flipY);
-		ImGui::Checkbox("Pixel Snap", &sprite.pixelSnap);
+		if (chrome::OutlineButton(ICON_FA_ROTATE "  Restart", ImVec2(buttonWidth, 0.0f)))
+		{
+			resetRuntime(true);
+		}
+
+		ImGui::SeparatorText("Playback");
+		PropCheckbox("Autoplay", &animator.autoplay, "Start this animation automatically when the scene loads");
+		PropFloat("Speed", &animator.speed, 0.05f, 0.0f, 20.0f, "%.2fx");
+		int startFrame = static_cast<int>(animator.startFrame);
+		const int maxFrame = clip != nullptr && !clip->frames.empty() ? static_cast<int>(clip->frames.size() - 1) : 0;
+		if (PropInt("Start Frame", &startFrame, 1.0f, 0, maxFrame))
+		{
+			animator.startFrame = static_cast<std::uint32_t>(std::clamp(startFrame, 0, maxFrame));
+			animator.initialized = false;
+		}
+		PropCheckbox("Use Clip Loop", &animator.useAssetLoopMode, "Use the loop mode saved in the animation clip");
+		if (!animator.useAssetLoopMode)
+		{
+			int loopMode = static_cast<int>(animator.loopMode);
+			constexpr const char* kLoopModes[] = {"Loop", "Once", "Ping Pong", "Hold"};
+			if (PropCombo("Loop Mode", &loopMode, kLoopModes, static_cast<int>(std::size(kLoopModes))))
+			{
+				animator.loopMode = static_cast<SpriteAnimationLoopMode>(loopMode);
+			}
+		}
+		if (clip != nullptr && !clip->frames.empty())
+		{
+			PropText("Preview Frame", "%u / %zu", std::min<std::uint32_t>(animator.currentFrame + 1u, static_cast<std::uint32_t>(clip->frames.size())), clip->frames.size());
+		}
 	}
 
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection)

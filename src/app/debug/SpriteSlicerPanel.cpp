@@ -14,7 +14,9 @@
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
-#include "debug/EditorDragDrop.hpp"
+#include "debug/EditorChrome.hpp"
+#include "debug/Icons.hpp"
+#include "debug/SpriteAuthoringUi.hpp"
 #include "editor/AsepriteSpriteImporter.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
@@ -25,17 +27,9 @@ namespace aether::editor
 {
 	namespace
 	{
-		template<std::size_t N>
-		void SetBuffer(std::array<char, N>& destination, std::string_view value)
-		{
-			destination.fill('\0');
-			const std::size_t count = std::min(value.size(), N - 1);
-			std::copy_n(value.data(), count, destination.data());
-		}
-
 		[[nodiscard]] ImU32 CheckerColor(std::int32_t x, std::int32_t y)
 		{
-			return ((x + y) & 1) == 0 ? IM_COL32(55, 55, 55, 255) : IM_COL32(78, 78, 78, 255);
+			return chrome::U32(((x + y) & 1) == 0 ? chrome::kPanel : chrome::kPanelHi);
 		}
 
 		[[nodiscard]] std::string FilenameSafe(std::string_view value)
@@ -51,6 +45,16 @@ namespace aether::editor
 			}
 			return result.empty() ? "animation" : result;
 		}
+
+		void DrawGridProperty(const char* label, const char* id, std::int32_t* value)
+		{
+			ImGui::TableNextColumn();
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextDisabled("%s", label);
+			ImGui::TableNextColumn();
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::DragInt2(id, value, 1.0f, 0, 8192);
+		}
 	} // namespace
 
 	void SpriteSlicerPanel::OnDetach(app::LayerContext& context)
@@ -64,136 +68,116 @@ namespace aether::editor
 		{
 			return;
 		}
-		if (!ImGui::Begin("Sprite Slicer", &m_visible, ImGuiWindowFlags_NoScrollbar))
+		ImGui::SetNextWindowSize(ImVec2(1120.0f, 760.0f), ImGuiCond_FirstUseEver);
+		if (!ImGui::Begin("Sprite Slicer", &m_visible))
 		{
 			ImGui::End();
 			return;
 		}
 
-		ImGui::SetNextItemWidth(-120.0f);
-		ImGui::InputText("Source Texture", m_texturePath.data(), m_texturePath.size());
-		ImGui::SameLine();
-		if (ImGui::Button("Load Source"))
+		char stat[96]{};
+		if (m_texturePath.empty())
 		{
-			LoadSource(context);
+			std::snprintf(stat, sizeof(stat), "NO SOURCE");
 		}
-		if (ImGui::BeginDragDropTarget())
+		else
 		{
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload); payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
-			{
-				const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
-				SetBuffer(m_texturePath, file->path);
-				LoadSource(context);
-			}
-			ImGui::EndDragDropTarget();
+			std::snprintf(stat, sizeof(stat), "%d x %d  \xC2\xB7  %zu REGIONS", m_textureWidth, m_textureHeight, m_atlas.sprites.size());
+		}
+		chrome::PanelHeader("SPRITE ATLAS AUTHORING", stat);
+
+		if (const spriteui::AssetSlotChange source = spriteui::DrawAssetSlot(context, "sourceTexture", ICON_FA_IMAGE, "Source Texture", m_texturePath, spriteui::AssetRole::Texture, "Select or drop a texture"); source.changed && !source.path.empty())
+		{
+			SetSource(context, source.path);
 		}
 
-		ImGui::SetNextItemWidth(-120.0f);
-		ImGui::InputText("Atlas File", m_atlasPath.data(), m_atlasPath.size());
-		ImGui::SameLine();
-		if (ImGui::Button("Load Atlas"))
+		if (const spriteui::AssetSlotChange atlas = spriteui::DrawAssetSlot(context, "atlasAsset", ICON_FA_BOX_OPEN, "Atlas Asset", m_atlasPath, spriteui::AssetRole::Atlas, "Output path is derived from the texture"); atlas.changed)
 		{
-			const auto loaded = SpriteAtlasAsset::Load(std::filesystem::path(m_atlasPath.data()));
-			if (loaded.has_value())
+			if (atlas.path.empty())
 			{
-				m_atlas = *loaded;
-				m_textureWidth = m_atlas.textureWidth;
-				m_textureHeight = m_atlas.textureHeight;
-				SetBuffer(m_texturePath, m_atlas.texturePath);
-				m_selectedRegion = m_atlas.sprites.empty() ? -1 : 0;
-				m_status = "Atlas loaded.";
-				m_statusError = false;
-				LoadSource(context);
+				m_atlasPath.clear();
 			}
 			else
 			{
-				m_status = loaded.error().ToString();
-				m_statusError = true;
-			}
-		}
-		ImGui::SetNextItemWidth(-160.0f);
-		ImGui::InputText("Aseprite JSON", m_asepritePath.data(), m_asepritePath.size());
-		ImGui::SameLine();
-		if (ImGui::Button("Import Aseprite"))
-		{
-			auto imported = ImportAsepriteSpriteMetadata(m_asepritePath.data(), m_texturePath.data(), &m_atlas);
-			if (imported.has_value())
-			{
-				m_diagnostics = CompareSpriteAtlasReimport(m_atlas, imported->atlas);
-				m_atlas = std::move(imported->atlas);
-				m_selectedRegion = m_atlas.sprites.empty() ? -1 : 0;
-				const std::filesystem::path atlasPath(m_atlasPath.data());
-				const std::size_t clipCount = imported->animations.size();
-				std::optional<std::string> clipError;
-				for (SpriteAnimationAsset& animation: imported->animations)
-				{
-					animation.atlasPath = m_atlasPath.data();
-					const std::filesystem::path animationPath = atlasPath.parent_path() / (atlasPath.stem().string() + "-" + FilenameSafe(animation.name) + ".spriteanim.toml");
-					const auto saved = context.Get<SpriteAssetStore>().SaveAnimation(animationPath.string(), std::move(animation));
-					if (saved.has_value())
-					{
-						context.Get<AssetDatabase>().Register(MakeSpriteAnimationSource(animationPath.string()), animationPath.stem().string());
-					}
-					else if (!clipError.has_value())
-					{
-						clipError = saved.error().ToString();
-					}
-				}
-				m_status = clipError.value_or(std::format("Imported {} Aseprite regions and {} tagged clips.", m_atlas.sprites.size(), clipCount));
-				m_statusError = clipError.has_value();
-			}
-			else
-			{
-				m_status = imported.error().ToString();
-				m_statusError = true;
+				LoadAtlas(context, atlas.path);
 			}
 		}
 
-		if (ImGui::BeginTable("##slicerLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV))
+		if (m_texturePath.empty())
+		{
+			spriteui::DrawEmptyState(ICON_FA_IMAGE, "Choose a source texture", "Select a texture in File Explorer and click Use Selected, or drag it onto the Source Texture field. The atlas output path will be created beside it automatically.");
+		}
+		else if (ImGui::BeginTable("##slicerLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV))
 		{
 			ImGui::TableSetupColumn("Preview", ImGuiTableColumnFlags_WidthStretch, 0.68f);
 			ImGui::TableSetupColumn("Authoring", ImGuiTableColumnFlags_WidthStretch, 0.32f);
 			ImGui::TableNextColumn();
 			DrawPreview();
-			ImGui::TableNextColumn();
 
+			ImGui::TableNextColumn();
+			ImGui::BeginChild("##slicerAuthoring", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+			chrome::SectionTag("SLICE GRID");
 			const char* presets[] = {"16 px grid", "32 px grid", "64 px grid", "Custom"};
-			if (ImGui::Combo("Import Preset", &m_preset, presets, static_cast<int>(std::size(presets))))
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::Combo("##slicePreset", &m_preset, presets, static_cast<int>(std::size(presets))))
 			{
 				ApplyPreset(m_preset);
 			}
-			ImGui::DragInt2("Cell Size", &m_atlas.sliceSettings.cellWidth, 1.0f, 1, 8192);
-			ImGui::DragInt2("Columns / Rows", &m_atlas.sliceSettings.columns, 1.0f, 0, 4096);
-			ImGui::DragInt2("Padding", &m_atlas.sliceSettings.paddingX, 1.0f, 0, 4096);
-			ImGui::DragInt2("Spacing", &m_atlas.sliceSettings.spacingX, 1.0f, 0, 4096);
+
+			if (ImGui::BeginTable("##gridProperties", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+			{
+				ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 108.0f);
+				ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+				DrawGridProperty("Cell size", "##cellSize", &m_atlas.sliceSettings.cellWidth);
+				DrawGridProperty("Columns / rows", "##gridCount", &m_atlas.sliceSettings.columns);
+				if (ImGui::TreeNodeEx("Advanced grid settings", ImGuiTreeNodeFlags_SpanAllColumns))
+				{
+					DrawGridProperty("Padding", "##padding", &m_atlas.sliceSettings.paddingX);
+					DrawGridProperty("Spacing", "##spacing", &m_atlas.sliceSettings.spacingX);
+					ImGui::TableNextColumn();
+					ImGui::TextDisabled("Pixels / unit");
+					ImGui::TableNextColumn();
+					ImGui::SetNextItemWidth(-1.0f);
+					ImGui::DragFloat("##ppu", &m_atlas.pixelsPerUnit, 1.0f, 0.001f, 10000.0f);
+					ImGui::TreePop();
+				}
+				ImGui::EndTable();
+			}
+
 			int origin = static_cast<int>(m_atlas.sliceSettings.origin);
 			const char* origins[] = {"Top Left", "Bottom Left"};
+			ImGui::SetNextItemWidth(140.0f);
 			if (ImGui::Combo("Origin", &origin, origins, static_cast<int>(std::size(origins))))
 			{
 				m_atlas.sliceSettings.origin = static_cast<SpriteSliceOrigin>(origin);
 			}
-			ImGui::Checkbox("Trim Transparent Bounds", &m_atlas.sliceSettings.trimAlpha);
-			int alphaThreshold = m_atlas.sliceSettings.alphaThreshold;
-			if (ImGui::SliderInt("Alpha Threshold", &alphaThreshold, 0, 255))
+			ImGui::Checkbox("Trim transparent bounds", &m_atlas.sliceSettings.trimAlpha);
+			if (m_atlas.sliceSettings.trimAlpha)
 			{
-				m_atlas.sliceSettings.alphaThreshold = static_cast<std::uint8_t>(alphaThreshold);
+				int alphaThreshold = m_atlas.sliceSettings.alphaThreshold;
+				ImGui::SetNextItemWidth(-1.0f);
+				if (ImGui::SliderInt("Alpha threshold", &alphaThreshold, 0, 255))
+				{
+					m_atlas.sliceSettings.alphaThreshold = static_cast<std::uint8_t>(alphaThreshold);
+				}
 			}
-			ImGui::DragFloat("Pixels Per Unit", &m_atlas.pixelsPerUnit, 1.0f, 0.001f, 10000.0f);
-			ImGui::Checkbox("Checkerboard", &m_checkerboard);
-			ImGui::SameLine();
-			ImGui::Checkbox("Pixel Grid", &m_showPixelGrid);
 
-			if (ImGui::Button("Preview Re-slice", ImVec2(-1.0f, 0.0f)))
+			if (chrome::PrimaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Generate Preview", ImVec2(-1.0f, 0.0f)))
 			{
-				m_slicePreview = SpriteAtlasAsset::SliceGrid(m_texturePath.data(), m_textureWidth, m_textureHeight, m_atlas.sliceSettings, &m_atlas, m_rgbaPixels);
+				m_slicePreview = SpriteAtlasAsset::SliceGrid(m_texturePath, m_textureWidth, m_textureHeight, m_atlas.sliceSettings, &m_atlas, m_rgbaPixels);
 				m_diagnostics = CompareSpriteAtlasReimport(m_atlas, m_slicePreview);
 				m_hasSlicePreview = true;
 			}
 			if (m_hasSlicePreview)
 			{
-				ImGui::Text("Preview: %zu regions", m_slicePreview.sprites.size());
-				ImGui::TextColored(m_diagnostics.HasReferenceRisk() ? ImVec4(1.0f, 0.45f, 0.25f, 1.0f) : ImVec4(0.45f, 0.9f, 0.55f, 1.0f), "IDs: %u preserved, %u added, %u removed", m_diagnostics.preserved, m_diagnostics.added, m_diagnostics.removed);
-				if (ImGui::Button("Commit Preview", ImVec2(-1.0f, 0.0f)))
+				const bool risk = m_diagnostics.HasReferenceRisk();
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::WithAlpha(risk ? chrome::kWarning : chrome::kSuccess, 0.08f));
+				ImGui::BeginChild("##sliceDiagnostics", ImVec2(0.0f, 68.0f), ImGuiChildFlags_Borders);
+				ImGui::Text("%zu regions in preview", m_slicePreview.sprites.size());
+				ImGui::TextColored(risk ? chrome::kWarning : chrome::kSuccess, "%u preserved  \xC2\xB7  %u added  \xC2\xB7  %u removed", m_diagnostics.preserved, m_diagnostics.added, m_diagnostics.removed);
+				ImGui::EndChild();
+				ImGui::PopStyleColor();
+				if (chrome::OutlineButton("Apply Preview", ImVec2(-1.0f, 0.0f)))
 				{
 					m_atlas = std::move(m_slicePreview);
 					m_hasSlicePreview = false;
@@ -201,19 +185,19 @@ namespace aether::editor
 				}
 			}
 
-			ImGui::SeparatorText("Manual Regions");
-			if (ImGui::Button("Create"))
+			ImGui::Dummy(ImVec2(0.0f, 4.0f));
+			chrome::SectionTag("REGIONS");
+			if (chrome::OutlineButton(ICON_FA_PLUS "  Add"))
 			{
-				m_atlas.texturePath = m_texturePath.data();
+				m_atlas.texturePath = m_texturePath;
 				m_atlas.textureWidth = m_textureWidth;
 				m_atlas.textureHeight = m_textureHeight;
-				auto& region = m_atlas.AddManualRegion({0, 0, std::min(32, m_textureWidth), std::min(32, m_textureHeight)}, "Sprite");
+				(void) m_atlas.AddManualRegion({0, 0, std::min(32, m_textureWidth), std::min(32, m_textureHeight)}, "Sprite");
 				m_atlas.RecalculateUvs(m_textureWidth, m_textureHeight);
 				m_selectedRegion = static_cast<std::int32_t>(m_atlas.sprites.size() - 1);
-				(void) region;
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Duplicate") && m_selectedRegion >= 0 && m_selectedRegion < static_cast<std::int32_t>(m_atlas.sprites.size()))
+			if (chrome::GhostButton(ICON_FA_COPY "  Duplicate") && m_selectedRegion >= 0 && m_selectedRegion < static_cast<std::int32_t>(m_atlas.sprites.size()))
 			{
 				const SpriteRegion source = m_atlas.sprites[static_cast<std::size_t>(m_selectedRegion)];
 				SpriteRegion& duplicate = m_atlas.AddManualRegion(source.pixelRect, source.name + " Copy");
@@ -224,57 +208,82 @@ namespace aether::editor
 				m_selectedRegion = static_cast<std::int32_t>(m_atlas.sprites.size() - 1);
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Delete") && m_selectedRegion >= 0 && m_selectedRegion < static_cast<std::int32_t>(m_atlas.sprites.size()))
+			if (chrome::GhostButton(ICON_FA_TRASH "  Delete", ImVec2(0.0f, 0.0f), chrome::kError) && m_selectedRegion >= 0 && m_selectedRegion < static_cast<std::int32_t>(m_atlas.sprites.size()))
 			{
 				m_atlas.Remove(m_atlas.sprites[static_cast<std::size_t>(m_selectedRegion)].id);
 				m_selectedRegion = std::min(m_selectedRegion, static_cast<std::int32_t>(m_atlas.sprites.size()) - 1);
 			}
 			DrawRegionEditor();
 
-			if (ImGui::Button("Save Atlas", ImVec2(-1.0f, 0.0f)))
+			if (ImGui::CollapsingHeader("Aseprite import"))
 			{
-				m_atlas.texturePath = m_texturePath.data();
-				m_atlas.textureWidth = m_textureWidth;
-				m_atlas.textureHeight = m_textureHeight;
-				m_atlas.RecalculateUvs(m_textureWidth, m_textureHeight);
-				auto& store = context.Get<SpriteAssetStore>();
-				auto saved = store.SaveAtlas(m_atlasPath.data(), m_atlas);
-				if (saved.has_value())
+				if (const spriteui::AssetSlotChange aseprite = spriteui::DrawAssetSlot(context, "asepriteJson", ICON_FA_FILE, "Aseprite JSON", m_asepritePath, spriteui::AssetRole::AsepriteJson, "Select or drop exported JSON", true); aseprite.changed)
 				{
-					m_diagnostics = *saved;
-					context.Get<AssetDatabase>().Register(MakeSpriteAtlasSource(m_atlasPath.data()), std::filesystem::path(m_atlasPath.data()).stem().string());
-					m_status = std::format("Saved {} sprites; {} IDs preserved, {} removed.", m_atlas.sprites.size(), m_diagnostics.preserved, m_diagnostics.removed);
-					m_statusError = false;
-				}
-				else
-				{
-					m_status = saved.error().ToString();
-					m_statusError = true;
+					m_asepritePath = aseprite.path;
+					if (!m_asepritePath.empty())
+					{
+						ImportAseprite(context, m_asepritePath);
+					}
 				}
 			}
-			if (!m_status.empty())
+
+			if (ImGui::CollapsingHeader("Advanced file locations"))
 			{
-				ImGui::TextColored(m_statusError ? ImVec4(1.0f, 0.35f, 0.3f, 1.0f) : ImVec4(0.45f, 0.9f, 0.55f, 1.0f), "%s", m_status.c_str());
+				ImGui::InputText("Texture path", &m_texturePath);
+				ImGui::InputText("Atlas path", &m_atlasPath);
+				if (chrome::GhostButton("Reload texture"))
+				{
+					SetSource(context, m_texturePath, false);
+				}
+				ImGui::SameLine();
+				if (chrome::GhostButton("Load atlas"))
+				{
+					LoadAtlas(context, m_atlasPath);
+				}
 			}
+
+			ImGui::BeginDisabled(m_atlasPath.empty());
+			if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save Atlas", ImVec2(-1.0f, 0.0f)))
+			{
+				SaveAtlas(context);
+			}
+			ImGui::EndDisabled();
+			ImGui::EndChild();
 			ImGui::EndTable();
 		}
+
+		spriteui::DrawStatus(m_status, m_statusError);
 		ImGui::End();
 	}
 
-	void SpriteSlicerPanel::LoadSource(app::LayerContext& context)
+	void SpriteSlicerPanel::SetSource(app::LayerContext& context, std::string path, bool deriveAtlasPath)
 	{
-		ReleasePreview(context);
-		m_rgbaPixels.clear();
-		const auto decoded = DecodeSpriteSourceImage(m_texturePath.data());
-		if (decoded.has_value())
+		if (path.empty())
 		{
-			m_textureWidth = decoded->width;
-			m_textureHeight = decoded->height;
-			m_rgbaPixels = decoded->rgbaPixels;
+			return;
+		}
+		const bool atlasWasDerived = m_atlasPath.empty() || m_atlasPath == spriteui::CompanionPath(m_texturePath, ".spriteatlas.toml");
+		ReleasePreview(context);
+		m_texturePath = std::move(path);
+		if (deriveAtlasPath && atlasWasDerived)
+		{
+			m_atlasPath = spriteui::CompanionPath(m_texturePath, ".spriteatlas.toml");
 		}
 
+		m_rgbaPixels.clear();
+		const auto decoded = DecodeSpriteSourceImage(m_texturePath);
+		if (!decoded.has_value())
+		{
+			m_status = decoded.error().ToString();
+			m_statusError = true;
+			return;
+		}
+		m_textureWidth = decoded->width;
+		m_textureHeight = decoded->height;
+		m_rgbaPixels = decoded->rgbaPixels;
+
 		auto& textures = context.Get<AssetManager>().GetTextureRegistry();
-		m_previewTexture = textures.Acquire(m_texturePath.data());
+		m_previewTexture = textures.Acquire(m_texturePath);
 		const std::uint32_t slot = textures.ResolveSlot(m_previewTexture);
 		if (auto* imgui = context.TryGet<ImguiSubsystem>())
 		{
@@ -294,11 +303,93 @@ namespace aether::editor
 				break;
 			}
 		}
-		m_atlas.texturePath = m_texturePath.data();
+		m_atlas.texturePath = m_texturePath;
 		m_atlas.textureWidth = m_textureWidth;
 		m_atlas.textureHeight = m_textureHeight;
-		m_status = m_previewTextureId != 0 ? "Source loaded." : "Source metadata loaded; GPU preview unavailable.";
+		m_zoom = std::clamp(520.0f / static_cast<float>(std::max(m_textureWidth, m_textureHeight)), 0.25f, 4.0f);
+		context.Get<AssetDatabase>().Register(MakeTextureSource(m_texturePath), spriteui::DisplayName(m_texturePath));
+		m_status = m_previewTextureId != 0 ? "Source texture ready." : "Source loaded; GPU preview is still preparing.";
 		m_statusError = false;
+	}
+
+	void SpriteSlicerPanel::LoadAtlas(app::LayerContext& context, std::string path)
+	{
+		if (path.empty())
+		{
+			return;
+		}
+		const auto loaded = context.Get<SpriteAssetStore>().LoadAtlas(path);
+		if (!loaded.has_value())
+		{
+			m_status = loaded.error().ToString();
+			m_statusError = true;
+			return;
+		}
+		m_atlasPath = std::move(path);
+		m_atlas = **loaded;
+		m_textureWidth = m_atlas.textureWidth;
+		m_textureHeight = m_atlas.textureHeight;
+		m_selectedRegion = m_atlas.sprites.empty() ? -1 : 0;
+		SetSource(context, m_atlas.texturePath, false);
+		context.Get<AssetDatabase>().Register(MakeSpriteAtlasSource(m_atlasPath), spriteui::DisplayName(m_atlasPath));
+		m_status = std::format("Atlas loaded with {} regions.", m_atlas.sprites.size());
+		m_statusError = false;
+	}
+
+	void SpriteSlicerPanel::ImportAseprite(app::LayerContext& context, std::string path)
+	{
+		m_asepritePath = std::move(path);
+		auto imported = ImportAsepriteSpriteMetadata(m_asepritePath, m_texturePath, &m_atlas);
+		if (!imported.has_value())
+		{
+			m_status = imported.error().ToString();
+			m_statusError = true;
+			return;
+		}
+
+		m_diagnostics = CompareSpriteAtlasReimport(m_atlas, imported->atlas);
+		m_atlas = std::move(imported->atlas);
+		m_selectedRegion = m_atlas.sprites.empty() ? -1 : 0;
+		const std::filesystem::path atlasPath(m_atlasPath);
+		const std::size_t clipCount = imported->animations.size();
+		std::optional<std::string> clipError;
+		for (SpriteAnimationAsset& animation: imported->animations)
+		{
+			animation.atlasPath = m_atlasPath;
+			const std::filesystem::path animationPath = atlasPath.parent_path() / (atlasPath.stem().string() + "-" + FilenameSafe(animation.name) + ".spriteanim.toml");
+			const auto saved = context.Get<SpriteAssetStore>().SaveAnimation(animationPath.string(), std::move(animation));
+			if (saved.has_value())
+			{
+				context.Get<AssetDatabase>().Register(MakeSpriteAnimationSource(animationPath.string()), animationPath.stem().string());
+			}
+			else if (!clipError.has_value())
+			{
+				clipError = saved.error().ToString();
+			}
+		}
+		m_status = clipError.value_or(std::format("Imported {} regions and {} tagged clips from Aseprite.", m_atlas.sprites.size(), clipCount));
+		m_statusError = clipError.has_value();
+	}
+
+	void SpriteSlicerPanel::SaveAtlas(app::LayerContext& context)
+	{
+		m_atlas.texturePath = m_texturePath;
+		m_atlas.textureWidth = m_textureWidth;
+		m_atlas.textureHeight = m_textureHeight;
+		m_atlas.RecalculateUvs(m_textureWidth, m_textureHeight);
+		const auto saved = context.Get<SpriteAssetStore>().SaveAtlas(m_atlasPath, m_atlas);
+		if (saved.has_value())
+		{
+			m_diagnostics = *saved;
+			context.Get<AssetDatabase>().Register(MakeSpriteAtlasSource(m_atlasPath), spriteui::DisplayName(m_atlasPath));
+			m_status = std::format("Saved {} regions; {} IDs preserved, {} removed.", m_atlas.sprites.size(), m_diagnostics.preserved, m_diagnostics.removed);
+			m_statusError = false;
+		}
+		else
+		{
+			m_status = saved.error().ToString();
+			m_statusError = true;
+		}
 	}
 
 	void SpriteSlicerPanel::ReleasePreview(app::LayerContext& context)
@@ -320,8 +411,24 @@ namespace aether::editor
 
 	void SpriteSlicerPanel::DrawPreview()
 	{
-		ImGui::SliderFloat("Zoom", &m_zoom, 0.25f, 16.0f, "%.2fx", ImGuiSliderFlags_Logarithmic);
+		chrome::SectionTag("PREVIEW");
+		ImGui::TextDisabled("%d x %d", m_textureWidth, m_textureHeight);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(130.0f);
+		ImGui::SliderFloat("##zoom", &m_zoom, 0.05f, 16.0f, "%.2fx", ImGuiSliderFlags_Logarithmic);
+		ImGui::SameLine();
+		if (chrome::GhostButton("Fit"))
+		{
+			const ImVec2 available = ImGui::GetContentRegionAvail();
+			m_zoom = std::clamp(std::min(available.x / static_cast<float>(std::max(m_textureWidth, 1)), std::max(200.0f, available.y) / static_cast<float>(std::max(m_textureHeight, 1))), 0.05f, 16.0f);
+		}
+		ImGui::SameLine();
+		ImGui::Checkbox("Checker", &m_checkerboard);
+		ImGui::SameLine();
+		ImGui::Checkbox("Grid", &m_showPixelGrid);
+
 		const ImVec2 childSize = ImGui::GetContentRegionAvail();
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::kPanel);
 		ImGui::BeginChild("##spriteSlicerPreview", childSize, ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
 		const ImVec2 imageSize(static_cast<float>(m_textureWidth) * m_zoom, static_cast<float>(m_textureHeight) * m_zoom);
@@ -348,22 +455,22 @@ namespace aether::editor
 			const ImVec2 min(origin.x + static_cast<float>(region.pixelRect.x) * m_zoom, origin.y + static_cast<float>(region.pixelRect.y) * m_zoom);
 			const ImVec2 max(min.x + static_cast<float>(region.pixelRect.width) * m_zoom, min.y + static_cast<float>(region.pixelRect.height) * m_zoom);
 			const bool selected = !m_hasSlicePreview && static_cast<std::int32_t>(index) == m_selectedRegion;
-			drawList->AddRect(min, max, selected ? IM_COL32(255, 190, 55, 255) : IM_COL32(80, 210, 255, 220), 0.0f, 0, selected ? 3.0f : 1.0f);
+			drawList->AddRect(min, max, chrome::U32(selected ? chrome::kAccentHi : chrome::WithAlpha(chrome::kDropTarget, 0.78f)), 0.0f, 0, selected ? 3.0f : 1.0f);
 			if (selected)
 			{
 				const ImVec2 pivot(min.x + region.pivot.x * (max.x - min.x), min.y + region.pivot.y * (max.y - min.y));
-				drawList->AddCircleFilled(pivot, 4.0f, IM_COL32(255, 225, 70, 255));
+				drawList->AddCircleFilled(pivot, 4.0f, chrome::U32(chrome::kAccent));
 			}
 		}
 		if (m_showPixelGrid && m_zoom >= 8.0f && m_textureWidth <= 1024 && m_textureHeight <= 1024)
 		{
 			for (std::int32_t x = 0; x <= m_textureWidth; ++x)
 			{
-				drawList->AddLine(ImVec2(origin.x + x * m_zoom, origin.y), ImVec2(origin.x + x * m_zoom, origin.y + imageSize.y), IM_COL32(255, 255, 255, 30));
+				drawList->AddLine(ImVec2(origin.x + x * m_zoom, origin.y), ImVec2(origin.x + x * m_zoom, origin.y + imageSize.y), chrome::U32(chrome::WithAlpha(chrome::kText, 0.12f)));
 			}
 			for (std::int32_t y = 0; y <= m_textureHeight; ++y)
 			{
-				drawList->AddLine(ImVec2(origin.x, origin.y + y * m_zoom), ImVec2(origin.x + imageSize.x, origin.y + y * m_zoom), IM_COL32(255, 255, 255, 30));
+				drawList->AddLine(ImVec2(origin.x, origin.y + y * m_zoom), ImVec2(origin.x + imageSize.x, origin.y + y * m_zoom), chrome::U32(chrome::WithAlpha(chrome::kText, 0.12f)));
 			}
 		}
 		ImGui::InvisibleButton("##slicerCanvas", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonMiddle);
@@ -389,13 +496,14 @@ namespace aether::editor
 			region.pivot = glm::clamp(glm::vec2{(mouse.x - origin.x) / m_zoom - region.pixelRect.x, (mouse.y - origin.y) / m_zoom - region.pixelRect.y} / glm::vec2{region.pixelRect.width, region.pixelRect.height}, glm::vec2(0.0f), glm::vec2(1.0f));
 		}
 		ImGui::EndChild();
+		ImGui::PopStyleColor();
 	}
 
 	void SpriteSlicerPanel::DrawRegionEditor()
 	{
 		if (m_selectedRegion < 0 || m_selectedRegion >= static_cast<std::int32_t>(m_atlas.sprites.size()))
 		{
-			ImGui::TextDisabled("Select a region in the preview.");
+			ImGui::TextDisabled("Click a region in the preview to edit it.");
 			return;
 		}
 		SpriteRegion& region = m_atlas.sprites[static_cast<std::size_t>(m_selectedRegion)];
@@ -409,32 +517,36 @@ namespace aether::editor
 			m_atlas.RecalculateUvs(m_textureWidth, m_textureHeight);
 		}
 		ImGui::DragFloat2("Pivot", &region.pivot.x, 0.01f, 0.0f, 1.0f);
-		if (ImGui::Button("Bottom Left"))
+		if (chrome::GhostButton("Bottom Left"))
 		{
 			region.pivot = {0.0f, 1.0f};
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Center"))
+		if (chrome::GhostButton("Center"))
 		{
 			region.pivot = {0.5f, 0.5f};
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Top Right"))
+		if (chrome::GhostButton("Top Right"))
 		{
 			region.pivot = {1.0f, 0.0f};
 		}
-		ImGui::TextDisabled("Alt-drag in the preview to move the pivot directly.");
-		ImGui::DragFloat4("Nine-slice Border", &region.border.x, 1.0f, 0.0f, 4096.0f);
-		if (ImGui::Button("Box Collision Outline"))
+		ImGui::TextDisabled("Alt-drag in the preview to place the pivot.");
+		if (ImGui::TreeNode("Nine-slice & collision"))
 		{
-			region.collisionOutline = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+			ImGui::DragFloat4("Border", &region.border.x, 1.0f, 0.0f, 4096.0f);
+			if (chrome::GhostButton("Box outline"))
+			{
+				region.collisionOutline = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Clear outline"))
+			{
+				region.collisionOutline.clear();
+			}
+			ImGui::TextDisabled("%zu collision points", region.collisionOutline.size());
+			ImGui::TreePop();
 		}
-		ImGui::SameLine();
-		if (ImGui::Button("Clear Outline"))
-		{
-			region.collisionOutline.clear();
-		}
-		ImGui::Text("Collision points: %zu", region.collisionOutline.size());
 	}
 
 	void SpriteSlicerPanel::ApplyPreset(int preset)

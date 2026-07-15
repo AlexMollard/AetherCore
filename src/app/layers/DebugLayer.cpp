@@ -170,6 +170,14 @@ namespace aether::editor
 			{
 				return ICON_FA_IMAGE;
 			}
+			if (panelName == "Sprite Slicer")
+			{
+				return ICON_FA_IMAGE;
+			}
+			if (panelName == "Sprite Animation")
+			{
+				return ICON_FA_FILM;
+			}
 			if (panelName == "Console")
 			{
 				return ICON_FA_CODE;
@@ -1029,6 +1037,7 @@ namespace aether::editor
 
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
+				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
@@ -1212,6 +1221,8 @@ namespace aether::editor
 			ImGui::DockBuilderDockWindow("File Explorer", dock_left_files);
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
 			ImGui::DockBuilderDockWindow("UI Canvas", remaining);
+			ImGui::DockBuilderDockWindow("Sprite Slicer", remaining);
+			ImGui::DockBuilderDockWindow("Sprite Animation", remaining);
 			ImGui::DockBuilderDockWindow("Inspector", dock_right);
 			ImGui::DockBuilderDockWindow("Render Graph", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Debug", dock_right_tools);

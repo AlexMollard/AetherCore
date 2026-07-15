@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "io/Process.hpp"
 
 #include "utils/Logger.hpp"
@@ -20,7 +21,8 @@ namespace aether::app::scripting
 		std::filesystem::path ResolveManagedDir()
 		{
 			const auto cwd = std::filesystem::current_path();
-			const std::array<std::filesystem::path, 3> candidates = {
+			const std::array<std::filesystem::path, 4> candidates = {
+			        io::PlatformPaths::GetExecutableDir() / "data" / "scripts" / "managed",
 			        cwd / "data" / "scripts" / "managed",
 			        cwd / ".." / "data" / "scripts" / "managed",
 			        cwd / ".." / ".." / "data" / "scripts" / "managed",

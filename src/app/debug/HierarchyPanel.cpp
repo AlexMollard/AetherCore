@@ -15,6 +15,7 @@
 
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/SpriteAssetStore.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorDragDrop.hpp"
@@ -296,6 +297,75 @@ namespace aether::editor
 			asset.doubleSided = true;
 			MaterialSystem::AssignMaterial(world, e, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 			selection.Select(e);
+		}
+
+		void ApplySpriteRegion(SpriteRendererComponent& renderer, const SpriteAtlasAsset& atlas, const SpriteRegion& region, std::string_view atlasPath)
+		{
+			renderer.texturePath = atlas.texturePath;
+			renderer.atlasPath = atlasPath;
+			renderer.spriteId = region.id;
+			renderer.uvRect = region.uvRect;
+			renderer.pixelSize = region.pixelSize;
+			renderer.pivot = region.pivot;
+			renderer.pixelsPerUnit = atlas.pixelsPerUnit;
+			renderer.visible = true;
+		}
+
+		Entity CreateSpriteEntity(app::LayerContext& context, World& world, SceneSelection& selection, bool animated)
+		{
+			const std::string selectedPath = selection.HasAsset() ? selection.SelectedAsset().path : std::string{};
+			const std::string lowerPath = ToLower(selectedPath);
+			const Entity entity = world.Create();
+			world.Emplace<NameComponent>(entity, NameComponent{.name = animated ? "Animated Sprite" : "Sprite"});
+			world.Emplace<TransformComponent>(entity);
+			auto& renderer = world.Emplace<SpriteRendererComponent>(entity);
+			SpriteAnimatorComponent* animator = animated ? &world.Emplace<SpriteAnimatorComponent>(entity) : nullptr;
+
+			if (auto* sprites = context.TryGet<SpriteAssetStore>(); sprites != nullptr && !selectedPath.empty())
+			{
+				std::string atlasPath;
+				AssetObjectId spriteId{};
+				if (lowerPath.ends_with(".spriteanim.toml"))
+				{
+					if (const auto loaded = sprites->LoadAnimation(selectedPath); loaded.has_value())
+					{
+						const SpriteAnimationAsset& animation = **loaded;
+						atlasPath = animation.atlasPath;
+						if (!animation.frames.empty())
+						{
+							spriteId = animation.frames.front().spriteId;
+						}
+						if (animator != nullptr)
+						{
+							animator->animationPath = selectedPath;
+						}
+					}
+				}
+				else if (lowerPath.ends_with(".spriteatlas.toml"))
+				{
+					atlasPath = selectedPath;
+				}
+
+				if (!atlasPath.empty())
+				{
+					if (const auto loaded = sprites->LoadAtlas(atlasPath); loaded.has_value())
+					{
+						const SpriteAtlasAsset& atlas = **loaded;
+						const SpriteRegion* region = spriteId.IsValid() ? atlas.Find(spriteId) : (atlas.sprites.empty() ? nullptr : &atlas.sprites.front());
+						if (region != nullptr)
+						{
+							ApplySpriteRegion(renderer, atlas, *region, atlasPath);
+						}
+					}
+				}
+			}
+			if (renderer.texturePath.empty() && (lowerPath.ends_with(".png") || lowerPath.ends_with(".jpg") || lowerPath.ends_with(".jpeg") || lowerPath.ends_with(".bmp") || lowerPath.ends_with(".tga")))
+			{
+				renderer.texturePath = selectedPath;
+			}
+
+			selection.Select(entity);
+			return entity;
 		}
 
 		Entity FindOrCreateCanvas(World& world)
@@ -1145,6 +1215,32 @@ namespace aether::editor
 					const Entity e = world.Create();
 					world.Emplace<NameComponent>(e, NameComponent{.name = "Entity"});
 					selection.Select(e);
+				}
+				ImGui::Separator();
+				if (ImGui::BeginMenu(ICON_FA_IMAGE "  2D"))
+				{
+					if (ImGui::MenuItem(ICON_FA_IMAGE "  Sprite"))
+					{
+						(void) CreateSpriteEntity(context, world, selection, false);
+					}
+					if (ImGui::MenuItem(ICON_FA_FILM "  Animated Sprite"))
+					{
+						(void) CreateSpriteEntity(context, world, selection, true);
+					}
+					ImGui::Separator();
+					if (ImGui::MenuItem(ICON_FA_VIDEO "  Orthographic Camera"))
+					{
+						CameraComponent camera{};
+						camera.projection = CameraProjection::Orthographic;
+						camera.orthographicHeight = 10.0f;
+						const Entity entity = ecs::CreateCameraEntity(world, {0.0f, 0.0f, 10.0f}, {0.0f, 0.0f, -1.0f}, camera, "2D Camera");
+						if (!ecs::GetMainCameraEntity(world).IsValid())
+						{
+							ecs::SetMainCameraEntity(world, entity);
+						}
+						selection.Select(entity);
+					}
+					ImGui::EndMenu();
 				}
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_CUBE "  Cube"))

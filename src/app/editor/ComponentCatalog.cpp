@@ -148,6 +148,21 @@ namespace aether::editor
 			        },
 			        [](World& w, Entity e) { w.Remove<SpriteRendererComponent>(e); }});
 
+			c.push_back(ComponentCatalogEntry{"Sprite Animator",
+			        "Animation",
+			        ICON_FA_FILM,
+			        [](const World& w, Entity e) { return w.Has<SpriteAnimatorComponent>(e); },
+			        [](World& w, Entity e, ServiceContainer&)
+			        {
+				        EnsureTransform(w, e);
+				        if (!w.Has<SpriteRendererComponent>(e))
+				        {
+					        w.Emplace<SpriteRendererComponent>(e);
+				        }
+				        w.EmplaceOrReplace<SpriteAnimatorComponent>(e);
+			        },
+			        [](World& w, Entity e) { w.Remove<SpriteAnimatorComponent>(e); }});
+
 			c.push_back(ComponentCatalogEntry{"Material",
 			        "Rendering",
 			        ICON_FA_PALETTE,

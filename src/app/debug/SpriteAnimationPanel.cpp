@@ -1,6 +1,7 @@
 #include "debug/SpriteAnimationPanel.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <format>
 
@@ -8,9 +9,17 @@
 #include <misc/cpp/imgui_stdlib.h>
 
 #include "assets/AssetDatabase.hpp"
+#include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
+#include "debug/EditorChrome.hpp"
+#include "debug/EditorDragDrop.hpp"
+#include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/SpriteAuthoringUi.hpp"
+#include "gpu/ResourceRegistry.hpp"
+#include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"
+#include "material/TextureRegistry.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 
@@ -18,14 +27,26 @@ namespace aether::editor
 {
 	namespace
 	{
-		template<std::size_t N>
-		void SetBuffer(std::array<char, N>& destination, std::string_view value)
+		inline constexpr const char* kSpriteRegionPayload = "AETHER_SPRITE_REGION";
+
+		void AddRegionImage(ImDrawList* drawList, std::uint64_t textureId, const SpriteRegion* region, ImVec2 min, ImVec2 max)
 		{
-			destination.fill('\0');
-			const std::size_t count = std::min(value.size(), N - 1);
-			std::copy_n(value.data(), count, destination.data());
+			drawList->AddRectFilled(min, max, chrome::U32(chrome::kPanel));
+			if (textureId == 0 || region == nullptr)
+			{
+				chrome::CornerBrackets(drawList, min, max, 8.0f, 1.0f, chrome::WithAlpha(chrome::kMuted, 0.55f));
+				return;
+			}
+			const ImVec2 uv0(region->uvRect.x, region->uvRect.y);
+			const ImVec2 uv1(region->uvRect.x + region->uvRect.z, region->uvRect.y + region->uvRect.w);
+			drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(textureId)), min, max, uv0, uv1);
 		}
 	} // namespace
+
+	void SpriteAnimationPanel::OnDetach(app::LayerContext& context)
+	{
+		ReleasePreviewTexture(context);
+	}
 
 	void SpriteAnimationPanel::OnImGui(app::LayerContext& context)
 	{
@@ -33,63 +54,99 @@ namespace aether::editor
 		{
 			return;
 		}
+		ImGui::SetNextWindowSize(ImVec2(1080.0f, 760.0f), ImGuiCond_FirstUseEver);
 		if (!ImGui::Begin("Sprite Animation", &m_visible))
 		{
 			ImGui::End();
 			return;
 		}
 
-		ImGui::SetNextItemWidth(-120.0f);
-		ImGui::InputText("Animation File", m_animationPath.data(), m_animationPath.size());
-		ImGui::SameLine();
-		if (ImGui::Button("Load"))
+		char stat[96]{};
+		std::snprintf(stat, sizeof(stat), "%zu FRAMES  \xC2\xB7  %zu EVENTS", m_animation.frames.size(), m_animation.events.size());
+		chrome::PanelHeader("SPRITE ANIMATION", stat);
+
+		if (const spriteui::AssetSlotChange animation = spriteui::DrawAssetSlot(context, "animationAsset", ICON_FA_FILM, "Animation Clip", m_animationPath, spriteui::AssetRole::Animation, "Created beside the atlas when you save", true);
+		        animation.changed)
 		{
-			const auto loaded = SpriteAnimationAsset::Load(std::filesystem::path(m_animationPath.data()));
-			if (loaded.has_value())
+			if (animation.path.empty())
 			{
-				m_animation = *loaded;
-				SetBuffer(m_atlasPath, m_animation.atlasPath);
-				m_selectedFrame = m_animation.frames.empty() ? -1 : 0;
-				m_previewFrame = 0;
-				m_previewFrameTime = 0.0f;
-				LoadAtlas(context);
-				m_status = "Animation loaded.";
-				m_statusError = false;
+				m_animationPath.clear();
 			}
 			else
 			{
-				m_status = loaded.error().ToString();
-				m_statusError = true;
+				LoadAnimation(context, animation.path);
 			}
 		}
-
-		ImGui::InputText("Clip Name", &m_animation.name);
-		ImGui::SetNextItemWidth(-120.0f);
-		ImGui::InputText("Atlas", m_atlasPath.data(), m_atlasPath.size());
-		ImGui::SameLine();
-		if (ImGui::Button("Load Atlas"))
+		if (const spriteui::AssetSlotChange atlas = spriteui::DrawAssetSlot(context, "animationAtlas", ICON_FA_BOX_OPEN, "Sprite Atlas", m_atlasPath, spriteui::AssetRole::Atlas, "Select or drop a saved sprite atlas");
+		        atlas.changed && !atlas.path.empty())
 		{
-			LoadAtlas(context);
+			LoadAtlas(context, atlas.path);
 		}
-		int loopMode = static_cast<int>(m_animation.loopMode);
-		const char* loopNames[] = {"Loop", "Once", "Ping Pong", "Hold"};
-		if (ImGui::Combo("Loop Mode", &loopMode, loopNames, static_cast<int>(std::size(loopNames))))
-		{
-			m_animation.loopMode = static_cast<SpriteAnimationLoopMode>(loopMode);
-		}
+		spriteui::DrawStatus(m_status, m_statusError);
 
-		if (ImGui::BeginTable("##animationEditorLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV))
+		if (m_atlasPath.empty() || m_atlas.sprites.empty())
 		{
-			ImGui::TableSetupColumn("Timeline", ImGuiTableColumnFlags_WidthStretch, 0.7f);
-			ImGui::TableSetupColumn("Atlas", ImGuiTableColumnFlags_WidthStretch, 0.3f);
+			spriteui::DrawEmptyState(
+			        ICON_FA_FILM, "Choose a sprite atlas", "Select an atlas in File Explorer and click Use Selected, drag one onto the Sprite Atlas field, or choose it from the asset catalogue. Double-click regions to build the timeline.");
+		}
+		else if (ImGui::BeginTable("##animationEditorLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV))
+		{
+			ImGui::TableSetupColumn("Timeline", ImGuiTableColumnFlags_WidthStretch, 0.70f);
+			ImGui::TableSetupColumn("Atlas", ImGuiTableColumnFlags_WidthStretch, 0.30f);
 			ImGui::TableNextColumn();
+			ImGui::BeginChild("##animationTimelineColumn", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
 
-			if (ImGui::Button(m_previewPlaying ? "Pause" : "Play"))
+			chrome::SectionTag("CLIP SETTINGS");
+			if (ImGui::BeginTable("##clipSettings", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+			{
+				ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+				ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableNextColumn();
+				ImGui::AlignTextToFramePadding();
+				ImGui::TextDisabled("Name");
+				ImGui::TableNextColumn();
+				ImGui::SetNextItemWidth(-1.0f);
+				ImGui::InputText("##clipName", &m_animation.name);
+				int loopMode = static_cast<int>(m_animation.loopMode);
+				const char* loopNames[] = {"Loop", "Once", "Ping Pong", "Hold"};
+				ImGui::TableNextColumn();
+				ImGui::AlignTextToFramePadding();
+				ImGui::TextDisabled("Loop mode");
+				ImGui::TableNextColumn();
+				ImGui::SetNextItemWidth(-1.0f);
+				if (ImGui::Combo("##loopMode", &loopMode, loopNames, static_cast<int>(std::size(loopNames))))
+				{
+					m_animation.loopMode = static_cast<SpriteAnimationLoopMode>(loopMode);
+				}
+				ImGui::EndTable();
+			}
+
+			chrome::SectionTag("PREVIEW");
+			const SpriteRegion* previewRegion = nullptr;
+			std::uint32_t previewIndex = 0;
+			if (!m_animation.frames.empty())
+			{
+				previewIndex = std::min<std::uint32_t>(m_previewFrame, static_cast<std::uint32_t>(m_animation.frames.size() - 1));
+				previewRegion = m_atlas.Find(m_animation.frames[previewIndex].spriteId);
+			}
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::kPanel);
+			ImGui::BeginChild("##animationPreview", ImVec2(0.0f, 178.0f), ImGuiChildFlags_Borders);
+			const float previewSide = 118.0f;
+			ImGui::SetCursorPosX(std::max(8.0f, (ImGui::GetContentRegionAvail().x - previewSide) * 0.5f));
+			DrawSpriteThumbnail(previewRegion, ImVec2(previewSide, previewSide));
+			const std::string previewLabel = previewRegion != nullptr ? previewRegion->name : (m_animation.frames.empty() ? "Timeline is empty" : "Missing atlas region");
+			const float previewLabelWidth = ImGui::CalcTextSize(previewLabel.c_str()).x;
+			ImGui::SetCursorPosX(std::max(8.0f, (ImGui::GetContentRegionAvail().x - previewLabelWidth) * 0.5f));
+			ImGui::TextUnformatted(previewLabel.c_str());
+			ImGui::EndChild();
+			ImGui::PopStyleColor();
+
+			if (chrome::PrimaryButton(m_previewPlaying ? "Pause" : ICON_FA_PLAY "  Play"))
 			{
 				m_previewPlaying = !m_previewPlaying;
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Restart"))
+			if (chrome::GhostButton(ICON_FA_ROTATE "  Restart"))
 			{
 				m_previewFrame = 0;
 				m_previewDirection = 1;
@@ -97,74 +154,77 @@ namespace aether::editor
 				m_previewPlaying = true;
 			}
 			ImGui::SameLine();
-			ImGui::SetNextItemWidth(140.0f);
-			ImGui::SliderFloat("Preview Speed", &m_previewSpeed, 0.1f, 4.0f, "%.2fx");
+			ImGui::SetNextItemWidth(150.0f);
+			ImGui::SliderFloat("Speed", &m_previewSpeed, 0.1f, 4.0f, "%.2fx");
 			if (m_previewPlaying)
 			{
 				AdvancePreview(ImGui::GetIO().DeltaTime * m_previewSpeed);
 			}
 
-			ImGui::SeparatorText("Preview");
-			if (!m_animation.frames.empty())
-			{
-				const std::uint32_t frame = std::min<std::uint32_t>(m_previewFrame, static_cast<std::uint32_t>(m_animation.frames.size() - 1));
-				const AssetObjectId id = m_animation.frames[frame].spriteId;
-				const SpriteRegion* region = m_atlas.Find(id);
-				ImGui::BeginChild("##animationPreview", ImVec2(0.0f, 110.0f), ImGuiChildFlags_Borders);
-				ImGui::SetCursorPosY(28.0f);
-				const std::string label = region != nullptr ? std::format("{}  ({} x {})", region->name, region->pixelRect.width, region->pixelRect.height) : std::format("Missing sprite {:016x}", id.value);
-				const float textWidth = ImGui::CalcTextSize(label.c_str()).x;
-				ImGui::SetCursorPosX(std::max(8.0f, (ImGui::GetContentRegionAvail().x - textWidth) * 0.5f));
-				ImGui::TextUnformatted(label.c_str());
-				ImGui::SetCursorPosX(8.0f);
-				ImGui::ProgressBar(m_animation.frames[frame].durationSeconds > 0.0f ? m_previewFrameTime / m_animation.frames[frame].durationSeconds : 0.0f, ImVec2(-8.0f, 0.0f));
-				ImGui::EndChild();
-			}
-
-			ImGui::SeparatorText("Timeline");
-			ImGui::BeginChild("##spriteTimeline", ImVec2(0.0f, 135.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
+			chrome::SectionTag("TIMELINE");
+			ImGui::BeginChild("##spriteTimeline", ImVec2(0.0f, 122.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
 			for (std::size_t index = 0; index < m_animation.frames.size(); ++index)
 			{
 				if (index != 0)
 				{
-					ImGui::SameLine(0.0f, 3.0f);
+					ImGui::SameLine(0.0f, 5.0f);
 				}
 				const SpriteAnimationFrame& frame = m_animation.frames[index];
-				const float width = std::clamp(frame.durationSeconds * 300.0f, 48.0f, 220.0f);
+				const SpriteRegion* region = m_atlas.Find(frame.spriteId);
 				ImGui::PushID(static_cast<int>(index));
-				if (ImGui::Selectable(std::format("{}\n{:.0f} ms", index, frame.durationSeconds * 1000.0f).c_str(), m_selectedFrame == static_cast<std::int32_t>(index), 0, ImVec2(width, 72.0f)))
+				if (ImGui::Selectable("##frame", m_selectedFrame == static_cast<std::int32_t>(index), ImGuiSelectableFlags_None, ImVec2(86.0f, 98.0f)))
 				{
 					m_selectedFrame = static_cast<std::int32_t>(index);
 					m_previewFrame = static_cast<std::uint32_t>(index);
 					m_previewFrameTime = 0.0f;
 				}
+				const ImVec2 cardMin = ImGui::GetItemRectMin();
+				const ImVec2 cardMax = ImGui::GetItemRectMax();
+				AddRegionImage(ImGui::GetWindowDrawList(), m_previewTextureId, region, ImVec2(cardMin.x + 8.0f, cardMin.y + 7.0f), ImVec2(cardMax.x - 8.0f, cardMin.y + 70.0f));
+				ImGui::GetWindowDrawList()->AddText(ImVec2(cardMin.x + 8.0f, cardMax.y - 22.0f), chrome::U32(chrome::kMuted), std::format("{}  \xC2\xB7  {:.0f}ms", index + 1, frame.durationSeconds * 1000.0f).c_str());
 				if (m_previewFrame == index)
 				{
-					const ImVec2 min = ImGui::GetItemRectMin();
-					const ImVec2 max = ImGui::GetItemRectMax();
-					ImGui::GetWindowDrawList()->AddLine(ImVec2(min.x, max.y + 3.0f), ImVec2(max.x, max.y + 3.0f), IM_COL32(255, 190, 55, 255), 3.0f);
+					ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(cardMin.x, cardMax.y - 3.0f), cardMax, chrome::U32(chrome::kAccent));
 				}
 				ImGui::PopID();
 			}
 			ImGui::EndChild();
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kSpriteRegionPayload); payload != nullptr && payload->DataSize == sizeof(std::uint32_t))
+				{
+					const std::uint32_t regionIndex = *static_cast<const std::uint32_t*>(payload->Data);
+					if (regionIndex < m_atlas.sprites.size())
+					{
+						m_animation.frames.push_back({m_atlas.sprites[regionIndex].id, 0.1f});
+						m_selectedFrame = static_cast<std::int32_t>(m_animation.frames.size() - 1);
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
 
-			if (m_selectedFrame >= 0 && m_selectedFrame < static_cast<std::int32_t>(m_animation.frames.size()))
+			if (m_animation.frames.empty())
+			{
+				ImGui::TextDisabled("Double-click or drag atlas regions here to add frames.");
+			}
+			else if (m_selectedFrame >= 0 && m_selectedFrame < static_cast<std::int32_t>(m_animation.frames.size()))
 			{
 				auto& frame = m_animation.frames[static_cast<std::size_t>(m_selectedFrame)];
-				ImGui::DragFloat("Frame Duration", &frame.durationSeconds, 0.005f, 0.001f, 60.0f, "%.3f s");
-				if (ImGui::Button("Move Left") && m_selectedFrame > 0)
+				ImGui::SetNextItemWidth(180.0f);
+				ImGui::DragFloat("Frame duration", &frame.durationSeconds, 0.005f, 0.001f, 60.0f, "%.3f s");
+				if (chrome::GhostButton("Move left") && m_selectedFrame > 0)
 				{
 					std::swap(m_animation.frames[static_cast<std::size_t>(m_selectedFrame)], m_animation.frames[static_cast<std::size_t>(m_selectedFrame - 1)]);
 					--m_selectedFrame;
 				}
 				ImGui::SameLine();
-				if (ImGui::Button("Move Right") && m_selectedFrame + 1 < static_cast<std::int32_t>(m_animation.frames.size()))
+				if (chrome::GhostButton("Move right") && m_selectedFrame + 1 < static_cast<std::int32_t>(m_animation.frames.size()))
 				{
 					std::swap(m_animation.frames[static_cast<std::size_t>(m_selectedFrame)], m_animation.frames[static_cast<std::size_t>(m_selectedFrame + 1)]);
 					++m_selectedFrame;
 				}
 				ImGui::SameLine();
-				if (ImGui::Button("Delete Frame"))
+				if (chrome::GhostButton(ICON_FA_TRASH "  Delete", ImVec2(0.0f, 0.0f), chrome::kError))
 				{
 					m_animation.frames.erase(m_animation.frames.begin() + m_selectedFrame);
 					m_selectedFrame = std::min(m_selectedFrame, static_cast<std::int32_t>(m_animation.frames.size()) - 1);
@@ -172,117 +232,304 @@ namespace aether::editor
 				}
 			}
 
-			ImGui::SeparatorText("Events");
-			if (ImGui::Button("Add Event"))
+			if (ImGui::CollapsingHeader("Animation events"))
 			{
-				m_animation.events.push_back({m_selectedFrame >= 0 ? static_cast<std::uint32_t>(m_selectedFrame) : 0u, "Event", {}});
-				m_selectedEvent = static_cast<std::int32_t>(m_animation.events.size() - 1);
-			}
-			for (std::size_t index = 0; index < m_animation.events.size(); ++index)
-			{
-				ImGui::PushID(static_cast<int>(index));
-				if (ImGui::Selectable(std::format("Frame {}: {}", m_animation.events[index].frameIndex, m_animation.events[index].name).c_str(), m_selectedEvent == static_cast<std::int32_t>(index)))
+				if (chrome::OutlineButton(ICON_FA_PLUS "  Add Event"))
 				{
-					m_selectedEvent = static_cast<std::int32_t>(index);
+					m_animation.events.push_back({m_selectedFrame >= 0 ? static_cast<std::uint32_t>(m_selectedFrame) : 0u, "Event", {}});
+					m_selectedEvent = static_cast<std::int32_t>(m_animation.events.size() - 1);
 				}
-				ImGui::PopID();
-			}
-			if (m_selectedEvent >= 0 && m_selectedEvent < static_cast<std::int32_t>(m_animation.events.size()))
-			{
-				auto& event = m_animation.events[static_cast<std::size_t>(m_selectedEvent)];
-				ImGui::DragScalar("Event Frame", ImGuiDataType_U32, &event.frameIndex, 1.0f);
-				ImGui::InputText("Event Name", &event.name);
-				ImGui::InputText("Payload", &event.payload);
-				if (ImGui::Button("Delete Event"))
+				for (std::size_t index = 0; index < m_animation.events.size(); ++index)
 				{
-					m_animation.events.erase(m_animation.events.begin() + m_selectedEvent);
-					m_selectedEvent = -1;
+					ImGui::PushID(static_cast<int>(index));
+					if (ImGui::Selectable(std::format("Frame {}  \xC2\xB7  {}", m_animation.events[index].frameIndex + 1, m_animation.events[index].name).c_str(), m_selectedEvent == static_cast<std::int32_t>(index)))
+					{
+						m_selectedEvent = static_cast<std::int32_t>(index);
+					}
+					ImGui::PopID();
 				}
-			}
-
-			ImGui::TableNextColumn();
-			ImGui::SeparatorText("Atlas Regions");
-			if (ImGui::Button("Add All Regions", ImVec2(-1.0f, 0.0f)))
-			{
-				for (const SpriteRegion& region: m_atlas.sprites)
+				if (m_selectedEvent >= 0 && m_selectedEvent < static_cast<std::int32_t>(m_animation.events.size()))
 				{
-					m_animation.frames.push_back({region.id, 0.1f});
-				}
-				m_selectedFrame = m_animation.frames.empty() ? -1 : 0;
-			}
-			ImGui::BeginChild("##atlasRegions", ImVec2(0.0f, 360.0f), ImGuiChildFlags_Borders);
-			for (std::size_t index = 0; index < m_atlas.sprites.size(); ++index)
-			{
-				const SpriteRegion& region = m_atlas.sprites[index];
-				if (ImGui::Selectable(region.name.c_str(), m_selectedAtlasRegion == static_cast<std::int32_t>(index)))
-				{
-					m_selectedAtlasRegion = static_cast<std::int32_t>(index);
+					auto& event = m_animation.events[static_cast<std::size_t>(m_selectedEvent)];
+					if (ImGui::BeginTable("##eventEditor", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+					{
+						ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+						ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+						ImGui::TableNextColumn();
+						ImGui::AlignTextToFramePadding();
+						ImGui::TextDisabled("Frame");
+						ImGui::TableNextColumn();
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::DragScalar("##eventFrame", ImGuiDataType_U32, &event.frameIndex, 1.0f);
+						if (!m_animation.frames.empty())
+						{
+							event.frameIndex = std::min(event.frameIndex, static_cast<std::uint32_t>(m_animation.frames.size() - 1));
+						}
+						ImGui::TableNextColumn();
+						ImGui::AlignTextToFramePadding();
+						ImGui::TextDisabled("Name");
+						ImGui::TableNextColumn();
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::InputText("##eventName", &event.name);
+						ImGui::TableNextColumn();
+						ImGui::AlignTextToFramePadding();
+						ImGui::TextDisabled("Payload");
+						ImGui::TableNextColumn();
+						ImGui::SetNextItemWidth(-1.0f);
+						ImGui::InputText("##eventPayload", &event.payload);
+						ImGui::EndTable();
+					}
+					if (chrome::GhostButton(ICON_FA_TRASH "  Delete Event", ImVec2(0.0f, 0.0f), chrome::kError))
+					{
+						m_animation.events.erase(m_animation.events.begin() + m_selectedEvent);
+						m_selectedEvent = -1;
+					}
 				}
 			}
 			ImGui::EndChild();
-			if (ImGui::Button("Add Selected Frame", ImVec2(-1.0f, 0.0f)) && m_selectedAtlasRegion >= 0 && m_selectedAtlasRegion < static_cast<std::int32_t>(m_atlas.sprites.size()))
+
+			ImGui::TableNextColumn();
+			ImGui::BeginChild("##animationAtlasColumn", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+			chrome::SectionTag("ATLAS REGIONS");
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::InputTextWithHint("##regionFilter", ICON_FA_MAGNIFYING_GLASS "  Filter regions", m_regionFilter, sizeof(m_regionFilter));
+			const std::string filter = spriteui::Lower(m_regionFilter);
+			ImGui::BeginChild("##atlasRegions", ImVec2(0.0f, -150.0f), ImGuiChildFlags_Borders);
+			for (std::size_t index = 0; index < m_atlas.sprites.size(); ++index)
+			{
+				const SpriteRegion& region = m_atlas.sprites[index];
+				if (!filter.empty() && !spriteui::Lower(region.name).contains(filter))
+				{
+					continue;
+				}
+				ImGui::PushID(static_cast<int>(index));
+				if (ImGui::Selectable("##region", m_selectedAtlasRegion == static_cast<std::int32_t>(index), ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, 46.0f)))
+				{
+					m_selectedAtlasRegion = static_cast<std::int32_t>(index);
+					if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+					{
+						m_animation.frames.push_back({region.id, 0.1f});
+						m_selectedFrame = static_cast<std::int32_t>(m_animation.frames.size() - 1);
+					}
+				}
+				const ImVec2 rowMin = ImGui::GetItemRectMin();
+				const ImVec2 rowMax = ImGui::GetItemRectMax();
+				AddRegionImage(ImGui::GetWindowDrawList(), m_previewTextureId, &region, ImVec2(rowMin.x + 5.0f, rowMin.y + 5.0f), ImVec2(rowMin.x + 41.0f, rowMax.y - 5.0f));
+				ImGui::GetWindowDrawList()->AddText(ImVec2(rowMin.x + 49.0f, rowMin.y + 8.0f), chrome::U32(chrome::kText), region.name.c_str());
+				ImGui::GetWindowDrawList()->AddText(ImVec2(rowMin.x + 49.0f, rowMin.y + 25.0f), chrome::U32(chrome::kFaint), std::format("{} x {}", region.pixelRect.width, region.pixelRect.height).c_str());
+				if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+				{
+					const std::uint32_t payloadIndex = static_cast<std::uint32_t>(index);
+					ImGui::SetDragDropPayload(kSpriteRegionPayload, &payloadIndex, sizeof(payloadIndex));
+					ImGui::Text("%s  %s", ICON_FA_IMAGE, region.name.c_str());
+					ImGui::EndDragDropSource();
+				}
+				ImGui::PopID();
+			}
+			ImGui::EndChild();
+
+			ImGui::BeginDisabled(m_selectedAtlasRegion < 0 || m_selectedAtlasRegion >= static_cast<std::int32_t>(m_atlas.sprites.size()));
+			if (chrome::PrimaryButton(ICON_FA_PLUS "  Add Selected Frame", ImVec2(-1.0f, 0.0f)))
 			{
 				m_animation.frames.push_back({m_atlas.sprites[static_cast<std::size_t>(m_selectedAtlasRegion)].id, 0.1f});
 				m_selectedFrame = static_cast<std::int32_t>(m_animation.frames.size() - 1);
 			}
-
-			ImGui::Separator();
-			if (ImGui::Button("Save Animation", ImVec2(-1.0f, 0.0f)))
+			ImGui::EndDisabled();
+			if (chrome::OutlineButton("Add All Visible Regions", ImVec2(-1.0f, 0.0f)))
 			{
-				m_animation.atlasPath = m_atlasPath.data();
-				auto saved = context.Get<SpriteAssetStore>().SaveAnimation(m_animationPath.data(), m_animation);
-				if (saved.has_value())
+				for (const SpriteRegion& region: m_atlas.sprites)
 				{
-					context.Get<AssetDatabase>().Register(MakeSpriteAnimationSource(m_animationPath.data()), std::filesystem::path(m_animationPath.data()).stem().string());
-					m_status = std::format("Saved {} frames and {} events.", m_animation.frames.size(), m_animation.events.size());
-					m_statusError = false;
+					if (filter.empty() || spriteui::Lower(region.name).contains(filter))
+					{
+						m_animation.frames.push_back({region.id, 0.1f});
+					}
 				}
-				else
+				m_selectedFrame = m_animation.frames.empty() ? -1 : static_cast<std::int32_t>(m_animation.frames.size() - 1);
+			}
+
+			if (ImGui::CollapsingHeader("Advanced file locations"))
+			{
+				ImGui::InputText("Animation path", &m_animationPath);
+				ImGui::InputText("Atlas path", &m_atlasPath);
+				if (chrome::GhostButton("Load animation"))
 				{
-					m_status = saved.error().ToString();
-					m_statusError = true;
+					LoadAnimation(context, m_animationPath);
+				}
+				ImGui::SameLine();
+				if (chrome::GhostButton("Load atlas"))
+				{
+					LoadAtlas(context, m_atlasPath);
 				}
 			}
+
+			ImGui::BeginDisabled(m_animationPath.empty());
+			if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save Animation", ImVec2(-1.0f, 0.0f)))
+			{
+				SaveAnimation(context);
+			}
+			ImGui::EndDisabled();
 
 			const auto* selection = context.TryGet<SceneSelection>();
-			if (selection != nullptr && selection->Primary().IsValid() && ImGui::Button("Assign To Selected Entity", ImVec2(-1.0f, 0.0f)))
+			const Entity target = selection != nullptr ? selection->LastEntityPrimary() : Entity{};
+			ImGui::BeginDisabled(!target.IsValid() || m_animationPath.empty());
+			if (chrome::OutlineButton("Assign To Last Selected Entity", ImVec2(-1.0f, 0.0f)))
 			{
 				World& world = context.Get<World>();
-				const Entity entity = selection->Primary();
-				if (!world.Has<SpriteRendererComponent>(entity))
+				if (!world.Has<TransformComponent>(target))
 				{
-					world.Emplace<SpriteRendererComponent>(entity);
+					world.Emplace<TransformComponent>(target);
 				}
-				world.EmplaceOrReplace<SpriteAnimatorComponent>(entity, SpriteAnimatorComponent{.animationPath = m_animationPath.data()});
-				m_status = "Animation assigned to selected entity.";
+				if (!world.Has<SpriteRendererComponent>(target))
+				{
+					world.Emplace<SpriteRendererComponent>(target);
+				}
+				auto& renderer = world.Get<SpriteRendererComponent>(target);
+				if (!m_animation.frames.empty())
+				{
+					if (const SpriteRegion* region = m_atlas.Find(m_animation.frames.front().spriteId); region != nullptr)
+					{
+						renderer.texturePath = m_atlas.texturePath;
+						renderer.atlasPath = m_atlasPath;
+						renderer.spriteId = region->id;
+						renderer.uvRect = region->uvRect;
+						renderer.pixelSize = region->pixelSize;
+						renderer.pivot = region->pivot;
+						renderer.pixelsPerUnit = m_atlas.pixelsPerUnit;
+						renderer.visible = true;
+					}
+				}
+				world.EmplaceOrReplace<SpriteAnimatorComponent>(target, SpriteAnimatorComponent{.animationPath = m_animationPath});
+				m_status = "Animation assigned and the first frame is visible in the viewport.";
 				m_statusError = false;
 			}
-
-			if (!m_status.empty())
-			{
-				ImGui::TextColored(m_statusError ? ImVec4(1.0f, 0.35f, 0.3f, 1.0f) : ImVec4(0.45f, 0.9f, 0.55f, 1.0f), "%s", m_status.c_str());
-			}
+			ImGui::EndDisabled();
+			ImGui::EndChild();
 			ImGui::EndTable();
 		}
+
 		ImGui::End();
 	}
 
-	void SpriteAnimationPanel::LoadAtlas(app::LayerContext& context)
+	void SpriteAnimationPanel::LoadAnimation(app::LayerContext& context, std::string path)
 	{
-		const auto atlas = context.Get<SpriteAssetStore>().LoadAtlas(m_atlasPath.data());
-		if (atlas.has_value())
+		if (path.empty())
 		{
-			m_atlas = **atlas;
-			m_animation.atlasPath = m_atlasPath.data();
-			m_selectedAtlasRegion = m_atlas.sprites.empty() ? -1 : 0;
-			m_status = std::format("Loaded {} atlas regions.", m_atlas.sprites.size());
+			return;
+		}
+		const auto loaded = context.Get<SpriteAssetStore>().LoadAnimation(path);
+		if (!loaded.has_value())
+		{
+			m_status = loaded.error().ToString();
+			m_statusError = true;
+			return;
+		}
+		m_animationPath = std::move(path);
+		m_animation = **loaded;
+		m_selectedFrame = m_animation.frames.empty() ? -1 : 0;
+		m_previewFrame = 0;
+		m_previewFrameTime = 0.0f;
+		if (!m_animation.atlasPath.empty())
+		{
+			LoadAtlas(context, m_animation.atlasPath);
+		}
+		context.Get<AssetDatabase>().Register(MakeSpriteAnimationSource(m_animationPath), spriteui::DisplayName(m_animationPath));
+		m_status = std::format("Animation loaded with {} frames.", m_animation.frames.size());
+		m_statusError = false;
+	}
+
+	void SpriteAnimationPanel::LoadAtlas(app::LayerContext& context, std::string path)
+	{
+		if (path.empty())
+		{
+			return;
+		}
+		const auto atlas = context.Get<SpriteAssetStore>().LoadAtlas(path);
+		if (!atlas.has_value())
+		{
+			m_status = atlas.error().ToString();
+			m_statusError = true;
+			return;
+		}
+		m_atlasPath = std::move(path);
+		m_atlas = **atlas;
+		m_animation.atlasPath = m_atlasPath;
+		m_selectedAtlasRegion = m_atlas.sprites.empty() ? -1 : 0;
+		if (m_animationPath.empty())
+		{
+			m_animationPath = spriteui::CompanionPath(m_atlasPath, ".spriteanim.toml");
+		}
+		LoadPreviewTexture(context);
+		context.Get<AssetDatabase>().Register(MakeSpriteAtlasSource(m_atlasPath), spriteui::DisplayName(m_atlasPath));
+		m_status = std::format("Atlas ready with {} regions.", m_atlas.sprites.size());
+		m_statusError = false;
+	}
+
+	void SpriteAnimationPanel::LoadPreviewTexture(app::LayerContext& context)
+	{
+		ReleasePreviewTexture(context);
+		if (m_atlas.texturePath.empty())
+		{
+			return;
+		}
+		auto& textures = context.Get<AssetManager>().GetTextureRegistry();
+		m_previewTexture = textures.Acquire(m_atlas.texturePath);
+		const std::uint32_t slot = textures.ResolveSlot(m_previewTexture);
+		if (auto* imgui = context.TryGet<ImguiSubsystem>())
+		{
+			for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
+			{
+				if (!info.hasBindlessSampled || info.bindlessSampledSlot != slot || info.view == nullptr)
+				{
+					continue;
+				}
+				const ImTextureID id = imgui->RegisterTexture(info.view, gpu::ImageLayout::ShaderReadOnly);
+				if (id != ImTextureID_Invalid)
+				{
+					m_previewTextureId = static_cast<std::uint64_t>(id);
+				}
+				break;
+			}
+		}
+	}
+
+	void SpriteAnimationPanel::ReleasePreviewTexture(app::LayerContext& context)
+	{
+		if (m_previewTextureId != 0)
+		{
+			if (auto* imgui = context.TryGet<ImguiSubsystem>())
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(m_previewTextureId));
+			}
+			m_previewTextureId = 0;
+		}
+		if (m_previewTexture.IsValid())
+		{
+			context.Get<AssetManager>().GetTextureRegistry().Release(m_previewTexture);
+			m_previewTexture = {};
+		}
+	}
+
+	void SpriteAnimationPanel::SaveAnimation(app::LayerContext& context)
+	{
+		m_animation.atlasPath = m_atlasPath;
+		const auto saved = context.Get<SpriteAssetStore>().SaveAnimation(m_animationPath, m_animation);
+		if (saved.has_value())
+		{
+			context.Get<AssetDatabase>().Register(MakeSpriteAnimationSource(m_animationPath), spriteui::DisplayName(m_animationPath));
+			m_status = std::format("Saved {} frames and {} events.", m_animation.frames.size(), m_animation.events.size());
 			m_statusError = false;
 		}
 		else
 		{
-			m_status = atlas.error().ToString();
+			m_status = saved.error().ToString();
 			m_statusError = true;
 		}
+	}
+
+	void SpriteAnimationPanel::DrawSpriteThumbnail(const SpriteRegion* region, ImVec2 size) const
+	{
+		ImGui::Dummy(size);
+		AddRegionImage(ImGui::GetWindowDrawList(), m_previewTextureId, region, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
 	}
 
 	void SpriteAnimationPanel::AdvancePreview(float dt)

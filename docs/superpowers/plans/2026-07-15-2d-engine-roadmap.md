@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-15
 
-**Status:** In progress; Phases 0-2 complete
+**Status:** In progress; Phases 0-2 complete and Phase 2 remediation verified
 
 **Target:** A native 2D game workflow inside AetherCore, sharing the existing world, asset, scripting, editor, and rendering foundations without treating game-world sprites as UI.
 
@@ -444,6 +444,17 @@ Mixed scenes may continue using mesh quads intentionally; only the legacy marker
 - [x] Add deterministic fixed-step animation and managed animation controls.
 - [x] Add import presets and reimport diagnostics.
 - [x] Add optional Aseprite metadata import after the native workflow is stable.
+
+#### Phase 2 remediation and release gate
+
+- [x] Rework the Sprite Slicer and Sprite Animation panels around editor-theme tokens, asset selection, drag/drop, and discoverable texture/atlas pickers instead of typed paths.
+- [x] Add Sprite, Animated Sprite, and Orthographic Camera entries to the hierarchy create menu and keep asset selection in the File Explorer preview instead of replacing the entity Inspector.
+- [x] Render and preview sprite animation in Edit and Play modes, including autoplay on scene start and published-runtime startup.
+- [x] Preserve every authored Sprite Renderer and Sprite Animator field through scene save/load and Play snapshot restoration.
+- [x] Isolate alpha, additive, multiply, and opaque sprite blend submission so one sprite cannot leak state into neighbouring sprites.
+- [x] Package sprites, atlases, animations, scenes, project settings, and managed deployment inputs so published 2D games reproduce the editor scene.
+- [x] Keep the 2D editor camera orthographic and square to the XY plane, render orthographic camera gizmos as flat framing rectangles, and inset atlas UVs to texel centres to prevent one-pixel frame-edge bleed.
+- [x] Validate the complete workflow with Editor MCP screenshots, Play-mode inspection, a published executable, scene round-trip fixtures, renderer/animation unit coverage, and the full engine test suite.
 
 **Exit gate:** A sprite sheet can be sliced, turned into multiple clips, reimported, edited, and played without losing valid scene or animation references.
 

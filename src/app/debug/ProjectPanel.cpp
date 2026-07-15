@@ -25,11 +25,17 @@
 #endif
 
 #include "debug/Icons.hpp"
+#include "PlayState.hpp"
+#include "assets/AssetManager.hpp"
 #include "editor/EditorProjectActions.hpp"
 #include "io/FileUtil.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "layers/AppLayer.hpp"
+#include "rendering/Renderer.hpp"
+#include "scene/SceneSubsystem.hpp"
+#include "scene/SceneWorkflow.hpp"
+#include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TextIni.hpp"
 #include "utils/TomlConfig.hpp"
@@ -126,6 +132,36 @@ namespace aether::editor
 			ImGui::PushTextWrapPos(0.0f);
 			ImGui::TextDisabled("%s", text.c_str());
 			ImGui::PopTextWrapPos();
+		}
+
+		bool SaveCurrentSceneForPublish(app::LayerContext& context, std::string& error)
+		{
+			if (const auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && (playState->IsPlaying() || playState->IsCompiling()))
+			{
+				error = "Stop Play mode before publishing so the authored scene can be saved.";
+				return false;
+			}
+
+			const auto* scenes = context.TryGet<SceneSubsystem>();
+			if (scenes == nullptr || scenes->GetCurrentScene().empty())
+			{
+				error = "Save the current scene before publishing.";
+				return false;
+			}
+
+			auto* assets = context.TryGet<AssetManager>();
+			if (assets == nullptr)
+			{
+				error = "The current scene could not be saved because the asset service is unavailable.";
+				return false;
+			}
+
+			if (!app::scene::QuickSave(context.Get<World>(), scenes->GetCurrentScene(), assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>()))
+			{
+				error = "The current scene could not be saved. Publishing was cancelled to avoid packaging stale content.";
+				return false;
+			}
+			return true;
 		}
 
 		struct ButtonRow
@@ -520,44 +556,53 @@ namespace aether::editor
 		ImGui::BeginDisabled(!canPublish);
 		if (chrome::PrimaryButton(ICON_FA_ROCKET " Publish", ImVec2(buttonWidth, 0.0f)))
 		{
-			if (m_dirtySettings)
+			std::string saveError;
+			if (!SaveCurrentSceneForPublish(context, saveError))
 			{
-				SaveProjectSettings(project);
+				m_publishSucceeded = false;
+				m_publishStatus = std::move(saveError);
 			}
-			SavePublishSettings(project);
-
-			EditorProjectPublishOptions options;
-			options.outputRoot = outputRoot;
-			options.productName = m_publishProductName;
-			options.platformName = m_publishPlatformName;
-			options.cleanOutput = m_publishCleanOutput;
-			options.buildProjectScripts = m_publishBuildScripts;
-			options.usePackageTemplate = m_publishUsePackageTemplate;
-			options.verifyOutput = m_publishVerifyOutput;
-			options.syncEditorRuntimeProjectPak = m_publishSyncEditorPak;
-
-			m_publishSucceeded = false;
-			m_publishStatus = "Publishing...";
-			m_publishTask = std::make_shared<PublishTask>();
+			else
 			{
-				const std::scoped_lock lock(m_publishTask->mutex);
-				m_publishTask->stage = "Preparing publish";
+				if (m_dirtySettings)
+				{
+					SaveProjectSettings(project);
+				}
+				SavePublishSettings(project);
+
+				EditorProjectPublishOptions options;
+				options.outputRoot = outputRoot;
+				options.productName = m_publishProductName;
+				options.platformName = m_publishPlatformName;
+				options.cleanOutput = m_publishCleanOutput;
+				options.buildProjectScripts = m_publishBuildScripts;
+				options.usePackageTemplate = m_publishUsePackageTemplate;
+				options.verifyOutput = m_publishVerifyOutput;
+				options.syncEditorRuntimeProjectPak = m_publishSyncEditorPak;
+
+				m_publishSucceeded = false;
+				m_publishStatus = "Publishing...";
+				m_publishTask = std::make_shared<PublishTask>();
+				{
+					const std::scoped_lock lock(m_publishTask->mutex);
+					m_publishTask->stage = "Preparing publish";
+				}
+				const auto publishAction = actions->publishProject;
+				const app::EditorProjectContext projectCopy = project;
+				const std::shared_ptr<PublishTask> task = m_publishTask;
+				m_publishFuture = std::async(std::launch::async,
+				        [publishAction, projectCopy, options, task]()
+				        {
+					        return publishAction(projectCopy,
+					                options,
+					                [task](const float completion, const std::string_view stage)
+					                {
+						                task->completion.store(completion, std::memory_order_release);
+						                const std::scoped_lock lock(task->mutex);
+						                task->stage = stage;
+					                });
+				        });
 			}
-			const auto publishAction = actions->publishProject;
-			const app::EditorProjectContext projectCopy = project;
-			const std::shared_ptr<PublishTask> task = m_publishTask;
-			m_publishFuture = std::async(std::launch::async,
-			        [publishAction, projectCopy, options, task]()
-			        {
-				        return publishAction(projectCopy,
-				                options,
-				                [task](const float completion, const std::string_view stage)
-				                {
-					                task->completion.store(completion, std::memory_order_release);
-					                const std::scoped_lock lock(task->mutex);
-					                task->stage = stage;
-				                });
-			        });
 		}
 		ImGui::EndDisabled();
 		ImGui::SameLine();

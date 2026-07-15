@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -28,15 +27,18 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
-		void LoadSource(app::LayerContext& context);
+		void SetSource(app::LayerContext& context, std::string path, bool deriveAtlasPath = true);
+		void LoadAtlas(app::LayerContext& context, std::string path);
+		void ImportAseprite(app::LayerContext& context, std::string path);
+		void SaveAtlas(app::LayerContext& context);
 		void ReleasePreview(app::LayerContext& context);
 		void DrawPreview();
 		void DrawRegionEditor();
 		void ApplyPreset(int preset);
 
-		std::array<char, 512> m_texturePath{};
-		std::array<char, 512> m_atlasPath{};
-		std::array<char, 512> m_asepritePath{};
+		std::string m_texturePath;
+		std::string m_atlasPath;
+		std::string m_asepritePath;
 		SpriteAtlasAsset m_atlas;
 		SpriteAtlasAsset m_slicePreview;
 		SpriteAtlasReimportDiagnostics m_diagnostics;

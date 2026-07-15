@@ -26,7 +26,8 @@ namespace aether
 			gpu::DeviceAddress instances;
 			float viewportWidth;
 			float viewportHeight;
-			std::uint32_t padding[2];
+			std::uint32_t instanceOffset;
+			std::uint32_t padding;
 		};
 
 		static_assert(sizeof(SpritePush) == 32);
@@ -187,28 +188,38 @@ namespace aether
 			                {
 				                return;
 			                }
-			                const Frame& frame = m_frames[ctx.frameSlot % kFrames];
+			                Frame& frame = m_frames[ctx.frameSlot % kFrames];
 			                if (frame.count == 0)
 			                {
 				                return;
 			                }
 			                bindless.CmdBindHeaps(ctx.recorder);
-			                const SpritePush push{
-			                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
-			                        .instances = frame.address,
-			                        .viewportWidth = static_cast<float>(extent.width),
-			                        .viewportHeight = static_cast<float>(extent.height),
-			                };
-			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+			                frame.spritePushData.resize(frame.count);
+			                std::size_t pushIndex = 0;
 			                for (const DrawBatch& batch: frame.batches)
 			                {
 				                const gpu::PipelineHandle pipeline = m_pipelines[batch.blendMode];
 				                if (!pipeline.IsValid())
 				                {
+					                pushIndex += batch.count;
 					                continue;
 				                }
 				                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(pipeline).state);
-				                ctx.recorder.Draw(6, batch.count, 0, batch.firstInstance);
+				                // Shader-object blend state is dynamic. Keep each sprite in an isolated draw so
+				                // changing one component's blend mode cannot affect neighbouring instances.
+				                for (std::uint32_t instance = 0; instance < batch.count; ++instance, ++pushIndex)
+				                {
+					                const SpritePush push{
+					                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
+					                        .instances = frame.address,
+					                        .viewportWidth = static_cast<float>(extent.width),
+					                        .viewportHeight = static_cast<float>(extent.height),
+					                        .instanceOffset = batch.firstInstance + instance,
+					                };
+					                std::memcpy(frame.spritePushData[pushIndex].data(), &push, sizeof(push));
+					                ctx.recorder.PushDataRaw(0, frame.spritePushData[pushIndex]);
+					                ctx.recorder.Draw(6, 1, 0, 0);
+				                }
 			                }
 		                });
 	}

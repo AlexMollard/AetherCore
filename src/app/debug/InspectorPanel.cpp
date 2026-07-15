@@ -256,7 +256,7 @@ namespace aether::editor
 			}
 		}
 
-		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection)
+		[[maybe_unused]] void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection)
 		{
 			const SceneSelection::Asset& asset = selection.SelectedAsset();
 			const Entity target = selection.LastEntityPrimary();
@@ -361,16 +361,14 @@ namespace aether::editor
 		ImGui::Begin("Inspector", VisiblePtr());
 		World& world = context.Get<World>();
 		auto& selection = context.Get<SceneSelection>();
-		const Entity entity = selection.Primary();
+		Entity entity = selection.Primary();
+		if (!IsAlive(world, entity) && selection.HasAsset() && IsAlive(world, selection.LastEntityPrimary()))
+		{
+			entity = selection.LastEntityPrimary();
+		}
 
 		if (!IsAlive(world, entity))
 		{
-			if (selection.HasAsset())
-			{
-				DrawAssetInspector(context, world, selection);
-				ImGui::End();
-				return;
-			}
 			ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.4f));
 			const char* icon = ICON_FA_CIRCLE_INFO;
 			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(icon).x) * 0.5f);
@@ -556,6 +554,18 @@ namespace aether::editor
 				}
 				world.EmplaceOrReplace<SpriteRendererComponent>(entity);
 			}
+			if (PaletteEntry(ICON_FA_FILM "  Sprite Animator (2D)", m_addFilter, world.Has<SpriteAnimatorComponent>(entity)))
+			{
+				if (!world.Has<TransformComponent>(entity))
+				{
+					world.Emplace<TransformComponent>(entity);
+				}
+				if (!world.Has<SpriteRendererComponent>(entity))
+				{
+					world.Emplace<SpriteRendererComponent>(entity);
+				}
+				world.EmplaceOrReplace<SpriteAnimatorComponent>(entity);
+			}
 
 			if (m_addFilter[0] == '\0')
 			{
@@ -710,12 +720,13 @@ namespace aether::editor
 		DrawUiText(world, entity);
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
-		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer"});
+		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer", "Sprite Animator"});
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
 		DrawCollisionEvents(world, entity);
 		DrawMeshRenderer(context, world, entity);
 		DrawSpriteRenderer(context, world, entity);
+		DrawSpriteAnimator(context, world, entity);
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);

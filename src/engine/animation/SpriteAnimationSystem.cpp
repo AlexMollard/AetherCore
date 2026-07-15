@@ -20,6 +20,32 @@ namespace aether
 
 	void SpriteAnimationSystem::Update(World& world, float dt)
 	{
+		UpdateAnimations(world, dt, true);
+	}
+
+	void SpriteAnimationSystem::UpdatePreview(World& world, float dt)
+	{
+		UpdateAnimations(world, dt, false);
+	}
+
+	void SpriteAnimationSystem::ResetForPlay(World& world)
+	{
+		m_events.clear();
+		auto view = world.GetRegistry().view<SpriteAnimatorComponent>();
+		for (const entt::entity raw: view)
+		{
+			auto& animator = view.get<SpriteAnimatorComponent>(raw);
+			animator.frameTime = 0.0f;
+			animator.fixedAccumulator = 0.0f;
+			animator.currentFrame = animator.startFrame;
+			animator.direction = 1;
+			animator.playing = false;
+			animator.initialized = false;
+		}
+	}
+
+	void SpriteAnimationSystem::UpdateAnimations(World& world, float dt, bool emitEvents)
+	{
 		AE_PROFILE_ZONE();
 		auto view = world.GetRegistry().view<SpriteAnimatorComponent, SpriteRendererComponent>(entt::exclude<DisabledComponent>);
 		for (const entt::entity raw: view)
@@ -56,7 +82,7 @@ namespace aether
 			animator.fixedAccumulator = std::min(animator.fixedAccumulator + std::max(dt, 0.0f), 0.25f);
 			while (animator.fixedAccumulator >= kFixedTimestep)
 			{
-				Advance(entity, animator, animation, kFixedTimestep * std::max(animator.speed, 0.0f));
+				Advance(entity, animator, animation, kFixedTimestep * std::max(animator.speed, 0.0f), emitEvents);
 				animator.fixedAccumulator -= kFixedTimestep;
 			}
 			ApplyFrame(renderer, animation, animator);
@@ -114,9 +140,13 @@ namespace aether
 		renderer.pixelsPerUnit = atlas.pixelsPerUnit;
 	}
 
-	void SpriteAnimationSystem::EnterFrame(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, std::uint32_t frameIndex)
+	void SpriteAnimationSystem::EnterFrame(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, std::uint32_t frameIndex, bool emitEvents)
 	{
 		animator.currentFrame = frameIndex;
+		if (!emitEvents)
+		{
+			return;
+		}
 		for (const SpriteAnimationEvent& event: animation.events)
 		{
 			if (event.frameIndex != frameIndex || event.name.empty())
@@ -131,7 +161,7 @@ namespace aether
 		}
 	}
 
-	void SpriteAnimationSystem::Advance(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, float stepSeconds)
+	void SpriteAnimationSystem::Advance(Entity entity, SpriteAnimatorComponent& animator, const SpriteAnimationAsset& animation, float stepSeconds, bool emitEvents)
 	{
 		if (animation.frames.empty() || stepSeconds <= 0.0f)
 		{
@@ -151,7 +181,7 @@ namespace aether
 			animator.frameTime -= duration;
 			if (mode == SpriteAnimationLoopMode::Loop)
 			{
-				EnterFrame(entity, animator, animation, (current + 1u) % static_cast<std::uint32_t>(animation.frames.size()));
+				EnterFrame(entity, animator, animation, (current + 1u) % static_cast<std::uint32_t>(animation.frames.size()), emitEvents);
 			}
 			else if (mode == SpriteAnimationLoopMode::PingPong)
 			{
@@ -171,11 +201,11 @@ namespace aether
 					animator.direction = 1;
 					next = 1;
 				}
-				EnterFrame(entity, animator, animation, static_cast<std::uint32_t>(next));
+				EnterFrame(entity, animator, animation, static_cast<std::uint32_t>(next), emitEvents);
 			}
 			else if (current + 1u < animation.frames.size())
 			{
-				EnterFrame(entity, animator, animation, current + 1u);
+				EnterFrame(entity, animator, animation, current + 1u, emitEvents);
 			}
 			else
 			{

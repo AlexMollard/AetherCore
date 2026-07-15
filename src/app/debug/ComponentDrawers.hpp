@@ -54,6 +54,7 @@ namespace aether::editor
 	void DrawJoint(app::LayerContext& context, World& world, Entity entity);
 	void DrawMeshRenderer(app::LayerContext& context, World& world, Entity entity);
 	void DrawSpriteRenderer(app::LayerContext& context, World& world, Entity entity);
+	void DrawSpriteAnimator(app::LayerContext& context, World& world, Entity entity);
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection);
 	void DrawTags(World& world, Entity entity, char* addTagBuf, std::size_t addTagBufSize);
 } // namespace aether::editor

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -56,6 +57,7 @@ namespace aether
 			std::uint32_t capacity = 0;
 			std::uint32_t count = 0;
 			std::vector<DrawBatch> batches;
+			std::vector<std::array<std::byte, 32>> spritePushData;
 		};
 
 		void EnsureCapacity(Frame& frame, std::uint32_t count);

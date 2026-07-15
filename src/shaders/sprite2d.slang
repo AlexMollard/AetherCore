@@ -22,7 +22,8 @@ struct SpritePush
     DevicePtr<FrameConstantsData> frameConstants;
     DevicePtr<SpriteInstance> instances;
     float2 viewportSize;
-    uint2 padding;
+    uint instanceOffset;
+    uint padding;
 };
 
 [[vk::push_constant]] SpritePush pc;
@@ -33,6 +34,7 @@ struct VSOutput
     float2 uv : TEXCOORD0;
     float4 color : TEXCOORD1;
     nointerpolation uint textureIndex : TEXCOORD2;
+    nointerpolation uint blendMode : TEXCOORD3;
 };
 
 [shader("vertex")]
@@ -42,7 +44,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
         float2(0.0, 0.0), float2(1.0, 0.0), float2(1.0, 1.0),
         float2(0.0, 0.0), float2(1.0, 1.0), float2(0.0, 1.0),
     };
-    const SpriteInstance sprite = pc.instances.Ptr()[instanceId];
+    const SpriteInstance sprite = pc.instances.Ptr()[pc.instanceOffset + instanceId];
     FrameConstantsData* frame = pc.frameConstants.Ptr();
     float2 corner = corners[vertexId % 6u];
     float2 local = (corner - sprite.sizeAndPivot.zw) * sprite.sizeAndPivot.xy;
@@ -66,11 +68,19 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.uv = lerp(sprite.uvRect.xy, sprite.uvRect.zw, corner);
     output.color = sprite.color;
     output.textureIndex = sprite.textureIndex;
+    output.blendMode = sprite.blendMode;
     return output;
 }
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
-    return g_textures[input.textureIndex].Sample(g_linearSampler, input.uv) * input.color;
+    float4 color = g_textures[input.textureIndex].Sample(g_linearSampler, input.uv) * input.color;
+    if (input.blendMode == 2u)
+    {
+        // The multiply pipeline uses DstColor/Zero. Folding alpha into the
+        // source makes transparent texels neutral instead of painting black.
+        color.rgb = lerp(float3(1.0, 1.0, 1.0), color.rgb, color.a);
+    }
+    return color;
 }

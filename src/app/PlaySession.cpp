@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "PlayState.hpp"
+#include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
 #include "debug/SceneSelection.hpp"
 #include "rendering/Renderer.hpp"
@@ -32,6 +33,10 @@ namespace aether::app
 			{
 				playState.stopSelection.clear();
 				playState.stopSelectionPrimary = {};
+			}
+			if (auto* spriteAnimations = context.TryGet<SpriteAnimationSystem>())
+			{
+				spriteAnimations->ResetForPlay(world);
 			}
 			playState.SetMode(PlayState::Mode::Playing);
 		}
