@@ -1,6 +1,7 @@
 #include "debug/ComponentDrawers.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -568,9 +569,23 @@ namespace aether::editor
 		const glm::vec3 scale0 = scale;
 
 		bool changed = false;
+		const bool sprite2D = world.GetSceneKind() == SceneKind::Scene2D && world.Has<SpriteRendererComponent>(entity);
 		changed |= DrawVec3Row("Position", pos, 0.0f, 0.05f);
-		changed |= DrawVec3Row("Rotation", euler, 0.0f, 0.5f);
-		changed |= DrawVec3Row("Scale", scale, 1.0f, 0.02f);
+		if (sprite2D)
+		{
+			const bool hadOutOfPlaneTransform = std::abs(euler.x) > 0.0001f || std::abs(euler.y) > 0.0001f || std::abs(scale.z - 1.0f) > 0.0001f;
+			euler.x = 0.0f;
+			euler.y = 0.0f;
+			scale.z = 1.0f;
+			changed |= hadOutOfPlaneTransform;
+			changed |= PropFloat("Rotation Z", &euler.z, 0.5f);
+			changed |= PropDrag2("Scale XY", &scale.x, 0.02f);
+		}
+		else
+		{
+			changed |= DrawVec3Row("Rotation", euler, 0.0f, 0.5f);
+			changed |= DrawVec3Row("Scale", scale, 1.0f, 0.02f);
+		}
 		if (!changed)
 		{
 			return;
@@ -1758,22 +1773,11 @@ namespace aether::editor
 			return;
 		}
 
-		auto* assets = context.TryGet<AssetManager>();
-		const auto* inst = world.TryGet<MaterialInstanceComponent>(entity);
-
+		auto& sprite = world.Get<SpriteRendererComponent>(entity);
 		auto* assetDb = context.TryGet<AssetDatabase>();
 		const auto setSpriteTexture = [&](const std::string& path)
 		{
-			if (assets == nullptr)
-			{
-				return;
-			}
-			const TextureHandle h = assets->GetTextureRegistry().Acquire(path);
-			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), h);
-			if (h.IsValid())
-			{
-				assets->GetTextureRegistry().Release(h);
-			}
+			sprite.texturePath = path;
 			if (assetDb != nullptr)
 			{
 				assetDb->Register(MakeTextureSource(path));
@@ -1781,8 +1785,8 @@ namespace aether::editor
 		};
 
 		iw::PropLabel("Sprite");
-		const bool hasTex = inst != nullptr && inst->asset.albedoTex.IsValid();
-		const std::string texLabel = hasTex ? ("Texture entry " + std::to_string(inst->asset.albedoTex.index)) : std::string("Drop / pick a texture");
+		const bool hasTex = !sprite.texturePath.empty();
+		const std::string texLabel = hasTex ? sprite.texturePath : std::string("Drop / pick a texture");
 		const AssetId pickedTex = AssetPickerButton("##spriteTexPicker", assetDb, AssetType::Texture, AssetId{}, "Drop / pick a texture", texLabel.c_str());
 		if (ImGui::BeginDragDropTarget())
 		{
@@ -1809,12 +1813,23 @@ namespace aether::editor
 			}
 		}
 
-		glm::vec3 tint = inst != nullptr ? glm::vec3(inst->asset.baseColorFactor) : glm::vec3(1.0f);
-		if (PropColor3("Tint", &tint.x) && assets != nullptr)
+		PropColor4("Tint", &sprite.tint.x);
+		ImGui::DragFloat2("Pixel Size", &sprite.pixelSize.x, 1.0f, 1.0f, 16384.0f);
+		ImGui::DragFloat2("Pivot", &sprite.pivot.x, 0.01f, 0.0f, 1.0f);
+		ImGui::DragFloat("Pixels Per Unit", &sprite.pixelsPerUnit, 1.0f, 0.001f, 10000.0f);
+		ImGui::DragInt("Sorting Layer", &sprite.sortingLayer);
+		ImGui::DragInt("Order In Layer", &sprite.orderInLayer);
+		int blend = static_cast<int>(sprite.blendMode);
+		constexpr const char* kBlendNames[] = {"Alpha", "Additive", "Multiply", "Opaque"};
+		if (ImGui::Combo("Blend Mode", &blend, kBlendNames, static_cast<int>(std::size(kBlendNames))))
 		{
-			MaterialSystem::SetBaseColor(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), tint);
+			sprite.blendMode = static_cast<SpriteBlendMode>(blend);
 		}
-		ImGui::TextDisabled("Flat quad drawn via the mesh path - full colour/alpha in Material.");
+		ImGui::Checkbox("Visible", &sprite.visible);
+		ImGui::Checkbox("Flip X", &sprite.flipX);
+		ImGui::SameLine();
+		ImGui::Checkbox("Flip Y", &sprite.flipY);
+		ImGui::Checkbox("Pixel Snap", &sprite.pixelSnap);
 	}
 
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection)

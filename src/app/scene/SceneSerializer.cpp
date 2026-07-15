@@ -654,7 +654,10 @@ namespace aether::app::scene
 					        }
 				        });
 				rec.disabled = world.Has<DisabledComponent>(e);
-				rec.sprite = world.Has<SpriteRendererComponent>(e);
+				if (const auto* sprite = world.TryGet<SpriteRendererComponent>(e))
+				{
+					rec.sprite = *sprite;
+				}
 				if (const auto* mr = world.TryGet<MeshRendererComponent>(e))
 				{
 					rec.meshRenderer = true;
@@ -1043,7 +1046,12 @@ namespace aether::app::scene
 			}
 			if (rec.sprite)
 			{
-				t.insert("sprite", true);
+				toml::table sprite = WriteReflectedToToml("Sprite Renderer", &*rec.sprite);
+				if (rec.sprite->spriteId.IsValid())
+				{
+					sprite.insert("sprite_id", static_cast<std::int64_t>(rec.sprite->spriteId.value));
+				}
+				t.insert("sprite", std::move(sprite));
 			}
 			if (rec.meshRenderer)
 			{
@@ -1405,7 +1413,18 @@ namespace aether::app::scene
 				}
 			}
 			rec.disabled = tv["disabled"].value_or(false);
-			rec.sprite = tv["sprite"].value_or(false);
+			const bool legacySprite = tv["sprite"].is_boolean() && tv["sprite"].value_or(false);
+			if (legacySprite)
+			{
+				rec.sprite = SpriteRendererComponent{};
+			}
+			else if (const auto* sprite = tv["sprite"].as_table())
+			{
+				SpriteRendererComponent component{};
+				ReadReflectedFromToml("Sprite Renderer", *sprite, &component);
+				component.spriteId.value = static_cast<std::uint64_t>(toml::node_view<const toml::node>{*sprite}["sprite_id"].value_or(std::int64_t{0}));
+				rec.sprite = std::move(component);
+			}
 			rec.meshRenderer = tv["mesh_renderer"].value_or(false);
 			rec.meshRendererVisible = tv["mesh_renderer_visible"].value_or(true);
 			rec.meshRendererCastShadows = tv["mesh_renderer_cast_shadows"].value_or(true);
@@ -1447,6 +1466,11 @@ namespace aether::app::scene
 				mat.occlusionPath = mv["occlusion_tex"].value_or(std::string{});
 				mat.emissivePath = mv["emissive_tex"].value_or(std::string{});
 				rec.material = std::move(mat);
+				if (legacySprite && rec.sprite)
+				{
+					rec.sprite->texturePath = rec.material->albedoPath;
+					rec.sprite->tint = rec.material->asset.baseColorFactor;
+				}
 			}
 			if (const auto* s = tv["skinned"].as_table())
 			{
@@ -2014,7 +2038,7 @@ namespace aether::app::scene
 				}
 				if (rec.sprite)
 				{
-					world.EmplaceOrReplace<SpriteRendererComponent>(e);
+					world.EmplaceOrReplace<SpriteRendererComponent>(e, *rec.sprite);
 				}
 				if (rec.meshRenderer)
 				{

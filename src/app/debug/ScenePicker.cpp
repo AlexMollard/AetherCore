@@ -1,5 +1,9 @@
 #include "debug/ScenePicker.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+
 #include <glm/glm.hpp>
 
 #include "mesh/Mesh.hpp"
@@ -14,6 +18,50 @@ namespace aether::editor
 	{
 		PickHit best{};
 		best.t = maxDist;
+		std::uint64_t bestSpriteOrder = 0;
+		bool haveSprite = false;
+		for (const auto& [enttE, sprite, transform]: world.GetRegistry().view<SpriteRendererComponent, TransformComponent>(entt::exclude<DisabledComponent>).each())
+		{
+			if (!sprite.visible)
+			{
+				continue;
+			}
+			const glm::mat4 worldToLocal = glm::inverse(transform.localToWorld);
+			const glm::vec3 localOrigin = glm::vec3(worldToLocal * glm::vec4(ray.origin, 1.0f));
+			const glm::vec3 localDir = glm::vec3(worldToLocal * glm::vec4(ray.dir, 0.0f));
+			if (std::abs(localDir.z) < 1e-6f)
+			{
+				continue;
+			}
+			const float localT = -localOrigin.z / localDir.z;
+			if (localT < 0.0f)
+			{
+				continue;
+			}
+			const glm::vec2 point = glm::vec2(localOrigin + localDir * localT);
+			const glm::vec2 size = sprite.pixelSize / std::max(sprite.pixelsPerUnit, 0.001f);
+			const glm::vec2 minPoint = -sprite.pivot * size;
+			const glm::vec2 maxPoint = (glm::vec2(1.0f) - sprite.pivot) * size;
+			if (point.x < minPoint.x || point.y < minPoint.y || point.x > maxPoint.x || point.y > maxPoint.y)
+			{
+				continue;
+			}
+			const Entity entity = World::FromEntt(enttE);
+			const auto biased = [](std::int32_t value) { return static_cast<std::uint64_t>(std::clamp(value, -32768, 32767) + 32768); };
+			const std::uint64_t order = (biased(sprite.sortingLayer) << 48u) | (biased(sprite.orderInLayer) << 32u) | entity.id;
+			if (!haveSprite || order > bestSpriteOrder)
+			{
+				const glm::vec3 localHit = localOrigin + localDir * localT;
+				const glm::vec3 worldHit = glm::vec3(transform.localToWorld * glm::vec4(localHit, 1.0f));
+				best = PickHit{.entity = entity, .t = glm::dot(worldHit - ray.origin, ray.dir)};
+				bestSpriteOrder = order;
+				haveSprite = true;
+			}
+		}
+		if (haveSprite)
+		{
+			return best;
+		}
 
 		for (const auto& [enttE, meshComp, tc]: world.View<MeshComponent, TransformComponent>().each())
 		{

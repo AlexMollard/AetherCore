@@ -42,6 +42,7 @@ namespace aether
 		// error texture can never itself fail to load.
 		AE_EXPECT_OR_THROW(magentaFallback, Texture::CreateSolidColor({255, 0, 255, 255}, vk.GetDevice().device, vk.GetGraphicsQueue(), m_uploadContext.GetCommandPool()));
 		m_textureRegistry.InitializeDefault(TextureResource{std::move(magentaFallback)});
+		m_spriteSystem.Initialize(m_textureRegistry);
 
 		MaterialAsset defaultAsset;
 		defaultAsset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
@@ -121,6 +122,7 @@ namespace aether
 			m_world = nullptr;
 		}
 		m_materialAuthoring.ReleaseAll();
+		m_spriteSystem.Shutdown();
 		m_textureRegistry.ReleaseAll();
 		m_assetManager = AssetManager{};
 		m_primitiveMeshes.Destroy();

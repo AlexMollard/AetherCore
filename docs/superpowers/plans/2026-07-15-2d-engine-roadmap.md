@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-15
 
-**Status:** In progress; Phase 0 complete
+**Status:** In progress; Phases 0-1 complete
 
 **Target:** A native 2D game workflow inside AetherCore, sharing the existing world, asset, scripting, editor, and rendering foundations without treating game-world sprites as UI.
 
@@ -419,14 +419,17 @@ Mixed scenes may continue using mesh quads intentionally; only the legacy marker
 
 **Outcome:** A user can import, place, render, select, save, and script static sprites.
 
-- [ ] Implement `SpriteAtlasAsset` with whole-texture sprite creation.
-- [ ] Replace the marker component with the authored `SpriteRendererComponent` model.
-- [ ] Extract visible sprite instances on the game thread.
-- [ ] Render unit-quad instances with bindless textures and deterministic sorting.
-- [ ] Add tint, pivot, pixels-per-unit, flip, layer, order, and blend mode.
-- [ ] Add editor picking, outlines, drag/drop placement, and Inspector fields.
-- [ ] Add scene round-trip, undo/redo, duplication, copy/paste, and legacy migration.
-- [ ] Add managed `SpriteRendererRef` and control/reflection coverage.
+- [x] Implement `SpriteAtlasAsset` with whole-texture sprite creation.
+- [x] Replace the marker component with the authored `SpriteRendererComponent` model.
+- [x] Extract visible sprite instances on the game thread.
+- [x] Render unit-quad instances with bindless textures and deterministic sorting.
+- [x] Add tint, pivot, pixels-per-unit, flip, layer, order, and blend mode.
+- [x] Add editor picking, outlines, drag/drop placement, and Inspector fields.
+- [x] Add scene round-trip, undo/redo, duplication, copy/paste, and legacy migration.
+- [x] Add managed `SpriteRendererRef` and control/reflection coverage.
+- [x] Add batched MCP entity, transform, and component operations for large scene authoring and stress validation.
+- [x] Make orthographic picking position-aware and constrain sprite transforms to Z rotation and XY scale.
+- [x] Keep Play and camera look-through views free of editor overlays while rendering sprites in 2D camera previews.
 
 **Exit gate:** A saved scene containing hundreds of differently layered sprites reproduces the same image and selection behavior after reload and in play mode, with no render-thread ECS access.
 

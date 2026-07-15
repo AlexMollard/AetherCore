@@ -8,6 +8,7 @@
 
 #include "animation/AnimationDatabase.hpp"
 #include "assets/AssetId.hpp"
+#include "assets/AssetTypes.hpp"
 #include "assets/GltfAsset.hpp"
 #include "material/EffectParams.hpp"
 #include "material/MaterialAsset.hpp"
@@ -85,8 +86,30 @@ namespace aether
 		bool castShadows = true;
 	};
 
+	enum class SpriteBlendMode : std::uint8_t
+	{
+		Alpha = 0,
+		Additive,
+		Multiply,
+		Opaque,
+	};
+
 	struct SpriteRendererComponent
 	{
+		std::string texturePath;
+		AssetObjectId spriteId{};
+		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};
+		glm::vec4 tint{1.0f};
+		glm::vec2 pixelSize{100.0f};
+		glm::vec2 pivot{0.5f};
+		float pixelsPerUnit = 100.0f;
+		std::int32_t sortingLayer = 0;
+		std::int32_t orderInLayer = 0;
+		SpriteBlendMode blendMode = SpriteBlendMode::Alpha;
+		bool visible = true;
+		bool flipX = false;
+		bool flipY = false;
+		bool pixelSnap = false;
 	};
 
 	struct EffectRefComponent

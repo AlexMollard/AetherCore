@@ -548,21 +548,12 @@ namespace aether::editor
 			addPrimitive(PrimitiveMesh::Quad, ICON_FA_IMAGE "  Mesh Renderer - Quad", "quad");
 			addPrimitive(PrimitiveMesh::Triangle, ICON_FA_PLAY "  Mesh Renderer - Triangle", "triangle");
 
-			if (PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer (2D)", m_addFilter, world.Has<SpriteRendererComponent>(entity)) && primitives != nullptr && assets != nullptr)
+			if (PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer (2D)", m_addFilter, world.Has<SpriteRendererComponent>(entity)))
 			{
 				if (!world.Has<TransformComponent>(entity))
 				{
 					world.Emplace<TransformComponent>(entity);
 				}
-				world.EmplaceOrReplace<MeshComponent>(entity, MeshComponent{.mesh = &primitives->Get(PrimitiveMesh::Quad)});
-				world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "quad", .primitiveIndex = 0});
-				MaterialAsset asset{};
-				asset.baseColorFactor = glm::vec4(1.0f);
-				asset.roughnessFactor = 1.0f;
-				asset.metallicFactor = 0.0f;
-				asset.doubleSided = true;
-				asset.alphaBlend = true;
-				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 				world.EmplaceOrReplace<SpriteRendererComponent>(entity);
 			}
 
@@ -719,7 +710,7 @@ namespace aether::editor
 		DrawUiText(world, entity);
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
-		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name"});
+		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer"});
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
 		DrawCollisionEvents(world, entity);

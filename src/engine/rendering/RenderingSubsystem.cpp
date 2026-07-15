@@ -210,6 +210,8 @@ namespace aether
 			return;
 		}
 
+		m_renderer2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
+
 		auto& cameras = services.Get<CameraManager>();
 		auto& lighting = services.Get<LightingManager>();
 		auto& materials = services.Get<MaterialBuffer>();
@@ -315,6 +317,7 @@ namespace aether
 		// were never initialized, so their Destroy/Shutdown must be skipped - several
 		if (m_profile == RuntimeProfile::Full)
 		{
+			m_renderer2D.Shutdown();
 			DestroySceneViewportDepth();
 			m_gtaoPass.Destroy();
 			m_postProcessStack.Destroy();
@@ -696,10 +699,10 @@ namespace aether
 			        });
 		}
 
-		m_renderer2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent);
+		m_renderer2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent, bindless);
 
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
-		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline());
+		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline(), m_renderer2D);
 		m_modelPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_modelPreview.RegisterGraphicsPasses(m_renderGraph, bindless, m_postProcessStack);
 

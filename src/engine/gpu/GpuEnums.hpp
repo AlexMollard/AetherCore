@@ -94,6 +94,14 @@ namespace aether::gpu
 		Always = 7,
 	};
 
+	enum class BlendMode : std::uint32_t
+	{
+		Alpha = 0,
+		Additive,
+		Multiply,
+		Opaque,
+	};
+
 	enum class LoadOp : std::uint32_t
 	{
 		Load = 0,

@@ -94,3 +94,27 @@ TEST_CASE("Camera orthographic projection uses the authored vertical size") {
     CHECK(cam.GetProjection() == CameraProjection::Orthographic);
     CHECK(cam.GetOrthographicHeight() == doctest::Approx(10.0f));
 }
+
+TEST_CASE("BuildCameraRay offsets orthographic ray origins to the clicked point") {
+    CameraDesc desc;
+    desc.mode = CameraMode::Manual;
+    desc.projection = CameraProjection::Orthographic;
+    desc.position = {3.0f, 4.0f, 10.0f};
+    desc.pitch = 0.0f;
+    desc.orthographicHeight = 10.0f;
+    const Camera cam(desc);
+
+    constexpr float aspect = 2.0f;
+    const glm::mat4 invViewProjection = glm::inverse(cam.GetProjectionMatrix(aspect) * cam.GetViewMatrix());
+    const Ray topLeft = BuildCameraRay(invViewProjection, {0.0f, 0.0f}, cam.GetPosition(), true);
+    const Ray bottomRight = BuildCameraRay(invViewProjection, {1.0f, 1.0f}, cam.GetPosition(), true);
+
+    CHECK(topLeft.origin.x == doctest::Approx(-7.0f));
+    CHECK(topLeft.origin.y == doctest::Approx(9.0f));
+    CHECK(bottomRight.origin.x == doctest::Approx(13.0f));
+    CHECK(bottomRight.origin.y == doctest::Approx(-1.0f));
+    CHECK(topLeft.origin.z == doctest::Approx(cam.GetPosition().z));
+    CHECK(topLeft.dir.x == doctest::Approx(0.0f));
+    CHECK(topLeft.dir.y == doctest::Approx(0.0f));
+    CHECK(topLeft.dir.z == doctest::Approx(-1.0f));
+}

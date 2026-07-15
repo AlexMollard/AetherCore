@@ -15,6 +15,7 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetDatabase.hpp"
+#include "rendering/SpriteSystem.hpp"
 
 namespace aether
 {
@@ -99,6 +100,11 @@ namespace aether
 			return m_uploadContext;
 		}
 
+		[[nodiscard]] SpriteSystem& GetSpriteSystem()
+		{
+			return m_spriteSystem;
+		}
+
 		void FlushMeshUploads();
 
 		void AdvanceFrame(std::uint64_t frameIndex);
@@ -117,6 +123,7 @@ namespace aether
 		PrimitiveMeshes m_primitiveMeshes;
 		AssetDatabase m_assetDatabase{m_primitiveMeshes};
 		gpu::UploadContext m_uploadContext;
+		SpriteSystem m_spriteSystem;
 		VulkanContext* m_context = nullptr;
 		World* m_world = nullptr;
 	};

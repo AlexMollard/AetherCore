@@ -607,6 +607,7 @@ namespace aether
 		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
 		packet.effectParamBufferAddr = effectParamBuffer.GetDeviceAddressU64();
 		packet.sceneFeatures = world.GetSceneFeatures();
+		assetsSub.GetSpriteSystem().Extract(world, packet.render2D);
 
 		if (const Camera* cam = cameras.TryGetMainCamera())
 		{
@@ -657,7 +658,7 @@ namespace aether
 			debugRenderer.SetFrameDebugEnabled(packet.debugRenderingEnabled);
 			if (m_profile == RuntimeProfile::Full)
 			{
-				m_rendering->GetRenderer2D().BeginFrame(packet.render2D);
+				m_rendering->GetRenderer2D().BeginFrame(packet.render2D, packet.drawSlot);
 			}
 		}
 

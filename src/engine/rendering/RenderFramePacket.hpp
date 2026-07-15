@@ -33,6 +33,7 @@ namespace aether
 		std::uint32_t textureIndex = 0;
 		std::uint32_t entityId = 0;
 		SpriteInstanceFlags flags = SpriteInstanceFlags::None;
+		std::uint32_t blendMode = 0;
 	};
 
 	// Owned by RenderFramePacket and moved through the render-thread queue with

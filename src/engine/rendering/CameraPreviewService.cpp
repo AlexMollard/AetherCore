@@ -14,6 +14,7 @@
 #include "rendering/GpuContracts.hpp"
 #include "rendering/LightingManager.hpp"
 #include "rendering/RenderGraphTypes.hpp"
+#include "rendering/Renderer2D.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
@@ -99,7 +100,7 @@ namespace aether
 		m_initialized = false;
 	}
 
-	void CameraPreviewService::SetRequest(bool enabled, const glm::mat4& view, const glm::mat4& proj, glm::vec3 cameraPos, float nearPlane)
+	void CameraPreviewService::SetRequest(bool enabled, const glm::mat4& view, const glm::mat4& proj, glm::vec3 cameraPos, float nearPlane, bool drawSkybox)
 	{
 		{
 			const std::lock_guard<std::mutex> lock(m_requestMutex);
@@ -108,6 +109,7 @@ namespace aether
 			m_reqCameraPos = cameraPos;
 			m_reqNearPlane = nearPlane;
 		}
+		m_drawSkybox.store(drawSkybox, std::memory_order_relaxed);
 		m_enabled.store(enabled, std::memory_order_relaxed);
 	}
 
@@ -188,7 +190,12 @@ namespace aether
 		        .OnDebugDisabled([this](PassContext& ctx) { m_queue.DiscardPending(ctx.frameSlot); });
 	}
 
-	void CameraPreviewService::RegisterGraphicsPasses(RenderGraph& graph, LightingManager* lighting, BindlessManager& bindless, const PostProcessStack& postProcess, gpu::PipelineView skyboxPipeline)
+	void CameraPreviewService::RegisterGraphicsPasses(RenderGraph& graph,
+	        LightingManager* lighting,
+	        BindlessManager& bindless,
+	        const PostProcessStack& postProcess,
+	        gpu::PipelineView skyboxPipeline,
+	        Renderer2D& renderer2D)
 	{
 		if (!m_initialized)
 		{
@@ -204,7 +211,7 @@ namespace aether
 		        .Execute(
 		                [this, skyboxPipeline](PassContext& ctx)
 		                {
-			                if (!m_enabled.load(std::memory_order_relaxed))
+			                if (!m_enabled.load(std::memory_order_relaxed) || !m_drawSkybox.load(std::memory_order_relaxed))
 			                {
 				                return;
 			                }
@@ -251,6 +258,8 @@ namespace aether
 			        bindless.CmdBindHeaps(ctx.recorder);
 			        m_queue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, &lightingAddr, m_constants.GetDeviceAddress(ctx.frameSlot), nullptr, 0, nullptr);
 		        });
+
+		renderer2D.RegisterPass(graph, m_color, {kWidth, kHeight}, bindless, "$CameraPreviewRenderer2D", &m_constants, &m_enabled);
 
 		graph.AddFullscreenPass({
 		                                .name = "$CameraPreviewTonemap",

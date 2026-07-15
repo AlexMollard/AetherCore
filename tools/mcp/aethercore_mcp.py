@@ -93,11 +93,15 @@ def _ctl(method: str, params: dict | None = None) -> dict:
     if not Path(ctl).exists():
         return {"error": f"aether-ctl not found (searched build dirs under {REPO}); build it: cmake --build {BUILD_DIR} --target aether-ctl"}
     args = [ctl, "--port", str(PORT), method]
+    input_json = None
     if params:
-        args.append(json.dumps(params))
+        # Avoid Windows' ~32 KiB command-line limit. Batch scene requests can
+        # legitimately be hundreds of KiB, so stream JSON through stdin.
+        args.append("-")
+        input_json = json.dumps(params)
     try:
         # Generous: engine.play rebuilds C# scripts before replying.
-        proc = subprocess.run(args, capture_output=True, text=True, timeout=45)
+        proc = subprocess.run(args, input=input_json, capture_output=True, text=True, timeout=45)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"error": f"aether-ctl failed to run: {exc}"}
     if proc.returncode != 0:

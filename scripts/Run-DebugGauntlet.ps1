@@ -186,10 +186,15 @@ function Get-CrashStack([string]$Exe, [string]$WorkDir) {
 # best-practice). Benign non-validation warnings (e.g. the scene-format
 # migration note) are reported but do not fail.
 function Measure-Findings([string[]]$logLines) {
+    # Vulkan loader diagnostics about machine-installed implicit overlays do not
+    # describe application validation failures. Keep the patterns narrow so
+    # synchronization, best-practice, and resource warnings still fail the smoke.
+    $loaderNoise = "Validation: General: (Removing layer .* because it is a duplicate|Layer .* uses API version .* older than the application specified API version|Layer .* forced disabled because name matches filter of env var)"
+    $benignValidation = @($logLines | Where-Object { $_ -match "\bWARN\b.*Validation:" -and $_ -match $loaderNoise })
     $errors     = @($logLines | Where-Object { $_ -match "\bERRO\b" })
-    $valWarn    = @($logLines | Where-Object { $_ -match "\bWARN\b.*Validation:" })
+    $valWarn    = @($logLines | Where-Object { $_ -match "\bWARN\b.*Validation:" -and $_ -notmatch $loaderNoise })
     $valInfo    = @($logLines | Where-Object { $_ -match "\bINFO\b.*Validation:" })
-    $otherWarn  = @($logLines | Where-Object { $_ -match "\bWARN\b" -and $_ -notmatch "Validation:" })
+    $otherWarn  = @($logLines | Where-Object { $_ -match "\bWARN\b" -and $_ -notmatch "Validation:" }) + $benignValidation
     $tierLine   = @($logLines | Where-Object { $_ -match "validation layer enabled" }) | Select-Object -First 1
     return [pscustomobject]@{
         Errors     = $errors

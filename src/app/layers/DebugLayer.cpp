@@ -404,7 +404,9 @@ namespace aether::editor
 
 		m_selection.Prune(context.Get<World>());
 
-		if (IsDebugRenderingEnabled() && !m_selection.All().empty())
+		const auto* updatePlayState = context.TryGet<app::PlayState>();
+		const bool editing = updatePlayState == nullptr || !updatePlayState->IsPlaying();
+		if (editing && IsDebugRenderingEnabled() && !m_selection.All().empty())
 		{
 			if (auto* engine = context.TryGet<AetherCore>())
 			{
@@ -421,6 +423,10 @@ namespace aether::editor
 				const Entity primary = m_selection.Primary();
 				for (const Entity e: m_selection.All())
 				{
+					if (world.Has<SpriteRendererComponent>(e))
+					{
+						continue;
+					}
 					const auto* tc = world.TryGet<TransformComponent>(e);
 					if (tc == nullptr)
 					{

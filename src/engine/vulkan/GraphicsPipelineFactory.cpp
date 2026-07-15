@@ -138,9 +138,19 @@ namespace aether::vkutil
 		// Color blend (single attachment - the engine never uses MRT).
 		if (hasColorAttachment)
 		{
-			entry.colorBlendEnable = desc.blendEnable ? VK_TRUE : VK_FALSE;
+			entry.colorBlendEnable = desc.blendEnable && desc.blendMode != gpu::BlendMode::Opaque ? VK_TRUE : VK_FALSE;
 			entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 			entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			if (desc.blendMode == gpu::BlendMode::Additive)
+			{
+				entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+				entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			}
+			else if (desc.blendMode == gpu::BlendMode::Multiply)
+			{
+				entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
+				entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			}
 			entry.colorBlendEquation.colorBlendOp = VK_BLEND_OP_ADD;
 			entry.colorBlendEquation.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 			entry.colorBlendEquation.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;

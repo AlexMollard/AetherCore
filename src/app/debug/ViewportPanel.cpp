@@ -18,9 +18,12 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorChrome.hpp"
+#include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/ScenePicker.hpp"
+#include "debug/UndoStack.hpp"
+#include "assets/AssetDatabase.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scripting/SceneContext.hpp"
@@ -117,6 +120,10 @@ namespace aether::editor
 		}
 		else if (!editing && m_editorCamActive)
 		{
+			if (m_lookThroughEntityId != 0)
+			{
+				RestoreEditorCameraAfterLookThrough(context);
+			}
 			CameraHandle entityMain{};
 			if (auto* cameraSystem = context.TryGet<CameraSystem>())
 			{
@@ -202,6 +209,30 @@ namespace aether::editor
 				m_lookThroughEntityId = 0;
 			}
 		}
+	}
+
+	void ViewportPanel::RestoreEditorCameraAfterLookThrough(app::LayerContext& context)
+	{
+		auto* cameras = context.TryGet<CameraManager>();
+		Camera* editorCam = cameras != nullptr ? cameras->TryGet(CameraHandle{m_editorCamId}) : nullptr;
+		if (editorCam != nullptr)
+		{
+			const bool scene2D = context.Get<World>().GetSceneKind() == SceneKind::Scene2D;
+			if (scene2D)
+			{
+				editorCam->SetMode(CameraMode::Manual);
+				editorCam->SetPosition(m_hasSaved2DEditorCamera ? m_saved2DEditorPosition : glm::vec3{0.0f, 0.0f, 10.0f});
+				editorCam->SetYawPitch(0.0f, 0.0f);
+				editorCam->SetOrthographic(m_hasSaved2DEditorCamera ? m_saved2DEditorHeight : 10.0f, 0.1f, 1000.0f);
+			}
+			else
+			{
+				editorCam->SetMode(CameraMode::Free);
+				editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
+			}
+		}
+		m_hasSaved2DEditorCamera = false;
+		m_lookThroughEntityId = 0;
 	}
 
 	void ViewportPanel::DrawPlayControls(app::LayerContext& context)
@@ -449,7 +480,8 @@ namespace aether::editor
 		}
 
 		const glm::mat4 viewProj = camera->GetProjectionMatrix(renderAspect) * camera->GetViewMatrix();
-		const Ray ray = BuildCameraRay(glm::inverse(viewProj), uv, camera->GetPosition());
+		const Ray ray = BuildCameraRay(
+		        glm::inverse(viewProj), uv, camera->GetPosition(), camera->GetProjection() == CameraProjection::Orthographic);
 
 		auto& selection = context.Get<SceneSelection>();
 		const PickHit hit = PickEntity(context.Get<World>(), context.TryGet<PhysicsSystem>(), ray, camera->GetFarPlane());
@@ -572,6 +604,54 @@ namespace aether::editor
 		drawList->PopClipRect();
 	}
 
+	void ViewportPanel::DrawSpriteOutlines(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		const auto* selection = context.TryGet<SceneSelection>();
+		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		if (selection == nullptr || camera == nullptr || selection->All().empty())
+		{
+			return;
+		}
+		glm::mat4 projection = camera->GetProjectionMatrix(renderAspect);
+		projection[1][1] *= -1.0f;
+		const glm::mat4 viewProjection = projection * camera->GetViewMatrix();
+		World& world = context.Get<World>();
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		for (const Entity entity: selection->All())
+		{
+			const auto* sprite = world.TryGet<SpriteRendererComponent>(entity);
+			const auto* transform = world.TryGet<TransformComponent>(entity);
+			if (sprite == nullptr || transform == nullptr)
+			{
+				continue;
+			}
+			const glm::vec2 size = sprite->pixelSize / std::max(sprite->pixelsPerUnit, 0.001f);
+			const glm::vec2 local[4] = {
+			        -sprite->pivot * size,
+			        (glm::vec2(1.0f, 0.0f) - sprite->pivot) * size,
+			        (glm::vec2(1.0f) - sprite->pivot) * size,
+			        (glm::vec2(0.0f, 1.0f) - sprite->pivot) * size,
+			};
+			ImVec2 screen[4];
+			bool valid = true;
+			for (std::uint32_t i = 0; i < 4; ++i)
+			{
+				const glm::vec4 clip = viewProjection * transform->localToWorld * glm::vec4(local[i], 0.0f, 1.0f);
+				if (clip.w <= 1e-5f)
+				{
+					valid = false;
+					break;
+				}
+				const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+				screen[i] = ImVec2(imageMin.x + (ndc.x * 0.5f + 0.5f) * imageSize.x, imageMin.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * imageSize.y);
+			}
+			if (valid)
+			{
+				drawList->AddPolyline(screen, 4, IM_COL32(255, 190, 55, 255), ImDrawFlags_Closed, 2.0f);
+			}
+		}
+	}
+
 	void ViewportPanel::DrawCameraPreviewControls(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize)
 	{
 		auto* playState = context.TryGet<app::PlayState>();
@@ -594,7 +674,12 @@ namespace aether::editor
 				if (const Camera* backing = context.Get<CameraManager>().TryGet(CameraHandle{cc->backingCamera}))
 				{
 					constexpr float aspect = static_cast<float>(CameraPreviewService::kWidth) / static_cast<float>(CameraPreviewService::kHeight);
-					preview.SetRequest(true, backing->GetViewMatrix(), backing->GetProjectionMatrix(aspect), backing->GetPosition(), backing->GetNearPlane());
+					preview.SetRequest(true,
+					        backing->GetViewMatrix(),
+					        backing->GetProjectionMatrix(aspect),
+					        backing->GetPosition(),
+					        backing->GetNearPlane(),
+					        world.GetSceneKind() != SceneKind::Scene2D);
 					enabled = true;
 				}
 			}
@@ -665,18 +750,22 @@ namespace aether::editor
 		{
 			if (previewing)
 			{
-				if (auto* cameras = context.TryGet<CameraManager>())
-				{
-					if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
-					{
-						editorCam->SetMode(CameraMode::Free);
-						editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
-					}
-				}
-				m_lookThroughEntityId = 0;
+				RestoreEditorCameraAfterLookThrough(context);
 			}
 			else
 			{
+				if (world.GetSceneKind() == SceneKind::Scene2D)
+				{
+					if (auto* cameras = context.TryGet<CameraManager>())
+					{
+						if (const Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
+						{
+							m_saved2DEditorPosition = editorCam->GetPosition();
+							m_saved2DEditorHeight = editorCam->GetOrthographicHeight();
+							m_hasSaved2DEditorCamera = true;
+						}
+					}
+				}
 				m_lookThroughEntityId = primary.id;
 			}
 		}
@@ -838,13 +927,21 @@ namespace aether::editor
 
 		const ImVec2 imageMin = ImGui::GetCursorScreenPos();
 		const ImVec2 imageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+		const auto* viewportPlayState = context.TryGet<app::PlayState>();
+		const bool viewportEditing = viewportPlayState == nullptr || !viewportPlayState->IsPlaying();
+		const bool editorViewportInteractive = viewportEditing && m_lookThroughEntityId == 0;
 		ImGui::PushClipRect(imageAreaMin, imageAreaMax, true);
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-		Draw2DGrid(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
-		const bool gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
-		DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		bool gizmoDrawn = false;
+		if (editorViewportInteractive)
+		{
+			Draw2DGrid(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+			DrawSpriteOutlines(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+			gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+			DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		}
 
-		// highlight, drags never start). While a handle is hovered the button is
+		// Do not cover ImGuizmo with the input hitbox: it steals handle hover and prevents drags.
 		const ImVec2 gizmoMouse = ImGui::GetIO().MousePos;
 		const bool mouseOverImage =
 		        gizmoMouse.x >= std::max(imageMin.x, imageAreaMin.x) && gizmoMouse.x < std::min(imageMax.x, imageAreaMax.x) && gizmoMouse.y >= std::max(imageMin.y, imageAreaMin.y) && gizmoMouse.y < std::min(imageMax.y, imageAreaMax.y);
@@ -853,14 +950,47 @@ namespace aether::editor
 		const ImVec2 inputViewportOrigin = ImGui::GetWindowViewport() != nullptr ? ImGui::GetWindowViewport()->Pos : ImGui::GetMainViewport()->Pos;
 		const glm::vec2 inputImageMin{imageMin.x - inputViewportOrigin.x, imageMin.y - inputViewportOrigin.y};
 		context.Get<Input>().SetMouseViewportTransform(inputImageMin, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
-		if (!gizmoActive && !gizmoHovered)
+		if (editorViewportInteractive && !gizmoActive && !gizmoHovered)
 		{
 			ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload); payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
+				{
+					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+					Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+					World& world = context.Get<World>();
+					if (file->kind == dragdrop::FileKind::Texture && camera != nullptr && camera->GetProjection() == CameraProjection::Orthographic)
+					{
+						if (auto* undo = context.TryGet<UndoStack>())
+						{
+							undo->Push(world, context.services);
+						}
+						const glm::vec2 mouse{ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y};
+						const glm::vec2 uv = (mouse - glm::vec2{imageMin.x, imageMin.y}) / glm::vec2{imageSize.x, imageSize.y};
+						const glm::vec3 cameraPosition = camera->GetPosition();
+						const float height = camera->GetOrthographicHeight();
+						const glm::vec3 position{cameraPosition.x + (uv.x - 0.5f) * height * renderAspect, cameraPosition.y + (0.5f - uv.y) * height, 0.0f};
+						const Entity entity = world.Create();
+						world.Emplace<NameComponent>(entity, NameComponent{.name = file->displayName[0] != '\0' ? file->displayName : "Sprite"});
+						TransformComponent transform{};
+						transform.localToWorld[3] = glm::vec4(position, 1.0f);
+						world.Emplace<TransformComponent>(entity, transform);
+						world.Emplace<SpriteRendererComponent>(entity, SpriteRendererComponent{.texturePath = file->path});
+						if (auto* database = context.TryGet<AssetDatabase>())
+						{
+							database->Register(MakeTextureSource(file->path));
+						}
+						context.Get<SceneSelection>().Select(entity);
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
 			Handle2DNavigation(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
-		if (m_editorCamActive && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F, false) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+		if (editorViewportInteractive && m_editorCamActive && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F, false) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
 		{
 			auto& selection = context.Get<SceneSelection>();
 			World& world = context.Get<World>();
@@ -890,7 +1020,7 @@ namespace aether::editor
 				}
 			}
 		}
-		if (m_viewportShowStats || m_viewportShowMouse)
+		if (editorViewportInteractive && (m_viewportShowStats || m_viewportShowMouse))
 		{
 			struct StatRow
 			{
@@ -1097,13 +1227,20 @@ namespace aether::editor
 		ImGui::PopStyleColor(2);
 
 		// Look-through preview pill (bottom-center), shown for camera selections.
-		DrawCameraPreviewControls(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageSize.x, imageSize.y});
+		if (viewportEditing)
+		{
+			DrawCameraPreviewControls(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageSize.x, imageSize.y});
+		}
+		else
+		{
+			rendering.GetCameraPreview().SetRequest(false, glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f));
+		}
 		toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
 
 		// Tick() consumes this value on the next frame when translating ImGui capture
 		// into camera capture. Toolbar hover is intentionally ignored: the camera
 		// should only lose the mouse while a control/popup/gizmo is actually active.
-		context.Get<Input>().SetMouseViewportInputActive(mouseOverImage && !gizmoActive && !toolbarControlActive);
+		context.Get<Input>().SetMouseViewportInputActive(editorViewportInteractive && mouseOverImage && !gizmoActive && !toolbarControlActive);
 
 		if (viewportSettingsChanged)
 		{

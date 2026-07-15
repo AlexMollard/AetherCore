@@ -20,7 +20,34 @@ namespace
 		static const reflect::EnumTable table{{{"perspective", static_cast<int>(CameraProjection::Perspective)}, {"orthographic", static_cast<int>(CameraProjection::Orthographic)}}};
 		return table;
 	}
+
+	const reflect::EnumTable& SpriteBlendEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"alpha", static_cast<int>(SpriteBlendMode::Alpha)},
+		        {"additive", static_cast<int>(SpriteBlendMode::Additive)},
+		        {"multiply", static_cast<int>(SpriteBlendMode::Multiply)},
+		        {"opaque", static_cast<int>(SpriteBlendMode::Opaque)},
+		}};
+		return table;
+	}
 } // namespace
+
+AE_COMPONENT(SpriteRendererComponent, "Sprite Renderer", "Rendering", ICON_FA_IMAGE)
+AE_FIELD_N("texture", texturePath, String)
+AE_FIELD_N("uv_rect", uvRect, Vec4)
+AE_FIELD_N("tint", tint, Color4)
+AE_FIELD_N("pixel_size", pixelSize, Vec2)
+AE_FIELD_N("pivot", pivot, Vec2)
+AE_FIELD_N("pixels_per_unit", pixelsPerUnit, Float)
+AE_FIELD_N("sorting_layer", sortingLayer, Int)
+AE_FIELD_N("order_in_layer", orderInLayer, Int)
+AE_FIELD_ENUM("blend_mode", blendMode, SpriteBlendEnum())
+AE_FIELD_N("visible", visible, Bool)
+AE_FIELD_N("flip_x", flipX, Bool)
+AE_FIELD_N("flip_y", flipY, Bool)
+AE_FIELD_N("pixel_snap", pixelSnap, Bool)
+AE_COMPONENT_END()
 
 AE_COMPONENT(PointLightComponent, "Point Light", "Rendering", ICON_FA_LIGHTBULB)
 AE_FIELD_N("color", color, Color3)

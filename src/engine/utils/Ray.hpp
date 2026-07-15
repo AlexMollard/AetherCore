@@ -45,13 +45,20 @@ namespace aether
 		return true;
 	}
 
-	inline Ray BuildCameraRay(const glm::mat4& invViewProj, glm::vec2 ndc01, const glm::vec3& cameraPos)
+	inline Ray BuildCameraRay(const glm::mat4& invViewProj, glm::vec2 ndc01, const glm::vec3& cameraPos, bool orthographic = false)
 	{
 		const glm::vec2 ndc = ndc01 * 2.0f - 1.0f;
 		glm::vec4 nearPt = invViewProj * glm::vec4(ndc, 0.25f, 1.0f);
 		glm::vec4 farPt = invViewProj * glm::vec4(ndc, 0.75f, 1.0f);
 		nearPt /= nearPt.w;
 		farPt /= farPt.w;
-		return Ray{cameraPos, glm::normalize(glm::vec3(farPt) - glm::vec3(nearPt))};
+		const glm::vec3 direction = glm::normalize(glm::vec3(farPt) - glm::vec3(nearPt));
+		glm::vec3 origin = cameraPos;
+		if (orthographic)
+		{
+			const glm::vec3 cameraToSample = glm::vec3(nearPt) - cameraPos;
+			origin += cameraToSample - direction * glm::dot(cameraToSample, direction);
+		}
+		return Ray{origin, direction};
 	}
 } // namespace aether

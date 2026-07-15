@@ -43,6 +43,35 @@ public readonly struct CameraRef : IComponentRef
     public Vector3 Right => Camera.GetRight(Owner);
 }
 
+/// <summary>Reference to an authored world-space sprite renderer.</summary>
+public readonly struct SpriteRendererRef : IComponentRef
+{
+    public static string ComponentType => "Sprite Renderer";
+    public Entity Owner { get; }
+    public SpriteRendererRef(Entity owner) => Owner = owner;
+    public bool IsValid => Owner.IsValid;
+
+    public void SetTexture(string path) => SpriteRenderer.SetTexture(Owner, path);
+    public Vector4 Tint { get => SpriteRenderer.GetTint(Owner); set => SpriteRenderer.SetTint(Owner, value); }
+    public Vector2 PixelSize { get => SpriteRenderer.GetPixelSize(Owner); set => SpriteRenderer.SetPixelSize(Owner, value); }
+    public Vector2 Pivot { get => SpriteRenderer.GetPivot(Owner); set => SpriteRenderer.SetPivot(Owner, value); }
+    public float PixelsPerUnit { get => SpriteRenderer.GetPixelsPerUnit(Owner); set => SpriteRenderer.SetPixelsPerUnit(Owner, value); }
+    public int SortingLayer { get => SpriteRenderer.GetSortingLayer(Owner); set => SpriteRenderer.SetSortingLayer(Owner, value); }
+    public int OrderInLayer { get => SpriteRenderer.GetOrderInLayer(Owner); set => SpriteRenderer.SetOrderInLayer(Owner, value); }
+    public SpriteBlendMode BlendMode { get => SpriteRenderer.GetBlendMode(Owner); set => SpriteRenderer.SetBlendMode(Owner, value); }
+
+    private bool GetFlag(uint flag) => (SpriteRenderer.GetFlags(Owner) & flag) != 0;
+    private void SetFlag(uint flag, bool value)
+    {
+        uint flags = SpriteRenderer.GetFlags(Owner);
+        SpriteRenderer.SetFlags(Owner, value ? flags | flag : flags & ~flag);
+    }
+    public bool Visible { get => GetFlag(1); set => SetFlag(1, value); }
+    public bool FlipX { get => GetFlag(2); set => SetFlag(2, value); }
+    public bool FlipY { get => GetFlag(4); set => SetFlag(4, value); }
+    public bool PixelSnap { get => GetFlag(8); set => SetFlag(8, value); }
+}
+
 /// <summary>Reference to a rigid body on an entity. Drop an entity that has a
 /// Rigid Body to link it, then read/write its motion through this wrapper.</summary>
 public readonly struct RigidBodyRef : IComponentRef

@@ -14,6 +14,25 @@ internal static unsafe partial class Native
 {
     private const string Lib = "AetherHost";
 
+	[LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+	internal static partial void aether_sprite_set_texture(uint id, string path);
+	[LibraryImport(Lib)] internal static partial Vector4 aether_sprite_get_tint(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_tint(uint id, Vector4 value);
+	[LibraryImport(Lib)] internal static partial Vector2 aether_sprite_get_pixel_size(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_pixel_size(uint id, Vector2 value);
+	[LibraryImport(Lib)] internal static partial Vector2 aether_sprite_get_pivot(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_pivot(uint id, Vector2 value);
+	[LibraryImport(Lib)] internal static partial float aether_sprite_get_pixels_per_unit(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_pixels_per_unit(uint id, float value);
+	[LibraryImport(Lib)] internal static partial int aether_sprite_get_sorting_layer(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_sorting_layer(uint id, int value);
+	[LibraryImport(Lib)] internal static partial int aether_sprite_get_order_in_layer(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_order_in_layer(uint id, int value);
+	[LibraryImport(Lib)] internal static partial int aether_sprite_get_blend_mode(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_blend_mode(uint id, int value);
+	[LibraryImport(Lib)] internal static partial uint aether_sprite_get_flags(uint id);
+	[LibraryImport(Lib)] internal static partial void aether_sprite_set_flags(uint id, uint flags);
+
     // Called once from AetherCore.Interop.Bootstrap.Init (before any script runs,
     // hence before the first P/Invoke) to point "AetherHost" at the running
     // executable. Reachable from the Interop assembly via InternalsVisibleTo.

@@ -4,9 +4,12 @@
 #include <chrono>
 #include <cctype>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -51,6 +54,7 @@ namespace aether::editor
 
 	namespace
 	{
+		constexpr std::size_t kMaxBatchItems = 10'000;
 		const json kVec3 = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}};
 
 		json Obj(json properties = json::object(), const std::vector<std::string>& required = {})
@@ -71,6 +75,50 @@ namespace aether::editor
 		json StrProp()
 		{
 			return json{{"type", "string"}};
+		}
+
+		json BatchSchema(const json& itemSchema)
+		{
+			return Obj({{"items", json{{"type", "array"}, {"items", itemSchema}, {"minItems", 1}, {"maxItems", kMaxBatchItems}}}}, {"items"});
+		}
+
+		template<typename Operation>
+		auto BatchOperation(Operation operation)
+		{
+			return [operation = std::move(operation)](const json& p, MethodContext& ctx) -> json
+			{
+				if (!p.contains("items") || !p["items"].is_array())
+				{
+					return json{{"error", "'items' must be an array"}};
+				}
+				const json& items = p["items"];
+				if (items.empty() || items.size() > kMaxBatchItems)
+				{
+					return json{{"error", "'items' must contain between 1 and 10000 entries"}};
+				}
+
+				json results = json::array();
+				std::size_t succeeded = 0;
+				for (std::size_t index = 0; index < items.size(); ++index)
+				{
+					json result;
+					try
+					{
+						result = operation(items[index], ctx);
+					}
+					catch (const std::exception& ex)
+					{
+						result = json{{"error", ex.what()}};
+					}
+					result["index"] = index;
+					if (!result.contains("error"))
+					{
+						++succeeded;
+					}
+					results.push_back(std::move(result));
+				}
+				return json{{"requested", items.size()}, {"succeeded", succeeded}, {"failed", items.size() - succeeded}, {"results", std::move(results)}};
+			};
 		}
 
 		// stable, unique id the endpoint exposes (callers never pass the source site).
@@ -319,26 +367,35 @@ namespace aether::editor
 			        return j;
 		        }});
 
+		const auto createEntity = [](const json& p, MethodContext& ctx) -> json
+		{
+			auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			if (scenes == nullptr)
+			{
+				return ErrNoScene();
+			}
+			World& world = scenes->GetWorld();
+			const Entity entity = world.Create();
+			const std::string name = p.value("name", std::string("Entity"));
+			world.Emplace<NameComponent>(entity, name);
+			const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
+			const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
+			const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
+			glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos);
+			transform = glm::rotate(transform, glm::radians(euler.z), glm::vec3(0, 0, 1));
+			transform = glm::rotate(transform, glm::radians(euler.y), glm::vec3(0, 1, 0));
+			transform = glm::rotate(transform, glm::radians(euler.x), glm::vec3(1, 0, 0));
+			transform = glm::scale(transform, scale);
+			world.Emplace<TransformComponent>(entity, TransformComponent{transform});
+			world.RegisterRoot(entity);
+			return json{{"id", entity.id}, {"name", name}};
+		};
 		methods.push_back({"scene.create",
 		        "create_entity",
 		        "Create an entity in the live scene. Returns its id.",
 		        true,
-		        Obj({{"name", StrProp()}, {"position", kVec3}}),
-		        [](const json& p, MethodContext& ctx) -> json
-		        {
-			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
-			        if (scenes == nullptr)
-			        {
-				        return ErrNoScene();
-			        }
-			        World& world = scenes->GetWorld();
-			        const Entity entity = world.Create();
-			        const std::string name = p.value("name", std::string("Entity"));
-			        world.Emplace<NameComponent>(entity, name);
-			        world.Emplace<TransformComponent>(entity, TransformComponent{glm::translate(glm::mat4(1.0f), ReadVec3(p, "position", glm::vec3(0.0f)))});
-			        world.RegisterRoot(entity);
-			        return json{{"id", entity.id}, {"name", name}};
-		        }});
+		        Obj({{"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}),
+		        createEntity});
 
 		methods.push_back({"scene.add_model",
 		        "add_model",
@@ -447,57 +504,59 @@ namespace aether::editor
 			        return json{{"id", child.id}, {"parent", parent.id}, {"ok", ok}};
 		        }});
 
+		const auto setTransform = [](const json& p, MethodContext& ctx) -> json
+		{
+			auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			if (scenes == nullptr)
+			{
+				return ErrNoScene();
+			}
+			World& world = scenes->GetWorld();
+			const Entity entity{IdOf(p)};
+			if (!world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				return ErrNoEntity();
+			}
+			const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
+			const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
+			const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
+			glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
+			m = glm::rotate(m, glm::radians(euler.z), glm::vec3(0, 0, 1));
+			m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
+			m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
+			m = glm::scale(m, scale);
+			world.EmplaceOrReplace<TransformComponent>(entity, TransformComponent{m});
+			return json{{"id", entity.id}, {"ok", true}};
+		};
 		methods.push_back({"scene.transform",
 		        "set_transform",
 		        "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
 		        true,
 		        Obj({{"id", IntProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"id"}),
-		        [](const json& p, MethodContext& ctx) -> json
-		        {
-			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
-			        if (scenes == nullptr)
-			        {
-				        return ErrNoScene();
-			        }
-			        World& world = scenes->GetWorld();
-			        const Entity entity{IdOf(p)};
-			        if (!world.GetRegistry().valid(World::ToEntt(entity)))
-			        {
-				        return ErrNoEntity();
-			        }
-			        const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
-			        const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
-			        const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
-			        glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
-			        m = glm::rotate(m, glm::radians(euler.z), glm::vec3(0, 0, 1));
-			        m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
-			        m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
-			        m = glm::scale(m, scale);
-			        world.EmplaceOrReplace<TransformComponent>(entity, TransformComponent{m});
-			        return json{{"id", entity.id}, {"ok", true}};
-		        }});
+		        setTransform});
 
+		const auto deleteEntity = [](const json& p, MethodContext& ctx) -> json
+		{
+			auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			if (scenes == nullptr)
+			{
+				return ErrNoScene();
+			}
+			World& world = scenes->GetWorld();
+			const Entity entity{IdOf(p)};
+			if (!world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				return ErrNoEntity();
+			}
+			world.Destroy(entity);
+			return json{{"id", entity.id}, {"deleted", true}};
+		};
 		methods.push_back({"scene.delete",
 		        "delete_entity",
 		        "Delete an entity from the live scene by id.",
 		        true,
 		        Obj({{"id", IntProp()}}, {"id"}),
-		        [](const json& p, MethodContext& ctx) -> json
-		        {
-			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
-			        if (scenes == nullptr)
-			        {
-				        return ErrNoScene();
-			        }
-			        World& world = scenes->GetWorld();
-			        const Entity entity{IdOf(p)};
-			        if (!world.GetRegistry().valid(World::ToEntt(entity)))
-			        {
-				        return ErrNoEntity();
-			        }
-			        world.Destroy(entity);
-			        return json{{"id", entity.id}, {"deleted", true}};
-		        }});
+		        deleteEntity});
 
 		// the Inspector's Add-Component palette uses, so the two never drift.
 		const auto componentOp = [](bool add)
@@ -536,13 +595,15 @@ namespace aether::editor
 				return json{{"id", entity.id}, {"type", type}, {add ? "added" : "removed", true}};
 			};
 		};
+		const auto addComponent = componentOp(true);
+		const auto removeComponent = componentOp(false);
 		methods.push_back({"scene.add_component",
 		        "add_component",
 		        "Add a component to an entity by id. 'type' is a ComponentCatalog name (call list_component_types for the set).",
 		        true,
 		        Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}),
-		        componentOp(true)});
-		methods.push_back({"scene.remove_component", "remove_component", "Remove a component from an entity by id ('type' is a ComponentCatalog name).", true, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}), componentOp(false)});
+		        addComponent});
+		methods.push_back({"scene.remove_component", "remove_component", "Remove a component from an entity by id ('type' is a ComponentCatalog name).", true, Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}), removeComponent});
 
 		methods.push_back({"scene.get_component",
 		        "get_component",
@@ -599,13 +660,7 @@ namespace aether::editor
 			        return json{{"id", entity.id}, {"type", type}, {"fields", out}};
 		        }});
 
-		methods.push_back({"scene.set_component",
-		        "set_component",
-		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change "
-		        "(partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
-		        true,
-		        Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"}),
-		        [](const json& p, MethodContext& ctx) -> json
+		const auto setComponent = [](const json& p, MethodContext& ctx) -> json
 		        {
 			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
 			        if (scenes == nullptr)
@@ -657,7 +712,106 @@ namespace aether::editor
 				        return json{{"error", "entity has no '" + type + "' component, or 'values' named no known fields"}};
 			        }
 			        return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
-		        }});
+		        };
+		methods.push_back({"scene.set_component",
+		        "set_component",
+		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change "
+		        "(partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
+		        true,
+		        Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"}),
+		        setComponent});
+
+		const json componentSpec = Obj({{"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"type"});
+		const json entitySpec = Obj({{"name", StrProp()},
+		        {"position", kVec3},
+		        {"rotationEuler", kVec3},
+		        {"scale", kVec3},
+		        {"components", json{{"type", "array"}, {"items", componentSpec}, {"maxItems", 64}}}});
+		const json transformSpec = Obj({{"id", IntProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"id"});
+		const json componentItemSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type"});
+		const json setComponentSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"});
+
+		const auto addComponentWithValues = [addComponent, setComponent](const json& p, MethodContext& ctx) -> json
+		{
+			json added = addComponent(p, ctx);
+			if (added.contains("error") || !p.contains("values"))
+			{
+				return added;
+			}
+			json updated = setComponent(p, ctx);
+			if (updated.contains("error"))
+			{
+				return updated;
+			}
+			added["applied"] = std::move(updated["applied"]);
+			return added;
+		};
+
+		const auto createEntityWithComponents = [createEntity, addComponentWithValues, deleteEntity](const json& p, MethodContext& ctx) -> json
+		{
+			if (p.contains("components") && (!p["components"].is_array() || p["components"].size() > 64))
+			{
+				return json{{"error", "'components' must be an array with at most 64 entries"}};
+			}
+			json created = createEntity(p, ctx);
+			if (created.contains("error") || !p.contains("components"))
+			{
+				return created;
+			}
+			const std::uint32_t id = created.value("id", std::uint32_t{0});
+			std::size_t componentCount = 0;
+			for (const json& component: p["components"])
+			{
+				json request = component;
+				request["id"] = id;
+				json result = addComponentWithValues(request, ctx);
+				if (result.contains("error"))
+				{
+					deleteEntity(json{{"id", id}}, ctx);
+					return json{{"error", result["error"]}, {"componentIndex", componentCount}};
+				}
+				++componentCount;
+			}
+			created["componentsAdded"] = componentCount;
+			return created;
+		};
+
+		methods.push_back({"scene.create_many",
+		        "create_entities",
+		        "Create up to 10,000 entities in one request. Each item accepts name/transform plus optional components with initial reflected values. Processing is one editor-frame command; failures are reported per item and a failed item's partial entity is rolled back.",
+		        true,
+		        BatchSchema(entitySpec),
+		        BatchOperation(createEntityWithComponents)});
+		methods.push_back({"scene.transform_many",
+		        "set_transforms",
+		        "Set transforms for up to 10,000 entities in one request. Returns ordered per-item results with partial failures instead of aborting the batch.",
+		        true,
+		        BatchSchema(transformSpec),
+		        BatchOperation(setTransform)});
+		methods.push_back({"scene.delete_many",
+		        "delete_entities",
+		        "Delete up to 10,000 entities in one request. Returns ordered per-item results with partial failures.",
+		        true,
+		        BatchSchema(Obj({{"id", IntProp()}}, {"id"})),
+		        BatchOperation(deleteEntity)});
+		methods.push_back({"scene.add_component_many",
+		        "add_components",
+		        "Add components to up to 10,000 entities in one request. Each item may also provide reflected field values, combining add and initialize without another round trip.",
+		        true,
+		        BatchSchema(componentItemSpec),
+		        BatchOperation(addComponentWithValues)});
+		methods.push_back({"scene.remove_component_many",
+		        "remove_components",
+		        "Remove components from up to 10,000 entities in one request, with ordered per-item results.",
+		        true,
+		        BatchSchema(Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"})),
+		        BatchOperation(removeComponent)});
+		methods.push_back({"scene.set_component_many",
+		        "set_components",
+		        "Apply reflected component field updates to up to 10,000 entities in one request, with ordered per-item applied-field or error results.",
+		        true,
+		        BatchSchema(setComponentSpec),
+		        BatchOperation(setComponent)});
 
 		methods.push_back({"scene.component_types",
 		        "list_component_types",

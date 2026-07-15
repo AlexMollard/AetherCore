@@ -26,16 +26,18 @@ namespace aether::editor
 
 	private:
 		void ReleaseSceneViewportTexture(app::LayerContext& context);
-		// Click-to-select. Must be called while the viewport InvisibleButton is
+		// Click-to-select. Must be called while the viewport InvisibleButton is current.
 		void HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
-		// state - those are stale leftovers on frames where Manipulate never ran.
+		// Returns whether a gizmo was submitted so callers do not use stale ImGuizmo state.
 		bool DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void Draw2DGrid(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void DrawPlayControls(app::LayerContext& context);
 		void DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		void DrawSpriteOutlines(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// sets m_lookThroughEntityId, which OnUpdate uses to lock the editor camera.
 		void DrawCameraPreviewControls(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
+		void RestoreEditorCameraAfterLookThrough(app::LayerContext& context);
 
 		std::uint64_t m_sceneViewportTextureId = 0;
 		gpu::ImageView m_sceneViewportImageView = nullptr;
@@ -58,5 +60,8 @@ namespace aether::editor
 		bool m_editor2DMode = false;
 
 		std::uint32_t m_lookThroughEntityId = 0;
+		glm::vec3 m_saved2DEditorPosition{0.0f, 0.0f, 10.0f};
+		float m_saved2DEditorHeight = 10.0f;
+		bool m_hasSaved2DEditorCamera = false;
 	};
 } // namespace aether::editor

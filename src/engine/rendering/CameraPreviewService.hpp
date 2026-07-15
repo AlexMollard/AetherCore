@@ -22,6 +22,7 @@ namespace aether
 	class CullPass;
 	class LightingManager;
 	class PostProcessStack;
+	class Renderer2D;
 	class VulkanContext;
 	class World;
 
@@ -36,7 +37,7 @@ namespace aether
 		void Shutdown();
 
 		// Producer thread: aim the preview at a camera's view/projection (enabled=false
-		void SetRequest(bool enabled, const glm::mat4& view, const glm::mat4& proj, glm::vec3 cameraPos, float nearPlane = 0.1f);
+		void SetRequest(bool enabled, const glm::mat4& view, const glm::mat4& proj, glm::vec3 cameraPos, float nearPlane = 0.1f, bool drawSkybox = true);
 
 		[[nodiscard]] bool IsEnabled() const
 		{
@@ -52,7 +53,12 @@ namespace aether
 		void RegisterImages(RenderGraph& graph);
 
 		void RegisterComputePasses(RenderGraph& graph, CullPass& cullPass);
-		void RegisterGraphicsPasses(RenderGraph& graph, LightingManager* lighting, BindlessManager& bindless, const PostProcessStack& postProcess, gpu::PipelineView skyboxPipeline);
+		void RegisterGraphicsPasses(RenderGraph& graph,
+		        LightingManager* lighting,
+		        BindlessManager& bindless,
+		        const PostProcessStack& postProcess,
+		        gpu::PipelineView skyboxPipeline,
+		        Renderer2D& renderer2D);
 
 		[[nodiscard]] gpu::ImageView GetColorView() const
 		{
@@ -99,5 +105,6 @@ namespace aether
 		glm::vec3 m_reqCameraPos{0.0f};
 		float m_reqNearPlane = 0.1f;
 		std::atomic<bool> m_enabled{false};
+		std::atomic<bool> m_drawSkybox{true};
 	};
 } // namespace aether

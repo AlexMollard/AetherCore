@@ -137,31 +137,16 @@ namespace aether::editor
 			c.push_back(meshEntry("Quad", ICON_FA_IMAGE, PrimitiveMesh::Quad, "quad"));
 			c.push_back(meshEntry("Triangle", ICON_FA_PLAY, PrimitiveMesh::Triangle, "triangle"));
 
-			c.push_back(ComponentCatalogEntry{"Sprite",
+			c.push_back(ComponentCatalogEntry{"Sprite Renderer",
 			        "Rendering",
 			        ICON_FA_IMAGE,
 			        [](const World& w, Entity e) { return w.Has<SpriteRendererComponent>(e); },
-			        [](World& w, Entity e, ServiceContainer& s)
+			        [](World& w, Entity e, ServiceContainer&)
 			        {
-				        auto* prims = s.TryGet<PrimitiveMeshes>();
-				        auto* assets = s.TryGet<AssetManager>();
-				        if (prims == nullptr || assets == nullptr)
-				        {
-					        return;
-				        }
 				        EnsureTransform(w, e);
-				        w.EmplaceOrReplace<MeshComponent>(e, MeshComponent{.mesh = &prims->Get(PrimitiveMesh::Quad)});
-				        w.EmplaceOrReplace<MeshSourceComponent>(e, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "quad", .primitiveIndex = 0});
-				        MaterialAsset asset{};
-				        asset.baseColorFactor = glm::vec4(1.0f);
-				        asset.roughnessFactor = 1.0f;
-				        asset.metallicFactor = 0.0f;
-				        asset.doubleSided = true;
-				        asset.alphaBlend = true;
-				        MaterialSystem::AssignMaterial(w, e, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 				        w.EmplaceOrReplace<SpriteRendererComponent>(e);
 			        },
-			        [](World& w, Entity e) { RemoveMeshBundle(w, e); }});
+			        [](World& w, Entity e) { w.Remove<SpriteRendererComponent>(e); }});
 
 			c.push_back(ComponentCatalogEntry{"Material",
 			        "Rendering",

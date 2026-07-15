@@ -55,6 +55,7 @@ namespace aether
 		        .depthWriteEnable = desc.depthWriteEnable,
 		        .depthCompareOp = desc.depthCompareOp,
 		        .blendEnable = desc.blendEnable,
+		        .blendMode = desc.blendMode,
 		        .topology = desc.topology,
 		        .polygonMode = desc.polygonMode,
 		        .cullMode = desc.cullMode,

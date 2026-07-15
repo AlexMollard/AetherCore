@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -32,8 +33,9 @@ int main(int argc, char** argv)
 		}
 		else if (arg == "-h" || arg == "--help")
 		{
-			std::cout << "usage: aether-ctl [--port N] <method> [params-json]\n"
+			std::cout << "usage: aether-ctl [--port N] <method> [params-json|-]\n"
 			             "  methods: info | scene.entities | scene.create | scene.transform | scene.delete | rendergraph\n"
+			             "  params:  pass '-' to read JSON from stdin (recommended for large batches)\n"
 			             "  port:    --port, else $AETHER_CONTROL_PORT, else 8787\n";
 			return 0;
 		}
@@ -48,7 +50,15 @@ int main(int argc, char** argv)
 		return Fail("error: missing <method> (try --help)");
 	}
 	const std::string method = positional[0];
-	const std::string paramsStr = positional.size() > 1 ? positional[1] : std::string("{}");
+	std::string paramsStr = positional.size() > 1 ? positional[1] : std::string("{}");
+	if (paramsStr == "-")
+	{
+		paramsStr.assign(std::istreambuf_iterator<char>(std::cin), std::istreambuf_iterator<char>());
+		if (paramsStr.empty())
+		{
+			paramsStr = "{}";
+		}
+	}
 
 	if (port == 0)
 	{

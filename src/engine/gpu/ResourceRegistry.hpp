@@ -74,6 +74,7 @@ namespace aether::gpu
 		bool depthWriteEnable = false;
 		CompareOp depthCompareOp = CompareOp::Less;
 		bool blendEnable = false;
+		BlendMode blendMode = BlendMode::Alpha;
 		PrimitiveTopology topology = PrimitiveTopology::TriangleList;
 		PolygonMode polygonMode = PolygonMode::Fill;
 		CullMode cullMode = CullMode::None;

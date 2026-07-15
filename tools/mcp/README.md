@@ -37,11 +37,15 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `list_windows` / `set_window` | yes | List every editor panel + visibility; open/close one by name (case-insensitive). Lets the agent stage the editor before a screenshot. |
 | `inspect_component` | yes | Open the Inspector and scroll a named component's drawer into view (force-opening it), e.g. `Rigid Body`. Select an entity first, then screenshot that component. |
 | `create_entity` | yes | Create an entity (`name`, `position`). Returns its id. |
+| `create_entities` | yes | Create up to 10,000 entities in one request, including transforms and optional components with initial reflected values. Per-item failures are isolated and reported. |
 | `rename_entity` | yes | Rename an entity by `id`. |
 | `parent_entity` | yes | Set an entity's parent by `id` (`parent:0` unparents to root). |
 | `set_transform` | yes | Set an entity's `position` / `rotationEuler` (deg) / `scale` by `id`. |
+| `set_transforms` | yes | Batch transform updates for up to 10,000 entities with ordered per-item results. |
 | `add_component` / `remove_component` | yes | Add/remove a core component (`Transform`, `Name`, `Hierarchy`) by `id`. |
+| `add_components` / `remove_components` / `set_components` | yes | Batch component creation, removal, and reflected-field updates. `add_components` can initialize fields in the same call. |
 | `delete_entity` | yes | Delete an entity by `id`. |
+| `delete_entities` | yes | Batch deletion for up to 10,000 entities with partial-failure reporting. |
 | `save_scene` | yes | Save the live scene to its committable `.scene.toml`. |
 | `load_scene` | yes | Switch the editor to a scene by `name`. |
 | `new_scene` | yes | Replace the live scene with a fresh empty one. |
@@ -58,9 +62,9 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `list_component_types` | yes | The 28 components the ComponentCatalog can add (name + category). |
 | `screenshot` | yes | Capture the current editor frame to a compressed `.png` and return its path — lets the agent *see* what's rendered. |
 
-Rich components (mesh/material/physics) stay inspector-authored; they need
-meshes/materials/defaults the Add-Component palette wires. The agent can now
-*see* any GPU texture (`capture_texture`), not just the viewport, and query
+Batch arguments are streamed to `aether-ctl` over stdin, avoiding the Windows
+command-line length limit for large scene requests. The agent can also *see*
+any GPU texture (`capture_texture`), not just the viewport, and query
 render-graph, scene, light, camera and settings state across subsystems.
 
 The editor exposes a **Control Server** panel (Window menu) to start/stop the

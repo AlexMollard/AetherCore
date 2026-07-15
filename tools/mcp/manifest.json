@@ -88,6 +88,22 @@
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
           }
         },
         "type": "object"
@@ -437,7 +453,7 @@
       "tool": "render_benchmark"
     },
     {
-      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
+      "description": "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
       "mutates": false,
       "name": "viewport.screenshot",
       "paramsSchema": {
@@ -676,6 +692,268 @@
         "type": "object"
       },
       "tool": "create_project"
+    },
+    {
+      "description": "Create up to 10,000 entities in one request. Each item accepts name/transform plus optional components with initial reflected values. Processing is one editor-frame command; failures are reported per item and a failed item's partial entity is rolled back.",
+      "mutates": true,
+      "name": "scene.create_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "components": {
+                  "items": {
+                    "properties": {
+                      "type": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "position": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "rotationEuler": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "scale": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "create_entities"
+    },
+    {
+      "description": "Set transforms for up to 10,000 entities in one request. Returns ordered per-item results with partial failures instead of aborting the batch.",
+      "mutates": true,
+      "name": "scene.transform_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "position": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "rotationEuler": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "scale": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "set_transforms"
+    },
+    {
+      "description": "Delete up to 10,000 entities in one request. Returns ordered per-item results with partial failures.",
+      "mutates": true,
+      "name": "scene.delete_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "delete_entities"
+    },
+    {
+      "description": "Add components to up to 10,000 entities in one request. Each item may also provide reflected field values, combining add and initialize without another round trip.",
+      "mutates": true,
+      "name": "scene.add_component_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "type"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "add_components"
+    },
+    {
+      "description": "Remove components from up to 10,000 entities in one request, with ordered per-item results.",
+      "mutates": true,
+      "name": "scene.remove_component_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "type"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_components"
+    },
+    {
+      "description": "Apply reflected component field updates to up to 10,000 entities in one request, with ordered per-item applied-field or error results.",
+      "mutates": true,
+      "name": "scene.set_component_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "values"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "set_components"
     }
   ]
 }

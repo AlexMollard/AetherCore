@@ -1,35 +1,36 @@
 #pragma once
 
+#include <array>
+#include <atomic>
+#include <cstdint>
+#include <string_view>
+#include <vector>
+
+#include "gpu/ResourceRegistry.hpp"
 #include "rendering/RenderFramePacket.hpp"
-#include "rendering/RenderGraph.hpp"
+#include "rendering/RenderGraphTypes.hpp"
 
 namespace aether
 {
-	// World-space 2D render seam. Phase 0 owns packet lifetime and graph
-	// composition; sprite GPU upload and drawing are layered onto this class.
+	class BindlessManager;
+	class FrameConstantsBuffer;
+	class GpuDevice;
+	class RenderGraph;
+
 	class Renderer2D
 	{
 	public:
-		void BeginFrame(const Render2DFrameData& frameData)
-		{
-			m_frameData = &frameData;
-		}
-
-		void EndFrame()
-		{
-			m_frameData = nullptr;
-		}
-
-		void RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent)
-		{
-			graph.AddFullscreenPass({
-			             .name = "$Renderer2D",
-			             .color = color,
-			             .extent = extent,
-			             .loadOp = gpu::LoadOp::Load,
-			     })
-			        .Execute([this](PassContext&) { (void) m_frameData; });
-		}
+		void Initialize(GpuDevice& gpu, gpu::Format colorFormat);
+		void Shutdown();
+		void BeginFrame(const Render2DFrameData& frameData, std::uint32_t frameSlot);
+		void EndFrame();
+		void RegisterPass(RenderGraph& graph,
+		        RGImage color,
+		        gpu::Extent2D extent,
+		        BindlessManager& bindless,
+		        std::string_view name = "$Renderer2D",
+		        const FrameConstantsBuffer* frameConstants = nullptr,
+		        const std::atomic<bool>* enabled = nullptr);
 
 		[[nodiscard]] const Render2DFrameData* GetFrameData() const
 		{
@@ -37,6 +38,30 @@ namespace aether
 		}
 
 	private:
+		static constexpr std::uint32_t kFrames = kMaxFramesInFlight;
+		static constexpr std::uint32_t kBlendModeCount = 4;
+
+		struct DrawBatch
+		{
+			std::uint32_t firstInstance = 0;
+			std::uint32_t count = 0;
+			std::uint32_t blendMode = 0;
+		};
+
+		struct Frame
+		{
+			gpu::BufferHandle buffer{};
+			void* mapped = nullptr;
+			gpu::DeviceAddress address = 0;
+			std::uint32_t capacity = 0;
+			std::uint32_t count = 0;
+			std::vector<DrawBatch> batches;
+		};
+
+		void EnsureCapacity(Frame& frame, std::uint32_t count);
+
 		const Render2DFrameData* m_frameData = nullptr;
+		std::array<Frame, kFrames> m_frames{};
+		std::array<gpu::PipelineHandle, kBlendModeCount> m_pipelines{};
 	};
 } // namespace aether
