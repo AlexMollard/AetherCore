@@ -493,7 +493,7 @@ namespace aether::editor
 		}
 	}
 
-	void EditorProjectManager::CreateProject(std::filesystem::path root, std::string_view name)
+	void EditorProjectManager::CreateProject(std::filesystem::path root, std::string_view name, ProjectTemplate projectTemplate)
 	{
 		m_launcherState.error.clear();
 		root = ResolveProjectRoot(std::move(root));
@@ -508,7 +508,7 @@ namespace aether::editor
 			m_launcherState.error = "Choose a project folder.";
 			return;
 		}
-		if (!WriteProjectDescriptor(root, projectName, m_launcherState.error))
+		if (!WriteProjectDescriptor(root, projectName, m_launcherState.error, projectTemplate))
 		{
 			return;
 		}
@@ -529,9 +529,9 @@ namespace aether::editor
 		{
 			OpenProject(std::move(root));
 		};
-		actions.createProject = [this](std::filesystem::path root, std::string_view name)
+		actions.createProject = [this](std::filesystem::path root, std::string_view name, ProjectTemplate projectTemplate)
 		{
-			CreateProject(std::move(root), name);
+			CreateProject(std::move(root), name, projectTemplate);
 		};
 		actions.browseFolder = []() -> std::optional<std::filesystem::path>
 		{

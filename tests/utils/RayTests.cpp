@@ -72,3 +72,25 @@ TEST_CASE("BuildCameraRay round-trips points projected by the real camera") {
         }
     }
 }
+
+TEST_CASE("Camera orthographic projection uses the authored vertical size") {
+    CameraDesc desc;
+    desc.mode = CameraMode::Manual;
+    desc.projection = CameraProjection::Orthographic;
+    desc.orthographicHeight = 10.0f;
+    desc.nearPlane = 0.1f;
+    desc.farPlane = 100.0f;
+    const Camera cam(desc);
+
+    constexpr float aspect = 2.0f;
+    const glm::mat4 projection = cam.GetProjectionMatrix(aspect);
+    const glm::vec4 left = projection * glm::vec4(-10.0f, 0.0f, -1.0f, 1.0f);
+    const glm::vec4 right = projection * glm::vec4(10.0f, 0.0f, -1.0f, 1.0f);
+    const glm::vec4 top = projection * glm::vec4(0.0f, 5.0f, -1.0f, 1.0f);
+
+    CHECK(left.x == doctest::Approx(-1.0f));
+    CHECK(right.x == doctest::Approx(1.0f));
+    CHECK(top.y == doctest::Approx(-1.0f));
+    CHECK(cam.GetProjection() == CameraProjection::Orthographic);
+    CHECK(cam.GetOrthographicHeight() == doctest::Approx(10.0f));
+}

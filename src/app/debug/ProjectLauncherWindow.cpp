@@ -308,7 +308,38 @@ namespace aether::app
 			else
 			{
 				ImGui::TextUnformatted("Create a new AetherCore project");
-				ImGui::TextDisabled("Choose a name and an empty project folder.");
+				ImGui::TextDisabled("Choose a template, name, and empty project folder.");
+				ImGui::Spacing();
+
+				const project::ProjectTemplateInfo* selectedTemplate = &project::kProjectTemplates.front();
+				for (const project::ProjectTemplateInfo& info: project::kProjectTemplates)
+				{
+					if (info.value == state.newTemplate)
+					{
+						selectedTemplate = &info;
+						break;
+					}
+				}
+				ImGui::TextUnformatted("Template");
+				ImGui::SetNextItemWidth(width);
+				if (ImGui::BeginCombo("##newProjectTemplate", selectedTemplate->name.data()))
+				{
+					for (const project::ProjectTemplateInfo& info: project::kProjectTemplates)
+					{
+						const bool selected = info.value == state.newTemplate;
+						if (ImGui::Selectable(info.name.data(), selected))
+						{
+							state.newTemplate = info.value;
+							selectedTemplate = &info;
+						}
+						if (selected)
+						{
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+				ImGui::TextDisabled("%s", selectedTemplate->description.data());
 				ImGui::Spacing();
 				ImGui::SetNextItemWidth(width);
 				submit = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
@@ -357,7 +388,7 @@ namespace aether::app
 				}
 				else if (!opening && actions.createProject)
 				{
-					actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data());
+					actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data(), state.newTemplate);
 				}
 				state.dialog = ProjectLauncherDialog::None;
 				ImGui::CloseCurrentPopup();

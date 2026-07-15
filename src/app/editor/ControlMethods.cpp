@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -39,6 +40,7 @@
 #include "scene/SceneWorkflow.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scene/World.hpp"
+#include "utils/LogRingBuffer.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
@@ -107,6 +109,62 @@ namespace aether::editor
 		{
 			return json{{"error", "no such entity"}};
 		}
+
+		const char* SceneKindName(SceneKind kind)
+		{
+			switch (kind)
+			{
+				case SceneKind::Scene2D:
+					return "2d";
+				case SceneKind::Mixed:
+					return "mixed";
+				case SceneKind::Scene3D:
+				default:
+					return "3d";
+			}
+		}
+
+		const char* LogLevelName(LogLevel level)
+		{
+			switch (level)
+			{
+				case LogLevel::Error:
+					return "error";
+				case LogLevel::Warn:
+					return "warn";
+				case LogLevel::Info:
+					return "info";
+				case LogLevel::Verbose:
+				default:
+					return "verbose";
+			}
+		}
+
+		std::optional<LogLevel> ParseLogLevel(std::string_view name)
+		{
+			if (name == "verbose")
+			{
+				return LogLevel::Verbose;
+			}
+			if (name == "info")
+			{
+				return LogLevel::Info;
+			}
+			if (name == "warn")
+			{
+				return LogLevel::Warn;
+			}
+			if (name == "error")
+			{
+				return LogLevel::Error;
+			}
+			return std::nullopt;
+		}
+
+		bool ContainsInsensitive(std::string_view text, std::string_view needle)
+		{
+			return std::ranges::search(text, needle, [](char lhs, char rhs) { return std::tolower(static_cast<unsigned char>(lhs)) == std::tolower(static_cast<unsigned char>(rhs)); }).begin() != text.end();
+		}
 	} // namespace
 
 	std::vector<ControlMethod> BuildControlMethods()
@@ -115,7 +173,7 @@ namespace aether::editor
 
 		methods.push_back({"info",
 		        "engine_info",
-		        "Live editor summary: current scene name, entity count, frame index, fps.",
+		        "Live editor summary: current scene name and kind, entity count, frame index, fps.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -135,7 +193,62 @@ namespace aether::editor
 			        {
 				        mode = playState->IsPlaying() ? "playing" : (playState->IsCompiling() ? "compiling" : "editing");
 			        }
-			        return json{{"frame", ctx.frameIndex}, {"fps", ctx.fps}, {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""}, {"entities", count}, {"playState", mode}};
+			        return json{{"frame", ctx.frameIndex},
+			                {"fps", ctx.fps},
+			                {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""},
+			                {"sceneKind", scenes != nullptr ? SceneKindName(scenes->GetWorld().GetSceneKind()) : "unknown"},
+			                {"entities", count},
+			                {"playState", mode}};
+		        }});
+
+		methods.push_back({"console.logs",
+		        "get_console_log",
+		        "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling.",
+		        false,
+		        Obj({{"limit", json{{"type", "integer"}, {"minimum", 1}, {"maximum", 500}}},
+		                {"minimumLevel", json{{"type", "string"}, {"enum", json::array({"verbose", "info", "warn", "error"})}}},
+		                {"category", StrProp()},
+		                {"contains", StrProp()},
+		                {"afterSeq", json{{"type", "integer"}, {"minimum", 0}}}}),
+		        [](const json& params, MethodContext&) -> json
+		        {
+			        const int limit = std::clamp(params.value("limit", 100), 1, 500);
+			        const std::string minimumLevelName = params.value("minimumLevel", std::string{"verbose"});
+			        const std::optional<LogLevel> minimumLevel = ParseLogLevel(minimumLevelName);
+			        if (!minimumLevel.has_value())
+			        {
+				        return json{{"error", "minimumLevel must be verbose, info, warn, or error"}};
+			        }
+
+			        const std::string category = params.value("category", std::string{});
+			        const std::string contains = params.value("contains", std::string{});
+			        const bool hasAfterSeq = params.contains("afterSeq");
+			        const std::uint64_t afterSeq = hasAfterSeq ? params.value("afterSeq", std::uint64_t{0}) : 0;
+
+			        std::vector<LogRingBuffer::Record> records;
+			        LogRingBuffer::Get().Snapshot(records);
+			        json entries = json::array();
+			        std::size_t matched = 0;
+			        for (auto it = records.rbegin(); it != records.rend(); ++it)
+			        {
+				        const LogRingBuffer::Record& record = *it;
+				        if (record.level < *minimumLevel || (hasAfterSeq && record.seq <= afterSeq) || (!category.empty() && !ContainsInsensitive(record.category, category)) || (!contains.empty() && !ContainsInsensitive(record.message, contains)))
+				        {
+					        continue;
+				        }
+				        ++matched;
+				        if (entries.size() >= static_cast<std::size_t>(limit))
+				        {
+					        continue;
+				        }
+				        entries.push_back(json{{"seq", record.seq}, {"time", record.time}, {"level", LogLevelName(record.level)}, {"category", record.category}, {"message", record.message}, {"file", record.file}, {"line", record.line}});
+			        }
+			        std::reverse(entries.begin(), entries.end());
+			        return json{{"entries", std::move(entries)},
+			                {"matched", matched},
+			                {"truncated", matched > static_cast<std::size_t>(limit)},
+			                {"oldestSeq", records.empty() ? 0 : records.front().seq},
+			                {"latestSeq", records.empty() ? 0 : records.back().seq}};
 		        }});
 
 		methods.push_back({"scene.entities",
@@ -917,7 +1030,7 @@ namespace aether::editor
 			        {
 				        ++total;
 			        }
-			        return json{{"entities", total}, {"componentCounts", counts}};
+			        return json{{"sceneKind", SceneKindName(world.GetSceneKind())}, {"entities", total}, {"componentCounts", counts}};
 		        }});
 
 		methods.push_back({"scene.lights",
@@ -977,7 +1090,7 @@ namespace aether::editor
 
 		methods.push_back({"camera.info",
 		        "camera_info",
-		        "Active camera: world position, forward direction, and vertical field of view (degrees).",
+		        "Active camera: projection mode, world position, forward direction, vertical field of view, and orthographic height.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -992,7 +1105,11 @@ namespace aether::editor
 			        {
 				        return json{{"error", "no active camera"}};
 			        }
-			        return json{{"position", Vec3ToJson(cam->GetPosition())}, {"forward", Vec3ToJson(cam->GetForward())}, {"fovDegrees", cam->GetFovDegrees()}};
+			        return json{{"projection", cam->GetProjection() == CameraProjection::Orthographic ? "orthographic" : "perspective"},
+			                {"position", Vec3ToJson(cam->GetPosition())},
+			                {"forward", Vec3ToJson(cam->GetForward())},
+			                {"fovDegrees", cam->GetFovDegrees()},
+			                {"orthographicHeight", cam->GetOrthographicHeight()}};
 		        }});
 
 		methods.push_back({"settings.get",

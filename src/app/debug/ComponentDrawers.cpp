@@ -1359,8 +1359,22 @@ namespace aether::editor
 			ImGui::SetItemTooltip("Drive the scene view from this camera while Playing");
 		}
 
-		PropFloat("FOV", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f\xc2\xb0");
-		cam->fovDegrees = std::clamp(cam->fovDegrees, 1.0f, 179.0f);
+		int projection = cam->projection == CameraProjection::Orthographic ? 1 : 0;
+		constexpr const char* kProjections[] = {"Perspective", "Orthographic"};
+		if (PropCombo("Projection", &projection, kProjections, IM_ARRAYSIZE(kProjections)))
+		{
+			cam->projection = projection == 1 ? CameraProjection::Orthographic : CameraProjection::Perspective;
+		}
+		if (cam->projection == CameraProjection::Orthographic)
+		{
+			PropFloat("Size", &cam->orthographicHeight, 0.1f, 0.01f, 100000.0f, "%.2f");
+			cam->orthographicHeight = std::max(0.001f, cam->orthographicHeight);
+		}
+		else
+		{
+			PropFloat("FOV", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f\xc2\xb0");
+			cam->fovDegrees = std::clamp(cam->fovDegrees, 1.0f, 179.0f);
+		}
 		PropFloat("Near", &cam->nearPlane, 0.01f, 0.001f, 100.0f, "%.3f");
 		PropFloat("Far", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f");
 		cam->nearPlane = std::max(0.001f, cam->nearPlane);

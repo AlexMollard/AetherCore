@@ -1,6 +1,618 @@
 {
   "methods": [
     {
+      "description": "Live editor summary: current scene name and kind, entity count, frame index, fps.",
+      "mutates": false,
+      "name": "info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "engine_info"
+    },
+    {
+      "description": "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling.",
+      "mutates": false,
+      "name": "console.logs",
+      "paramsSchema": {
+        "properties": {
+          "afterSeq": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "category": {
+            "type": "string"
+          },
+          "contains": {
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimumLevel": {
+            "enum": [
+              "verbose",
+              "info",
+              "warn",
+              "error"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "get_console_log"
+    },
+    {
+      "description": "List every entity in the live scene with id, name, and world position.",
+      "mutates": false,
+      "name": "scene.entities",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_entities"
+    },
+    {
+      "description": "Full detail for one entity by id: name, world position, scale, and its component type list.",
+      "mutates": false,
+      "name": "scene.get",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "get_entity"
+    },
+    {
+      "description": "Create an entity in the live scene. Returns its id.",
+      "mutates": true,
+      "name": "scene.create",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "create_entity"
+    },
+    {
+      "description": "Add a model file to the live scene as one operation - the seamless equivalent of dragging a glTF into the editor. Bakes the raw glTF if it hasn't been imported yet, then spawns the correct layout: a lone static mesh sits on a single entity, while a multi-primitive or skinned model becomes a root with one child per primitive (each carrying its own material and skin). 'path' is a project:// or absolute model path; optional 'name', 'position', 'rotationEuler' (degrees) and 'scale' place it (skinned models authored in centimetres usually want scale ~0.01). Returns the root id and primitive count.",
+      "mutates": true,
+      "name": "scene.add_model",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "add_model"
+    },
+    {
+      "description": "Rename an entity by id.",
+      "mutates": true,
+      "name": "scene.rename",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "rename_entity"
+    },
+    {
+      "description": "Set an entity's parent by id. parent=0 unparents it to the scene root.",
+      "mutates": true,
+      "name": "scene.parent",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "parent": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "parent_entity"
+    },
+    {
+      "description": "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
+      "mutates": true,
+      "name": "scene.transform",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "set_transform"
+    },
+    {
+      "description": "Delete an entity from the live scene by id.",
+      "mutates": true,
+      "name": "scene.delete",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "delete_entity"
+    },
+    {
+      "description": "Add a component to an entity by id. 'type' is a ComponentCatalog name (call list_component_types for the set).",
+      "mutates": true,
+      "name": "scene.add_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "add_component"
+    },
+    {
+      "description": "Remove a component from an entity by id ('type' is a ComponentCatalog name).",
+      "mutates": true,
+      "name": "scene.remove_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_component"
+    },
+    {
+      "description": "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a component name (call list_component_types for the set and each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
+      "mutates": false,
+      "name": "scene.get_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "get_component"
+    },
+    {
+      "description": "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
+      "mutates": true,
+      "name": "scene.set_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "values"
+        ],
+        "type": "object"
+      },
+      "tool": "set_component"
+    },
+    {
+      "description": "List every component (name + category), plus, for components with editable fields, the field list get_component / set_component accept.",
+      "mutates": false,
+      "name": "scene.component_types",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_component_types"
+    },
+    {
+      "description": "Save the live scene to its committable .scene.toml. Defaults to the current scene; pass 'name' to save under a different name.",
+      "mutates": true,
+      "name": "scene.save",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "save_scene"
+    },
+    {
+      "description": "Switch the live editor to a scene by name (tears the current scene down first).",
+      "mutates": true,
+      "name": "scene.load",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "load_scene"
+    },
+    {
+      "description": "Replace the live scene with a fresh empty scene.",
+      "mutates": true,
+      "name": "scene.new",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "new_scene"
+    },
+    {
+      "description": "Enter Play mode (async): rebuild the C# scripts on a worker thread, then snapshot + start. Returns immediately with state='compiling'; poll info.playState until 'playing'. The editor never blocks. Mirrors the Play button.",
+      "mutates": true,
+      "name": "engine.play",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "play"
+    },
+    {
+      "description": "Exit Play mode and restore the pre-play scene snapshot.",
+      "mutates": true,
+      "name": "engine.stop",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "stop"
+    },
+    {
+      "description": "Toggle Play/Stop.",
+      "mutates": true,
+      "name": "engine.toggle_play",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "toggle_play"
+    },
+    {
+      "description": "Dump the live render graph: every compiled pass with its type, dependencies, produced/consumed frame products, and last CPU time.",
+      "mutates": false,
+      "name": "rendergraph",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "query_rendergraph"
+    },
+    {
+      "description": "Render-graph frame statistics: pass/barrier counts, transient-image cache hit/miss, and the transient GPU heap capacity vs. bytes used - the engine's per-frame allocation profile.",
+      "mutates": false,
+      "name": "render.stats",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "render_stats"
+    },
+    {
+      "description": "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.",
+      "mutates": false,
+      "name": "render.benchmark",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "render_benchmark"
+    },
+    {
+      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
+      "mutates": false,
+      "name": "viewport.screenshot",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "screenshot"
+    },
+    {
+      "description": "List every registered texture / render target (shadow atlas, GBuffer, scene color, asset textures): name, format, extent, aspect, mips, layers, bindless slot.",
+      "mutates": false,
+      "name": "render.textures",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_textures"
+    },
+    {
+      "description": "Capture a registered texture / render target (name from list_textures) to a .png and return its path - use it to SEE any GPU texture, not just the viewport. Handles 8-bit color, depth (normalized grayscale) and HDR (tonemapped) targets.",
+      "mutates": false,
+      "name": "render.capture_texture",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "capture_texture"
+    },
+    {
+      "description": "Per-component-type entity counts in the live scene - a histogram over the ECS storage pools.",
+      "mutates": false,
+      "name": "scene.stats",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "scene_stats"
+    },
+    {
+      "description": "Every light in the live scene: id, name, type (point/spot), world position, color, intensity, radius, shadow-casting flag (spots also report cone angles and aim direction).",
+      "mutates": false,
+      "name": "scene.lights",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_lights"
+    },
+    {
+      "description": "Active camera: projection mode, world position, forward direction, vertical field of view, and orthographic height.",
+      "mutates": false,
+      "name": "camera.info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "camera_info"
+    },
+    {
+      "description": "Current engine settings: resolution, vsync, and target fps.",
+      "mutates": false,
+      "name": "settings.get",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "get_settings"
+    },
+    {
+      "description": "List every editor panel/window and whether it is currently open. Names feed set_window.",
+      "mutates": false,
+      "name": "editor.windows",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_windows"
+    },
+    {
+      "description": "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.",
+      "mutates": true,
+      "name": "editor.window_set",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "visible"
+        ],
+        "type": "object"
+      },
+      "tool": "set_window"
+    },
+    {
+      "description": "Open the Inspector and scroll a specific component's drawer into view (force-opening it), e.g. 'Rigid Body' or 'Material'. Select an entity first. Matches the section label case-insensitively - use it to frame a component for a screenshot.",
+      "mutates": true,
+      "name": "editor.inspect_component",
+      "paramsSchema": {
+        "properties": {
+          "component": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "type": "object"
+      },
+      "tool": "inspect_component"
+    },
+    {
+      "description": "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
+      "mutates": true,
+      "name": "asset.select",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "select_asset"
+    },
+    {
+      "description": "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",
+      "mutates": true,
+      "name": "scene.select",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "select_entity"
+    },
+    {
+      "description": "The current editor selection: the primary entity id (0 if none) plus all selected ids.",
+      "mutates": false,
+      "name": "scene.selection",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "get_selection"
+    },
+    {
       "description": "Live Launcher summary: recent-project count, handoff state, frame index, and fps.",
       "mutates": false,
       "name": "launcher.info",
@@ -21,18 +633,49 @@
       "tool": "list_projects"
     },
     {
-      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
-      "mutates": false,
-      "name": "viewport.screenshot",
+      "description": "Open an existing AetherCore project and hand the control port from the Launcher to its Editor process.",
+      "mutates": true,
+      "name": "launcher.open_project",
       "paramsSchema": {
         "properties": {
-          "path": {
+          "root": {
             "type": "string"
           }
         },
+        "required": [
+          "root"
+        ],
         "type": "object"
       },
-      "tool": "screenshot"
+      "tool": "open_project"
+    },
+    {
+      "description": "Create a Blank 2D or Blank 3D project, then hand the control port from the Launcher to its Editor process.",
+      "mutates": true,
+      "name": "launcher.create_project",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "template": {
+            "enum": [
+              "blank_3d",
+              "blank_2d"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "template"
+        ],
+        "type": "object"
+      },
+      "tool": "create_project"
     }
   ]
 }

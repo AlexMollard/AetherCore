@@ -9,8 +9,9 @@ sun_direction = [ -0.6, 0.65, 0.35 ]
 sun_intensity = 4.0
 
 [scene]
+kind = '3d'
 name = 'default'
-version = 7
+version = 9
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]

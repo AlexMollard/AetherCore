@@ -8,6 +8,12 @@ public enum CameraMode
     Free = 1,
 }
 
+public enum CameraProjection
+{
+    Perspective = 0,
+    Orthographic = 1,
+}
+
 /// <summary>
 /// Camera creation and control. A camera is an ENTITY carrying a CameraComponent
 /// (orbit cameras additionally carry an OrbitCameraComponent), so a "camera handle"
@@ -25,6 +31,10 @@ public static class Camera
     public static Entity CreateFree(Vector3 position, float fovDegrees)
         => new(Native.aether_camera_create_free(position, fovDegrees));
 
+    /// <summary>Spawn an orthographic camera looking down the negative Z axis.</summary>
+    public static Entity CreateOrthographic(Vector3 position, float height)
+        => new(Native.aether_camera_create_orthographic(position, height));
+
     /// <summary>Make <paramref name="camera"/> the scene's single main camera.</summary>
     public static void SetMain(Entity camera) => Native.aether_camera_set_main(camera.Id);
 
@@ -32,6 +42,14 @@ public static class Camera
     public static Entity Main => new(Native.aether_camera_get_main());
 
     public static void SetMode(Entity camera, CameraMode mode) => Native.aether_camera_set_mode(camera.Id, (int)mode);
+
+    public static void SetPerspective(Entity camera, float fovDegrees) => Native.aether_camera_set_perspective(camera.Id, fovDegrees);
+
+    public static void SetOrthographic(Entity camera, float height) => Native.aether_camera_set_orthographic(camera.Id, height);
+
+    public static CameraProjection GetProjection(Entity camera) => (CameraProjection)Native.aether_camera_get_projection(camera.Id);
+
+    public static float GetOrthographicHeight(Entity camera) => Native.aether_camera_get_orthographic_height(camera.Id);
 
     public static void SetPosition(Entity camera, Vector3 position) => Native.aether_camera_set_position(camera.Id, position);
 

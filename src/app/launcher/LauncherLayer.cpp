@@ -31,14 +31,37 @@ namespace aether::app
 
 		constexpr std::string_view kEditorLogoPath = "engine://branding/aethercore-icon-white.png";
 
-		json Obj(json properties = json::object())
+		json Obj(json properties = json::object(), const std::vector<std::string>& required = {})
 		{
-			return json{{"type", "object"}, {"properties", std::move(properties)}};
+			json schema{{"type", "object"}, {"properties", std::move(properties)}};
+			if (!required.empty())
+			{
+				schema["required"] = required;
+			}
+			return schema;
 		}
 
 		json StrProp()
 		{
 			return json{{"type", "string"}};
+		}
+
+		json ProjectTemplateProp()
+		{
+			return json{{"type", "string"}, {"enum", json::array({"blank_3d", "blank_2d"})}};
+		}
+
+		std::optional<project::ProjectTemplate> ProjectTemplateFromName(std::string_view name)
+		{
+			if (name == "blank_3d")
+			{
+				return project::ProjectTemplate::Blank3D;
+			}
+			if (name == "blank_2d")
+			{
+				return project::ProjectTemplate::Blank2D;
+			}
+			return std::nullopt;
 		}
 
 		// single project via --project and never reads it.
@@ -102,6 +125,43 @@ namespace aether::app
 				        return json{{"projects", std::move(projects)}};
 			        }});
 
+			methods.push_back({"launcher.open_project",
+			        "open_project",
+			        "Open an existing AetherCore project and hand the control port from the Launcher to its Editor process.",
+			        true,
+			        Obj({{"root", StrProp()}}, {"root"}),
+			        [&launcher](const json& params, editor::MethodContext&) -> json
+			        {
+				        const std::filesystem::path root = params.value("root", std::string{});
+				        if (const std::string error = launcher.QueueOpenProjectForControl(root); !error.empty())
+				        {
+					        return json{{"error", error}};
+				        }
+				        return json{{"status", "queued"}, {"root", root.string()}};
+			        }});
+
+			methods.push_back({"launcher.create_project",
+			        "create_project",
+			        "Create a Blank 2D or Blank 3D project, then hand the control port from the Launcher to its Editor process.",
+			        true,
+			        Obj({{"root", StrProp()}, {"name", StrProp()}, {"template", ProjectTemplateProp()}}, {"root", "template"}),
+			        [&launcher](const json& params, editor::MethodContext&) -> json
+			        {
+				        const std::filesystem::path root = params.value("root", std::string{});
+				        const std::string name = params.value("name", std::string{});
+				        const std::string templateName = params.value("template", std::string{});
+				        const std::optional<project::ProjectTemplate> projectTemplate = ProjectTemplateFromName(templateName);
+				        if (!projectTemplate.has_value())
+				        {
+					        return json{{"error", "template must be 'blank_3d' or 'blank_2d'"}};
+				        }
+				        if (const std::string error = launcher.QueueCreateProjectForControl(root, name, *projectTemplate); !error.empty())
+				        {
+					        return json{{"error", error}};
+				        }
+				        return json{{"status", "queued"}, {"root", root.string()}, {"name", name}, {"template", templateName}};
+			        }});
+
 			methods.push_back({"viewport.screenshot",
 			        "screenshot",
 			        "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
@@ -144,6 +204,41 @@ namespace aether::app
 	bool LauncherLayer::IsLaunchingEditor() const noexcept
 	{
 		return m_pendingEditor.has_value();
+	}
+
+	std::string LauncherLayer::QueueOpenProjectForControl(const std::filesystem::path& root)
+	{
+		if (m_pendingControlAction.has_value() || m_pendingEditor.has_value())
+		{
+			return "the Launcher is already handing off to an Editor";
+		}
+		const std::filesystem::path resolved = project::ResolveProjectRoot(root);
+		if (resolved.empty())
+		{
+			return "root must identify a project folder";
+		}
+		if (!project::HasProjectDescriptor(resolved))
+		{
+			return "no ProjectSettings.toml found under root";
+		}
+		m_pendingControlAction = PendingControlAction{.kind = PendingControlActionKind::Open, .root = resolved, .executeAfter = std::chrono::steady_clock::now() + std::chrono::milliseconds(250)};
+		return {};
+	}
+
+	std::string LauncherLayer::QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate)
+	{
+		if (m_pendingControlAction.has_value() || m_pendingEditor.has_value())
+		{
+			return "the Launcher is already handing off to an Editor";
+		}
+		const std::filesystem::path resolved = project::ResolveProjectRoot(root);
+		if (resolved.empty())
+		{
+			return "root must identify a project folder";
+		}
+		m_pendingControlAction = PendingControlAction{
+		        .kind = PendingControlActionKind::Create, .root = resolved, .name = text::TrimAscii(std::string(name)), .projectTemplate = projectTemplate, .executeAfter = std::chrono::steady_clock::now() + std::chrono::milliseconds(250)};
+		return {};
 	}
 
 	void LauncherLayer::OnAttach(LayerContext& context)
@@ -226,6 +321,20 @@ namespace aether::app
 
 	void LauncherLayer::OnUpdate(LayerContext& context)
 	{
+		if (m_pendingControlAction.has_value() && std::chrono::steady_clock::now() >= m_pendingControlAction->executeAfter)
+		{
+			PendingControlAction action = std::move(*m_pendingControlAction);
+			m_pendingControlAction.reset();
+			if (action.kind == PendingControlActionKind::Create)
+			{
+				CreateProject(action.root, action.name, action.projectTemplate);
+			}
+			else
+			{
+				OpenProject(action.root);
+			}
+		}
+
 		if (m_controlServer != nullptr && m_controlServer->IsRunning())
 		{
 			const double fps = context.deltaTimeSeconds > 0.0 ? 1.0 / context.deltaTimeSeconds : 0.0;
@@ -350,9 +459,9 @@ namespace aether::app
 		{
 			OpenProject(root);
 		};
-		actions.createProject = [this](const std::filesystem::path& root, std::string_view name)
+		actions.createProject = [this](const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate)
 		{
-			CreateProject(root, name);
+			CreateProject(root, name, projectTemplate);
 		};
 		actions.browseFolder = []()
 		{
@@ -389,7 +498,7 @@ namespace aether::app
 		SpawnEditorFor(resolved);
 	}
 
-	void LauncherLayer::CreateProject(const std::filesystem::path& root, std::string_view name)
+	void LauncherLayer::CreateProject(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate)
 	{
 		m_windowState.error.clear();
 		const std::filesystem::path resolved = project::ResolveProjectRoot(root);
@@ -403,7 +512,7 @@ namespace aether::app
 		{
 			projectName = project::FallbackProjectName(resolved);
 		}
-		if (!project::WriteProjectDescriptor(resolved, projectName, m_windowState.error))
+		if (!project::WriteProjectDescriptor(resolved, projectName, m_windowState.error, projectTemplate))
 		{
 			return;
 		}

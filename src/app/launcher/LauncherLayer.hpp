@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -38,10 +39,27 @@ namespace aether::app
 
 		[[nodiscard]] std::span<const EditorProjectContext> RecentProjects() const;
 		[[nodiscard]] bool IsLaunchingEditor() const noexcept;
+		[[nodiscard]] std::string QueueOpenProjectForControl(const std::filesystem::path& root);
+		[[nodiscard]] std::string QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate);
 
 	private:
+		enum class PendingControlActionKind
+		{
+			Open,
+			Create,
+		};
+
+		struct PendingControlAction
+		{
+			PendingControlActionKind kind = PendingControlActionKind::Open;
+			std::filesystem::path root;
+			std::string name;
+			project::ProjectTemplate projectTemplate = project::ProjectTemplate::Blank3D;
+			std::chrono::steady_clock::time_point executeAfter{};
+		};
+
 		void OpenProject(const std::filesystem::path& root);
-		void CreateProject(const std::filesystem::path& root, std::string_view name);
+		void CreateProject(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate);
 		void SpawnEditorFor(const std::filesystem::path& root);
 		void StartControlServer();
 		void StopControlServer();
@@ -72,6 +90,7 @@ namespace aether::app
 		std::unordered_map<std::string, PreviewEntry> m_previews;
 
 		int m_controlBasePort = 0;
+		std::optional<PendingControlAction> m_pendingControlAction;
 		std::optional<launcher::EditorLaunch> m_pendingEditor;
 		double m_editorStartupSeconds = 0.0;
 	};

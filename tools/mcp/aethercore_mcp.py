@@ -10,8 +10,9 @@ A dependency-free (stdlib-only) Model Context Protocol server over stdio.
                    manifest. The endpoint (src/app/editor/ControlMethods.cpp) is
                    the single source of truth; adding a capability there makes the
                    MCP tool appear automatically, with zero changes here. The
-                   manifest is cached to manifest.json next to this file so the
-                   tools stay visible even when the editor isn't running.
+                   manifest is merged into manifest.json next to this file so
+                   Launcher and Editor tools stay visible across handoff and
+                   even when neither endpoint is running.
 
 ENet is a C library with no maintained Python binding, so it lives entirely on
 the C++ side; this server only spawns subprocesses (aether-ctl + PowerShell).
@@ -143,22 +144,37 @@ RUN_GAUNTLET = {
 
 
 def _fetch_manifest() -> list:
-    """The endpoint's method manifest (via `describe`), cached to disk so the
-    tools remain visible when the editor isn't running."""
+    """Return the union of cached and live endpoint methods.
+
+    Launcher and Editor expose different method sets on the same port. Keeping
+    their union makes a fixed MCP client tool list usable before and after the
+    handoff; calls still go to whichever endpoint currently owns the port.
+    """
+    cached = []
+    if MANIFEST_CACHE.exists():
+        try:
+            cached = json.loads(MANIFEST_CACHE.read_text(encoding="utf-8")).get("methods", [])
+        except (OSError, ValueError):
+            pass
+
     result = _ctl("describe")
     methods = result["result"].get("methods") if isinstance(result.get("result"), dict) else None
     if methods is not None:
+        merged = list(cached)
+        index_by_tool = {method.get("tool"): index for index, method in enumerate(merged) if method.get("tool")}
+        for method in methods:
+            tool = method.get("tool")
+            if tool in index_by_tool:
+                merged[index_by_tool[tool]] = method
+            else:
+                index_by_tool[tool] = len(merged)
+                merged.append(method)
         try:
-            MANIFEST_CACHE.write_text(json.dumps({"methods": methods}, indent=2), encoding="utf-8")
+            MANIFEST_CACHE.write_text(json.dumps({"methods": merged}, indent=2), encoding="utf-8")
         except OSError:
             pass
-        return methods
-    if MANIFEST_CACHE.exists():
-        try:
-            return json.loads(MANIFEST_CACHE.read_text(encoding="utf-8")).get("methods", [])
-        except (OSError, ValueError):
-            pass
-    return []
+        return merged
+    return cached
 
 
 def _engine_tools() -> list:

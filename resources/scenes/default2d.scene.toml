@@ -1,0 +1,20 @@
+# AetherCore scene - blank 2D project template
+[scene]
+kind = '2d'
+name = 'default'
+version = 9
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+parent = -1
+position = [ 0.0, 0.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    far = 1000.0
+    fov = 60.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'orthographic'

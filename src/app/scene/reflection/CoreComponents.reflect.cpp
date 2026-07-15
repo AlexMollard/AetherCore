@@ -13,6 +13,15 @@ using namespace aether;
 using aether::reflect::FieldType;
 using aether::reflect::FieldValue;
 
+namespace
+{
+	const reflect::EnumTable& CameraProjectionEnum()
+	{
+		static const reflect::EnumTable table{{{"perspective", static_cast<int>(CameraProjection::Perspective)}, {"orthographic", static_cast<int>(CameraProjection::Orthographic)}}};
+		return table;
+	}
+} // namespace
+
 AE_COMPONENT(PointLightComponent, "Point Light", "Rendering", ICON_FA_LIGHTBULB)
 AE_FIELD_N("color", color, Color3)
 AE_FIELD_R(intensity, Float, 0.0f, 1000.0f)
@@ -30,7 +39,9 @@ AE_FIELD_N("shadow", castsShadow, Bool)
 AE_COMPONENT_END()
 
 AE_COMPONENT(CameraComponent, "Camera", "Rendering", ICON_FA_VIDEO)
+AE_FIELD_ENUM("projection", projection, CameraProjectionEnum())
 AE_FIELD_N("fov", fovDegrees, Float)
+AE_FIELD_N("orthographic_height", orthographicHeight, Float)
 AE_FIELD_N("near", nearPlane, Float)
 AE_FIELD_N("far", farPlane, Float)
 AE_COMPONENT_END()

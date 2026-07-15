@@ -33,7 +33,7 @@ namespace aether::editor
 		void OpenLauncher();
 		void CloseLauncher();
 		void OpenProject(std::filesystem::path root, bool reloadScene = true);
-		void CreateProject(std::filesystem::path root, std::string_view name);
+		void CreateProject(std::filesystem::path root, std::string_view name, app::project::ProjectTemplate projectTemplate);
 		void RefreshServices();
 		void UpdateScriptBuild();
 

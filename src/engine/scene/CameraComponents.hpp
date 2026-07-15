@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "camera/CameraProjection.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/World.hpp"
@@ -16,7 +17,9 @@ namespace aether
 {
 	struct CameraComponent
 	{
+		CameraProjection projection = CameraProjection::Perspective;
 		float fovDegrees = 60.0f;
+		float orthographicHeight = 10.0f;
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 

@@ -99,7 +99,7 @@ namespace aether::app::project
 #endif
 		}
 
-		bool SeedProjectTemplateFiles(const std::filesystem::path& root, std::string& error)
+		bool SeedProjectTemplateFiles(const std::filesystem::path& root, ProjectTemplate projectTemplate, std::string& error)
 		{
 			const std::filesystem::path scriptsProject = root / "scripts" / "AetherGame.csproj";
 			if (!io::file_util::Exists(scriptsProject))
@@ -120,7 +120,8 @@ namespace aether::app::project
 					error = "Could not create project folder: " + dirResult.error().message;
 					return false;
 				}
-				if (auto copyResult = io::file_util::CopyFile(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / "default.scene.toml", seedScene); !copyResult)
+				const std::string_view sourceScene = projectTemplate == ProjectTemplate::Blank2D ? "default2d.scene.toml" : "default.scene.toml";
+				if (auto copyResult = io::file_util::CopyFile(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / sourceScene, seedScene); !copyResult)
 				{
 					error = "Could not copy project template scene: " + copyResult.error().message;
 					return false;
@@ -266,6 +267,10 @@ namespace aether::app::project
 				        {
 					        project.name = text::StripQuotes(entry.value);
 				        }
+				        else if (entry.fullKey == "project.kind")
+				        {
+					        project.kind = text::StripQuotes(entry.value) == "2d" ? ProjectKind::Scene2D : ProjectKind::Scene3D;
+				        }
 				        else if (entry.fullKey == "paths.assets")
 				        {
 					        assetsPath = text::StripQuotes(entry.value);
@@ -342,7 +347,7 @@ namespace aether::app::project
 		         "</Project>\n";
 	}
 
-	bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error)
+	bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate)
 	{
 		if (auto dirResult = io::file_util::CreateDirectories(root); !dirResult)
 		{
@@ -359,9 +364,10 @@ namespace aether::app::project
 			}
 		}
 
+		const bool is2D = ProjectKindForTemplate(projectTemplate) == ProjectKind::Scene2D;
 		const std::string descriptor = "# AetherCore project file.\n\n"
-		                               "[project]\nversion = 1\nname = \""
-		                               + EscapeTomlString(name)
+		                               "[project]\nversion = 2\nname = \""
+		                               + EscapeTomlString(name) + "\"\nkind = \"" + (is2D ? "2d" : "3d") + "\"\ntemplate = \"" + (is2D ? "blank_2d" : "blank_3d")
 		                               + "\"\n\n"
 		                                 "[paths]\nassets = \"assets\"\nscenes = \"scenes\"\nprefabs = \"assets/prefabs\"\nscripts = \"scripts\"\n\n"
 		                                 "[app]\nstartupScene = \"default\"\n\n"
@@ -372,7 +378,7 @@ namespace aether::app::project
 			error = "Could not write ProjectSettings.toml.";
 			return false;
 		}
-		return SeedProjectTemplateFiles(root, error);
+		return SeedProjectTemplateFiles(root, projectTemplate, error);
 	}
 
 #ifdef _WIN32

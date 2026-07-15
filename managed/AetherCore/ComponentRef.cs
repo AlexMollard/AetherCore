@@ -33,7 +33,11 @@ public readonly struct CameraRef : IComponentRef
 
     public void SetTarget(Vector3 target) => Camera.SetTarget(Owner, target);
     public void SetOrbital(float yaw, float pitch, float distance) => Camera.SetOrbital(Owner, yaw, pitch, distance);
+    public void SetPerspective(float fovDegrees) => Camera.SetPerspective(Owner, fovDegrees);
+    public void SetOrthographic(float height) => Camera.SetOrthographic(Owner, height);
 
+    public CameraProjection Projection => Camera.GetProjection(Owner);
+    public float OrthographicHeight => Camera.GetOrthographicHeight(Owner);
     public float Yaw => Camera.GetYaw(Owner);
     public Vector3 Forward => Camera.GetForward(Owner);
     public Vector3 Right => Camera.GetRight(Owner);

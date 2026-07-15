@@ -27,7 +27,10 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | Tool | Needs editor running? | Purpose |
 |------|:---:|---------|
 | `run_gauntlet` | no | Build Editor/GameRuntime/EngineTests, run the unit suite; `mode:"full"` also runs the GPU validation smokes. Returns `gauntlet-report.json`. |
-| `engine_info` | yes | Scene name, entity count, frame index, fps. |
+| `launcher_info` / `list_projects` | Launcher | Inspect hub and recent-project state before handoff. |
+| `open_project` / `create_project` | Launcher | Open an existing project or create a `blank_2d` / `blank_3d` project, then hand the same control port to the Editor. |
+| `engine_info` | yes | Scene name and 2D/3D kind, entity count, frame index, fps. |
+| `get_console_log` | yes | Bounded, filterable live console tail with levels, categories, source locations, and monotonic sequence ids for polling. |
 | `list_entities` | yes | Every entity: id, name, world position. |
 | `get_entity` | yes | One entity's full detail: name, position, scale, component types. |
 | `select_entity` / `get_selection` | yes | Set / read the editor's entity selection (the Inspector shows the primary). `select_entity` first, then `set_window` the Inspector open, then `screenshot` to *see* an entity's components. |
@@ -50,7 +53,7 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `capture_texture` | yes | Capture *any* registered texture (name from `list_textures`) to a compressed `.png` — 8-bit color, depth (normalized grayscale), or HDR (tonemapped). Lets the agent *see* shadow maps, GBuffer, scene color, asset textures — not just the viewport. |
 | `scene_stats` | yes | Per-component-type entity-count histogram over the live ECS. |
 | `list_lights` | yes | Every light: id, name, type (point/spot), position, color, intensity, radius, shadow flag (spots add cone angles + aim). |
-| `camera_info` | yes | Active camera: world position, forward direction, vertical FOV (deg). |
+| `camera_info` | yes | Active camera: projection, world position, forward direction, vertical FOV, and orthographic height. |
 | `get_settings` | yes | Current engine settings: resolution, vsync, target fps. |
 | `list_component_types` | yes | The 28 components the ComponentCatalog can add (name + category). |
 | `screenshot` | yes | Capture the current editor frame to a compressed `.png` and return its path — lets the agent *see* what's rendered. |
@@ -70,8 +73,8 @@ endpoint, pick the port, toggle auto-start, and watch live request stats.
 cmake --build build/vs2022-msvc --config Debug --target Editor aether-ctl
 
 # 2. Launch the hub. Its localhost MCP endpoint starts on 8787 by default, so
-#    launcher_info, list_projects, and screenshot are available immediately. Open
-#    a project and that same port is handed to the spawned Editor automatically:
+#    launcher_info, list_projects, open_project, create_project, and screenshot
+#    are available immediately. The same port is handed to the spawned Editor:
 .\build\vs2022-msvc\src\app\Debug\Launcher.exe   # run from the build-tree root; open a project in the hub
 ```
 
@@ -80,10 +83,12 @@ cmake --build build/vs2022-msvc --config Debug --target Editor aether-ctl
 ### Launcher → Editor MCP handoff
 
 The Launcher runs a small localhost control endpoint on its UiShell runtime. It exposes
-only hub-safe methods: `launcher_info`, `list_projects`, and `screenshot`. When the user
+only hub-safe methods: `launcher_info`, `list_projects`, `open_project`, `create_project`, and `screenshot`. When the user
 opens or creates a project, the Launcher stops that endpoint immediately before spawning
 the Editor; the Editor inherits the same `AETHER_CONTROL_PORT`. The MCP client therefore
-stays on one port across the handoff. Resolution (read once at launcher startup from
+stays on one port across the handoff. The cached MCP manifest retains the union of Launcher
+and Editor tools, so fixed tool-list clients can drive both sides of the transition.
+Resolution (read once at launcher startup from
 `AETHER_CONTROL_PORT`):
 
 | `AETHER_CONTROL_PORT` on the Launcher | Behaviour |

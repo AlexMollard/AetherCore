@@ -14,6 +14,7 @@ namespace aether::app::scene
 
 		SceneDescription empty;
 		empty.name = "Untitled";
+		empty.kind = world.GetSceneKind();
 		ReplaceScene(empty, world, deps);
 		return empty.name;
 	}
@@ -33,7 +34,9 @@ namespace aether::app::scene
 		{
 			return true;
 		}
-		ReplaceScene(SceneDescription{}, world, deps);
+		SceneDescription empty;
+		empty.kind = world.GetSceneKind();
+		ReplaceScene(empty, world, deps);
 		return false;
 	}
 } // namespace aether::app::scene

@@ -228,6 +228,9 @@ internal static unsafe partial class Native
     internal static partial uint aether_camera_create_free(Vector3 pos, float fovDeg);
 
     [LibraryImport(Lib)]
+    internal static partial uint aether_camera_create_orthographic(Vector3 pos, float height);
+
+    [LibraryImport(Lib)]
     internal static partial void aether_camera_set_main(uint id);
 
     [LibraryImport(Lib)]
@@ -235,6 +238,20 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     internal static partial void aether_camera_set_mode(uint id, int mode);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_camera_set_perspective(uint id, float fovDeg);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_camera_set_orthographic(uint id, float height);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_camera_get_projection(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial float aether_camera_get_orthographic_height(uint id);
 
     [LibraryImport(Lib)]
     internal static partial void aether_camera_set_position(uint id, Vector3 pos);

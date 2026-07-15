@@ -7,6 +7,7 @@
 
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
+#include "scene/SceneKind.hpp"
 #include "scene/System.hpp"
 
 namespace aether
@@ -105,6 +106,16 @@ namespace aether
 		void UnregisterRoot(Entity entity);
 		void InsertRootAt(Entity entity, int index);
 
+		[[nodiscard]] SceneKind GetSceneKind() const noexcept
+		{
+			return m_sceneKind;
+		}
+
+		void SetSceneKind(SceneKind kind) noexcept
+		{
+			m_sceneKind = kind;
+		}
+
 		[[nodiscard]] static entt::entity ToEntt(Entity entity) noexcept;
 		[[nodiscard]] static Entity FromEntt(entt::entity entity) noexcept;
 
@@ -112,5 +123,6 @@ namespace aether
 		SystemRegistry m_systems;
 		Registry m_registry;
 		std::vector<Entity> m_rootOrder;
+		SceneKind m_sceneKind = SceneKind::Scene3D;
 	};
 } // namespace aether

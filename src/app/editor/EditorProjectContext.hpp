@@ -5,6 +5,12 @@
 
 namespace aether::app
 {
+	enum class ProjectKind
+	{
+		Scene3D,
+		Scene2D,
+	};
+
 	struct EditorProjectContext
 	{
 		std::filesystem::path root;
@@ -14,6 +20,7 @@ namespace aether::app
 		std::filesystem::path prefabsDir;
 		std::filesystem::path scriptsDir;
 		std::string name;
+		ProjectKind kind = ProjectKind::Scene3D;
 		bool loaded = false;
 
 		[[nodiscard]] bool IsLoaded() const noexcept

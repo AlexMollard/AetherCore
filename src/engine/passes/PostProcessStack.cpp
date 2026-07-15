@@ -47,7 +47,7 @@ namespace aether
 		const gpu::TextureDesc ldrDesc{
 		        .format = gpu::Format::R8G8B8A8Unorm,
 		        .extent = desc.extent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
+		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled | gpu::ImageUsage::TransferSrc,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "PostProcess.LdrColor",
 		};
@@ -67,7 +67,7 @@ namespace aether
 		const gpu::TextureDesc finalDesc{
 		        .format = desc.swapchainFormat,
 		        .extent = desc.extent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
+		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled | gpu::ImageUsage::TransferSrc,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "PostProcess.FinalColor",
 		};

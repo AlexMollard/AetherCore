@@ -37,6 +37,15 @@ AE_SCRIPT_API std::uint32_t aether_camera_create_free(Vec3 pos, float fovDeg)
 	return aether::ecs::CreateCameraEntity(world, ToGlm(pos), glm::vec3(0.0f, 0.0f, -1.0f), cam).id;
 }
 
+AE_SCRIPT_API std::uint32_t aether_camera_create_orthographic(Vec3 pos, float height)
+{
+	auto& world = ActiveWorld();
+	aether::CameraComponent cam{};
+	cam.projection = aether::CameraProjection::Orthographic;
+	cam.orthographicHeight = glm::max(0.001f, height);
+	return aether::ecs::CreateCameraEntity(world, ToGlm(pos), glm::vec3(0.0f, 0.0f, -1.0f), cam).id;
+}
+
 AE_SCRIPT_API void aether_camera_set_main(std::uint32_t id)
 {
 	aether::ecs::SetMainCameraEntity(ActiveWorld(), aether::Entity{id});
@@ -79,6 +88,42 @@ AE_SCRIPT_API void aether_camera_set_mode(std::uint32_t id, std::int32_t mode)
 	{
 		reg.remove<aether::OrbitCameraComponent>(enttE);
 	}
+}
+
+AE_SCRIPT_API void aether_camera_set_perspective(std::uint32_t id, float fovDeg)
+{
+	if (auto* camera = ActiveWorld().TryGet<aether::CameraComponent>(aether::Entity{id}))
+	{
+		camera->projection = aether::CameraProjection::Perspective;
+		camera->fovDegrees = glm::clamp(fovDeg, 1.0f, 179.0f);
+	}
+}
+
+AE_SCRIPT_API void aether_camera_set_orthographic(std::uint32_t id, float height)
+{
+	if (auto* camera = ActiveWorld().TryGet<aether::CameraComponent>(aether::Entity{id}))
+	{
+		camera->projection = aether::CameraProjection::Orthographic;
+		camera->orthographicHeight = glm::max(0.001f, height);
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_camera_get_projection(std::uint32_t id)
+{
+	if (const auto* camera = ActiveWorld().TryGet<aether::CameraComponent>(aether::Entity{id}))
+	{
+		return camera->projection == aether::CameraProjection::Orthographic ? 1 : 0;
+	}
+	return 0;
+}
+
+AE_SCRIPT_API float aether_camera_get_orthographic_height(std::uint32_t id)
+{
+	if (const auto* camera = ActiveWorld().TryGet<aether::CameraComponent>(aether::Entity{id}))
+	{
+		return camera->orthographicHeight;
+	}
+	return 0.0f;
 }
 
 AE_SCRIPT_API void aether_camera_set_position(std::uint32_t id, Vec3 pos)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -21,6 +22,30 @@ namespace aether::app::project
 
 	inline constexpr int kMaxRecentProjects = 8;
 
+	enum class ProjectTemplate
+	{
+		Blank3D,
+		Blank2D,
+	};
+
+	struct ProjectTemplateInfo
+	{
+		ProjectTemplate value;
+		ProjectKind kind;
+		std::string_view name;
+		std::string_view description;
+	};
+
+	inline constexpr std::array<ProjectTemplateInfo, 2> kProjectTemplates{{
+	        {ProjectTemplate::Blank3D, ProjectKind::Scene3D, "Blank 3D", "Perspective camera and the standard 3D starter scene."},
+	        {ProjectTemplate::Blank2D, ProjectKind::Scene2D, "Blank 2D", "Orthographic camera and an empty XY-plane scene."},
+	}};
+
+	[[nodiscard]] constexpr ProjectKind ProjectKindForTemplate(ProjectTemplate projectTemplate)
+	{
+		return projectTemplate == ProjectTemplate::Blank2D ? ProjectKind::Scene2D : ProjectKind::Scene3D;
+	}
+
 	[[nodiscard]] std::filesystem::path NormalizePath(std::filesystem::path path);
 	[[nodiscard]] std::string DisplayPath(const std::filesystem::path& path);
 	[[nodiscard]] std::filesystem::path ProjectFilePath(const std::filesystem::path& root);
@@ -33,7 +58,7 @@ namespace aether::app::project
 	[[nodiscard]] Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root);
 	[[nodiscard]] std::string ReadProjectName(const std::filesystem::path& root);
 
-	[[nodiscard]] bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error);
+	[[nodiscard]] bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate = ProjectTemplate::Blank3D);
 	[[nodiscard]] std::string MakeProjectScriptCsprojText(const std::filesystem::path& managedSdkProject);
 
 	[[nodiscard]] std::optional<std::filesystem::path> PickProjectFolder();

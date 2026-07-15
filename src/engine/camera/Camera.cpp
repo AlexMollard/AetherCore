@@ -21,7 +21,9 @@ namespace aether
 	        m_orbitDistance(desc.orbitDistance),
 	        m_orbitYaw(desc.orbitYaw),
 	        m_orbitPitch(desc.orbitPitch),
+	        m_projection(desc.projection),
 	        m_fovDeg(desc.fovDegrees),
+	        m_orthographicHeight(std::max(0.001f, desc.orthographicHeight)),
 	        m_near(desc.nearPlane),
 	        m_far(desc.farPlane),
 	        m_moveSpeed(desc.moveSpeed),
@@ -108,7 +110,17 @@ namespace aether
 
 	glm::mat4 Camera::GetProjectionMatrix(float aspect) const
 	{
-		glm::mat4 proj = glm::perspective(glm::radians(m_fovDeg), aspect, m_near, m_far);
+		glm::mat4 proj;
+		if (m_projection == CameraProjection::Orthographic)
+		{
+			const float height = std::max(0.001f, m_orthographicHeight);
+			const float width = height * std::max(0.001f, aspect);
+			proj = glm::ortho(-width * 0.5f, width * 0.5f, -height * 0.5f, height * 0.5f, m_near, m_far);
+		}
+		else
+		{
+			proj = glm::perspective(glm::radians(m_fovDeg), aspect, m_near, m_far);
+		}
 		proj[1][1] *= -1.0f;
 		return proj;
 	}

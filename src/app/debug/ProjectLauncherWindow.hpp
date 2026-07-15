@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "editor/EditorProjectContext.hpp"
+#include "project/ProjectCommon.hpp"
 
 namespace aether::app
 {
@@ -32,6 +33,7 @@ namespace aether::app
 		std::array<char, 260> openPath{};
 		std::array<char, 260> newPath{};
 		std::array<char, 96> newName{};
+		project::ProjectTemplate newTemplate = project::ProjectTemplate::Blank3D;
 		ProjectLauncherDialog dialog = ProjectLauncherDialog::None;
 		bool launching = false;
 		std::string error;
@@ -51,7 +53,7 @@ namespace aether::app
 	struct ProjectLauncherWindowActions
 	{
 		std::function<void(std::filesystem::path)> openProject;
-		std::function<void(std::filesystem::path, std::string_view)> createProject;
+		std::function<void(std::filesystem::path, std::string_view, project::ProjectTemplate)> createProject;
 		std::function<std::optional<std::filesystem::path>()> browseFolder;
 		std::function<std::optional<std::filesystem::path>()> browseProjectFile;
 		std::function<void()> closeLauncher;

@@ -39,6 +39,32 @@ namespace aether::app::scene
 {
 	namespace
 	{
+		const char* SceneKindName(SceneKind kind)
+		{
+			switch (kind)
+			{
+				case SceneKind::Scene2D:
+					return "2d";
+				case SceneKind::Mixed:
+					return "mixed";
+				case SceneKind::Scene3D:
+				default:
+					return "3d";
+			}
+		}
+
+		SceneKind SceneKindFromName(std::string_view name)
+		{
+			if (name == "2d")
+			{
+				return SceneKind::Scene2D;
+			}
+			if (name == "mixed")
+			{
+				return SceneKind::Mixed;
+			}
+			return SceneKind::Scene3D;
+		}
 
 		const char* ShapeName(PhysicsShapeType t)
 		{
@@ -760,6 +786,7 @@ namespace aether::app::scene
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer)
 	{
 		SceneDescription scene;
+		scene.kind = world.GetSceneKind();
 		auto& reg = world.GetRegistry();
 
 		// Punctual lights are entities now (LightComponents.hpp) and serialize
@@ -853,6 +880,7 @@ namespace aether::app::scene
 		toml::table header;
 		header.insert("version", kSceneFormatVersion);
 		header.insert("name", scene.name);
+		header.insert("kind", SceneKindName(scene.kind));
 		root.insert("scene", std::move(header));
 
 		if (scene.environment)
@@ -1172,6 +1200,7 @@ namespace aether::app::scene
 		SceneDescription scene;
 		scene.name = root["scene"]["name"].value_or(std::string{});
 		scene.version = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
+		scene.kind = SceneKindFromName(root["scene"]["kind"].value_or(std::string{"3d"}));
 		if (scene.version < kSceneFormatVersion)
 		{
 			AE_WARN(LogCategory::App,
@@ -2217,6 +2246,7 @@ namespace aether::app::scene
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
+		world.SetSceneKind(scene.kind);
 		std::vector<Entity> created;
 		created.reserve(scene.entities.size());
 		for (std::size_t i = 0; i < scene.entities.size(); ++i)
@@ -2228,6 +2258,7 @@ namespace aether::app::scene
 
 	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
+		world.SetSceneKind(scene.kind);
 		if (deps.physics != nullptr)
 		{
 			deps.physics->WaitForStepIdle();
@@ -2289,6 +2320,7 @@ namespace aether::app::scene
 
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
+		world.SetSceneKind(scene.kind);
 		// removal must not race the async physics step.
 		if (deps.physics != nullptr)
 		{

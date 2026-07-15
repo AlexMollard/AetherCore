@@ -56,7 +56,9 @@ namespace aether
 			{
 				CameraDesc desc;
 				desc.mode = CameraMode::Manual;
+				desc.projection = cam.projection;
 				desc.fovDegrees = cam.fovDegrees;
+				desc.orthographicHeight = cam.orthographicHeight;
 				desc.nearPlane = cam.nearPlane;
 				desc.farPlane = cam.farPlane;
 				backing = m_cameras.Create(desc);
@@ -76,7 +78,14 @@ namespace aether
 			backingCam->SetMode(CameraMode::Manual);
 			backingCam->SetPosition(position);
 			backingCam->SetYawPitch(yaw, pitch);
-			backingCam->SetPerspective(cam.fovDegrees, cam.nearPlane, cam.farPlane);
+			if (cam.projection == CameraProjection::Orthographic)
+			{
+				backingCam->SetOrthographic(cam.orthographicHeight, cam.nearPlane, cam.farPlane);
+			}
+			else
+			{
+				backingCam->SetPerspective(cam.fovDegrees, cam.nearPlane, cam.farPlane);
+			}
 
 			m_seenScratch.insert(World::FromEntt(handle).id);
 			m_backing[World::FromEntt(handle).id] = backing;

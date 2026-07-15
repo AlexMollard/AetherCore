@@ -374,6 +374,27 @@ TEST_CASE("Pre-versioning scene files parse as format v1") {
     CHECK(!parsed->entities[0].orbit.has_value());
 }
 
+#ifdef AETHER_SCENES_SOURCE_DIR
+TEST_CASE("Blank 2D template scene has an orthographic main camera") {
+    const auto text = io::file_util::ReadText(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / "default2d.scene.toml");
+    REQUIRE(text.has_value());
+    const auto scene = ParseToml(*text);
+    REQUIRE(scene.has_value());
+    CHECK(scene->kind == SceneKind::Scene2D);
+    REQUIRE(scene->entities.size() == 1);
+    REQUIRE(scene->entities[0].camera.has_value());
+    CHECK(scene->entities[0].mainCamera);
+    CHECK(scene->entities[0].camera->projection == CameraProjection::Orthographic);
+    CHECK(scene->entities[0].camera->orthographicHeight == doctest::Approx(10.0f));
+
+    World world = MakeWorld();
+    const auto created = ApplyScene(*scene, world, ApplySceneDeps{});
+    REQUIRE(created.size() == 1);
+    CHECK(world.GetSceneKind() == SceneKind::Scene2D);
+    CHECK(world.Get<CameraComponent>(created[0]).projection == CameraProjection::Orthographic);
+}
+#endif
+
 TEST_CASE("ReplaceScene spares transient subtrees (script-owned actors)") {
     World world = MakeWorld();
 
@@ -710,11 +731,12 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     MaterialRegistry mreg(sink, treg);
 
     World world = MakeWorld();
+    world.SetSceneKind(SceneKind::Scene2D);
 
     Entity cam = world.Create();
     world.Emplace<NameComponent>(cam, NameComponent{.name = "Camera"});
     world.Emplace<TransformComponent>(cam, TransformComponent{});
-    world.Emplace<CameraComponent>(cam, CameraComponent{.fovDegrees = 55.0f});
+    world.Emplace<CameraComponent>(cam, CameraComponent{.projection = CameraProjection::Orthographic, .fovDegrees = 55.0f, .orthographicHeight = 18.0f});
     world.Emplace<OrbitCameraComponent>(cam, OrbitCameraComponent{.target = {0, 1, 0}, .yaw = 15.0f, .pitch = 25.0f, .distance = 8.0f});
     world.Emplace<MainCameraComponent>(cam, MainCameraComponent{});
 
@@ -734,6 +756,13 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     world.Emplace<SpriteRendererComponent>(sprite);
 
     const SceneDescription snapshot = CaptureScene(world, mreg, treg);
+    CHECK(snapshot.kind == SceneKind::Scene2D);
+    const auto serialized = ParseToml(WriteToml(snapshot));
+    REQUIRE(serialized.has_value());
+    CHECK(serialized->kind == SceneKind::Scene2D);
+    REQUIRE(serialized->entities[0].camera.has_value());
+    CHECK(serialized->entities[0].camera->projection == CameraProjection::Orthographic);
+    CHECK(serialized->entities[0].camera->orthographicHeight == doctest::Approx(18.0f));
     const std::uint32_t camIdBefore = cam.id;
 
     Entity spawned = world.Create();
@@ -742,13 +771,17 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     ecs::SetParent(world, sprite, spawned);
     world.Remove<DisabledComponent>(disabledParent);
     world.EmplaceOrReplace<DisabledComponent>(sprite);
+    world.SetSceneKind(SceneKind::Scene3D);
 
     const std::vector<Entity> restored = RestoreSceneInPlace(snapshot, world, ApplySceneDeps{});
     REQUIRE(restored.size() == snapshot.entities.size());
+    CHECK(world.GetSceneKind() == SceneKind::Scene2D);
 
     const Entity camAfter = AppliedOf(snapshot, restored, "Camera");
     CHECK(camAfter.id == camIdBefore);
     REQUIRE(world.TryGet<OrbitCameraComponent>(camAfter) != nullptr);
+    CHECK(world.Get<CameraComponent>(camAfter).projection == CameraProjection::Orthographic);
+    CHECK(world.Get<CameraComponent>(camAfter).orthographicHeight == doctest::Approx(18.0f));
     CHECK(world.Get<OrbitCameraComponent>(camAfter).distance == doctest::Approx(8.0f));
     CHECK(world.Has<MainCameraComponent>(camAfter));
 

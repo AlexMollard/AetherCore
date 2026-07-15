@@ -17,6 +17,7 @@
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/ModelBakeHook.hpp"
+#include "scene/SceneKind.hpp"
 
 namespace aether
 {
@@ -210,7 +211,7 @@ namespace aether::app::scene
 		glm::vec3 skyVoid{0.05f};
 	};
 
-	inline constexpr int kSceneFormatVersion = 8;
+	inline constexpr int kSceneFormatVersion = 9;
 
 	struct AssetManifestEntry
 	{
@@ -225,6 +226,7 @@ namespace aether::app::scene
 	{
 		std::string name;
 		int version = kSceneFormatVersion;
+		SceneKind kind = SceneKind::Scene3D;
 		std::vector<EntityRecord> entities;
 		std::vector<LightRecord> lights;
 		std::optional<EnvironmentRecord> environment;

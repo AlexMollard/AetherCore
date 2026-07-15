@@ -145,7 +145,14 @@ namespace aether::editor
 				editorCam->SetMode(CameraMode::Manual);
 				editorCam->SetPosition(position);
 				editorCam->SetYawPitch(yaw, pitch);
-				editorCam->SetPerspective(targetCam->fovDegrees, targetCam->nearPlane, targetCam->farPlane);
+				if (targetCam->projection == CameraProjection::Orthographic)
+				{
+					editorCam->SetOrthographic(targetCam->orthographicHeight, targetCam->nearPlane, targetCam->farPlane);
+				}
+				else
+				{
+					editorCam->SetPerspective(targetCam->fovDegrees, targetCam->nearPlane, targetCam->farPlane);
+				}
 			}
 			else
 			{
@@ -227,7 +234,7 @@ namespace aether::editor
 			return false;
 		}
 
-		ImGuizmo::SetOrthographic(false);
+		ImGuizmo::SetOrthographic(camera->GetProjection() == CameraProjection::Orthographic);
 		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 		ImGuizmo::SetRect(imageMin.x, imageMin.y, imageSize.x, imageSize.y);
 
@@ -381,11 +388,12 @@ namespace aether::editor
 
 			        const float nearD = std::max(0.02f, cam.nearPlane);
 			        const float farD = std::clamp(cam.farPlane, nearD + 0.5f, nearD + 9.0f);
+			        const bool orthographic = cam.projection == CameraProjection::Orthographic;
 			        const float tanHalf = std::tan(glm::radians(cam.fovDegrees) * 0.5f);
 
 			        auto planeCorners = [&](float dist, glm::vec3 out[4])
 			        {
-				        const float h = tanHalf * dist;
+				        const float h = orthographic ? std::max(0.001f, cam.orthographicHeight) * 0.5f : tanHalf * dist;
 				        const float w = h * renderAspect;
 				        const glm::vec3 c = pos + fwd * dist;
 				        out[0] = c - right * w + up * h;
@@ -428,10 +436,13 @@ namespace aether::editor
 				        line(farC[i], farC[j]);
 				        line(nearC[i], farC[i]);
 			        }
-			        line(pos, nearC[0]);
-			        line(pos, nearC[1]);
-			        line(pos, nearC[2]);
-			        line(pos, nearC[3]);
+			        if (!orthographic)
+			        {
+				        line(pos, nearC[0]);
+				        line(pos, nearC[1]);
+				        line(pos, nearC[2]);
+				        line(pos, nearC[3]);
+			        }
 		        });
 
 		drawList->PopClipRect();

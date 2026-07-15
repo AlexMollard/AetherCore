@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include "camera/CameraProjection.hpp"
+
 namespace aether
 {
 	class Input;
@@ -16,7 +18,9 @@ namespace aether
 	struct CameraDesc
 	{
 		CameraMode mode = CameraMode::Orbit;
+		CameraProjection projection = CameraProjection::Perspective;
 		float fovDegrees = 60.0f;
+		float orthographicHeight = 10.0f;
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 
@@ -88,14 +92,33 @@ namespace aether
 
 		void SetPerspective(float fovDegrees, float nearPlane, float farPlane)
 		{
+			m_projection = CameraProjection::Perspective;
 			m_fovDeg = fovDegrees;
 			m_near = nearPlane;
 			m_far = farPlane;
 		}
 
+		void SetOrthographic(float height, float nearPlane, float farPlane)
+		{
+			m_projection = CameraProjection::Orthographic;
+			m_orthographicHeight = glm::max(0.001f, height);
+			m_near = nearPlane;
+			m_far = farPlane;
+		}
+
+		[[nodiscard]] CameraProjection GetProjection() const
+		{
+			return m_projection;
+		}
+
 		[[nodiscard]] float GetFovDegrees() const
 		{
 			return m_fovDeg;
+		}
+
+		[[nodiscard]] float GetOrthographicHeight() const
+		{
+			return m_orthographicHeight;
 		}
 
 		[[nodiscard]] float GetNearPlane() const
@@ -129,7 +152,9 @@ namespace aether
 		float m_orbitYaw;
 		float m_orbitPitch;
 
+		CameraProjection m_projection;
 		float m_fovDeg;
+		float m_orthographicHeight;
 		float m_near;
 		float m_far;
 
