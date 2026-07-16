@@ -5,7 +5,7 @@
 <h1 align="center">AetherCore</h1>
 
 <p align="center">
-  <strong>A modern Vulkan game engine with an editor-first workflow and hot-reloadable C# gameplay.</strong>
+  <strong>A modern Vulkan game engine for 2D and 3D games, with an editor-first workflow and hot-reloadable C# gameplay.</strong>
 </p>
 
 <p align="center">
@@ -16,48 +16,58 @@
 </p>
 
 <p align="center">
+  <a href="#what-is-aethercore">What is it</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#editor-workflow">Editor workflow</a> ·
+  <a href="#2d-workflow">2D workflow</a> ·
+  <a href="#c-scripting">C# scripting</a> ·
   <a href="#engine-mcp">Engine MCP</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#c-scripting">C# scripting</a> ·
   <a href="#asset-and-shipping-pipeline">Asset pipeline</a>
 </p>
 
-<p align="center">
-  <img src="docs/images/editor.png" alt="AetherCore Editor overview" width="1100">
-</p>
-<p align="center"><sub>Editor overview</sub></p>
+<br>
 
-<p align="center">
-  <img src="docs/images/launcher.png" alt="AetherCore Project Launcher" width="1100">
-</p>
-<p align="center"><sub>Project Launcher</sub></p>
+<img src="docs/images/editor.png" align="right" width="560" alt="AetherCore Editor authoring a 3D scene">
 
-> [!NOTE]
-> AetherCore is under active development. The editor, runtime, scripting API, and
-> asset formats are usable today, but backward compatibility is not guaranteed yet.
+### 3D editor
 
-## What is AetherCore?
+Dockable viewport, hierarchy, and inspectors on the full render graph-GPU-driven culling, tiled lighting, shadows, and post-processing.
+<br>
+<br clear="all">
 
-AetherCore is a from-scratch game engine built around three ideas:
+<img src="docs/images/editor-2d.png" align="left" width="560" alt="AetherCore Editor authoring a 2D sprite scene">
 
-- **Keep the renderer explicit.** A GPU abstraction protects engine code from Vulkan details without hiding synchronization, resource lifetime, or render-graph structure.
-- **Make the editor part of the engine.** Project creation, scene authoring, diagnostics, asset inspection, play mode, packaging, and publishing live in one coherent tool.
-- **Keep gameplay iteration fast.** Game code is written against a small C# SDK and can be rebuilt and hot-reloaded without restarting the native engine.
+### 2D editor
 
-The native engine uses C++26 with Clang and C++23 with other compilers. Rendering is Vulkan-based, the scene world is powered by EnTT, physics uses Jolt, and managed gameplay runs in-process on .NET 10 CoreCLR.
+The same shell in orthographic mode: sprite placement, non-destructive sheet slicing, and animation timelines with deterministic playback.
+
+<br clear="all">
+<br>
+
+<img src="docs/images/launcher.png" align="right" width="560" alt="AetherCore Project Launcher">
+
+### Project Launcher
+
+A standalone hub that spawns a dedicated Editor process per project and closes once startup finishes.
+
+<br clear="all">
 
 ## At a glance
 
 | Area | Current capabilities |
 |---|---|
 | **Editor** | Standalone project Launcher, Night Amber ImGui workspace, dockable viewport and inspectors, scene hierarchy, project/file browser, UI canvas tools, theme editor, render-graph and texture inspection |
+| **2D authoring** | Blank 2D projects, orthographic 2D viewport and XY tools, sprite placement and picking, non-destructive sheet slicing, sprite animation timelines, deterministic playback, and 2D asset publishing |
 | **Rendering** | Bindless descriptors, buffer device address, render graph, GPU-driven draw culling, tiled lighting, directional and local shadows, GTAO, FXAA, tonemapping, post-processing, offscreen cameras |
 | **Scene and simulation** | EnTT world, reflection-driven component editing and scene serialization, typed asset identities, Jolt rigid bodies, skeletal animation, blending, root motion, day/night lighting |
 | **Gameplay** | Public C# engine SDK, entity scripts, inspector-exposed fields, native interop boundary, collectible load contexts, F5 rebuild and hot reload, and one-click Visual Studio script debugging |
 | **Assets** | Virtual file system, glTF import, mesh and animation processing, texture transcoding, material presets, one-time `engine.pak` staging, and publish-only project PAKs |
 | **Diagnostics** | Tracy CPU/GPU instrumentation, render-pass timings, resource inspection, validation logging, built-in editor-control MCP scene authoring, and Visual Studio debugger MCP workflow |
+
+> [!NOTE]
+> AetherCore is under active development. The editor, runtime, scripting API, and
+> asset formats are usable today, but backward compatibility is not guaranteed yet.
 
 ## Quick start
 
@@ -77,13 +87,11 @@ cmake --preset default
 cmake --build --preset default
 ```
 
-The build produces both the project hub and full editor. Start with the Launcher:
+This builds both the project hub and the editor. Start with the Launcher:
 
 ```text
 build/src/app/RelWithDebInfo/Launcher.exe
 ```
-
-The Launcher starts a separate `Editor` process for the selected project and closes only after that editor has finished its application startup. From the Editor, **File > Save & Return to Project Launcher…** saves the current named scene, opens the hub, and cleanly exits the editor.
 
 For ClangCL:
 
@@ -92,7 +100,7 @@ cmake --preset vs2022-clang
 cmake --build --preset vs2022-clang
 ```
 
-Open `managed/AetherCore.slnx` in **Visual Studio 2026** or Rider to edit the engine managed code — the `AetherCore` SDK and `AetherCore.Interop` boot assembly (engine code only; a project's gameplay scripts live in `projects/<name>/scripts/` and are edited there). The `net10.0` projects do not load in Visual Studio 2022; this does not prevent VS 2022 from building the native C++ targets through CMake.
+Open `managed/AetherCore.slnx` in **Visual Studio 2026** or Rider to edit the engine managed code (the `AetherCore` SDK and `AetherCore.Interop` boot assembly). A project's gameplay scripts live in `projects/<name>/scripts/` and are edited there. The `net10.0` projects do not load in VS 2022, but VS 2022 can still build the native C++ targets through CMake.
 
 ### Linux
 
@@ -103,7 +111,7 @@ cmake --preset linux-clang
 cmake --build --preset linux-clang
 ```
 
-The Vulkan loader, a working Vulkan driver, Clang, Ninja, and the platform development packages required by GLFW must be available. The .NET 10 SDK is optional; managed scripting is skipped when the SDK is not found.
+Requires the Vulkan loader and driver, Clang, Ninja, and GLFW's platform development packages. The .NET 10 SDK is optional-managed scripting is skipped when it is absent.
 
 ### Useful presets
 
@@ -118,33 +126,75 @@ The Vulkan loader, a working Vulkan driver, Clang, Ninja, and the platform devel
 
 ## Editor workflow
 
-1. Start `Launcher` and create or open a project. It spawns a dedicated `Editor` process, waits for it to become healthy, then closes itself.
+1. Start `Launcher` and create or open a project; it spawns a dedicated `Editor` process and closes itself.
 2. Build a scene with the hierarchy, inspector, viewport, asset browser, and component tools.
-3. Add gameplay under the project's `scripts/` directory using the `AetherCore` managed SDK.
-4. Enter play mode to run the scene. In a development build, press **F5** to rebuild and hot-reload gameplay code.
-5. Use **Debug C#** in the Project panel to open project scripts in Visual Studio with the script debugger pre-attached, or pack and publish a standalone build.
-6. Use **File > Save & Return to Project Launcher…** when switching projects; the editor saves first, starts the standalone hub, and then exits.
+3. Add gameplay under the project's `scripts/` directory using the `AetherCore` SDK.
+4. Enter play mode to run it. In a development build, press **F5** to rebuild and hot-reload gameplay code.
+5. Use **Debug C#** in the Project panel to open scripts in Visual Studio with the debugger attached, or pack and publish a standalone build.
+6. **File > Save & Return to Project Launcher…** saves and hands control back to the hub when switching projects.
 
-Each project is rooted by `ProjectSettings.toml` and owns its assets, scenes, prefabs, scripts, build intermediates, and publishing settings. Engine resources remain separate and are mounted through `engine://`; opened project content is mounted through `project://`.
+Each project is rooted by `ProjectSettings.toml` and owns its assets, scenes, prefabs, scripts, build intermediates, and publish settings. Engine resources mount through `engine://`, project content through `project://`.
+
+## 2D workflow
+
+Choose **Blank 2D** in the Launcher for an orthographic camera, 2D viewport grid and XY tools, and sprite rendering. It is the same project structure and editor shell as 3D, so scenes still share assets, C# gameplay, UI, packaging, and the render graph.
+
+1. Import a texture or sprite sheet, then open the **Sprite Slicer** to create and refine non-destructive regions with grid, trim, and pivot tools.
+2. Drag sprites into the 2D viewport or create **Sprite** and **Animated Sprite** entities from the hierarchy.
+3. Create animation clips in the **Sprite Animation** timeline, edit frame durations and events, then preview playback in Edit or Play mode.
+4. Save, script, and publish normally. Sprite regions keep stable identities across compatible re-slices, and published projects package their sprites, atlases, animations, and scenes.
+
+Physics2D and tilemaps are the next roadmap phases; the current 2D release focuses on production-ready sprite authoring and animation.
+
+## C# scripting
+
+Managed gameplay is split across three assemblies with a deliberate boundary:
+
+| Assembly | Role |
+|---|---|
+| `AetherCore` | Public gameplay SDK: entities, world, input, camera, physics, logging, and components |
+| `AetherCore.Interop` | ABI and CoreCLR boot layer used by the native host; hidden from normal game code |
+| `AetherGame` | Project gameplay scripts loaded into a collectible context for hot reload |
+
+Scripts derive from `EntityScript`. Public fields appear in the editor inspector and serialize with the entity:
+
+```csharp
+using System.Numerics;
+using AetherCore;
+
+namespace AetherGame;
+
+public sealed class Spinner : EntityScript
+{
+    public float DegreesPerSecond = 90.0f;
+
+    public override void OnUpdate(float deltaTime)
+    {
+        Vector3 euler = Self.EulerDegrees;
+        euler.Y = (euler.Y + DegreesPerSecond * deltaTime) % 360.0f;
+        Self.EulerDegrees = euler;
+    }
+}
+```
+
+The CMake build runs `dotnet build` when the .NET SDK is present and deploys the managed assemblies next to the native executable. NuGet dependencies declared by the game project resolve into the script load context.
 
 ## Engine MCP
 
-AetherCore includes its own MCP server, so a coding agent can run the test
-gauntlet, inspect the Launcher hub, or work with a live editor: inspect and edit
-scenes, manage editor panels, query the render graph, capture textures and
-screenshots, and enter play mode. The live-control endpoint listens only on
-`127.0.0.1`.
+AetherCore ships its own MCP server, so a coding agent can run the test gauntlet,
+inspect the Launcher hub, or drive a live editor-editing scenes, managing panels,
+querying the render graph, capturing textures and screenshots, and entering play
+mode. The live-control endpoint listens only on `127.0.0.1`.
 
 ```powershell
 cmake --build --preset default --target Editor aether-ctl
 ./scripts/Install-Mcp.ps1 -Targets codex
 ```
 
-The Launcher owns the control port while its hub is open (`8787` by default), offering
-hub status, project listing, and screenshots. When it launches an Editor, it releases
-that same port for the Editor's full control endpoint, so MCP tools follow the handoff
-without reconfiguration. For a directly started Editor, set `AETHER_CONTROL_PORT=8787`
-or enable it from the **Control Server** panel. See the [MCP setup guide](docs/mcp-setup.md#aethercore-mcp) for the short setup path and the [full engine MCP reference](tools/mcp/README.md) for all tools and options.
+The Launcher owns the control port while its hub is open (`8787` by default) and hands
+it off to the Editor it launches, so MCP tools follow the handoff without reconfiguration.
+For a directly started Editor, set `AETHER_CONTROL_PORT=8787` or enable the **Control Server**
+panel. See the [MCP setup guide](docs/mcp-setup.md#aethercore-mcp) and the [full engine MCP reference](tools/mcp/README.md).
 
 ## Architecture
 
@@ -187,39 +237,6 @@ The frame pipeline follows an extract-and-consume model: the producer thread gat
 
 Subsystems are wired through `ServiceContainer`. Engine startup and shutdown order is dependency-sensitive, and GPU-backed services are destroyed before the GPU device.
 
-## C# scripting
-
-Managed gameplay is split across three assemblies with a deliberate boundary:
-
-| Assembly | Role |
-|---|---|
-| `AetherCore` | Public gameplay SDK: entities, world, input, camera, physics, logging, and components |
-| `AetherCore.Interop` | ABI and CoreCLR boot layer used by the native host; hidden from normal game code |
-| `AetherGame` | Project gameplay scripts loaded into a collectible context for hot reload |
-
-Scripts derive from `EntityScript`. Public fields appear in the editor inspector and serialize with the entity:
-
-```csharp
-using System.Numerics;
-using AetherCore;
-
-namespace AetherGame;
-
-public sealed class Spinner : EntityScript
-{
-    public float DegreesPerSecond = 90.0f;
-
-    public override void OnUpdate(float deltaTime)
-    {
-        Vector3 euler = Self.EulerDegrees;
-        euler.Y = (euler.Y + DegreesPerSecond * deltaTime) % 360.0f;
-        Self.EulerDegrees = euler;
-    }
-}
-```
-
-The CMake build invokes `dotnet build` when the .NET SDK is available and deploys the managed assemblies next to the native executable. NuGet dependencies declared by the game project are resolved into the script load context.
-
 ## Asset and shipping pipeline
 
 AetherCore keeps engine and project payloads separate:
@@ -230,7 +247,7 @@ AetherCore keeps engine and project payloads separate:
 | `project://` | Project directory during development; `data/project.pak` when publishing | The opened project's scenes, prefabs, scripts, models, materials, textures, and derived assets |
 | `shaders://` | Overlay over engine and project shader intermediates | Engine shaders plus project overrides during editor development |
 
-`AssetPacker` processes project content before packing. Depending on source type, that includes texture transcoding, mesh/skeleton/animation extraction, material generation, shader optimization, and zstd compression. `engine.pak` is built once for the shared Editor/Launcher bundle; `project.pak` is created for published games rather than every editor build.
+`AssetPacker` processes project content before packing-texture transcoding, mesh/skeleton/animation extraction, material generation, shader optimization, and zstd compression, depending on source type. `engine.pak` is built once for the shared Editor/Launcher bundle; `project.pak` is created only when publishing.
 
 ```powershell
 AssetPacker --project --import-materials projects/TestingProject build/data/project.pak
@@ -250,7 +267,7 @@ normal = "project://assets/textures/normal.png"
 metallicRoughness = "project://assets/textures/metal-roughness.png"
 ```
 
-Asset references are catalogued through stable `AssetId` values while existing texture and material registries remain the owning backends. The current design and its reload roadmap are documented in [Asset Database](docs/asset-database.md).
+Asset references are catalogued through stable `AssetId` values, while texture and material registries remain the owning backends. See [Asset Database](docs/asset-database.md) for the design and reload roadmap.
 
 ## Build targets
 
