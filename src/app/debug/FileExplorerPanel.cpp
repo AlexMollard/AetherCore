@@ -903,28 +903,39 @@ namespace aether::editor
 		ImGui::InputTextWithHint("##feSearch", "Search files...", m_search, sizeof(m_search));
 	}
 
+	// Draws the inline rename input when `entry` is the active rename target. Returns
+	// true when it consumed the row (the caller pushed an ID and must PopID + return).
+	bool FileExplorerPanel::DrawActiveRename(const Entry& entry)
+	{
+		if (m_renameTarget != entry.path)
+		{
+			return false;
+		}
+		ImGui::SetNextItemWidth(-1.0f);
+		if (m_renameFocusPending)
+		{
+			ImGui::SetKeyboardFocusHere();
+			m_renameFocusPending = false;
+		}
+		if (ImGui::InputText("##feRename", m_renameBuf, sizeof(m_renameBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			ApplyRename(m_renameTarget, m_renameBuf);
+			m_renameTarget.clear();
+		}
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered()))
+		{
+			m_renameTarget.clear();
+		}
+		return true;
+	}
+
 	void FileExplorerPanel::DrawDirectoryNode(app::LayerContext& context, Entry& entry, const int depth)
 	{
 		(void) depth;
 		ImGui::PushID(entry.path.generic_string().c_str());
 
-		if (m_renameTarget == entry.path)
+		if (DrawActiveRename(entry))
 		{
-			ImGui::SetNextItemWidth(-1.0f);
-			if (m_renameFocusPending)
-			{
-				ImGui::SetKeyboardFocusHere();
-				m_renameFocusPending = false;
-			}
-			if (ImGui::InputText("##feRename", m_renameBuf, sizeof(m_renameBuf), ImGuiInputTextFlags_EnterReturnsTrue))
-			{
-				ApplyRename(m_renameTarget, m_renameBuf);
-				m_renameTarget.clear();
-			}
-			if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered()))
-			{
-				m_renameTarget.clear();
-			}
 			ImGui::PopID();
 			return;
 		}
@@ -991,23 +1002,8 @@ namespace aether::editor
 	{
 		ImGui::PushID(entry.path.generic_string().c_str());
 
-		if (m_renameTarget == entry.path)
+		if (DrawActiveRename(entry))
 		{
-			ImGui::SetNextItemWidth(-1.0f);
-			if (m_renameFocusPending)
-			{
-				ImGui::SetKeyboardFocusHere();
-				m_renameFocusPending = false;
-			}
-			if (ImGui::InputText("##feRename", m_renameBuf, sizeof(m_renameBuf), ImGuiInputTextFlags_EnterReturnsTrue))
-			{
-				ApplyRename(m_renameTarget, m_renameBuf);
-				m_renameTarget.clear();
-			}
-			if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered()))
-			{
-				m_renameTarget.clear();
-			}
 			ImGui::PopID();
 			return;
 		}

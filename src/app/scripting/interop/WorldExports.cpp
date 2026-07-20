@@ -195,7 +195,7 @@ AE_SCRIPT_API Vec3 aether_get_scale(std::uint32_t id)
 		return {1.0f, 1.0f, 1.0f};
 	}
 	const auto& m = tc->localToWorld;
-	return FromGlm({glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2]))});
+	return FromGlm(aether::ExtractScale(m));
 }
 
 AE_SCRIPT_API void aether_set_transform(std::uint32_t id, Vec3 pos, Vec3 euler, Vec3 scale)

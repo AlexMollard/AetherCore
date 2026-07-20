@@ -224,6 +224,7 @@ namespace aether::editor
 			}
 			catch (const std::exception& e)
 			{
+				AE_WARN(LogCategory::App, "Control command '{}' threw: {}", in.method, e.what());
 				resultBody = json{{"error", std::string("command threw: ") + e.what()}}.dump();
 			}
 

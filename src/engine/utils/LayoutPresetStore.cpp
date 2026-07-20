@@ -8,28 +8,12 @@
 #include "io/PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
+#include "utils/StringUtils.hpp"
 
 namespace aether
 {
 	namespace
 	{
-		std::string_view Trim(std::string_view s)
-		{
-			const auto notSpace = [](char c)
-			{
-				return c != ' ' && c != '\t';
-			};
-			while (!s.empty() && !notSpace(s.front()))
-			{
-				s.remove_prefix(1);
-			}
-			while (!s.empty() && !notSpace(s.back()))
-			{
-				s.remove_suffix(1);
-			}
-			return s;
-		}
-
 		constexpr std::string_view kImguiMarker = "[imgui]";
 		constexpr std::string_view kVisibilityMarker = "[visibility]";
 	} // namespace
@@ -89,8 +73,8 @@ namespace aether
 
 			if (const std::size_t eq = line.find('='); eq != std::string_view::npos)
 			{
-				const std::string_view key = Trim(line.substr(0, eq));
-				const std::string_view value = Trim(line.substr(eq + 1));
+				const std::string_view key = utils::TrimView(line.substr(0, eq), " \t");
+				const std::string_view value = utils::TrimView(line.substr(eq + 1), " \t");
 				if (inVisibility)
 				{
 					preset.visibility.emplace_back(std::string(key), value == "1" || value == "true");

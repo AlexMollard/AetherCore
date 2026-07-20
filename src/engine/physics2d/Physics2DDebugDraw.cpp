@@ -75,22 +75,6 @@ namespace aether
 		{
 			constexpr glm::vec4 kTileColor{0.35f, 0.9f, 0.5f, 1.0f};
 			constexpr glm::vec4 kOneWayColor{0.30f, 0.70f, 1.0f, 1.0f}; // cyan: one-way platforms/doors
-			const auto solidNormal = [](TileOneWay dir) -> glm::vec2
-			{
-				switch (dir)
-				{
-					case TileOneWay::Up:
-						return {0.0f, 1.0f};
-					case TileOneWay::Down:
-						return {0.0f, -1.0f};
-					case TileOneWay::Left:
-						return {-1.0f, 0.0f};
-					case TileOneWay::Right:
-						return {1.0f, 0.0f};
-					default:
-						return {0.0f, 0.0f};
-				}
-			};
 			tileSystem->ForEachTileDebugOutline(
 			        [&](const std::vector<glm::vec2>& outline, TileOneWay oneWay)
 			        {
@@ -107,7 +91,7 @@ namespace aether
 				        {
 					        return;
 				        }
-				        const glm::vec2 n = solidNormal(oneWay);
+				        const glm::vec2 n = OneWaySolidNormal(oneWay);
 				        glm::vec2 centre{0.0f};
 				        for (int k = 0; k < 4; ++k)
 				        {

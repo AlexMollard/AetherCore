@@ -52,21 +52,23 @@ namespace aether
 		auto& reg = world.GetRegistry();
 
 		auto skinnedView = reg.view<SkinnedMeshComponent>();
-		std::uint32_t jobIdx = 0;
 
 		for (const auto& [entity, skinned]: skinnedView.each())
 		{
-			if (jobIdx >= static_cast<std::uint32_t>(m_blendJobs.size()))
-			{
-				AE_WARN(LogCategory::Animation, "AnimationBlendSystem: blend job buffer overflow at {} jobs.", jobIdx);
-				break;
-			}
-
 			const AnimationBlendComponent* blendComp = reg.try_get<AnimationBlendComponent>(entity);
 			if (blendComp == nullptr || !blendComp->inTransition)
 			{
-				++jobIdx;
 				continue;
+			}
+
+			// Writes are compacted into [0, m_writtenJobCount); the compute dispatch
+			// covers exactly that range. A non-blending entity earlier in the view must
+			// not advance the write cursor, or its stale slot is read as a job and the
+			// real job (written past the dispatch bound) is skipped.
+			if (m_writtenJobCount >= static_cast<std::uint32_t>(m_blendJobs.size()))
+			{
+				AE_WARN(LogCategory::Animation, "AnimationBlendSystem: blend job buffer overflow at {} jobs.", m_writtenJobCount);
+				break;
 			}
 
 			AnimationContracts::AnimatorBlendJob job{};
@@ -83,9 +85,8 @@ namespace aether
 			job.valuesAddr = animDb.GetValuesAddr();
 			job.clipCount = animDb.GetClipCount();
 
-			m_mappedBlendJobs[jobIdx] = job;
-			m_blendJobs[jobIdx] = job;
-			++jobIdx;
+			m_mappedBlendJobs[m_writtenJobCount] = job;
+			m_blendJobs[m_writtenJobCount] = job;
 			++m_writtenJobCount;
 		}
 

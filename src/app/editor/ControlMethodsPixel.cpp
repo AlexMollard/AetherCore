@@ -1,4 +1,5 @@
 #include "editor/ControlMethods.hpp"
+#include "editor/ControlSchema.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -19,26 +20,6 @@ namespace aether::editor
 
 	namespace
 	{
-		json Obj(json properties = json::object(), const std::vector<std::string>& required = {})
-		{
-			json schema{{"type", "object"}, {"properties", std::move(properties)}};
-			if (!required.empty())
-			{
-				schema["required"] = required;
-			}
-			return schema;
-		}
-
-		json IntProp()
-		{
-			return json{{"type", "integer"}};
-		}
-
-		json ColorProp()
-		{
-			return json{{"type", "array"}, {"items", json{{"type", "integer"}, {"minimum", 0}, {"maximum", 255}}}, {"minItems", 3}, {"maxItems", 4}, {"description", "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour"}};
-		}
-
 		std::uint32_t ParseColor(const json& params, const char* key, std::uint32_t fallback)
 		{
 			if (!params.contains(key) || !params[key].is_array() || params[key].size() < 3)
@@ -59,20 +40,6 @@ namespace aether::editor
 			return params.contains(key) && params[key].is_number_integer() ? params[key].get<int>() : fallback;
 		}
 
-		std::filesystem::path ResolveProjectPath(MethodContext& ctx, std::string_view vpath)
-		{
-			const auto* project = ctx.services.TryGet<app::EditorProjectContext>();
-			if (project == nullptr || project->root.empty())
-			{
-				return {};
-			}
-			constexpr std::string_view kPrefix = "project://";
-			if (vpath.starts_with(kPrefix))
-			{
-				vpath.remove_prefix(kPrefix.size());
-			}
-			return project->root / std::filesystem::path(vpath);
-		}
 
 		json DocInfo(const PixelArtDocument& doc)
 		{
@@ -200,7 +167,7 @@ namespace aether::editor
 			                {
 				                return json{{"ok", false}, {"error", "no path given and no current file"}};
 			                }
-			                const std::filesystem::path disk = ResolveProjectPath(ctx, vpath);
+			                const std::filesystem::path disk = app::ResolveProjectPath(ctx.services.TryGet<app::EditorProjectContext>(), vpath);
 			                const bool ok = !disk.empty() && doc.Save(disk);
 			                return json{{"ok", ok}, {"path", vpath}};
 		                })});
@@ -209,7 +176,7 @@ namespace aether::editor
 		        withDoc([](const json& p, MethodContext& ctx, PixelArtDocument& doc) -> json
 		                {
 			                const std::string vpath = p.contains("path") && p["path"].is_string() ? p["path"].get<std::string>() : std::string{};
-			                const std::filesystem::path disk = ResolveProjectPath(ctx, vpath);
+			                const std::filesystem::path disk = app::ResolveProjectPath(ctx.services.TryGet<app::EditorProjectContext>(), vpath);
 			                const bool ok = !disk.empty() && doc.Load(disk);
 			                return json{{"ok", ok}, {"info", DocInfo(doc)}};
 		                })});

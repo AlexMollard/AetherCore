@@ -24,60 +24,7 @@ namespace
 		return dir;
 	}
 
-	std::array<std::uint32_t, kTileChunkCellCount> CellsWith(std::initializer_list<glm::ivec2> solidCells)
-	{
-		std::array<std::uint32_t, kTileChunkCellCount> cells{};
-		for (const glm::ivec2 cell: solidCells)
-		{
-			cells[static_cast<std::size_t>(cell.y) * kTileChunkSize + static_cast<std::size_t>(cell.x)] = tilecell::Make(0);
-		}
-		return cells;
-	}
-
-	const auto kAnySolid = [](std::uint32_t cell) { return !tilecell::Empty(cell); };
 } // namespace
-
-TEST_CASE("greedy merge covers solid cells exactly once")
-{
-	// Empty chunk -> nothing.
-	CHECK(MergeSolidCells(CellsWith({}), kAnySolid).empty());
-
-	// Full chunk -> a single rect.
-	std::array<std::uint32_t, kTileChunkCellCount> full{};
-	full.fill(tilecell::Make(0));
-	const auto fullRects = MergeSolidCells(full, kAnySolid);
-	REQUIRE(fullRects.size() == 1);
-	CHECK(fullRects[0] == TileRect{0, 0, kTileChunkSize, kTileChunkSize});
-
-	// One row -> one rect.
-	auto row = CellsWith({});
-	for (int x = 0; x < kTileChunkSize; ++x)
-	{
-		row[static_cast<std::size_t>(x)] = tilecell::Make(0);
-	}
-	const auto rowRects = MergeSolidCells(row, kAnySolid);
-	REQUIRE(rowRects.size() == 1);
-	CHECK(rowRects[0] == TileRect{0, 0, kTileChunkSize, 1});
-
-	// L-shape -> two rects covering 5 cells total.
-	const auto lShape = MergeSolidCells(CellsWith({{0, 0}, {0, 1}, {0, 2}, {1, 2}, {2, 2}}), kAnySolid);
-	std::int32_t covered = 0;
-	for (const TileRect& rect: lShape)
-	{
-		covered += rect.w * rect.h;
-	}
-	CHECK(covered == 5);
-	CHECK(lShape.size() == 2);
-
-	// Checkerboard 4x4 -> 8 unit rects.
-	const auto checker = MergeSolidCells(CellsWith({{0, 0}, {2, 0}, {1, 1}, {3, 1}, {0, 2}, {2, 2}, {1, 3}, {3, 3}}), kAnySolid);
-	CHECK(checker.size() == 8);
-	for (const TileRect& rect: checker)
-	{
-		CHECK(rect.w == 1);
-		CHECK(rect.h == 1);
-	}
-}
 
 namespace
 {

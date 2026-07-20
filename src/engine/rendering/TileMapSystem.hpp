@@ -10,6 +10,7 @@
 #include "material/TextureHandle.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "scene/Entity.hpp"
+#include "utils/Hash.hpp"
 
 namespace aether
 {
@@ -62,7 +63,7 @@ namespace aether
 			[[nodiscard]] std::size_t operator()(const ChunkCacheKey& key) const noexcept
 			{
 				std::size_t hash = std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(key.entity) << 32u) | key.layer);
-				hash ^= std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(static_cast<std::uint32_t>(key.chunkX)) << 32u) | static_cast<std::uint32_t>(key.chunkY)) + 0x9e3779b97f4a7c15ull + (hash << 6u) + (hash >> 2u);
+				hash = utils::HashCombine(hash, std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(static_cast<std::uint32_t>(key.chunkX)) << 32u) | static_cast<std::uint32_t>(key.chunkY)));
 				return hash;
 			}
 		};

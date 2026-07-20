@@ -21,8 +21,10 @@
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
 #include "IOThread.hpp"
+#include "PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
+#include "utils/StringUtils.hpp"
 #include "OverlayBackend.hpp"
 #include "PakBackend.hpp"
 
@@ -128,23 +130,7 @@ namespace aether::io
 
 		std::string EnvironmentString(const char* name)
 		{
-#ifdef _MSC_VER
-			char* value = nullptr;
-			std::size_t size = 0;
-			if (_dupenv_s(&value, &size, name) != 0 || value == nullptr)
-			{
-				return {};
-			}
-			std::string result(value);
-			std::free(value);
-			return result;
-#else
-			if (const char* value = std::getenv(name); value != nullptr)
-			{
-				return value;
-			}
-			return {};
-#endif
+			return PlatformPaths::ReadEnvironmentVariable(name);
 		}
 
 		std::optional<std::filesystem::path> EnvironmentPath(const char* name)
@@ -170,11 +156,6 @@ namespace aether::io
 				return value;
 			}
 			return EnvironmentPath(legacy);
-		}
-
-		bool EqualsIgnoreCase(std::string_view lhs, std::string_view rhs)
-		{
-			return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
 		}
 
 		bool MountPakCandidate(std::string_view mountPoint, std::string_view pakName, const std::vector<std::filesystem::path>& candidates)
@@ -282,7 +263,7 @@ namespace aether::io
 		// Default pak candidates are run-directory data/ first (ship layout),
 		bool engineUsesPak = false;
 		const std::string engineMode = EnvironmentStringFirst("AETHER_ENGINE_MODE", "AETHER_ASSET_MODE");
-		if (EqualsIgnoreCase(engineMode, "dir"))
+		if (utils::IEq(engineMode, "dir"))
 		{
 			MountEngineDirectory(EnvironmentPathFirst("AETHER_ENGINE_DIR", "AETHER_ASSET_DIR")
 			                .value_or(
@@ -314,7 +295,7 @@ namespace aether::io
 			}
 			else
 			{
-				if (EqualsIgnoreCase(engineMode, "pak"))
+				if (utils::IEq(engineMode, "pak"))
 				{
 					AE_ASSERT_ALWAYS(false, "AETHER_ENGINE_MODE=pak but no usable engine.pak was found. Set AETHER_ENGINE_PAK or build the Editor to generate data/engine.pak.");
 				}
@@ -332,7 +313,7 @@ namespace aether::io
 
 		bool projectUsesPak = false;
 		const std::string projectMode = EnvironmentString("AETHER_PROJECT_MODE");
-		if (EqualsIgnoreCase(projectMode, "dir"))
+		if (utils::IEq(projectMode, "dir"))
 		{
 			MountProjectDirectory(EnvironmentPath("AETHER_PROJECT_DIR")
 			                .value_or(
@@ -361,7 +342,7 @@ namespace aether::io
 			projectUsesPak = MountProjectPak(projectPakCandidates);
 			if (!projectUsesPak)
 			{
-				if (EqualsIgnoreCase(projectMode, "pak"))
+				if (utils::IEq(projectMode, "pak"))
 				{
 					AE_ASSERT_ALWAYS(false, "AETHER_PROJECT_MODE=pak but no usable project.pak was found. Set AETHER_PROJECT_PAK or build the Editor to generate data/project.pak.");
 				}
@@ -585,51 +566,6 @@ namespace aether::io
 		}
 		AE_VERBOSE(LogCategory::FileSystem, "Glob: '{}' returned {} result(s)", virtualPattern, result->size());
 		return result;
-	}
-
-	FileRequestHandle FileSystem::RequestAsync(std::string_view virtualPath, IOPriority priority)
-	{
-		if (s_backend == nullptr)
-		{
-			AE_ASSERT_ALWAYS(false, "FileSystem::RequestAsync() called before Initialize().");
-		}
-
-		const std::string virtualPathString(virtualPath);
-		auto handle = std::make_shared<FileRequest>();
-		AE_VERBOSE(LogCategory::FileSystem, "RequestAsync (priority={}): {}", static_cast<int>(priority), virtualPathString);
-
-		s_backend->ioThread->Submit(priority,
-		        [handle, virtualPathString]()
-		        {
-			        try
-			        {
-				        auto result = FileSystem::ReadFile(virtualPathString);
-				        if (result.has_value())
-				        {
-					        handle->m_data = std::move(*result);
-					        handle->m_state.store(FileRequest::State::Complete, std::memory_order_release);
-				        }
-				        else
-				        {
-					        handle->m_error = result.error().ToString();
-					        handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
-				        }
-			        }
-			        catch (...)
-			        {
-				        handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
-			        }
-		        });
-
-		return handle;
-	}
-
-	void FileSystem::WaitFor(const FileRequestHandle& handle)
-	{
-		while (handle->GetState() == FileRequest::State::Pending)
-		{
-			std::this_thread::yield();
-		}
 	}
 
 	coro::task<std::vector<std::byte>> FileSystem::ReadFileAsync(std::string_view virtualPath, IOPriority priority)

@@ -17,13 +17,20 @@ namespace aether
 		return t * r * s;
 	}
 
+	// Per-axis scale = the length of each basis column. This is the correct way to
+	// recover scale from a TRS matrix (m[i][i] is wrong once there is any rotation).
+	inline glm::vec3 ExtractScale(const glm::mat4& m)
+	{
+		return {glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2]))};
+	}
+
 	inline void DecomposeTRS(const glm::mat4& m, glm::vec3& pos, glm::vec3& eulerDeg, glm::vec3& scale)
 	{
 		pos = glm::vec3(m[3]);
-		const float sx = glm::length(glm::vec3(m[0]));
-		const float sy = glm::length(glm::vec3(m[1]));
-		const float sz = glm::length(glm::vec3(m[2]));
-		scale = {sx, sy, sz};
+		scale = ExtractScale(m);
+		const float sx = scale.x;
+		const float sy = scale.y;
+		const float sz = scale.z;
 		const glm::vec3 c2 = sz > 1e-6f ? glm::vec3(m[2]) / sz : glm::vec3(0, 0, 1);
 		const glm::vec3 c0 = sx > 1e-6f ? glm::vec3(m[0]) / sx : glm::vec3(1, 0, 0);
 		const float sinX = glm::clamp(-c2.y, -1.0f, 1.0f);

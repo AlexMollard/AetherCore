@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <regex>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -79,35 +80,16 @@ namespace aether::editor
 			return LowerAscii(path.stem().generic_string()).starts_with("gfsdk_aftermath");
 		}
 
-		// redistributable release CRT (msvcp140.dll, no trailing 'd') and never emit these.
+		// A debug CRT DLL is a known release-CRT stem with a trailing 'd' before the
+		// extension: ucrtbased.dll, msvcp<ver>d.dll, vcruntime<ver>d.dll, concrt<ver>d.dll,
+		// vccorlib<ver>d.dll. This gates a Debug package into a hard publish failure, so
+		// match an explicit, documented pattern rather than scanning for "digit d ." - a
+		// false negative would ship a non-redistributable, validation-layer build.
 		bool IsDebugCrtDll(const std::filesystem::path& path)
 		{
+			static const std::regex kDebugCrt(R"(^(ucrtbased|(?:msvcp|vcruntime|concrt|vccorlib)\d+d)\.dll$)");
 			const std::string name = LowerAscii(path.filename().generic_string());
-			if (name == "ucrtbased.dll")
-			{
-				return true;
-			}
-			bool isCrt = false;
-			for (const char* prefix: {"msvcp", "vcruntime", "concrt", "vccorlib"})
-			{
-				if (name.starts_with(prefix))
-				{
-					isCrt = true;
-					break;
-				}
-			}
-			if (!isCrt || !name.ends_with(".dll"))
-			{
-				return false;
-			}
-			for (std::size_t i = 1; i + 1 < name.size(); ++i)
-			{
-				if (name[i] == 'd' && (std::isdigit(static_cast<unsigned char>(name[i - 1])) != 0) && (name[i + 1] == '.' || name[i + 1] == '_'))
-				{
-					return true;
-				}
-			}
-			return false;
+			return std::regex_match(name, kDebugCrt);
 		}
 
 		// no runtime purpose that leak dev paths - never ship them.
@@ -277,6 +259,32 @@ namespace aether::editor
 			return true;
 		}
 
+		// Single source of dev-artifact knowledge for both the prune pass (auto-clean)
+		// and the verify pass (fatal). Prune = build leftovers safe to delete; Forbid =
+		// source/project files that must never ship. Packer sidecars are classified by
+		// the shared IsPakSidecarFile predicate at the call sites (they keep a distinct
+		// verify message).
+		enum class DevArtifactAction
+		{
+			Keep,
+			Prune,
+			Forbid
+		};
+
+		DevArtifactAction ClassifyPublishedFile(const std::filesystem::path& path)
+		{
+			const std::string ext = LowerAscii(path.extension().generic_string());
+			if (ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk")
+			{
+				return DevArtifactAction::Prune;
+			}
+			if (ext == ".cs" || ext == ".csproj" || ext == ".vcxproj")
+			{
+				return DevArtifactAction::Forbid;
+			}
+			return DevArtifactAction::Keep;
+		}
+
 		bool PrunePublishedDevFiles(const std::filesystem::path& packageDir, std::string& error)
 		{
 			std::error_code ec;
@@ -291,8 +299,7 @@ namespace aether::editor
 				{
 					continue;
 				}
-				const std::string ext = LowerAscii(entry.path().extension().generic_string());
-				if (ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk" || IsPakSidecarFile(entry.path()))
+				if (ClassifyPublishedFile(entry.path()) == DevArtifactAction::Prune || IsPakSidecarFile(entry.path()))
 				{
 					std::filesystem::remove(entry.path(), ec);
 					if (ec)
@@ -320,6 +327,7 @@ namespace aether::editor
 			catch (const std::exception& ex)
 			{
 				error = "Could not verify shaders in published engine.pak: " + std::string(ex.what());
+				AE_ERROR(LogCategory::App, "{}", error);
 				return false;
 			}
 			return true;
@@ -406,6 +414,7 @@ namespace aether::editor
 			catch (const std::exception& ex)
 			{
 				error = "Could not verify startup scene '" + settings.app.startupScene + "' in " + DisplayPath(projectPakPath) + ": " + std::string(ex.what());
+				AE_ERROR(LogCategory::App, "{}", error);
 				return false;
 			}
 			return true;
@@ -463,8 +472,7 @@ namespace aether::editor
 				{
 					continue;
 				}
-				const std::string ext = LowerAscii(entry.path().extension().generic_string());
-				if (ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk" || ext == ".cs" || ext == ".csproj" || ext == ".vcxproj")
+				if (ClassifyPublishedFile(entry.path()) != DevArtifactAction::Keep)
 				{
 					error = "Published build contains a dev/source file: " + DisplayPath(entry.path());
 					return false;
@@ -884,6 +892,7 @@ namespace aether::editor
 			}
 			catch (const std::exception& ex)
 			{
+				AE_ERROR(LogCategory::App, "Publish: could not read runtime engine.pak: {}", ex.what());
 				return {.succeeded = false, .message = "Could not read the runtime package's engine.pak (" + DisplayPath(templatePak) + "): " + ex.what(), .outputPath = publishDir};
 			}
 			if (runtimePakVersion != PAK_PIPELINE_VERSION)

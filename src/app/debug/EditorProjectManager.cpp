@@ -218,26 +218,7 @@ namespace aether::editor
 			m_currentProject.name = ReadProjectName(m_currentProject.root);
 		}
 
-		m_recentProjects.clear();
-		for (int i = 0; i < kMaxRecentProjects; ++i)
-		{
-			const std::string key = std::format("launcher.recent_{}", i);
-			app::EditorProjectContext project;
-			project.root = NormalizePath(config.GetString(key + ".path"));
-			project.name = config.GetString(key + ".name");
-			if (project.root.empty())
-			{
-				continue;
-			}
-			if (project.name.empty())
-			{
-				project.name = ReadProjectName(project.root);
-			}
-			if (std::ranges::none_of(m_recentProjects, [&](const app::EditorProjectContext& existing) { return NormalizePath(existing.root) == project.root; }))
-			{
-				m_recentProjects.push_back(std::move(project));
-			}
-		}
+		m_recentProjects = LoadRecentProjects(config);
 
 		const std::filesystem::path cwd = NormalizePath(std::filesystem::current_path());
 		std::snprintf(m_launcherState.openPath.data(), m_launcherState.openPath.size(), "%s", DisplayPath(cwd).c_str());
@@ -265,20 +246,7 @@ namespace aether::editor
 		config.Set("launcher.open_last", m_launcherState.openLastProject);
 		config.Set("launcher.current.path", DisplayPath(m_currentProject.root));
 		config.Set("launcher.current.name", m_currentProject.name);
-		for (int i = 0; i < kMaxRecentProjects; ++i)
-		{
-			const std::string key = std::format("launcher.recent_{}", i);
-			if (i < static_cast<int>(m_recentProjects.size()))
-			{
-				config.Set(key + ".path", DisplayPath(m_recentProjects[static_cast<std::size_t>(i)].root));
-				config.Set(key + ".name", m_recentProjects[static_cast<std::size_t>(i)].name);
-			}
-			else
-			{
-				config.Set(key + ".path", std::string_view{});
-				config.Set(key + ".name", std::string_view{});
-			}
-		}
+		SaveRecentProjects(config, m_recentProjects);
 	}
 
 	void EditorProjectManager::AddRecentProject(std::filesystem::path root, std::string name)

@@ -105,18 +105,6 @@ namespace aether::assets
 			return std::string(mount) + "://" + resolved.generic_string();
 		}
 
-		std::string DeriveMeshPath(std::string_view vfsPath)
-		{
-			const std::size_t ss = vfsPath.find("://");
-			if (ss == std::string_view::npos)
-			{
-				return {};
-			}
-			const std::string mount(vfsPath.substr(0, ss));
-			const std::filesystem::path rel(vfsPath.substr(ss + 3));
-			return mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".mesh";
-		}
-
 		std::string ResolveSkelPath(std::string_view meshVfsPath, std::string_view skinRefPath)
 		{
 			if (skinRefPath.empty())
@@ -865,7 +853,7 @@ namespace aether::assets
 		std::string meshPath = vfsPath;
 		if (!vfsPath.ends_with(".mesh"))
 		{
-			const std::string derived = DeriveMeshPath(vfsPath);
+			const std::string derived = GltfAsset::ResolveMeshPath(vfsPath);
 			if (TryMesh(derived))
 			{
 				meshPath = derived;

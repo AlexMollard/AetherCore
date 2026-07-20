@@ -9,12 +9,14 @@
 
 namespace aether::ecs
 {
-	inline bool HasSceneTransientAncestor(World& world, Entity entity)
+	// True when the entity or any ancestor carries component T (walks parent links).
+	template <typename T>
+	bool HasAncestorWith(const World& world, Entity entity)
 	{
 		Entity cur = entity;
 		while (cur.IsValid())
 		{
-			if (world.Has<SceneTransientComponent>(cur))
+			if (world.Has<T>(cur))
 			{
 				return true;
 			}
@@ -22,6 +24,11 @@ namespace aether::ecs
 			cur = h ? h->parent : Entity{};
 		}
 		return false;
+	}
+
+	inline bool HasSceneTransientAncestor(World& world, Entity entity)
+	{
+		return HasAncestorWith<SceneTransientComponent>(world, entity);
 	}
 
 	// True when the entity or any ancestor is DontDestroyOnLoad - i.e. it must
@@ -30,32 +37,12 @@ namespace aether::ecs
 	// DontDestroyOnLoad, so they get torn down and re-expanded instead of leaking.
 	inline bool HasDontDestroyOnLoadAncestor(World& world, Entity entity)
 	{
-		Entity cur = entity;
-		while (cur.IsValid())
-		{
-			if (world.Has<DontDestroyOnLoadComponent>(cur))
-			{
-				return true;
-			}
-			const auto* h = world.TryGet<HierarchyComponent>(cur);
-			cur = h ? h->parent : Entity{};
-		}
-		return false;
+		return HasAncestorWith<DontDestroyOnLoadComponent>(world, entity);
 	}
 
 	inline bool HasDisabledAncestor(const World& world, Entity entity)
 	{
-		Entity cur = entity;
-		while (cur.IsValid())
-		{
-			if (world.Has<DisabledComponent>(cur))
-			{
-				return true;
-			}
-			const auto* h = world.TryGet<HierarchyComponent>(cur);
-			cur = h ? h->parent : Entity{};
-		}
-		return false;
+		return HasAncestorWith<DisabledComponent>(world, entity);
 	}
 
 	inline bool IsActiveInHierarchy(const World& world, Entity entity)
@@ -103,52 +90,13 @@ namespace aether::ecs
 		world.RegisterRoot(child);
 	}
 
+	inline bool InsertChildAt(World& world, Entity child, Entity parent, int index);
+
+	// Reparent `child` under `parent`, appended to the end. A thin wrapper over
+	// InsertChildAt(-1) so the detach/emplace/root bookkeeping lives in one place.
 	inline bool SetParent(World& world, Entity child, Entity parent)
 	{
-		if (!child.IsValid() || child == parent)
-		{
-			return false;
-		}
-		if (parent.IsValid() && IsAncestor(world, parent, child))
-		{
-			return false;
-		}
-
-		if (auto* old = world.TryGet<HierarchyComponent>(child); old != nullptr && old->parent.IsValid())
-		{
-			if (auto* ph = world.TryGet<HierarchyComponent>(old->parent))
-			{
-				auto& kids = ph->children;
-				kids.erase(std::remove(kids.begin(), kids.end(), child), kids.end());
-			}
-		}
-		else
-		{
-			world.UnregisterRoot(child);
-		}
-
-		auto* ch = world.TryGet<HierarchyComponent>(child);
-		if (!ch)
-		{
-			ch = &world.Emplace<HierarchyComponent>(child);
-		}
-		ch->parent = parent;
-
-		if (parent.IsValid())
-		{
-			world.UnregisterRoot(child);
-			auto* ph = world.TryGet<HierarchyComponent>(parent);
-			if (!ph)
-			{
-				ph = &world.Emplace<HierarchyComponent>(parent);
-			}
-			ph->children.push_back(child);
-		}
-		else
-		{
-			world.RegisterRoot(child);
-		}
-		return true;
+		return InsertChildAt(world, child, parent, -1);
 	}
 
 	inline bool InsertChildAt(World& world, Entity child, Entity parent, int index)

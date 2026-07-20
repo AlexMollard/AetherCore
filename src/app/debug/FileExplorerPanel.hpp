@@ -51,6 +51,7 @@ namespace aether::editor
 		void DrawTree(app::LayerContext& context);
 		void DrawDirectoryNode(app::LayerContext& context, Entry& entry, int depth);
 		void DrawFileRow(app::LayerContext& context, const Entry& entry);
+		bool DrawActiveRename(const Entry& entry);
 		void DrawSearchResults(app::LayerContext& context, const Entry& entry);
 		bool DrawRowContextMenu(app::LayerContext& context, const Entry& entry);
 		void DrawPendingPopups(app::LayerContext& context);

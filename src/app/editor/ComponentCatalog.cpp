@@ -18,6 +18,7 @@
 #include "scene/LightComponents.hpp"
 #include "scene/World.hpp"
 #include "scene/reflection/Reflection.hpp"
+#include "scene/TransformUtils.hpp"
 #include "ui/UiComponents.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -39,7 +40,7 @@ namespace aether::editor
 			if (const auto* t = w.TryGet<TransformComponent>(e))
 			{
 				const glm::mat4& m = t->localToWorld;
-				return glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
+				return aether::ExtractScale(m);
 			}
 			return glm::vec3(1.0f);
 		}

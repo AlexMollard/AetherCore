@@ -12,6 +12,7 @@
 #include "io/FileUtil.hpp"
 #include "io/Process.hpp"
 #include "project/ProjectCommon.hpp"
+#include "utils/StringUtils.hpp"
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -29,13 +30,7 @@ namespace aether::editor
 #ifdef _WIN32
 		std::string Trim(const std::string& text)
 		{
-			const auto first = text.find_first_not_of(" \t\r\n");
-			if (first == std::string::npos)
-			{
-				return {};
-			}
-			const auto last = text.find_last_not_of(" \t\r\n");
-			return text.substr(first, last - first + 1);
+			return std::string(aether::utils::TrimView(text));
 		}
 
 		std::optional<std::filesystem::path> FindVSWhere()

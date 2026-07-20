@@ -17,6 +17,7 @@
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "utils/Hash.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
@@ -67,25 +68,6 @@ namespace aether
 		void* OneWayUserData(TileOneWay dir)
 		{
 			return reinterpret_cast<void*>(static_cast<std::uintptr_t>(dir));
-		}
-
-		// The outward normal of a one-way collider's SOLID face. A contact is kept
-		// only when the other body sits on this side.
-		glm::vec2 OneWaySolidNormal(TileOneWay dir)
-		{
-			switch (dir)
-			{
-				case TileOneWay::Up:
-					return {0.0f, 1.0f};
-				case TileOneWay::Down:
-					return {0.0f, -1.0f};
-				case TileOneWay::Left:
-					return {-1.0f, 0.0f};
-				case TileOneWay::Right:
-					return {1.0f, 0.0f};
-				default:
-					return {0.0f, 0.0f};
-			}
 		}
 
 		// One-way pre-solve: called on the physics thread for contacts involving a
@@ -156,7 +138,7 @@ namespace aether
 			std::size_t operator()(const TileBodyKey& key) const noexcept
 			{
 				std::size_t hash = std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(key.entity) << 32u) | key.layer);
-				hash ^= std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(static_cast<std::uint32_t>(key.chunkX)) << 32u) | static_cast<std::uint32_t>(key.chunkY)) + 0x9e3779b97f4a7c15ull + (hash << 6u) + (hash >> 2u);
+				hash = utils::HashCombine(hash, std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(static_cast<std::uint32_t>(key.chunkX)) << 32u) | static_cast<std::uint32_t>(key.chunkY)));
 				return hash;
 			}
 		};

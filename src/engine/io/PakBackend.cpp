@@ -18,63 +18,13 @@
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
+#include "GlobMatch.hpp"
 #include "utils/AetherExceptions.hpp"
 #include "utils/Expected.hpp"
 #include "utils/StringUtils.hpp"
 
 namespace aether::io
 {
-	namespace
-	{
-		std::string GlobToRegex(std::string_view pattern)
-		{
-			std::string regex;
-			regex.reserve(pattern.size() * 2 + 2);
-			regex += '^';
-
-			for (std::size_t i = 0; i < pattern.size(); ++i)
-			{
-				const char c = pattern[i];
-				if (c == '*')
-				{
-					const bool isDoubleStar = (i + 1 < pattern.size() && pattern[i + 1] == '*');
-					if (isDoubleStar)
-					{
-						const bool followedBySlash = (i + 2 < pattern.size() && pattern[i + 2] == '/');
-						if (followedBySlash)
-						{
-							regex += "(?:.*/)?";
-							i += 2;
-						}
-						else
-						{
-							regex += ".*";
-							++i;
-						}
-					}
-					else
-					{
-						regex += "[^/]*";
-					}
-					continue;
-				}
-				if (c == '?')
-				{
-					regex += "[^/]";
-					continue;
-				}
-				if (c == '.' || c == '^' || c == '$' || c == '+' || c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == '|' || c == '\\')
-				{
-					regex += '\\';
-				}
-				regex += c;
-			}
-
-			regex += '$';
-			return regex;
-		}
-	} // namespace
-
 	PakBackend::PakBackend(std::filesystem::path pakPath, bool enforceVersion)
 	      : m_pakPath(std::move(pakPath))
 	{

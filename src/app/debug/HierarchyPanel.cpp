@@ -1686,11 +1686,6 @@ namespace aether::editor
 			ImGui::SameLine();
 			FilterChip(ICON_FA_WAND_MAGIC_SPARKLES, "Effects", ImVec4(0.80f, 0.55f, 1.00f, 1.0f), m_filterEffect);
 
-			if (!m_expandedPathsLoaded)
-			{
-				SyncExpandedFromPaths(world);
-			}
-
 			DrawBreadcrumbTrail(world, selection);
 
 			const bool anyChip = m_filterMesh || m_filterSkinned || m_filterPhysics || m_filterEffect;
@@ -2109,121 +2104,6 @@ namespace aether::editor
 		ImGui::End();
 	}
 
-	std::string HierarchyPanel::ComputeEntityPath(const World& world, Entity e) const
-	{
-		std::vector<std::string> segments;
-		Entity cur = e;
-		while (cur.IsValid())
-		{
-			segments.emplace_back(EntityDisplayName(world, cur));
-			const auto* h = world.TryGet<HierarchyComponent>(cur);
-			cur = h ? h->parent : Entity{};
-		}
-		std::string path;
-		for (auto& segment: std::views::reverse(segments))
-		{
-			path += '/';
-			path += segment;
-		}
-		return path;
-	}
-
-	namespace
-	{
-		Entity FindEntityByPath(const World& world, const std::vector<std::string>& segments)
-		{
-			if (segments.empty())
-			{
-				return {};
-			}
-			Entity cur{};
-			for (const Entity e: world.Roots())
-			{
-				if (!e.IsValid() || !world.GetRegistry().valid(World::ToEntt(e)))
-				{
-					continue;
-				}
-				if (EntityDisplayName(world, e) == segments[0])
-				{
-					cur = e;
-					break;
-				}
-			}
-			if (!cur.IsValid())
-			{
-				return {};
-			}
-			for (std::size_t i = 1; i < segments.size(); ++i)
-			{
-				const auto* h = world.TryGet<HierarchyComponent>(cur);
-				if (!h)
-				{
-					return {};
-				}
-				bool found = false;
-				for (const Entity c: h->children)
-				{
-					if (EntityDisplayName(world, c) == segments[i])
-					{
-						cur = c;
-						found = true;
-						break;
-					}
-				}
-				if (!found)
-				{
-					return {};
-				}
-			}
-			return cur;
-		}
-
-		void SplitPath(std::string_view path, std::vector<std::string>& out)
-		{
-			out.clear();
-			if (!path.empty() && path[0] == '/')
-			{
-				path = path.substr(1);
-			}
-			while (!path.empty())
-			{
-				const auto pos = path.find('/');
-				if (pos == std::string_view::npos)
-				{
-					out.emplace_back(path);
-					break;
-				}
-				out.emplace_back(path.substr(0, pos));
-				path = path.substr(pos + 1);
-			}
-		}
-	} // namespace
-
-	void HierarchyPanel::SyncExpandedFromPaths(World& world)
-	{
-		if (m_expandedPaths.empty())
-		{
-			m_expandedPathsLoaded = true;
-			return;
-		}
-		m_expandedNodes.clear();
-		std::vector<std::string> segments;
-		for (const auto& [path, expanded]: m_expandedPaths)
-		{
-			if (!expanded)
-			{
-				continue;
-			}
-			SplitPath(path, segments);
-			const Entity e = FindEntityByPath(world, segments);
-			if (e.IsValid())
-			{
-				m_expandedNodes.insert(e.id);
-			}
-		}
-		m_expandedPathsLoaded = true;
-	}
-
 	void HierarchyPanel::DrawBreadcrumbTrail(const World& world, SceneSelection& selection)
 	{
 		const Entity primary = selection.Primary();
@@ -2364,19 +2244,6 @@ namespace aether::editor
 		m_filterSkinned = config.GetBool("debug.hierarchy.filterSkinned", m_filterSkinned);
 		m_filterPhysics = config.GetBool("debug.hierarchy.filterPhysics", m_filterPhysics);
 		m_filterEffect = config.GetBool("debug.hierarchy.filterEffect", m_filterEffect);
-
-		m_expandedPaths.clear();
-		const int count = static_cast<int>(config.GetFloat("debug.hierarchy.expanded.count", 0.0f));
-		for (int i = 0; i < count; ++i)
-		{
-			char key[96];
-			std::snprintf(key, sizeof(key), "debug.hierarchy.expanded.%d", i);
-			if (config.Has(key))
-			{
-				m_expandedPaths[std::string(key)] = true;
-			}
-		}
-		m_expandedPathsLoaded = false;
 	}
 
 	void HierarchyPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const

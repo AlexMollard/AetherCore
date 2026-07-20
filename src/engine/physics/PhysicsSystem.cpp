@@ -806,11 +806,6 @@ namespace aether
 				AE_WARN(LogCategory::Engine, "Entity {} has both 3D and 2D physics components; skipping its 3D body (remove one set)", World::FromEntt(enttEntity).id);
 				continue;
 			}
-			if (physics_gate::EntityHas2DPhysics(world, World::FromEntt(enttEntity)))
-			{
-				AE_WARN(LogCategory::Engine, "Entity {} has both 3D and 2D physics components; skipping its 3D body (remove one set)", World::FromEntt(enttEntity).id);
-				continue;
-			}
 
 			JPH::ShapeRefC shape = GetOrCreateColliderShape(m_impl->shapeCache, collider);
 			if (shape == nullptr)
@@ -1122,6 +1117,28 @@ namespace aether
 		world.Remove<ColliderComponent>(entity);
 	}
 
+	void PhysicsSystem::DestroyJointsTouching(entt::registry& registry, entt::entity enttEntity)
+	{
+		if (m_impl->constraints.empty())
+		{
+			return;
+		}
+		for (auto&& [je, joint]: registry.view<JointComponent>().each())
+		{
+			if (joint.constraintId == 0)
+			{
+				continue;
+			}
+			const bool touches = je == enttEntity || (joint.target.IsValid() && World::ToEntt(joint.target) == enttEntity);
+			if (!touches)
+			{
+				continue;
+			}
+			RemoveJointConstraint(joint.constraintId);
+			joint.constraintId = 0;
+		}
+	}
+
 	void PhysicsSystem::OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity)
 	{
 		WaitForStep();
@@ -1137,23 +1154,7 @@ namespace aether
 			return;
 		}
 
-		if (!m_impl->constraints.empty())
-		{
-			for (auto&& [je, joint]: registry.view<JointComponent>().each())
-			{
-				if (joint.constraintId == 0)
-				{
-					continue;
-				}
-				const bool touches = je == enttEntity || (joint.target.IsValid() && World::ToEntt(joint.target) == enttEntity);
-				if (!touches)
-				{
-					continue;
-				}
-				RemoveJointConstraint(joint.constraintId);
-				joint.constraintId = 0;
-			}
-		}
+		DestroyJointsTouching(registry, enttEntity);
 
 		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
 		const JPH::BodyID id = ToJolt(rigid->body);
@@ -1347,20 +1348,7 @@ namespace aether
 		{
 			auto& reg = world.GetRegistry();
 			const entt::entity enttEntity = World::ToEntt(entity);
-			for (auto&& [je, joint]: reg.view<JointComponent>().each())
-			{
-				if (joint.constraintId == 0)
-				{
-					continue;
-				}
-				const bool touches = je == enttEntity || (joint.target.IsValid() && World::ToEntt(joint.target) == enttEntity);
-				if (!touches)
-				{
-					continue;
-				}
-				RemoveJointConstraint(joint.constraintId);
-				joint.constraintId = 0;
-			}
+			DestroyJointsTouching(reg, enttEntity);
 
 			auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
 			const JPH::BodyID id = ToJolt(rb->body);

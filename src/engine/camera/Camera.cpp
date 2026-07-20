@@ -94,15 +94,7 @@ namespace aether
 	{
 		if (m_mode == CameraMode::Orbit)
 		{
-			const float oy = glm::radians(m_orbitYaw);
-			const float op = glm::radians(m_orbitPitch);
-			const glm::vec3 offset = {
-			        m_orbitDistance * std::cos(op) * std::sin(oy),
-			        m_orbitDistance * std::sin(op),
-			        m_orbitDistance * std::cos(op) * std::cos(oy),
-			};
-			const glm::vec3 eye = m_orbitTarget + offset;
-			return glm::lookAt(eye, m_orbitTarget, {0.0f, 1.0f, 0.0f});
+			return glm::lookAt(GetPosition(), m_orbitTarget, {0.0f, 1.0f, 0.0f});
 		}
 
 		return glm::lookAt(m_position, m_position + GetForward(), {0.0f, 1.0f, 0.0f});

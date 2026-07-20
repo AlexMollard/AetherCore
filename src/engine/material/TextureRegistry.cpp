@@ -1,23 +1,10 @@
 #include "material/TextureRegistry.hpp"
 
+#include "utils/Hash.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether
 {
-	namespace
-	{
-		std::uint64_t HashString(std::string_view s)
-		{
-			std::uint64_t h = 1469598103934665603ull;
-			for (const char c: s)
-			{
-				h ^= static_cast<unsigned char>(c);
-				h *= 1099511628211ull;
-			}
-			return h;
-		}
-	} // namespace
-
 	TextureRegistry::TextureRegistry(ITextureSlotSink& sink)
 	      : m_sink(sink)
 	{
@@ -67,7 +54,7 @@ namespace aether
 	TextureHandle TextureRegistry::Acquire(std::string_view path)
 	{
 		const std::string resolved = m_sink.ResolvePath(path);
-		const std::uint64_t hash = HashString(resolved);
+		const std::uint64_t hash = utils::Fnv1a(resolved);
 
 		const std::scoped_lock lock(m_mutex);
 

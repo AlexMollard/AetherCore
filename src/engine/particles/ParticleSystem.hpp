@@ -12,6 +12,7 @@ namespace aether
 {
 	class World;
 	class TextureRegistry;
+	class Physics2DSystem;
 	struct Render2DFrameData;
 	struct ParticleEmitterComponent;
 
@@ -53,6 +54,10 @@ namespace aether
 		static void StepStandalone(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin);
 
 	private:
+		// Shared spawn/integrate/cull step for one emitter (physics == null skips
+		// world collision). Used by Update (per entity) and StepStandalone (preview).
+		static void StepEmitter(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin, const Physics2DSystem* physics);
+
 		TextureHandle ResolveTexture(const std::string& path);
 
 		TextureRegistry& m_textures;

@@ -101,6 +101,8 @@ namespace aether
 		void FlushPendingBodies(World& world);
 		void FlushPendingJoints(World& world);
 		void RemoveJointConstraint(std::uint32_t constraintId);
+		// Removes every joint constraint attached to (or targeting) enttEntity.
+		void DestroyJointsTouching(entt::registry& registry, entt::entity enttEntity);
 		void DrainContactEvents(World& world);
 
 		void StepPhysics();

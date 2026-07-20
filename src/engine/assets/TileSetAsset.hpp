@@ -36,6 +36,27 @@ namespace aether
 		Right,
 	};
 
+	// The outward normal of a one-way collider's SOLID face. A contact is kept only
+	// when the other body sits on this side; None yields a zero vector. Shared by the
+	// 2D physics pre-solve and the debug overlay so they can never disagree.
+	[[nodiscard]] inline glm::vec2 OneWaySolidNormal(TileOneWay dir)
+	{
+		switch (dir)
+		{
+			case TileOneWay::Up:
+				return {0.0f, 1.0f};
+			case TileOneWay::Down:
+				return {0.0f, -1.0f};
+			case TileOneWay::Left:
+				return {-1.0f, 0.0f};
+			case TileOneWay::Right:
+				return {1.0f, 0.0f};
+			case TileOneWay::None:
+			default:
+				return {0.0f, 0.0f};
+		}
+	}
+
 	// One paintable tile: visuals come from a sprite atlas region (stable ids on
 	// both sides so re-slicing an atlas never silently redirects tiles).
 	struct TileDefinition

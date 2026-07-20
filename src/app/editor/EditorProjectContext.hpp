@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace aether::app
 {
@@ -28,4 +29,21 @@ namespace aether::app
 			return loaded && !root.empty();
 		}
 	};
+
+	// Resolve a project:// virtual path (or a bare relative path) against the project
+	// root. Returns {} when no project is open. Shared so panels and control methods
+	// resolve project paths identically.
+	[[nodiscard]] inline std::filesystem::path ResolveProjectPath(const EditorProjectContext* project, std::string_view vpath)
+	{
+		if (project == nullptr || project->root.empty())
+		{
+			return {};
+		}
+		constexpr std::string_view kPrefix = "project://";
+		if (vpath.starts_with(kPrefix))
+		{
+			vpath.remove_prefix(kPrefix.size());
+		}
+		return project->root / std::filesystem::path(vpath);
+	}
 } // namespace aether::app

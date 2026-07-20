@@ -43,6 +43,16 @@ namespace aether
 	std::string ResolveAddress(void* addr) noexcept
 	{
 #ifdef _WIN32
+		// DbgHelp resolves nothing until the symbol handler is initialised. Do it once,
+		// lazily and thread-safely, so leak-tracking backtraces (not only the crash
+		// handler) resolve to symbols instead of degrading to raw hex.
+		static const bool symInit = []() noexcept
+		{
+			SymSetOptions(SymGetOptions() | SYMOPT_LOAD_LINES | SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+			return SymInitialize(GetCurrentProcess(), nullptr, TRUE) == TRUE;
+		}();
+		(void) symInit;
+
 		const auto address = reinterpret_cast<std::uint64_t>(addr);
 
 		std::array<char, sizeof(SYMBOL_INFO) + MAX_SYM_NAME> symBuf{};

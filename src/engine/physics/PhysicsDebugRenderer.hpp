@@ -61,8 +61,6 @@ namespace aether
 	void AddDebugAabb(std::vector<DebugVertex>& out, const glm::vec3& min, const glm::vec3& max, const glm::vec4& color = kDefaultDebugColor);
 	void AddDebugBox(std::vector<DebugVertex>& out, const glm::vec3& center, const glm::quat& rotation, const glm::vec3& halfExtents, const glm::vec4& color = kDefaultDebugColor);
 	void AddDebugSphere(std::vector<DebugVertex>& out, const glm::vec3& center, float radius, const glm::vec4& color = kDefaultDebugColor, int segments = 16);
-	void AddDebugFrustum(std::vector<DebugVertex>& out, const glm::mat4& viewProj, const glm::vec4& color = kDefaultDebugColor);
-	void AddDebugAxes(std::vector<DebugVertex>& out, const glm::mat4& transform, float length = 1.0f);
 
 	class PhysicsDebugRenderer
 	{

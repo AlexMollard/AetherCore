@@ -72,8 +72,6 @@ namespace aether::editor
 		bool DrawRowContextMenu(app::LayerContext& context, World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
 		void DrawRowUtilityToggles(World& world, Entity e);
-		std::string ComputeEntityPath(const World& world, Entity e) const;
-		void SyncExpandedFromPaths(World& world);
 		void DrawBreadcrumbTrail(const World& world, SceneSelection& selection);
 		void DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const;
 		void UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax);
@@ -151,7 +149,5 @@ namespace aether::editor
 		bool m_pendingGroup = false;
 		bool m_pendingUngroup = false;
 
-		std::unordered_map<std::string, bool> m_expandedPaths;
-		bool m_expandedPathsLoaded = false;
 	};
 } // namespace aether::editor

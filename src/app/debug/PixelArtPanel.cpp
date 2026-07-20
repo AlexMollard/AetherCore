@@ -28,20 +28,6 @@ namespace aether::editor
 			return ch(c.w) << 24 | ch(c.z) << 16 | ch(c.y) << 8 | ch(c.x);
 		}
 
-		std::filesystem::path ResolveProjectPath(app::LayerContext& context, std::string_view vpath)
-		{
-			const auto* project = context.TryGet<app::EditorProjectContext>();
-			if (project == nullptr || project->root.empty())
-			{
-				return {};
-			}
-			constexpr std::string_view kPrefix = "project://";
-			if (vpath.starts_with(kPrefix))
-			{
-				vpath.remove_prefix(kPrefix.size());
-			}
-			return project->root / std::filesystem::path(vpath);
-		}
 	} // namespace
 
 	void PixelArtPanel::OnImGui(app::LayerContext& context)
@@ -144,13 +130,13 @@ namespace aether::editor
 		ImGui::SameLine();
 		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Open"))
 		{
-			const std::filesystem::path disk = ResolveProjectPath(context, m_savePath);
+			const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
 			m_status = doc.Load(disk) ? "Opened " + m_savePath : "Open failed: " + m_savePath;
 		}
 		ImGui::SameLine();
 		if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK " Save"))
 		{
-			const std::filesystem::path disk = ResolveProjectPath(context, m_savePath);
+			const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
 			m_status = doc.Save(disk) ? "Saved " + m_savePath : "Save failed: " + m_savePath;
 		}
 		if (!m_status.empty())

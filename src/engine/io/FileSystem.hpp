@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "FileGlobOptions.hpp"
-#include "FileRequest.hpp"
+#include "IOPriority.hpp"
 #include "OverlayBackend.hpp"
 #include "utils/Expected.hpp"
 #include "utils/coro/Task.hpp"
@@ -47,10 +47,6 @@ namespace aether::io
 		[[nodiscard]] static Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view virtualPath);
 
 		[[nodiscard]] static Expected<std::vector<std::string>> Glob(std::string_view virtualPattern, const FileGlobOptions& options = {});
-
-		[[nodiscard]] static FileRequestHandle RequestAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);
-
-		static void WaitFor(const FileRequestHandle& handle);
 
 		// file has been read on the background I/O thread.  The calling
 		[[nodiscard]] static coro::task<std::vector<std::byte>> ReadFileAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);

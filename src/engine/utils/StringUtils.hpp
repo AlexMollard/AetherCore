@@ -7,6 +7,18 @@
 
 namespace aether::utils
 {
+	// Trim leading/trailing characters in `ws` (default ASCII whitespace) from a view.
+	inline std::string_view TrimView(std::string_view s, std::string_view ws = " \t\r\n")
+	{
+		const auto first = s.find_first_not_of(ws);
+		if (first == std::string_view::npos)
+		{
+			return {};
+		}
+		const auto last = s.find_last_not_of(ws);
+		return s.substr(first, last - first + 1);
+	}
+
 	inline bool IEq(std::string_view a, std::string_view b)
 	{
 		if (a.size() != b.size())

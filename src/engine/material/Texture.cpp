@@ -200,17 +200,9 @@ namespace aether
 	{
 		if (fileData.size() < 4)
 		{
-			int width = 0, height = 0, channels = 0;
-			stbi_uc* const pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(fileData.data()), static_cast<int>(fileData.size()), &width, &height, &channels, STBI_rgb_alpha);
-			if (!pixels)
-			{
-				AE_UNEXPECTED(AetherError::Asset("failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason()));
-			}
-			Texture texture;
-			texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, std::string(debugPath).c_str());
-			texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
-			stbi_image_free(pixels);
-			return texture;
+			// Too small to carry a 4-byte magic or be a decodable image; fail early
+			// instead of routing through the stbi fallback (which can only fail too).
+			AE_UNEXPECTED(AetherError::Asset("failed to decode '" + std::string(debugPath) + "': file too small to identify (" + std::to_string(fileData.size()) + " bytes)"));
 		}
 
 		uint32_t magic = 0;

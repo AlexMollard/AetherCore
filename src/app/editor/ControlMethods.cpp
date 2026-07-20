@@ -1,4 +1,5 @@
 #include "editor/ControlMethods.hpp"
+#include "editor/ControlSchema.hpp"
 
 #include "imgui/UiAutomationMethods.hpp"
 
@@ -52,6 +53,7 @@
 #include "scene/World.hpp"
 #include "utils/LogRingBuffer.hpp"
 #include "utils/LogCategory.hpp"
+#include "scene/TransformUtils.hpp"
 #include "utils/Logger.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -66,25 +68,6 @@ namespace aether::editor
 		constexpr std::size_t kMaxBatchItems = 10'000;
 		const json kVec3 = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}};
 
-		json Obj(json properties = json::object(), const std::vector<std::string>& required = {})
-		{
-			json schema{{"type", "object"}, {"properties", std::move(properties)}};
-			if (!required.empty())
-			{
-				schema["required"] = required;
-			}
-			return schema;
-		}
-
-		json IntProp()
-		{
-			return json{{"type", "integer"}};
-		}
-
-		json StrProp()
-		{
-			return json{{"type", "string"}};
-		}
 
 		// GLFW key code for a key name (same vocabulary as engine.send_input): a-z,
 		// 0-9, or left/right/up/down/space/enter/escape/tab/shift/ctrl/alt. -1 if unknown.
@@ -226,6 +209,7 @@ namespace aether::editor
 					}
 					catch (const std::exception& ex)
 					{
+						AE_WARN(LogCategory::App, "Batch operation item {} threw: {}", index, ex.what());
 						result = json{{"error", ex.what()}};
 					}
 					result["index"] = index;
@@ -483,7 +467,7 @@ namespace aether::editor
 			        {
 				        const glm::mat4& m = t->localToWorld;
 				        j["position"] = Vec3ToJson(glm::vec3(m[3]));
-				        j["scale"] = Vec3ToJson(glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2]))));
+				        j["scale"] = Vec3ToJson(aether::ExtractScale(m));
 			        }
 			        json comps = json::array();
 			        for (auto&& [typeId, storage]: world.GetRegistry().storage())
@@ -511,11 +495,7 @@ namespace aether::editor
 			const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
 			const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
 			const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
-			glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos);
-			transform = glm::rotate(transform, glm::radians(euler.z), glm::vec3(0, 0, 1));
-			transform = glm::rotate(transform, glm::radians(euler.y), glm::vec3(0, 1, 0));
-			transform = glm::rotate(transform, glm::radians(euler.x), glm::vec3(1, 0, 0));
-			transform = glm::scale(transform, scale);
+			const glm::mat4 transform = aether::ComposeTransform(pos, euler, scale);
 			world.Emplace<TransformComponent>(entity, TransformComponent{transform});
 			world.RegisterRoot(entity);
 			if (auto* undo = ctx.services.TryGet<UndoStack>())
@@ -557,11 +537,7 @@ namespace aether::editor
 			        const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
 			        const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
 			        const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
-			        glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos);
-			        transform = glm::rotate(transform, glm::radians(euler.z), glm::vec3(0, 0, 1));
-			        transform = glm::rotate(transform, glm::radians(euler.y), glm::vec3(0, 1, 0));
-			        transform = glm::rotate(transform, glm::radians(euler.x), glm::vec3(1, 0, 0));
-			        transform = glm::scale(transform, scale);
+			        const glm::mat4 transform = aether::ComposeTransform(pos, euler, scale);
 			        const Entity root = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(ctx.services), transform);
 			        if (!root.IsValid())
 			        {
@@ -693,11 +669,7 @@ namespace aether::editor
 			        const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
 			        const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
 			        const glm::vec3 scl = ReadVec3(p, "scale", glm::vec3(1.0f));
-			        glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
-			        m = glm::rotate(m, glm::radians(euler.z), glm::vec3(0, 0, 1));
-			        m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
-			        m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
-			        m = glm::scale(m, scl);
+			        const glm::mat4 m = aether::ComposeTransform(pos, euler, scl);
 
 			        std::string error;
 			        const Entity root = editor::ImportModelIntoScene(world, ctx.services, path, m, p.value("name", std::string{}), error);
@@ -792,11 +764,7 @@ namespace aether::editor
 			const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
 			const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
 			const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
-			glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
-			m = glm::rotate(m, glm::radians(euler.z), glm::vec3(0, 0, 1));
-			m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
-			m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
-			m = glm::scale(m, scale);
+			const glm::mat4 m = aether::ComposeTransform(pos, euler, scale);
 			const auto* beforeTc = world.TryGet<TransformComponent>(entity);
 			const glm::mat4 before = beforeTc != nullptr ? beforeTc->localToWorld : m;
 			if (world.TryGet<TransformComponent>(entity) == nullptr)
@@ -1324,33 +1292,6 @@ namespace aether::editor
 			        {
 				        return json{{"ok", false}, {"error", "input service unavailable"}};
 			        }
-			        const auto keyCode = [](std::string name) -> int
-			        {
-				        for (char& c: name)
-				        {
-					        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-				        }
-				        if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z')
-				        {
-					        return 65 + (name[0] - 'a');
-				        }
-				        if (name.size() == 1 && name[0] >= '0' && name[0] <= '9')
-				        {
-					        return 48 + (name[0] - '0');
-				        }
-				        if (name == "left") return 263;
-				        if (name == "right") return 262;
-				        if (name == "up") return 265;
-				        if (name == "down") return 264;
-				        if (name == "space") return 32;
-				        if (name == "enter" || name == "return") return 257;
-				        if (name == "escape" || name == "esc") return 256;
-				        if (name == "tab") return 258;
-				        if (name == "shift" || name == "lshift") return 340;
-				        if (name == "ctrl" || name == "lctrl") return 341;
-				        if (name == "alt" || name == "lalt") return 342;
-				        return -1;
-			        };
 			        if (params.value("clear", false))
 			        {
 				        input->ClearSyntheticKeys();
@@ -1370,7 +1311,7 @@ namespace aether::editor
 						        continue;
 					        }
 					        const std::string name = entry.get<std::string>();
-					        const int code = keyCode(name);
+					        const int code = KeyCodeFromName(name);
 					        if (code >= 0)
 					        {
 						        input->SetSyntheticKey(code, down);

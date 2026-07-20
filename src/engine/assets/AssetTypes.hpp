@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "assets/AssetId.hpp"
+#include "utils/Hash.hpp"
 
 namespace aether
 {
@@ -85,41 +86,24 @@ namespace aether
 	// invalid id (0) is never produced.
 	[[nodiscard]] inline AssetId ComputeAssetId(const AssetSource& source) noexcept
 	{
-		std::uint64_t h = 1469598103934665603ull;
-		const auto mix = [&h](const void* data, std::size_t n)
-		{
-			const auto* bytes = static_cast<const unsigned char*>(data);
-			for (std::size_t i = 0; i < n; ++i)
-			{
-				h ^= bytes[i];
-				h *= 1099511628211ull;
-			}
-		};
-
+		utils::Fnv1aHasher hasher;
 		const std::uint8_t typeByte = static_cast<std::uint8_t>(source.type);
 		const std::uint8_t builtinByte = source.builtin ? 1u : 0u;
-		mix(&typeByte, sizeof(typeByte));
-		mix(&builtinByte, sizeof(builtinByte));
-		mix(&source.subIndex, sizeof(source.subIndex));
-		mix(source.path.data(), source.path.size());
+		hasher.MixValue(typeByte);
+		hasher.MixValue(builtinByte);
+		hasher.MixValue(source.subIndex);
+		hasher.Mix(source.path);
 
+		const std::uint64_t h = hasher.Value();
 		return AssetId{h == 0 ? 1ull : h}; // never collide with the invalid sentinel
 	}
 
 	[[nodiscard]] inline AssetObjectId ComputeAssetObjectId(AssetId owner, std::string_view persistentKey) noexcept
 	{
-		std::uint64_t h = 1469598103934665603ull;
-		const auto mix = [&h](const void* data, std::size_t n)
-		{
-			const auto* bytes = static_cast<const unsigned char*>(data);
-			for (std::size_t i = 0; i < n; ++i)
-			{
-				h ^= bytes[i];
-				h *= 1099511628211ull;
-			}
-		};
-		mix(&owner.value, sizeof(owner.value));
-		mix(persistentKey.data(), persistentKey.size());
+		utils::Fnv1aHasher hasher;
+		hasher.MixValue(owner.value);
+		hasher.Mix(persistentKey);
+		const std::uint64_t h = hasher.Value();
 		return AssetObjectId{h == 0 ? 1ull : h};
 	}
 

@@ -63,6 +63,16 @@ namespace aether::editor
 
 	EditorProjectActionResult BakeEnginePak(const std::filesystem::path& outputEnginePak)
 	{
+		struct StagingCleanup
+		{
+			std::filesystem::path dir;
+			~StagingCleanup()
+			{
+				std::error_code ec;
+				std::filesystem::remove_all(dir, ec);
+			}
+		};
+
 		const std::optional<std::filesystem::path> resources = EngineResourcesDir();
 		if (!resources)
 		{
@@ -75,12 +85,15 @@ namespace aether::editor
 		{
 			return {.succeeded = false, .message = "Could not resolve temp directory: " + ec.message()};
 		}
-		const std::filesystem::path staging = tempRoot / "aether_engine_pak_stage";
+		// Unique-per-pak staging dir + RAII cleanup so bakes of different paks don't
+		// collide and every early return removes the dir.
+		const std::filesystem::path staging = tempRoot / ("aether_engine_pak_stage_" + outputEnginePak.stem().string());
 		std::filesystem::remove_all(staging, ec);
 		if (auto dirResult = io::file_util::CreateDirectories(staging); !dirResult)
 		{
 			return {.succeeded = false, .message = "Could not create engine.pak staging dir: " + dirResult.error().message};
 		}
+		const StagingCleanup stagingCleanup{staging};
 
 		for (const std::string_view subdir: kEngineAssetSubdirs)
 		{
@@ -92,8 +105,6 @@ namespace aether::editor
 			std::filesystem::copy(from, staging / subdir, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
 			if (ec)
 			{
-				std::error_code cleanupEc;
-				std::filesystem::remove_all(staging, cleanupEc);
 				return {.succeeded = false, .message = "Could not stage engine assets '" + std::string(subdir) + "': " + ec.message()};
 			}
 		}
@@ -109,8 +120,6 @@ namespace aether::editor
 			}
 			if (ec)
 			{
-				std::error_code cleanupEc;
-				std::filesystem::remove_all(staging, cleanupEc);
 				return {.succeeded = false, .message = "Could not stage engine asset '" + std::string(file) + "': " + ec.message()};
 			}
 		}
@@ -120,14 +129,11 @@ namespace aether::editor
 			std::filesystem::copy(*shaders, staging / kEngineShaderSubdir, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
 			if (ec)
 			{
-				std::error_code cleanupEc;
-				std::filesystem::remove_all(staging, cleanupEc);
 				return {.succeeded = false, .message = "Could not stage engine shaders: " + ec.message()};
 			}
 		}
 
 		const assetpipeline::PackResult result = assetpipeline::PackDirectory(staging, outputEnginePak, {});
-		std::filesystem::remove_all(staging, ec);
 
 		if (!result.ok)
 		{

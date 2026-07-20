@@ -193,16 +193,11 @@ namespace aether
 		emitter.pendingBurst += count;
 	}
 
-	void ParticleSystem::StepStandalone(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin)
+	// The shared per-emitter step: start burst, queued bursts, continuous emission,
+	// integrate + swap-pop cull, then sibling collisions. `physics` is null for the
+	// editor preview (no world collision).
+	void ParticleSystem::StepEmitter(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin, const Physics2DSystem* physics)
 	{
-		if (dt <= 0.0f)
-		{
-			return;
-		}
-		if (emitter.rngState == 0)
-		{
-			emitter.rngState = 0x9E3779B9u;
-		}
 		if (emitter.emitOnStart && !emitter.started)
 		{
 			emitter.pendingBurst += emitter.burstCount;
@@ -214,6 +209,7 @@ namespace aether
 			SpawnOne(emitter, origin);
 			--emitter.pendingBurst;
 		}
+
 		if (emitter.emitting && emitter.rate > 0.0f)
 		{
 			emitter.spawnAccumulator += emitter.rate * dt;
@@ -223,6 +219,7 @@ namespace aether
 				emitter.spawnAccumulator -= 1.0f;
 			}
 		}
+
 		for (std::size_t i = 0; i < emitter.particles.size();)
 		{
 			Particle& p = emitter.particles[i];
@@ -233,13 +230,27 @@ namespace aether
 				emitter.particles.pop_back();
 				continue;
 			}
-			IntegrateParticle(emitter, p, dt, nullptr); // no world collision in preview
+			IntegrateParticle(emitter, p, dt, physics);
 			++i;
 		}
+
 		if (emitter.collideParticles)
 		{
 			ResolveParticleCollisions(emitter);
 		}
+	}
+
+	void ParticleSystem::StepStandalone(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin)
+	{
+		if (dt <= 0.0f)
+		{
+			return;
+		}
+		if (emitter.rngState == 0)
+		{
+			emitter.rngState = 0x9E3779B9u;
+		}
+		StepEmitter(emitter, dt, origin, nullptr); // no world collision in preview
 	}
 
 	void ParticleSystem::Update(World& world, float dt)
@@ -268,51 +279,7 @@ namespace aether
 			}
 			const glm::vec2 origin{transform.localToWorld[3].x, transform.localToWorld[3].y};
 
-			// One-shot start burst.
-			if (emitter.emitOnStart && !emitter.started)
-			{
-				emitter.pendingBurst += emitter.burstCount;
-			}
-			emitter.started = true;
-
-			// Script-queued bursts.
-			while (emitter.pendingBurst > 0)
-			{
-				SpawnOne(emitter, origin);
-				--emitter.pendingBurst;
-			}
-
-			// Continuous emission.
-			if (emitter.emitting && emitter.rate > 0.0f)
-			{
-				emitter.spawnAccumulator += emitter.rate * dt;
-				while (emitter.spawnAccumulator >= 1.0f)
-				{
-					SpawnOne(emitter, origin);
-					emitter.spawnAccumulator -= 1.0f;
-				}
-			}
-
-			// Integrate + cull (swap-and-pop keeps it O(n)).
-			for (std::size_t i = 0; i < emitter.particles.size();)
-			{
-				Particle& p = emitter.particles[i];
-				p.age += dt;
-				if (p.age >= p.lifetime)
-				{
-					emitter.particles[i] = emitter.particles.back();
-					emitter.particles.pop_back();
-					continue;
-				}
-				IntegrateParticle(emitter, p, dt, physics);
-				++i;
-			}
-
-			// Sibling collisions after everyone has moved this step.
-			if (emitter.collideParticles)
-			{
-				ResolveParticleCollisions(emitter);
-			}
+			StepEmitter(emitter, dt, origin, physics);
 
 			// One-shot emitter that has finished: retire its entity.
 			const bool idle = emitter.particles.empty() && emitter.pendingBurst == 0 && !(emitter.emitting && emitter.rate > 0.0f);

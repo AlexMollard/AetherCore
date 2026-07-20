@@ -4,6 +4,7 @@
 // live render/collision caches and MCP paints land in the Tile Palette's
 // undo stack.
 #include "editor/ControlMethods.hpp"
+#include "editor/ControlSchema.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -40,41 +41,6 @@ namespace aether::editor
 		constexpr std::size_t kMaxPaintCells = 10'000;
 		constexpr std::size_t kMaxReadCells = 10'000;
 		constexpr std::size_t kMaxListedAssets = 2'000;
-
-		json Obj(json properties = json::object(), const std::vector<std::string>& required = {})
-		{
-			json schema{{"type", "object"}, {"properties", std::move(properties)}};
-			if (!required.empty())
-			{
-				schema["required"] = required;
-			}
-			return schema;
-		}
-
-		json IntProp()
-		{
-			return json{{"type", "integer"}};
-		}
-
-		json StrProp()
-		{
-			return json{{"type", "string"}};
-		}
-
-		json NumProp()
-		{
-			return json{{"type", "number"}};
-		}
-
-		json BoolProp()
-		{
-			return json{{"type", "boolean"}};
-		}
-
-		json RectProp()
-		{
-			return json{{"type", "array"}, {"items", IntProp()}, {"minItems", 4}, {"maxItems", 4}, {"description", "cell rect [x0, y0, x1, y1], inclusive"}};
-		}
 
 		// Everything the tile methods need, resolved from an entity id. `error`
 		// is non-null when resolution failed.

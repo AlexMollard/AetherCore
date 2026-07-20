@@ -251,7 +251,7 @@ namespace aether
 		};
 
 		normalise(bins, m_histogramBins, kHistogramBins);
-		normalise(bins + 256, m_ldrHistogramBins, kHistogramBins);
+		normalise(bins + kHistogramBins, m_ldrHistogramBins, kHistogramBins);
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
@@ -270,16 +270,6 @@ namespace aether
 		                {
 			                gpu::CommandList& cmd = ctx.recorder;
 
-			                const gpu::Viewport vp{
-			                        .width = static_cast<float>(ctx.extent.width),
-			                        .height = static_cast<float>(ctx.extent.height),
-			                };
-			                const gpu::Rect2D scissor{
-			                        .x = 0,
-			                        .y = 0,
-			                        .width = ctx.extent.width,
-			                        .height = ctx.extent.height,
-			                };
 			                bindless.CmdBindHeaps(cmd);
 
 			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline());

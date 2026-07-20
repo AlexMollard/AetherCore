@@ -45,7 +45,6 @@ namespace aether
 		std::atomic<bool> g_installed{false};
 		std::string g_appName = "AetherCore";
 		std::mutex g_writeMutex;
-		std::atomic_flag g_crashInProgress = ATOMIC_FLAG_INIT;
 
 		// any thread at any time, independent of the crash-write path.
 		std::mutex g_contextMutex;

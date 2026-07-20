@@ -198,11 +198,15 @@ namespace aether
 		return {0.0f, 0.0f};
 	}
 
+	// Sentinel written by TransformMousePos when the cursor is outside the viewport;
+	// no real viewport-local coordinate comes anywhere near this.
+	constexpr float kOutsideViewport = -1000000.0f;
+
 	glm::vec2 Input::GetMouseDelta() const
 	{
 		const glm::vec2 current = TransformMousePos(m_mousePos);
 		const glm::vec2 previous = TransformMousePos(m_prevMousePos);
-		if (current.x < -999999.0f || previous.x < -999999.0f)
+		if (current.x <= kOutsideViewport || previous.x <= kOutsideViewport)
 		{
 			return {};
 		}
@@ -246,7 +250,7 @@ namespace aether
 		const glm::vec2 local = windowMousePos - m_mouseViewportMin;
 		if (local.x < 0.0f || local.y < 0.0f || local.x >= m_mouseViewportSize.x || local.y >= m_mouseViewportSize.y)
 		{
-			return {-1000000.0f, -1000000.0f};
+			return {kOutsideViewport, kOutsideViewport};
 		}
 
 		const glm::vec2 uv = local / m_mouseViewportSize;

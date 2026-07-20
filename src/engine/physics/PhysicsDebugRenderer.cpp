@@ -516,53 +516,6 @@ namespace aether
 		addCircle({0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
 	}
 
-	void AddDebugFrustum(std::vector<DebugVertex>& out, const glm::mat4& viewProj, const glm::vec4& color)
-	{
-		const glm::mat4 inv = glm::inverse(viewProj);
-
-		const std::array<glm::vec4, 8> ndc{
-		        glm::vec4{-1.0f, -1.0f, -1.0f, 1.0f},
-		        glm::vec4{1.0f, -1.0f, -1.0f, 1.0f},
-		        glm::vec4{1.0f, 1.0f, -1.0f, 1.0f},
-		        glm::vec4{-1.0f, 1.0f, -1.0f, 1.0f},
-		        glm::vec4{-1.0f, -1.0f, 1.0f, 1.0f},
-		        glm::vec4{1.0f, -1.0f, 1.0f, 1.0f},
-		        glm::vec4{-1.0f, 1.0f, 1.0f, 1.0f},
-		        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-		};
-
-		std::array<glm::vec3, 8> world;
-		for (std::size_t i = 0; i < ndc.size(); ++i)
-		{
-			const glm::vec4 h = inv * ndc[i];
-			world[i] = glm::vec3(h) / h.w;
-		}
-
-		AddDebugLine(out, world[0], world[1], color);
-		AddDebugLine(out, world[1], world[2], color);
-		AddDebugLine(out, world[2], world[3], color);
-		AddDebugLine(out, world[3], world[0], color);
-		AddDebugLine(out, world[4], world[5], color);
-		AddDebugLine(out, world[5], world[6], color);
-		AddDebugLine(out, world[6], world[7], color);
-		AddDebugLine(out, world[7], world[4], color);
-		AddDebugLine(out, world[0], world[4], color);
-		AddDebugLine(out, world[1], world[5], color);
-		AddDebugLine(out, world[2], world[6], color);
-		AddDebugLine(out, world[3], world[7], color);
-	}
-
-	void AddDebugAxes(std::vector<DebugVertex>& out, const glm::mat4& transform, float length)
-	{
-		const glm::vec3 origin = glm::vec3(transform[3]);
-		const glm::vec3 xAxis = glm::vec3(transform[0]) * length;
-		const glm::vec3 yAxis = glm::vec3(transform[1]) * length;
-		const glm::vec3 zAxis = glm::vec3(transform[2]) * length;
-		AddDebugLine(out, origin, origin + xAxis, colors::DebugRed);
-		AddDebugLine(out, origin, origin + yAxis, colors::DebugGreen);
-		AddDebugLine(out, origin, origin + zAxis, colors::DebugBlue);
-	}
-
 	void PhysicsDebugRenderer::EnsureImmediateBufferCapacity(std::uint32_t vertexCount)
 	{
 		constexpr std::uint32_t kInitialImmediateCapacity = 4096;
@@ -723,16 +676,6 @@ namespace aether
 
 			                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_pipelineHandle);
 			                gpu::CommandList& cmd = ctx.recorder;
-
-			                // Push-constant layout: { uint64 frameAddr, vec4 tint, mat4 model }
-			                struct DebugPc
-			                {
-				                std::uint64_t frameAddr;
-				                glm::vec4 tintColor;
-				                glm::mat4 model;
-			                };
-			                static_assert(sizeof(DebugPc) == 88);
-
 			                cmd.BindPipeline(resolved.state);
 			                cmd.SetLineWidth(2.0f);
 

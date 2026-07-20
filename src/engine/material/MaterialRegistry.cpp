@@ -6,24 +6,10 @@
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialPacking.hpp"
 #include "material/TextureRegistry.hpp"
+#include "utils/Hash.hpp"
 
 namespace aether
 {
-	namespace
-	{
-		std::uint64_t HashBytes(const void* data, std::size_t n)
-		{
-			const auto* p = static_cast<const unsigned char*>(data);
-			std::uint64_t h = 1469598103934665603ull;
-			for (std::size_t i = 0; i < n; ++i)
-			{
-				h ^= p[i];
-				h *= 1099511628211ull;
-			}
-			return h;
-		}
-	} // namespace
-
 	MaterialRegistry::MaterialRegistry(IMaterialSlotSink& sink, TextureRegistry& textures)
 	      : m_sink(sink), m_textures(textures)
 	{
@@ -41,7 +27,7 @@ namespace aether
 	MaterialHandle MaterialRegistry::Acquire(const MaterialAsset& asset)
 	{
 		const GpuMaterial packed = PackMaterial(asset, m_textures);
-		const std::uint64_t hash = HashBytes(&packed, sizeof(packed));
+		const std::uint64_t hash = utils::Fnv1a(&packed, sizeof(packed));
 
 		const std::scoped_lock lock(m_mutex);
 
