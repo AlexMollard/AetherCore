@@ -21,6 +21,9 @@ namespace aether
 		FlipY = 1u << 1u,
 		PixelSnap = 1u << 2u,
 		Masked = 1u << 3u,
+		// Pixel-art sampling: the shader snaps UVs to texel centres, emulating
+		// a nearest-neighbour sampler (set from the atlas' filter metadata).
+		NearestFilter = 1u << 4u,
 	};
 
 	struct SpriteRenderInstance

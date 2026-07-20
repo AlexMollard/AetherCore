@@ -80,10 +80,23 @@ namespace aether::editor
 		bool SceneListOwnsKeyboard() const noexcept;
 		void HandleKeyboardNavigation(SceneSelection& selection);
 		void HandleTypeToJump(const World& world, SceneSelection& selection);
+		void DrawOpenSceneModal(app::LayerContext& context, World& world, SceneSelection& selection);
+
+		// Open Scene dialog: metadata scanned once per open/refresh.
+		struct SceneListEntry
+		{
+			std::string name;
+			std::string kindLabel;
+			std::size_t entityCount = 0;
+		};
 
 		char m_search[64] = {};
 		char m_sceneNameBuf[48] = "scene";
 		std::vector<std::string> m_sceneList;
+		std::vector<SceneListEntry> m_sceneEntries;
+		char m_sceneSearch[64] = {};
+		std::string m_openSceneSelected;
+		bool m_sceneSearchFocusPending = false;
 		bool m_sceneListDirty = true;
 		bool m_requestSaveAsPopup = false;
 		bool m_requestOpenPopup = false;

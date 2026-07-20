@@ -93,8 +93,8 @@ namespace aether::reflect
 		bool addable = true; // false = reference-only, never added to an arbitrary entity
 		bool serializable = true;
 
-		// Scene features this component depends on. Adding it auto-enables them
-		// when AllowedSceneFeatures(kind) permits; otherwise the add is blocked.
+		// Scene features this component implies. Adding it auto-enables them on
+		// the world (metadata only - every component is legal in every scene).
 		SceneFeatureFlags requiredFeatures = SceneFeatureFlags::None;
 		// Catalog-entry names that must NOT be present on the entity (e.g. the
 		// 2D/3D physics domain exclusivity). Checked by ComponentAddBlockReason.

@@ -311,57 +311,11 @@ namespace aether::editor
 		return catalog;
 	}
 
-	namespace
-	{
-		const char* SceneKindLabel(SceneKind kind)
-		{
-			switch (kind)
-			{
-				case SceneKind::Scene2D:
-					return "2D";
-				case SceneKind::Mixed:
-					return "mixed";
-				case SceneKind::Scene3D:
-				default:
-					return "3D";
-			}
-		}
-
-		std::string FeatureLabels(SceneFeatureFlags features)
-		{
-			static constexpr std::pair<SceneFeatureFlags, const char*> kNames[] = {
-			        {SceneFeatureFlags::Sprites, "Sprites"},
-			        {SceneFeatureFlags::Tilemaps, "Tilemaps"},
-			        {SceneFeatureFlags::Physics2D, "2D Physics"},
-			        {SceneFeatureFlags::Meshes3D, "3D Meshes"},
-			        {SceneFeatureFlags::Lighting3D, "3D Lighting"},
-			        {SceneFeatureFlags::Navigation, "Navigation"},
-			        {SceneFeatureFlags::Physics3D, "3D Physics"},
-			};
-			std::string out;
-			for (const auto& [flag, name]: kNames)
-			{
-				if (HasSceneFeature(features, flag))
-				{
-					if (!out.empty())
-					{
-						out += ", ";
-					}
-					out += name;
-				}
-			}
-			return out;
-		}
-	} // namespace
-
 	std::string ComponentAddBlockReason(const World& world, Entity entity, const ComponentCatalogEntry& entry)
 	{
-		const SceneFeatureFlags allowed = AllowedSceneFeatures(world.GetSceneKind());
-		if (!HasAllSceneFeatures(allowed, entry.requiredFeatures))
-		{
-			const auto missing = static_cast<SceneFeatureFlags>(static_cast<std::uint32_t>(entry.requiredFeatures) & ~static_cast<std::uint32_t>(allowed));
-			return "requires " + FeatureLabels(missing) + ", which a " + SceneKindLabel(world.GetSceneKind()) + " scene cannot enable";
-		}
+		// Unity-style: every component is available in every scene. The one
+		// hard rule is per-entity - an entity never simulates in two physics
+		// domains at once (conflictsWith).
 		for (const std::string& conflictName: entry.conflictsWith)
 		{
 			const ComponentCatalogEntry* conflict = FindComponent(conflictName);
@@ -375,7 +329,7 @@ namespace aether::editor
 
 	bool ComponentVisibleInMenu(const World& world, Entity entity, const ComponentCatalogEntry& entry)
 	{
-		if (!entry.addable || !HasAllSceneFeatures(world.GetSceneFeatures(), entry.requiredFeatures))
+		if (!entry.addable)
 		{
 			return false;
 		}

@@ -372,26 +372,26 @@ namespace aether::app
 		}
 		else
 		{
-			// Edit-mode previews honour the same feature-driven activation as the
-			// play-mode SystemRegistry (System::RequiredFeatures).
+			// Edit-mode previews mirror play mode: every system participates in
+			// every scene (Unity-style); each skips cheaply when it has nothing.
 			World& editWorld = ctx.Get<World>();
-			if (auto* spriteAnimations = ctx.TryGet<aether::SpriteAnimationSystem>(); spriteAnimations != nullptr && spriteAnimations->IsActiveIn(editWorld))
+			if (auto* spriteAnimations = ctx.TryGet<aether::SpriteAnimationSystem>())
 			{
 				spriteAnimations->UpdatePreview(editWorld, static_cast<float>(gameDt));
 			}
-			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>(); physics != nullptr && physics->IsActiveIn(editWorld))
+			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>())
 			{
 				physics->FlushPendingOnly(editWorld);
 			}
-			if (auto* physics2D = ctx.TryGet<aether::Physics2DSystem>(); physics2D != nullptr && physics2D->IsActiveIn(editWorld))
+			if (auto* physics2D = ctx.TryGet<aether::Physics2DSystem>())
 			{
 				physics2D->FlushPendingOnly(editWorld);
 			}
-			if (auto* dayNight = ctx.TryGet<aether::app::DayNightSystem>(); dayNight != nullptr && dayNight->IsActiveIn(editWorld))
+			if (auto* dayNight = ctx.TryGet<aether::app::DayNightSystem>())
 			{
 				dayNight->Update(editWorld, 0.0f);
 			}
-			if (auto* lights = ctx.TryGet<aether::LightSystem>(); lights != nullptr && lights->IsActiveIn(editWorld))
+			if (auto* lights = ctx.TryGet<aether::LightSystem>())
 			{
 				lights->Update(editWorld, 0.0f);
 			}

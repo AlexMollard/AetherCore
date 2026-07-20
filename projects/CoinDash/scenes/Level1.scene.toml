@@ -752,10 +752,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -811,10 +811,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 904254031272807882
+    sprite_id = 904255130784436093
     texture = 'project://assets/textures/tex_Enemy.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -870,10 +870,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 904254031272807882
+    sprite_id = 904255130784436093
     texture = 'project://assets/textures/tex_Enemy.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -950,7 +950,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ -0.0, 0.0, 0.0 ]
 name = 'Goal'
 parent = -1
-position = [ 76.0, 3.5, 0.0 ]
+position = [ 76.5, 3.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -979,3 +979,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'GoalFlag'
+
+        [entities.scripts.properties.NextScene]
+        t = 'string'
+        v = 'Level2'

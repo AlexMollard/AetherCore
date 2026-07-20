@@ -4,6 +4,9 @@
 
 namespace aether
 {
+	// Unity-style: a scene's kind is an EDITOR HINT (default camera projection,
+	// viewport mode, template seed), never a capability gate. Every feature is
+	// available in every scene, which is what makes hybrid 2D/3D games work.
 	enum class SceneKind
 	{
 		Scene3D,
@@ -54,15 +57,13 @@ namespace aether
 		}
 	}
 
-	// Which features a scene of this kind may EVER enable. Physics is the only
-	// hard exclusion: 2D physics is exclusive to Scene2D scenes and 3D physics
-	// is unavailable there (Mixed simulates with 3D physics only). Everything
-	// else - meshes in 2D scenes, sprites in 3D scenes - stays legal.
-	[[nodiscard]] constexpr SceneFeatureFlags AllowedSceneFeatures(SceneKind kind) noexcept
+	// Every feature is available in every scene kind. The flags persist as
+	// scene metadata (template seeds, tooling hints) but grant nothing; the
+	// only remaining domain rule is per-entity - one entity never simulates
+	// in both physics domains (ComponentCatalog conflictsWith).
+	[[nodiscard]] constexpr SceneFeatureFlags AllowedSceneFeatures(SceneKind) noexcept
 	{
-		constexpr auto all = static_cast<SceneFeatureFlags>(~0u);
-		const auto excluded = kind == SceneKind::Scene2D ? SceneFeatureFlags::Physics3D : SceneFeatureFlags::Physics2D;
-		return static_cast<SceneFeatureFlags>(static_cast<std::uint32_t>(all) & ~static_cast<std::uint32_t>(excluded));
+		return static_cast<SceneFeatureFlags>(~0u);
 	}
 
 	[[nodiscard]] constexpr bool HasAllSceneFeatures(SceneFeatureFlags features, SceneFeatureFlags required) noexcept

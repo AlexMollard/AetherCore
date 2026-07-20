@@ -69,7 +69,11 @@ AE_SCRIPT_API std::uint32_t aether_entity_create()
 
 AE_SCRIPT_API void aether_entity_destroy(std::uint32_t id)
 {
-	ActiveWorld().Destroy(aether::Entity{id});
+	// Deferred (Unity-style): scripts call this from inside their own
+	// callbacks, where an immediate destroy would free the ScriptComponent
+	// storage the runner is iterating. Flushed at the end of the script
+	// update (ScriptComponentSystem); the entity stays valid until then.
+	aether::app::scripting::ActiveContext().pendingDestroys.push_back(aether::Entity{id});
 }
 
 AE_SCRIPT_API std::int32_t aether_entity_valid(std::uint32_t id)

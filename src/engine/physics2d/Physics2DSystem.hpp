@@ -38,11 +38,6 @@ namespace aether
 			return "Physics2DSystem";
 		}
 
-		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
-		{
-			return SceneFeatureFlags::Physics2D;
-		}
-
 		static constexpr float kFixedTimestep = 1.0f / 60.0f;
 		static constexpr int kSubStepCount = 4;
 

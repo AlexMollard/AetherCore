@@ -30,8 +30,8 @@ namespace aether::editor
 		// (Create > UI > Text), never added as a loose component. The Add-Component
 		bool addable = true;
 
-		// Scene features the component depends on: adding it auto-enables them
-		// when AllowedSceneFeatures(kind) permits, otherwise the add is blocked.
+		// Scene features the component implies; adding it auto-enables them on
+		// the world (metadata bookkeeping only - never a permission check).
 		SceneFeatureFlags requiredFeatures = SceneFeatureFlags::None;
 		// Catalog-entry names that must not be present on the entity (physics
 		// 2D/3D domain exclusivity).
@@ -42,16 +42,14 @@ namespace aether::editor
 
 	[[nodiscard]] const ComponentCatalogEntry* FindComponent(std::string_view name);
 
-	// Empty string = the entry may be added to this entity in this scene right
-	// now; otherwise a human-readable reason (feature not allowed for the scene
-	// kind, or a conflicting component is present). Every add path - Inspector
+	// Empty string = the entry may be added to this entity right now; otherwise
+	// a human-readable reason. The only block is a conflicting component on the
+	// same entity (2D/3D physics exclusivity). Every add path - Inspector
 	// palette, MCP add_component - consults this single implementation.
 	[[nodiscard]] std::string ComponentAddBlockReason(const World& world, Entity entity, const ComponentCatalogEntry& entry);
 
-	// Editor menus show an entry only when its required features are ACTIVE in
-	// the scene and no conflicting component is present - inactive domains are
-	// absent from menus rather than shown disabled. (MCP still uses
-	// ComponentAddBlockReason, which allows first-use feature enabling.)
+	// Editor menus show every addable entry that doesn't conflict with a
+	// component already on the entity. No scene-kind or feature filtering.
 	[[nodiscard]] bool ComponentVisibleInMenu(const World& world, Entity entity, const ComponentCatalogEntry& entry);
 
 	// Enables the entry's required features on the world after a successful add

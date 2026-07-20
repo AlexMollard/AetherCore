@@ -1297,6 +1297,22 @@ namespace aether::editor
 			        return json{{"width", s.window.width}, {"height", s.window.height}, {"vsync", s.graphics.vsync}, {"targetFps", s.app.targetFps}};
 		        }});
 
+		methods.push_back({"editor.open_scene_dialog",
+		        "open_scene_dialog",
+		        "Open the editor's Open Scene dialog (the same one as File > Open).",
+		        true,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
+			        if (windows == nullptr || !windows->openSceneDialog)
+			        {
+				        return json{{"error", "no editor window actions (editor only)"}};
+			        }
+			        windows->openSceneDialog();
+			        return json{{"opened", true}};
+		        }});
+
 		methods.push_back({"editor.windows",
 		        "list_windows",
 		        "List every editor panel/window and whether it is currently open. Names feed set_window.",

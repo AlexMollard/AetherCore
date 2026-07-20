@@ -9,6 +9,9 @@ add_executable(EngineTests
     # the reflection TUs that populate the component registry at static-init) and the
     # ImguiFrameData type its test exercises are compiled straight in here.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerApply.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerCapture.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerToml.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"

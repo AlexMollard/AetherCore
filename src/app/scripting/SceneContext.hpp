@@ -55,6 +55,16 @@ namespace aether::app::scripting
 
 		std::vector<aether::Entity> sceneEntities;
 
+		// Scene switch requested by a script (Scene.Load). Applied at the end
+		// of the script update - a load tears down every entity, so it must
+		// never run inside a script callback.
+		std::string pendingSceneLoad;
+
+		// Entities destroyed by scripts (Entity.Destroy). Deferred to the end
+		// of the script update: an immediate destroy would free the component
+		// storage the script runner is iterating.
+		std::vector<aether::Entity> pendingDestroys;
+
 		// Loaded model data.  Must outlive the mesh entities that reference it.
 		std::deque<aether::LoadedModel> loadedModels;
 		std::unordered_map<std::string, size_t> loadedModelMap;

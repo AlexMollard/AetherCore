@@ -207,6 +207,9 @@ internal static unsafe partial class Native
     internal static partial uint aether_scene_find_by_name(string name);
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_scene_load(string name);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint aether_scene_create_entity(string name, Vector3 pos);
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]

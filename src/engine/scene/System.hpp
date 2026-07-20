@@ -29,16 +29,6 @@ namespace aether
 			return "System";
 		}
 
-		// Scene features this system needs before it runs (None = always). The
-		// SystemRegistry skips inactive systems each frame, and editor preview
-		// paths consult IsActiveIn before invoking a system directly - this is
-		// THE mechanism for 2D/3D domain separation, not per-system kind checks.
-		[[nodiscard]] virtual SceneFeatureFlags RequiredFeatures() const
-		{
-			return SceneFeatureFlags::None;
-		}
-
-		[[nodiscard]] bool IsActiveIn(const World& world) const;
 	};
 
 	class SystemRegistry

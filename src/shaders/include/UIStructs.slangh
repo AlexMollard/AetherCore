@@ -11,7 +11,7 @@ struct DrawCommandData
     uint   type;
     int    layer;
     uint   textureSlot;  // bindless slot (TexturedRect only)
-    uint   _pad1;
+    uint   flags;        // bit 0 = pixel-art (nearest) sampling
 };
 
 struct DrawIndirectCommand

@@ -8,11 +8,6 @@
 
 namespace aether
 {
-	bool System::IsActiveIn(const World& world) const
-	{
-		return HasAllSceneFeatures(world.GetSceneFeatures(), RequiredFeatures());
-	}
-
 	void SystemRegistry::Register(std::unique_ptr<System> system)
 	{
 		AE_PROFILE_ZONE();
@@ -39,9 +34,12 @@ namespace aether
 	void SystemRegistry::UpdateAll(World& world, float dt)
 	{
 		AE_PROFILE_ZONE();
+		// Unity-style: every system ticks every frame regardless of scene kind
+		// or feature flags; systems with nothing to do skip cheaply over empty
+		// views. Domain rules live per-entity, not per-scene.
 		for (auto& system: m_systems)
 		{
-			if (system && system->IsActiveIn(world))
+			if (system)
 			{
 				AE_PROFILE_ZONE_N("SystemRegistry.UpdateSystem");
 				AE_PROFILE_SET_ZONE_NAME(system->GetName());

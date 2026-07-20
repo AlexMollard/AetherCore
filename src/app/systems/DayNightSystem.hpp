@@ -29,11 +29,6 @@ namespace aether::app
 			return "DayNightSystem";
 		}
 
-		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
-		{
-			return SceneFeatureFlags::Lighting3D;
-		}
-
 		void OnRegister(aether::World& world) override;
 		void Update(aether::World& world, float dt) override;
 		void OnUnregister(aether::World& world) override;

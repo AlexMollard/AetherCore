@@ -1,9 +1,12 @@
 #include "systems/ScriptComponentSystem.hpp"
 
+#include <utility>
 #include <vector>
 
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/SceneSerializer.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
@@ -247,6 +250,70 @@ namespace aether::app
 		}
 
 		PurgeStaleCSharpInstances(world, *csScripting, *sceneCtx);
+
+		// Entity.Destroy from script: deferred to here so no callback ever
+		// frees the component storage the loop above was iterating.
+		if (!sceneCtx->pendingDestroys.empty())
+		{
+			for (const Entity doomed: std::exchange(sceneCtx->pendingDestroys, {}))
+			{
+				if (world.GetRegistry().valid(World::ToEntt(doomed)))
+				{
+					world.Destroy(doomed);
+				}
+			}
+		}
+
+		// Scene.Load from script: applied here, after every callback for the
+		// frame has finished, because the switch destroys all entities.
+		if (!sceneCtx->pendingSceneLoad.empty())
+		{
+			const std::string sceneName = std::exchange(sceneCtx->pendingSceneLoad, {});
+			// Persistent (DontDestroyOnLoad / SceneTransient) entities survive
+			// the switch WITH their live script instances; everything else's
+			// instances are torn down before their entities are.
+			PruneInstancesForSceneSwitch(world, *csScripting);
+			if (scene::LoadSceneFile(sceneName, world, scene::MakeApplySceneDeps(m_services), scene::SceneLoadMode::GameplaySwitch))
+			{
+				if (auto* scenes = m_services.TryGet<SceneSubsystem>())
+				{
+					scenes->SetCurrentScene(sceneName);
+				}
+				AE_INFO(LogCategory::App, "Scene.Load: switched to '{}'", sceneName);
+			}
+			else
+			{
+				AE_WARN(LogCategory::App, "Scene.Load: scene '{}' not found - staying in the current scene", sceneName);
+			}
+		}
+	}
+
+	void ScriptComponentSystem::PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs)
+	{
+		const auto* api = cs.Api();
+		auto& reg = world.GetRegistry();
+		for (auto it = m_instances.begin(); it != m_instances.end();)
+		{
+			const Entity entity{InstanceEntityId(it->first)};
+			const bool persistent = reg.valid(World::ToEntt(entity)) && ecs::HasSceneTransientAncestor(world, entity);
+			if (persistent)
+			{
+				++it;
+				continue;
+			}
+			if (api != nullptr)
+			{
+				if (api->InvokeDetach != nullptr)
+				{
+					api->InvokeDetach(it->second.handle);
+				}
+				if (api->DestroyInstance != nullptr)
+				{
+					api->DestroyInstance(it->second.handle);
+				}
+			}
+			it = m_instances.erase(it);
+		}
 	}
 
 	void ScriptComponentSystem::Invalidate(World& world)

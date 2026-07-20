@@ -20,6 +20,7 @@
 #define ICON_FA_PLAY "\xef\x81\x8b"
 #define ICON_FA_STOP "\xef\x81\x8d"
 #define ICON_FA_ROCKET "\xef\x84\xb5"
+#define ICON_FA_STAR "\xef\x80\x85"
 
 #define ICON_FA_UP_DOWN_LEFT_RIGHT "\xef\x82\xb2"
 #define ICON_FA_PALETTE "\xef\x94\xbf"

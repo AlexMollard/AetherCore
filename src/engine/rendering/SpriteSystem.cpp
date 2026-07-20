@@ -111,6 +111,7 @@ namespace aether
 			glm::vec2 pivot = sprite.pivot;
 			float pixelsPerUnit = sprite.pixelsPerUnit;
 			glm::ivec2 atlasTextureSize{0};
+			bool nearestFilter = false;
 			if (m_assets != nullptr && !sprite.atlasPath.empty() && sprite.spriteId.IsValid())
 			{
 				if (const auto atlasResult = m_assets->LoadAtlas(sprite.atlasPath); atlasResult.has_value())
@@ -124,6 +125,7 @@ namespace aether
 						pivot = region->pivot;
 						pixelsPerUnit = atlas.pixelsPerUnit;
 						atlasTextureSize = {atlas.textureWidth, atlas.textureHeight};
+						nearestFilter = atlas.filterRecommendation == "nearest";
 					}
 				}
 			}
@@ -153,6 +155,10 @@ namespace aether
 			if (sprite.pixelSnap)
 			{
 				flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(flags) | static_cast<std::uint32_t>(SpriteInstanceFlags::PixelSnap));
+			}
+			if (nearestFilter)
+			{
+				flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(flags) | static_cast<std::uint32_t>(SpriteInstanceFlags::NearestFilter));
 			}
 
 			const float ppu = std::max(pixelsPerUnit, 0.001f);

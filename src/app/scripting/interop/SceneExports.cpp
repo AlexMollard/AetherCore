@@ -71,6 +71,17 @@ AE_SCRIPT_API std::int32_t aether_entity_is_active(std::uint32_t id)
 	return aether::ecs::IsActiveInHierarchy(world, e) ? 1 : 0;
 }
 
+AE_SCRIPT_API void aether_scene_load(const char* name)
+{
+	if (name == nullptr || name[0] == '\0')
+	{
+		return;
+	}
+	// Deferred: the switch runs after the script update completes (see
+	// ScriptComponentSystem) - never inside this callback.
+	aether::app::scripting::ActiveContext().pendingSceneLoad = name;
+}
+
 AE_SCRIPT_API std::uint32_t aether_scene_find_by_name(const char* name)
 {
 	if (name == nullptr)

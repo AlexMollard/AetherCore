@@ -31,11 +31,36 @@ public sealed class PlayerController : EntityScript
 
     public override void OnAttach()
     {
+        // Singleton guard (the Unity pattern for persistent actors): when a
+        // DontDestroyOnLoad player crosses into a scene that authors its own
+        // player, the scene's copy is the duplicate and removes itself. Every
+        // level can safely author a player, so loading any level directly
+        // still produces exactly one.
+        if (Instance != null && Instance != this)
+        {
+            Log.Info("[CoinDash] Duplicate player removed (a persistent one already exists)");
+            Self.Destroy();
+            return;
+        }
         Instance = this;
         _spawn = Self.Position;
-        GameState.Reset();
+        // Mid-run level transition keeps run totals; a fresh Play starts over.
+        if (GameState.NextSceneQueued)
+        {
+            GameState.BeginLevel();
+        }
+        else
+        {
+            GameState.ResetRun();
+        }
         Physics2D.EnableEvents(Self);
         SetAnim(AnimIdle);
+
+        // Every level shares the same HUD prefab - one source of truth.
+        if (!Scene.Find("GameHud").IsValid)
+        {
+            Scene.Instantiate("GameHud");
+        }
     }
 
     public override void OnDetach()

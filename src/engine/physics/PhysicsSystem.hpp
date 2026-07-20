@@ -37,11 +37,6 @@ namespace aether
 			return "PhysicsSystem";
 		}
 
-		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
-		{
-			return SceneFeatureFlags::Physics3D;
-		}
-
 		void RemoveBody(World& world, Entity entity);
 
 		// Removes and destroys the backing physics body so we never leak physics

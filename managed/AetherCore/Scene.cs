@@ -36,4 +36,15 @@ public static class Scene
     /// </summary>
     public static Entity Instantiate(string prefabName, Vector3 position = default)
         => new(Native.aether_scene_instantiate_prefab(prefabName, position));
+
+    /// <summary>
+    /// Switch to another scene by name (e.g. <c>Scene.Load("Level2")</c>).
+    /// The current scene is torn down and the named scene loads at the end of
+    /// this frame's script update - never mid-callback - so code after this
+    /// call still runs, but this entity (and every other) is destroyed before
+    /// the next frame. In the editor, stopping Play still restores the scene
+    /// you were editing.
+    /// </summary>
+    public static void Load(string sceneName)
+        => Native.aether_scene_load(sceneName);
 }

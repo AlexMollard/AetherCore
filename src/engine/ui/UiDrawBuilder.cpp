@@ -20,6 +20,7 @@ namespace aether::ui
 			cmd.type = kShapeTexturedRect;
 			cmd.data1 = {0.f, 0.f, 1.f, 1.f};
 			cmd.textureSlot = textures != nullptr ? textures->ResolveSlot(img.texture) : 0xFFFFFFFFu;
+			cmd.flags = img.pixelArt ? 1u : 0u;
 		}
 		else
 		{

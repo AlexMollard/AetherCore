@@ -37,6 +37,8 @@ namespace aether::ui
 		glm::vec4 color{1.f};
 		float cornerRadius = 0.f;
 		TextureHandle texture{};
+		// Pixel-art sampling: the UI shader snaps UVs to texel centres.
+		bool pixelArt = false;
 	};
 
 	struct UIText

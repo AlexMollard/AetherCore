@@ -433,7 +433,7 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
 }
 #endif
 
-TEST_CASE("ReplaceScene spares transient subtrees (script-owned actors)") {
+TEST_CASE("ReplaceScene spares transient subtrees during gameplay switches only") {
     World world = MakeWorld();
 
     const Entity player = world.Create();
@@ -448,13 +448,19 @@ TEST_CASE("ReplaceScene spares transient subtrees (script-owned actors)") {
     world.Emplace<NameComponent>(prop, NameComponent{.name = "Prop"});
     world.Emplace<TransformComponent>(prop, TransformComponent{});
 
-    // Restore an empty snapshot: the prop must go, the player subtree must stay.
-    ReplaceScene(SceneDescription{}, world, ApplySceneDeps{});
+    // Gameplay switch (Scene.Load): the prop goes, the player subtree stays.
+    ReplaceScene(SceneDescription{}, world, ApplySceneDeps{}, SceneLoadMode::GameplaySwitch);
 
     auto& reg = world.GetRegistry();
     CHECK(reg.valid(World::ToEntt(player)));
     CHECK(reg.valid(World::ToEntt(playerMesh)));
     CHECK(!reg.valid(World::ToEntt(prop)));
+
+    // Authoring load (editor Open / play stop): persistence does not apply -
+    // the whole world resets, transients included.
+    ReplaceScene(SceneDescription{}, world, ApplySceneDeps{});
+    CHECK(!reg.valid(World::ToEntt(player)));
+    CHECK(!reg.valid(World::ToEntt(playerMesh)));
 }
 
 TEST_CASE("Light entities round-trip through capture, TOML and apply (v3)") {
@@ -1106,11 +1112,11 @@ TEST_CASE("Day Night component and camera background survive a scene round trip"
     CHECK(HasSceneFeature(loaded.GetSceneFeatures(), SceneFeatureFlags::Lighting3D));
 }
 
-TEST_CASE("Scene apply skips physics records from the wrong domain for the scene kind") {
-    // A 3D scene containing 2D physics records (hand-edited or copy-pasted)
-    // must not gain Box2D bodies: the records are skipped with a warning.
-    const char* toml3D = "[scene]\nname = 'bad mix'\nkind = '3d'\nversion = 14\nfeatures = ['physics_3d']\n\n"
-                         "[[entities]]\nname = 'Smuggled'\nposition = [0.0, 1.0, 0.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n"
+TEST_CASE("Scene apply keeps cross-domain physics records (Unity-style) but never both on one entity") {
+    // 2D physics in a 3D scene is legal now - hybrid games depend on it. The
+    // records apply and imply the feature flag.
+    const char* toml3D = "[scene]\nname = 'hybrid'\nkind = '3d'\nversion = 14\nfeatures = ['physics_3d']\n\n"
+                         "[[entities]]\nname = 'Sprite body'\nposition = [0.0, 1.0, 0.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n"
                          "[entities.rigid_body_2d]\nbody_type = 'dynamic'\n"
                          "[entities.collider_2d]\nshape = 'box'\n";
     const auto parsed = ParseToml(toml3D);
@@ -1121,23 +1127,28 @@ TEST_CASE("Scene apply skips physics records from the wrong domain for the scene
     World world = MakeWorld();
     const auto created = ApplyScene(*parsed, world, ApplySceneDeps{});
     REQUIRE(created.size() == 1);
-    CHECK_FALSE(world.Has<RigidBody2DComponent>(created[0]));
-    CHECK_FALSE(world.Has<Collider2DComponent>(created[0]));
+    CHECK(world.Has<RigidBody2DComponent>(created[0]));
+    CHECK(world.Has<Collider2DComponent>(created[0]));
+    CHECK(HasSceneFeature(world.GetSceneFeatures(), SceneFeatureFlags::Physics2D));
 
-    // The mirror case: 3D physics records in a 2D scene are skipped too.
-    const char* toml2D = "[scene]\nname = 'bad mix 2d'\nkind = '2d'\nversion = 14\nfeatures = ['sprites', 'physics_2d']\n\n"
-                         "[[entities]]\nname = 'Smuggled3D'\nposition = [0.0, 1.0, 0.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n"
-                         "[entities.physics]\nshape = 'box'\nmotion = 'dynamic'\n";
-    const auto parsed2D = ParseToml(toml2D);
-    REQUIRE(parsed2D.has_value());
-    REQUIRE(parsed2D->entities.size() == 1);
-    CHECK(parsed2D->entities[0].physics.has_value());
+    // The one rule that remains: an entity carrying BOTH domains keeps only
+    // the set matching the scene kind.
+    const char* tomlBoth = "[scene]\nname = 'both'\nkind = '2d'\nversion = 14\nfeatures = ['sprites', 'physics_2d']\n\n"
+                           "[[entities]]\nname = 'Contested'\nposition = [0.0, 1.0, 0.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n"
+                           "[entities.rigid_body_2d]\nbody_type = 'dynamic'\n"
+                           "[entities.collider_2d]\nshape = 'box'\n"
+                           "[entities.physics]\nshape = 'box'\nmotion = 'dynamic'\n";
+    const auto parsedBoth = ParseToml(tomlBoth);
+    REQUIRE(parsedBoth.has_value());
+    REQUIRE(parsedBoth->entities.size() == 1);
+    CHECK(parsedBoth->entities[0].physics.has_value());
+    CHECK(parsedBoth->entities[0].rigidBody2D.has_value());
 
     World world2D = MakeWorld();
-    const auto created2D = ApplyScene(*parsed2D, world2D, ApplySceneDeps{});
+    const auto created2D = ApplyScene(*parsedBoth, world2D, ApplySceneDeps{});
     REQUIRE(created2D.size() == 1);
+    CHECK(world2D.Has<RigidBody2DComponent>(created2D[0]));
     CHECK_FALSE(world2D.Has<RigidBodyComponent>(created2D[0]));
-    CHECK_FALSE(world2D.Has<ColliderComponent>(created2D[0]));
 }
 
 TEST_CASE("Tile Map component survives a scene round trip and implies the feature") {

@@ -197,7 +197,7 @@ namespace aether
 								}
 
 								const glm::vec2 cellCentre{(static_cast<float>(chunkKey.x * kTileChunkSize + localX) + 0.5f) * cellSize, (static_cast<float>(chunkKey.y * kTileChunkSize + localY) + 0.5f) * cellSize};
-								SpriteInstanceFlags flags = SpriteInstanceFlags::None;
+								SpriteInstanceFlags flags = atlas.filterRecommendation == "nearest" ? SpriteInstanceFlags::NearestFilter : SpriteInstanceFlags::None;
 								if ((cell & tilecell::kFlipX) != 0u)
 								{
 									flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(flags) | static_cast<std::uint32_t>(SpriteInstanceFlags::FlipX));

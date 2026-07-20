@@ -35,6 +35,7 @@ struct VSOutput
     nointerpolation uint type        : TEXCOORD4;
     float2 texUV         : TEXCOORD5; // UV for TexturedRect
     nointerpolation uint textureSlot : TEXCOORD6;
+    nointerpolation uint flags       : TEXCOORD7;
 };
 
 [shader("vertex")]
@@ -103,6 +104,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.type        = cmd.type;
     output.texUV       = outTexUV;
     output.textureSlot = cmd.textureSlot;
+    output.flags       = cmd.flags;
     return output;
 }
 
@@ -126,7 +128,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     if (input.type == kShapeTexturedRect)
     {
-        const float4 texColor = g_textures[input.textureSlot].Sample(g_linearSampler, input.texUV);
+        float2 uv = input.texUV;
+        if ((input.flags & 1u) != 0u)
+        {
+            // Pixel art: snap to texel centres so icons stay crisp under the
+            // shared linear sampler.
+            uint width, height;
+            g_textures[input.textureSlot].GetDimensions(width, height);
+            const float2 texSize = float2(max(width, 1u), max(height, 1u));
+            uv = (floor(uv * texSize) + 0.5) / texSize;
+        }
+        const float4 texColor = g_textures[input.textureSlot].Sample(g_linearSampler, uv);
         return texColor * input.color;
     }
 

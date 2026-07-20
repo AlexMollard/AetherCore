@@ -112,6 +112,9 @@ namespace aether
 		{
 			std::uint64_t body = 0; // packed b2BodyId
 			std::uint32_t builtRevision = 0;
+			// Chain outlines sample up to two cells into neighbouring chunks
+			// (seam ghost vertices), so a neighbour edit must rebuild us too.
+			std::uint64_t builtNeighbourRevisions = 0;
 			glm::mat4 builtTransform{1.0f};
 			bool seen = false;
 		};
@@ -215,14 +218,9 @@ namespace aether
 			{
 				case Collider2DShape::Box:
 				{
-					const float halfX = std::max(0.5f * collider.size.x * s.x, 0.001f);
-					const float halfY = std::max(0.5f * collider.size.y * s.y, 0.001f);
-					// Moving boxes get slightly rounded corners so they glide
-					// over seams between adjacent static shapes (tile chunk
-					// borders) instead of snagging on the ghost corner. Outer
-					// dimensions are preserved. Static boxes stay sharp.
-					const float round = rigid.bodyType == Body2DType::Static ? 0.0f : std::min({0.04f, halfX * 0.5f, halfY * 0.5f});
-					const b2Polygon box = round > 0.0f ? b2MakeOffsetRoundedBox(halfX - round, halfY - round, center, b2Rot_identity, round) : b2MakeOffsetBox(halfX, halfY, center, b2Rot_identity);
+					// Sharp corners are safe again: tile terrain is one-sided
+					// chain outlines, so there are no rect seams to snag on.
+					const b2Polygon box = b2MakeOffsetBox(std::max(0.5f * collider.size.x * s.x, 0.001f), std::max(0.5f * collider.size.y * s.y, 0.001f), center, b2Rot_identity);
 					collider.shapes.push_back(b2StoreShapeId(b2CreatePolygonShape(body, &shapeDef, &box)));
 					break;
 				}
@@ -735,12 +733,32 @@ namespace aether
 				{
 					continue;
 				}
+				// Cell solidity by GLOBAL cell coordinate; outline tracing samples
+				// up to two cells past a chunk border for seam ghost vertices.
+				const auto solidGlobal = [&](glm::ivec2 cell) { return isSolid(map.GetCell(layerIndex, cell)); };
+
 				for (const auto& [chunkKey, chunk]: layer.chunks)
 				{
+					std::uint64_t neighbourRevisions = 0;
+					for (std::int32_t dy = -1; dy <= 1; ++dy)
+					{
+						for (std::int32_t dx = -1; dx <= 1; ++dx)
+						{
+							if (dx == 0 && dy == 0)
+							{
+								continue;
+							}
+							if (const auto it = layer.chunks.find(TileChunkKey{chunkKey.x + dx, chunkKey.y + dy}); it != layer.chunks.end())
+							{
+								neighbourRevisions += it->second.revision;
+							}
+						}
+					}
+
 					const TileBodyKey bodyKey{entity.id, static_cast<std::uint32_t>(layerIndex), chunkKey.x, chunkKey.y};
 					TileBodyEntry& entry = m_impl->tileBodies[bodyKey];
 					entry.seen = true;
-					if (entry.builtRevision == chunk.revision && entry.builtTransform == transform.localToWorld && entry.body != 0)
+					if (entry.builtRevision == chunk.revision && entry.builtNeighbourRevisions == neighbourRevisions && entry.builtTransform == transform.localToWorld && entry.body != 0)
 					{
 						continue;
 					}
@@ -754,10 +772,12 @@ namespace aether
 						entry.body = 0;
 					}
 					entry.builtRevision = chunk.revision;
+					entry.builtNeighbourRevisions = neighbourRevisions;
 					entry.builtTransform = transform.localToWorld;
 
-					const std::vector<TileRect> rects = MergeSolidCells(chunk.cells, isSolid);
-					if (rects.empty())
+					const glm::ivec2 chunkCellOrigin{chunkKey.x * kTileChunkSize, chunkKey.y * kTileChunkSize};
+					const std::vector<TileChainPath> outlines = TraceSolidOutlines([&](glm::ivec2 local) { return solidGlobal(chunkCellOrigin + local); });
+					if (outlines.empty())
 					{
 						continue;
 					}
@@ -769,16 +789,35 @@ namespace aether
 					bodyDef.userData = PackEntity(entity);
 					const b2BodyId body = b2CreateBody(m_impl->world, &bodyDef);
 
-					b2ShapeDef shapeDef = b2DefaultShapeDef();
-					shapeDef.enableContactEvents = true;
-					shapeDef.enableSensorEvents = true;
-					const glm::vec2 chunkOrigin{static_cast<float>(chunkKey.x * kTileChunkSize) * cellSize, static_cast<float>(chunkKey.y * kTileChunkSize) * cellSize};
-					for (const TileRect& rect: rects)
+					// One-sided chain outlines instead of merged boxes: interior
+					// segment joins are ghost-collision free, and seams between
+					// chunks are covered by the ghost extensions each side
+					// contributes (open chains overlap on their end points).
+					std::vector<b2Vec2> points;
+					std::vector<b2ShapeId> segments;
+					for (const TileChainPath& outline: outlines)
 					{
-						const glm::vec2 centre = (chunkOrigin + glm::vec2{(static_cast<float>(rect.x) + static_cast<float>(rect.w) * 0.5f) * cellSize, (static_cast<float>(rect.y) + static_cast<float>(rect.h) * 0.5f) * cellSize}) * s;
-						const glm::vec2 half{0.5f * static_cast<float>(rect.w) * cellSize * s.x, 0.5f * static_cast<float>(rect.h) * cellSize * s.y};
-						const b2Polygon box = b2MakeOffsetBox(std::max(half.x, 0.001f), std::max(half.y, 0.001f), {centre.x, centre.y}, b2Rot_identity);
-						b2CreatePolygonShape(body, &shapeDef, &box);
+						points.clear();
+						points.reserve(outline.points.size());
+						for (const glm::ivec2 corner: outline.points)
+						{
+							const glm::vec2 world = glm::vec2(chunkCellOrigin + corner) * cellSize * s;
+							points.push_back({world.x, world.y});
+						}
+						b2ChainDef chainDef = b2DefaultChainDef();
+						chainDef.points = points.data();
+						chainDef.count = static_cast<int>(points.size());
+						chainDef.isLoop = outline.isLoop;
+						chainDef.enableSensorEvents = true;
+						const b2ChainId chain = b2CreateChain(body, &chainDef);
+						// Chain segments default to no contact events; tiles keep
+						// emitting them so gameplay collision callbacks still fire.
+						segments.resize(static_cast<std::size_t>(b2Chain_GetSegmentCount(chain)));
+						b2Chain_GetSegments(chain, segments.data(), static_cast<int>(segments.size()));
+						for (const b2ShapeId segment: segments)
+						{
+							b2Shape_EnableContactEvents(segment, true);
+						}
 					}
 					entry.body = b2StoreBodyId(body);
 				}

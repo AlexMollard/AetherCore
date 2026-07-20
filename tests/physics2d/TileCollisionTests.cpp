@@ -185,9 +185,9 @@ TEST_CASE("clearing a tile removes its collision on the next flush")
 	fx.MakeTileMapEntity();
 	fx.physics->FlushPendingOnly(fx.world);
 
-	// A probe over the solid row hits it...
-	const auto before = fx.physics->OverlapPoint({0.5f, 0.5f});
-	CHECK_FALSE(before.empty());
+	// A ray from above strikes the solid row's surface (tile collision is a
+	// one-sided chain outline now, so probe the surface, not the interior)...
+	CHECK(fx.physics->CastRay({0.5f, 3.0f}, {0.0f, -1.0f}, 5.0f).hit);
 
 	// ...then the tiles under it are cleared and the body rebuilds without them.
 	for (int x = -3; x <= 3; ++x)
@@ -195,7 +195,7 @@ TEST_CASE("clearing a tile removes its collision on the next flush")
 		map.SetCell(0, {x, 0}, tilecell::kEmpty);
 	}
 	fx.physics->FlushPendingOnly(fx.world);
-	CHECK(fx.physics->OverlapPoint({0.5f, 0.5f}).empty());
+	CHECK_FALSE(fx.physics->CastRay({0.5f, 3.0f}, {0.0f, -1.0f}, 5.0f).hit);
 }
 
 TEST_CASE("editing one chunk leaves other chunk bodies untouched")
@@ -207,12 +207,48 @@ TEST_CASE("editing one chunk leaves other chunk bodies untouched")
 	fx.MakeTileMapEntity();
 	fx.physics->FlushPendingOnly(fx.world);
 
-	CHECK_FALSE(fx.physics->OverlapPoint({1.5f, 1.5f}).empty());
-	CHECK_FALSE(fx.physics->OverlapPoint({70.5f, 1.5f}).empty());
+	CHECK(fx.physics->CastRay({1.5f, 4.0f}, {0.0f, -1.0f}, 5.0f).hit);
+	CHECK(fx.physics->CastRay({70.5f, 4.0f}, {0.0f, -1.0f}, 5.0f).hit);
 
 	// Edit only chunk (0,0): the far chunk's collision persists, the near one updates.
 	map.SetCell(0, {1, 1}, tilecell::kEmpty);
 	fx.physics->FlushPendingOnly(fx.world);
-	CHECK(fx.physics->OverlapPoint({1.5f, 1.5f}).empty());
-	CHECK_FALSE(fx.physics->OverlapPoint({70.5f, 1.5f}).empty());
+	CHECK_FALSE(fx.physics->CastRay({1.5f, 4.0f}, {0.0f, -1.0f}, 5.0f).hit);
+	CHECK(fx.physics->CastRay({70.5f, 4.0f}, {0.0f, -1.0f}, 5.0f).hit);
+}
+
+TEST_CASE("a driven box crosses chunk seams without snagging")
+{
+	// Regression for the ghost-corner stall at chunk borders (the CoinDash
+	// patroller froze at x=64.425 where two chunks' merged rects met). Tile
+	// collision is chain outlines now: a flat-bottomed box driven along a
+	// multi-chunk ground line must keep moving across every seam.
+	TileCollisionFixture fx;
+	TileMapAsset& map = fx.Map();
+	for (int x = 0; x <= 80; ++x) // spans chunks (0,0), (1,0), and (2,0)
+	{
+		map.SetCell(0, {x, 0}, tilecell::Make(fx.solidIndex));
+	}
+	fx.MakeTileMapEntity();
+	const Entity walker = fx.MakeFallingBox({2.0f, 1.6f});
+	fx.StepSeconds(0.5f); // settle onto the ground
+
+	const auto body = fx.world.Get<RigidBody2DComponent>(walker).body;
+	glm::vec3 pos{}, euler{}, scale{};
+	const int frames = static_cast<int>(12.0f / Physics2DSystem::kFixedTimestep);
+	for (int i = 0; i < frames; ++i)
+	{
+		fx.physics->SetLinearVelocity(body, {8.0f, fx.physics->GetLinearVelocity(body).y});
+		fx.physics->Update(fx.world, Physics2DSystem::kFixedTimestep);
+		DecomposeTRS(fx.world.Get<TransformComponent>(walker).localToWorld, pos, euler, scale);
+		if (pos.x > 76.0f)
+		{
+			break; // reached the far end - stop before running off the line
+		}
+	}
+
+	// Any seam snag (x = 32 or 64) leaves the box far short; it must reach the
+	// far end still ON the ground (a bounce or wedge would change y).
+	CHECK(pos.x > 76.0f);
+	CHECK(pos.y == doctest::Approx(1.5f).epsilon(0.1));
 }

@@ -363,6 +363,13 @@ namespace aether::editor
 			}
 			iw::InspectorFocusRequest() = std::string(component);
 		};
+		windowActions.openSceneDialog = [this]()
+		{
+			if (m_hierarchyPanel != nullptr)
+			{
+				m_hierarchyPanel->RequestOpenPopup();
+			}
+		};
 		context.services.Register<EditorWindowActions>(m_windowActions = std::move(windowActions));
 	}
 

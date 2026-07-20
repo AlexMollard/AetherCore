@@ -46,6 +46,11 @@ public readonly struct Entity : IEquatable<Entity>
     public void SetTransform(Vector3 position, Vector3 eulerDegrees, Vector3 scale)
         => Native.aether_set_transform(Id, position, eulerDegrees, scale);
 
+    /// <summary>
+    /// Destroy this entity. Deferred Unity-style: the entity is removed at the
+    /// end of the current frame's script update, never mid-callback, so code
+    /// after this call still sees it briefly.
+    /// </summary>
     public void Destroy() => Native.aether_entity_destroy(Id);
 
     // ── Hierarchy ───────────────────────────────────────────────────────────────
@@ -78,6 +83,19 @@ public readonly struct Entity : IEquatable<Entity>
 
     /// <summary>Exclude this entity (and subtree) from scene serialization.</summary>
     public void MarkTransient() => Native.aether_mark_transient(Id);
+
+    /// <summary>
+    /// Unity-style persistence: this entity (and its subtree) survives
+    /// <see cref="Scene.Load"/>, keeping its components and attached script
+    /// instances alive across the switch. Gameplay-only: editor scene loads
+    /// and stopping Play always reset the world, and nothing is saved into
+    /// scene files. If the destination scene authors its own copy of a
+    /// persistent actor, resolve the duplicate in the script (in OnAttach:
+    /// when a live instance already exists, destroy Self) - only the
+    /// surviving copy runs, so every scene can author one and loading any
+    /// scene directly still works.
+    /// </summary>
+    public void DontDestroyOnLoad() => Native.aether_mark_transient(Id);
 
     /// <summary>Give the entity an identity transform (needed before SetTransform).</summary>
     public void AddTransform() => Native.aether_add_transform(Id);

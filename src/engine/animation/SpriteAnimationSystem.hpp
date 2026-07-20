@@ -36,11 +36,6 @@ namespace aether
 			return "SpriteAnimationSystem";
 		}
 
-		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
-		{
-			return SceneFeatureFlags::Sprites;
-		}
-
 		void Update(World& world, float dt) override;
 		void UpdatePreview(World& world, float dt);
 		void ResetForPlay(World& world);

@@ -376,9 +376,9 @@ TEST_CASE("Physics2D: destroying a joint target releases the joint without crash
 	CHECK(fx.PositionOf(bob).y == doctest::Approx(-0.25f).epsilon(0.2));
 }
 
-TEST_CASE("Physics2D: the system is inert in worlds without the Physics2D feature")
+TEST_CASE("Physics2D: the system simulates in every scene kind (Unity-style)")
 {
-	aether::World world; // defaults to Scene3D features (no Physics2D)
+	aether::World world; // defaults to Scene3D - 2D physics must still work
 	world.RegisterSystem(std::make_unique<aether::Physics2DSystem>());
 
 	const aether::Entity e = world.Create();
@@ -386,17 +386,15 @@ TEST_CASE("Physics2D: the system is inert in worlds without the Physics2D featur
 	world.Emplace<aether::RigidBody2DComponent>(e);
 	world.Emplace<aether::Collider2DComponent>(e);
 
-	// Through the registry (the real activation path) nothing simulates and no
-	// backing body is ever created.
 	for (int i = 0; i < 30; ++i)
 	{
 		world.UpdateSystems(aether::Physics2DSystem::kFixedTimestep);
 	}
 
-	CHECK_FALSE(world.Get<aether::RigidBody2DComponent>(e).body.IsValid());
+	CHECK(world.Get<aether::RigidBody2DComponent>(e).body.IsValid());
 	glm::vec3 pos{}, euler{}, scale{};
 	aether::DecomposeTRS(world.Get<aether::TransformComponent>(e).localToWorld, pos, euler, scale);
-	CHECK(pos.y == doctest::Approx(5.0f));
+	CHECK(pos.y < 5.0f); // gravity acted: hybrid 2D-in-3D scenes simulate
 }
 
 TEST_CASE("Physics2D: an entity carrying 3D physics components is skipped with its 2D body uncreated")

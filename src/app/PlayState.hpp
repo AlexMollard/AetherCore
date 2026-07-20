@@ -40,6 +40,9 @@ namespace aether::app
 		std::optional<scene::SceneDescription> stopSnapshot;
 		std::vector<Entity> stopSelection;
 		Entity stopSelectionPrimary{};
+		// Editor scene name at play start; scripts may Scene.Load() a different
+		// scene mid-play, and stop must restore the name with the snapshot.
+		std::string stopSceneName;
 
 	private:
 		Mode m_mode = Mode::Editing;

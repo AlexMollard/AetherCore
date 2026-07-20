@@ -11,6 +11,7 @@
 #include "debug/SceneSelection.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/SceneSerializer.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
@@ -24,6 +25,10 @@ namespace aether::app
 		{
 			World& world = context.Get<World>();
 			playState.stopSnapshot = scene::CaptureScene(world, assets.GetMaterialRegistry(), assets.GetTextureRegistry(), context.TryGet<Renderer>());
+			if (const auto* scenes = context.TryGet<SceneSubsystem>())
+			{
+				playState.stopSceneName = scenes->GetCurrentScene();
+			}
 			if (const auto* selection = context.TryGet<aether::editor::SceneSelection>())
 			{
 				playState.stopSelection = selection->All();
@@ -169,6 +174,12 @@ namespace aether::app
 			}
 			primaryToRestore = remapRestored(primaryToRestore);
 			playState->stopSnapshot.reset();
+			// A script may have switched scenes mid-play; the snapshot restore
+			// brings back the edited scene, so the name must follow it.
+			if (auto* scenes = context.TryGet<SceneSubsystem>())
+			{
+				scenes->SetCurrentScene(playState->stopSceneName);
+			}
 		}
 		playState->stopSelection.clear();
 		playState->stopSelectionPrimary = {};

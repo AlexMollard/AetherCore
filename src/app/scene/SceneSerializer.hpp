@@ -121,6 +121,7 @@ namespace aether::app::scene
 	{
 		glm::vec4 color{1.f};
 		float cornerRadius = 0.f;
+		bool pixelArt = false;
 		std::string texturePath;
 	};
 
@@ -288,12 +289,22 @@ namespace aether::app::scene
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
 
-	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
+	// Persistence (SceneTransient / DontDestroyOnLoad) is a GAMEPLAY behaviour:
+	// only runtime scene switches spare marked subtrees. Authoring loads (the
+	// editor's Open dialog, menus, control endpoint, play start/stop) always
+	// reset the world completely.
+	enum class SceneLoadMode
+	{
+		Authoring,
+		GameplaySwitch,
+	};
+
+	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, SceneLoadMode mode = SceneLoadMode::Authoring);
 
 	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
 
 	// ReplaceScene from a scene file on disk.
-	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps);
+	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps, SceneLoadMode mode = SceneLoadMode::Authoring);
 
 	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld);
 } // namespace aether::app::scene

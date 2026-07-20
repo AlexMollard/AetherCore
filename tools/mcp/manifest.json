@@ -1382,6 +1382,16 @@
         "type": "object"
       },
       "tool": "remove_script"
+    },
+    {
+      "description": "Open the editor's Open Scene dialog (the same one as File > Open).",
+      "mutates": true,
+      "name": "editor.open_scene_dialog",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "open_scene_dialog"
     }
   ]
 }

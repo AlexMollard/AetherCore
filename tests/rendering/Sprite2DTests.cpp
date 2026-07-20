@@ -10,6 +10,7 @@
 #include "rendering/SpriteSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "scene/World.hpp"
 #include "../material/FakeSlotSink.hpp"
 #include "../material/FakeTextureSink.hpp"
@@ -151,6 +152,60 @@ TEST_CASE("atlas sub-region extraction produces begin/end uv coordinates")
 
 	sprites.Shutdown();
 	textures.ReleaseAll();
+	std::filesystem::remove(atlasPath);
+}
+
+TEST_CASE("reflected 'sprite' field selects atlas sprites by name or index")
+{
+	// Agents pick atlas sub-region sprites through set_component with a
+	// human-readable name (or index); the reflection setter resolves it
+	// against the component's atlas and updates the stable spriteId.
+	const std::filesystem::path atlasPath = std::filesystem::temp_directory_path() / "aethercore_sprite_field.spriteatlas.toml";
+	std::filesystem::remove(atlasPath);
+
+	SpriteAssetStore assets;
+	SpriteAtlasAsset atlas;
+	atlas.texturePath = "atlas.png";
+	atlas.textureWidth = 64;
+	atlas.textureHeight = 32;
+	// AddManualRegion returns a reference into the sprites vector; a later add
+	// may reallocate, so take ids from the vector after both adds.
+	(void) atlas.AddManualRegion({0, 0, 32, 32}, "Idle");
+	(void) atlas.AddManualRegion({32, 0, 32, 32}, "Run");
+	const AssetObjectId idleId = atlas.sprites[0].id;
+	const AssetObjectId runId = atlas.sprites[1].id;
+	atlas.RecalculateUvs(atlas.textureWidth, atlas.textureHeight);
+	REQUIRE(assets.SaveAtlas(atlasPath.string(), std::move(atlas)).has_value());
+
+	const auto* type = aether::reflect::FindComponentType("Sprite Renderer");
+	REQUIRE(type != nullptr);
+	const auto* field = type->FindField("sprite");
+	REQUIRE(field != nullptr);
+	CHECK_FALSE(field->meta.serialize);
+
+	SpriteRendererComponent sprite;
+	sprite.atlasPath = atlasPath.string();
+
+	// By name.
+	field->set(&sprite, aether::reflect::MakeValue(std::string{"Run"}));
+	CHECK(sprite.spriteId == runId);
+	CHECK(sprite.texturePath == "atlas.png");
+	CHECK(sprite.pixelSize.x == doctest::Approx(32.0f));
+
+	// Read-back returns the name.
+	CHECK(field->get(&sprite).str == "Run");
+
+	// By index.
+	field->set(&sprite, aether::reflect::MakeValue(std::string{"0"}));
+	CHECK(sprite.spriteId == idleId);
+	CHECK(field->get(&sprite).str == "Idle");
+
+	// Unknown names leave the selection untouched; empty clears it.
+	field->set(&sprite, aether::reflect::MakeValue(std::string{"Missing"}));
+	CHECK(sprite.spriteId == idleId);
+	field->set(&sprite, aether::reflect::MakeValue(std::string{}));
+	CHECK_FALSE(sprite.spriteId.IsValid());
+
 	std::filesystem::remove(atlasPath);
 }
 

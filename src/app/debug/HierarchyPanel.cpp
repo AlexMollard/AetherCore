@@ -1113,6 +1113,179 @@ namespace aether::editor
 		SetVisible(true);
 	}
 
+	// Centered "Open Scene" dialog: searchable scene list with kind badges,
+	// entity counts, and a startup-scene toggle. Double-click or Enter opens.
+	void HierarchyPanel::DrawOpenSceneModal(app::LayerContext& context, World& world, SceneSelection& selection)
+	{
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSize(ImVec2(560.0f, 480.0f), ImGuiCond_Appearing);
+		ImGui::SetNextWindowSizeConstraints(ImVec2(420.0f, 320.0f), ImVec2(FLT_MAX, FLT_MAX));
+		bool open = true;
+		if (!ImGui::BeginPopupModal("Open Scene", &open, ImGuiWindowFlags_NoCollapse))
+		{
+			return;
+		}
+
+		if (m_sceneListDirty)
+		{
+			m_sceneListDirty = false;
+			m_sceneEntries.clear();
+			for (const std::string& name: app::scene::ListSceneFiles())
+			{
+				SceneListEntry entry;
+				entry.name = name;
+				if (const auto desc = app::scene::ReadSceneFile(name))
+				{
+					entry.kindLabel = desc->kind == SceneKind::Scene2D ? "2D" : desc->kind == SceneKind::Mixed ? "Mixed" : "3D";
+					entry.entityCount = desc->entities.size();
+				}
+				m_sceneEntries.push_back(std::move(entry));
+			}
+		}
+
+		auto* settingsService = context.TryGet<aether::SettingsService>();
+		auto* scenes = context.TryGet<aether::SceneSubsystem>();
+		const std::string currentScene = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
+
+		const auto loadScene = [&](const std::string& name)
+		{
+			if (app::scene::LoadSceneFile(name, world, app::scene::MakeApplySceneDeps(context.services)))
+			{
+				selection.Clear();
+				if (scenes != nullptr)
+				{
+					scenes->SetCurrentScene(name);
+				}
+			}
+			ImGui::CloseCurrentPopup();
+		};
+
+		// ── Search row ────────────────────────────────────────────────────────
+		ImGui::TextColored(chrome::kAccentHi, ICON_FA_MAGNIFYING_GLASS);
+		ImGui::SameLine();
+		if (m_sceneSearchFocusPending)
+		{
+			ImGui::SetKeyboardFocusHere();
+			m_sceneSearchFocusPending = false;
+		}
+		ImGui::SetNextItemWidth(-64.0f);
+		ImGui::InputTextWithHint("##sceneSearch", "Search scenes...", m_sceneSearch, sizeof(m_sceneSearch));
+		const bool searchEntered = ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter, false);
+		ImGui::SameLine();
+		if (chrome::GhostIconButton(ICON_FA_ROTATE, "##refreshScenes", ImVec2(28.0f, 0.0f)))
+		{
+			m_sceneListDirty = true;
+		}
+		ImGui::SetItemTooltip("Rescan the scenes folder");
+
+		// ── Scene list ────────────────────────────────────────────────────────
+		const float footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::WithAlpha(chrome::kPanel, 0.6f));
+		ImGui::BeginChild("##sceneRows", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_Borders);
+		const std::string_view needle{m_sceneSearch};
+		std::size_t shown = 0;
+		std::string firstVisible;
+		for (const SceneListEntry& entry: m_sceneEntries)
+		{
+			if (!needle.empty() && std::search(entry.name.begin(), entry.name.end(), needle.begin(), needle.end(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); }) == entry.name.end())
+			{
+				continue;
+			}
+			++shown;
+			if (firstVisible.empty())
+			{
+				firstVisible = entry.name;
+			}
+			ImGui::PushID(entry.name.c_str());
+			const bool isCurrent = entry.name == currentScene;
+			const bool isStartup = settingsService != nullptr && settingsService->Get().app.startupScene == entry.name;
+			const bool isSelected = m_openSceneSelected == entry.name;
+
+			const float rowStart = ImGui::GetCursorPosX();
+			if (ImGui::Selectable("##row", isSelected, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetFrameHeight() + 6.0f)))
+			{
+				m_openSceneSelected = entry.name;
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+				{
+					loadScene(entry.name);
+				}
+			}
+			const ImVec2 rowMin = ImGui::GetItemRectMin();
+			const ImVec2 rowMax = ImGui::GetItemRectMax();
+			const float rowMidY = (rowMin.y + rowMax.y) * 0.5f - ImGui::GetTextLineHeight() * 0.5f;
+
+			// Kind badge + name + metadata, drawn over the selectable.
+			ImGui::SetCursorScreenPos(ImVec2(rowMin.x + 8.0f, rowMidY));
+			ImGui::TextColored(chrome::WithAlpha(chrome::kAccentHi, 0.9f), "%s", entry.kindLabel.empty() ? "?" : entry.kindLabel.c_str());
+			ImGui::SameLine(rowStart + 52.0f);
+			ImGui::TextUnformatted(entry.name.c_str());
+			if (isCurrent)
+			{
+				ImGui::SameLine();
+				ImGui::TextColored(chrome::kMuted, "(current)");
+			}
+
+			// Right side: entity count + startup star.
+			char meta[48]{};
+			std::snprintf(meta, sizeof(meta), "%zu %s", entry.entityCount, entry.entityCount == 1 ? "entity" : "entities");
+			const float starWidth = 26.0f;
+			const float metaWidth = ImGui::CalcTextSize(meta).x;
+			ImGui::SameLine(ImGui::GetContentRegionMax().x - metaWidth - starWidth - 16.0f);
+			ImGui::TextColored(chrome::kMuted, "%s", meta);
+			ImGui::SameLine(ImGui::GetContentRegionMax().x - starWidth - 4.0f);
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2.0f);
+			if (isStartup)
+			{
+				ImGui::TextColored(chrome::kAccentHi, ICON_FA_STAR);
+				ImGui::SetItemTooltip("Startup scene (loaded when the game boots)");
+			}
+			else if (settingsService != nullptr)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, chrome::WithAlpha(chrome::kMuted, 0.35f));
+				const bool setStartup = ImGui::SmallButton(ICON_FA_STAR "##startup");
+				ImGui::PopStyleColor();
+				if (setStartup)
+				{
+					settingsService->Values().app.startupScene = entry.name;
+					settingsService->ApplyField("app.startupScene");
+					settingsService->Save();
+				}
+				ImGui::SetItemTooltip("Make this the startup scene");
+			}
+			ImGui::PopID();
+		}
+		if (m_sceneEntries.empty())
+		{
+			ImGui::TextColored(chrome::kMuted, "No scenes in %s", app::scene::ScenesDirectory().c_str());
+		}
+		else if (shown == 0)
+		{
+			ImGui::TextColored(chrome::kMuted, "No scene matches '%s'", m_sceneSearch);
+		}
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
+
+		// ── Footer ────────────────────────────────────────────────────────────
+		const bool canOpen = !m_openSceneSelected.empty() || (shown == 1 && !firstVisible.empty());
+		const std::string openTarget = !m_openSceneSelected.empty() ? m_openSceneSelected : firstVisible;
+		ImGui::Spacing();
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - 196.0f);
+		if (chrome::OutlineButton("Cancel", ImVec2(90.0f, 0.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		ImGui::BeginDisabled(!canOpen);
+		if (chrome::PrimaryButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(98.0f, 0.0f)) || (canOpen && (searchEntered || ImGui::IsKeyPressed(ImGuiKey_Enter, false))))
+		{
+			loadScene(openTarget);
+		}
+		ImGui::EndDisabled();
+
+		ImGui::EndPopup();
+	}
+
 	void HierarchyPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -1175,7 +1348,10 @@ namespace aether::editor
 			{
 				m_requestOpenPopup = false;
 				m_sceneListDirty = true;
-				ImGui::OpenPopup("LoadScene");
+				m_sceneSearch[0] = '\0';
+				m_sceneSearchFocusPending = true;
+				m_openSceneSelected.clear();
+				ImGui::OpenPopup("Open Scene");
 			}
 
 			std::size_t count = 0;
@@ -1210,14 +1386,8 @@ namespace aether::editor
 			}
 			if (ImGui::BeginPopup("CreateEntity"))
 			{
-				// Create entries follow the ACTIVE scene features: entries for inactive
-				// domains are absent rather than disabled, so a 2D scene's menu has no
-				// meshes/lights and a 3D scene's has no sprite entries (Mixed shows both).
-				const SceneFeatureFlags activeFeatures = world.GetSceneFeatures();
-				const bool show2D = HasSceneFeature(activeFeatures, SceneFeatureFlags::Sprites);
-				const bool showMeshes3D = HasSceneFeature(activeFeatures, SceneFeatureFlags::Meshes3D);
-				const bool showLighting3D = HasSceneFeature(activeFeatures, SceneFeatureFlags::Lighting3D);
-
+				// Unity-style: every create entry is available in every scene -
+				// 2D and 3D content freely mix, so nothing is hidden by kind.
 				if (ImGui::MenuItem(ICON_FA_CIRCLE "  Empty entity"))
 				{
 					const Entity e = world.Create();
@@ -1225,7 +1395,7 @@ namespace aether::editor
 					selection.Select(e);
 				}
 				ImGui::Separator();
-				if (show2D && ImGui::BeginMenu(ICON_FA_IMAGE "  2D"))
+				if (ImGui::BeginMenu(ICON_FA_IMAGE "  2D"))
 				{
 					if (ImGui::MenuItem(ICON_FA_IMAGE "  Sprite"))
 					{
@@ -1258,7 +1428,6 @@ namespace aether::editor
 					}
 					ImGui::EndMenu();
 				}
-				if (showMeshes3D)
 				{
 					ImGui::Separator();
 					if (ImGui::MenuItem(ICON_FA_CUBE "  Cube"))
@@ -1282,7 +1451,6 @@ namespace aether::editor
 						CreatePrimitive(context, world, selection, PrimitiveMesh::Triangle, "Triangle", "triangle");
 					}
 				}
-				if (showLighting3D)
 				{
 					ImGui::Separator();
 					if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light"))
@@ -1294,7 +1462,6 @@ namespace aether::editor
 						selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
 					}
 				}
-				if (showMeshes3D)
 				{
 					ImGui::Separator();
 					if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera"))
@@ -1350,72 +1517,7 @@ namespace aether::editor
 				}
 				ImGui::EndPopup();
 			}
-			if (ImGui::BeginPopup("LoadScene"))
-			{
-				if (m_sceneListDirty)
-				{
-					m_sceneList = app::scene::ListSceneFiles();
-					m_sceneListDirty = false;
-				}
-				if (m_sceneList.empty())
-				{
-					ImGui::TextDisabled("No scenes in %s", app::scene::ScenesDirectory().c_str());
-				}
-				auto* settingsService = context.TryGet<aether::SettingsService>();
-
-				// Fixed name-column width keeps the row layout (and thus the popup
-				float nameColWidth = ImGui::CalcTextSize("startup").x;
-				for (const std::string& name: m_sceneList)
-				{
-					const float w = ImGui::CalcTextSize(name.c_str()).x;
-					if (w > nameColWidth)
-					{
-						nameColWidth = w;
-					}
-				}
-				nameColWidth += ImGui::GetStyle().ItemSpacing.x + 8.0f;
-
-				for (const std::string& name: m_sceneList)
-				{
-					ImGui::PushID(name.c_str());
-					const bool isStartup = settingsService != nullptr && settingsService->Get().app.startupScene == name;
-					if (ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowOverlap, ImVec2(nameColWidth, 0.0f)))
-					{
-						if (app::scene::LoadSceneFile(name, world, app::scene::MakeApplySceneDeps(context.services)))
-						{
-							selection.Clear();
-							if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
-							{
-								scenes->SetCurrentScene(name);
-							}
-						}
-						ImGui::CloseCurrentPopup();
-					}
-					if (settingsService != nullptr)
-					{
-						ImGui::SameLine();
-						if (isStartup)
-						{
-							ImGui::TextDisabled("startup");
-						}
-						else
-						{
-							if (ImGui::SmallButton(ICON_FA_PLAY "##startup"))
-							{
-								settingsService->Values().app.startupScene = name;
-								settingsService->ApplyField("app.startupScene");
-								settingsService->Save();
-							}
-							if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-							{
-								ImGui::SetTooltip("Set as startup scene (saves to user settings)");
-							}
-						}
-					}
-					ImGui::PopID();
-				}
-				ImGui::EndPopup();
-			}
+			DrawOpenSceneModal(context, world, selection);
 
 			if (m_openPrefabSave)
 			{

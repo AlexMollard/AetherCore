@@ -35,6 +35,7 @@ struct VSOutput
     float4 color : TEXCOORD1;
     nointerpolation uint textureIndex : TEXCOORD2;
     nointerpolation uint blendMode : TEXCOORD3;
+    nointerpolation uint flags : TEXCOORD4;
 };
 
 [shader("vertex")]
@@ -72,13 +73,24 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.color = sprite.color;
     output.textureIndex = sprite.textureIndex;
     output.blendMode = sprite.blendMode;
+    output.flags = sprite.flags;
     return output;
 }
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
-    float4 color = g_textures[input.textureIndex].Sample(g_linearSampler, input.uv) * input.color;
+    float2 uv = input.uv;
+    if ((input.flags & 16u) != 0u)
+    {
+        // NearestFilter: snap to texel centres so pixel art stays crisp under
+        // the shared linear sampler.
+        uint width, height;
+        g_textures[input.textureIndex].GetDimensions(width, height);
+        const float2 texSize = float2(max(width, 1u), max(height, 1u));
+        uv = (floor(uv * texSize) + 0.5) / texSize;
+    }
+    float4 color = g_textures[input.textureIndex].Sample(g_linearSampler, uv) * input.color;
     if (input.blendMode == 2u)
     {
         // The multiply pipeline uses DstColor/Zero. Folding alpha into the

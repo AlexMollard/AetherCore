@@ -2,6 +2,9 @@
 
 #include "scene/reflection/Reflection.hpp"
 
+#include <charconv>
+
+#include "assets/SpriteAtlasAsset.hpp"
 #include "debug/Icons.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
@@ -47,6 +50,77 @@ namespace
 AE_COMPONENT(SpriteRendererComponent, "Sprite Renderer", "Rendering", ICON_FA_IMAGE)
 AE_FIELD_N("texture", texturePath, String)
 AE_FIELD_N("atlas", atlasPath, String)
+// Agent-friendly atlas sprite selection by NAME or numeric index, resolved
+// against the component's atlas. Reads back as the sprite's name. Not
+// serialized: scenes persist the stable sprite_id through the bespoke sprite
+// TOML instead.
+b.CustomField(
+        "sprite", ::aether::reflect::FieldType::String,
+        [](const void* component) -> ::aether::reflect::FieldValue
+        {
+	        const auto* sprite = static_cast<const SpriteRendererComponent*>(component);
+	        std::string name;
+	        if (sprite->spriteId.IsValid() && !sprite->atlasPath.empty())
+	        {
+		        if (const auto atlas = SpriteAtlasAsset::Load(sprite->atlasPath); atlas.has_value())
+		        {
+			        if (const SpriteRegion* region = atlas->Find(sprite->spriteId))
+			        {
+				        name = region->name;
+			        }
+		        }
+	        }
+	        return ::aether::reflect::MakeValue(name);
+        },
+        [](void* component, const ::aether::reflect::FieldValue& value)
+        {
+	        auto* sprite = static_cast<SpriteRendererComponent*>(component);
+	        if (value.str.empty())
+	        {
+		        sprite->spriteId = {};
+		        return;
+	        }
+	        if (sprite->atlasPath.empty())
+	        {
+		        return; // nothing to resolve against; set 'atlas' first
+	        }
+	        const auto atlas = SpriteAtlasAsset::Load(sprite->atlasPath);
+	        if (!atlas.has_value())
+	        {
+		        return;
+	        }
+	        const SpriteRegion* region = nullptr;
+	        std::size_t index = 0;
+	        const auto [ptr, ec] = std::from_chars(value.str.data(), value.str.data() + value.str.size(), index);
+	        if (ec == std::errc{} && ptr == value.str.data() + value.str.size())
+	        {
+		        region = index < atlas->sprites.size() ? &atlas->sprites[index] : nullptr;
+	        }
+	        else
+	        {
+		        for (const SpriteRegion& candidate: atlas->sprites)
+		        {
+			        if (candidate.name == value.str)
+			        {
+				        region = &candidate;
+				        break;
+			        }
+		        }
+	        }
+	        if (region == nullptr)
+	        {
+		        return; // unknown sprite: leave the current selection untouched
+	        }
+	        sprite->spriteId = region->id;
+	        // Mirror the region's geometry so the component is coherent even
+	        // before the sprite system re-derives it during extraction.
+	        sprite->uvRect = region->uvRect;
+	        sprite->pixelSize = region->pixelSize;
+	        sprite->pivot = region->pivot;
+	        sprite->pixelsPerUnit = atlas->pixelsPerUnit;
+	        sprite->texturePath = atlas->texturePath;
+        },
+        ::aether::reflect::FieldMeta{.serialize = false, .tooltip = "Atlas sprite by name or index (requires 'atlas')"});
 AE_FIELD_N("uv_rect", uvRect, Vec4)
 AE_FIELD_N("tint", tint, Color4)
 AE_FIELD_N("pixel_size", pixelSize, Vec2)

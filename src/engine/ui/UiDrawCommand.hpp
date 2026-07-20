@@ -22,7 +22,7 @@ namespace aether::ui
 		std::uint32_t type = kShapeRect;
 		std::int32_t layer = 0;
 		std::uint32_t textureSlot = 0;
-		std::uint32_t pad1 = 0;
+		std::uint32_t flags = 0; // bit 0 = pixel-art (nearest) sampling
 	};
 
 	static_assert(sizeof(UiDrawCommand) == 64, "must match DrawCommandData std430 layout");
