@@ -24,6 +24,7 @@ namespace aether
 			const char* appName = "AetherCore";
 			bool enableVsync = true;
 			bool enableGpuDiagnostics = false;
+			bool enableValidation = true;
 		};
 
 		[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);

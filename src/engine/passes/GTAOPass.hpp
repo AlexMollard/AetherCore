@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
@@ -30,7 +31,10 @@ namespace aether
 		void Create(const Desc& desc);
 		void Destroy();
 
-		void RegisterPasses(RenderGraph& graph, RGImage depth);
+		// isActive is polled each frame; when it returns false (e.g. a 2D scene with no
+		// 3D geometry) both AO passes skip their compute so the full-screen AO work is
+		// not wasted. Null => always active.
+		void RegisterPasses(RenderGraph& graph, RGImage depth, std::function<bool()> isActive = {});
 
 		[[nodiscard]] std::uint32_t GetAoBindlessSlot() const
 		{

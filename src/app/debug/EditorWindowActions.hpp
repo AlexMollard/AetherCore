@@ -22,5 +22,9 @@ namespace aether::editor
 		// Opens the File > Open scene dialog (used by the menu and the control
 		// endpoint alike).
 		std::function<void()> openSceneDialog;
+		// Built-in workflow dock layouts: list their names, and apply one by name
+		// (case-insensitive). Used by Window > Layouts and the control endpoint.
+		std::function<std::vector<std::string>()> listLayouts;
+		std::function<bool(std::string_view name)> applyLayout;
 	};
 } // namespace aether::editor

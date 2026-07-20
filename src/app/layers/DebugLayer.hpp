@@ -49,6 +49,9 @@ namespace aether::editor
 		void ApplyLayoutPreset(const LayoutPreset& preset);
 		void CaptureCurrentLayout(std::string name);
 		void DeleteLayoutPreset(std::string_view name);
+		// Apply a built-in workflow layout (index into the workflow table): rebuilds the
+		// dockspace and shows the panels relevant to that workflow.
+		void ApplyWorkflowLayout(int index);
 		[[nodiscard]] DebugPanel* FindPanelByName(std::string_view name) const;
 		void LoadSettings(app::LayerContext& context);
 		void SaveSettings(app::LayerContext& context);
@@ -78,6 +81,9 @@ namespace aether::editor
 		TomlConfig m_debugConfig;
 		ScriptErrorOverlay m_scriptErrors;
 		bool m_dockspaceBuilt = false;
+		// Selected built-in workflow layout to apply on the next dock rebuild (-1 = the
+		// default layout). Consumed alongside m_resetLayout.
+		int m_pendingWorkflowLayout = -1;
 		// Set by the Window > Reset Layout menu item; forces the default dock layout
 		bool m_resetLayout = false;
 

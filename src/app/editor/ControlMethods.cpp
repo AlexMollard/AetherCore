@@ -1818,6 +1818,41 @@ namespace aether::editor
 			        return json{{"name", name}, {"visible", visible}};
 		        }});
 
+		methods.push_back({"editor.layouts_list",
+		        "list_layouts",
+		        "List the built-in workflow dock layouts (e.g. '2D / Sprites', 'Rendering / Look-dev'). Names feed apply_layout.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
+			        if (windows == nullptr || !windows->listLayouts)
+			        {
+				        return json{{"error", "no editor window actions (editor only)"}};
+			        }
+			        return json{{"layouts", windows->listLayouts()}};
+		        }});
+
+		methods.push_back({"editor.layout_apply",
+		        "apply_layout",
+		        "Apply a built-in workflow dock layout by name (from list_layouts; case-insensitive): rebuilds the dockspace and shows that workflow's panels.",
+		        true,
+		        Obj({{"name", StrProp()}}, {"name"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
+			        if (windows == nullptr || !windows->applyLayout)
+			        {
+				        return json{{"error", "no editor window actions (editor only)"}};
+			        }
+			        const std::string name = p.value("name", std::string{});
+			        if (!windows->applyLayout(name))
+			        {
+				        return json{{"error", "no layout named '" + name + "' (call list_layouts)"}};
+			        }
+			        return json{{"applied", name}};
+		        }});
+
 		methods.push_back({"editor.inspect_component",
 		        "inspect_component",
 		        "Open the Inspector and scroll a specific component's drawer into view (force-opening it), e.g. 'Rigid Body' or 'Material'. Select an entity first. Matches the section label case-insensitively - use it to frame a component for a "

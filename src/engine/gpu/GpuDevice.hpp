@@ -33,6 +33,7 @@ namespace aether
 			const char* appName = "AetherCore";
 			bool enableVsync = true;
 			bool enableGpuDiagnostics = false;
+			bool enableValidation = true;
 		};
 
 		GpuDevice();

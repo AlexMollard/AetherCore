@@ -127,7 +127,7 @@ namespace aether
 		m_passesRegistered = false;
 	}
 
-	void GTAOPass::RegisterPasses(RenderGraph& graph, RGImage depth)
+	void GTAOPass::RegisterPasses(RenderGraph& graph, RGImage depth, std::function<bool()> isActive)
 	{
 		AE_PROFILE_ZONE();
 		if (m_passesRegistered)
@@ -148,8 +148,12 @@ namespace aether
 		                        })
 		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 		        .Execute(
-		                [this](PassContext& ctx)
+		                [this, isActive](PassContext& ctx)
 		                {
+			                if (isActive && !isActive())
+			                {
+				                return; // 2D / no 3D geometry: skip the full-screen AO compute
+			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
 			                cmd.BindPipeline(m_mainPipeline.GetPipeline());
@@ -188,8 +192,12 @@ namespace aether
 		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 		        .ReadTexture(m_rawAoImage)
 		        .Execute(
-		                [this](PassContext& ctx)
+		                [this, isActive](PassContext& ctx)
 		                {
+			                if (isActive && !isActive())
+			                {
+				                return; // matches $GTAO_Main: no AO compute for 2D scenes
+			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
 			                cmd.BindPipeline(m_denoisePipeline.GetPipeline());

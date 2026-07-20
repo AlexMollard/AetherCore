@@ -999,7 +999,10 @@ namespace aether::editor
 		auto* state = context.TryGet<editor::TilePaintingState>();
 		auto* tiles = context.TryGet<TileAssetStore>();
 		auto* selection = context.TryGet<SceneSelection>();
-		if (state == nullptr || tiles == nullptr || selection == nullptr || state->tool == editor::TileTool::None)
+		// tool == None is still allowed through: right-click always erases so you can
+		// start deleting tiles without first picking a tile or a tool. Left-click only
+		// paints once a real tool is active (below), so entity selection still works.
+		if (state == nullptr || tiles == nullptr || selection == nullptr)
 		{
 			return;
 		}
@@ -1038,7 +1041,10 @@ namespace aether::editor
 		const glm::vec2 local = glm::vec2(inverseTransform * glm::vec4(mouseWorld, 0.0f, 1.0f));
 		const glm::ivec2 cell{static_cast<std::int32_t>(std::floor(local.x / cellSize)), static_cast<std::int32_t>(std::floor(local.y / cellSize))};
 		const bool mouseOverImage = io.MousePos.x >= imageMin.x && io.MousePos.x <= imageMin.x + imageSize.x && io.MousePos.y >= imageMin.y && io.MousePos.y <= imageMin.y + imageSize.y;
-		m_tilePaintCapture = mouseOverImage;
+		// With a tool active we own the mouse over the viewport (LMB paints). With no
+		// tool, only claim it while right-click-erasing, so LMB still selects entities.
+		const bool toolActive = state->tool != editor::TileTool::None;
+		m_tilePaintCapture = mouseOverImage && (toolActive || ImGui::IsMouseDown(ImGuiMouseButton_Right));
 
 		// Cursor cell + chunk boundary overlay.
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -1047,15 +1053,19 @@ namespace aether::editor
 			const glm::vec4 world4 = transform->localToWorld * glm::vec4(static_cast<float>(c.x) * cellSize, static_cast<float>(c.y) * cellSize, 0.0f, 1.0f);
 			return glm::vec2(world4);
 		};
+		// Show the cell/chunk overlays while actively editing (a tool is active, or the
+		// user is right-click-erasing) - not merely because a tilemap is selected.
+		const bool editingOverlay = toolActive || ImGui::IsMouseDown(ImGuiMouseButton_Right);
 		const ImU32 cursorColor = chrome::U32(chrome::WithAlpha(chrome::kAccentHi, 0.9f));
 		const ImU32 chunkColor = chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.35f));
-		if (mouseOverImage)
+		if (mouseOverImage && editingOverlay)
 		{
 			const ImVec2 a = toScreen(cellCornerWorld(cell));
 			const ImVec2 b = toScreen(cellCornerWorld({cell.x + 1, cell.y + 1}));
 			drawList->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), cursorColor, 0.0f, 0, 2.0f);
 		}
 		// Chunk lines across the view (entity-local axis aligned).
+		if (editingOverlay)
 		{
 			const float chunkSpan = static_cast<float>(kTileChunkSize) * cellSize;
 			const glm::vec2 viewMinLocal = glm::vec2(inverseTransform * glm::vec4(minX, cameraPos.y - viewHeight * 0.5f, 0.0f, 1.0f));
@@ -1126,17 +1136,20 @@ namespace aether::editor
 
 		switch (state->tool)
 		{
+			case editor::TileTool::None:
 			case editor::TileTool::Pencil:
 			case editor::TileTool::Erase:
 			{
-				const bool leftDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+				// With no active tool, left-click is a selection click (never paints);
+				// only right-click erases. With a tool, left-click acts per the tool.
+				const bool leftActs = ImGui::IsMouseDown(ImGuiMouseButton_Left) && state->tool != editor::TileTool::None;
 				const bool rightDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
-				if (leftDown || rightDown)
+				if (leftActs || rightDown)
 				{
 					if (!m_tileStrokeActive)
 					{
 						m_tileStrokeActive = true;
-						m_tileStrokeErasing = !leftDown; // RMB-started stroke erases
+						m_tileStrokeErasing = !leftActs; // RMB (or no tool) erases
 						m_tileStrokeCells.clear();
 						m_tileStrokeEdits.clear();
 					}
@@ -1274,8 +1287,6 @@ namespace aether::editor
 				}
 				break;
 			}
-			case editor::TileTool::None:
-				break;
 		}
 	}
 

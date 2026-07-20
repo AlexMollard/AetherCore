@@ -5,8 +5,12 @@ namespace aether::app::scene
 {
 	std::string NewScene(World& world, const ApplySceneDeps& deps, SceneKind kind)
 	{
-		const auto desc = ReadSceneFile(kind == SceneKind::Scene2D ? "default2d" : "default");
-		if (desc.has_value())
+		// Use the kind-specific template ("default"/"default2d") only if it actually
+		// matches the requested kind. A project can shadow those names with a scene of
+		// the OTHER kind (e.g. a 2D game whose own "default" scene is 2D), which would
+		// otherwise make "new 3D scene" produce a 2D world - and a 2D world keeps the
+		// editor camera orthographic, so the new 3D scene opened on the 2D view camera.
+		if (const auto desc = ReadSceneFile(kind == SceneKind::Scene2D ? "default2d" : "default"); desc.has_value() && desc->kind == kind)
 		{
 			ReplaceScene(*desc, world, deps);
 			return desc->name.empty() ? std::string{"Untitled"} : desc->name;

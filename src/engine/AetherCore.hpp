@@ -39,6 +39,9 @@ namespace aether
 			const char* settingsFile = "EngineSettings.toml";
 			// GameRuntime must leave this false: Aftermath is a dev tool (dumps
 			bool enableGpuDiagnostics = false;
+			// Enable the Vulkan validation layer (dev builds only; compiled out of
+			// release). Disable it (--no-validation) for a stable high frame rate.
+			bool enableValidation = true;
 
 			RuntimeProfile profile = RuntimeProfile::Full;
 		};

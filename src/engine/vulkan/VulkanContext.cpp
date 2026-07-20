@@ -238,7 +238,7 @@ namespace
 
 namespace aether
 {
-	VulkanContext::VulkanContext(const Window& window, const char* appName, [[maybe_unused]] bool enableGpuDiagnostics)
+	VulkanContext::VulkanContext(const Window& window, const char* appName, [[maybe_unused]] bool enableGpuDiagnostics, [[maybe_unused]] bool enableValidation)
 	{
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
@@ -252,33 +252,39 @@ namespace aether
 		instanceBuilder.set_app_name(appName);
 		instanceBuilder.require_api_version(1, 4, 0);
 #if VK_VALIDATION_CPU
-		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		const VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-		const VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
-		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-		instanceBuilder.request_validation_layers();
-		instanceBuilder.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		// The validation layer is compiled in for dev builds, but it accumulates state
+		// (~2-3 KB/frame) and progressively slows the render thread over long sessions,
+		// so allow disabling it at startup (--no-validation) for a stable high frame rate.
+		if (enableValidation)
+		{
+			VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			const VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+			debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+			instanceBuilder.request_validation_layers();
+			instanceBuilder.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-		instanceBuilder.set_debug_callback(LogValidationMessage);
-		instanceBuilder.set_debug_messenger_severity(debugSeverity);
-		instanceBuilder.set_debug_messenger_type(debugTypes);
+			instanceBuilder.set_debug_callback(LogValidationMessage);
+			instanceBuilder.set_debug_messenger_severity(debugSeverity);
+			instanceBuilder.set_debug_messenger_type(debugTypes);
 
 #	if defined(VULKAN_BEST_PRACTICES)
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
+			instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
 #	endif
 #	if VK_VALIDATION_GPU
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
-		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (GPU-AV, debug printf + best practices).");
+			instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
+			instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
+			instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT);
+			instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
+			AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (GPU-AV, debug printf + best practices; render-pass injection, TDR risk on AMD/Intel).");
 #	else
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
-		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + best practices).");
+			instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
+			AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + best practices).");
 #	endif
-#endif
-#if VK_VALIDATION_GPU
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT);
-		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
-		AE_INFO(LogCategory::Vulkan, "GPU-AV enabled (render-pass injection; TDR risk on AMD/Intel).");
+		}
+		else
+		{
+			AE_INFO(LogCategory::Vulkan, "Vulkan validation layer disabled at startup (--no-validation) - stable frame rate, no validation diagnostics.");
+		}
 #endif
 
 		auto instanceResult = instanceBuilder.build();
@@ -539,7 +545,6 @@ namespace aether
 		}
 
 #if VK_VALIDATION_CPU
-		(void) debugTypesWithAddressBinding;
 		m_debugMessenger = VK_NULL_HANDLE;
 #endif
 
@@ -805,11 +810,11 @@ namespace aether
 		}
 	}
 
-	Expected<std::unique_ptr<VulkanContext>> VulkanContext::Create(const Window& window, const char* appName, bool enableGpuDiagnostics)
+	Expected<std::unique_ptr<VulkanContext>> VulkanContext::Create(const Window& window, const char* appName, bool enableGpuDiagnostics, bool enableValidation)
 	{
 		try
 		{
-			return std::unique_ptr<VulkanContext>(new VulkanContext(window, appName, enableGpuDiagnostics));
+			return std::unique_ptr<VulkanContext>(new VulkanContext(window, appName, enableGpuDiagnostics, enableValidation));
 		}
 		catch (const VulkanError& e)
 		{

@@ -2043,6 +2043,33 @@
         "type": "object"
       },
       "tool": "revert_prefab_instance"
+    },
+    {
+      "description": "List the built-in workflow dock layouts (e.g. '2D / Sprites', 'Rendering / Look-dev'). Names feed apply_layout.",
+      "mutates": false,
+      "name": "editor.layouts_list",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_layouts"
+    },
+    {
+      "description": "Apply a built-in workflow dock layout by name (from list_layouts; case-insensitive): rebuilds the dockspace and shows that workflow's panels.",
+      "mutates": true,
+      "name": "editor.layout_apply",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "apply_layout"
     }
   ]
 }

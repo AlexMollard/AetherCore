@@ -80,6 +80,189 @@ namespace aether::editor
 {
 	namespace
 	{
+		// Built-in dock layouts for common workflows. Each one rebuilds the dockspace
+		// via DockBuilder (like Reset Layout) and drives which panels are shown, so a
+		// user can jump between "2D authoring", "look-dev", "scripting", etc. in a click.
+		enum class WorkflowLayout
+		{
+			Default = 0,
+			TwoD,
+			ThreeD,
+			Rendering,
+			Scripting,
+			Minimal,
+			Count,
+		};
+
+		struct WorkflowLayoutDef
+		{
+			WorkflowLayout id;
+			const char* name;
+			const char* tooltip;
+		};
+
+		constexpr WorkflowLayoutDef kWorkflowLayouts[] = {
+		        {WorkflowLayout::Default, "Default", "General editing: hierarchy, viewport, inspector and all tool panels."},
+		        {WorkflowLayout::TwoD, "2D / Sprites", "Tilemaps, sprite slicing, animation and pixel art around the viewport."},
+		        {WorkflowLayout::ThreeD, "3D / Scene", "Scene building with lighting; 2D tool panels hidden."},
+		        {WorkflowLayout::Rendering, "Rendering / Look-dev", "Render graph, tonemap, post-processing, lighting and textures."},
+		        {WorkflowLayout::Scripting, "Scripting / Debug", "Console, control server, performance and debug tools along the bottom."},
+		        {WorkflowLayout::Minimal, "Minimal", "Just hierarchy, viewport and inspector."},
+		};
+
+		// Panels shown for a workflow (others are hidden), keyed by panel GetName()
+		// (which differs from the dock window title for a few: "Scene Outliner" vs the
+		// "Scene" window, "DevTools" vs "Debug", "TextureInspector" vs "Textures").
+		// Empty => show everything.
+		std::vector<std::string> WorkflowVisiblePanels(WorkflowLayout kind)
+		{
+			switch (kind)
+			{
+				case WorkflowLayout::TwoD:
+					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Tile Palette", "Sprite Slicer", "Sprite Animation", "Pixel Art", "UI Canvas", "Console"};
+				case WorkflowLayout::ThreeD:
+					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Lighting", "Console", "Performance"};
+				case WorkflowLayout::Rendering:
+					return {"Scene Outliner", "Viewport", "Inspector", "Render Graph", "Tonemap", "Post Processing", "Lighting", "TextureInspector", "Performance", "Console"};
+				case WorkflowLayout::Scripting:
+					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Console", "Control Server", "Performance", "DevTools"};
+				case WorkflowLayout::Minimal:
+					return {"Scene Outliner", "Viewport", "Inspector"};
+				case WorkflowLayout::Default:
+				case WorkflowLayout::Count:
+					break;
+			}
+			return {}; // Default: leave everything visible
+		}
+
+		// Reset the dockspace and arrange panels for the given workflow.
+		void BuildWorkflowLayout(WorkflowLayout kind, ImGuiID id, ImVec2 size)
+		{
+			ImGui::DockBuilderRemoveNode(id);
+			ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
+			ImGui::DockBuilderSetNodeSize(id, size);
+			ImGuiID root = id;
+
+			switch (kind)
+			{
+				case WorkflowLayout::Minimal:
+				{
+					const ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.20f, nullptr, &root);
+					const ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.25f, nullptr, &root);
+					ImGui::DockBuilderDockWindow("Scene", left);
+					ImGui::DockBuilderDockWindow("Inspector", right);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					break;
+				}
+				case WorkflowLayout::TwoD:
+				{
+					ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.18f, nullptr, &root);
+					const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.45f, nullptr, &left);
+					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.24f, nullptr, &root);
+					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.50f, nullptr, &right);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.30f, nullptr, &root);
+					ImGui::DockBuilderDockWindow("Scene", left);
+					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
+					ImGui::DockBuilderDockWindow("Inspector", right);
+					ImGui::DockBuilderDockWindow("Tile Palette", rightBottom);
+					ImGui::DockBuilderDockWindow("Sprite Slicer", bottom);
+					ImGui::DockBuilderDockWindow("Sprite Animation", bottom);
+					ImGui::DockBuilderDockWindow("Pixel Art", bottom);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					ImGui::DockBuilderDockWindow("UI Canvas", root);
+					break;
+				}
+				case WorkflowLayout::ThreeD:
+				{
+					ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.20f, nullptr, &root);
+					const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
+					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.24f, nullptr, &root);
+					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.45f, nullptr, &right);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.26f, nullptr, &root);
+					ImGui::DockBuilderDockWindow("Scene", left);
+					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
+					ImGui::DockBuilderDockWindow("Inspector", right);
+					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
+					ImGui::DockBuilderDockWindow("Performance", bottom);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					break;
+				}
+				case WorkflowLayout::Rendering:
+				{
+					const ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.18f, nullptr, &root);
+					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.28f, nullptr, &root);
+					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.45f, nullptr, &right);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.26f, nullptr, &root);
+					ImGui::DockBuilderDockWindow("Scene", left);
+					ImGui::DockBuilderDockWindow("Render Graph", right);
+					ImGui::DockBuilderDockWindow("Tonemap", right);
+					ImGui::DockBuilderDockWindow("Post Processing", right);
+					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
+					ImGui::DockBuilderDockWindow("Inspector", rightBottom);
+					ImGui::DockBuilderDockWindow("Performance", bottom);
+					ImGui::DockBuilderDockWindow("Textures", bottom);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					break;
+				}
+				case WorkflowLayout::Scripting:
+				{
+					ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.18f, nullptr, &root);
+					const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
+					const ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.22f, nullptr, &root);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.34f, nullptr, &root);
+					ImGui::DockBuilderDockWindow("Scene", left);
+					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
+					ImGui::DockBuilderDockWindow("Inspector", right);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Control Server", bottom);
+					ImGui::DockBuilderDockWindow("Performance", bottom);
+					ImGui::DockBuilderDockWindow("Debug", bottom);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					break;
+				}
+				case WorkflowLayout::Default:
+				case WorkflowLayout::Count:
+				{
+					ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.20f, nullptr, &root);
+					const ImGuiID leftFiles = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
+					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.27f, nullptr, &root);
+					const ImGuiID rightTools = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.38f, nullptr, &right);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.28f, nullptr, &root);
+					ImGui::DockBuilderDockWindow("Scene", left);
+					ImGui::DockBuilderDockWindow("Project", leftFiles);
+					ImGui::DockBuilderDockWindow("File Explorer", leftFiles);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					ImGui::DockBuilderDockWindow("UI Canvas", root);
+					ImGui::DockBuilderDockWindow("Sprite Slicer", root);
+					ImGui::DockBuilderDockWindow("Tile Palette", root);
+					ImGui::DockBuilderDockWindow("Sprite Animation", root);
+					ImGui::DockBuilderDockWindow("Pixel Art", root);
+					ImGui::DockBuilderDockWindow("Particles", root);
+					ImGui::DockBuilderDockWindow("Inspector", right);
+					ImGui::DockBuilderDockWindow("Render Graph", rightTools);
+					ImGui::DockBuilderDockWindow("Debug", rightTools);
+					ImGui::DockBuilderDockWindow("Tonemap", rightTools);
+					ImGui::DockBuilderDockWindow("Post Processing", rightTools);
+					ImGui::DockBuilderDockWindow("Settings", rightTools);
+					ImGui::DockBuilderDockWindow("Theme", rightTools);
+					ImGui::DockBuilderDockWindow("Control Server", rightTools);
+					ImGui::DockBuilderDockWindow("Performance", bottom);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Lighting", bottom);
+					ImGui::DockBuilderDockWindow("Textures", bottom);
+					break;
+				}
+			}
+
+			ImGui::DockBuilderFinish(id);
+		}
+
 #ifndef AETHER_LAUNCHER_EXE_NAME
 #	define AETHER_LAUNCHER_EXE_NAME "Launcher.exe"
 #endif
@@ -377,6 +560,31 @@ namespace aether::editor
 				m_hierarchyPanel->RequestOpenPopup();
 			}
 		};
+		windowActions.listLayouts = []()
+		{
+			std::vector<std::string> names;
+			for (const WorkflowLayoutDef& wf: kWorkflowLayouts)
+			{
+				names.emplace_back(wf.name);
+			}
+			return names;
+		};
+		windowActions.applyLayout = [this](std::string_view name) -> bool
+		{
+			const auto equalsInsensitive = [](std::string_view a, std::string_view b)
+			{
+				return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) { return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y)); });
+			};
+			for (const WorkflowLayoutDef& wf: kWorkflowLayouts)
+			{
+				if (equalsInsensitive(name, wf.name))
+				{
+					ApplyWorkflowLayout(static_cast<int>(wf.id));
+					return true;
+				}
+			}
+			return false;
+		};
 		context.services.Register<EditorWindowActions>(m_windowActions = std::move(windowActions));
 	}
 
@@ -652,6 +860,11 @@ namespace aether::editor
 			actions.push_back({"Play: Speed 2x (fast-forward)", [playState]() { playState->SetTimeScale(2.0f); }});
 		}
 		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
+		for (const WorkflowLayoutDef& wf: kWorkflowLayouts)
+		{
+			const int id = static_cast<int>(wf.id);
+			actions.push_back({std::string("Layout: ") + wf.name, [this, id]() { ApplyWorkflowLayout(id); }});
+		}
 		for (const auto& preset: m_layoutPresets)
 		{
 			actions.push_back({std::string("Layout: ") + preset.name, [this, preset]() { ApplyLayoutPreset(preset); }});
@@ -738,6 +951,34 @@ namespace aether::editor
 		m_pendingLayoutIni = preset.imguiIni;
 		m_pendingLayoutVisibility = preset.visibility;
 		m_pendingLayoutApply = true;
+	}
+
+	void DebugLayer::ApplyWorkflowLayout(int index)
+	{
+		if (index < 0 || index >= static_cast<int>(WorkflowLayout::Count))
+		{
+			return;
+		}
+		// Rebuild the dockspace for this workflow next frame...
+		m_pendingWorkflowLayout = index;
+		m_resetLayout = true;
+		// ...and show only the panels that workflow uses (empty set => leave all shown).
+		const std::vector<std::string> visible = WorkflowVisiblePanels(static_cast<WorkflowLayout>(index));
+		if (!visible.empty())
+		{
+			for (auto& panel: m_panels)
+			{
+				const std::string name(panel->GetName());
+				panel->SetVisible(std::find(visible.begin(), visible.end(), name) != visible.end());
+			}
+		}
+		else
+		{
+			for (auto& panel: m_panels)
+			{
+				panel->SetVisible(true);
+			}
+		}
 	}
 
 	void DebugLayer::CaptureCurrentLayout(std::string name)
@@ -1203,11 +1444,25 @@ namespace aether::editor
 				ImGui::Separator();
 				if (ImGui::BeginMenu("Layouts"))
 				{
+					ImGui::TextDisabled("Workflows");
+					for (const WorkflowLayoutDef& wf: kWorkflowLayouts)
+					{
+						if (ImGui::MenuItem(wf.name))
+						{
+							ApplyWorkflowLayout(static_cast<int>(wf.id));
+						}
+						if (ImGui::IsItemHovered() && (wf.tooltip != nullptr))
+						{
+							ImGui::SetTooltip("%s", wf.tooltip);
+						}
+					}
+					ImGui::Separator();
 					if (ImGui::MenuItem("Save Current As..."))
 					{
 						m_openSavePresetPopup = true;
 					}
 					ImGui::Separator();
+					ImGui::TextDisabled("Saved");
 					if (m_layoutPresets.empty())
 					{
 						ImGui::TextDisabled("(no saved layouts)");
@@ -1311,41 +1566,14 @@ namespace aether::editor
 
 		if (m_resetLayout || (!m_dockspaceBuilt && !hasSavedDockspace))
 		{
-			ImGui::DockBuilderRemoveNode(dockspace_id);
-			ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-			ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
-
-			ImGuiID remaining = dockspace_id;
-			ImGuiID dock_left = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Left, 0.20f, nullptr, &remaining);
-			const ImGuiID dock_left_files = ImGui::DockBuilderSplitNode(dock_left, ImGuiDir_Down, 0.42f, nullptr, &dock_left);
-			ImGuiID dock_right = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.27f, nullptr, &remaining);
-			const ImGuiID dock_right_tools = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.38f, nullptr, &dock_right);
-			const ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.28f, nullptr, &remaining);
-
-			ImGui::DockBuilderDockWindow("Scene", dock_left);
-			ImGui::DockBuilderDockWindow("Project", dock_left_files);
-			ImGui::DockBuilderDockWindow("File Explorer", dock_left_files);
-			ImGui::DockBuilderDockWindow("Viewport", remaining);
-			ImGui::DockBuilderDockWindow("UI Canvas", remaining);
-			ImGui::DockBuilderDockWindow("Sprite Slicer", remaining);
-			ImGui::DockBuilderDockWindow("Tile Palette", remaining);
-			ImGui::DockBuilderDockWindow("Sprite Animation", remaining);
-			ImGui::DockBuilderDockWindow("Inspector", dock_right);
-			ImGui::DockBuilderDockWindow("Render Graph", dock_right_tools);
-			ImGui::DockBuilderDockWindow("Debug", dock_right_tools);
-			ImGui::DockBuilderDockWindow("Tonemap", dock_right_tools);
-			ImGui::DockBuilderDockWindow("Post Processing", dock_right_tools);
-			ImGui::DockBuilderDockWindow("Settings", dock_right_tools);
-			ImGui::DockBuilderDockWindow("Theme", dock_right_tools);
-			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
-			ImGui::DockBuilderDockWindow("Console", dock_bottom);
-			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);
-			ImGui::DockBuilderDockWindow("Textures", dock_bottom);
-
-			ImGui::DockBuilderFinish(dockspace_id);
+			const WorkflowLayout layout = (m_pendingWorkflowLayout >= 0 && m_pendingWorkflowLayout < static_cast<int>(WorkflowLayout::Count))
+			                                      ? static_cast<WorkflowLayout>(m_pendingWorkflowLayout)
+			                                      : WorkflowLayout::Default;
+			BuildWorkflowLayout(layout, dockspace_id, viewport->WorkSize);
 		}
 		m_dockspaceBuilt = true;
 		m_resetLayout = false;
+		m_pendingWorkflowLayout = -1;
 
 		if (showStatusBar)
 		{

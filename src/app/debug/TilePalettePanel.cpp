@@ -355,7 +355,7 @@ namespace aether::editor
 		ImGui::SameLine();
 		ImGui::Checkbox("Flip Y", &state->flipY);
 		ImGui::SetItemTooltip("Mirror the brush vertically (Shift+Y)");
-		ImGui::TextColored(chrome::kMuted, ICON_FA_CIRCLE_INFO "  Right-click erases with any paint tool.");
+		ImGui::TextColored(chrome::kMuted, ICON_FA_CIRCLE_INFO "  Right-click erases - even with no tool or tile selected.");
 		DrawBrushPreview(context, tileSet, *state);
 
 		// ── Layers ────────────────────────────────────────────────────────────
@@ -425,7 +425,12 @@ namespace aether::editor
 		auto* sprites = context.TryGet<SpriteAssetStore>();
 		constexpr float kTileButton = 40.0f;
 		const float panelWidth = ImGui::GetContentRegionAvail().x;
-		const int columns = std::max(1, static_cast<int>(panelWidth / (kTileButton + 8.0f)));
+		// A tile button's real footprint is the image + its frame padding on both sides,
+		// plus the inter-item spacing. Using just kTileButton over-counts columns, so the
+		// rightmost tiles overflow the panel and get clipped at some widths.
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const float cellStride = kTileButton + style.FramePadding.x * 2.0f + style.ItemSpacing.x;
+		const int columns = std::max(1, static_cast<int>((panelWidth + style.ItemSpacing.x) / cellStride));
 		int column = 0;
 		for (const TileDefinition& tile: tileSet.tiles)
 		{

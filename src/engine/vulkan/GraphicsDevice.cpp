@@ -27,7 +27,7 @@ namespace aether
 		AE_PROFILE_ZONE();
 		auto& window = services.Get<Window>();
 
-		AE_TRY(ctxResult, VulkanContext::Create(window, config.appName, config.enableGpuDiagnostics));
+		AE_TRY(ctxResult, VulkanContext::Create(window, config.appName, config.enableGpuDiagnostics, config.enableValidation));
 		m_vulkanContext = std::move(*ctxResult);
 		m_resourceRegistry.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetAllocator());
 		m_diagnosticEngine.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetPhysicalDevice(), m_vulkanContext->GetGraphicsQueue());

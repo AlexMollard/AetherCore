@@ -642,7 +642,10 @@ namespace aether
 		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
 		if constexpr (kEnableForwardGtao)
 		{
-			m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth);
+			// AO is a 3D-lighting effect; the pass is registered statically but skips its
+			// full-screen compute per-frame for 2D scenes (no Meshes3D) - the forward pass
+			// that samples AO already no-ops there, so the stale product is never read.
+			m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, [this] { return IsSceneFeatureEnabled(SceneFeatureFlags::Meshes3D); });
 		}
 
 		{

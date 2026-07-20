@@ -21,4 +21,17 @@ namespace aether::app
 	{
 		return ParseOptionArg(argc, argv, "--project");
 	}
+
+	// A valueless boolean flag, e.g. --no-validation.
+	[[nodiscard]] inline bool HasFlagArg(int argc, char** argv, std::string_view flag)
+	{
+		for (int i = 1; i < argc; ++i)
+		{
+			if (std::string_view(argv[i]) == flag)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 } // namespace aether::app

@@ -329,7 +329,10 @@ namespace aether::app::scene
 	// this one list, so adding such a component is a single entry here.
 	const std::vector<std::string>& GenericComponentTypeNames();
 
-	std::string WriteToml(const SceneDescription& scene);
+	// includeSceneHeader=false omits the [scene] block (kind/features/version) - used
+	// for prefab fragments, which are header-less by convention. Writing a header onto
+	// a header-less prefab would wrongly stamp it kind='3d' with 3D features.
+	std::string WriteToml(const SceneDescription& scene, bool includeSceneHeader = true);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
 
 	// True when a scene's top-level text declares no main-camera entity AND no prefab
@@ -348,13 +351,13 @@ namespace aether::app::scene
 
 	// Serialize once into BOTH the text and cooked-binary forms, sharing a single
 	// document-tree build (cheaper than calling WriteToml + WriteSceneBinary).
-	void SerializeScene(const SceneDescription& scene, std::string& outToml, std::vector<std::byte>& outBinary);
+	void SerializeScene(const SceneDescription& scene, std::string& outToml, std::vector<std::byte>& outBinary, bool includeSceneHeader = true);
 
 	// Binary scene/prefab format: the TOML document tree encoded as compact bytes
 	// (magic + version header). Same content as WriteToml/ParseToml, but tokenizer-
 	// free to load - the cooked runtime form. ReadSceneBinary fails closed
 	// (std::nullopt) on a bad magic/version so callers can fall back to TOML.
-	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene);
+	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene, bool includeSceneHeader = true);
 	std::optional<SceneDescription> ReadSceneBinary(const std::byte* data, std::size_t size);
 	std::optional<SceneDescription> ReadSceneBinary(const std::vector<std::byte>& bytes);
 

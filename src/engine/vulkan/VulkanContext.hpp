@@ -34,7 +34,7 @@ namespace aether
 		~VulkanContext();
 
 		// device selection so a non-NVIDIA device never has its NVIDIA-only
-		[[nodiscard]] static Expected<std::unique_ptr<VulkanContext>> Create(const Window& window, const char* appName, bool enableGpuDiagnostics = false);
+		[[nodiscard]] static Expected<std::unique_ptr<VulkanContext>> Create(const Window& window, const char* appName, bool enableGpuDiagnostics = false, bool enableValidation = true);
 
 		VulkanContext(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
 		VulkanContext& operator=(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
@@ -82,7 +82,7 @@ namespace aether
 #endif
 
 	private:
-		VulkanContext(const Window& window, const char* appName, bool enableGpuDiagnostics);
+		VulkanContext(const Window& window, const char* appName, bool enableGpuDiagnostics, bool enableValidation);
 
 		std::optional<vkb::Instance> m_instance;
 		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;

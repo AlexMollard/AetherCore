@@ -739,15 +739,21 @@ namespace aether::app::scene
 
 	} // namespace
 
-	toml::table BuildSceneToml(const SceneDescription& scene)
+	toml::table BuildSceneToml(const SceneDescription& scene, bool includeSceneHeader = true)
 	{
 		toml::table root;
-		toml::table header;
-		header.insert("version", kSceneFormatVersion);
-		header.insert("name", scene.name);
-		header.insert("kind", SceneKindName(scene.kind));
-		header.insert("features", SceneFeaturesToToml(scene.features));
-		root.insert("scene", std::move(header));
+		// Prefabs are fragments, not scenes: they carry no [scene] header (kind /
+		// features / version), matching the hand-authored convention. Writing one would
+		// stamp a header-less prefab as kind='3d' with 3D features on any re-serialize.
+		if (includeSceneHeader)
+		{
+			toml::table header;
+			header.insert("version", kSceneFormatVersion);
+			header.insert("name", scene.name);
+			header.insert("kind", SceneKindName(scene.kind));
+			header.insert("features", SceneFeaturesToToml(scene.features));
+			root.insert("scene", std::move(header));
+		}
 
 		if (scene.environment)
 		{
@@ -1184,9 +1190,9 @@ namespace aether::app::scene
 		}
 	} // namespace
 
-	std::string WriteToml(const SceneDescription& scene)
+	std::string WriteToml(const SceneDescription& scene, bool includeSceneHeader)
 	{
-		return StringifyTree(BuildSceneToml(scene));
+		return StringifyTree(BuildSceneToml(scene, includeSceneHeader));
 	}
 
 	// Build a SceneDescription from an already-parsed TOML document (shared by the
@@ -1988,17 +1994,17 @@ namespace aether::app::scene
 		}
 	} // namespace
 
-	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene)
+	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene, bool includeSceneHeader)
 	{
-		return EncodeTreeBinary(BuildSceneToml(scene));
+		return EncodeTreeBinary(BuildSceneToml(scene, includeSceneHeader));
 	}
 
-	void SerializeScene(const SceneDescription& scene, std::string& outToml, std::vector<std::byte>& outBinary)
+	void SerializeScene(const SceneDescription& scene, std::string& outToml, std::vector<std::byte>& outBinary, bool includeSceneHeader)
 	{
 		// Build the document tree ONCE and drive both encoders from it. Previously
 		// SaveSceneFile called WriteToml and WriteSceneBinary separately, each of
 		// which ran BuildSceneToml - doubling the serialization cost per save.
-		const toml::table tree = BuildSceneToml(scene);
+		const toml::table tree = BuildSceneToml(scene, includeSceneHeader);
 		outToml = StringifyTree(tree);
 		outBinary = EncodeTreeBinary(tree);
 	}

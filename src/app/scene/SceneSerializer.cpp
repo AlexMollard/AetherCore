@@ -122,6 +122,32 @@ namespace aether::app::scene
 			return std::nullopt;
 		}
 
+		// The cooked .bin is a derived cache of the .toml source. When the source is
+		// edited WITHOUT going through SaveSceneFile - a git checkout / merge / pull
+		// (the .bin is gitignored, so it lags the pulled .toml), a hand-edit, or any
+		// tool that rewrites only the .toml - the stale .bin silently wins at load and
+		// the edits vanish at runtime (e.g. a GoalFlag.NextScene that still points at
+		// the old value). Returns true when a loose .toml source exists on disk and is
+		// newer than its cooked .bin sibling, so the caller reads from source instead.
+		// A pak-only project has no loose .toml sibling (cooked atomically at publish),
+		// so both stat calls fail and this returns false - the cooked binary is trusted.
+		bool CookedBinaryIsStale(const std::filesystem::path& diskDir, const std::string& name,
+		        std::string_view binSuffix, std::string_view tomlSuffix)
+		{
+			std::error_code ec;
+			const auto binTime = std::filesystem::last_write_time(diskDir / (name + std::string(binSuffix)), ec);
+			if (ec)
+			{
+				return false; // no loose cooked bin to compare (VFS/pak path) - trust whatever TryReadBinary finds
+			}
+			const auto tomlTime = std::filesystem::last_write_time(diskDir / (name + std::string(tomlSuffix)), ec);
+			if (ec)
+			{
+				return false; // no loose source sibling - nothing newer to prefer
+			}
+			return tomlTime > binTime;
+		}
+
 		std::vector<std::string> ListProjectFiles(std::string_view directory, std::string_view suffix)
 		{
 			std::vector<std::string> names;
@@ -246,7 +272,9 @@ namespace aether::app::scene
 
 		std::string tomlText;
 		std::vector<std::byte> binary;
-		SerializeScene(prefab, tomlText, binary);
+		// Prefabs are header-less fragments (no [scene] block); a header would stamp
+		// them kind='3d' with 3D features.
+		SerializeScene(prefab, tomlText, binary, /*includeSceneHeader=*/false);
 
 		{
 			const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
@@ -280,7 +308,14 @@ namespace aether::app::scene
 			}
 		}
 
-		std::optional<SceneDescription> parsed = TryReadBinary(kProjectPrefabsVfsDir, prefabName, kPrefabBinSuffix, std::filesystem::path{PrefabsDirectory()});
+		const std::filesystem::path prefabsDir{PrefabsDirectory()};
+		// Same freshness rule as scenes: a stale cooked .bin (e.g. after a git pull of
+		// an edited .prefab.toml) must not shadow the newer source.
+		std::optional<SceneDescription> parsed;
+		if (!CookedBinaryIsStale(prefabsDir, prefabName, kPrefabBinSuffix, kPrefabSuffix))
+		{
+			parsed = TryReadBinary(kProjectPrefabsVfsDir, prefabName, kPrefabBinSuffix, prefabsDir);
+		}
 		if (parsed)
 		{
 			// cooked binary hit
@@ -291,7 +326,7 @@ namespace aether::app::scene
 		}
 		else
 		{
-			const std::filesystem::path path = std::filesystem::path{PrefabsDirectory()} / (prefabName + ".prefab.toml");
+			const std::filesystem::path path = prefabsDir / (prefabName + ".prefab.toml");
 			auto diskText = io::file_util::ReadText(path);
 			if (!diskText)
 			{
@@ -403,10 +438,21 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName)
 	{
-		// Prefer the cooked binary; fall back to the TOML source.
-		if (auto binary = TryReadBinary(kProjectScenesVfsDir, sceneName, kSceneBinSuffix, std::filesystem::path{ScenesDirectory()}))
+		const std::filesystem::path scenesDir{ScenesDirectory()};
+		// Prefer the cooked binary, but never a stale one (see CookedBinaryIsStale):
+		// a stale .bin drops post-cook edits at runtime.
+		if (!CookedBinaryIsStale(scenesDir, sceneName, kSceneBinSuffix, kSceneSuffix))
 		{
-			return binary;
+			if (auto binary = TryReadBinary(kProjectScenesVfsDir, sceneName, kSceneBinSuffix, scenesDir))
+			{
+				return binary;
+			}
+		}
+		else
+		{
+			AE_INFO(LogCategory::App,
+			        "ReadSceneFile: cooked '{}{}' is older than its '{}' source; loading source and skipping the stale cook (re-save to refresh it)",
+			        sceneName, kSceneBinSuffix, kSceneSuffix);
 		}
 
 		if (auto text = ReadProjectText(kProjectScenesVfsDir, sceneName, kSceneSuffix))

@@ -25,7 +25,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_gfx = std::make_unique<GraphicsDevice>();
-		AE_TRY_VOID(m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics}));
+		AE_TRY_VOID(m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation}));
 
 		gpu::ResourceRegistryInitDesc regInit{};
 		regInit.vulkanDevice = static_cast<void*>(m_gfx->GetVulkanContext().GetDevice().device);

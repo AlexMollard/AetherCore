@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <filesystem>
 
 #include <glm/glm.hpp>
@@ -1086,6 +1087,116 @@ TEST_CASE("Scene and prefab file helpers read and list through mounted project V
 
     io::FileSystem::Shutdown();
     fs::remove_all(root, ec);
+}
+
+TEST_CASE("A cooked .bin older than its .toml source is skipped (stale-cook guard)") {
+    // Regression: ReadSceneFile preferred the cooked .bin unconditionally. When the
+    // .toml source changed WITHOUT a re-cook (git pull of the tracked .toml while the
+    // gitignored .bin lags, a hand-edit, or a tool that rewrites only the .toml), the
+    // stale .bin silently won and the edits vanished at runtime - e.g. a level's
+    // GoalFlag.NextScene still pointing at the old level, so progression broke.
+    namespace fs = std::filesystem;
+
+    if (io::FileSystem::IsInitialized())
+    {
+        io::FileSystem::Shutdown();
+    }
+    ClearProjectSceneDirectories();
+
+    const fs::path root = fs::temp_directory_path() / "aethercore_stale_bin_test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+
+    io::FileSystem::Initialize();
+    io::FileSystem::Mount("project", root);
+    // Point the on-disk scene dir at the temp root so the freshness mtime check
+    // (which stats ScenesDirectory()) targets these files.
+    SetProjectSceneDirectories(root / "scenes", root / "assets" / "prefabs");
+
+    // SaveSceneFile writes a matched .toml + cooked .bin pair, both "Cooked Entity".
+    SceneDescription cooked;
+    cooked.name = "StaleScene";
+    {
+        EntityRecord e;
+        e.name = "Cooked Entity";
+        cooked.entities.push_back(e);
+    }
+    REQUIRE(SaveSceneFile("StaleScene", cooked));
+
+    const fs::path tomlPath = root / "scenes" / "StaleScene.scene.toml";
+    const fs::path binPath = root / "scenes" / "StaleScene.scene.bin";
+    REQUIRE(fs::exists(binPath));
+
+    // Matched pair: the cooked binary is trusted.
+    {
+        const auto fresh = ReadSceneFile("StaleScene");
+        REQUIRE(fresh.has_value());
+        REQUIRE(fresh->entities.size() == 1);
+        CHECK(fresh->entities[0].name == "Cooked Entity");
+    }
+
+    // The source is edited AFTER the cook: rewrite the .toml with "Edited Entity" and
+    // stamp its mtime newer than the (now stale) .bin.
+    SceneDescription edited;
+    edited.name = "StaleScene";
+    {
+        EntityRecord e;
+        e.name = "Edited Entity";
+        edited.entities.push_back(e);
+    }
+    REQUIRE(io::file_util::WriteText(tomlPath, WriteToml(edited)).has_value());
+    fs::last_write_time(tomlPath, fs::last_write_time(binPath) + std::chrono::seconds(5));
+
+    // The stale .bin (still "Cooked Entity") must NOT win - the newer source does.
+    {
+        const auto loaded = ReadSceneFile("StaleScene");
+        REQUIRE(loaded.has_value());
+        REQUIRE(loaded->entities.size() == 1);
+        CHECK(loaded->entities[0].name == "Edited Entity");
+    }
+
+    // Refreshing the cook (bin newer than source again) restores the fast cooked path.
+    fs::last_write_time(binPath, fs::last_write_time(tomlPath) + std::chrono::seconds(5));
+    {
+        const auto reloaded = ReadSceneFile("StaleScene");
+        REQUIRE(reloaded.has_value());
+        REQUIRE(reloaded->entities.size() == 1);
+        CHECK(reloaded->entities[0].name == "Cooked Entity");
+    }
+
+    io::FileSystem::Shutdown();
+    ClearProjectSceneDirectories();
+    fs::remove_all(root, ec);
+}
+
+TEST_CASE("Prefab serialization omits the [scene] header and round-trips header-less") {
+    // A prefab is a fragment: writing it with includeSceneHeader=false must not emit a
+    // [scene] block, even though the description carries a (2D) kind.
+    SceneDescription prefab;
+    prefab.kind = SceneKind::Scene2D;
+    prefab.name = "Frag";
+    EntityRecord e;
+    e.name = "Root";
+    e.hasTransform = true;
+    e.scale = {1, 1, 1};
+    prefab.entities.push_back(e);
+
+    const std::string bare = WriteToml(prefab, /*includeSceneHeader=*/false);
+    CHECK(bare.find("[scene]") == std::string::npos);
+    CHECK(bare.find("kind =") == std::string::npos);
+    CHECK(bare.find("features") == std::string::npos);
+
+    // A real scene still gets its header by default.
+    CHECK(WriteToml(prefab).find("[scene]") != std::string::npos);
+
+    // Round-trip: parse the bare prefab and re-write it header-less -> stays bare. The
+    // old bug re-stamped a header-less prefab as kind='3d' with 3D features.
+    const auto parsed = ParseToml(bare);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    const std::string again = WriteToml(*parsed, false);
+    CHECK(again.find("[scene]") == std::string::npos);
+    CHECK(again.find("meshes_3d") == std::string::npos);
 }
 
 TEST_CASE("Capturing an unedited prefab instance reports no removed entities") {
