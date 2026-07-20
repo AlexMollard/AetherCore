@@ -156,6 +156,15 @@ namespace aether
 	{
 	};
 
+	// Marks an entity (and, via ancestry, its subtree) to SURVIVE a gameplay scene
+	// switch (Scene.Load) - the DontDestroyOnLoad semantic. Deliberately distinct from
+	// SceneTransientComponent, which only means "runtime-only, don't serialize":
+	// prefab-instance roots are SceneTransient (re-expanded from the prefab on the next
+	// load) but must NOT persist, or they accumulate on every scene switch.
+	struct DontDestroyOnLoadComponent
+	{
+	};
+
 	struct DisabledComponent
 	{
 	};

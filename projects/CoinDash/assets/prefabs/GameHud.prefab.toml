@@ -20,6 +20,9 @@ parent = -1
     [[entities.scripts]]
     type = 'HudController'
 
+    [[entities.scripts]]
+    type = 'PauseController'
+
 [[entities]]
 name = 'HudCoinIcon'
 parent = 0
@@ -74,6 +77,121 @@ disabled = true
     font = 'PixelStorm'
     pixel_size = 88.0
     color = [ 1.0, 0.95, 0.55, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+# ── Pause menu (PauseController toggles these on Esc/P) ──────────────────────────
+[[entities]]
+name = 'PauseOverlay'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.0, 0.0 ]
+    anchor_max = [ 1.0, 1.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_image]
+    color = [ 0.03, 0.04, 0.08, 0.66 ]
+    corner_radius = 0.0
+    pixel_art = false
+
+[[entities]]
+name = 'PauseTitle'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.26 ]
+    anchor_max = [ 0.5, 0.26 ]
+    offset_min = [ -600.0, -110.0 ]
+    offset_max = [ 600.0, 110.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'PAUSED'
+    font = 'PixelStorm'
+    pixel_size = 130.0
+    color = [ 1.0, 0.96, 0.7, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
+name = 'PauseResumeBtn'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.46 ]
+    anchor_max = [ 0.5, 0.46 ]
+    offset_min = [ -210.0, -58.0 ]
+    offset_max = [ 210.0, 58.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_image]
+    color = [ 0.16, 0.55, 0.30, 0.96 ]
+    corner_radius = 16.0
+    pixel_art = false
+
+[[entities]]
+name = 'PauseResumeLabel'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.46 ]
+    anchor_max = [ 0.5, 0.46 ]
+    offset_min = [ -210.0, -58.0 ]
+    offset_max = [ 210.0, 58.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'RESUME'
+    font = 'PixelStorm'
+    pixel_size = 52.0
+    color = [ 1.0, 1.0, 1.0, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
+name = 'PauseMenuBtn'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.6 ]
+    anchor_max = [ 0.5, 0.6 ]
+    offset_min = [ -210.0, -58.0 ]
+    offset_max = [ 210.0, 58.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_image]
+    color = [ 0.30, 0.34, 0.46, 0.96 ]
+    corner_radius = 16.0
+    pixel_art = false
+
+[[entities]]
+name = 'PauseMenuLabel'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.6 ]
+    anchor_max = [ 0.5, 0.6 ]
+    offset_min = [ -210.0, -58.0 ]
+    offset_max = [ 210.0, 58.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'MENU'
+    font = 'PixelStorm'
+    pixel_size = 52.0
+    color = [ 1.0, 1.0, 1.0, 1.0 ]
     h_align = 1
     v_align = 1
     wrap = false

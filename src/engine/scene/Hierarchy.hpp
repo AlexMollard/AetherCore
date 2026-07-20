@@ -24,6 +24,25 @@ namespace aether::ecs
 		return false;
 	}
 
+	// True when the entity or any ancestor is DontDestroyOnLoad - i.e. it must
+	// survive a gameplay scene switch. Use this (not SceneTransient) to decide what
+	// to spare on Scene.Load; prefab-instance roots are SceneTransient but not
+	// DontDestroyOnLoad, so they get torn down and re-expanded instead of leaking.
+	inline bool HasDontDestroyOnLoadAncestor(World& world, Entity entity)
+	{
+		Entity cur = entity;
+		while (cur.IsValid())
+		{
+			if (world.Has<DontDestroyOnLoadComponent>(cur))
+			{
+				return true;
+			}
+			const auto* h = world.TryGet<HierarchyComponent>(cur);
+			cur = h ? h->parent : Entity{};
+		}
+		return false;
+	}
+
 	inline bool HasDisabledAncestor(const World& world, Entity entity)
 	{
 		Entity cur = entity;

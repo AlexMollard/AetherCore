@@ -84,8 +84,8 @@ public sealed class EnemyPatrol : EntityScript
         }
         else
         {
-            Log.Info("[CoinDash] Ouch! Back to the start.");
-            player.Respawn();
+            Log.Info("[CoinDash] Ouch! The slime got you.");
+            player.Die();
         }
     }
 }

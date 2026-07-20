@@ -116,8 +116,11 @@ namespace aether::app
 
 		// Play-speed multiplier (slow-mo < 1, fast-forward > 1). Applied to the
 		// simulation delta while playing; persists across Play sessions so a chosen
-		// speed survives Stop -> Play. Clamped to a sane authoring range.
-		static constexpr float kMinTimeScale = 0.05f;
+		// speed survives Stop -> Play. Clamped to a sane authoring range. 0 is a
+		// valid value - a full freeze (gameDt becomes 0, so the world stops but the
+		// script system still ticks): this is how an in-game pause menu works
+		// (Unity's Time.timeScale = 0), driven from C# via Time.Pause().
+		static constexpr float kMinTimeScale = 0.0f;
 		static constexpr float kMaxTimeScale = 16.0f;
 
 		[[nodiscard]] float TimeScale() const

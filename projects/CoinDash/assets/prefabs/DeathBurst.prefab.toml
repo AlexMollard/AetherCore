@@ -1,0 +1,96 @@
+# One-shot player death burst. PlayerController.Die() instantiates it at the
+# player. A radial spark explosion (root) with falling debris chunks and a soft
+# smoke puff (children). Every emitter bursts once and auto-destroys; the root
+# has the longest lifetime so the hierarchy teardown never clips a child.
+[[entities]]
+name = 'Death Burst'
+guid = 1
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/spark.png'
+    rate = 0.0
+    burst_count = 30
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 56
+    lifetime_min = 0.35
+    lifetime_max = 1.0
+    speed_min = 2.5
+    speed_max = 7.5
+    direction_deg = 90.0
+    spread_deg = 360.0
+    gravity = [ 0.0, -5.0 ]
+    start_size = 0.36
+    end_size = 0.0
+    start_color = [ 1.0, 0.62, 0.26, 1.0 ]
+    end_color = [ 1.0, 0.2, 0.15, 0.0 ]
+    blend_mode = 'additive'
+    sorting_layer = 20
+    order_in_layer = 2
+
+[[entities]]
+name = 'Death Debris'
+guid = 2
+parent = 0
+position = [ 0.0, 0.1, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/dot_soft.png'
+    rate = 0.0
+    burst_count = 16
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 28
+    lifetime_min = 0.45
+    lifetime_max = 0.85
+    speed_min = 2.0
+    speed_max = 6.0
+    direction_deg = 90.0
+    spread_deg = 220.0
+    gravity = [ 0.0, -14.0 ]
+    start_size = 0.20
+    end_size = 0.06
+    start_color = [ 0.95, 0.85, 0.55, 1.0 ]
+    end_color = [ 0.65, 0.35, 0.25, 0.0 ]
+    blend_mode = 'alpha'
+    sorting_layer = 20
+    order_in_layer = 1
+
+[[entities]]
+name = 'Death Smoke'
+guid = 3
+parent = 0
+position = [ 0.0, 0.15, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/dot_soft.png'
+    rate = 0.0
+    burst_count = 12
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 20
+    lifetime_min = 0.4
+    lifetime_max = 0.8
+    speed_min = 0.4
+    speed_max = 1.8
+    direction_deg = 90.0
+    spread_deg = 150.0
+    gravity = [ 0.0, 1.0 ]
+    start_size = 0.40
+    end_size = 1.0
+    start_color = [ 0.9, 0.9, 0.95, 0.5 ]
+    end_color = [ 0.65, 0.65, 0.75, 0.0 ]
+    blend_mode = 'alpha'
+    sorting_layer = 19
+    order_in_layer = 0

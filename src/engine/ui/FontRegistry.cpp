@@ -98,7 +98,10 @@ namespace aether::ui
 		// Vertical alignment: shift the whole shaped block by the box's slack.
 		if (vAlign != 0 && !lines.empty())
 		{
-			const float blockHeight = static_cast<float>(lines.size()) * font.lineHeight * scale;
+			// Center/bottom-align the TIGHT glyph box (ascent + descent), not the full
+			// line box: lineHeight carries trailing leading below the descent, and
+			// including it pushes single-line text visibly high off the box centre.
+			const float blockHeight = (static_cast<float>(lines.size() - 1) * font.lineHeight + font.ascent + font.descent) * scale;
 			const float factor = vAlign == 1 ? 0.5f : 1.0f;
 			const float shift = (boxRect.w - blockHeight) * factor;
 			for (ShapedGlyph& shaped: out)

@@ -1,0 +1,32 @@
+# One-shot respawn sparkle: a quick cyan/white burst when the player
+# rematerialises at the checkpoint. PlayerController.RespawnNow() instantiates it.
+[[entities]]
+name = 'Respawn Pop'
+guid = 1
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/spark.png'
+    rate = 0.0
+    burst_count = 20
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 32
+    lifetime_min = 0.3
+    lifetime_max = 0.55
+    speed_min = 1.5
+    speed_max = 4.5
+    direction_deg = 90.0
+    spread_deg = 360.0
+    gravity = [ 0.0, 2.0 ]
+    start_size = 0.28
+    end_size = 0.0
+    start_color = [ 0.5, 0.85, 1.0, 1.0 ]
+    end_color = [ 0.3, 0.6, 1.0, 0.0 ]
+    blend_mode = 'additive'
+    sorting_layer = 20
+    order_in_layer = 0

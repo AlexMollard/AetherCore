@@ -295,7 +295,7 @@ namespace aether::app
 		for (auto it = m_instances.begin(); it != m_instances.end();)
 		{
 			const Entity entity{InstanceEntityId(it->first)};
-			const bool persistent = reg.valid(World::ToEntt(entity)) && ecs::HasSceneTransientAncestor(world, entity);
+			const bool persistent = reg.valid(World::ToEntt(entity)) && ecs::HasDontDestroyOnLoadAncestor(world, entity);
 			if (persistent)
 			{
 				++it;

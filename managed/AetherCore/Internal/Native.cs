@@ -165,6 +165,12 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial long aether_time_frame_count();
 
+    [LibraryImport(Lib)]
+    internal static partial void aether_time_set_scale(float scale);
+
+    [LibraryImport(Lib)]
+    internal static partial float aether_time_get_scale();
+
     // ── Mouse input (Module 03) ─────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial int aether_input_mouse_down(int btn);

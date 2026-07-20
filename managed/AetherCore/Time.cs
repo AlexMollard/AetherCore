@@ -14,4 +14,25 @@ public static class Time
 
     /// <summary>Number of frames rendered since play started.</summary>
     public static long FrameCount => Native.aether_time_frame_count();
+
+    /// <summary>
+    /// Global time scale (1 = normal, &lt;1 slow-mo, &gt;1 fast-forward, 0 = frozen).
+    /// Setting 0 pauses the whole simulation - physics, particles and animation stop -
+    /// while scripts keep ticking with <see cref="DeltaTime"/> == 0, so a pause menu can
+    /// still read input to resume. This is the Unity Time.timeScale model.
+    /// </summary>
+    public static float Scale
+    {
+        get => Native.aether_time_get_scale();
+        set => Native.aether_time_set_scale(value);
+    }
+
+    /// <summary>True while the game is frozen via <see cref="Pause"/> (scale ~ 0).</summary>
+    public static bool IsPaused => Native.aether_time_get_scale() <= 0.0001f;
+
+    /// <summary>Freeze the simulation (scale = 0). Scripts still tick; gameplay stops.</summary>
+    public static void Pause() => Native.aether_time_set_scale(0.0f);
+
+    /// <summary>Resume at normal speed (scale = 1).</summary>
+    public static void Resume() => Native.aether_time_set_scale(1.0f);
 }

@@ -21,8 +21,7 @@ public sealed class Hazard : EntityScript
         {
             return;
         }
-        CameraFollow.Instance?.AddShake(0.12f);
-        Log.Info("[CoinDash] Ouch - hazard! Back to the checkpoint.");
-        player.Respawn();
+        Log.Info("[CoinDash] Ouch - hazard!");
+        player.Die();
     }
 }

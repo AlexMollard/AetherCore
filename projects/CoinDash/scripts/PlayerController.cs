@@ -23,6 +23,12 @@ public sealed class PlayerController : EntityScript
     /// <summary>Releasing jump while rising cuts the ascent to this fraction, once.</summary>
     public float JumpCutFactor = 0.45f;
 
+    /// <summary>Death feel: the corpse pops up with this speed and falls through the
+    /// world, and the whole death beat lasts <see cref="DeathDuration"/> before the
+    /// respawn at the last checkpoint.</summary>
+    public float DeathHopSpeed = 13.0f;
+    public float DeathDuration = 0.7f;
+
     private const string AnimIdle = "project://assets/animations/player_idle.spriteanim.toml";
     private const string AnimRun = "project://assets/animations/player_run.spriteanim.toml";
     private const string AnimJump = "project://assets/animations/player_jump.spriteanim.toml";
@@ -42,6 +48,11 @@ public sealed class PlayerController : EntityScript
     private float _squash;       // +squashed (wide/short), -stretched (tall/thin)
     private bool _wasGrounded = true;
     private float _prevVelY;
+
+    // Death sequence state (see Die/UpdateDeath): while dead the player ignores
+    // input and world collision and plays out the death beat.
+    private bool _dead;
+    private float _deathTimer;
 
     public override void OnAttach()
     {
@@ -89,9 +100,23 @@ public sealed class PlayerController : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
+        // Frozen by the pause menu: scripts still tick at dt=0, so skip input/movement
+        // entirely (otherwise a jump pressed on the pause screen would buffer).
+        if (Time.IsPaused)
+        {
+            return;
+        }
+
         if (GameState.Won)
         {
             Physics2D.SetLinearVelocity(Self, new Vector2(0.0f, Physics2D.GetLinearVelocity(Self).Y));
+            return;
+        }
+
+        // Death owns the player until the respawn beat is up - no input, no movement.
+        if (_dead)
+        {
+            UpdateDeath(deltaTime);
             return;
         }
 
@@ -171,7 +196,7 @@ public sealed class PlayerController : EntityScript
 
         if (Self.Position.Y < FallRespawnY)
         {
-            Respawn();
+            Die();
         }
     }
 
@@ -182,14 +207,65 @@ public sealed class PlayerController : EntityScript
         _spawn = position;
     }
 
-    public void Respawn()
+    /// <summary>Kill the player. Instead of snapping straight back, the corpse pops
+    /// up and arcs down THROUGH the world (Mario-style) with a hurt flash and a
+    /// screen shake, then <see cref="RespawnNow"/> restores control at the last
+    /// checkpoint after <see cref="DeathDuration"/>. Called by hazards, enemies and
+    /// the fall-off-the-world check; re-entrant calls are ignored while already dead.</summary>
+    public void Die()
     {
-        // Death: a subtle screen shake sells the hit.
-        CameraFollow.Instance?.AddShake(0.09f);
+        if (_dead)
+        {
+            return;
+        }
+        _dead = true;
+        _deathTimer = 0.0f;
+        // Sensor so the body ignores the ground and floats off; gravity still pulls
+        // it back down for the arc.
+        Physics2D.SetTrigger(Self, true);
+        Physics2D.SetGravityScale(Self, GravityScale);
+        Physics2D.SetLinearVelocity(Self, new Vector2(0.0f, DeathHopSpeed));
+        SetAnim(AnimJump);
+        SpriteRenderer.SetTint(Self, new Vector4(1.0f, 0.4f, 0.35f, 1.0f)); // hurt flash
+        CameraFollow.Instance?.AddShake(0.22f);
+        // Layered burst: spark explosion + debris + smoke (all in the one prefab),
+        // plus a ground puff at the feet.
+        Scene.Instantiate("DeathBurst", new Vector3(Self.Position.X, Self.Position.Y, 0.0f));
+        Scene.Instantiate("Dust", new Vector3(Self.Position.X, Self.Position.Y - 0.5f, 0.0f));
+        Log.Info("[CoinDash] Player down - respawning at the checkpoint.");
+    }
+
+    /// <summary>Per-frame death beat: the corpse shrinks and fades as it falls, then
+    /// respawns when the timer runs out.</summary>
+    private void UpdateDeath(float deltaTime)
+    {
+        _deathTimer += deltaTime;
+        float k = System.Math.Clamp(_deathTimer / DeathDuration, 0.0f, 1.0f);
+        float scale = 1.0f - 0.55f * k;
+        SpriteRenderer.SetPixelSize(Self, new Vector2(_baseSpriteSize.X * scale, _baseSpriteSize.Y * scale));
+        SpriteRenderer.SetTint(Self, new Vector4(1.0f, 0.4f, 0.35f, 1.0f - k));
+        if (_deathTimer >= DeathDuration)
+        {
+            RespawnNow();
+        }
+    }
+
+    /// <summary>Tail of the death sequence: snap back to the last checkpoint, restore
+    /// solid collision and control, and pop a spawn puff.</summary>
+    private void RespawnNow()
+    {
+        _dead = false;
         _squash = 0.0f;
-        SpriteRenderer.SetPixelSize(Self, _baseSpriteSize);
-        Physics2D.SetLinearVelocity(Self, Vector2.Zero);
         Self.Position = _spawn;
+        Physics2D.SetTrigger(Self, false);
+        Physics2D.SetGravityScale(Self, GravityScale);
+        Physics2D.SetLinearVelocity(Self, Vector2.Zero);
+        SpriteRenderer.SetPixelSize(Self, _baseSpriteSize);
+        SpriteRenderer.SetTint(Self, Vector4.One);
+        SetAnim(AnimIdle);
+        CameraFollow.Instance?.AddShake(0.06f);
+        // Materialise sparkle at the checkpoint.
+        Scene.Instantiate("RespawnPop", new Vector3(_spawn.X, _spawn.Y, 0.0f));
     }
 
     /// <summary>Bounce used by enemies when the player stomps them.</summary>

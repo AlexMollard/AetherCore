@@ -884,9 +884,10 @@ namespace aether::app::scene
 				{
 					continue;
 				}
-				// Persistent subtrees survive gameplay switches only; authoring
-				// loads reset the world completely.
-				if (mode == SceneLoadMode::GameplaySwitch && ecs::HasSceneTransientAncestor(world, e))
+				// DontDestroyOnLoad subtrees survive gameplay switches only; authoring
+				// loads reset the world completely. (SceneTransient alone is NOT enough -
+				// prefab-instance roots are SceneTransient but must be re-expanded, not kept.)
+				if (mode == SceneLoadMode::GameplaySwitch && ecs::HasDontDestroyOnLoadAncestor(world, e))
 				{
 					spared.push_back(e);
 				}

@@ -1,0 +1,158 @@
+# CoinDash title screen. Startup scene; MainMenu loads Level1 on PLAY.
+[scene]
+features = [ 'sprites', 'tilemaps', 'physics_2d', 'meshes_3d', 'lighting_3d', 'navigation', 'physics_3d' ]
+kind = '2d'
+name = ''
+version = 16
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+parent = -1
+position = [ 8.0, 3.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    background = 'solid_colour'
+    clear_color = [ 0.47, 0.55, 0.75 ]
+    far = 1000.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 13.0
+    projection = 'orthographic'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
+
+[[entities]]
+name = 'MenuUI'
+parent = -1
+
+    [entities.ui_canvas]
+    scale_mode = 1
+    reference = [ 1920.0, 1080.0 ]
+    sort_bias = 0
+
+    [entities.ui_rect]
+    anchor_min = [ 0.0, 0.0 ]
+    anchor_max = [ 1.0, 1.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [[entities.scripts]]
+    type = 'MainMenu'
+
+        [entities.scripts.properties.StartScene]
+        t = 'string'
+        v = 'Level1'
+
+[[entities]]
+name = 'MenuTitle'
+parent = 1
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.18 ]
+    anchor_max = [ 0.5, 0.18 ]
+    offset_min = [ -760.0, -140.0 ]
+    offset_max = [ 760.0, 140.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'COIN DASH'
+    font = 'PixelStorm'
+    pixel_size = 170.0
+    color = [ 1.0, 0.86, 0.28, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
+name = 'MenuSubtitle'
+parent = 1
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.31 ]
+    anchor_max = [ 0.5, 0.31 ]
+    offset_min = [ -760.0, -40.0 ]
+    offset_max = [ 760.0, 40.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'A tiny platformer'
+    font = 'PixelStorm'
+    pixel_size = 40.0
+    color = [ 0.85, 0.90, 1.0, 0.9 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
+name = 'PlayButton'
+parent = 1
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.5 ]
+    anchor_max = [ 0.5, 0.5 ]
+    offset_min = [ -230.0, -66.0 ]
+    offset_max = [ 230.0, 66.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_image]
+    color = [ 0.16, 0.55, 0.30, 0.96 ]
+    corner_radius = 18.0
+    pixel_art = false
+
+[[entities]]
+name = 'PlayLabel'
+parent = 4
+
+    [entities.ui_rect]
+    anchor_min = [ 0.0, 0.0 ]
+    anchor_max = [ 1.0, 1.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'PLAY'
+    font = 'PixelStorm'
+    pixel_size = 60.0
+    color = [ 1.0, 1.0, 1.0, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
+name = 'MenuHint'
+parent = 1
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.86 ]
+    anchor_max = [ 0.5, 0.86 ]
+    offset_min = [ -760.0, -36.0 ]
+    offset_max = [ 760.0, 36.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'Enter or click PLAY    -    Move A / D    Jump Space    Pause Esc'
+    font = 'PixelStorm'
+    pixel_size = 32.0
+    color = [ 0.88, 0.88, 0.94, 0.8 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Parallax Background'
+position = [ 0.0, 0.0, 0.0 ]
+prefab = 'ParallaxBackground'
+scale = [ 1.0, 1.0, 1.0 ]

@@ -85,9 +85,19 @@ AE_SCRIPT_API void aether_mark_transient(std::uint32_t id)
 {
 	auto& reg = ActiveWorld().GetRegistry();
 	const auto e = aether::World::ToEntt(aether::Entity{id});
-	if (reg.valid(e) && !reg.all_of<aether::SceneTransientComponent>(e))
+	if (!reg.valid(e))
+	{
+		return;
+	}
+	// DontDestroyOnLoad: survive scene switches (DontDestroyOnLoad marker) AND stay out
+	// of the serialized scene (SceneTransient), since these are runtime-spawned.
+	if (!reg.all_of<aether::SceneTransientComponent>(e))
 	{
 		reg.emplace<aether::SceneTransientComponent>(e);
+	}
+	if (!reg.all_of<aether::DontDestroyOnLoadComponent>(e))
+	{
+		reg.emplace<aether::DontDestroyOnLoadComponent>(e);
 	}
 }
 
