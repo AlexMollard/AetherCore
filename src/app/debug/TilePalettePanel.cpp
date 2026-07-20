@@ -292,14 +292,15 @@ namespace aether::editor
 			}
 			ImGui::SetItemTooltip("Paint target");
 			ImGui::SameLine();
-			ImGui::Checkbox("##visible", &layer.visible);
+			state->mapDirty |= ImGui::Checkbox("##visible", &layer.visible);
 			ImGui::SetItemTooltip("Visible");
 			ImGui::SameLine();
-			ImGui::Checkbox("##collision", &layer.collision);
-			ImGui::SetItemTooltip("Collision");
+			state->mapDirty |= ImGui::Checkbox("##collision", &layer.collision);
+			ImGui::SetItemTooltip("Collision (layer-wide: backdrop layers never collide)");
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(90.0f);
 			ImGui::SliderFloat("##opacity", &layer.opacity, 0.0f, 1.0f, "%.2f");
+			state->mapDirty |= ImGui::IsItemDeactivatedAfterEdit();
 			ImGui::SameLine();
 			ImGui::TextUnformatted(layer.name.c_str());
 			ImGui::SameLine(ImGui::GetContentRegionMax().x - 24.0f);
@@ -379,7 +380,7 @@ namespace aether::editor
 					state->selectedTile = tile.id;
 				}
 			}
-			ImGui::SetItemTooltip("%s%s", tile.name.c_str(), tile.collision == TileCollisionKind::Full ? " (solid)" : "");
+			ImGui::SetItemTooltip("%s%s", tile.name.c_str(), tile.collision == TileCollisionKind::Full ? " (solid)" : tile.collision == TileCollisionKind::Rect ? " (rect collider)" : "");
 			if (++column < columns)
 			{
 				ImGui::SameLine();
@@ -393,6 +394,54 @@ namespace aether::editor
 		if (tileSet.tiles.empty())
 		{
 			ImGui::TextDisabled("Tileset has no tiles.");
+		}
+
+		// ── Selected tile: collision editing ─────────────────────────────────
+		if (TileSetAsset* mutableSet = tiles->MutableTileSet(map->tileSetPath))
+		{
+			if (TileDefinition* tile = mutableSet->Find(state->selectedTile))
+			{
+				ImGui::SeparatorText("Selected Tile");
+				ImGui::TextUnformatted(tile->name.c_str());
+				ImGui::SameLine();
+				ImGui::TextDisabled("- collision saves to the tileset");
+
+				bool commit = false;
+				int kind = static_cast<int>(tile->collision);
+				constexpr const char* kKinds[] = {"None", "Full cell", "Rect"};
+				ImGui::SetNextItemWidth(140.0f);
+				if (ImGui::Combo("Collision", &kind, kKinds, IM_ARRAYSIZE(kKinds)))
+				{
+					tile->collision = static_cast<TileCollisionKind>(std::clamp(kind, 0, 2));
+					commit = true;
+				}
+				if (tile->collision == TileCollisionKind::Rect)
+				{
+					// Cell fractions, y-up from the cell's bottom-left.
+					ImGui::SetNextItemWidth(220.0f);
+					ImGui::DragFloat4("Rect (x, y, w, h)", &tile->collisionRect.x, 0.01f, 0.0f, 1.0f, "%.3f");
+					commit |= ImGui::IsItemDeactivatedAfterEdit();
+					tile->collisionRect.x = std::clamp(tile->collisionRect.x, 0.0f, 1.0f);
+					tile->collisionRect.y = std::clamp(tile->collisionRect.y, 0.0f, 1.0f);
+					tile->collisionRect.z = std::clamp(tile->collisionRect.z, 0.01f, 1.0f - tile->collisionRect.x);
+					tile->collisionRect.w = std::clamp(tile->collisionRect.w, 0.01f, 1.0f - tile->collisionRect.y);
+					ImGui::SetItemTooltip("Cell fractions, y-up from the cell's bottom-left.\nContiguous tiles sharing a rect merge into one collider.");
+				}
+				if (commit)
+				{
+					TileSetAsset copy = *mutableSet;
+					if (tiles->SaveTileSet(map->tileSetPath, std::move(copy)).has_value())
+					{
+						m_status = "Tile collision saved.";
+						m_statusError = false;
+					}
+					else
+					{
+						m_status = "Tileset save failed.";
+						m_statusError = true;
+					}
+				}
+			}
 		}
 
 		if (!m_status.empty())

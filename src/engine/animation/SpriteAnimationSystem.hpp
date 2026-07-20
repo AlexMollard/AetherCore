@@ -39,6 +39,18 @@ namespace aether
 		void Update(World& world, float dt) override;
 		void UpdatePreview(World& world, float dt);
 		void ResetForPlay(World& world);
+
+		// Edit-mode preview toggle: when off, UpdatePreview freezes on the
+		// current frame so authored sprites stay legible. Play mode uses
+		// Update() and is unaffected. Session-only; not persisted.
+		void SetPreviewEnabled(bool enabled) noexcept
+		{
+			m_previewEnabled = enabled;
+		}
+		[[nodiscard]] bool IsPreviewEnabled() const noexcept
+		{
+			return m_previewEnabled;
+		}
 		[[nodiscard]] bool TryPopEvent(SpriteAnimationEventRecord& event);
 		[[nodiscard]] bool TryPopEvent(Entity entity, SpriteAnimationEventRecord& event);
 		[[nodiscard]] std::size_t PendingEventCount() const noexcept
@@ -54,5 +66,6 @@ namespace aether
 
 		SpriteAssetStore& m_assets;
 		std::deque<SpriteAnimationEventRecord> m_events;
+		bool m_previewEnabled = true;
 	};
 } // namespace aether

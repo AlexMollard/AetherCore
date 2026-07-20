@@ -38,6 +38,7 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "rendering/ShadowService.hpp"
 #include "rendering/WorldRenderer.hpp"
+#include "particles/ParticleSystem.hpp"
 #include "physics2d/Physics2DDebugDraw.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/EcsHelpers.hpp"
@@ -589,8 +590,15 @@ namespace aether
 		CameraManager& cameras = m_cameras->GetCameraManager();
 		const Renderer& renderer = m_rendering->GetRenderer();
 
+		// Collision-only view: leave the queue and 2D packet empty so nothing
+		// but the clear colour and the collider wireframes reaches the screen.
+		const bool collisionOnly = IsCollisionOnlyViewEnabled();
+
 		renderQueue.SetWriteSlot(drawSlot);
-		WorldRenderer::Flush(world, renderQueue);
+		if (!collisionOnly)
+		{
+			WorldRenderer::Flush(world, renderQueue);
+		}
 
 		rttService.PrepareQueues(drawSlot, world);
 
@@ -609,7 +617,10 @@ namespace aether
 		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
 		packet.effectParamBufferAddr = effectParamBuffer.GetDeviceAddressU64();
 		packet.sceneFeatures = world.GetSceneFeatures();
-		assetsSub.GetSpriteSystem().Extract(world, packet.render2D);
+		if (!collisionOnly)
+		{
+			assetsSub.GetSpriteSystem().Extract(world, packet.render2D);
+		}
 
 		View2DBounds tileView; // invalid = no chunk culling (non-ortho views)
 		if (const Camera* cam = cameras.TryGetMainCamera())
@@ -630,7 +641,18 @@ namespace aether
 		}
 		// Tiles append into the same instance stream as sprites; one shared sort
 		// interleaves them by sort key.
-		assetsSub.GetTileMapSystem().Extract(world, tileView, static_cast<float>(m_gameElapsedSeconds), packet.render2D);
+		if (!collisionOnly)
+		{
+			assetsSub.GetTileMapSystem().Extract(world, tileView, static_cast<float>(m_gameElapsedSeconds), packet.render2D);
+		}
+		// Live particles append into the same 2D instance stream.
+		if (!collisionOnly)
+		{
+			if (auto* particles = static_cast<ParticleSystem*>(world.FindSystem("ParticleSystem")))
+			{
+				particles->Extract(world, packet.render2D);
+			}
+		}
 		Finalize2DFrame(packet.render2D);
 
 		packet.sunDirectionIntensity = sunDirIntensity;
@@ -664,11 +686,11 @@ namespace aether
 		packet.spotLights.assign(renderer.GetSpotLights().begin(), renderer.GetSpotLights().end());
 
 		// presence-or-absence. The render thread reads neither global.
-		packet.debugRenderingEnabled = IsDebugRenderingEnabled();
+		packet.debugRenderingEnabled = IsDebugRenderingEnabled() || collisionOnly;
 		m_rendering->GetPhysicsDebugRenderer().ExtractShapes(world, packet.physicsDebugShapes);
 		// 2D collider wireframes ride the immediate-mode line channel, gated by
 		// the same physics-debug toggle as the 3D shapes.
-		if (IsPhysicsDebugShapesEnabled())
+		if (IsPhysicsDebugShapesEnabled() || collisionOnly)
 		{
 			ExtractPhysics2DDebugLines(world, packet.debugVertices);
 		}

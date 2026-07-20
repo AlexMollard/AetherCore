@@ -68,6 +68,7 @@ namespace aether
 	Expected<void> TileAssetStore::SaveTileSet(std::string path, TileSetAsset tileSet)
 	{
 		AE_TRY_VOID(tileSet.Save(path));
+		BumpTileSetGeneration(path);
 		m_tileSets.insert_or_assign(std::move(path), std::move(tileSet));
 		return {};
 	}
@@ -83,6 +84,18 @@ namespace aether
 	{
 		m_tileSets.erase(std::string(path));
 		m_tileMaps.erase(std::string(path));
+		BumpTileSetGeneration(path);
+	}
+
+	std::uint32_t TileAssetStore::TileSetGeneration(std::string_view path) const
+	{
+		const auto it = m_tileSetGenerations.find(std::string(path));
+		return it != m_tileSetGenerations.end() ? it->second : 0;
+	}
+
+	void TileAssetStore::BumpTileSetGeneration(std::string_view path)
+	{
+		++m_tileSetGenerations[std::string(path)];
 	}
 
 	void TileAssetStore::Clear()

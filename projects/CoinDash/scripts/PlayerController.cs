@@ -11,10 +11,17 @@ namespace AetherGame;
 public sealed class PlayerController : EntityScript
 {
     public float MoveSpeed = 7.0f;
-    public float JumpSpeed = 13.5f;
-    public float CoyoteTime = 0.1f;
-    public float JumpBuffer = 0.12f;
+    public float JumpSpeed = 16.5f;
+    public float CoyoteTime = 0.12f;
+    public float JumpBuffer = 0.15f;
     public float FallRespawnY = -8.0f;
+
+    /// <summary>Snappy platformer arc: ~0.33 s to apex instead of a floaty
+    /// full-second hang (applied to the body's gravity scale on attach).</summary>
+    public float GravityScale = 4.0f;
+
+    /// <summary>Releasing jump while rising cuts the ascent to this fraction, once.</summary>
+    public float JumpCutFactor = 0.45f;
 
     private const string AnimIdle = "project://assets/animations/player_idle.spriteanim.toml";
     private const string AnimRun = "project://assets/animations/player_run.spriteanim.toml";
@@ -27,7 +34,14 @@ public sealed class PlayerController : EntityScript
     private float _sinceGrounded = 99.0f;
     private float _sinceJumpPressed = 99.0f;
     private string _anim = "";
-    private float _facing = 1.0f;
+    private bool _jumpCutDone;
+
+    // Squash & stretch is purely visual (drives the sprite quad size, never the
+    // collider): stretch while airborne, squash impulse on landing, eased back.
+    private Vector2 _baseSpriteSize = new(32.0f, 32.0f);
+    private float _squash;       // +squashed (wide/short), -stretched (tall/thin)
+    private bool _wasGrounded = true;
+    private float _prevVelY;
 
     public override void OnAttach()
     {
@@ -44,6 +58,7 @@ public sealed class PlayerController : EntityScript
         }
         Instance = this;
         _spawn = Self.Position;
+        _baseSpriteSize = SpriteRenderer.GetPixelSize(Self);
         // Mid-run level transition keeps run totals; a fresh Play starts over.
         if (GameState.NextSceneQueued)
         {
@@ -54,6 +69,7 @@ public sealed class PlayerController : EntityScript
             GameState.ResetRun();
         }
         Physics2D.EnableEvents(Self);
+        Physics2D.SetGravityScale(Self, GravityScale);
         SetAnim(AnimIdle);
 
         // Every level shares the same HUD prefab - one source of truth.
@@ -84,9 +100,22 @@ public sealed class PlayerController : EntityScript
         if (Input.IsKeyDown(Key.D) || Input.IsKeyDown(Key.Right)) { move += 1.0f; }
 
         Vector2 velocity = Physics2D.GetLinearVelocity(Self);
+        float readVelY = velocity.Y; // pre-jump read, used for landing impact
         velocity.X = move * MoveSpeed;
 
         bool grounded = IsGrounded();
+        // Landing squashes the sprite (visual only) - no screen shake here;
+        // shake is reserved for kills and deaths so it stays meaningful.
+        if (grounded && !_wasGrounded)
+        {
+            _squash = 0.30f;
+            // Kick up a dust puff at the feet on a real fall (not tiny hops).
+            if (-_prevVelY > 3.0f)
+            {
+                Scene.Instantiate("Dust", new Vector3(Self.Position.X, Self.Position.Y - 0.6f, 0.0f));
+            }
+        }
+        _wasGrounded = grounded;
         _sinceGrounded = grounded ? 0.0f : _sinceGrounded + deltaTime;
         _sinceJumpPressed += deltaTime;
         if (Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up))
@@ -94,27 +123,51 @@ public sealed class PlayerController : EntityScript
             _sinceJumpPressed = 0.0f;
         }
 
+        if (grounded)
+        {
+            _jumpCutDone = false;
+        }
         if (_sinceJumpPressed < JumpBuffer && _sinceGrounded < CoyoteTime)
         {
             velocity.Y = JumpSpeed;
             _sinceGrounded = 99.0f;
             _sinceJumpPressed = 99.0f;
+            _jumpCutDone = false;
+            _squash = -0.24f; // launch stretch
         }
-        // Variable jump height: releasing early clips the ascent.
-        if (velocity.Y > 0.0f && !(Input.IsKeyDown(Key.Space) || Input.IsKeyDown(Key.W) || Input.IsKeyDown(Key.Up)))
+        // Variable jump height: releasing early clips the ascent ONCE (a
+        // per-frame multiplier would be framerate-dependent).
+        if (!_jumpCutDone && velocity.Y > 0.0f && !(Input.IsKeyDown(Key.Space) || Input.IsKeyDown(Key.W) || Input.IsKeyDown(Key.Up)))
         {
-            velocity.Y *= 0.82f;
+            velocity.Y *= JumpCutFactor;
+            _jumpCutDone = true;
         }
 
         Physics2D.SetLinearVelocity(Self, velocity);
 
-        if (move != 0.0f && System.MathF.Sign(move) != System.MathF.Sign(_facing))
+        // Face the way we move via the sprite flag: negative transform scale
+        // is clamped away by the 2D physics transform sync.
+        if (move != 0.0f)
         {
-            _facing = move;
-            Self.SetTransform(Self.Position, Self.EulerDegrees, new Vector3(_facing, 1.0f, 1.0f));
+            SpriteRenderer.SetFlipX(Self, move < 0.0f);
         }
 
         SetAnim(!grounded ? AnimJump : move != 0.0f ? AnimRun : AnimIdle);
+
+        // Drive squash/stretch: motion-stretch while airborne, ease to neutral
+        // on the ground, then push the sprite quad size (feet stay put enough
+        // with the centre pivot at these small magnitudes).
+        if (!grounded)
+        {
+            float wantStretch = -System.Math.Clamp(System.Math.Abs(velocity.Y) * 0.016f, 0.0f, 0.20f);
+            _squash += (wantStretch - _squash) * System.Math.Clamp(10.0f * deltaTime, 0.0f, 1.0f);
+        }
+        else
+        {
+            _squash *= System.Math.Max(0.0f, 1.0f - 13.0f * deltaTime);
+        }
+        SpriteRenderer.SetPixelSize(Self, new Vector2(_baseSpriteSize.X * (1.0f + _squash), _baseSpriteSize.Y * (1.0f - _squash)));
+        _prevVelY = readVelY;
 
         if (Self.Position.Y < FallRespawnY)
         {
@@ -124,6 +177,10 @@ public sealed class PlayerController : EntityScript
 
     public void Respawn()
     {
+        // Death: a subtle screen shake sells the hit.
+        CameraFollow.Instance?.AddShake(0.09f);
+        _squash = 0.0f;
+        SpriteRenderer.SetPixelSize(Self, _baseSpriteSize);
         Physics2D.SetLinearVelocity(Self, Vector2.Zero);
         Self.Position = _spawn;
     }

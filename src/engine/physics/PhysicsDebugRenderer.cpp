@@ -88,6 +88,18 @@ namespace aether
 		return s_physicsDebugShapesEnabled;
 	}
 
+	static bool s_collisionOnlyViewEnabled = false;
+
+	void SetCollisionOnlyViewEnabled(bool enabled)
+	{
+		s_collisionOnlyViewEnabled = enabled;
+	}
+
+	bool IsCollisionOnlyViewEnabled()
+	{
+		return s_collisionOnlyViewEnabled;
+	}
+
 	PhysicsDebugRenderer::~PhysicsDebugRenderer()
 	{
 		Shutdown();
@@ -621,7 +633,7 @@ namespace aether
 
 	void PhysicsDebugRenderer::ExtractShapes(const World& world, std::vector<PhysicsDebugInstance>& out) const
 	{
-		if (!s_physicsDebugShapesEnabled)
+		if (!s_physicsDebugShapesEnabled && !s_collisionOnlyViewEnabled)
 		{
 			return;
 		}

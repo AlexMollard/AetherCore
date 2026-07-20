@@ -133,6 +133,7 @@ AE_FIELD_N("visible", visible, Bool)
 AE_FIELD_N("flip_x", flipX, Bool)
 AE_FIELD_N("flip_y", flipY, Bool)
 AE_FIELD_N("pixel_snap", pixelSnap, Bool)
+AE_FIELD_N("pixel_art", pixelArt, Bool)
 AE_COMPONENT_END()
 
 AE_COMPONENT(SpriteAnimatorComponent, "Sprite Animator", "Animation", ICON_FA_FILM)

@@ -51,6 +51,7 @@
 #define ICON_FA_UNLOCK                  "\xef\x82\x9c"
 #define ICON_FA_POWER_OFF               "\xef\x80\x91"
 
+#define ICON_FA_TRIANGLE_EXCLAMATION "\xef\x81\xb1"
 #define ICON_FA_BUG "\xef\x86\x88"
 #define ICON_FA_GAUGE_HIGH "\xef\x98\xa5"
 #define ICON_FA_CLOUD_SUN "\xef\x9b\x84"

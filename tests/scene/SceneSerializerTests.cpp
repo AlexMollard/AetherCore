@@ -207,6 +207,93 @@ TEST_CASE("Behavior components round-trip through capture, TOML and apply") {
     CHECK(!fresh.Get<BobComponent>(appliedOrb).baseCaptured);
 }
 
+TEST_CASE("Parallax component round-trips through capture, TOML and apply") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World source = MakeWorld();
+
+    Entity layer = source.Create();
+    source.Emplace<NameComponent>(layer, NameComponent{.name = "Clouds"});
+    source.Emplace<TransformComponent>(layer, TransformComponent{});
+    // Runtime fields (base/time/baseCaptured) must be stripped on capture.
+    source.Emplace<ParallaxComponent>(layer, ParallaxComponent{.factor = {0.2f, 0.35f}, .scrollSpeed = {0.5f, 0.0f}, .baseCaptured = true, .base = {12.0f, 3.0f}, .time = 42.0f});
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(source, mreg, treg)));
+    REQUIRE(parsed.has_value());
+
+    const EntityRecord& c = RecordOf(*parsed, "Clouds");
+    REQUIRE(c.parallax.has_value());
+    CHECK(c.parallax->factor.x == doctest::Approx(0.2f));
+    CHECK(c.parallax->factor.y == doctest::Approx(0.35f));
+    CHECK(c.parallax->scrollSpeed.x == doctest::Approx(0.5f));
+    CHECK(c.parallax->scrollSpeed.y == doctest::Approx(0.0f));
+    CHECK(!c.parallax->baseCaptured);
+    CHECK(c.parallax->time == doctest::Approx(0.0f));
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity applied = AppliedOf(*parsed, created, "Clouds");
+    REQUIRE(applied.IsValid());
+    REQUIRE(fresh.TryGet<ParallaxComponent>(applied) != nullptr);
+    CHECK(fresh.Get<ParallaxComponent>(applied).factor.y == doctest::Approx(0.35f));
+    CHECK(!fresh.Get<ParallaxComponent>(applied).baseCaptured);
+}
+
+TEST_CASE("Particle emitter round-trips through capture, TOML and apply") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World source = MakeWorld();
+
+    Entity fx = source.Create();
+    source.Emplace<NameComponent>(fx, NameComponent{.name = "Sparkle"});
+    source.Emplace<TransformComponent>(fx, TransformComponent{});
+    ParticleEmitterComponent emitter;
+    emitter.texturePath = "project://fx/spark.png";
+    emitter.burstCount = 14;
+    emitter.emitOnStart = true;
+    emitter.autoDestroyWhenDone = true;
+    emitter.lifetimeMax = 0.7f;
+    emitter.startSize = 0.4f;
+    emitter.endSize = 0.05f;
+    emitter.gravity = {0.0f, -3.0f};
+    emitter.blendMode = SpriteBlendMode::Additive;
+    emitter.sortingLayer = 20;
+    // Runtime state that must never serialize.
+    emitter.particles.push_back(Particle{});
+    emitter.started = true;
+    emitter.pendingBurst = 3;
+    source.Emplace<ParticleEmitterComponent>(fx, emitter);
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(source, mreg, treg)));
+    REQUIRE(parsed.has_value());
+
+    const EntityRecord& r = RecordOf(*parsed, "Sparkle");
+    REQUIRE(r.particles.has_value());
+    CHECK(r.particles->texturePath == "project://fx/spark.png");
+    CHECK(r.particles->burstCount == 14);
+    CHECK(r.particles->emitOnStart);
+    CHECK(r.particles->autoDestroyWhenDone);
+    CHECK(r.particles->blendMode == SpriteBlendMode::Additive);
+    CHECK(r.particles->sortingLayer == 20);
+    CHECK(r.particles->gravity.y == doctest::Approx(-3.0f));
+    // Runtime fields stripped.
+    CHECK(r.particles->particles.empty());
+    CHECK(!r.particles->started);
+    CHECK(r.particles->pendingBurst == 0);
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity applied = AppliedOf(*parsed, created, "Sparkle");
+    REQUIRE(applied.IsValid());
+    REQUIRE(fresh.TryGet<ParticleEmitterComponent>(applied) != nullptr);
+    CHECK(fresh.Get<ParticleEmitterComponent>(applied).burstCount == 14);
+    CHECK(fresh.Get<ParticleEmitterComponent>(applied).endSize == doctest::Approx(0.05f));
+}
+
 TEST_CASE("Lights and environment records round-trip through TOML") {
     SceneDescription scene;
     scene.name = "lit";

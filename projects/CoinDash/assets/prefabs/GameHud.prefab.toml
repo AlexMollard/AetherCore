@@ -50,7 +50,7 @@ parent = 0
 
     [entities.ui_text]
     text = 'x 0'
-    font = 'Roboto'
+    font = 'PixelStorm'
     pixel_size = 40.0
     color = [ 1.0, 0.92, 0.35, 1.0 ]
     h_align = 0
@@ -71,7 +71,7 @@ disabled = true
 
     [entities.ui_text]
     text = 'LEVEL COMPLETE!'
-    font = 'Roboto'
+    font = 'PixelStorm'
     pixel_size = 88.0
     color = [ 1.0, 0.95, 0.55, 1.0 ]
     h_align = 1

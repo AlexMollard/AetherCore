@@ -277,6 +277,24 @@ namespace aether::app::scene
 				{
 					rec.lookAt = *look;
 				}
+				if (const auto* parallax = world.TryGet<ParallaxComponent>(e))
+				{
+					ParallaxComponent clean = *parallax;
+					clean.baseCaptured = false;
+					clean.base = glm::vec2(0.0f);
+					clean.time = 0.0f;
+					rec.parallax = clean;
+				}
+				if (const auto* particles = world.TryGet<ParticleEmitterComponent>(e))
+				{
+					ParticleEmitterComponent clean = *particles;
+					clean.particles.clear();
+					clean.spawnAccumulator = 0.0f;
+					clean.rngState = 0;
+					clean.started = false;
+					clean.pendingBurst = 0;
+					rec.particles = std::move(clean);
+				}
 				if (const auto* pl = world.TryGet<PointLightComponent>(e))
 				{
 					rec.pointLight = *pl;

@@ -42,7 +42,7 @@ namespace aether::editor
 	void DrawEffectParams(app::LayerContext& context, World& world, Entity entity);
 	void DrawUiCanvas(World& world, Entity entity);
 	void DrawUiRect(World& world, Entity entity);
-	void DrawUiImage(World& world, Entity entity);
+	void DrawUiImage(app::LayerContext& context, World& world, Entity entity);
 	void DrawUiText(World& world, Entity entity);
 	void DrawCamera(World& world, Entity entity);
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName = {});

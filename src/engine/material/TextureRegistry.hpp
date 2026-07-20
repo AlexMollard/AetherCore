@@ -23,6 +23,11 @@ namespace aether
 		// fallbacks so the error texture never itself depends on an asset load.
 		void InitializeDefault(TextureResource&& fallback);
 
+		// Solid white built-in for content that is INTENTIONALLY untextured
+		// (sprites/UI tinted by vertex colour). Distinct from the default so
+		// magenta stays an unambiguous "asset load failed" signal.
+		void InitializeWhite(TextureResource&& white);
+
 		[[nodiscard]] TextureHandle Acquire(std::string_view path);
 
 		void AddRef(TextureHandle handle);
@@ -38,6 +43,12 @@ namespace aether
 		[[nodiscard]] TextureHandle DefaultHandle() const
 		{
 			return m_defaultHandle;
+		}
+
+		// Falls back to the default (magenta) if InitializeWhite was never called.
+		[[nodiscard]] TextureHandle WhiteHandle() const
+		{
+			return m_whiteHandle.IsValid() ? m_whiteHandle : m_defaultHandle;
 		}
 
 	private:
@@ -57,5 +68,6 @@ namespace aether
 		std::unordered_multimap<std::uint64_t, std::uint32_t> m_hashToEntry;
 		TextureHandle m_defaultHandle{};
 		std::uint32_t m_defaultSlot = 0xFFFFFFFFu;
+		TextureHandle m_whiteHandle{};
 	};
 } // namespace aether

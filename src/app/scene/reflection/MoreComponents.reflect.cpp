@@ -1,12 +1,27 @@
 #include "scene/reflection/Reflection.hpp"
 
 #include "debug/Icons.hpp"
+#include "particles/ParticleComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
 
 using namespace aether;
+
+namespace
+{
+	const reflect::EnumTable& ParticleBlendEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"alpha", static_cast<int>(SpriteBlendMode::Alpha)},
+		        {"additive", static_cast<int>(SpriteBlendMode::Additive)},
+		        {"multiply", static_cast<int>(SpriteBlendMode::Multiply)},
+		        {"opaque", static_cast<int>(SpriteBlendMode::Opaque)},
+		}};
+		return table;
+	}
+} // namespace
 
 AE_COMPONENT(TileMapComponent, "Tile Map", "Rendering", ICON_FA_IMAGE)
 AE_FIELD_N("tilemap", tilemapPath, String)
@@ -35,6 +50,40 @@ AE_FIELD_N("yaw", yaw, Float)
 AE_FIELD_N("pitch", pitch, Float)
 AE_FIELD_N("distance", distance, Float)
 AE_NOT_ADDABLE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(ParallaxComponent, "Parallax", "Rendering", ICON_FA_IMAGE)
+AE_FIELD_N("factor", factor, Vec2)
+AE_FIELD_N("scroll_speed", scrollSpeed, Vec2)
+AE_COMPONENT_END()
+
+AE_COMPONENT(ParticleEmitterComponent, "Particle Emitter", "Rendering", ICON_FA_WAND_MAGIC_SPARKLES)
+AE_FIELD_N("texture", texturePath, String)
+AE_FIELD_N("rate", rate, Float)
+AE_FIELD_N("burst_count", burstCount, UInt)
+AE_FIELD_N("emit_on_start", emitOnStart, Bool)
+AE_FIELD_N("emitting", emitting, Bool)
+AE_FIELD_N("auto_destroy", autoDestroyWhenDone, Bool)
+AE_FIELD_N("max_particles", maxParticles, UInt)
+AE_FIELD_N("lifetime_min", lifetimeMin, Float)
+AE_FIELD_N("lifetime_max", lifetimeMax, Float)
+AE_FIELD_N("speed_min", speedMin, Float)
+AE_FIELD_N("speed_max", speedMax, Float)
+AE_FIELD_N("direction_deg", directionDeg, Float)
+AE_FIELD_N("spread_deg", spreadDeg, Float)
+AE_FIELD_N("gravity", gravity, Vec2)
+AE_FIELD_N("start_size", startSize, Float)
+AE_FIELD_N("end_size", endSize, Float)
+AE_FIELD_N("start_color", startColor, Color4)
+AE_FIELD_N("end_color", endColor, Color4)
+AE_FIELD_ENUM("blend_mode", blendMode, ParticleBlendEnum())
+AE_FIELD_N("sorting_layer", sortingLayer, Int)
+AE_FIELD_N("order_in_layer", orderInLayer, Int)
+AE_FIELD_N("collide_world", collideWorld, Bool)
+AE_FIELD_N("collide_particles", collideParticles, Bool)
+AE_FIELD_N("bounce", bounce, Float)
+AE_FIELD_N("collision_damping", collisionDamping, Float)
+AE_FIELD_N("collision_radius", collisionRadius, Float)
 AE_COMPONENT_END()
 
 AE_COMPONENT(LookAtComponent, "Look At", "Behaviors", ICON_FA_EYE)

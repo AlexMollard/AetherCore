@@ -53,6 +53,10 @@ namespace aether::editor
 		void LoadProjectStartupScene();
 		void BuildAndReloadProjectScripts();
 
+		// Bakes every TTF/OTF under assets/fonts to .fontmeta/.fontatlas when
+		// missing or older than the source - drop a font in, it just works.
+		void BakeProjectFonts() const;
+
 		app::EditorProjectContext m_currentProject;
 		bool m_scriptBuildPending = false;
 		int m_previewCaptureCountdown = 0;

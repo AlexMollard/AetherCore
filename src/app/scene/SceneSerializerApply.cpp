@@ -99,6 +99,8 @@ namespace aether::app::scene
 			RemoveIf<MaterialPulseComponent>(world, entity);
 			RemoveIf<ScalePulseComponent>(world, entity);
 			RemoveIf<LookAtComponent>(world, entity);
+			RemoveIf<ParallaxComponent>(world, entity);
+			RemoveIf<ParticleEmitterComponent>(world, entity);
 			RemoveIf<PointLightComponent>(world, entity);
 			RemoveIf<SpotLightComponent>(world, entity);
 			RemoveIf<DayNightComponent>(world, entity);
@@ -485,6 +487,16 @@ namespace aether::app::scene
 				if (rec.lookAt)
 				{
 					world.Emplace<LookAtComponent>(e, *rec.lookAt);
+					++behaviorCount;
+				}
+				if (rec.parallax)
+				{
+					world.Emplace<ParallaxComponent>(e, *rec.parallax);
+					++behaviorCount;
+				}
+				if (rec.particles)
+				{
+					world.Emplace<ParticleEmitterComponent>(e, *rec.particles);
 					++behaviorCount;
 				}
 				if (rec.pointLight)

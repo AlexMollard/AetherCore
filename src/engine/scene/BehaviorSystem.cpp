@@ -8,6 +8,7 @@
 #include "assets/AssetManager.hpp"
 #include "material/MaterialSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformEdit.hpp"
@@ -107,6 +108,40 @@ namespace aether
 			m[2] *= scale.z;
 			m[3] = glm::vec4(pos, 1.0f);
 			ecs::SetWorldTransform(world, World::FromEntt(enttE), m);
+		}
+
+		// Parallax layers follow the main camera at a fraction of its motion.
+		// Runs before the script system that drives the camera, so it samples
+		// the same camera-entity transform the frame will render against.
+		if (const Entity camEntity = ecs::GetMainCameraEntity(world); camEntity.IsValid())
+		{
+			glm::vec2 camPos{0.0f};
+			if (const auto* camTc = world.TryGet<TransformComponent>(camEntity))
+			{
+				camPos = glm::vec2(camTc->localToWorld[3]);
+			}
+			for (auto&& [enttE, parallax, tc]: reg.view<ParallaxComponent, TransformComponent>().each())
+			{
+				if (ecs::HasDisabledAncestor(world, World::FromEntt(enttE)))
+				{
+					continue;
+				}
+				glm::vec3 pos{}, euler{}, scale{};
+				DecomposeTRS(tc.localToWorld, pos, euler, scale);
+				const glm::vec2 follow = glm::vec2(1.0f) - parallax.factor;
+				if (!parallax.baseCaptured)
+				{
+					// Anchor so the first frame lands exactly on the authored
+					// position (no snap when Play begins).
+					parallax.base = glm::vec2(pos) - follow * camPos;
+					parallax.baseCaptured = true;
+				}
+				parallax.time += dt;
+				const glm::vec2 want = parallax.base + follow * camPos + parallax.scrollSpeed * parallax.time;
+				pos.x = want.x;
+				pos.y = want.y;
+				ecs::SetWorldTransform(world, World::FromEntt(enttE), ComposeTransform(pos, euler, scale));
+			}
 		}
 
 		auto& materials = m_assets.GetMaterialRegistry();

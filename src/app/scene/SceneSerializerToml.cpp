@@ -904,6 +904,14 @@ namespace aether::app::scene
 			{
 				t.insert("look_at", WriteReflectedToToml("Look At", &*rec.lookAt));
 			}
+			if (rec.parallax)
+			{
+				t.insert("parallax", WriteReflectedToToml("Parallax", &*rec.parallax));
+			}
+			if (rec.particles)
+			{
+				t.insert("particles", WriteReflectedToToml("Particle Emitter", &*rec.particles));
+			}
 			if (rec.pointLight)
 			{
 				t.insert("point_light", WriteReflectedToToml("Point Light", &*rec.pointLight));
@@ -1330,6 +1338,18 @@ namespace aether::app::scene
 				LookAtComponent c{};
 				ReadReflectedFromToml("Look At", *p, &c);
 				rec.lookAt = c;
+			}
+			if (const auto* p = tv["parallax"].as_table())
+			{
+				ParallaxComponent c{};
+				ReadReflectedFromToml("Parallax", *p, &c);
+				rec.parallax = c;
+			}
+			if (const auto* p = tv["particles"].as_table())
+			{
+				ParticleEmitterComponent c{};
+				ReadReflectedFromToml("Particle Emitter", *p, &c);
+				rec.particles = c;
 			}
 			if (const auto* l = tv["point_light"].as_table())
 			{

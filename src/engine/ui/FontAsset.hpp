@@ -62,6 +62,9 @@ namespace aether::ui
 		std::uint32_t atlasBindlessSlot = 0xFFFFFFFFu;
 		float atlasWidth = 0.f, atlasHeight = 0.f;
 		float ascent = 0.f, descent = 0.f, lineHeight = 0.f, bakeSize = 48.f;
+		// VFS path of the paired .fontatlas, recorded when the .fontmeta loads
+		// so the renderer never re-derives it from the font name.
+		std::string atlasPath;
 		std::unordered_map<std::uint32_t, GlyphMeta> glyphs;
 
 		[[nodiscard]] const GlyphMeta* Find(std::uint32_t cp) const

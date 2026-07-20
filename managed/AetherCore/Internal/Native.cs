@@ -462,6 +462,13 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial uint aether_physics2d_event_at(uint id, int kind, int index);
 
+    // ── Particles ─────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_particles_burst(uint id, int count);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_particles_set_emitting(uint id, int on);
+
     // ── Effects ───────────────────────────────────────────────────────────────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_effect_set(uint id, string name);

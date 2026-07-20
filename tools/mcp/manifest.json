@@ -383,19 +383,11 @@
       "tool": "load_scene"
     },
     {
-      "description": "Replace the live scene with a fresh scene from the shipped default template. 'kind' picks the domain: '3d' (default) or '2d' (orthographic camera, sprite/tilemap/2D-physics features).",
+      "description": "Replace the live scene with a fresh empty scene.",
       "mutates": true,
       "name": "scene.new",
       "paramsSchema": {
-        "properties": {
-          "kind": {
-            "enum": [
-              "2d",
-              "3d"
-            ],
-            "type": "string"
-          }
-        },
+        "properties": {},
         "type": "object"
       },
       "tool": "new_scene"

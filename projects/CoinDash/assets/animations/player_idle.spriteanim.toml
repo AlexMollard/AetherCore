@@ -1,13 +1,15 @@
 # AetherCore sprite animation
 
 [animation]
-atlas = "project://assets/textures/tex_Player.spriteatlas.toml"
+atlas = "project://assets/textures/player/idle32x32.spriteatlas.toml"
 event_count = 0.00
-frame_count = 1.00
+frame_count = 2.00
 loop_mode = "loop"
 name = "player_idle"
 schema_version = 1.00
 
 [frame]
-0.duration = 0.50
-0.sprite_id = "11b3834e9afe2674"
+0.duration = 0.40
+0.sprite_id = "c68c78e0a5f193a2"
+1.duration = 0.40
+1.sprite_id = "c68c79e0a5f19555"

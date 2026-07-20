@@ -28,8 +28,15 @@ namespace aether
 		void Invalidate(std::string_view path);
 		void Clear();
 
+		// Monotonic per-tileset edit counter: bumped on save/invalidate and by
+		// editors after mutating via MutableTileSet. Collision caches key on it
+		// so a tile's collision edit rebuilds bodies without touching chunks.
+		[[nodiscard]] std::uint32_t TileSetGeneration(std::string_view path) const;
+		void BumpTileSetGeneration(std::string_view path);
+
 	private:
 		std::unordered_map<std::string, TileSetAsset> m_tileSets;
 		std::unordered_map<std::string, TileMapAsset> m_tileMaps;
+		std::unordered_map<std::string, std::uint32_t> m_tileSetGenerations;
 	};
 } // namespace aether

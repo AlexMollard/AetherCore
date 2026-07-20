@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
 #include <glm/glm.hpp>
@@ -89,6 +90,10 @@ namespace aether
 		[[nodiscard]] std::vector<std::uint32_t> OverlapCircle(glm::vec2 center, float radius) const;
 		[[nodiscard]] std::vector<std::uint32_t> OverlapPoint(glm::vec2 point) const;
 		[[nodiscard]] RayHit2D CastCircle(glm::vec2 center, float radius, glm::vec2 direction, float maxDistance) const;
+
+		// Tile collision geometry for the physics debug overlay: invokes the
+		// callback with world-space polylines (chain outlines and rect loops).
+		void ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>&)>& callback) const;
 
 		// entt destroy hooks - remove the backing Box2D objects so they never leak.
 		void OnRigidBody2DDestroyed(entt::registry& registry, entt::entity enttEntity);

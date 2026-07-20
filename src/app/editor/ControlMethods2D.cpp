@@ -348,7 +348,7 @@ namespace aether::editor
 				        const TileDefinition& tile = tc.tileSet->tiles[i];
 				        tiles.push_back(json{{"index", i},
 				                {"name", tile.name},
-				                {"collision", tile.collision == TileCollisionKind::Full ? "full" : "none"},
+				                {"collision", tile.collision == TileCollisionKind::Full ? "full" : tile.collision == TileCollisionKind::Rect ? "rect" : "none"},
 				                {"animated", !tile.animationFrames.empty()}});
 			        }
 			        json layers = json::array();

@@ -1342,7 +1342,7 @@ namespace aether::editor
 			if (m_requestSaveAsPopup)
 			{
 				m_requestSaveAsPopup = false;
-				ImGui::OpenPopup("SaveScene");
+				ImGui::OpenPopup("Save Scene As");
 			}
 			if (m_requestOpenPopup)
 			{
@@ -1494,61 +1494,118 @@ namespace aether::editor
 				ImGui::EndPopup();
 			}
 
-			if (ImGui::BeginPopup("SaveScene"))
 			{
-				ImGui::SetNextItemWidth(180.0f);
-				const bool entered = ImGui::InputTextWithHint("##sceneName", "Scene name...", m_sceneNameBuf, sizeof(m_sceneNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
-				ImGui::SameLine();
-				const bool save = ImGui::Button(ICON_FA_FLOPPY_DISK " Save") || entered;
-				ImGui::TextDisabled("-> %s", app::scene::ScenesDirectory().c_str());
-				if (save && m_sceneNameBuf[0] != '\0')
+				const ImGuiViewport* viewport = ImGui::GetMainViewport();
+				ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+				ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f), ImGuiCond_Appearing);
+				bool saveSceneOpen = true;
+				if (ImGui::BeginPopupModal("Save Scene As", &saveSceneOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize))
 				{
-					if (auto* assets = context.TryGet<AssetManager>())
+					if (ImGui::IsWindowAppearing())
 					{
-						const auto captured = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
-						app::scene::SaveSceneFile(m_sceneNameBuf, captured);
-						m_sceneListDirty = true;
-						if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
-						{
-							scenes->SetCurrentScene(m_sceneNameBuf);
-						}
+						m_saveExistingNames = app::scene::ListSceneFiles();
 					}
-					ImGui::CloseCurrentPopup();
+					ImGui::TextColored(chrome::kAccentHi, ICON_FA_FLOPPY_DISK);
+					ImGui::SameLine();
+					if (ImGui::IsWindowAppearing())
+					{
+						ImGui::SetKeyboardFocusHere();
+					}
+					ImGui::SetNextItemWidth(-FLT_MIN);
+					const bool entered = ImGui::InputTextWithHint("##sceneName", "Scene name...", m_sceneNameBuf, sizeof(m_sceneNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+					ImGui::TextColored(chrome::kMuted, ICON_FA_FOLDER_OPEN "  %s", app::scene::ScenesDirectory().c_str());
+					const bool exists = m_sceneNameBuf[0] != '\0' && std::ranges::find(m_saveExistingNames, m_sceneNameBuf) != m_saveExistingNames.end();
+					if (exists)
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.35f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  Overwrites the existing '%s' scene", m_sceneNameBuf);
+					}
+					ImGui::Spacing();
+					ImGui::SameLine(ImGui::GetContentRegionMax().x - 196.0f);
+					if (chrome::OutlineButton("Cancel", ImVec2(90.0f, 0.0f)))
+					{
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::SameLine();
+					ImGui::BeginDisabled(m_sceneNameBuf[0] == '\0');
+					if (chrome::PrimaryButton(exists ? ICON_FA_FLOPPY_DISK "  Overwrite" : ICON_FA_FLOPPY_DISK "  Save", ImVec2(98.0f, 0.0f)) || (entered && m_sceneNameBuf[0] != '\0'))
+					{
+						if (auto* assets = context.TryGet<AssetManager>())
+						{
+							const auto captured = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+							app::scene::SaveSceneFile(m_sceneNameBuf, captured);
+							m_sceneListDirty = true;
+							if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
+							{
+								scenes->SetCurrentScene(m_sceneNameBuf);
+							}
+						}
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::EndDisabled();
+					ImGui::EndPopup();
 				}
-				ImGui::EndPopup();
 			}
 			DrawOpenSceneModal(context, world, selection);
 
 			if (m_openPrefabSave)
 			{
-				ImGui::OpenPopup("SavePrefab");
+				ImGui::OpenPopup("Save Prefab");
 				m_openPrefabSave = false;
 			}
-			if (ImGui::BeginPopup("SavePrefab"))
 			{
-				auto& reg2 = world.GetRegistry();
-				if (!m_prefabSaveTarget.IsValid() || !reg2.valid(World::ToEntt(m_prefabSaveTarget)))
+				const ImGuiViewport* viewport = ImGui::GetMainViewport();
+				ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+				ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f), ImGuiCond_Appearing);
+				bool savePrefabOpen = true;
+				if (ImGui::BeginPopupModal("Save Prefab", &savePrefabOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize))
 				{
-					ImGui::CloseCurrentPopup();
-				}
-				else
-				{
-					ImGui::TextDisabled("Prefab of '%s' (subtree)", EntityDisplayName(world, m_prefabSaveTarget));
-					ImGui::SetNextItemWidth(180.0f);
-					const bool entered = ImGui::InputTextWithHint("##prefabName", "Prefab name...", m_prefabNameBuf, sizeof(m_prefabNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
-					ImGui::SameLine();
-					const bool save = ImGui::Button(ICON_FA_FLOPPY_DISK " Save") || entered;
-					ImGui::TextDisabled("-> %s", app::scene::PrefabsDirectory().c_str());
-					if (save && m_prefabNameBuf[0] != '\0')
+					auto& reg2 = world.GetRegistry();
+					if (!m_prefabSaveTarget.IsValid() || !reg2.valid(World::ToEntt(m_prefabSaveTarget)))
 					{
-						if (auto* assets = context.TryGet<AssetManager>())
-						{
-							app::scene::SavePrefabFile(m_prefabNameBuf, app::scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
-						}
 						ImGui::CloseCurrentPopup();
 					}
+					else
+					{
+						if (ImGui::IsWindowAppearing())
+						{
+							m_saveExistingNames = app::scene::ListPrefabFiles();
+						}
+						ImGui::TextColored(chrome::kMuted, ICON_FA_BOX_OPEN "  Prefab of '%s' (includes children)", EntityDisplayName(world, m_prefabSaveTarget));
+						ImGui::Spacing();
+						ImGui::TextColored(chrome::kAccentHi, ICON_FA_FLOPPY_DISK);
+						ImGui::SameLine();
+						if (ImGui::IsWindowAppearing())
+						{
+							ImGui::SetKeyboardFocusHere();
+						}
+						ImGui::SetNextItemWidth(-FLT_MIN);
+						const bool entered = ImGui::InputTextWithHint("##prefabName", "Prefab name...", m_prefabNameBuf, sizeof(m_prefabNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+						ImGui::TextColored(chrome::kMuted, ICON_FA_FOLDER_OPEN "  %s", app::scene::PrefabsDirectory().c_str());
+						const bool exists = m_prefabNameBuf[0] != '\0' && std::ranges::find(m_saveExistingNames, m_prefabNameBuf) != m_saveExistingNames.end();
+						if (exists)
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.35f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  Overwrites the existing '%s' prefab", m_prefabNameBuf);
+						}
+						ImGui::Spacing();
+						ImGui::SameLine(ImGui::GetContentRegionMax().x - 196.0f);
+						if (chrome::OutlineButton("Cancel", ImVec2(90.0f, 0.0f)))
+						{
+							ImGui::CloseCurrentPopup();
+						}
+						ImGui::SameLine();
+						ImGui::BeginDisabled(m_prefabNameBuf[0] == '\0');
+						if (chrome::PrimaryButton(exists ? ICON_FA_FLOPPY_DISK "  Overwrite" : ICON_FA_FLOPPY_DISK "  Save", ImVec2(98.0f, 0.0f)) || (entered && m_prefabNameBuf[0] != '\0'))
+						{
+							if (auto* assets = context.TryGet<AssetManager>())
+							{
+								app::scene::SavePrefabFile(m_prefabNameBuf, app::scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
+							}
+							ImGui::CloseCurrentPopup();
+						}
+						ImGui::EndDisabled();
+					}
+					ImGui::EndPopup();
 				}
-				ImGui::EndPopup();
 			}
 
 			ImGui::SameLine();

@@ -37,6 +37,7 @@
 #include "vulkan/Swapchain.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "particles/ParticleSystem.hpp"
 #include "scene/BehaviorSystem.hpp"
 #include "scene/CameraSystem.hpp"
 #include "camera/CameraManager.hpp"
@@ -308,6 +309,12 @@ namespace aether::app
 				auto* scriptPtr = scriptSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(scriptSystem));
 				services.Register<ScriptComponentSystem>(*scriptPtr);
+
+				// After scripts, so a burst a script queues this frame emits now.
+				auto particleSystem = std::make_unique<aether::ParticleSystem>(attachContext.Get<AssetManager>().GetTextureRegistry());
+				auto* particlePtr = particleSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(particleSystem));
+				services.Register<aether::ParticleSystem>(*particlePtr);
 			}
 #endif
 		}
@@ -378,6 +385,11 @@ namespace aether::app
 			if (auto* spriteAnimations = ctx.TryGet<aether::SpriteAnimationSystem>())
 			{
 				spriteAnimations->UpdatePreview(editWorld, static_cast<float>(gameDt));
+			}
+			// Preview particle emitters while editing so effects are authorable.
+			if (auto* particles = ctx.TryGet<aether::ParticleSystem>())
+			{
+				particles->Update(editWorld, static_cast<float>(gameDt));
 			}
 			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>())
 			{

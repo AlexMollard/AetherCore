@@ -42,6 +42,10 @@ namespace aether
 		// error texture can never itself fail to load.
 		AE_EXPECT_OR_THROW(magentaFallback, Texture::CreateSolidColor({255, 0, 255, 255}, vk.GetDevice().device, vk.GetGraphicsQueue(), m_uploadContext.GetCommandPool()));
 		m_textureRegistry.InitializeDefault(TextureResource{std::move(magentaFallback)});
+		// Solid white: what untextured sprites sample, so their tint shows true
+		// (magenta stays reserved for "asset load failed").
+		AE_EXPECT_OR_THROW(whiteBuiltin, Texture::CreateSolidColor({255, 255, 255, 255}, vk.GetDevice().device, vk.GetGraphicsQueue(), m_uploadContext.GetCommandPool()));
+		m_textureRegistry.InitializeWhite(TextureResource{std::move(whiteBuiltin)});
 		m_spriteSystem.Initialize(m_textureRegistry, m_spriteAssetStore);
 		m_tileMapSystem.Initialize(m_textureRegistry, m_spriteAssetStore, m_tileAssetStore);
 		services.Register<SpriteAssetStore>(m_spriteAssetStore);

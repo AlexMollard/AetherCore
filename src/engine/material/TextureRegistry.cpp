@@ -49,6 +49,21 @@ namespace aether
 		m_defaultSlot = e.texture.GetBindlessSlot();
 	}
 
+	void TextureRegistry::InitializeWhite(TextureResource&& white)
+	{
+		const std::scoped_lock lock(m_mutex);
+		const std::uint32_t index = static_cast<std::uint32_t>(m_entries.size());
+		m_entries.emplace_back();
+		Entry& e = m_entries[index];
+		e.resolvedPath = "\x01"
+		                 "builtin:white"; // leading 0x01: never a real VFS path
+		e.hash = 0;
+		e.texture = std::move(white);
+		e.refcount = 1;
+		e.alive = true;
+		m_whiteHandle = TextureHandle{index, e.generation};
+	}
+
 	TextureHandle TextureRegistry::Acquire(std::string_view path)
 	{
 		const std::string resolved = m_sink.ResolvePath(path);
@@ -154,6 +169,7 @@ namespace aether
 		m_hashToEntry.clear();
 		m_defaultHandle = TextureHandle{};
 		m_defaultSlot = 0xFFFFFFFFu;
+		m_whiteHandle = TextureHandle{};
 	}
 
 	std::uint32_t TextureRegistry::ResolveSlot(TextureHandle handle) const

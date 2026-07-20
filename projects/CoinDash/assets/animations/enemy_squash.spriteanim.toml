@@ -1,13 +1,21 @@
 # AetherCore sprite animation
 
 [animation]
-atlas = "project://assets/textures/tex_Enemy.spriteatlas.toml"
+atlas = "project://assets/textures/slime/death32x32.spriteatlas.toml"
 event_count = 0.00
-frame_count = 1.00
+frame_count = 5.00
 loop_mode = "hold"
 name = "enemy_squash"
 schema_version = 1.00
 
 [frame]
-0.duration = 0.50
-0.sprite_id = "0c8c8d4020bb0c17"
+0.duration = 0.08
+0.sprite_id = "068ca84e7dcdb742"
+1.duration = 0.08
+1.sprite_id = "068ca94e7dcdb8f5"
+2.duration = 0.08
+2.sprite_id = "068ca64e7dcdb3dc"
+3.duration = 0.08
+3.sprite_id = "068ca74e7dcdb58f"
+4.duration = 0.08
+4.sprite_id = "068ca44e7dcdb076"

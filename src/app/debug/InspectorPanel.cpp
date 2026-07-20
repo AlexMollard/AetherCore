@@ -724,7 +724,7 @@ namespace aether::editor
 		DrawEffectParams(context, world, entity);
 		DrawUiCanvas(world, entity);
 		DrawUiRect(world, entity);
-		DrawUiImage(world, entity);
+		DrawUiImage(context, world, entity);
 		DrawUiText(world, entity);
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);

@@ -23,6 +23,7 @@
 #include "debug/SceneSelection.hpp"
 #include "debug/ScenePicker.hpp"
 #include "debug/UndoStack.hpp"
+#include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetDatabase.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
@@ -1861,6 +1862,15 @@ namespace aether::editor
 				}
 				ImGui::Checkbox("Stats overlay", &m_viewportShowStats);
 				ImGui::Checkbox("Mouse overlay", &m_viewportShowMouse);
+				if (auto* spriteAnimations = context.TryGet<aether::SpriteAnimationSystem>())
+				{
+					bool animate = spriteAnimations->IsPreviewEnabled();
+					if (ImGui::Checkbox("Animate in edit mode", &animate))
+					{
+						spriteAnimations->SetPreviewEnabled(animate);
+					}
+					ImGui::SetItemTooltip("Play sprite animations while editing. Turn off to freeze every\nanimated sprite on its current frame (Play mode is unaffected).\nNot saved; resets on restart.");
+				}
 				ImGui::Spacing();
 				chrome::SectionTag("DEBUG VIEW");
 				ImGui::Spacing();
@@ -1881,6 +1891,12 @@ namespace aether::editor
 					}
 				}
 				ImGui::SetItemTooltip("Wireframes for 3D and 2D colliders\n(static blue, kinematic cyan, dynamic yellow, triggers green)");
+				bool collisionOnly = IsCollisionOnlyViewEnabled();
+				if (ImGui::Checkbox("Collision only", &collisionOnly))
+				{
+					SetCollisionOnlyViewEnabled(collisionOnly);
+				}
+				ImGui::SetItemTooltip("Hide all scene rendering (meshes, sprites, tiles) and show only\ncollider wireframes - reading tilemap collision is much easier\nagainst the plain clear colour. Not saved; resets on restart.");
 				ImGui::EndPopup();
 			}
 			ImGui::PopStyleVar(2);

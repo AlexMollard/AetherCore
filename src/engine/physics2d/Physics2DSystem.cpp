@@ -112,11 +112,17 @@ namespace aether
 		{
 			std::uint64_t body = 0; // packed b2BodyId
 			std::uint32_t builtRevision = 0;
+			// Tileset edits (per-tile collision kind/rect) rebuild without any
+			// chunk changing: the store bumps this on save/mutation.
+			std::uint32_t builtTileSetGeneration = 0;
 			// Chain outlines sample up to two cells into neighbouring chunks
 			// (seam ghost vertices), so a neighbour edit must rebuild us too.
 			std::uint64_t builtNeighbourRevisions = 0;
 			glm::mat4 builtTransform{1.0f};
 			bool seen = false;
+			// World-space collision geometry for the physics debug overlay
+			// (chain polylines, and closed loops for rect-collision tiles).
+			std::vector<std::vector<glm::vec2>> debugOutlines;
 		};
 	} // namespace
 
@@ -703,21 +709,34 @@ namespace aether
 			const float cellSize = map.cellSize > 0.0f ? map.cellSize : tileSet.cellSize;
 			const Entity entity = World::FromEntt(enttEntity);
 
-			// Palette-indexed solidity lookup for this map.
-			std::vector<std::uint8_t> solidByPalette(map.tilePalette.size(), 0);
+			// Palette-indexed collision lookup for this map: Full cells merge
+			// into chain outlines; Rect cells become per-run boxes.
+			struct PaletteCollision
+			{
+				TileCollisionKind kind = TileCollisionKind::None;
+				glm::vec4 rect{0.0f, 0.0f, 1.0f, 1.0f};
+			};
+			std::vector<PaletteCollision> paletteCollision(map.tilePalette.size());
 			for (std::size_t i = 0; i < map.tilePalette.size(); ++i)
 			{
-				const TileDefinition* tile = tileSet.Find(map.tilePalette[i]);
-				solidByPalette[i] = (tile != nullptr && tile->collision == TileCollisionKind::Full) ? 1 : 0;
+				if (const TileDefinition* tile = tileSet.Find(map.tilePalette[i]))
+				{
+					paletteCollision[i] = {tile->collision, tile->collisionRect};
+				}
 			}
-			const auto isSolid = [&solidByPalette](std::uint32_t cell)
+			const auto collisionOf = [&paletteCollision](std::uint32_t cell) -> const PaletteCollision*
 			{
 				if (tilecell::Empty(cell))
 				{
-					return false;
+					return nullptr;
 				}
 				const std::uint16_t index = tilecell::PaletteIndex(cell);
-				return index < solidByPalette.size() && solidByPalette[index] != 0;
+				return index < paletteCollision.size() ? &paletteCollision[index] : nullptr;
+			};
+			const auto isSolid = [&collisionOf](std::uint32_t cell)
+			{
+				const PaletteCollision* collision = collisionOf(cell);
+				return collision != nullptr && collision->kind == TileCollisionKind::Full;
 			};
 
 			glm::vec3 pos{};
@@ -755,10 +774,11 @@ namespace aether
 						}
 					}
 
+					const std::uint32_t tileSetGeneration = m_tileAssets->TileSetGeneration(map.tileSetPath);
 					const TileBodyKey bodyKey{entity.id, static_cast<std::uint32_t>(layerIndex), chunkKey.x, chunkKey.y};
 					TileBodyEntry& entry = m_impl->tileBodies[bodyKey];
 					entry.seen = true;
-					if (entry.builtRevision == chunk.revision && entry.builtNeighbourRevisions == neighbourRevisions && entry.builtTransform == transform.localToWorld && entry.body != 0)
+					if (entry.builtRevision == chunk.revision && entry.builtTileSetGeneration == tileSetGeneration && entry.builtNeighbourRevisions == neighbourRevisions && entry.builtTransform == transform.localToWorld && entry.body != 0)
 					{
 						continue;
 					}
@@ -772,15 +792,71 @@ namespace aether
 						entry.body = 0;
 					}
 					entry.builtRevision = chunk.revision;
+					entry.builtTileSetGeneration = tileSetGeneration;
 					entry.builtNeighbourRevisions = neighbourRevisions;
 					entry.builtTransform = transform.localToWorld;
 
 					const glm::ivec2 chunkCellOrigin{chunkKey.x * kTileChunkSize, chunkKey.y * kTileChunkSize};
 					const std::vector<TileChainPath> outlines = TraceSolidOutlines([&](glm::ivec2 local) { return solidGlobal(chunkCellOrigin + local); });
-					if (outlines.empty())
+
+					// Rect-collision runs: contiguous same-palette Rect cells in a
+					// row merge into one box (thin platforms etc.).
+					struct RectRun
+					{
+						glm::vec2 min{0.0f};
+						glm::vec2 max{0.0f};
+					};
+					std::vector<RectRun> rectRuns;
+					for (std::int32_t localY = 0; localY < kTileChunkSize; ++localY)
+					{
+						for (std::int32_t localX = 0; localX < kTileChunkSize;)
+						{
+							const std::uint32_t cell = chunk.cells[static_cast<std::size_t>(localY) * kTileChunkSize + localX];
+							const PaletteCollision* collision = collisionOf(cell);
+							if (collision == nullptr || collision->kind != TileCollisionKind::Rect)
+							{
+								++localX;
+								continue;
+							}
+							// Merge by identical rect VALUE, not palette: platform
+							// left/mid/right caps are distinct tiles sharing one
+							// collision rect and must form a single seamless box.
+							std::int32_t runEnd = localX + 1;
+							while (runEnd < kTileChunkSize)
+							{
+								const PaletteCollision* next = collisionOf(chunk.cells[static_cast<std::size_t>(localY) * kTileChunkSize + runEnd]);
+								if (next == nullptr || next->kind != TileCollisionKind::Rect || next->rect != collision->rect)
+								{
+									break;
+								}
+								++runEnd;
+							}
+							const glm::vec4& r = collision->rect;
+							const glm::vec2 cellBase{static_cast<float>(chunkCellOrigin.x + localX), static_cast<float>(chunkCellOrigin.y + localY)};
+							rectRuns.push_back(RectRun{
+							        .min = (cellBase + glm::vec2{r.x, r.y}) * cellSize * s,
+							        .max = (glm::vec2{static_cast<float>(chunkCellOrigin.x + runEnd - 1) + r.x + r.z, cellBase.y + r.y + r.w}) * cellSize * s,
+							});
+							localX = runEnd;
+						}
+					}
+
+					entry.debugOutlines.clear();
+					if (outlines.empty() && rectRuns.empty())
 					{
 						continue;
 					}
+
+					// Debug outline points are stored in WORLD space (chain/box
+					// geometry itself stays body-local; the body carries the
+					// entity transform).
+					const float bodyAngle = glm::radians(eulerDeg.z);
+					const float bodyCos = std::cos(bodyAngle);
+					const float bodySin = std::sin(bodyAngle);
+					const auto toWorldDebug = [&](glm::vec2 local)
+					{
+						return glm::vec2{pos.x + local.x * bodyCos - local.y * bodySin, pos.y + local.x * bodySin + local.y * bodyCos};
+					};
 
 					b2BodyDef bodyDef = b2DefaultBodyDef();
 					bodyDef.type = b2_staticBody;
@@ -799,11 +875,19 @@ namespace aether
 					{
 						points.clear();
 						points.reserve(outline.points.size());
+						std::vector<glm::vec2> debugPoints;
+						debugPoints.reserve(outline.points.size() + 1);
 						for (const glm::ivec2 corner: outline.points)
 						{
-							const glm::vec2 world = glm::vec2(chunkCellOrigin + corner) * cellSize * s;
-							points.push_back({world.x, world.y});
+							const glm::vec2 local = glm::vec2(chunkCellOrigin + corner) * cellSize * s;
+							points.push_back({local.x, local.y});
+							debugPoints.push_back(toWorldDebug(local));
 						}
+						if (outline.isLoop && !debugPoints.empty())
+						{
+							debugPoints.push_back(debugPoints.front());
+						}
+						entry.debugOutlines.push_back(std::move(debugPoints));
 						b2ChainDef chainDef = b2DefaultChainDef();
 						chainDef.points = points.data();
 						chainDef.count = static_cast<int>(points.size());
@@ -818,6 +902,18 @@ namespace aether
 						{
 							b2Shape_EnableContactEvents(segment, true);
 						}
+					}
+
+					b2ShapeDef rectShapeDef = b2DefaultShapeDef();
+					rectShapeDef.enableContactEvents = true;
+					rectShapeDef.enableSensorEvents = true;
+					for (const RectRun& run: rectRuns)
+					{
+						const glm::vec2 centre = (run.min + run.max) * 0.5f;
+						const glm::vec2 half = glm::max((run.max - run.min) * 0.5f, glm::vec2{0.001f});
+						const b2Polygon box = b2MakeOffsetBox(half.x, half.y, {centre.x, centre.y}, b2Rot_identity);
+						b2CreatePolygonShape(body, &rectShapeDef, &box);
+						entry.debugOutlines.push_back({toWorldDebug({run.min.x, run.min.y}), toWorldDebug({run.max.x, run.min.y}), toWorldDebug({run.max.x, run.max.y}), toWorldDebug({run.min.x, run.max.y}), toWorldDebug({run.min.x, run.min.y})});
 					}
 					entry.body = b2StoreBodyId(body);
 				}
@@ -842,6 +938,17 @@ namespace aether
 			else
 			{
 				++it;
+			}
+		}
+	}
+
+	void Physics2DSystem::ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>&)>& callback) const
+	{
+		for (const auto& [key, entry]: m_impl->tileBodies)
+		{
+			for (const std::vector<glm::vec2>& outline: entry.debugOutlines)
+			{
+				callback(outline);
 			}
 		}
 	}

@@ -56,4 +56,22 @@ namespace aether
 		glm::vec3 target{0.0f};
 		bool keepUpright = true; // lock roll using world +Y as up
 	};
+
+	// Parallax scrolling for 2D background/foreground layers. Each frame the
+	// layer is repositioned relative to the main camera so it appears to scroll
+	// at a fraction of the camera's speed:
+	//   factor = 1 -> moves with the world (gameplay plane, no parallax)
+	//   factor = 0 -> locked to the camera (infinitely distant, e.g. the sky)
+	//   0 < factor < 1 -> distant background (slow); factor > 1 -> foreground (fast)
+	// scrollSpeed adds a constant world-units/sec drift (e.g. clouds sliding).
+	struct ParallaxComponent
+	{
+		glm::vec2 factor{0.5f, 1.0f};
+		glm::vec2 scrollSpeed{0.0f};
+		// Runtime: base anchor captured on first tick so Play never jumps, plus
+		// the accumulated drift clock. Not serialized.
+		bool baseCaptured = false;
+		glm::vec2 base{0.0f};
+		float time = 0.0f;
+	};
 } // namespace aether

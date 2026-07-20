@@ -27,6 +27,22 @@ public static class SpriteRenderer
     public static void SetOrderInLayer(Entity entity, int value) => Native.aether_sprite_set_order_in_layer(entity.Id, value);
     public static SpriteBlendMode GetBlendMode(Entity entity) => (SpriteBlendMode)Native.aether_sprite_get_blend_mode(entity.Id);
     public static void SetBlendMode(Entity entity, SpriteBlendMode value) => Native.aether_sprite_set_blend_mode(entity.Id, (int)value);
+
+    /// <summary>Mirror the sprite horizontally (the way to face movement - negative
+    /// transform scale does not survive the 2D physics transform sync).</summary>
+    public static bool GetFlipX(Entity entity) => (GetFlags(entity) & 2u) != 0u;
+    public static void SetFlipX(Entity entity, bool value) => SetFlag(entity, 2u, value);
+    public static bool GetFlipY(Entity entity) => (GetFlags(entity) & 4u) != 0u;
+    public static void SetFlipY(Entity entity, bool value) => SetFlag(entity, 4u, value);
+    public static bool GetVisible(Entity entity) => (GetFlags(entity) & 1u) != 0u;
+    public static void SetVisible(Entity entity, bool value) => SetFlag(entity, 1u, value);
+
+    private static void SetFlag(Entity entity, uint bit, bool value)
+    {
+        uint flags = GetFlags(entity);
+        SetFlags(entity, value ? flags | bit : flags & ~bit);
+    }
+
     internal static uint GetFlags(Entity entity) => Native.aether_sprite_get_flags(entity.Id);
     internal static void SetFlags(Entity entity, uint flags) => Native.aether_sprite_set_flags(entity.Id, flags);
 }

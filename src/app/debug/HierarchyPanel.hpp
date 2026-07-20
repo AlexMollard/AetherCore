@@ -103,6 +103,8 @@ namespace aether::editor
 		Entity m_prefabSaveTarget{};
 		char m_prefabNameBuf[48] = "";
 		bool m_openPrefabSave = false;
+		// Existing file names, snapshotted when a save modal appears (overwrite warnings).
+		std::vector<std::string> m_saveExistingNames;
 		bool m_filterMesh = false;
 		bool m_filterSkinned = false;
 		bool m_filterPhysics = false;

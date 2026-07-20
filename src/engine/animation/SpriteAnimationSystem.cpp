@@ -25,6 +25,10 @@ namespace aether
 
 	void SpriteAnimationSystem::UpdatePreview(World& world, float dt)
 	{
+		if (!m_previewEnabled)
+		{
+			return;
+		}
 		UpdateAnimations(world, dt, false);
 	}
 

@@ -1,0 +1,31 @@
+# One-shot golden sparkle burst. Coin.cs instantiates it at the coin's position
+# on pickup; the emitter bursts once and auto-destroys when the particles die.
+[[entities]]
+name = 'CoinSparkle'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/spark.png'
+    rate = 0.0
+    burst_count = 14
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 32
+    lifetime_min = 0.30
+    lifetime_max = 0.55
+    speed_min = 1.5
+    speed_max = 4.5
+    direction_deg = 90.0
+    spread_deg = 180.0
+    gravity = [ 0.0, -3.0 ]
+    start_size = 0.35
+    end_size = 0.0
+    start_color = [ 1.0, 0.95, 0.5, 1.0 ]
+    end_color = [ 1.0, 0.7, 0.2, 0.0 ]
+    blend_mode = 'additive'
+    sorting_layer = 20
+    order_in_layer = 0

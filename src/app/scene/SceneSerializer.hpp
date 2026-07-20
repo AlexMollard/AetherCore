@@ -13,6 +13,7 @@
 #include "material/MaterialAsset.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics2d/Physics2DComponents.hpp"
+#include "particles/ParticleComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
@@ -180,6 +181,8 @@ namespace aether::app::scene
 		std::optional<MaterialPulseComponent> materialPulse;
 		std::optional<ScalePulseComponent> scalePulse;
 		std::optional<LookAtComponent> lookAt;
+		std::optional<ParallaxComponent> parallax;
+		std::optional<ParticleEmitterComponent> particles;
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
 		std::optional<DayNightComponent> dayNight;

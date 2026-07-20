@@ -1,5 +1,6 @@
 #include "ui/FontRegistry.hpp"
 
+#include <array>
 #include <cstring>
 
 #include "io/FileSystem.hpp"
@@ -116,11 +117,29 @@ namespace aether::ui
 			return cached;
 		}
 
-		const std::string metaPath = "engine://fonts/" + std::string(name) + "-Regular.fontmeta";
-		const auto metaBytes = io::FileSystem::ReadFile(metaPath);
+		// A font name resolves against project fonts first (games bring their
+		// own typefaces), then the engine's shipped set; both accept the plain
+		// stem and the conventional -Regular suffix.
+		const std::array<std::string, 4> candidates{
+		        "project://assets/fonts/" + std::string(name) + ".fontmeta",
+		        "project://assets/fonts/" + std::string(name) + "-Regular.fontmeta",
+		        "engine://fonts/" + std::string(name) + ".fontmeta",
+		        "engine://fonts/" + std::string(name) + "-Regular.fontmeta",
+		};
+		std::string metaPath;
+		Expected<std::vector<std::byte>> metaBytes = Unexpected{AetherError::Asset("no font candidates tried")};
+		for (const std::string& candidate: candidates)
+		{
+			metaBytes = io::FileSystem::ReadFile(candidate);
+			if (metaBytes.has_value())
+			{
+				metaPath = candidate;
+				break;
+			}
+		}
 		if (!metaBytes.has_value())
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: failed to read '{}'", metaPath);
+			AE_ERROR(LogCategory::UI, "FontRegistry: no .fontmeta for font '{}' in project://assets/fonts or engine://fonts (bake the TTF or check the name)", name);
 			return nullptr;
 		}
 
@@ -153,6 +172,7 @@ namespace aether::ui
 		}
 
 		FontAsset asset;
+		asset.atlasPath = metaPath.substr(0, metaPath.size() - std::string_view{".fontmeta"}.size()) + ".fontatlas";
 		asset.atlasWidth = header.atlasWidth;
 		asset.atlasHeight = header.atlasHeight;
 		asset.ascent = header.ascent;

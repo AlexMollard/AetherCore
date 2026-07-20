@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -70,6 +71,8 @@ namespace aether::ui
 		FontRegistry m_fontRegistry;
 		gpu::TextureHandle m_defaultFontAtlas{};
 		bool m_defaultFontReady = false;
+		// Font names whose atlas upload was attempted (success or not) - one try each.
+		std::unordered_set<std::string> m_fontsTried;
 		gpu::PipelineHandle m_pipeline{};
 		std::array<Frame, kFrames> m_frames{};
 		std::vector<UiDrawCommand> m_scratch;

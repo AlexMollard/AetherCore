@@ -4,6 +4,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "physics2d/Physics2DComponents.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
@@ -68,6 +69,21 @@ namespace aether
 
 	void ExtractPhysics2DDebugLines(const World& world, std::vector<DebugVertex>& out)
 	{
+		// Tile collision (chain outlines + rect-run boxes) lives in internal
+		// per-chunk bodies, not on entities - pull it from the system.
+		if (const auto* tileSystem = static_cast<const Physics2DSystem*>(const_cast<World&>(world).FindSystem("Physics2DSystem")))
+		{
+			constexpr glm::vec4 kTileColor{0.35f, 0.9f, 0.5f, 1.0f};
+			tileSystem->ForEachTileDebugOutline(
+			        [&](const std::vector<glm::vec2>& outline)
+			        {
+				        for (std::size_t i = 1; i < outline.size(); ++i)
+				        {
+					        AddDebugLine(out, {outline[i - 1].x, outline[i - 1].y, 0.01f}, {outline[i].x, outline[i].y, 0.01f}, kTileColor);
+				        }
+			        });
+		}
+
 		for (const auto& [enttEntity, collider, transform]: world.View<Collider2DComponent, TransformComponent>().each())
 		{
 			glm::vec3 pos{};

@@ -45,6 +45,7 @@ using namespace std::string_view_literals;
 #include "debug/SpriteAnimationPanel.hpp"
 #include "debug/SpriteSlicerPanel.hpp"
 #include "debug/TilePaintingState.hpp"
+#include "debug/ParticlePanel.hpp"
 #include "debug/TilePalettePanel.hpp"
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
@@ -286,6 +287,7 @@ namespace aether::editor
 		m_panels.push_back(std::make_unique<SpriteSlicerPanel>());
 		m_panels.push_back(std::make_unique<TilePalettePanel>());
 		m_panels.push_back(std::make_unique<SpriteAnimationPanel>());
+		m_panels.push_back(std::make_unique<ParticlePanel>());
 		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));

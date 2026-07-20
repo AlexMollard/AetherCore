@@ -27,6 +27,12 @@ namespace aether
 	void SetPhysicsDebugShapesEnabled(bool enabled);
 	bool IsPhysicsDebugShapesEnabled();
 
+	// Collision-only view: scene rendering (meshes, sprites, tiles) is
+	// suppressed and every collider wireframe draws - for reading collision
+	// against a plain background. Session-only; never persisted.
+	void SetCollisionOnlyViewEnabled(bool enabled);
+	bool IsCollisionOnlyViewEnabled();
+
 	enum class PhysicsDebugColorMode : uint8_t
 	{
 		None,

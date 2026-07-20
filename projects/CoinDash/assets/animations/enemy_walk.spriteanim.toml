@@ -1,15 +1,19 @@
 # AetherCore sprite animation
 
 [animation]
-atlas = "project://assets/textures/tex_Enemy.spriteatlas.toml"
+atlas = "project://assets/textures/slime/walk32x32.spriteatlas.toml"
 event_count = 0.00
-frame_count = 2.00
+frame_count = 4.00
 loop_mode = "loop"
 name = "enemy_walk"
 schema_version = 1.00
 
 [frame]
-0.duration = 0.20
-0.sprite_id = "0c8c8f4020bb0f7d"
-1.duration = 0.20
-1.sprite_id = "0c8c8e4020bb0dca"
+0.duration = 0.14
+0.sprite_id = "fafec320ce56b256"
+1.duration = 0.14
+1.sprite_id = "fafec420ce56b409"
+2.duration = 0.14
+2.sprite_id = "fafec120ce56aef0"
+3.duration = 0.14
+3.sprite_id = "fafec220ce56b0a3"

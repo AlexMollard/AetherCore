@@ -1,0 +1,31 @@
+# One-shot landing dust puff. PlayerController instantiates it at the player's
+# feet on landing; bursts once and auto-destroys.
+[[entities]]
+name = 'Dust'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/dot_soft.png'
+    rate = 0.0
+    burst_count = 8
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 24
+    lifetime_min = 0.22
+    lifetime_max = 0.42
+    speed_min = 0.9
+    speed_max = 2.4
+    direction_deg = 90.0
+    spread_deg = 85.0
+    gravity = [ 0.0, -2.0 ]
+    start_size = 0.30
+    end_size = 0.02
+    start_color = [ 0.86, 0.79, 0.62, 0.9 ]
+    end_color = [ 0.80, 0.72, 0.55, 0.0 ]
+    blend_mode = 'alpha'
+    sorting_layer = 1
+    order_in_layer = 0

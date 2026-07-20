@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/glm.hpp>
+
 #include "assets/AssetTypes.hpp"
 #include "utils/Expected.hpp"
 
@@ -14,7 +16,11 @@ namespace aether
 	enum class TileCollisionKind : std::uint8_t
 	{
 		None = 0,
-		Full, // solid unit cell; merged into chunk rectangles by tile collision
+		Full, // solid unit cell; merged into chunk chain outlines
+		// Solid sub-rectangle of the cell (collisionRect) - for art that does
+		// not fill its cell, e.g. thin platforms. Contiguous same-rect runs
+		// merge into one box per row.
+		Rect,
 	};
 
 	// One paintable tile: visuals come from a sprite atlas region (stable ids on
@@ -26,6 +32,9 @@ namespace aether
 		std::string atlasPath;
 		AssetObjectId spriteId{};
 		TileCollisionKind collision = TileCollisionKind::None;
+		// Rect collision only: (x, y, w, h) in cell fractions, y-up from the
+		// cell's bottom-left. Default = the full cell.
+		glm::vec4 collisionRect{0.0f, 0.0f, 1.0f, 1.0f};
 		// Animated tiles: atlas region ids played at animationFps; empty = static.
 		std::vector<AssetObjectId> animationFrames;
 		float animationFps = 8.0f;

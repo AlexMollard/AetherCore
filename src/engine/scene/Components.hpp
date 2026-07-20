@@ -112,6 +112,10 @@ namespace aether
 		bool flipX = false;
 		bool flipY = false;
 		bool pixelSnap = false;
+		// Crisp nearest-neighbour sampling for pixel art (the shader snaps UVs to
+		// texel centres). Atlas sprites also get this from the atlas' filter
+		// recommendation; this opts a plain full-texture sprite in too.
+		bool pixelArt = false;
 	};
 
 	struct SpriteAnimatorComponent

@@ -126,7 +126,9 @@ namespace aether::ui
 			return false;
 		}
 
-		const std::string atlasPath = "engine://fonts/" + std::string(name) + "-Regular.fontatlas";
+		// The registry recorded the paired atlas path when the meta loaded -
+		// no name-based guessing here.
+		const std::string& atlasPath = font->atlasPath;
 		const auto atlasBytes = io::FileSystem::ReadFile(atlasPath);
 		if (!atlasBytes.has_value())
 		{
@@ -267,6 +269,18 @@ namespace aether::ui
 		}
 
 		ResolveCanvases(*m_world, outputExtent);
+
+		// Lazily upload the atlas of every font the scene's text references -
+		// project fonts appear here the first frame a UIText names them.
+		for (const auto& [enttEntity, text]: m_world->View<UIText>().each())
+		{
+			if (!text.fontName.empty() && !m_fontsTried.contains(text.fontName))
+			{
+				m_fontsTried.insert(text.fontName);
+				EnsureFontAtlasUploaded(text.fontName);
+			}
+		}
+
 		BuildDrawCommands(*m_world, m_scratch, m_defaultFontReady ? &m_fontRegistry : nullptr, m_textures);
 
 		const auto count = static_cast<std::uint32_t>(m_scratch.size());

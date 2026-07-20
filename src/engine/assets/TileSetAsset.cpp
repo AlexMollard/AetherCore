@@ -41,12 +41,29 @@ namespace aether
 
 		[[nodiscard]] const char* CollisionName(TileCollisionKind kind)
 		{
-			return kind == TileCollisionKind::Full ? "full" : "none";
+			switch (kind)
+			{
+				case TileCollisionKind::Full:
+					return "full";
+				case TileCollisionKind::Rect:
+					return "rect";
+				case TileCollisionKind::None:
+				default:
+					return "none";
+			}
 		}
 
 		[[nodiscard]] TileCollisionKind CollisionFromName(std::string_view name)
 		{
-			return name == "full" ? TileCollisionKind::Full : TileCollisionKind::None;
+			if (name == "full")
+			{
+				return TileCollisionKind::Full;
+			}
+			if (name == "rect")
+			{
+				return TileCollisionKind::Rect;
+			}
+			return TileCollisionKind::None;
 		}
 	} // namespace
 
@@ -89,6 +106,13 @@ namespace aether
 			config.Set(TileKey(index, "atlas"), tile.atlasPath);
 			config.Set(TileKey(index, "sprite_id"), IdToString(tile.spriteId));
 			config.Set(TileKey(index, "collision"), std::string_view{CollisionName(tile.collision)});
+			if (tile.collision == TileCollisionKind::Rect)
+			{
+				config.Set(TileKey(index, "collision_x"), tile.collisionRect.x);
+				config.Set(TileKey(index, "collision_y"), tile.collisionRect.y);
+				config.Set(TileKey(index, "collision_w"), tile.collisionRect.z);
+				config.Set(TileKey(index, "collision_h"), tile.collisionRect.w);
+			}
 			config.Set(TileKey(index, "animation_fps"), tile.animationFps);
 			config.Set(TileKey(index, "frame_count"), static_cast<float>(tile.animationFrames.size()));
 			for (std::size_t frameIndex = 0; frameIndex < tile.animationFrames.size(); ++frameIndex)
@@ -147,6 +171,13 @@ namespace aether
 			tile.atlasPath = config.GetString(TileKey(index, "atlas"));
 			tile.spriteId = ParseId(config.GetString(TileKey(index, "sprite_id")));
 			tile.collision = CollisionFromName(config.GetString(TileKey(index, "collision"), "none"));
+			if (tile.collision == TileCollisionKind::Rect)
+			{
+				tile.collisionRect.x = config.GetFloat(TileKey(index, "collision_x"), 0.0f);
+				tile.collisionRect.y = config.GetFloat(TileKey(index, "collision_y"), 0.0f);
+				tile.collisionRect.z = config.GetFloat(TileKey(index, "collision_w"), 1.0f);
+				tile.collisionRect.w = config.GetFloat(TileKey(index, "collision_h"), 1.0f);
+			}
 			tile.animationFps = std::max(config.GetFloat(TileKey(index, "animation_fps"), 8.0f), 0.001f);
 			const auto frameCount = static_cast<std::size_t>(config.GetFloat(TileKey(index, "frame_count"), 0.0f));
 			tile.animationFrames.reserve(frameCount);

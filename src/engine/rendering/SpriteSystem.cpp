@@ -78,7 +78,10 @@ namespace aether
 	{
 		if (m_textures == nullptr || path.empty())
 		{
-			return m_textures != nullptr ? m_textures->DefaultHandle() : TextureHandle{};
+			// No texture assigned is a valid authoring state (tint-only sprite):
+			// sample plain white so the tint shows true. Magenta stays reserved
+			// for actual load failures below.
+			return m_textures != nullptr ? m_textures->WhiteHandle() : TextureHandle{};
 		}
 		if (const auto it = m_textureCache.find(path); it != m_textureCache.end())
 		{
@@ -156,7 +159,7 @@ namespace aether
 			{
 				flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(flags) | static_cast<std::uint32_t>(SpriteInstanceFlags::PixelSnap));
 			}
-			if (nearestFilter)
+			if (nearestFilter || sprite.pixelArt)
 			{
 				flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(flags) | static_cast<std::uint32_t>(SpriteInstanceFlags::NearestFilter));
 			}

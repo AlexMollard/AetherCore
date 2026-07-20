@@ -1,6 +1,7 @@
 #include "debug/ComponentDrawers.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +19,7 @@
 #include "assets/SpriteAtlasAsset.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/EditorChrome.hpp"
+#include "io/FileSystem.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "editor/EditorProjectContext.hpp"
@@ -158,7 +160,7 @@ namespace aether::editor
 		ImGui::TextDisabled("Resolved %.1f, %.1f  %.1f x %.1f", rect->resolvedRect.x, rect->resolvedRect.y, rect->resolvedRect.z, rect->resolvedRect.w);
 	}
 
-	void DrawUiImage(World& world, Entity entity)
+	void DrawUiImage(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* image = world.TryGet<ui::UIImage>(entity);
 		if (image == nullptr || !SectionHeader(ICON_FA_IMAGE "  UI Image", ImGuiTreeNodeFlags_DefaultOpen))
@@ -169,13 +171,30 @@ namespace aether::editor
 		PropColor4("Color", &image->color.x);
 		PropFloat("Corner radius", &image->cornerRadius, 0.5f, 0.f, 200.f, "%.1f");
 		PropCheckbox("Pixel art", &image->pixelArt);
-		if (image->texture.IsValid())
+
+		// Texture slot with browse / drag-drop / Use Selected / clear.
+		auto* assets = context.TryGet<AssetManager>();
+		std::string currentPath;
+		if (assets != nullptr && image->texture.IsValid())
 		{
-			PropText("Texture", "entry %u", image->texture.index);
+			assets->GetTextureRegistry().TryGetPath(image->texture, currentPath);
 		}
-		else
+		const spriteui::AssetSlotChange slot = spriteui::DrawAssetSlot(context, "uiImageTexture", ICON_FA_IMAGE, "Texture", currentPath, spriteui::AssetRole::Texture, "Solid color (pick a texture...)", true);
+		if (slot.changed && assets != nullptr)
 		{
-			PropText("Texture", "(none)");
+			if (image->texture.IsValid())
+			{
+				assets->GetTextureRegistry().Release(image->texture);
+				image->texture = {};
+			}
+			if (!slot.path.empty())
+			{
+				image->texture = assets->GetTextureRegistry().Acquire(slot.path);
+				if (auto* db = context.TryGet<AssetDatabase>())
+				{
+					db->Register(MakeTextureSource(slot.path));
+				}
+			}
 		}
 	}
 
@@ -195,11 +214,42 @@ namespace aether::editor
 			text->text = textBuf;
 		}
 
-		char fontBuf[128]{};
-		std::snprintf(fontBuf, sizeof(fontBuf), "%s", text->fontName.c_str());
-		if (PropInputText("Font", fontBuf, sizeof(fontBuf), "default"))
+		// Every baked font, engine-shipped and project-local, in one picker.
+		iw::PropLabel("Font");
+		if (ImGui::BeginCombo("##fontName", text->fontName.empty() ? "Roboto" : text->fontName.c_str()))
 		{
-			text->fontName = fontBuf;
+			std::vector<std::string> fonts;
+			for (const char* pattern: {"engine://fonts/*.fontmeta", "project://assets/fonts/*.fontmeta"})
+			{
+				if (const auto matches = io::FileSystem::Glob(pattern); matches.has_value())
+				{
+					for (const std::string& match: *matches)
+					{
+						std::string stem = std::filesystem::path(match).stem().string();
+						if (stem.ends_with("-Regular"))
+						{
+							stem.resize(stem.size() - std::string_view{"-Regular"}.size());
+						}
+						if (std::ranges::find(fonts, stem) == fonts.end())
+						{
+							fonts.push_back(std::move(stem));
+						}
+					}
+				}
+			}
+			std::ranges::sort(fonts);
+			for (const std::string& font: fonts)
+			{
+				if (ImGui::Selectable(font.c_str(), font == text->fontName))
+				{
+					text->fontName = font;
+				}
+			}
+			if (fonts.empty())
+			{
+				ImGui::TextDisabled("No baked fonts found");
+			}
+			ImGui::EndCombo();
 		}
 
 		PropFloat("Pixel size", &text->pixelSize, 0.5f, 4.f, 200.f, "%.0f");

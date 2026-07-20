@@ -1,6 +1,7 @@
 #include "debug/EditorProjectManager.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <format>
@@ -15,6 +16,7 @@
 
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
+#include "FontProcessor.hpp"
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "editor/ModelBake.hpp"
@@ -433,6 +435,7 @@ namespace aether::editor
 		io::FileSystem::Mount("project", m_currentProject.root);
 		CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
 		BuildAndReloadProjectScripts();
+		BakeProjectFonts();
 		app::scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
 		RefreshServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
@@ -448,6 +451,44 @@ namespace aether::editor
 			m_previewCaptureCountdown = 90;
 		}
 		AE_INFO(LogCategory::App, "Opened editor project '{}' at {}", m_currentProject.name, DisplayPath(m_currentProject.root));
+	}
+
+	void EditorProjectManager::BakeProjectFonts() const
+	{
+		const std::filesystem::path fontsDir = m_currentProject.root / "assets" / "fonts";
+		std::error_code ec;
+		if (!std::filesystem::exists(fontsDir, ec))
+		{
+			return;
+		}
+		for (const auto& entry: std::filesystem::directory_iterator(fontsDir, ec))
+		{
+			if (!entry.is_regular_file())
+			{
+				continue;
+			}
+			std::string ext = entry.path().extension().string();
+			std::ranges::transform(ext, ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (ext != ".ttf" && ext != ".otf")
+			{
+				continue;
+			}
+			const std::filesystem::path meta = entry.path().parent_path() / (entry.path().stem().string() + ".fontmeta");
+			std::error_code metaEc;
+			if (std::filesystem::exists(meta, metaEc) && std::filesystem::last_write_time(meta, metaEc) >= entry.last_write_time(metaEc))
+			{
+				continue; // baked and up to date
+			}
+			const auto result = aether::assetpipeline::FontProcessor::BakeFont(entry.path(), fontsDir);
+			if (result.success)
+			{
+				AE_INFO(LogCategory::App, "Project font baked: {} ({} glyphs, {}x{} atlas)", entry.path().filename().string(), result.glyphCount, result.atlasWidth, result.atlasHeight);
+			}
+			else
+			{
+				AE_WARN(LogCategory::App, "Project font bake failed for {}: {}", entry.path().filename().string(), result.error);
+			}
+		}
 	}
 
 	void EditorProjectManager::LoadProjectStartupScene()
