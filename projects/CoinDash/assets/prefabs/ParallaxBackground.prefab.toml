@@ -9,7 +9,7 @@ position = [ 0.0, 0.0, 0.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'BG Sky'
 guid = 2
 parent = 0
@@ -37,7 +37,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'BG Hills Far'
 guid = 3
 parent = 0
@@ -45,7 +45,7 @@ position = [ 40.0, 2.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.parallax]
-    factor = [ 0.25, 0.30000001192092896 ]
+    factor = [ 0.25, 0.3 ]
     scroll_speed = [ 0.0, 0.0 ]
 
     [entities.sprite]
@@ -65,7 +65,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 10.0, 1.0 ]
     visible = true
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'BG Clouds'
 guid = 4
 parent = 0
@@ -73,7 +73,7 @@ position = [ 40.0, 6.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.parallax]
-    factor = [ 0.11999999731779099, 0.18000000715255737 ]
+    factor = [ 0.12, 0.18 ]
     scroll_speed = [ 0.5, 0.0 ]
 
     [entities.sprite]
@@ -93,7 +93,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 10.0, 1.0 ]
     visible = true
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'BG Hills Near'
 guid = 5
 parent = 0
@@ -101,7 +101,7 @@ position = [ 40.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.parallax]
-    factor = [ 0.44999998807907104, 0.5 ]
+    factor = [ 0.45, 0.5 ]
     scroll_speed = [ 0.0, 0.0 ]
 
     [entities.sprite]
@@ -121,15 +121,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 8.0, 1.0 ]
     visible = true
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'BG Grass FG'
 guid = 6
 parent = 0
-position = [ 40.0, -1.2999999523162842, 0.0 ]
+position = [ 40.0, -1.3, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.parallax]
-    factor = [ 1.100000023841858, 1.0 ]
+    factor = [ 1.1, 1.0 ]
     scroll_speed = [ 0.0, 0.0 ]
 
     [entities.sprite]
@@ -149,7 +149,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 9.0, 1.0 ]
     visible = true
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'BG Grass Fill'
 guid = 7
 parent = 0
@@ -157,7 +157,7 @@ position = [ 40.0, -10.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.parallax]
-    factor = [ 1.100000023841858, 1.0 ]
+    factor = [ 1.1, 1.0 ]
     scroll_speed = [ 0.0, 0.0 ]
 
     [entities.sprite]
@@ -173,6 +173,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixels_per_unit = 16.0
     sorting_layer = 99
     texture = ''
-    tint = [ 0.0860000029206276, 0.10199999809265137, 0.13300000131130219, 1.0 ]
+    tint = [ 0.086, 0.102, 0.133, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true

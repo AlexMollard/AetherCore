@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -353,6 +355,53 @@ namespace aether::app::scene
 		toml::array Vec4ToToml(const glm::vec4& v)
 		{
 			return toml::array{v.x, v.y, v.z, v.w};
+		}
+
+		// The scene data model is entirely float32, but glm floats promote to double
+		// when inserted into toml, which then serializes them at full double precision
+		// (0.30000001192092896 for 0.3f) - visual noise, and a source of churn. Round
+		// each float node to the shortest decimal that round-trips to the SAME float32
+		// (lossless for float32 storage) and normalize -0.0 to 0.0.
+		double CleanFloatForToml(double value)
+		{
+			const float f = static_cast<float>(value);
+			if (f == 0.0f)
+			{
+				return 0.0; // fold -0.0 into 0.0
+			}
+			if (!std::isfinite(f))
+			{
+				return value; // leave inf/nan untouched
+			}
+			char buffer[32];
+			const std::to_chars_result out = std::to_chars(buffer, buffer + sizeof(buffer), f);
+			double cleaned = value;
+			std::from_chars(buffer, out.ptr, cleaned);
+			return cleaned;
+		}
+
+		// Walk a built document and clean every floating-point node in place. Integers
+		// (guids, sprite ids, sorting layers) are stored as int64 and left alone.
+		void CleanFloatsInTree(toml::node& node)
+		{
+			if (auto* table = node.as_table())
+			{
+				for (auto&& [key, child]: *table)
+				{
+					CleanFloatsInTree(child);
+				}
+			}
+			else if (auto* array = node.as_array())
+			{
+				for (auto&& child: *array)
+				{
+					CleanFloatsInTree(child);
+				}
+			}
+			else if (auto* dbl = node.as_floating_point())
+			{
+				dbl->get() = CleanFloatForToml(dbl->get());
+			}
 		}
 
 		glm::vec2 Vec2FromToml(const toml::node_view<const toml::node>& node, glm::vec2 fallback)
@@ -1119,6 +1168,9 @@ namespace aether::app::scene
 			root.insert("prefab_instances", std::move(instances));
 		}
 
+		// Normalize every float to its shortest float32 representation so both the TOML
+		// text and the cooked binary (both built from this tree) are clean and stable.
+		CleanFloatsInTree(root);
 		return root;
 	}
 

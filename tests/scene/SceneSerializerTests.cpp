@@ -811,6 +811,34 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     CHECK(fresh.TryGet<SpinComponent>(h->children[0]) != nullptr);
 }
 
+TEST_CASE("Float serialization is clean (shortest float32, no -0.0) and lossless") {
+    SceneDescription scene;
+    scene.version = kSceneFormatVersion;
+    EntityRecord e;
+    e.name = "Floaty";
+    e.hasTransform = true;
+    e.position = {0.3f, 1.0f / 3.0f, -0.0f};
+    e.eulerDeg = {-0.0f, 90.0f, 0.0f};
+    e.scale = {1.0f, 1.0f, 1.0f};
+    scene.entities.push_back(e);
+
+    const std::string toml = WriteToml(scene);
+    // Float32 0.3 must not spill its double-promotion tail, and -0.0 must read as 0.0.
+    CHECK(toml.find("0.30000001") == std::string::npos);
+    CHECK(toml.find("-0.0") == std::string::npos);
+    CHECK(toml.find("0.3") != std::string::npos);
+
+    // Still lossless: values round-trip back to the same float32.
+    const auto parsed = ParseToml(toml);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    const EntityRecord& r = parsed->entities[0];
+    CHECK(r.position.x == 0.3f);
+    CHECK(r.position.y == 1.0f / 3.0f);
+    CHECK(r.position.z == 0.0f);
+    CHECK(r.eulerDeg.y == doctest::Approx(90.0f));
+}
+
 TEST_CASE("Prefab instance overrides, removed guids and added entities round-trip through TOML") {
     SceneDescription scene;
     scene.version = kSceneFormatVersion;
