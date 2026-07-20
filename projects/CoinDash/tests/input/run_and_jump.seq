@@ -1,0 +1,16 @@
+# Auto-test input sequence for CoinDash.
+# Format: <time_seconds> <op> [keys...]
+#   op = hold   -> press keys and keep them held
+#        release-> release keys ("release all" releases everything)
+#        tap    -> press now, auto-release ~0.1s later (good for jumps)
+#        clear  -> release everything
+#   keys: a-z, 0-9, left/right/up/down, space, shift, ctrl, alt, ...
+#   '#' starts a comment; blank lines are ignored.
+#
+# Play it with:  engine.play_input_sequence {"file":"<path to this>.seq"}
+#            or:  engine.play_input_sequence {"text":"0 hold d\n2 clear"}
+
+0.0   hold d          # start running right
+1.0   tap space       # jump
+2.3   tap space       # jump again
+3.2   clear           # stop (release everything)

@@ -9,6 +9,7 @@
 #include <exception>
 #include <filesystem>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,7 +30,9 @@
 #include "editor/ModelImport.hpp"
 #include "editor/ReflectionJson.hpp"
 #include "gpu/ResourceRegistry.hpp"
+#include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
+#include "platform/Input.hpp"
 #include "rendering/ScreenshotService.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/SettingsService.hpp"
@@ -79,6 +82,115 @@ namespace aether::editor
 		json StrProp()
 		{
 			return json{{"type", "string"}};
+		}
+
+		// GLFW key code for a key name (same vocabulary as engine.send_input): a-z,
+		// 0-9, or left/right/up/down/space/enter/escape/tab/shift/ctrl/alt. -1 if unknown.
+		int KeyCodeFromName(std::string name)
+		{
+			for (char& c: name)
+			{
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			}
+			if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z')
+			{
+				return 65 + (name[0] - 'a');
+			}
+			if (name.size() == 1 && name[0] >= '0' && name[0] <= '9')
+			{
+				return 48 + (name[0] - '0');
+			}
+			if (name == "left") return 263;
+			if (name == "right") return 262;
+			if (name == "up") return 265;
+			if (name == "down") return 264;
+			if (name == "space") return 32;
+			if (name == "enter" || name == "return") return 257;
+			if (name == "escape" || name == "esc") return 256;
+			if (name == "tab") return 258;
+			if (name == "shift" || name == "lshift") return 340;
+			if (name == "ctrl" || name == "lctrl") return 341;
+			if (name == "alt" || name == "lalt") return 342;
+			return -1;
+		}
+
+		// Parse the auto-test input sequence text into timed events. Each non-empty,
+		// non-comment line is "<time_seconds> <op> [keys...]"; op is hold/press (hold
+		// keys down), release/up (release keys; "release all" clears everything), tap
+		// (press then auto-release ~0.1s later), or clear. Sets 'error' on a bad line.
+		std::vector<Input::InputSequenceEvent> ParseInputSequence(const std::string& text, std::string& error)
+		{
+			std::vector<Input::InputSequenceEvent> events;
+			std::istringstream stream(text);
+			std::string line;
+			int lineNo = 0;
+			while (std::getline(stream, line))
+			{
+				++lineNo;
+				if (const auto hash = line.find('#'); hash != std::string::npos)
+				{
+					line.erase(hash);
+				}
+				std::istringstream ls(line);
+				std::string timeTok;
+				if (!(ls >> timeTok))
+				{
+					continue; // blank / comment-only line
+				}
+				float t = 0.0f;
+				try
+				{
+					t = std::stof(timeTok);
+				}
+				catch (...)
+				{
+					error = "line " + std::to_string(lineNo) + ": expected a time, got '" + timeTok + "'";
+					return {};
+				}
+				std::string op;
+				if (!(ls >> op))
+				{
+					continue;
+				}
+				for (char& c: op)
+				{
+					c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+				}
+				std::vector<std::string> keys;
+				for (std::string k; ls >> k;)
+				{
+					keys.push_back(k);
+				}
+
+				if (op == "clear" || (op == "release" && keys.size() == 1 && keys[0] == "all"))
+				{
+					events.push_back({t, -1, false});
+					continue;
+				}
+				const bool down = (op == "hold" || op == "press" || op == "tap");
+				const bool release = (op == "release" || op == "up");
+				const bool tap = (op == "tap");
+				if (!down && !release)
+				{
+					error = "line " + std::to_string(lineNo) + ": unknown op '" + op + "' (use hold/release/tap/clear)";
+					return {};
+				}
+				for (const std::string& key: keys)
+				{
+					const int code = KeyCodeFromName(key);
+					if (code < 0)
+					{
+						error = "line " + std::to_string(lineNo) + ": unknown key '" + key + "'";
+						return {};
+					}
+					events.push_back({t, code, !release});
+					if (tap)
+					{
+						events.push_back({t + 0.1f, code, false});
+					}
+				}
+			}
+			return events;
 		}
 
 		json BatchSchema(const json& itemSchema)
@@ -1051,6 +1163,137 @@ namespace aether::editor
 			        }
 			        return json{{"ok", true}, {"speed", playState->TimeScale()}};
 		        }});
+		methods.push_back({"engine.send_input",
+		        "send_input",
+		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire.",
+		        true,
+		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}}, {"up", json{{"type", "array"}, {"items", StrProp()}}}, {"clear", json{{"type", "boolean"}}}}),
+		        [](const json& params, MethodContext& ctx) -> json
+		        {
+			        auto* input = ctx.services.TryGet<Input>();
+			        if (input == nullptr)
+			        {
+				        return json{{"ok", false}, {"error", "input service unavailable"}};
+			        }
+			        const auto keyCode = [](std::string name) -> int
+			        {
+				        for (char& c: name)
+				        {
+					        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+				        }
+				        if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z')
+				        {
+					        return 65 + (name[0] - 'a');
+				        }
+				        if (name.size() == 1 && name[0] >= '0' && name[0] <= '9')
+				        {
+					        return 48 + (name[0] - '0');
+				        }
+				        if (name == "left") return 263;
+				        if (name == "right") return 262;
+				        if (name == "up") return 265;
+				        if (name == "down") return 264;
+				        if (name == "space") return 32;
+				        if (name == "enter" || name == "return") return 257;
+				        if (name == "escape" || name == "esc") return 256;
+				        if (name == "tab") return 258;
+				        if (name == "shift" || name == "lshift") return 340;
+				        if (name == "ctrl" || name == "lctrl") return 341;
+				        if (name == "alt" || name == "lalt") return 342;
+				        return -1;
+			        };
+			        if (params.value("clear", false))
+			        {
+				        input->ClearSyntheticKeys();
+			        }
+			        json applied = json::array();
+			        json unknown = json::array();
+			        const auto apply = [&](const char* field, bool down)
+			        {
+				        if (!params.contains(field) || !params[field].is_array())
+				        {
+					        return;
+				        }
+				        for (const auto& entry: params[field])
+				        {
+					        if (!entry.is_string())
+					        {
+						        continue;
+					        }
+					        const std::string name = entry.get<std::string>();
+					        const int code = keyCode(name);
+					        if (code >= 0)
+					        {
+						        input->SetSyntheticKey(code, down);
+						        applied.push_back(name);
+					        }
+					        else
+					        {
+						        unknown.push_back(name);
+					        }
+				        }
+			        };
+			        apply("down", true);
+			        apply("up", false);
+			        return json{{"ok", true}, {"applied", applied}, {"unknown", unknown}};
+		        }});
+
+		methods.push_back({"engine.play_input_sequence",
+		        "play_input_sequence",
+		        "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
+		        true,
+		        Obj({{"text", StrProp()}, {"file", StrProp()}, {"stop", json{{"type", "boolean"}}}}),
+		        [](const json& params, MethodContext& ctx) -> json
+		        {
+			        auto* input = ctx.services.TryGet<Input>();
+			        if (input == nullptr)
+			        {
+				        return json{{"ok", false}, {"error", "input service unavailable"}};
+			        }
+			        if (params.value("stop", false))
+			        {
+				        input->StopInputSequence();
+				        return json{{"ok", true}, {"stopped", true}};
+			        }
+			        std::string text;
+			        if (params.contains("text") && params["text"].is_string())
+			        {
+				        text = params["text"].get<std::string>();
+			        }
+			        else if (params.contains("file") && params["file"].is_string())
+			        {
+				        const std::string path = params["file"].get<std::string>();
+				        auto contents = io::file_util::ReadText(path);
+				        if (!contents)
+				        {
+					        return json{{"ok", false}, {"error", "could not read sequence file: " + path}};
+				        }
+				        text = *contents;
+			        }
+			        else
+			        {
+				        return json{{"ok", false}, {"error", "provide 'text' (inline) or 'file' (path)"}};
+			        }
+
+			        std::string error;
+			        std::vector<Input::InputSequenceEvent> events = ParseInputSequence(text, error);
+			        if (!error.empty())
+			        {
+				        return json{{"ok", false}, {"error", error}};
+			        }
+			        if (events.empty())
+			        {
+				        return json{{"ok", false}, {"error", "sequence has no events"}};
+			        }
+			        float duration = 0.0f;
+			        for (const Input::InputSequenceEvent& e: events)
+			        {
+				        duration = std::max(duration, e.time);
+			        }
+			        const std::size_t count = events.size();
+			        input->PlayInputSequence(std::move(events));
+			        return json{{"ok", true}, {"events", count}, {"duration", duration}};
+		        }});
 
 		methods.push_back({"rendergraph",
 		        "query_rendergraph",
@@ -1561,6 +1804,7 @@ namespace aether::editor
 		        }});
 
 		Append2DAuthoringMethods(methods);
+		AppendPixelArtMethods(methods);
 		AppendUiAutomationMethods(methods);
 
 		// Undo / redo endpoints (mirror Ctrl+Z / Ctrl+Y). They run the editor

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <array>
+#include <chrono>
+#include <cstddef>
 #include <string>
+#include <vector>
 #include <glm/glm.hpp>
 
 struct GLFWwindow;
@@ -154,6 +157,11 @@ namespace aether
 
 		[[nodiscard]] glm::vec2 GetMousePos() const;
 
+		// The pixel-space size that GetMousePos() is expressed in: the game render
+		// target when a viewport transform is active (editor play), otherwise the
+		// window size (shipped game). Scripts need this to unproject the cursor.
+		[[nodiscard]] glm::vec2 GetMouseTargetSize() const;
+
 		[[nodiscard]] glm::vec2 GetMouseDelta() const;
 
 		void SetMouseViewportTransform(glm::vec2 viewportMin, glm::vec2 viewportSize, glm::vec2 targetSize);
@@ -184,7 +192,44 @@ namespace aether
 			return m_mouseCaptured;
 		}
 
+		// Synthetic key injection (headless playtesting via the control server). A
+		// synthetic key is OR'd into the real GLFW state each Update(), so held keys
+		// drive IsKeyDown and the down-edge still fires IsKeyPressed exactly once.
+		void SetSyntheticKey(int key, bool down)
+		{
+			if (key >= 0 && key < kMaxKeys)
+			{
+				m_syntheticKeys[key] = down;
+			}
+		}
+
+		void ClearSyntheticKeys()
+		{
+			m_syntheticKeys.fill(false);
+		}
+
+		// Timed synthetic-input playback for auto-testing. A sequence is a list of
+		// events (seconds-from-start, key, down/up); keyCode < 0 means "release all".
+		// Driven off a wall clock in Update(), so it survives variable framerate and
+		// needs no per-frame dt. See engine.play_input_sequence.
+		struct InputSequenceEvent
+		{
+			float time = 0.0f;
+			int keyCode = 0; // < 0 == clear all synthetic keys
+			bool down = false;
+		};
+
+		void PlayInputSequence(std::vector<InputSequenceEvent> events);
+		void StopInputSequence();
+
+		[[nodiscard]] bool IsInputSequenceActive() const
+		{
+			return m_inputSequenceActive;
+		}
+
 	private:
+		void TickInputSequence();
+
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
 		static void OnChar(GLFWwindow* window, unsigned int codepoint);
 
@@ -195,6 +240,7 @@ namespace aether
 
 		std::array<bool, kMaxKeys> m_currKeys{};
 		std::array<bool, kMaxKeys> m_prevKeys{};
+		std::array<bool, kMaxKeys> m_syntheticKeys{};
 		std::array<bool, kMaxMouseButtons> m_currMouseButtons{};
 		std::array<bool, kMaxMouseButtons> m_prevMouseButtons{};
 
@@ -210,6 +256,11 @@ namespace aether
 		bool m_firstUpdate = true;
 		bool m_mouseCaptured = false;
 		bool m_mouseViewportInputActive = false;
+
+		std::vector<InputSequenceEvent> m_inputSequence;
+		std::size_t m_inputSequenceNext = 0;
+		bool m_inputSequenceActive = false;
+		std::chrono::steady_clock::time_point m_inputSequenceStart{};
 
 		bool m_mouseViewportTransformActive = false;
 		glm::vec2 m_mouseViewportMin{};

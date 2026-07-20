@@ -175,6 +175,13 @@ public sealed class PlayerController : EntityScript
         }
     }
 
+    /// <summary>Move the respawn point (checkpoints). The player returns here on a
+    /// hazard hit or a fall instead of the level start.</summary>
+    public void SetCheckpoint(Vector3 position)
+    {
+        _spawn = position;
+    }
+
     public void Respawn()
     {
         // Death: a subtle screen shake sells the hit.
@@ -191,6 +198,18 @@ public sealed class PlayerController : EntityScript
         Vector2 velocity = Physics2D.GetLinearVelocity(Self);
         velocity.Y = JumpSpeed * 0.7f;
         Physics2D.SetLinearVelocity(Self, velocity);
+    }
+
+    /// <summary>Set an explicit upward launch (spring pads). Cancels the variable-jump
+    /// cut for this ascent so the full launch height always lands, whether or not the
+    /// player is holding jump, and adds a launch stretch.</summary>
+    public void Launch(float speed)
+    {
+        Vector2 velocity = Physics2D.GetLinearVelocity(Self);
+        velocity.Y = speed;
+        Physics2D.SetLinearVelocity(Self, velocity);
+        _jumpCutDone = true;
+        _squash = -0.3f;
     }
 
     private bool IsGrounded()

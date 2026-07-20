@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "platform/Input.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
@@ -239,4 +240,40 @@ AE_SCRIPT_API Vec3 aether_camera_get_right(std::uint32_t id)
 	const glm::vec3 right = glm::vec3(pose[0]);
 	const float len = glm::length(right);
 	return FromGlm(len > 1e-6f ? right / len : glm::vec3(1.0f, 0.0f, 0.0f));
+}
+
+// Unproject a cursor position (as returned by aether_input_mouse_pos) to a world
+// point on the z = 0 plane, using the current main camera. Exact for orthographic
+// 2D cameras (the CoinDash case); for perspective it returns the point on the
+// camera plane in the cursor direction, which is a reasonable approximation.
+AE_SCRIPT_API Vec3 aether_camera_screen_to_world(Vec2 screenPos)
+{
+	auto& ctx = ActiveContext();
+	auto& world = ActiveWorld();
+	const aether::Entity cam = aether::ecs::GetMainCameraEntity(world);
+	const auto* cc = world.TryGet<aether::CameraComponent>(cam);
+	const auto* tc = world.TryGet<aether::TransformComponent>(cam);
+	if (cc == nullptr || tc == nullptr || ctx.input == nullptr)
+	{
+		return Vec3{0.0f, 0.0f, 0.0f};
+	}
+
+	const glm::vec2 target = ctx.input->GetMouseTargetSize();
+	if (target.x <= 0.0f || target.y <= 0.0f)
+	{
+		return Vec3{0.0f, 0.0f, 0.0f};
+	}
+
+	const float aspect = target.x / target.y;
+	// Normalized device coords in [-1, 1]; screen Y grows down, world Y grows up.
+	const float ndcX = screenPos.x / target.x * 2.0f - 1.0f;
+	const float ndcY = 1.0f - screenPos.y / target.y * 2.0f;
+	const float halfH = cc->orthographicHeight * 0.5f;
+	const float halfW = halfH * aspect;
+
+	const glm::vec3 camPos = glm::vec3(tc->localToWorld[3]);
+	const glm::vec3 right = glm::normalize(glm::vec3(tc->localToWorld[0]));
+	const glm::vec3 up = glm::normalize(glm::vec3(tc->localToWorld[1]));
+	const glm::vec3 pointOnPlane = camPos + right * (ndcX * halfW) + up * (ndcY * halfH);
+	return Vec3{pointOnPlane.x, pointOnPlane.y, 0.0f};
 }

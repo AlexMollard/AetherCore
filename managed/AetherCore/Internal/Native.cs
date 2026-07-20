@@ -312,6 +312,10 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial Vector3 aether_camera_get_right(uint id);
 
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector3 aether_camera_screen_to_world(Vector2 screenPos);
+
     // ── Physics ───────────────────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial void aether_physics_add_box(uint id, Vector3 halfExtents, int dynamic);

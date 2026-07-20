@@ -39,4 +39,8 @@ namespace aether::editor
 	// 2D authoring group (tile painting, atlas slicing, animation creation,
 	// editor camera, asset discovery) - defined in ControlMethods2D.cpp.
 	void Append2DAuthoringMethods(std::vector<ControlMethod>& methods);
+
+	// Pixel-art canvas group (new/open/save, per-pixel + shape edits, read-back) -
+	// defined in ControlMethodsPixel.cpp. Operates on the shared PixelArtDocument.
+	void AppendPixelArtMethods(std::vector<ControlMethod>& methods);
 } // namespace aether::editor

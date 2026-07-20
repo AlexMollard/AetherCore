@@ -60,6 +60,58 @@ namespace aether
 			return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(b2Body_GetUserData(body)));
 		}
 
+		// A one-way tile shape carries its blocking direction (TileOneWay, 1..4) in
+		// its shape user data - a tag pointer, never dereferenced. None (0) shapes
+		// leave user data null. Real pointers never fall in 1..4, so the pre-solve
+		// can tell a one-way shape from a normal one by this value alone.
+		void* OneWayUserData(TileOneWay dir)
+		{
+			return reinterpret_cast<void*>(static_cast<std::uintptr_t>(dir));
+		}
+
+		// The outward normal of a one-way collider's SOLID face. A contact is kept
+		// only when the other body sits on this side.
+		glm::vec2 OneWaySolidNormal(TileOneWay dir)
+		{
+			switch (dir)
+			{
+				case TileOneWay::Up:
+					return {0.0f, 1.0f};
+				case TileOneWay::Down:
+					return {0.0f, -1.0f};
+				case TileOneWay::Left:
+					return {-1.0f, 0.0f};
+				case TileOneWay::Right:
+					return {1.0f, 0.0f};
+				default:
+					return {0.0f, 0.0f};
+			}
+		}
+
+		// One-way pre-solve: called on the physics thread for contacts involving a
+		// one-way tile shape. Keep the contact only when the other body is on the
+		// solid side (approaching that face); from any other side it passes straight
+		// through. b2Manifold.normal points from shape A to shape B, so orient it by
+		// which shape is the platform, then project onto the solid-face normal.
+		bool OneWayPreSolve(b2ShapeId shapeIdA, b2ShapeId shapeIdB, b2Manifold* manifold, void* /*context*/)
+		{
+			const auto tag = [](b2ShapeId shape) -> TileOneWay
+			{
+				const std::uintptr_t v = reinterpret_cast<std::uintptr_t>(b2Shape_GetUserData(shape));
+				return (v >= 1 && v <= 4) ? static_cast<TileOneWay>(v) : TileOneWay::None;
+			};
+			const TileOneWay dirA = tag(shapeIdA);
+			const TileOneWay dirB = tag(shapeIdB);
+			if ((dirA != TileOneWay::None) == (dirB != TileOneWay::None))
+			{
+				return true; // neither (or both) is one-way: solve normally
+			}
+			const bool platformIsA = dirA != TileOneWay::None;
+			const float sign = platformIsA ? 1.0f : -1.0f; // orient normal platform -> body
+			const glm::vec2 solid = OneWaySolidNormal(platformIsA ? dirA : dirB);
+			return (sign * manifold->normal.x) * solid.x + (sign * manifold->normal.y) * solid.y > 0.5f;
+		}
+
 		CollisionEvents2DComponent* EventsOf(World& world, std::uint32_t rawEntity)
 		{
 			const Entity entity{rawEntity};
@@ -123,6 +175,9 @@ namespace aether
 			// World-space collision geometry for the physics debug overlay
 			// (chain polylines, and closed loops for rect-collision tiles).
 			std::vector<std::vector<glm::vec2>> debugOutlines;
+			// Parallel to debugOutlines: the one-way direction of each outline
+			// (None for solid chains / two-way boxes) so the overlay can flag them.
+			std::vector<TileOneWay> debugOneWay;
 		};
 	} // namespace
 
@@ -143,6 +198,8 @@ namespace aether
 		b2WorldDef worldDef = b2DefaultWorldDef();
 		worldDef.gravity = {0.0f, -9.81f};
 		m_impl->world = b2CreateWorld(&worldDef);
+		// One-way tile platforms disable their contact from below via this callback.
+		b2World_SetPreSolveCallback(m_impl->world, &OneWayPreSolve, nullptr);
 
 		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBody2DComponent>().connect<&Physics2DSystem::OnRigidBody2DDestroyed>(this);
 		m_jointDestroyConn = world.GetRegistry().on_destroy<Joint2DComponent>().connect<&Physics2DSystem::OnJoint2DDestroyed>(this);
@@ -714,6 +771,7 @@ namespace aether
 			struct PaletteCollision
 			{
 				TileCollisionKind kind = TileCollisionKind::None;
+				TileOneWay oneWay = TileOneWay::None;
 				glm::vec4 rect{0.0f, 0.0f, 1.0f, 1.0f};
 			};
 			std::vector<PaletteCollision> paletteCollision(map.tilePalette.size());
@@ -721,7 +779,7 @@ namespace aether
 			{
 				if (const TileDefinition* tile = tileSet.Find(map.tilePalette[i]))
 				{
-					paletteCollision[i] = {tile->collision, tile->collisionRect};
+					paletteCollision[i] = {tile->collision, tile->collision != TileCollisionKind::None ? tile->oneWay : TileOneWay::None, tile->collisionRect};
 				}
 			}
 			const auto collisionOf = [&paletteCollision](std::uint32_t cell) -> const PaletteCollision*
@@ -733,10 +791,12 @@ namespace aether
 				const std::uint16_t index = tilecell::PaletteIndex(cell);
 				return index < paletteCollision.size() ? &paletteCollision[index] : nullptr;
 			};
+			// Two-way solid cells feed the merged chain outlines. One-way cells are
+			// excluded here and become separate top-surface box colliders below.
 			const auto isSolid = [&collisionOf](std::uint32_t cell)
 			{
 				const PaletteCollision* collision = collisionOf(cell);
-				return collision != nullptr && collision->kind == TileCollisionKind::Full;
+				return collision != nullptr && collision->kind == TileCollisionKind::Full && collision->oneWay == TileOneWay::None;
 			};
 
 			glm::vec3 pos{};
@@ -805,43 +865,70 @@ namespace aether
 					{
 						glm::vec2 min{0.0f};
 						glm::vec2 max{0.0f};
+						TileOneWay oneWay = TileOneWay::None;
+					};
+					// A cell needs a box collider (rather than a merged chain) when it
+					// is a Rect sub-cell OR any one-way platform; a one-way Full cell
+					// uses the whole-cell rect. Two-way Full cells return invalid here
+					// and are covered by the chain outlines instead.
+					struct BoxInfo
+					{
+						bool valid = false;
+						glm::vec4 rect{0.0f, 0.0f, 1.0f, 1.0f};
+						TileOneWay oneWay = TileOneWay::None;
+					};
+					const auto boxOf = [&collisionOf](std::uint32_t cell) -> BoxInfo
+					{
+						const PaletteCollision* c = collisionOf(cell);
+						if (c == nullptr || c->kind == TileCollisionKind::None)
+						{
+							return {};
+						}
+						if (c->kind == TileCollisionKind::Rect)
+						{
+							return {true, c->rect, c->oneWay};
+						}
+						// Full: only one-way Full becomes a box; two-way Full -> chains.
+						return c->oneWay != TileOneWay::None ? BoxInfo{true, glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}, c->oneWay} : BoxInfo{};
 					};
 					std::vector<RectRun> rectRuns;
 					for (std::int32_t localY = 0; localY < kTileChunkSize; ++localY)
 					{
 						for (std::int32_t localX = 0; localX < kTileChunkSize;)
 						{
-							const std::uint32_t cell = chunk.cells[static_cast<std::size_t>(localY) * kTileChunkSize + localX];
-							const PaletteCollision* collision = collisionOf(cell);
-							if (collision == nullptr || collision->kind != TileCollisionKind::Rect)
+							const BoxInfo box = boxOf(chunk.cells[static_cast<std::size_t>(localY) * kTileChunkSize + localX]);
+							if (!box.valid)
 							{
 								++localX;
 								continue;
 							}
-							// Merge by identical rect VALUE, not palette: platform
+							// Merge by identical rect VALUE and one-way flag: platform
 							// left/mid/right caps are distinct tiles sharing one
-							// collision rect and must form a single seamless box.
+							// collision rect and must form a single seamless box, but a
+							// one-way run must never merge with a two-way one.
 							std::int32_t runEnd = localX + 1;
 							while (runEnd < kTileChunkSize)
 							{
-								const PaletteCollision* next = collisionOf(chunk.cells[static_cast<std::size_t>(localY) * kTileChunkSize + runEnd]);
-								if (next == nullptr || next->kind != TileCollisionKind::Rect || next->rect != collision->rect)
+								const BoxInfo next = boxOf(chunk.cells[static_cast<std::size_t>(localY) * kTileChunkSize + runEnd]);
+								if (!next.valid || next.rect != box.rect || next.oneWay != box.oneWay)
 								{
 									break;
 								}
 								++runEnd;
 							}
-							const glm::vec4& r = collision->rect;
+							const glm::vec4& r = box.rect;
 							const glm::vec2 cellBase{static_cast<float>(chunkCellOrigin.x + localX), static_cast<float>(chunkCellOrigin.y + localY)};
 							rectRuns.push_back(RectRun{
 							        .min = (cellBase + glm::vec2{r.x, r.y}) * cellSize * s,
 							        .max = (glm::vec2{static_cast<float>(chunkCellOrigin.x + runEnd - 1) + r.x + r.z, cellBase.y + r.y + r.w}) * cellSize * s,
+							        .oneWay = box.oneWay,
 							});
 							localX = runEnd;
 						}
 					}
 
 					entry.debugOutlines.clear();
+					entry.debugOneWay.clear();
 					if (outlines.empty() && rectRuns.empty())
 					{
 						continue;
@@ -888,6 +975,7 @@ namespace aether
 							debugPoints.push_back(debugPoints.front());
 						}
 						entry.debugOutlines.push_back(std::move(debugPoints));
+						entry.debugOneWay.push_back(TileOneWay::None); // solid chains are two-way
 						b2ChainDef chainDef = b2DefaultChainDef();
 						chainDef.points = points.data();
 						chainDef.count = static_cast<int>(points.size());
@@ -912,8 +1000,14 @@ namespace aether
 						const glm::vec2 centre = (run.min + run.max) * 0.5f;
 						const glm::vec2 half = glm::max((run.max - run.min) * 0.5f, glm::vec2{0.001f});
 						const b2Polygon box = b2MakeOffsetBox(half.x, half.y, {centre.x, centre.y}, b2Rot_identity);
-						b2CreatePolygonShape(body, &rectShapeDef, &box);
+						// One-way runs opt into pre-solve and carry their direction so
+						// OneWayPreSolve can drop contacts from the passable sides.
+						b2ShapeDef def = rectShapeDef;
+						def.enablePreSolveEvents = run.oneWay != TileOneWay::None;
+						def.userData = run.oneWay != TileOneWay::None ? OneWayUserData(run.oneWay) : nullptr;
+						b2CreatePolygonShape(body, &def, &box);
 						entry.debugOutlines.push_back({toWorldDebug({run.min.x, run.min.y}), toWorldDebug({run.max.x, run.min.y}), toWorldDebug({run.max.x, run.max.y}), toWorldDebug({run.min.x, run.max.y}), toWorldDebug({run.min.x, run.min.y})});
+						entry.debugOneWay.push_back(run.oneWay);
 					}
 					entry.body = b2StoreBodyId(body);
 				}
@@ -942,13 +1036,13 @@ namespace aether
 		}
 	}
 
-	void Physics2DSystem::ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>&)>& callback) const
+	void Physics2DSystem::ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>&, TileOneWay)>& callback) const
 	{
 		for (const auto& [key, entry]: m_impl->tileBodies)
 		{
-			for (const std::vector<glm::vec2>& outline: entry.debugOutlines)
+			for (std::size_t i = 0; i < entry.debugOutlines.size(); ++i)
 			{
-				callback(outline);
+				callback(entry.debugOutlines[i], i < entry.debugOneWay.size() ? entry.debugOneWay[i] : TileOneWay::None);
 			}
 		}
 	}

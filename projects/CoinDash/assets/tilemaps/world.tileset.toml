@@ -132,6 +132,7 @@
 16.animation_fps = 8.00
 16.atlas = "project://assets/textures/world/tileset_16x16.spriteatlas.toml"
 16.collision = "rect"
+16.one_way = "up"
 16.collision_x = 0.00
 16.collision_y = 0.625
 16.collision_w = 1.00
@@ -144,6 +145,7 @@
 17.animation_fps = 8.00
 17.atlas = "project://assets/textures/world/tileset_16x16.spriteatlas.toml"
 17.collision = "rect"
+17.one_way = "up"
 17.collision_x = 0.00
 17.collision_y = 0.625
 17.collision_w = 1.00
@@ -156,6 +158,7 @@
 18.animation_fps = 8.00
 18.atlas = "project://assets/textures/world/tileset_16x16.spriteatlas.toml"
 18.collision = "rect"
+18.one_way = "up"
 18.collision_x = 0.00
 18.collision_y = 0.625
 18.collision_w = 1.00

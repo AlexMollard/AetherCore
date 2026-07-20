@@ -363,6 +363,8 @@ namespace aether
 				                std::int32_t inspectY;
 				                std::uint32_t screenWidth;
 				                std::uint32_t screenHeight;
+				                std::uint32_t _padBg;
+				                std::uint64_t backgroundParamsAddr;
 			                } push;
 			                push.hdrSlot = m_colorBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(postProcess.GetTonemapMode());
@@ -373,6 +375,10 @@ namespace aether
 			                push.inspectY = -1;
 			                push.screenWidth = kSize;
 			                push.screenHeight = kSize;
+			                // Push the full 48-byte TonemapPush; the shader reads the background
+			                // BDA and must never see an uninitialised device address.
+			                push._padBg = 0u;
+			                push.backgroundParamsAddr = 0u;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                cmd.Draw(3, 1, 0, 0);
 		                });

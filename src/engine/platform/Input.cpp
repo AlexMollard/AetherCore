@@ -28,15 +28,70 @@ namespace aether
 		glfwSetCharCallback(window, &Input::OnChar);
 	}
 
+	void Input::PlayInputSequence(std::vector<InputSequenceEvent> events)
+	{
+		ClearSyntheticKeys();
+		m_inputSequence = std::move(events);
+		std::sort(m_inputSequence.begin(), m_inputSequence.end(), [](const InputSequenceEvent& a, const InputSequenceEvent& b) { return a.time < b.time; });
+		m_inputSequenceNext = 0;
+		m_inputSequenceStart = std::chrono::steady_clock::now();
+		m_inputSequenceActive = !m_inputSequence.empty();
+	}
+
+	void Input::StopInputSequence()
+	{
+		m_inputSequenceActive = false;
+		m_inputSequence.clear();
+		m_inputSequenceNext = 0;
+		ClearSyntheticKeys();
+	}
+
+	void Input::TickInputSequence()
+	{
+		if (!m_inputSequenceActive)
+		{
+			return;
+		}
+		const float elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_inputSequenceStart).count();
+		while (m_inputSequenceNext < m_inputSequence.size() && m_inputSequence[m_inputSequenceNext].time <= elapsed)
+		{
+			const InputSequenceEvent& ev = m_inputSequence[m_inputSequenceNext];
+			++m_inputSequenceNext;
+			if (ev.keyCode < 0)
+			{
+				ClearSyntheticKeys();
+			}
+			else
+			{
+				SetSyntheticKey(ev.keyCode, ev.down);
+			}
+		}
+		// Once every event has fired, stop scheduling but leave held keys as-is:
+		// an open-ended "hold" should keep holding until an explicit clear/release
+		// event, StopInputSequence, or Play-stop (which clears synthetic keys). End
+		// a self-contained test with a final "clear" line to release everything.
+		if (m_inputSequenceNext >= m_inputSequence.size())
+		{
+			m_inputSequenceActive = false;
+			m_inputSequence.clear();
+			m_inputSequenceNext = 0;
+		}
+	}
+
 	void Input::Update()
 	{
 		AE_PROFILE_ZONE();
+		// Apply any due auto-test sequence events before sampling key state so this
+		// frame reflects them (they OR into m_currKeys below via m_syntheticKeys).
+		TickInputSequence();
 		m_prevKeys = m_currKeys;
 		m_prevMouseButtons = m_currMouseButtons;
 
 		for (int i = 0; i < kMaxKeys; ++i)
 		{
-			m_currKeys[i] = (glfwGetKey(m_window, i) == GLFW_PRESS);
+			// Synthetic keys (control-server injection) OR into the real state, so
+			// headless playtests drive the same IsKeyDown/IsKeyPressed paths.
+			m_currKeys[i] = (glfwGetKey(m_window, i) == GLFW_PRESS) || m_syntheticKeys[i];
 		}
 
 		for (int i = 0; i < kMaxMouseButtons; ++i)
@@ -125,6 +180,22 @@ namespace aether
 	glm::vec2 Input::GetMousePos() const
 	{
 		return TransformMousePos(m_mousePos);
+	}
+
+	glm::vec2 Input::GetMouseTargetSize() const
+	{
+		if (m_mouseViewportTransformActive)
+		{
+			return m_mouseViewportTargetSize;
+		}
+		if (m_window != nullptr)
+		{
+			int w = 0;
+			int h = 0;
+			glfwGetWindowSize(m_window, &w, &h);
+			return {static_cast<float>(w), static_cast<float>(h)};
+		}
+		return {0.0f, 0.0f};
 	}
 
 	glm::vec2 Input::GetMouseDelta() const

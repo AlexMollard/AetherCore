@@ -350,6 +350,12 @@ namespace aether::editor
 				        tiles.push_back(json{{"index", i},
 				                {"name", tile.name},
 				                {"collision", tile.collision == TileCollisionKind::Full ? "full" : tile.collision == TileCollisionKind::Rect ? "rect" : "none"},
+				                {"oneWay", tile.collision == TileCollisionKind::None ? "none"
+				                        : tile.oneWay == TileOneWay::Up      ? "up"
+				                        : tile.oneWay == TileOneWay::Down    ? "down"
+				                        : tile.oneWay == TileOneWay::Left    ? "left"
+				                        : tile.oneWay == TileOneWay::Right   ? "right"
+				                                                             : "none"},
 				                {"animated", !tile.animationFrames.empty()}});
 			        }
 			        json layers = json::array();

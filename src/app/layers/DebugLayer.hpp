@@ -16,6 +16,7 @@
 #include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/ScriptErrorOverlay.hpp"
+#include "debug/PixelArtDocument.hpp"
 #include "debug/TilePaintingState.hpp"
 #include "debug/UndoStack.hpp"
 #include "scene/BackgroundSceneWriter.hpp"
@@ -68,6 +69,7 @@ namespace aether::editor
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
 		TilePaintingState m_tilePainting;
+		PixelArtDocument m_pixelArt;
 		app::scene::BackgroundSceneWriter m_sceneWriter;
 		// registers a reference to this, so it must outlive the registration).
 		EditorWindowActions m_windowActions;

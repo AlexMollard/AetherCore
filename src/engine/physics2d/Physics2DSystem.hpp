@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
 
+#include "assets/TileSetAsset.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/Entity.hpp"
 #include "scene/System.hpp"
@@ -93,7 +94,7 @@ namespace aether
 
 		// Tile collision geometry for the physics debug overlay: invokes the
 		// callback with world-space polylines (chain outlines and rect loops).
-		void ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>&)>& callback) const;
+		void ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>& outline, TileOneWay oneWay)>& callback) const;
 
 		// entt destroy hooks - remove the backing Box2D objects so they never leak.
 		void OnRigidBody2DDestroyed(entt::registry& registry, entt::entity enttEntity);

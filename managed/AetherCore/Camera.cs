@@ -65,4 +65,10 @@ public static class Camera
     public static Vector3 GetForward(Entity camera) => Native.aether_camera_get_forward(camera.Id);
 
     public static Vector3 GetRight(Entity camera) => Native.aether_camera_get_right(camera.Id);
+
+    /// <summary>Convert a cursor/screen position (as from <see cref="Input.MousePosition"/>)
+    /// to a world point on the 2D plane (z = 0), using the current main camera.
+    /// Exact for orthographic 2D cameras. Handles both the editor viewport and a
+    /// shipped fullscreen window.</summary>
+    public static Vector3 ScreenToWorld(Vector2 screenPos) => Native.aether_camera_screen_to_world(screenPos);
 }

@@ -494,6 +494,21 @@ namespace aether::editor
 					tile->collision = static_cast<TileCollisionKind>(std::clamp(kind, 0, 2));
 					commit = true;
 				}
+				if (tile->collision != TileCollisionKind::None)
+				{
+					// One-way direction: the collider blocks only from the chosen side.
+					// Up = a platform (land on top, jump up through); Left/Right/Down
+					// enable one-way doors and ceilings.
+					int oneWay = static_cast<int>(tile->oneWay);
+					constexpr const char* kOneWay[] = {"Off", "Up (platform)", "Down", "Left", "Right"};
+					ImGui::SetNextItemWidth(140.0f);
+					if (ImGui::Combo("One-way", &oneWay, kOneWay, IM_ARRAYSIZE(kOneWay)))
+					{
+						tile->oneWay = static_cast<TileOneWay>(std::clamp(oneWay, 0, 4));
+						commit = true;
+					}
+					ImGui::SetItemTooltip("Blocks only from the chosen side; passes through from the others.\nUp = platform: land on top, jump up through it.");
+				}
 				if (tile->collision == TileCollisionKind::Rect)
 				{
 					// Cell fractions, y-up from the cell's bottom-left.

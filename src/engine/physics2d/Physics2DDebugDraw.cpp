@@ -74,12 +74,72 @@ namespace aether
 		if (const auto* tileSystem = static_cast<const Physics2DSystem*>(const_cast<World&>(world).FindSystem("Physics2DSystem")))
 		{
 			constexpr glm::vec4 kTileColor{0.35f, 0.9f, 0.5f, 1.0f};
+			constexpr glm::vec4 kOneWayColor{0.30f, 0.70f, 1.0f, 1.0f}; // cyan: one-way platforms/doors
+			const auto solidNormal = [](TileOneWay dir) -> glm::vec2
+			{
+				switch (dir)
+				{
+					case TileOneWay::Up:
+						return {0.0f, 1.0f};
+					case TileOneWay::Down:
+						return {0.0f, -1.0f};
+					case TileOneWay::Left:
+						return {-1.0f, 0.0f};
+					case TileOneWay::Right:
+						return {1.0f, 0.0f};
+					default:
+						return {0.0f, 0.0f};
+				}
+			};
 			tileSystem->ForEachTileDebugOutline(
-			        [&](const std::vector<glm::vec2>& outline)
+			        [&](const std::vector<glm::vec2>& outline, TileOneWay oneWay)
 			        {
+				        const glm::vec4 color = oneWay == TileOneWay::None ? kTileColor : kOneWayColor;
 				        for (std::size_t i = 1; i < outline.size(); ++i)
 				        {
-					        AddDebugLine(out, {outline[i - 1].x, outline[i - 1].y, 0.01f}, {outline[i].x, outline[i].y, 0.01f}, kTileColor);
+					        AddDebugLine(out, {outline[i - 1].x, outline[i - 1].y, 0.01f}, {outline[i].x, outline[i].y, 0.01f}, color);
+				        }
+				        // One-way boxes get outward ticks along their SOLID edge (the side
+				        // that blocks), so you can read direction at a glance. Pick the box
+				        // edge whose outward normal best matches the solid direction - works
+				        // even for a rotated tilemap.
+				        if (oneWay == TileOneWay::None || outline.size() < 4)
+				        {
+					        return;
+				        }
+				        const glm::vec2 n = solidNormal(oneWay);
+				        glm::vec2 centre{0.0f};
+				        for (int k = 0; k < 4; ++k)
+				        {
+					        centre += outline[static_cast<std::size_t>(k)];
+				        }
+				        centre *= 0.25f;
+				        int bestEdge = 0;
+				        float bestDot = -2.0f;
+				        for (int k = 0; k < 4; ++k)
+				        {
+					        const glm::vec2 a = outline[static_cast<std::size_t>(k)];
+					        const glm::vec2 b = outline[static_cast<std::size_t>((k + 1) % 4)];
+					        const glm::vec2 mid = (a + b) * 0.5f;
+					        const glm::vec2 outward = mid - centre;
+					        const float len = glm::length(outward);
+					        const float d = len > 1e-5f ? glm::dot(outward / len, n) : -2.0f;
+					        if (d > bestDot)
+					        {
+						        bestDot = d;
+						        bestEdge = k;
+					        }
+				        }
+				        const glm::vec2 ea = outline[static_cast<std::size_t>(bestEdge)];
+				        const glm::vec2 eb = outline[static_cast<std::size_t>((bestEdge + 1) % 4)];
+				        constexpr int kTicks = 4;
+				        constexpr float kTickLen = 0.14f;
+				        for (int t = 1; t <= kTicks; ++t)
+				        {
+					        const float f = static_cast<float>(t) / static_cast<float>(kTicks + 1);
+					        const glm::vec2 p = ea + (eb - ea) * f;
+					        const glm::vec2 q = p + n * kTickLen;
+					        AddDebugLine(out, {p.x, p.y, 0.01f}, {q.x, q.y, 0.01f}, color);
 				        }
 			        });
 		}

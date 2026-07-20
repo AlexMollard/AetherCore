@@ -12,6 +12,7 @@
 #include "rendering/Renderer.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
+#include "platform/Input.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
@@ -134,6 +135,13 @@ namespace aether::app
 		if (!playState->IsPlaying())
 		{
 			return false;
+		}
+
+		// Drop any synthetic keys a headless playtest was holding so they don't
+		// leak into edit mode.
+		if (auto* input = context.TryGet<Input>())
+		{
+			input->ClearSyntheticKeys();
 		}
 
 		World& world = context.Get<World>();

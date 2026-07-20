@@ -23,6 +23,19 @@ namespace aether
 		Rect,
 	};
 
+	// One-way collision direction: the collider only stops bodies approaching from
+	// this side; from any other side they pass straight through. Up = a classic
+	// platform (land on top, jump up through). Left/Right/Down enable one-way doors
+	// and ceilings. The enum values are stable (encoded into physics shape data).
+	enum class TileOneWay : std::uint8_t
+	{
+		None = 0,
+		Up,   // solid on top: platforms
+		Down, // solid underneath: one-way ceilings
+		Left, // solid on the left face: doors passable rightward
+		Right,
+	};
+
 	// One paintable tile: visuals come from a sprite atlas region (stable ids on
 	// both sides so re-slicing an atlas never silently redirects tiles).
 	struct TileDefinition
@@ -32,6 +45,10 @@ namespace aether
 		std::string atlasPath;
 		AssetObjectId spriteId{};
 		TileCollisionKind collision = TileCollisionKind::None;
+		// One-way collision: the collider only stops bodies approaching from the
+		// named side (Up = a platform). Orthogonal to the shape - applies to Full or
+		// Rect. Ignored when collision is None.
+		TileOneWay oneWay = TileOneWay::None;
 		// Rect collision only: (x, y, w, h) in cell fractions, y-up from the
 		// cell's bottom-left. Default = the full cell.
 		glm::vec4 collisionRect{0.0f, 0.0f, 1.0f, 1.0f};

@@ -46,6 +46,7 @@ using namespace std::string_view_literals;
 #include "debug/SpriteSlicerPanel.hpp"
 #include "debug/TilePaintingState.hpp"
 #include "debug/ParticlePanel.hpp"
+#include "debug/PixelArtPanel.hpp"
 #include "debug/TilePalettePanel.hpp"
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
@@ -283,10 +284,12 @@ namespace aether::editor
 		context.services.Register<SceneSelection>(m_selection);
 		context.services.Register<UndoStack>(m_undoStack);
 		context.services.Register<TilePaintingState>(m_tilePainting);
+		context.services.Register<PixelArtDocument>(m_pixelArt);
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
 		m_panels.push_back(std::make_unique<SpriteSlicerPanel>());
 		m_panels.push_back(std::make_unique<TilePalettePanel>());
+		m_panels.push_back(std::make_unique<PixelArtPanel>());
 		m_panels.push_back(std::make_unique<SpriteAnimationPanel>());
 		m_panels.push_back(std::make_unique<ParticlePanel>());
 		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
@@ -1105,7 +1108,7 @@ namespace aether::editor
 
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
-				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation", "Tile Palette"}},
+				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "TextureInspector"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},

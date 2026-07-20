@@ -285,6 +285,8 @@ namespace aether
 				                std::int32_t inspectY;
 				                std::uint32_t screenWidth;
 				                std::uint32_t screenHeight;
+				                std::uint32_t _padBg;
+				                std::uint64_t backgroundParamsAddr;
 			                } push;
 			                push.hdrSlot = m_colorBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(postProcess.GetTonemapMode());
@@ -295,6 +297,11 @@ namespace aether
 			                push.inspectY = -1;
 			                push.screenWidth = kWidth;
 			                push.screenHeight = kHeight;
+			                // The tonemap shader reads the full TonemapPush (48 bytes) incl. the
+			                // background BDA; push the whole struct so it never dereferences an
+			                // uninitialised device address. No camera background in this preview.
+			                push._padBg = 0u;
+			                push.backgroundParamsAddr = 0u;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                cmd.Draw(3, 1, 0, 0);
 		                });

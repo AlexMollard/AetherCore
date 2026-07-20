@@ -65,6 +65,45 @@ namespace aether
 			}
 			return TileCollisionKind::None;
 		}
+
+		[[nodiscard]] const char* OneWayName(TileOneWay dir)
+		{
+			switch (dir)
+			{
+				case TileOneWay::Up:
+					return "up";
+				case TileOneWay::Down:
+					return "down";
+				case TileOneWay::Left:
+					return "left";
+				case TileOneWay::Right:
+					return "right";
+				case TileOneWay::None:
+				default:
+					return "none";
+			}
+		}
+
+		[[nodiscard]] TileOneWay OneWayFromName(std::string_view name)
+		{
+			if (name == "up")
+			{
+				return TileOneWay::Up;
+			}
+			if (name == "down")
+			{
+				return TileOneWay::Down;
+			}
+			if (name == "left")
+			{
+				return TileOneWay::Left;
+			}
+			if (name == "right")
+			{
+				return TileOneWay::Right;
+			}
+			return TileOneWay::None;
+		}
 	} // namespace
 
 	TileDefinition& TileSetAsset::AddTile(std::string atlasPath, AssetObjectId spriteId, std::string tileName)
@@ -106,6 +145,10 @@ namespace aether
 			config.Set(TileKey(index, "atlas"), tile.atlasPath);
 			config.Set(TileKey(index, "sprite_id"), IdToString(tile.spriteId));
 			config.Set(TileKey(index, "collision"), std::string_view{CollisionName(tile.collision)});
+			if (tile.collision != TileCollisionKind::None && tile.oneWay != TileOneWay::None)
+			{
+				config.Set(TileKey(index, "one_way"), std::string_view{OneWayName(tile.oneWay)});
+			}
 			if (tile.collision == TileCollisionKind::Rect)
 			{
 				config.Set(TileKey(index, "collision_x"), tile.collisionRect.x);
@@ -171,6 +214,7 @@ namespace aether
 			tile.atlasPath = config.GetString(TileKey(index, "atlas"));
 			tile.spriteId = ParseId(config.GetString(TileKey(index, "sprite_id")));
 			tile.collision = CollisionFromName(config.GetString(TileKey(index, "collision"), "none"));
+			tile.oneWay = OneWayFromName(config.GetString(TileKey(index, "one_way"), "none"));
 			if (tile.collision == TileCollisionKind::Rect)
 			{
 				tile.collisionRect.x = config.GetFloat(TileKey(index, "collision_x"), 0.0f);

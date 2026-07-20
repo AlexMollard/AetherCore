@@ -1582,6 +1582,375 @@
         "type": "object"
       },
       "tool": "ui_key"
+    },
+    {
+      "description": "Freeze the running simulation (state='paused'). Session stays live; no-op unless playing.",
+      "mutates": true,
+      "name": "engine.pause",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "pause"
+    },
+    {
+      "description": "Unfreeze a paused simulation (state='playing'). No-op unless playing.",
+      "mutates": true,
+      "name": "engine.resume",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "resume"
+    },
+    {
+      "description": "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.",
+      "mutates": true,
+      "name": "engine.step",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "step"
+    },
+    {
+      "description": "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
+      "mutates": true,
+      "name": "engine.set_speed",
+      "paramsSchema": {
+        "properties": {
+          "speed": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          }
+        },
+        "required": [
+          "speed"
+        ],
+        "type": "object"
+      },
+      "tool": "set_speed"
+    },
+    {
+      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire.",
+      "mutates": true,
+      "name": "engine.send_input",
+      "paramsSchema": {
+        "properties": {
+          "clear": {
+            "type": "boolean"
+          },
+          "down": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "up": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "send_input"
+    },
+    {
+      "description": "Create a fresh transparent pixel-art canvas of {width, height} (1-512). Clears undo history. Mirrors the Pixel Art panel's New.",
+      "mutates": true,
+      "name": "pixel.new",
+      "paramsSchema": {
+        "properties": {
+          "height": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_new"
+    },
+    {
+      "description": "Current pixel-art canvas dimensions, dirty flag, and file path.",
+      "mutates": false,
+      "name": "pixel.info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "pixel_info"
+    },
+    {
+      "description": "Set the active drawing colour {color:[r,g,b,a]}.",
+      "mutates": true,
+      "name": "pixel.set_color",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "color"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_set_color"
+    },
+    {
+      "description": "Set individual texels: {pixels:[{x,y,color?}]}. 'color' omitted uses the active colour; use [0,0,0,0] to erase. One undo step for the batch.",
+      "mutates": true,
+      "name": "pixel.set",
+      "paramsSchema": {
+        "properties": {
+          "pixels": {
+            "items": {
+              "properties": {
+                "color": {
+                  "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+                  "items": {
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxItems": 4,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pixels"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_set"
+    },
+    {
+      "description": "Fill an inclusive cell rectangle {x0,y0,x1,y1, color?}. One undo step.",
+      "mutates": true,
+      "name": "pixel.fill_rect",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "x0": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "integer"
+          },
+          "y0": {
+            "type": "integer"
+          },
+          "y1": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_fill_rect"
+    },
+    {
+      "description": "Draw a line between two texels {x0,y0,x1,y1, color?}. One undo step.",
+      "mutates": true,
+      "name": "pixel.line",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "x0": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "integer"
+          },
+          "y0": {
+            "type": "integer"
+          },
+          "y1": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_line"
+    },
+    {
+      "description": "Flood-fill the connected region at {x, y} with 'color' (or the active colour). One undo step.",
+      "mutates": true,
+      "name": "pixel.bucket",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_bucket"
+    },
+    {
+      "description": "Clear the whole canvas to 'color' (default transparent). One undo step.",
+      "mutates": true,
+      "name": "pixel.clear",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "pixel_clear"
+    },
+    {
+      "description": "Read the canvas back: dimensions plus a row-major 'pixels' array of 0xAABBGGRR values (only when <= 4096 texels; otherwise omitted).",
+      "mutates": false,
+      "name": "pixel.get",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "pixel_get"
+    },
+    {
+      "description": "Save the canvas to a PNG at 'path' (project:// virtual path; default: the current file). Creates folders.",
+      "mutates": true,
+      "name": "pixel.save",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "pixel_save"
+    },
+    {
+      "description": "Load a PNG at 'path' (project:// virtual path) into the canvas for editing.",
+      "mutates": true,
+      "name": "pixel.open",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_open"
+    },
+    {
+      "description": "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
+      "mutates": true,
+      "name": "engine.play_input_sequence",
+      "paramsSchema": {
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "stop": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "play_input_sequence"
     }
   ]
 }
