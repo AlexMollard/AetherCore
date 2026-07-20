@@ -160,6 +160,26 @@ namespace aether
 	{
 	};
 
+	// A prefab-instance root: this entity and its subtree were expanded from the
+	// named prefab at scene load, and the scene re-serializes them as a single
+	// reference (path + root transform + per-entity overrides) rather than as flat
+	// entities. Editing the prefab propagates to every scene that instances it.
+	// Overrides are re-derived at capture (live-vs-prefab diff), not stored here.
+	struct PrefabInstanceComponent
+	{
+		std::string prefabPath;
+	};
+
+	// Marks an entity as part of a prefab instance's expanded subtree. `instanceRoot`
+	// carries the PrefabInstanceComponent; `prefabGuid` is the source prefab entity's
+	// stable id (its index in the prefab), used to route overrides / apply-revert.
+	// Runtime-only, never a flat serialized entity - capture emits the reference.
+	struct PrefabLinkComponent
+	{
+		Entity instanceRoot{};
+		std::uint64_t prefabGuid = 0;
+	};
+
 	struct ScriptPropertyValue
 	{
 		enum class Type : std::int32_t

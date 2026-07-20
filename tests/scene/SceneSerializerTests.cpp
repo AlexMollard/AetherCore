@@ -798,6 +798,73 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     CHECK(fresh.TryGet<SpinComponent>(h->children[0]) != nullptr);
 }
 
+TEST_CASE("Prefab instance overrides, removed guids and added entities round-trip through TOML") {
+    SceneDescription scene;
+    scene.version = kSceneFormatVersion;
+
+    PrefabInstanceRecord inst;
+    inst.prefabPath = "ParallaxBackground";
+    inst.name = "Backdrop";
+    inst.position = {5.0f, 6.0f, 0.0f};
+    inst.eulerDeg = {0.0f, 0.0f, 0.0f};
+    inst.scale = {1.0f, 1.0f, 1.0f};
+
+    // A per-field override keyed by the source prefab entity's stable guid: only the
+    // position key differs, so only that key is stored.
+    EntityRecord prefabEntity;
+    prefabEntity.guid = 3;
+    prefabEntity.name = "BG Hills Far";
+    prefabEntity.hasTransform = true;
+    prefabEntity.position = {40.0f, 2.5f, 0.0f};
+    prefabEntity.scale = {1.0f, 1.0f, 1.0f};
+    EntityRecord liveEntity = prefabEntity;
+    liveEntity.position = {40.0f, 9.0f, 0.0f};
+    const std::string partial = ComputePrefabOverrideToml(liveEntity, prefabEntity);
+    REQUIRE_FALSE(partial.empty());
+    inst.overrides.push_back(PrefabEntityOverride{.guid = 3, .partialToml = partial});
+
+    // A prefab entity deleted in this instance.
+    inst.removedGuids.push_back(7);
+
+    // An entity added beyond the prefab (attaches to the instance root on load).
+    EntityRecord addRec;
+    addRec.name = "Extra Cloud";
+    addRec.parentIndex = -1;
+    addRec.hasTransform = true;
+    addRec.position = {1.0f, 2.0f, 3.0f};
+    addRec.scale = {1.0f, 1.0f, 1.0f};
+    inst.addedEntities.push_back(addRec);
+
+    scene.prefabInstances.push_back(inst);
+
+    const auto parsed = ParseToml(WriteToml(scene));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->prefabInstances.size() == 1);
+    const PrefabInstanceRecord& pi = parsed->prefabInstances[0];
+    CHECK(pi.prefabPath == "ParallaxBackground");
+    CHECK(pi.name == "Backdrop");
+
+    REQUIRE(pi.overrides.size() == 1);
+    CHECK(pi.overrides[0].guid == 3);
+    REQUIRE_FALSE(pi.overrides[0].partialToml.empty());
+
+    // Field-level merge: the overridden key wins; every other key - including a
+    // texture the prefab changes *after* the override was authored - tracks the prefab.
+    EntityRecord newerPrefab = prefabEntity;
+    newerPrefab.name = "BG Hills Far v2"; // a later prefab edit to a NON-overridden key
+    const EntityRecord merged = MergePrefabOverride(newerPrefab, pi.overrides[0].partialToml);
+    CHECK(merged.position.y == doctest::Approx(9.0f)); // instance override
+    CHECK(merged.name == "BG Hills Far v2");           // later prefab edit propagates
+
+    REQUIRE(pi.removedGuids.size() == 1);
+    CHECK(pi.removedGuids[0] == 7);
+
+    REQUIRE(pi.addedEntities.size() == 1);
+    CHECK(pi.addedEntities[0].name == "Extra Cloud");
+    CHECK(pi.addedEntities[0].parentIndex == -1);
+    CHECK(pi.addedEntities[0].position.z == doctest::Approx(3.0f));
+}
+
 TEST_CASE("Script components round-trip through capture, TOML and apply") {
     FakeSlotSink sink(8);
     FakeTextureSink tsink;

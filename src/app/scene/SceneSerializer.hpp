@@ -165,6 +165,10 @@ namespace aether::app::scene
 	struct EntityRecord
 	{
 		std::uint32_t entityId = 0;
+		// Stable per-prefab id (assigned on prefab save). Prefab-instance overrides
+		// and PrefabLink route by this guid, so reordering a prefab's entities never
+		// misaligns overrides. 0 = unassigned (falls back to the entity index).
+		std::uint64_t guid = 0;
 		std::string name;
 		std::vector<std::string> tags;
 		bool disabled = false;
@@ -235,10 +239,52 @@ namespace aether::app::scene
 		glm::vec3 skyVoid{0.05f};
 	};
 
+	// A per-entity override inside a prefab instance: `guid` is the source prefab
+	// entity's stable id (its index in the prefab), and `record` is the entity's
+	// full authored state as it differs in this instance. Applied after the prefab
+	// expands, replacing that entity's components. Whole-entity granularity: any
+	// change to a prefab entity in a scene freezes that entity's components here.
+	struct PrefabEntityOverride
+	{
+		std::uint64_t guid = 0;
+		// Only the top-level keys that differ from the source prefab entity, as TOML
+		// table text (e.g. "position = [...]\n[sprite]\ntint = [...]"). Non-overridden
+		// keys - including ones the prefab changes *later* - come from the prefab at
+		// apply time, so an override no longer freezes the whole entity's other fields.
+		std::string partialToml;
+	};
+
+	// A prefab entity's stable id: its assigned guid, or (index + 1) for a legacy
+	// prefab whose entities were never re-saved with guids. Overrides and PrefabLink
+	// route by this, so both the apply and capture sides must agree on it.
+	[[nodiscard]] inline std::uint64_t EffectiveGuid(const EntityRecord& rec, std::size_t index)
+	{
+		return rec.guid != 0 ? rec.guid : static_cast<std::uint64_t>(index + 1);
+	}
+
+	// A linked prefab instance placed in a scene: the scene stores this reference
+	// (prefab path + root transform + per-entity overrides) instead of the expanded
+	// entities, so editing the prefab propagates to every scene that instances it.
+	struct PrefabInstanceRecord
+	{
+		std::string prefabPath;
+		std::string name; // hierarchy display name (defaults to the prefab's root name)
+		glm::vec3 position{0.0f};
+		glm::vec3 eulerDeg{0.0f};
+		glm::vec3 scale{1.0f};
+		std::vector<PrefabEntityOverride> overrides; // applied after expansion
+		// Prefab entities (by stable guid) deleted in this instance; removed on load.
+		std::vector<std::uint64_t> removedGuids;
+		// Entities added to this instance beyond the prefab (self-contained subtrees,
+		// internal parentIndex; roots attach to the instance root). Kept across reloads.
+		std::vector<EntityRecord> addedEntities;
+	};
+
 	// v13 added Physics2D records (rigid_body_2d / collider_2d / joint_2d).
 	// v14 added the Physics3D feature flag (feature-driven system activation).
 	// v15 added the tile_map record and made Tilemaps a Scene2D default feature.
-	inline constexpr int kSceneFormatVersion = 15;
+	// v16 added prefab_instances (linked prefab instances).
+	inline constexpr int kSceneFormatVersion = 16;
 
 	struct AssetManifestEntry
 	{
@@ -256,10 +302,15 @@ namespace aether::app::scene
 		SceneKind kind = SceneKind::Scene3D;
 		SceneFeatureFlags features = DefaultSceneFeatures(SceneKind::Scene3D);
 		std::vector<EntityRecord> entities;
+		std::vector<PrefabInstanceRecord> prefabInstances;
 		std::vector<LightRecord> lights;
 		std::optional<EnvironmentRecord> environment;
 		std::vector<AssetManifestEntry> assetManifest;
 	};
+
+	// Assign a fresh, stable guid to every entity that lacks one (max existing + 1).
+	// Existing guids are preserved, so reordering never remaps them. Called on save.
+	void AssignPrefabGuids(SceneDescription& prefab);
 
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer = nullptr);
 
@@ -274,6 +325,14 @@ namespace aether::app::scene
 
 	std::string WriteToml(const SceneDescription& scene);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
+
+	// Field-level prefab overrides. ComputePrefabOverrideToml returns the TOML text of
+	// only the top-level keys where `live` differs from `prefab` (empty if identical);
+	// callers should canonicalize transforms first so precision noise is not an
+	// override. MergePrefabOverride overlays that partial text onto a fresh copy of the
+	// prefab record, so keys the instance did not override always track the prefab.
+	std::string ComputePrefabOverrideToml(const EntityRecord& live, const EntityRecord& prefab);
+	EntityRecord MergePrefabOverride(const EntityRecord& prefab, const std::string& partialToml);
 
 	// Serialize once into BOTH the text and cooked-binary forms, sharing a single
 	// document-tree build (cheaper than calling WriteToml + WriteSceneBinary).
@@ -348,5 +407,13 @@ namespace aether::app::scene
 	// ReplaceScene from a scene file on disk.
 	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps, SceneLoadMode mode = SceneLoadMode::Authoring);
 
-	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld);
+	// outCreated (optional) receives the created entities aligned with prefab.entities
+	// by index, so callers can map each spawned entity back to its source prefab entry.
+	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::vector<Entity>* outCreated = nullptr);
+
+	// Create a LINKED prefab instance (unlike InstantiatePrefab, which copies): the
+	// root is tagged (PrefabInstance + SceneTransient + PrefabLink subtree) so the
+	// scene re-serializes it as a reference and edits to the prefab propagate to
+	// every instance. `prefabName` is the prefab's save name (what a scene stores).
+	Entity InstantiatePrefabInstance(const std::string& prefabName, const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld);
 } // namespace aether::app::scene

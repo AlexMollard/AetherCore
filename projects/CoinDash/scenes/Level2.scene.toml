@@ -5,14 +5,14 @@ sky_horizon = [ 0.3400000035762787, 0.5199999809265137, 0.8199999928474426 ]
 sky_void = [ 0.0010000000474974513, 0.0020000000949949026, 0.004999999888241291 ]
 sky_zenith = [ 0.07999999821186066, 0.1899999976158142, 0.44999998807907104 ]
 sun_color = [ 1.0, 0.9599999785423279, 0.8999999761581421 ]
-sun_direction = [ 0.5773502588272095, 0.5773502588272095, 0.5773502588272095 ]
+sun_direction = [ 0.5773503184318542, 0.5773503184318542, 0.5773503184318542 ]
 sun_intensity = 3.0
 
 [scene]
-features = [ 'sprites', 'tilemaps', 'physics_2d' ]
+features = [ 'sprites', 'tilemaps', 'physics_2d', 'meshes_3d', 'lighting_3d', 'navigation', 'physics_3d' ]
 kind = '2d'
 name = ''
-version = 15
+version = 16
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
@@ -180,10 +180,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -240,10 +240,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -300,10 +300,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -360,10 +360,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -420,10 +420,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -480,10 +480,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -540,10 +540,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -600,10 +600,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -660,10 +660,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 5325942297317060072
+    sprite_id = 5325943396828688283
     texture = 'project://assets/textures/tex_Coin.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -720,10 +720,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = -360636374474902954
+    sprite_id = -360635274963274743
     texture = 'project://assets/textures/slime/walk32x32.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
+    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -784,10 +784,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = -360636374474902954
+    sprite_id = -360635274963274743
     texture = 'project://assets/textures/slime/walk32x32.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
+    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -848,10 +848,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = -360636374474902954
+    sprite_id = -360635274963274743
     texture = 'project://assets/textures/slime/walk32x32.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
+    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -912,10 +912,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = -360636374474902954
+    sprite_id = -360635274963274743
     texture = 'project://assets/textures/slime/walk32x32.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 0.25, 1.0 ]
+    uv_rect = [ 0.25, 0.0, 0.5, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
@@ -971,170 +971,9 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'string'
         v = 'Level3'
 
-[[entities]]
+[[prefab_instances]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'BG Sky'
-parent = -1
-position = [ 8.0, 3.0, 0.0 ]
+name = 'Parallax Background'
+position = [ 0.0, 0.0, 0.0 ]
+prefab = 'ParallaxBackground'
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.parallax]
-    factor = [ 0.0, 0.0 ]
-    scroll_speed = [ 0.0, 0.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = false
-    pixel_size = [ 640.0, 448.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = -50
-    texture = 'project://assets/textures/background/bg_sky.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'BG Hills Far'
-parent = -1
-position = [ 40.0, 2.5, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.parallax]
-    factor = [ 0.25, 0.30000001192092896 ]
-    scroll_speed = [ 0.0, 0.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 3720.0, 72.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = -40
-    texture = 'project://assets/textures/background/bg_hills_far.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 10.0, 1.0 ]
-    visible = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'BG Clouds'
-parent = -1
-position = [ 40.0, 6.5, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.parallax]
-    factor = [ 0.11999999731779099, 0.18000000715255737 ]
-    scroll_speed = [ 0.5, 0.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 3430.0, 68.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = -45
-    texture = 'project://assets/textures/background/bg_clouds.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 10.0, 1.0 ]
-    visible = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'BG Hills Near'
-parent = -1
-position = [ 40.0, 0.5, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.parallax]
-    factor = [ 0.44999998807907104, 0.5 ]
-    scroll_speed = [ 0.0, 0.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 3400.0, 96.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = -30
-    texture = 'project://assets/textures/background/bg_hills_near.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 8.0, 1.0 ]
-    visible = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'BG Grass FG'
-parent = -1
-position = [ 40.0, -1.2999999523162842, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.parallax]
-    factor = [ 1.100000023841858, 1.0 ]
-    scroll_speed = [ 0.0, 0.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 3501.0, 31.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 100
-    texture = 'project://assets/textures/background/bg_grass_fg.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 9.0, 1.0 ]
-    visible = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'BG Grass Fill'
-parent = -1
-position = [ 40.0, -10.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.parallax]
-    factor = [ 1.100000023841858, 1.0 ]
-    scroll_speed = [ 0.0, 0.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = false
-    pixel_size = [ 8000.0, 288.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 99
-    texture = ''
-    tint = [ 0.0860000029206276, 0.10199999809265137, 0.13300000131130219, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true

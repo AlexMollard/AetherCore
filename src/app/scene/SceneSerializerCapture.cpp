@@ -1,3 +1,4 @@
+#include <cmath>
 #include "scene/SceneSerializer.hpp"
 
 #include <algorithm>
@@ -351,6 +352,135 @@ namespace aether::app::scene
 				}
 			}
 		}
+
+		// BFS collect an entity and all its descendants.
+		std::vector<Entity> CollectSubtree(World& world, Entity root)
+		{
+			std::vector<Entity> out;
+			out.push_back(root);
+			for (std::size_t i = 0; i < out.size(); ++i)
+			{
+				if (const auto* h = world.TryGet<HierarchyComponent>(out[i]))
+				{
+					out.insert(out.end(), h->children.begin(), h->children.end());
+				}
+			}
+			return out;
+		}
+
+		// Serialize one entity record to a normalized string for content comparison:
+		// id/parent are structural (differ between a live instance and the prefab), so
+		// they are zeroed - only the component data participates in the diff.
+		// Canonicalize a record's transform through a compose/decompose round-trip so a
+		// parsed prefab value and a live decomposed value compare equal - no "-0.0 vs
+		// 0.0" or float-precision noise creating a spurious per-field override.
+		void CanonicalizeRecordTransform(EntityRecord& rec)
+		{
+			if (!rec.hasTransform)
+			{
+				return;
+			}
+			DecomposeTRS(ComposeTransform(rec.position, rec.eulerDeg, rec.scale), rec.position, rec.eulerDeg, rec.scale);
+			const auto snap = [](glm::vec3& v)
+			{
+				for (int i = 0; i < 3; ++i)
+				{
+					if (std::abs(v[i]) < 1e-5f)
+					{
+						v[i] = 0.0f;
+					}
+				}
+			};
+			snap(rec.position);
+			snap(rec.eulerDeg);
+			snap(rec.scale);
+		}
+
+		// Diff a live prefab-instance subtree against its prefab, one entity at a time
+		// (mapped by PrefabLink.prefabGuid = the prefab entity index). Any entity whose
+		// captured content differs becomes a whole-entity override.
+		// Diff a live prefab instance against its prefab, producing: field overrides
+		// (changed prefab entities), removedGuids (prefab entities deleted here), and
+		// addedEntities (entities added beyond the prefab - self-contained subtrees,
+		// roots re-parented to the instance root on load).
+		void ComputePrefabDelta(World& world, Entity root, const std::string& prefabPath, const MaterialRegistry& materials, const TextureRegistry& textures,
+		        std::vector<PrefabEntityOverride>& overrides, std::vector<std::uint64_t>& removedGuids, std::vector<EntityRecord>& addedEntities)
+		{
+			const std::optional<SceneDescription> prefab = ReadPrefabFile(prefabPath);
+			if (!prefab)
+			{
+				return;
+			}
+			// Map each prefab entity by its stable guid so live entities route to their
+			// source by guid (PrefabLink.prefabGuid), never by index.
+			std::unordered_map<std::uint64_t, const EntityRecord*> prefabByGuid;
+			for (std::size_t i = 0; i < prefab->entities.size(); ++i)
+			{
+				prefabByGuid[EffectiveGuid(prefab->entities[i], i)] = &prefab->entities[i];
+			}
+			std::unordered_set<std::uint64_t> presentGuids;
+			for (const Entity e: CollectSubtree(world, root))
+			{
+				// The instance root's transform is the instance transform, never an
+				// override (re-applying onto a root would strip its children list).
+				if (e == root)
+				{
+					continue;
+				}
+				const auto* link = world.TryGet<PrefabLinkComponent>(e);
+				const auto pit = link != nullptr ? prefabByGuid.find(link->prefabGuid) : prefabByGuid.end();
+				if (link != nullptr && pit != prefabByGuid.end())
+				{
+					// A prefab entity: mark present and record only the changed top-level
+					// keys (field-level override), so keys we do not touch - including
+					// ones the prefab changes later - keep tracking the prefab.
+					presentGuids.insert(link->prefabGuid);
+					SceneDescription oneCap = CaptureSubtrees(world, {e}, materials, textures);
+					if (!oneCap.entities.empty())
+					{
+						EntityRecord liveC = std::move(oneCap.entities[0]);
+						EntityRecord prefC = *pit->second;
+						CanonicalizeRecordTransform(liveC);
+						CanonicalizeRecordTransform(prefC);
+						std::string partial = ComputePrefabOverrideToml(liveC, prefC);
+						if (!partial.empty())
+						{
+							overrides.push_back(PrefabEntityOverride{.guid = link->prefabGuid, .partialToml = std::move(partial)});
+						}
+					}
+					continue;
+				}
+				// Added entity: capture it (and its subtree) only if it is an added ROOT
+				// - its parent is a prefab entity or the instance root, not another added
+				// entity (which would capture it as part of that subtree already).
+				Entity parent{};
+				if (const auto* h = world.TryGet<HierarchyComponent>(e))
+				{
+					parent = h->parent;
+				}
+				const bool parentIsPrefab = parent.IsValid() && world.Has<PrefabLinkComponent>(parent);
+				if (parent == root || parentIsPrefab)
+				{
+					SceneDescription addCap = CaptureSubtrees(world, {e}, materials, textures);
+					const int base = static_cast<int>(addedEntities.size());
+					for (EntityRecord& r: addCap.entities)
+					{
+						if (r.parentIndex >= 0)
+						{
+							r.parentIndex += base; // rebase into the merged addedEntities vector
+						}
+						addedEntities.push_back(std::move(r));
+					}
+				}
+			}
+			for (const auto& [guid, rec]: prefabByGuid)
+			{
+				if (!presentGuids.contains(guid))
+				{
+					removedGuids.push_back(guid);
+				}
+			}
+		}
 	} // namespace
 
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer)
@@ -407,6 +537,35 @@ namespace aether::app::scene
 		}
 
 		AppendEntityRecords(scene, world, order, indexOf, materials, textures);
+
+		// Linked prefab instances: emit a reference (path + world transform +
+		// overrides) for each instance root. Their expanded subtrees were tagged
+		// SceneTransient, so they are already excluded from the flat records above.
+		for (const auto handle: reg.storage<entt::entity>())
+		{
+			if (!reg.valid(handle))
+			{
+				continue;
+			}
+			const Entity e = World::FromEntt(handle);
+			const auto* inst = world.TryGet<PrefabInstanceComponent>(e);
+			if (inst == nullptr)
+			{
+				continue;
+			}
+			PrefabInstanceRecord rec;
+			rec.prefabPath = inst->prefabPath;
+			ComputePrefabDelta(world, e, inst->prefabPath, materials, textures, rec.overrides, rec.removedGuids, rec.addedEntities);
+			if (const auto* nc = world.TryGet<NameComponent>(e))
+			{
+				rec.name = nc->name;
+			}
+			if (const auto* tc = world.TryGet<TransformComponent>(e))
+			{
+				DecomposeTRS(tc->localToWorld, rec.position, rec.eulerDeg, rec.scale);
+			}
+			scene.prefabInstances.push_back(std::move(rec));
+		}
 		return scene;
 	}
 

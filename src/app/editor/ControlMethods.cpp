@@ -529,6 +529,144 @@ namespace aether::editor
 		        Obj({{"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}),
 		        createEntity});
 
+		methods.push_back({"scene.add_prefab_instance",
+		        "add_prefab_instance",
+		        "Place a LINKED prefab instance in the live scene: the scene stores a reference (not a copy), so editing the prefab propagates to every instance. 'prefab' is the prefab's save name; optional 'position'/'rotationEuler'/'scale' place the instance root. Returns the root id.",
+		        true,
+		        Obj({{"prefab", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"prefab"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr)
+			        {
+				        return ErrNoScene();
+			        }
+			        const std::string prefabName = p.value("prefab", std::string{});
+			        if (prefabName.empty())
+			        {
+				        return json{{"error", "'prefab' is required"}};
+			        }
+			        const auto prefab = app::scene::ReadPrefabFile(prefabName);
+			        if (!prefab)
+			        {
+				        return json{{"error", "prefab not found: " + prefabName}};
+			        }
+			        World& world = scenes->GetWorld();
+			        const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
+			        const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
+			        const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
+			        glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos);
+			        transform = glm::rotate(transform, glm::radians(euler.z), glm::vec3(0, 0, 1));
+			        transform = glm::rotate(transform, glm::radians(euler.y), glm::vec3(0, 1, 0));
+			        transform = glm::rotate(transform, glm::radians(euler.x), glm::vec3(1, 0, 0));
+			        transform = glm::scale(transform, scale);
+			        const Entity root = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(ctx.services), transform);
+			        if (!root.IsValid())
+			        {
+				        return json{{"error", "failed to instantiate prefab"}};
+			        }
+			        return json{{"id", root.id}, {"prefab", prefabName}};
+		        }});
+
+		methods.push_back({"scene.unpack_prefab_instance",
+		        "unpack_prefab_instance",
+		        "Break a prefab instance's link: its expanded entities become plain scene entities that no longer track the prefab (and are saved individually). 'id' is the instance root. Returns how many entities were unpacked.",
+		        true,
+		        Obj({{"id", IntProp()}}, {"id"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr)
+			        {
+				        return ErrNoScene();
+			        }
+			        World& world = scenes->GetWorld();
+			        const Entity root{IdOf(p)};
+			        if (!world.GetRegistry().valid(World::ToEntt(root)) || !world.Has<PrefabInstanceComponent>(root))
+			        {
+				        return json{{"error", "not a prefab instance root"}};
+			        }
+			        std::vector<Entity> subtree{root};
+			        for (std::size_t i = 0; i < subtree.size(); ++i)
+			        {
+				        if (const auto* h = world.TryGet<HierarchyComponent>(subtree[i]))
+				        {
+					        subtree.insert(subtree.end(), h->children.begin(), h->children.end());
+				        }
+			        }
+			        for (const Entity e: subtree)
+			        {
+				        world.Remove<PrefabLinkComponent>(e);
+				        world.Remove<SceneTransientComponent>(e);
+			        }
+			        world.Remove<PrefabInstanceComponent>(root);
+			        return json{{"id", root.id}, {"unpacked", subtree.size()}};
+		        }});
+
+		methods.push_back({"scene.apply_prefab_instance",
+		        "apply_prefab_instance",
+		        "Apply a prefab instance's current state (its overrides included) back to the prefab file, so every instance of that prefab picks up the change on reload. 'id' is the instance root.",
+		        true,
+		        Obj({{"id", IntProp()}}, {"id"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        auto* assets = ctx.services.TryGet<AssetManager>();
+			        if (scenes == nullptr || assets == nullptr)
+			        {
+				        return ErrNoScene();
+			        }
+			        World& world = scenes->GetWorld();
+			        const Entity root{IdOf(p)};
+			        const auto* inst = world.TryGet<PrefabInstanceComponent>(root);
+			        if (inst == nullptr)
+			        {
+				        return json{{"error", "not a prefab instance root"}};
+			        }
+			        const std::string prefabName = inst->prefabPath;
+			        const app::scene::SceneDescription captured = app::scene::CapturePrefab(world, root, assets->GetMaterialRegistry(), assets->GetTextureRegistry());
+			        if (!app::scene::SavePrefabFile(prefabName, captured))
+			        {
+				        return json{{"error", "failed to save prefab"}};
+			        }
+			        return json{{"id", root.id}, {"prefab", prefabName}, {"applied", true}};
+		        }});
+
+		methods.push_back({"scene.revert_prefab_instance",
+		        "revert_prefab_instance",
+		        "Discard a prefab instance's overrides and re-expand it from the prefab (a fresh, unmodified copy). 'id' is the instance root. Returns the new root id.",
+		        true,
+		        Obj({{"id", IntProp()}}, {"id"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr)
+			        {
+				        return ErrNoScene();
+			        }
+			        World& world = scenes->GetWorld();
+			        const Entity root{IdOf(p)};
+			        const auto* inst = world.TryGet<PrefabInstanceComponent>(root);
+			        if (inst == nullptr)
+			        {
+				        return json{{"error", "not a prefab instance root"}};
+			        }
+			        const std::string prefabName = inst->prefabPath;
+			        glm::mat4 xform(1.0f);
+			        if (const auto* tc = world.TryGet<TransformComponent>(root))
+			        {
+				        xform = tc->localToWorld;
+			        }
+			        const auto prefab = app::scene::ReadPrefabFile(prefabName);
+			        if (!prefab)
+			        {
+				        return json{{"error", "prefab not found: " + prefabName}};
+			        }
+			        ecs::DestroyHierarchy(world, root);
+			        const Entity newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(ctx.services), xform);
+			        return json{{"id", newRoot.id}, {"prefab", prefabName}, {"reverted", true}};
+		        }});
+
 		methods.push_back({"scene.add_model",
 		        "add_model",
 		        "Add a model file to the live scene as one operation - the seamless equivalent of dragging a glTF into the editor. Bakes the raw glTF if it hasn't been imported yet, then spawns the correct layout: a lone static mesh sits on a "

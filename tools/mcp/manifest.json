@@ -1951,6 +1951,98 @@
         "type": "object"
       },
       "tool": "play_input_sequence"
+    },
+    {
+      "description": "Place a LINKED prefab instance in the live scene: the scene stores a reference (not a copy), so editing the prefab propagates to every instance. 'prefab' is the prefab's save name; optional 'position'/'rotationEuler'/'scale' place the instance root. Returns the root id.",
+      "mutates": true,
+      "name": "scene.add_prefab_instance",
+      "paramsSchema": {
+        "properties": {
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "prefab": {
+            "type": "string"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "prefab"
+        ],
+        "type": "object"
+      },
+      "tool": "add_prefab_instance"
+    },
+    {
+      "description": "Break a prefab instance's link: its expanded entities become plain scene entities that no longer track the prefab (and are saved individually). 'id' is the instance root. Returns how many entities were unpacked.",
+      "mutates": true,
+      "name": "scene.unpack_prefab_instance",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "unpack_prefab_instance"
+    },
+    {
+      "description": "Apply a prefab instance's current state (its overrides included) back to the prefab file, so every instance of that prefab picks up the change on reload. 'id' is the instance root.",
+      "mutates": true,
+      "name": "scene.apply_prefab_instance",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "apply_prefab_instance"
+    },
+    {
+      "description": "Discard a prefab instance's overrides and re-expand it from the prefab (a fresh, unmodified copy). 'id' is the instance root. Returns the new root id.",
+      "mutates": true,
+      "name": "scene.revert_prefab_instance",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "revert_prefab_instance"
     }
   ]
 }

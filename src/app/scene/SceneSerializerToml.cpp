@@ -738,11 +738,14 @@ namespace aether::app::scene
 			root.insert("lights", std::move(lights));
 		}
 
-		toml::array entities;
-		for (const EntityRecord& rec: scene.entities)
+		const auto buildEntityTable = [](const EntityRecord& rec) -> toml::table
 		{
 			toml::table t;
 			t.insert("name", rec.name);
+			if (rec.guid != 0)
+			{
+				t.insert("guid", static_cast<std::int64_t>(rec.guid));
+			}
 			if (!rec.tags.empty())
 			{
 				toml::array tags;
@@ -1025,7 +1028,13 @@ namespace aether::app::scene
 				}
 				t.insert("scripts", std::move(scripts));
 			}
-			entities.push_back(std::move(t));
+			return t;
+		};
+
+		toml::array entities;
+		for (const EntityRecord& rec: scene.entities)
+		{
+			entities.push_back(buildEntityTable(rec));
 		}
 		root.insert("entities", std::move(entities));
 
@@ -1049,6 +1058,65 @@ namespace aether::app::scene
 				assets.push_back(std::move(at));
 			}
 			root.insert("assets", std::move(assets));
+		}
+
+		if (!scene.prefabInstances.empty())
+		{
+			toml::array instances;
+			for (const PrefabInstanceRecord& pi: scene.prefabInstances)
+			{
+				toml::table it;
+				it.insert("prefab", pi.prefabPath);
+				if (!pi.name.empty())
+				{
+					it.insert("name", pi.name);
+				}
+				it.insert("position", Vec3ToToml(pi.position));
+				it.insert("euler", Vec3ToToml(pi.eulerDeg));
+				it.insert("scale", Vec3ToToml(pi.scale));
+				if (!pi.overrides.empty())
+				{
+					toml::array ovs;
+					for (const PrefabEntityOverride& ov: pi.overrides)
+					{
+						toml::table ot;
+						if (!ov.partialToml.empty())
+						{
+							try
+							{
+								ot = toml::parse(ov.partialToml);
+							}
+							catch (const toml::parse_error& err)
+							{
+								AE_WARN(LogCategory::App, "Prefab override serialize error: {}", err.description());
+							}
+						}
+						ot.insert_or_assign("guid", static_cast<std::int64_t>(ov.guid));
+						ovs.push_back(std::move(ot));
+					}
+					it.insert("overrides", std::move(ovs));
+				}
+				if (!pi.removedGuids.empty())
+				{
+					toml::array rem;
+					for (const std::uint64_t g: pi.removedGuids)
+					{
+						rem.push_back(static_cast<std::int64_t>(g));
+					}
+					it.insert("removed", std::move(rem));
+				}
+				if (!pi.addedEntities.empty())
+				{
+					toml::array added;
+					for (const EntityRecord& r: pi.addedEntities)
+					{
+						added.push_back(buildEntityTable(r));
+					}
+					it.insert("added", std::move(added));
+				}
+				instances.push_back(std::move(it));
+			}
+			root.insert("prefab_instances", std::move(instances));
 		}
 
 		return root;
@@ -1155,22 +1223,16 @@ namespace aether::app::scene
 		}
 
 		const auto* entities = root["entities"].as_array();
-		if (entities == nullptr)
-		{
-			return scene;
-		}
 
-		for (const auto& node: *entities)
+		// The entity-table parser, reused for scene entities and for the entity
+		// records embedded in prefab-instance overrides.
+		const auto parseEntityTable = [](const toml::table& tbl) -> EntityRecord
 		{
-			const auto* t = node.as_table();
-			if (t == nullptr)
-			{
-				continue;
-			}
-			const toml::node_view<const toml::node> tv{*t};
+			const toml::node_view<const toml::node> tv{tbl};
 
 			EntityRecord rec;
 			rec.name = tv["name"].value_or(std::string{});
+			rec.guid = static_cast<std::uint64_t>(tv["guid"].value_or(std::int64_t{0}));
 			if (const auto* tags = tv["tags"].as_array())
 			{
 				for (const auto& tag: *tags)
@@ -1517,8 +1579,77 @@ namespace aether::app::scene
 				}
 				rec.scripts.push_back(std::move(legacy));
 			}
-			scene.entities.push_back(std::move(rec));
+			return rec;
+		};
+
+		if (entities != nullptr)
+		{
+			for (const auto& node: *entities)
+			{
+				if (const auto* t = node.as_table())
+				{
+					scene.entities.push_back(parseEntityTable(*t));
+				}
+			}
 		}
+
+		if (const auto* instances = root["prefab_instances"].as_array())
+		{
+			for (const auto& node: *instances)
+			{
+				const auto* it = node.as_table();
+				if (it == nullptr)
+				{
+					continue;
+				}
+				PrefabInstanceRecord pi;
+				pi.prefabPath = (*it)["prefab"].value_or(std::string{});
+				if (pi.prefabPath.empty())
+				{
+					continue;
+				}
+				pi.name = (*it)["name"].value_or(std::string{});
+				pi.position = Vec3FromToml((*it)["position"], glm::vec3(0.0f));
+				pi.eulerDeg = Vec3FromToml((*it)["euler"], glm::vec3(0.0f));
+				pi.scale = Vec3FromToml((*it)["scale"], glm::vec3(1.0f));
+				if (const auto* ovs = (*it)["overrides"].as_array())
+				{
+					for (const auto& on: *ovs)
+					{
+						const auto* ot = on.as_table();
+						if (ot == nullptr)
+						{
+							continue;
+						}
+						PrefabEntityOverride ov;
+						ov.guid = static_cast<std::uint64_t>((*ot)["guid"].value_or(std::int64_t{0}));
+						toml::table keys = *ot;
+						keys.erase("guid");
+						ov.partialToml = StringifyTree(keys);
+						pi.overrides.push_back(std::move(ov));
+					}
+				}
+				if (const auto* rem = (*it)["removed"].as_array())
+				{
+					for (const auto& g: *rem)
+					{
+						pi.removedGuids.push_back(static_cast<std::uint64_t>(g.value_or(std::int64_t{0})));
+					}
+				}
+				if (const auto* added = (*it)["added"].as_array())
+				{
+					for (const auto& an: *added)
+					{
+						if (const auto* at = an.as_table())
+						{
+							pi.addedEntities.push_back(parseEntityTable(*at));
+						}
+					}
+				}
+				scene.prefabInstances.push_back(std::move(pi));
+			}
+		}
+
 		return scene;
 	}
 
@@ -1535,6 +1666,100 @@ namespace aether::app::scene
 			return std::nullopt;
 		}
 		return BuildSceneFromToml(std::move(root));
+	}
+
+	namespace
+	{
+		// Round-trip a single record through the scene document path to get / rebuild
+		// its top-level TOML table, so override diff/merge is generic over every
+		// component slot (no per-field code) and always matches on-disk serialization.
+		toml::table EntityToTable(const EntityRecord& rec)
+		{
+			SceneDescription d;
+			d.entities.push_back(rec);
+			toml::table root = BuildSceneToml(d);
+			if (auto* arr = root["entities"].as_array(); arr != nullptr && !arr->empty())
+			{
+				if (auto* t = (*arr)[0].as_table())
+				{
+					return *t;
+				}
+			}
+			return {};
+		}
+
+		EntityRecord TableToEntity(toml::table entTable)
+		{
+			toml::table root;
+			root.insert("version", static_cast<std::int64_t>(kSceneFormatVersion));
+			toml::array arr;
+			arr.push_back(std::move(entTable));
+			root.insert("entities", std::move(arr));
+			if (auto d = BuildSceneFromToml(std::move(root)); d.has_value() && !d->entities.empty())
+			{
+				return std::move(d->entities[0]);
+			}
+			return {};
+		}
+
+		// Canonical string form of a single node, for value comparison and copying.
+		std::string NodeToString(const toml::node& n)
+		{
+			toml::table tmp;
+			n.visit([&](auto&& concrete) { tmp.insert_or_assign("k", concrete); });
+			return StringifyTree(tmp);
+		}
+	} // namespace
+
+	std::string ComputePrefabOverrideToml(const EntityRecord& live, const EntityRecord& prefab)
+	{
+		const toml::table lt = EntityToTable(live);
+		const toml::table pt = EntityToTable(prefab);
+		toml::table pruned;
+		for (auto&& [k, v]: lt)
+		{
+			const std::string key(k.str());
+			if (key == "guid" || key == "parent")
+			{
+				continue; // identity / structural, never an override
+			}
+			const auto* pv = pt.get(key);
+			if (pv == nullptr || NodeToString(v) != NodeToString(*pv))
+			{
+				v.visit([&](auto&& concrete) { pruned.insert_or_assign(key, concrete); });
+			}
+		}
+		if (pruned.empty())
+		{
+			return {};
+		}
+		return StringifyTree(pruned);
+	}
+
+	EntityRecord MergePrefabOverride(const EntityRecord& prefab, const std::string& partialToml)
+	{
+		toml::table merged = EntityToTable(prefab);
+		if (!partialToml.empty())
+		{
+			try
+			{
+				const toml::table over = toml::parse(partialToml);
+				for (auto&& [k, v]: over)
+				{
+					const std::string key(k.str());
+					if (key == "guid")
+					{
+						continue;
+					}
+					v.visit([&](auto&& concrete) { merged.insert_or_assign(key, concrete); });
+				}
+			}
+			catch (const toml::parse_error& err)
+			{
+				AE_WARN(LogCategory::App, "Prefab override parse error: {}", err.description());
+			}
+		}
+		return TableToEntity(std::move(merged));
 	}
 
 	// ── Binary format ────────────────────────────────────────────────────────

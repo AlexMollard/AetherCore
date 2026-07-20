@@ -69,7 +69,7 @@ namespace aether::editor
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		void HandleRowDragDrop(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
-		bool DrawRowContextMenu(World& world, SceneSelection& selection, Entity e);
+		bool DrawRowContextMenu(app::LayerContext& context, World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
 		void DrawRowUtilityToggles(World& world, Entity e);
 		std::string ComputeEntityPath(const World& world, Entity e) const;

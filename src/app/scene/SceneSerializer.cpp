@@ -214,7 +214,23 @@ namespace aether::app::scene
 #endif
 	}
 
-	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefab)
+	void AssignPrefabGuids(SceneDescription& prefab)
+	{
+		std::uint64_t maxGuid = 0;
+		for (const EntityRecord& e: prefab.entities)
+		{
+			maxGuid = std::max(maxGuid, e.guid);
+		}
+		for (EntityRecord& e: prefab.entities)
+		{
+			if (e.guid == 0)
+			{
+				e.guid = ++maxGuid;
+			}
+		}
+	}
+
+	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefabIn)
 	{
 		const std::filesystem::path dir{PrefabsDirectory()};
 		if (!io::file_util::CreateDirectories(dir))
@@ -223,6 +239,10 @@ namespace aether::app::scene
 			return false;
 		}
 		const std::filesystem::path path = dir / (prefabName + ".prefab.toml");
+
+		// Assign stable guids so instance overrides survive future prefab edits.
+		SceneDescription prefab = prefabIn;
+		AssignPrefabGuids(prefab);
 
 		std::string tomlText;
 		std::vector<std::byte> binary;

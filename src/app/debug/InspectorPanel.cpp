@@ -153,7 +153,8 @@ namespace aether::editor
 		{
 			if (const auto prefab = app::scene::ReadPrefabFile(name))
 			{
-				const Entity root = app::scene::InstantiatePrefab(*prefab, world, app::scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
+				// Linked instance (not a copy): edits to the prefab propagate.
+				const Entity root = app::scene::InstantiatePrefabInstance(name, *prefab, world, app::scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
 				if (root.IsValid() && parent.IsValid())
 				{
 					ecs::SetParent(world, root, parent);

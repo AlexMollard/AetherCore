@@ -115,6 +115,148 @@ namespace aether::app::scene
 			RemoveIf<DisabledComponent>(world, entity);
 		}
 
+		// Forward decl: override application (below) applies a one-entity mini-scene
+		// onto an already-expanded entity, and the expander is called from this core.
+		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities);
+
+		// Link every expanded entity back to its instance root, stamping the source
+		// prefab entity's STABLE guid (created[i] aligns with prefab.entities[i]).
+		// Returns a guid -> entity map so overrides route by guid, not by index -
+		// reordering the prefab's entities never misaligns existing overrides.
+		std::unordered_map<std::uint64_t, Entity> LinkPrefabSubtree(World& world, const std::vector<Entity>& created, Entity root, const SceneDescription& prefab)
+		{
+			std::unordered_map<std::uint64_t, Entity> byGuid;
+			for (std::size_t i = 0; i < created.size(); ++i)
+			{
+				if (!created[i].IsValid())
+				{
+					continue;
+				}
+				const std::uint64_t g = i < prefab.entities.size() ? EffectiveGuid(prefab.entities[i], i) : static_cast<std::uint64_t>(i + 1);
+				world.Emplace<PrefabLinkComponent>(created[i], PrefabLinkComponent{.instanceRoot = root, .prefabGuid = g});
+				byGuid[g] = created[i];
+			}
+			return byGuid;
+		}
+
+		// Re-apply each per-entity override onto the matching expanded entity (by
+		// stable guid). Uses RestoreSubtreeInPlace (the proven undo restore path): it
+		// strips the entity, re-applies the override record onto the same handle, and
+		// re-attaches it to its original parent - safe to run onto a populated entity
+		// (a plain re-apply double-fires component-construct signals). PrefabLink is
+		// preserved (not a restorable component), so the entity stays linked.
+		void ApplyPrefabOverrides(World& world, const ApplySceneDeps& deps, const std::unordered_map<std::uint64_t, Entity>& byGuid,
+		        const std::unordered_map<std::uint64_t, const EntityRecord*>& prefabByGuid, const std::vector<PrefabEntityOverride>& overrides)
+		{
+			for (const PrefabEntityOverride& ov: overrides)
+			{
+				const auto it = byGuid.find(ov.guid);
+				if (it == byGuid.end() || !it->second.IsValid())
+				{
+					continue;
+				}
+				const auto pit = prefabByGuid.find(ov.guid);
+				if (pit == prefabByGuid.end() || pit->second == nullptr)
+				{
+					continue; // override references a guid no longer in the prefab
+				}
+				const Entity target = it->second;
+				Entity parent{};
+				if (const auto* h = world.TryGet<HierarchyComponent>(target))
+				{
+					parent = h->parent;
+				}
+				// Merge the instance's changed keys onto a fresh copy of the *current*
+				// prefab record, so un-overridden keys (incl. later prefab edits) win.
+				EntityRecord merged = MergePrefabOverride(*pit->second, ov.partialToml);
+				merged.parentIndex = -1;
+				merged.entityId = target.id;
+				SceneDescription mini;
+				mini.entities.push_back(std::move(merged));
+				RestoreSubtreeInPlace(mini, world, deps, parent);
+			}
+		}
+
+		// Expand every linked prefab instance in `scene` into live entities. Each
+		// instance root carries a PrefabInstanceComponent (so capture re-emits the
+		// reference) and a SceneTransientComponent (so the expanded subtree is never
+		// written back as flat entities); the whole subtree is PrefabLink-tagged and
+		// per-entity overrides are re-applied.
+		void ExpandPrefabInstances(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
+		{
+			for (const PrefabInstanceRecord& rec: scene.prefabInstances)
+			{
+				if (rec.prefabPath.empty())
+				{
+					continue;
+				}
+				std::optional<SceneDescription> prefab = ReadPrefabFile(rec.prefabPath);
+				if (!prefab)
+				{
+					AE_WARN(LogCategory::App, "Prefab instance references missing prefab '{}'", rec.prefabPath);
+					continue;
+				}
+				const glm::mat4 xform = ComposeTransform(rec.position, rec.eulerDeg, rec.scale);
+				std::vector<Entity> created;
+				const Entity root = InstantiatePrefab(*prefab, world, deps, xform, &created);
+				if (!root.IsValid())
+				{
+					continue;
+				}
+				world.Emplace<PrefabInstanceComponent>(root, PrefabInstanceComponent{.prefabPath = rec.prefabPath});
+				world.Emplace<SceneTransientComponent>(root);
+				if (!rec.name.empty())
+				{
+					if (auto* nc = world.TryGet<NameComponent>(root))
+					{
+						nc->name = rec.name;
+					}
+				}
+				const auto byGuid = LinkPrefabSubtree(world, created, root, *prefab);
+
+				// Remove prefab entities that were deleted in this instance.
+				for (const std::uint64_t g: rec.removedGuids)
+				{
+					const auto it = byGuid.find(g);
+					if (it != byGuid.end() && world.GetRegistry().valid(World::ToEntt(it->second)))
+					{
+						ecs::DestroyHierarchy(world, it->second);
+					}
+				}
+
+				// Map prefab records by stable guid so overrides merge onto the current
+				// prefab (field-level: only overridden keys come from the instance).
+				std::unordered_map<std::uint64_t, const EntityRecord*> prefabByGuid;
+				for (std::size_t i = 0; i < prefab->entities.size(); ++i)
+				{
+					prefabByGuid[EffectiveGuid(prefab->entities[i], i)] = &prefab->entities[i];
+				}
+				ApplyPrefabOverrides(world, deps, byGuid, prefabByGuid, rec.overrides);
+
+				// Re-create instance-local added entities; their roots attach to the
+				// instance root (which is SceneTransient, so they capture as added again).
+				if (!rec.addedEntities.empty())
+				{
+					SceneDescription addScene;
+					addScene.entities = rec.addedEntities;
+					std::vector<Entity> addCreated;
+					addCreated.reserve(addScene.entities.size());
+					for (std::size_t i = 0; i < addScene.entities.size(); ++i)
+					{
+						addCreated.push_back(world.Create());
+					}
+					ApplySceneToEntities(addScene, world, deps, addCreated, false);
+					for (std::size_t i = 0; i < addScene.entities.size() && i < addCreated.size(); ++i)
+					{
+						if (addScene.entities[i].parentIndex < 0)
+						{
+							ecs::SetParent(world, addCreated[i], root);
+						}
+					}
+				}
+			}
+		}
+
 		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities)
 		{
 			if (deps.assetDatabase != nullptr)
@@ -583,7 +725,12 @@ namespace aether::app::scene
 				world.SetSceneFeatures(world.GetSceneFeatures() | missingImplied);
 			}
 
-			AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.version);
+			// Expand linked prefab instances into live (SceneTransient) subtrees. Done
+			// last so instance children never collide with the scene's own entities,
+			// and shared by every apply path (load, restore, undo) via this core.
+			ExpandPrefabInstances(scene, world, deps);
+
+			AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects, {} prefab instances (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.prefabInstances.size(), scene.version);
 			return created;
 		}
 	} // namespace
@@ -777,7 +924,7 @@ namespace aether::app::scene
 		return true;
 	}
 
-	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld)
+	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::vector<Entity>* outCreated)
 	{
 		// Instantiating a prefab must NOT redefine the scene's domain. A prefab is
 		// serialised as a mini-scene whose `kind` defaults to Scene3D; ApplyScene
@@ -788,18 +935,38 @@ namespace aether::app::scene
 		// existing kind and only ever *add* the features the prefab's entities imply.
 		const SceneKind savedKind = world.GetSceneKind();
 		const SceneFeatureFlags savedFeatures = world.GetSceneFeatures();
-		const std::vector<Entity> created = ApplyScene(prefab, world, deps);
+		std::vector<Entity> created = ApplyScene(prefab, world, deps);
 		world.SetSceneKind(savedKind);
 		world.SetSceneFeatures(savedFeatures | world.GetSceneFeatures());
 
+		Entity root = created.empty() ? Entity{} : created.front();
 		for (std::size_t i = 0; i < prefab.entities.size() && i < created.size(); ++i)
 		{
 			if (prefab.entities[i].parentIndex < 0)
 			{
 				ecs::SetWorldTransform(world, created[i], localToWorld);
-				return created[i];
+				root = created[i];
+				break;
 			}
 		}
-		return created.empty() ? Entity{} : created.front();
+		if (outCreated != nullptr)
+		{
+			*outCreated = std::move(created);
+		}
+		return root;
+	}
+
+	Entity InstantiatePrefabInstance(const std::string& prefabName, const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld)
+	{
+		std::vector<Entity> created;
+		const Entity root = InstantiatePrefab(prefab, world, deps, localToWorld, &created);
+		if (!root.IsValid())
+		{
+			return root;
+		}
+		world.Emplace<PrefabInstanceComponent>(root, PrefabInstanceComponent{.prefabPath = prefabName});
+		world.Emplace<SceneTransientComponent>(root);
+		LinkPrefabSubtree(world, created, root, prefab);
+		return root;
 	}
 } // namespace aether::app::scene

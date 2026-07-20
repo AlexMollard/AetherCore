@@ -125,7 +125,9 @@ namespace aether::editor
 		{
 			if (const auto prefab = app::scene::ReadPrefabFile(name))
 			{
-				const Entity root = app::scene::InstantiatePrefab(*prefab, world, app::scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
+				// Linked instance (not a copy): edits to the prefab propagate, and the
+				// scene stores a reference rather than the expanded entities.
+				const Entity root = app::scene::InstantiatePrefabInstance(name, *prefab, world, app::scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
 				if (root.IsValid() && parent.IsValid())
 				{
 					ecs::SetParent(world, root, parent);
@@ -627,7 +629,7 @@ namespace aether::editor
 		}
 	}
 
-	bool HierarchyPanel::DrawRowContextMenu(World& world, SceneSelection& selection, Entity e)
+	bool HierarchyPanel::DrawRowContextMenu(app::LayerContext& context, World& world, SceneSelection& selection, Entity e)
 	{
 		if (!ImGui::BeginPopupContextItem("ctx"))
 		{
@@ -683,6 +685,56 @@ namespace aether::editor
 				*c = *c == ' ' ? '_' : static_cast<char>(std::tolower(static_cast<unsigned char>(*c)));
 			}
 			m_openPrefabSave = true;
+		}
+		if (world.Has<PrefabInstanceComponent>(e))
+		{
+			ImGui::Separator();
+			if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Apply to Prefab"))
+			{
+				if (auto* assetMgr = context.services.TryGet<AssetManager>())
+				{
+					const std::string prefabName = world.Get<PrefabInstanceComponent>(e).prefabPath;
+					const auto captured = app::scene::CapturePrefab(world, e, assetMgr->GetMaterialRegistry(), assetMgr->GetTextureRegistry());
+					app::scene::SavePrefabFile(prefabName, captured);
+					m_dirty = true;
+				}
+			}
+			if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Revert Instance"))
+			{
+				const std::string prefabName = world.Get<PrefabInstanceComponent>(e).prefabPath;
+				glm::mat4 xform(1.0f);
+				if (const auto* tc = world.TryGet<TransformComponent>(e))
+				{
+					xform = tc->localToWorld;
+				}
+				if (const auto prefab = app::scene::ReadPrefabFile(prefabName))
+				{
+					ecs::DestroyHierarchy(world, e);
+					const Entity newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(context.services), xform);
+					selection.Select(newRoot);
+					m_dirty = true;
+					ImGui::EndPopup();
+					return true; // e was destroyed
+				}
+			}
+			if (ImGui::MenuItem(ICON_FA_SITEMAP "  Unpack Instance"))
+			{
+				std::vector<Entity> subtree{e};
+				for (std::size_t i = 0; i < subtree.size(); ++i)
+				{
+					if (const auto* h = world.TryGet<HierarchyComponent>(subtree[i]))
+					{
+						subtree.insert(subtree.end(), h->children.begin(), h->children.end());
+					}
+				}
+				for (const Entity se: subtree)
+				{
+					world.Remove<PrefabLinkComponent>(se);
+					world.Remove<SceneTransientComponent>(se);
+				}
+				world.Remove<PrefabInstanceComponent>(e);
+				m_dirty = true;
+			}
 		}
 		ImGui::Separator();
 		const bool selfDisabled = world.Has<DisabledComponent>(e);
@@ -794,6 +846,13 @@ namespace aether::editor
 		else
 		{
 			ImGui::SameLine();
+			// Prefab-linked entities (instance root + its expanded subtree) render in a
+			// distinct blue so it is clear at a glance they come from a prefab.
+			const bool prefabLinked = world.Has<PrefabLinkComponent>(e) || world.Has<PrefabInstanceComponent>(e);
+			if (prefabLinked)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.46f, 0.66f, 1.0f, 1.0f));
+			}
 			const std::string name = EntityDisplayName(world, e);
 			if (searching && !needle.empty())
 			{
@@ -823,6 +882,10 @@ namespace aether::editor
 			else
 			{
 				ImGui::TextUnformatted(name.c_str());
+			}
+			if (prefabLinked)
+			{
+				ImGui::PopStyleColor();
 			}
 		}
 		ImGui::SameLine();
@@ -1051,7 +1114,7 @@ namespace aether::editor
 			const float gapHalf = ImGui::GetStyle().ItemSpacing.y * 0.5f;
 			HandleRowDragDrop(context, world, selection, e, rowMin.y - gapHalf, rowMax.y + gapHalf, visualRowMax.x);
 		}
-		const bool destroyed = DrawRowContextMenu(world, selection, e);
+		const bool destroyed = DrawRowContextMenu(context, world, selection, e);
 
 		const ImVec2 contentStart(rowStart.x + depthOffset + arrowSlot + ImGui::GetStyle().ItemInnerSpacing.x, rowStart.y);
 		ImGui::SetCursorScreenPos(contentStart);
@@ -1710,7 +1773,7 @@ namespace aether::editor
 						}
 						HandleRowClick(selection, e);
 						HandleRowDragDrop(context, world, selection, e, rowMin.y, rowMax.y, rowMax.x);
-						if (!DrawRowContextMenu(world, selection, e))
+						if (!DrawRowContextMenu(context, world, selection, e))
 						{
 							DrawRowContent(world, e, searching, needle);
 						}
