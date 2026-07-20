@@ -15,6 +15,7 @@
 #include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
+#include "assets/TileAssetStore.hpp"
 // Dear ImGui is used by every tooling front end (editor AND launcher) but never by
 #ifdef AETHERCORE_WITH_IMGUI
 #	include "imgui/ImguiSubsystem.hpp"
@@ -24,6 +25,7 @@
 #	include "utils/TomlConfig.hpp"
 #endif
 #include "physics/PhysicsSystem.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
 #include "platform/Window.hpp"
@@ -217,6 +219,7 @@ namespace aether::app
 		context.Get<World>().UnregisterSystem("SpriteAnimationSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
 		context.Get<World>().UnregisterSystem("PhysicsSystem");
+		context.Get<World>().UnregisterSystem("Physics2DSystem");
 #endif
 
 		m_layers.DetachAll(context);
@@ -276,6 +279,12 @@ namespace aether::app
 				auto* physicsPtr = physicsSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
 				services.Register<aether::PhysicsSystem>(*physicsPtr);
+
+				auto physics2DSystem = std::make_unique<aether::Physics2DSystem>();
+				physics2DSystem->SetTileAssets(attachContext.TryGet<aether::TileAssetStore>());
+				auto* physics2DPtr = physics2DSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(physics2DSystem));
+				services.Register<aether::Physics2DSystem>(*physics2DPtr);
 
 				auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
 				dayNightSystem->Init(*attachContext.TryGet<Renderer>());
@@ -363,25 +372,32 @@ namespace aether::app
 		}
 		else
 		{
-			if (auto* spriteAnimations = ctx.TryGet<aether::SpriteAnimationSystem>())
+			// Edit-mode previews honour the same feature-driven activation as the
+			// play-mode SystemRegistry (System::RequiredFeatures).
+			World& editWorld = ctx.Get<World>();
+			if (auto* spriteAnimations = ctx.TryGet<aether::SpriteAnimationSystem>(); spriteAnimations != nullptr && spriteAnimations->IsActiveIn(editWorld))
 			{
-				spriteAnimations->UpdatePreview(ctx.Get<World>(), static_cast<float>(gameDt));
+				spriteAnimations->UpdatePreview(editWorld, static_cast<float>(gameDt));
 			}
-			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>())
+			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>(); physics != nullptr && physics->IsActiveIn(editWorld))
 			{
-				physics->FlushPendingOnly(ctx.Get<World>());
+				physics->FlushPendingOnly(editWorld);
 			}
-			if (auto* dayNight = ctx.TryGet<aether::app::DayNightSystem>())
+			if (auto* physics2D = ctx.TryGet<aether::Physics2DSystem>(); physics2D != nullptr && physics2D->IsActiveIn(editWorld))
 			{
-				dayNight->Update(ctx.Get<World>(), 0.0f);
+				physics2D->FlushPendingOnly(editWorld);
 			}
-			if (auto* lights = ctx.TryGet<aether::LightSystem>())
+			if (auto* dayNight = ctx.TryGet<aether::app::DayNightSystem>(); dayNight != nullptr && dayNight->IsActiveIn(editWorld))
 			{
-				lights->Update(ctx.Get<World>(), 0.0f);
+				dayNight->Update(editWorld, 0.0f);
+			}
+			if (auto* lights = ctx.TryGet<aether::LightSystem>(); lights != nullptr && lights->IsActiveIn(editWorld))
+			{
+				lights->Update(editWorld, 0.0f);
 			}
 			if (auto* cameras = ctx.TryGet<aether::CameraSystem>())
 			{
-				cameras->Update(ctx.Get<World>(), 0.0f);
+				cameras->Update(editWorld, 0.0f);
 			}
 		}
 #endif

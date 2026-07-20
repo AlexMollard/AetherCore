@@ -20,6 +20,7 @@ namespace aether
 	class GraphicsPipeline;
 	class PrimitiveMeshes;
 	class PhysicsSystem;
+	class Physics2DSystem;
 	class IEngineRuntime;
 	class ServiceContainer;
 	struct DebugVertex;
@@ -44,6 +45,7 @@ namespace aether::app::scripting
 		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
+		aether::Physics2DSystem* physics2D = nullptr;
 		// Used to quiesce the render thread around script-triggered GPU work
 		aether::IEngineRuntime* engineRuntime = nullptr;
 		gpu::CommandPool uploadPool = nullptr;

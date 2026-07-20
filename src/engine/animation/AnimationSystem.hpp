@@ -12,6 +12,11 @@ namespace aether
 			return "AnimationSystem";
 		}
 
+		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
+		{
+			return SceneFeatureFlags::Meshes3D;
+		}
+
 		void Update(World& world, float dt) override;
 	};
 } // namespace aether

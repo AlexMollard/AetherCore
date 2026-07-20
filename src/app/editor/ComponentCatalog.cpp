@@ -237,7 +237,15 @@ namespace aether::editor
 			c.push_back(Simple<ScalePulseComponent>("Scale Pulse", "Behaviors", ICON_FA_EXPAND, ScalePulseComponent{.amplitude = 0.2f, .frequency = 2.0f}));
 			c.push_back(Simple<LookAtComponent>("Look At", "Behaviors", ICON_FA_EYE, LookAtComponent{.target = {0.0f, 0.0f, 0.0f}}));
 
-			c.push_back(Simple<RigidBodyComponent>("Rigid Body", "Physics", ICON_FA_WEIGHT_HANGING, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic}));
+			// 3D physics entries: Physics3D-gated and exclusive with the 2D set.
+			const std::vector<std::string> kConflicts2D{"Rigid Body 2D", "Collider 2D", "Joint 2D"};
+			const auto physics3D = [&kConflicts2D](ComponentCatalogEntry entry)
+			{
+				entry.requiredFeatures = SceneFeatureFlags::Physics3D;
+				entry.conflictsWith = kConflicts2D;
+				return entry;
+			};
+			c.push_back(physics3D(Simple<RigidBodyComponent>("Rigid Body", "Physics", ICON_FA_WEIGHT_HANGING, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic})));
 			const auto colliderEntry = [](std::string name, PhysicsShapeType shape)
 			{
 				return ComponentCatalogEntry{std::move(name),
@@ -247,11 +255,11 @@ namespace aether::editor
 				        [shape](World& w, Entity e, ServiceContainer&) { AddCollider(w, e, shape); },
 				        [](World& w, Entity e) { w.Remove<ColliderComponent>(e); }};
 			};
-			c.push_back(colliderEntry("Box Collider", PhysicsShapeType::Box));
-			c.push_back(colliderEntry("Sphere Collider", PhysicsShapeType::Sphere));
-			c.push_back(colliderEntry("Capsule Collider", PhysicsShapeType::Capsule));
-			c.push_back(colliderEntry("Cylinder Collider", PhysicsShapeType::Cylinder));
-			c.push_back(ComponentCatalogEntry{"Trigger Volume",
+			c.push_back(physics3D(colliderEntry("Box Collider", PhysicsShapeType::Box)));
+			c.push_back(physics3D(colliderEntry("Sphere Collider", PhysicsShapeType::Sphere)));
+			c.push_back(physics3D(colliderEntry("Capsule Collider", PhysicsShapeType::Capsule)));
+			c.push_back(physics3D(colliderEntry("Cylinder Collider", PhysicsShapeType::Cylinder)));
+			c.push_back(physics3D(ComponentCatalogEntry{"Trigger Volume",
 			        "Physics",
 			        ICON_FA_WEIGHT_HANGING,
 			        [](const World& w, Entity e) { return w.Has<ColliderComponent>(e); },
@@ -264,13 +272,13 @@ namespace aether::editor
 				        col.layer = PhysicsLayer::Sensor;
 				        w.Emplace<ColliderComponent>(e, col);
 			        },
-			        [](World& w, Entity e) { w.Remove<ColliderComponent>(e); }});
-			c.push_back(ComponentCatalogEntry{"Joint",
+			        [](World& w, Entity e) { w.Remove<ColliderComponent>(e); }}));
+			c.push_back(physics3D(ComponentCatalogEntry{"Joint",
 			        "Physics",
 			        ICON_FA_LINK,
 			        [](const World& w, Entity e) { return w.Has<JointComponent>(e); },
 			        [](World& w, Entity e, ServiceContainer&) { w.EmplaceOrReplace<JointComponent>(e, JointComponent{.anchor = EntityPosition(w, e)}); },
-			        [](World& w, Entity e) { w.Remove<JointComponent>(e); }});
+			        [](World& w, Entity e) { w.Remove<JointComponent>(e); }}));
 			c.push_back(Simple<CollisionEventsComponent>("Collision Events", "Physics", ICON_FA_BOLT));
 
 			c.push_back(Simple<SceneTransientComponent>("Scene Transient", "Editor", ICON_FA_GHOST));
@@ -286,8 +294,11 @@ namespace aether::editor
 				{
 					continue;
 				}
-				c.push_back(ComponentCatalogEntry{
-				        rt.name, rt.category, rt.icon, [&rt](const World& w, Entity e) { return rt.has(w, e); }, [&rt](World& w, Entity e, ServiceContainer&) { rt.emplaceDefault(w, e); }, [&rt](World& w, Entity e) { rt.remove(w, e); }});
+				ComponentCatalogEntry entry{
+				        rt.name, rt.category, rt.icon, [&rt](const World& w, Entity e) { return rt.has(w, e); }, [&rt](World& w, Entity e, ServiceContainer&) { rt.emplaceDefault(w, e); }, [&rt](World& w, Entity e) { rt.remove(w, e); }};
+				entry.requiredFeatures = rt.requiredFeatures;
+				entry.conflictsWith = rt.conflictsWith;
+				c.push_back(std::move(entry));
 			}
 
 			return c;
@@ -298,6 +309,93 @@ namespace aether::editor
 	{
 		static const std::vector<ComponentCatalogEntry> catalog = Build();
 		return catalog;
+	}
+
+	namespace
+	{
+		const char* SceneKindLabel(SceneKind kind)
+		{
+			switch (kind)
+			{
+				case SceneKind::Scene2D:
+					return "2D";
+				case SceneKind::Mixed:
+					return "mixed";
+				case SceneKind::Scene3D:
+				default:
+					return "3D";
+			}
+		}
+
+		std::string FeatureLabels(SceneFeatureFlags features)
+		{
+			static constexpr std::pair<SceneFeatureFlags, const char*> kNames[] = {
+			        {SceneFeatureFlags::Sprites, "Sprites"},
+			        {SceneFeatureFlags::Tilemaps, "Tilemaps"},
+			        {SceneFeatureFlags::Physics2D, "2D Physics"},
+			        {SceneFeatureFlags::Meshes3D, "3D Meshes"},
+			        {SceneFeatureFlags::Lighting3D, "3D Lighting"},
+			        {SceneFeatureFlags::Navigation, "Navigation"},
+			        {SceneFeatureFlags::Physics3D, "3D Physics"},
+			};
+			std::string out;
+			for (const auto& [flag, name]: kNames)
+			{
+				if (HasSceneFeature(features, flag))
+				{
+					if (!out.empty())
+					{
+						out += ", ";
+					}
+					out += name;
+				}
+			}
+			return out;
+		}
+	} // namespace
+
+	std::string ComponentAddBlockReason(const World& world, Entity entity, const ComponentCatalogEntry& entry)
+	{
+		const SceneFeatureFlags allowed = AllowedSceneFeatures(world.GetSceneKind());
+		if (!HasAllSceneFeatures(allowed, entry.requiredFeatures))
+		{
+			const auto missing = static_cast<SceneFeatureFlags>(static_cast<std::uint32_t>(entry.requiredFeatures) & ~static_cast<std::uint32_t>(allowed));
+			return "requires " + FeatureLabels(missing) + ", which a " + SceneKindLabel(world.GetSceneKind()) + " scene cannot enable";
+		}
+		for (const std::string& conflictName: entry.conflictsWith)
+		{
+			const ComponentCatalogEntry* conflict = FindComponent(conflictName);
+			if (conflict != nullptr && conflict->has && conflict->has(world, entity))
+			{
+				return "conflicts with the entity's " + conflictName + " component";
+			}
+		}
+		return {};
+	}
+
+	bool ComponentVisibleInMenu(const World& world, Entity entity, const ComponentCatalogEntry& entry)
+	{
+		if (!entry.addable || !HasAllSceneFeatures(world.GetSceneFeatures(), entry.requiredFeatures))
+		{
+			return false;
+		}
+		for (const std::string& conflictName: entry.conflictsWith)
+		{
+			const ComponentCatalogEntry* conflict = FindComponent(conflictName);
+			if (conflict != nullptr && conflict->has && conflict->has(world, entity))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void EnableComponentFeatures(World& world, const ComponentCatalogEntry& entry)
+	{
+		if (entry.requiredFeatures != SceneFeatureFlags::None && !HasAllSceneFeatures(world.GetSceneFeatures(), entry.requiredFeatures))
+		{
+			world.SetSceneFeatures(world.GetSceneFeatures() | entry.requiredFeatures);
+		}
 	}
 
 	const ComponentCatalogEntry* FindComponent(std::string_view name)

@@ -38,8 +38,16 @@ public abstract class EntityScript
     public virtual void OnTriggerEnter(Entity other) { }
     public virtual void OnTriggerExit(Entity other) { }
 
+    // 2D physics twins (Box2D-backed; fire in 2D scenes only).
+    public virtual void OnCollisionEnter2D(Entity other) { }
+    public virtual void OnCollisionExit2D(Entity other) { }
+    public virtual void OnTriggerEnter2D(Entity other) { }
+    public virtual void OnTriggerExit2D(Entity other) { }
+
     // 0 = undetermined, 1 = enabled + dispatching, 2 = no callbacks overridden.
     private int _physicsDispatch;
+    private bool _dispatch3D;
+    private bool _dispatch2D;
 
     private static bool Overrides(System.Type t, string method)
         => t.GetMethod(method)?.DeclaringType != typeof(EntityScript);
@@ -53,21 +61,34 @@ public abstract class EntityScript
         if (_physicsDispatch == 0)
         {
             System.Type t = GetType();
-            bool any = Overrides(t, nameof(OnCollisionEnter)) || Overrides(t, nameof(OnCollisionExit))
-                       || Overrides(t, nameof(OnTriggerEnter)) || Overrides(t, nameof(OnTriggerExit));
-            if (!any)
+            _dispatch3D = Overrides(t, nameof(OnCollisionEnter)) || Overrides(t, nameof(OnCollisionExit))
+                          || Overrides(t, nameof(OnTriggerEnter)) || Overrides(t, nameof(OnTriggerExit));
+            _dispatch2D = Overrides(t, nameof(OnCollisionEnter2D)) || Overrides(t, nameof(OnCollisionExit2D))
+                          || Overrides(t, nameof(OnTriggerEnter2D)) || Overrides(t, nameof(OnTriggerExit2D));
+            if (!_dispatch3D && !_dispatch2D)
             {
                 _physicsDispatch = 2;
                 return;
             }
-            Physics.EnableEvents(Self);
+            if (_dispatch3D) { Physics.EnableEvents(Self); }
+            if (_dispatch2D) { Physics2D.EnableEvents(Self); }
             _physicsDispatch = 1;
             return; // events start recording after enable; dispatch from next frame
         }
-        foreach (Entity e in Physics.GetCollisionEnter(Self)) { OnCollisionEnter(e); }
-        foreach (Entity e in Physics.GetCollisionExit(Self)) { OnCollisionExit(e); }
-        foreach (Entity e in Physics.GetTriggerEnter(Self)) { OnTriggerEnter(e); }
-        foreach (Entity e in Physics.GetTriggerExit(Self)) { OnTriggerExit(e); }
+        if (_dispatch3D)
+        {
+            foreach (Entity e in Physics.GetCollisionEnter(Self)) { OnCollisionEnter(e); }
+            foreach (Entity e in Physics.GetCollisionExit(Self)) { OnCollisionExit(e); }
+            foreach (Entity e in Physics.GetTriggerEnter(Self)) { OnTriggerEnter(e); }
+            foreach (Entity e in Physics.GetTriggerExit(Self)) { OnTriggerExit(e); }
+        }
+        if (_dispatch2D)
+        {
+            foreach (Entity e in Physics2D.GetCollisionEnter(Self)) { OnCollisionEnter2D(e); }
+            foreach (Entity e in Physics2D.GetCollisionExit(Self)) { OnCollisionExit2D(e); }
+            foreach (Entity e in Physics2D.GetTriggerEnter(Self)) { OnTriggerEnter2D(e); }
+            foreach (Entity e in Physics2D.GetTriggerExit(Self)) { OnTriggerExit2D(e); }
+        }
     }
 
     // ── Coroutines ────────────────────────────────────────────────────────────────

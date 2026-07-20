@@ -52,6 +52,9 @@ namespace aether
 		std::string persistentKey;
 		std::string name;
 		SpritePixelRect pixelRect{};
+		// Normalised UV begin/end (x0, y0, x1, y1) — the same form the sprite
+		// shader lerps between and SpriteRendererComponent.uvRect uses. Derived
+		// from pixelRect on load; never persisted.
 		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};
 		glm::vec2 pixelSize{1.0f};
 		glm::vec2 pivot{0.5f};

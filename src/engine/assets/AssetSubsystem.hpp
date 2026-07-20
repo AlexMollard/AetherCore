@@ -16,6 +16,8 @@
 #include "assets/AssetManager.hpp"
 #include "assets/AssetDatabase.hpp"
 #include "assets/SpriteAssetStore.hpp"
+#include "assets/TileAssetStore.hpp"
+#include "rendering/TileMapSystem.hpp"
 #include "rendering/SpriteSystem.hpp"
 
 namespace aether
@@ -101,9 +103,19 @@ namespace aether
 			return m_uploadContext;
 		}
 
+		[[nodiscard]] TileMapSystem& GetTileMapSystem()
+		{
+			return m_tileMapSystem;
+		}
+
 		[[nodiscard]] SpriteSystem& GetSpriteSystem()
 		{
 			return m_spriteSystem;
+		}
+
+		[[nodiscard]] TileAssetStore& GetTileAssetStore()
+		{
+			return m_tileAssetStore;
 		}
 
 		[[nodiscard]] SpriteAssetStore& GetSpriteAssetStore()
@@ -130,7 +142,9 @@ namespace aether
 		AssetDatabase m_assetDatabase{m_primitiveMeshes};
 		gpu::UploadContext m_uploadContext;
 		SpriteAssetStore m_spriteAssetStore;
+		TileAssetStore m_tileAssetStore;
 		SpriteSystem m_spriteSystem;
+		TileMapSystem m_tileMapSystem;
 		VulkanContext* m_context = nullptr;
 		World* m_world = nullptr;
 	};

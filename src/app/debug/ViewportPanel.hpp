@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 #include <string_view>
 
 #include <glm/glm.hpp>
 
 #include "debug/DebugPanel.hpp"
+#include "debug/TilePaintingState.hpp"
 #include "gpu/GpuTypes.hpp"
 
 namespace aether::editor
@@ -34,6 +36,13 @@ namespace aether::editor
 		void Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void DrawPlayControls(app::LayerContext& context);
 		void DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		// Interactive Collider 2D editing for the selected entity in 2D edit mode:
+		// box/circle/capsule size handles, offset handle, and polygon point
+		// drag/insert (ctrl+click edge)/remove (right-click point).
+		void DrawCollider2DHandles(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		// Tile painting for the selected Tile Map entity (tool state lives in the
+		// TilePaintingState service; strokes record chunk-local diffs for undo).
+		void HandleTilePainting(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void DrawSpriteOutlines(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// sets m_lookThroughEntityId, which OnUpdate uses to lock the editor camera.
 		void DrawCameraPreviewControls(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
@@ -59,7 +68,21 @@ namespace aether::editor
 		bool m_editorCamActive = false;
 		bool m_editor2DMode = false;
 
-		std::uint32_t m_lookThroughEntityId = 0;
+		// Collider 2D handle interaction (edit mode). Capture suppresses viewport
+	// picking while a handle is hovered or dragged.
+	int m_collider2DActiveHandle = -1;
+	bool m_collider2DMouseCapture = false;
+	bool m_collider2DUndoPushed = false;
+
+		// Tile painting gesture state (tool selection lives in TilePaintingState).
+		bool m_tilePaintCapture = false;
+		bool m_tileStrokeActive = false;
+		bool m_tileRectDragging = false;
+		glm::ivec2 m_tileRectAnchor{0};
+		std::vector<glm::ivec2> m_tileStrokeCells;
+		std::vector<editor::TilePaintEdit> m_tileStrokeEdits;
+
+	std::uint32_t m_lookThroughEntityId = 0;
 		glm::vec3 m_saved2DEditorPosition{0.0f, 0.0f, 10.0f};
 		float m_saved2DEditorHeight = 10.0f;
 		bool m_hasSaved2DEditorCamera = false;

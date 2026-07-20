@@ -84,6 +84,7 @@ namespace aether::app::scene
 			AppendSceneFeature(values, features, SceneFeatureFlags::Meshes3D, "meshes_3d");
 			AppendSceneFeature(values, features, SceneFeatureFlags::Lighting3D, "lighting_3d");
 			AppendSceneFeature(values, features, SceneFeatureFlags::Navigation, "navigation");
+			AppendSceneFeature(values, features, SceneFeatureFlags::Physics3D, "physics_3d");
 			return values;
 		}
 
@@ -126,6 +127,10 @@ namespace aether::app::scene
 				{
 					features |= SceneFeatureFlags::Navigation;
 				}
+				else if (*name == "physics_3d")
+				{
+					features |= SceneFeatureFlags::Physics3D;
+				}
 				else
 				{
 					AE_WARN(LogCategory::App, "Ignoring unknown scene feature '{}'.", *name);
@@ -145,6 +150,62 @@ namespace aether::app::scene
 			scene->insert("features", SceneFeaturesToToml(DefaultSceneFeatures(kind)));
 		}
 
+		// v14 made system activation and editor menus feature driven and added the
+		// Physics3D flag. Scenes written earlier never recorded their kind's
+		// physics flag, so grant it: physics_3d to 3D/Mixed scenes, physics_2d to
+		// 2D scenes (both are now kind defaults).
+		void MigratePhysicsFeaturesToV14(toml::table& root)
+		{
+			toml::table* scene = root["scene"].as_table();
+			if (scene == nullptr)
+			{
+				return;
+			}
+			const SceneKind kind = SceneKindFromName((*scene)["kind"].value_or(std::string{"3d"}));
+			toml::array* features = (*scene)["features"].as_array();
+			if (features == nullptr)
+			{
+				return; // pre-v10 file: the v10 migration inserts kind defaults, which now include the physics flag
+			}
+			const std::string_view grant = kind == SceneKind::Scene2D ? "physics_2d" : "physics_3d";
+			for (const toml::node& value: *features)
+			{
+				if (value.value<std::string_view>() == grant)
+				{
+					return;
+				}
+			}
+			features->push_back(std::string{grant});
+		}
+
+		// v15 made Tilemaps a Scene2D default feature; grant it to older 2D
+		// scenes so their editors show the tile tooling.
+		void MigrateTilemapsFeatureToV15(toml::table& root)
+		{
+			toml::table* scene = root["scene"].as_table();
+			if (scene == nullptr)
+			{
+				return;
+			}
+			if (SceneKindFromName((*scene)["kind"].value_or(std::string{"3d"})) != SceneKind::Scene2D)
+			{
+				return;
+			}
+			toml::array* features = (*scene)["features"].as_array();
+			if (features == nullptr)
+			{
+				return; // pre-v10 file: the v10 migration inserts kind defaults, which now include tilemaps
+			}
+			for (const toml::node& value: *features)
+			{
+				if (value.value<std::string_view>() == "tilemaps")
+				{
+					return;
+				}
+			}
+			features->push_back("tilemaps");
+		}
+
 		struct SceneMigration
 		{
 			int targetVersion;
@@ -153,6 +214,8 @@ namespace aether::app::scene
 
 		constexpr std::array kSceneMigrations{
 		        SceneMigration{.targetVersion = 10, .apply = MigrateSceneFeaturesToV10},
+		        SceneMigration{.targetVersion = 14, .apply = MigratePhysicsFeaturesToV14},
+		        SceneMigration{.targetVersion = 15, .apply = MigrateTilemapsFeatureToV15},
 		};
 
 		void ApplySceneMigrations(toml::table& root, int sourceVersion)
@@ -760,6 +823,30 @@ namespace aether::app::scene
 					jr.collideConnected = j->collideConnected;
 					rec.joint = jr;
 				}
+				if (const auto* rb2d = world.TryGet<RigidBody2DComponent>(e))
+				{
+					RigidBody2DComponent copy = *rb2d;
+					copy.body = {};
+					rec.rigidBody2D = std::move(copy);
+				}
+				if (const auto* col2d = world.TryGet<Collider2DComponent>(e))
+				{
+					Collider2DComponent copy = *col2d;
+					copy.shapes.clear();
+					rec.collider2D = std::move(copy);
+				}
+				if (const auto* j2d = world.TryGet<Joint2DComponent>(e))
+				{
+					Joint2DComponent copy = *j2d;
+					copy.jointId = 0;
+					if (copy.target.IsValid())
+					{
+						const auto it = indexOf.find(copy.target.id);
+						rec.joint2DTargetIndex = it != indexOf.end() ? it->second : -1;
+					}
+					copy.target = {};
+					rec.joint2D = std::move(copy);
+				}
 				if (const auto* c = world.TryGet<ui::UICanvas>(e))
 				{
 					rec.uiCanvas = UICanvasRecord{static_cast<std::uint8_t>(c->scaleMode), c->referenceResolution, c->sortBias};
@@ -832,6 +919,14 @@ namespace aether::app::scene
 				if (const auto* sl = world.TryGet<SpotLightComponent>(e))
 				{
 					rec.spotLight = *sl;
+				}
+				if (const auto* dn = world.TryGet<DayNightComponent>(e))
+				{
+					rec.dayNight = *dn;
+				}
+				if (const auto* tm = world.TryGet<TileMapComponent>(e))
+				{
+					rec.tileMap = *tm;
 				}
 				if (const auto* cam = world.TryGet<CameraComponent>(e))
 				{
@@ -1163,6 +1258,32 @@ namespace aether::app::scene
 				j.insert("collide_connected", rec.joint->collideConnected);
 				t.insert("joint", std::move(j));
 			}
+			if (rec.rigidBody2D)
+			{
+				t.insert("rigid_body_2d", WriteReflectedToToml("Rigid Body 2D", &*rec.rigidBody2D));
+			}
+			if (rec.collider2D)
+			{
+				toml::table c = WriteReflectedToToml("Collider 2D", &*rec.collider2D);
+				if (!rec.collider2D->points.empty())
+				{
+					toml::array pts;
+					for (const glm::vec2& p: rec.collider2D->points)
+					{
+						pts.push_back(Vec2ToToml(p));
+					}
+					c.insert("points", std::move(pts));
+				}
+				t.insert("collider_2d", std::move(c));
+			}
+			if (rec.joint2D)
+			{
+				toml::table j = WriteReflectedToToml("Joint 2D", &*rec.joint2D);
+				// Reflection writes 'target' as a raw entity id, which does not
+				// survive a cold load; overwrite with the scene-local index.
+				j.insert_or_assign("target", static_cast<std::int64_t>(rec.joint2DTargetIndex));
+				t.insert("joint_2d", std::move(j));
+			}
 			if (rec.uiCanvas)
 			{
 				toml::table c;
@@ -1245,6 +1366,14 @@ namespace aether::app::scene
 			if (rec.spotLight)
 			{
 				t.insert("spot_light", WriteReflectedToToml("Spot Light", &*rec.spotLight));
+			}
+			if (rec.dayNight)
+			{
+				t.insert("day_night", WriteReflectedToToml("Day Night", &*rec.dayNight));
+			}
+			if (rec.tileMap)
+			{
+				t.insert("tile_map", WriteReflectedToToml("Tile Map", &*rec.tileMap));
 			}
 			if (rec.camera)
 			{
@@ -1533,6 +1662,40 @@ namespace aether::app::scene
 				        .collideConnected = jv["collide_connected"].value_or(false),
 				};
 			}
+			if (const auto* rb = tv["rigid_body_2d"].as_table())
+			{
+				RigidBody2DComponent component{};
+				ReadReflectedFromToml("Rigid Body 2D", *rb, &component);
+				rec.rigidBody2D = std::move(component);
+			}
+			if (const auto* col = tv["collider_2d"].as_table())
+			{
+				Collider2DComponent component{};
+				ReadReflectedFromToml("Collider 2D", *col, &component);
+				if (const auto* pts = toml::node_view<const toml::node>{*col}["points"].as_array())
+				{
+					component.points.reserve(pts->size());
+					for (const auto& p: *pts)
+					{
+						if (const auto* v = p.as_array(); v != nullptr && v->size() >= 2)
+						{
+							component.points.emplace_back(static_cast<float>((*v)[0].value_or(0.0)), static_cast<float>((*v)[1].value_or(0.0)));
+						}
+					}
+				}
+				rec.collider2D = std::move(component);
+			}
+			if (const auto* j2d = tv["joint_2d"].as_table())
+			{
+				Joint2DComponent component{};
+				ReadReflectedFromToml("Joint 2D", *j2d, &component);
+				// 'target' in the file is a scene-local index (see the writer);
+				// clear the raw value reflection deposited and stash the index.
+				component.target = {};
+				component.jointId = 0;
+				rec.joint2DTargetIndex = static_cast<int>(toml::node_view<const toml::node>{*j2d}["target"].value_or(std::int64_t{-1}));
+				rec.joint2D = std::move(component);
+			}
 			if (const auto* c = tv["ui_canvas"].as_table())
 			{
 				const toml::node_view<const toml::node> cv{*c};
@@ -1633,6 +1796,18 @@ namespace aether::app::scene
 				SpotLightComponent c{};
 				ReadReflectedFromToml("Spot Light", *l, &c);
 				rec.spotLight = c;
+			}
+			if (const auto* dn = tv["day_night"].as_table())
+			{
+				DayNightComponent c{};
+				ReadReflectedFromToml("Day Night", *dn, &c);
+				rec.dayNight = c;
+			}
+			if (const auto* tm = tv["tile_map"].as_table())
+			{
+				TileMapComponent c{};
+				ReadReflectedFromToml("Tile Map", *tm, &c);
+				rec.tileMap = c;
 			}
 			if (const auto* c = tv["camera"].as_table())
 			{
@@ -1880,13 +2055,23 @@ namespace aether::app::scene
 		}
 
 		const std::filesystem::path path = std::filesystem::path{ScenesDirectory()} / (sceneName + ".scene.toml");
-		auto text = io::file_util::ReadText(path);
-		if (!text)
+		if (auto text = io::file_util::ReadText(path))
 		{
-			AE_WARN(LogCategory::App, "ReadSceneFile: cannot read '{}'", path.string());
-			return std::nullopt;
+			return ParseToml(*text);
 		}
-		return ParseToml(*text);
+
+#ifdef AETHER_SCENES_SOURCE_DIR
+		// Shipped templates ("default", "default2d"): older projects predate
+		// some templates, so fall back to the engine's resources.
+		const std::filesystem::path shipped = std::filesystem::path{AETHER_SCENES_SOURCE_DIR} / (sceneName + ".scene.toml");
+		if (auto text = io::file_util::ReadText(shipped))
+		{
+			return ParseToml(*text);
+		}
+#endif
+
+		AE_WARN(LogCategory::App, "ReadSceneFile: cannot read '{}'", path.string());
+		return std::nullopt;
 	}
 
 	std::vector<std::string> ListSceneFiles()
@@ -1978,6 +2163,11 @@ namespace aether::app::scene
 			RemoveIf<ColliderComponent>(world, entity);
 			RemoveIf<RigidBodyComponent>(world, entity);
 			RemoveIf<PhysicsStateComponent>(world, entity);
+			RemoveIf<Joint2DComponent>(world, entity);
+			RemoveIf<CollisionEvents2DComponent>(world, entity);
+			RemoveIf<Collider2DComponent>(world, entity);
+			RemoveIf<RigidBody2DComponent>(world, entity);
+			RemoveIf<Physics2DStateComponent>(world, entity);
 			RemoveIf<ui::UICanvas>(world, entity);
 			RemoveIf<ui::UIRect>(world, entity);
 			RemoveIf<ui::UIImage>(world, entity);
@@ -1992,6 +2182,8 @@ namespace aether::app::scene
 			RemoveIf<LookAtComponent>(world, entity);
 			RemoveIf<PointLightComponent>(world, entity);
 			RemoveIf<SpotLightComponent>(world, entity);
+			RemoveIf<DayNightComponent>(world, entity);
+			RemoveIf<TileMapComponent>(world, entity);
 			RemoveIf<CameraComponent>(world, entity);
 			RemoveIf<OrbitCameraComponent>(world, entity);
 			RemoveIf<MainCameraComponent>(world, entity);
@@ -2030,10 +2222,63 @@ namespace aether::app::scene
 			std::size_t behaviorCount = 0;
 			std::size_t effectCount = 0;
 
+			// Feature reconcile: records imply scene features (old files predate
+			// some flags; hand-edited files may disagree). Implied features are
+			// OR'd in when the scene kind allows them; disallowed physics records
+			// are skipped so one entity never simulates in the wrong domain.
+			const SceneFeatureFlags allowedFeatures = AllowedSceneFeatures(scene.kind);
+			SceneFeatureFlags impliedFeatures = SceneFeatureFlags::None;
+
 			for (std::size_t i = 0; i < scene.entities.size(); ++i)
 			{
 				const EntityRecord& rec = scene.entities[i];
 				const Entity e = created[i];
+
+				const bool has2DPhysicsRecord = rec.rigidBody2D || rec.collider2D || rec.joint2D;
+				const bool has3DPhysicsRecord = rec.physics.has_value() || rec.joint.has_value();
+				bool apply3DPhysics = has3DPhysicsRecord && HasSceneFeature(allowedFeatures, SceneFeatureFlags::Physics3D);
+				bool apply2DPhysics = has2DPhysicsRecord && HasSceneFeature(allowedFeatures, SceneFeatureFlags::Physics2D);
+				if (has3DPhysicsRecord && !apply3DPhysics)
+				{
+					AE_WARN(LogCategory::App, "Scene load: entity '{}' has 3D physics records, which a {} scene cannot enable - skipped", rec.name, SceneKindName(scene.kind));
+				}
+				if (has2DPhysicsRecord && !apply2DPhysics)
+				{
+					AE_WARN(LogCategory::App, "Scene load: entity '{}' has 2D physics records, which a {} scene cannot enable - skipped", rec.name, SceneKindName(scene.kind));
+				}
+				if (apply2DPhysics && apply3DPhysics)
+				{
+					// One domain per entity; keep the one matching the scene kind.
+					if (scene.kind == SceneKind::Scene2D)
+					{
+						apply3DPhysics = false;
+					}
+					else
+					{
+						apply2DPhysics = false;
+					}
+					AE_WARN(LogCategory::App, "Scene load: entity '{}' has both 2D and 3D physics records; keeping the {} set", rec.name, apply2DPhysics ? "2D" : "3D");
+				}
+				if (apply3DPhysics)
+				{
+					impliedFeatures |= SceneFeatureFlags::Physics3D;
+				}
+				if (apply2DPhysics)
+				{
+					impliedFeatures |= SceneFeatureFlags::Physics2D;
+				}
+				if (rec.sprite || rec.spriteAnimator)
+				{
+					impliedFeatures |= SceneFeatureFlags::Sprites;
+				}
+				if (rec.mesh || rec.skinned)
+				{
+					impliedFeatures |= SceneFeatureFlags::Meshes3D;
+				}
+				if (rec.pointLight || rec.spotLight)
+				{
+					impliedFeatures |= SceneFeatureFlags::Lighting3D;
+				}
 
 				if (!rec.name.empty())
 				{
@@ -2068,7 +2313,7 @@ namespace aether::app::scene
 					world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = ComposeTransform(rec.position, rec.eulerDeg, rec.scale)});
 				}
 
-				if (rec.physics)
+				if (rec.physics && apply3DPhysics)
 				{
 					const PhysicsRecord& phys = *rec.physics;
 					world.Emplace<ColliderComponent>(e,
@@ -2098,7 +2343,7 @@ namespace aether::app::scene
 					                .lockRotation = phys.lockRotation,
 					        });
 				}
-				if (rec.joint)
+				if (rec.joint && apply3DPhysics)
 				{
 					const JointRecord& jr = *rec.joint;
 					Entity targetEntity{};
@@ -2117,6 +2362,23 @@ namespace aether::app::scene
 					                .distance = jr.distance,
 					                .collideConnected = jr.collideConnected,
 					        });
+				}
+				if (rec.rigidBody2D && apply2DPhysics)
+				{
+					world.EmplaceOrReplace<RigidBody2DComponent>(e, *rec.rigidBody2D);
+				}
+				if (rec.collider2D && apply2DPhysics)
+				{
+					world.EmplaceOrReplace<Collider2DComponent>(e, *rec.collider2D);
+				}
+				if (rec.joint2D && apply2DPhysics)
+				{
+					Joint2DComponent component = *rec.joint2D;
+					if (rec.joint2DTargetIndex >= 0 && rec.joint2DTargetIndex < static_cast<int>(created.size()))
+					{
+						component.target = created[static_cast<std::size_t>(rec.joint2DTargetIndex)];
+					}
+					world.EmplaceOrReplace<Joint2DComponent>(e, component);
 				}
 
 				if (rec.uiCanvas)
@@ -2324,6 +2586,16 @@ namespace aether::app::scene
 				{
 					world.Emplace<SpotLightComponent>(e, *rec.spotLight);
 				}
+				if (rec.dayNight && HasSceneFeature(allowedFeatures, SceneFeatureFlags::Lighting3D))
+				{
+					world.Emplace<DayNightComponent>(e, *rec.dayNight);
+					impliedFeatures |= SceneFeatureFlags::Lighting3D;
+				}
+				if (rec.tileMap)
+				{
+					world.EmplaceOrReplace<TileMapComponent>(e, *rec.tileMap);
+					impliedFeatures |= SceneFeatureFlags::Tilemaps;
+				}
 				if (rec.camera)
 				{
 					world.Emplace<CameraComponent>(e, *rec.camera);
@@ -2388,6 +2660,16 @@ namespace aether::app::scene
 					deps.sceneContext->sceneEntities.push_back(e);
 				}
 			}
+			if (!migratedLights.empty())
+			{
+				impliedFeatures |= SceneFeatureFlags::Lighting3D;
+			}
+			const auto missingImplied = static_cast<SceneFeatureFlags>(static_cast<std::uint32_t>(impliedFeatures) & static_cast<std::uint32_t>(allowedFeatures) & ~static_cast<std::uint32_t>(world.GetSceneFeatures()));
+			if (missingImplied != SceneFeatureFlags::None)
+			{
+				world.SetSceneFeatures(world.GetSceneFeatures() | missingImplied);
+			}
+
 			AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.version);
 			return created;
 		}

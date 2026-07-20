@@ -61,9 +61,11 @@ BUILD_DIR = _find_build_dir()
 def _ctl_path() -> str:
     """Locate aether-ctl. Resolved LAZILY (per call, not at import) so a client built
     *after* the server started is picked up without restarting the MCP, and so a wrong
-    build dir cached at startup can't stick. Prefers AETHER_CTL, then the first
-    candidate build dir / config that actually contains the exe; otherwise returns the
-    primary Debug path so the 'build it' error names a sensible target."""
+    build dir cached at startup can't stick. Prefers AETHER_CTL, then the NEWEST
+    (by mtime) exe across every candidate build dir / config: with several build
+    trees on disk, first-found returned stale binaries missing newer CLI features
+    (e.g. the '-' stdin params mode -> "params is not valid JSON: -"). Falls back
+    to the primary Debug path so the 'build it' error names a sensible target."""
     env = os.environ.get("AETHER_CTL")
     if env:
         return env
@@ -71,13 +73,16 @@ def _ctl_path() -> str:
     build_env = os.environ.get("AETHER_BUILD_DIR")
     names = ([build_env] if build_env else []) + list(_BUILD_DIR_NAMES)
     fallback: Path | None = None
+    existing: list[Path] = []
     for name in names:
         base = Path(name) if os.path.isabs(name) else (REPO / name)
         for cfg in ("RelWithDebInfo", "Debug", "Release", None):
             cand = base / "tools" / "control-client" / cfg / exe if cfg else base / "tools" / "control-client" / exe
             fallback = fallback or cand
             if cand.exists():
-                return str(cand)
+                existing.append(cand)
+    if existing:
+        return str(max(existing, key=lambda p: p.stat().st_mtime))
     return str(fallback)
 
 

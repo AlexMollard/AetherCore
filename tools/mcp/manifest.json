@@ -383,11 +383,19 @@
       "tool": "load_scene"
     },
     {
-      "description": "Replace the live scene with a fresh empty scene.",
+      "description": "Replace the live scene with a fresh scene from the shipped default template. 'kind' picks the domain: '3d' (default) or '2d' (orthographic camera, sprite/tilemap/2D-physics features).",
       "mutates": true,
       "name": "scene.new",
       "paramsSchema": {
-        "properties": {},
+        "properties": {
+          "kind": {
+            "enum": [
+              "2d",
+              "3d"
+            ],
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "tool": "new_scene"
@@ -954,6 +962,426 @@
         "type": "object"
       },
       "tool": "set_components"
+    },
+    {
+      "description": "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. Returns tileset/tilemap paths and the paintable tile list.",
+      "mutates": true,
+      "name": "tiles.create",
+      "paramsSchema": {
+        "properties": {
+          "atlas": {
+            "type": "string"
+          },
+          "cellSize": {
+            "type": "number"
+          },
+          "directory": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "solid": {
+            "description": "give every tile Full collision (default false)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "atlas"
+        ],
+        "type": "object"
+      },
+      "tool": "create_tile_assets"
+    },
+    {
+      "description": "Inspect an entity's tilemap: paintable tiles (tileset indices used by paint_tiles), layers, palette usage, painted-cell bounds, and cell count.",
+      "mutates": false,
+      "name": "tiles.info",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "get_tile_map"
+    },
+    {
+      "description": "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Edits join the editor's undo stack. 'save' (default true) persists the tilemap asset.",
+      "mutates": true,
+      "name": "tiles.paint",
+      "paramsSchema": {
+        "properties": {
+          "cells": {
+            "items": {
+              "properties": {
+                "flipX": {
+                  "type": "boolean"
+                },
+                "flipY": {
+                  "type": "boolean"
+                },
+                "tile": {
+                  "type": "integer"
+                },
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "layer": {
+            "type": "integer"
+          },
+          "save": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "cells"
+        ],
+        "type": "object"
+      },
+      "tool": "paint_tiles"
+    },
+    {
+      "description": "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack.",
+      "mutates": true,
+      "name": "tiles.fill",
+      "paramsSchema": {
+        "properties": {
+          "flipX": {
+            "type": "boolean"
+          },
+          "flipY": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "layer": {
+            "type": "integer"
+          },
+          "rect": {
+            "description": "cell rect [x0, y0, x1, y1], inclusive",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "save": {
+            "type": "boolean"
+          },
+          "tile": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "rect"
+        ],
+        "type": "object"
+      },
+      "tool": "fill_tiles"
+    },
+    {
+      "description": "Read the non-empty cells of an inclusive cell rect [x0, y0, x1, y1] back as {x, y, tile, flipX, flipY} with 'tile' as a tileset index.",
+      "mutates": false,
+      "name": "tiles.read",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "layer": {
+            "type": "integer"
+          },
+          "rect": {
+            "description": "cell rect [x0, y0, x1, y1], inclusive",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "rect"
+        ],
+        "type": "object"
+      },
+      "tool": "read_tiles"
+    },
+    {
+      "description": "Append a layer to an entity's tilemap and return its index (paint_tiles' 'layer' parameter).",
+      "mutates": true,
+      "name": "tiles.add_layer",
+      "paramsSchema": {
+        "properties": {
+          "collision": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "opacity": {
+            "type": "number"
+          },
+          "orderInLayer": {
+            "type": "integer"
+          },
+          "save": {
+            "type": "boolean"
+          },
+          "sortingLayer": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "add_tile_layer"
+    },
+    {
+      "description": "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. Returns the atlas path and sprite list.",
+      "mutates": true,
+      "name": "atlas.slice",
+      "paramsSchema": {
+        "properties": {
+          "cellHeight": {
+            "type": "integer"
+          },
+          "cellWidth": {
+            "type": "integer"
+          },
+          "out": {
+            "type": "string"
+          },
+          "paddingX": {
+            "type": "integer"
+          },
+          "paddingY": {
+            "type": "integer"
+          },
+          "pixelsPerUnit": {
+            "type": "number"
+          },
+          "spacingX": {
+            "type": "integer"
+          },
+          "spacingY": {
+            "type": "integer"
+          },
+          "texture": {
+            "type": "string"
+          },
+          "trimAlpha": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "texture",
+          "cellWidth",
+          "cellHeight"
+        ],
+        "type": "object"
+      },
+      "tool": "slice_atlas"
+    },
+    {
+      "description": "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components.",
+      "mutates": false,
+      "name": "atlas.info",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "get_atlas"
+    },
+    {
+      "description": "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play it.",
+      "mutates": true,
+      "name": "animation.create",
+      "paramsSchema": {
+        "properties": {
+          "atlas": {
+            "type": "string"
+          },
+          "fps": {
+            "type": "number"
+          },
+          "frames": {
+            "maxItems": 1024,
+            "minItems": 1,
+            "type": "array"
+          },
+          "loop": {
+            "enum": [
+              "loop",
+              "once",
+              "pingpong",
+              "hold"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "out": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "atlas",
+          "name",
+          "frames"
+        ],
+        "type": "object"
+      },
+      "tool": "create_sprite_animation"
+    },
+    {
+      "description": "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Edit mode only - the play camera belongs to the game.",
+      "mutates": true,
+      "name": "editor.camera",
+      "paramsSchema": {
+        "properties": {
+          "frame": {
+            "description": "entity id to centre on",
+            "type": "integer"
+          },
+          "height": {
+            "type": "number"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "set_editor_camera"
+    },
+    {
+      "description": "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods.",
+      "mutates": false,
+      "name": "assets.list",
+      "paramsSchema": {
+        "properties": {
+          "glob": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "list_assets"
+    },
+    {
+      "description": "Attach a C# script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields: numbers, bools, strings, or [x, y, z] arrays.",
+      "mutates": true,
+      "name": "scene.add_script",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "properties": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "add_script"
+    },
+    {
+      "description": "List the C# scripts attached to an entity.",
+      "mutates": false,
+      "name": "scene.scripts",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "list_scripts"
+    },
+    {
+      "description": "Detach a C# script from an entity by type name.",
+      "mutates": true,
+      "name": "scene.remove_script",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_script"
     }
   ]
 }

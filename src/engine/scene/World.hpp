@@ -18,6 +18,15 @@ namespace aether
 		using Registry = entt::registry;
 
 		World();
+		// Shuts systems down (OnUnregister) before the registry is destroyed:
+		// m_systems is declared before m_registry, so without this the registry
+		// dies first and system destructors would sever entt signal connections
+		// into freed memory.
+		~World();
+		World(const World&) = delete;
+		World& operator=(const World&) = delete;
+		World(World&&) = delete;
+		World& operator=(World&&) = delete;
 
 		[[nodiscard]] Entity Create();
 		void Destroy(Entity entity);

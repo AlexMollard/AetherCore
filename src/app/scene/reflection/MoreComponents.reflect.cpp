@@ -4,8 +4,26 @@
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/LightComponents.hpp"
 
 using namespace aether;
+
+AE_COMPONENT(TileMapComponent, "Tile Map", "Rendering", ICON_FA_IMAGE)
+AE_FIELD_N("tilemap", tilemapPath, String)
+AE_FIELD_N("tint", tint, Color4)
+AE_FIELD_N("sorting_layer", sortingLayer, Int)
+AE_FIELD_N("order_in_layer", orderInLayer, Int)
+AE_FIELD_N("visible_layers", visibleLayerMask, UInt)
+AE_FIELD_N("visible", visible, Bool)
+b.RequiresFeature(SceneFeatureFlags::Tilemaps);
+AE_COMPONENT_END()
+
+AE_COMPONENT(DayNightComponent, "Day Night", "Rendering", ICON_FA_CLOUD_SUN)
+AE_FIELD_N("animate", animate, Bool)
+AE_FIELD_N("time_of_day", timeOfDayHours, Float)
+AE_FIELD_N("time_speed", timeSpeedSecondsPerSecond, Float)
+b.RequiresFeature(SceneFeatureFlags::Lighting3D);
+AE_COMPONENT_END()
 
 AE_COMPONENT(NameComponent, "Name", "Core", ICON_FA_PEN)
 AE_FIELD_N("name", name, String)

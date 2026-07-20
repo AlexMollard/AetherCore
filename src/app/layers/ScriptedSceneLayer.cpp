@@ -21,6 +21,7 @@
 #include "gpu/GpuDevice.hpp"
 #include "scene/World.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -141,6 +142,10 @@ namespace aether::app
 		if (auto* physSys = context.Get<World>().FindSystem("PhysicsSystem"))
 		{
 			m_sceneCtx.physics = dynamic_cast<aether::PhysicsSystem*>(physSys);
+		}
+		if (auto* phys2DSys = context.Get<World>().FindSystem("Physics2DSystem"))
+		{
+			m_sceneCtx.physics2D = dynamic_cast<aether::Physics2DSystem*>(phys2DSys);
 		}
 		m_sceneCtx.engineRuntime = &context.Get<aether::IEngineRuntime>();
 		if (auto* engine = context.TryGet<aether::AetherCore>())

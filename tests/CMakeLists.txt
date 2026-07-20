@@ -14,12 +14,16 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics.reflect.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics2D.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests
+# Box2D headers for the direct dependency smoke test in tests/physics2d (Engine links
+# box2d PRIVATE; everything else goes through Physics2DSystem).
+target_include_directories(EngineTests PRIVATE "${box2d_SOURCE_DIR}/include")
 # Mirror App's scenes dir so ReadSceneFile("default") resolves the committed template.
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 target_compile_definitions(EngineTests PRIVATE AETHER_TESTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
@@ -27,6 +31,10 @@ target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest 
 aethercore_target_defaults(EngineTests)
 if(MSVC)
     target_compile_options(EngineTests PRIVATE /bigobj)
+    # Incremental links of this target intermittently produce a binary whose
+    # indirect calls trip CFG (FAST_FAIL_GUARD_ICALL_CHECK_FAILURE) after a
+    # test-TU-only rebuild. Full links are cheap here; force them.
+    target_link_options(EngineTests PRIVATE /INCREMENTAL:NO)
 endif()
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
 add_test(NAME EngineTests COMMAND EngineTests)

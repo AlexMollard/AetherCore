@@ -52,6 +52,7 @@
 #endif
 
 #include "physics/PhysicsSystem.hpp"
+#include "physics2d/PhysicsDomainGate.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformEdit.hpp"
@@ -786,6 +787,17 @@ namespace aether
 			auto* rb = reg.try_get<RigidBodyComponent>(enttEntity);
 			if (rb != nullptr && rb->body.IsValid())
 			{
+				continue;
+			}
+			// One entity never simulates in both physics domains.
+			if (physics_gate::EntityHas2DPhysics(world, World::FromEntt(enttEntity)))
+			{
+				AE_WARN(LogCategory::Engine, "Entity {} has both 3D and 2D physics components; skipping its 3D body (remove one set)", World::FromEntt(enttEntity).id);
+				continue;
+			}
+			if (physics_gate::EntityHas2DPhysics(world, World::FromEntt(enttEntity)))
+			{
+				AE_WARN(LogCategory::Engine, "Entity {} has both 3D and 2D physics components; skipping its 3D body (remove one set)", World::FromEntt(enttEntity).id);
 				continue;
 			}
 

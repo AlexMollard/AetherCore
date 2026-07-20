@@ -1,0 +1,142 @@
+# Physics2D exit-gate reference: top-down collision sandbox. WASD to move.
+[scene]
+kind = '2d'
+name = 'TopDown2D'
+version = 14
+features = [ 'sprites', 'physics_2d' ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+parent = -1
+position = [ 0.0, 0.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    main = true
+    near = 0.1
+    far = 1000.0
+    orthographic_height = 14.0
+    projection = 'orthographic'
+    use_sky_gradient = false
+    clear_color = [ 0.09, 0.11, 0.10 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Arena North'
+parent = -1
+position = [ 0.0, 6.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 20.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Arena South'
+parent = -1
+position = [ 0.0, -6.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 20.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Arena West'
+parent = -1
+position = [ -10.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 1.0, 13.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Arena East'
+parent = -1
+position = [ 10.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 1.0, 13.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 45.0 ]
+name = 'Obstacle Diamond'
+parent = -1
+position = [ 3.0, 1.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 2.0, 2.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Pushable Crate'
+parent = -1
+position = [ -3.0, 2.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'dynamic'
+    gravity_scale = 0.0
+    linear_damping = 4.0
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 1.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Sensor Zone'
+parent = -1
+position = [ 5.0, -3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'circle'
+    radius = 1.5
+    is_trigger = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Player'
+parent = -1
+position = [ -6.0, -2.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'dynamic'
+    gravity_scale = 0.0
+    fixed_rotation = true
+
+    [entities.collider_2d]
+    shape = 'circle'
+    radius = 0.5
+
+    [[entities.scripts]]
+    type = 'TopDownController2D'

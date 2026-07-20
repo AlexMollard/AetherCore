@@ -9,7 +9,9 @@ namespace aether
 
 namespace aether::app::scene
 {
-	std::string NewScene(World& world, const ApplySceneDeps& deps);
+	// Replaces the live scene with the shipped default for `kind`
+	// ("default" / "default2d"), falling back to an empty scene of that kind.
+	std::string NewScene(World& world, const ApplySceneDeps& deps, SceneKind kind = SceneKind::Scene3D);
 
 	bool QuickSave(World& world, const std::string& sceneName, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer);
 

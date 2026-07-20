@@ -38,6 +38,8 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "rendering/ShadowService.hpp"
 #include "rendering/WorldRenderer.hpp"
+#include "physics2d/Physics2DDebugDraw.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
@@ -609,6 +611,7 @@ namespace aether
 		packet.sceneFeatures = world.GetSceneFeatures();
 		assetsSub.GetSpriteSystem().Extract(world, packet.render2D);
 
+		View2DBounds tileView; // invalid = no chunk culling (non-ortho views)
 		if (const Camera* cam = cameras.TryGetMainCamera())
 		{
 			packet.hasCameraData = true;
@@ -617,7 +620,18 @@ namespace aether
 			packet.proj = cam->GetProjectionMatrix(aspect);
 			packet.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 			packet.cameraNearPlane = cam->GetNearPlane();
+			if (cam->GetProjection() == CameraProjection::Orthographic)
+			{
+				const glm::vec2 halfExtent{cam->GetOrthographicHeight() * aspect * 0.5f, cam->GetOrthographicHeight() * 0.5f};
+				tileView.min = glm::vec2(cam->GetPosition()) - halfExtent;
+				tileView.max = glm::vec2(cam->GetPosition()) + halfExtent;
+				tileView.valid = true;
+			}
 		}
+		// Tiles append into the same instance stream as sprites; one shared sort
+		// interleaves them by sort key.
+		assetsSub.GetTileMapSystem().Extract(world, tileView, static_cast<float>(m_gameElapsedSeconds), packet.render2D);
+		Finalize2DFrame(packet.render2D);
 
 		packet.sunDirectionIntensity = sunDirIntensity;
 		packet.directionalShadowEnabled = directionalShadowEnabled;
@@ -626,6 +640,21 @@ namespace aether
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
+
+		// The scene background is owned by the main camera. A flat clear colour
+		// travels through the sky constants: skyVoidColor.w == 0 tells the
+		// skybox shader to emit skyHorizonColor directly instead of evaluating
+		// the gradient/sun/stars (the .w lane is otherwise unused).
+		if (const Entity mainCamera = ecs::GetMainCameraEntity(world); mainCamera.IsValid())
+		{
+			if (const auto* cameraComponent = world.TryGet<CameraComponent>(mainCamera); cameraComponent != nullptr && !cameraComponent->useSkyGradient)
+			{
+				const glm::vec4 clear{cameraComponent->clearColor, 1.0f};
+				packet.skyHorizonColor = clear;
+				packet.skyZenithColor = clear;
+				packet.skyVoidColor = glm::vec4(cameraComponent->clearColor, 0.0f);
+			}
+		}
 
 		packet.pointLights.assign(renderer.GetPointLights().begin(), renderer.GetPointLights().end());
 
@@ -637,6 +666,12 @@ namespace aether
 		// presence-or-absence. The render thread reads neither global.
 		packet.debugRenderingEnabled = IsDebugRenderingEnabled();
 		m_rendering->GetPhysicsDebugRenderer().ExtractShapes(world, packet.physicsDebugShapes);
+		// 2D collider wireframes ride the immediate-mode line channel, gated by
+		// the same physics-debug toggle as the 3D shapes.
+		if (IsPhysicsDebugShapesEnabled())
+		{
+			ExtractPhysics2DDebugLines(world, packet.debugVertices);
+		}
 
 		return packet;
 	}

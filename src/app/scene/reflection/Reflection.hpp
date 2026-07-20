@@ -93,6 +93,13 @@ namespace aether::reflect
 		bool addable = true; // false = reference-only, never added to an arbitrary entity
 		bool serializable = true;
 
+		// Scene features this component depends on. Adding it auto-enables them
+		// when AllowedSceneFeatures(kind) permits; otherwise the add is blocked.
+		SceneFeatureFlags requiredFeatures = SceneFeatureFlags::None;
+		// Catalog-entry names that must NOT be present on the entity (e.g. the
+		// 2D/3D physics domain exclusivity). Checked by ComponentAddBlockReason.
+		std::vector<std::string> conflictsWith;
+
 		std::function<void(World&, Entity)> postSet;
 		CustomSerializeFns customSerialize;
 
@@ -339,6 +346,18 @@ namespace aether::reflect
 		ComponentBuilder& PostSet(std::function<void(World&, Entity)> fn)
 		{
 			m_type.postSet = std::move(fn);
+			return *this;
+		}
+
+		ComponentBuilder& RequiresFeature(SceneFeatureFlags features)
+		{
+			m_type.requiredFeatures = m_type.requiredFeatures | features;
+			return *this;
+		}
+
+		ComponentBuilder& ConflictsWith(std::vector<std::string> names)
+		{
+			m_type.conflictsWith = std::move(names);
 			return *this;
 		}
 

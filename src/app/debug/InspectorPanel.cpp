@@ -24,6 +24,7 @@
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
+#include "editor/ComponentCatalog.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
 #include "material/EffectManager.hpp"
@@ -516,11 +517,18 @@ namespace aether::editor
 				world.Emplace<HierarchyComponent>(entity);
 			}
 
+			// Rendering entries follow the ACTIVE scene features, mirroring the
+			// hierarchy create menu: inactive domains are absent, not disabled.
+			const SceneFeatureFlags paletteFeatures = world.GetSceneFeatures();
+			const bool paletteSprites = HasSceneFeature(paletteFeatures, SceneFeatureFlags::Sprites);
+			const bool paletteMeshes3D = HasSceneFeature(paletteFeatures, SceneFeatureFlags::Meshes3D);
+			const bool paletteLighting3D = HasSceneFeature(paletteFeatures, SceneFeatureFlags::Lighting3D);
+
 			ImGui::SeparatorText("Rendering");
 			const bool hasMesh = world.Has<MeshComponent>(entity);
 			const auto addPrimitive = [&](PrimitiveMesh kind, const char* label, const char* kindName)
 			{
-				if (!PaletteEntry(label, m_addFilter, hasMesh) || primitives == nullptr || assets == nullptr)
+				if (!paletteMeshes3D || !PaletteEntry(label, m_addFilter, hasMesh) || primitives == nullptr || assets == nullptr)
 				{
 					return;
 				}
@@ -546,7 +554,7 @@ namespace aether::editor
 			addPrimitive(PrimitiveMesh::Quad, ICON_FA_IMAGE "  Mesh Renderer - Quad", "quad");
 			addPrimitive(PrimitiveMesh::Triangle, ICON_FA_PLAY "  Mesh Renderer - Triangle", "triangle");
 
-			if (PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer (2D)", m_addFilter, world.Has<SpriteRendererComponent>(entity)))
+			if (paletteSprites && PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer (2D)", m_addFilter, world.Has<SpriteRendererComponent>(entity)))
 			{
 				if (!world.Has<TransformComponent>(entity))
 				{
@@ -554,7 +562,7 @@ namespace aether::editor
 				}
 				world.EmplaceOrReplace<SpriteRendererComponent>(entity);
 			}
-			if (PaletteEntry(ICON_FA_FILM "  Sprite Animator (2D)", m_addFilter, world.Has<SpriteAnimatorComponent>(entity)))
+			if (paletteSprites && PaletteEntry(ICON_FA_FILM "  Sprite Animator (2D)", m_addFilter, world.Has<SpriteAnimatorComponent>(entity)))
 			{
 				if (!world.Has<TransformComponent>(entity))
 				{
@@ -573,14 +581,14 @@ namespace aether::editor
 				ImGui::TextWrapped(ICON_FA_CUBE "  glTF Model: drag a .gltf/.glb from the File Explorer onto the entity or its Mesh Renderer slot");
 				ImGui::PopStyleColor();
 			}
-			if (PaletteEntry(ICON_FA_PALETTE "  Material", m_addFilter, world.Has<MaterialComponent>(entity)) && assets != nullptr)
+			if (paletteMeshes3D && PaletteEntry(ICON_FA_PALETTE "  Material", m_addFilter, world.Has<MaterialComponent>(entity)) && assets != nullptr)
 			{
 				MaterialAsset asset{};
 				asset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
 				asset.roughnessFactor = 0.6f;
 				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 			}
-			if (PaletteEntry(ICON_FA_LIGHTBULB "  Point Light", m_addFilter, world.Has<PointLightComponent>(entity)))
+			if (paletteLighting3D && PaletteEntry(ICON_FA_LIGHTBULB "  Point Light", m_addFilter, world.Has<PointLightComponent>(entity)))
 			{
 				if (!world.Has<TransformComponent>(entity))
 				{
@@ -588,7 +596,7 @@ namespace aether::editor
 				}
 				world.Emplace<PointLightComponent>(entity);
 			}
-			if (PaletteEntry(ICON_FA_LIGHTBULB "  Spot Light", m_addFilter, world.Has<SpotLightComponent>(entity)))
+			if (paletteLighting3D && PaletteEntry(ICON_FA_LIGHTBULB "  Spot Light", m_addFilter, world.Has<SpotLightComponent>(entity)))
 			{
 				if (!world.Has<TransformComponent>(entity))
 				{
@@ -604,7 +612,7 @@ namespace aether::editor
 				}
 				world.Emplace<CameraComponent>(entity);
 			}
-			if (sceneCtx != nullptr && sceneCtx->effects != nullptr && assets != nullptr)
+			if (paletteMeshes3D && sceneCtx != nullptr && sceneCtx->effects != nullptr && assets != nullptr)
 			{
 				const bool hasEffect = world.Has<EffectRefComponent>(entity);
 				std::vector<std::string> effectNames;
@@ -656,47 +664,116 @@ namespace aether::editor
 				world.Emplace<LookAtComponent>(entity, LookAtComponent{.target = {0.0f, 0.0f, 0.0f}});
 			}
 
-			ImGui::SeparatorText("Physics");
-			const bool hasCollider = world.Has<ColliderComponent>(entity);
-			const bool hasRigidBody = world.Has<RigidBodyComponent>(entity);
-
-			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Rigid Body", m_addFilter, hasRigidBody))
+			// Menus reflect ACTIVE scene features and domain conflicts through the
+			// shared catalog rule; entries for inactive domains are simply absent.
+			const auto physicsVisible = [&](const char* entryName)
 			{
-				world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
-			}
-			const auto addCollider = [&](PhysicsShapeType shape, const char* label)
-			{
-				if (!PaletteEntry(label, m_addFilter, hasCollider))
-				{
-					return;
-				}
-				ColliderComponent c{};
-				c.shape = shape;
-				c.halfExtents = curScale * 0.5f;
-				c.radius = shape == PhysicsShapeType::Sphere ? std::max({curScale.x, curScale.y, curScale.z}) * 0.5f : curScale.x * 0.5f;
-				c.halfHeight = curScale.y * 0.5f;
-				world.Emplace<ColliderComponent>(entity, c);
+				const editor::ComponentCatalogEntry* entry = editor::FindComponent(entryName);
+				return entry != nullptr && editor::ComponentVisibleInMenu(world, entity, *entry);
 			};
-			addCollider(PhysicsShapeType::Box, ICON_FA_WEIGHT_HANGING "  Box Collider");
-			addCollider(PhysicsShapeType::Sphere, ICON_FA_WEIGHT_HANGING "  Sphere Collider");
-			addCollider(PhysicsShapeType::Capsule, ICON_FA_WEIGHT_HANGING "  Capsule Collider");
-			addCollider(PhysicsShapeType::Cylinder, ICON_FA_WEIGHT_HANGING "  Cylinder Collider");
-			if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Trigger Volume (box sensor)", m_addFilter, hasCollider))
+
+			if (physicsVisible("Rigid Body"))
 			{
-				ColliderComponent c{};
-				c.shape = PhysicsShapeType::Box;
-				c.halfExtents = curScale * 0.5f;
-				c.isSensor = true;
-				c.layer = PhysicsLayer::Sensor;
-				world.Emplace<ColliderComponent>(entity, c);
+				ImGui::SeparatorText("Physics");
+				const bool hasCollider = world.Has<ColliderComponent>(entity);
+				const bool hasRigidBody = world.Has<RigidBodyComponent>(entity);
+
+				if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Rigid Body", m_addFilter, hasRigidBody))
+				{
+					world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+				}
+				const auto addCollider = [&](PhysicsShapeType shape, const char* label)
+				{
+					if (!PaletteEntry(label, m_addFilter, hasCollider))
+					{
+						return;
+					}
+					ColliderComponent c{};
+					c.shape = shape;
+					c.halfExtents = curScale * 0.5f;
+					c.radius = shape == PhysicsShapeType::Sphere ? std::max({curScale.x, curScale.y, curScale.z}) * 0.5f : curScale.x * 0.5f;
+					c.halfHeight = curScale.y * 0.5f;
+					world.Emplace<ColliderComponent>(entity, c);
+				};
+				addCollider(PhysicsShapeType::Box, ICON_FA_WEIGHT_HANGING "  Box Collider");
+				addCollider(PhysicsShapeType::Sphere, ICON_FA_WEIGHT_HANGING "  Sphere Collider");
+				addCollider(PhysicsShapeType::Capsule, ICON_FA_WEIGHT_HANGING "  Capsule Collider");
+				addCollider(PhysicsShapeType::Cylinder, ICON_FA_WEIGHT_HANGING "  Cylinder Collider");
+				if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Trigger Volume (box sensor)", m_addFilter, hasCollider))
+				{
+					ColliderComponent c{};
+					c.shape = PhysicsShapeType::Box;
+					c.halfExtents = curScale * 0.5f;
+					c.isSensor = true;
+					c.layer = PhysicsLayer::Sensor;
+					world.Emplace<ColliderComponent>(entity, c);
+				}
+				if (PaletteEntry(ICON_FA_LINK "  Joint", m_addFilter, world.Has<JointComponent>(entity)))
+				{
+					world.Emplace<JointComponent>(entity, JointComponent{.anchor = curPos});
+				}
+				if (PaletteEntry(ICON_FA_BOLT "  Collision Events", m_addFilter, world.Has<CollisionEventsComponent>(entity)))
+				{
+					world.GetRegistry().emplace<CollisionEventsComponent>(World::ToEntt(entity));
+				}
 			}
-			if (PaletteEntry(ICON_FA_LINK "  Joint", m_addFilter, world.Has<JointComponent>(entity)))
+
+			if (physicsVisible("Rigid Body 2D"))
 			{
-				world.Emplace<JointComponent>(entity, JointComponent{.anchor = curPos});
+				ImGui::SeparatorText("Physics 2D");
+				const auto add2D = [&](const char* entryName, const char* label)
+				{
+					const editor::ComponentCatalogEntry* entry = editor::FindComponent(entryName);
+					if (entry == nullptr || entry->has == nullptr || entry->add == nullptr)
+					{
+						return;
+					}
+					if (PaletteEntry(label, m_addFilter, entry->has(world, entity)))
+					{
+						if (!world.Has<TransformComponent>(entity))
+						{
+							world.Emplace<TransformComponent>(entity);
+						}
+						entry->add(world, entity, context.services);
+					}
+				};
+				add2D("Rigid Body 2D", ICON_FA_WEIGHT_HANGING "  Rigid Body 2D");
+				add2D("Collider 2D", ICON_FA_BOX_OPEN "  Collider 2D");
+				add2D("Joint 2D", ICON_FA_LINK "  Joint 2D");
 			}
-			if (PaletteEntry(ICON_FA_BOLT "  Collision Events", m_addFilter, world.Has<CollisionEventsComponent>(entity)))
+
+			// Catalog components without a hand-authored entry above (reflected
+			// registrations like Day Night or future 2D physics additions) list
+			// here automatically, honoring the same feature/conflict visibility.
 			{
-				world.GetRegistry().emplace<CollisionEventsComponent>(World::ToEntt(entity));
+				static constexpr std::string_view kHandAuthored[] = {"Bob", "Box Collider", "Camera", "Capsule Collider", "Collision Events", "Cylinder Collider", "Hierarchy", "Joint", "Look At", "Material", "Material Pulse", "Name", "Orbit",
+				        "Point Light", "Rigid Body", "Scale Pulse", "Scene Transient", "Sphere Collider", "Spin", "Spot Light", "Sprite Animator", "Sprite Renderer", "Trigger Volume", "UI Text", "Transform", "Rigid Body 2D", "Collider 2D",
+				        "Joint 2D"};
+				bool headerShown = false;
+				for (const editor::ComponentCatalogEntry& entry: editor::ComponentCatalog())
+				{
+					if (std::find(std::begin(kHandAuthored), std::end(kHandAuthored), entry.name) != std::end(kHandAuthored))
+					{
+						continue;
+					}
+					if (entry.has == nullptr || entry.add == nullptr || !editor::ComponentVisibleInMenu(world, entity, entry))
+					{
+						continue;
+					}
+					if (!headerShown)
+					{
+						ImGui::SeparatorText("Components");
+						headerShown = true;
+					}
+					if (PaletteEntry((entry.icon + "  " + entry.name).c_str(), m_addFilter, entry.has(world, entity)))
+					{
+						if (!world.Has<TransformComponent>(entity))
+						{
+							world.Emplace<TransformComponent>(entity);
+						}
+						entry.add(world, entity, context.services);
+					}
+				}
 			}
 
 			ImGui::SeparatorText("Editor");
@@ -721,6 +798,7 @@ namespace aether::editor
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
 		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer", "Sprite Animator"});
+		DrawCollider2DTools(context, world, entity);
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
 		DrawCollisionEvents(world, entity);

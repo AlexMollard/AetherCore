@@ -42,9 +42,14 @@ namespace aether
 	// packet. It must never reach back into the ECS or asset authoring objects.
 	struct Render2DFrameData
 	{
+		// Sprites AND tile instances: tile extraction appends here so one sort
+		// interleaves both by sort key. Finalize2DFrame must run after the last
+		// producer and before submission.
 		std::vector<SpriteRenderInstance> sprites;
-		std::vector<SpriteRenderInstance> tileInstances;
 	};
+
+	// Deterministic sort of the merged 2D instance stream (stable, by sortKey).
+	void Finalize2DFrame(Render2DFrameData& frame);
 
 	// Per-frame render data snapshot produced by the game thread and consumed by
 	// the render thread. All dynamic arrays are packet-owned.

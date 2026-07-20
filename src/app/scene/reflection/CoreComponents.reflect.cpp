@@ -92,6 +92,8 @@ AE_FIELD_N("fov", fovDegrees, Float)
 AE_FIELD_N("orthographic_height", orthographicHeight, Float)
 AE_FIELD_N("near", nearPlane, Float)
 AE_FIELD_N("far", farPlane, Float)
+AE_FIELD_N("use_sky_gradient", useSkyGradient, Bool)
+AE_FIELD_N("clear_color", clearColor, Color3)
 AE_COMPONENT_END()
 
 AE_COMPONENT(SkinnedMeshComponent, "Skinned Mesh", "Rendering", ICON_FA_FILM)

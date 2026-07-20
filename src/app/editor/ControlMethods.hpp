@@ -35,4 +35,8 @@ namespace aether::editor
 	};
 
 	[[nodiscard]] std::vector<ControlMethod> BuildControlMethods();
+
+	// 2D authoring group (tile painting, atlas slicing, animation creation,
+	// editor camera, asset discovery) - defined in ControlMethods2D.cpp.
+	void Append2DAuthoringMethods(std::vector<ControlMethod>& methods);
 } // namespace aether::editor

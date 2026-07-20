@@ -12,6 +12,7 @@
 #include "material/EffectParams.hpp"
 #include "material/MaterialAsset.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics2d/Physics2DComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
@@ -180,12 +181,20 @@ namespace aether::app::scene
 		std::optional<LookAtComponent> lookAt;
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
+		std::optional<DayNightComponent> dayNight;
+		std::optional<TileMapComponent> tileMap;
 		// backingCamera is runtime state and is never serialized. mainCamera marks
 		std::optional<CameraComponent> camera;
 		bool mainCamera = false;
 		std::optional<OrbitCameraComponent> orbitCamera;
 		std::vector<ScriptRecord> scripts;
 		std::optional<JointRecord> joint;
+		// 2D physics: authored fields only (runtime body/shape/joint handles are
+		// stripped at capture so play-stop restore never resurrects stale ids).
+		std::optional<RigidBody2DComponent> rigidBody2D;
+		std::optional<Collider2DComponent> collider2D;
+		std::optional<Joint2DComponent> joint2D;
+		int joint2DTargetIndex = -1; // scene-local index, like JointRecord::targetIndex
 	};
 
 	struct LightRecord
@@ -212,7 +221,10 @@ namespace aether::app::scene
 		glm::vec3 skyVoid{0.05f};
 	};
 
-	inline constexpr int kSceneFormatVersion = 12;
+	// v13 added Physics2D records (rigid_body_2d / collider_2d / joint_2d).
+	// v14 added the Physics3D feature flag (feature-driven system activation).
+	// v15 added the tile_map record and made Tilemaps a Scene2D default feature.
+	inline constexpr int kSceneFormatVersion = 15;
 
 	struct AssetManifestEntry
 	{

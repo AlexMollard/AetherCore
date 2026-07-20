@@ -1,0 +1,15 @@
+# AetherCore sprite animation
+
+[animation]
+atlas = "project://assets/textures/tex_Enemy.spriteatlas.toml"
+event_count = 0.00
+frame_count = 2.00
+loop_mode = "loop"
+name = "enemy_walk"
+schema_version = 1.00
+
+[frame]
+0.duration = 0.20
+0.sprite_id = "0c8c8f4020bb0f7d"
+1.duration = 0.20
+1.sprite_id = "0c8c8e4020bb0dca"

@@ -387,6 +387,78 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial uint aether_physics_event_at(uint id, int kind, int index);
 
+    // ── Physics 2D ────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_box(uint id, Vector2 size, int bodyType);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_circle(uint id, float radius, int bodyType);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_capsule(uint id, float radius, float height, int bodyType);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_set_trigger(uint id, int trigger);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_set_linear_velocity(uint id, Vector2 velocity);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector2 aether_physics2d_get_linear_velocity(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_set_angular_velocity(uint id, float radiansPerSec);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial float aether_physics2d_get_angular_velocity(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_force(uint id, Vector2 force);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_impulse(uint id, Vector2 impulse);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_torque(uint id, float torque);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_add_angular_impulse(uint id, float impulse);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_set_gravity_scale(uint id, float scale);
+
+    [LibraryImport(Lib)]
+    internal static partial RaycastHit2D aether_physics2d_raycast(Vector2 origin, Vector2 direction, float maxDistance);
+
+    [LibraryImport(Lib)]
+    internal static partial RaycastHit2D aether_physics2d_circlecast(Vector2 origin, float radius, Vector2 direction, float maxDistance);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_physics2d_overlap_circle(Vector2 center, float radius);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_physics2d_overlap_point(Vector2 point);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_physics2d_overlap_aabb(Vector2 min, Vector2 max);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_physics2d_overlap_at(int index);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_enable_events(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_physics2d_event_count(uint id, int kind);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_physics2d_event_at(uint id, int kind, int index);
+
     // ── Effects ───────────────────────────────────────────────────────────────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_effect_set(uint id, string name);

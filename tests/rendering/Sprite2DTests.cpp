@@ -57,6 +57,7 @@ TEST_CASE("sprite extraction is packet-owned and deterministically sorted")
 
 	Render2DFrameData packet;
 	sprites.Extract(world, packet);
+    aether::Finalize2DFrame(packet);
 	REQUIRE(packet.sprites.size() == 2);
 	CHECK(packet.sprites[0].entityId == lower.id);
 	CHECK(packet.sprites[1].entityId == upper.id);
@@ -92,11 +93,61 @@ TEST_CASE("atlas sprite extraction samples inside the region texel borders")
 
 	Render2DFrameData packet;
 	sprites.Extract(world, packet);
+    aether::Finalize2DFrame(packet);
 	REQUIRE(packet.sprites.size() == 1);
 	CHECK(packet.sprites[0].uvRect.x == doctest::Approx(0.0625f));
 	CHECK(packet.sprites[0].uvRect.y == doctest::Approx(0.125f));
 	CHECK(packet.sprites[0].uvRect.z == doctest::Approx(0.9375f));
 	CHECK(packet.sprites[0].uvRect.w == doctest::Approx(0.875f));
+
+	sprites.Shutdown();
+	textures.ReleaseAll();
+	std::filesystem::remove(atlasPath);
+}
+
+TEST_CASE("atlas sub-region extraction produces begin/end uv coordinates")
+{
+	// Regression: SpriteRegion.uvRect must be (x0, y0, x1, y1) — the sprite
+	// shader lerps between xy and zw, so width/height in zw renders every
+	// non-origin region wrong (tiles were the first sub-region consumer).
+	const std::filesystem::path atlasPath = std::filesystem::temp_directory_path() / "aethercore_sprite_uv_subregion.spriteatlas.toml";
+	std::filesystem::remove(atlasPath);
+
+	FakeTextureSink sink;
+	TextureRegistry textures(sink);
+	textures.InitializeDefault("fallback.png");
+	SpriteAssetStore assets;
+	SpriteAtlasAsset atlas;
+	atlas.texturePath = "atlas.png";
+	atlas.textureWidth = 256;
+	atlas.textureHeight = 128;
+	SpriteRegion& region = atlas.AddManualRegion({64, 32, 64, 32}, "Cell");
+	const AssetObjectId spriteId = region.id;
+	atlas.RecalculateUvs(atlas.textureWidth, atlas.textureHeight);
+	REQUIRE(assets.SaveAtlas(atlasPath.string(), std::move(atlas)).has_value());
+
+	SpriteSystem sprites;
+	sprites.Initialize(textures, assets);
+	World world;
+	const Entity entity = world.Create();
+	world.Emplace<TransformComponent>(entity);
+	world.Emplace<SpriteRendererComponent>(entity, SpriteRendererComponent{
+	        .atlasPath = atlasPath.string(),
+	        .spriteId = spriteId,
+	});
+
+	Render2DFrameData packet;
+	sprites.Extract(world, packet);
+	aether::Finalize2DFrame(packet);
+	REQUIRE(packet.sprites.size() == 1);
+	// Region (64,32,64,32) in a 256x128 texture: begin (0.25, 0.25), end
+	// (0.5, 0.5), then a half-texel inset on each side.
+	const float insetX = 0.5f / 256.0f;
+	const float insetY = 0.5f / 128.0f;
+	CHECK(packet.sprites[0].uvRect.x == doctest::Approx(0.25f + insetX));
+	CHECK(packet.sprites[0].uvRect.y == doctest::Approx(0.25f + insetY));
+	CHECK(packet.sprites[0].uvRect.z == doctest::Approx(0.5f - insetX));
+	CHECK(packet.sprites[0].uvRect.w == doctest::Approx(0.5f - insetY));
 
 	sprites.Shutdown();
 	textures.ReleaseAll();

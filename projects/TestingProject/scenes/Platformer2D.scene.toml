@@ -1,0 +1,126 @@
+# Physics2D exit-gate reference: a small platformer room. WASD/arrows + Space.
+[scene]
+kind = '2d'
+name = 'Platformer2D'
+version = 14
+features = [ 'sprites', 'physics_2d' ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+parent = -1
+position = [ 0.0, 2.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    main = true
+    near = 0.1
+    far = 1000.0
+    orthographic_height = 12.0
+    projection = 'orthographic'
+    use_sky_gradient = false
+    clear_color = [ 0.08, 0.09, 0.12 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Floor'
+parent = -1
+position = [ 0.0, -3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 24.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Wall Left'
+parent = -1
+position = [ -12.0, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 1.0, 13.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Wall Right'
+parent = -1
+position = [ 12.0, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 1.0, 13.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Platform Low'
+parent = -1
+position = [ -4.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 4.0, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Platform High'
+parent = -1
+position = [ 3.0, 2.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 4.0, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Goal Zone'
+parent = -1
+position = [ 8.0, 4.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 2.0, 2.0 ]
+    is_trigger = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Player'
+parent = -1
+position = [ -8.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'dynamic'
+    fixed_rotation = true
+
+    [entities.collider_2d]
+    shape = 'capsule'
+    radius = 0.3
+    capsule_height = 1.0
+
+    [[entities.scripts]]
+    type = 'PlatformerController2D'

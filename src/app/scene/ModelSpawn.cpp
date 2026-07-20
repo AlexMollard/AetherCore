@@ -114,6 +114,13 @@ namespace aether::app::scene
 		{
 			return false;
 		}
+		// Chokepoint for every model-assign path (drag-drop, palette, scripts):
+		// 3D geometry needs the Meshes3D feature active in this scene.
+		if (!HasSceneFeature(world.GetSceneFeatures(), SceneFeatureFlags::Meshes3D))
+		{
+			AE_WARN(LogCategory::App, "Ignoring model assign '{}': the 3D Meshes feature is not active in this scene", path);
+			return false;
+		}
 
 		LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
 		if (modelPtr == nullptr)

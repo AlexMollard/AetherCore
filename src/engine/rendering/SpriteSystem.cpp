@@ -169,6 +169,10 @@ namespace aether
 			});
 		}
 
-		std::ranges::stable_sort(output.sprites, [](const SpriteRenderInstance& a, const SpriteRenderInstance& b) { return a.sortKey < b.sortKey; });
+	}
+
+	void Finalize2DFrame(Render2DFrameData& frame)
+	{
+		std::ranges::stable_sort(frame.sprites, [](const SpriteRenderInstance& a, const SpriteRenderInstance& b) { return a.sortKey < b.sortKey; });
 	}
 } // namespace aether

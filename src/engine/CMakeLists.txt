@@ -30,6 +30,7 @@ target_link_libraries(Engine
         $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:Nvidia::Aftermath>
         $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:delayimp>   # thunk for /DELAYLOAD below
     PRIVATE
+        box2d
         freetype
 )
 

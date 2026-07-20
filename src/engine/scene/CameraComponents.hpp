@@ -23,6 +23,12 @@ namespace aether
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 
+		// Scene background policy, owned by the main camera: either the 3D sky
+		// gradient (renderer environment / DayNight entity) or a flat clear
+		// colour - the natural choice for 2D scenes.
+		bool useSkyGradient = true;
+		glm::vec3 clearColor{0.10f, 0.10f, 0.12f};
+
 		// in sync (0 = not created yet). Never serialized - it is re-established on
 		std::uint32_t backingCamera = 0;
 	};

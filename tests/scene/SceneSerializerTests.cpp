@@ -389,15 +389,22 @@ TEST_CASE("Scene feature flags round-trip and use kind-aware legacy defaults") {
 
     const auto legacy2D = ParseToml("[scene]\nname = 'legacy 2d'\nkind = '2d'\nversion = 9\nfeatures = ['sprites', 'physics_2d']\n");
     REQUIRE(legacy2D.has_value());
-    CHECK(legacy2D->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D));
+    CHECK(legacy2D->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
 
     const auto missingFeatures = ParseToml("[scene]\nname = 'legacy 2d defaults'\nkind = '2d'\nversion = 9\n");
     REQUIRE(missingFeatures.has_value());
     CHECK(missingFeatures->features == DefaultSceneFeatures(SceneKind::Scene2D));
 
+    // Pre-v14 files never knew the physics flags (physics ran unconditionally),
+    // so the v14 migration grants the kind's physics flag even to an explicitly
+    // empty feature list - preserving old behaviour.
     const auto explicitlyEmpty = ParseToml("[scene]\nname = 'no features'\nkind = 'mixed'\nversion = 10\nfeatures = []\n");
     REQUIRE(explicitlyEmpty.has_value());
-    CHECK(explicitlyEmpty->features == SceneFeatureFlags::None);
+    CHECK(explicitlyEmpty->features == SceneFeatureFlags::Physics3D);
+
+    const auto modernEmpty = ParseToml("[scene]\nname = 'no features v14'\nkind = 'mixed'\nversion = 14\nfeatures = []\n");
+    REQUIRE(modernEmpty.has_value());
+    CHECK(modernEmpty->features == SceneFeatureFlags::None);
 }
 
 #ifdef AETHER_SCENES_SOURCE_DIR
@@ -407,18 +414,21 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     const auto scene = ParseToml(*text);
     REQUIRE(scene.has_value());
     CHECK(scene->kind == SceneKind::Scene2D);
-    CHECK(scene->features == SceneFeatureFlags::Sprites);
+    CHECK(scene->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
     REQUIRE(scene->entities.size() == 1);
     REQUIRE(scene->entities[0].camera.has_value());
     CHECK(scene->entities[0].mainCamera);
     CHECK(scene->entities[0].camera->projection == CameraProjection::Orthographic);
     CHECK(scene->entities[0].camera->orthographicHeight == doctest::Approx(10.0f));
+    // 2D scenes clear to a flat camera-owned colour instead of the 3D sky.
+    CHECK_FALSE(scene->entities[0].camera->useSkyGradient);
+    CHECK(scene->entities[0].camera->clearColor.r == doctest::Approx(0.10f));
 
     World world = MakeWorld();
     const auto created = ApplyScene(*scene, world, ApplySceneDeps{});
     REQUIRE(created.size() == 1);
     CHECK(world.GetSceneKind() == SceneKind::Scene2D);
-    CHECK(world.GetSceneFeatures() == SceneFeatureFlags::Sprites);
+    CHECK(world.GetSceneFeatures() == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
     CHECK(world.Get<CameraComponent>(created[0]).projection == CameraProjection::Orthographic);
 }
 #endif
@@ -924,6 +934,268 @@ TEST_CASE("2D sprite authoring fields survive a scene save and load round trip")
     CHECK(loaded.Get<SpriteAnimatorComponent>(applied[0]).animationPath == animator.animationPath);
 }
 
+TEST_CASE("Physics2D components survive a scene save and load round trip") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    World world = MakeWorld();
+    world.SetSceneKind(SceneKind::Scene2D);
+    world.SetSceneFeatures(SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D);
+
+    const Entity anchor = world.Create();
+    world.Emplace<NameComponent>(anchor, NameComponent{.name = "Anchor"});
+    world.Emplace<TransformComponent>(anchor, TransformComponent{});
+    world.Emplace<RigidBody2DComponent>(anchor, RigidBody2DComponent{.bodyType = Body2DType::Static});
+    world.Emplace<Collider2DComponent>(anchor, Collider2DComponent{.size = {10.0f, 0.5f}});
+
+    const Entity entity = world.Create();
+    world.Emplace<NameComponent>(entity, NameComponent{.name = "Crate"});
+    world.Emplace<TransformComponent>(entity, TransformComponent{});
+
+    RigidBody2DComponent rigid;
+    rigid.body.value = 0xdeadbeefu; // runtime handle must never become authored state
+    rigid.bodyType = Body2DType::Kinematic;
+    rigid.gravityScale = 0.5f;
+    rigid.linearDamping = 0.25f;
+    rigid.angularDamping = 0.75f;
+    rigid.fixedRotation = true;
+    rigid.continuousCollision = true;
+    rigid.allowSleeping = false;
+    rigid.startAwake = false;
+    world.Emplace<RigidBody2DComponent>(entity, rigid);
+
+    Collider2DComponent collider;
+    collider.shape = Collider2DShape::Polygon;
+    collider.size = {2.0f, 3.0f};
+    collider.radius = 0.25f;
+    collider.capsuleHeight = 1.5f;
+    collider.offset = {0.1f, -0.2f};
+    collider.density = 2.5f;
+    collider.friction = 0.9f;
+    collider.restitution = 0.3f;
+    collider.isTrigger = true;
+    collider.categoryBits = 0x00000004u;
+    collider.maskBits = 0x0000ff00u;
+    collider.groupIndex = -3;
+    collider.points = {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.0f, 0.75f}};
+    collider.shapes = {1u, 2u}; // runtime shape ids must be stripped
+    world.Emplace<Collider2DComponent>(entity, collider);
+
+    Joint2DComponent joint;
+    joint.type = Joint2DType::Prismatic;
+    joint.target = anchor;
+    joint.anchor = {0.25f, 0.5f};
+    joint.connectedAnchor = {-0.25f, -0.5f};
+    joint.axis = {0.0f, 1.0f};
+    joint.minLimit = -1.5f;
+    joint.maxLimit = 2.5f;
+    joint.length = 3.0f;
+    joint.motorSpeed = 4.0f;
+    joint.maxMotorForce = 50.0f;
+    joint.enableLimit = true;
+    joint.enableMotor = true;
+    joint.collideConnected = true;
+    joint.jointId = 77; // runtime handle
+    world.Emplace<Joint2DComponent>(entity, joint);
+
+    const SceneDescription captured = CaptureScene(world, mreg, treg);
+    const auto parsed = ParseToml(WriteToml(captured));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 2);
+    const EntityRecord& rec = parsed->entities[1];
+    REQUIRE(rec.rigidBody2D.has_value());
+    REQUIRE(rec.collider2D.has_value());
+    REQUIRE(rec.joint2D.has_value());
+
+    const RigidBody2DComponent& savedRigid = *rec.rigidBody2D;
+    CHECK_FALSE(savedRigid.body.IsValid());
+    CHECK(savedRigid.bodyType == rigid.bodyType);
+    CHECK(savedRigid.gravityScale == doctest::Approx(rigid.gravityScale));
+    CHECK(savedRigid.linearDamping == doctest::Approx(rigid.linearDamping));
+    CHECK(savedRigid.angularDamping == doctest::Approx(rigid.angularDamping));
+    CHECK(savedRigid.fixedRotation == rigid.fixedRotation);
+    CHECK(savedRigid.continuousCollision == rigid.continuousCollision);
+    CHECK(savedRigid.allowSleeping == rigid.allowSleeping);
+    CHECK(savedRigid.startAwake == rigid.startAwake);
+
+    const Collider2DComponent& savedCollider = *rec.collider2D;
+    CHECK(savedCollider.shape == collider.shape);
+    CHECK(savedCollider.size == collider.size);
+    CHECK(savedCollider.radius == doctest::Approx(collider.radius));
+    CHECK(savedCollider.capsuleHeight == doctest::Approx(collider.capsuleHeight));
+    CHECK(savedCollider.offset == collider.offset);
+    CHECK(savedCollider.density == doctest::Approx(collider.density));
+    CHECK(savedCollider.friction == doctest::Approx(collider.friction));
+    CHECK(savedCollider.restitution == doctest::Approx(collider.restitution));
+    CHECK(savedCollider.isTrigger == collider.isTrigger);
+    CHECK(savedCollider.categoryBits == collider.categoryBits);
+    CHECK(savedCollider.maskBits == collider.maskBits);
+    CHECK(savedCollider.groupIndex == collider.groupIndex);
+    REQUIRE(savedCollider.points.size() == 3);
+    CHECK(savedCollider.points[2] == glm::vec2{0.0f, 0.75f});
+    CHECK(savedCollider.shapes.empty());
+
+    const Joint2DComponent& savedJoint = *rec.joint2D;
+    CHECK(savedJoint.type == joint.type);
+    CHECK(savedJoint.anchor == joint.anchor);
+    CHECK(savedJoint.connectedAnchor == joint.connectedAnchor);
+    CHECK(savedJoint.axis == joint.axis);
+    CHECK(savedJoint.minLimit == doctest::Approx(joint.minLimit));
+    CHECK(savedJoint.maxLimit == doctest::Approx(joint.maxLimit));
+    CHECK(savedJoint.length == doctest::Approx(joint.length));
+    CHECK(savedJoint.motorSpeed == doctest::Approx(joint.motorSpeed));
+    CHECK(savedJoint.maxMotorForce == doctest::Approx(joint.maxMotorForce));
+    CHECK(savedJoint.enableLimit == joint.enableLimit);
+    CHECK(savedJoint.enableMotor == joint.enableMotor);
+    CHECK(savedJoint.collideConnected == joint.collideConnected);
+    CHECK(savedJoint.jointId == 0);
+    CHECK(rec.joint2DTargetIndex == 0);
+
+    World loaded = MakeWorld();
+    const std::vector<Entity> applied = ApplyScene(*parsed, loaded, ApplySceneDeps{});
+    REQUIRE(applied.size() == 2);
+    REQUIRE(loaded.TryGet<RigidBody2DComponent>(applied[1]) != nullptr);
+    REQUIRE(loaded.TryGet<Collider2DComponent>(applied[1]) != nullptr);
+    REQUIRE(loaded.TryGet<Joint2DComponent>(applied[1]) != nullptr);
+    CHECK(loaded.Get<RigidBody2DComponent>(applied[1]).bodyType == Body2DType::Kinematic);
+    CHECK(loaded.Get<Collider2DComponent>(applied[1]).points.size() == 3);
+    // Cold load resolves the joint target through the scene-local index.
+    CHECK(loaded.Get<Joint2DComponent>(applied[1]).target == applied[0]);
+}
+
+TEST_CASE("Day Night component and camera background survive a scene round trip") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    World world = MakeWorld();
+    const Entity sun = world.Create();
+    world.Emplace<NameComponent>(sun, NameComponent{.name = "Sun"});
+    world.Emplace<TransformComponent>(sun, TransformComponent{});
+    world.Emplace<DayNightComponent>(sun, DayNightComponent{.animate = false, .timeOfDayHours = 17.5f, .timeSpeedSecondsPerSecond = 120.0f});
+
+    const Entity cam = world.Create();
+    world.Emplace<NameComponent>(cam, NameComponent{.name = "Cam"});
+    world.Emplace<TransformComponent>(cam, TransformComponent{});
+    CameraComponent camera{};
+    camera.useSkyGradient = false;
+    camera.clearColor = {0.2f, 0.3f, 0.4f};
+    world.Emplace<CameraComponent>(cam, camera);
+
+    const SceneDescription captured = CaptureScene(world, mreg, treg);
+    const auto parsed = ParseToml(WriteToml(captured));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 2);
+    REQUIRE(parsed->entities[0].dayNight.has_value());
+    CHECK_FALSE(parsed->entities[0].dayNight->animate);
+    CHECK(parsed->entities[0].dayNight->timeOfDayHours == doctest::Approx(17.5f));
+    CHECK(parsed->entities[0].dayNight->timeSpeedSecondsPerSecond == doctest::Approx(120.0f));
+    REQUIRE(parsed->entities[1].camera.has_value());
+    CHECK_FALSE(parsed->entities[1].camera->useSkyGradient);
+    CHECK(parsed->entities[1].camera->clearColor.g == doctest::Approx(0.3f));
+
+    World loaded = MakeWorld();
+    const std::vector<Entity> applied = ApplyScene(*parsed, loaded, ApplySceneDeps{});
+    REQUIRE(applied.size() == 2);
+    REQUIRE(loaded.TryGet<DayNightComponent>(applied[0]) != nullptr);
+    CHECK(loaded.Get<DayNightComponent>(applied[0]).timeOfDayHours == doctest::Approx(17.5f));
+    // Day Night implies 3D lighting for the loaded scene.
+    CHECK(HasSceneFeature(loaded.GetSceneFeatures(), SceneFeatureFlags::Lighting3D));
+}
+
+TEST_CASE("Scene apply skips physics records from the wrong domain for the scene kind") {
+    // A 3D scene containing 2D physics records (hand-edited or copy-pasted)
+    // must not gain Box2D bodies: the records are skipped with a warning.
+    const char* toml3D = "[scene]\nname = 'bad mix'\nkind = '3d'\nversion = 14\nfeatures = ['physics_3d']\n\n"
+                         "[[entities]]\nname = 'Smuggled'\nposition = [0.0, 1.0, 0.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n"
+                         "[entities.rigid_body_2d]\nbody_type = 'dynamic'\n"
+                         "[entities.collider_2d]\nshape = 'box'\n";
+    const auto parsed = ParseToml(toml3D);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    CHECK(parsed->entities[0].rigidBody2D.has_value());
+
+    World world = MakeWorld();
+    const auto created = ApplyScene(*parsed, world, ApplySceneDeps{});
+    REQUIRE(created.size() == 1);
+    CHECK_FALSE(world.Has<RigidBody2DComponent>(created[0]));
+    CHECK_FALSE(world.Has<Collider2DComponent>(created[0]));
+
+    // The mirror case: 3D physics records in a 2D scene are skipped too.
+    const char* toml2D = "[scene]\nname = 'bad mix 2d'\nkind = '2d'\nversion = 14\nfeatures = ['sprites', 'physics_2d']\n\n"
+                         "[[entities]]\nname = 'Smuggled3D'\nposition = [0.0, 1.0, 0.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n"
+                         "[entities.physics]\nshape = 'box'\nmotion = 'dynamic'\n";
+    const auto parsed2D = ParseToml(toml2D);
+    REQUIRE(parsed2D.has_value());
+    REQUIRE(parsed2D->entities.size() == 1);
+    CHECK(parsed2D->entities[0].physics.has_value());
+
+    World world2D = MakeWorld();
+    const auto created2D = ApplyScene(*parsed2D, world2D, ApplySceneDeps{});
+    REQUIRE(created2D.size() == 1);
+    CHECK_FALSE(world2D.Has<RigidBodyComponent>(created2D[0]));
+    CHECK_FALSE(world2D.Has<ColliderComponent>(created2D[0]));
+}
+
+TEST_CASE("Tile Map component survives a scene round trip and implies the feature") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    World world = MakeWorld();
+    world.SetSceneKind(SceneKind::Scene2D);
+    world.SetSceneFeatures(SceneFeatureFlags::Sprites); // deliberately missing Tilemaps
+
+    const Entity entity = world.Create();
+    world.Emplace<NameComponent>(entity, NameComponent{.name = "Map"});
+    world.Emplace<TransformComponent>(entity, TransformComponent{});
+    TileMapComponent tileMap;
+    tileMap.tilemapPath = "project://assets/tilemaps/room.tilemap";
+    tileMap.tint = {0.5f, 0.6f, 0.7f, 1.0f};
+    tileMap.sortingLayer = -2;
+    tileMap.orderInLayer = 4;
+    tileMap.visibleLayerMask = 0x5u;
+    tileMap.visible = false;
+    world.Emplace<TileMapComponent>(entity, tileMap);
+
+    const SceneDescription captured = CaptureScene(world, mreg, treg);
+    const auto parsed = ParseToml(WriteToml(captured));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    REQUIRE(parsed->entities[0].tileMap.has_value());
+    const TileMapComponent& saved = *parsed->entities[0].tileMap;
+    CHECK(saved.tilemapPath == tileMap.tilemapPath);
+    CHECK(saved.tint.g == doctest::Approx(0.6f));
+    CHECK(saved.sortingLayer == -2);
+    CHECK(saved.orderInLayer == 4);
+    CHECK(saved.visibleLayerMask == 0x5u);
+    CHECK_FALSE(saved.visible);
+
+    World loaded = MakeWorld();
+    const auto applied = ApplyScene(*parsed, loaded, ApplySceneDeps{});
+    REQUIRE(applied.size() == 1);
+    REQUIRE(loaded.TryGet<TileMapComponent>(applied[0]) != nullptr);
+    CHECK(HasSceneFeature(loaded.GetSceneFeatures(), SceneFeatureFlags::Tilemaps));
+}
+
+TEST_CASE("v14 2D scenes gain the tilemaps feature via the v15 migration") {
+    const auto migrated = ParseToml("[scene]\nname = 'v14 2d'\nkind = '2d'\nversion = 14\nfeatures = ['sprites', 'physics_2d']\n");
+    REQUIRE(migrated.has_value());
+    CHECK(HasSceneFeature(migrated->features, SceneFeatureFlags::Tilemaps));
+
+    const auto untouched3D = ParseToml("[scene]\nname = 'v14 3d'\nkind = '3d'\nversion = 14\nfeatures = ['physics_3d']\n");
+    REQUIRE(untouched3D.has_value());
+    CHECK_FALSE(HasSceneFeature(untouched3D->features, SceneFeatureFlags::Tilemaps));
+
+    const auto modern2D = ParseToml("[scene]\nname = 'v15 2d'\nkind = '2d'\nversion = 15\nfeatures = ['sprites']\n");
+    REQUIRE(modern2D.has_value());
+    CHECK_FALSE(HasSceneFeature(modern2D->features, SceneFeatureFlags::Tilemaps));
+}
+
 TEST_CASE("v9 scene fixtures migrate feature defaults without changing source version") {
     const auto readFixture = [](std::string_view name)
     {
@@ -936,7 +1208,7 @@ TEST_CASE("v9 scene fixtures migrate feature defaults without changing source ve
     REQUIRE(legacy2D.has_value());
     CHECK(legacy2D->version == 9);
     CHECK(legacy2D->kind == SceneKind::Scene2D);
-    CHECK(legacy2D->features == SceneFeatureFlags::Sprites);
+    CHECK(legacy2D->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
 
     const auto legacy3DText = readFixture("v9-3d.scene.toml");
     REQUIRE(legacy3DText.has_value());

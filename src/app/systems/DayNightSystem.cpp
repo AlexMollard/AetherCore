@@ -6,31 +6,51 @@
 #include <glm/geometric.hpp>
 
 #include "rendering/Renderer.hpp"
+#include "scene/Hierarchy.hpp"
+#include "scene/LightComponents.hpp"
+#include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
 {
 	namespace
 	{
-		constexpr float kSecondsPerHour = 3600.0f;
 		constexpr float kHoursPerDay = 24.0f;
-		constexpr float kSecondsPerDay = kHoursPerDay * kSecondsPerHour;
+		constexpr float kSecondsPerHour = 3600.0f;
 		constexpr float kTau = 6.2832f;
 		constexpr float kHalfPi = 1.5708f;
 
-		float WrapDaySeconds(float seconds)
+		float WrapDayHours(float hours)
 		{
-			if (!std::isfinite(seconds))
+			if (!std::isfinite(hours))
 			{
 				return 0.0f;
 			}
-
-			seconds = std::fmod(seconds, kSecondsPerDay);
-			if (seconds < 0.0f)
+			hours = std::fmod(hours, kHoursPerDay);
+			if (hours < 0.0f)
 			{
-				seconds += kSecondsPerDay;
+				hours += kHoursPerDay;
 			}
-			return seconds;
+			return hours;
+		}
+
+		// The single scene driver: the first live entity carrying the component.
+		DayNightComponent* FindDriver(aether::World* world)
+		{
+			if (world == nullptr)
+			{
+				return nullptr;
+			}
+			DayNightComponent* found = nullptr;
+			world->View<DayNightComponent>().each(
+			        [&](entt::entity e, DayNightComponent& component)
+			        {
+				        if (found == nullptr && !ecs::HasDisabledAncestor(*world, World::FromEntt(e)))
+				        {
+					        found = &component;
+				        }
+			        });
+			return found;
 		}
 	} // namespace
 
@@ -40,18 +60,42 @@ namespace aether::app
 		m_renderer = &renderer;
 	}
 
-	void DayNightSystem::OnRegister([[maybe_unused]] aether::World& world)
+	void DayNightSystem::OnRegister(aether::World& world)
 	{
+		m_world = &world;
+	}
+
+	void DayNightSystem::OnUnregister([[maybe_unused]] aether::World& world)
+	{
+		m_world = nullptr;
+	}
+
+	void DayNightSystem::SetEnabled(bool enabled)
+	{
+		if (auto* driver = FindDriver(m_world))
+		{
+			driver->animate = enabled;
+		}
+	}
+
+	bool DayNightSystem::IsEnabled() const
+	{
+		const auto* driver = FindDriver(m_world);
+		return driver != nullptr && driver->animate;
 	}
 
 	void DayNightSystem::SetTimeOfDay(float hours)
 	{
-		m_time = WrapDaySeconds(hours * kSecondsPerHour);
+		if (auto* driver = FindDriver(m_world))
+		{
+			driver->timeOfDayHours = WrapDayHours(hours);
+		}
 	}
 
 	float DayNightSystem::GetTimeOfDay() const
 	{
-		return WrapDaySeconds(m_time) / kSecondsPerHour;
+		const auto* driver = FindDriver(m_world);
+		return driver != nullptr ? WrapDayHours(driver->timeOfDayHours) : 6.0f;
 	}
 
 	void DayNightSystem::SetTimeSpeed(float secondsPerSecond)
@@ -60,24 +104,42 @@ namespace aether::app
 		{
 			secondsPerSecond = kDefaultTimeSpeed;
 		}
-
-		m_timeSpeed = std::clamp(secondsPerSecond, kMinTimeSpeed, kMaxTimeSpeed);
+		if (auto* driver = FindDriver(m_world))
+		{
+			driver->timeSpeedSecondsPerSecond = std::clamp(secondsPerSecond, kMinTimeSpeed, kMaxTimeSpeed);
+		}
 	}
 
-	void DayNightSystem::Update([[maybe_unused]] aether::World& world, float dt)
+	float DayNightSystem::GetTimeSpeed() const
+	{
+		const auto* driver = FindDriver(m_world);
+		return driver != nullptr ? driver->timeSpeedSecondsPerSecond : kDefaultTimeSpeed;
+	}
+
+	bool DayNightSystem::HasDriver() const
+	{
+		return FindDriver(m_world) != nullptr;
+	}
+
+	void DayNightSystem::Update(aether::World& world, float dt)
 	{
 		AE_PROFILE_ZONE();
 		if (m_renderer == nullptr)
 		{
 			return;
 		}
-
-		if (m_enabled)
+		auto* driver = FindDriver(&world);
+		if (driver == nullptr)
 		{
-			m_time = WrapDaySeconds(m_time + dt * m_timeSpeed);
+			return; // no entity drives the environment: keep the authored one
 		}
 
-		const float hours = GetTimeOfDay();
+		if (driver->animate)
+		{
+			driver->timeOfDayHours = WrapDayHours(driver->timeOfDayHours + dt * driver->timeSpeedSecondsPerSecond / kSecondsPerHour);
+		}
+
+		const float hours = WrapDayHours(driver->timeOfDayHours);
 		const float sunAngle = (hours / kHoursPerDay) * kTau - kHalfPi;
 
 		m_sunDirection = glm::normalize(glm::vec3(std::cos(sunAngle), std::sin(sunAngle), 0.15f));
@@ -122,9 +184,5 @@ namespace aether::app
 		m_renderer->SetAmbientLight(ambient);
 		m_renderer->SetSkyGradient(skyHorizon, skyZenith);
 		m_renderer->SetSkyVoidColor(skyVoid);
-	}
-
-	void DayNightSystem::OnUnregister([[maybe_unused]] aether::World& world)
-	{
 	}
 } // namespace aether::app

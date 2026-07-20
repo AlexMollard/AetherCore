@@ -79,6 +79,11 @@ namespace aether
 		}
 	}
 
+	World::~World()
+	{
+		m_systems.Shutdown(*this);
+	}
+
 	void World::RegisterSystem(std::unique_ptr<System> system)
 	{
 		if (system)

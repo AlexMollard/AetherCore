@@ -23,6 +23,11 @@ namespace aether
 			return "LightSystem";
 		}
 
+		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
+		{
+			return SceneFeatureFlags::Lighting3D;
+		}
+
 		void Update(World& world, float dt) override;
 
 	private:

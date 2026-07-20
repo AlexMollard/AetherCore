@@ -178,6 +178,15 @@ float4 fragmentMain(VSOut input) : SV_Target0
 {
     FrameConstantsData* fc = pc.frame.Ptr();
 
+    // Flat clear mode: the main camera opted out of the sky gradient
+    // (skyVoidColor.w == 0, set on the game thread from the camera's clear
+    // colour). Emit the flat colour before any direction math - orthographic
+    // projections have no meaningful view ray anyway.
+    if (fc->skyVoidColor.w < 0.5f)
+    {
+        return float4(fc->skyHorizonColor.rgb, 1.0f);
+    }
+
     // ── Step 1: NDC -> view-space direction ──────────────────────────────
     // GLM perspective (Vulkan variant) column-major layout:
     //   proj[0][0]  = 1 / (aspect * tan(fovY/2))   - col 0, row 0

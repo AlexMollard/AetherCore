@@ -65,7 +65,10 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
 
     VSOutput output;
     output.position = clip;
-    output.uv = lerp(sprite.uvRect.xy, sprite.uvRect.zw, corner);
+    // uvRect is in image space (origin top-left, v down); quad corners are
+    // world space (+y up). Flip v so the top of the image lands on the top of
+    // the quad.
+    output.uv = lerp(sprite.uvRect.xy, sprite.uvRect.zw, float2(corner.x, 1.0 - corner.y));
     output.color = sprite.color;
     output.textureIndex = sprite.textureIndex;
     output.blendMode = sprite.blendMode;

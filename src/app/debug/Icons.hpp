@@ -33,6 +33,8 @@
 #define ICON_FA_LINK "\xef\x83\x81"
 #define ICON_FA_EYE "\xef\x81\xae"
 #define ICON_FA_ROTATE "\xef\x8b\xb1"
+#define ICON_FA_ROTATE_LEFT "\xef\x8b\xaa"
+#define ICON_FA_ROTATE_RIGHT "\xef\x8b\xb9"
 #define ICON_FA_EXPAND "\xef\x81\xa5"
 #define ICON_FA_DIAGRAM_PROJECT "\xef\x95\x82"
 

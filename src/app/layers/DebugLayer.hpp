@@ -16,6 +16,7 @@
 #include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/ScriptErrorOverlay.hpp"
+#include "debug/TilePaintingState.hpp"
 #include "debug/UndoStack.hpp"
 
 namespace aether
@@ -65,6 +66,7 @@ namespace aether::editor
 
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
+		TilePaintingState m_tilePainting;
 		// registers a reference to this, so it must outlive the registration).
 		EditorWindowActions m_windowActions;
 		std::uint64_t m_outlineSeenSerial = 0;

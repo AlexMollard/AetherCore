@@ -18,6 +18,7 @@
 #include "assets/AssetManager.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
+#include "debug/ComponentDrawers.hpp"
 #include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
 #include "editor/ComponentCatalog.hpp"
@@ -525,7 +526,15 @@ namespace aether::editor
 			m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
 			m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
 			m = glm::scale(m, scale);
-			world.EmplaceOrReplace<TransformComponent>(entity, TransformComponent{m});
+			if (world.TryGet<TransformComponent>(entity) == nullptr)
+			{
+				world.EmplaceOrReplace<TransformComponent>(entity, TransformComponent{m});
+			}
+			// Same path as the viewport gizmo: updates hierarchy children and
+			// teleports any 3D/2D physics bodies so the pose isn't reverted by
+			// the next physics sync.
+			app::LayerContext lc{.services = ctx.services, .frameIndex = ctx.frameIndex};
+			ApplyWorldTransform(lc, world, entity, m);
 			return json{{"id", entity.id}, {"ok", true}};
 		};
 		methods.push_back({"scene.transform",
@@ -586,7 +595,12 @@ namespace aether::editor
 				}
 				if (add)
 				{
+					if (const std::string blockReason = ComponentAddBlockReason(world, entity, *entry); !blockReason.empty())
+					{
+						return json{{"error", "'" + type + "' cannot be added: " + blockReason}};
+					}
 					entry->add(world, entity, ctx.services);
+					EnableComponentFeatures(world, *entry);
 				}
 				else
 				{
@@ -909,22 +923,23 @@ namespace aether::editor
 
 		methods.push_back({"scene.new",
 		        "new_scene",
-		        "Replace the live scene with a fresh empty scene.",
+		        "Replace the live scene with a fresh scene from the shipped default template. 'kind' picks the domain: '3d' (default) or '2d' (orthographic camera, sprite/tilemap/2D-physics features).",
 		        true,
-		        Obj(),
-		        [](const json&, MethodContext& ctx) -> json
+		        Obj({{"kind", json{{"type", "string"}, {"enum", json::array({"2d", "3d"})}}}}),
+		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
 			        if (scenes == nullptr)
 			        {
 				        return ErrNoScene();
 			        }
-			        const std::string name = app::scene::NewScene(scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services));
+			        const SceneKind kind = p.value("kind", std::string{"3d"}) == "2d" ? SceneKind::Scene2D : SceneKind::Scene3D;
+			        const std::string name = app::scene::NewScene(scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services), kind);
 			        if (!name.empty())
 			        {
 				        scenes->SetCurrentScene(name);
 			        }
-			        return json{{"scene", name}, {"ok", !name.empty()}};
+			        return json{{"scene", name}, {"kind", kind == SceneKind::Scene2D ? "2d" : "3d"}, {"ok", !name.empty()}};
 		        }});
 
 		const auto playHandler = [](const char* which)
@@ -1456,6 +1471,8 @@ namespace aether::editor
 			        }
 			        return j;
 		        }});
+
+		Append2DAuthoringMethods(methods);
 
 		return methods;
 	}

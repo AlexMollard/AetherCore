@@ -1210,6 +1210,14 @@ namespace aether::editor
 			}
 			if (ImGui::BeginPopup("CreateEntity"))
 			{
+				// Create entries follow the ACTIVE scene features: entries for inactive
+				// domains are absent rather than disabled, so a 2D scene's menu has no
+				// meshes/lights and a 3D scene's has no sprite entries (Mixed shows both).
+				const SceneFeatureFlags activeFeatures = world.GetSceneFeatures();
+				const bool show2D = HasSceneFeature(activeFeatures, SceneFeatureFlags::Sprites);
+				const bool showMeshes3D = HasSceneFeature(activeFeatures, SceneFeatureFlags::Meshes3D);
+				const bool showLighting3D = HasSceneFeature(activeFeatures, SceneFeatureFlags::Lighting3D);
+
 				if (ImGui::MenuItem(ICON_FA_CIRCLE "  Empty entity"))
 				{
 					const Entity e = world.Create();
@@ -1217,7 +1225,7 @@ namespace aether::editor
 					selection.Select(e);
 				}
 				ImGui::Separator();
-				if (ImGui::BeginMenu(ICON_FA_IMAGE "  2D"))
+				if (show2D && ImGui::BeginMenu(ICON_FA_IMAGE "  2D"))
 				{
 					if (ImGui::MenuItem(ICON_FA_IMAGE "  Sprite"))
 					{
@@ -1226,6 +1234,14 @@ namespace aether::editor
 					if (ImGui::MenuItem(ICON_FA_FILM "  Animated Sprite"))
 					{
 						(void) CreateSpriteEntity(context, world, selection, true);
+					}
+					if (ImGui::MenuItem(ICON_FA_IMAGE "  Tile Map"))
+					{
+						const Entity entity = world.Create();
+						world.Emplace<NameComponent>(entity, NameComponent{.name = "Tile Map"});
+						world.Emplace<TransformComponent>(entity);
+						world.Emplace<TileMapComponent>(entity);
+						selection.Select(entity);
 					}
 					ImGui::Separator();
 					if (ImGui::MenuItem(ICON_FA_VIDEO "  Orthographic Camera"))
@@ -1242,45 +1258,54 @@ namespace aether::editor
 					}
 					ImGui::EndMenu();
 				}
-				ImGui::Separator();
-				if (ImGui::MenuItem(ICON_FA_CUBE "  Cube"))
+				if (showMeshes3D)
 				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Cube, "Cube", "cube");
-				}
-				if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere"))
-				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Sphere, "Sphere", "sphere");
-				}
-				if (ImGui::MenuItem(ICON_FA_IMAGE "  Plane"))
-				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Plane, "Plane", "plane");
-				}
-				if (ImGui::MenuItem(ICON_FA_IMAGE "  Quad"))
-				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Quad, "Quad", "quad");
-				}
-				if (ImGui::MenuItem(ICON_FA_PLAY "  Triangle"))
-				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Triangle, "Triangle", "triangle");
-				}
-				ImGui::Separator();
-				if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light"))
-				{
-					selection.Select(ecs::CreatePointLightEntity(world, {0.0f, 5.0f, 0.0f}, PointLightComponent{}));
-				}
-				if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light"))
-				{
-					selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
-				}
-				ImGui::Separator();
-				if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera"))
-				{
-					const Entity cam = ecs::CreateCameraEntity(world, {0.0f, 3.0f, 8.0f}, {0.0f, -0.35f, -1.0f}, CameraComponent{});
-					if (!ecs::GetMainCameraEntity(world).IsValid())
+					ImGui::Separator();
+					if (ImGui::MenuItem(ICON_FA_CUBE "  Cube"))
 					{
-						ecs::SetMainCameraEntity(world, cam);
+						CreatePrimitive(context, world, selection, PrimitiveMesh::Cube, "Cube", "cube");
 					}
-					selection.Select(cam);
+					if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere"))
+					{
+						CreatePrimitive(context, world, selection, PrimitiveMesh::Sphere, "Sphere", "sphere");
+					}
+					if (ImGui::MenuItem(ICON_FA_IMAGE "  Plane"))
+					{
+						CreatePrimitive(context, world, selection, PrimitiveMesh::Plane, "Plane", "plane");
+					}
+					if (ImGui::MenuItem(ICON_FA_IMAGE "  Quad"))
+					{
+						CreatePrimitive(context, world, selection, PrimitiveMesh::Quad, "Quad", "quad");
+					}
+					if (ImGui::MenuItem(ICON_FA_PLAY "  Triangle"))
+					{
+						CreatePrimitive(context, world, selection, PrimitiveMesh::Triangle, "Triangle", "triangle");
+					}
+				}
+				if (showLighting3D)
+				{
+					ImGui::Separator();
+					if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light"))
+					{
+						selection.Select(ecs::CreatePointLightEntity(world, {0.0f, 5.0f, 0.0f}, PointLightComponent{}));
+					}
+					if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light"))
+					{
+						selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
+					}
+				}
+				if (showMeshes3D)
+				{
+					ImGui::Separator();
+					if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera"))
+					{
+						const Entity cam = ecs::CreateCameraEntity(world, {0.0f, 3.0f, 8.0f}, {0.0f, -0.35f, -1.0f}, CameraComponent{});
+						if (!ecs::GetMainCameraEntity(world).IsValid())
+						{
+							ecs::SetMainCameraEntity(world, cam);
+						}
+						selection.Select(cam);
+					}
 				}
 				ImGui::Separator();
 				if (ImGui::BeginMenu(ICON_FA_IMAGE "  UI"))

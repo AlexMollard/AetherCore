@@ -39,6 +39,10 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "assets/SpriteAssetStore.hpp"
+#include "physics2d/Physics2DComponents.hpp"
+#include "physics2d/Physics2DSystem.hpp"
+#include "physics2d/SpriteColliderGen.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
@@ -551,6 +555,33 @@ namespace aether::editor
 			{
 				physics->SetPosition(rb->body, pos);
 				physics->SetRotation(rb->body, q);
+			}
+		}
+
+		auto* physics2D = context.TryGet<Physics2DSystem>();
+		for (const Entity e: subtree)
+		{
+			auto* ps2d = world.TryGet<Physics2DStateComponent>(e);
+			const auto* etc = world.TryGet<TransformComponent>(e);
+			if (ps2d == nullptr || etc == nullptr)
+			{
+				continue;
+			}
+			glm::vec3 pos{}, euler{}, scale{};
+			DecomposeTRS(etc->localToWorld, pos, euler, scale);
+			ps2d->prevPosition = ps2d->currPosition = glm::vec2(pos);
+			ps2d->prevAngle = ps2d->currAngle = glm::radians(euler.z);
+			ps2d->depthZ = pos.z;
+			ps2d->scale = glm::max(scale, glm::vec3(0.001f));
+
+			const auto* rb2d = world.TryGet<RigidBody2DComponent>(e);
+			if (rb2d && physics2D)
+			{
+				physics2D->SetBodyPosition(rb2d->body, glm::vec2(pos));
+				physics2D->SetBodyAngle(rb2d->body, glm::radians(euler.z));
+				// A sleeping body teleported in midair would otherwise hang
+				// there until something collides with it.
+				physics2D->SetBodyAwake(rb2d->body, true);
 			}
 		}
 	}
@@ -1221,6 +1252,48 @@ namespace aether::editor
 		{
 			physics->RebuildBody(world, entity);
 		}
+	}
+
+	void DrawCollider2DTools(app::LayerContext& context, World& world, Entity entity)
+	{
+		auto* collider = world.TryGet<Collider2DComponent>(entity);
+		const auto* sprite = world.TryGet<SpriteRendererComponent>(entity);
+		if (collider == nullptr || sprite == nullptr)
+		{
+			return;
+		}
+		ImGui::PushID("collider2dTools");
+		if (ImGui::Button(ICON_FA_BOX_OPEN "  Collider from sprite outline"))
+		{
+			bool generated = false;
+			if (auto* sprites = context.TryGet<SpriteAssetStore>(); sprites != nullptr && !sprite->atlasPath.empty())
+			{
+				if (const auto atlas = sprites->LoadAtlas(sprite->atlasPath); atlas.has_value())
+				{
+					const SpriteRegion* region = sprite->spriteId.IsValid() ? (*atlas)->Find(sprite->spriteId) : ((*atlas)->sprites.empty() ? nullptr : &(*atlas)->sprites.front());
+					if (region != nullptr && region->collisionOutline.size() >= 3)
+					{
+						collider->points = BuildColliderPointsFromOutline(region->collisionOutline, region->pixelSize, region->pivot, (*atlas)->pixelsPerUnit);
+						collider->shape = Collider2DShape::Polygon;
+						if (collider->points.size() > 8)
+						{
+							AE_WARN(LogCategory::App, "Sprite outline has {} points; Box2D keeps at most 8 after the convex hull", collider->points.size());
+						}
+						if (auto* physics = context.TryGet<Physics2DSystem>())
+						{
+							physics->RebuildBody(world, entity);
+						}
+						generated = true;
+					}
+				}
+			}
+			if (!generated)
+			{
+				AE_WARN(LogCategory::App, "Collider from sprite outline: entity {} has no atlas region with a collision outline (author one in the Sprite Slicer)", entity.id);
+			}
+		}
+		ImGui::SetItemTooltip("Build a polygon collider from the sprite's authored collision outline\n(Sprite Slicer > collision editing; at most 8 points survive the convex hull)");
+		ImGui::PopID();
 	}
 
 	void DrawCollisionEvents(World& world, Entity entity)

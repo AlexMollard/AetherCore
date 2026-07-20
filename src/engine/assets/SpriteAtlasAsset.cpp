@@ -77,11 +77,12 @@ namespace aether
 			region.pixelRect.width = std::max(region.pixelRect.width, 1);
 			region.pixelRect.height = std::max(region.pixelRect.height, 1);
 			region.pixelSize = {static_cast<float>(region.pixelRect.width), static_cast<float>(region.pixelRect.height)};
+			// Begin/end form (x0, y0, x1, y1) to match the sprite shader's lerp.
 			region.uvRect = {
 			        static_cast<float>(region.pixelRect.x) / width,
 			        static_cast<float>(region.pixelRect.y) / height,
-			        static_cast<float>(region.pixelRect.width) / width,
-			        static_cast<float>(region.pixelRect.height) / height,
+			        static_cast<float>(region.pixelRect.x + region.pixelRect.width) / width,
+			        static_cast<float>(region.pixelRect.y + region.pixelRect.height) / height,
 			};
 		}
 	} // namespace

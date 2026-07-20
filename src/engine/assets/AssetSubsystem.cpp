@@ -43,7 +43,9 @@ namespace aether
 		AE_EXPECT_OR_THROW(magentaFallback, Texture::CreateSolidColor({255, 0, 255, 255}, vk.GetDevice().device, vk.GetGraphicsQueue(), m_uploadContext.GetCommandPool()));
 		m_textureRegistry.InitializeDefault(TextureResource{std::move(magentaFallback)});
 		m_spriteSystem.Initialize(m_textureRegistry, m_spriteAssetStore);
+		m_tileMapSystem.Initialize(m_textureRegistry, m_spriteAssetStore, m_tileAssetStore);
 		services.Register<SpriteAssetStore>(m_spriteAssetStore);
+		services.Register<TileAssetStore>(m_tileAssetStore);
 
 		MaterialAsset defaultAsset;
 		defaultAsset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
@@ -123,6 +125,7 @@ namespace aether
 			m_world = nullptr;
 		}
 		m_materialAuthoring.ReleaseAll();
+		m_tileMapSystem.Shutdown();
 		m_spriteSystem.Shutdown();
 		m_spriteAssetStore.Clear();
 		m_textureRegistry.ReleaseAll();

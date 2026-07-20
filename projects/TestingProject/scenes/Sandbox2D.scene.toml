@@ -1,0 +1,95 @@
+# 2D physics sandbox - ground + scripted crate exercising the managed API.
+[scene]
+kind = '2d'
+name = 'Sandbox2D'
+version = 14
+features = [ 'sprites', 'physics_2d' ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+parent = -1
+position = [ 0.0, 0.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    far = 1000.0
+    fov = 60.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'orthographic'
+    use_sky_gradient = false
+    clear_color = [ 0.10, 0.10, 0.12 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Ground'
+parent = -1
+position = [ 0.0, -3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'static'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 20.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Crate'
+parent = -1
+position = [ 0.0, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'dynamic'
+
+    [entities.collider_2d]
+    shape = 'box'
+    size = [ 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'Physics2DSmoke'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Wedge'
+parent = -1
+position = [ 2.5, 4.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'dynamic'
+
+    [entities.collider_2d]
+    shape = 'polygon'
+    # Triangle produced by BuildColliderPointsFromOutline from a 32x32 sprite
+    # outline (apex top-centre), pinned by the unit tests.
+    points = [ [ 0.0, 0.5 ], [ 0.5, -0.5 ], [ -0.5, -0.5 ] ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Tile World'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.tile_map]
+    tilemap = 'project://assets/tilemaps/uvtiles.tilemap'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Ball'
+parent = -1
+position = [ -2.5, 5.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    body_type = 'dynamic'
+
+    [entities.collider_2d]
+    shape = 'circle'
+    radius = 0.5
+    restitution = 0.5

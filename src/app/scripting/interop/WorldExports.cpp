@@ -7,6 +7,7 @@
 
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
@@ -22,28 +23,37 @@ namespace
 {
 	void TeleportBodyToTransform(aether::World& w, aether::Entity e)
 	{
-		auto* ps = w.TryGet<aether::PhysicsStateComponent>(e);
 		const auto* tc = w.TryGet<aether::TransformComponent>(e);
-		if (ps == nullptr || tc == nullptr)
+		if (tc == nullptr)
 		{
 			return;
 		}
 
-		glm::vec3 pos{}, euler{}, scale{};
-		aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
-		const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
-		ps->prevPosition = pos;
-		ps->currPosition = pos;
-		ps->prevRotation = q;
-		ps->currRotation = q;
-		ps->scale = glm::max(scale, glm::vec3(0.001f));
-
-		const auto* rb = w.TryGet<aether::RigidBodyComponent>(e);
-		auto* physics = aether::app::scripting::ActiveContext().physics;
-		if (rb != nullptr && physics != nullptr)
+		if (auto* ps = w.TryGet<aether::PhysicsStateComponent>(e))
 		{
-			physics->SetPosition(rb->body, pos);
-			physics->SetRotation(rb->body, q);
+			glm::vec3 pos{}, euler{}, scale{};
+			aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
+			const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
+			ps->prevPosition = pos;
+			ps->currPosition = pos;
+			ps->prevRotation = q;
+			ps->currRotation = q;
+			ps->scale = glm::max(scale, glm::vec3(0.001f));
+
+			const auto* rb = w.TryGet<aether::RigidBodyComponent>(e);
+			auto* physics = aether::app::scripting::ActiveContext().physics;
+			if (rb != nullptr && physics != nullptr)
+			{
+				physics->SetPosition(rb->body, pos);
+				physics->SetRotation(rb->body, q);
+			}
+		}
+
+		// 2D bodies re-sync the transform from the body every frame, so a
+		// script teleport must move the body too or it silently reverts.
+		if (auto* physics2D = aether::app::scripting::ActiveContext().physics2D)
+		{
+			physics2D->TeleportToTransform(w, e);
 		}
 	}
 } // namespace

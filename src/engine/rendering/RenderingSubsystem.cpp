@@ -626,10 +626,9 @@ namespace aether
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
-				                if (!IsSceneFeatureEnabled(SceneFeatureFlags::Lighting3D))
-				                {
-					                return;
-				                }
+				                // Always draw: the frame constants decide between the 3D
+				                // gradient and a camera-owned flat clear (skyVoidColor.w
+				                // == 0), so 2D scenes get their background painted too.
 				                gpu::CommandList& cmd = ctx.recorder;
 				                cmd.BindPipeline(m_skyboxPipeline.GetPipeline());
 				                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;

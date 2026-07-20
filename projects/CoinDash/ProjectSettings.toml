@@ -1,0 +1,20 @@
+# AetherCore project file.
+
+[app]
+startupscene = "Level1"
+targetfps = 0
+
+[graphics]
+asynccompute = true
+fxaa = false
+vsync = false
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+name = "Coin Dash"
+version = 1

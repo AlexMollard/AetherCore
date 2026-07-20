@@ -3,9 +3,9 @@
 
 namespace aether::app::scene
 {
-	std::string NewScene(World& world, const ApplySceneDeps& deps)
+	std::string NewScene(World& world, const ApplySceneDeps& deps, SceneKind kind)
 	{
-		const auto desc = ReadSceneFile("default");
+		const auto desc = ReadSceneFile(kind == SceneKind::Scene2D ? "default2d" : "default");
 		if (desc.has_value())
 		{
 			ReplaceScene(*desc, world, deps);
@@ -14,8 +14,8 @@ namespace aether::app::scene
 
 		SceneDescription empty;
 		empty.name = "Untitled";
-		empty.kind = world.GetSceneKind();
-		empty.features = world.GetSceneFeatures();
+		empty.kind = kind;
+		empty.features = DefaultSceneFeatures(kind);
 		ReplaceScene(empty, world, deps);
 		return empty.name;
 	}

@@ -31,6 +31,10 @@
 #include "layers/AppLayer.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "assets/TileAssetStore.hpp"
+#include "debug/TilePaintingState.hpp"
+#include "physics2d/Physics2DComponents.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "platform/Input.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
@@ -172,11 +176,31 @@ namespace aether::editor
 				m_editor2DMode = scene2D;
 				if (scene2D)
 				{
-					const glm::vec3 position = editorCam->GetPosition();
+					// Entering a 2D scene: frame it from the scene's main camera
+					// rather than carrying the 3D editor camera's wander, which
+					// typically hovers above the 2D content and opens on empty
+					// space.
+					glm::vec3 position{0.0f, 0.0f, 10.0f};
+					float orthoHeight = 10.0f;
+					CameraHandle seedFrom{};
+					if (auto* cameraSystem = context.TryGet<CameraSystem>())
+					{
+						seedFrom = cameraSystem->GetMainCameraBacking();
+					}
+					if (const Camera* from = cameras->TryGet(seedFrom); from != nullptr && seedFrom.id != m_editorCamId)
+					{
+						const glm::mat4 inv = glm::inverse(from->GetViewMatrix());
+						const glm::vec3 eye = glm::vec3(inv[3]);
+						position = {eye.x, eye.y, 10.0f};
+						if (from->GetProjection() == CameraProjection::Orthographic)
+						{
+							orthoHeight = from->GetOrthographicHeight();
+						}
+					}
 					editorCam->SetMode(CameraMode::Manual);
-					editorCam->SetPosition({position.x, position.y, 10.0f});
+					editorCam->SetPosition(position);
 					editorCam->SetYawPitch(0.0f, 0.0f);
-					editorCam->SetOrthographic(10.0f, 0.1f, 1000.0f);
+					editorCam->SetOrthographic(orthoHeight, 0.1f, 1000.0f);
 				}
 				else
 				{
@@ -443,6 +467,305 @@ namespace aether::editor
 		}
 	}
 
+	void ViewportPanel::DrawCollider2DHandles(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		m_collider2DMouseCapture = false;
+		if (auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && playState->IsPlaying())
+		{
+			return;
+		}
+		World& world = context.Get<World>();
+		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		if (!m_editorCamActive || world.GetSceneKind() != SceneKind::Scene2D || camera == nullptr || camera->GetProjection() != CameraProjection::Orthographic)
+		{
+			return;
+		}
+		auto* selection = context.TryGet<SceneSelection>();
+		if (selection == nullptr || selection->All().size() != 1)
+		{
+			return;
+		}
+		const Entity entity = selection->Primary();
+		auto* collider = world.TryGet<Collider2DComponent>(entity);
+		const auto* transform = world.TryGet<TransformComponent>(entity);
+		if (collider == nullptr || transform == nullptr)
+		{
+			return;
+		}
+
+		// World <-> screen mapping (same as Draw2DGrid) and the collider's local
+		// frame (matches Physics2DSystem::FlushPendingBodies geometry baking).
+		const glm::vec3 cameraPos = camera->GetPosition();
+		const float viewHeight = camera->GetOrthographicHeight();
+		const float viewWidth = viewHeight * renderAspect;
+		const float minX = cameraPos.x - viewWidth * 0.5f;
+		const float maxY = cameraPos.y + viewHeight * 0.5f;
+		const auto toScreen = [&](glm::vec2 point)
+		{
+			return ImVec2{imageMin.x + (point.x - minX) / viewWidth * imageSize.x, imageMin.y + (maxY - point.y) / viewHeight * imageSize.y};
+		};
+		const auto toWorld = [&](ImVec2 screen)
+		{
+			return glm::vec2{minX + (screen.x - imageMin.x) / imageSize.x * viewWidth, maxY - (screen.y - imageMin.y) / imageSize.y * viewHeight};
+		};
+
+		glm::vec3 pos{};
+		glm::vec3 eulerDeg{};
+		glm::vec3 scale{};
+		DecomposeTRS(transform->localToWorld, pos, eulerDeg, scale);
+		const float angle = glm::radians(eulerDeg.z);
+		const float cosA = std::cos(angle);
+		const float sinA = std::sin(angle);
+		const glm::vec2 origin{pos.x, pos.y};
+		const glm::vec2 s{std::max(std::abs(scale.x), 0.001f), std::max(std::abs(scale.y), 0.001f)};
+		const glm::vec2 center = collider->offset * s;
+		// "Baked" space: entity scale applied, before rotation/translation.
+		const auto bakedToWorld = [&](glm::vec2 baked)
+		{
+			return glm::vec2{origin.x + baked.x * cosA - baked.y * sinA, origin.y + baked.x * sinA + baked.y * cosA};
+		};
+		const auto worldToBaked = [&](glm::vec2 worldPoint)
+		{
+			const glm::vec2 d = worldPoint - origin;
+			return glm::vec2{d.x * cosA + d.y * sinA, -d.x * sinA + d.y * cosA};
+		};
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImU32 outlineColor = chrome::U32(chrome::WithAlpha(chrome::C(collider->isTrigger ? colors::Green : colors::DebugYellow), 0.9f));
+		const ImU32 handleColor = chrome::U32(chrome::WithAlpha(chrome::kAccentHi, 0.95f));
+		const ImU32 handleHotColor = chrome::U32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+		// -- Shape outline ------------------------------------------------------
+		const auto lineBaked = [&](glm::vec2 a, glm::vec2 b) { drawList->AddLine(toScreen(bakedToWorld(a)), toScreen(bakedToWorld(b)), outlineColor, 1.5f); };
+		switch (collider->shape)
+		{
+			case Collider2DShape::Box:
+			{
+				const glm::vec2 half{0.5f * collider->size.x * s.x, 0.5f * collider->size.y * s.y};
+				lineBaked(center + glm::vec2{-half.x, -half.y}, center + glm::vec2{half.x, -half.y});
+				lineBaked(center + glm::vec2{half.x, -half.y}, center + glm::vec2{half.x, half.y});
+				lineBaked(center + glm::vec2{half.x, half.y}, center + glm::vec2{-half.x, half.y});
+				lineBaked(center + glm::vec2{-half.x, half.y}, center + glm::vec2{-half.x, -half.y});
+				break;
+			}
+			case Collider2DShape::Circle:
+			{
+				const float radius = std::max(collider->radius * std::max(s.x, s.y), 0.001f);
+				glm::vec2 prev = center + glm::vec2{radius, 0.0f};
+				for (int i = 1; i <= 24; ++i)
+				{
+					const float a = glm::two_pi<float>() * static_cast<float>(i) / 24.0f;
+					const glm::vec2 next = center + radius * glm::vec2{std::cos(a), std::sin(a)};
+					lineBaked(prev, next);
+					prev = next;
+				}
+				break;
+			}
+			case Collider2DShape::Capsule:
+			{
+				const float radius = std::max(collider->radius * s.x, 0.001f);
+				const float half = std::max(0.5f * collider->capsuleHeight * s.y - radius, 0.001f);
+				for (int i = 0; i < 12; ++i)
+				{
+					const float a0 = glm::pi<float>() * static_cast<float>(i) / 12.0f;
+					const float a1 = glm::pi<float>() * static_cast<float>(i + 1) / 12.0f;
+					lineBaked(center + glm::vec2{radius * std::cos(a0), half + radius * std::sin(a0)}, center + glm::vec2{radius * std::cos(a1), half + radius * std::sin(a1)});
+					lineBaked(center + glm::vec2{radius * std::cos(glm::pi<float>() + a0), -half + radius * std::sin(glm::pi<float>() + a0)}, center + glm::vec2{radius * std::cos(glm::pi<float>() + a1), -half + radius * std::sin(glm::pi<float>() + a1)});
+				}
+				lineBaked(center + glm::vec2{-radius, -half}, center + glm::vec2{-radius, half});
+				lineBaked(center + glm::vec2{radius, -half}, center + glm::vec2{radius, half});
+				break;
+			}
+			case Collider2DShape::Polygon:
+			{
+				const std::size_t count = collider->points.size();
+				for (std::size_t i = 0; i < count && count >= 2; ++i)
+				{
+					lineBaked(collider->points[i] * s + center, collider->points[(i + 1) % count] * s + center);
+				}
+				break;
+			}
+		}
+
+		// -- Handles --------------------------------------------------------------
+		// Ids: 0 = offset/centre, 1..4 = box right/top/left/bottom edges,
+		// 1 = circle radius, 1/2 = capsule radius/height, 100+i = polygon points,
+		// 200+i = polygon edge midpoints (ctrl+click inserts a point).
+		struct HandleSpot
+		{
+			int id;
+			glm::vec2 baked;
+		};
+		std::vector<HandleSpot> handles;
+		handles.push_back({0, center});
+		switch (collider->shape)
+		{
+			case Collider2DShape::Box:
+			{
+				const glm::vec2 half{0.5f * collider->size.x * s.x, 0.5f * collider->size.y * s.y};
+				handles.push_back({1, center + glm::vec2{half.x, 0.0f}});
+				handles.push_back({2, center + glm::vec2{0.0f, half.y}});
+				handles.push_back({3, center + glm::vec2{-half.x, 0.0f}});
+				handles.push_back({4, center + glm::vec2{0.0f, -half.y}});
+				break;
+			}
+			case Collider2DShape::Circle:
+				handles.push_back({1, center + glm::vec2{std::max(collider->radius * std::max(s.x, s.y), 0.001f), 0.0f}});
+				break;
+			case Collider2DShape::Capsule:
+				handles.push_back({1, center + glm::vec2{std::max(collider->radius * s.x, 0.001f), 0.0f}});
+				handles.push_back({2, center + glm::vec2{0.0f, 0.5f * collider->capsuleHeight * s.y}});
+				break;
+			case Collider2DShape::Polygon:
+			{
+				const std::size_t count = collider->points.size();
+				for (std::size_t i = 0; i < count; ++i)
+				{
+					handles.push_back({100 + static_cast<int>(i), collider->points[i] * s + center});
+				}
+				for (std::size_t i = 0; i < count && count >= 3; ++i)
+				{
+					handles.push_back({200 + static_cast<int>(i), 0.5f * (collider->points[i] + collider->points[(i + 1) % count]) * s + center});
+				}
+				break;
+			}
+		}
+
+		const ImGuiIO& io = ImGui::GetIO();
+		const glm::vec2 mouseWorld = toWorld(io.MousePos);
+		const glm::vec2 mouseBaked = worldToBaked(mouseWorld);
+		constexpr float kHitRadiusPx = 8.0f;
+
+		int hovered = -1;
+		if (m_collider2DActiveHandle < 0 && !ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny())
+		{
+			for (const HandleSpot& handle: handles)
+			{
+				const ImVec2 sp = toScreen(bakedToWorld(handle.baked));
+				const float dx = io.MousePos.x - sp.x;
+				const float dy = io.MousePos.y - sp.y;
+				if (dx * dx + dy * dy <= kHitRadiusPx * kHitRadiusPx)
+				{
+					hovered = handle.id;
+					break;
+				}
+			}
+		}
+		m_collider2DMouseCapture = hovered >= 0 || m_collider2DActiveHandle >= 0;
+
+		const auto pushUndoOnce = [&]
+		{
+			if (!m_collider2DUndoPushed)
+			{
+				if (auto* undo = context.TryGet<UndoStack>())
+				{
+					undo->Push(world, context.services);
+				}
+				m_collider2DUndoPushed = true;
+			}
+		};
+		const auto rebuild = [&]
+		{
+			if (auto* physics = context.TryGet<Physics2DSystem>())
+			{
+				physics->RebuildBody(world, entity);
+			}
+		};
+
+		// Polygon point removal: right-click a point handle (keep at least 3).
+		if (hovered >= 100 && hovered < 200 && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && collider->points.size() > 3)
+		{
+			pushUndoOnce();
+			collider->points.erase(collider->points.begin() + (hovered - 100));
+			m_collider2DUndoPushed = false;
+			rebuild();
+			return;
+		}
+
+		if (hovered >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			if (hovered >= 200)
+			{
+				// Edge midpoint: ctrl+click inserts a point and starts dragging it.
+				if (io.KeyCtrl)
+				{
+					pushUndoOnce();
+					const std::size_t index = static_cast<std::size_t>(hovered - 200);
+					const glm::vec2 mid = 0.5f * (collider->points[index] + collider->points[(index + 1) % collider->points.size()]);
+					collider->points.insert(collider->points.begin() + static_cast<std::ptrdiff_t>(index) + 1, mid);
+					m_collider2DActiveHandle = 100 + static_cast<int>(index) + 1;
+				}
+			}
+			else
+			{
+				pushUndoOnce();
+				m_collider2DActiveHandle = hovered;
+			}
+		}
+
+		if (m_collider2DActiveHandle >= 0 && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			const glm::vec2 local = mouseBaked - center; // relative to the collider centre, baked units
+			switch (collider->shape)
+			{
+				case Collider2DShape::Box:
+					if (m_collider2DActiveHandle == 1 || m_collider2DActiveHandle == 3)
+					{
+						collider->size.x = std::max(2.0f * std::abs(local.x) / s.x, 0.01f);
+					}
+					else if (m_collider2DActiveHandle == 2 || m_collider2DActiveHandle == 4)
+					{
+						collider->size.y = std::max(2.0f * std::abs(local.y) / s.y, 0.01f);
+					}
+					break;
+				case Collider2DShape::Circle:
+					if (m_collider2DActiveHandle == 1)
+					{
+						collider->radius = std::max(glm::length(local) / std::max(s.x, s.y), 0.005f);
+					}
+					break;
+				case Collider2DShape::Capsule:
+					if (m_collider2DActiveHandle == 1)
+					{
+						collider->radius = std::max(std::abs(local.x) / s.x, 0.005f);
+					}
+					else if (m_collider2DActiveHandle == 2)
+					{
+						collider->capsuleHeight = std::max(2.0f * std::abs(local.y) / s.y, 2.0f * collider->radius);
+					}
+					break;
+				case Collider2DShape::Polygon:
+					break;
+			}
+			if (m_collider2DActiveHandle == 0)
+			{
+				collider->offset = mouseBaked / s;
+			}
+			else if (m_collider2DActiveHandle >= 100 && m_collider2DActiveHandle < 200)
+			{
+				const std::size_t index = static_cast<std::size_t>(m_collider2DActiveHandle - 100);
+				if (index < collider->points.size())
+				{
+					collider->points[index] = local / s;
+				}
+			}
+		}
+		if (m_collider2DActiveHandle >= 0 && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+		{
+			m_collider2DActiveHandle = -1;
+			m_collider2DUndoPushed = false;
+			rebuild();
+		}
+
+		for (const HandleSpot& handle: handles)
+		{
+			const ImVec2 sp = toScreen(bakedToWorld(handle.baked));
+			const bool hot = handle.id == hovered || handle.id == m_collider2DActiveHandle;
+			const float half = handle.id >= 200 ? 3.0f : 4.5f;
+			drawList->AddRectFilled(ImVec2(sp.x - half, sp.y - half), ImVec2(sp.x + half, sp.y + half), hot ? handleHotColor : handleColor, 2.0f);
+		}
+	}
+
 	void ViewportPanel::Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		World& world = context.Get<World>();
@@ -478,9 +801,279 @@ namespace aether::editor
 		}
 	}
 
+	void ViewportPanel::HandleTilePainting(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		m_tilePaintCapture = false;
+		if (auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && playState->IsPlaying())
+		{
+			return;
+		}
+		World& world = context.Get<World>();
+		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		auto* state = context.TryGet<editor::TilePaintingState>();
+		auto* tiles = context.TryGet<TileAssetStore>();
+		auto* selection = context.TryGet<SceneSelection>();
+		if (state == nullptr || tiles == nullptr || selection == nullptr || state->tool == editor::TileTool::None)
+		{
+			return;
+		}
+		if (!m_editorCamActive || world.GetSceneKind() != SceneKind::Scene2D || camera == nullptr || camera->GetProjection() != CameraProjection::Orthographic)
+		{
+			return;
+		}
+		const Entity entity = selection->Primary();
+		auto* component = entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity)) ? world.TryGet<TileMapComponent>(entity) : nullptr;
+		const auto* transform = component != nullptr ? world.TryGet<TransformComponent>(entity) : nullptr;
+		if (component == nullptr || transform == nullptr || component->tilemapPath.empty())
+		{
+			return;
+		}
+		TileMapAsset* map = tiles->MutableTileMap(component->tilemapPath);
+		if (map == nullptr || map->layers.empty())
+		{
+			return;
+		}
+		const std::size_t layer = std::min(state->activeLayer, map->layers.size() - 1);
+		const float cellSize = map->cellSize > 0.0f ? map->cellSize : 1.0f;
+
+		// World <-> screen (same mapping as the 2D grid) and world -> cell.
+		const glm::vec3 cameraPos = camera->GetPosition();
+		const float viewHeight = camera->GetOrthographicHeight();
+		const float viewWidth = viewHeight * renderAspect;
+		const float minX = cameraPos.x - viewWidth * 0.5f;
+		const float maxY = cameraPos.y + viewHeight * 0.5f;
+		const auto toScreen = [&](glm::vec2 point)
+		{
+			return ImVec2{imageMin.x + (point.x - minX) / viewWidth * imageSize.x, imageMin.y + (maxY - point.y) / viewHeight * imageSize.y};
+		};
+		const ImGuiIO& io = ImGui::GetIO();
+		const glm::vec2 mouseWorld{minX + (io.MousePos.x - imageMin.x) / imageSize.x * viewWidth, maxY - (io.MousePos.y - imageMin.y) / imageSize.y * viewHeight};
+		const glm::mat4 inverseTransform = glm::inverse(transform->localToWorld);
+		const glm::vec2 local = glm::vec2(inverseTransform * glm::vec4(mouseWorld, 0.0f, 1.0f));
+		const glm::ivec2 cell{static_cast<std::int32_t>(std::floor(local.x / cellSize)), static_cast<std::int32_t>(std::floor(local.y / cellSize))};
+		const bool mouseOverImage = io.MousePos.x >= imageMin.x && io.MousePos.x <= imageMin.x + imageSize.x && io.MousePos.y >= imageMin.y && io.MousePos.y <= imageMin.y + imageSize.y;
+		m_tilePaintCapture = mouseOverImage;
+
+		// Cursor cell + chunk boundary overlay.
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const auto cellCornerWorld = [&](glm::ivec2 c)
+		{
+			const glm::vec4 world4 = transform->localToWorld * glm::vec4(static_cast<float>(c.x) * cellSize, static_cast<float>(c.y) * cellSize, 0.0f, 1.0f);
+			return glm::vec2(world4);
+		};
+		const ImU32 cursorColor = chrome::U32(chrome::WithAlpha(chrome::kAccentHi, 0.9f));
+		const ImU32 chunkColor = chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.35f));
+		if (mouseOverImage)
+		{
+			const ImVec2 a = toScreen(cellCornerWorld(cell));
+			const ImVec2 b = toScreen(cellCornerWorld({cell.x + 1, cell.y + 1}));
+			drawList->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), cursorColor, 0.0f, 0, 2.0f);
+		}
+		// Chunk lines across the view (entity-local axis aligned).
+		{
+			const float chunkSpan = static_cast<float>(kTileChunkSize) * cellSize;
+			const glm::vec2 viewMinLocal = glm::vec2(inverseTransform * glm::vec4(minX, cameraPos.y - viewHeight * 0.5f, 0.0f, 1.0f));
+			const glm::vec2 viewMaxLocal = glm::vec2(inverseTransform * glm::vec4(minX + viewWidth, maxY, 0.0f, 1.0f));
+			const glm::vec2 lo = glm::min(viewMinLocal, viewMaxLocal);
+			const glm::vec2 hi = glm::max(viewMinLocal, viewMaxLocal);
+			for (float x = std::floor(lo.x / chunkSpan) * chunkSpan; x <= hi.x; x += chunkSpan)
+			{
+				const glm::vec2 top = glm::vec2(transform->localToWorld * glm::vec4(x, hi.y, 0.0f, 1.0f));
+				const glm::vec2 bottom = glm::vec2(transform->localToWorld * glm::vec4(x, lo.y, 0.0f, 1.0f));
+				drawList->AddLine(toScreen(top), toScreen(bottom), chunkColor);
+			}
+			for (float y = std::floor(lo.y / chunkSpan) * chunkSpan; y <= hi.y; y += chunkSpan)
+			{
+				const glm::vec2 left = glm::vec2(transform->localToWorld * glm::vec4(lo.x, y, 0.0f, 1.0f));
+				const glm::vec2 right = glm::vec2(transform->localToWorld * glm::vec4(hi.x, y, 0.0f, 1.0f));
+				drawList->AddLine(toScreen(left), toScreen(right), chunkColor);
+			}
+		}
+
+		if (!mouseOverImage)
+		{
+			return;
+		}
+
+		const auto paintValue = [&]() -> std::uint32_t
+		{
+			if (state->tool == editor::TileTool::Erase)
+			{
+				return tilecell::kEmpty;
+			}
+			if (!state->selectedTile.IsValid())
+			{
+				return tilecell::kEmpty;
+			}
+			return tilecell::Make(map->PaletteIndexFor(state->selectedTile), state->flipX, state->flipY);
+		};
+		const auto recordEdit = [&](glm::ivec2 target, std::uint32_t value)
+		{
+			const std::uint32_t before = map->GetCell(layer, target);
+			if (before == value)
+			{
+				return;
+			}
+			map->SetCell(layer, target, value);
+			// One edit per cell per stroke: keep the FIRST 'before'.
+			for (const glm::ivec2 painted: m_tileStrokeCells)
+			{
+				if (painted == target)
+				{
+					for (auto& edit: m_tileStrokeEdits)
+					{
+						if (edit.cell == target)
+						{
+							edit.after = value;
+							return;
+						}
+					}
+					return;
+				}
+			}
+			m_tileStrokeCells.push_back(target);
+			m_tileStrokeEdits.push_back(editor::TilePaintEdit{.layer = layer, .cell = target, .before = before, .after = value});
+		};
+
+		switch (state->tool)
+		{
+			case editor::TileTool::Pencil:
+			case editor::TileTool::Erase:
+			{
+				if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				{
+					if (!m_tileStrokeActive)
+					{
+						m_tileStrokeActive = true;
+						m_tileStrokeCells.clear();
+						m_tileStrokeEdits.clear();
+					}
+					if (state->tool == editor::TileTool::Pencil && !state->selectedTile.IsValid())
+					{
+						break; // nothing selected to paint
+					}
+					recordEdit(cell, paintValue());
+				}
+				else if (m_tileStrokeActive)
+				{
+					m_tileStrokeActive = false;
+					state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
+					m_tileStrokeEdits.clear();
+					m_tileStrokeCells.clear();
+				}
+				break;
+			}
+			case editor::TileTool::Rectangle:
+			{
+				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+				{
+					m_tileRectDragging = true;
+					m_tileRectAnchor = cell;
+				}
+				if (m_tileRectDragging)
+				{
+					const glm::ivec2 lo = glm::min(m_tileRectAnchor, cell);
+					const glm::ivec2 hi = glm::max(m_tileRectAnchor, cell);
+					const ImVec2 a = toScreen(cellCornerWorld(lo));
+					const ImVec2 b = toScreen(cellCornerWorld({hi.x + 1, hi.y + 1}));
+					drawList->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), cursorColor, 0.0f, 0, 2.0f);
+					if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+					{
+						m_tileRectDragging = false;
+						if (state->tool == editor::TileTool::Rectangle && (state->selectedTile.IsValid() || false))
+						{
+							m_tileStrokeCells.clear();
+							m_tileStrokeEdits.clear();
+							const std::uint32_t value = paintValue();
+							for (std::int32_t y = lo.y; y <= hi.y; ++y)
+							{
+								for (std::int32_t x = lo.x; x <= hi.x; ++x)
+								{
+									recordEdit({x, y}, value);
+								}
+							}
+							state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
+							m_tileStrokeEdits.clear();
+							m_tileStrokeCells.clear();
+						}
+					}
+				}
+				break;
+			}
+			case editor::TileTool::Fill:
+			{
+				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && state->selectedTile.IsValid())
+				{
+					constexpr std::int32_t kFillRadius = 32; // 64x64 hard cap
+					const std::uint32_t target = map->GetCell(layer, cell);
+					const std::uint32_t value = paintValue();
+					if (target != value)
+					{
+						m_tileStrokeCells.clear();
+						m_tileStrokeEdits.clear();
+						std::vector<glm::ivec2> frontier{cell};
+						std::vector<glm::ivec2> visited;
+						bool clamped = false;
+						while (!frontier.empty())
+						{
+							const glm::ivec2 current = frontier.back();
+							frontier.pop_back();
+							if (std::abs(current.x - cell.x) > kFillRadius || std::abs(current.y - cell.y) > kFillRadius)
+							{
+								clamped = true;
+								continue;
+							}
+							if (std::find(visited.begin(), visited.end(), current) != visited.end() || map->GetCell(layer, current) != target)
+							{
+								continue;
+							}
+							visited.push_back(current);
+							recordEdit(current, value);
+							frontier.push_back({current.x + 1, current.y});
+							frontier.push_back({current.x - 1, current.y});
+							frontier.push_back({current.x, current.y + 1});
+							frontier.push_back({current.x, current.y - 1});
+						}
+						if (clamped)
+						{
+							AE_WARN(LogCategory::App, "Tile fill clamped to a {0}x{0} region around the click", kFillRadius * 2);
+						}
+						state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
+						m_tileStrokeEdits.clear();
+						m_tileStrokeCells.clear();
+					}
+				}
+				break;
+			}
+			case editor::TileTool::Picker:
+			{
+				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+				{
+					const std::uint32_t sampled = map->GetCell(layer, cell);
+					if (!tilecell::Empty(sampled) && tilecell::PaletteIndex(sampled) < map->tilePalette.size())
+					{
+						state->selectedTile = map->tilePalette[tilecell::PaletteIndex(sampled)];
+						state->flipX = (sampled & tilecell::kFlipX) != 0u;
+						state->flipY = (sampled & tilecell::kFlipY) != 0u;
+						state->tool = editor::TileTool::Pencil;
+					}
+				}
+				break;
+			}
+			case editor::TileTool::None:
+				break;
+		}
+	}
+
 	void ViewportPanel::HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		if (ImGuizmo::IsOver() || ImGuizmo::IsUsingAny())
+		{
+			return;
+		}
+		// Collider 2D handles own the mouse while hovered or dragged; tile
+		// painting owns it whenever a tool is active over the viewport.
+		if (m_collider2DMouseCapture || m_tilePaintCapture)
 		{
 			return;
 		}
@@ -986,6 +1579,8 @@ namespace aether::editor
 		if (editorViewportInteractive)
 		{
 			Draw2DGrid(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		DrawCollider2DHandles(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		HandleTilePainting(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			DrawSpriteOutlines(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
@@ -1266,6 +1861,26 @@ namespace aether::editor
 				}
 				ImGui::Checkbox("Stats overlay", &m_viewportShowStats);
 				ImGui::Checkbox("Mouse overlay", &m_viewportShowMouse);
+				ImGui::Spacing();
+				chrome::SectionTag("DEBUG VIEW");
+				ImGui::Spacing();
+				bool debugRendering = IsDebugRenderingEnabled();
+				if (ImGui::Checkbox("Debug rendering", &debugRendering))
+				{
+					SetDebugRenderingEnabled(debugRendering);
+				}
+				ImGui::SetItemTooltip("Master switch for debug lines and shapes\n(script Debug.DrawLine, physics wireframes)");
+				bool physicsShapes = IsPhysicsDebugShapesEnabled();
+				if (ImGui::Checkbox("Physics colliders", &physicsShapes))
+				{
+					SetPhysicsDebugShapesEnabled(physicsShapes);
+					if (physicsShapes)
+					{
+						// Wireframes only draw while debug rendering is on.
+						SetDebugRenderingEnabled(true);
+					}
+				}
+				ImGui::SetItemTooltip("Wireframes for 3D and 2D colliders\n(static blue, kinematic cyan, dynamic yellow, triggers green)");
 				ImGui::EndPopup();
 			}
 			ImGui::PopStyleVar(2);

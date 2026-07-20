@@ -2,7 +2,11 @@
 
 **Date:** 2026-07-15
 
-**Status:** In progress; Phases 0-2 complete and Phase 2 remediation verified
+**Status:** In progress; Phases 0-2 complete and Phase 2 remediation verified. Phase 0-2 audit re-verified 2026-07-16: clean Debug build, 180/180 test cases (1403 assertions) including sprite/animation suites and v1-v10 scene-migration fixtures; `Renderer2D` confirmed gated to `RuntimeProfile::Full`; stable region IDs, reimport diagnostics, import presets, and Aseprite import all present. `SortingGroupComponent` from the data model remains unimplemented (never a Phase 0-2 item; schedule with Phase 5 sorting depth).
+
+**Phase 3 (Physics2D) COMPLETE 2026-07-16** (started and finished the same day). Native layer: Box2D v3.1.1, bodies/colliders, fixed step + interpolation, contact/trigger events, ray/overlap/point/shape queries, distance/revolute/prismatic/weld joints, CCD/filters, bitwise-deterministic replay, scene format v13 records, reflection + editor integration, play/stop restore verified live. Managed layer: `Physics2D` statics, `RigidBody2DRef`/`Collider2DRef`, Unity-style 2D collision callbacks (verified live via `Physics2DSmoke.cs`). Editor: collider wireframe debug drawing with a viewport toggle, interactive collider handles + polygon editing, sprite-outline collider generation. Exit gate met via `Platformer2D` + `TopDown2D` reference scenes (screenshot-verified, zero errors). Detailed plan: `2026-07-16-physics2d-implementation.md`. Suite: 204 cases / 1630 assertions.
+
+Architecture addendum (2026-07-16, user-directed): 2D/3D domain separation is now feature-driven engine-wide (spec: `../specs/2026-07-16-scene-feature-gating-design.md`) - `System::RequiredFeatures` + `AllowedSceneFeatures(kind)` with physics as the only hard kind exclusion; editor menus hide inactive domains; scene format v14 grants kind physics flags to older files. Day/Night became a scene entity (`DayNightComponent`; panel deleted) and the main camera owns the scene clear colour (`use_sky_gradient`/`clear_color`, flat-clear via the skybox pass).
 
 **Target:** A native 2D game workflow inside AetherCore, sharing the existing world, asset, scripting, editor, and rendering foundations without treating game-world sprites as UI.
 
@@ -462,31 +466,35 @@ Mixed scenes may continue using mesh quads intentionally; only the legacy marker
 
 **Outcome:** 2D gameplay supports production-quality collision and rigid-body behavior.
 
-- [ ] Integrate Box2D behind a Vulkan- and editor-independent engine interface.
-- [ ] Add bodies, colliders, filters, triggers, fixed stepping, and interpolation.
-- [ ] Add contact/trigger event buffering and managed callbacks.
-- [ ] Add ray, overlap, point, and shape queries.
-- [ ] Add collider handles, polygon editing, and physics debug drawing.
-- [ ] Add initial joints and continuous collision.
-- [ ] Add sprite-to-collider generation from authored outlines.
-- [ ] Add deterministic-enough replay tests for fixed inputs within the supported platform contract.
+- [x] Integrate Box2D behind a Vulkan- and editor-independent engine interface.
+- [x] Add bodies, colliders, filters, triggers, fixed stepping, and interpolation.
+- [x] Add contact/trigger event buffering and managed callbacks. (Unity-style OnCollision/TriggerEnter2D + Physics2D statics + RigidBody2DRef/Collider2DRef; verified live from a scene script.)
+- [x] Add ray, overlap, point, and shape queries.
+- [x] Add collider handles, polygon editing, and physics debug drawing. (Viewport drag handles for box/circle/capsule/offset, polygon point drag/insert/remove with undo + body rebuild, wireframe debug draw with a viewport settings toggle.)
+- [x] Add initial joints and continuous collision.
+- [x] Add sprite-to-collider generation from authored outlines.
+- [x] Add deterministic-enough replay tests for fixed inputs within the supported platform contract.
 
 **Exit gate:** A reference platformer room and top-down collision sandbox behave consistently across save/load, play/stop, and scripted queries, with no reentrant physics-world mutation.
+
+**Exit gate status (2026-07-16): MET.** `TestingProject/scenes/Platformer2D` (floor/walls/platforms, trigger goal, scripted capsule player with grounded-raycast jump) and `TestingProject/scenes/TopDown2D` (walled arena, rotated obstacle, pushable zero-gravity crate, sensor zone, WASD circle player) both load, play, and stop cleanly with zero console errors; screenshots confirm colour-coded collider wireframes including rotated bodies. Events are buffered component data consumed after the step, so scripts never mutate the Box2D world reentrantly by construction. Suite: 204 cases / 1630 assertions green. Phase 3 complete.
 
 ### Phase 4 - Tilemaps and World Building
 
 **Outcome:** Users can author and run large tile-based worlds efficiently.
 
-- [ ] Implement `TileSetAsset`, `TileMapAsset`, and `TileMapComponent`.
-- [ ] Implement chunk storage, compression/versioning, dirty tracking, and streaming hooks.
-- [ ] Render culled chunks in sprite-compatible batches.
-- [ ] Build palette, layer, painting, fill, selection, and chunk-aware undo tools.
-- [ ] Generate and incrementally rebuild tile collision.
-- [ ] Add animated tiles and per-layer sorting/tint.
-- [ ] Add terrain/autotile rules and custom tile properties.
-- [ ] Add external interchange support only after the native format is stable.
+- [x] Implement `TileSetAsset`, `TileMapAsset`, and `TileMapComponent`. (TOML tileset with stable ids, collision kinds, animation frames, and custom properties; binary zstd `.tilemap` with palette dedupe; component with tint, layer mask, sorting.)
+- [x] Implement chunk storage, compression/versioning, dirty tracking, and streaming hooks. (32x32 sparse chunks, auto-pruned when empty; per-chunk revisions bumped by `SetCell`; format version + corruption guards in the binary loader.)
+- [x] Render culled chunks in sprite-compatible batches. (TileMapSystem extracts per-chunk instance caches keyed by revision + transform into the shared sprite stream; `Finalize2DFrame` interleaves tiles and sprites by sort key; conservative chunk AABB vs ortho view culling.)
+- [x] Build palette, layer, painting, fill, selection, and chunk-aware undo tools. (Tile Palette panel with atlas previews, tools, and layer list; viewport pencil/rect/fill/erase/picker painting; stroke-grouped undo/redo.)
+- [x] Generate and incrementally rebuild tile collision. (Greedy-meshed solid rects per chunk as static Box2D bodies; Physics2DSystem rebuilds only chunks whose revision changed.)
+- [x] Add animated tiles and per-layer sorting/tint. (Cached instances patched per frame from `animationFrames`/fps; layer sorting/order/tint/opacity compose with the component's.)
+- [ ] Add terrain/autotile rules and custom tile properties. (Custom properties shipped on `TileDefinition`; terrain/autotile rules deferred to a follow-up pass.)
+- [ ] Add external interchange support only after the native format is stable. (Deferred by design until the native format has soaked.)
 
 **Exit gate:** A `100,000+` tile test world remains editable and playable with chunk culling and dirty-only rebuilds; editing one cell does not rebuild the whole map.
+
+**Exit gate status (2026-07-16): MET** (terrain/autotile and external interchange intentionally deferred). The extraction suite builds a `100,000+` cell world and asserts view culling keeps appended instances bounded and that a single `SetCell` rebuilds only the touched chunk's cache. The `uvtiles` demo tilemap in `TestingProject` (35 cells across three chunks, animated + flipped tiles, solid first row) renders pixel-correct in the editor against a labelled UV-grid texture — verification that also flushed out three engine-wide rendering bugs now fixed: `SpriteRegion.uvRect` stored width/height while the shader lerps begin/end (every non-origin atlas sub-region sampled wrong), the sprite shader mapped +y-up quad corners straight into y-down image space (all sprites rendered v-flipped), and entering a 2D scene kept the 3D editor camera's position so the view opened on empty space. Suite: 219 cases / 1801 assertions green.
 
 ### Phase 5 - Feature Depth
 

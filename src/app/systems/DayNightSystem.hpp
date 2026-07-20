@@ -6,10 +6,15 @@
 namespace aether
 {
 	class Renderer;
+	class World;
 }
 
 namespace aether::app
 {
+	// Stateless driver over DayNightComponent (scene/LightComponents.hpp): the
+	// first entity carrying one owns the animated sun/sky; without one the
+	// authored environment stays untouched. The accessor methods below keep the
+	// editor panel and script exports stable - they read/write the component.
 	class DayNightSystem final : public aether::System
 	{
 	public:
@@ -24,30 +29,26 @@ namespace aether::app
 			return "DayNightSystem";
 		}
 
+		[[nodiscard]] SceneFeatureFlags RequiredFeatures() const override
+		{
+			return SceneFeatureFlags::Lighting3D;
+		}
+
 		void OnRegister(aether::World& world) override;
 		void Update(aether::World& world, float dt) override;
 		void OnUnregister(aether::World& world) override;
 
-		void SetEnabled(bool enabled)
-		{
-			m_enabled = enabled;
-		}
-
-		[[nodiscard]] bool IsEnabled() const
-		{
-			return m_enabled;
-		}
-
+		// Component-backed accessors (no component in the scene = no-ops /
+		// component defaults). Kept so the C# exports do not care where the
+		// state lives.
+		void SetEnabled(bool enabled);
+		[[nodiscard]] bool IsEnabled() const;
 		void SetTimeOfDay(float hours);
-
 		[[nodiscard]] float GetTimeOfDay() const;
-
 		void SetTimeSpeed(float secondsPerSecond);
+		[[nodiscard]] float GetTimeSpeed() const;
 
-		[[nodiscard]] float GetTimeSpeed() const
-		{
-			return m_timeSpeed;
-		}
+		[[nodiscard]] bool HasDriver() const; // any DayNightComponent in the scene?
 
 		[[nodiscard]] glm::vec3 GetSunDirection() const
 		{
@@ -56,9 +57,7 @@ namespace aether::app
 
 	private:
 		aether::Renderer* m_renderer = nullptr;
-		float m_time = 6.0f * 3600.0f;
-		float m_timeSpeed = kDefaultTimeSpeed;
-		bool m_enabled = true;
+		aether::World* m_world = nullptr;
 		glm::vec3 m_sunDirection = {0.0f, 1.0f, 0.0f};
 	};
 } // namespace aether::app

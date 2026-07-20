@@ -30,6 +30,18 @@ namespace aether
 		bool castsShadow = false;
 	};
 
+	// Animated sun/sky environment driver. Scene content, not a global: the
+	// DayNightSystem drives the renderer from the first enabled instance and
+	// leaves the authored environment untouched when no entity carries one, so
+	// 2D scenes (no Lighting3D feature) never fight it. Time state lives here
+	// so it serializes and play-restores like any other authored data.
+	struct DayNightComponent
+	{
+		bool animate = true;
+		float timeOfDayHours = 6.0f;             // wraps [0, 24)
+		float timeSpeedSecondsPerSecond = 60.0f; // simulated seconds per real second
+	};
+
 	namespace ecs
 	{
 		inline glm::mat4 LightAimMatrix(const glm::vec3& position, const glm::vec3& direction)

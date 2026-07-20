@@ -27,7 +27,6 @@ using namespace std::string_view_literals;
 #include "debug/ConsolePanel.hpp"
 #include "debug/ControlServerPanel.hpp"
 #include "debug/InspectorWidgets.hpp"
-#include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
 #include "debug/FileExplorerPanel.hpp"
 #include "debug/EditorChrome.hpp"
@@ -45,6 +44,8 @@ using namespace std::string_view_literals;
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/SpriteAnimationPanel.hpp"
 #include "debug/SpriteSlicerPanel.hpp"
+#include "debug/TilePaintingState.hpp"
+#include "debug/TilePalettePanel.hpp"
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "AetherCore.hpp"
@@ -161,10 +162,6 @@ namespace aether::editor
 			if (panelName == "Lighting")
 			{
 				return ICON_FA_LIGHTBULB;
-			}
-			if (panelName == "Day / Night")
-			{
-				return ICON_FA_CLOUD_SUN;
 			}
 			if (panelName == "TextureInspector")
 			{
@@ -283,9 +280,11 @@ namespace aether::editor
 		// panel can resolve it for its whole lifetime.
 		context.services.Register<SceneSelection>(m_selection);
 		context.services.Register<UndoStack>(m_undoStack);
+		context.services.Register<TilePaintingState>(m_tilePainting);
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
 		m_panels.push_back(std::make_unique<SpriteSlicerPanel>());
+		m_panels.push_back(std::make_unique<TilePalettePanel>());
 		m_panels.push_back(std::make_unique<SpriteAnimationPanel>());
 		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
 		m_hierarchyPanel = hierarchyPanel.get();
@@ -303,7 +302,6 @@ namespace aether::editor
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
 		m_panels.push_back(std::make_unique<ConsolePanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
-		m_panels.push_back(std::make_unique<DayNightPanel>());
 		m_panels.push_back(std::make_unique<ControlServerPanel>());
 		for (auto& panel: m_panels)
 		{
@@ -980,9 +978,9 @@ namespace aether::editor
 					SaveAndReturnToLauncher(context);
 				}
 				ImGui::Separator();
-				if (ImGui::MenuItem(ICON_FA_PLUS "  New Scene"))
+				const auto newScene = [&](SceneKind kind)
 				{
-					const std::string name = app::scene::NewScene(context.Get<World>(), app::scene::MakeApplySceneDeps(context.services));
+					const std::string name = app::scene::NewScene(context.Get<World>(), app::scene::MakeApplySceneDeps(context.services), kind);
 					if (!name.empty())
 					{
 						if (auto* scenes = context.TryGet<SceneSubsystem>())
@@ -991,6 +989,14 @@ namespace aether::editor
 						}
 						m_selection.Clear();
 					}
+				};
+				if (ImGui::MenuItem(ICON_FA_PLUS "  New 3D Scene"))
+				{
+					newScene(SceneKind::Scene3D);
+				}
+				if (ImGui::MenuItem(ICON_FA_PLUS "  New 2D Scene"))
+				{
+					newScene(SceneKind::Scene2D);
 				}
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open..."))
@@ -1037,8 +1043,8 @@ namespace aether::editor
 
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
-				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation"}},
-				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},
+				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation", "Tile Palette"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "TextureInspector"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
 				};
@@ -1222,6 +1228,7 @@ namespace aether::editor
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
 			ImGui::DockBuilderDockWindow("UI Canvas", remaining);
 			ImGui::DockBuilderDockWindow("Sprite Slicer", remaining);
+			ImGui::DockBuilderDockWindow("Tile Palette", remaining);
 			ImGui::DockBuilderDockWindow("Sprite Animation", remaining);
 			ImGui::DockBuilderDockWindow("Inspector", dock_right);
 			ImGui::DockBuilderDockWindow("Render Graph", dock_right_tools);
@@ -1233,7 +1240,6 @@ namespace aether::editor
 			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
 			ImGui::DockBuilderDockWindow("Console", dock_bottom);
 			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);
-			ImGui::DockBuilderDockWindow("Day / Night", dock_bottom);
 			ImGui::DockBuilderDockWindow("Textures", dock_bottom);
 
 			ImGui::DockBuilderFinish(dockspace_id);

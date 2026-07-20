@@ -116,6 +116,47 @@ public readonly struct RigidBodyRef : IComponentRef
     public void AddImpulse(Vector3 impulse) => Physics.AddImpulse(Owner, impulse);
 }
 
+/// <summary>Reference to a 2D rigid body on an entity (Box2D-backed; 2D scenes
+/// only). Drop an entity that has a Rigid Body 2D to link it.</summary>
+public readonly struct RigidBody2DRef : IComponentRef
+{
+    public static string ComponentType => "Rigid Body 2D";
+    public Entity Owner { get; }
+    public RigidBody2DRef(Entity owner) => Owner = owner;
+    public bool IsValid => Owner.IsValid;
+
+    public Vector2 LinearVelocity
+    {
+        get => Physics2D.GetLinearVelocity(Owner);
+        set => Physics2D.SetLinearVelocity(Owner, value);
+    }
+
+    /// <summary>Radians per second, positive counter-clockwise.</summary>
+    public float AngularVelocity
+    {
+        get => Physics2D.GetAngularVelocity(Owner);
+        set => Physics2D.SetAngularVelocity(Owner, value);
+    }
+
+    public void AddForce(Vector2 force) => Physics2D.AddForce(Owner, force);
+    public void AddImpulse(Vector2 impulse) => Physics2D.AddImpulse(Owner, impulse);
+    public void AddTorque(float torque) => Physics2D.AddTorque(Owner, torque);
+    public void SetGravityScale(float scale) => Physics2D.SetGravityScale(Owner, scale);
+}
+
+/// <summary>Reference to a 2D collider on an entity. Drop an entity that has a
+/// Collider 2D to link it.</summary>
+public readonly struct Collider2DRef : IComponentRef
+{
+    public static string ComponentType => "Collider 2D";
+    public Entity Owner { get; }
+    public Collider2DRef(Entity owner) => Owner = owner;
+    public bool IsValid => Owner.IsValid;
+
+    /// <summary>Switch the collider between solid and trigger (sensor).</summary>
+    public void SetTrigger(bool trigger) => Physics2D.SetTrigger(Owner, trigger);
+}
+
 /// <summary>Reference to a UI Text element on an entity. Drop a canvas text entity
 /// to link it, then drive its string from a script through <see cref="Text"/>.</summary>
 public readonly struct UiTextRef : IComponentRef

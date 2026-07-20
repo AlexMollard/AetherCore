@@ -38,7 +38,7 @@ namespace aether::editor
 				return;
 			}
 			const ImVec2 uv0(region->uvRect.x, region->uvRect.y);
-			const ImVec2 uv1(region->uvRect.x + region->uvRect.z, region->uvRect.y + region->uvRect.w);
+			const ImVec2 uv1(region->uvRect.z, region->uvRect.w);
 			drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(textureId)), min, max, uv0, uv1);
 		}
 	} // namespace

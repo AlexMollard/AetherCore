@@ -131,6 +131,18 @@ namespace aether
 		bool initialized = false;
 	};
 
+	// References a TileMapAsset (cell data lives in its own binary file, never
+	// scene TOML). Sorting offsets add onto each layer's own values.
+	struct TileMapComponent
+	{
+		std::string tilemapPath;
+		glm::vec4 tint{1.0f};
+		std::int32_t sortingLayer = 0;
+		std::int32_t orderInLayer = 0;
+		std::uint32_t visibleLayerMask = 0xFFFFFFFFu;
+		bool visible = true;
+	};
+
 	struct EffectRefComponent
 	{
 		std::string name;

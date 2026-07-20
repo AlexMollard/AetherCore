@@ -212,6 +212,22 @@ CPMAddPackage(
         "USE_AVX512 OFF"
 )
 
+# ── 2D physics ────────────────────────────────────────────────────────────────
+# Box2D v3 (C API). Cross-platform deterministic since 3.1 - required for the
+# Physics2D replay tests and future lockstep networking, matching the Jolt policy.
+CPMAddPackage(
+    NAME box2d
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    GIT_TAG        v3.1.1
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        "BOX2D_SAMPLES OFF"
+        "BOX2D_BENCHMARKS OFF"
+        "BOX2D_DOCS OFF"
+        "BOX2D_UNIT_TESTS OFF"
+        "BOX2D_AVX2 OFF"          # match Jolt: no AVX2 so one binary runs everywhere
+)
+
 # ── Hashing ───────────────────────────────────────────────────────────────────
 CPMAddPackage(
     NAME xxHash
@@ -289,6 +305,7 @@ foreach(_dep IN ITEMS
     TracyClient
     imgui
     Jolt
+    box2d
     libzstd_static
 )
     if(TARGET ${_dep})
