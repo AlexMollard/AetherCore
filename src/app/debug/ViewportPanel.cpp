@@ -971,7 +971,11 @@ namespace aether::editor
 				{
 					m_tileStrokeActive = false;
 					m_tileStrokeErasing = false;
-					state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
+					if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr && !m_tileStrokeEdits.empty())
+					{
+						undo->Record(std::make_unique<editor::TileStrokeCommand>(component->tilemapPath, std::move(m_tileStrokeEdits)));
+						state->mapDirty = true;
+					}
 					m_tileStrokeEdits.clear();
 					m_tileStrokeCells.clear();
 				}
@@ -1011,7 +1015,11 @@ namespace aether::editor
 									recordEdit({x, y}, value);
 								}
 							}
-							state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
+							if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr && !m_tileStrokeEdits.empty())
+						{
+							undo->Record(std::make_unique<editor::TileStrokeCommand>(component->tilemapPath, std::move(m_tileStrokeEdits)));
+							state->mapDirty = true;
+						}
 							m_tileStrokeEdits.clear();
 							m_tileStrokeCells.clear();
 						}
@@ -1060,7 +1068,11 @@ namespace aether::editor
 						{
 							AE_WARN(LogCategory::App, "Tile fill clamped to a {0}x{0} region around the click", kFillRadius * 2);
 						}
-						state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
+						if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr && !m_tileStrokeEdits.empty())
+						{
+							undo->Record(std::make_unique<editor::TileStrokeCommand>(component->tilemapPath, std::move(m_tileStrokeEdits)));
+							state->mapDirty = true;
+						}
 						m_tileStrokeEdits.clear();
 						m_tileStrokeCells.clear();
 					}

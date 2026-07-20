@@ -32,6 +32,19 @@ namespace aether
 		return entity;
 	}
 
+	Entity World::CreateWithId(Entity desired)
+	{
+		if (!desired.IsValid())
+		{
+			return Create();
+		}
+		// entt honours the hint (same index + version) when that index slot is free;
+		// otherwise it allocates a fresh identifier, which the caller must remap to.
+		const Entity entity = FromEntt(m_registry.create(ToEntt(desired)));
+		RegisterRoot(entity);
+		return entity;
+	}
+
 	void World::Destroy(Entity entity)
 	{
 		const entt::entity enttEntity = ToEntt(entity);

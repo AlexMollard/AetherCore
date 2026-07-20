@@ -27,18 +27,6 @@
 
 namespace aether::editor
 {
-	namespace
-	{
-		// Applies one stroke direction through SetCell (revisions self-heal the
-		// render caches and collision bodies).
-		void ApplyStroke(TileMapAsset& map, const TilePaintStroke& stroke, bool forward)
-		{
-			for (const TilePaintEdit& edit: stroke.edits)
-			{
-				map.SetCell(edit.layer, edit.cell, forward ? edit.after : edit.before);
-			}
-		}
-	} // namespace
 
 	std::uint64_t TilePalettePanel::AcquirePreviewTexture(app::LayerContext& context, const std::string& texturePath)
 	{
@@ -300,44 +288,8 @@ namespace aether::editor
 			}
 		}
 		ImGui::SameLine();
-		ImGui::BeginDisabled(state->undo.empty());
-		if (ImGui::SmallButton(ICON_FA_ROTATE_LEFT " Undo") && !state->undo.empty())
-		{
-			ApplyStroke(*map, state->undo.back(), false);
-			state->redo.push_back(std::move(state->undo.back()));
-			state->undo.pop_back();
-			state->mapDirty = true;
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		ImGui::BeginDisabled(state->redo.empty());
-		if (ImGui::SmallButton(ICON_FA_ROTATE_RIGHT " Redo") && !state->redo.empty())
-		{
-			ApplyStroke(*map, state->redo.back(), true);
-			state->undo.push_back(std::move(state->redo.back()));
-			state->redo.pop_back();
-			state->mapDirty = true;
-		}
-		ImGui::EndDisabled();
-
-		// Ctrl+Z / Ctrl+Y while a tool is active.
-		if (state->tool != TileTool::None && ImGui::GetIO().KeyCtrl)
-		{
-			if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && !state->undo.empty())
-			{
-				ApplyStroke(*map, state->undo.back(), false);
-				state->redo.push_back(std::move(state->undo.back()));
-				state->undo.pop_back();
-				state->mapDirty = true;
-			}
-			if (ImGui::IsKeyPressed(ImGuiKey_Y, false) && !state->redo.empty())
-			{
-				ApplyStroke(*map, state->redo.back(), true);
-				state->undo.push_back(std::move(state->redo.back()));
-				state->redo.pop_back();
-				state->mapDirty = true;
-			}
-		}
+		ImGui::TextDisabled("Ctrl+Z undoes");
+		ImGui::SetItemTooltip("Tile paints share the editor's global undo history (Ctrl+Z / Ctrl+Y),\nso tile and entity edits undo together.");
 
 		// Image-editor tool hotkeys, while not typing into a field. Shift+Y mirrors
 		// vertically (plain Ctrl+Y stays redo above; plain X toggles horizontal).

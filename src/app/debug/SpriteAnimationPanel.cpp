@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <format>
+#include <memory>
 
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
@@ -15,6 +16,7 @@
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/UndoStack.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
@@ -28,6 +30,29 @@ namespace aether::editor
 	namespace
 	{
 		inline constexpr const char* kSpriteRegionPayload = "AETHER_SPRITE_REGION";
+
+		bool AnimationsEqual(const SpriteAnimationAsset& a, const SpriteAnimationAsset& b)
+		{
+			if (a.name != b.name || a.loopMode != b.loopMode || a.atlasPath != b.atlasPath || a.frames.size() != b.frames.size() || a.events.size() != b.events.size())
+			{
+				return false;
+			}
+			for (std::size_t i = 0; i < a.frames.size(); ++i)
+			{
+				if (!(a.frames[i].spriteId == b.frames[i].spriteId) || a.frames[i].durationSeconds != b.frames[i].durationSeconds)
+				{
+					return false;
+				}
+			}
+			for (std::size_t i = 0; i < a.events.size(); ++i)
+			{
+				if (a.events[i].frameIndex != b.events[i].frameIndex || a.events[i].name != b.events[i].name || a.events[i].payload != b.events[i].payload)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
 
 		void AddRegionImage(ImDrawList* drawList, std::uint64_t textureId, const SpriteRegion* region, ImVec2 min, ImVec2 max)
 		{
@@ -64,6 +89,13 @@ namespace aether::editor
 		char stat[96]{};
 		std::snprintf(stat, sizeof(stat), "%zu FRAMES  \xC2\xB7  %zu EVENTS", m_animation.frames.size(), m_animation.events.size());
 		chrome::PanelHeader("SPRITE ANIMATION", stat);
+
+		// Snapshot the clip when an interaction starts in this window; the matching
+		// commit runs at the end of the frame (records onto the global undo stack).
+		if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			CaptureAnimationBaseline();
+		}
 
 		if (const spriteui::AssetSlotChange animation = spriteui::DrawAssetSlot(context, "animationAsset", ICON_FA_FILM, "Animation Clip", m_animationPath, spriteui::AssetRole::Animation, "Created beside the atlas when you save", true);
 		        animation.changed)
@@ -407,6 +439,9 @@ namespace aether::editor
 			ImGui::EndTable();
 		}
 
+		// Finalize an in-flight clip edit once the mouse is released.
+		CommitAnimationEdit(context);
+
 		ImGui::End();
 	}
 
@@ -578,5 +613,50 @@ namespace aether::editor
 				break;
 			}
 		}
+	}
+
+	void SpriteAnimationPanel::CaptureAnimationBaseline()
+	{
+		if (!m_animUndoActive)
+		{
+			m_animUndoBaseline = m_animation;
+			m_animUndoActive = true;
+		}
+	}
+
+	void SpriteAnimationPanel::CommitAnimationEdit(app::LayerContext& context)
+	{
+		if (!m_animUndoActive || ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			return; // wait for the interaction to finish
+		}
+		if (!AnimationsEqual(m_animation, m_animUndoBaseline))
+		{
+			if (auto* undo = context.services.TryGet<UndoStack>())
+			{
+				undo->Record(std::make_unique<SpriteAnimationEditCommand>(m_animUndoBaseline, m_animation, [this](const SpriteAnimationAsset& animation) { ApplyUndoneAnimation(animation); }));
+			}
+		}
+		m_animUndoActive = false;
+	}
+
+	void SpriteAnimationPanel::ApplyUndoneAnimation(const SpriteAnimationAsset& animation)
+	{
+		m_animation = animation;
+		if (m_animation.frames.empty())
+		{
+			m_selectedFrame = -1;
+			m_previewFrame = 0;
+		}
+		else
+		{
+			m_selectedFrame = std::min(m_selectedFrame, static_cast<std::int32_t>(m_animation.frames.size()) - 1);
+			m_previewFrame = std::min<std::uint32_t>(m_previewFrame, static_cast<std::uint32_t>(m_animation.frames.size() - 1));
+		}
+		if (m_selectedEvent >= static_cast<std::int32_t>(m_animation.events.size()))
+		{
+			m_selectedEvent = -1;
+		}
+		m_previewFrameTime = 0.0f;
 	}
 } // namespace aether::editor

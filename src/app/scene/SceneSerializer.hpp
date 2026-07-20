@@ -306,6 +306,15 @@ namespace aether::app::scene
 
 	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
 
+	// Restore a self-contained subtree snapshot (from CaptureSubtrees) onto the
+	// exact entity ids it was captured under - reusing live handles, recreating any
+	// missing ones via World::CreateWithId, and reattaching the subtree roots to
+	// `attachParent` (invalid = scene root). Unlike RestoreSceneInPlace it never
+	// touches entities outside the snapshot, so it is the primitive behind the
+	// typed create/delete/edit undo commands. Returns the target entities, aligned
+	// with scene.entities.
+	std::vector<Entity> RestoreSubtreeInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, Entity attachParent);
+
 	// ReplaceScene from a scene file on disk.
 	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps, SceneLoadMode mode = SceneLoadMode::Authoring);
 

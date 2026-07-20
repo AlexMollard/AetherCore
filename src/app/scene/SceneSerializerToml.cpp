@@ -1016,7 +1016,10 @@ namespace aether::app::scene
 		scene.version = sourceVersion;
 		scene.kind = SceneKindFromName(root["scene"]["kind"].value_or(std::string{"3d"}));
 		scene.features = SceneFeaturesFromToml(root["scene"]["features"].as_array(), scene.kind);
-		if (scene.version < kSceneFormatVersion)
+		// Only nudge for real, named scene files. Prefabs and in-memory snapshots are
+		// nameless and get instantiated constantly at runtime, so warning on those
+		// just floods the log (and their older format is migrated on load anyway).
+		if (scene.version < kSceneFormatVersion && !scene.name.empty())
 		{
 			AE_WARN(LogCategory::App,
 			        "Scene file '{}' is format v{} (current v{}): records added since it was written are absent (v2 added behaviors + lights/environment; v3 made lights entities - legacy [[lights]] migrate on load). Re-save from the editor to "

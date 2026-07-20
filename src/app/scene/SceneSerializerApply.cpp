@@ -672,6 +672,55 @@ namespace aether::app::scene
 		return restored;
 	}
 
+	std::vector<Entity> RestoreSubtreeInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, Entity attachParent)
+	{
+		if (deps.physics != nullptr)
+		{
+			deps.physics->WaitForStepIdle();
+		}
+		auto& reg = world.GetRegistry();
+
+		// Reuse each record's original id where it is still live; recreate the rest
+		// under the same id so references (selection, parenting, component refs) hold.
+		std::vector<Entity> targets;
+		targets.reserve(scene.entities.size());
+		for (const EntityRecord& rec: scene.entities)
+		{
+			Entity target{rec.entityId};
+			if (!target.IsValid() || !reg.valid(World::ToEntt(target)))
+			{
+				target = world.CreateWithId(Entity{rec.entityId});
+			}
+			targets.push_back(target);
+		}
+
+		// Clear the reused entities back to a blank slate before re-applying.
+		for (const Entity target: targets)
+		{
+			if (reg.valid(World::ToEntt(target)))
+			{
+				ResetRestorableEntity(world, target);
+			}
+		}
+
+		ApplySceneToEntities(scene, world, deps, targets, false);
+
+		// Re-attach the subtree roots (parentIndex < 0) to their live parent. Internal
+		// parenting was already resolved by ApplySceneToEntities via parentIndex.
+		for (std::size_t i = 0; i < scene.entities.size() && i < targets.size(); ++i)
+		{
+			if (scene.entities[i].parentIndex >= 0 || !reg.valid(World::ToEntt(targets[i])))
+			{
+				continue;
+			}
+			if (attachParent.IsValid() && reg.valid(World::ToEntt(attachParent)))
+			{
+				ecs::SetParent(world, targets[i], attachParent);
+			}
+		}
+		return targets;
+	}
+
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, SceneLoadMode mode)
 	{
 		world.SetSceneKind(scene.kind);

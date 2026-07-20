@@ -36,8 +36,10 @@ namespace aether::editor
 		std::vector<TilePaintEdit> edits;
 	};
 
-	// Shared between the Tile Palette panel (tool/tile selection, undo UI) and
-	// the viewport (painting). Registered as a service by DebugLayer.
+	// Shared between the Tile Palette panel (tool/tile selection) and the viewport
+	// (painting). Registered as a service by DebugLayer. Paint gestures are recorded
+	// as TileStrokeCommands on the main editor UndoStack, so tile and entity edits
+	// share one Ctrl+Z history.
 	struct TilePaintingState
 	{
 		TileTool tool = TileTool::None;
@@ -46,19 +48,6 @@ namespace aether::editor
 		bool flipY = false;
 		std::size_t activeLayer = 0;
 
-		std::vector<TilePaintStroke> undo;
-		std::vector<TilePaintStroke> redo;
 		bool mapDirty = false; // unsaved tilemap edits
-
-		void PushStroke(TilePaintStroke stroke)
-		{
-			if (stroke.edits.empty())
-			{
-				return;
-			}
-			undo.push_back(std::move(stroke));
-			redo.clear();
-			mapDirty = true;
-		}
 	};
 } // namespace aether::editor

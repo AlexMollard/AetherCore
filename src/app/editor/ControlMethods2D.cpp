@@ -22,6 +22,7 @@
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "debug/TilePaintingState.hpp"
+#include "debug/UndoStack.hpp"
 #include "io/FileGlobOptions.hpp"
 #include "io/FileSystem.hpp"
 #include "scene/Components.hpp"
@@ -447,9 +448,13 @@ namespace aether::editor
 				        stroke.edits.push_back(TilePaintEdit{.layer = layer, .cell = at, .before = before, .after = *value});
 				        ++painted;
 			        }
+			        if (auto* undo = ctx.services.TryGet<UndoStack>(); undo != nullptr && !stroke.edits.empty())
+			        {
+				        undo->Record(std::make_unique<TileStrokeCommand>(std::move(stroke.tilemapPath), std::move(stroke.edits)));
+			        }
 			        if (auto* paintState = ctx.services.TryGet<TilePaintingState>())
 			        {
-				        paintState->PushStroke(std::move(stroke));
+				        paintState->mapDirty = true;
 			        }
 			        return FinishTileEdit(tc, ctx, p.value("save", true), json{{"painted", painted}, {"cellCount", tc.map->TotalCellCount()}});
 		        }});
@@ -515,9 +520,13 @@ namespace aether::editor
 					        ++painted;
 				        }
 			        }
+			        if (auto* undo = ctx.services.TryGet<UndoStack>(); undo != nullptr && !stroke.edits.empty())
+			        {
+				        undo->Record(std::make_unique<TileStrokeCommand>(std::move(stroke.tilemapPath), std::move(stroke.edits)));
+			        }
 			        if (auto* paintState = ctx.services.TryGet<TilePaintingState>())
 			        {
-				        paintState->PushStroke(std::move(stroke));
+				        paintState->mapDirty = true;
 			        }
 			        return FinishTileEdit(tc, ctx, p.value("save", true), json{{"painted", painted}, {"cellCount", tc.map->TotalCellCount()}});
 		        }});

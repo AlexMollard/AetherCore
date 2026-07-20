@@ -23,6 +23,7 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/UndoStack.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "editor/ComponentFields.hpp"
 #include "editor/ModelImport.hpp"
@@ -391,6 +392,10 @@ namespace aether::editor
 			transform = glm::scale(transform, scale);
 			world.Emplace<TransformComponent>(entity, TransformComponent{transform});
 			world.RegisterRoot(entity);
+			if (auto* undo = ctx.services.TryGet<UndoStack>())
+			{
+				undo->Record(SubtreeLifetimeCommand::Capture(world, ctx.services, {entity}, /*createdByThisEdit=*/true, "Create"));
+			}
 			return json{{"id", entity.id}, {"name", name}};
 		};
 		methods.push_back({"scene.create",
@@ -528,6 +533,8 @@ namespace aether::editor
 			m = glm::rotate(m, glm::radians(euler.y), glm::vec3(0, 1, 0));
 			m = glm::rotate(m, glm::radians(euler.x), glm::vec3(1, 0, 0));
 			m = glm::scale(m, scale);
+			const auto* beforeTc = world.TryGet<TransformComponent>(entity);
+			const glm::mat4 before = beforeTc != nullptr ? beforeTc->localToWorld : m;
 			if (world.TryGet<TransformComponent>(entity) == nullptr)
 			{
 				world.EmplaceOrReplace<TransformComponent>(entity, TransformComponent{m});
@@ -537,6 +544,10 @@ namespace aether::editor
 			// the next physics sync.
 			app::LayerContext lc{.services = ctx.services, .frameIndex = ctx.frameIndex};
 			ApplyWorldTransform(lc, world, entity, m);
+			if (auto* undo = ctx.services.TryGet<UndoStack>())
+			{
+				undo->Record(std::make_unique<TransformCommand>(std::vector<TransformCommand::Item>{{entity.id, before, m}}));
+			}
 			return json{{"id", entity.id}, {"ok", true}};
 		};
 		methods.push_back({"scene.transform",
@@ -559,7 +570,12 @@ namespace aether::editor
 			{
 				return ErrNoEntity();
 			}
-			world.Destroy(entity);
+			if (auto* undo = ctx.services.TryGet<UndoStack>())
+			{
+				undo->Record(SubtreeLifetimeCommand::Capture(world, ctx.services, {entity}, /*createdByThisEdit=*/false, "Delete"));
+			}
+			// Delete the whole subtree - a bare Destroy would orphan the children.
+			ecs::DestroyHierarchy(world, entity);
 			return json{{"id", entity.id}, {"deleted", true}};
 		};
 		methods.push_back({"scene.delete",
@@ -1492,6 +1508,78 @@ namespace aether::editor
 
 		Append2DAuthoringMethods(methods);
 		AppendUiAutomationMethods(methods);
+
+		// Undo / redo endpoints (mirror Ctrl+Z / Ctrl+Y). They run the editor
+		// command history and remap the selection through the applied command so it
+		// survives the edit.
+		const auto undoRedo = [](bool redo)
+		{
+			return [redo](const json&, MethodContext& ctx) -> json
+			{
+				auto* undo = ctx.services.TryGet<UndoStack>();
+				auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+				if (undo == nullptr || scenes == nullptr)
+				{
+					return json{{"ok", false}, {"error", "undo history unavailable"}};
+				}
+				World& world = scenes->GetWorld();
+				IEditorCommand* command = redo ? undo->Redo(world, ctx.services) : undo->Undo(world, ctx.services);
+				if (command != nullptr)
+				{
+					if (auto* selection = ctx.services.TryGet<SceneSelection>())
+					{
+						std::vector<Entity> remapped = selection->All();
+						for (Entity& e: remapped)
+						{
+							e = command->Remap(e);
+						}
+						const Entity primary = command->Remap(selection->Primary());
+						selection->Replace(std::move(remapped), primary);
+						selection->Prune(world);
+					}
+				}
+				return json{{"ok", command != nullptr}, {"label", command != nullptr ? std::string(command->Label()) : std::string{}}, {"undoDepth", undo->UndoDepth()}, {"redoDepth", undo->RedoDepth()}};
+			};
+		};
+		methods.push_back({"edit.undo",
+		        "undo",
+		        "Undo the last scene edit (mirrors Ctrl+Z). Applies the top command in place so entity ids and the selection are preserved. Returns ok=false when the undo history is empty; undoDepth/redoDepth report the remaining stack sizes.",
+		        true,
+		        Obj(),
+		        undoRedo(false)});
+		methods.push_back({"edit.redo", "redo", "Redo the last undone scene edit (mirrors Ctrl+Y). Returns ok=false when the redo stack is empty.", true, Obj(), undoRedo(true)});
+
+		// Make every scene-mutating method undoable: snapshot a baseline before it
+		// runs and commit after. CommitPending only records a command when the
+		// serialized scene actually changed, so non-scene mutations (camera, window
+		// toggles, selection, save, tile-asset paints) add nothing to the history.
+		// Play/stop and the undo ops manage their own state and are excluded.
+		for (ControlMethod& method: methods)
+		{
+			if (!method.mutates || method.name == "engine.play" || method.name == "engine.stop" || method.name == "engine.toggle_play" || method.name == "edit.undo" || method.name == "edit.redo"
+			        // Methods that record their own precise typed command:
+			        || method.name == "scene.transform" || method.name == "scene.create" || method.name == "scene.delete")
+			{
+				continue;
+			}
+			MethodHandler inner = std::move(method.handler);
+			method.handler = [inner = std::move(inner)](const json& params, MethodContext& ctx) -> json
+			{
+				auto* undo = ctx.services.TryGet<UndoStack>();
+				auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+				World* world = scenes != nullptr ? &scenes->GetWorld() : nullptr;
+				if (undo != nullptr && world != nullptr)
+				{
+					undo->CaptureBaseline(*world, ctx.services);
+				}
+				json result = inner(params, ctx);
+				if (undo != nullptr && world != nullptr)
+				{
+					undo->CommitPending(*world, ctx.services);
+				}
+				return result;
+			};
+		}
 
 		return methods;
 	}

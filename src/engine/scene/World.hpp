@@ -29,6 +29,10 @@ namespace aether
 		World& operator=(World&&) = delete;
 
 		[[nodiscard]] Entity Create();
+		// Recreate an entity under a specific id (for undo of a delete). Returns the
+		// entity actually created: the requested id when its slot is free, otherwise
+		// a fresh id (callers remap references through the returned handle).
+		[[nodiscard]] Entity CreateWithId(Entity desired);
 		void Destroy(Entity entity);
 
 		template<typename T, typename... Args>

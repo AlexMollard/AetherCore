@@ -431,6 +431,26 @@
       "tool": "toggle_play"
     },
     {
+      "description": "Undo the last scene edit (mirrors Ctrl+Z). Applies the top command in place so entity ids and the selection are preserved. Returns ok=false when the undo history is empty; undoDepth/redoDepth report the remaining stack sizes.",
+      "mutates": true,
+      "name": "edit.undo",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "undo"
+    },
+    {
+      "description": "Redo the last undone scene edit (mirrors Ctrl+Y). Returns ok=false when the redo stack is empty.",
+      "mutates": true,
+      "name": "edit.redo",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "redo"
+    },
+    {
       "description": "Dump the live render graph: every compiled pass with its type, dependencies, produced/consumed frame products, and last CPU time.",
       "mutates": false,
       "name": "rendergraph",

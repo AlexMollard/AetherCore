@@ -37,9 +37,17 @@ namespace aether::editor
 		void DrawSpriteThumbnail(const SpriteRegion* region, ImVec2 size) const;
 		void AdvancePreview(float dt);
 
+		// Undo integration: snapshot the clip before an interaction, and on release
+		// record a SpriteAnimationEditCommand on the shared history if it changed.
+		void CaptureAnimationBaseline();
+		void CommitAnimationEdit(app::LayerContext& context);
+		void ApplyUndoneAnimation(const SpriteAnimationAsset& animation);
+
 		std::string m_animationPath;
 		std::string m_atlasPath;
 		SpriteAnimationAsset m_animation;
+		SpriteAnimationAsset m_animUndoBaseline;
+		bool m_animUndoActive = false;
 		SpriteAtlasAsset m_atlas;
 		TextureHandle m_previewTexture{};
 		std::uint64_t m_previewTextureId = 0;

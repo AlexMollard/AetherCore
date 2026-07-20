@@ -928,12 +928,21 @@ namespace aether::editor
 			ImGui::GetBackgroundDrawList(mainViewport)->AddRectFilled(mainViewport->Pos, ImVec2(mainViewport->Pos.x + mainViewport->Size.x, mainViewport->Pos.y + mainViewport->Size.y), editorBg);
 		}
 
-		if (const auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && !playState->IsPlaying())
+		const auto* undoPlayState = context.TryGet<app::PlayState>();
+		const bool undoEditable = undoPlayState != nullptr && !undoPlayState->IsPlaying() && !undoPlayState->IsCompiling();
+		if (!undoEditable)
+		{
+			// Compiling/playing: the scene is the running sim, not an editable doc.
+			m_undoStack.AbandonPending();
+		}
+		if (undoEditable)
 		{
 			const ImGuiIO& io = ImGui::GetIO();
+			// Snapshot the pre-edit baseline when an interaction starts; the matching
+			// commit runs at end of frame (see CommitPending below).
 			if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 			{
-				m_undoStack.Push(context.Get<World>(), context.services);
+				m_undoStack.CaptureBaseline(context.Get<World>(), context.services);
 			}
 			if (io.KeyCtrl && !io.WantTextInput)
 			{
@@ -942,10 +951,21 @@ namespace aether::editor
 				const bool undoCombo = zKey && !io.KeyShift;
 				if (undoCombo || redoCombo)
 				{
-					const bool did = redoCombo ? m_undoStack.Redo(context.Get<World>(), context.services) : m_undoStack.Undo(context.Get<World>(), context.services);
-					if (did)
+					IEditorCommand* command = redoCombo ? m_undoStack.Redo(context.Get<World>(), context.services) : m_undoStack.Undo(context.Get<World>(), context.services);
+					if (command != nullptr)
 					{
-						m_selection.Clear();
+						// Preserve the selection across the edit: remap each id through
+						// the command (identity unless it recreated entities), then drop
+						// any that no longer exist.
+						World& world = context.Get<World>();
+						std::vector<Entity> remapped = m_selection.All();
+						for (Entity& e: remapped)
+						{
+							e = command->Remap(e);
+						}
+						const Entity primary = command->Remap(m_selection.Primary());
+						m_selection.Replace(std::move(remapped), primary);
+						m_selection.Prune(world);
 					}
 				}
 			}
@@ -1274,6 +1294,13 @@ namespace aether::editor
 		}
 
 		DrawCommandPalette(context);
+
+		// Finalize an in-flight edit once the mouse is released, so a multi-frame
+		// drag (gizmo, collider handle, tile stroke) becomes a single undo command.
+		if (undoEditable && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			m_undoStack.CommitPending(context.Get<World>(), context.services);
+		}
 
 		PersistSettings(context);
 	}

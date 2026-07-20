@@ -24,6 +24,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/project/ProjectPaths.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
+    # Editor undo/redo command logic under test.
+    "${CMAKE_SOURCE_DIR}/src/app/debug/UndoStack.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/debug/EditorCommand.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests
