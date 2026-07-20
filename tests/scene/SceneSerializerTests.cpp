@@ -494,6 +494,87 @@ TEST_CASE("Scene feature flags round-trip and use kind-aware legacy defaults") {
     CHECK(modernEmpty->features == SceneFeatureFlags::None);
 }
 
+TEST_CASE("CameraComponent gradient stops round-trip through TOML") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    const Entity cam = world.Create();
+    world.Emplace<NameComponent>(cam, NameComponent{.name = "Cam"});
+    world.Emplace<TransformComponent>(cam, TransformComponent{});
+    CameraComponent camera{};
+    camera.background = CameraBackground::Gradient;
+    camera.gradientAngleDegrees = 30.0f;
+    camera.gradientStops = {
+            {{1.0f, 0.0f, 0.0f}, 0.0f},
+            {{0.0f, 1.0f, 0.0f}, 0.5f},
+            {{0.0f, 0.0f, 1.0f}, 1.0f},
+    };
+    world.Emplace<CameraComponent>(cam, camera);
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    REQUIRE(parsed->entities[0].camera.has_value());
+    const auto& out = *parsed->entities[0].camera;
+    CHECK(out.background == CameraBackground::Gradient);
+    CHECK(out.gradientAngleDegrees == doctest::Approx(30.0f));
+    REQUIRE(out.gradientStops.size() == 3);
+    CHECK(out.gradientStops[1].position == doctest::Approx(0.5f));
+    CHECK(out.gradientStops[2].colour.b == doctest::Approx(1.0f));
+}
+
+TEST_CASE("Legacy use_sky_gradient=false migrates to SolidColour") {
+    const auto parsed = ParseToml(
+            "[scene]\nkind = '2d'\nname = 'legacy'\nversion = 15\n"
+            "[[entities]]\nname = 'Cam'\n"
+            "[entities.camera]\nprojection = 'orthographic'\nuse_sky_gradient = false\n"
+            "clear_color = [0.2, 0.3, 0.4]\nmain = true\n");
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 1);
+    REQUIRE(parsed->entities[0].camera.has_value());
+    const auto& cam = *parsed->entities[0].camera;
+    CHECK(cam.background == CameraBackground::SolidColour);
+    CHECK(cam.clearColor.g == doctest::Approx(0.3f));
+}
+
+TEST_CASE("Legacy use_sky_gradient=true migrates to SkyGradient") {
+    const auto parsed = ParseToml(
+            "[scene]\nkind = 'mixed'\nname = 'legacy'\nversion = 15\n"
+            "[[entities]]\nname = 'Cam'\n"
+            "[entities.camera]\nuse_sky_gradient = true\nmain = true\n");
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities[0].camera.has_value());
+    CHECK(parsed->entities[0].camera->background == CameraBackground::SkyGradient);
+}
+
+TEST_CASE("Gradient stops are clamped and sorted on load") {
+    const auto parsed = ParseToml(
+            "[scene]\nkind = '2d'\nname = 'grad'\nversion = 15\n"
+            "[[entities]]\nname = 'Cam'\n"
+            "[entities.camera]\nbackground = 'gradient'\n"
+            "[[entities.camera.gradient_stops]]\ncolour = [0,0,1]\nposition = 1.5\n"
+            "[[entities.camera.gradient_stops]]\ncolour = [1,0,0]\nposition = -0.5\n");
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities[0].camera.has_value());
+    const auto& stops = parsed->entities[0].camera->gradientStops;
+    REQUIRE(stops.size() == 2);
+    CHECK(stops.front().position == doctest::Approx(0.0f)); // clamped from -0.5, sorted first
+    CHECK(stops.front().colour.r == doctest::Approx(1.0f)); // the red stop
+    CHECK(stops.back().position == doctest::Approx(1.0f));  // clamped from 1.5
+}
+
+TEST_CASE("CameraComponent defaults to SkyGradient with two gradient stops") {
+    CameraComponent cam{};
+    CHECK(cam.background == CameraBackground::SkyGradient);
+    REQUIRE(cam.gradientStops.size() == 2);
+    CHECK(cam.gradientStops.front().position == doctest::Approx(0.0f));
+    CHECK(cam.gradientStops.back().position == doctest::Approx(1.0f));
+    CHECK(cam.gradientAngleDegrees == doctest::Approx(0.0f));
+}
+
 #ifdef AETHER_SCENES_SOURCE_DIR
 TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     const auto text = io::file_util::ReadText(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / "default2d.scene.toml");
@@ -508,7 +589,7 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     CHECK(scene->entities[0].camera->projection == CameraProjection::Orthographic);
     CHECK(scene->entities[0].camera->orthographicHeight == doctest::Approx(10.0f));
     // 2D scenes clear to a flat camera-owned colour instead of the 3D sky.
-    CHECK_FALSE(scene->entities[0].camera->useSkyGradient);
+    CHECK(scene->entities[0].camera->background == CameraBackground::SolidColour);
     CHECK(scene->entities[0].camera->clearColor.r == doctest::Approx(0.10f));
 
     World world = MakeWorld();
@@ -1174,7 +1255,7 @@ TEST_CASE("Day Night component and camera background survive a scene round trip"
     world.Emplace<NameComponent>(cam, NameComponent{.name = "Cam"});
     world.Emplace<TransformComponent>(cam, TransformComponent{});
     CameraComponent camera{};
-    camera.useSkyGradient = false;
+    camera.background = CameraBackground::SolidColour;
     camera.clearColor = {0.2f, 0.3f, 0.4f};
     world.Emplace<CameraComponent>(cam, camera);
 
@@ -1187,7 +1268,7 @@ TEST_CASE("Day Night component and camera background survive a scene round trip"
     CHECK(parsed->entities[0].dayNight->timeOfDayHours == doctest::Approx(17.5f));
     CHECK(parsed->entities[0].dayNight->timeSpeedSecondsPerSecond == doctest::Approx(120.0f));
     REQUIRE(parsed->entities[1].camera.has_value());
-    CHECK_FALSE(parsed->entities[1].camera->useSkyGradient);
+    CHECK(parsed->entities[1].camera->background == CameraBackground::SolidColour);
     CHECK(parsed->entities[1].camera->clearColor.g == doctest::Approx(0.3f));
 
     World loaded = MakeWorld();

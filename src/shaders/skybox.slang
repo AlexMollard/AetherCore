@@ -178,13 +178,14 @@ float4 fragmentMain(VSOut input) : SV_Target0
 {
     FrameConstantsData* fc = pc.frame.Ptr();
 
-    // Flat clear mode: the main camera opted out of the sky gradient
-    // (skyVoidColor.w == 0, set on the game thread from the camera's clear
-    // colour). Emit the flat colour before any direction math - orthographic
-    // projections have no meaningful view ray anyway.
+    // WYSIWYG background modes (solid colour / gradient) are composited in the
+    // tonemap pass in display space. The sky pass only marks these pixels as
+    // "not scene" by writing zero coverage (alpha 0); the compositor then fills
+    // them from the camera's background params. skyVoidColor.w < 0.5 signals a
+    // non-sky background (set on the game thread from the camera's mode).
     if (fc->skyVoidColor.w < 0.5f)
     {
-        return float4(fc->skyHorizonColor.rgb, 1.0f);
+        return float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
     // ── Step 1: NDC -> view-space direction ──────────────────────────────

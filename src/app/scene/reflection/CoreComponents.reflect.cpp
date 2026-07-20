@@ -24,6 +24,16 @@ namespace
 		return table;
 	}
 
+	const reflect::EnumTable& CameraBackgroundEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"solid_colour", static_cast<int>(CameraBackground::SolidColour)},
+		        {"gradient", static_cast<int>(CameraBackground::Gradient)},
+		        {"sky_gradient", static_cast<int>(CameraBackground::SkyGradient)},
+		}};
+		return table;
+	}
+
 	const reflect::EnumTable& SpriteBlendEnum()
 	{
 		static const reflect::EnumTable table{{
@@ -167,8 +177,9 @@ AE_FIELD_N("fov", fovDegrees, Float)
 AE_FIELD_N("orthographic_height", orthographicHeight, Float)
 AE_FIELD_N("near", nearPlane, Float)
 AE_FIELD_N("far", farPlane, Float)
-AE_FIELD_N("use_sky_gradient", useSkyGradient, Bool)
+AE_FIELD_ENUM("background", background, CameraBackgroundEnum())
 AE_FIELD_N("clear_color", clearColor, Color3)
+AE_FIELD_N("gradient_angle", gradientAngleDegrees, Float)
 AE_COMPONENT_END()
 
 AE_COMPONENT(SkinnedMeshComponent, "Skinned Mesh", "Rendering", ICON_FA_FILM)

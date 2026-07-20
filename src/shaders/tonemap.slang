@@ -28,8 +28,44 @@ struct TonemapPush
     int   inspectY;
     uint  screenWidth;    // render target width for debug division
     uint  screenHeight;   // render target height for header bar
+    uint  _padBg;         // alignment before the 8-byte address
+    uint64_t backgroundParamsAddr; // BDA -> GpuBackgroundParams (0 = disabled)
 };
 [[vk::push_constant]] TonemapPush pc;
+
+// Camera-owned WYSIWYG background, composited in display space (see
+// PostProcessStack::SetBackgroundParams). Layout matches the CPU fill.
+struct GpuBackgroundParams
+{
+    uint   mode;         // 0 solid, 1 gradient
+    uint   stopCount;
+    float  angleRadians; // 0 = top->bottom
+    uint   _pad;
+    float4 stops[8];     // xyz = display-space colour, w = position (0..1)
+};
+
+// Evaluate the background colour in display space for a 0..1 screen UV (y-down).
+float3 EvalBackground(GpuBackgroundParams* bg, float2 uv)
+{
+    if (bg->mode == 0u || bg->stopCount <= 1u)
+    {
+        return bg->stops[0].rgb;
+    }
+
+    // Project the pixel onto the gradient axis (0 deg = top->bottom).
+    const float2 dir = float2(sin(bg->angleRadians), cos(bg->angleRadians));
+    const float  t   = saturate(dot(uv - 0.5f, dir) + 0.5f);
+
+    float3 col = bg->stops[0].rgb;
+    for (uint i = 1u; i < bg->stopCount; ++i)
+    {
+        const float p0 = bg->stops[i - 1u].w;
+        const float p1 = bg->stops[i].w;
+        const float seg = saturate((t - p0) / max(p1 - p0, 1e-5f));
+        col = (t >= p0) ? lerp(bg->stops[i - 1u].rgb, bg->stops[i].rgb, seg) : col;
+    }
+    return col;
+}
 
 // Tonemap operators live in individual family files under include/Tonemap/.
 // Add a new operator there, then register it in TonemapOperators.slangh.
@@ -125,6 +161,19 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     }
 
     // Approximate sRGB gamma (linear -> display).
-    const float3 gamma = pow(max(mapped, float3(0.0f)), float3(1.0f / 2.2f));
-    return float4(gamma, 1.0f);
+    float3 outColor = pow(max(mapped, float3(0.0f)), float3(1.0f / 2.2f));
+
+    // WYSIWYG background composite: fill pixels the scene did not cover (HDR
+    // alpha) with the camera background, evaluated directly in display space so
+    // it matches the authored swatch. Disabled (addr 0) for the sky mode.
+    if (pc.backgroundParamsAddr != 0ull)
+    {
+        GpuBackgroundParams* bg = (GpuBackgroundParams*)pc.backgroundParamsAddr;
+        const float  coverage = g_textures[pc.hdrSlot].Load(int3(coord, 0)).a;
+        const float2 uv = (float2(coord) + 0.5f) / float2(max(pc.screenWidth, 1u), max(pc.screenHeight, 1u));
+        const float3 bgCol = EvalBackground(bg, uv);
+        outColor = lerp(bgCol, outColor, saturate(coverage));
+    }
+
+    return float4(outColor, 1.0f);
 }

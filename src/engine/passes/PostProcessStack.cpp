@@ -128,6 +128,25 @@ namespace aether
 			}
 		}
 
+		{
+			// Per-frame background params buffer read by the tonemap pass (BDA):
+			// uint mode, stopCount; float angleRadians; uint pad; float4 stops[8].
+			constexpr auto kBackgroundBufferSize = sizeof(std::uint32_t) * 4u + sizeof(glm::vec4) * kMaxBackgroundStops;
+			for (auto& buf: stack.m_backgroundBuffer)
+			{
+				buf = gpu::ResourceRegistry::CreateMappedBuffer({
+				        .size = kBackgroundBufferSize,
+				        .usage = gpu::BufferUsage::ShaderDeviceAddress,
+				        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+				        .debugName = "PostProcess.BackgroundParams",
+				});
+				if (!buf.IsValid())
+				{
+					Throw(AetherError::Engine("PostProcessStack: BackgroundParams CreateMappedBuffer failed"));
+				}
+			}
+		}
+
 		stack.m_swapchainFormat = desc.swapchainFormat;
 		stack.m_extent = desc.extent;
 
@@ -160,6 +179,14 @@ namespace aether
 		m_hdrColorHandle = {};
 		m_hdrColor = RGImage{};
 		m_hdrBindlessSlot = 0xFFFFFFFFu;
+		for (auto& buf: m_backgroundBuffer)
+		{
+			if (buf.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(buf);
+			}
+			buf = {};
+		}
 		if (m_histogramPipeline.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_histogramPipeline);
@@ -257,6 +284,36 @@ namespace aether
 
 			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline());
 
+			                // Fill this frame's background params buffer (display-space
+			                // WYSIWYG composite). mode 2 (sky) => addr 0 => tonemap
+			                // passes through unchanged.
+			                std::uint64_t backgroundParamsAddr = 0;
+			                if (m_bgMode != 2u)
+			                {
+				                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
+				                const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_backgroundBuffer[slot]);
+				                if (view.mappedPtr != nullptr)
+				                {
+					                struct GpuBackgroundParams
+					                {
+						                std::uint32_t mode;
+						                std::uint32_t stopCount;
+						                float angleRadians;
+						                std::uint32_t pad;
+						                glm::vec4 stops[kMaxBackgroundStops];
+					                } params{};
+					                params.mode = m_bgMode;
+					                params.stopCount = m_bgStopCount;
+					                params.angleRadians = m_bgAngleRadians;
+					                for (std::uint32_t i = 0; i < kMaxBackgroundStops; ++i)
+					                {
+						                params.stops[i] = m_bgStops[i];
+					                }
+					                std::memcpy(view.mappedPtr, &params, sizeof(params));
+					                backgroundParamsAddr = gpu::ResourceRegistry::ResolveBuffer(m_backgroundBuffer[slot]).deviceAddress;
+				                }
+			                }
+
 			                struct
 			                {
 				                std::uint32_t hdrSlot;
@@ -268,6 +325,8 @@ namespace aether
 				                std::int32_t inspectY;
 				                std::uint32_t screenWidth;
 				                std::uint32_t screenHeight;
+				                std::uint32_t _padBg;
+				                std::uint64_t backgroundParamsAddr;
 			                } push;
 			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
@@ -278,6 +337,8 @@ namespace aether
 			                push.inspectY = -1;
 			                push.screenWidth = m_extent.width;
 			                push.screenHeight = m_extent.height;
+			                push._padBg = 0u;
+			                push.backgroundParamsAddr = backgroundParamsAddr;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			                cmd.Draw(3, 1, 0, 0);

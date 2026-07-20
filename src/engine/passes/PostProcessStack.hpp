@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <span>
 
+#include <glm/glm.hpp>
+
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "passes/TonemapDefs.hpp"
@@ -97,6 +99,18 @@ namespace aether
 		[[nodiscard]] float GetExposure() const
 		{
 			return m_exposure;
+		}
+
+		// Camera-owned background composited WYSIWYG in the tonemap pass.
+		// mode mirrors CameraBackground (0 solid, 1 gradient, 2 sky => disabled).
+		// stops pack xyz = display-space colour, w = position (0..1).
+		static constexpr std::uint32_t kMaxBackgroundStops = 8;
+		void SetBackgroundParams(std::uint32_t mode, float angleRadians, std::uint32_t stopCount, const std::array<glm::vec4, kMaxBackgroundStops>& stops)
+		{
+			m_bgMode = mode;
+			m_bgAngleRadians = angleRadians;
+			m_bgStopCount = stopCount;
+			m_bgStops = stops;
 		}
 
 		[[nodiscard]] gpu::PipelineView GetTonemapPipeline() const
@@ -240,6 +254,12 @@ namespace aether
 		static constexpr std::uint32_t kHistogramBins = 256;
 		static constexpr float kHistogramLogMin = -10.0f;
 		static constexpr float kHistogramLogMax = 10.0f;
+
+		std::uint32_t m_bgMode = 2; // 2 = SkyGradient (composite disabled)
+		float m_bgAngleRadians = 0.0f;
+		std::uint32_t m_bgStopCount = 0;
+		std::array<glm::vec4, kMaxBackgroundStops> m_bgStops{};
+		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_backgroundBuffer{};
 
 		gpu::PipelineHandle m_histogramPipeline;
 		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{};

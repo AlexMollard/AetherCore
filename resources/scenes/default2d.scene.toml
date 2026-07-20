@@ -19,5 +19,5 @@ scale = [ 1.0, 1.0, 1.0 ]
     near = 0.1
     orthographic_height = 10.0
     projection = 'orthographic'
-    use_sky_gradient = false
+    background = 'solid_colour'
     clear_color = [ 0.10, 0.10, 0.12 ]

@@ -18,6 +18,9 @@
 #include "platform/Input.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "scene/Hierarchy.hpp"
+#include "scene/LightComponents.hpp"
+#include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
@@ -140,6 +143,22 @@ namespace aether::editor
 				}
 			}
 		}
+		// A directional source is a live DayNight driver (the engine has no
+		// standalone directional-light component). The renderer always holds a
+		// default sun, so the gizmo must key off the actual scene, not that.
+		bool SceneHasDirectionalSource(const aether::World& world)
+		{
+			bool found = false;
+			world.View<const DayNightComponent>().each(
+			        [&](entt::entity e, const DayNightComponent&)
+			        {
+				        if (!found && !ecs::HasDisabledAncestor(world, World::FromEntt(e)))
+				        {
+					        found = true;
+				        }
+			        });
+			return found;
+		}
 	} // namespace
 
 	void LightingPanel::OnUpdate(app::LayerContext& context)
@@ -150,13 +169,17 @@ namespace aether::editor
 		{
 			if (auto* engine = context.TryGet<aether::AetherCore>())
 			{
+				const World& world = context.Get<World>();
+				// The sun gizmo is meaningless in 2D scenes and when no directional
+				// source exists - never draw it from the renderer's default sun.
+				const bool sceneHasSun = world.GetSceneKind() != SceneKind::Scene2D && SceneHasDirectionalSource(world);
 				AddLightGizmos(engine->GetPendingDebugVertices(),
 				        context.Get<Renderer>(),
 				        context.Get<CameraManager>(),
 				        LightGizmoOptions{
 				                .pointVolumes = m_lightGizmoPointVolumes,
 				                .spotCones = m_lightGizmoSpotCones,
-				                .sunDirection = m_lightGizmoSunDirection,
+				                .sunDirection = m_lightGizmoSunDirection && sceneHasSun,
 				                .shadowMarkers = m_lightGizmoShadowMarkers,
 				                .scale = m_lightGizmoScale,
 				        });

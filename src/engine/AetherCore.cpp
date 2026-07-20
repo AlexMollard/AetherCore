@@ -663,18 +663,34 @@ namespace aether
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
 
-		// The scene background is owned by the main camera. A flat clear colour
-		// travels through the sky constants: skyVoidColor.w == 0 tells the
-		// skybox shader to emit skyHorizonColor directly instead of evaluating
-		// the gradient/sun/stars (the .w lane is otherwise unused).
+		// The scene background is owned by the main camera. Solid/Gradient are
+		// composited WYSIWYG in the tonemap pass (see PostProcessStack); only the
+		// SkyGradient mode uses the procedural sky above.
 		if (const Entity mainCamera = ecs::GetMainCameraEntity(world); mainCamera.IsValid())
 		{
-			if (const auto* cameraComponent = world.TryGet<CameraComponent>(mainCamera); cameraComponent != nullptr && !cameraComponent->useSkyGradient)
+			if (const auto* cam = world.TryGet<CameraComponent>(mainCamera); cam != nullptr)
 			{
-				const glm::vec4 clear{cameraComponent->clearColor, 1.0f};
-				packet.skyHorizonColor = clear;
-				packet.skyZenithColor = clear;
-				packet.skyVoidColor = glm::vec4(cameraComponent->clearColor, 0.0f);
+				packet.backgroundMode = static_cast<std::uint32_t>(cam->background);
+				packet.backgroundAngleRadians = glm::radians(cam->gradientAngleDegrees);
+				packet.backgroundStopCount = 0;
+				// skyVoidColor.w carries the sky-vs-WYSIWYG flag for the skybox
+				// pass: >= 0.5 draws the procedural sky, < 0.5 emits transparent
+				// coverage so the tonemap compositor fills those pixels.
+				packet.skyVoidColor.w = (cam->background == CameraBackground::SkyGradient) ? 1.0f : 0.0f;
+				if (cam->background == CameraBackground::SolidColour)
+				{
+					packet.backgroundStopCount = 1;
+					packet.backgroundStops[0] = glm::vec4(cam->clearColor, 0.0f);
+				}
+				else if (cam->background == CameraBackground::Gradient)
+				{
+					const std::uint32_t n = std::min<std::uint32_t>(static_cast<std::uint32_t>(cam->gradientStops.size()), RenderFramePacket::kMaxBackgroundStops);
+					packet.backgroundStopCount = n;
+					for (std::uint32_t i = 0; i < n; ++i)
+					{
+						packet.backgroundStops[i] = glm::vec4(cam->gradientStops[i].colour, cam->gradientStops[i].position);
+					}
+				}
 			}
 		}
 
@@ -709,6 +725,7 @@ namespace aether
 		if (m_rendering)
 		{
 			m_rendering->SetSceneFeatures(packet.sceneFeatures);
+			m_rendering->SetBackgroundParams(packet.backgroundMode, packet.backgroundAngleRadians, packet.backgroundStopCount, packet.backgroundStops);
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
 			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);
 			debugRenderer.SetFramePhysicsShapes(&packet.physicsDebugShapes);

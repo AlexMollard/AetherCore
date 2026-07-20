@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -73,6 +74,15 @@ namespace aether
 		glm::vec4 skyZenithColor{0.5f, 0.7f, 1.0f, 1.0f};
 		glm::vec4 skyVoidColor{0.0f};
 		bool directionalShadowEnabled = false;
+
+		// Camera-owned background, composited WYSIWYG in the tonemap pass.
+		// backgroundMode mirrors CameraBackground (0 solid, 1 gradient, 2 sky).
+		// Stops pack xyz = display-space colour, w = position (0..1).
+		static constexpr std::uint32_t kMaxBackgroundStops = 8;
+		std::uint32_t backgroundMode = 2; // 2 = SkyGradient (composite disabled)
+		float backgroundAngleRadians = 0.0f;
+		std::uint32_t backgroundStopCount = 0;
+		std::array<glm::vec4, kMaxBackgroundStops> backgroundStops{};
 
 		// Local light lists snapshotted to avoid data race between game thread
 		std::vector<Renderer::PointLight> pointLights;

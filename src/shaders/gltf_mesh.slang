@@ -284,5 +284,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
 
-    return float4(finalColor, baseColor.a);
+    // Alpha carries scene coverage for the background compositor: opaque forward
+    // geometry always fully covers (the forward pass has no transparent path).
+    return float4(finalColor, 1.0);
 }

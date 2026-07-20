@@ -15,6 +15,19 @@
 
 namespace aether
 {
+	enum class CameraBackground : std::uint8_t
+	{
+		SolidColour = 0,
+		Gradient    = 1,
+		SkyGradient = 2, // procedural sky (renderer environment / DayNight entity)
+	};
+
+	struct GradientStop
+	{
+		glm::vec3 colour{0.0f};
+		float position = 0.0f; // 0..1 along the gradient axis
+	};
+
 	struct CameraComponent
 	{
 		CameraProjection projection = CameraProjection::Perspective;
@@ -23,11 +36,16 @@ namespace aether
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 
-		// Scene background policy, owned by the main camera: either the 3D sky
-		// gradient (renderer environment / DayNight entity) or a flat clear
-		// colour - the natural choice for 2D scenes.
-		bool useSkyGradient = true;
-		glm::vec3 clearColor{0.10f, 0.10f, 0.12f};
+		// Scene background policy, owned by the main camera. Solid/Gradient are
+		// composited WYSIWYG in the tonemap pass; SkyGradient uses the procedural
+		// sky gradient (renderer environment / DayNight entity).
+		CameraBackground background = CameraBackground::SkyGradient;
+		glm::vec3 clearColor{0.10f, 0.10f, 0.12f}; // SolidColour mode
+		std::vector<GradientStop> gradientStops{   // Gradient mode (>=2)
+		        GradientStop{{0.05f, 0.06f, 0.10f}, 0.0f},
+		        GradientStop{{0.02f, 0.02f, 0.03f}, 1.0f},
+		};
+		float gradientAngleDegrees = 0.0f; // 0 = top->bottom
 
 		// in sync (0 = not created yet). Never serialized - it is re-established on
 		std::uint32_t backingCamera = 0;

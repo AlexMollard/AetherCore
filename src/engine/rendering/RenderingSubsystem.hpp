@@ -114,6 +114,11 @@ namespace aether
 			m_sceneFeatures.store(static_cast<std::uint32_t>(features), std::memory_order_relaxed);
 		}
 
+		void SetBackgroundParams(std::uint32_t mode, float angleRadians, std::uint32_t stopCount, const std::array<glm::vec4, PostProcessStack::kMaxBackgroundStops>& stops)
+		{
+			m_postProcessStack.SetBackgroundParams(mode, angleRadians, stopCount, stops);
+		}
+
 		[[nodiscard]] bool IsSceneFeatureEnabled(SceneFeatureFlags feature) const
 		{
 			const auto features = static_cast<SceneFeatureFlags>(m_sceneFeatures.load(std::memory_order_relaxed));

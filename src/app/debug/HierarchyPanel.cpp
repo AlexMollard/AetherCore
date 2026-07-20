@@ -1419,6 +1419,7 @@ namespace aether::editor
 						CameraComponent camera{};
 						camera.projection = CameraProjection::Orthographic;
 						camera.orthographicHeight = 10.0f;
+						camera.background = CameraBackground::SolidColour;
 						const Entity entity = ecs::CreateCameraEntity(world, {0.0f, 0.0f, 10.0f}, {0.0f, 0.0f, -1.0f}, camera, "2D Camera");
 						if (!ecs::GetMainCameraEntity(world).IsValid())
 						{

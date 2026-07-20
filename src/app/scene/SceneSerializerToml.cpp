@@ -932,6 +932,17 @@ namespace aether::app::scene
 			{
 				toml::table c = WriteReflectedToToml("Camera", &*rec.camera);
 				c.insert("main", rec.mainCamera);
+				// Gradient stops are a variable-length list, which the reflection
+				// field system does not model - serialize them explicitly.
+				toml::array stops;
+				for (const auto& s: rec.camera->gradientStops)
+				{
+					toml::table st;
+					st.insert("colour", toml::array{s.colour.r, s.colour.g, s.colour.b});
+					st.insert("position", s.position);
+					stops.push_back(std::move(st));
+				}
+				c.insert("gradient_stops", std::move(stops));
 				t.insert("camera", std::move(c));
 			}
 			if (rec.orbitCamera)
@@ -1379,8 +1390,39 @@ namespace aether::app::scene
 			{
 				CameraComponent cam{};
 				ReadReflectedFromToml("Camera", *c, &cam);
+
+				const toml::node_view<const toml::node> cv{*c};
+				// Back-compat: pre-background scenes used a `use_sky_gradient` bool.
+				if (!cv["background"] && cv["use_sky_gradient"])
+				{
+					cam.background = cv["use_sky_gradient"].value_or(true) ? CameraBackground::SkyGradient : CameraBackground::SolidColour;
+				}
+				// Gradient stops (custom: reflection has no list type).
+				if (const auto* stops = cv["gradient_stops"].as_array())
+				{
+					cam.gradientStops.clear();
+					for (const auto& node: *stops)
+					{
+						if (const auto* st = node.as_table())
+						{
+							GradientStop s{};
+							if (const auto* col = (*st)["colour"].as_array(); col != nullptr && col->size() >= 3)
+							{
+								s.colour = glm::vec3((*col)[0].value_or(0.0f), (*col)[1].value_or(0.0f), (*col)[2].value_or(0.0f));
+							}
+							s.position = std::clamp((*st)["position"].value_or(0.0f), 0.0f, 1.0f);
+							cam.gradientStops.push_back(s);
+						}
+					}
+					std::sort(cam.gradientStops.begin(), cam.gradientStops.end(), [](const GradientStop& a, const GradientStop& b) { return a.position < b.position; });
+					if (cam.gradientStops.size() < 2)
+					{
+						cam.gradientStops = CameraComponent{}.gradientStops;
+					}
+				}
+
 				rec.camera = cam;
-				rec.mainCamera = toml::node_view<const toml::node>{*c}["main"].value_or(false);
+				rec.mainCamera = cv["main"].value_or(false);
 			}
 			if (const auto* o = tv["orbit_camera"].as_table())
 			{

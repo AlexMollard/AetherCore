@@ -342,17 +342,55 @@ namespace aether::editor
 		cam->farPlane = std::max(cam->nearPlane + 0.01f, cam->farPlane);
 
 		// Unity's "Clear Flags": the main camera owns the scene background -
-		// either the procedural sky gradient or a flat clear colour.
+		// a flat solid colour, a multi-stop gradient, or the procedural sky.
 		ImGui::SeparatorText("Background");
-		int background = cam->useSkyGradient ? 0 : 1;
-		constexpr const char* kBackgrounds[] = {"Sky Gradient", "Solid Color"};
+		int background = static_cast<int>(cam->background);
+		constexpr const char* kBackgrounds[] = {"Solid Color", "Gradient", "Sky Gradient"};
 		if (PropCombo("Clear", &background, kBackgrounds, IM_ARRAYSIZE(kBackgrounds)))
 		{
-			cam->useSkyGradient = background == 0;
+			cam->background = static_cast<CameraBackground>(background);
+			if (cam->background == CameraBackground::Gradient && cam->gradientStops.size() < 2)
+			{
+				cam->gradientStops = CameraComponent{}.gradientStops;
+			}
 		}
-		if (!cam->useSkyGradient)
+		if (cam->background == CameraBackground::SolidColour)
 		{
 			PropColor3("Color", &cam->clearColor.x);
+		}
+		else if (cam->background == CameraBackground::Gradient)
+		{
+			PropFloat("Angle", &cam->gradientAngleDegrees, 1.0f, -360.0f, 360.0f, "%.0f\xc2\xb0");
+			int removeIdx = -1;
+			for (int i = 0; i < static_cast<int>(cam->gradientStops.size()); ++i)
+			{
+				ImGui::PushID(i);
+				auto& stop = cam->gradientStops[static_cast<std::size_t>(i)];
+				ImGui::ColorEdit3("##col", &stop.colour.x, ImGuiColorEditFlags_NoInputs);
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(120.0f);
+				ImGui::SliderFloat("##pos", &stop.position, 0.0f, 1.0f, "%.2f");
+				stop.position = std::clamp(stop.position, 0.0f, 1.0f);
+				if (cam->gradientStops.size() > 2)
+				{
+					ImGui::SameLine();
+					if (ImGui::SmallButton(ICON_FA_XMARK))
+					{
+						removeIdx = i;
+					}
+				}
+				ImGui::PopID();
+			}
+			if (removeIdx >= 0)
+			{
+				cam->gradientStops.erase(cam->gradientStops.begin() + removeIdx);
+			}
+			constexpr std::size_t kMaxStops = 8;
+			if (cam->gradientStops.size() < kMaxStops && ImGui::SmallButton(ICON_FA_PLUS " Add stop"))
+			{
+				cam->gradientStops.push_back(GradientStop{{1.0f, 1.0f, 1.0f}, 1.0f});
+			}
+			std::sort(cam->gradientStops.begin(), cam->gradientStops.end(), [](const GradientStop& a, const GradientStop& b) { return a.position < b.position; });
 		}
 		if (!isMain)
 		{
