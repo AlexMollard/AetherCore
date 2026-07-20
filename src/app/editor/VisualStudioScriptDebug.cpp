@@ -11,6 +11,7 @@
 
 #include "io/FileUtil.hpp"
 #include "io/Process.hpp"
+#include "project/ProjectCommon.hpp"
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -81,42 +82,6 @@ namespace aether::editor
 		{
 			const std::string leaf = installPath.filename().string();
 			return leaf.empty() ? "Visual Studio (" + installPath.string() + ")" : "Visual Studio " + leaf + " (" + installPath.string() + ")";
-		}
-
-		std::optional<std::filesystem::path> ManagedSdkProjectPath()
-		{
-#	ifdef AETHER_MANAGED_SDK_PROJECT
-			std::error_code ec;
-			const std::filesystem::path sdkProject = std::filesystem::absolute(AETHER_MANAGED_SDK_PROJECT, ec).lexically_normal();
-			return !ec && io::file_util::Exists(sdkProject) ? std::optional{sdkProject} : std::nullopt;
-#	else
-			return std::nullopt;
-#	endif
-		}
-
-		bool RepairLegacySdkProjectReference(const std::filesystem::path& scriptsProject, const std::filesystem::path& managedSdkProject, std::string& error)
-		{
-			constexpr std::string_view kLegacyReference = "../../../managed/AetherCore/AetherCore.csproj";
-			auto text = io::file_util::ReadText(scriptsProject);
-			if (!text)
-			{
-				error = "Could not read the C# project: " + text.error().message;
-				return false;
-			}
-
-			const std::size_t legacy = text->find(kLegacyReference);
-			if (legacy == std::string::npos)
-			{
-				return true;
-			}
-
-			text->replace(legacy, kLegacyReference.size(), managedSdkProject.generic_string());
-			if (auto writeResult = io::file_util::WriteText(scriptsProject, *text); !writeResult)
-			{
-				error = "Could not update the C# SDK reference: " + writeResult.error().message;
-				return false;
-			}
-			return true;
 		}
 
 		int VisualStudioMajorVersion(const std::filesystem::path& devenv)
@@ -223,7 +188,7 @@ namespace aether::editor
 			return reinterpret_cast<std::intptr_t>(result) > 32;
 		}
 
-		bool LaunchVisualStudioAutomation(const VisualStudioInstallation& installation, const std::filesystem::path& scriptsProject, const std::filesystem::path& managedSdkProject)
+		bool LaunchVisualStudioAutomation(const VisualStudioInstallation& installation, const std::filesystem::path& solution)
 		{
 			const auto powershell = FindPowerShell();
 			if (!powershell)
@@ -231,11 +196,18 @@ namespace aether::editor
 				return false;
 			}
 
+			// Open the saved per-project solution in a fresh DTE instance and attach
+			// to this Editor. `New-Object -ComObject VisualStudio.DTE` starts VS in
+			// COM automation/embedding mode, which shuts down when its automation
+			// client (this hidden PowerShell) releases it on exit. Setting
+			// `UserControl = $true` hands the instance to the user so it stays open
+			// afterwards - otherwise VS tears down right after Attach() and, being
+			// mid-debug, prompts "stop debugging?" then closes.
 			std::wstring command = L"$ErrorActionPreference='Stop';";
 			command += L"$dte=New-Object -ComObject " + PowerShellLiteral(DteProgId(installation.majorVersion)) + L";";
+			command += L"$dte.UserControl=$true;";
 			command += L"$dte.MainWindow.Visible=$true;";
-			command += L"$dte.Solution.AddFromFile(" + PowerShellLiteral(managedSdkProject.wstring()) + L",$true);";
-			command += L"$dte.Solution.AddFromFile(" + PowerShellLiteral(scriptsProject.wstring()) + L",$false);";
+			command += L"$dte.Solution.Open(" + PowerShellLiteral(solution.wstring()) + L");";
 			command += L"$target=$null;for($attempt=0;$attempt -lt 40 -and $null -eq $target;$attempt++){foreach($candidate in $dte.Debugger.LocalProcesses){if($candidate.ProcessID -eq " + std::to_wstring(GetCurrentProcessId());
 			command += L"){$target=$candidate;break}};if($null -eq $target){Start-Sleep -Milliseconds 250}};";
 			command += L"if($null -eq $target){throw 'Could not locate the Editor process for Visual Studio attachment.'};$target.Attach();";
@@ -300,24 +272,26 @@ namespace aether::editor
 			return {.succeeded = false, .message = installation->displayName + " does not expose Visual Studio automation for debugger attachment."};
 		}
 
-		const auto managedSdkProject = ManagedSdkProjectPath();
-		if (!managedSdkProject)
+		// The scripts project lives at <root>/scripts/AetherGame.csproj; the generated
+		// solution sits at the project root.
+		const std::filesystem::path projectRoot = scriptsProject.parent_path().parent_path();
+		std::string solutionError;
+		if (!app::project::EnsureGameSolution(projectRoot, solutionError))
 		{
-			return {.succeeded = false, .message = "The AetherCore managed SDK project could not be found."};
+			return {.succeeded = false, .message = solutionError};
+		}
+		const std::filesystem::path solution = projectRoot / "AetherGame.slnx";
+		if (!io::file_util::Exists(solution))
+		{
+			return {.succeeded = false, .message = "The AetherGame solution could not be generated for Visual Studio."};
 		}
 
-		std::string repairError;
-		if (!RepairLegacySdkProjectReference(scriptsProject, *managedSdkProject, repairError))
-		{
-			return {.succeeded = false, .message = repairError};
-		}
-
-		if (!LaunchVisualStudioAutomation(*installation, scriptsProject, *managedSdkProject))
+		if (!LaunchVisualStudioAutomation(*installation, solution))
 		{
 			return {.succeeded = false, .message = "Could not start Visual Studio's debugger automation."};
 		}
 
-		return {.succeeded = true, .message = "Opening AetherCore and AetherGame in Visual Studio, then attaching that IDE to this Editor. Set breakpoints, then press Play."};
+		return {.succeeded = true, .message = "Opening AetherGame.slnx in Visual Studio and attaching that IDE to this Editor. Set breakpoints, then press Play."};
 #else
 		return {.succeeded = false, .message = "Visual Studio script debugging is currently available on Windows only."};
 #endif

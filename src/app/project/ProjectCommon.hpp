@@ -61,6 +61,12 @@ namespace aether::app::project
 	[[nodiscard]] bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate = ProjectTemplate::Blank3D);
 	[[nodiscard]] std::string MakeProjectScriptCsprojText(const std::filesystem::path& managedSdkProject);
 
+	// A per-project Visual Studio solution (.slnx) that pairs the game scripts
+	// project with the engine SDK project, so opening it resolves engine types in
+	// the IDE. Generated locally on project open (not committed).
+	[[nodiscard]] std::string MakeGameSolutionText(const std::filesystem::path& root, const std::filesystem::path& managedSdkProject);
+	bool EnsureGameSolution(const std::filesystem::path& root, std::string& error);
+
 	[[nodiscard]] std::optional<std::filesystem::path> PickProjectFolder();
 	[[nodiscard]] std::optional<std::filesystem::path> PickProjectFile();
 

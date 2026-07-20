@@ -108,3 +108,6 @@ __pycache__/
 
 # Generated per-project launcher preview thumbnails (editor writes these on save)
 **/.aether/preview.png
+
+# Editor-generated per-project VS solution (paths are machine-local)
+AetherGame.slnx

@@ -433,6 +433,12 @@ namespace aether::editor
 		m_currentProject = *std::move(projectResult);
 		m_currentProject.loaded = true;
 		io::FileSystem::Mount("project", m_currentProject.root);
+		// Refresh the per-project VS solution so opening AetherGame.slnx resolves
+		// engine types in the IDE (non-fatal).
+		if (std::string solutionError; !EnsureGameSolution(m_currentProject.root, solutionError))
+		{
+			AE_WARN(LogCategory::App, "Could not generate game solution: {}", solutionError);
+		}
 		CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
 		BuildAndReloadProjectScripts();
 		BakeProjectFonts();
