@@ -316,6 +316,12 @@ namespace aether::app::scene
 
 	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures);
 
+	// A SpriteAnimator drives the renderer's frame (spriteId/uvRect/pixelSize/pivot)
+	// every editor-preview frame. That is runtime state, not authored data, so both
+	// capture (to keep saves stable) and the undo diff (to ignore preview animation)
+	// canonicalize those fields to a fixed value when an entity has both components.
+	void CanonicalizeAnimatedSpriteFrame(EntityRecord& record);
+
 	SceneDescription CaptureSubtrees(World& world, const std::vector<Entity>& roots, const MaterialRegistry& materials, const TextureRegistry& textures);
 
 	// Reflected component type names captured/applied/serialized generically (pure
@@ -325,6 +331,12 @@ namespace aether::app::scene
 
 	std::string WriteToml(const SceneDescription& scene);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
+
+	// True when a scene's top-level text declares no main-camera entity AND no prefab
+	// instances (which could carry one). Publish uses this to warn - non-fatally, since
+	// a script may create the camera at runtime - that a shipped startup scene would
+	// otherwise boot with a default camera.
+	bool SceneTextHasNoCameraSource(std::string_view sceneToml);
 
 	// Field-level prefab overrides. ComputePrefabOverrideToml returns the TOML text of
 	// only the top-level keys where `live` differs from `prefab` (empty if identical);

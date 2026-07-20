@@ -317,6 +317,7 @@ namespace aether::app::scene
 						rec.scripts.push_back(ScriptRecord{.type = entry.path, .properties = ScriptPropsToSceneRefs(entry.properties, indexOf)});
 					}
 				}
+				CanonicalizeAnimatedSpriteFrame(rec);
 				scene.entities.push_back(std::move(rec));
 			}
 
@@ -421,20 +422,24 @@ namespace aether::app::scene
 			std::unordered_set<std::uint64_t> presentGuids;
 			for (const Entity e: CollectSubtree(world, root))
 			{
-				// The instance root's transform is the instance transform, never an
-				// override (re-applying onto a root would strip its children list).
-				if (e == root)
-				{
-					continue;
-				}
 				const auto* link = world.TryGet<PrefabLinkComponent>(e);
 				const auto pit = link != nullptr ? prefabByGuid.find(link->prefabGuid) : prefabByGuid.end();
 				if (link != nullptr && pit != prefabByGuid.end())
 				{
-					// A prefab entity: mark present and record only the changed top-level
-					// keys (field-level override), so keys we do not touch - including
-					// ones the prefab changes later - keep tracking the prefab.
+					// A prefab entity is present (so it is never counted as "removed").
+					// This includes the instance root, which links to the prefab's own
+					// root entity.
 					presentGuids.insert(link->prefabGuid);
+					// The instance root's transform IS the instance transform, and
+					// re-applying onto a root would strip its children list, so the root
+					// is never a per-entity override - mark it present and move on.
+					if (e == root)
+					{
+						continue;
+					}
+					// Record only the changed top-level keys (field-level override), so
+					// keys we do not touch - including ones the prefab changes later -
+					// keep tracking the prefab.
 					SceneDescription oneCap = CaptureSubtrees(world, {e}, materials, textures);
 					if (!oneCap.entities.empty())
 					{
@@ -483,6 +488,19 @@ namespace aether::app::scene
 		}
 	} // namespace
 
+	void CanonicalizeAnimatedSpriteFrame(EntityRecord& record)
+	{
+		if (record.spriteAnimator.has_value() && record.sprite.has_value())
+		{
+			// The animation system re-applies the real frame every update (before the
+			// next render), so these placeholders are never actually shown.
+			record.sprite->spriteId = {};
+			record.sprite->uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+			record.sprite->pixelSize = glm::vec2(0.0f);
+			record.sprite->pivot = glm::vec2(0.0f);
+		}
+	}
+
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer)
 	{
 		SceneDescription scene;
@@ -491,7 +509,11 @@ namespace aether::app::scene
 		auto& reg = world.GetRegistry();
 
 		// Punctual lights are entities now (LightComponents.hpp) and serialize
-		if (renderer != nullptr)
+		// separately. The directional sun + sky environment is 3D-only: 2D scenes are
+		// unlit (the camera owns the clear colour), so capturing it there just writes a
+		// runtime-derived block whose normalized sun_direction drifts and produces
+		// false-positive diffs on every save. Skip it for 2D scenes entirely.
+		if (renderer != nullptr && scene.kind != SceneKind::Scene2D)
 		{
 			EnvironmentRecord env;
 			env.ambient = renderer->GetAmbientLight();

@@ -34,6 +34,7 @@ using namespace std::string_view_literals;
 namespace aether::app::scene
 {
 	std::size_t CookProjectBinaries();
+	bool SceneTextHasNoCameraSource(std::string_view sceneToml);
 }
 
 namespace aether::editor
@@ -386,6 +387,20 @@ namespace aether::editor
 				{
 					error = "Published build would boot empty: startup scene '" + settings.app.startupScene + "' (" + sceneVirtualPath + ") was not found in " + DisplayPath(projectPakPath);
 					return false;
+				}
+
+				// Non-fatal: a shipped game has no editor camera, so a startup scene with
+				// no main camera (and no prefab that might carry one) boots on a default
+				// camera. A script may still create one at runtime, so warn, don't fail.
+				if (const auto sceneBytes = projectPak.Read(sceneVirtualPath); sceneBytes.has_value())
+				{
+					const std::string_view sceneToml(reinterpret_cast<const char*>(sceneBytes->data()), sceneBytes->size());
+					if (app::scene::SceneTextHasNoCameraSource(sceneToml))
+					{
+						AE_WARN(LogCategory::App,
+						        "Published startup scene '{}' has no main camera - the game will boot with a default camera unless a script creates one.",
+						        settings.app.startupScene);
+					}
 				}
 			}
 			catch (const std::exception& ex)

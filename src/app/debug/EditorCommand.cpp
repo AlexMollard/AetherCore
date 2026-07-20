@@ -274,17 +274,10 @@ namespace aether::editor
 			mini.entities.push_back(desc.entities[i]);
 			EntityRecord& record = mini.entities[0];
 			record.parentIndex = -1;
-			// A SpriteAnimator drives the renderer's frame (spriteId/uvRect/pixel
-			// size/pivot) every frame during edit-mode preview. That is runtime state,
-			// not an authored edit, so canonicalize it here - otherwise a previewing
-			// animation would register as an edit and flood undo with frame changes.
-			if (record.spriteAnimator.has_value() && record.sprite.has_value())
-			{
-				record.sprite->spriteId = {};
-				record.sprite->uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-				record.sprite->pixelSize = glm::vec2(0.0f);
-				record.sprite->pivot = glm::vec2(0.0f);
-			}
+			// A SpriteAnimator drives the renderer's frame every edit-mode preview
+			// frame; canonicalize it (shared with capture) so a previewing animation is
+			// not mistaken for an authored edit and does not flood undo with frames.
+			app::scene::CanonicalizeAnimatedSpriteFrame(record);
 			return app::scene::WriteToml(mini) + "|p=" + std::to_string(ParentIdOf(desc, i));
 		}
 

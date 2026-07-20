@@ -620,6 +620,19 @@ TEST_CASE("CameraComponent defaults to SkyGradient with two gradient stops") {
 }
 
 #ifdef AETHER_SCENES_SOURCE_DIR
+TEST_CASE("SceneTextHasNoCameraSource flags camera-less scenes but not prefab-backed ones") {
+    // A scene with a main camera has a camera source.
+    const auto with = io::file_util::ReadText(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / "default2d.scene.toml");
+    REQUIRE(with.has_value());
+    CHECK_FALSE(SceneTextHasNoCameraSource(*with));
+
+    // A scene with entities but no main camera and no prefab instances lacks one.
+    CHECK(SceneTextHasNoCameraSource("version = 16\n[[entities]]\nname = 'Ground'\nparent = -1\n"));
+
+    // A prefab instance may carry the camera, so never warn in that case.
+    CHECK_FALSE(SceneTextHasNoCameraSource("version = 16\n[[prefab_instances]]\nprefab = 'CameraRig'\n"));
+}
+
 TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     const auto text = io::file_util::ReadText(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / "default2d.scene.toml");
     REQUIRE(text.has_value());
@@ -1047,6 +1060,61 @@ TEST_CASE("Scene and prefab file helpers read and list through mounted project V
     fs::remove_all(root, ec);
 }
 
+TEST_CASE("Capturing an unedited prefab instance reports no removed entities") {
+    namespace fs = std::filesystem;
+    if (io::FileSystem::IsInitialized())
+    {
+        io::FileSystem::Shutdown();
+    }
+    ClearProjectSceneDirectories();
+
+    const fs::path root = fs::temp_directory_path() / "aethercore_prefab_delta_test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    io::FileSystem::Initialize();
+    io::FileSystem::Mount("project", root);
+
+    // A prefab: a container root (guid 1) with one child (guid 2).
+    SceneDescription prefab;
+    prefab.name = "CamRig";
+    EntityRecord container;
+    container.name = "Rig";
+    container.parentIndex = -1;
+    container.hasTransform = true;
+    container.scale = {1, 1, 1};
+    EntityRecord child;
+    child.name = "Cam";
+    child.parentIndex = 0;
+    child.hasTransform = true;
+    child.scale = {1, 1, 1};
+    prefab.entities = {container, child};
+    REQUIRE(SavePrefabFile("CamRig", prefab));
+    const auto saved = ReadPrefabFile("CamRig"); // guid-assigned copy
+    REQUIRE(saved.has_value());
+
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    const Entity instanceRoot = InstantiatePrefabInstance("CamRig", *saved, world, ApplySceneDeps{}, glm::mat4(1.0f));
+    REQUIRE(instanceRoot.IsValid());
+
+    // Capturing with no edits must not report the instance root's own guid (or any
+    // other) as removed - regression for the "removed = [1]" bug that wiped the whole
+    // instance on the next load.
+    const SceneDescription captured = CaptureScene(world, mreg, treg);
+    REQUIRE(captured.prefabInstances.size() == 1);
+    const PrefabInstanceRecord& pi = captured.prefabInstances[0];
+    CHECK(pi.removedGuids.empty());
+    CHECK(pi.overrides.empty());
+    CHECK(pi.addedEntities.empty());
+
+    io::FileSystem::Shutdown();
+    fs::remove_all(root, ec);
+}
+
 TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting") {
     FakeSlotSink sink(8);
     FakeTextureSink tsink;
@@ -1182,11 +1250,15 @@ TEST_CASE("2D sprite authoring fields survive a scene save and load round trip")
     const SpriteRendererComponent& savedSprite = *parsed->entities[0].sprite;
     CHECK(savedSprite.texturePath == sprite.texturePath);
     CHECK(savedSprite.atlasPath == sprite.atlasPath);
-    CHECK(savedSprite.spriteId == sprite.spriteId);
-    CHECK(savedSprite.uvRect == sprite.uvRect);
     CHECK(savedSprite.tint == sprite.tint);
-    CHECK(savedSprite.pixelSize == sprite.pixelSize);
-    CHECK(savedSprite.pivot == sprite.pivot);
+    // The animator drives the frame (spriteId/uvRect/pixelSize/pivot) every update and
+    // re-applies startFrame on load, so capture canonicalizes those to a fixed value
+    // instead of persisting whatever preview frame was live - otherwise a previewing
+    // animation floods every save with false-positive frame diffs.
+    CHECK_FALSE(savedSprite.spriteId.IsValid());
+    CHECK(savedSprite.uvRect == glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+    CHECK(savedSprite.pixelSize == glm::vec2(0.0f));
+    CHECK(savedSprite.pivot == glm::vec2(0.0f));
     CHECK(savedSprite.pixelsPerUnit == doctest::Approx(sprite.pixelsPerUnit));
     CHECK(savedSprite.sortingLayer == sprite.sortingLayer);
     CHECK(savedSprite.orderInLayer == sprite.orderInLayer);

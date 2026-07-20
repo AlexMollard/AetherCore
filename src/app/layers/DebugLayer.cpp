@@ -818,6 +818,12 @@ namespace aether::editor
 						tileFlushError = flushed.error().message;
 					}
 				}
+				// The scene's entity edits are now on disk; pin this history position so
+				// the unsaved-changes guard only fires on edits made after this save.
+				if (auto* undo = context.TryGet<editor::UndoStack>())
+				{
+					undo->MarkSaved();
+				}
 				saved = true;
 			}
 		}

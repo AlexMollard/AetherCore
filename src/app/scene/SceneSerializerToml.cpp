@@ -1668,6 +1668,29 @@ namespace aether::app::scene
 		return BuildSceneFromToml(std::move(root));
 	}
 
+	bool SceneTextHasNoCameraSource(std::string_view sceneToml)
+	{
+		const std::optional<SceneDescription> parsed = ParseToml(sceneToml);
+		if (!parsed)
+		{
+			return false; // unparseable - a separate error path handles that
+		}
+		// A prefab instance may carry the main camera, so treat any instance as a
+		// possible camera source and never warn then (avoids false positives).
+		if (!parsed->prefabInstances.empty())
+		{
+			return false;
+		}
+		for (const EntityRecord& e: parsed->entities)
+		{
+			if (e.mainCamera)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	namespace
 	{
 		// Round-trip a single record through the scene document path to get / rebuild

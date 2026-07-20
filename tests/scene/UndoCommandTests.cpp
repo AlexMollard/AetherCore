@@ -252,3 +252,35 @@ TEST_CASE("UndoStack ordering and redo invalidation")
 	CHECK(stack.RedoDepth() == 0);
 	CHECK(stack.UndoDepth() == 2);
 }
+
+TEST_CASE("UndoStack tracks unsaved changes across edits, save, undo and load")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	const glm::mat4 origin = world.TryGet<TransformComponent>(entity)->localToWorld;
+	const glm::mat4 one = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+	UndoStack stack;
+	CHECK_FALSE(stack.HasUnsavedChanges()); // fresh stack is clean
+
+	stack.Record(std::make_unique<TransformCommand>(std::vector<TransformCommand::Item>{{entity.id, origin, one}}));
+	CHECK(stack.HasUnsavedChanges()); // an edit makes it dirty
+
+	stack.MarkSaved();
+	CHECK_FALSE(stack.HasUnsavedChanges()); // saving pins the clean point
+
+	// Undoing after a save still counts as an outstanding change (conservative: never
+	// reports clean while the on-disk state differs from what a save just wrote).
+	CHECK(stack.Undo(world, services) != nullptr);
+	CHECK(stack.HasUnsavedChanges());
+
+	stack.MarkSaved();
+	CHECK_FALSE(stack.HasUnsavedChanges());
+
+	// A scene load (Clear) resets to clean.
+	stack.Record(std::make_unique<TransformCommand>(std::vector<TransformCommand::Item>{{entity.id, origin, one}}));
+	CHECK(stack.HasUnsavedChanges());
+	stack.Clear();
+	CHECK_FALSE(stack.HasUnsavedChanges());
+}

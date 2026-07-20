@@ -214,11 +214,14 @@ namespace aether::app::scene
 				}
 				const auto byGuid = LinkPrefabSubtree(world, created, root, *prefab);
 
-				// Remove prefab entities that were deleted in this instance.
+				// Remove prefab entities that were deleted in this instance. Never remove
+				// the instance root itself: it maps to the prefab's root entity, and an
+				// earlier capture bug could write the root's guid into `removed`; deleting
+				// it would wipe the whole instance.
 				for (const std::uint64_t g: rec.removedGuids)
 				{
 					const auto it = byGuid.find(g);
-					if (it != byGuid.end() && world.GetRegistry().valid(World::ToEntt(it->second)))
+					if (it != byGuid.end() && it->second != root && world.GetRegistry().valid(World::ToEntt(it->second)))
 					{
 						ecs::DestroyHierarchy(world, it->second);
 					}

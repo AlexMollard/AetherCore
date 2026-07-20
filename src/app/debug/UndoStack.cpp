@@ -91,6 +91,7 @@ namespace aether::editor
 			m_undo.erase(m_undo.begin());
 		}
 		m_redo.clear();
+		++m_editSeq;
 	}
 
 	IEditorCommand* UndoStack::Undo(World& world, ServiceContainer& services)
@@ -111,6 +112,7 @@ namespace aether::editor
 		{
 			m_redo.erase(m_redo.begin());
 		}
+		++m_editSeq;
 		return raw;
 	}
 
@@ -130,6 +132,7 @@ namespace aether::editor
 		{
 			m_undo.erase(m_undo.begin());
 		}
+		++m_editSeq;
 		return raw;
 	}
 
@@ -139,5 +142,8 @@ namespace aether::editor
 		m_redo.clear();
 		m_pendingBefore.reset();
 		m_pendingBeforeKey.clear();
+		// A fresh scene load starts clean.
+		m_editSeq = 0;
+		m_savedSeq = 0;
 	}
 } // namespace aether::editor

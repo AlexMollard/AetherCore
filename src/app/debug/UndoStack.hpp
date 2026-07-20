@@ -71,6 +71,22 @@ namespace aether::editor
 			return m_redo.size();
 		}
 
+		// Unsaved-changes tracking. MarkSaved() pins the current history position as
+		// the on-disk state; HasUnsavedChanges() is true after any later edit/undo/redo
+		// until the next save or scene load (Clear). Intentionally conservative - it may
+		// report changes after an undo returns to the saved content, but it never
+		// reports "clean" while edits are outstanding, so a save/exit guard cannot
+		// silently drop work.
+		void MarkSaved()
+		{
+			m_savedSeq = m_editSeq;
+		}
+
+		[[nodiscard]] bool HasUnsavedChanges() const
+		{
+			return m_editSeq != m_savedSeq;
+		}
+
 	private:
 		[[nodiscard]] bool CaptureScene(World& world, ServiceContainer& services, app::scene::SceneDescription& outDesc, std::string& outKey) const;
 		void RecordCommand(std::unique_ptr<IEditorCommand> command);
@@ -80,5 +96,10 @@ namespace aether::editor
 
 		std::vector<std::unique_ptr<IEditorCommand>> m_undo;
 		std::vector<std::unique_ptr<IEditorCommand>> m_redo;
+
+		// Monotonic count of scene-mutating operations (record/undo/redo); compared
+		// against m_savedSeq to detect unsaved changes.
+		std::size_t m_editSeq = 0;
+		std::size_t m_savedSeq = 0;
 	};
 } // namespace aether::editor
