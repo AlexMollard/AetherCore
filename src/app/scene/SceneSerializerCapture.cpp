@@ -245,45 +245,30 @@ namespace aether::app::scene
 					}
 					rec.effect = std::move(fx);
 				}
-				if (const auto* bob = world.TryGet<BobComponent>(e))
+				// Pure data-only components, captured generically from the reflection
+				// registry. Only reflected (authored) fields are stored, so runtime
+				// state - baseCaptured/time/base etc. - is naturally left out and
+				// resurrected as defaults on apply (what the old per-type "clean" did).
+				for (const std::string& typeName: GenericComponentTypeNames())
 				{
-					BobComponent clean = *bob;
-					clean.baseCaptured = false;
-					clean.time = 0.0f;
-					rec.bob = clean;
-				}
-				if (const auto* spin = world.TryGet<SpinComponent>(e))
-				{
-					rec.spin = *spin;
-				}
-				if (const auto* orbit = world.TryGet<OrbitComponent>(e))
-				{
-					rec.orbit = *orbit;
-				}
-				if (const auto* pulse = world.TryGet<MaterialPulseComponent>(e))
-				{
-					MaterialPulseComponent clean = *pulse;
-					clean.time = 0.0f;
-					rec.materialPulse = clean;
-				}
-				if (const auto* scale = world.TryGet<ScalePulseComponent>(e))
-				{
-					ScalePulseComponent clean = *scale;
-					clean.baseCaptured = false;
-					clean.time = 0.0f;
-					rec.scalePulse = clean;
-				}
-				if (const auto* look = world.TryGet<LookAtComponent>(e))
-				{
-					rec.lookAt = *look;
-				}
-				if (const auto* parallax = world.TryGet<ParallaxComponent>(e))
-				{
-					ParallaxComponent clean = *parallax;
-					clean.baseCaptured = false;
-					clean.base = glm::vec2(0.0f);
-					clean.time = 0.0f;
-					rec.parallax = clean;
+					const reflect::ComponentType* ct = reflect::FindComponentType(typeName);
+					if (ct == nullptr)
+					{
+						continue;
+					}
+					const void* comp = ct->tryGetRawConst(world, e);
+					if (comp == nullptr)
+					{
+						continue;
+					}
+					GenericComponent generic;
+					generic.type = typeName;
+					generic.fields.reserve(ct->fields.size());
+					for (const reflect::FieldDesc& field: ct->fields)
+					{
+						generic.fields.emplace_back(field.name, field.get(comp));
+					}
+					rec.reflected.push_back(std::move(generic));
 				}
 				if (const auto* particles = world.TryGet<ParticleEmitterComponent>(e))
 				{

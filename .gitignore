@@ -111,3 +111,7 @@ __pycache__/
 
 # Editor-generated per-project VS solution (paths are machine-local)
 AetherGame.slnx
+
+# Cooked scene/prefab binaries (derived from the .toml source)
+*.scene.bin
+*.prefab.bin

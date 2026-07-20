@@ -459,39 +459,31 @@ namespace aether::app::scene
 					AE_WARN(LogCategory::App, "Scene load: effect '{}' on '{}' skipped (missing effect deps)", rec.effect->name, rec.name);
 				}
 
-				if (rec.bob)
+				// Pure data-only components, applied generically: emplace a default
+				// (so runtime fields start clean) then set the reflected fields.
+				for (const GenericComponent& generic: rec.reflected)
 				{
-					world.Emplace<BobComponent>(e, *rec.bob);
-					++behaviorCount;
-				}
-				if (rec.spin)
-				{
-					world.Emplace<SpinComponent>(e, *rec.spin);
-					++behaviorCount;
-				}
-				if (rec.orbit)
-				{
-					world.Emplace<OrbitComponent>(e, *rec.orbit);
-					++behaviorCount;
-				}
-				if (rec.materialPulse)
-				{
-					world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
-					++behaviorCount;
-				}
-				if (rec.scalePulse)
-				{
-					world.Emplace<ScalePulseComponent>(e, *rec.scalePulse);
-					++behaviorCount;
-				}
-				if (rec.lookAt)
-				{
-					world.Emplace<LookAtComponent>(e, *rec.lookAt);
-					++behaviorCount;
-				}
-				if (rec.parallax)
-				{
-					world.Emplace<ParallaxComponent>(e, *rec.parallax);
+					const reflect::ComponentType* ct = reflect::FindComponentType(generic.type);
+					if (ct == nullptr || ct->emplaceDefault == nullptr)
+					{
+						continue;
+					}
+					void* comp = ct->emplaceDefault(world, e);
+					if (comp == nullptr)
+					{
+						continue;
+					}
+					for (const auto& [fieldName, value]: generic.fields)
+					{
+						if (const reflect::FieldDesc* f = ct->FindField(fieldName))
+						{
+							f->set(comp, value);
+						}
+					}
+					if (ct->postSet)
+					{
+						ct->postSet(world, e);
+					}
 					++behaviorCount;
 				}
 				if (rec.particles)

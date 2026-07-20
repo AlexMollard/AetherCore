@@ -27,6 +27,14 @@
 
 using namespace std::string_view_literals;
 
+// Forward-declared instead of including scene/SceneSerializer.hpp: that header
+// transitively pulls <Windows.h>, whose CopyFile macro clobbers the
+// io::file_util::CopyFile calls in this file.
+namespace aether::app::scene
+{
+	std::size_t CookProjectBinaries();
+}
+
 namespace aether::editor
 {
 	namespace
@@ -649,6 +657,10 @@ namespace aether::editor
 				}
 				shaderSpirvDir = intermediateShaderDir;
 			}
+
+			// Cook fresh scene/prefab binaries into the project so the pak (which
+			// packs the whole project tree) ships the fast binary form, not just TOML.
+			app::scene::CookProjectBinaries();
 
 			const std::filesystem::path outputPak = outputDir / "project.pak";
 			const assetpipeline::PackResult packResult = assetpipeline::PackProject(project.root, outputPak, {.importMaterials = true, .projectLayout = true, .shaderSpirvDir = shaderSpirvDir});

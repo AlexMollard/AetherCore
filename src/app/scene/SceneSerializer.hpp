@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -19,6 +21,7 @@
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/ModelBakeHook.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "scene/SceneKind.hpp"
 
 namespace aether
@@ -149,6 +152,16 @@ namespace aether::app::scene
 		std::map<std::string, ScriptPropertyValue> properties;
 	};
 
+	// A component captured generically from the reflection registry: the reflected
+	// component name plus a (fieldName, value) for each present field. Only fields
+	// actually present are stored, so on apply an absent field keeps its default -
+	// matching the old per-type behaviour. Serialized/applied with no per-component code.
+	struct GenericComponent
+	{
+		std::string type;
+		std::vector<std::pair<std::string, reflect::FieldValue>> fields;
+	};
+
 	struct EntityRecord
 	{
 		std::uint32_t entityId = 0;
@@ -174,14 +187,11 @@ namespace aether::app::scene
 		std::optional<UIRectRecord> uiRect;
 		std::optional<UIImageRecord> uiImage;
 		std::optional<UITextRecord> uiText;
-		// Data-driven behaviors (BehaviorComponents.hpp) serialize as plain data;
-		std::optional<BobComponent> bob;
-		std::optional<SpinComponent> spin;
-		std::optional<OrbitComponent> orbit;
-		std::optional<MaterialPulseComponent> materialPulse;
-		std::optional<ScalePulseComponent> scalePulse;
-		std::optional<LookAtComponent> lookAt;
-		std::optional<ParallaxComponent> parallax;
+		// Pure data-only components (no asset resolution or side effects) are
+		// captured/applied/serialized generically from the reflection registry - see
+		// GenericComponentTypeNames(). Adding one needs only its AE_COMPONENT
+		// declaration plus an entry in that list; no per-component serializer code.
+		std::vector<GenericComponent> reflected;
 		std::optional<ParticleEmitterComponent> particles;
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
@@ -257,13 +267,29 @@ namespace aether::app::scene
 
 	SceneDescription CaptureSubtrees(World& world, const std::vector<Entity>& roots, const MaterialRegistry& materials, const TextureRegistry& textures);
 
+	// Reflected component type names captured/applied/serialized generically (pure
+	// data-only components). Capture, Apply and the TOML/binary codecs all key off
+	// this one list, so adding such a component is a single entry here.
+	const std::vector<std::string>& GenericComponentTypeNames();
+
 	std::string WriteToml(const SceneDescription& scene);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
+
+	// Binary scene/prefab format: the TOML document tree encoded as compact bytes
+	// (magic + version header). Same content as WriteToml/ParseToml, but tokenizer-
+	// free to load - the cooked runtime form. ReadSceneBinary fails closed
+	// (std::nullopt) on a bad magic/version so callers can fall back to TOML.
+	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene);
+	std::optional<SceneDescription> ReadSceneBinary(const std::byte* data, std::size_t size);
+	std::optional<SceneDescription> ReadSceneBinary(const std::vector<std::byte>& bytes);
 
 	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir);
 	void ClearProjectSceneDirectories();
 
 	std::string ScenesDirectory();
+	// Re-cook every project scene/prefab .toml to its .bin sibling (fresh cooked
+	// binaries for the shipped pak). Returns how many were written.
+	std::size_t CookProjectBinaries();
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene);
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName);
 	std::vector<std::string> ListSceneFiles();

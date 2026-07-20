@@ -2,13 +2,21 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <filesystem>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <entt/entt.hpp>
 #include <toml++/toml.hpp>
+
+#include "utils/BinaryReader.hpp"
+#include "utils/BinaryWriter.hpp"
 
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
@@ -492,6 +500,67 @@ namespace aether::app::scene
 			}
 		}
 
+		// TOML key a generically-serialized component is stored under: lower-cased
+		// display name with spaces as underscores ("Material Pulse" -> "material_pulse"),
+		// matching the keys the hand-written serializer used.
+		std::string ComponentTomlKey(std::string_view displayName)
+		{
+			std::string key(displayName);
+			for (char& c: key)
+			{
+				c = (c == ' ') ? '_' : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			}
+			return key;
+		}
+
+		// One reflected field value <-> TOML (mirrors the switches in
+		// Write/ReadReflectedFromToml, but from a stored FieldValue).
+		void InsertReflectedFieldValue(toml::table& tbl, const std::string& key, const reflect::FieldDesc& f, const reflect::FieldValue& v)
+		{
+			switch (f.type)
+			{
+				case reflect::FieldType::Float: tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num); break;
+				case reflect::FieldType::Int:
+				case reflect::FieldType::UInt: tbl.insert(key, static_cast<std::int64_t>(v.num)); break;
+				case reflect::FieldType::Bool: tbl.insert(key, v.boolean); break;
+				case reflect::FieldType::Vec2: tbl.insert(key, Vec2ToToml(glm::vec2(v.vec))); break;
+				case reflect::FieldType::Vec3:
+				case reflect::FieldType::Color3: tbl.insert(key, Vec3ToToml(glm::vec3(v.vec))); break;
+				case reflect::FieldType::Vec4:
+				case reflect::FieldType::Color4: tbl.insert(key, Vec4ToToml(v.vec)); break;
+				case reflect::FieldType::Enum: tbl.insert(key, f.meta.enumTable != nullptr ? f.meta.enumTable->NameOf(v.enumValue) : std::to_string(v.enumValue)); break;
+				case reflect::FieldType::String: tbl.insert(key, v.str); break;
+				case reflect::FieldType::EntityRef: tbl.insert(key, static_cast<std::int64_t>(v.entity)); break;
+			}
+		}
+
+		reflect::FieldValue ReadReflectedFieldValue(const toml::node_view<const toml::node>& node, const reflect::FieldDesc& f)
+		{
+			reflect::FieldValue v;
+			v.type = f.type;
+			switch (f.type)
+			{
+				case reflect::FieldType::Float: v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(0.0)) : node.value_or(0.0); break;
+				case reflect::FieldType::Int:
+				case reflect::FieldType::UInt: v.num = static_cast<double>(node.value_or(std::int64_t{0})); break;
+				case reflect::FieldType::Bool: v.boolean = node.value_or(false); break;
+				case reflect::FieldType::Vec2: v.vec = glm::vec4(Vec2FromToml(node, glm::vec2(0.0f)), 0.0f, 0.0f); break;
+				case reflect::FieldType::Vec3:
+				case reflect::FieldType::Color3: v.vec = glm::vec4(Vec3FromToml(node, glm::vec3(0.0f)), 0.0f); break;
+				case reflect::FieldType::Vec4:
+				case reflect::FieldType::Color4: v.vec = Vec4FromToml(node, glm::vec4(0.0f)); break;
+				case reflect::FieldType::Enum:
+					if (f.meta.enumTable != nullptr)
+					{
+						v.enumValue = node.is_string() ? f.meta.enumTable->ValueOf(node.value_or(std::string{}), 0) : static_cast<int>(node.value_or(std::int64_t{0}));
+					}
+					break;
+				case reflect::FieldType::String: v.str = node.value_or(std::string{}); break;
+				case reflect::FieldType::EntityRef: v.entity = static_cast<std::uint64_t>(node.value_or(std::int64_t{0})); break;
+			}
+			return v;
+		}
+
 		const char* ScriptPropTypeTag(ScriptPropertyValue::Type type)
 		{
 			switch (type)
@@ -621,7 +690,7 @@ namespace aether::app::scene
 
 	} // namespace
 
-	std::string WriteToml(const SceneDescription& scene)
+	toml::table BuildSceneToml(const SceneDescription& scene)
 	{
 		toml::table root;
 		toml::table header;
@@ -880,33 +949,25 @@ namespace aether::app::scene
 				f.insert("intensity", rec.effect->params.intensity);
 				t.insert("effect", std::move(f));
 			}
-			if (rec.bob)
+			// Generically-serialized pure-data components (see GenericComponentTypeNames).
+			for (const GenericComponent& generic: rec.reflected)
 			{
-				t.insert("bob", WriteReflectedToToml("Bob", &*rec.bob));
-			}
-			if (rec.spin)
-			{
-				t.insert("spin", WriteReflectedToToml("Spin", &*rec.spin));
-			}
-			if (rec.orbit)
-			{
-				t.insert("orbit", WriteReflectedToToml("Orbit", &*rec.orbit));
-			}
-			if (rec.materialPulse)
-			{
-				t.insert("material_pulse", WriteReflectedToToml("Material Pulse", &*rec.materialPulse));
-			}
-			if (rec.scalePulse)
-			{
-				t.insert("scale_pulse", WriteReflectedToToml("Scale Pulse", &*rec.scalePulse));
-			}
-			if (rec.lookAt)
-			{
-				t.insert("look_at", WriteReflectedToToml("Look At", &*rec.lookAt));
-			}
-			if (rec.parallax)
-			{
-				t.insert("parallax", WriteReflectedToToml("Parallax", &*rec.parallax));
+				const reflect::ComponentType* ct = reflect::FindComponentType(generic.type);
+				if (ct == nullptr)
+				{
+					continue;
+				}
+				toml::table gtbl;
+				for (const auto& [fieldName, value]: generic.fields)
+				{
+					const reflect::FieldDesc* f = ct->FindField(fieldName);
+					if (f == nullptr || !f->meta.serialize)
+					{
+						continue;
+					}
+					InsertReflectedFieldValue(gtbl, f->meta.serializeName.empty() ? f->name : f->meta.serializeName, *f, value);
+				}
+				t.insert(ComponentTomlKey(generic.type), std::move(gtbl));
 			}
 			if (rec.particles)
 			{
@@ -990,24 +1051,20 @@ namespace aether::app::scene
 			root.insert("assets", std::move(assets));
 		}
 
+		return root;
+	}
+
+	std::string WriteToml(const SceneDescription& scene)
+	{
 		std::ostringstream out;
-		out << "# AetherCore scene - generated by the debug editor\n" << root << "\n";
+		out << "# AetherCore scene - generated by the debug editor\n" << BuildSceneToml(scene) << "\n";
 		return out.str();
 	}
 
-	std::optional<SceneDescription> ParseToml(std::string_view text)
+	// Build a SceneDescription from an already-parsed TOML document (shared by the
+	// text parser and the binary reader, which decodes the same document tree).
+	std::optional<SceneDescription> BuildSceneFromToml(toml::table root)
 	{
-		toml::table root;
-		try
-		{
-			root = toml::parse(text);
-		}
-		catch (const toml::parse_error& err)
-		{
-			AE_WARN(LogCategory::App, "Scene parse error: {}", err.description());
-			return std::nullopt;
-		}
-
 		const int sourceVersion = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
 		ApplySceneMigrations(root, sourceVersion);
 
@@ -1317,47 +1374,32 @@ namespace aether::app::scene
 				fx.params.intensity = static_cast<float>(fv["intensity"].value_or(1.0));
 				rec.effect = std::move(fx);
 			}
-			if (const auto* b = tv["bob"].as_table())
+			// Generically-serialized pure-data components (see GenericComponentTypeNames).
+			for (const std::string& typeName: GenericComponentTypeNames())
 			{
-				BobComponent c{};
-				ReadReflectedFromToml("Bob", *b, &c);
-				rec.bob = c;
-			}
-			if (const auto* s = tv["spin"].as_table())
-			{
-				SpinComponent c{};
-				ReadReflectedFromToml("Spin", *s, &c);
-				rec.spin = c;
-			}
-			if (const auto* o = tv["orbit"].as_table())
-			{
-				OrbitComponent c{};
-				ReadReflectedFromToml("Orbit", *o, &c);
-				rec.orbit = c;
-			}
-			if (const auto* p = tv["material_pulse"].as_table())
-			{
-				MaterialPulseComponent c{};
-				ReadReflectedFromToml("Material Pulse", *p, &c);
-				rec.materialPulse = c;
-			}
-			if (const auto* p = tv["scale_pulse"].as_table())
-			{
-				ScalePulseComponent c{};
-				ReadReflectedFromToml("Scale Pulse", *p, &c);
-				rec.scalePulse = c;
-			}
-			if (const auto* p = tv["look_at"].as_table())
-			{
-				LookAtComponent c{};
-				ReadReflectedFromToml("Look At", *p, &c);
-				rec.lookAt = c;
-			}
-			if (const auto* p = tv["parallax"].as_table())
-			{
-				ParallaxComponent c{};
-				ReadReflectedFromToml("Parallax", *p, &c);
-				rec.parallax = c;
+				const reflect::ComponentType* ct = reflect::FindComponentType(typeName);
+				if (ct == nullptr)
+				{
+					continue;
+				}
+				const auto* gtbl = tv[ComponentTomlKey(typeName)].as_table();
+				if (gtbl == nullptr)
+				{
+					continue;
+				}
+				GenericComponent generic;
+				generic.type = typeName;
+				const toml::node_view<const toml::node> gview{*gtbl};
+				for (const reflect::FieldDesc& f: ct->fields)
+				{
+					const auto node = gview[f.meta.serializeName.empty() ? f.name : f.meta.serializeName];
+					if (!node)
+					{
+						continue;
+					}
+					generic.fields.emplace_back(f.name, ReadReflectedFieldValue(node, f));
+				}
+				rec.reflected.push_back(std::move(generic));
 			}
 			if (const auto* p = tv["particles"].as_table())
 			{
@@ -1470,5 +1512,187 @@ namespace aether::app::scene
 			scene.entities.push_back(std::move(rec));
 		}
 		return scene;
+	}
+
+	std::optional<SceneDescription> ParseToml(std::string_view text)
+	{
+		toml::table root;
+		try
+		{
+			root = toml::parse(text);
+		}
+		catch (const toml::parse_error& err)
+		{
+			AE_WARN(LogCategory::App, "Scene parse error: {}", err.description());
+			return std::nullopt;
+		}
+		return BuildSceneFromToml(std::move(root));
+	}
+
+	// ── Binary format ────────────────────────────────────────────────────────
+	// The binary scene/prefab format is the TOML document tree encoded as bytes
+	// (like BSON to JSON): the SAME BuildSceneToml/BuildSceneFromToml path, just a
+	// compact, tokenizer-free encoding for fast runtime loads. Any component that
+	// serializes to TOML serializes to binary for free - no per-component code.
+	namespace
+	{
+		constexpr std::uint32_t kSceneBinaryMagic = 0x42534541u; // "AESB"
+		constexpr std::uint32_t kSceneBinaryVersion = 1u;
+
+		enum class TomlTag : std::uint8_t
+		{
+			Null = 0,
+			Table = 1,
+			Array = 2,
+			String = 3,
+			Int = 4,
+			Float = 5,
+			Bool = 6,
+		};
+
+		void WriteTomlTreeNode(BinaryWriter& writer, const toml::node& node)
+		{
+			switch (node.type())
+			{
+				case toml::node_type::table:
+				{
+					const toml::table& table = *node.as_table();
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Table));
+					writer.Write<std::uint32_t>(static_cast<std::uint32_t>(table.size()));
+					for (auto&& [key, child]: table)
+					{
+						writer.WriteString(key.str());
+						WriteTomlTreeNode(writer, child);
+					}
+					break;
+				}
+				case toml::node_type::array:
+				{
+					const toml::array& array = *node.as_array();
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Array));
+					writer.Write<std::uint32_t>(static_cast<std::uint32_t>(array.size()));
+					for (auto&& child: array)
+					{
+						WriteTomlTreeNode(writer, child);
+					}
+					break;
+				}
+				case toml::node_type::string:
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::String));
+					writer.WriteString(node.as_string()->get());
+					break;
+				case toml::node_type::integer:
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Int));
+					writer.Write<std::int64_t>(node.as_integer()->get());
+					break;
+				case toml::node_type::floating_point:
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Float));
+					writer.Write<double>(node.as_floating_point()->get());
+					break;
+				case toml::node_type::boolean:
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Bool));
+					writer.Write<std::uint8_t>(node.as_boolean()->get() ? 1u : 0u);
+					break;
+				default:
+					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Null));
+					break;
+			}
+		}
+
+		std::string ReadBinaryString(BinaryReader& reader)
+		{
+			const std::uint32_t length = reader.Read<std::uint32_t>();
+			std::string value;
+			if (length > 0 && reader.CanRead(length))
+			{
+				value.assign(reinterpret_cast<const char*>(reader.Data()), length);
+				reader.Advance(length);
+			}
+			return value;
+		}
+
+		// Plain (non-template) recursion: a generic-lambda template here would
+		// instantiate a fresh type at every depth and blow up the compiler.
+		toml::table ReadTomlTableBody(BinaryReader& reader, int depth);
+		toml::array ReadTomlArrayBody(BinaryReader& reader, int depth);
+
+		toml::table ReadTomlTableBody(BinaryReader& reader, int depth)
+		{
+			toml::table table;
+			if (depth > 512)
+			{
+				return table;
+			}
+			const std::uint32_t count = reader.Read<std::uint32_t>();
+			for (std::uint32_t i = 0; i < count && reader.Remaining() > 0; ++i)
+			{
+				const std::string key = ReadBinaryString(reader);
+				switch (static_cast<TomlTag>(reader.Read<std::uint8_t>()))
+				{
+					case TomlTag::Table: table.insert(key, ReadTomlTableBody(reader, depth + 1)); break;
+					case TomlTag::Array: table.insert(key, ReadTomlArrayBody(reader, depth + 1)); break;
+					case TomlTag::String: table.insert(key, ReadBinaryString(reader)); break;
+					case TomlTag::Int: table.insert(key, reader.Read<std::int64_t>()); break;
+					case TomlTag::Float: table.insert(key, reader.Read<double>()); break;
+					case TomlTag::Bool: table.insert(key, static_cast<bool>(reader.Read<std::uint8_t>())); break;
+					case TomlTag::Null:
+					default: break;
+				}
+			}
+			return table;
+		}
+
+		toml::array ReadTomlArrayBody(BinaryReader& reader, int depth)
+		{
+			toml::array array;
+			if (depth > 512)
+			{
+				return array;
+			}
+			const std::uint32_t count = reader.Read<std::uint32_t>();
+			for (std::uint32_t i = 0; i < count && reader.Remaining() > 0; ++i)
+			{
+				switch (static_cast<TomlTag>(reader.Read<std::uint8_t>()))
+				{
+					case TomlTag::Table: array.push_back(ReadTomlTableBody(reader, depth + 1)); break;
+					case TomlTag::Array: array.push_back(ReadTomlArrayBody(reader, depth + 1)); break;
+					case TomlTag::String: array.push_back(ReadBinaryString(reader)); break;
+					case TomlTag::Int: array.push_back(reader.Read<std::int64_t>()); break;
+					case TomlTag::Float: array.push_back(reader.Read<double>()); break;
+					case TomlTag::Bool: array.push_back(static_cast<bool>(reader.Read<std::uint8_t>())); break;
+					case TomlTag::Null:
+					default: break;
+				}
+			}
+			return array;
+		}
+	} // namespace
+
+	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene)
+	{
+		BinaryWriter writer;
+		writer.Write<std::uint32_t>(kSceneBinaryMagic);
+		writer.Write<std::uint32_t>(kSceneBinaryVersion);
+		WriteTomlTreeNode(writer, BuildSceneToml(scene));
+		return writer.Take();
+	}
+
+	std::optional<SceneDescription> ReadSceneBinary(const std::byte* data, std::size_t size)
+	{
+		BinaryReader reader(data, size);
+		if (!reader.CanRead(sizeof(std::uint32_t) * 2 + 1) || reader.Read<std::uint32_t>() != kSceneBinaryMagic || reader.Read<std::uint32_t>() != kSceneBinaryVersion)
+		{
+			return std::nullopt;
+		}
+		if (static_cast<TomlTag>(reader.Read<std::uint8_t>()) != TomlTag::Table)
+		{
+			return std::nullopt;
+		}
+		return BuildSceneFromToml(ReadTomlTableBody(reader, 0));
+	}
+
+	std::optional<SceneDescription> ReadSceneBinary(const std::vector<std::byte>& bytes)
+	{
+		return ReadSceneBinary(bytes.data(), bytes.size());
 	}
 } // namespace aether::app::scene

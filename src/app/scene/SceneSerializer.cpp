@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -43,10 +44,27 @@ namespace aether::app::scene
 		std::filesystem::path g_projectScenesDirectory;
 		std::filesystem::path g_projectPrefabsDirectory;
 
+		// Parsed-prefab cache: a game may instantiate the same prefab thousands of
+		// times (bullets, pickups, enemies); without this each spawn re-read the
+		// file and re-ran the TOML parser. Keyed by prefab name; refreshed on save
+		// and cleared when the active project's prefab directory changes.
+		std::mutex g_prefabCacheMutex;
+		std::unordered_map<std::string, SceneDescription> g_prefabCache;
+
+		void InvalidatePrefabCache()
+		{
+			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
+			g_prefabCache.clear();
+		}
+
 		constexpr std::string_view kProjectScenesVfsDir = "scenes";
 		constexpr std::string_view kProjectPrefabsVfsDir = "assets/prefabs";
 		constexpr std::string_view kSceneSuffix = ".scene.toml";
 		constexpr std::string_view kPrefabSuffix = ".prefab.toml";
+		// Cooked binary siblings (see WriteSceneBinary): loaded in preference to the
+		// TOML source at runtime for a fast, tokenizer-free parse.
+		constexpr std::string_view kSceneBinSuffix = ".scene.bin";
+		constexpr std::string_view kPrefabBinSuffix = ".prefab.bin";
 
 		std::string ProjectVirtualPath(std::string_view directory, const std::string& name, std::string_view suffix)
 		{
@@ -71,6 +89,31 @@ namespace aether::app::scene
 				return std::nullopt;
 			}
 			return std::move(*text);
+		}
+
+		// Load the cooked binary sibling (project VFS first, then disk), decode it,
+		// and return the scene - or nullopt if there's no valid binary (caller then
+		// falls back to the TOML source).
+		std::optional<SceneDescription> TryReadBinary(std::string_view vfsDir, const std::string& name, std::string_view binSuffix, const std::filesystem::path& diskDir)
+		{
+			if (io::FileSystem::IsInitialized() && io::FileSystem::IsMounted("project"))
+			{
+				if (auto bytes = io::FileSystem::ReadFile(ProjectVirtualPath(vfsDir, name, binSuffix)); bytes)
+				{
+					if (auto scene = ReadSceneBinary(*bytes))
+					{
+						return scene;
+					}
+				}
+			}
+			if (auto bytes = io::file_util::ReadBinary(diskDir / (name + std::string(binSuffix))); bytes)
+			{
+				if (auto scene = ReadSceneBinary(*bytes))
+				{
+					return scene;
+				}
+			}
+			return std::nullopt;
 		}
 
 		std::vector<std::string> ListProjectFiles(std::string_view directory, std::string_view suffix)
@@ -106,6 +149,10 @@ namespace aether::app::scene
 
 	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir)
 	{
+		if (g_projectPrefabsDirectory != prefabsDir)
+		{
+			InvalidatePrefabCache();
+		}
 		g_projectScenesDirectory = std::move(scenesDir);
 		g_projectPrefabsDirectory = std::move(prefabsDir);
 	}
@@ -114,6 +161,25 @@ namespace aether::app::scene
 	{
 		g_projectScenesDirectory.clear();
 		g_projectPrefabsDirectory.clear();
+		InvalidatePrefabCache();
+	}
+
+	const std::vector<std::string>& GenericComponentTypeNames()
+	{
+		// Pure data-only components: no asset resolution, physics bodies, cross-entity
+		// refs, or bespoke serialization - just reflected fields. Capture/Apply/codec
+		// handle these generically, so a new one only needs its AE_COMPONENT
+		// declaration plus an entry here.
+		static const std::vector<std::string> kNames{
+		        "Bob",
+		        "Spin",
+		        "Orbit",
+		        "Material Pulse",
+		        "Scale Pulse",
+		        "Look At",
+		        "Parallax",
+		};
+		return kNames;
 	}
 
 	std::string ScenesDirectory()
@@ -157,25 +223,57 @@ namespace aether::app::scene
 			AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", path.string());
 			return false;
 		}
+		// Cook the binary sibling (best-effort; the TOML is the source of truth).
+		if (auto cooked = io::file_util::WriteBinary(dir / (prefabName + std::string(kPrefabBinSuffix)), WriteSceneBinary(prefab)); !cooked)
+		{
+			AE_WARN(LogCategory::App, "SavePrefabFile: cannot cook binary for '{}': {}", prefabName, cooked.error().message);
+		}
+		// Refresh the cache so the next instantiation sees the saved edit without a re-read.
+		{
+			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
+			g_prefabCache[prefabName] = prefab;
+		}
 		AE_INFO(LogCategory::App, "Prefab saved: {} ({} entities)", path.string(), prefab.entities.size());
 		return true;
 	}
 
 	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName)
 	{
-		if (auto text = ReadProjectText(kProjectPrefabsVfsDir, prefabName, kPrefabSuffix))
 		{
-			return ParseToml(*text);
+			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
+			if (const auto it = g_prefabCache.find(prefabName); it != g_prefabCache.end())
+			{
+				return it->second;
+			}
 		}
 
-		const std::filesystem::path path = std::filesystem::path{PrefabsDirectory()} / (prefabName + ".prefab.toml");
-		auto text = io::file_util::ReadText(path);
-		if (!text)
+		std::optional<SceneDescription> parsed = TryReadBinary(kProjectPrefabsVfsDir, prefabName, kPrefabBinSuffix, std::filesystem::path{PrefabsDirectory()});
+		if (parsed)
 		{
-			AE_WARN(LogCategory::App, "ReadPrefabFile: cannot read '{}'", path.string());
-			return std::nullopt;
+			// cooked binary hit
 		}
-		return ParseToml(*text);
+		else if (auto text = ReadProjectText(kProjectPrefabsVfsDir, prefabName, kPrefabSuffix))
+		{
+			parsed = ParseToml(*text);
+		}
+		else
+		{
+			const std::filesystem::path path = std::filesystem::path{PrefabsDirectory()} / (prefabName + ".prefab.toml");
+			auto diskText = io::file_util::ReadText(path);
+			if (!diskText)
+			{
+				AE_WARN(LogCategory::App, "ReadPrefabFile: cannot read '{}'", path.string());
+				return std::nullopt;
+			}
+			parsed = ParseToml(*diskText);
+		}
+
+		if (parsed)
+		{
+			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
+			g_prefabCache[prefabName] = *parsed;
+		}
+		return parsed;
 	}
 
 	std::vector<std::string> ListPrefabFiles()
@@ -220,12 +318,59 @@ namespace aether::app::scene
 			AE_WARN(LogCategory::App, "SaveSceneFile: cannot write '{}'", path.string());
 			return false;
 		}
+		// Cook the binary sibling for fast runtime loads (best-effort; TOML is source).
+		if (auto cooked = io::file_util::WriteBinary(dir / (sceneName + std::string(kSceneBinSuffix)), WriteSceneBinary(scene)); !cooked)
+		{
+			AE_WARN(LogCategory::App, "SaveSceneFile: cannot cook binary for '{}': {}", sceneName, cooked.error().message);
+		}
 		AE_INFO(LogCategory::App, "Scene saved: {} ({} entities)", path.string(), scene.entities.size());
 		return true;
 	}
 
+	std::size_t CookProjectBinaries()
+	{
+		std::size_t cooked = 0;
+		const auto cookOne = [&cooked](const std::filesystem::path& dir, const std::string& name, std::string_view tomlSuffix, std::string_view binSuffix)
+		{
+			const std::filesystem::path tomlPath = dir / (name + std::string(tomlSuffix));
+			auto text = io::file_util::ReadText(tomlPath);
+			if (!text)
+			{
+				return;
+			}
+			auto desc = ParseToml(*text);
+			if (!desc)
+			{
+				return;
+			}
+			if (io::file_util::WriteBinary(dir / (name + std::string(binSuffix)), WriteSceneBinary(*desc)))
+			{
+				++cooked;
+			}
+		};
+
+		const std::filesystem::path scenesDir{ScenesDirectory()};
+		for (const std::string& name: ListSceneFiles())
+		{
+			cookOne(scenesDir, name, kSceneSuffix, kSceneBinSuffix);
+		}
+		const std::filesystem::path prefabsDir{PrefabsDirectory()};
+		for (const std::string& name: ListPrefabFiles())
+		{
+			cookOne(prefabsDir, name, kPrefabSuffix, kPrefabBinSuffix);
+		}
+		AE_INFO(LogCategory::App, "Cooked {} scene/prefab binaries", cooked);
+		return cooked;
+	}
+
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName)
 	{
+		// Prefer the cooked binary; fall back to the TOML source.
+		if (auto binary = TryReadBinary(kProjectScenesVfsDir, sceneName, kSceneBinSuffix, std::filesystem::path{ScenesDirectory()}))
+		{
+			return binary;
+		}
+
 		if (auto text = ReadProjectText(kProjectScenesVfsDir, sceneName, kSceneSuffix))
 		{
 			return ParseToml(*text);

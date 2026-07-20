@@ -57,6 +57,51 @@ namespace
         const int i = IndexOf(scene, name);
         return i >= 0 ? created[static_cast<std::size_t>(i)] : Entity{};
     }
+
+    // Reflection-driven pure-data components (Bob, Spin, Orbit, Material Pulse, Scale Pulse,
+    // Look At, Parallax) live in EntityRecord::reflected keyed by display name + reflected field name.
+    bool HasGeneric(const EntityRecord& rec, std::string_view type)
+    {
+        for (const GenericComponent& g: rec.reflected)
+        {
+            if (g.type == type)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    const reflect::FieldValue* GenericVal(const EntityRecord& rec, std::string_view type, std::string_view field)
+    {
+        for (const GenericComponent& g: rec.reflected)
+        {
+            if (g.type != type)
+            {
+                continue;
+            }
+            for (const auto& [name, val]: g.fields)
+            {
+                if (name == field)
+                {
+                    return &val;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    double GNum(const EntityRecord& rec, std::string_view type, std::string_view field)
+    {
+        const reflect::FieldValue* v = GenericVal(rec, type, field);
+        return v != nullptr ? v->num : 0.0;
+    }
+
+    glm::vec4 GVec(const EntityRecord& rec, std::string_view type, std::string_view field)
+    {
+        const reflect::FieldValue* v = GenericVal(rec, type, field);
+        return v != nullptr ? v->vec : glm::vec4(0.0f);
+    }
 }
 
 TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
@@ -174,27 +219,26 @@ TEST_CASE("Behavior components round-trip through capture, TOML and apply") {
     REQUIRE(parsed.has_value());
 
     const EntityRecord& o = RecordOf(*parsed, "Orb");
-    REQUIRE(o.bob.has_value());
-    CHECK(o.bob->amplitude == doctest::Approx(1.5f));
-    CHECK(o.bob->frequency == doctest::Approx(0.8f));
-    CHECK(o.bob->phase == doctest::Approx(2.1f));
-    CHECK(!o.bob->baseCaptured);
-    CHECK(o.bob->time == doctest::Approx(0.0f));
+    REQUIRE(HasGeneric(o, "Bob"));
+    CHECK(GNum(o, "Bob", "amplitude") == doctest::Approx(1.5f));
+    CHECK(GNum(o, "Bob", "frequency") == doctest::Approx(0.8f));
+    CHECK(GNum(o, "Bob", "phase") == doctest::Approx(2.1f));
+    // Runtime fields (baseCaptured/time) are not reflected, so they never serialize; the
+    // post-apply World check below confirms they stay default on load.
 
     const EntityRecord& s = RecordOf(*parsed, "Spinner");
-    REQUIRE(s.spin.has_value());
-    CHECK(s.spin->eulerDegPerSec.x == doctest::Approx(20.0f));
-    REQUIRE(s.materialPulse.has_value());
-    CHECK(s.materialPulse->emissiveB.r == doctest::Approx(2.0f));
-    CHECK(s.materialPulse->frequency == doctest::Approx(2.0f));
-    CHECK(s.materialPulse->time == doctest::Approx(0.0f));
+    REQUIRE(HasGeneric(s, "Spin"));
+    CHECK(GVec(s, "Spin", "euler_deg_per_sec").x == doctest::Approx(20.0f));
+    REQUIRE(HasGeneric(s, "Material Pulse"));
+    CHECK(GVec(s, "Material Pulse", "emissive_b").r == doctest::Approx(2.0f));
+    CHECK(GNum(s, "Material Pulse", "frequency") == doctest::Approx(2.0f));
 
     const EntityRecord& f = RecordOf(*parsed, "Fox");
-    REQUIRE(f.orbit.has_value());
-    CHECK(f.orbit->center.x == doctest::Approx(14.0f));
-    CHECK(f.orbit->radius == doctest::Approx(6.0f));
-    CHECK(f.orbit->angleDeg == doctest::Approx(123.0f));
-    CHECK(f.orbit->yawOffsetDeg == doctest::Approx(90.0f));
+    REQUIRE(HasGeneric(f, "Orbit"));
+    CHECK(GVec(f, "Orbit", "center").x == doctest::Approx(14.0f));
+    CHECK(GNum(f, "Orbit", "radius") == doctest::Approx(6.0f));
+    CHECK(GNum(f, "Orbit", "angle_deg") == doctest::Approx(123.0f));
+    CHECK(GNum(f, "Orbit", "yaw_offset_deg") == doctest::Approx(90.0f));
 
     World fresh = MakeWorld();
     const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
@@ -224,13 +268,13 @@ TEST_CASE("Parallax component round-trips through capture, TOML and apply") {
     REQUIRE(parsed.has_value());
 
     const EntityRecord& c = RecordOf(*parsed, "Clouds");
-    REQUIRE(c.parallax.has_value());
-    CHECK(c.parallax->factor.x == doctest::Approx(0.2f));
-    CHECK(c.parallax->factor.y == doctest::Approx(0.35f));
-    CHECK(c.parallax->scrollSpeed.x == doctest::Approx(0.5f));
-    CHECK(c.parallax->scrollSpeed.y == doctest::Approx(0.0f));
-    CHECK(!c.parallax->baseCaptured);
-    CHECK(c.parallax->time == doctest::Approx(0.0f));
+    REQUIRE(HasGeneric(c, "Parallax"));
+    CHECK(GVec(c, "Parallax", "factor").x == doctest::Approx(0.2f));
+    CHECK(GVec(c, "Parallax", "factor").y == doctest::Approx(0.35f));
+    CHECK(GVec(c, "Parallax", "scroll_speed").x == doctest::Approx(0.5f));
+    CHECK(GVec(c, "Parallax", "scroll_speed").y == doctest::Approx(0.0f));
+    // Runtime fields (base/time/baseCaptured) are not reflected; the World check below
+    // confirms they stay default on load.
 
     World fresh = MakeWorld();
     const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
@@ -459,7 +503,7 @@ TEST_CASE("Pre-versioning scene files parse as format v1") {
     CHECK(parsed->features == DefaultSceneFeatures(SceneKind::Scene3D));
     REQUIRE(parsed->entities.size() == 1);
     CHECK(parsed->entities[0].name == "Box");
-    CHECK(!parsed->entities[0].orbit.has_value());
+    CHECK(!HasGeneric(parsed->entities[0], "Orbit"));
 }
 
 TEST_CASE("Scene feature flags round-trip and use kind-aware legacy defaults") {
@@ -739,7 +783,7 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     CHECK(IndexOf(*parsed, "Outside") == -1);
     const EntityRecord& armRec = RecordOf(*parsed, "Arm");
     CHECK(armRec.parentIndex == 0);
-    REQUIRE(armRec.spin.has_value());
+    REQUIRE(HasGeneric(armRec, "Spin"));
 
     World fresh = MakeWorld();
     const Entity newRoot = InstantiatePrefab(*parsed, fresh, ApplySceneDeps{}, ComposeTransform({12, 0, 0}, {0, 0, 0}, {1, 1, 1}));
