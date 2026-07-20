@@ -119,6 +119,7 @@ namespace aether
 		}
 		chunk.cells[index] = value;
 		++chunk.revision;
+		dirty = true;
 		if (tilecell::Empty(value) && chunk.IsEmpty())
 		{
 			target.chunks.erase(it); // keep the map sparse

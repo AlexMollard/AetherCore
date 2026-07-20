@@ -28,6 +28,7 @@
 #include "debug/Icons.hpp"
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/TileAssetStore.hpp"
 #include "editor/EditorProjectActions.hpp"
 #include "io/FileUtil.hpp"
 #include "editor/EditorProjectContext.hpp"
@@ -188,6 +189,18 @@ namespace aether::editor
 			{
 				error = "The current scene could not be saved. Publishing was cancelled to avoid packaging stale content.";
 				return false;
+			}
+
+			// Tilemap cells live in their own .tiles asset (the project pak ships the
+			// file on disk), so unsaved in-memory tile edits must be flushed before
+			// packing - otherwise a scene that looks right in Play publishes stale tiles.
+			if (auto* tiles = context.TryGet<TileAssetStore>())
+			{
+				if (const auto flushed = tiles->FlushDirtyTileMaps(); !flushed.has_value())
+				{
+					error = "Edited tilemaps could not be saved: " + flushed.error().message + ". Publishing was cancelled to avoid packaging stale tiles.";
+					return false;
+				}
 			}
 			return true;
 		}

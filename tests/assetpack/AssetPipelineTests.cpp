@@ -1,11 +1,15 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 #include "AssetPipeline.hpp"
 #include "PakWriter.hpp"
+#include "assets/TileMapAsset.hpp"
 #include "io/PakBackend.hpp"
 
 using namespace aether;
@@ -26,6 +30,36 @@ namespace
 		std::ofstream out(path, std::ios::binary);
 		out << contents;
 	}
+}
+
+TEST_CASE("PackProject ships tilemap .tiles assets with their current on-disk bytes")
+{
+	// Regression guard for the tilemap-publish bug: the pack must include the .tiles
+	// asset and ship exactly what is on disk (which the save/publish flush writes).
+	const std::filesystem::path projectRoot = MakeTempDir("proj_tiles");
+	WriteFile(projectRoot / "ProjectSettings.toml", "[project]\nversion = 1\nname = \"Test\"\n");
+
+	aether::TileMapAsset map;
+	map.layers.emplace_back();
+	map.SetCell(0, {3, 4}, aether::tilecell::Make(0));
+	const std::filesystem::path tilesPath = projectRoot / "assets" / "tiles" / "level.atlm";
+	std::filesystem::create_directories(tilesPath.parent_path());
+	REQUIRE(map.Save(tilesPath).has_value());
+
+	const std::filesystem::path pak = std::filesystem::temp_directory_path() / "aepak_test_tiles.pak";
+	std::filesystem::remove(pak);
+	const assetpipeline::PackResult result = assetpipeline::PackProject(projectRoot, pak, {.projectLayout = true});
+	REQUIRE(result.ok);
+
+	io::PakBackend backend(pak);
+	REQUIRE(backend.Exists("assets/tiles/level.atlm"));
+
+	const auto packed = backend.Read("assets/tiles/level.atlm");
+	REQUIRE(packed.has_value());
+	std::ifstream in(tilesPath, std::ios::binary);
+	const std::vector<char> onDisk((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	REQUIRE(packed->size() == onDisk.size());
+	CHECK(std::equal(onDisk.begin(), onDisk.end(), reinterpret_cast<const char*>(packed->data())));
 }
 
 TEST_CASE("PackDirectory round-trips plain files through PakBackend")

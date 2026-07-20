@@ -8,6 +8,7 @@
 #include "PlayState.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/TileAssetStore.hpp"
 #include "debug/SceneSelection.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -43,6 +44,12 @@ namespace aether::app
 			if (auto* spriteAnimations = context.TryGet<SpriteAnimationSystem>())
 			{
 				spriteAnimations->ResetForPlay(world);
+			}
+			// Snapshot tile cells too - they live in shared assets, not the ECS, so a
+			// script painting during play would otherwise persist past Stop.
+			if (auto* tiles = context.TryGet<TileAssetStore>())
+			{
+				playState.tileStopSnapshot = tiles->SnapshotTileMaps();
 			}
 			playState.SetMode(PlayState::Mode::Playing);
 		}
@@ -189,6 +196,14 @@ namespace aether::app
 				scenes->SetCurrentScene(playState->stopSceneName);
 			}
 		}
+		// Revert any tile edits a script made during play (mirrors the ECS restore).
+		// Wholesale swap: play-time paints undo, maps loaded during play drop out.
+		if (auto* tiles = context.TryGet<TileAssetStore>())
+		{
+			tiles->RestoreTileMaps(std::move(playState->tileStopSnapshot));
+		}
+		playState->tileStopSnapshot.clear();
+
 		playState->stopSelection.clear();
 		playState->stopSelectionPrimary = {};
 

@@ -231,3 +231,106 @@ TEST_CASE("TileAssetStore caches and invalidates")
 	REQUIRE(third.has_value());
 	CHECK((*third)->name == "Cache");
 }
+
+TEST_CASE("FlushDirtyTileMaps persists in-memory tile edits to disk")
+{
+	const auto mapPath = (TempDir() / "flush.atlm").generic_string();
+
+	// Seed a saved map with one cell, then load it into the store (clean cache).
+	aether::TileMapAsset seed;
+	seed.layers.emplace_back();
+	seed.SetCell(0, {2, 3}, aether::tilecell::Make(0));
+	seed.SetCell(0, {5, 5}, aether::tilecell::Make(0));
+
+	aether::TileAssetStore store;
+	REQUIRE(store.SaveTileMap(mapPath, seed).has_value());
+	CHECK_FALSE(store.AnyTileMapDirty()); // SaveTileMap leaves the cache clean
+
+	// Edit through the editor-facing mutable accessor (as painting/erasing does).
+	aether::TileMapAsset* live = store.MutableTileMap(mapPath);
+	REQUIRE(live != nullptr);
+	live->SetCell(0, {5, 5}, aether::tilecell::kEmpty); // erase a tile
+	live->SetCell(0, {9, 1}, aether::tilecell::Make(0)); // paint a new one
+	CHECK(store.AnyTileMapDirty());
+
+	// Before flushing, the on-disk file still holds the old cells.
+	{
+		const auto onDisk = aether::TileMapAsset::Load(mapPath);
+		REQUIRE(onDisk.has_value());
+		CHECK(onDisk->GetCell(0, {5, 5}) != aether::tilecell::kEmpty); // still there on disk
+		CHECK(onDisk->GetCell(0, {9, 1}) == aether::tilecell::kEmpty); // not yet on disk
+	}
+
+	REQUIRE(store.FlushDirtyTileMaps().has_value());
+	CHECK_FALSE(store.AnyTileMapDirty());
+
+	// After flushing, disk matches the in-memory edits - what publish would pack.
+	const auto flushed = aether::TileMapAsset::Load(mapPath);
+	REQUIRE(flushed.has_value());
+	CHECK(flushed->GetCell(0, {5, 5}) == aether::tilecell::kEmpty); // erase persisted
+	CHECK(flushed->GetCell(0, {9, 1}) != aether::tilecell::kEmpty); // paint persisted
+	CHECK(flushed->GetCell(0, {2, 3}) != aether::tilecell::kEmpty); // untouched cell intact
+}
+
+TEST_CASE("FlushDirtyTileMaps isolates one bad map and still flushes the healthy ones")
+{
+	const auto goodPath = (TempDir() / "flush_good.atlm").generic_string();
+	const auto badPath = (TempDir() / "flush_bad.atlm").generic_string();
+
+	aether::TileMapAsset seed;
+	seed.layers.emplace_back();
+
+	aether::TileAssetStore store;
+	REQUIRE(store.SaveTileMap(goodPath, seed).has_value());
+	REQUIRE(store.SaveTileMap(badPath, seed).has_value());
+
+	// Dirty both maps through the editor-facing accessor.
+	store.MutableTileMap(goodPath)->SetCell(0, {1, 1}, aether::tilecell::Make(0));
+	store.MutableTileMap(badPath)->SetCell(0, {2, 2}, aether::tilecell::Make(0));
+	CHECK(store.AnyTileMapDirty());
+
+	// Make badPath unwritable as a file by replacing it with a directory - Save's
+	// ofstream cannot open a directory, so that one map fails while the other saves.
+	std::error_code ec;
+	std::filesystem::remove(badPath, ec);
+	std::filesystem::create_directory(badPath, ec);
+	REQUIRE(std::filesystem::is_directory(badPath, ec));
+
+	const auto result = store.FlushDirtyTileMaps();
+	CHECK_FALSE(result.has_value()); // surfaced the failure
+
+	// The healthy map flushed and is clean; the bad one stays dirty for a later retry.
+	CHECK(store.AnyTileMapDirty());
+	const auto good = aether::TileMapAsset::Load(goodPath);
+	REQUIRE(good.has_value());
+	CHECK(good->GetCell(0, {1, 1}) != aether::tilecell::kEmpty);
+
+	std::filesystem::remove_all(badPath, ec); // cleanup
+}
+
+TEST_CASE("Snapshot/RestoreTileMaps reverts play-time tile edits")
+{
+	const auto path = (TempDir() / "playrevert.atlm").generic_string();
+	aether::TileMapAsset seed;
+	seed.layers.emplace_back();
+	seed.SetCell(0, {0, 0}, aether::tilecell::Make(0));
+
+	aether::TileAssetStore store;
+	REQUIRE(store.SaveTileMap(path, seed).has_value());
+
+	// Snapshot at "play start", then simulate a script painting/erasing during play.
+	auto snapshot = store.SnapshotTileMaps();
+	aether::TileMapAsset* live = store.MutableTileMap(path);
+	REQUIRE(live != nullptr);
+	live->SetCell(0, {0, 0}, aether::tilecell::kEmpty);  // erase the authored tile
+	live->SetCell(0, {7, 7}, aether::tilecell::Make(0)); // paint a runtime tile
+	CHECK(store.MutableTileMap(path)->GetCell(0, {7, 7}) != aether::tilecell::kEmpty);
+
+	// "Stop" restores the snapshot: play-time edits are gone, authored state is back.
+	store.RestoreTileMaps(std::move(snapshot));
+	const aether::TileMapAsset* reverted = store.MutableTileMap(path);
+	REQUIRE(reverted != nullptr);
+	CHECK(reverted->GetCell(0, {0, 0}) != aether::tilecell::kEmpty); // authored tile restored
+	CHECK(reverted->GetCell(0, {7, 7}) == aether::tilecell::kEmpty); // runtime paint reverted
+	CHECK_FALSE(store.AnyTileMapDirty()); // snapshot was clean, so restore is clean
+}

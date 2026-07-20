@@ -91,6 +91,12 @@ namespace aether
 		std::vector<AssetObjectId> tilePalette; // cell palette indices point here
 		std::vector<TileMapLayer> layers;
 
+		// Set by SetCell (and by editor layer-metadata edits) when the in-memory asset
+		// diverges from disk; cleared when the store flushes it. In-memory only - never
+		// serialized. Scene save / publish flush dirty maps so on-disk .tiles (which the
+		// project pak packs) matches what the editor shows and Play renders.
+		bool dirty = false;
+
 		// Palette index for a tile id, appending it when new. Palette entries are
 		// never removed so existing cells stay valid.
 		[[nodiscard]] std::uint16_t PaletteIndexFor(AssetObjectId tileId);

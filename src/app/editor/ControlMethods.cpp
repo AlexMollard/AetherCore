@@ -51,7 +51,9 @@
 #include "scripting/SceneContext.hpp"
 #include "scene/World.hpp"
 #include "utils/LogRingBuffer.hpp"
+#include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
+#include "assets/TileAssetStore.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 
@@ -1173,6 +1175,15 @@ namespace aether::editor
 				        return json{{"error", "no scene name (open a scene first, or pass 'name')"}};
 			        }
 			        const bool ok = app::scene::QuickSave(ctx.services.Get<World>(), name, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
+			        // Tilemap cells live in their own .tiles asset, so flush any edited-in-
+			        // memory maps too - else the saved project keeps stale tiles.
+			        if (auto* tiles = ctx.services.TryGet<TileAssetStore>())
+			        {
+				        if (const auto flushed = tiles->FlushDirtyTileMaps(); !flushed.has_value())
+				        {
+					        AE_WARN(LogCategory::App, "save_scene: failed to flush edited tilemap(s): {}", flushed.error().message);
+				        }
+			        }
 			        return json{{"saved", ok}, {"scene", name}};
 		        }});
 

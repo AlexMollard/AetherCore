@@ -53,6 +53,7 @@ using namespace std::string_view_literals;
 #include "AetherCore.hpp"
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/TileAssetStore.hpp"
 #include "io/PlatformPaths.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
@@ -783,6 +784,7 @@ namespace aether::editor
 		const std::string currentName = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
 
 		bool saved = false;
+		std::string tileFlushError;
 		if (!currentName.empty())
 		{
 			if (auto* assets = context.TryGet<AssetManager>())
@@ -794,11 +796,38 @@ namespace aether::editor
 				app::scene::SceneDescription desc =
 				        app::scene::CaptureScene(context.Get<World>(), assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
 				m_sceneWriter.RequestSave(currentName, std::move(desc));
+
+				// Tilemap cells live in their own .tiles asset, not the scene TOML, so a
+				// scene save must also flush any edited-in-memory tilemaps to disk - else
+				// Play looks right (in-memory) but the saved/published project keeps the
+				// stale .tiles.
+				if (auto* tiles = context.TryGet<TileAssetStore>())
+				{
+					if (const auto flushed = tiles->FlushDirtyTileMaps(); flushed.has_value())
+					{
+						if (auto* paint = context.TryGet<editor::TilePaintingState>())
+						{
+							paint->mapDirty = false;
+						}
+					}
+					else
+					{
+						// Do not clear mapDirty (edits are still unsaved) and do not claim a
+						// clean save - the .tiles on disk is now out of sync with the editor.
+						AE_WARN(LogCategory::App, "Failed to save edited tilemap(s): {}", flushed.error().message);
+						tileFlushError = flushed.error().message;
+					}
+				}
 				saved = true;
 			}
 		}
 
-		if (saved)
+		if (saved && !tileFlushError.empty())
+		{
+			ShowToast(std::string(ICON_FA_TRIANGLE_EXCLAMATION "  Scene saved, but a tilemap could not be written: ") + tileFlushError, true);
+			m_projects.CaptureProjectPreview();
+		}
+		else if (saved)
 		{
 			ShowToast(std::string(ICON_FA_FLOPPY_DISK "  Saved  ") + currentName);
 			m_projects.CaptureProjectPreview();

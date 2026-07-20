@@ -371,15 +371,25 @@ namespace aether::editor
 			}
 			ImGui::SetItemTooltip("Paint target");
 			ImGui::SameLine();
-			state->mapDirty |= ImGui::Checkbox("##visible", &layer.visible);
+			// These layer edits mutate the tilemap asset directly (not via SetCell), so
+			// mark the asset dirty too - the store flush persists it on scene save.
+			const auto markMapDirty = [&](bool changed)
+			{
+				if (changed)
+				{
+					state->mapDirty = true;
+					map->dirty = true;
+				}
+			};
+			markMapDirty(ImGui::Checkbox("##visible", &layer.visible));
 			ImGui::SetItemTooltip("Visible");
 			ImGui::SameLine();
-			state->mapDirty |= ImGui::Checkbox("##collision", &layer.collision);
+			markMapDirty(ImGui::Checkbox("##collision", &layer.collision));
 			ImGui::SetItemTooltip("Collision (layer-wide: backdrop layers never collide)");
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(90.0f);
 			ImGui::SliderFloat("##opacity", &layer.opacity, 0.0f, 1.0f, "%.2f");
-			state->mapDirty |= ImGui::IsItemDeactivatedAfterEdit();
+			markMapDirty(ImGui::IsItemDeactivatedAfterEdit());
 			ImGui::SameLine();
 			ImGui::TextUnformatted(layer.name.c_str());
 			ImGui::SameLine(ImGui::GetContentRegionMax().x - 24.0f);
@@ -389,6 +399,7 @@ namespace aether::editor
 				map->layers.erase(map->layers.begin() + static_cast<std::ptrdiff_t>(i));
 				state->activeLayer = std::min(state->activeLayer, map->layers.size() - 1);
 				state->mapDirty = true;
+				map->dirty = true;
 				ImGui::EndDisabled();
 				ImGui::PopID();
 				break;
@@ -406,6 +417,7 @@ namespace aether::editor
 			map->layers.push_back(std::move(layer));
 			m_layerName[0] = '\0';
 			state->mapDirty = true;
+			map->dirty = true;
 		}
 
 		// ── Tile grid ─────────────────────────────────────────────────────────

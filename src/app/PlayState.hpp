@@ -2,8 +2,11 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "assets/TileMapAsset.hpp"
 #include "scene/SceneSerializer.hpp"
 
 namespace aether::app
@@ -152,6 +155,10 @@ namespace aether::app
 		// Editor scene name at play start; scripts may Scene.Load() a different
 		// scene mid-play, and stop must restore the name with the snapshot.
 		std::string stopSceneName;
+		// Tilemap cache at play start. Tile cells live in shared TileAssetStore assets,
+		// not the ECS, so script-driven paints during play must revert on Stop like the
+		// ECS snapshot does. Empty when no tilemaps were loaded at play start.
+		std::unordered_map<std::string, TileMapAsset> tileStopSnapshot;
 
 	private:
 		Mode m_mode = Mode::Editing;
