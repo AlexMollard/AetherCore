@@ -173,6 +173,10 @@ if(imgui_ADDED)
         IMGUI_IMPL_VULKAN_NO_PROTOTYPES
         IMGUI_IMPL_VULKAN_USE_VOLK
     )
+    # UI automation: route imgui's item-info hooks to our registry (UiAutomation.cpp
+    # implements the ImGuiTestEngineHook_* symbols). PUBLIC so imgui.cpp emits the
+    # calls and consumers can include imgui_internal.h with matching layout.
+    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_TEST_ENGINE)
     if(TARGET volk::volk_headers)
         target_link_libraries(imgui PRIVATE volk::volk_headers)
     endif()

@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <format>
 #include <system_error>
 
 #ifdef _WIN32
 #	include <Windows.h>
+#	include <shellapi.h>
 #	include <shobjidl.h>
 #	undef CopyFile
 #endif
@@ -478,6 +480,17 @@ namespace aether::app::project
 		}
 		return selected;
 	}
+
+	void OpenPathInFileManager(const std::filesystem::path& path)
+	{
+		std::error_code ec;
+		if (path.empty() || !std::filesystem::exists(path, ec))
+		{
+			return;
+		}
+		const std::filesystem::path folder = std::filesystem::is_directory(path, ec) ? path : path.parent_path();
+		ShellExecuteW(nullptr, L"open", folder.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	}
 #else
 	std::optional<std::filesystem::path> PickProjectFolder()
 	{
@@ -487,6 +500,18 @@ namespace aether::app::project
 	std::optional<std::filesystem::path> PickProjectFile()
 	{
 		return std::nullopt;
+	}
+
+	void OpenPathInFileManager(const std::filesystem::path& path)
+	{
+		std::error_code ec;
+		if (path.empty() || !std::filesystem::exists(path, ec))
+		{
+			return;
+		}
+		const std::filesystem::path folder = std::filesystem::is_directory(path, ec) ? path : path.parent_path();
+		const std::string cmd = "xdg-open \"" + folder.string() + "\" >/dev/null 2>&1 &";
+		std::system(cmd.c_str());
 	}
 #endif
 

@@ -42,6 +42,11 @@ namespace aether::app
 		[[nodiscard]] std::string QueueOpenProjectForControl(const std::filesystem::path& root);
 		[[nodiscard]] std::string QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate);
 
+		// Recents management - also exposed as control methods (remove/reveal/relocate).
+		void RemoveRecent(const std::filesystem::path& root);
+		bool RelocateRecent(const std::filesystem::path& oldRoot, const std::filesystem::path& newRoot, std::string& error);
+		void RevealProjectFolder(const std::filesystem::path& root);
+
 	private:
 		enum class PendingControlActionKind
 		{
@@ -64,6 +69,7 @@ namespace aether::app
 		void StartControlServer();
 		void StopControlServer();
 		void RememberRecent(const std::filesystem::path& root);
+		void RelocateRecent(const std::filesystem::path& oldRoot); // UI: opens folder picker, delegates to the public overload
 		void PersistSettings();
 
 		void LoadPreview(const EditorProjectContext& project);

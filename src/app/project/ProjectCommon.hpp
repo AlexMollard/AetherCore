@@ -64,6 +64,10 @@ namespace aether::app::project
 	[[nodiscard]] std::optional<std::filesystem::path> PickProjectFolder();
 	[[nodiscard]] std::optional<std::filesystem::path> PickProjectFile();
 
+	// Open a folder (or a file's parent folder) in the OS file manager. No-op if
+	// the path is empty or does not exist.
+	void OpenPathInFileManager(const std::filesystem::path& path);
+
 	[[nodiscard]] std::vector<EditorProjectContext> LoadRecentProjects(TomlConfig& config);
 	void SaveRecentProjects(TomlConfig& config, std::span<const EditorProjectContext> recents);
 } // namespace aether::app::project

@@ -21,6 +21,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/project/ProjectPaths.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests

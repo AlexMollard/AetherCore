@@ -58,6 +58,9 @@ namespace aether::app
 		std::function<std::optional<std::filesystem::path>()> browseProjectFile;
 		std::function<void()> closeLauncher;
 		std::function<void()> saveSettings;
+		std::function<void(std::filesystem::path)> removeRecent;
+		std::function<void(std::filesystem::path)> revealProjectFolder;
+		std::function<void(std::filesystem::path)> relocateRecent;
 	};
 
 	class ProjectLauncherWindow final

@@ -14,6 +14,7 @@
 #include "Color.hpp"
 #include "debug/Icons.hpp"
 #include "debug/EditorChrome.hpp"
+#include "project/ProjectPaths.hpp"
 
 namespace aether::app
 {
@@ -86,7 +87,16 @@ namespace aether::app
 			TextSized(drawList, dp(13.0f), Add(pos, dp(10.0f, -1.0f)), kMuted, label);
 		}
 
-		bool DrawProjectCard(const EditorProjectContext& project, std::uint64_t previewTextureId, const std::string& modifiedLabel, bool selected, bool missing, const ImVec2& cardSize, const Px& dp)
+		enum class CardAction
+		{
+			None,
+			Open,
+			Remove,
+			Reveal,
+			Relocate,
+		};
+
+		CardAction DrawProjectCard(const EditorProjectContext& project, std::uint64_t previewTextureId, const std::string& modifiedLabel, bool selected, bool missing, const ImVec2& cardSize, const Px& dp)
 		{
 			const ImVec2 start = ImGui::GetCursorScreenPos();
 			ImGui::PushID(DisplayPath(project.root).c_str());
@@ -160,13 +170,68 @@ namespace aether::app
 			{
 				const char* hint = "OPEN";
 				const ImVec2 hintSize = MeasureSized(dp(12.0f), hint);
-				const ImVec2 hp(thumbMax.x - hintSize.x - dp(16.0f), thumbMin.y + dp(12.0f));
+				// Shift left of the hover close (x) button so the two chips never overlap.
+				const ImVec2 hp(thumbMax.x - hintSize.x - dp(16.0f) - dp(30.0f), thumbMin.y + dp(12.0f));
 				ScrimBehind(drawList, hp, hintSize, dp(8.0f, 5.0f), WithAlpha(kAccent, 0.9f), dp(2.0f));
 				TextSized(drawList, dp(12.0f), hp, kOnAccent, hint);
 				ImGui::SetTooltip("%s", path.c_str());
 			}
+
+			CardAction action = CardAction::None;
+
+			// Right-click context menu bound to this card item.
+			if (ImGui::BeginPopupContextItem("##cardMenu"))
+			{
+				if (!missing && ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open"))
+				{
+					action = CardAction::Open;
+				}
+				if (!missing && ImGui::MenuItem(ICON_FA_FOLDER "  Reveal folder"))
+				{
+					action = CardAction::Reveal;
+				}
+				if (missing && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Locate moved project..."))
+				{
+					action = CardAction::Relocate;
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(ICON_FA_TRASH "  Remove from list"))
+				{
+					action = CardAction::Remove;
+				}
+				ImGui::EndPopup();
+			}
+
+			// Hover close (x) button in the top-right corner.
+			const float xSize = dp(22.0f);
+			const ImVec2 xMin(end.x - xSize - dp(6.0f), start.y + dp(6.0f));
+			const ImVec2 xMax(xMin.x + xSize, xMin.y + xSize);
+			const ImVec2 mouse = ImGui::GetIO().MousePos;
+			const bool xHovered = hovered && mouse.x >= xMin.x && mouse.x <= xMax.x && mouse.y >= xMin.y && mouse.y <= xMax.y;
+			if (hovered || xHovered)
+			{
+				drawList->AddRectFilled(xMin, xMax, ToU32(WithAlpha(xHovered ? kError : kBg, xHovered ? 0.9f : 0.6f)), dp(3.0f));
+				const ImVec2 gx = MeasureSized(dp(13.0f), ICON_FA_XMARK);
+				TextSized(drawList, dp(13.0f), ImVec2((xMin.x + xMax.x - gx.x) * 0.5f, (xMin.y + xMax.y - gx.y) * 0.5f), xHovered ? kOnAccent : kMuted, ICON_FA_XMARK);
+				if (xHovered)
+				{
+					ImGui::SetTooltip("Remove from list");
+				}
+			}
+			if (xHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				action = CardAction::Remove;
+			}
+
+			// The full-card press opens, but only when the x was not the target and
+			// the project is present.
+			if (action == CardAction::None && pressed && !xHovered && !missing)
+			{
+				action = CardAction::Open;
+			}
+
 			ImGui::PopID();
-			return pressed;
+			return action;
 		}
 
 		void PushInputStyles(const Px& dp)
@@ -292,23 +357,31 @@ namespace aether::app
 			if (opening)
 			{
 				ImGui::TextUnformatted("Open an existing AetherCore project");
-				ImGui::TextDisabled("Choose its ProjectSettings.toml file.");
+				ImGui::TextDisabled("Choose the project folder (or its ProjectSettings.toml).");
 				ImGui::Spacing();
 				ImGui::SetNextItemWidth(width - browseSize - controlGap);
-				submit = ImGui::InputTextWithHint("##openProjectPath", "Path to ProjectSettings.toml...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+				submit = ImGui::InputTextWithHint("##openProjectPath", "Project folder...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
 				ImGui::SameLine(0.0f, controlGap);
-				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseProjectFile)
+				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseFolder)
 				{
-					if (const auto file = actions.browseProjectFile())
+					if (const auto folder = actions.browseFolder())
 					{
-						CopyToBuffer(state.openPath, *file);
+						CopyToBuffer(state.openPath, *folder);
 					}
+				}
+				ImGui::Spacing();
+				if (state.openPath[0] != '\0')
+				{
+					const bool found = project::HasProjectDescriptor(project::ResolveProjectRoot(std::filesystem::path(state.openPath.data())));
+					ImGui::PushStyleColor(ImGuiCol_Text, found ? kAccentHi : kError);
+					ImGui::TextWrapped("%s", found ? "Project found" : ICON_FA_XMARK "  No ProjectSettings.toml here");
+					ImGui::PopStyleColor();
 				}
 			}
 			else
 			{
 				ImGui::TextUnformatted("Create a new AetherCore project");
-				ImGui::TextDisabled("Choose a template, name, and empty project folder.");
+				ImGui::TextDisabled("Pick a template, name it, and choose where it lives.");
 				ImGui::Spacing();
 
 				const project::ProjectTemplateInfo* selectedTemplate = &project::kProjectTemplates.front();
@@ -341,10 +414,14 @@ namespace aether::app
 				}
 				ImGui::TextDisabled("%s", selectedTemplate->description.data());
 				ImGui::Spacing();
+
+				ImGui::TextUnformatted("Name");
 				ImGui::SetNextItemWidth(width);
-				submit = ImGui::InputTextWithHint("##newProjectName", "Project name...", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+				submit = ImGui::InputTextWithHint("##newProjectName", "My Game", state.newName.data(), state.newName.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+
+				ImGui::TextUnformatted("Location");
 				ImGui::SetNextItemWidth(width - browseSize - controlGap);
-				submit = ImGui::InputTextWithHint("##newProjectPath", "Project folder...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || submit;
+				submit = ImGui::InputTextWithHint("##newProjectPath", "Parent folder for the new project...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || submit;
 				ImGui::SameLine(0.0f, controlGap);
 				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize)) && actions.browseFolder)
 				{
@@ -352,6 +429,29 @@ namespace aether::app
 					{
 						CopyToBuffer(state.newPath, *folder);
 					}
+				}
+
+				// Live preview + inline validation.
+				const std::filesystem::path composed = project::ComposeNewProjectRoot(std::filesystem::path(state.newPath.data()), state.newName.data());
+				ImGui::Spacing();
+				if (!composed.empty())
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
+					ImGui::TextWrapped("Creates: %s", composed.string().c_str());
+					ImGui::PopStyleColor();
+					std::error_code existsEc;
+					if (std::filesystem::exists(composed, existsEc) && !std::filesystem::is_empty(composed, existsEc))
+					{
+						ImGui::PushStyleColor(ImGuiCol_Text, kWarning);
+						ImGui::TextWrapped("A non-empty folder already exists here - files may be overwritten.");
+						ImGui::PopStyleColor();
+					}
+				}
+				else if (state.newName[0] != '\0' && project::SanitizeProjectFolderName(state.newName.data()).empty())
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, kError);
+					ImGui::TextWrapped("That name has no usable characters.");
+					ImGui::PopStyleColor();
 				}
 			}
 
@@ -364,7 +464,9 @@ namespace aether::app
 			}
 
 			ImGui::Spacing();
-			const bool incomplete = opening ? state.openPath[0] == '\0' : state.newName[0] == '\0' || state.newPath[0] == '\0';
+			const bool openReady = opening && state.openPath[0] != '\0' && project::HasProjectDescriptor(project::ResolveProjectRoot(std::filesystem::path(state.openPath.data())));
+			const std::filesystem::path createRoot = opening ? std::filesystem::path{} : project::ComposeNewProjectRoot(std::filesystem::path(state.newPath.data()), state.newName.data());
+			const bool incomplete = opening ? !openReady : createRoot.empty();
 			const float cancelWidth = dp(100.0f);
 			const float actionWidth = dp(108.0f);
 			const float buttonHeight = dp(38.0f);
@@ -456,6 +558,10 @@ namespace aether::app
 				const float cardWidth = std::floor((avail - gridGap * static_cast<float>(columns - 1)) / static_cast<float>(columns));
 				const float cardHeight = std::floor(cardWidth * 9.0f / 16.0f) + dp(64.0f);
 				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gridGap, gridGap));
+				// Defer the chosen action until after the loop: removal mutates the
+				// recents list the loop is iterating.
+				CardAction pending = CardAction::None;
+				std::filesystem::path pendingRoot;
 				for (std::size_t i = 0; i < model.recentProjects.size(); ++i)
 				{
 					const EditorProjectContext& project = model.recentProjects[i];
@@ -468,12 +574,44 @@ namespace aether::app
 					const bool missing = !std::filesystem::exists(project.root / "ProjectSettings.toml", existsEc);
 					const std::uint64_t preview = model.previewTextureId ? model.previewTextureId(project) : 0;
 					const std::string edited = model.modifiedLabel ? model.modifiedLabel(project) : std::string{};
-					if (DrawProjectCard(project, preview, edited, selected, missing, ImVec2(cardWidth, cardHeight), dp) && actions.openProject)
+					const CardAction a = DrawProjectCard(project, preview, edited, selected, missing, ImVec2(cardWidth, cardHeight), dp);
+					if (a != CardAction::None)
 					{
-						actions.openProject(project.root);
+						pending = a;
+						pendingRoot = project.root;
 					}
 				}
 				ImGui::PopStyleVar();
+
+				switch (pending)
+				{
+					case CardAction::Open:
+						if (actions.openProject)
+						{
+							actions.openProject(pendingRoot);
+						}
+						break;
+					case CardAction::Remove:
+						if (actions.removeRecent)
+						{
+							actions.removeRecent(pendingRoot);
+						}
+						break;
+					case CardAction::Reveal:
+						if (actions.revealProjectFolder)
+						{
+							actions.revealProjectFolder(pendingRoot);
+						}
+						break;
+					case CardAction::Relocate:
+						if (actions.relocateRecent)
+						{
+							actions.relocateRecent(pendingRoot);
+						}
+						break;
+					case CardAction::None:
+						break;
+				}
 			}
 			ImGui::EndChild();
 			ImGui::PopStyleVar();

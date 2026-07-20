@@ -453,7 +453,7 @@
       "tool": "render_benchmark"
     },
     {
-      "description": "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
+      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
       "mutates": false,
       "name": "viewport.screenshot",
       "paramsSchema": {
@@ -1384,6 +1384,176 @@
         "type": "object"
       },
       "tool": "open_scene_dialog"
+    },
+    {
+      "description": "Remove a project from the Launcher's recent list (works whether the project still exists or is missing).",
+      "mutates": true,
+      "name": "launcher.remove_recent",
+      "paramsSchema": {
+        "properties": {
+          "root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_recent"
+    },
+    {
+      "description": "Open a recent project's folder in the OS file manager.",
+      "mutates": false,
+      "name": "launcher.reveal_folder",
+      "paramsSchema": {
+        "properties": {
+          "root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root"
+        ],
+        "type": "object"
+      },
+      "tool": "reveal_folder"
+    },
+    {
+      "description": "Re-point a moved project in the recent list to a new folder (headless: no folder picker).",
+      "mutates": true,
+      "name": "launcher.relocate_recent",
+      "paramsSchema": {
+        "properties": {
+          "new_root": {
+            "type": "string"
+          },
+          "old_root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "old_root",
+          "new_root"
+        ],
+        "type": "object"
+      },
+      "tool": "relocate_recent"
+    },
+    {
+      "description": "List on-screen ImGui widgets from the last frame: window, label, screen rect, and hovered/active state. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
+      "mutates": false,
+      "name": "ui.query",
+      "paramsSchema": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "ui_query"
+    },
+    {
+      "description": "Click a widget by {window,label} or a raw {x,y} screen point. Optional 'button' ('left'|'right') and 'double'. Async: the click plays over a few frames; query/screenshot afterwards to see the effect.",
+      "mutates": true,
+      "name": "ui.click",
+      "paramsSchema": {
+        "properties": {
+          "button": {
+            "type": "string"
+          },
+          "double": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "ui_click"
+    },
+    {
+      "description": "Hold the mouse over a widget ({window,label}) or {x,y}. Reveals hover-only UI (tooltips, hover buttons) and sets up a subsequent ui_click on a context-menu item. Held until the next action.",
+      "mutates": true,
+      "name": "ui.hover",
+      "paramsSchema": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "ui_hover"
+    },
+    {
+      "description": "Focus a text field ({window,label} or {x,y}) and replace its contents with 'text' (select-all, delete, then type).",
+      "mutates": true,
+      "name": "ui.input_text",
+      "paramsSchema": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "tool": "ui_input_text"
+    },
+    {
+      "description": "Press a named key: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end.",
+      "mutates": true,
+      "name": "ui.key",
+      "paramsSchema": {
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "tool": "ui_key"
     }
   ]
 }

@@ -17,7 +17,9 @@
 #include "io/PlatformPaths.hpp"
 #include "launcher/LauncherProcess.hpp"
 #include "platform/Window.hpp"
+#include "imgui/UiAutomationMethods.hpp"
 #include "project/ProjectCommon.hpp"
+#include "project/ProjectPaths.hpp"
 #include "rendering/ScreenshotService.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -189,6 +191,60 @@ namespace aether::app
 				        const std::string saved = result.get();
 				        return saved.empty() ? json{{"error", "capture failed"}} : json{{"path", saved}};
 			        }});
+
+			const auto recentsToJson = [&launcher]() -> json
+			{
+				json projects = json::array();
+				for (const EditorProjectContext& p: launcher.RecentProjects())
+				{
+					projects.push_back(json{{"name", p.name}, {"root", p.root.string()}});
+				}
+				return projects;
+			};
+
+			methods.push_back({"launcher.remove_recent",
+			        "remove_recent",
+			        "Remove a project from the Launcher's recent list (works whether the project still exists or is missing).",
+			        true,
+			        Obj({{"root", StrProp()}}, {"root"}),
+			        [&launcher, recentsToJson](const json& params, editor::MethodContext&) -> json
+			        {
+				        const std::filesystem::path root = params.value("root", std::string{});
+				        const std::size_t before = launcher.RecentProjects().size();
+				        launcher.RemoveRecent(root);
+				        return json{{"removed", launcher.RecentProjects().size() != before}, {"projects", recentsToJson()}};
+			        }});
+
+			methods.push_back({"launcher.reveal_folder",
+			        "reveal_folder",
+			        "Open a recent project's folder in the OS file manager.",
+			        false,
+			        Obj({{"root", StrProp()}}, {"root"}),
+			        [&launcher](const json& params, editor::MethodContext&) -> json
+			        {
+				        const std::filesystem::path root = params.value("root", std::string{});
+				        launcher.RevealProjectFolder(root);
+				        return json{{"status", "opened"}, {"root", root.string()}};
+			        }});
+
+			methods.push_back({"launcher.relocate_recent",
+			        "relocate_recent",
+			        "Re-point a moved project in the recent list to a new folder (headless: no folder picker).",
+			        true,
+			        Obj({{"old_root", StrProp()}, {"new_root", StrProp()}}, {"old_root", "new_root"}),
+			        [&launcher, recentsToJson](const json& params, editor::MethodContext&) -> json
+			        {
+				        const std::filesystem::path oldRoot = params.value("old_root", std::string{});
+				        const std::filesystem::path newRoot = params.value("new_root", std::string{});
+				        std::string error;
+				        if (!launcher.RelocateRecent(oldRoot, newRoot, error))
+				        {
+					        return json{{"error", error}};
+				        }
+				        return json{{"projects", recentsToJson()}};
+			        }});
+
+			editor::AppendUiAutomationMethods(methods);
 
 			return methods;
 		}
@@ -459,8 +515,14 @@ namespace aether::app
 		{
 			OpenProject(root);
 		};
-		actions.createProject = [this](const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate)
+		actions.createProject = [this](const std::filesystem::path& parentDir, std::string_view name, project::ProjectTemplate projectTemplate)
 		{
+			const std::filesystem::path root = project::ComposeNewProjectRoot(parentDir, name);
+			if (root.empty())
+			{
+				m_windowState.error = "Choose a location and a valid project name.";
+				return;
+			}
 			CreateProject(root, name, projectTemplate);
 		};
 		actions.browseFolder = []()
@@ -476,6 +538,9 @@ namespace aether::app
 		{
 			PersistSettings();
 		};
+		actions.removeRecent = [this](const std::filesystem::path& root) { RemoveRecent(root); };
+		actions.revealProjectFolder = [this](const std::filesystem::path& root) { RevealProjectFolder(root); };
+		actions.relocateRecent = [this](const std::filesystem::path& root) { RelocateRecent(root); };
 
 		m_window.Draw(m_windowState, model, actions);
 	}
@@ -583,6 +648,50 @@ namespace aether::app
 			m_recentProjects.resize(static_cast<std::size_t>(project::kMaxRecentProjects));
 		}
 		PersistSettings();
+	}
+
+	void LauncherLayer::RemoveRecent(const std::filesystem::path& root)
+	{
+		const std::filesystem::path resolved = project::NormalizePath(project::ResolveProjectRoot(root));
+		const std::size_t before = m_recentProjects.size();
+		std::erase_if(m_recentProjects, [&](const EditorProjectContext& p) { return project::NormalizePath(p.root) == resolved; });
+		if (m_recentProjects.size() != before)
+		{
+			PersistSettings();
+		}
+	}
+
+	void LauncherLayer::RelocateRecent(const std::filesystem::path& oldRoot)
+	{
+		m_windowState.error.clear();
+		const auto picked = project::PickProjectFolder();
+		if (!picked.has_value())
+		{
+			return; // user cancelled
+		}
+		std::string error;
+		if (!RelocateRecent(oldRoot, project::ResolveProjectRoot(*picked), error))
+		{
+			m_windowState.error = error;
+		}
+	}
+
+	bool LauncherLayer::RelocateRecent(const std::filesystem::path& oldRoot, const std::filesystem::path& newRoot, std::string& error)
+	{
+		const std::filesystem::path resolved = project::ResolveProjectRoot(newRoot);
+		if (!project::HasProjectDescriptor(resolved))
+		{
+			error = "That folder has no ProjectSettings.toml.";
+			return false;
+		}
+		RemoveRecent(oldRoot);
+		RememberRecent(resolved); // moves to front + persists
+		return true;
+	}
+
+	void LauncherLayer::RevealProjectFolder(const std::filesystem::path& root)
+	{
+		project::OpenPathInFileManager(project::ResolveProjectRoot(root));
 	}
 
 	void LauncherLayer::PersistSettings()

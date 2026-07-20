@@ -1,6 +1,7 @@
 #include "imgui/ImguiSubsystem.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
+#include "imgui/UiAutomation.hpp"
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 #include <algorithm>
@@ -94,6 +95,11 @@ namespace aether
 
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
+		// Route item-info hooks (IMGUI_ENABLE_TEST_ENGINE) to the UI-automation registry.
+		if (ImGuiContext* g = ImGui::GetCurrentContext())
+		{
+			g->TestEngineHookItems = true;
+		}
 		ImGuiIO& io = ImGui::GetIO();
 
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -195,6 +201,11 @@ namespace aether
 			ImGui_ImplVulkan_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
 		}
+
+		// Publish last frame's item registry and inject synthetic input after the
+		// GLFW backend has posted real events (so injected events win this frame).
+		app::UiAutomation::Get().BeginFrameSwap();
+		app::UiAutomation::Get().ApplyInput(io);
 
 		ImGui::NewFrame();
 		++m_frameIndex;

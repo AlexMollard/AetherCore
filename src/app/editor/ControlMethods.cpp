@@ -1,5 +1,7 @@
 #include "editor/ControlMethods.hpp"
 
+#include "imgui/UiAutomationMethods.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cctype>
@@ -1489,6 +1491,7 @@ namespace aether::editor
 		        }});
 
 		Append2DAuthoringMethods(methods);
+		AppendUiAutomationMethods(methods);
 
 		return methods;
 	}
