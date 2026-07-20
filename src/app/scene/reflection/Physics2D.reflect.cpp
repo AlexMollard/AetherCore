@@ -62,6 +62,7 @@ AE_FIELD_N("start_awake", startAwake, Bool)
 b.PostSet(&RebuildBody2D);
 b.RequiresFeature(SceneFeatureFlags::Physics2D);
 b.ConflictsWith({"Rigid Body", "Box Collider", "Joint"});
+AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(Collider2DComponent, "Collider 2D", "Physics 2D", ICON_FA_BOX_OPEN)
@@ -77,9 +78,40 @@ AE_FIELD_N("is_trigger", isTrigger, Bool)
 AE_FIELD_N("category_bits", categoryBits, UInt)
 AE_FIELD_N("mask_bits", maskBits, UInt)
 AE_FIELD_N("group_index", groupIndex, Int)
+// Polygon vertices: a flat list of vec2 persisted as points = [[x,y], ...]. Runtime
+// Box2D shapes are not reflected, so they are naturally excluded from serialization.
+b.CustomListField(
+        "points",
+        {{"", reflect::FieldType::Vec2}},
+        [](const void* comp) -> reflect::FieldValue
+        {
+	        reflect::FieldValue v;
+	        v.type = reflect::FieldType::List;
+	        for (const glm::vec2& p: static_cast<const Collider2DComponent*>(comp)->points)
+	        {
+		        reflect::FieldValue pv;
+		        pv.type = reflect::FieldType::Vec2;
+		        pv.vec = glm::vec4(p, 0.0f, 0.0f);
+		        v.list.push_back({pv});
+	        }
+	        return v;
+        },
+        [](void* comp, const reflect::FieldValue& in)
+        {
+	        std::vector<glm::vec2>& pts = static_cast<Collider2DComponent*>(comp)->points;
+	        pts.clear();
+	        for (const std::vector<reflect::FieldValue>& row: in.list)
+	        {
+		        if (!row.empty())
+		        {
+			        pts.push_back(glm::vec2(row[0].vec));
+		        }
+	        }
+        });
 b.PostSet(&RebuildBody2D);
 b.RequiresFeature(SceneFeatureFlags::Physics2D);
 b.ConflictsWith({"Rigid Body", "Box Collider", "Joint"});
+AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(Joint2DComponent, "Joint 2D", "Physics 2D", ICON_FA_LINK)

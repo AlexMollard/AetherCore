@@ -906,7 +906,7 @@ namespace aether::editor
 					        }
 					        else
 					        {
-						        out[f.name] = editor::FieldValueToJson(fv);
+						        out[f.name] = editor::FieldValueToJson(fv, &f);
 					        }
 				        }
 				        return json{{"id", entity.id}, {"type", type}, {"fields", out}};

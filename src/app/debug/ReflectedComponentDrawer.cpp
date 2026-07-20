@@ -19,18 +19,16 @@ namespace aether::editor
 	{
 		using reflect::FieldType;
 
-		bool DrawField(const reflect::FieldDesc& f, void* comp)
+		bool DrawScalarField(const char* lbl, reflect::FieldType type, const reflect::FieldMeta& meta, reflect::FieldValue& v)
 		{
-			reflect::FieldValue v = f.get(comp);
-			const char* lbl = f.name.c_str();
-			const float speed = f.meta.speed > 0.0f ? f.meta.speed : 0.05f;
+			const float speed = meta.speed > 0.0f ? meta.speed : 0.05f;
 			bool changed = false;
-			switch (f.type)
+			switch (type)
 			{
 				case FieldType::Float:
 				{
 					float x = static_cast<float>(v.num);
-					if (iw::PropFloat(lbl, &x, speed, f.meta.min, f.meta.max))
+					if (iw::PropFloat(lbl, &x, speed, meta.min, meta.max))
 					{
 						v.num = x;
 						changed = true;
@@ -110,21 +108,21 @@ namespace aether::editor
 				}
 				case FieldType::Enum:
 				{
-					if (f.meta.enumTable != nullptr)
+					if (meta.enumTable != nullptr)
 					{
 						std::vector<const char*> items;
 						int cur = 0;
-						for (std::size_t i = 0; i < f.meta.enumTable->values.size(); ++i)
+						for (std::size_t i = 0; i < meta.enumTable->values.size(); ++i)
 						{
-							items.push_back(f.meta.enumTable->values[i].first.c_str());
-							if (f.meta.enumTable->values[i].second == v.enumValue)
+							items.push_back(meta.enumTable->values[i].first.c_str());
+							if (meta.enumTable->values[i].second == v.enumValue)
 							{
 								cur = static_cast<int>(i);
 							}
 						}
-						if (iw::PropCombo(lbl, &cur, items.data(), static_cast<int>(items.size())) && cur >= 0 && cur < static_cast<int>(f.meta.enumTable->values.size()))
+						if (iw::PropCombo(lbl, &cur, items.data(), static_cast<int>(items.size())) && cur >= 0 && cur < static_cast<int>(meta.enumTable->values.size()))
 						{
-							v.enumValue = f.meta.enumTable->values[static_cast<std::size_t>(cur)].second;
+							v.enumValue = meta.enumTable->values[static_cast<std::size_t>(cur)].second;
 							changed = true;
 						}
 					}
@@ -144,7 +142,63 @@ namespace aether::editor
 				case FieldType::EntityRef:
 					iw::PropText(lbl, "entity %llu", static_cast<unsigned long long>(v.entity));
 					break;
+				case FieldType::List:
+					break; // nested lists are not modelled; the top level is drawn in DrawField
 			}
+			return changed;
+		}
+
+		// Editable rows for a FieldType::List: each row draws its element sub-fields, with
+		// per-row remove and a trailing add. Any edit rebuilds and re-sets the whole list
+		// (the component setter re-applies any validation - sorting, clamping, defaults).
+		bool DrawListField(const reflect::FieldDesc& f, reflect::FieldValue& v)
+		{
+			bool changed = false;
+			ImGui::PushID(f.name.c_str());
+			if (ImGui::TreeNodeEx(f.name.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth))
+			{
+				for (std::size_t r = 0; r < v.list.size();)
+				{
+					ImGui::PushID(static_cast<int>(r));
+					std::vector<reflect::FieldValue>& row = v.list[r];
+					for (std::size_t i = 0; i < f.elementFields.size() && i < row.size(); ++i)
+					{
+						changed |= DrawScalarField(f.elementFields[i].name.c_str(), f.elementFields[i].type, reflect::FieldMeta{}, row[i]);
+					}
+					const bool removed = ImGui::SmallButton("Remove");
+					ImGui::Separator();
+					ImGui::PopID();
+					if (removed)
+					{
+						v.list.erase(v.list.begin() + static_cast<std::ptrdiff_t>(r));
+						changed = true;
+						continue;
+					}
+					++r;
+				}
+				if (ImGui::SmallButton("Add"))
+				{
+					std::vector<reflect::FieldValue> row;
+					row.reserve(f.elementFields.size());
+					for (const reflect::ListElementDesc& ed: f.elementFields)
+					{
+						reflect::FieldValue ev;
+						ev.type = ed.type;
+						row.push_back(std::move(ev));
+					}
+					v.list.push_back(std::move(row));
+					changed = true;
+				}
+				ImGui::TreePop();
+			}
+			ImGui::PopID();
+			return changed;
+		}
+
+		bool DrawField(const reflect::FieldDesc& f, void* comp)
+		{
+			reflect::FieldValue v = f.get(comp);
+			const bool changed = f.type == FieldType::List ? DrawListField(f, v) : DrawScalarField(f.name.c_str(), f.type, f.meta, v);
 			if (changed)
 			{
 				f.set(comp, v);

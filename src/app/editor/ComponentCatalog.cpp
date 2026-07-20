@@ -291,7 +291,10 @@ namespace aether::editor
 				{
 					continue;
 				}
-				if (std::any_of(c.begin(), c.end(), [&](const ComponentCatalogEntry& e) { return e.name == rt.name; }))
+				// A component with a bespoke hand-authored entry above (flagged at its
+				// declaration, not matched by DisplayName) is skipped so it is not listed
+				// twice - a rename can no longer silently duplicate the palette entry.
+				if (rt.hasHandAuthoredCatalogEntry)
 				{
 					continue;
 				}

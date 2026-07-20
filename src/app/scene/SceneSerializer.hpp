@@ -105,39 +105,14 @@ namespace aether::app::scene
 		bool collideConnected = false;
 	};
 
-	struct UICanvasRecord
-	{
-		std::uint8_t scaleMode = 0;
-		glm::vec2 referenceResolution{1920.f, 1080.f};
-		int sortBias = 0;
-	};
-
-	struct UIRectRecord
-	{
-		glm::vec2 anchorMin{0.5f, 0.5f};
-		glm::vec2 anchorMax{0.5f, 0.5f};
-		glm::vec2 offsetMin{-50.f, -50.f};
-		glm::vec2 offsetMax{50.f, 50.f};
-		glm::vec2 pivot{0.5f, 0.5f};
-	};
-
+	// UI Canvas / UI Rect / UI Text are pure authored data, serialized generically via
+	// reflection (no bespoke record). UI Image keeps a record for its texture path.
 	struct UIImageRecord
 	{
 		glm::vec4 color{1.f};
 		float cornerRadius = 0.f;
 		bool pixelArt = false;
 		std::string texturePath;
-	};
-
-	struct UITextRecord
-	{
-		std::string text;
-		std::string fontName = "Roboto";
-		float pixelSize = 24.f;
-		glm::vec4 color{1.f};
-		std::uint8_t hAlign = 0;
-		std::uint8_t vAlign = 0;
-		bool wrap = true;
 	};
 
 	struct EffectRecord
@@ -187,30 +162,22 @@ namespace aether::app::scene
 		std::optional<SkinnedRecord> skinned;
 		std::optional<PhysicsRecord> physics;
 		std::optional<EffectRecord> effect;
-		std::optional<UICanvasRecord> uiCanvas;
-		std::optional<UIRectRecord> uiRect;
 		std::optional<UIImageRecord> uiImage;
-		std::optional<UITextRecord> uiText;
 		// Pure data-only components (no asset resolution or side effects) are
-		// captured/applied/serialized generically from the reflection registry - see
-		// GenericComponentTypeNames(). Adding one needs only its AE_COMPONENT
-		// declaration plus an entry in that list; no per-component serializer code.
+		// captured/applied/serialized generically from the reflection registry (every
+		// ComponentType flagged genericSerialize). Adding one needs only its AE_COMPONENT
+		// declaration plus AE_GENERIC_SERIALIZE(); no per-component serializer code.
 		std::vector<GenericComponent> reflected;
-		std::optional<ParticleEmitterComponent> particles;
-		std::optional<PointLightComponent> pointLight;
-		std::optional<SpotLightComponent> spotLight;
-		std::optional<DayNightComponent> dayNight;
-		std::optional<TileMapComponent> tileMap;
+		// Particle Emitter, Point/Spot lights, Day Night, Tile Map and Orbit Camera are
+		// pure reflected data and live in `reflected` (genericSerialize) - no bespoke
+		// record field. (Particle Emitter keeps its legacy "particles" on-disk key.)
 		// backingCamera is runtime state and is never serialized. mainCamera marks
 		std::optional<CameraComponent> camera;
 		bool mainCamera = false;
-		std::optional<OrbitCameraComponent> orbitCamera;
 		std::vector<ScriptRecord> scripts;
 		std::optional<JointRecord> joint;
 		// 2D physics: authored fields only (runtime body/shape/joint handles are
 		// stripped at capture so play-stop restore never resurrects stale ids).
-		std::optional<RigidBody2DComponent> rigidBody2D;
-		std::optional<Collider2DComponent> collider2D;
 		std::optional<Joint2DComponent> joint2D;
 		int joint2DTargetIndex = -1; // scene-local index, like JointRecord::targetIndex
 	};
@@ -323,11 +290,6 @@ namespace aether::app::scene
 	void CanonicalizeAnimatedSpriteFrame(EntityRecord& record);
 
 	SceneDescription CaptureSubtrees(World& world, const std::vector<Entity>& roots, const MaterialRegistry& materials, const TextureRegistry& textures);
-
-	// Reflected component type names captured/applied/serialized generically (pure
-	// data-only components). Capture, Apply and the TOML/binary codecs all key off
-	// this one list, so adding such a component is a single entry here.
-	const std::vector<std::string>& GenericComponentTypeNames();
 
 	// includeSceneHeader=false omits the [scene] block (kind/features/version) - used
 	// for prefab fragments, which are header-less by convention. Writing a header onto

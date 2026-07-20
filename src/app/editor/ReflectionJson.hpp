@@ -8,7 +8,9 @@
 
 namespace aether::editor
 {
-	inline nlohmann::json FieldValueToJson(const reflect::FieldValue& v)
+	// `field` is only needed for FieldType::List (to name each element's sub-fields);
+	// scalar values ignore it, so element recursion passes nullptr.
+	inline nlohmann::json FieldValueToJson(const reflect::FieldValue& v, const reflect::FieldDesc* field = nullptr)
 	{
 		using FT = reflect::FieldType;
 		switch (v.type)
@@ -35,6 +37,30 @@ namespace aether::editor
 				return v.str;
 			case FT::EntityRef:
 				return v.entity;
+			case FT::List:
+			{
+				nlohmann::json arr = nlohmann::json::array();
+				const std::vector<reflect::ListElementDesc>* elems = field != nullptr ? &field->elementFields : nullptr;
+				// Flat list (one unnamed element field) -> array of bare values; otherwise
+				// an array of {sub-field: value} objects.
+				const bool flat = elems != nullptr && elems->size() == 1 && (*elems)[0].name.empty();
+				for (const std::vector<reflect::FieldValue>& row: v.list)
+				{
+					if (flat && !row.empty())
+					{
+						arr.push_back(FieldValueToJson(row[0]));
+						continue;
+					}
+					nlohmann::json obj = nlohmann::json::object();
+					for (std::size_t i = 0; i < row.size(); ++i)
+					{
+						const std::string name = (elems != nullptr && i < elems->size()) ? (*elems)[i].name : std::to_string(i);
+						obj[name] = FieldValueToJson(row[i]);
+					}
+					arr.push_back(std::move(obj));
+				}
+				return arr;
+			}
 		}
 		return nullptr;
 	}
@@ -98,6 +124,42 @@ namespace aether::editor
 					v.entity = j.get<std::uint64_t>();
 				}
 				break;
+			case FT::List:
+				if (j.is_array())
+				{
+					const bool flat = field.elementFields.size() == 1 && field.elementFields[0].name.empty();
+					for (const nlohmann::json& elemJson: j)
+					{
+						if (flat)
+						{
+							reflect::FieldDesc ef;
+							ef.type = field.elementFields[0].type;
+							v.list.push_back({JsonToFieldValue(elemJson, ef)});
+							continue;
+						}
+						std::vector<reflect::FieldValue> row;
+						row.reserve(field.elementFields.size());
+						for (const reflect::ListElementDesc& ed: field.elementFields)
+						{
+							reflect::FieldDesc ef;
+							ef.name = ed.name;
+							ef.type = ed.type;
+							const auto it = elemJson.is_object() ? elemJson.find(ed.name) : elemJson.end();
+							if (it != elemJson.end())
+							{
+								row.push_back(JsonToFieldValue(*it, ef));
+							}
+							else
+							{
+								reflect::FieldValue miss;
+								miss.type = ed.type;
+								row.push_back(std::move(miss));
+							}
+						}
+						v.list.push_back(std::move(row));
+					}
+				}
+				break;
 		}
 		return v;
 	}
@@ -131,6 +193,8 @@ namespace aether::editor
 				return "string";
 			case FT::EntityRef:
 				return "entity";
+			case FT::List:
+				return "list";
 		}
 		return "?";
 	}

@@ -35,6 +35,7 @@
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
+#include "scene/SceneComponentSerde.hpp"
 #include "scene/SceneSerializerDetail.hpp"
 
 namespace aether::app::scene
@@ -84,29 +85,22 @@ namespace aether::app::scene
 			RemoveIf<PhysicsStateComponent>(world, entity);
 			RemoveIf<Joint2DComponent>(world, entity);
 			RemoveIf<CollisionEvents2DComponent>(world, entity);
-			RemoveIf<Collider2DComponent>(world, entity);
-			RemoveIf<RigidBody2DComponent>(world, entity);
 			RemoveIf<Physics2DStateComponent>(world, entity);
-			RemoveIf<ui::UICanvas>(world, entity);
-			RemoveIf<ui::UIRect>(world, entity);
 			RemoveIf<ui::UIImage>(world, entity);
-			RemoveIf<ui::UIText>(world, entity);
 			RemoveIf<EffectRefComponent>(world, entity);
 			RemoveIf<EffectParamsComponent>(world, entity);
-			RemoveIf<BobComponent>(world, entity);
-			RemoveIf<SpinComponent>(world, entity);
-			RemoveIf<OrbitComponent>(world, entity);
-			RemoveIf<MaterialPulseComponent>(world, entity);
-			RemoveIf<ScalePulseComponent>(world, entity);
-			RemoveIf<LookAtComponent>(world, entity);
-			RemoveIf<ParallaxComponent>(world, entity);
-			RemoveIf<ParticleEmitterComponent>(world, entity);
-			RemoveIf<PointLightComponent>(world, entity);
-			RemoveIf<SpotLightComponent>(world, entity);
-			RemoveIf<DayNightComponent>(world, entity);
-			RemoveIf<TileMapComponent>(world, entity);
+			// Every genericSerialize component (Bob/Spin/Orbit/lights/tile map/day night/
+			// orbit camera/...) is cleared straight from the registry via the same flag
+			// that drives its capture/apply, so a new one never needs a matching RemoveIf
+			// line here to be reset before re-apply.
+			for (const reflect::ComponentType& ct: reflect::ComponentTypes())
+			{
+				if (ct.genericSerialize && ct.remove)
+				{
+					ct.remove(world, entity);
+				}
+			}
 			RemoveIf<CameraComponent>(world, entity);
-			RemoveIf<OrbitCameraComponent>(world, entity);
 			RemoveIf<MainCameraComponent>(world, entity);
 			RemoveIf<ScriptComponent>(world, entity);
 			RemoveIf<MeshRendererComponent>(world, entity);
@@ -118,6 +112,26 @@ namespace aether::app::scene
 		// Forward decl: override application (below) applies a one-entity mini-scene
 		// onto an already-expanded entity, and the expander is called from this core.
 		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities);
+
+		// True if the record carries any 2D physics: the generic Rigid Body 2D / Collider
+		// 2D (any reflected component requiring the Physics2D feature) or the bespoke Joint
+		// 2D. Drives the per-entity 2D/3D physics exclusivity tie-break.
+		bool RecordHas2DPhysics(const EntityRecord& rec)
+		{
+			if (rec.joint2D.has_value())
+			{
+				return true;
+			}
+			for (const GenericComponent& g: rec.reflected)
+			{
+				const reflect::ComponentType* ct = reflect::FindComponentType(g.type);
+				if (ct != nullptr && (static_cast<std::uint32_t>(ct->requiredFeatures) & static_cast<std::uint32_t>(SceneFeatureFlags::Physics2D)) != 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
 
 		// Link every expanded entity back to its instance root, stamping the source
 		// prefab entity's STABLE guid (created[i] aligns with prefab.entities[i]).
@@ -299,7 +313,7 @@ namespace aether::app::scene
 				const EntityRecord& rec = scene.entities[i];
 				const Entity e = created[i];
 
-				bool apply2DPhysics = rec.rigidBody2D || rec.collider2D || rec.joint2D;
+				bool apply2DPhysics = RecordHas2DPhysics(rec);
 				bool apply3DPhysics = rec.physics.has_value() || rec.joint.has_value();
 				if (apply2DPhysics && apply3DPhysics)
 				{
@@ -330,10 +344,6 @@ namespace aether::app::scene
 				{
 					impliedFeatures |= SceneFeatureFlags::Meshes3D;
 				}
-				if (rec.pointLight || rec.spotLight)
-				{
-					impliedFeatures |= SceneFeatureFlags::Lighting3D;
-				}
 
 				if (!rec.name.empty())
 				{
@@ -351,257 +361,11 @@ namespace aether::app::scene
 				{
 					world.EmplaceOrReplace<DisabledComponent>(e);
 				}
-				if (rec.sprite)
-				{
-					world.EmplaceOrReplace<SpriteRendererComponent>(e, *rec.sprite);
-				}
-				if (rec.spriteAnimator)
-				{
-					world.EmplaceOrReplace<SpriteAnimatorComponent>(e, *rec.spriteAnimator);
-				}
-				if (rec.meshRenderer)
-				{
-					world.EmplaceOrReplace<MeshRendererComponent>(e, MeshRendererComponent{.visible = rec.meshRendererVisible, .castShadows = rec.meshRendererCastShadows});
-				}
+				// Sprite Renderer / Sprite Animator / Mesh Renderer apply through the serde
+				// table (below).
 				if (rec.hasTransform)
 				{
 					world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = ComposeTransform(rec.position, rec.eulerDeg, rec.scale)});
-				}
-
-				if (rec.physics && apply3DPhysics)
-				{
-					const PhysicsRecord& phys = *rec.physics;
-					world.Emplace<ColliderComponent>(e,
-					        ColliderComponent{
-					                .shape = phys.shapeType,
-					                .halfExtents = phys.halfExtents,
-					                .radius = phys.radius,
-					                .halfHeight = phys.halfHeight,
-					                .center = phys.center,
-					                .friction = phys.friction,
-					                .restitution = phys.restitution,
-					                .isSensor = phys.isSensor,
-					                .layer = phys.isSensor ? PhysicsLayer::Sensor : PhysicsLayer::Moving,
-					        });
-					world.Emplace<RigidBodyComponent>(e,
-					        RigidBodyComponent{
-					                .motionType = phys.motionType,
-					                .mass = phys.mass,
-					                .linearDamping = phys.linearDamping,
-					                .angularDamping = phys.angularDamping,
-					                .gravityFactor = phys.gravityFactor,
-					                .maxLinearVelocity = phys.maxLinearVelocity,
-					                .maxAngularVelocity = phys.maxAngularVelocity,
-					                .continuousCollision = phys.continuousCollision,
-					                .allowSleeping = phys.allowSleeping,
-					                .lockPosition = phys.lockPosition,
-					                .lockRotation = phys.lockRotation,
-					        });
-				}
-				if (rec.joint && apply3DPhysics)
-				{
-					const JointRecord& jr = *rec.joint;
-					Entity targetEntity{};
-					if (jr.targetIndex >= 0 && jr.targetIndex < static_cast<int>(created.size()))
-					{
-						targetEntity = created[static_cast<std::size_t>(jr.targetIndex)];
-					}
-					world.Emplace<JointComponent>(e,
-					        JointComponent{
-					                .type = jr.type,
-					                .target = targetEntity,
-					                .anchor = jr.anchor,
-					                .axis = jr.axis,
-					                .minLimit = jr.minLimit,
-					                .maxLimit = jr.maxLimit,
-					                .distance = jr.distance,
-					                .collideConnected = jr.collideConnected,
-					        });
-				}
-				if (rec.rigidBody2D && apply2DPhysics)
-				{
-					world.EmplaceOrReplace<RigidBody2DComponent>(e, *rec.rigidBody2D);
-				}
-				if (rec.collider2D && apply2DPhysics)
-				{
-					world.EmplaceOrReplace<Collider2DComponent>(e, *rec.collider2D);
-				}
-				if (rec.joint2D && apply2DPhysics)
-				{
-					Joint2DComponent component = *rec.joint2D;
-					if (rec.joint2DTargetIndex >= 0 && rec.joint2DTargetIndex < static_cast<int>(created.size()))
-					{
-						component.target = created[static_cast<std::size_t>(rec.joint2DTargetIndex)];
-					}
-					world.EmplaceOrReplace<Joint2DComponent>(e, component);
-				}
-
-				if (rec.uiCanvas)
-				{
-					world.Emplace<ui::UICanvas>(e, ui::UICanvas{static_cast<ui::UICanvas::ScaleMode>(rec.uiCanvas->scaleMode), rec.uiCanvas->referenceResolution, rec.uiCanvas->sortBias});
-				}
-				if (rec.uiRect)
-				{
-					world.Emplace<ui::UIRect>(e, ui::UIRect{rec.uiRect->anchorMin, rec.uiRect->anchorMax, rec.uiRect->offsetMin, rec.uiRect->offsetMax, rec.uiRect->pivot, glm::vec4{0.f}});
-				}
-				if (rec.uiImage)
-				{
-					ui::UIImage im;
-					im.color = rec.uiImage->color;
-					im.cornerRadius = rec.uiImage->cornerRadius;
-					im.pixelArt = rec.uiImage->pixelArt;
-					if (!rec.uiImage->texturePath.empty() && deps.assets != nullptr)
-					{
-						im.texture = deps.assets->GetTextureRegistry().Acquire(rec.uiImage->texturePath);
-						if (deps.assetDatabase != nullptr)
-						{
-							deps.assetDatabase->Register(MakeTextureSource(rec.uiImage->texturePath));
-						}
-					}
-					world.Emplace<ui::UIImage>(e, im);
-				}
-				if (rec.uiText)
-				{
-					world.Emplace<ui::UIText>(
-					        e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
-				}
-
-				if (rec.mesh)
-				{
-					const Mesh* resolved = nullptr;
-					LoadedModel* model = nullptr;
-					if (rec.mesh->kind == MeshSourceComponent::Kind::Primitive)
-					{
-						if (deps.assets != nullptr && deps.primitives != nullptr)
-						{
-							if (const auto prim = PrimitiveFromName(rec.mesh->path))
-							{
-								resolved = &deps.primitives->Get(*prim);
-							}
-						}
-					}
-					else if (deps.sceneContext != nullptr)
-					{
-						auto& ctx = *deps.sceneContext;
-						if (const auto it = ctx.loadedModelMap.find(rec.mesh->path); it != ctx.loadedModelMap.end())
-						{
-							model = &ctx.loadedModels[it->second];
-						}
-						else if (deps.assets != nullptr)
-						{
-							auto result = deps.assets->LoadModel(rec.mesh->path);
-							if (!result && deps.ensureModelBaked)
-							{
-								std::string bakeError;
-								if (deps.ensureModelBaked(rec.mesh->path, bakeError))
-								{
-									AE_INFO(LogCategory::App, "Scene load: auto-imported model '{}'", rec.mesh->path);
-									result = deps.assets->LoadModel(rec.mesh->path);
-								}
-								else
-								{
-									AE_WARN(LogCategory::App, "Scene load: auto-import of model '{}' failed: {}", rec.mesh->path, bakeError);
-								}
-							}
-							if (result)
-							{
-								ctx.loadedModels.push_back(std::move(result.value()));
-								ctx.loadedModelMap[rec.mesh->path] = ctx.loadedModels.size() - 1;
-								model = &ctx.loadedModels.back();
-							}
-							else
-							{
-								AE_WARN(LogCategory::App, "Scene load: model '{}' failed: {}", rec.mesh->path, result.error());
-							}
-						}
-						if (model != nullptr && rec.mesh->primitiveIndex < model->primitives.size())
-						{
-							resolved = &model->primitives[rec.mesh->primitiveIndex].mesh;
-						}
-					}
-
-					if (resolved != nullptr)
-					{
-						world.Emplace<MeshComponent>(e, MeshComponent{.mesh = resolved});
-						world.Emplace<MeshSourceComponent>(e, *rec.mesh);
-						if (deps.assetDatabase != nullptr)
-						{
-							deps.assetDatabase->Register(rec.mesh->kind == MeshSourceComponent::Kind::Primitive ? MakePrimitiveMeshSource(rec.mesh->path) : MakeModelMeshSource(rec.mesh->path, static_cast<int>(rec.mesh->primitiveIndex)));
-						}
-					}
-					else
-					{
-						AE_WARN(LogCategory::App, "Scene load: mesh source '{}' unresolved for '{}'", rec.mesh->path, rec.name);
-					}
-
-					if (rec.skinned && model != nullptr && model->animationDb.IsValid())
-					{
-						const auto& primitive = model->primitives[rec.mesh->primitiveIndex];
-						if (primitive.skinIndex >= 0)
-						{
-							const auto skinIdx = static_cast<std::uint32_t>(primitive.skinIndex);
-							const std::uint32_t joints = model->animationDb.GetSkinJointCount(skinIdx);
-							const std::uint32_t clipCount = model->animationDb.GetClipCount();
-							SkinnedMeshComponent smc{};
-							smc.animDb = &model->animationDb;
-							smc.skinIndex = skinIdx;
-							smc.jointCount = joints;
-							smc.clipIndex = clipCount > 0 ? std::min(rec.skinned->clipIndex, clipCount - 1) : 0;
-							smc.animTime = rec.skinned->animTime;
-							smc.playbackSpeed = rec.skinned->playbackSpeed;
-							smc.looping = rec.skinned->looping;
-							world.EmplaceOrReplace<SkinnedMeshComponent>(e, smc);
-						}
-					}
-				}
-
-				if (rec.material && deps.assets != nullptr)
-				{
-					MaterialAsset asset = rec.material->asset;
-					TextureRegistry& textures = deps.assets->GetTextureRegistry();
-					const auto acquire = [&textures](const std::string& path, TextureHandle& out)
-					{
-						out = path.empty() ? TextureHandle{} : textures.Acquire(path);
-					};
-					acquire(rec.material->albedoPath, asset.albedoTex);
-					acquire(rec.material->normalPath, asset.normalTex);
-					acquire(rec.material->metallicRoughnessPath, asset.metallicRoughnessTex);
-					acquire(rec.material->occlusionPath, asset.occlusionTex);
-					acquire(rec.material->emissivePath, asset.emissiveTex);
-					if (deps.assetDatabase != nullptr)
-					{
-						for (const std::string& texPath: {rec.material->albedoPath, rec.material->normalPath, rec.material->metallicRoughnessPath, rec.material->occlusionPath, rec.material->emissivePath})
-						{
-							if (!texPath.empty())
-							{
-								deps.assetDatabase->Register(MakeTextureSource(texPath));
-							}
-						}
-					}
-					MaterialSystem::AssignMaterial(world, e, deps.assets->GetMaterialRegistry(), deps.assets->GetPipelineCache(), asset);
-					for (const TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
-					{
-						if (h.IsValid())
-						{
-							textures.Release(h);
-						}
-					}
-				}
-
-				if (rec.effect && !rec.effect->name.empty() && deps.effectManager != nullptr && deps.effectParams != nullptr && deps.pipelines != nullptr)
-				{
-					if (effects::ApplyEntityEffect(world, e, rec.effect->name, *deps.effectManager, *deps.pipelines, *deps.effectParams, &rec.effect->params))
-					{
-						++effectCount;
-					}
-					else
-					{
-						AE_WARN(LogCategory::App, "Scene load: unknown effect '{}'", rec.effect->name);
-					}
-				}
-				else if (rec.effect)
-				{
-					AE_WARN(LogCategory::App, "Scene load: effect '{}' on '{}' skipped (missing effect deps)", rec.effect->name, rec.name);
 				}
 
 				// Pure data-only components, applied generically: emplace a default
@@ -613,11 +377,21 @@ namespace aether::app::scene
 					{
 						continue;
 					}
+					// Physics-domain exclusivity: when this entity's 2D physics lost the
+					// tie-break to 3D, skip its 2D-physics components (never emplace both).
+					if (!apply2DPhysics && (static_cast<std::uint32_t>(ct->requiredFeatures) & static_cast<std::uint32_t>(SceneFeatureFlags::Physics2D)) != 0)
+					{
+						continue;
+					}
 					void* comp = ct->emplaceDefault(world, e);
 					if (comp == nullptr)
 					{
 						continue;
 					}
+					// A component implies its declared scene features (e.g. a light implies
+					// Lighting3D, a tile map implies Tilemaps) - this drives the feature
+					// reconcile generically, replacing the old per-component impliedFeatures.
+					impliedFeatures |= ct->requiredFeatures;
 					for (const auto& [fieldName, value]: generic.fields)
 					{
 						if (const reflect::FieldDesc* f = ct->FindField(fieldName))
@@ -631,51 +405,16 @@ namespace aether::app::scene
 					}
 					++behaviorCount;
 				}
-				if (rec.particles)
-				{
-					world.Emplace<ParticleEmitterComponent>(e, *rec.particles);
-					++behaviorCount;
-				}
-				if (rec.pointLight)
-				{
-					world.Emplace<PointLightComponent>(e, *rec.pointLight);
-				}
-				if (rec.spotLight)
-				{
-					world.Emplace<SpotLightComponent>(e, *rec.spotLight);
-				}
-				if (rec.dayNight)
-				{
-					world.Emplace<DayNightComponent>(e, *rec.dayNight);
-					impliedFeatures |= SceneFeatureFlags::Lighting3D;
-				}
-				if (rec.tileMap)
-				{
-					world.EmplaceOrReplace<TileMapComponent>(e, *rec.tileMap);
-					impliedFeatures |= SceneFeatureFlags::Tilemaps;
-				}
-				if (rec.camera)
-				{
-					world.Emplace<CameraComponent>(e, *rec.camera);
-					if (rec.mainCamera)
-					{
-						ecs::SetMainCameraEntity(world, e);
-					}
-				}
-				if (rec.orbitCamera)
-				{
-					world.EmplaceOrReplace<OrbitCameraComponent>(e, *rec.orbitCamera);
-				}
-				if (!rec.scripts.empty())
-				{
-					ScriptComponent component;
-					component.scripts.reserve(rec.scripts.size());
-					for (const ScriptRecord& script: rec.scripts)
-					{
-						component.scripts.push_back(ScriptEntry{.path = script.type, .attached = false, .properties = ScriptPropsFromSceneRefs(script.properties, created)});
-					}
-					world.Emplace<ScriptComponent>(e, std::move(component));
-				}
+				// Particle Emitter, Point/Spot lights, Day Night, Tile Map and Orbit Camera
+				// are applied generically through the rec.reflected loop above. Camera and
+				// Scripts apply through the serde table (below).
+
+				// Components with custom serialization (asset resolution, cross-entity refs,
+				// merged records) apply through the serde table at the end of the per-entity
+				// pass, ordered so dependencies hold (mesh before material, etc.); each is
+				// registered next to its component instead of inlined here.
+				SceneApplyContext applyCtx{world, e, deps, created, rec, scene.kind, impliedFeatures, apply2DPhysics, apply3DPhysics, behaviorCount, effectCount};
+				RunApplySerdes(applyCtx);
 			}
 
 			std::vector<Entity> migratedLights;

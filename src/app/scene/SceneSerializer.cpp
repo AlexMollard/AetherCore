@@ -196,24 +196,6 @@ namespace aether::app::scene
 		InvalidatePrefabCache();
 	}
 
-	const std::vector<std::string>& GenericComponentTypeNames()
-	{
-		// Pure data-only components: no asset resolution, physics bodies, cross-entity
-		// refs, or bespoke serialization - just reflected fields. Capture/Apply/codec
-		// handle these generically, so a new one only needs its AE_COMPONENT
-		// declaration plus an entry here.
-		static const std::vector<std::string> kNames{
-		        "Bob",
-		        "Spin",
-		        "Orbit",
-		        "Material Pulse",
-		        "Scale Pulse",
-		        "Look At",
-		        "Parallax",
-		};
-		return kNames;
-	}
-
 	std::string ScenesDirectory()
 	{
 		if (!g_projectScenesDirectory.empty())

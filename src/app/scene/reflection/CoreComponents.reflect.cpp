@@ -2,6 +2,7 @@
 
 #include "scene/reflection/Reflection.hpp"
 
+#include <algorithm>
 #include <charconv>
 
 #include "assets/SpriteAtlasAsset.hpp"
@@ -144,6 +145,7 @@ AE_FIELD_N("flip_x", flipX, Bool)
 AE_FIELD_N("flip_y", flipY, Bool)
 AE_FIELD_N("pixel_snap", pixelSnap, Bool)
 AE_FIELD_N("pixel_art", pixelArt, Bool)
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(SpriteAnimatorComponent, "Sprite Animator", "Animation", ICON_FA_FILM)
@@ -153,6 +155,7 @@ AE_FIELD_N("start_frame", startFrame, UInt)
 AE_FIELD_ENUM("loop_mode", loopMode, SpriteAnimationLoopEnum())
 AE_FIELD_N("use_asset_loop_mode", useAssetLoopMode, Bool)
 AE_FIELD_N("autoplay", autoplay, Bool)
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(PointLightComponent, "Point Light", "Rendering", ICON_FA_LIGHTBULB)
@@ -160,6 +163,9 @@ AE_FIELD_N("color", color, Color3)
 AE_FIELD_R(intensity, Float, 0.0f, 1000.0f)
 AE_FIELD_R(radius, Float, 0.0f, 500.0f)
 AE_FIELD_N("shadow", castsShadow, Bool)
+b.RequiresFeature(SceneFeatureFlags::Lighting3D);
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(SpotLightComponent, "Spot Light", "Rendering", ICON_FA_LIGHTBULB)
@@ -169,6 +175,9 @@ AE_FIELD_R(radius, Float, 0.0f, 500.0f)
 AE_FIELD_ANGLE_AS("inner_angle_deg", innerAngleRad, "inner_rad")
 AE_FIELD_ANGLE_AS("outer_angle_deg", outerAngleRad, "outer_rad")
 AE_FIELD_N("shadow", castsShadow, Bool)
+b.RequiresFeature(SceneFeatureFlags::Lighting3D);
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(CameraComponent, "Camera", "Rendering", ICON_FA_VIDEO)
@@ -180,6 +189,52 @@ AE_FIELD_N("far", farPlane, Float)
 AE_FIELD_ENUM("background", background, CameraBackgroundEnum())
 AE_FIELD_N("clear_color", clearColor, Color3)
 AE_FIELD_N("gradient_angle", gradientAngleDegrees, Float)
+// gradient_stops is a variable-length list of {colour, position} - the first field to
+// use the reflected List type, so it is reachable via MCP/serializer instead of being
+// hand-parsed. The setter re-applies the clamp/sort/min-two validation on every write.
+b.CustomListField(
+        "gradient_stops",
+        {{"colour", FieldType::Color3}, {"position", FieldType::Float}},
+        [](const void* comp) -> FieldValue
+        {
+	        FieldValue v;
+	        v.type = FieldType::List;
+	        for (const GradientStop& s: static_cast<const CameraComponent*>(comp)->gradientStops)
+	        {
+		        FieldValue col;
+		        col.type = FieldType::Color3;
+		        col.vec = glm::vec4(s.colour, 0.0f);
+		        FieldValue pos;
+		        pos.type = FieldType::Float;
+		        pos.num = s.position;
+		        v.list.push_back({col, pos});
+	        }
+	        return v;
+        },
+        [](void* comp, const FieldValue& in)
+        {
+	        std::vector<GradientStop>& stops = static_cast<CameraComponent*>(comp)->gradientStops;
+	        stops.clear();
+	        for (const std::vector<FieldValue>& row: in.list)
+	        {
+		        GradientStop s{};
+		        if (row.size() >= 1)
+		        {
+			        s.colour = glm::vec3(row[0].vec);
+		        }
+		        if (row.size() >= 2)
+		        {
+			        s.position = std::clamp(static_cast<float>(row[1].num), 0.0f, 1.0f);
+		        }
+		        stops.push_back(s);
+	        }
+	        std::sort(stops.begin(), stops.end(), [](const GradientStop& a, const GradientStop& b) { return a.position < b.position; });
+	        if (stops.size() < 2)
+	        {
+		        stops = CameraComponent{}.gradientStops;
+	        }
+        });
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(SkinnedMeshComponent, "Skinned Mesh", "Rendering", ICON_FA_FILM)
@@ -255,12 +310,16 @@ AE_COMPONENT_END()
 
 AE_COMPONENT(SpinComponent, "Spin", "Behaviors", ICON_FA_ROTATE)
 AE_FIELD_N("euler_deg_per_sec", eulerDegPerSec, Vec3)
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(BobComponent, "Bob", "Behaviors", ICON_FA_WAVE_SQUARE)
 AE_FIELD_N("amplitude", amplitude, Float)
 AE_FIELD_N("frequency", frequency, Float)
 AE_FIELD_N("phase", phase, Float)
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(OrbitComponent, "Orbit", "Behaviors", ICON_FA_CIRCLE_NOTCH)
@@ -270,16 +329,22 @@ AE_FIELD_N("speed_deg", angularSpeedDeg, Float)
 AE_FIELD_N("angle_deg", angleDeg, Float)
 AE_FIELD_N("yaw_offset_deg", yawOffsetDeg, Float)
 AE_FIELD_N("height", height, Float)
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(ScalePulseComponent, "Scale Pulse", "Behaviors", ICON_FA_EXPAND)
 AE_FIELD_N("amplitude", amplitude, Float)
 AE_FIELD_N("frequency", frequency, Float)
 AE_FIELD_N("phase", phase, Float)
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(MaterialPulseComponent, "Material Pulse", "Behaviors", ICON_FA_HEART_PULSE)
 AE_FIELD_N("emissive_a", emissiveA, Color3)
 AE_FIELD_N("emissive_b", emissiveB, Color3)
 AE_FIELD_N("frequency", frequency, Float)
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()

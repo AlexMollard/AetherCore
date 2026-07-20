@@ -756,6 +756,7 @@ namespace aether::editor
 		PropCheckbox("Flip X", &sprite.flipX);
 		PropCheckbox("Flip Y", &sprite.flipY);
 		PropCheckbox("Pixel Snap", &sprite.pixelSnap, "Snap sprite placement to the pixel grid");
+		PropCheckbox("Pixel Art", &sprite.pixelArt, "Sample the sprite with nearest filtering for crisp pixel-art edges");
 
 		if (ImGui::TreeNodeEx("Layout & Sorting", ImGuiTreeNodeFlags_SpanAvailWidth))
 		{

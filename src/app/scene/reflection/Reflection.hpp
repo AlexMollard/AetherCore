@@ -28,6 +28,9 @@ namespace aether::reflect
 		Enum,
 		String,
 		EntityRef,
+		// A homogeneous list of small structs - each element is a fixed set of scalar
+		// sub-fields (see FieldDesc::elementFields). Stored in FieldValue::list.
+		List,
 	};
 
 	struct EnumTable
@@ -59,6 +62,17 @@ namespace aether::reflect
 		int enumValue = 0;
 		std::uint64_t entity = 0;
 		std::string str;
+		// FieldType::List only: one inner vector per element, each holding the element's
+		// sub-field values positionally matching FieldDesc::elementFields.
+		std::vector<std::vector<FieldValue>> list;
+	};
+
+	// One sub-field of a FieldType::List element (name + scalar type). Elements are flat
+	// structs of scalars; nested lists are not modelled.
+	struct ListElementDesc
+	{
+		std::string name;
+		FieldType type = FieldType::Float;
 	};
 
 	struct FieldDesc
@@ -68,6 +82,9 @@ namespace aether::reflect
 		FieldMeta meta;
 		std::function<FieldValue(const void* component)> get;
 		std::function<void(void* component, const FieldValue&)> set;
+		// FieldType::List only: the schema of each element's sub-fields, used by the TOML
+		// codec, MCP JSON and the inspector to name/type the rows in FieldValue::list.
+		std::vector<ListElementDesc> elementFields;
 	};
 
 	// Bespoke TOML for the components whose on-disk shape isn't a flat field list
@@ -92,6 +109,21 @@ namespace aether::reflect
 
 		bool addable = true; // false = reference-only, never added to an arbitrary entity
 		bool serializable = true;
+		// true = a pure data-only component (no asset resolution, physics bodies,
+		// cross-entity refs, or bespoke on-disk shape) whose capture/apply/TOML codec
+		// are driven entirely from the reflected fields here. This flag IS the registry
+		// of generic components - the scene serializer scans ComponentTypes() for it,
+		// so a new data-only component only needs its declaration plus AE_GENERIC_SERIALIZE.
+		bool genericSerialize = false;
+		// true = the editor's ComponentCatalog builds a bespoke palette entry for this
+		// component by hand (richer add behavior - ensure Transform, seed defaults from
+		// position, set conflicts). The catalog skips auto-generating a plain reflected
+		// entry for it, keyed off this flag rather than a fragile DisplayName string match.
+		bool hasHandAuthoredCatalogEntry = false;
+		// TOML table key this component serializes under when genericSerialize is set and
+		// the on-disk key differs from the display name's derived key (e.g. "Particle
+		// Emitter" persists under the legacy "particles" key). Empty = derive from name.
+		std::string serializeKey;
 
 		// Scene features this component implies. Adding it auto-enables them on
 		// the world (metadata only - every component is legal in every scene).
@@ -308,6 +340,23 @@ namespace aether::reflect
 			return *this;
 		}
 
+		// A FieldType::List field. `elementFields` names/types each element's sub-fields;
+		// get/set convert between the component's list and FieldValue::list (rows of
+		// sub-field values, positional to elementFields). The setter is the place for any
+		// element validation (clamp/sort/defaults).
+		ComponentBuilder& CustomListField(const char* name, std::vector<ListElementDesc> elementFields, std::function<FieldValue(const void*)> get, std::function<void(void*, const FieldValue&)> set, FieldMeta meta = {})
+		{
+			FieldDesc f;
+			f.name = name;
+			f.type = FieldType::List;
+			f.meta = std::move(meta);
+			f.elementFields = std::move(elementFields);
+			f.get = std::move(get);
+			f.set = std::move(set);
+			m_type.fields.push_back(std::move(f));
+			return *this;
+		}
+
 		// the declaration file - see AE_FIELD_ENUM). Must outlive the registry (statics do).
 		template<typename C, typename E>
 		ComponentBuilder& EnumField(const char* name, E C::* member, const EnumTable& table)
@@ -340,6 +389,24 @@ namespace aether::reflect
 		ComponentBuilder& Serializable(bool v)
 		{
 			m_type.serializable = v;
+			return *this;
+		}
+
+		ComponentBuilder& GenericSerialize(bool v = true)
+		{
+			m_type.genericSerialize = v;
+			return *this;
+		}
+
+		ComponentBuilder& SerializeKey(std::string key)
+		{
+			m_type.serializeKey = std::move(key);
+			return *this;
+		}
+
+		ComponentBuilder& HandAuthoredCatalogEntry(bool v = true)
+		{
+			m_type.hasHandAuthoredCatalogEntry = v;
 			return *this;
 		}
 
@@ -401,6 +468,14 @@ namespace aether::reflect
 #define AE_FIELD_ENUM(name, member, tableRef) b.EnumField(name, &C::member, tableRef);
 
 #define AE_NOT_ADDABLE() b.Addable(false);
+
+// Marks a pure data-only component for generic scene serialization (see
+// ComponentType::genericSerialize). No per-component capture/apply/codec needed.
+#define AE_GENERIC_SERIALIZE() b.GenericSerialize(true);
+
+// Marks a component that the editor's ComponentCatalog adds a hand-authored palette
+// entry for, so the catalog does not auto-generate a plain reflected one.
+#define AE_HAND_AUTHORED_CATALOG() b.HandAuthoredCatalogEntry(true);
 
 #define AE_COMPONENT_END()                                                           \
 			::aether::reflect::RegisterComponent(std::move(b).Build());              \

@@ -19,6 +19,8 @@
 #include "scene/TagSlots.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "ui/UiComponents.hpp"
+#include "editor/ReflectionJson.hpp"
 #include "../material/FakePipelineFactory.hpp"
 #include "../material/FakeSlotSink.hpp"
 #include "../material/FakeTextureSink.hpp"
@@ -316,27 +318,29 @@ TEST_CASE("Particle emitter round-trips through capture, TOML and apply") {
     const auto parsed = ParseToml(WriteToml(CaptureScene(source, mreg, treg)));
     REQUIRE(parsed.has_value());
 
+    // Particle Emitter serializes generically under its legacy "particles" key; the
+    // authored values and runtime-stripping are verified on the applied component.
     const EntityRecord& r = RecordOf(*parsed, "Sparkle");
-    REQUIRE(r.particles.has_value());
-    CHECK(r.particles->texturePath == "project://fx/spark.png");
-    CHECK(r.particles->burstCount == 14);
-    CHECK(r.particles->emitOnStart);
-    CHECK(r.particles->autoDestroyWhenDone);
-    CHECK(r.particles->blendMode == SpriteBlendMode::Additive);
-    CHECK(r.particles->sortingLayer == 20);
-    CHECK(r.particles->gravity.y == doctest::Approx(-3.0f));
-    // Runtime fields stripped.
-    CHECK(r.particles->particles.empty());
-    CHECK(!r.particles->started);
-    CHECK(r.particles->pendingBurst == 0);
+    CHECK(HasGeneric(r, "Particle Emitter"));
 
     World fresh = MakeWorld();
     const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
     const Entity applied = AppliedOf(*parsed, created, "Sparkle");
     REQUIRE(applied.IsValid());
     REQUIRE(fresh.TryGet<ParticleEmitterComponent>(applied) != nullptr);
-    CHECK(fresh.Get<ParticleEmitterComponent>(applied).burstCount == 14);
-    CHECK(fresh.Get<ParticleEmitterComponent>(applied).endSize == doctest::Approx(0.05f));
+    const ParticleEmitterComponent& out = fresh.Get<ParticleEmitterComponent>(applied);
+    CHECK(out.texturePath == "project://fx/spark.png");
+    CHECK(out.burstCount == 14);
+    CHECK(out.emitOnStart);
+    CHECK(out.autoDestroyWhenDone);
+    CHECK(out.blendMode == SpriteBlendMode::Additive);
+    CHECK(out.sortingLayer == 20);
+    CHECK(out.gravity.y == doctest::Approx(-3.0f));
+    CHECK(out.endSize == doctest::Approx(0.05f));
+    // Runtime fields never round-trip: the applied emitter starts clean.
+    CHECK(out.particles.empty());
+    CHECK(!out.started);
+    CHECK(out.pendingBurst == 0);
 }
 
 TEST_CASE("Lights and environment records round-trip through TOML") {
@@ -620,6 +624,37 @@ TEST_CASE("CameraComponent defaults to SkyGradient with two gradient stops") {
     CHECK(cam.gradientAngleDegrees == doctest::Approx(0.0f));
 }
 
+TEST_CASE("Reflected List field round-trips through MCP JSON (gradient stops)") {
+    // gradient_stops was previously hand-parsed and unreachable via get_component /
+    // set_component; as a reflected List field it now round-trips through the same
+    // FieldValueToJson / JsonToFieldValue the MCP handlers use.
+    const reflect::ComponentType* rt = reflect::FindComponentType("Camera");
+    REQUIRE(rt != nullptr);
+    const reflect::FieldDesc* field = rt->FindField("gradient_stops");
+    REQUIRE(field != nullptr);
+    CHECK(field->type == reflect::FieldType::List);
+
+    CameraComponent cam{};
+    cam.gradientStops = {
+            {{1.0f, 0.0f, 0.0f}, 0.0f},
+            {{0.0f, 1.0f, 0.0f}, 0.5f},
+            {{0.0f, 0.0f, 1.0f}, 1.0f},
+    };
+
+    const nlohmann::json j = editor::FieldValueToJson(field->get(&cam), field);
+    REQUIRE(j.is_array());
+    REQUIRE(j.size() == 3);
+    CHECK(j[1]["position"].get<double>() == doctest::Approx(0.5));
+    CHECK(j[2]["colour"][2].get<double>() == doctest::Approx(1.0));
+
+    CameraComponent restored{};
+    field->set(&restored, editor::JsonToFieldValue(j, *field));
+    REQUIRE(restored.gradientStops.size() == 3);
+    CHECK(restored.gradientStops[0].colour.r == doctest::Approx(1.0f));
+    CHECK(restored.gradientStops[1].position == doctest::Approx(0.5f));
+    CHECK(restored.gradientStops[2].colour.b == doctest::Approx(1.0f));
+}
+
 #ifdef AETHER_SCENES_SOURCE_DIR
 TEST_CASE("SceneTextHasNoCameraSource flags camera-less scenes but not prefab-backed ones") {
     // A scene with a main camera has a camera source.
@@ -662,10 +697,15 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
 TEST_CASE("ReplaceScene spares transient subtrees during gameplay switches only") {
     World world = MakeWorld();
 
+    // A persistent script actor: aether_mark_transient sets both markers, so this
+    // mirrors how the engine actually tags a DontDestroyOnLoad entity. The gameplay
+    // spare keys off DontDestroyOnLoad, not SceneTransient (prefab-instance roots are
+    // SceneTransient but must be re-expanded, not kept - see the Scene.Load leak fix).
     const Entity player = world.Create();
     world.Emplace<NameComponent>(player, NameComponent{.name = "Player"});
     world.Emplace<TransformComponent>(player, TransformComponent{});
     world.GetRegistry().emplace<SceneTransientComponent>(World::ToEntt(player));
+    world.GetRegistry().emplace<DontDestroyOnLoadComponent>(World::ToEntt(player));
     const Entity playerMesh = world.Create();
     world.Emplace<TransformComponent>(playerMesh, TransformComponent{});
     REQUIRE(ecs::SetParent(world, playerMesh, player));
@@ -705,29 +745,32 @@ TEST_CASE("Light entities round-trip through capture, TOML and apply (v3)") {
     CHECK(parsed->version == kSceneFormatVersion);
     CHECK(parsed->lights.empty());
 
+    // Lights serialize generically (genericSerialize), so the record carries them in
+    // `reflected`; the authored values are verified on the applied components below.
     const EntityRecord& p = RecordOf(*parsed, "Plaza Light");
-    REQUIRE(p.pointLight.has_value());
-    CHECK(p.pointLight->intensity == doctest::Approx(45.0f));
-    CHECK(p.pointLight->radius == doctest::Approx(34.0f));
-    CHECK(p.pointLight->castsShadow);
+    CHECK(HasGeneric(p, "Point Light"));
     CHECK(p.position.x == doctest::Approx(-40.0f));
 
     const EntityRecord& s = RecordOf(*parsed, "Stage Spot");
-    REQUIRE(s.spotLight.has_value());
-    CHECK(s.spotLight->innerAngleRad == doctest::Approx(0.35f));
-    CHECK(s.spotLight->outerAngleRad == doctest::Approx(0.55f));
+    CHECK(HasGeneric(s, "Spot Light"));
 
     World fresh = MakeWorld();
     const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
     const Entity spot = AppliedOf(*parsed, created, "Stage Spot");
     REQUIRE(spot.IsValid());
     REQUIRE(fresh.TryGet<SpotLightComponent>(spot) != nullptr);
+    const SpotLightComponent& appliedSpot = fresh.Get<SpotLightComponent>(spot);
+    CHECK(appliedSpot.innerAngleRad == doctest::Approx(0.35f));
+    CHECK(appliedSpot.outerAngleRad == doctest::Approx(0.55f));
     const glm::mat4& m = fresh.Get<TransformComponent>(spot).localToWorld;
     const glm::vec3 fwd = -glm::normalize(glm::vec3(m[2]));
     CHECK(glm::dot(fwd, spotDir) == doctest::Approx(1.0f).epsilon(1e-3));
     const Entity point = AppliedOf(*parsed, created, "Plaza Light");
     REQUIRE(fresh.TryGet<PointLightComponent>(point) != nullptr);
-    CHECK(fresh.Get<PointLightComponent>(point).intensity == doctest::Approx(45.0f));
+    const PointLightComponent& appliedPoint = fresh.Get<PointLightComponent>(point);
+    CHECK(appliedPoint.intensity == doctest::Approx(45.0f));
+    CHECK(appliedPoint.radius == doctest::Approx(34.0f));
+    CHECK(appliedPoint.castsShadow);
 }
 
 TEST_CASE("Legacy [[lights]] records migrate to light entities on apply") {
@@ -966,83 +1009,85 @@ TEST_CASE("CaptureSubtrees copies multiple roots with local parent links") {
     CHECK(RecordOf(*parsed, "A child").parentIndex == IndexOf(*parsed, "A"));
 }
 
-TEST_CASE("UI components round-trip through TOML") {
-    SceneDescription in;
-    in.version = 6;
+TEST_CASE("UI components round-trip through capture, TOML and apply") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
 
-    EntityRecord ent;
-    ent.name = "Widget";
-    UICanvasRecord uc;
-    uc.scaleMode = 1;
-    uc.referenceResolution = {1280.f, 720.f};
-    uc.sortBias = 3;
-    ent.uiCanvas = uc;
-    UIRectRecord ur;
-    ur.anchorMin = {0.1f, 0.2f};
-    ur.anchorMax = {0.8f, 0.9f};
-    ur.offsetMin = {3.f, 4.f};
-    ur.offsetMax = {-3.f, -4.f};
-    ur.pivot = {0.25f, 0.75f};
-    ent.uiRect = ur;
-    UIImageRecord ui;
-    ui.color = {0.1f, 0.2f, 0.3f, 0.4f};
-    ui.cornerRadius = 7.5f;
-    ui.texturePath = "ui/panel.png";
-    ent.uiImage = ui;
-    UITextRecord ut;
-    ut.text = "Hello";
-    ut.fontName = "Custom";
-    ut.pixelSize = 18.f;
-    ut.color = {0.5f, 0.6f, 0.7f, 0.8f};
-    ut.hAlign = 2;
-    ut.vAlign = 1;
-    ut.wrap = false;
-    ent.uiText = ut;
-    in.entities.push_back(ent);
+    // UI Canvas / Rect / Text serialize generically; UI Image stays bespoke (texture).
+    const Entity widget = world.Create();
+    world.Emplace<NameComponent>(widget, NameComponent{.name = "Widget"});
+    world.Emplace<TransformComponent>(widget, TransformComponent{});
+    world.Emplace<ui::UICanvas>(widget, ui::UICanvas{ui::UICanvas::ScaleMode::ScaleWithReference, {1280.f, 720.f}, 3});
+    world.Emplace<ui::UIRect>(widget, ui::UIRect{{0.1f, 0.2f}, {0.8f, 0.9f}, {3.f, 4.f}, {-3.f, -4.f}, {0.25f, 0.75f}, glm::vec4{0.f}});
+    world.Emplace<ui::UIImage>(widget, ui::UIImage{.color = {0.1f, 0.2f, 0.3f, 0.4f}, .cornerRadius = 7.5f});
+    world.Emplace<ui::UIText>(widget, ui::UIText{"Hello", "Custom", 18.f, {0.5f, 0.6f, 0.7f, 0.8f}, ui::UIText::HAlign::Right, ui::UIText::VAlign::Middle, false});
 
-    const std::string toml = WriteToml(in);
+    const std::string toml = WriteToml(CaptureScene(world, mreg, treg));
+    // Enums persist as names now (a backward-compatible upgrade from integer keys).
+    CHECK(toml.find("scale_mode = 'scale_with_reference'") != std::string::npos);
+    CHECK(toml.find("h_align = 'right'") != std::string::npos);
+
     const auto out = ParseToml(toml);
     REQUIRE(out.has_value());
-    REQUIRE(out->entities.size() == 1);
-    const auto& e = out->entities[0];
+    const EntityRecord& e = RecordOf(*out, "Widget");
+    CHECK(HasGeneric(e, "UI Canvas"));
+    CHECK(HasGeneric(e, "UI Rect"));
+    CHECK(HasGeneric(e, "UI Text"));
 
-    REQUIRE(e.uiCanvas.has_value());
-    CHECK(e.uiCanvas->scaleMode == 1);
-    CHECK(e.uiCanvas->referenceResolution.x == doctest::Approx(1280.f));
-    CHECK(e.uiCanvas->referenceResolution.y == doctest::Approx(720.f));
-    CHECK(e.uiCanvas->sortBias == 3);
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*out, fresh, ApplySceneDeps{});
+    const Entity w = AppliedOf(*out, created, "Widget");
+    REQUIRE(w.IsValid());
 
-    REQUIRE(e.uiRect.has_value());
-    CHECK(e.uiRect->anchorMin.x == doctest::Approx(0.1f));
-    CHECK(e.uiRect->anchorMin.y == doctest::Approx(0.2f));
-    CHECK(e.uiRect->anchorMax.x == doctest::Approx(0.8f));
-    CHECK(e.uiRect->anchorMax.y == doctest::Approx(0.9f));
-    CHECK(e.uiRect->offsetMin.x == doctest::Approx(3.f));
-    CHECK(e.uiRect->offsetMin.y == doctest::Approx(4.f));
-    CHECK(e.uiRect->offsetMax.x == doctest::Approx(-3.f));
-    CHECK(e.uiRect->offsetMax.y == doctest::Approx(-4.f));
-    CHECK(e.uiRect->pivot.x == doctest::Approx(0.25f));
-    CHECK(e.uiRect->pivot.y == doctest::Approx(0.75f));
+    REQUIRE(fresh.TryGet<ui::UICanvas>(w) != nullptr);
+    const ui::UICanvas& canvas = fresh.Get<ui::UICanvas>(w);
+    CHECK(canvas.scaleMode == ui::UICanvas::ScaleMode::ScaleWithReference);
+    CHECK(canvas.referenceResolution.x == doctest::Approx(1280.f));
+    CHECK(canvas.sortBias == 3);
 
-    REQUIRE(e.uiImage.has_value());
-    CHECK(e.uiImage->color.r == doctest::Approx(0.1f));
-    CHECK(e.uiImage->color.g == doctest::Approx(0.2f));
-    CHECK(e.uiImage->color.b == doctest::Approx(0.3f));
-    CHECK(e.uiImage->color.a == doctest::Approx(0.4f));
-    CHECK(e.uiImage->cornerRadius == doctest::Approx(7.5f));
-    CHECK(e.uiImage->texturePath == "ui/panel.png");
+    REQUIRE(fresh.TryGet<ui::UIRect>(w) != nullptr);
+    const ui::UIRect& rect = fresh.Get<ui::UIRect>(w);
+    CHECK(rect.anchorMin.x == doctest::Approx(0.1f));
+    CHECK(rect.anchorMax.y == doctest::Approx(0.9f));
+    CHECK(rect.offsetMax.y == doctest::Approx(-4.f));
+    CHECK(rect.pivot.y == doctest::Approx(0.75f));
 
-    REQUIRE(e.uiText.has_value());
-    CHECK(e.uiText->text == "Hello");
-    CHECK(e.uiText->fontName == "Custom");
-    CHECK(e.uiText->pixelSize == doctest::Approx(18.f));
-    CHECK(e.uiText->color.r == doctest::Approx(0.5f));
-    CHECK(e.uiText->color.g == doctest::Approx(0.6f));
-    CHECK(e.uiText->color.b == doctest::Approx(0.7f));
-    CHECK(e.uiText->color.a == doctest::Approx(0.8f));
-    CHECK(e.uiText->hAlign == 2);
-    CHECK(e.uiText->vAlign == 1);
-    CHECK(e.uiText->wrap == false);
+    REQUIRE(fresh.TryGet<ui::UIImage>(w) != nullptr);
+    CHECK(fresh.Get<ui::UIImage>(w).cornerRadius == doctest::Approx(7.5f));
+
+    REQUIRE(fresh.TryGet<ui::UIText>(w) != nullptr);
+    const ui::UIText& text = fresh.Get<ui::UIText>(w);
+    CHECK(text.text == "Hello");
+    CHECK(text.fontName == "Custom");
+    CHECK(text.pixelSize == doctest::Approx(18.f));
+    CHECK(text.color.b == doctest::Approx(0.7f));
+    CHECK(text.hAlign == ui::UIText::HAlign::Right);
+    CHECK(text.vAlign == ui::UIText::VAlign::Middle);
+    CHECK_FALSE(text.wrap);
+}
+
+TEST_CASE("Legacy integer UI enum keys still load after the string upgrade") {
+    // Shipped scenes wrote UI enums as integers before they became reflected enums;
+    // the reader must still accept them (h_align = 2 -> Right, scale_mode = 1 -> ref).
+    const auto parsed = ParseToml(
+            "[scene]\nkind = '2d'\nname = 'legacy ui'\nversion = 15\n"
+            "[[entities]]\nname = 'Label'\n"
+            "[entities.ui_canvas]\nscale_mode = 1\n"
+            "[entities.ui_text]\ntext = 'Hi'\nh_align = 2\nv_align = 1\n");
+    REQUIRE(parsed.has_value());
+
+    World world = MakeWorld();
+    const auto created = ApplyScene(*parsed, world, ApplySceneDeps{});
+    const Entity label = AppliedOf(*parsed, created, "Label");
+    REQUIRE(label.IsValid());
+    REQUIRE(world.TryGet<ui::UICanvas>(label) != nullptr);
+    CHECK(world.Get<ui::UICanvas>(label).scaleMode == ui::UICanvas::ScaleMode::ScaleWithReference);
+    REQUIRE(world.TryGet<ui::UIText>(label) != nullptr);
+    CHECK(world.Get<ui::UIText>(label).hAlign == ui::UIText::HAlign::Right);
+    CHECK(world.Get<ui::UIText>(label).vAlign == ui::UIText::VAlign::Middle);
 }
 
 TEST_CASE("Scene and prefab file helpers read and list through mounted project VFS") {
@@ -1501,37 +1546,11 @@ TEST_CASE("Physics2D components survive a scene save and load round trip") {
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->entities.size() == 2);
     const EntityRecord& rec = parsed->entities[1];
-    REQUIRE(rec.rigidBody2D.has_value());
-    REQUIRE(rec.collider2D.has_value());
     REQUIRE(rec.joint2D.has_value());
-
-    const RigidBody2DComponent& savedRigid = *rec.rigidBody2D;
-    CHECK_FALSE(savedRigid.body.IsValid());
-    CHECK(savedRigid.bodyType == rigid.bodyType);
-    CHECK(savedRigid.gravityScale == doctest::Approx(rigid.gravityScale));
-    CHECK(savedRigid.linearDamping == doctest::Approx(rigid.linearDamping));
-    CHECK(savedRigid.angularDamping == doctest::Approx(rigid.angularDamping));
-    CHECK(savedRigid.fixedRotation == rigid.fixedRotation);
-    CHECK(savedRigid.continuousCollision == rigid.continuousCollision);
-    CHECK(savedRigid.allowSleeping == rigid.allowSleeping);
-    CHECK(savedRigid.startAwake == rigid.startAwake);
-
-    const Collider2DComponent& savedCollider = *rec.collider2D;
-    CHECK(savedCollider.shape == collider.shape);
-    CHECK(savedCollider.size == collider.size);
-    CHECK(savedCollider.radius == doctest::Approx(collider.radius));
-    CHECK(savedCollider.capsuleHeight == doctest::Approx(collider.capsuleHeight));
-    CHECK(savedCollider.offset == collider.offset);
-    CHECK(savedCollider.density == doctest::Approx(collider.density));
-    CHECK(savedCollider.friction == doctest::Approx(collider.friction));
-    CHECK(savedCollider.restitution == doctest::Approx(collider.restitution));
-    CHECK(savedCollider.isTrigger == collider.isTrigger);
-    CHECK(savedCollider.categoryBits == collider.categoryBits);
-    CHECK(savedCollider.maskBits == collider.maskBits);
-    CHECK(savedCollider.groupIndex == collider.groupIndex);
-    REQUIRE(savedCollider.points.size() == 3);
-    CHECK(savedCollider.points[2] == glm::vec2{0.0f, 0.75f});
-    CHECK(savedCollider.shapes.empty());
+    // Rigid Body 2D and Collider 2D serialize generically; their values (including the
+    // polygon points flat List) are verified on the applied components below.
+    CHECK(HasGeneric(rec, "Rigid Body 2D"));
+    CHECK(HasGeneric(rec, "Collider 2D"));
 
     const Joint2DComponent& savedJoint = *rec.joint2D;
     CHECK(savedJoint.type == joint.type);
@@ -1555,8 +1574,19 @@ TEST_CASE("Physics2D components survive a scene save and load round trip") {
     REQUIRE(loaded.TryGet<RigidBody2DComponent>(applied[1]) != nullptr);
     REQUIRE(loaded.TryGet<Collider2DComponent>(applied[1]) != nullptr);
     REQUIRE(loaded.TryGet<Joint2DComponent>(applied[1]) != nullptr);
-    CHECK(loaded.Get<RigidBody2DComponent>(applied[1]).bodyType == Body2DType::Kinematic);
-    CHECK(loaded.Get<Collider2DComponent>(applied[1]).points.size() == 3);
+    const RigidBody2DComponent& outRigid = loaded.Get<RigidBody2DComponent>(applied[1]);
+    CHECK(outRigid.bodyType == rigid.bodyType);
+    CHECK(outRigid.gravityScale == doctest::Approx(rigid.gravityScale));
+    CHECK(outRigid.fixedRotation == rigid.fixedRotation);
+    CHECK(outRigid.startAwake == rigid.startAwake);
+    const Collider2DComponent& outCollider = loaded.Get<Collider2DComponent>(applied[1]);
+    CHECK(outCollider.shape == collider.shape);
+    CHECK(outCollider.size == collider.size);
+    CHECK(outCollider.density == doctest::Approx(collider.density));
+    CHECK(outCollider.categoryBits == collider.categoryBits);
+    CHECK(outCollider.groupIndex == collider.groupIndex);
+    REQUIRE(outCollider.points.size() == 3);
+    CHECK(outCollider.points[2] == glm::vec2{0.0f, 0.75f});
     // Cold load resolves the joint target through the scene-local index.
     CHECK(loaded.Get<Joint2DComponent>(applied[1]).target == applied[0]);
 }
@@ -1585,10 +1615,17 @@ TEST_CASE("Day Night component and camera background survive a scene round trip"
     const auto parsed = ParseToml(WriteToml(captured));
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->entities.size() == 2);
-    REQUIRE(parsed->entities[0].dayNight.has_value());
-    CHECK_FALSE(parsed->entities[0].dayNight->animate);
-    CHECK(parsed->entities[0].dayNight->timeOfDayHours == doctest::Approx(17.5f));
-    CHECK(parsed->entities[0].dayNight->timeSpeedSecondsPerSecond == doctest::Approx(120.0f));
+    // Day Night serializes generically now; read its authored fields from `reflected`.
+    const EntityRecord& sunRec = parsed->entities[0];
+    const reflect::FieldValue* dnAnimate = GenericVal(sunRec, "Day Night", "animate");
+    const reflect::FieldValue* dnTimeOfDay = GenericVal(sunRec, "Day Night", "time_of_day");
+    const reflect::FieldValue* dnTimeSpeed = GenericVal(sunRec, "Day Night", "time_speed");
+    REQUIRE(dnAnimate != nullptr);
+    REQUIRE(dnTimeOfDay != nullptr);
+    REQUIRE(dnTimeSpeed != nullptr);
+    CHECK_FALSE(dnAnimate->boolean);
+    CHECK(dnTimeOfDay->num == doctest::Approx(17.5f));
+    CHECK(dnTimeSpeed->num == doctest::Approx(120.0f));
     REQUIRE(parsed->entities[1].camera.has_value());
     CHECK(parsed->entities[1].camera->background == CameraBackground::SolidColour);
     CHECK(parsed->entities[1].camera->clearColor.g == doctest::Approx(0.3f));
@@ -1612,7 +1649,7 @@ TEST_CASE("Scene apply keeps cross-domain physics records (Unity-style) but neve
     const auto parsed = ParseToml(toml3D);
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->entities.size() == 1);
-    CHECK(parsed->entities[0].rigidBody2D.has_value());
+    CHECK(HasGeneric(parsed->entities[0], "Rigid Body 2D"));
 
     World world = MakeWorld();
     const auto created = ApplyScene(*parsed, world, ApplySceneDeps{});
@@ -1632,13 +1669,37 @@ TEST_CASE("Scene apply keeps cross-domain physics records (Unity-style) but neve
     REQUIRE(parsedBoth.has_value());
     REQUIRE(parsedBoth->entities.size() == 1);
     CHECK(parsedBoth->entities[0].physics.has_value());
-    CHECK(parsedBoth->entities[0].rigidBody2D.has_value());
+    CHECK(HasGeneric(parsedBoth->entities[0], "Rigid Body 2D"));
 
     World world2D = MakeWorld();
     const auto created2D = ApplyScene(*parsedBoth, world2D, ApplySceneDeps{});
     REQUIRE(created2D.size() == 1);
     CHECK(world2D.Has<RigidBody2DComponent>(created2D[0]));
     CHECK_FALSE(world2D.Has<RigidBodyComponent>(created2D[0]));
+}
+
+TEST_CASE("Collider 2D polygon points are reachable through reflection as a flat List") {
+    // Previously points were hand-parsed and invisible to MCP; now a flat List field.
+    const reflect::ComponentType* rt = reflect::FindComponentType("Collider 2D");
+    REQUIRE(rt != nullptr);
+    const reflect::FieldDesc* field = rt->FindField("points");
+    REQUIRE(field != nullptr);
+    CHECK(field->type == reflect::FieldType::List);
+
+    Collider2DComponent col{};
+    col.points = {{0.0f, 0.5f}, {0.5f, -0.5f}, {-0.5f, -0.5f}};
+
+    // get -> JSON is a flat array of [x, y] pairs (not an array of objects).
+    const nlohmann::json j = editor::FieldValueToJson(field->get(&col), field);
+    REQUIRE(j.is_array());
+    REQUIRE(j.size() == 3);
+    REQUIRE(j[1].is_array());
+    CHECK(j[1][0].get<double>() == doctest::Approx(0.5));
+
+    Collider2DComponent restored{};
+    field->set(&restored, editor::JsonToFieldValue(j, *field));
+    REQUIRE(restored.points.size() == 3);
+    CHECK(restored.points[2] == glm::vec2{-0.5f, -0.5f});
 }
 
 TEST_CASE("Tile Map component survives a scene round trip and implies the feature") {
@@ -1667,19 +1728,22 @@ TEST_CASE("Tile Map component survives a scene round trip and implies the featur
     const auto parsed = ParseToml(WriteToml(captured));
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->entities.size() == 1);
-    REQUIRE(parsed->entities[0].tileMap.has_value());
-    const TileMapComponent& saved = *parsed->entities[0].tileMap;
+    // Tile Map serializes generically now; verify the authored values on the applied
+    // component (a full capture -> TOML -> parse -> apply round-trip).
+    CHECK(HasGeneric(parsed->entities[0], "Tile Map"));
+
+    World loaded = MakeWorld();
+    const auto applied = ApplyScene(*parsed, loaded, ApplySceneDeps{});
+    REQUIRE(applied.size() == 1);
+    REQUIRE(loaded.TryGet<TileMapComponent>(applied[0]) != nullptr);
+    const TileMapComponent& saved = loaded.Get<TileMapComponent>(applied[0]);
     CHECK(saved.tilemapPath == tileMap.tilemapPath);
     CHECK(saved.tint.g == doctest::Approx(0.6f));
     CHECK(saved.sortingLayer == -2);
     CHECK(saved.orderInLayer == 4);
     CHECK(saved.visibleLayerMask == 0x5u);
     CHECK_FALSE(saved.visible);
-
-    World loaded = MakeWorld();
-    const auto applied = ApplyScene(*parsed, loaded, ApplySceneDeps{});
-    REQUIRE(applied.size() == 1);
-    REQUIRE(loaded.TryGet<TileMapComponent>(applied[0]) != nullptr);
+    // The Tile Map component implies the Tilemaps feature via reflection requiredFeatures.
     CHECK(HasSceneFeature(loaded.GetSceneFeatures(), SceneFeatureFlags::Tilemaps));
 }
 
