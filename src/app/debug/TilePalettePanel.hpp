@@ -7,8 +7,15 @@
 
 #include "debug/DebugPanel.hpp"
 
+namespace aether
+{
+	struct TileSetAsset;
+}
+
 namespace aether::editor
 {
+	struct TilePaintingState;
+
 	// Tile authoring hub for the selected Tile Map entity: tileset browser with
 	// atlas previews, paint tools, layer list, chunk-local undo/redo, and asset
 	// saving. Painting itself happens in the viewport (HandleTilePainting).
@@ -26,6 +33,10 @@ namespace aether::editor
 	private:
 		[[nodiscard]] std::uint64_t AcquirePreviewTexture(app::LayerContext& context, const std::string& texturePath);
 		void ReleasePreviews(app::LayerContext& context);
+
+		// Live "what the next click paints" swatch: the selected tile with the
+		// active flips applied, or an erase/picker affordance for those tools.
+		void DrawBrushPreview(app::LayerContext& context, const TileSetAsset& tileSet, const TilePaintingState& state);
 
 		struct Preview
 		{

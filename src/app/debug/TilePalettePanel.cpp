@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <utility>
 
 #include <imgui.h>
 
@@ -84,6 +85,94 @@ namespace aether::editor
 			}
 		}
 		m_previews.clear();
+	}
+
+	void TilePalettePanel::DrawBrushPreview(app::LayerContext& context, const TileSetAsset& tileSet, const TilePaintingState& state)
+	{
+		constexpr float kSide = 54.0f;
+		const ImVec2 p0 = ImGui::GetCursorScreenPos();
+		const ImVec2 p1{p0.x + kSide, p0.y + kSide};
+		ImGui::Dummy(ImVec2(kSide, kSide));
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+
+		// Checkerboard backing so tile transparency reads.
+		const ImU32 c1 = chrome::U32(chrome::kPanel);
+		const ImU32 c2 = chrome::U32(chrome::kPanelHi);
+		constexpr float cs = 9.0f;
+		for (float y = 0.0f; y < kSide; y += cs)
+		{
+			for (float x = 0.0f; x < kSide; x += cs)
+			{
+				const bool alt = (static_cast<int>(x / cs) + static_cast<int>(y / cs)) % 2 == 0;
+				dl->AddRectFilled(ImVec2(p0.x + x, p0.y + y), ImVec2(p0.x + std::min(x + cs, kSide), p0.y + std::min(y + cs, kSide)), alt ? c1 : c2);
+			}
+		}
+
+		const bool erasing = state.tool == TileTool::Erase;
+		const TileDefinition* tile = state.selectedTile.IsValid() ? tileSet.Find(state.selectedTile) : nullptr;
+		bool drewTile = false;
+		if (!erasing && tile != nullptr)
+		{
+			if (auto* sprites = context.TryGet<SpriteAssetStore>())
+			{
+				if (const auto atlas = sprites->LoadAtlas(tile->atlasPath); atlas.has_value())
+				{
+					if (const SpriteRegion* region = (*atlas)->Find(tile->spriteId))
+					{
+						if (const std::uint64_t textureId = AcquirePreviewTexture(context, (*atlas)->texturePath); textureId != 0)
+						{
+							ImVec2 uv0{region->uvRect.x, region->uvRect.y};
+							ImVec2 uv1{region->uvRect.z, region->uvRect.w};
+							if (state.flipX)
+							{
+								std::swap(uv0.x, uv1.x);
+							}
+							if (state.flipY)
+							{
+								std::swap(uv0.y, uv1.y);
+							}
+							dl->AddImage(ImTextureRef(static_cast<ImTextureID>(textureId)), ImVec2(p0.x + 3.0f, p0.y + 3.0f), ImVec2(p1.x - 3.0f, p1.y - 3.0f), uv0, uv1);
+							drewTile = true;
+						}
+					}
+				}
+			}
+		}
+		if (!drewTile)
+		{
+			// Erase / picker / nothing-selected: an X-through affordance.
+			const ImU32 col = chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.85f));
+			dl->AddLine(ImVec2(p0.x + 13.0f, p0.y + 13.0f), ImVec2(p1.x - 13.0f, p1.y - 13.0f), col, 2.0f);
+			dl->AddLine(ImVec2(p1.x - 13.0f, p0.y + 13.0f), ImVec2(p0.x + 13.0f, p1.y - 13.0f), col, 2.0f);
+		}
+		dl->AddRect(p0, p1, chrome::U32(chrome::WithAlpha(chrome::kMuted, 0.6f)), 3.0f);
+
+		ImGui::SameLine();
+		ImGui::BeginGroup();
+		const char* toolName = "No tool";
+		switch (state.tool)
+		{
+			case TileTool::Pencil: toolName = "Pencil"; break;
+			case TileTool::Rectangle: toolName = "Rectangle"; break;
+			case TileTool::Fill: toolName = "Fill"; break;
+			case TileTool::Erase: toolName = "Erase"; break;
+			case TileTool::Picker: toolName = "Picker"; break;
+			case TileTool::None: toolName = "No tool"; break;
+		}
+		ImGui::TextUnformatted(toolName);
+		if (erasing)
+		{
+			ImGui::TextColored(chrome::kMuted, "clears cells");
+		}
+		else if (tile != nullptr)
+		{
+			ImGui::TextColored(chrome::kMuted, "%s", tile->name.c_str());
+		}
+		else
+		{
+			ImGui::TextColored(chrome::kMuted, "pick a tile below");
+		}
+		ImGui::EndGroup();
 	}
 
 	void TilePalettePanel::OnDetach(app::LayerContext& context)
@@ -250,6 +339,40 @@ namespace aether::editor
 			}
 		}
 
+		// Image-editor tool hotkeys, while not typing into a field. Shift+Y mirrors
+		// vertically (plain Ctrl+Y stays redo above; plain X toggles horizontal).
+		if (const ImGuiIO& io = ImGui::GetIO(); !io.WantTextInput && !io.KeyCtrl && !io.KeyAlt)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_B, false))
+			{
+				state->tool = TileTool::Pencil;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+			{
+				state->tool = TileTool::Rectangle;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_G, false))
+			{
+				state->tool = TileTool::Fill;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_E, false))
+			{
+				state->tool = TileTool::Erase;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_I, false))
+			{
+				state->tool = TileTool::Picker;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_X, false))
+			{
+				state->flipX = !state->flipX;
+			}
+			else if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+			{
+				state->flipY = !state->flipY;
+			}
+		}
+
 		// ── Tools ─────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Tools");
 		const auto toolButton = [&](TileTool tool, const char* label, const char* tooltip)
@@ -270,14 +393,18 @@ namespace aether::editor
 			ImGui::SetItemTooltip("%s", tooltip);
 			ImGui::SameLine();
 		};
-		toolButton(TileTool::Pencil, ICON_FA_PEN "##pencil", "Pencil: paint cells (drag)");
-		toolButton(TileTool::Rectangle, ICON_FA_EXPAND "##rect", "Rectangle: drag to fill a rect");
-		toolButton(TileTool::Fill, ICON_FA_WAND_MAGIC_SPARKLES "##fill", "Fill: flood fill (bounded)");
-		toolButton(TileTool::Erase, ICON_FA_XMARK "##erase", "Erase: clear cells (drag)");
-		toolButton(TileTool::Picker, ICON_FA_EYE "##picker", "Picker: sample a painted cell");
+		toolButton(TileTool::Pencil, ICON_FA_PEN "##pencil", "Pencil (B): paint cells - drag to stroke.\nRight-click drags an erase.");
+		toolButton(TileTool::Rectangle, ICON_FA_EXPAND "##rect", "Rectangle (R): drag out a filled rect.\nRight-click drags an erase rect.");
+		toolButton(TileTool::Fill, ICON_FA_WAND_MAGIC_SPARKLES "##fill", "Fill (G): flood fill a region.\nRight-click flood-erases.");
+		toolButton(TileTool::Erase, ICON_FA_XMARK "##erase", "Erase (E): clear cells (drag).");
+		toolButton(TileTool::Picker, ICON_FA_EYE "##picker", "Picker (I): sample a painted cell.");
 		ImGui::Checkbox("Flip X", &state->flipX);
+		ImGui::SetItemTooltip("Mirror the brush horizontally (X)");
 		ImGui::SameLine();
 		ImGui::Checkbox("Flip Y", &state->flipY);
+		ImGui::SetItemTooltip("Mirror the brush vertically (Shift+Y)");
+		ImGui::TextColored(chrome::kMuted, ICON_FA_CIRCLE_INFO "  Right-click erases with any paint tool.");
+		DrawBrushPreview(context, tileSet, *state);
 
 		// ── Layers ────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("Layers");

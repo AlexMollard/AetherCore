@@ -172,7 +172,12 @@ namespace aether::editor
 		{
 			Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId});
 			World& world = context.Get<World>();
-			if (editorCam != nullptr && m_lookThroughEntityId == 0 && m_editor2DMode != scene2D)
+			// Re-seed on a scene-kind flip OR whenever the editor camera's projection
+			// has drifted out of sync with the scene kind (e.g. it somehow became a
+			// 3D perspective view in a 2D scene). The 2D grid and tile painting both
+			// require an orthographic editor camera, so this self-heals a stuck view.
+			const bool projectionMismatch = editorCam != nullptr && (scene2D ? editorCam->GetProjection() != CameraProjection::Orthographic : editorCam->GetProjection() != CameraProjection::Perspective);
+			if (editorCam != nullptr && m_lookThroughEntityId == 0 && (m_editor2DMode != scene2D || projectionMismatch))
 			{
 				m_editor2DMode = scene2D;
 				if (scene2D)
@@ -896,9 +901,11 @@ namespace aether::editor
 			return;
 		}
 
-		const auto paintValue = [&]() -> std::uint32_t
+		// Right mouse button erases for any painting tool (Pencil/Rectangle/Fill),
+		// mirroring how sprite/tile editors universally bind RMB to erase.
+		const auto paintValue = [&](bool erasing) -> std::uint32_t
 		{
-			if (state->tool == editor::TileTool::Erase)
+			if (erasing || state->tool == editor::TileTool::Erase)
 			{
 				return tilecell::kEmpty;
 			}
@@ -908,6 +915,7 @@ namespace aether::editor
 			}
 			return tilecell::Make(map->PaletteIndexFor(state->selectedTile), state->flipX, state->flipY);
 		};
+		const ImU32 eraseColor = IM_COL32(230, 80, 80, 230);
 		const auto recordEdit = [&](glm::ivec2 target, std::uint32_t value)
 		{
 			const std::uint32_t before = map->GetCell(layer, target);
@@ -941,23 +949,28 @@ namespace aether::editor
 			case editor::TileTool::Pencil:
 			case editor::TileTool::Erase:
 			{
-				if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				const bool leftDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+				const bool rightDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+				if (leftDown || rightDown)
 				{
 					if (!m_tileStrokeActive)
 					{
 						m_tileStrokeActive = true;
+						m_tileStrokeErasing = !leftDown; // RMB-started stroke erases
 						m_tileStrokeCells.clear();
 						m_tileStrokeEdits.clear();
 					}
-					if (state->tool == editor::TileTool::Pencil && !state->selectedTile.IsValid())
+					const bool erasing = m_tileStrokeErasing;
+					if (state->tool == editor::TileTool::Pencil && !erasing && !state->selectedTile.IsValid())
 					{
-						break; // nothing selected to paint
+						break; // nothing selected to paint (erase still allowed)
 					}
-					recordEdit(cell, paintValue());
+					recordEdit(cell, paintValue(erasing));
 				}
 				else if (m_tileStrokeActive)
 				{
 					m_tileStrokeActive = false;
+					m_tileStrokeErasing = false;
 					state->PushStroke(editor::TilePaintStroke{.tilemapPath = component->tilemapPath, .edits = std::move(m_tileStrokeEdits)});
 					m_tileStrokeEdits.clear();
 					m_tileStrokeCells.clear();
@@ -966,9 +979,12 @@ namespace aether::editor
 			}
 			case editor::TileTool::Rectangle:
 			{
-				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+				const bool leftClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+				const bool rightClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+				if (leftClicked || rightClicked)
 				{
 					m_tileRectDragging = true;
+					m_tileRectErasing = !leftClicked; // RMB rect erases
 					m_tileRectAnchor = cell;
 				}
 				if (m_tileRectDragging)
@@ -977,15 +993,17 @@ namespace aether::editor
 					const glm::ivec2 hi = glm::max(m_tileRectAnchor, cell);
 					const ImVec2 a = toScreen(cellCornerWorld(lo));
 					const ImVec2 b = toScreen(cellCornerWorld({hi.x + 1, hi.y + 1}));
-					drawList->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), cursorColor, 0.0f, 0, 2.0f);
-					if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+					drawList->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), m_tileRectErasing ? eraseColor : cursorColor, 0.0f, 0, 2.0f);
+					const bool released = m_tileRectErasing ? ImGui::IsMouseReleased(ImGuiMouseButton_Right) : ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+					if (released)
 					{
 						m_tileRectDragging = false;
-						if (state->tool == editor::TileTool::Rectangle && (state->selectedTile.IsValid() || false))
+						const bool erasing = m_tileRectErasing;
+						if (erasing || state->selectedTile.IsValid())
 						{
 							m_tileStrokeCells.clear();
 							m_tileStrokeEdits.clear();
-							const std::uint32_t value = paintValue();
+							const std::uint32_t value = paintValue(erasing);
 							for (std::int32_t y = lo.y; y <= hi.y; ++y)
 							{
 								for (std::int32_t x = lo.x; x <= hi.x; ++x)
@@ -1003,11 +1021,14 @@ namespace aether::editor
 			}
 			case editor::TileTool::Fill:
 			{
-				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && state->selectedTile.IsValid())
+				const bool leftClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+				const bool rightClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+				const bool erasing = rightClicked && !leftClicked; // RMB flood-erases
+				if ((leftClicked || rightClicked) && (erasing || state->selectedTile.IsValid()))
 				{
 					constexpr std::int32_t kFillRadius = 32; // 64x64 hard cap
 					const std::uint32_t target = map->GetCell(layer, cell);
-					const std::uint32_t value = paintValue();
+					const std::uint32_t value = paintValue(erasing);
 					if (target != value)
 					{
 						m_tileStrokeCells.clear();
@@ -1853,6 +1874,26 @@ namespace aether::editor
 				const char* const aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
 				ImGui::SetNextItemWidth(150.0f);
 				ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
+
+				ImGui::Spacing();
+				chrome::SectionTag("SCENE");
+				ImGui::Spacing();
+				{
+					// Scene-kind override. Drives the editor camera (2D = orthographic +
+					// tile painting / 2D grid; 3D = perspective free-fly) via the same
+					// reseed logic as a scene load. Save the scene to persist.
+					World& sceneKindWorld = context.Get<World>();
+					const SceneKind currentKind = sceneKindWorld.GetSceneKind();
+					int kindIndex = currentKind == SceneKind::Scene2D ? 0 : (currentKind == SceneKind::Mixed ? 1 : 2);
+					const char* const kindLabels[] = {"2D", "Mixed", "3D"};
+					ImGui::SetNextItemWidth(150.0f);
+					if (ImGui::Combo("Scene kind", &kindIndex, kindLabels, static_cast<int>(std::size(kindLabels))))
+					{
+						sceneKindWorld.SetSceneKind(kindIndex == 0 ? SceneKind::Scene2D : (kindIndex == 1 ? SceneKind::Mixed : SceneKind::Scene3D));
+					}
+					ImGui::SetItemTooltip("This scene's kind. 2D uses an orthographic editor camera and enables tile painting / the 2D grid; 3D uses a perspective camera. Save the scene to persist.");
+				}
+
 				ImGui::Spacing();
 				chrome::SectionTag("OVERLAYS");
 				ImGui::Spacing();

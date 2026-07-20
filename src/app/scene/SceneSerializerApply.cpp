@@ -738,7 +738,18 @@ namespace aether::app::scene
 
 	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld)
 	{
+		// Instantiating a prefab must NOT redefine the scene's domain. A prefab is
+		// serialised as a mini-scene whose `kind` defaults to Scene3D; ApplyScene
+		// otherwise assigns that kind to the world, so spawning a prefab from a
+		// script at runtime silently flips a 2D world to 3D. That breaks every
+		// kind-dependent path (2D grid/tile painting in the editor, and any
+		// gameplay/render logic that keys off the world kind). Preserve the world's
+		// existing kind and only ever *add* the features the prefab's entities imply.
+		const SceneKind savedKind = world.GetSceneKind();
+		const SceneFeatureFlags savedFeatures = world.GetSceneFeatures();
 		const std::vector<Entity> created = ApplyScene(prefab, world, deps);
+		world.SetSceneKind(savedKind);
+		world.SetSceneFeatures(savedFeatures | world.GetSceneFeatures());
 
 		for (std::size_t i = 0; i < prefab.entities.size() && i < created.size(); ++i)
 		{

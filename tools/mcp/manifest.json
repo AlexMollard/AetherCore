@@ -383,11 +383,19 @@
       "tool": "load_scene"
     },
     {
-      "description": "Replace the live scene with a fresh empty scene.",
+      "description": "Replace the live scene with a fresh scene from the shipped default template. 'kind' picks the domain: '3d' (default) or '2d' (orthographic camera, sprite/tilemap/2D-physics features).",
       "mutates": true,
       "name": "scene.new",
       "paramsSchema": {
-        "properties": {},
+        "properties": {
+          "kind": {
+            "enum": [
+              "2d",
+              "3d"
+            ],
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "tool": "new_scene"
@@ -453,7 +461,7 @@
       "tool": "render_benchmark"
     },
     {
-      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
+      "description": "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
       "mutates": false,
       "name": "viewport.screenshot",
       "paramsSchema": {

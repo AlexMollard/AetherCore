@@ -77,7 +77,9 @@ namespace aether::editor
 		// Tile painting gesture state (tool selection lives in TilePaintingState).
 		bool m_tilePaintCapture = false;
 		bool m_tileStrokeActive = false;
+		bool m_tileStrokeErasing = false; // this drag was started with RMB (erase)
 		bool m_tileRectDragging = false;
+		bool m_tileRectErasing = false; // this rect drag was started with RMB (erase)
 		glm::ivec2 m_tileRectAnchor{0};
 		std::vector<glm::ivec2> m_tileStrokeCells;
 		std::vector<editor::TilePaintEdit> m_tileStrokeEdits;

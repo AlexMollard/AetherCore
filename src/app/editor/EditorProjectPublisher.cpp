@@ -354,7 +354,18 @@ namespace aether::editor
 			aether::EngineSettingsIO::Apply(*text, settings);
 			if (settings.app.startupScene.empty())
 			{
-				return true;
+				error = "Published build would boot to an empty world: app.startupScene is not set in " + DisplayPath(settingsPath)
+				        + ". Set a startup scene in ProjectSettings.toml (e.g. [app] startupscene = \"Level1\") and publish again.";
+				return false;
+			}
+			if (!settings.app.autoplay)
+			{
+				// A shipped game has no editor and no Play button; without autoplay it
+				// boots in edit mode - the scene's main camera is never applied and no
+				// scripts run, so the player sees a default camera over an inert scene.
+				error = "Published build would boot in edit mode (default camera, no gameplay): app.autoplay is false in " + DisplayPath(settingsPath)
+				        + ". BakePublishedEngineSettings must force autoplay = true.";
+				return false;
 			}
 
 			const std::filesystem::path projectPakPath = packageDir / "data" / "project.pak";
