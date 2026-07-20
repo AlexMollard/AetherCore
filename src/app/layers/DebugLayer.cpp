@@ -63,6 +63,7 @@ using namespace std::string_view_literals;
 #include "PlayState.hpp"
 #include "scene/ModelBakeHook.hpp"
 #include "scene/SceneSubsystem.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
 #include "utils/SettingsService.hpp"
@@ -640,6 +641,11 @@ namespace aether::editor
 		if (auto* playState = context.TryGet<app::PlayState>())
 		{
 			actions.push_back({"Play: Toggle Play / Stop", [&context]() { TogglePlaySession(context); }});
+			actions.push_back({"Play: Pause / Resume (F6)", [&context]() { TogglePausePlaySession(context); }});
+			actions.push_back({"Play: Step One Frame (F7)", [&context]() { StepPlaySession(context); }});
+			actions.push_back({"Play: Speed 0.5x (slow-mo)", [playState]() { playState->SetTimeScale(0.5f); }});
+			actions.push_back({"Play: Speed 1x (normal)", [playState]() { playState->SetTimeScale(1.0f); }});
+			actions.push_back({"Play: Speed 2x (fast-forward)", [playState]() { playState->SetTimeScale(2.0f); }});
 		}
 		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
 		for (const auto& preset: m_layoutPresets)
@@ -778,7 +784,14 @@ namespace aether::editor
 		{
 			if (auto* assets = context.TryGet<AssetManager>())
 			{
-				saved = app::scene::QuickSave(context.Get<World>(), currentName, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+				// Capture from the ECS on the main thread (~2 ms), then hand the heavy
+				// serialization + disk write (~15-20 ms) to the background writer so the
+				// frame never stalls on a save. Pending writes flush on shutdown, so a
+				// last-moment Ctrl+S is never lost.
+				app::scene::SceneDescription desc =
+				        app::scene::CaptureScene(context.Get<World>(), assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+				m_sceneWriter.RequestSave(currentName, std::move(desc));
+				saved = true;
 			}
 		}
 
@@ -801,6 +814,9 @@ namespace aether::editor
 			ShowToast(ICON_FA_CIRCLE_INFO "  Save the scene before returning to the launcher.", true);
 			return;
 		}
+		// The save is asynchronous; the launcher reads the project's scene files, so
+		// block until the write lands on disk before handing off.
+		m_sceneWriter.Flush();
 		if (!SpawnStandaloneLauncher())
 		{
 			ShowToast(ICON_FA_CIRCLE_INFO "  Could not open the project launcher.", true);
@@ -976,6 +992,23 @@ namespace aether::editor
 			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_S, false))
 			{
 				SaveCurrentScene(context);
+			}
+		}
+
+		// Play-control shortcuts (act on the running sim, so not gated on edit mode).
+		// F6 toggles pause, F7 steps one frame. Both no-op unless a session is live.
+		{
+			const ImGuiIO& io = ImGui::GetIO();
+			if (!io.WantTextInput)
+			{
+				if (ImGui::IsKeyPressed(ImGuiKey_F6, false))
+				{
+					TogglePausePlaySession(context);
+				}
+				if (ImGui::IsKeyPressed(ImGuiKey_F7, false))
+				{
+					StepPlaySession(context);
+				}
 			}
 		}
 

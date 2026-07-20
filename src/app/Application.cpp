@@ -351,7 +351,22 @@ namespace aether::app
 	{
 		constexpr double kFastForwardScale = 10.0;
 		const auto& input = m_engine.GetServiceContainer().Get<Input>();
-		return input.IsKeyDown(Key::GraveAccent) ? kFastForwardScale : 1.0;
+
+		// The user-set play speed drives the sim while running; when paused the
+		// scale stays 1x so a queued single-step advances one normal frame.
+		double scale = 1.0;
+		if (m_playState.IsPlaying() && !m_playState.IsPaused())
+		{
+			scale = static_cast<double>(m_playState.TimeScale());
+		}
+
+		// Hold-to-turbo layers on top of everything (also works while scrubbing
+		// edit-mode previews).
+		if (input.IsKeyDown(Key::GraveAccent))
+		{
+			scale *= kFastForwardScale;
+		}
+		return scale;
 	}
 
 	void Application::OnUpdate(double gameDt, std::uint64_t frameIndex)
@@ -375,7 +390,14 @@ namespace aether::app
 
 		if (m_playState.IsPlaying())
 		{
-			ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
+			// Pause/Step: TakeSimulationStep() returns false while paused (unless a
+			// single-step was requested), so the world freezes but the session stays
+			// live and the viewport keeps rendering the last simulated state.
+			if (m_playState.TakeSimulationStep())
+			{
+				ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
+				m_playState.RecordSimulatedFrame(gameDt);
+			}
 		}
 		else
 		{

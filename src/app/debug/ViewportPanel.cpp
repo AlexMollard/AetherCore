@@ -1,6 +1,8 @@
 #include "ViewportPanel.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <array>
 #include <cmath>
 #include <format>
@@ -281,6 +283,51 @@ namespace aether::editor
 		m_lookThroughEntityId = 0;
 	}
 
+	namespace
+	{
+		// Button label text used for both sizing (PlayControlsContentWidth) and
+		// rendering, so the centered pill never clips the controls.
+		constexpr const char* kStopLabel = ICON_FA_STOP " Stop";
+		constexpr const char* kCompilingLabel = ICON_FA_GEAR " Compiling";
+		constexpr const char* kPlayLabel = ICON_FA_PLAY " Play";
+
+		float LabelButtonWidth(const char* label)
+		{
+			return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		}
+
+		// Compact play-speed label, e.g. "1x", "0.5x", "2x", "0.25x".
+		void FormatSpeedLabel(char* out, std::size_t cap, float scale)
+		{
+			std::snprintf(out, cap, "%gx", static_cast<double>(scale));
+		}
+
+		constexpr float kSpeedPresets[] = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f};
+	} // namespace
+
+	float ViewportPanel::PlayControlsContentWidth(const app::PlayState* playState)
+	{
+		if (playState == nullptr)
+		{
+			return LabelButtonWidth(kPlayLabel);
+		}
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		if (playState->IsPlaying())
+		{
+			// Stop + Pause/Resume + Step (square) + speed.
+			const char* pauseLabel = playState->IsPaused() ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause";
+			const float stepW = ImGui::GetFrameHeight();
+			char speedLabel[16];
+			FormatSpeedLabel(speedLabel, sizeof(speedLabel), playState->TimeScale());
+			return LabelButtonWidth(kStopLabel) + spacing + LabelButtonWidth(pauseLabel) + spacing + stepW + spacing + LabelButtonWidth(speedLabel);
+		}
+		if (playState->IsCompiling())
+		{
+			return LabelButtonWidth(kCompilingLabel);
+		}
+		return LabelButtonWidth(kPlayLabel);
+	}
+
 	void ViewportPanel::DrawPlayControls(app::LayerContext& context)
 	{
 		auto* playState = context.TryGet<app::PlayState>();
@@ -292,25 +339,158 @@ namespace aether::editor
 		const bool playing = playState->IsPlaying();
 		const bool compiling = playState->IsCompiling();
 		const ImVec2 size(0.0f, ImGui::GetFrameHeight());
-		bool clicked = false;
+
 		if (playing)
 		{
-			clicked = chrome::PrimaryButton(ICON_FA_STOP " Stop", size);
+			if (chrome::PrimaryButton(kStopLabel, size))
+			{
+				TogglePlaySession(context);
+			}
+			ImGui::SetItemTooltip("Stop and restore the Play snapshot in-place");
+
+			const bool paused = playState->IsPaused();
+			ImGui::SameLine();
+			if (chrome::OutlineButton(paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause", size))
+			{
+				TogglePausePlaySession(context);
+			}
+			ImGui::SetItemTooltip("%s", paused ? "Resume the frozen simulation" : "Freeze the simulation (session stays live)");
+
+			ImGui::SameLine();
+			const float stepW = ImGui::GetFrameHeight();
+			if (chrome::GhostIconButton(ICON_FA_FORWARD_STEP, "##vpStep", ImVec2(stepW, stepW), paused ? chrome::kAccentHi : chrome::kMuted))
+			{
+				StepPlaySession(context);
+			}
+			ImGui::SetItemTooltip("Advance one frame (pauses first)");
+
+			// Play-speed control: label opens a popup of presets + a fine slider.
+			ImGui::SameLine();
+			char speedLabel[16];
+			FormatSpeedLabel(speedLabel, sizeof(speedLabel), playState->TimeScale());
+			const bool offNormal = std::abs(playState->TimeScale() - 1.0f) > 0.001f;
+			if (chrome::GhostButton(speedLabel, size, offNormal ? chrome::kAccentHi : chrome::kMuted))
+			{
+				ImGui::OpenPopup("##vpSpeed");
+			}
+			ImGui::SetItemTooltip("Play speed (slow-mo / fast-forward)");
+			if (ImGui::BeginPopup("##vpSpeed"))
+			{
+				chrome::SectionTag("PLAY SPEED");
+				ImGui::Spacing();
+				const float current = playState->TimeScale();
+				for (std::size_t i = 0; i < std::size(kSpeedPresets); ++i)
+				{
+					char preset[16];
+					FormatSpeedLabel(preset, sizeof(preset), kSpeedPresets[i]);
+					const bool active = std::abs(current - kSpeedPresets[i]) < 0.001f;
+					if (i != 0)
+					{
+						ImGui::SameLine();
+					}
+					if (active ? chrome::PrimaryButton(preset, ImVec2(46.0f, 0.0f)) : chrome::OutlineButton(preset, ImVec2(46.0f, 0.0f)))
+					{
+						playState->SetTimeScale(kSpeedPresets[i]);
+					}
+				}
+				ImGui::Spacing();
+				float scale = playState->TimeScale();
+				ImGui::SetNextItemWidth(320.0f);
+				if (ImGui::SliderFloat("##speedSlider", &scale, app::PlayState::kMinTimeScale, app::PlayState::kMaxTimeScale, "%.2fx", ImGuiSliderFlags_Logarithmic))
+				{
+					playState->SetTimeScale(scale);
+				}
+				ImGui::EndPopup();
+			}
+			return;
 		}
-		else if (compiling)
+
+		if (compiling)
 		{
-			clicked = chrome::OutlineButton(ICON_FA_GEAR " Compiling", size);
+			if (chrome::OutlineButton(kCompilingLabel, size))
+			{
+				TogglePlaySession(context);
+			}
+			ImGui::SetItemTooltip("Building C# scripts on a worker thread - click to cancel");
+			return;
 		}
-		else
+
+		if (chrome::GhostButton(kPlayLabel, size, chrome::kAccentHi))
 		{
-			clicked = chrome::GhostButton(ICON_FA_PLAY " Play", size, chrome::kAccentHi);
+			TogglePlaySession(context);
 		}
-		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place" : (compiling ? "Building C# scripts on a worker thread - click to cancel" : "Snapshot the scene and simulate"));
-		if (!clicked)
+		ImGui::SetItemTooltip("Snapshot the scene and simulate");
+	}
+
+	void ViewportPanel::DrawPlayHud(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize)
+	{
+		const auto* playState = context.TryGet<app::PlayState>();
+		if (playState == nullptr || !playState->IsPlaying())
 		{
 			return;
 		}
-		TogglePlaySession(context);
+
+		const bool paused = playState->IsPaused();
+		const double elapsed = playState->PlayElapsedSeconds();
+		const std::uint64_t frames = playState->PlayFrameCount();
+		const float fps = ImGui::GetIO().Framerate;
+		const float speed = playState->TimeScale();
+		const bool offNormal = std::abs(speed - 1.0f) > 0.001f;
+
+		const int totalMs = static_cast<int>(elapsed * 1000.0);
+		const int minutes = totalMs / 60000;
+		const int seconds = (totalMs / 1000) % 60;
+		const int millis = totalMs % 1000;
+
+		// State chip carries the speed suffix when running off normal (e.g. "2x").
+		char stateBuf[48];
+		if (offNormal && !paused)
+		{
+			std::snprintf(stateBuf, sizeof(stateBuf), ICON_FA_PLAY " PLAYING  %gx", static_cast<double>(speed));
+		}
+		else
+		{
+			std::snprintf(stateBuf, sizeof(stateBuf), "%s", paused ? ICON_FA_PAUSE " PAUSED" : ICON_FA_PLAY " PLAYING");
+		}
+		const char* stateLine = stateBuf;
+		char timeLine[64];
+		std::snprintf(timeLine, sizeof(timeLine), "%02d:%02d.%03d  ·  %llu f", minutes, seconds, millis, static_cast<unsigned long long>(frames));
+		char fpsLine[32];
+		std::snprintf(fpsLine, sizeof(fpsLine), "%.0f FPS", static_cast<double>(fps));
+
+		// Amber while paused so it reads distinctly from the accent "playing" state.
+		const ImVec4 amber{0.96f, 0.74f, 0.26f, 1.0f};
+		const ImVec4 stateColor = paused ? amber : chrome::kAccentHi;
+
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		const float pad = 8.0f;
+		const float lineH = ImGui::GetTextLineHeight();
+		const float spacing = 3.0f;
+		const float w0 = ImGui::CalcTextSize(stateLine).x;
+		const float w1 = ImGui::CalcTextSize(timeLine).x;
+		const float w2 = ImGui::CalcTextSize(fpsLine).x;
+		const float boxW = std::max({w0, w1, w2}) + pad * 2.0f;
+		const float boxH = lineH * 3.0f + spacing * 2.0f + pad * 2.0f;
+
+		// Skip the overlay when the viewport is too small to host it without
+		// swamping the scene (e.g. a slim docked strip).
+		if (imageSize.x < boxW + 24.0f || imageSize.y < boxH + 24.0f)
+		{
+			return;
+		}
+
+		const ImVec2 boxMin{imageMin.x + 12.0f, imageMin.y + 12.0f};
+		const ImVec2 boxMax{boxMin.x + boxW, boxMin.y + boxH};
+		draw->AddRectFilled(boxMin, boxMax, chrome::U32(chrome::WithAlpha(chrome::kBg, 0.72f)), 5.0f);
+		draw->AddRect(boxMin, boxMax, chrome::U32(chrome::WithAlpha(stateColor, 0.55f)), 5.0f);
+
+		float ty = boxMin.y + pad;
+		const float tx = boxMin.x + pad;
+		draw->AddText(ImVec2(tx, ty), chrome::U32(stateColor), stateLine);
+		ty += lineH + spacing;
+		draw->AddText(ImVec2(tx, ty), chrome::U32(chrome::kText), timeLine);
+		ty += lineH + spacing;
+		draw->AddText(ImVec2(tx, ty), chrome::U32(chrome::kMuted), fpsLine);
 	}
 
 	bool ViewportPanel::DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
@@ -1486,7 +1666,30 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin(GetName().data(), VisiblePtr(), ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		// Maximize on Play: while a session is live and the toggle is on, the
+		// viewport floats fullscreen over the editor (covering every other panel),
+		// then re-docks to its saved node on Stop. Contained here - the editor shell
+		// needs no changes because a focused fullscreen window occludes the rest.
+		const auto* maximizePlayState = context.TryGet<app::PlayState>();
+		const bool maximized = m_maximizeOnPlay && maximizePlayState != nullptr && maximizePlayState->IsPlaying();
+		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+		if (maximized)
+		{
+			const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+			ImGui::SetNextWindowPos(mainViewport->WorkPos);
+			ImGui::SetNextWindowSize(mainViewport->WorkSize);
+			ImGui::SetNextWindowViewport(mainViewport->ID);
+			windowFlags |= ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+			if (!m_wasMaximized)
+			{
+				// Bring it above the docked panels the first frame; being fullscreen,
+				// the user can't defocus it afterwards, so focus once is enough.
+				ImGui::SetNextWindowFocus();
+			}
+		}
+		m_wasMaximized = maximized;
+
+		ImGui::Begin(GetName().data(), VisiblePtr(), windowFlags);
 
 		auto& rendering = context.Get<aether::RenderingSubsystem>();
 		auto& post = rendering.GetPostProcessStack();
@@ -1618,6 +1821,10 @@ namespace aether::editor
 			DrawSpriteOutlines(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		}
+		else
+		{
+			DrawPlayHud(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y});
 		}
 
 		// Do not cover ImGuizmo with the input hitbox: it steals handle hover and prevents drags.
@@ -1828,9 +2035,8 @@ namespace aether::editor
 		}
 		ImGui::EndChild();
 
-		// Center pill: Play/Stop, horizontally centered in the toolbar row.
-		const char* playSizeLabel = toolbarPlaying ? ICON_FA_STOP " Stop" : (toolbarCompiling ? ICON_FA_GEAR " Compiling" : ICON_FA_PLAY " Play");
-		const float playBtnW = ImGui::CalcTextSize(playSizeLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		// Center pill: Play; or Stop + Pause/Resume + Step while playing. Centered.
+		const float playBtnW = PlayControlsContentWidth(toolbarPlayState);
 		const float playPillW = playBtnW + pillPad.x * 2.0f;
 		ImGui::SetCursorScreenPos(ImVec2(toolbarMin.x + (contentAvailable.x - playPillW) * 0.5f, pillTop));
 		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -1886,6 +2092,12 @@ namespace aether::editor
 				const char* const aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
 				ImGui::SetNextItemWidth(150.0f);
 				ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
+
+				ImGui::Spacing();
+				chrome::SectionTag("PLAY");
+				ImGui::Spacing();
+				ImGui::Checkbox("Maximize on Play", &m_maximizeOnPlay);
+				ImGui::SetItemTooltip("Fullscreen the viewport while playing; re-docks on Stop");
 
 				ImGui::Spacing();
 				chrome::SectionTag("SCENE");

@@ -18,6 +18,8 @@ namespace aether::editor
 	class ProjectPanel final : public DebugPanel
 	{
 	public:
+		~ProjectPanel() override;
+
 		std::string_view GetName() const override
 		{
 			return "Project";

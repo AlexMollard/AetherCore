@@ -13,6 +13,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <string_view>
 #include <system_error>
 
@@ -107,6 +108,33 @@ namespace aether::editor
 #endif
 		}
 
+		std::string PublishedRuntimeExeName()
+		{
+#ifdef AETHER_GAME_RUNTIME_EXE_NAME
+			return AETHER_GAME_RUNTIME_EXE_NAME;
+#elif defined(_WIN32)
+			return "AetherGame.exe";
+#else
+			return "AetherGame";
+#endif
+		}
+
+		// Launch the published game detached, with its working directory set to the
+		// build folder so the runtime resolves data/ (engine.pak, project.pak, ...).
+		void LaunchGameBuild(const std::filesystem::path& packageDir)
+		{
+#ifdef _WIN32
+			if (packageDir.empty())
+			{
+				return;
+			}
+			const std::filesystem::path exe = packageDir / PublishedRuntimeExeName();
+			ShellExecuteW(nullptr, L"open", exe.wstring().c_str(), nullptr, packageDir.wstring().c_str(), SW_SHOWNORMAL);
+#else
+			static_cast<void>(packageDir);
+#endif
+		}
+
 		ImVec4 StatusColor(bool succeeded)
 		{
 			return succeeded ? chrome::kSuccess : chrome::kError;
@@ -189,6 +217,20 @@ namespace aether::editor
 			}
 		};
 	} // namespace
+
+	ProjectPanel::~ProjectPanel()
+	{
+		// A future from std::async blocks in its destructor until the task finishes,
+		// so tearing the editor down mid-publish would stall shutdown until the pack
+		// + shader + dotnet build completed. The publish task is self-contained
+		// (a capture-free PublishProject over a copied project, reporting into a
+		// shared_ptr<PublishTask>), so hand an in-flight future to a detached waiter
+		// instead of blocking teardown on it.
+		if (m_publishFuture.valid())
+		{
+			std::thread([f = std::move(m_publishFuture)]() mutable { f.wait(); }).detach();
+		}
+	}
 
 	void ProjectPanel::Refresh(const app::EditorProjectContext& project)
 	{
@@ -662,236 +704,270 @@ namespace aether::editor
 		chrome::PanelHeader("PROJECT", sceneStat.c_str());
 		ImGui::TextUnformatted(project->name.c_str());
 		MutedWrapped(DisplayPath(project->root));
-		ImGui::Dummy(ImVec2(0.0f, 2.0f));
-
+		if (!m_status.empty())
 		{
-			ButtonRow toolbar;
-			if (actions != nullptr && actions->openLauncher)
+			MutedWrapped(m_status);
+		}
+		ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+		if (ImGui::BeginTabBar("##projectTabs", ImGuiTabBarFlags_None))
+		{
+			// Overview: the daily driver - quick actions and the startup scene.
+			if (ImGui::BeginTabItem("Overview"))
 			{
-				const char* label = ICON_FA_CUBE " Launcher";
-				toolbar.Item(label);
-				if (chrome::GhostButton(label))
+				ImGui::Dummy(ImVec2(0.0f, 2.0f));
 				{
-					actions->openLauncher();
+					ButtonRow toolbar;
+					if (actions != nullptr && actions->openLauncher)
+					{
+						const char* label = ICON_FA_CUBE " Launcher";
+						toolbar.Item(label);
+						if (chrome::GhostButton(label))
+						{
+							actions->openLauncher();
+						}
+					}
+					if (actions != nullptr && actions->reloadProject)
+					{
+						const char* label = ICON_FA_ROTATE " Reload";
+						toolbar.Item(label);
+						if (chrome::GhostButton(label))
+						{
+							actions->reloadProject();
+							Refresh(*project);
+						}
+					}
+					{
+						const char* label = ICON_FA_FOLDER_OPEN " Open Root";
+						toolbar.Item(label);
+						if (chrome::GhostButton(label))
+						{
+							OpenFolderInShell(project->root);
+						}
+					}
 				}
-			}
-			if (actions != nullptr && actions->reloadProject)
-			{
-				const char* label = ICON_FA_ROTATE " Reload";
-				toolbar.Item(label);
-				if (chrome::GhostButton(label))
+
+				ImGui::SeparatorText("Startup Scene");
+				if (m_scenes.empty())
 				{
-					actions->reloadProject();
-					Refresh(*project);
+					ImGui::TextDisabled("No scenes found in the project scenes folder.");
 				}
-			}
-			{
-				const char* label = ICON_FA_FOLDER_OPEN " Open Root";
-				toolbar.Item(label);
-				if (chrome::GhostButton(label))
+				else
 				{
-					OpenFolderInShell(project->root);
+					DrawSceneTable();
 				}
+				{
+					ButtonRow row;
+					const char* clearLabel = ICON_FA_XMARK " Clear Startup";
+					row.Item(clearLabel);
+					ImGui::BeginDisabled(m_startupScene.empty());
+					if (chrome::GhostButton(clearLabel))
+					{
+						m_startupScene.clear();
+						m_dirtySettings = true;
+					}
+					ImGui::EndDisabled();
+
+					const char* saveLabel = ICON_FA_FLOPPY_DISK " Save Project Settings";
+					row.Item(saveLabel);
+					ImGui::BeginDisabled(!m_dirtySettings);
+					if (chrome::OutlineButton(saveLabel))
+					{
+						SaveProjectSettings(*project);
+					}
+					ImGui::EndDisabled();
+				}
+				ImGui::EndTabItem();
 			}
+
+			// Assets: folder layout and repair. Reference/maintenance, rarely touched.
+			if (ImGui::BeginTabItem("Assets"))
 			{
-				const char* label = ICON_FA_FOLDER_OPEN " Repair Folders";
-				toolbar.Item(label);
-				if (chrome::GhostButton(label))
+				ImGui::Dummy(ImVec2(0.0f, 2.0f));
+				if (ImGui::BeginTable("##projectFolders", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
+				{
+					ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 82.0f);
+					ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 64.0f);
+					ImGui::TableSetupColumn("Path");
+					ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 4.0f);
+					DrawFolderRow("Assets", project->assetsDir);
+					DrawFolderRow("Models", project->assetsDir / "models");
+					DrawFolderRow("Materials", project->assetsDir / "materials");
+					DrawFolderRow("Textures", project->assetsDir / "textures");
+					DrawFolderRow("Animations", project->assetsDir / "animations");
+					DrawFolderRow("Scenes", project->scenesDir);
+					DrawFolderRow("Prefabs", project->prefabsDir);
+					DrawFolderRow("Data", project->root / "data");
+					DrawFolderRow("Scripts", project->scriptsDir);
+					ImGui::EndTable();
+				}
+				ImGui::Dummy(ImVec2(0.0f, 4.0f));
+				if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Repair Folders"))
 				{
 					EnsureStandardFolders(*project);
 				}
+				ImGui::EndTabItem();
 			}
-		}
-		MutedWrapped(m_status);
 
-		if (actions != nullptr)
-		{
-			const auto& visualStudios = actions->visualStudioInstallations;
-			const auto selected = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
-			if (selected == visualStudios.end() && !visualStudios.empty())
+			// Build: scripting debugger, packing, and publishing.
+			if (ImGui::BeginTabItem("Build"))
 			{
-				const auto compatible = std::ranges::find_if(visualStudios, [](const VisualStudioInstallation& installation) { return installation.supportsDotNet10 && installation.hasDebuggerAutomation; });
-				m_visualStudioInstall = (compatible != visualStudios.end() ? compatible : visualStudios.begin())->installPath;
-			}
-			const auto current = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
-
-			ImGui::SeparatorText("Scripting");
-			iw::LabelColumn("C# Debugger");
-			const char* debugLabel = ICON_FA_BUG " Debug C#";
-			const float debugWidth = ImGui::CalcTextSize(debugLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-			ImGui::SetNextItemWidth(-(debugWidth + ImGui::GetStyle().ItemSpacing.x));
-			const char* preview = current != visualStudios.end() ? current->displayName.c_str() : "No Visual Studio IDE found";
-			if (ImGui::BeginCombo("##scriptDebugger", preview))
-			{
-				for (const VisualStudioInstallation& installation: visualStudios)
+				ImGui::Dummy(ImVec2(0.0f, 2.0f));
+				if (actions != nullptr)
 				{
-					const bool isSelected = installation.installPath == m_visualStudioInstall;
-					const std::string label = installation.displayName + (installation.supportsDotNet10 ? "" : " (.NET 10 unsupported)") + (installation.hasDebuggerAutomation ? "" : " (debugger automation unavailable)");
-					if (ImGui::Selectable(label.c_str(), isSelected))
+					const auto& visualStudios = actions->visualStudioInstallations;
+					const auto selected = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
+					if (selected == visualStudios.end() && !visualStudios.empty())
 					{
-						m_visualStudioInstall = installation.installPath;
+						const auto compatible = std::ranges::find_if(visualStudios, [](const VisualStudioInstallation& installation) { return installation.supportsDotNet10 && installation.hasDebuggerAutomation; });
+						m_visualStudioInstall = (compatible != visualStudios.end() ? compatible : visualStudios.begin())->installPath;
 					}
-					if (isSelected)
+					const auto current = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
+
+					ImGui::SeparatorText("Scripting");
+					iw::LabelColumn("C# Debugger");
+					const char* debugLabel = ICON_FA_BUG " Debug C#";
+					const float debugWidth = ImGui::CalcTextSize(debugLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+					ImGui::SetNextItemWidth(-(debugWidth + ImGui::GetStyle().ItemSpacing.x));
+					const char* preview = current != visualStudios.end() ? current->displayName.c_str() : "No Visual Studio IDE found";
+					if (ImGui::BeginCombo("##scriptDebugger", preview))
 					{
-						ImGui::SetItemDefaultFocus();
+						for (const VisualStudioInstallation& installation: visualStudios)
+						{
+							const bool isSelected = installation.installPath == m_visualStudioInstall;
+							const std::string label = installation.displayName + (installation.supportsDotNet10 ? "" : " (.NET 10 unsupported)") + (installation.hasDebuggerAutomation ? "" : " (debugger automation unavailable)");
+							if (ImGui::Selectable(label.c_str(), isSelected))
+							{
+								m_visualStudioInstall = installation.installPath;
+							}
+							if (isSelected)
+							{
+								ImGui::SetItemDefaultFocus();
+							}
+						}
+						ImGui::EndCombo();
 					}
+					ImGui::SameLine();
+					const bool canDebugScripts = actions->debugScripts && current != visualStudios.end() && current->supportsDotNet10 && current->hasDebuggerAutomation;
+					ImGui::BeginDisabled(!canDebugScripts);
+					if (chrome::PrimaryButton(debugLabel))
+					{
+						const EditorProjectActionResult result = actions->debugScripts(m_visualStudioInstall);
+						m_status = result.message;
+					}
+					ImGui::EndDisabled();
 				}
-				ImGui::EndCombo();
-			}
-			ImGui::SameLine();
-			const bool canDebugScripts = actions->debugScripts && current != visualStudios.end() && current->supportsDotNet10 && current->hasDebuggerAutomation;
-			ImGui::BeginDisabled(!canDebugScripts);
-			if (chrome::PrimaryButton(debugLabel))
-			{
-				const EditorProjectActionResult result = actions->debugScripts(m_visualStudioInstall);
-				m_status = result.message;
-			}
-			ImGui::EndDisabled();
-		}
 
-		ImGui::SeparatorText("Folders");
-		if (ImGui::BeginTable("##projectFolders", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
-		{
-			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 82.0f);
-			ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 64.0f);
-			ImGui::TableSetupColumn("Path");
-			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 4.0f);
-			DrawFolderRow("Assets", project->assetsDir);
-			DrawFolderRow("Models", project->assetsDir / "models");
-			DrawFolderRow("Materials", project->assetsDir / "materials");
-			DrawFolderRow("Textures", project->assetsDir / "textures");
-			DrawFolderRow("Animations", project->assetsDir / "animations");
-			DrawFolderRow("Scenes", project->scenesDir);
-			DrawFolderRow("Prefabs", project->prefabsDir);
-			DrawFolderRow("Data", project->root / "data");
-			DrawFolderRow("Scripts", project->scriptsDir);
-			ImGui::EndTable();
-		}
-
-		ImGui::SeparatorText("Startup Scene");
-		if (m_scenes.empty())
-		{
-			ImGui::TextDisabled("No scenes found in the project scenes folder.");
-		}
-		else
-		{
-			DrawSceneTable();
-		}
-
-		{
-			ButtonRow row;
-			const char* clearLabel = ICON_FA_XMARK " Clear Startup";
-			row.Item(clearLabel);
-			ImGui::BeginDisabled(m_startupScene.empty());
-			if (chrome::GhostButton(clearLabel))
-			{
-				m_startupScene.clear();
-				m_dirtySettings = true;
-			}
-			ImGui::EndDisabled();
-
-			const char* saveLabel = ICON_FA_FLOPPY_DISK " Save Project Settings";
-			row.Item(saveLabel);
-			ImGui::BeginDisabled(!m_dirtySettings);
-			if (chrome::OutlineButton(saveLabel))
-			{
-				SaveProjectSettings(*project);
-			}
-			ImGui::EndDisabled();
-		}
-
-		ImGui::SeparatorText("Build & Publish");
-		if (actions != nullptr)
-		{
-			ButtonRow row;
-
-			const char* packLabel = ICON_FA_BOX_OPEN " Pack Project";
-			row.Item(packLabel);
-			ImGui::BeginDisabled(!actions->packProject);
-			if (chrome::GhostButton(packLabel))
-			{
-				if (m_dirtySettings)
+				ImGui::SeparatorText("Build & Publish");
+				if (actions != nullptr)
 				{
-					SaveProjectSettings(*project);
-				}
-				const EditorProjectActionResult result = actions->packProject(*project);
-				m_packSucceeded = result.succeeded;
-				m_packStatus = result.message;
-				m_lastPackPath = result.outputPath;
-			}
-			ImGui::EndDisabled();
+					ButtonRow row;
 
-			if (actions->rebuildEnginePak)
-			{
-				const char* label = ICON_FA_GEAR " Rebuild Engine Pak";
-				row.Item(label);
-				if (chrome::GhostButton(label))
+					const char* packLabel = ICON_FA_BOX_OPEN " Pack Project";
+					row.Item(packLabel);
+					ImGui::BeginDisabled(!actions->packProject);
+					if (chrome::GhostButton(packLabel))
+					{
+						if (m_dirtySettings)
+						{
+							SaveProjectSettings(*project);
+						}
+						const EditorProjectActionResult result = actions->packProject(*project);
+						m_packSucceeded = result.succeeded;
+						m_packStatus = result.message;
+						m_lastPackPath = result.outputPath;
+					}
+					ImGui::EndDisabled();
+
+					if (actions->rebuildEnginePak)
+					{
+						const char* label = ICON_FA_GEAR " Rebuild Engine Pak";
+						row.Item(label);
+						if (chrome::GhostButton(label))
+						{
+							const EditorProjectActionResult result = actions->rebuildEnginePak();
+							m_packSucceeded = result.succeeded;
+							m_packStatus = result.message;
+						}
+					}
+
+					if (actions->recompileShaders)
+					{
+						const char* label = ICON_FA_BOLT " Recompile Shaders";
+						row.Item(label);
+						if (chrome::GhostButton(label))
+						{
+							const EditorProjectActionResult result = actions->recompileShaders();
+							m_shaderSucceeded = result.succeeded;
+							m_shaderStatus = result.message;
+						}
+					}
+
+					if (!m_lastPackPath.empty())
+					{
+						const char* label = ICON_FA_FOLDER_OPEN " Output";
+						row.Item(label);
+						ImGui::BeginDisabled(!FolderExists(m_lastPackPath.parent_path()));
+						if (chrome::GhostButton(label))
+						{
+							OpenFolderInShell(m_lastPackPath.parent_path());
+						}
+						ImGui::EndDisabled();
+					}
+
+					const char* publishLabel = ICON_FA_ROCKET " Publish...";
+					row.Item(publishLabel);
+					ImGui::BeginDisabled(!actions->publishProject);
+					if (chrome::PrimaryButton(publishLabel))
+					{
+						ResetPublishSettings(*project);
+						LoadPublishSettings(*project);
+						m_publishStatus.clear();
+						m_publishSucceeded = false;
+						ImGui::OpenPopup("Publish Game");
+					}
+					ImGui::EndDisabled();
+				}
+
+				// Modal lives in the same ID scope as its OpenPopup (this tab item).
+				DrawPublishDialog(context, *project);
+
+				if (!m_lastPackPath.empty())
 				{
-					const EditorProjectActionResult result = actions->rebuildEnginePak();
-					m_packSucceeded = result.succeeded;
-					m_packStatus = result.message;
+					MutedWrapped(DisplayPath(m_lastPackPath));
+					MutedWrapped(FileSummary(m_lastPackPath));
 				}
-			}
+				StatusText(m_packStatus, m_packSucceeded);
+				StatusText(m_shaderStatus, m_shaderSucceeded);
 
-			if (actions->recompileShaders)
-			{
-				const char* label = ICON_FA_BOLT " Recompile Shaders";
-				row.Item(label);
-				if (chrome::GhostButton(label))
+				if (!m_lastPublishPath.empty())
 				{
-					const EditorProjectActionResult result = actions->recompileShaders();
-					m_shaderSucceeded = result.succeeded;
-					m_shaderStatus = result.message;
+					ImGui::BeginDisabled(!FolderExists(m_lastPublishPath));
+					if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Published Build"))
+					{
+						OpenFolderInShell(m_lastPublishPath);
+					}
+					ImGui::EndDisabled();
+
+					// Close the publish->test loop: run the game we just built.
+					std::error_code runEc;
+					const bool exeReady = m_publishSucceeded && std::filesystem::exists(m_lastPublishPath / PublishedRuntimeExeName(), runEc);
+					ImGui::SameLine();
+					ImGui::BeginDisabled(!exeReady);
+					if (chrome::GhostButton(ICON_FA_PLAY " Run Build", ImVec2(0.0f, 0.0f), chrome::kAccentHi))
+					{
+						LaunchGameBuild(m_lastPublishPath);
+					}
+					ImGui::EndDisabled();
+					ImGui::SetItemTooltip("Launch the published game (working dir = build folder)");
+
+					MutedWrapped(DisplayPath(m_lastPublishPath));
 				}
+				StatusText(m_publishStatus, m_publishSucceeded);
+				ImGui::EndTabItem();
 			}
-
-			if (!m_lastPackPath.empty())
-			{
-				const char* label = ICON_FA_FOLDER_OPEN " Output";
-				row.Item(label);
-				ImGui::BeginDisabled(!FolderExists(m_lastPackPath.parent_path()));
-				if (chrome::GhostButton(label))
-				{
-					OpenFolderInShell(m_lastPackPath.parent_path());
-				}
-				ImGui::EndDisabled();
-			}
-
-			const char* publishLabel = ICON_FA_ROCKET " Publish...";
-			row.Item(publishLabel);
-			ImGui::BeginDisabled(!actions->publishProject);
-			if (chrome::PrimaryButton(publishLabel))
-			{
-				ResetPublishSettings(*project);
-				LoadPublishSettings(*project);
-				m_publishStatus.clear();
-				m_publishSucceeded = false;
-				ImGui::OpenPopup("Publish Game");
-			}
-			ImGui::EndDisabled();
+			ImGui::EndTabBar();
 		}
-
-		DrawPublishDialog(context, *project);
-
-		if (!m_lastPackPath.empty())
-		{
-			MutedWrapped(DisplayPath(m_lastPackPath));
-			MutedWrapped(FileSummary(m_lastPackPath));
-		}
-		StatusText(m_packStatus, m_packSucceeded);
-		StatusText(m_shaderStatus, m_shaderSucceeded);
-
-		if (!m_lastPublishPath.empty())
-		{
-			ImGui::BeginDisabled(!FolderExists(m_lastPublishPath));
-			if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Published Build"))
-			{
-				OpenFolderInShell(m_lastPublishPath);
-			}
-			ImGui::EndDisabled();
-			MutedWrapped(DisplayPath(m_lastPublishPath));
-		}
-		StatusText(m_publishStatus, m_publishSucceeded);
 
 		ImGui::End();
 	}

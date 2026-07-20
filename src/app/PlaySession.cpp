@@ -201,4 +201,53 @@ namespace aether::app
 		}
 		return (playState->IsPlaying() || playState->IsCompiling()) ? StopPlaySession(context) : StartPlaySession(context);
 	}
+
+	bool PausePlaySession(LayerContext& context)
+	{
+		auto* playState = context.TryGet<PlayState>();
+		if (playState == nullptr || !playState->IsPlaying())
+		{
+			return false;
+		}
+		playState->SetPaused(true);
+		return true;
+	}
+
+	bool ResumePlaySession(LayerContext& context)
+	{
+		auto* playState = context.TryGet<PlayState>();
+		if (playState == nullptr || !playState->IsPlaying())
+		{
+			return false;
+		}
+		playState->SetPaused(false);
+		return true;
+	}
+
+	bool TogglePausePlaySession(LayerContext& context)
+	{
+		auto* playState = context.TryGet<PlayState>();
+		if (playState == nullptr || !playState->IsPlaying())
+		{
+			return false;
+		}
+		playState->SetPaused(!playState->IsPaused());
+		return true;
+	}
+
+	bool StepPlaySession(LayerContext& context)
+	{
+		auto* playState = context.TryGet<PlayState>();
+		if (playState == nullptr || !playState->IsPlaying())
+		{
+			return false;
+		}
+		// A step only makes sense against a frozen sim, so pause first if needed.
+		if (!playState->IsPaused())
+		{
+			playState->SetPaused(true);
+		}
+		playState->RequestStep();
+		return true;
+	}
 } // namespace aether::app

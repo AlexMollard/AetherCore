@@ -241,16 +241,28 @@ namespace aether::editor
 			        }
 			        const auto* playState = ctx.services.TryGet<app::PlayState>();
 			        const char* mode = "editing";
+			        bool paused = false;
+			        double playElapsed = 0.0;
+			        std::uint64_t playFrame = 0;
+			        float speed = 1.0f;
 			        if (playState != nullptr)
 			        {
-				        mode = playState->IsPlaying() ? "playing" : (playState->IsCompiling() ? "compiling" : "editing");
+				        paused = playState->IsPaused();
+				        mode = playState->IsPlaying() ? (paused ? "paused" : "playing") : (playState->IsCompiling() ? "compiling" : "editing");
+				        playElapsed = playState->PlayElapsedSeconds();
+				        playFrame = playState->PlayFrameCount();
+				        speed = playState->TimeScale();
 			        }
 			        return json{{"frame", ctx.frameIndex},
 			                {"fps", ctx.fps},
 			                {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""},
 			                {"sceneKind", scenes != nullptr ? SceneKindName(scenes->GetWorld().GetSceneKind()) : "unknown"},
 			                {"entities", count},
-			                {"playState", mode}};
+			                {"playState", mode},
+			                {"paused", paused},
+			                {"playElapsed", playElapsed},
+			                {"playFrame", playFrame},
+			                {"speed", speed}};
 		        }});
 
 		methods.push_back({"console.logs",
@@ -975,18 +987,38 @@ namespace aether::editor
 				{
 					ok = StopPlaySession(lc);
 				}
+				else if (w == "pause")
+				{
+					ok = PausePlaySession(lc);
+				}
+				else if (w == "resume")
+				{
+					ok = ResumePlaySession(lc);
+				}
+				else if (w == "step")
+				{
+					ok = StepPlaySession(lc);
+				}
 				else
 				{
 					ok = TogglePlaySession(lc);
 				}
 				const auto* playState = ctx.services.TryGet<app::PlayState>();
 				const char* state = "editing";
+				bool paused = false;
+				double elapsed = 0.0;
+				std::uint64_t frames = 0;
+				float speed = 1.0f;
 				if (playState != nullptr)
 				{
-					state = playState->IsPlaying() ? "playing" : (playState->IsCompiling() ? "compiling" : "editing");
+					paused = playState->IsPaused();
+					state = playState->IsPlaying() ? (paused ? "paused" : "playing") : (playState->IsCompiling() ? "compiling" : "editing");
+					elapsed = playState->PlayElapsedSeconds();
+					frames = playState->PlayFrameCount();
+					speed = playState->TimeScale();
 				}
 				// the C# build runs on a worker thread. Poll `info`.playState until it
-				return json{{"ok", ok}, {"playing", playState != nullptr && playState->IsPlaying()}, {"state", state}};
+				return json{{"ok", ok}, {"playing", playState != nullptr && playState->IsPlaying()}, {"paused", paused}, {"state", state}, {"elapsed", elapsed}, {"frame", frames}, {"speed", speed}};
 			};
 		};
 		methods.push_back({"engine.play",
@@ -997,6 +1029,28 @@ namespace aether::editor
 		        playHandler("play")});
 		methods.push_back({"engine.stop", "stop", "Exit Play mode and restore the pre-play scene snapshot.", true, Obj(), playHandler("stop")});
 		methods.push_back({"engine.toggle_play", "toggle_play", "Toggle Play/Stop.", true, Obj(), playHandler("toggle")});
+		methods.push_back({"engine.pause", "pause", "Freeze the running simulation (state='paused'). Session stays live; no-op unless playing.", true, Obj(), playHandler("pause")});
+		methods.push_back({"engine.resume", "resume", "Unfreeze a paused simulation (state='playing'). No-op unless playing.", true, Obj(), playHandler("resume")});
+		methods.push_back(
+		        {"engine.step", "step", "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.", true, Obj(), playHandler("step")});
+		methods.push_back({"engine.set_speed",
+		        "set_speed",
+		        "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
+		        true,
+		        Obj({{"speed", json{{"type", "number"}, {"minimum", 0.05}, {"maximum", 16.0}}}}, {"speed"}),
+		        [](const json& params, MethodContext& ctx) -> json
+		        {
+			        auto* playState = ctx.services.TryGet<app::PlayState>();
+			        if (playState == nullptr)
+			        {
+				        return json{{"ok", false}, {"error", "play state unavailable"}};
+			        }
+			        if (params.contains("speed") && params["speed"].is_number())
+			        {
+				        playState->SetTimeScale(params["speed"].get<float>());
+			        }
+			        return json{{"ok", true}, {"speed", playState->TimeScale()}};
+		        }});
 
 		methods.push_back({"rendergraph",
 		        "query_rendergraph",

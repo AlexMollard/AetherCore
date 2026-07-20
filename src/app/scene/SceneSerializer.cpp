@@ -51,6 +51,12 @@ namespace aether::app::scene
 		std::mutex g_prefabCacheMutex;
 		std::unordered_map<std::string, SceneDescription> g_prefabCache;
 
+		// Serializes concurrent scene/prefab file writes. SaveSceneFile/SavePrefabFile
+		// may be driven from the BackgroundSceneWriter thread as well as the main
+		// thread (MCP scene.save, launcher hand-off); this keeps two writers from
+		// interleaving into the same file.
+		std::mutex g_sceneWriteMutex;
+
 		void InvalidatePrefabCache()
 		{
 			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
@@ -218,15 +224,22 @@ namespace aether::app::scene
 		}
 		const std::filesystem::path path = dir / (prefabName + ".prefab.toml");
 
-		if (!io::file_util::WriteText(path, WriteToml(prefab)))
+		std::string tomlText;
+		std::vector<std::byte> binary;
+		SerializeScene(prefab, tomlText, binary);
+
 		{
-			AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", path.string());
-			return false;
-		}
-		// Cook the binary sibling (best-effort; the TOML is the source of truth).
-		if (auto cooked = io::file_util::WriteBinary(dir / (prefabName + std::string(kPrefabBinSuffix)), WriteSceneBinary(prefab)); !cooked)
-		{
-			AE_WARN(LogCategory::App, "SavePrefabFile: cannot cook binary for '{}': {}", prefabName, cooked.error().message);
+			const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
+			if (!io::file_util::WriteText(path, tomlText))
+			{
+				AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", path.string());
+				return false;
+			}
+			// Cook the binary sibling (best-effort; the TOML is the source of truth).
+			if (auto cooked = io::file_util::WriteBinary(dir / (prefabName + std::string(kPrefabBinSuffix)), binary); !cooked)
+			{
+				AE_WARN(LogCategory::App, "SavePrefabFile: cannot cook binary for '{}': {}", prefabName, cooked.error().message);
+			}
 		}
 		// Refresh the cache so the next instantiation sees the saved edit without a re-read.
 		{
@@ -313,13 +326,18 @@ namespace aether::app::scene
 		}
 		const std::filesystem::path path = dir / (sceneName + ".scene.toml");
 
-		if (!io::file_util::WriteText(path, WriteToml(scene)))
+		std::string tomlText;
+		std::vector<std::byte> binary;
+		SerializeScene(scene, tomlText, binary);
+
+		const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
+		if (!io::file_util::WriteText(path, tomlText))
 		{
 			AE_WARN(LogCategory::App, "SaveSceneFile: cannot write '{}'", path.string());
 			return false;
 		}
 		// Cook the binary sibling for fast runtime loads (best-effort; TOML is source).
-		if (auto cooked = io::file_util::WriteBinary(dir / (sceneName + std::string(kSceneBinSuffix)), WriteSceneBinary(scene)); !cooked)
+		if (auto cooked = io::file_util::WriteBinary(dir / (sceneName + std::string(kSceneBinSuffix)), binary); !cooked)
 		{
 			AE_WARN(LogCategory::App, "SaveSceneFile: cannot cook binary for '{}': {}", sceneName, cooked.error().message);
 		}

@@ -275,6 +275,10 @@ namespace aether::app::scene
 	std::string WriteToml(const SceneDescription& scene);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
 
+	// Serialize once into BOTH the text and cooked-binary forms, sharing a single
+	// document-tree build (cheaper than calling WriteToml + WriteSceneBinary).
+	void SerializeScene(const SceneDescription& scene, std::string& outToml, std::vector<std::byte>& outBinary);
+
 	// Binary scene/prefab format: the TOML document tree encoded as compact bytes
 	// (magic + version header). Same content as WriteToml/ParseToml, but tokenizer-
 	// free to load - the cooked runtime form. ReadSceneBinary fails closed

@@ -505,8 +505,13 @@ namespace aether
 		// 4. Accumulate time and kick step(s) to the physics thread.
 		m_accumulator += dt;
 
+		// Spiral-of-death guard (mirrors Physics2DSystem): at elevated time-scale
+		// (Play speed / backtick turbo) or after a long stall, dt can be worth many
+		// fixed steps. Cap the catch-up and drop the excess debt so a single frame
+		// never wedges on dozens of blocking WaitForStep()s.
+		constexpr int kMaxStepsPerFrame = 8;
 		int stepsThisFrame = 0;
-		while (m_accumulator >= kFixedTimestep)
+		while (m_accumulator >= kFixedTimestep && stepsThisFrame < kMaxStepsPerFrame)
 		{
 			if (m_stepInFlight)
 			{
@@ -520,6 +525,12 @@ namespace aether
 			m_stepKick.release();
 			m_stepInFlight = true;
 			++stepsThisFrame;
+		}
+
+		if (stepsThisFrame == kMaxStepsPerFrame && m_accumulator >= kFixedTimestep)
+		{
+			AE_WARN(LogCategory::Engine, "Physics dropped {:.1f} ms of simulation debt after {} steps in one frame", m_accumulator * 1000.0f, stepsThisFrame);
+			m_accumulator = 0.0f;
 		}
 
 		m_lastAlpha = m_accumulator / kFixedTimestep;

@@ -18,7 +18,9 @@
 #define ICON_FA_FLOPPY_DISK "\xef\x83\x87"
 #define ICON_FA_FOLDER_OPEN "\xef\x81\xbc"
 #define ICON_FA_PLAY "\xef\x81\x8b"
+#define ICON_FA_PAUSE "\xef\x81\x8c"
 #define ICON_FA_STOP "\xef\x81\x8d"
+#define ICON_FA_FORWARD_STEP "\xef\x81\x91"
 #define ICON_FA_ROCKET "\xef\x84\xb5"
 #define ICON_FA_STAR "\xef\x80\x85"
 

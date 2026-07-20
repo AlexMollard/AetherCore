@@ -10,6 +10,11 @@
 #include "debug/TilePaintingState.hpp"
 #include "gpu/GpuTypes.hpp"
 
+namespace aether::app
+{
+	class PlayState;
+}
+
 namespace aether::editor
 {
 	class ViewportPanel final : public DebugPanel
@@ -35,6 +40,13 @@ namespace aether::editor
 		void Draw2DGrid(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void DrawPlayControls(app::LayerContext& context);
+		// Total content width the play controls need this frame (Play; or Stop +
+		// Pause/Resume + Step while playing). Keeps the centered toolbar pill sized
+		// to match what DrawPlayControls renders.
+		[[nodiscard]] static float PlayControlsContentWidth(const app::PlayState* playState);
+		// Play-mode overlay in the viewport corner: state (Playing/Paused), elapsed
+		// sim time, frame count, and FPS. Drawn only while a session is live.
+		void DrawPlayHud(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize);
 		void DrawCameraGizmos(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// Interactive Collider 2D editing for the selected entity in 2D edit mode:
 		// box/circle/capsule size handles, offset handle, and polygon point
@@ -57,6 +69,10 @@ namespace aether::editor
 		int m_viewportDisplayMode = 0;
 		int m_viewportAspectMode = 0;
 		bool m_viewportShowStats = true;
+		// Maximize on Play: fullscreen the viewport while a session runs. m_wasMaximized
+		// tracks the transition so focus is only stolen on the frame it turns on.
+		bool m_maximizeOnPlay = false;
+		bool m_wasMaximized = false;
 		bool m_viewportShowMouse = true;
 		bool m_viewportShow2DGrid = true;
 

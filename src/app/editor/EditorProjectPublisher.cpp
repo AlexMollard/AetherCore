@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -591,6 +592,110 @@ namespace aether::editor
 				progress(completion, stage);
 			}
 		}
+
+		std::string HumanBytes(std::uintmax_t bytes)
+		{
+			const char* const units[] = {"B", "KB", "MB", "GB"};
+			double value = static_cast<double>(bytes);
+			int unit = 0;
+			while (value >= 1024.0 && unit < 3)
+			{
+				value /= 1024.0;
+				++unit;
+			}
+			char buffer[48];
+			std::snprintf(buffer, sizeof(buffer), unit == 0 ? "%.0f %s" : "%.2f %s", value, units[unit]);
+			return buffer;
+		}
+
+		struct PublishReport
+		{
+			std::string summary; // one line for the result message
+			std::string text;    // full publish-report.txt body
+			bool ok = false;
+		};
+
+		// Walk the finished package and describe what shipped: total size, file
+		// count, the key paks/assemblies, the largest files, and the boot config.
+		// Purely observational - never fails the publish.
+		PublishReport BuildPublishReport(const std::filesystem::path& packageDir, const app::EditorProjectContext& project, const EditorProjectPublishOptions& options, std::string_view runtimeExecutableName)
+		{
+			PublishReport report;
+
+			std::vector<std::pair<std::string, std::uintmax_t>> files;
+			std::uintmax_t total = 0;
+			std::error_code ec;
+			for (const auto& entry: std::filesystem::recursive_directory_iterator(packageDir, ec))
+			{
+				if (ec || !entry.is_regular_file(ec))
+				{
+					continue;
+				}
+				const std::uintmax_t size = std::filesystem::file_size(entry.path(), ec);
+				if (ec)
+				{
+					continue;
+				}
+				const std::filesystem::path rel = std::filesystem::relative(entry.path(), packageDir, ec);
+				files.emplace_back(ec ? entry.path().filename().generic_string() : rel.generic_string(), size);
+				total += size;
+			}
+
+			std::string startupScene = "(unset)";
+			bool autoplay = false;
+			if (auto settingsText = io::file_util::ReadText(packageDir / "data" / "config" / "EngineSettings.toml"))
+			{
+				aether::EngineSettings settings{};
+				aether::EngineSettingsIO::Apply(*settingsText, settings);
+				if (!settings.app.startupScene.empty())
+				{
+					startupScene = settings.app.startupScene;
+				}
+				autoplay = settings.app.autoplay;
+			}
+
+			const auto sizeOf = [&files](std::string_view rel) -> std::uintmax_t
+			{
+				for (const auto& [path, size]: files)
+				{
+					if (path == rel)
+					{
+						return size;
+					}
+				}
+				return 0;
+			};
+
+			std::vector<std::pair<std::string, std::uintmax_t>> largest = files;
+			std::sort(largest.begin(), largest.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+
+			std::string text;
+			text += "AetherCore Publish Report\n";
+			text += "=========================\n\n";
+			text += "Product:       " + (options.productName.empty() ? project.name : options.productName) + "\n";
+			text += "Platform:      " + (options.platformName.empty() ? PublishPlatformDirectoryName() : options.platformName) + "\n";
+			text += "Runtime:       " + std::string(runtimeExecutableName) + "\n";
+			text += "Startup scene: " + startupScene + "  (autoplay: " + (autoplay ? "yes" : "no") + ")\n\n";
+			text += "Package\n-------\n";
+			text += "Total size:    " + HumanBytes(total) + "\n";
+			text += "Files:         " + std::to_string(files.size()) + "\n\n";
+			text += "Key payload\n-----------\n";
+			text += "engine.pak     " + HumanBytes(sizeOf("data/engine.pak")) + "\n";
+			text += "project.pak    " + HumanBytes(sizeOf("data/project.pak")) + "\n";
+			text += "runtime exe    " + HumanBytes(sizeOf(std::string(runtimeExecutableName))) + "\n\n";
+			text += "Largest files\n-------------\n";
+			for (std::size_t i = 0; i < largest.size() && i < 8; ++i)
+			{
+				char line[512];
+				std::snprintf(line, sizeof(line), "  %12s  %s\n", HumanBytes(largest[i].second).c_str(), largest[i].first.c_str());
+				text += line;
+			}
+
+			report.text = std::move(text);
+			report.summary = "Published game build (" + HumanBytes(total) + ", " + std::to_string(files.size()) + " files, startup '" + startupScene + "').";
+			report.ok = !files.empty();
+			return report;
+		}
 	} // namespace
 
 	EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig()
@@ -859,8 +964,21 @@ namespace aether::editor
 			return {.succeeded = false, .message = error, .outputPath = publishDir};
 		}
 
+		// Observability: describe what actually shipped and drop a report next to
+		// the build. Best-effort - a report failure never fails the publish.
+		std::string message = "Published game build.";
+		const PublishReport report = BuildPublishReport(publishDir, project, options, config.runtimeExecutableName);
+		if (report.ok)
+		{
+			message = report.summary;
+			if (auto writeResult = io::file_util::WriteText(publishDir / "publish-report.txt", report.text); !writeResult)
+			{
+				AE_WARN(LogCategory::App, "Could not write publish-report.txt: {}", writeResult.error().message);
+			}
+		}
+
 		AE_INFO(LogCategory::App, "Published project '{}' to {}", project.name, DisplayPath(publishDir));
 		ReportProgress(progress, 1.0f, "Published");
-		return {.succeeded = true, .message = "Published game build.", .outputPath = publishDir};
+		return {.succeeded = true, .message = std::move(message), .outputPath = publishDir};
 	}
 } // namespace aether::editor
