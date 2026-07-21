@@ -212,14 +212,6 @@ namespace aether::editor
 				        w.EmplaceOrReplace<CameraComponent>(e);
 			        },
 			        [](World& w, Entity e) { w.Remove<CameraComponent>(e); }});
-			// (Create > UI > Text / ui::CreateTextEntity), never slapped onto an
-			c.push_back(ComponentCatalogEntry{"UI Text",
-			        "Rendering",
-			        ICON_FA_PEN,
-			        [](const World& w, Entity e) { return w.Has<ui::UIText>(e); },
-			        nullptr,
-			        nullptr,
-			        /*addable=*/false});
 
 			c.push_back(Simple<BobComponent>("Bob", "Behaviors", ICON_FA_WAVE_SQUARE, BobComponent{.amplitude = 1.5f, .frequency = 0.8f}));
 			c.push_back(Simple<SpinComponent>("Spin", "Behaviors", ICON_FA_ROTATE, SpinComponent{.eulerDegPerSec = {0.0f, 40.0f, 0.0f}}));
