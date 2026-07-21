@@ -105,82 +105,6 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye3'
-parent = 1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.875, 0.66 ]
-    anchor_min = [ 0.875, 0.66 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
-    pivot = [ 0.5, 0.5 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye2'
-parent = 1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.83, 0.66 ]
-    anchor_min = [ 0.83, 0.66 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
-    pivot = [ 0.5, 0.5 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye1'
-parent = 1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.185, 0.24 ]
-    anchor_min = [ 0.185, 0.24 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
-    pivot = [ 0.5, 0.5 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye0'
-parent = 1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.14, 0.24 ]
-    anchor_min = [ 0.14, 0.24 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
-    pivot = [ 0.5, 0.5 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsRoot'
 parent = 1
 position = [ 0.0, 0.0, 0.0 ]
@@ -199,7 +123,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsHeader'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -222,7 +146,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsBack'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -252,7 +176,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsUnderline'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -271,7 +195,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsSubtitle'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -294,7 +218,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShakeLabel'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -317,7 +241,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShakeToggle'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -343,7 +267,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'RedactLabel'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -366,7 +290,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'RedactBars'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -385,7 +309,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsFooter'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -408,7 +332,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderMusicLabel'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -431,7 +355,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderMusic'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -460,7 +384,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderSfxLabel'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -483,7 +407,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderSfx'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -512,7 +436,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderInkGlowLabel'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -535,7 +459,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderInkGlow'
-parent = 8
+parent = 4
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -581,7 +505,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSPathLine'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -600,7 +524,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node0'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -623,7 +547,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node1'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -646,7 +570,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node2'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -669,7 +593,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node3'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -692,7 +616,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node4'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -715,7 +639,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node5'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -738,7 +662,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum0'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -761,7 +685,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum1'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -784,7 +708,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum2'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -807,7 +731,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum3'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -830,7 +754,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum4'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -853,7 +777,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum5'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -876,7 +800,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSHeader'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -899,7 +823,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailBorder'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -918,7 +842,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailHeader'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -941,7 +865,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailName'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -964,7 +888,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreview'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -983,7 +907,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreviewLabel'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1006,7 +930,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailStats'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1029,7 +953,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailFlavor'
-parent = 24
+parent = 20
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1069,7 +993,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleWordmark'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1092,7 +1016,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleTagline'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1115,7 +1039,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker0'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1134,7 +1058,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label0'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1164,7 +1088,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss0'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1187,7 +1111,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker1'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1206,7 +1130,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label1'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1236,7 +1160,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss1'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1259,7 +1183,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker2'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1278,7 +1202,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label2'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1308,7 +1232,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss2'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1331,7 +1255,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker3'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1350,7 +1274,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label3'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1380,7 +1304,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss3'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1403,7 +1327,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBL'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1426,7 +1350,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBR'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1449,7 +1373,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'DripInk0'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1468,7 +1392,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'DripInk1'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1487,7 +1411,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'DripInk2'
-parent = 46
+parent = 42
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
