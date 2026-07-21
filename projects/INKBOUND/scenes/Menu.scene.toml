@@ -6,13 +6,13 @@ name = ''
 version = 16
 
 [[assets]]
-id = 'e235b803df4dc920'
-path = 'project://assets/textures/ui/vignette.png'
+id = 'd3b7f2a6b6f76fec'
+path = 'project://assets/textures/ui/scanlines.png'
 type = 'texture'
 
 [[assets]]
-id = 'd3b7f2a6b6f76fec'
-path = 'project://assets/textures/ui/scanlines.png'
+id = 'e235b803df4dc920'
+path = 'project://assets/textures/ui/vignette.png'
 type = 'texture'
 
 [[entities]]
@@ -65,7 +65,123 @@ parent = -1
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'TitleRoot'
+name = 'ShellScanlines'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 1.0, 1.0, 1.0, 0.5 ]
+    corner_radius = 0.0
+    pixel_art = true
+    texture = 'project://assets/textures/ui/scanlines.png'
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShellVignette'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 1.0, 1.0, 1.0, 1.0 ]
+    corner_radius = 0.0
+    pixel_art = false
+    texture = 'project://assets/textures/ui/vignette.png'
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye3'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.875, 0.66 ]
+    anchor_min = [ 0.875, 0.66 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye2'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.83, 0.66 ]
+    anchor_min = [ 0.83, 0.66 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye1'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.185, 0.24 ]
+    anchor_min = [ 0.185, 0.24 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye0'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.14, 0.24 ]
+    anchor_min = [ 0.14, 0.24 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SettingsRoot'
 parent = 1
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -93,7 +209,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'SettingsRoot'
+name = 'TitleRoot'
 parent = 1
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -107,116 +223,352 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye0'
-parent = 1
+name = 'TitleWordmark'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.06, 0.15 ]
+    anchor_min = [ 0.06, 0.15 ]
+    offset_max = [ 1000.0, 85.0 ]
+    offset_min = [ 0.0, -85.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.933, 0.945, 0.969, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 120.0
+    text = 'INKBOUND'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'TitleTagline'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.062, 0.27 ]
+    anchor_min = [ 0.062, 0.27 ]
+    offset_max = [ 900.0, 28.0 ]
+    offset_min = [ 0.0, -28.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.478, 0.51, 0.588, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 30.0
+    text = "the ink knows the way out. you don't."
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Marker0'
+parent = 10
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 11.0
     pixel_art = false
 
     [entities.ui_rect]
-    anchor_max = [ 0.14, 0.24 ]
-    anchor_min = [ 0.14, 0.24 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
+    anchor_max = [ 0.067, 0.44 ]
+    anchor_min = [ 0.067, 0.44 ]
+    offset_max = [ 11.0, 11.0 ]
+    offset_min = [ -11.0, -11.0 ]
     pivot = [ 0.5, 0.5 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye1'
-parent = 1
+name = 'Label0'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.087, 0.44 ]
+    anchor_min = [ 0.087, 0.44 ]
+    offset_max = [ 420.0, 30.0 ]
+    offset_min = [ 0.0, -30.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 34.0
+    text = 'descend'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Gloss0'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.2, 0.44 ]
+    anchor_min = [ 0.2, 0.44 ]
+    offset_max = [ 520.0, 22.0 ]
+    offset_min = [ 0.0, -22.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.314, 0.4, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'â€” a new dark'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Marker1'
+parent = 10
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
+    color = [ 0.227, 0.251, 0.314, 1.0 ]
+    corner_radius = 8.0
     pixel_art = false
 
     [entities.ui_rect]
-    anchor_max = [ 0.185, 0.24 ]
-    anchor_min = [ 0.185, 0.24 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
+    anchor_max = [ 0.067, 0.52 ]
+    anchor_min = [ 0.067, 0.52 ]
+    offset_max = [ 8.0, 8.0 ]
+    offset_min = [ -8.0, -8.0 ]
     pivot = [ 0.5, 0.5 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye2'
-parent = 1
+name = 'Label1'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.087, 0.52 ]
+    anchor_min = [ 0.087, 0.52 ]
+    offset_max = [ 420.0, 28.0 ]
+    offset_min = [ 0.0, -28.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.337, 0.361, 0.431, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 30.0
+    text = 'return'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Gloss1'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.2, 0.52 ]
+    anchor_min = [ 0.2, 0.52 ]
+    offset_max = [ 520.0, 22.0 ]
+    offset_min = [ 0.0, -22.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.314, 0.4, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'â€” to where you left it'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Marker2'
+parent = 10
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
+    color = [ 0.227, 0.251, 0.314, 1.0 ]
+    corner_radius = 8.0
     pixel_art = false
 
     [entities.ui_rect]
-    anchor_max = [ 0.83, 0.66 ]
-    anchor_min = [ 0.83, 0.66 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
+    anchor_max = [ 0.067, 0.6 ]
+    anchor_min = [ 0.067, 0.6 ]
+    offset_max = [ 8.0, 8.0 ]
+    offset_min = [ -8.0, -8.0 ]
     pivot = [ 0.5, 0.5 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Eye3'
-parent = 1
+name = 'Label2'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.087, 0.6 ]
+    anchor_min = [ 0.087, 0.6 ]
+    offset_max = [ 420.0, 28.0 ]
+    offset_min = [ 0.0, -28.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.337, 0.361, 0.431, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 30.0
+    text = 'attune'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Gloss2'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.2, 0.6 ]
+    anchor_min = [ 0.2, 0.6 ]
+    offset_max = [ 520.0, 22.0 ]
+    offset_min = [ 0.0, -22.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.314, 0.4, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'â€” settings'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Marker3'
+parent = 10
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_image]
-    color = [ 0.416, 0.165, 0.165, 0.0 ]
-    corner_radius = 7.0
+    color = [ 0.227, 0.251, 0.314, 1.0 ]
+    corner_radius = 8.0
     pixel_art = false
 
     [entities.ui_rect]
-    anchor_max = [ 0.875, 0.66 ]
-    anchor_min = [ 0.875, 0.66 ]
-    offset_max = [ 7.0, 7.0 ]
-    offset_min = [ -7.0, -7.0 ]
+    anchor_max = [ 0.067, 0.68 ]
+    anchor_min = [ 0.067, 0.68 ]
+    offset_max = [ 8.0, 8.0 ]
+    offset_min = [ -8.0, -8.0 ]
     pivot = [ 0.5, 0.5 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'ShellVignette'
-parent = 1
+name = 'Label3'
+parent = 10
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
-    [entities.ui_image]
-    color = [ 1.0, 1.0, 1.0, 1.0 ]
-    corner_radius = 0.0
-    pixel_art = false
-    texture = 'project://assets/textures/ui/vignette.png'
-
     [entities.ui_rect]
-    anchor_max = [ 1.0, 1.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 0.0, 0.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.5, 0.5 ]
+    anchor_max = [ 0.087, 0.68 ]
+    anchor_min = [ 0.087, 0.68 ]
+    offset_max = [ 420.0, 28.0 ]
+    offset_min = [ 0.0, -28.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.337, 0.361, 0.431, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 30.0
+    text = 'release'
+    v_align = 'middle'
+    wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'ShellScanlines'
-parent = 1
+name = 'Gloss3'
+parent = 10
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
-    [entities.ui_image]
-    color = [ 1.0, 1.0, 1.0, 0.5 ]
-    corner_radius = 0.0
-    pixel_art = true
-    texture = 'project://assets/textures/ui/scanlines.png'
+    [entities.ui_rect]
+    anchor_max = [ 0.2, 0.68 ]
+    anchor_min = [ 0.2, 0.68 ]
+    offset_max = [ 520.0, 22.0 ]
+    offset_min = [ 0.0, -22.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.314, 0.4, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'â€” quit'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'FlavorBL'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_rect]
-    anchor_max = [ 1.0, 1.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 0.0, 0.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.5, 0.5 ]
+    anchor_max = [ 0.04, 0.95 ]
+    anchor_min = [ 0.04, 0.95 ]
+    offset_max = [ 700.0, 18.0 ]
+    offset_min = [ 0.0, -18.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.173, 0.184, 0.227, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 17.0
+    text = "build 0.0.1 â€” this wasn't supposed to ship"
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'FlavorBR'
+parent = 10
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.74, 0.92 ]
+    anchor_min = [ 0.74, 0.92 ]
+    offset_max = [ 400.0, 18.0 ]
+    offset_min = [ 0.0, -18.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.227, 0.251, 0.314, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 17.0
+    text = "it's looking up at you."
+    v_align = 'middle'
+    wrap = false
