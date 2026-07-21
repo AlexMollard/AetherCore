@@ -37,6 +37,11 @@ namespace aether::ui
 		glm::vec4 color{1.f};
 		float cornerRadius = 0.f;
 		TextureHandle texture{};
+		// Authored texture path; resolved to `texture` lazily by the draw builder when
+		// `textureDirty` is set. Every other texture-bearing component stores the path
+		// (SpriteRenderer, TileMap); this brings UIImage in line so reflection/MCP can set it.
+		std::string texturePath;
+		bool textureDirty = false;
 		// Pixel-art sampling: the UI shader snaps UVs to texel centres.
 		bool pixelArt = false;
 	};
