@@ -729,7 +729,10 @@ namespace aether::editor
 		DrawUiText(world, entity);
 		DrawCamera(world, entity);
 		DrawScript(context, world, entity);
-		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer", "Sprite Animator"});
+		// UI Canvas/Rect/Image/Text have richer bespoke drawers above; exclude them here so the
+		// reflected pass does not draw them a second time. UI Slider/Toggle/Button/Progress Bar and
+		// UI Selectable have no bespoke drawer, so they are intentionally drawn by the reflected pass.
+		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer", "Sprite Animator", "UI Canvas", "UI Rect", "UI Image", "UI Text"});
 		DrawCollider2DTools(context, world, entity);
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
