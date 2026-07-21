@@ -160,9 +160,13 @@ AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* pat
 	if (path == nullptr || path[0] == '\0')
 	{
 		img->texture = aether::TextureHandle{};
+		img->texturePath.clear();
+		img->textureDirty = false;
 		return;
 	}
+	img->texturePath = path;
 	img->texture = ctx.assets->GetTextureRegistry().Acquire(path);
+	img->textureDirty = false;
 }
 
 // frame's layout pass. Useful for placing things relative to an element.

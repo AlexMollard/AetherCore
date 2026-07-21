@@ -26,10 +26,7 @@ namespace aether::app::scene
 			ir.color = im->color;
 			ir.cornerRadius = im->cornerRadius;
 			ir.pixelArt = im->pixelArt;
-			if (im->texture.IsValid() && im->texture.index != TextureHandle::kBrokenIndex)
-			{
-				c.textures.TryGetPath(im->texture, ir.texturePath);
-			}
+			ir.texturePath = im->texturePath;
 			c.rec.uiImage = std::move(ir);
 		}
 
@@ -43,13 +40,11 @@ namespace aether::app::scene
 			im.color = c.rec.uiImage->color;
 			im.cornerRadius = c.rec.uiImage->cornerRadius;
 			im.pixelArt = c.rec.uiImage->pixelArt;
-			if (!c.rec.uiImage->texturePath.empty() && c.deps.assets != nullptr)
+			im.texturePath = c.rec.uiImage->texturePath;
+			im.textureDirty = !im.texturePath.empty();
+			if (!im.texturePath.empty() && c.deps.assetDatabase != nullptr)
 			{
-				im.texture = c.deps.assets->GetTextureRegistry().Acquire(c.rec.uiImage->texturePath);
-				if (c.deps.assetDatabase != nullptr)
-				{
-					c.deps.assetDatabase->Register(MakeTextureSource(c.rec.uiImage->texturePath));
-				}
+				c.deps.assetDatabase->Register(MakeTextureSource(im.texturePath));
 			}
 			c.world.Emplace<ui::UIImage>(c.entity, im);
 		}
