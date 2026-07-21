@@ -81,4 +81,58 @@ namespace aether::ui
 		VAlign vAlign = VAlign::Top;
 		bool wrap = true;
 	};
+
+	// Interactive horizontal slider. One entity; the draw builder renders track+fill+handle
+	// and UiWidgetSystem drives value from keyboard (when focused) and mouse drag. Composes a
+	// UISelectable for focus (added by the reflection PostSet hook).
+	struct UISlider
+	{
+		float minValue = 0.f;
+		float maxValue = 1.f;
+		float step = 0.05f; // 0 = continuous
+		float value = 0.5f; // real units, clamped to [min,max]
+		glm::vec4 trackColor{0.10f, 0.11f, 0.14f, 1.f};
+		glm::vec4 fillColor{0.30f, 0.85f, 1.f, 1.f};
+		glm::vec4 handleColor{0.30f, 0.85f, 1.f, 1.f};
+		float handleRadius = 10.f;
+		float cornerRadius = 4.f;
+		bool changed = false;  // runtime: user moved value this frame
+		bool dragging = false; // runtime: mouse drag in progress
+		float pulse = 1.f;     // runtime: focus alpha multiplier for the handle
+	};
+
+	struct UIToggle
+	{
+		bool on = false;
+		glm::vec4 trackColor{0.15f, 0.17f, 0.22f, 1.f}; // track when off
+		glm::vec4 onColor{0.30f, 0.85f, 1.f, 1.f};      // track when on
+		glm::vec4 knobColor{0.90f, 0.95f, 1.f, 1.f};
+		float knobRadius = 9.f;
+		float cornerRadius = 12.f; // pill
+		bool changed = false;      // runtime
+		float pulse = 1.f;         // runtime
+	};
+
+	struct UIButton
+	{
+		std::string label;
+		std::string fontName = "Roboto";
+		float pixelSize = 24.f;
+		UIText::HAlign hAlign = UIText::HAlign::Center;
+		UIText::VAlign vAlign = UIText::VAlign::Middle;
+		glm::vec4 bgColor{0.07f, 0.08f, 0.10f, 1.f};
+		glm::vec4 textColor{0.70f, 0.75f, 0.85f, 1.f};
+		glm::vec4 bgColorFocused{0.07f, 0.08f, 0.10f, 1.f};
+		glm::vec4 textColorFocused{0.30f, 0.85f, 1.f, 1.f};
+		float cornerRadius = 4.f;
+	};
+
+	// Read-only meter. No interaction, no UISelectable.
+	struct UIProgressBar
+	{
+		float value = 0.f; // normalized 0..1
+		glm::vec4 trackColor{0.10f, 0.11f, 0.14f, 1.f};
+		glm::vec4 fillColor{0.30f, 0.85f, 1.f, 1.f};
+		float cornerRadius = 4.f;
+	};
 } // namespace aether::ui
