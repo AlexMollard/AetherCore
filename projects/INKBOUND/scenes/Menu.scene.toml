@@ -207,6 +207,480 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_min = [ 0.0, 0.0 ]
     pivot = [ 0.5, 0.5 ]
 
+    [[entities.scripts]]
+    type = 'LevelSelectScreen'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSPathLine'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.149, 0.169, 0.227, 1.0 ]
+    corner_radius = 0.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.52, 0.42 ]
+    anchor_min = [ 0.09, 0.42 ]
+    offset_max = [ 0.0, 2.0 ]
+    offset_min = [ 0.0, -2.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Node0'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 22.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.11, 0.42 ]
+    anchor_min = [ 0.11, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'levelselect'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Node1'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 22.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.185, 0.42 ]
+    anchor_min = [ 0.185, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'levelselect'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Node2'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 22.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.26, 0.42 ]
+    anchor_min = [ 0.26, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'levelselect'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Node3'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 22.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.335, 0.42 ]
+    anchor_min = [ 0.335, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'levelselect'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Node4'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.094, 0.102, 0.133, 1.0 ]
+    corner_radius = 22.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.42, 0.42 ]
+    anchor_min = [ 0.42, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'levelselect'
+    interactable = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Node5'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.094, 0.102, 0.133, 1.0 ]
+    corner_radius = 22.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.42 ]
+    anchor_min = [ 0.5, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'levelselect'
+    interactable = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'NodeNum0'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.11, 0.42 ]
+    anchor_min = [ 0.11, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 24.0
+    text = '1'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'NodeNum1'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.185, 0.42 ]
+    anchor_min = [ 0.185, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 24.0
+    text = '2'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'NodeNum2'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.26, 0.42 ]
+    anchor_min = [ 0.26, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 24.0
+    text = '3'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'NodeNum3'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.335, 0.42 ]
+    anchor_min = [ 0.335, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 24.0
+    text = '4'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'NodeNum4'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.42, 0.42 ]
+    anchor_min = [ 0.42, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.35, 0.37, 0.43, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 24.0
+    text = '5'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'NodeNum5'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.42 ]
+    anchor_min = [ 0.5, 0.42 ]
+    offset_max = [ 22.0, 22.0 ]
+    offset_min = [ -22.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.35, 0.37, 0.43, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 24.0
+    text = '6'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSHeader'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.09, 0.2 ]
+    anchor_min = [ 0.09, 0.2 ]
+    offset_max = [ 700.0, 26.0 ]
+    offset_min = [ 0.0, -26.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.478, 0.51, 0.588, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 30.0
+    text = 'choose your descent'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailBorder'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.149, 0.169, 0.227, 1.0 ]
+    corner_radius = 0.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.63, 0.72 ]
+    anchor_min = [ 0.63, 0.16 ]
+    offset_max = [ 1.0, 0.0 ]
+    offset_min = [ -1.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailHeader'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.66, 0.2 ]
+    anchor_min = [ 0.66, 0.2 ]
+    offset_max = [ 400.0, 18.0 ]
+    offset_min = [ 0.0, -18.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.529, 0.569, 0.659, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 16.0
+    text = 'SELECTED LEVEL'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailName'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.66, 0.27 ]
+    anchor_min = [ 0.66, 0.27 ]
+    offset_max = [ 560.0, 28.0 ]
+    offset_min = [ 0.0, -28.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.933, 0.945, 0.969, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 26.0
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailPreview'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.118, 0.157, 1.0 ]
+    corner_radius = 4.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.92, 0.5 ]
+    anchor_min = [ 0.66, 0.33 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailPreviewLabel'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.79, 0.415 ]
+    anchor_min = [ 0.79, 0.415 ]
+    offset_max = [ 200.0, 18.0 ]
+    offset_min = [ -200.0, -18.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.314, 0.4, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 18.0
+    text = 'level preview art'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailStats'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.66, 0.56 ]
+    anchor_min = [ 0.66, 0.56 ]
+    offset_max = [ 560.0, 18.0 ]
+    offset_min = [ 0.0, -18.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.784, 0.808, 0.871, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 20.0
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LSDetailFlavor'
+parent = 9
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.66, 0.62 ]
+    anchor_min = [ 0.66, 0.62 ]
+    offset_max = [ 520.0, 44.0 ]
+    offset_min = [ 0.0, -44.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.314, 0.4, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 19.0
+    text = ''
+    v_align = 'middle'
+    wrap = true
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleRoot'
@@ -227,7 +701,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleWordmark'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -250,7 +724,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleTagline'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -273,7 +747,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker0'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -292,7 +766,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label0'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -319,7 +793,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss0'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -342,7 +816,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker1'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -361,7 +835,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label1'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -388,7 +862,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss1'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -411,7 +885,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker2'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -430,7 +904,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label2'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -457,7 +931,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss2'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -480,7 +954,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker3'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -499,7 +973,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label3'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -526,7 +1000,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss3'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -549,7 +1023,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBL'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -572,7 +1046,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBR'
-parent = 10
+parent = 31
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
