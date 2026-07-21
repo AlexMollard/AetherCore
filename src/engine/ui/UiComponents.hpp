@@ -46,6 +46,17 @@ namespace aether::ui
 		bool pixelArt = false;
 	};
 
+	// Marks a UI element as focusable/clickable. UiNavigationSystem tracks focus across the
+	// active selectables (spatial keyboard nav + mouse hover/click) and sets `focused` /
+	// `activated` for scripts. `group`/`interactable` are authored; the rest is runtime.
+	struct UISelectable
+	{
+		std::string group;         // optional grouping; reserved for scoping navigation
+		bool interactable = true;  // false = skipped by navigation (locked/redacted items)
+		bool focused = false;      // runtime: the currently focused selectable
+		bool activated = false;    // runtime: true for the one frame it is activated
+	};
+
 	struct UIText
 	{
 		enum class HAlign : std::uint8_t

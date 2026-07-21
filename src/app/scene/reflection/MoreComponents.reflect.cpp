@@ -16,6 +16,7 @@ using UiCanvasComponent = aether::ui::UICanvas;
 using UiRectComponent = aether::ui::UIRect;
 using UiTextComponent = aether::ui::UIText;
 using UiImageComponent = aether::ui::UIImage;
+using UiSelectableComponent = aether::ui::UISelectable;
 
 namespace
 {
@@ -60,7 +61,7 @@ namespace
 	}
 } // namespace
 
-AE_COMPONENT(TileMapComponent, "Tile Map", "Rendering", ICON_FA_IMAGE)
+AE_COMPONENT(TileMapComponent, "Tile Map", "Rendering", ICON_FA_TABLE_CELLS)
 AE_FIELD_N("tilemap", tilemapPath, String)
 AE_FIELD_N("tint", tint, Color4)
 AE_FIELD_N("sorting_layer", sortingLayer, Int)
@@ -79,7 +80,7 @@ b.RequiresFeature(SceneFeatureFlags::Lighting3D);
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(NameComponent, "Name", "Core", ICON_FA_PEN)
+AE_COMPONENT(NameComponent, "Name", "Core", ICON_FA_TAG)
 AE_FIELD_N("name", name, String)
 AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
@@ -93,7 +94,7 @@ AE_NOT_ADDABLE()
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(ParallaxComponent, "Parallax", "Rendering", ICON_FA_IMAGE)
+AE_COMPONENT(ParallaxComponent, "Parallax", "Rendering", ICON_FA_LAYER_GROUP)
 AE_FIELD_N("factor", factor, Vec2)
 AE_FIELD_N("scroll_speed", scrollSpeed, Vec2)
 AE_GENERIC_SERIALIZE()
@@ -144,7 +145,7 @@ AE_FIELD_N("enabled", enabled, Bool)
 AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(AnimationBlendComponent, "Animation Blend", "Rendering", ICON_FA_FILM)
+AE_COMPONENT(AnimationBlendComponent, "Animation Blend", "Rendering", ICON_FA_SHUFFLE)
 AE_FIELD_N("primary_clip", primaryClip, UInt)
 AE_FIELD_N("secondary_clip", secondaryClip, UInt)
 AE_FIELD_N("blend_weight", blendWeight, Float)
@@ -157,14 +158,14 @@ AE_COMPONENT_END()
 // serialized/inspected/MCP-reachable via reflection. Canvas/Rect/Text ride the generic
 // serde table; UI Image keeps its bespoke serde (texture handle <-> path) and reflects the
 // path through a CustomField. Enums persist as names.
-AE_COMPONENT(UiCanvasComponent, "UI Canvas", "UI", ICON_FA_IMAGE)
+AE_COMPONENT(UiCanvasComponent, "UI Canvas", "UI", ICON_FA_WINDOW_MAXIMIZE)
 AE_FIELD_ENUM("scale_mode", scaleMode, UiScaleModeEnum())
 AE_FIELD_N("reference", referenceResolution, Vec2)
 AE_FIELD_N("sort_bias", sortBias, Int)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(UiRectComponent, "UI Rect", "UI", ICON_FA_IMAGE)
+AE_COMPONENT(UiRectComponent, "UI Rect", "UI", ICON_FA_VECTOR_SQUARE)
 AE_FIELD_N("anchor_min", anchorMin, Vec2)
 AE_FIELD_N("anchor_max", anchorMax, Vec2)
 AE_FIELD_N("offset_min", offsetMin, Vec2)
@@ -173,7 +174,7 @@ AE_FIELD_N("pivot", pivot, Vec2)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(UiTextComponent, "UI Text", "UI", ICON_FA_PEN)
+AE_COMPONENT(UiTextComponent, "UI Text", "UI", ICON_FA_FONT)
 AE_FIELD_N("text", text, String)
 AE_FIELD_N("font", fontName, String)
 AE_FIELD_N("pixel_size", pixelSize, Float)
@@ -198,4 +199,10 @@ AE_FIELD_CUSTOM(
 	        img->textureDirty = true;
         })
 AE_FIELD_N("pixel_art", pixelArt, Bool)
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiSelectableComponent, "UI Selectable", "UI", ICON_FA_HAND_POINTER)
+AE_FIELD_N("group", group, String)
+AE_FIELD_N("interactable", interactable, Bool)
+AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()

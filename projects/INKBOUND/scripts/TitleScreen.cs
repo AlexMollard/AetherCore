@@ -4,13 +4,12 @@ using AetherCore;
 
 namespace AetherGame;
 
-/// <summary>Title screen behaviour: ink-blot selection over the four menu items, item
-/// activation, and the wordmark flicker. Driven by MenuController while Title is active.</summary>
+/// <summary>Title screen behaviour. Selection (keyboard + mouse) is handled by the engine's
+/// UiNavigationSystem via the labels' UI Selectable components; this script only styles by
+/// focus, reacts to activation, and flickers the wordmark.</summary>
 public sealed class TitleScreen : EntityScript, IMenuScreen
 {
-    private int _sel;
     private float _t;
-    private Vector2 _lastMouse;
     private Entity _wordmark;
     private readonly Entity[] _markers = new Entity[4];
     private readonly Entity[] _labels = new Entity[4];
@@ -29,66 +28,30 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             _markers[i] = Scene.Find($"Marker{i}");
             _labels[i] = Scene.Find($"Label{i}");
         }
-        Apply();
     }
 
     public void OnShown()
     {
-        _sel = 0;
-        Apply();
+        if (_labels[0].IsValid) Ui.SetFocus(_labels[0]); // default to 'descend'
     }
 
     public void HandleInput()
     {
-        if (Input.IsKeyPressed(Key.Down)) { _sel = (_sel + 1) & 3; Apply(); }
-        if (Input.IsKeyPressed(Key.Up)) { _sel = (_sel + 3) & 3; Apply(); }
-
-        // Mouse: hovering a menu item selects it (gated on actual mouse movement so it
-        // never fights keyboard navigation); clicking an item activates it.
-        Vector2 mouse = Input.MousePosition;
-        if (mouse != _lastMouse)
-        {
-            _lastMouse = mouse;
-            for (int i = 0; i < 4; i++)
-            {
-                if (_labels[i].IsValid && Ui.IsHovered(_labels[i]))
-                {
-                    if (i != _sel) { _sel = i; Apply(); }
-                    break;
-                }
-            }
-        }
-
-        bool activate = Input.IsKeyPressed(Key.Enter) || Input.IsKeyPressed(Key.Space);
-        for (int i = 0; i < 4; i++)
-        {
-            if (_labels[i].IsValid && Ui.WasClicked(_labels[i]))
-            {
-                _sel = i;
-                Apply();
-                activate = true;
-                break;
-            }
-        }
-        if (activate) Activate();
+        if (Activated(0)) { Log.Info("[INKBOUND] descend"); Scene.Load("Level1"); }
+        else if (Activated(1)) MenuController.Instance?.Go(MenuScreen.LevelSelect);
+        else if (Activated(2)) MenuController.Instance?.Go(MenuScreen.Settings);
+        else if (Activated(3)) Log.Info("[INKBOUND] release (quit)");
     }
 
-    private void Activate()
-    {
-        switch (_sel)
-        {
-            case 0: Log.Info("[INKBOUND] descend"); Scene.Load("Level1"); break;          // descend -> new game
-            case 1: MenuController.Instance?.Go(MenuScreen.LevelSelect); break;            // return
-            case 2: MenuController.Instance?.Go(MenuScreen.Settings); break;               // attune
-            case 3: Log.Info("[INKBOUND] release (quit)"); break;                          // release (quit export is a follow-up)
-        }
-    }
+    private bool Activated(int i) => _labels[i].IsValid && Ui.WasActivated(_labels[i]);
 
-    private void Apply()
+    public override void OnUpdate(float dt)
     {
+        _t += dt;
+
         for (int i = 0; i < 4; i++)
         {
-            bool on = i == _sel;
+            bool on = _labels[i].IsValid && Ui.IsFocused(_labels[i]);
             if (_labels[i].IsValid)
             {
                 Ui.SetTextColor(_labels[i], on ? Cyan : UnselLabel);
@@ -96,16 +59,19 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             }
             if (_markers[i].IsValid)
             {
-                Ui.SetImageColor(_markers[i], on ? Cyan : UnselMarker);
+                if (on)
+                {
+                    Vector4 c = Cyan;
+                    c.W = 0.75f + 0.25f * MathF.Sin(_t * 4.5f); // selected blot breathes
+                    Ui.SetImageColor(_markers[i], c);
+                }
+                else
+                {
+                    Ui.SetImageColor(_markers[i], UnselMarker);
+                }
             }
         }
-    }
 
-    public override void OnUpdate(float dt)
-    {
-        _t += dt;
-
-        // Wordmark flicker: mostly steady with brief dips (a failing sign).
         if (_wordmark.IsValid)
         {
             float n = Frac(MathF.Sin(_t * 12.9898f) * 43758.5453f);
@@ -113,14 +79,6 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             Vector4 c = WordmarkColor;
             c.W = a;
             Ui.SetTextColor(_wordmark, c);
-        }
-
-        // Selected ink-blot breathes so the cursor reads as "alive".
-        if (_markers[_sel].IsValid)
-        {
-            Vector4 c = Cyan;
-            c.W = 0.75f + 0.25f * MathF.Sin(_t * 4.5f);
-            Ui.SetImageColor(_markers[_sel], c);
         }
     }
 

@@ -102,4 +102,21 @@ public static class Ui
 
     /// <summary>True on the frame the element is clicked (hovered + left button pressed this frame).</summary>
     public static bool WasClicked(Entity e) => IsHovered(e) && Input.IsMousePressed(MouseButton.Left);
+
+    // ── Selection / focus (driven by the engine's UiNavigationSystem) ─────────────
+    // Give an element a UI Selectable component and the engine handles spatial keyboard
+    // navigation + mouse hover/click across the active selectables. Screens just style by
+    // IsFocused and act on WasActivated - no manual index/hover/click tracking.
+
+    /// <summary>True while this selectable is the focused one.</summary>
+    public static bool IsFocused(Entity e) => Native.aether_ui_is_focused(e.Id) != 0;
+
+    /// <summary>True on the frame this selectable is activated (Enter/Space while focused, or a click).</summary>
+    public static bool WasActivated(Entity e) => Native.aether_ui_was_activated(e.Id) != 0;
+
+    /// <summary>Make this selectable the focused one.</summary>
+    public static void SetFocus(Entity e) => Native.aether_ui_set_focus(e.Id);
+
+    /// <summary>Enable/disable navigation to this selectable (locked items set false).</summary>
+    public static void SetInteractable(Entity e, bool interactable) => Native.aether_ui_set_interactable(e.Id, interactable ? 1 : 0);
 }

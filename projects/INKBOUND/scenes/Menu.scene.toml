@@ -303,6 +303,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_min = [ 0.0, -30.0 ]
     pivot = [ 0.0, 0.5 ]
 
+    [entities.ui_selectable]
+    group = 'titlemenu'
+    interactable = true
+
     [entities.ui_text]
     color = [ 0.302, 0.851, 1.0, 1.0 ]
     font = 'PixelStorm'
@@ -367,6 +371,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_max = [ 420.0, 28.0 ]
     offset_min = [ 0.0, -28.0 ]
     pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'titlemenu'
+    interactable = true
 
     [entities.ui_text]
     color = [ 0.337, 0.361, 0.431, 1.0 ]
@@ -433,6 +441,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_min = [ 0.0, -28.0 ]
     pivot = [ 0.0, 0.5 ]
 
+    [entities.ui_selectable]
+    group = 'titlemenu'
+    interactable = true
+
     [entities.ui_text]
     color = [ 0.337, 0.361, 0.431, 1.0 ]
     font = 'PixelStorm'
@@ -497,6 +509,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_max = [ 420.0, 28.0 ]
     offset_min = [ 0.0, -28.0 ]
     pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'titlemenu'
+    interactable = true
 
     [entities.ui_text]
     color = [ 0.337, 0.361, 0.431, 1.0 ]

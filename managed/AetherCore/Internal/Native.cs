@@ -136,6 +136,18 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial Vector4 aether_ui_get_rect(uint id);
 
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_is_focused(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_was_activated(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_focus(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_interactable(uint id, int value);
+
     // ── Debug draw (Module 08) ──────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial void aether_debug_set_enabled(int enabled);

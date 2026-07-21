@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include <entt/entt.hpp>
+
 #include "assets/AssetManager.hpp"
 #include "material/TextureHandle.hpp"
 #include "material/TextureRegistry.hpp"
@@ -167,6 +169,39 @@ AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* pat
 	img->texturePath = path;
 	img->texture = ctx.assets->GetTextureRegistry().Acquire(path);
 	img->textureDirty = false;
+}
+
+// ── UI selection / focus (driven by UiNavigationSystem) ─────────────────────────
+AE_SCRIPT_API std::int32_t aether_ui_is_focused(std::uint32_t id)
+{
+	const auto* s = ActiveWorld().TryGet<aether::ui::UISelectable>(aether::Entity{id});
+	return (s != nullptr && s->focused) ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_was_activated(std::uint32_t id)
+{
+	const auto* s = ActiveWorld().TryGet<aether::ui::UISelectable>(aether::Entity{id});
+	return (s != nullptr && s->activated) ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_ui_set_focus(std::uint32_t id)
+{
+	auto& world = ActiveWorld();
+	const aether::Entity target{id};
+	if (world.TryGet<aether::ui::UISelectable>(target) == nullptr)
+	{
+		return;
+	}
+	world.View<aether::ui::UISelectable>().each([&](entt::entity ent, aether::ui::UISelectable& s) { s.focused = (aether::World::FromEntt(ent) == target); });
+}
+
+AE_SCRIPT_API void aether_ui_set_interactable(std::uint32_t id, std::int32_t value)
+{
+	auto* s = ActiveWorld().TryGet<aether::ui::UISelectable>(aether::Entity{id});
+	if (s != nullptr)
+	{
+		s->interactable = (value != 0);
+	}
 }
 
 // frame's layout pass. Useful for placing things relative to an element.

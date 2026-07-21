@@ -10,6 +10,7 @@
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
+#include "ui/UiNavigationSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -212,6 +213,12 @@ namespace aether::app
 		sceneCtx->deltaTime = dt;
 		sceneCtx->elapsedTime += dt;
 		++sceneCtx->frameCount;
+
+		// Drive UI focus/activation before scripts read it (Ui.IsFocused / Ui.WasActivated).
+		if (sceneCtx->input != nullptr)
+		{
+			aether::ui::UiNavigationSystem::Update(world, *sceneCtx->input);
+		}
 
 		std::vector<Entity> scripted;
 		for (const auto e: world.GetRegistry().view<ScriptComponent>())
