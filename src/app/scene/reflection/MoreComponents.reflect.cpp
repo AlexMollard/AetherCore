@@ -6,6 +6,7 @@
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/LightComponents.hpp"
+#include "scene/World.hpp"
 #include "ui/UiComponents.hpp"
 
 using namespace aether;
@@ -17,6 +18,10 @@ using UiRectComponent = aether::ui::UIRect;
 using UiTextComponent = aether::ui::UIText;
 using UiImageComponent = aether::ui::UIImage;
 using UiSelectableComponent = aether::ui::UISelectable;
+using UiSliderComponent = aether::ui::UISlider;
+using UiToggleComponent = aether::ui::UIToggle;
+using UiButtonComponent = aether::ui::UIButton;
+using UiProgressBarComponent = aether::ui::UIProgressBar;
 
 namespace
 {
@@ -58,6 +63,25 @@ namespace
 		        {"bottom", static_cast<int>(UiTextComponent::VAlign::Bottom)},
 		}};
 		return table;
+	}
+
+	// Interactive widgets are self-contained: adding one composes the UIRect it lays out in
+	// and (when interactive) the UISelectable the nav system drives. Idempotent, so it is safe
+	// to run on every add/set/apply.
+	void EnsureWidgetCompanions(World& world, Entity e, bool selectable)
+	{
+		if (!world.Has<aether::ui::UIRect>(e))
+		{
+			auto& r = world.Emplace<aether::ui::UIRect>(e);
+			r.anchorMin = {0.5f, 0.5f};
+			r.anchorMax = {0.5f, 0.5f};
+			r.offsetMin = {-110.f, -14.f};
+			r.offsetMax = {110.f, 14.f};
+		}
+		if (selectable && !world.Has<aether::ui::UISelectable>(e))
+		{
+			world.Emplace<aether::ui::UISelectable>(e);
+		}
 	}
 } // namespace
 
@@ -204,5 +228,54 @@ AE_COMPONENT_END()
 AE_COMPONENT(UiSelectableComponent, "UI Selectable", "UI", ICON_FA_HAND_POINTER)
 AE_FIELD_N("group", group, String)
 AE_FIELD_N("interactable", interactable, Bool)
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiSliderComponent, "UI Slider", "UI", ICON_FA_SLIDERS)
+AE_FIELD_N("min", minValue, Float)
+AE_FIELD_N("max", maxValue, Float)
+AE_FIELD_N("step", step, Float)
+AE_FIELD_N("value", value, Float)
+AE_FIELD_N("track_color", trackColor, Color4)
+AE_FIELD_N("fill_color", fillColor, Color4)
+AE_FIELD_N("handle_color", handleColor, Color4)
+AE_FIELD_N("handle_radius", handleRadius, Float)
+AE_FIELD_N("corner_radius", cornerRadius, Float)
+b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, true); });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiToggleComponent, "UI Toggle", "UI", ICON_FA_TOGGLE_ON)
+AE_FIELD_N("on", on, Bool)
+AE_FIELD_N("track_color", trackColor, Color4)
+AE_FIELD_N("on_color", onColor, Color4)
+AE_FIELD_N("knob_color", knobColor, Color4)
+AE_FIELD_N("knob_radius", knobRadius, Float)
+AE_FIELD_N("corner_radius", cornerRadius, Float)
+b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, true); });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiButtonComponent, "UI Button", "UI", ICON_FA_SQUARE)
+AE_FIELD_N("label", label, String)
+AE_FIELD_N("font", fontName, String)
+AE_FIELD_N("pixel_size", pixelSize, Float)
+AE_FIELD_ENUM("h_align", hAlign, UiHAlignEnum())
+AE_FIELD_ENUM("v_align", vAlign, UiVAlignEnum())
+AE_FIELD_N("bg_color", bgColor, Color4)
+AE_FIELD_N("text_color", textColor, Color4)
+AE_FIELD_N("bg_color_focused", bgColorFocused, Color4)
+AE_FIELD_N("text_color_focused", textColorFocused, Color4)
+AE_FIELD_N("corner_radius", cornerRadius, Float)
+b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, true); });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiProgressBarComponent, "UI Progress Bar", "UI", ICON_FA_BARS_PROGRESS)
+AE_FIELD_N("value", value, Float)
+AE_FIELD_N("track_color", trackColor, Color4)
+AE_FIELD_N("fill_color", fillColor, Color4)
+AE_FIELD_N("corner_radius", cornerRadius, Float)
+b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, false); });
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()

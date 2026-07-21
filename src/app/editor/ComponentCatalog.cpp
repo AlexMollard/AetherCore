@@ -291,7 +291,16 @@ namespace aether::editor
 					continue;
 				}
 				ComponentCatalogEntry entry{
-				        rt.name, rt.category, rt.icon, [&rt](const World& w, Entity e) { return rt.has(w, e); }, [&rt](World& w, Entity e, ServiceContainer&) { rt.emplaceDefault(w, e); }, [&rt](World& w, Entity e) { rt.remove(w, e); }};
+				        rt.name, rt.category, rt.icon, [&rt](const World& w, Entity e) { return rt.has(w, e); },
+				        [&rt](World& w, Entity e, ServiceContainer&)
+				        {
+					        rt.emplaceDefault(w, e);
+					        if (rt.postSet) // compose companions / rebuild backing objects on a bare add, as set/apply do
+					        {
+						        rt.postSet(w, e);
+					        }
+				        },
+				        [&rt](World& w, Entity e) { rt.remove(w, e); }};
 				entry.requiredFeatures = rt.requiredFeatures;
 				entry.conflictsWith = rt.conflictsWith;
 				c.push_back(std::move(entry));
