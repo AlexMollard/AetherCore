@@ -237,7 +237,7 @@ b.CustomListField(
 AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
-AE_COMPONENT(SkinnedMeshComponent, "Skinned Mesh", "Rendering", ICON_FA_FILM)
+AE_COMPONENT(SkinnedMeshComponent, "Skinned Mesh", "Rendering", ICON_FA_BONE)
 AE_FIELD_N("clip", clipIndex, UInt)
 AE_FIELD_N("time", animTime, Float)
 AE_FIELD_N("speed", playbackSpeed, Float)

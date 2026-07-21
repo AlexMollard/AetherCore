@@ -120,7 +120,7 @@ namespace aether::editor
 		{
 			std::vector<ComponentCatalogEntry> c;
 
-			c.push_back(Simple<NameComponent>("Name", "Core", ICON_FA_PEN, NameComponent{.name = "Entity"}));
+			c.push_back(Simple<NameComponent>("Name", "Core", ICON_FA_TAG, NameComponent{.name = "Entity"}));
 			c.push_back(Simple<HierarchyComponent>("Hierarchy", "Core", ICON_FA_SITEMAP));
 
 			const auto meshEntry = [](std::string name, std::string icon, PrimitiveMesh kind, const char* path)
@@ -243,7 +243,7 @@ namespace aether::editor
 			{
 				return ComponentCatalogEntry{std::move(name),
 				        "Physics",
-				        ICON_FA_WEIGHT_HANGING,
+				        ICON_FA_DRAW_POLYGON,
 				        [](const World& w, Entity e) { return w.Has<ColliderComponent>(e); },
 				        [shape](World& w, Entity e, ServiceContainer&) { AddCollider(w, e, shape); },
 				        [](World& w, Entity e) { w.Remove<ColliderComponent>(e); }};

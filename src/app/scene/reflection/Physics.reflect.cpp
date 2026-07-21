@@ -47,7 +47,7 @@ AE_FIELD_N("start_active", startActive, Bool)
 AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
-AE_COMPONENT(ColliderComponent, "Collider", "Physics", ICON_FA_WEIGHT_HANGING)
+AE_COMPONENT(ColliderComponent, "Collider", "Physics", ICON_FA_DRAW_POLYGON)
 AE_FIELD_ENUM("shape", shape, ShapeTypeEnum())
 AE_FIELD_N("half_extents", halfExtents, Vec3)
 AE_FIELD_N("radius", radius, Float)

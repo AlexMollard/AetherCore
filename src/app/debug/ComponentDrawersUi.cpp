@@ -101,7 +101,7 @@ namespace aether::editor
 	void DrawUiCanvas(World& world, Entity entity)
 	{
 		auto* canvas = world.TryGet<ui::UICanvas>(entity);
-		if (canvas == nullptr || !SectionHeader(ICON_FA_IMAGE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen))
+		if (canvas == nullptr || !SectionHeader(ICON_FA_WINDOW_MAXIMIZE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
@@ -119,7 +119,7 @@ namespace aether::editor
 	void DrawUiRect(World& world, Entity entity)
 	{
 		auto* rect = world.TryGet<ui::UIRect>(entity);
-		if (rect == nullptr || !SectionHeader(ICON_FA_EXPAND "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen))
+		if (rect == nullptr || !SectionHeader(ICON_FA_VECTOR_SQUARE "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}
@@ -201,7 +201,7 @@ namespace aether::editor
 	void DrawUiText(World& world, Entity entity)
 	{
 		auto* text = world.TryGet<ui::UIText>(entity);
-		if (text == nullptr || !SectionHeader(ICON_FA_CODE "  UI Text", ImGuiTreeNodeFlags_DefaultOpen))
+		if (text == nullptr || !SectionHeader(ICON_FA_FONT "  UI Text", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			return;
 		}

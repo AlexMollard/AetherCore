@@ -65,7 +65,7 @@ b.ConflictsWith({"Rigid Body", "Box Collider", "Joint"});
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(Collider2DComponent, "Collider 2D", "Physics 2D", ICON_FA_BOX_OPEN)
+AE_COMPONENT(Collider2DComponent, "Collider 2D", "Physics 2D", ICON_FA_DRAW_POLYGON)
 AE_FIELD_ENUM("shape", shape, Collider2DShapeEnum())
 AE_FIELD_N("size", size, Vec2)
 AE_FIELD_N("radius", radius, Float)
