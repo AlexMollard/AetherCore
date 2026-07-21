@@ -131,6 +131,9 @@ namespace aether::ui
 					break;
 				}
 			}
+			// A focused horizontal slider captures Left/Right for value adjustment
+			// (UiWidgetSystem handles them); vertical nav still works.
+			const bool focusedIsSlider = world.TryGet<UISlider>(focused) != nullptr;
 			glm::vec2 dir{0.0f, 0.0f};
 			if (input.IsKeyPressed(Key::Down))
 			{
@@ -140,11 +143,11 @@ namespace aether::ui
 			{
 				dir = {0.0f, -1.0f};
 			}
-			else if (input.IsKeyPressed(Key::Right))
+			else if (input.IsKeyPressed(Key::Right) && !focusedIsSlider)
 			{
 				dir = {1.0f, 0.0f};
 			}
-			else if (input.IsKeyPressed(Key::Left))
+			else if (input.IsKeyPressed(Key::Left) && !focusedIsSlider)
 			{
 				dir = {-1.0f, 0.0f};
 			}

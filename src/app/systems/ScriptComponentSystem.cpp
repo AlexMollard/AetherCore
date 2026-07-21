@@ -11,6 +11,7 @@
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiNavigationSystem.hpp"
+#include "ui/UiWidgetSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -214,10 +215,13 @@ namespace aether::app
 		sceneCtx->elapsedTime += dt;
 		++sceneCtx->frameCount;
 
-		// Drive UI focus/activation before scripts read it (Ui.IsFocused / Ui.WasActivated).
+		// Drive UI focus/activation before scripts read it (Ui.IsFocused / Ui.WasActivated),
+		// then widgets consume that focus/activation (slider adjust, toggle flip) so scripts
+		// see this frame's committed values + change flags.
 		if (sceneCtx->input != nullptr)
 		{
 			aether::ui::UiNavigationSystem::Update(world, *sceneCtx->input);
+			aether::ui::UiWidgetSystem::Update(world, *sceneCtx->input, static_cast<float>(sceneCtx->elapsedTime));
 		}
 
 		std::vector<Entity> scripted;
