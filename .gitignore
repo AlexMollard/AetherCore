@@ -13,6 +13,7 @@
 # Stray per-project intermediates (normally routed to /artifacts via ArtifactsPath)
 **/obj/
 managed/**/bin/
+projects/**/bin/
 
 # CMake generated files
 /CMakeFiles/
