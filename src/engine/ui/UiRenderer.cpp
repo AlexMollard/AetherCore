@@ -51,6 +51,22 @@ namespace aether::ui
 
 		static_assert(sizeof(EffectPush) == 80, "EffectPush must match the effect-shader push layout");
 
+		// Push layout for a per-element material draw. The first 32 bytes are identical to ShapesPush
+		// (the shared ui_shapes vertex shader reads only those); the trailing fx fields are read by
+		// the material's custom fragment. MUST match the ShapesPush/params layout in ui_material shaders.
+		struct MaterialPush
+		{
+			glm::vec4 screenSize;
+			std::uint64_t commandData;
+			std::uint32_t pad0;
+			std::uint32_t pad1;
+			glm::vec4 params;
+			glm::vec4 color0;
+			glm::vec4 color1;
+		};
+
+		static_assert(sizeof(MaterialPush) == 80, "MaterialPush must match the ui_material push layout");
+
 		constexpr std::uint32_t kInitialCommandCapacity = 256;
 		constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
 	} // namespace
@@ -117,6 +133,14 @@ namespace aether::ui
 			}
 		}
 		m_effectPipelines.clear();
+		for (auto& [name, pipe]: m_materialPipelines)
+		{
+			if (pipe.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(pipe);
+			}
+		}
+		m_materialPipelines.clear();
 		for (RetiringPipeline& retiring: m_effectPipelinesRetiring)
 		{
 			if (retiring.pipeline.IsValid())
@@ -284,6 +308,48 @@ namespace aether::ui
 		return handle;
 	}
 
+	gpu::PipelineHandle UiRenderer::MaterialPipeline(const std::string& shader)
+	{
+		if (const auto it = m_materialPipelines.find(shader); it != m_materialPipelines.end())
+		{
+			return it->second;
+		}
+
+		gpu::PipelineHandle handle{};
+		if (m_gpu != nullptr && !shader.empty())
+		{
+			// Shared UI vertex shader + the material's custom fragment, so the fragment gets the real
+			// glyph/quad geometry and font atlas and the effect is masked to the element's shapes.
+			const std::string fragPath = "shaders://" + shader + ".spv";
+			// A material shader provides only a fragment (it reuses the shared ui_shapes vertex), so
+			// slang compiles it as a single entry point named "main"; the shared vertex .spv keeps its
+			// "vertexMain" name because that file has multiple entry points.
+			const gpu::GraphicsPipelineDesc desc{
+			        .shaderVfsPath = "shaders://ui_shapes.spv",
+			        .fragmentVfsPath = fragPath.c_str(),
+			        .vertexEntry = "vertexMain",
+			        .fragmentEntry = "main",
+			        .colorFormat = m_colorFormat,
+			        .depthFormat = gpu::Format::Undefined,
+			        .depthTestEnable = false,
+			        .depthWriteEnable = false,
+			        .blendEnable = true,
+			        .topology = gpu::PrimitiveTopology::TriangleList,
+			        .polygonMode = gpu::PolygonMode::Fill,
+			        .cullMode = gpu::CullMode::None,
+			        .debugName = "UI.Material",
+			        .descriptorHeapMappings = m_gpu->GetBindlessManager().GetDescriptorHeapMappings(),
+			};
+			handle = gpu::ResourceRegistry::CreateGraphicsPipeline(m_gpu->GetDevice(), desc);
+			if (!handle.IsValid())
+			{
+				AE_ERROR(LogCategory::UI, "UiRenderer: failed to create material pipeline for '{}'", shader);
+			}
+		}
+		m_materialPipelines.emplace(shader, handle);
+		return handle;
+	}
+
 	void UiRenderer::EnsureCapacity(Frame& frame, std::uint32_t count)
 	{
 		if (frame.capacity >= count && frame.buffer.IsValid())
@@ -332,6 +398,8 @@ namespace aether::ui
 		Frame& frame = m_frames[frameSlot % kFrames];
 		frame.count = 0;
 		frame.effects.clear();
+		frame.materials.clear();
+		frame.groups.clear();
 		// thread later executes the pass.
 		frame.extent = outputExtent;
 
@@ -349,6 +417,14 @@ namespace aether::ui
 				}
 			}
 			m_effectPipelines.clear();
+			for (auto& [name, pipe]: m_materialPipelines)
+			{
+				if (pipe.IsValid())
+				{
+					m_effectPipelinesRetiring.push_back({pipe, static_cast<int>(kFrames) + 1});
+				}
+			}
+			m_materialPipelines.clear();
 		}
 		for (std::size_t i = 0; i < m_effectPipelinesRetiring.size();)
 		{
@@ -400,7 +476,7 @@ namespace aether::ui
 			}
 		}
 
-		BuildDrawCommands(*m_world, m_scratch, m_defaultFontReady ? &m_fontRegistry : nullptr, m_textures);
+		BuildDrawCommands(*m_world, m_scratch, frame.materials, m_defaultFontReady ? &m_fontRegistry : nullptr, m_textures);
 
 		const auto count = static_cast<std::uint32_t>(m_scratch.size());
 		if (count == 0)
@@ -408,9 +484,37 @@ namespace aether::ui
 			return;
 		}
 
+		// Split the command list into contiguous runs of the same shaderId. Runs with a material
+		// (shaderId > 0) draw with the material's pipeline (resolved here, on the producer thread);
+		// the rest use the default pipeline. A missing material pipeline falls back to default so the
+		// element still renders. Commands for one element are emitted together, so its run is contiguous.
+		for (std::uint32_t i = 0; i < count;)
+		{
+			const std::uint32_t shaderId = UiFlagsShaderId(m_scratch[i].flags);
+			std::uint32_t j = i + 1;
+			while (j < count && UiFlagsShaderId(m_scratch[j].flags) == shaderId)
+			{
+				++j;
+			}
+			gpu::PipelineHandle pipe = m_pipeline;
+			std::uint32_t effectiveId = 0; // 0 unless a valid material pipeline was resolved
+			if (shaderId != 0 && shaderId <= frame.materials.size())
+			{
+				const gpu::PipelineHandle mat = MaterialPipeline(frame.materials[shaderId - 1].shader);
+				if (mat.IsValid())
+				{
+					pipe = mat;
+					effectiveId = shaderId;
+				}
+			}
+			frame.groups.push_back(DrawGroup{i, j - i, effectiveId, pipe});
+			i = j;
+		}
+
 		EnsureCapacity(frame, count);
 		if (!frame.buffer.IsValid())
 		{
+			frame.groups.clear();
 			return;
 		}
 
@@ -471,21 +575,45 @@ namespace aether::ui
 				                }
 			                }
 
-			                // Batched UI shapes (one instanced draw of the whole command list).
-			                if (frame.count != 0 && m_pipeline.IsValid())
+			                // Batched UI shapes, drawn as runs split by material. Most runs use the default ui_shapes
+			                // fragment; a run tagged with a UIMaterial uses that material's fragment (glyph/quad-masked).
+			                // Each run offsets the command-buffer pointer to its first command (SV_InstanceID in the shared
+				                // vertex is per-draw and does NOT include firstInstance, so we can't offset the draw that way).
+			                for (const DrawGroup& g: frame.groups)
 			                {
-				                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_pipeline);
-				                cmd.BindPipeline(resolved.state);
-				                bindless.CmdBindHeaps(cmd);
-
-				                const ShapesPush push{
-				                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
-				                        .commandData = frame.address,
-				                        .pad0 = 0,
-				                        .pad1 = 0,
-				                };
-				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
-				                cmd.Draw(6, frame.count, 0, 0);
+			                	if (g.count == 0 || !g.pipeline.IsValid())
+			                	{
+			                		continue;
+			                	}
+			                	const auto resolved = gpu::ResourceRegistry::ResolvePipeline(g.pipeline);
+			                	cmd.BindPipeline(resolved.state);
+			                	bindless.CmdBindHeaps(cmd);
+			                	const std::uint64_t groupAddr = frame.address + static_cast<std::uint64_t>(g.first) * sizeof(UiDrawCommand);
+			                	if (g.shaderId != 0 && g.shaderId <= frame.materials.size())
+			                	{
+			                		const UiMaterialDraw& m = frame.materials[g.shaderId - 1];
+			                		const MaterialPush push{
+			                		        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
+			                		        .commandData = groupAddr,
+			                		        .pad0 = 0,
+			                		        .pad1 = 0,
+			                		        .params = m.params,
+			                		        .color0 = m.color0,
+			                		        .color1 = m.color1,
+			                		};
+			                		cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+			                	}
+			                	else
+			                	{
+			                		const ShapesPush push{
+			                		        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
+			                		        .commandData = groupAddr,
+			                		        .pad0 = 0,
+			                		        .pad1 = 0,
+			                		};
+			                		cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+			                	}
+			                	cmd.Draw(6, g.count, 0, 0);
 			                }
 
 			                // Overlay effects (transitions) draw on top of the batched UI.

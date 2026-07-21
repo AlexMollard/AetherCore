@@ -307,6 +307,33 @@ AE_SCRIPT_API void aether_ui_set_effect_colors(std::uint32_t id, Vec4 color0, Ve
 	}
 }
 
+// UIMaterial: a custom fragment shader on the element's own draw (glyph/quad-masked). set_material
+// get-or-adds so a script can apply a shader to any UI element at runtime.
+AE_SCRIPT_API void aether_ui_set_material(std::uint32_t id, const char* shader)
+{
+	auto& world = ActiveWorld();
+	const aether::Entity e{id};
+	auto& mat = world.Has<aether::ui::UIMaterial>(e) ? world.Get<aether::ui::UIMaterial>(e) : world.Emplace<aether::ui::UIMaterial>(e);
+	mat.shader = shader != nullptr ? shader : "";
+}
+
+AE_SCRIPT_API void aether_ui_set_material_params(std::uint32_t id, Vec4 params)
+{
+	if (auto* mat = ActiveWorld().TryGet<aether::ui::UIMaterial>(aether::Entity{id}))
+	{
+		mat->params = ToGlm(params);
+	}
+}
+
+AE_SCRIPT_API void aether_ui_set_material_colors(std::uint32_t id, Vec4 color0, Vec4 color1)
+{
+	if (auto* mat = ActiveWorld().TryGet<aether::ui::UIMaterial>(aether::Entity{id}))
+	{
+		mat->color0 = ToGlm(color0);
+		mat->color1 = ToGlm(color1);
+	}
+}
+
 // frame's layout pass. Useful for placing things relative to an element.
 AE_SCRIPT_API Vec4 aether_ui_get_rect(std::uint32_t id)
 {

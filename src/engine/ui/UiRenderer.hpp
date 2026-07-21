@@ -63,6 +63,15 @@ namespace aether::ui
 			bool background = false;
 		};
 
+		// A contiguous run of batched draw commands sharing one shaderId (0 = default fragment).
+		struct DrawGroup
+		{
+			std::uint32_t first = 0;
+			std::uint32_t count = 0;
+			std::uint32_t shaderId = 0;
+			gpu::PipelineHandle pipeline{}; // resolved on the producer thread (default or material)
+		};
+
 		struct Frame
 		{
 			gpu::BufferHandle buffer{};
@@ -73,12 +82,19 @@ namespace aether::ui
 			// (not a shared member) so a producer-thread BuildFrame for the next
 			glm::vec2 extent{0.f};
 			std::vector<EffectDraw> effects;
+			// Custom-material batches: the material table (shaderId-1 == index) and the split of the
+			// command buffer into runs, each drawn with its material's fragment shader.
+			std::vector<UiMaterialDraw> materials;
+			std::vector<DrawGroup> groups;
 		};
 
 		void EnsureCapacity(Frame& frame, std::uint32_t count);
 		bool EnsureFontAtlasUploaded(std::string_view name);
 		// Lazily create + cache a pipeline for a UIEffect shader ("shaders://<shader>.spv").
 		gpu::PipelineHandle EffectPipeline(const std::string& shader);
+		// Lazily create + cache a per-element material pipeline: the shared ui_shapes vertex shader
+		// paired with the material's custom fragment ("shaders://<shader>.spv").
+		gpu::PipelineHandle MaterialPipeline(const std::string& shader);
 
 		World* m_world = nullptr;
 		GpuDevice* m_gpu = nullptr;
@@ -100,6 +116,7 @@ namespace aether::ui
 		gpu::PipelineHandle m_pipeline{};
 		gpu::Format m_colorFormat{};
 		std::unordered_map<std::string, gpu::PipelineHandle> m_effectPipelines;
+		std::unordered_map<std::string, gpu::PipelineHandle> m_materialPipelines;
 		std::vector<RetiringPipeline> m_effectPipelinesRetiring;
 		std::uint64_t m_shaderGen = 0;
 		std::array<Frame, kFrames> m_frames{};

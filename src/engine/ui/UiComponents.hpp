@@ -149,4 +149,16 @@ namespace aether::ui
 		glm::vec4 color1{0.f};   // shader-defined (ink: edge/rim colour)
 		bool background = false; // true = drawn BEHIND the batched UI (menu backdrops); false = on top (overlays)
 	};
+
+	// A custom fragment shader applied to THIS element's own draw commands (its text glyphs, image,
+	// or rect) - not a separate quad like UIEffect. The element still uses the shared UI vertex
+	// shader, so the custom fragment receives the real glyph/quad geometry + font atlas and the
+	// effect is masked to the actual letter shapes. shader "ui_glitch_text" -> shaders://ui_glitch_text.spv.
+	struct UIMaterial
+	{
+		std::string shader;    // fragment shader name (project shader stem)
+		glm::vec4 params{0.f}; // shader-defined (x is conventionally time, driven from a script)
+		glm::vec4 color0{0.f}; // shader-defined
+		glm::vec4 color1{0.f}; // shader-defined
+	};
 } // namespace aether::ui

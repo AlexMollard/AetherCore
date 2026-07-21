@@ -168,7 +168,7 @@ namespace aether::ui
 	}
 
 	// shared across the whole canvas, so it must be threaded through by reference.
-	static void Walk(World& world, Entity entity, FontRegistry* fonts, TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out)
+	static void Walk(World& world, Entity entity, FontRegistry* fonts, TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out, std::vector<UiMaterialDraw>& materials)
 	{
 		// walk simply stops recursing, so its children never emit either.
 		if (world.Has<DisabledComponent>(entity))
@@ -176,6 +176,7 @@ namespace aether::ui
 			return;
 		}
 
+		const std::size_t emitBegin = out.size();
 		if (const auto* rect = world.TryGet<UIRect>(entity))
 		{
 			if (auto* img = world.TryGet<UIImage>(entity))
@@ -222,19 +223,37 @@ namespace aether::ui
 			}
 		}
 
+		// If this element carries a custom material, tag the commands it just emitted (its glyphs /
+		// image / rect - not its children) with a per-frame shaderId so the renderer draws them with
+		// the material's fragment shader. Children keep the default pipeline unless they carry their own.
+		if (const auto* mat = world.TryGet<UIMaterial>(entity))
+		{
+			const std::size_t emitEnd = out.size();
+			if (!mat->shader.empty() && emitEnd > emitBegin && materials.size() < kShaderIdMask)
+			{
+				const std::uint32_t shaderId = static_cast<std::uint32_t>(materials.size()) + 1u;
+				materials.push_back(UiMaterialDraw{mat->shader, mat->params, mat->color0, mat->color1});
+				for (std::size_t i = emitBegin; i < emitEnd; ++i)
+				{
+					out[i].flags = UiFlagsWithShaderId(out[i].flags, shaderId);
+				}
+			}
+		}
+
 		if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
 		{
 			for (const Entity child: hierarchy->children)
 			{
-				Walk(world, child, fonts, textures, layer, out);
+				Walk(world, child, fonts, textures, layer, out, materials);
 			}
 		}
 	}
 
-	void BuildDrawCommands(World& world, std::vector<UiDrawCommand>& out, FontRegistry* fonts, TextureRegistry* textures)
+	void BuildDrawCommands(World& world, std::vector<UiDrawCommand>& out, std::vector<UiMaterialDraw>& materials, FontRegistry* fonts, TextureRegistry* textures)
 	{
 		out.clear();
+		materials.clear();
 		int layer = 0;
-		world.View<UICanvas>().each([&](entt::entity canvasEntity, UICanvas&) { Walk(world, World::FromEntt(canvasEntity), fonts, textures, layer, out); });
+		world.View<UICanvas>().each([&](entt::entity canvasEntity, UICanvas&) { Walk(world, World::FromEntt(canvasEntity), fonts, textures, layer, out, materials); });
 	}
 } // namespace aether::ui

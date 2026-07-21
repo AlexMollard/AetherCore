@@ -36,6 +36,15 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             _labels[i] = Scene.Find($"Label{i}");
         }
         for (int i = 0; i < 3; i++) _drips[i] = Scene.Find($"DripInk{i}");
+
+        // Apply the glitch-ink material to the wordmark's glyphs themselves (a custom fragment shader
+        // masked to the letter shapes, not a backing quad). color0 = 0 keeps the flicker driving the
+        // base colour; color1 is the accent fringe/glitch colour.
+        if (_wordmark.IsValid)
+        {
+            Ui.SetMaterial(_wordmark, "ui_glitch_text");
+            Ui.SetMaterialColors(_wordmark, Vector4.Zero, Cyan);
+        }
     }
 
     public void OnShown()
@@ -56,6 +65,9 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
     public override void OnUpdate(float dt)
     {
         _t += dt;
+
+        // Feed the glitch-ink material its time so the split/scanlines/bursts animate.
+        if (_wordmark.IsValid) Ui.SetMaterialParams(_wordmark, new Vector4(_t, 0f, 0f, 0f));
 
         for (int i = 0; i < 4; i++)
         {

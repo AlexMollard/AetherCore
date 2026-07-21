@@ -174,4 +174,18 @@ public static class Ui
 
     /// <summary>Set the effect's two shader colours.</summary>
     public static void SetEffectColors(Entity e, Vector4 color0, Vector4 color1) => Native.aether_ui_set_effect_colors(e.Id, color0, color1);
+
+    // ── Per-element materials ────────────────────────────────────────────────────
+    // A UIMaterial applies a custom fragment shader to the element's OWN draw commands (its text
+    // glyphs / image / rect), masked to their shapes - not a separate quad. params.x is conventionally
+    // time. Add it via the editor/scene or SetMaterial, then animate with SetMaterialParams.
+
+    /// <summary>Apply (get-or-add) a custom fragment shader to this UI element's own draw.</summary>
+    public static void SetMaterial(Entity e, string shader) => Native.aether_ui_set_material(e.Id, shader);
+
+    /// <summary>Set the element material's shader params (meaning is shader-defined; x is usually time).</summary>
+    public static void SetMaterialParams(Entity e, Vector4 param) => Native.aether_ui_set_material_params(e.Id, param);
+
+    /// <summary>Set the element material's two shader colours.</summary>
+    public static void SetMaterialColors(Entity e, Vector4 color0, Vector4 color1) => Native.aether_ui_set_material_colors(e.Id, color0, color1);
 }

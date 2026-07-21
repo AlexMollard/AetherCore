@@ -23,6 +23,7 @@ using UiToggleComponent = aether::ui::UIToggle;
 using UiButtonComponent = aether::ui::UIButton;
 using UiProgressBarComponent = aether::ui::UIProgressBar;
 using UiEffectComponent = aether::ui::UIEffect;
+using UiMaterialComponent = aether::ui::UIMaterial;
 
 namespace
 {
@@ -299,5 +300,14 @@ b.PostSet(
 		        r.offsetMax = {0.f, 0.f};
 	        }
         });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+// A custom fragment shader on the element's own draw commands (its glyphs/image/rect), masked to
+// their shapes - unlike UI Effect which is a separate quad. Add it to a text/image/rect element.
+AE_COMPONENT(UiMaterialComponent, "UI Material", "UI", ICON_FA_WAND_MAGIC_SPARKLES)
+AE_FIELD_N("shader", shader, String)
+AE_FIELD_N("color0", color0, Color4)
+AE_FIELD_N("color1", color1, Color4)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
