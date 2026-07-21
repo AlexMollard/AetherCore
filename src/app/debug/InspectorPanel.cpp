@@ -631,7 +631,7 @@ namespace aether::editor
 				{
 					world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
 				}
-				if (PaletteEntry(ICON_FA_CUBE "  Collider", m_addFilter, world.Has<ColliderComponent>(entity)))
+				if (PaletteEntry(ICON_FA_DRAW_POLYGON "  Collider", m_addFilter, world.Has<ColliderComponent>(entity)))
 				{
 					ColliderComponent c{};
 					c.shape = PhysicsShapeType::Box;

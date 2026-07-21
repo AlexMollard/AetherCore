@@ -1511,7 +1511,7 @@ namespace aether::editor
 				using namespace chrome;
 				const auto* playState = context.TryGet<app::PlayState>();
 				const bool compiling = playState != nullptr && playState->IsCompiling();
-				const char* chip = compiling ? ICON_FA_GEAR "  BUILD" : "AETHERCORE";
+				const char* chip = compiling ? ICON_FA_HAMMER "  BUILD" : "AETHERCORE";
 				const ImVec4 chipColor = compiling ? kAccentHi : kFaint;
 				const float chipW = ImGui::CalcTextSize(chip).x;
 				const float avail = ImGui::GetContentRegionAvail().x;

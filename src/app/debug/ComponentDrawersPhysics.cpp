@@ -94,7 +94,7 @@ namespace aether::editor
 		if (collider != nullptr)
 		{
 			bool removed = false;
-			const bool open = RemovableSection(ICON_FA_CUBE "  Collider", ICON_FA_XMARK "##removeCollider", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			const bool open = RemovableSection(ICON_FA_DRAW_POLYGON "  Collider", ICON_FA_XMARK "##removeCollider", removed, ImGuiTreeNodeFlags_DefaultOpen);
 			if (removed)
 			{
 				if (physics != nullptr)

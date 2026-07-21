@@ -656,7 +656,7 @@ namespace aether::editor
 			}
 			m_pendingDuplicate = true;
 		}
-		if (ImGui::MenuItem(ICON_FA_CLONE "  Copy", "Ctrl+C"))
+		if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C"))
 		{
 			if (!selection.Contains(e))
 			{
@@ -664,7 +664,7 @@ namespace aether::editor
 			}
 			m_pendingCopy = true;
 		}
-		if (ImGui::MenuItem(ICON_FA_CLONE "  Cut", "Ctrl+X"))
+		if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", "Ctrl+X"))
 		{
 			if (!selection.Contains(e))
 			{
@@ -672,7 +672,7 @@ namespace aether::editor
 			}
 			m_pendingCut = true;
 		}
-		if (ImGui::MenuItem(ICON_FA_CLONE "  Paste", "Ctrl+V"))
+		if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V"))
 		{
 			m_pendingPaste = true;
 		}
