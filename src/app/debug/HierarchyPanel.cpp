@@ -1541,31 +1541,31 @@ namespace aether::editor
 				ImGui::Separator();
 				if (ImGui::BeginMenu(ICON_FA_IMAGE "  UI"))
 				{
-					if (ImGui::MenuItem("Canvas"))
+					if (ImGui::MenuItem(ICON_FA_WINDOW_MAXIMIZE "  Canvas"))
 					{
 						selection.Select(ui::CreateCanvasEntity(world));
 					}
-					if (ImGui::MenuItem("Image"))
+					if (ImGui::MenuItem(ICON_FA_IMAGE "  Image"))
 					{
 						selection.Select(ui::CreateImageEntity(world, FindOrCreateCanvas(world)));
 					}
-					if (ImGui::MenuItem("Text"))
+					if (ImGui::MenuItem(ICON_FA_FONT "  Text"))
 					{
 						selection.Select(ui::CreateTextEntity(world, FindOrCreateCanvas(world)));
 					}
-					if (ImGui::MenuItem("Slider"))
+					if (ImGui::MenuItem(ICON_FA_SLIDERS "  Slider"))
 					{
 						selection.Select(ui::CreateSliderEntity(world, FindOrCreateCanvas(world)));
 					}
-					if (ImGui::MenuItem("Toggle"))
+					if (ImGui::MenuItem(ICON_FA_TOGGLE_ON "  Toggle"))
 					{
 						selection.Select(ui::CreateToggleEntity(world, FindOrCreateCanvas(world)));
 					}
-					if (ImGui::MenuItem("Button"))
+					if (ImGui::MenuItem(ICON_FA_SQUARE "  Button"))
 					{
 						selection.Select(ui::CreateButtonEntity(world, FindOrCreateCanvas(world)));
 					}
-					if (ImGui::MenuItem("Progress Bar"))
+					if (ImGui::MenuItem(ICON_FA_BARS_PROGRESS "  Progress Bar"))
 					{
 						selection.Select(ui::CreateProgressBarEntity(world, FindOrCreateCanvas(world)));
 					}

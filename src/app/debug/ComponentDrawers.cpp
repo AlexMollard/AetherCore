@@ -105,11 +105,29 @@ namespace aether::editor
 		using iw::ToImVec4;
 		if (world.Has<ui::UICanvas>(entity))
 		{
-			return {ICON_FA_IMAGE, ToImVec4(colors::Info)};
+			return {ICON_FA_WINDOW_MAXIMIZE, ToImVec4(colors::Info)};
+		}
+		// Widgets before the UIImage/UIRect catch-all: they carry a UIRect but should read as
+		// their own kind, not a generic image. Icons match the reflected component icons.
+		if (world.Has<ui::UISlider>(entity))
+		{
+			return {ICON_FA_SLIDERS, ToImVec4(colors::Info)};
+		}
+		if (world.Has<ui::UIToggle>(entity))
+		{
+			return {ICON_FA_TOGGLE_ON, ToImVec4(colors::Info)};
+		}
+		if (world.Has<ui::UIButton>(entity))
+		{
+			return {ICON_FA_SQUARE, ToImVec4(colors::Info)};
+		}
+		if (world.Has<ui::UIProgressBar>(entity))
+		{
+			return {ICON_FA_BARS_PROGRESS, ToImVec4(colors::Info)};
 		}
 		if (world.Has<ui::UIText>(entity))
 		{
-			return {ICON_FA_CODE, ToImVec4(colors::Info)};
+			return {ICON_FA_FONT, ToImVec4(colors::Info)};
 		}
 		if (world.Has<ui::UIImage>(entity) || world.Has<ui::UIRect>(entity))
 		{
