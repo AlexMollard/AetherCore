@@ -73,6 +73,20 @@ float fbm(float2 p)
     return v;
 }
 
+// Pixel-art helpers, matched to ui_void_bg so the whole menu shares one virtual-pixel scale.
+static const float kPixelsWide = 300.0;
+
+float2 Pixelate(float2 uv, float aspect)
+{
+    const float2 res = float2(kPixelsWide, max(kPixelsWide / max(aspect, 0.001), 1.0));
+    return (floor(uv * res) + 0.5) / res;
+}
+
+float3 Posterize(float3 c, float levels)
+{
+    return floor(c * levels + 0.5) / levels;
+}
+
 // Surface uv.y for a boundary, given its own wave + drip params. Lower value = reaches higher.
 float inkBoundary(float uvx, float surf, float amp, float time, float win, float xf, float tf, float dripMul, float dripSharp)
 {
@@ -88,8 +102,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float time     = pc.params.y;
     const float amp      = pc.params.z;
     const float edgeW    = max(pc.params.w, 0.001);
-    const float uvx = input.uv.x;
-    const float uvy = input.uv.y;
+
+    // Snap to the same coarse virtual-pixel grid as the backdrop so the ink boundary stair-steps
+    // in chunky pixels instead of a smooth curve.
+    const float aspect = pc.rect.z / max(pc.rect.w, 1.0);
+    const float2 uv = Pixelate(input.uv, aspect);
+    const float uvx = uv.x;
+    const float uvy = uv.y;
 
     const float win = smoothstep(0.0, 0.12, coverage) * (1.0 - smoothstep(0.88, 1.0, coverage));
     const float surf = (1.0 - coverage) - 0.02 * coverage; // over-fill scales in as it nears full
@@ -99,23 +118,25 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float boundaryB = inkBoundary(uvx, surf - 0.02 * win, amp * 1.25, time, win, 3.2, 0.35, 1.6, 3.0);
     const float boundaryF = inkBoundary(uvx, surf, amp, time, win, 5.5, 0.55, 4.0, 5.0);
 
-    const float aa = fwidth(uvy) * 1.5;
-    const float inkB = smoothstep(-aa, aa, uvy - boundaryB);
-    const float inkF = smoothstep(-aa, aa, uvy - boundaryF);
+    // Hard, un-antialiased edges - the pixel grid does the stair-stepping for us.
+    const float inkB = step(boundaryB, uvy);
+    const float inkF = step(boundaryF, uvy);
     const float ink = max(inkB, inkF);
-    if (ink < 0.004)
+    if (ink < 0.5)
     {
         discard;
     }
 
-    // Fine paper grain in the ink body (subtle brightness break-up).
-    const float grain = (vnoise(input.uv * float2(190.0, 120.0)) - 0.5) * 0.10;
+    // Coarse paper grain quantised to a couple of steps so it stays blocky, not filmic.
+    const float grain = (floor(vnoise(uv * float2(90.0, 60.0)) * 3.0) / 3.0 - 0.5) * 0.14;
 
     // Two-tone body: the back-only region reads a shade darker than where the front sheet lies.
     float3 body = pc.inkColor.rgb * (1.0 + grain);
     body *= lerp(0.78, 1.05, inkF);
+    body = Posterize(body, 6.0);
 
-    const float rim = smoothstep(edgeW, 0.0, abs(uvy - boundaryF)); // rim on the leading (front) edge
+    // Hard chunky rim on the leading (front) edge.
+    const float rim = 1.0 - step(edgeW, abs(uvy - boundaryF));
     const float3 rgb = lerp(body, pc.edgeColor.rgb, rim * pc.edgeColor.a);
     const float alpha = max(pc.inkColor.a * ink, rim * pc.edgeColor.a);
     return float4(rgb, alpha);

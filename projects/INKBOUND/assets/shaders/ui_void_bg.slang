@@ -71,15 +71,27 @@ float fbm(float2 p)
     return v;
 }
 
+// Pixel-art helpers. kPixelsWide sets the virtual horizontal resolution the whole backdrop is
+// snapped to, so it reads as chunky authored pixels regardless of window size. Posterize then
+// bands the colour to a small palette for the flat, limited-colour look.
+static const float kPixelsWide = 300.0;
+
+float2 Pixelate(float2 uv, float aspect)
+{
+    const float2 res = float2(kPixelsWide, max(kPixelsWide / max(aspect, 0.001), 1.0));
+    return (floor(uv * res) + 0.5) / res;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
     const float time = pc.params.x;
     const float intensity = pc.params.y > 0.0 ? pc.params.y : 1.0;
-    const float2 uv = input.uv;
 
     // Aspect-correct domain so clouds aren't stretched.
     const float aspect = pc.screenSize.x / max(pc.screenSize.y, 1.0);
+    // Snap to a coarse virtual-pixel grid so the whole backdrop reads as chunky pixel art.
+    const float2 uv = Pixelate(input.uv, aspect);
     const float2 p = float2(uv.x * aspect, uv.y);
 
     // Two layers of slow roiling ink; a small domain-warp gives it a liquid, folded look.
@@ -88,19 +100,27 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float n2 = fbm(p * 5.5 - float2(time * 0.02, 0.0));
     const float clouds = smoothstep(0.30, 0.78, n1 * 0.72 + n2 * 0.28);
 
-    // Void base lifted slightly in the cloud folds; ink pools darker in the troughs.
-    float3 col = pc.color0.rgb;
-    col = lerp(col * 0.72, col * 1.55, clouds);
-
-    // Faint accent wisps ride the brightest folds; a slow rising drift keeps them alive.
+    // A slow rising drift feeds the faint accent crests.
     const float rise = fbm(float2(p.x * 3.0, p.y * 4.0 + time * 0.12));
-    const float wisp = pow(saturate(clouds), 3.0) * saturate(rise - 0.35) * 0.6;
-    col += pc.color1.rgb * wisp;
+    const float wisp = pow(saturate(clouds), 3.0) * saturate(rise - 0.35);
 
-    // Soft vignette toward the edges.
+    // Flat pixel-art shading: fold cloud + wisp into a single tone, quantise it into a few steps,
+    // then map through a small hand-built ramp. Colouring from a ramp (not RGB posterise) keeps the
+    // palette dark and ink-blue - posterising near-black RGB just greys and brightens it.
+    float tone = saturate(clouds * 0.85 + wisp * 0.6);
+    const float bands = 5.0;
+    tone = floor(tone * (bands - 1.0) + 0.5) / (bands - 1.0); // nearest of `bands` flat steps, 0..1
+
+    const float3 deep = pc.color0.rgb * 0.40;                       // trough shadow
+    const float3 base = pc.color0.rgb * 1.15;                       // mid void
+    const float3 lift = lerp(pc.color0.rgb * 1.7, pc.color1.rgb, 0.16); // faint cyan crest
+    float3 col = tone < 0.5 ? lerp(deep, base, tone * 2.0) : lerp(base, lift, (tone - 0.5) * 2.0);
+
+    // Vignette, banded too so it stays pixel-consistent.
     const float2 c = uv - 0.5;
-    const float vig = smoothstep(0.95, 0.32, length(c * float2(aspect, 1.0)));
-    col *= lerp(0.55, 1.0, vig);
+    float vig = smoothstep(0.95, 0.30, length(c * float2(aspect, 1.0)));
+    vig = floor(vig * 4.0 + 0.5) / 4.0;
+    col *= lerp(0.5, 1.0, vig);
 
     col = lerp(pc.color0.rgb, col, intensity);
     return float4(col, 1.0);
