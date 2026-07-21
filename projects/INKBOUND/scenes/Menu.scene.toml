@@ -226,6 +226,18 @@ parent = 8
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    label = '< back to the dark'
+    pixel_size = 20.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
     [entities.ui_rect]
     anchor_max = [ 0.07, 0.08 ]
     anchor_min = [ 0.07, 0.08 ]
@@ -236,15 +248,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_selectable]
     group = 'settings'
     interactable = true
-
-    [entities.ui_text]
-    color = [ 0.337, 0.361, 0.431, 1.0 ]
-    font = 'IBMPlexMono-Italic'
-    h_align = 'left'
-    pixel_size = 20.0
-    text = '< back to the dark'
-    v_align = 'middle'
-    wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -313,68 +316,29 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'ShakeSocket'
+name = 'ShakeToggle'
 parent = 8
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
-    [entities.ui_image]
-    color = [ 0.02, 0.024, 0.031, 1.0 ]
-    corner_radius = 6.0
-    pixel_art = false
-
     [entities.ui_rect]
     anchor_max = [ 0.3, 0.68 ]
     anchor_min = [ 0.3, 0.68 ]
-    offset_max = [ 15.0, 15.0 ]
-    offset_min = [ -15.0, -15.0 ]
-    pivot = [ 0.5, 0.5 ]
+    offset_max = [ 52.0, 13.0 ]
+    offset_min = [ 0.0, -13.0 ]
+    pivot = [ 0.0, 0.5 ]
 
     [entities.ui_selectable]
     group = 'settings'
     interactable = true
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'ShakeOrb'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 9.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.3, 0.68 ]
-    anchor_min = [ 0.3, 0.68 ]
-    offset_max = [ 9.0, 9.0 ]
-    offset_min = [ -9.0, -9.0 ]
-    pivot = [ 0.5, 0.5 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'ShakeValue'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_rect]
-    anchor_max = [ 0.325, 0.68 ]
-    anchor_min = [ 0.325, 0.68 ]
-    offset_max = [ 120.0, 16.0 ]
-    offset_min = [ 0.0, -16.0 ]
-    pivot = [ 0.0, 0.5 ]
-
-    [entities.ui_text]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    font = 'PixelStorm'
-    h_align = 'left'
-    pixel_size = 16.0
-    text = 'FULL'
-    v_align = 'middle'
-    wrap = false
+    [entities.ui_toggle]
+    corner_radius = 13.0
+    knob_color = [ 0.9, 0.95, 1.0, 1.0 ]
+    knob_radius = 9.0
+    on = true
+    on_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    track_color = [ 0.15, 0.17, 0.22, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -466,15 +430,10 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderMusicTrack'
+name = 'SliderMusic'
 parent = 8
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.02, 0.024, 0.031, 1.0 ]
-    corner_radius = 6.0
-    pixel_art = false
 
     [entities.ui_rect]
     anchor_max = [ 0.3, 0.35 ]
@@ -487,43 +446,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     group = 'settings'
     interactable = true
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderMusicFill'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 4.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.0, 0.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 10.0, 10.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.0, 0.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderMusicOrb'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 8.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.0, 0.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 16.0, 16.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.0, 0.0 ]
+    [entities.ui_slider]
+    corner_radius = 3.0
+    fill_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    handle_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    handle_radius = 8.0
+    max = 1.0
+    min = 0.0
+    step = 0.05
+    track_color = [ 0.1, 0.11, 0.14, 1.0 ]
+    value = 0.8
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -550,15 +482,10 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderSfxTrack'
+name = 'SliderSfx'
 parent = 8
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.02, 0.024, 0.031, 1.0 ]
-    corner_radius = 6.0
-    pixel_art = false
 
     [entities.ui_rect]
     anchor_max = [ 0.3, 0.46 ]
@@ -571,43 +498,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     group = 'settings'
     interactable = true
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderSfxFill'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 4.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.0, 0.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 10.0, 10.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.0, 0.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderSfxOrb'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 8.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.0, 0.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 16.0, 16.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.0, 0.0 ]
+    [entities.ui_slider]
+    corner_radius = 3.0
+    fill_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    handle_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    handle_radius = 8.0
+    max = 1.0
+    min = 0.0
+    step = 0.05
+    track_color = [ 0.1, 0.11, 0.14, 1.0 ]
+    value = 0.5
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -634,15 +534,10 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderInkGlowTrack'
+name = 'SliderInkGlow'
 parent = 8
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.02, 0.024, 0.031, 1.0 ]
-    corner_radius = 6.0
-    pixel_art = false
 
     [entities.ui_rect]
     anchor_max = [ 0.3, 0.57 ]
@@ -655,43 +550,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     group = 'settings'
     interactable = true
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderInkGlowFill'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 4.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.0, 0.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 10.0, 10.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.0, 0.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SliderInkGlowOrb'
-parent = 8
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    corner_radius = 8.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.0, 0.0 ]
-    anchor_min = [ 0.0, 0.0 ]
-    offset_max = [ 16.0, 16.0 ]
-    offset_min = [ 0.0, 0.0 ]
-    pivot = [ 0.0, 0.0 ]
+    [entities.ui_slider]
+    corner_radius = 3.0
+    fill_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    handle_color = [ 0.302, 0.851, 1.0, 1.0 ]
+    handle_radius = 8.0
+    max = 1.0
+    min = 0.0
+    step = 0.05
+    track_color = [ 0.1, 0.11, 0.14, 1.0 ]
+    value = 1.0
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -713,7 +581,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSPathLine'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -732,7 +600,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node0'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -755,7 +623,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node1'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -778,7 +646,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node2'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -801,7 +669,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node3'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -824,7 +692,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node4'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -847,7 +715,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node5'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -870,7 +738,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum0'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -893,7 +761,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum1'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -916,7 +784,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum2'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -939,7 +807,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum3'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -962,7 +830,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum4'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -985,7 +853,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum5'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1008,7 +876,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSHeader'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1031,7 +899,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailBorder'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1050,7 +918,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailHeader'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1073,7 +941,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailName'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1096,7 +964,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreview'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1115,7 +983,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreviewLabel'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1138,7 +1006,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailStats'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1161,7 +1029,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailFlavor'
-parent = 32
+parent = 24
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1201,7 +1069,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleWordmark'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1224,7 +1092,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleTagline'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1247,7 +1115,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker0'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1266,7 +1134,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label0'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1293,7 +1161,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss0'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1316,7 +1184,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker1'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1335,7 +1203,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label1'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1362,7 +1230,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss1'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1385,7 +1253,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker2'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1404,7 +1272,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label2'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1431,7 +1299,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss2'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1454,7 +1322,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker3'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1473,7 +1341,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label3'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1500,7 +1368,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss3'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1523,7 +1391,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBL'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1546,7 +1414,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBR'
-parent = 54
+parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
