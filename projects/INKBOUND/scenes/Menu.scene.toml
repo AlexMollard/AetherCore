@@ -1445,3 +1445,60 @@ scale = [ 1.0, 1.0, 1.0 ]
     text = "it's looking up at you."
     v_align = 'middle'
     wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DripInk0'
+parent = 46
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 0.55 ]
+    corner_radius = 2.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.1, 0.165 ]
+    anchor_min = [ 0.1, 0.165 ]
+    offset_max = [ 2.0, 22.0 ]
+    offset_min = [ -2.0, 0.0 ]
+    pivot = [ 0.5, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DripInk1'
+parent = 46
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 0.55 ]
+    corner_radius = 2.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.18, 0.165 ]
+    anchor_min = [ 0.18, 0.165 ]
+    offset_max = [ 2.0, 22.0 ]
+    offset_min = [ -2.0, 0.0 ]
+    pivot = [ 0.5, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DripInk2'
+parent = 46
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 0.55 ]
+    corner_radius = 2.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.25, 0.165 ]
+    anchor_min = [ 0.25, 0.165 ]
+    offset_max = [ 2.0, 22.0 ]
+    offset_min = [ -2.0, 0.0 ]
+    pivot = [ 0.5, 0.0 ]

@@ -6,17 +6,25 @@ namespace AetherGame;
 
 /// <summary>Title screen behaviour. The menu items are engine UIButtons now: the nav system
 /// handles keyboard + mouse selection and each button draws its own focus colour. This script
-/// reacts to activation, pulses the marker blots by focus, and flickers the wordmark.</summary>
+/// reacts to activation, pulses the marker blots by focus, flickers + gently bobs the wordmark,
+/// and runs the ink drips beneath it.</summary>
 public sealed class TitleScreen : EntityScript, IMenuScreen
 {
     private float _t;
     private Entity _wordmark;
     private readonly Entity[] _markers = new Entity[4];
     private readonly Entity[] _labels = new Entity[4];
+    private readonly Entity[] _drips = new Entity[3];
 
     private static readonly Vector4 Cyan = GameSettings.Accent;
     private static readonly Vector4 UnselMarker = new(0.227f, 0.251f, 0.314f, 1f);
     private static readonly Vector4 WordmarkColor = new(0.933f, 0.945f, 0.969f, 1f);
+
+    // Wordmark base rect (anchored-space SetRect params; see the authored TitleWordmark UI Rect).
+    private const float WordmarkW = 1000f, WordmarkH = 170f;
+    // Ink drips: staggered so they run and dry out of sync.
+    private static readonly float[] DripPhase = { 0f, 1.4f, 2.7f };
+    private const float DripPeriod = 4.0f, DripWidth = 6f, DripMaxLen = 28f, DripAlpha = 0.72f;
 
     public override void OnAttach()
     {
@@ -27,6 +35,7 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             _markers[i] = Scene.Find($"Marker{i}");
             _labels[i] = Scene.Find($"Label{i}");
         }
+        for (int i = 0; i < 3; i++) _drips[i] = Scene.Find($"DripInk{i}");
     }
 
     public void OnShown()
@@ -66,13 +75,34 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
 
         if (_wordmark.IsValid)
         {
+            // Gentle vertical bob (SetRect) plus the existing flicker (SetTextColor).
+            Ui.SetRect(_wordmark, 0f, 3f * MathF.Sin(_t * 0.75f), WordmarkW, WordmarkH);
             float n = Frac(MathF.Sin(_t * 12.9898f) * 43758.5453f);
             float a = n > 0.10f ? (0.9f + 0.1f * MathF.Sin(_t * 1.7f)) : 0.55f;
             Vector4 c = WordmarkColor;
             c.W = a;
             Ui.SetTextColor(_wordmark, c);
         }
+
+        // Ink drips: each runs down (length grows) then dries (fades) on a staggered loop.
+        for (int i = 0; i < 3; i++)
+        {
+            if (!_drips[i].IsValid) continue;
+            float p = ((_t + DripPhase[i]) % DripPeriod) / DripPeriod;
+            float len = 4f + (DripMaxLen - 4f) * Smooth(0f, 0.5f, p);
+            Ui.SetRect(_drips[i], 0f, 0f, DripWidth, len);
+            Vector4 c = Cyan;
+            c.W = DripAlpha * (1f - Smooth(0.62f, 1f, p));
+            Ui.SetImageColor(_drips[i], c);
+        }
     }
 
     private static float Frac(float v) => v - MathF.Floor(v);
+
+    // Smoothstep in [a,b].
+    private static float Smooth(float a, float b, float x)
+    {
+        float t = Math.Clamp((x - a) / (b - a), 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
 }
