@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#0d0f14;}
+  a{color:#4DD9FF;} a:hover{color:#7ee6ff;}
+  @keyframes ib-blink{0%,92%,100%{opacity:0;transform:scaleY(1);}94%{opacity:1;transform:scaleY(0.2);}96%{opacity:1;transform:scaleY(1);}}
+  @keyframes ib-bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+  @keyframes ib-flicker{0%,100%{opacity:1;}92%{opacity:1;}93%{opacity:0.4;}94%{opacity:1;}97%{opacity:0.5;}98%{opacity:1;}}
+  @keyframes ib-caret{0%,50%{opacity:1;}51%,100%{opacity:0;}}
+  @keyframes ib-glow-red{0%,100%{opacity:0.6;}50%{opacity:1;}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0d0f14;color:#eef1f7;font-family:'IBM Plex Mono',monospace;padding:56px 32px 80px;display:flex;flex-direction:column;align-items:center;gap:72px;">
+
+  <div style="max-width:900px;width:100%;display:flex;flex-direction:column;gap:10px;">
+    <div style="font-family:'Press Start 2P';font-size:22px;letter-spacing:1px;">INKBOUND — Storyboard</div>
+    <div style="font-size:13px;line-height:1.7;color:#8791a8;max-width:720px;">
+      Assumptions: a lightless world where your glowing ink is the only thing holding back the dark — and it doesn't last. Ink only becomes a platform once both ends bite into solid ground; drawing into the air does nothing. A 5-segment meter caps each draw; wells refill it. Drawn ink rots away seconds after it's placed, so routes are temporary and something is always a step behind you. Tone: quiet dread with a wry, unsettled narrator. Below: title, level select, self-talk dialogue, settings, and the cave gameplay beat — our chosen direction — before wiring up real physics.
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+    <div style="font-family:'Press Start 2P';font-size:10px;color:#8791a8;letter-spacing:1px;">SCREEN 1 — TITLE</div>
+    <div style="position:relative;width:640px;height:460px;background:radial-gradient(ellipse at 22% 30%, #16181f 0%, #0c0e13 45%, #070809 100%);border:6px solid #05060a;border-radius:6px;box-shadow:0 0 0 2px #262b3a,0 20px 40px rgba(0,0,0,0.5);overflow:hidden;">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,0.02) 0 1px,transparent 1px 4px);"></div>
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 35%, transparent 30%, rgba(0,0,0,0.72) 100%);pointer-events:none;"></div>
+
+      <div style="position:absolute;top:0;left:130px;width:2px;height:34px;background:linear-gradient(#4a5066,transparent);opacity:0.4;"></div>
+      <div style="position:absolute;top:0;left:300px;width:2px;height:20px;background:linear-gradient(#4a5066,transparent);opacity:0.35;"></div>
+      <div style="position:absolute;top:0;right:120px;width:2px;height:46px;background:linear-gradient(#4a5066,transparent);opacity:0.4;"><div style="position:absolute;bottom:-3px;left:-1px;width:4px;height:4px;border-radius:50%;background:#4a5066;"></div></div>
+
+      <div style="position:absolute;top:60px;right:70px;display:flex;gap:5px;animation:ib-blink 10s infinite;animation-delay:3s;">
+        <div style="width:4px;height:4px;border-radius:50%;background:#6a2a2a;"></div>
+        <div style="width:4px;height:4px;border-radius:50%;background:#6a2a2a;"></div>
+      </div>
+      <div style="position:absolute;bottom:120px;right:150px;display:flex;gap:4px;animation:ib-blink 13s infinite;animation-delay:7s;">
+        <div style="width:3px;height:3px;border-radius:50%;background:#6a2a2a;"></div>
+        <div style="width:3px;height:3px;border-radius:50%;background:#6a2a2a;"></div>
+      </div>
+
+      <div style="position:absolute;top:52px;left:52px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:flex-end;gap:14px;">
+          <div style="position:relative;width:44px;height:58px;animation:ib-bob 3.5s ease-in-out infinite;">
+            <div style="position:absolute;left:2px;top:0;width:40px;height:40px;border-radius:50%;background:{{inkColor}};box-shadow:0 0 18px {{inkColor}}, 0 0 36px {{inkColor}};"></div>
+            <div style="position:absolute;left:15px;top:30px;width:14px;height:14px;border-radius:50% 50% 50% 0;background:{{inkColor}};transform:rotate(45deg);box-shadow:0 0 8px {{inkColor}};"></div>
+          </div>
+          <div style="position:relative;padding-bottom:6px;">
+            <div style="font-family:'Press Start 2P';font-size:38px;letter-spacing:2px;color:#eef1f7;animation:ib-flicker 7s infinite;">INKBOUND</div>
+            <div style="position:absolute;left:24px;bottom:-12px;width:2px;height:12px;background:{{inkColor}};opacity:0.55;"></div>
+            <div style="position:absolute;left:150px;bottom:-22px;width:2px;height:22px;background:{{inkColor}};opacity:0.45;"><div style="position:absolute;bottom:-3px;left:-1px;width:4px;height:4px;border-radius:50%;background:{{inkColor}};box-shadow:0 0 6px {{inkColor}};"></div></div>
+            <div style="position:absolute;left:280px;bottom:-9px;width:2px;height:9px;background:{{inkColor}};opacity:0.5;"></div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#7a8296;letter-spacing:1px;font-style:italic;">the ink knows the way out. you don't.</div>
+      </div>
+
+      <div style="position:absolute;top:188px;left:66px;display:flex;flex-direction:column;gap:20px;">
+        <sc-for list="{{menuItems}}" as="item" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:16px;cursor:pointer;">
+            <div style="position:relative;width:24px;height:24px;">
+              <sc-if value="{{item.selected}}" hint-placeholder-val="{{true}}">
+                <div style="{{blotStyle}}"></div>
+                <div style="{{blotDotA}}"></div>
+                <div style="{{blotDotB}}"></div>
+              </sc-if>
+              <sc-if value="{{item.dim}}" hint-placeholder-val="{{false}}">
+                <div style="position:absolute;left:7px;top:8px;width:8px;height:8px;border-radius:50%;border:2px solid #3a4050;"></div>
+              </sc-if>
+            </div>
+            <div style="{{item.labelStyle}}">{{item.label}}</div>
+            <div style="font-size:10px;color:#4a5066;font-style:italic;letter-spacing:0.5px;">— {{item.gloss}}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="position:absolute;bottom:34px;right:56px;display:flex;flex-direction:column;align-items:center;">
+        <div style="width:44px;height:44px;position:absolute;bottom:-6px;border-radius:50%;background:radial-gradient(circle, {{inkColor}} 0%, transparent 70%);opacity:0.5;"></div>
+        <div style="{{playerSpriteStyle}}"></div>
+      </div>
+
+      <div style="position:absolute;bottom:14px;right:14px;font-size:9px;color:#3a4050;letter-spacing:0.5px;font-style:italic;">it's looking up at you.</div>
+      <div style="position:absolute;bottom:14px;left:22px;font-size:9px;color:#2c2f3a;letter-spacing:0.5px;">build 0.0.1 — this wasn't supposed to ship</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+    <div style="font-family:'Press Start 2P';font-size:10px;color:#8791a8;letter-spacing:1px;">SCREEN 2 — LEVEL SELECT</div>
+    <div style="position:relative;width:640px;height:380px;background:linear-gradient(180deg,#12141c,#0d0f14);border:6px solid #05060a;border-radius:6px;box-shadow:0 0 0 2px #262b3a,0 20px 40px rgba(0,0,0,0.5);overflow:hidden;display:flex;">
+      <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;position:relative;padding:0 24px;">
+        <div style="position:absolute;left:24px;right:24px;top:50%;height:2px;background:repeating-linear-gradient(90deg,#262b3a 0 8px,transparent 8px 16px);transform:translateY(-50%);"></div>
+        <div style="position:relative;display:flex;gap:14px;z-index:1;">
+          <sc-for list="{{levelNodes}}" as="node" hint-placeholder-count="6">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+              <div title="{{node.hint}}" style="{{node.circleStyle}}">
+                <sc-if value="{{node.showLock}}" hint-placeholder-val="{{false}}">
+                  <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+                    <div style="width:10px;height:8px;border:2px solid #4a5066;border-bottom:none;border-radius:6px 6px 0 0;"></div>
+                    <div style="width:16px;height:12px;background:#4a5066;border-radius:2px;"></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{node.showNumber}}" hint-placeholder-val="{{true}}">{{node.label}}</sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="width:200px;border-left:1px solid #262b3a;padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-family:'Press Start 2P';font-size:9px;color:#8791a8;letter-spacing:1px;">SELECTED LEVEL</div>
+        <div style="font-size:13px;font-weight:600;">1-3 · The Hollow Descent</div>
+        <div style="width:160px;height:70px;background:repeating-linear-gradient(135deg,#1b1e28 0 10px,#181a22 10px 20px);border:1px solid #262b3a;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#4a5066;text-align:center;">level preview art</div>
+        <div style="font-size:11px;color:#8791a8;display:flex;flex-direction:column;gap:4px;">
+          <div>INK CAPACITY  ●●●●○</div>
+          <div>PAR TIME  01:40</div>
+        </div>
+        <div style="font-size:10px;color:#4a5066;font-style:italic;">the walls here still remember every route you've drawn.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:22px;max-width:1500px;">
+    <div style="font-family:'Press Start 2P';font-size:10px;color:#8791a8;letter-spacing:1px;">SCREEN 3 — GAMEPLAY (CAVE)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:28px;justify-content:center;">
+      <sc-for list="{{worldThemes}}" as="theme" hint-placeholder-count="1">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+          <div style="font-family:'Press Start 2P';font-size:10px;color:#8791a8;letter-spacing:1px;">{{theme.name}}</div>
+          <div style="position:relative;width:460px;height:344px;background:linear-gradient(180deg,#0e1015,#080a0e);border:6px solid #05060a;border-radius:6px;box-shadow:0 0 0 2px #262b3a,0 14px 28px rgba(0,0,0,0.5);overflow:hidden;">
+            <div style="position:absolute;top:0;left:0;right:0;height:280px;overflow:hidden;">
+
+              <div style="position:absolute;bottom:0;left:280px;width:200px;height:170px;background:radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.85), transparent 68%);pointer-events:none;"></div>
+              <div style="position:absolute;top:112px;left:360px;display:flex;gap:9px;animation:ib-glow-red 4s infinite;">
+                <div style="width:5px;height:5px;border-radius:50%;background:#7a1f1f;box-shadow:0 0 6px #7a1f1f;"></div>
+                <div style="width:5px;height:5px;border-radius:50%;background:#7a1f1f;box-shadow:0 0 6px #7a1f1f;"></div>
+              </div>
+
+              <div style="position:absolute;top:64px;left:36px;display:flex;gap:5px;animation:ib-blink 9s infinite;animation-delay:1.2s;">
+                <div style="width:4px;height:4px;border-radius:50%;background:#6a2a2a;"></div>
+                <div style="width:4px;height:4px;border-radius:50%;background:#6a2a2a;"></div>
+              </div>
+              <div style="position:absolute;top:210px;left:20px;display:flex;gap:4px;animation:ib-blink 11s infinite;animation-delay:4s;">
+                <div style="width:3px;height:3px;border-radius:50%;background:#6a2a2a;"></div>
+                <div style="width:3px;height:3px;border-radius:50%;background:#6a2a2a;"></div>
+              </div>
+
+              <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 42% 55%, transparent 26%, rgba(0,0,0,0.78) 100%);pointer-events:none;"></div>
+              <div style="position:absolute;top:0;left:60px;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:22px solid #1a1c24;"></div>
+              <div style="position:absolute;top:0;left:340px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:16px solid #1a1c24;"></div>
+              <div style="position:absolute;top:0;left:200px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:14px solid #1a1c24;"></div>
+              <div style="position:absolute;top:0;left:410px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:11px solid #1a1c24;"></div>
+
+              <div style="{{theme.groundStyle}}"></div>
+              <div style="{{theme.wallStyle}}"></div>
+
+              <svg viewBox="0 0 460 280" style="position:absolute;inset:0;width:460px;height:280px;pointer-events:none;">
+                <path d="M150,222 C190,170 230,150 290,148" fill="none" stroke-width="12" stroke-linecap="round" opacity="0.25" stroke="{{inkColor}}"></path>
+                <path d="M150,222 C190,170 230,150 290,148" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 6" opacity="0.95" stroke="{{inkColor}}"></path>
+                <circle cx="150" cy="222" r="5" fill="{{inkColor}}"></circle>
+                <circle cx="290" cy="148" r="5" fill="{{inkColor}}"></circle>
+              </svg>
+
+              <div style="position:absolute;left:110px;bottom:46px;">
+                <div style="{{playerSpriteStyle}}"></div>
+              </div>
+
+              <div style="position:absolute;left:298px;bottom:120px;display:flex;flex-direction:column;align-items:center;">
+                <div style="position:relative;">
+                  <div style="{{pickupGlowStyle}}"></div>
+                  <div style="position:absolute;top:4px;left:4px;width:3px;height:3px;border-radius:50%;background:#0d0f14;animation:ib-blink 5s infinite;"></div>
+                </div>
+                <div style="width:14px;height:8px;background:#1b2030;border:1px solid #3a4256;margin-top:2px;"></div>
+              </div>
+
+              <div style="position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;">
+                <div style="font-family:'Press Start 2P';font-size:8px;color:#8791a8;">INK</div>
+                <div style="display:flex;gap:3px;">
+                  <sc-for list="{{inkMeterSegments}}" as="seg" hint-placeholder-count="5">
+                    <div style="{{seg.style}}"></div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="position:absolute;bottom:8px;right:10px;font-size:9px;color:#8791a8;letter-spacing:0.5px;">dissolves in ~3s (it gets bored)</div>
+            </div>
+
+            <div style="position:absolute;left:0;right:0;bottom:0;height:64px;background:rgba(6,7,11,0.96);border-top:2px solid #2c2f3a;box-sizing:border-box;padding:9px 14px;display:flex;flex-direction:column;gap:5px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:7px;height:7px;background:{{inkColor}};box-shadow:0 0 5px {{inkColor}};"></div>
+                <div style="font-family:'Press Start 2P';font-size:7px;color:{{inkColor}};letter-spacing:1px;">ME</div>
+              </div>
+              <div style="font-size:11px;color:#c8cede;font-style:italic;line-height:1.4;">"I don't remember drawing that one."<span style="display:inline-block;width:6px;color:#c8cede;animation:ib-caret 1s steps(1) infinite;">▍</span></div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{showAnnotations}}" hint-placeholder-val="{{true}}">
+      <div style="max-width:900px;width:100%;display:flex;flex-direction:column;gap:10px;background:#12141c;border:1px solid #262b3a;border-radius:6px;padding:20px 24px;margin-top:8px;">
+        <div style="font-family:'Press Start 2P';font-size:9px;color:#8791a8;letter-spacing:1px;">HOW IT READS</div>
+        <sc-for list="{{legend}}" as="item" hint-placeholder-count="3">
+          <div style="font-size:12px;line-height:1.6;display:flex;gap:8px;">
+            <span style="color:{{inkColor}};">●</span>
+            <span><span style="font-weight:600;">{{item.label}}</span> — {{item.desc}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="max-width:640px;width:100%;display:flex;flex-direction:column;gap:12px;background:#0e1015;border:1px solid #262b3a;border-radius:6px;padding:20px 24px;">
+    <div style="font-family:'Press Start 2P';font-size:9px;color:#8791a8;letter-spacing:1px;">SELF-TALK — the wanderer, to no one</div>
+    <sc-for list="{{selfTalk}}" as="line" hint-placeholder-count="4">
+      <div style="background:rgba(6,7,11,0.9);border-left:2px solid #2c2f3a;padding:8px 12px;font-size:12px;font-style:italic;color:#c8cede;line-height:1.4;">"{{line}}"</div>
+    </sc-for>
+    <div style="font-size:10px;color:#4a5066;">delivered as pixel textboxes, one line surfacing at a time as you move — no portrait, just the voice.</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+    <div style="font-family:'Press Start 2P';font-size:10px;color:#8791a8;letter-spacing:1px;">SCREEN 4 — SETTINGS</div>
+    <div style="position:relative;width:640px;height:400px;background:radial-gradient(ellipse at 78% 20%, #17191f 0%, #0d0f13 55%, #08090c 100%);border:6px solid #05060a;border-radius:6px;box-shadow:0 0 0 2px #262b3a,0 20px 40px rgba(0,0,0,0.5);overflow:hidden;padding:30px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,0.015) 0 1px,transparent 1px 5px);pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-30px;right:-20px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle, rgba(74,80,90,0.10), transparent 65%);pointer-events:none;"></div>
+      <div style="position:absolute;top:24px;right:44px;display:flex;gap:5px;animation:ib-blink 12s infinite;animation-delay:5s;">
+        <div style="width:3px;height:3px;border-radius:50%;background:#6a2a2a;"></div>
+        <div style="width:3px;height:3px;border-radius:50%;background:#6a2a2a;"></div>
+      </div>
+
+      <div style="font-size:10px;color:#565c6e;cursor:pointer;letter-spacing:1px;">&lt; back to the dark</div>
+      <div style="position:relative;margin-top:8px;width:fit-content;">
+        <div style="font-family:'Press Start 2P';font-size:22px;letter-spacing:1px;color:{{inkColor}};text-shadow:0 0 16px {{inkColor}};">attune</div>
+        <div style="margin-top:7px;height:3px;width:180px;background:linear-gradient(90deg,{{inkColor}},transparent);opacity:0.6;border-radius:2px;"></div>
+        <div style="position:absolute;left:172px;top:34px;width:8px;height:8px;border-radius:50%;background:{{inkColor}};opacity:0.5;box-shadow:0 0 6px {{inkColor}};"></div>
+      </div>
+      <div style="font-size:11px;color:#7a8296;font-style:italic;margin-top:10px;">the dark listens differently to each of these.</div>
+
+      <div style="display:flex;flex-direction:column;gap:20px;margin-top:22px;">
+        <sc-for list="{{sliders}}" as="s" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:13px;letter-spacing:0.5px;color:#c8cede;font-style:italic;">{{s.label}}</div>
+            <div style="width:210px;height:8px;background:#050608;border:1px solid #1a1c24;border-radius:5px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.8);position:relative;">
+              <div style="position:relative;height:100%;border-radius:5px;overflow:visible;">
+                <div style="{{s.fillStyle}}"></div>
+                <div style="{{fillTipStyle}}"></div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:13px;letter-spacing:0.5px;color:#c8cede;font-style:italic;">screen shake</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:9px;color:{{inkColor}};letter-spacing:1px;">FULL</div>
+            <div style="width:26px;height:26px;border-radius:50%;background:#050608;border:1px solid #1a1c24;box-shadow:inset 0 2px 4px rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;">
+              <div style="{{inkWellOrb}}"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;opacity:0.55;">
+          <div style="position:relative;font-size:13px;letter-spacing:0.5px;color:#565c6e;font-style:italic;">
+            <span style="filter:blur(1px);">the thing you keep hearing</span>
+            <div style="position:absolute;left:0;top:2px;height:12px;width:100%;background:repeating-linear-gradient(90deg,#1a1c24 0 14px,transparent 14px 20px);opacity:0.9;"></div>
+          </div>
+          <div style="width:26px;height:26px;border-radius:50%;background:#0a0b0e;border:1px solid #1a1c24;box-shadow:inset 0 2px 4px rgba(0,0,0,0.8);"></div>
+        </div>
+      </div>
+
+      <div style="flex:1;"></div>
+      <div style="font-size:9px;color:#3a4050;letter-spacing:0.5px;font-style:italic;">some settings settle back on their own after you leave.</div>
+    </div>
+  </div>
+
+  <div style="max-width:900px;width:100%;font-size:12px;color:#8791a8;line-height:1.7;border-top:1px solid #262b3a;padding-top:20px;">
+    Next steps: cave is locked in as the world direction — next we build the title, level-select and settings screens for real and wire the ink-draw mechanic into a playable test room.
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: {&quot;width&quot;: 1000, &quot;height&quot;: 900},
+  &quot;inkColor&quot;: {&quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#4DD9FF&quot;, &quot;options&quot;: [&quot;#4DD9FF&quot;, &quot;#B084FF&quot;, &quot;#FF6EC7&quot;], &quot;tsType&quot;: &quot;string&quot;},
+  &quot;showAnnotations&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}
+}">
+class Component extends DCLogic {
+  buildSprite(pattern, size, color) {
+    const shadows = [];
+    pattern.forEach((row, r) => {
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] === 'X') shadows.push(`${c * size}px ${r * size}px 0 0 ${color}`);
+      }
+    });
+    return shadows.join(',');
+  }
+
+  renderVals() {
+    const inkColor = this.props.inkColor ?? '#4DD9FF';
+    const showAnnotations = this.props.showAnnotations ?? true;
+
+    const PLAYER_PATTERN = [
+      '..XX....',
+      '.XXXX...',
+      '.XXXX...',
+      '.XXXX...',
+      '..XX....',
+      '.XXXXX..',
+      'XXXXXXX.',
+      'XXXXXXX.',
+      'XX.X.XX.',
+      'XX...XX.'
+    ];
+    const playerShadow = this.buildSprite(PLAYER_PATTERN, 4, '#1b2030');
+
+    const playerSpriteStyle = {
+      width: 32, height: 40, background: 'transparent',
+      boxShadow: playerShadow, filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.6))'
+    };
+
+    const pickupGlowStyle = {
+      width: 12, height: 12, borderRadius: '50%', background: inkColor,
+      boxShadow: `0 0 10px ${inkColor}, 0 0 20px ${inkColor}`
+    };
+
+    const buttonHoverStyle = {
+      borderColor: inkColor,
+      boxShadow: `4px 4px 0 #05060a, 0 0 12px ${inkColor}`
+    };
+
+    const logoMainStyle = {
+      position: 'absolute', left: 5, top: 0, width: 60, height: 60, borderRadius: '50%',
+      background: inkColor, boxShadow: `0 0 24px ${inkColor}, 0 0 48px ${inkColor}`
+    };
+    const logoTailStyle = {
+      position: 'absolute', left: 25, top: 46, width: 20, height: 20, borderRadius: '50% 50% 50% 0',
+      background: inkColor, transform: 'rotate(45deg)', boxShadow: `0 0 12px ${inkColor}`
+    };
+
+    const inkMeterFilled = [true, true, true, true, false];
+    const inkMeterSegments = inkMeterFilled.map(filled => ({
+      style: filled
+        ? { width: 14, height: 8, background: inkColor, boxShadow: `0 0 4px ${inkColor}`, border: '1px solid transparent' }
+        : { width: 14, height: 8, background: 'transparent', border: '1px solid #3a4256' }
+    }));
+
+    const nodeBase = { width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Press Start 2P'", fontSize: 12 };
+    const doneStyle = { ...nodeBase, background: '#1b2030', border: '2px solid #3a4256', color: '#eef1f7' };
+    const currentStyle = { ...nodeBase, background: '#1b2030', border: `2px solid ${inkColor}`, color: '#eef1f7', boxShadow: `0 0 14px ${inkColor}` };
+    const lockedStyle = { ...nodeBase, background: '#181a22', border: '2px solid #22242c', color: '#4a5066' };
+    const levelNodes = [
+      { label: '1', hint: 'The Cheerful Plunge', circleStyle: doneStyle, showLock: false, showNumber: true },
+      { label: '2', hint: 'Quiet, Please', circleStyle: doneStyle, showLock: false, showNumber: true },
+      { label: '3', hint: 'The Hollow Descent', circleStyle: currentStyle, showLock: false, showNumber: true },
+      { label: '', hint: "it's not ready for you yet", circleStyle: lockedStyle, showLock: true, showNumber: false },
+      { label: '', hint: 'best not to think about this one', circleStyle: lockedStyle, showLock: true, showNumber: false },
+      { label: '', hint: '\u2014', circleStyle: lockedStyle, showLock: true, showNumber: false }
+    ];
+
+    const worldThemes = [
+      {
+        name: 'CAVE', isCave: true, isForest: false, isIndustrial: false,
+        groundStyle: { position: 'absolute', left: 0, bottom: 0, width: 170, height: 46, background: '#23262f', borderTop: '2px solid #3a3f4d' },
+        wallStyle: { position: 'absolute', left: 260, bottom: 0, width: 70, height: 120, background: '#2c2f3a', borderTop: '2px solid #3a3f4d', borderLeft: '2px solid #3a3f4d' }
+      }
+    ];
+
+    const sliderDefs = [
+      { label: 'MUSIC VOLUME', pct: 70 },
+      { label: 'SFX VOLUME', pct: 55 },
+      { label: 'INK GLOW INTENSITY', pct: 85 }
+    ];
+    const sliders = sliderDefs.map(s => ({
+      label: s.label,
+      fillStyle: { width: s.pct + '%', height: '100%', background: inkColor, boxShadow: `0 0 6px ${inkColor}` }
+    }));
+    const toggleStyle = { width: 40, height: 20, borderRadius: 10, background: '#1b2030', border: `2px solid ${inkColor}`, display: 'flex', alignItems: 'center', padding: '0 3px', justifyContent: 'flex-end', boxSizing: 'border-box' };
+    const knobStyle = { width: 12, height: 12, borderRadius: '50%', background: inkColor, boxShadow: `0 0 6px ${inkColor}` };
+
+    const menuItems = [
+      { label: 'descend', gloss: 'a new dark', selected: true },
+      { label: 'return', gloss: 'to where you left it', selected: false },
+      { label: 'attune', gloss: 'settings', selected: false },
+      { label: 'release', gloss: 'quit', selected: false }
+    ].map(m => ({
+      label: m.label, gloss: m.gloss, selected: m.selected, dim: !m.selected,
+      labelStyle: m.selected
+        ? { fontFamily: "'Press Start 2P'", fontSize: 17, letterSpacing: '2px', color: inkColor, textShadow: `0 0 14px ${inkColor}` }
+        : { fontFamily: "'Press Start 2P'", fontSize: 15, letterSpacing: '2px', color: '#565c6e' }
+    }));
+    const blotStyle = { position: 'absolute', left: 2, top: 4, width: 18, height: 18, background: inkColor, borderRadius: '62% 38% 55% 45% / 52% 60% 40% 48%', boxShadow: `0 0 12px ${inkColor}` };
+    const blotDotA = { position: 'absolute', left: 17, top: 2, width: 5, height: 5, borderRadius: '50%', background: inkColor, boxShadow: `0 0 6px ${inkColor}` };
+    const blotDotB = { position: 'absolute', left: 0, top: 16, width: 4, height: 4, borderRadius: '50%', background: inkColor, opacity: 0.85 };
+    const fillTipStyle = { position: 'absolute', right: -4, top: '50%', width: 12, height: 12, marginTop: -6, borderRadius: '50%', background: inkColor, boxShadow: `0 0 8px ${inkColor}` };
+    const inkWellOrb = { width: 13, height: 13, borderRadius: '50%', background: inkColor, boxShadow: `0 0 8px ${inkColor}, inset 0 -2px 3px rgba(0,0,0,0.4)` };
+
+    const legend = [
+      { label: 'Ink meter', desc: "drains while you draw; refills at a glowing well \u2014 if it lets you near it." },
+      { label: 'Anchor points', desc: "ink won't hold itself up without a wall or floor to sink its edge into." },
+      { label: 'Dissolve timer', desc: "drawn ink rots back to nothing a few seconds after it's placed. don't stand still." }
+    ];
+
+    const selfTalk = [
+      "It's colder the deeper I draw.",
+      "...I didn't make that platform.",
+      "If I stop drawing, does the floor stop being there?",
+      "Something down here draws back."
+    ];
+
+    return {
+      inkColor, showAnnotations, playerSpriteStyle, pickupGlowStyle, buttonHoverStyle,
+      logoMainStyle, logoTailStyle, inkMeterSegments, levelNodes, worldThemes, legend,
+      sliders, toggleStyle, knobStyle, selfTalk,
+      menuItems, blotStyle, blotDotA, blotDotB, fillTipStyle, inkWellOrb
+    };
+  }
+}
+
+</script>
+</body>
+</html>
