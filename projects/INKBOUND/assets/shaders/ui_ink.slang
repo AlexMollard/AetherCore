@@ -82,11 +82,6 @@ float2 Pixelate(float2 uv, float aspect)
     return (floor(uv * res) + 0.5) / res;
 }
 
-float3 Posterize(float3 c, float levels)
-{
-    return floor(c * levels + 0.5) / levels;
-}
-
 // Surface uv.y for a boundary, given its own wave + drip params. Lower value = reaches higher.
 float inkBoundary(float uvx, float surf, float amp, float time, float win, float xf, float tf, float dripMul, float dripSharp)
 {
@@ -118,26 +113,38 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float boundaryB = inkBoundary(uvx, surf - 0.02 * win, amp * 1.25, time, win, 3.2, 0.35, 1.6, 3.0);
     const float boundaryF = inkBoundary(uvx, surf, amp, time, win, 5.5, 0.55, 4.0, 5.0);
 
-    // Hard, un-antialiased edges - the pixel grid does the stair-stepping for us.
-    const float inkB = step(boundaryB, uvy);
-    const float inkF = step(boundaryF, uvy);
-    const float ink = max(inkB, inkF);
-    if (ink < 0.5)
+    // Combined leading edge (topmost ink) from the two tendrilled boundaries; hard, un-antialiased
+    // so the pixel grid does the stair-stepping. Everything above the surface is clear.
+    const float lead = min(boundaryB, boundaryF);
+    const float depth = uvy - lead; // 0 at the leading edge, grows downward into the body
+    if (depth < 0.0)
     {
         discard;
     }
 
-    // Coarse paper grain quantised to a couple of steps so it stays blocky, not filmic.
-    const float grain = (floor(vnoise(uv * float2(90.0, 60.0)) * 3.0) / 3.0 - 0.5) * 0.14;
+    // Banded internal folds - the same roiling-fbm structure the backdrop uses, so the ink body
+    // has depth instead of reading as flat black. Back-only region (front sheet not yet here) dips
+    // a shade darker for a two-layer feel.
+    const float tex = fbm(float2(uvx * 5.5 + 2.3, uvy * 4.5 - time * 0.25));
+    const float backOnly = 1.0 - step(boundaryF, uvy);
 
-    // Two-tone body: the back-only region reads a shade darker than where the front sheet lies.
-    float3 body = pc.inkColor.rgb * (1.0 + grain);
-    body *= lerp(0.78, 1.05, inkF);
-    body = Posterize(body, 6.0);
+    // Tone 0..1: a bright crest right at the leading edge easing into the darker textured body.
+    const float tone = saturate((1.0 - smoothstep(0.0, edgeW * 3.0, depth)) * 0.85
+                                + tex * 0.5 - 0.12
+                                - backOnly * 0.12);
 
-    // Hard chunky rim on the leading (front) edge.
-    const float rim = 1.0 - step(edgeW, abs(uvy - boundaryF));
-    const float3 rgb = lerp(body, pc.edgeColor.rgb, rim * pc.edgeColor.a);
-    const float alpha = max(pc.inkColor.a * ink, rim * pc.edgeColor.a);
-    return float4(rgb, alpha);
+    // Limited 5-colour ink palette, deep ink -> bright cyan crest - the same ramp language as
+    // ui_void_bg, so the transition matches the backdrop's flat pixel-art quality.
+    const float3 c0 = pc.inkColor.rgb * 0.8;                              // deepest trough
+    const float3 c1 = pc.inkColor.rgb * 2.4;                              // dark body
+    const float3 c2 = pc.inkColor.rgb * 4.2;                              // lifted fold
+    const float3 c3 = lerp(pc.inkColor.rgb * 5.0, pc.edgeColor.rgb, 0.55); // near-crest blue-cyan
+    const float3 c4 = pc.edgeColor.rgb;                                   // cyan crest
+    float3 rgb = c0;
+    rgb = tone >= 0.2 ? c1 : rgb;
+    rgb = tone >= 0.4 ? c2 : rgb;
+    rgb = tone >= 0.6 ? c3 : rgb;
+    rgb = tone >= 0.8 ? c4 : rgb;
+
+    return float4(rgb, pc.inkColor.a);
 }
