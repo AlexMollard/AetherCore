@@ -15,6 +15,7 @@ using namespace aether;
 using UiCanvasComponent = aether::ui::UICanvas;
 using UiRectComponent = aether::ui::UIRect;
 using UiTextComponent = aether::ui::UIText;
+using UiImageComponent = aether::ui::UIImage;
 
 namespace
 {
@@ -151,15 +152,15 @@ AE_FIELD_N("transition_speed", transitionSpeed, Float)
 AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
-// UI components: pure authored data (the runtime resolved-rect and texture handle are
-// not reflected). Not addable to arbitrary entities - UI is built through the UI
-// authoring flow - but serialized/inspected/MCP-reachable via reflection. Enums now
-// persist as names (a backward-compatible upgrade from the old integer keys).
+// UI components: authored data (the runtime resolved-rect is not reflected). Addable via
+// the MCP / editor so UI can be built through the authoring flow, and
+// serialized/inspected/MCP-reachable via reflection. Canvas/Rect/Text ride the generic
+// serde table; UI Image keeps its bespoke serde (texture handle <-> path) and reflects the
+// path through a CustomField. Enums persist as names.
 AE_COMPONENT(UiCanvasComponent, "UI Canvas", "UI", ICON_FA_IMAGE)
 AE_FIELD_ENUM("scale_mode", scaleMode, UiScaleModeEnum())
 AE_FIELD_N("reference", referenceResolution, Vec2)
 AE_FIELD_N("sort_bias", sortBias, Int)
-AE_NOT_ADDABLE()
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
@@ -169,7 +170,6 @@ AE_FIELD_N("anchor_max", anchorMax, Vec2)
 AE_FIELD_N("offset_min", offsetMin, Vec2)
 AE_FIELD_N("offset_max", offsetMax, Vec2)
 AE_FIELD_N("pivot", pivot, Vec2)
-AE_NOT_ADDABLE()
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
@@ -181,6 +181,21 @@ AE_FIELD_N("color", color, Color4)
 AE_FIELD_ENUM("h_align", hAlign, UiHAlignEnum())
 AE_FIELD_ENUM("v_align", vAlign, UiVAlignEnum())
 AE_FIELD_N("wrap", wrap, Bool)
-AE_NOT_ADDABLE()
 AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiImageComponent, "UI Image", "UI", ICON_FA_IMAGE)
+AE_FIELD_N("color", color, Color4)
+AE_FIELD_N("corner_radius", cornerRadius, Float)
+AE_FIELD_CUSTOM(
+        "texture", String,
+        [](const void* c) -> ::aether::reflect::FieldValue
+        { return ::aether::reflect::MakeValue(static_cast<const UiImageComponent*>(c)->texturePath); },
+        [](void* c, const ::aether::reflect::FieldValue& v)
+        {
+	        auto* img = static_cast<UiImageComponent*>(c);
+	        img->texturePath = v.str;
+	        img->textureDirty = true;
+        })
+AE_FIELD_N("pixel_art", pixelArt, Bool)
 AE_COMPONENT_END()
