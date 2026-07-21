@@ -805,6 +805,43 @@ namespace aether::editor
 				}
 			}
 
+			if (const auto* slider = world.TryGet<ui::UISlider>(element.entity))
+			{
+				const float range = std::max(slider->maxValue - slider->minValue, 1e-6f);
+				const float t = std::clamp((slider->value - slider->minValue) / range, 0.f, 1.f);
+				drawList->AddRectFilled(element.min, element.max, ToU32(slider->trackColor), slider->cornerRadius * zoom);
+				const float fillW = (element.max.x - element.min.x) * t;
+				drawList->AddRectFilled(element.min, ImVec2(element.min.x + fillW, element.max.y), ToU32(slider->fillColor), 0.f);
+				const float cy = (element.min.y + element.max.y) * 0.5f;
+				drawList->AddCircleFilled(ImVec2(element.min.x + fillW, cy), slider->handleRadius * zoom, ToU32(slider->handleColor));
+			}
+			if (const auto* toggle = world.TryGet<ui::UIToggle>(element.entity))
+			{
+				drawList->AddRectFilled(element.min, element.max, ToU32(toggle->on ? toggle->onColor : toggle->trackColor), toggle->cornerRadius * zoom);
+				const float cy = (element.min.y + element.max.y) * 0.5f;
+				const float kr = toggle->knobRadius * zoom;
+				const float kx = toggle->on ? (element.max.x - kr) : (element.min.x + kr);
+				drawList->AddCircleFilled(ImVec2(kx, cy), kr, ToU32(toggle->knobColor));
+			}
+			if (const auto* bar = world.TryGet<ui::UIProgressBar>(element.entity))
+			{
+				drawList->AddRectFilled(element.min, element.max, ToU32(bar->trackColor), bar->cornerRadius * zoom);
+				const float fillW = (element.max.x - element.min.x) * std::clamp(bar->value, 0.f, 1.f);
+				drawList->AddRectFilled(element.min, ImVec2(element.min.x + fillW, element.max.y), ToU32(bar->fillColor), 0.f);
+			}
+			if (const auto* button = world.TryGet<ui::UIButton>(element.entity))
+			{
+				drawList->AddRectFilled(element.min, element.max, ToU32(button->bgColor), button->cornerRadius * zoom);
+				if (!button->label.empty())
+				{
+					const float fontSize = std::clamp(button->pixelSize * zoom, 6.f, 160.f);
+					ImFont* font = ImGui::GetFont();
+					const ImVec2 ts = font->CalcTextSizeA(fontSize, FLT_MAX, FLT_MAX, button->label.c_str());
+					const ImVec2 c((element.min.x + element.max.x - ts.x) * 0.5f, (element.min.y + element.max.y - ts.y) * 0.5f);
+					drawList->AddText(font, fontSize, c, ToU32(button->textColor), button->label.c_str());
+				}
+			}
+
 			const auto* text = world.TryGet<ui::UIText>(element.entity);
 			if (text == nullptr || text->text.empty())
 			{
