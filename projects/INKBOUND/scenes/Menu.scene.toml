@@ -5,6 +5,16 @@ kind = '2d'
 name = ''
 version = 16
 
+[[assets]]
+id = 'e235b803df4dc920'
+path = 'project://assets/textures/ui/vignette.png'
+type = 'texture'
+
+[[assets]]
+id = 'd3b7f2a6b6f76fec'
+path = 'project://assets/textures/ui/scanlines.png'
+type = 'texture'
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Main Camera'
@@ -50,6 +60,9 @@ parent = -1
     [[entities.scripts]]
     type = 'MenuController'
 
+    [[entities.scripts]]
+    type = 'MenuShell'
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleRoot'
@@ -84,6 +97,122 @@ name = 'SettingsRoot'
 parent = 1
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye0'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.14, 0.24 ]
+    anchor_min = [ 0.14, 0.24 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye1'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.185, 0.24 ]
+    anchor_min = [ 0.185, 0.24 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye2'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.83, 0.66 ]
+    anchor_min = [ 0.83, 0.66 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Eye3'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.416, 0.165, 0.165, 0.0 ]
+    corner_radius = 7.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.875, 0.66 ]
+    anchor_min = [ 0.875, 0.66 ]
+    offset_max = [ 7.0, 7.0 ]
+    offset_min = [ -7.0, -7.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShellVignette'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 1.0, 1.0, 1.0, 1.0 ]
+    corner_radius = 0.0
+    pixel_art = false
+    texture = 'project://assets/textures/ui/vignette.png'
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShellScanlines'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 1.0, 1.0, 1.0, 0.5 ]
+    corner_radius = 0.0
+    pixel_art = true
+    texture = 'project://assets/textures/ui/scanlines.png'
 
     [entities.ui_rect]
     anchor_max = [ 1.0, 1.0 ]
