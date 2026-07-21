@@ -119,4 +119,45 @@ public static class Ui
 
     /// <summary>Enable/disable navigation to this selectable (locked items set false).</summary>
     public static void SetInteractable(Entity e, bool interactable) => Native.aether_ui_set_interactable(e.Id, interactable ? 1 : 0);
+
+    // ── Widgets (engine-drawn UISlider / UIToggle / UIButton / UIProgressBar) ──────
+    // These components render themselves and are driven by the engine's UiWidgetSystem
+    // (keyboard adjust when focused, mouse drag, toggle flip). Scripts just read/seed the
+    // value and poll WasChanged to persist.
+
+    /// <summary>Current slider value in its own units (min..max).</summary>
+    public static float GetSliderValue(Entity e) => Native.aether_ui_get_slider_value(e.Id);
+
+    /// <summary>Set a slider's value (clamped to its min..max).</summary>
+    public static void SetSliderValue(Entity e, float value) => Native.aether_ui_set_slider_value(e.Id, value);
+
+    /// <summary>Current toggle state.</summary>
+    public static bool GetToggle(Entity e) => Native.aether_ui_get_toggle(e.Id) != 0;
+
+    /// <summary>Set a toggle's state.</summary>
+    public static void SetToggle(Entity e, bool on) => Native.aether_ui_set_toggle(e.Id, on ? 1 : 0);
+
+    /// <summary>Current progress-bar fill (0..1).</summary>
+    public static float GetProgress(Entity e) => Native.aether_ui_get_progress(e.Id);
+
+    /// <summary>Set a progress-bar's fill (clamped 0..1).</summary>
+    public static void SetProgress(Entity e, float value) => Native.aether_ui_set_progress(e.Id, value);
+
+    /// <summary>A button's label text.</summary>
+    public static unsafe string GetButtonLabel(Entity e)
+    {
+        Span<byte> buffer = stackalloc byte[256];
+        fixed (byte* ptr = buffer)
+        {
+            int written = Native.aether_ui_get_button_label(e.Id, ptr, buffer.Length);
+            return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+        }
+    }
+
+    /// <summary>Set a button's label (ASCII only).</summary>
+    public static void SetButtonLabel(Entity e, string label) => Native.aether_ui_set_button_label(e.Id, label);
+
+    /// <summary>True on the frame a slider or toggle on this entity was changed by the user
+    /// (keyboard/drag/activation). Poll this to persist settings.</summary>
+    public static bool WasChanged(Entity e) => Native.aether_ui_was_changed(e.Id) != 0;
 }
