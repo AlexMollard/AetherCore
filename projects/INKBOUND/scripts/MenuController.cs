@@ -34,13 +34,16 @@ public sealed class MenuController : EntityScript
 
     private Entity _titleRoot, _levelRoot, _settingsRoot;
 
-    // Ink-flood transition (runtime overlay, created on attach; lives only during Play).
-    private Entity _inkWipe, _inkEdge;
+    // Ink-flood transition: a custom-shader effect ("ui_ink") whose coverage animates 0..1..0.
+    // Created on attach; lives only during Play. The shader owns the liquid look.
+    private Entity _inkFx;
+    private float _inkTime;
     private enum Phase { Idle, Cover, Reveal }
     private Phase _phase = Phase.Idle;
     private float _tt;
     private MenuScreen _pending;
-    private const float CoverDur = 0.32f, RevealDur = 0.34f, InkMaxH = 1700f;
+    private const float CoverDur = 0.34f, RevealDur = 0.42f;
+    private const float NoiseAmp = 0.05f, EdgeWidth = 0.028f; // shader params (uv-space)
     private static readonly Vector4 InkColor = new(0.02f, 0.025f, 0.035f, 1f);
     private static readonly Vector4 EdgeColor = GameSettings.Accent;
 
@@ -67,6 +70,8 @@ public sealed class MenuController : EntityScript
 
     public override void OnUpdate(float dt)
     {
+        _inkTime += dt; // keep the ink noise rolling whenever it is on screen
+
         if (_phase == Phase.Idle)
         {
             if (Current != MenuScreen.Title && Input.IsKeyPressed(Key.Escape)) { Go(MenuScreen.Title); return; }
@@ -74,18 +79,18 @@ public sealed class MenuController : EntityScript
             return;
         }
 
-        // Mid-transition: animate the ink and swallow input.
+        // Mid-transition: drive coverage 0..1..0 and swallow input.
         _tt += dt;
         if (_phase == Phase.Cover)
         {
             float p = Math.Clamp(_tt / CoverDur, 0f, 1f);
-            SetInk(InkMaxH * EaseOut(p)); // rise fast, settle at full cover
+            SetInk(EaseOut(p)); // rise fast, settle at full cover
             if (p >= 1f) { ShowInstant(_pending); _phase = Phase.Reveal; _tt = 0f; }
         }
         else // Reveal
         {
             float p = Math.Clamp(_tt / RevealDur, 0f, 1f);
-            SetInk(InkMaxH * (1f - EaseIn(p))); // hold, then drain away
+            SetInk(1f - EaseIn(p)); // hold, then drain away
             if (p >= 1f) { SetInk(0f); _phase = Phase.Idle; }
         }
     }
@@ -99,35 +104,19 @@ public sealed class MenuController : EntityScript
         ActiveScreen()?.OnShown();
     }
 
-    // Full-width overlays anchored to the bottom edge; height animates upward via SetOffsets.
-    // Created last, so they draw on top of every screen and the shell.
+    // A full-screen custom-shader effect, drawn on top of every screen and the shell.
     private void CreateInk()
     {
-        _inkWipe = Ui.CreateImage(Self);
-        Ui.SetAnchors(_inkWipe, new Vector2(0f, 1f), new Vector2(1f, 1f));
-        Ui.SetPivot(_inkWipe, new Vector2(0.5f, 1f));
-        Ui.SetImageColor(_inkWipe, InkColor);
-
-        _inkEdge = Ui.CreateImage(Self);
-        Ui.SetAnchors(_inkEdge, new Vector2(0f, 1f), new Vector2(1f, 1f));
-        Ui.SetPivot(_inkEdge, new Vector2(0.5f, 1f));
-        Ui.SetImageColor(_inkEdge, EdgeColor);
-
+        _inkFx = Ui.CreateEffect(Self, "ui_ink");
+        Ui.SetEffectColors(_inkFx, InkColor, EdgeColor);
         SetInk(0f);
     }
 
-    private void SetInk(float h)
+    // coverage 0 = clear, 1 = fully covered. params = (coverage, time, noiseAmp, edgeWidth).
+    private void SetInk(float coverage)
     {
-        if (_inkWipe.IsValid)
-            Ui.SetOffsets(_inkWipe, new Vector2(0f, -h), new Vector2(0f, 0f));
-        if (_inkEdge.IsValid)
-        {
-            // A thin cyan "wet" line leading the ink's top edge; hidden once the ink is gone.
-            Ui.SetOffsets(_inkEdge, new Vector2(0f, -h - 3f), new Vector2(0f, -h));
-            Vector4 e = EdgeColor;
-            e.W = h > 2f ? 0.9f : 0f;
-            Ui.SetImageColor(_inkEdge, e);
-        }
+        if (_inkFx.IsValid)
+            Ui.SetEffectParams(_inkFx, new Vector4(coverage, _inkTime, NoiseAmp, EdgeWidth));
     }
 
     private static float EaseOut(float x) => 1f - (1f - x) * (1f - x);
