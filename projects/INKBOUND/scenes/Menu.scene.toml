@@ -1502,3 +1502,23 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_max = [ 2.0, 22.0 ]
     offset_min = [ -2.0, 0.0 ]
     pivot = [ 0.5, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'MenuBg'
+parent = 1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_effect]
+    background = true
+    color0 = [ 0.045, 0.055, 0.075, 1.0 ]
+    color1 = [ 0.302, 0.851, 1.0, 1.0 ]
+    shader = 'ui_void_bg'
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]

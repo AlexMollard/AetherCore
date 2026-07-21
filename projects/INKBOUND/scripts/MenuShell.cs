@@ -12,16 +12,21 @@ public sealed class MenuShell : EntityScript
     private readonly float[] _phase = { 0f, 3.3f, 6.7f, 9.1f };
     private readonly float[] _period = { 9f, 11f, 13f, 10f };
     private static readonly Vector4 EyeColor = new(0.416f, 0.165f, 0.165f, 1f);
+    private Entity _bg;
     private float _t;
 
     public override void OnAttach()
     {
         for (int i = 0; i < _eyes.Length; i++) _eyes[i] = Scene.Find($"Eye{i}");
+        _bg = Scene.Find("MenuBg"); // the ui_void_bg backdrop; we drive its shader time
     }
 
     public override void OnUpdate(float dt)
     {
         _t += dt;
+
+        // Roll the background shader's time (params.x); intensity defaults to full.
+        if (_bg.IsValid) Ui.SetEffectParams(_bg, new Vector4(_t, 0f, 0f, 0f));
         for (int i = 0; i < _eyes.Length; i++)
         {
             if (!_eyes[i].IsValid) continue;
