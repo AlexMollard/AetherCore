@@ -13,9 +13,14 @@
 #include <imgui.h>
 
 #include "Color.hpp"
+#include "assets/AssetManager.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
+#include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"
+#include "material/TextureRegistry.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
@@ -776,11 +781,28 @@ namespace aether::editor
 			drawList->AddRect(canvasMin, canvasMax, ToU32(colors::Border), 0.f, 0, 1.5f);
 		}
 
-		void DrawPreviewElement(ImDrawList* drawList, World& world, const UiElement& element, float zoom)
+		void DrawPreviewElement(ImDrawList* drawList, World& world, const UiElement& element, float zoom, ImTextureID texId)
 		{
 			if (const auto* image = world.TryGet<ui::UIImage>(element.entity))
 			{
-				drawList->AddRectFilled(element.min, element.max, ToU32(image->color), image->cornerRadius * zoom);
+				const ImU32 tint = ToU32(image->color);
+				const float rounding = image->cornerRadius * zoom;
+				if (texId != ImTextureID_Invalid)
+				{
+					// Render the real texture tinted by the image colour, matching the game viewport.
+					if (rounding > 0.f)
+					{
+						drawList->AddImageRounded(texId, element.min, element.max, ImVec2(0.f, 0.f), ImVec2(1.f, 1.f), tint, rounding);
+					}
+					else
+					{
+						drawList->AddImage(texId, element.min, element.max, ImVec2(0.f, 0.f), ImVec2(1.f, 1.f), tint);
+					}
+				}
+				else
+				{
+					drawList->AddRectFilled(element.min, element.max, tint, rounding);
+				}
 			}
 
 			const auto* text = world.TryGet<ui::UIText>(element.entity);
@@ -873,6 +895,51 @@ namespace aether::editor
 		World& world = context.Get<World>();
 		auto* selection = context.TryGet<SceneSelection>();
 		Entity canvas = ActiveCanvas(world, selection);
+
+		auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+		auto* assets = context.TryGet<aether::AssetManager>();
+		aether::TextureRegistry* textures = assets != nullptr ? &assets->GetTextureRegistry() : nullptr;
+		auto resolveTexId = [&](const UiElement& element) -> ImTextureID
+		{
+			if (imgui == nullptr || textures == nullptr)
+			{
+				return ImTextureID_Invalid;
+			}
+			const auto* image = world.TryGet<ui::UIImage>(element.entity);
+			if (image == nullptr || image->texturePath.empty())
+			{
+				return ImTextureID_Invalid;
+			}
+			if (auto it = m_texturePreviews.find(image->texturePath); it != m_texturePreviews.end())
+			{
+				return it->second;
+			}
+			// Mirror the file-explorer preview path: resolve the bindless slot, skip the
+			// fallback (magenta) slot so a not-yet-loaded texture just retries next frame,
+			// then pull the sampled view from the debug-texture registry (GetView() is the
+			// wrong view for an ImGui descriptor and samples white).
+			const TextureHandle handle = textures->Acquire(image->texturePath);
+			const std::uint32_t slot = textures->ResolveSlot(handle);
+			const std::uint32_t fallbackSlot = textures->ResolveSlot(textures->DefaultHandle());
+			if (!handle.IsValid() || slot == 0xFFFFFFFFu || slot == fallbackSlot)
+			{
+				return ImTextureID_Invalid;
+			}
+			for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
+			{
+				if (info.hasBindlessSampled && info.bindlessSampledSlot == slot && info.view != nullptr)
+				{
+					const ImTextureID id = imgui->RegisterTexture(info.view, gpu::ImageLayout::ShaderReadOnly);
+					if (id != ImTextureID_Invalid)
+					{
+						m_texturePreviews.emplace(image->texturePath, id);
+						return id;
+					}
+					break;
+				}
+			}
+			return ImTextureID_Invalid;
+		};
 
 		if (ImGui::Button(ICON_FA_PLUS "  Add Element"))
 		{
@@ -1008,7 +1075,7 @@ namespace aether::editor
 			drawList->AddRectFilled(canvasMin, canvasMax, ToU32(colors::Background));
 			for (const UiElement& element: elements)
 			{
-				DrawPreviewElement(drawList, world, element, m_zoom);
+				DrawPreviewElement(drawList, world, element, m_zoom, resolveTexId(element));
 			}
 		}
 		DrawGrid(drawList, canvasMin, canvasMax, origin, m_pan, m_zoom, extent);

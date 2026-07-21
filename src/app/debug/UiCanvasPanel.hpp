@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 
 #include <glm/vec2.hpp>
 #include <imgui.h>
@@ -84,5 +86,11 @@ namespace aether::editor
 		ImVec2 m_marqueeStart{0.f, 0.f};
 		ImVec2 m_marqueeEnd{0.f, 0.f};
 		std::vector<DragOrigin> m_multiDragOrigins;
+
+		// ImGui texture ids registered for UI-image previews, keyed by the image's
+		// texture path. Lets the preview draw real textures like the game viewport
+		// instead of a flat colour. The path is acquired once (kept for the session)
+		// and its descriptor is reclaimed when the ImGui subsystem tears down.
+		std::unordered_map<std::string, ImTextureID> m_texturePreviews;
 	};
 } // namespace aether::editor
