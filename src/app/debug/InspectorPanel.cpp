@@ -31,6 +31,7 @@
 #include "utils/Logger.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
+#include "ui/UiComponents.hpp"
 #include "material/MaterialSystem.hpp"
 #include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
@@ -178,10 +179,24 @@ namespace aether::editor
 			return "Entity #" + std::to_string(entity.id);
 		}
 
+		// Drop a .slang onto a UI Effect entity to set its shader (by stem, e.g. "ui_ink").
+		bool AssignShaderToEntity(World& world, Entity entity, const std::string& path)
+		{
+			auto* fx = world.TryGet<ui::UIEffect>(entity);
+			if (fx == nullptr)
+			{
+				return false;
+			}
+			fx->shader = std::filesystem::path(path).stem().string();
+			return true;
+		}
+
 		bool ApplyFilePayloadToEntity(app::LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
 		{
 			switch (payload.kind)
 			{
+				case dragdrop::FileKind::Shader:
+					return AssignShaderToEntity(world, entity, payload.path);
 				case dragdrop::FileKind::Model:
 					if (AssignModelAsset(context, world, entity, payload.path))
 					{

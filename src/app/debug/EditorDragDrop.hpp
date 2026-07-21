@@ -17,6 +17,7 @@ namespace aether::editor::dragdrop
 		Script,
 		Prefab,
 		Scene,
+		Shader,
 	};
 
 	struct ScriptPayload

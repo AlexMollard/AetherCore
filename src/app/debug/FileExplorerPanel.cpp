@@ -81,6 +81,10 @@ namespace aether::editor
 			{
 				return dragdrop::FileKind::Texture;
 			}
+			if (ext == ".slang")
+			{
+				return dragdrop::FileKind::Shader;
+			}
 			if (ext == ".toml")
 			{
 				const std::string generic = path.generic_string();
@@ -166,6 +170,8 @@ namespace aether::editor
 					return ICON_FA_PALETTE;
 				case dragdrop::FileKind::Script:
 					return ICON_FA_CODE;
+				case dragdrop::FileKind::Shader:
+					return ICON_FA_WAND_MAGIC_SPARKLES;
 				case dragdrop::FileKind::Unknown:
 				default:
 					return ICON_FA_FILE;
@@ -192,6 +198,8 @@ namespace aether::editor
 					return ImVec4(0.92f, 0.62f, 0.55f, 1.0f);
 				case dragdrop::FileKind::Script:
 					return chrome::kAccentHi;
+				case dragdrop::FileKind::Shader:
+					return ImVec4(0.48f, 0.80f, 0.96f, 1.0f);
 				case dragdrop::FileKind::Unknown:
 				default:
 					return chrome::kFaint;
