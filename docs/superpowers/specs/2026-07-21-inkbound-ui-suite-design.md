@@ -23,7 +23,7 @@ This is the first sub-project of the larger INKBOUND effort. Explicitly **out of
 | Settings depth | **Wire what's wireable** — Ink Glow and Screen Shake do real things; Music/SFX persist but stay inert (no audio system yet). |
 | Fonts | Keep **PixelStorm** for headings/labels; **bake IBM Plex Mono** (Regular + Italic) for the italic "voice" (taglines, gloss, dialogue). |
 | Architecture | **One `Menu` scene + state machine** (Title/LevelSelect/Settings roots toggled by a controller); instant transitions; shared shell. |
-| Build method | **Author UI structure via the 2D-authoring MCP** into `Menu.scene.toml` (persisted, editor-visible); **scripts drive behavior/animation only**. |
+| Build method | **Author UI structure via the 2D-authoring MCP** into `Menu.scene.toml` (persisted, editor-visible); **scripts drive behavior/animation only**. *Prerequisite:* the engine's MCP can't author UI today (UI Image unreflected; UI components `NOT_ADDABLE`) — Phase 0 of the plan reflects UI Image and makes the UI components addable. |
 | Composition | **Full-window**, preserving the deliberate off-center / left-aligned layout; drop the mockup's literal device bezel (a presentation artifact). |
 | Level unlock | **All unlocked (dev-friendly)** — nodes 1–4 → Level1–4 all playable; nodes 5–6 locked placeholders; real progression deferred. |
 | Ink accent | Cyan `#4DD9FF` constant (storyboard default); Ink Glow scales its glow. |
