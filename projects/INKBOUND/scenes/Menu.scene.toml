@@ -71,7 +71,7 @@ position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_image]
-    color = [ 0.0, 0.0, 0.0, 0.5 ]
+    color = [ 1.0, 1.0, 1.0, 0.5 ]
     corner_radius = 0.0
     pixel_art = true
     texture = 'project://assets/textures/ui/scanlines.png'
@@ -91,7 +91,7 @@ position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_image]
-    color = [ 0.0, 0.0, 0.0, 1.0 ]
+    color = [ 1.0, 1.0, 1.0, 1.0 ]
     corner_radius = 0.0
     pixel_art = false
     texture = 'project://assets/textures/ui/vignette.png'
