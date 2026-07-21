@@ -328,7 +328,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 22.0
-    text = 'â€” a new dark'
+    text = '- a new dark'
     v_align = 'middle'
     wrap = false
 
@@ -393,7 +393,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 22.0
-    text = 'â€” to where you left it'
+    text = '- to where you left it'
     v_align = 'middle'
     wrap = false
 
@@ -458,7 +458,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 22.0
-    text = 'â€” settings'
+    text = '- settings'
     v_align = 'middle'
     wrap = false
 
@@ -523,7 +523,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 22.0
-    text = 'â€” quit'
+    text = '- quit'
     v_align = 'middle'
     wrap = false
 
@@ -546,7 +546,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 17.0
-    text = "build 0.0.1 â€” this wasn't supposed to ship"
+    text = "build 0.0.1 - this wasn't supposed to ship"
     v_align = 'middle'
     wrap = false
 
