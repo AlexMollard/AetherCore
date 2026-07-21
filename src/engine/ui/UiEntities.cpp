@@ -85,4 +85,88 @@ namespace aether::ui
 		ecs::SetParent(world, textEntity, canvas);
 		return textEntity;
 	}
+
+	Entity CreateSliderEntity(World& world, Entity canvas)
+	{
+		canvas = EnsureCanvas(world, canvas);
+
+		const Entity e = world.Create();
+		world.Emplace<NameComponent>(e, NameComponent{.name = "Slider"});
+		world.Emplace<HierarchyComponent>(e);
+
+		auto& rect = world.Emplace<UIRect>(e);
+		rect.anchorMin = {0.5f, 0.5f};
+		rect.anchorMax = {0.5f, 0.5f};
+		rect.offsetMin = {-110.f, -12.f};
+		rect.offsetMax = {110.f, 12.f};
+
+		world.Emplace<UISlider>(e);
+		world.Emplace<UISelectable>(e);
+
+		ecs::SetParent(world, e, canvas);
+		return e;
+	}
+
+	Entity CreateToggleEntity(World& world, Entity canvas)
+	{
+		canvas = EnsureCanvas(world, canvas);
+
+		const Entity e = world.Create();
+		world.Emplace<NameComponent>(e, NameComponent{.name = "Toggle"});
+		world.Emplace<HierarchyComponent>(e);
+
+		auto& rect = world.Emplace<UIRect>(e);
+		rect.anchorMin = {0.5f, 0.5f};
+		rect.anchorMax = {0.5f, 0.5f};
+		rect.offsetMin = {-26.f, -13.f};
+		rect.offsetMax = {26.f, 13.f};
+
+		world.Emplace<UIToggle>(e);
+		world.Emplace<UISelectable>(e);
+
+		ecs::SetParent(world, e, canvas);
+		return e;
+	}
+
+	Entity CreateButtonEntity(World& world, Entity canvas)
+	{
+		canvas = EnsureCanvas(world, canvas);
+
+		const Entity e = world.Create();
+		world.Emplace<NameComponent>(e, NameComponent{.name = "Button"});
+		world.Emplace<HierarchyComponent>(e);
+
+		auto& rect = world.Emplace<UIRect>(e);
+		rect.anchorMin = {0.5f, 0.5f};
+		rect.anchorMax = {0.5f, 0.5f};
+		rect.offsetMin = {-120.f, -24.f};
+		rect.offsetMax = {120.f, 24.f};
+
+		auto& btn = world.Emplace<UIButton>(e);
+		btn.label = "Button";
+		world.Emplace<UISelectable>(e);
+
+		ecs::SetParent(world, e, canvas);
+		return e;
+	}
+
+	Entity CreateProgressBarEntity(World& world, Entity canvas)
+	{
+		canvas = EnsureCanvas(world, canvas);
+
+		const Entity e = world.Create();
+		world.Emplace<NameComponent>(e, NameComponent{.name = "ProgressBar"});
+		world.Emplace<HierarchyComponent>(e);
+
+		auto& rect = world.Emplace<UIRect>(e);
+		rect.anchorMin = {0.5f, 0.5f};
+		rect.anchorMax = {0.5f, 0.5f};
+		rect.offsetMin = {-110.f, -8.f};
+		rect.offsetMax = {110.f, 8.f};
+
+		world.Emplace<UIProgressBar>(e);
+
+		ecs::SetParent(world, e, canvas);
+		return e;
+	}
 } // namespace aether::ui
