@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -171,5 +172,13 @@ namespace aether::app
 		double m_lastFrameSeconds = 0.0;
 		std::uint64_t m_playFrameCount = 0;
 		float m_timeScale = 1.0f;
+	};
+
+	// Optional service the editor registers so a Play session recompiles project shaders (and
+	// refreshes the shaders:// overlay) right alongside the C# script rebuild - keeping shader
+	// hot-reload in step with script hot-reload. Absent in shipped/headless runs.
+	struct ProjectShaderRecompileHook
+	{
+		std::function<void()> recompile;
 	};
 } // namespace aether::app

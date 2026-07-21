@@ -89,9 +89,19 @@ namespace aether::ui
 		bool m_defaultFontReady = false;
 		// Font names whose atlas upload was attempted (success or not) - one try each.
 		std::unordered_set<std::string> m_fontsTried;
+		// Effect pipelines retired after a shader overlay change; destroyed a few frames later
+		// (they may still be referenced by in-flight command buffers).
+		struct RetiringPipeline
+		{
+			gpu::PipelineHandle pipeline{};
+			int framesLeft = 0;
+		};
+
 		gpu::PipelineHandle m_pipeline{};
 		gpu::Format m_colorFormat{};
 		std::unordered_map<std::string, gpu::PipelineHandle> m_effectPipelines;
+		std::vector<RetiringPipeline> m_effectPipelinesRetiring;
+		std::uint64_t m_shaderGen = 0;
 		std::array<Frame, kFrames> m_frames{};
 		std::vector<UiDrawCommand> m_scratch;
 	};

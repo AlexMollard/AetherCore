@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include "PlayState.hpp"
 #include "debug/ProjectLauncherWindow.hpp"
 #include "editor/EditorProjectActions.hpp"
 #include "editor/EditorProjectContext.hpp"
@@ -60,6 +61,7 @@ namespace aether::editor
 		app::EditorProjectContext m_currentProject;
 		bool m_scriptBuildPending = false;
 		int m_previewCaptureCountdown = 0;
+		app::ProjectShaderRecompileHook m_shaderRecompileHook; // registered so Play recompiles shaders
 		EditorProjectActions m_actions;
 		app::scene::ModelBakeHook m_bakeHook;
 		ServiceContainer* m_services = nullptr;

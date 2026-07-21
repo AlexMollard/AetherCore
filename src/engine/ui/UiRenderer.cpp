@@ -117,6 +117,14 @@ namespace aether::ui
 			}
 		}
 		m_effectPipelines.clear();
+		for (RetiringPipeline& retiring: m_effectPipelinesRetiring)
+		{
+			if (retiring.pipeline.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(retiring.pipeline);
+			}
+		}
+		m_effectPipelinesRetiring.clear();
 
 		if (m_defaultFontAtlas.IsValid())
 		{
@@ -326,6 +334,35 @@ namespace aether::ui
 		frame.effects.clear();
 		// thread later executes the pass.
 		frame.extent = outputExtent;
+
+		// When the shader overlay changes (a project shader recompiled), retire cached effect
+		// pipelines so they rebuild from the fresh .spv; destroy the old ones a few frames later
+		// once no in-flight command buffer can still reference them.
+		if (const std::uint64_t gen = io::FileSystem::ShaderOverlayGeneration(); gen != m_shaderGen)
+		{
+			m_shaderGen = gen;
+			for (auto& [name, pipe]: m_effectPipelines)
+			{
+				if (pipe.IsValid())
+				{
+					m_effectPipelinesRetiring.push_back({pipe, static_cast<int>(kFrames) + 1});
+				}
+			}
+			m_effectPipelines.clear();
+		}
+		for (std::size_t i = 0; i < m_effectPipelinesRetiring.size();)
+		{
+			if (--m_effectPipelinesRetiring[i].framesLeft <= 0)
+			{
+				gpu::ResourceRegistry::Destroy(m_effectPipelinesRetiring[i].pipeline);
+				m_effectPipelinesRetiring[i] = m_effectPipelinesRetiring.back();
+				m_effectPipelinesRetiring.pop_back();
+			}
+			else
+			{
+				++i;
+			}
+		}
 
 		if (m_world == nullptr)
 		{

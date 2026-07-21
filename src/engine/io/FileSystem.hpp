@@ -34,6 +34,11 @@ namespace aether::io
 
 		static void MountShaderOverlay(std::optional<OverlayBackend::Layer> projectLayer);
 
+		// Bumped every time the shader overlay is (re)mounted (e.g. after a project shader
+		// recompile). Consumers that cache compiled-shader pipelines poll this to know when to
+		// rebuild them from the fresh .spv. Thread-safe.
+		[[nodiscard]] static std::uint64_t ShaderOverlayGeneration();
+
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
 		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFile(std::string_view virtualPath);

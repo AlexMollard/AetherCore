@@ -64,6 +64,14 @@ namespace aether::app
 			return false;
 		}
 
+		// Recompile project shaders (editor-provided hook) so shader edits are picked up on Play,
+		// the same way the C# scripts are rebuilt below. Refreshing the overlay bumps the shader
+		// generation, which makes the renderer rebuild effect pipelines from the fresh .spv.
+		if (auto* shaderHook = context.TryGet<ProjectShaderRecompileHook>(); shaderHook != nullptr && shaderHook->recompile)
+		{
+			shaderHook->recompile();
+		}
+
 		if (auto* scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
 		{
 			// Kick the rebuild off on a worker thread and enter Compiling. The editor

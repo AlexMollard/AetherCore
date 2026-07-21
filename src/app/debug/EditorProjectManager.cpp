@@ -127,10 +127,26 @@ namespace aether::editor
 			return editor::EnsureModelBaked(vfsModelPath, m_currentProject, error);
 		};
 		services.Register<app::scene::ModelBakeHook>(m_bakeHook);
+
+		// A Play session recompiles project shaders through this hook (see PlaySession.cpp),
+		// so shader edits hot-reload on Play just like C# scripts. Guarded on toolchain
+		// availability and a loaded project, and a no-op when neither holds.
+		m_shaderRecompileHook.recompile = [this]()
+		{
+			if (CanCompileShaders() && m_currentProject.IsLoaded())
+			{
+				CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
+			}
+		};
+		services.Register<app::ProjectShaderRecompileHook>(m_shaderRecompileHook);
 	}
 
 	void EditorProjectManager::Detach()
 	{
+		if (m_services != nullptr)
+		{
+			m_services->Unregister<app::ProjectShaderRecompileHook>();
+		}
 		if (m_logoTextureId != 0 && m_services != nullptr)
 		{
 			if (auto* imgui = m_services->TryGet<ImguiSubsystem>())

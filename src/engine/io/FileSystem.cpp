@@ -8,6 +8,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <thread>
@@ -464,6 +466,11 @@ namespace aether::io
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
 	}
 
+	namespace
+	{
+		std::atomic<std::uint64_t> s_shaderOverlayGen{0};
+	}
+
 	void FileSystem::MountShaderOverlay(std::optional<OverlayBackend::Layer> projectLayer)
 	{
 		AE_PROFILE_ZONE();
@@ -484,6 +491,12 @@ namespace aether::io
 		}
 		shaderLayers.push_back(*s_backend->engineShaderLayer);
 		MountBackend("shaders", std::make_shared<OverlayBackend>(std::move(shaderLayers)));
+		s_shaderOverlayGen.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	std::uint64_t FileSystem::ShaderOverlayGeneration()
+	{
+		return s_shaderOverlayGen.load(std::memory_order_relaxed);
 	}
 
 	bool FileSystem::Exists(std::string_view virtualPath)
