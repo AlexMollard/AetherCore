@@ -15,5 +15,5 @@ namespace aether::ui
 	class FontRegistry;
 
 	// UIRect::resolvedRect, does not resolve layout itself.
-	void BuildDrawCommands(World& world, std::vector<UiDrawCommand>& out, FontRegistry* fonts = nullptr, const TextureRegistry* textures = nullptr);
+	void BuildDrawCommands(World& world, std::vector<UiDrawCommand>& out, FontRegistry* fonts = nullptr, TextureRegistry* textures = nullptr);
 } // namespace aether::ui

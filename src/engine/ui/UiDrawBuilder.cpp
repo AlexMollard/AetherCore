@@ -57,7 +57,7 @@ namespace aether::ui
 	}
 
 	// shared across the whole canvas, so it must be threaded through by reference.
-	static void Walk(World& world, Entity entity, FontRegistry* fonts, const TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out)
+	static void Walk(World& world, Entity entity, FontRegistry* fonts, TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out)
 	{
 		// walk simply stops recursing, so its children never emit either.
 		if (world.Has<DisabledComponent>(entity))
@@ -67,8 +67,20 @@ namespace aether::ui
 
 		if (const auto* rect = world.TryGet<UIRect>(entity))
 		{
-			if (const auto* img = world.TryGet<UIImage>(entity))
+			if (auto* img = world.TryGet<UIImage>(entity))
 			{
+				// Lazily resolve an authored texturePath to a handle (set via reflection/MCP,
+				// serde, or the native setter). Done here because this is where a mutable
+				// TextureRegistry meets the component each frame.
+				if (img->textureDirty && textures != nullptr)
+				{
+					if (img->texture.IsValid())
+					{
+						textures->Release(img->texture);
+					}
+					img->texture = img->texturePath.empty() ? TextureHandle{} : textures->Acquire(img->texturePath);
+					img->textureDirty = false;
+				}
 				EmitImage(*rect, *img, textures, layer++, out);
 			}
 			if (fonts != nullptr)
@@ -89,7 +101,7 @@ namespace aether::ui
 		}
 	}
 
-	void BuildDrawCommands(World& world, std::vector<UiDrawCommand>& out, FontRegistry* fonts, const TextureRegistry* textures)
+	void BuildDrawCommands(World& world, std::vector<UiDrawCommand>& out, FontRegistry* fonts, TextureRegistry* textures)
 	{
 		out.clear();
 		int layer = 0;

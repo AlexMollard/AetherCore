@@ -67,7 +67,7 @@ namespace aether::ui
 		World* m_world = nullptr;
 		GpuDevice* m_gpu = nullptr;
 		gpu::UploadContext* m_upload = nullptr;
-		const TextureRegistry* m_textures = nullptr;
+		TextureRegistry* m_textures = nullptr;
 		FontRegistry m_fontRegistry;
 		gpu::TextureHandle m_defaultFontAtlas{};
 		bool m_defaultFontReady = false;
