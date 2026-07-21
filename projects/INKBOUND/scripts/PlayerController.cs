@@ -63,7 +63,7 @@ public sealed class PlayerController : EntityScript
         // still produces exactly one.
         if (Instance != null && Instance != this)
         {
-            Log.Info("[CoinDash] Duplicate player removed (a persistent one already exists)");
+            Log.Info("[INKBOUND] Duplicate player removed (a persistent one already exists)");
             Self.Destroy();
             return;
         }
@@ -232,7 +232,7 @@ public sealed class PlayerController : EntityScript
         // plus a ground puff at the feet.
         Scene.Instantiate("DeathBurst", new Vector3(Self.Position.X, Self.Position.Y, 0.0f));
         Scene.Instantiate("Dust", new Vector3(Self.Position.X, Self.Position.Y - 0.5f, 0.0f));
-        Log.Info("[CoinDash] Player down - respawning at the checkpoint.");
+        Log.Info("[INKBOUND] Player down - respawning at the checkpoint.");
     }
 
     /// <summary>Per-frame death beat: the corpse shrinks and fades as it falls, then

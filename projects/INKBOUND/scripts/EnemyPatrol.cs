@@ -80,11 +80,11 @@ public sealed class EnemyPatrol : EntityScript
             SpriteAnimator.Play(Self);
             player.Bounce();
             CameraFollow.Instance?.AddShake(0.07f); // subtle kill feedback
-            Log.Info("[CoinDash] Enemy stomped!");
+            Log.Info("[INKBOUND] Enemy stomped!");
         }
         else
         {
-            Log.Info("[CoinDash] Ouch! The slime got you.");
+            Log.Info("[INKBOUND] Ouch! The slime got you.");
             player.Die();
         }
     }

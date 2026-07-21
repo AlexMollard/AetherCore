@@ -21,7 +21,7 @@ public sealed class Hazard : EntityScript
         {
             return;
         }
-        Log.Info("[CoinDash] Ouch - hazard!");
+        Log.Info("[INKBOUND] Ouch - hazard!");
         player.Die();
     }
 }

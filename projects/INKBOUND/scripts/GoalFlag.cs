@@ -35,7 +35,7 @@ public sealed class GoalFlag : EntityScript
     private IEnumerator LoadNextScene()
     {
         yield return new WaitForSeconds(NextSceneDelay);
-        Log.Info($"[CoinDash] Loading '{NextScene}'...");
+        Log.Info($"[INKBOUND] Loading '{NextScene}'...");
         Scene.Load(NextScene);
     }
 }

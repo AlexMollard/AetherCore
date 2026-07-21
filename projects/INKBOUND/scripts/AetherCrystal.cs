@@ -65,6 +65,6 @@ public sealed class AetherCrystal : EntityScript
         _collected = true;
         _respawnTimer = RespawnDelay;
         SpriteRenderer.SetTint(Self, new Vector4(_baseTint.X, _baseTint.Y, _baseTint.Z, 0.0f)); // hide until respawn
-        Log.Info($"[CoinDash] Aether crystal collected (+{RefillAmount})");
+        Log.Info($"[INKBOUND] Aether crystal collected (+{RefillAmount})");
     }
 }

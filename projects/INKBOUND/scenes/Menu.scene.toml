@@ -1,4 +1,4 @@
-# CoinDash title screen. Startup scene; MainMenu loads Level1 on PLAY.
+# INKBOUND title screen. Startup scene; MainMenu loads Level1 on PLAY.
 [scene]
 features = [ 'sprites', 'tilemaps', 'physics_2d', 'meshes_3d', 'lighting_3d', 'navigation', 'physics_3d' ]
 kind = '2d'
@@ -66,7 +66,7 @@ parent = 1
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    text = 'COIN DASH'
+    text = 'INKBOUND'
     font = 'PixelStorm'
     pixel_size = 170.0
     color = [ 1.0, 0.86, 0.28, 1.0 ]

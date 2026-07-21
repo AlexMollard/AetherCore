@@ -40,7 +40,7 @@ public static class GameState
     {
         Coins++;
         TotalCoins++;
-        Log.Info($"[CoinDash] Coin {Coins} collected! ({TotalCoins} this run)");
+        Log.Info($"[INKBOUND] Coin {Coins} collected! ({TotalCoins} this run)");
     }
 
     public static void Win()
@@ -50,6 +50,6 @@ public static class GameState
             return;
         }
         Won = true;
-        Log.Info($"[CoinDash] Level complete with {Coins} coins ({TotalCoins} this run)!");
+        Log.Info($"[INKBOUND] Level complete with {Coins} coins ({TotalCoins} this run)!");
     }
 }

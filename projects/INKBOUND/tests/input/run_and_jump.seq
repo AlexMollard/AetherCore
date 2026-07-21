@@ -1,4 +1,4 @@
-# Auto-test input sequence for CoinDash.
+# Auto-test input sequence for INKBOUND.
 # Format: <time_seconds> <op> [keys...]
 #   op = hold   -> press keys and keep them held
 #        release-> release keys ("release all" releases everything)

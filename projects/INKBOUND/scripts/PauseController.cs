@@ -72,7 +72,7 @@ public sealed class PauseController : EntityScript
         _paused = true;
         Time.Pause();
         ShowOverlay(true);
-        Log.Info("[CoinDash] Paused.");
+        Log.Info("[INKBOUND] Paused.");
     }
 
     private void Resume()
@@ -80,7 +80,7 @@ public sealed class PauseController : EntityScript
         _paused = false;
         Time.Resume();
         ShowOverlay(false);
-        Log.Info("[CoinDash] Resumed.");
+        Log.Info("[INKBOUND] Resumed.");
     }
 
     private void ShowOverlay(bool on)

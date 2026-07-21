@@ -33,6 +33,6 @@ public sealed class Checkpoint : EntityScript
         Vector3 here = Self.Position;
         player.SetCheckpoint(new Vector3(here.X, here.Y + SpawnYOffset, here.Z));
         SpriteRenderer.SetTint(Self, new Vector4(0.4f, 1.0f, 0.5f, 1.0f)); // lit green
-        Log.Info("[CoinDash] Checkpoint reached!");
+        Log.Info("[INKBOUND] Checkpoint reached!");
     }
 }

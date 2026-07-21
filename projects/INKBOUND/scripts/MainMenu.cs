@@ -49,7 +49,7 @@ public sealed class MainMenu : EntityScript
                      || Input.IsKeyPressed(Key.Space);
         if (start)
         {
-            Log.Info($"[CoinDash] Starting '{StartScene}'");
+            Log.Info($"[INKBOUND] Starting '{StartScene}'");
             Scene.Load(StartScene);
         }
     }

@@ -40,7 +40,7 @@ public sealed class SpringPad : EntityScript
         _cooldown = Cooldown;
         _squash = 0.55f;
         CameraFollow.Instance?.AddShake(0.04f);
-        Log.Info("[CoinDash] Boing!");
+        Log.Info("[INKBOUND] Boing!");
     }
 
     public override void OnUpdate(float deltaTime)

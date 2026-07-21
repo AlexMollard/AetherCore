@@ -1,4 +1,4 @@
-# CoinDash HUD - the single source of truth for every level's UI.
+# INKBOUND HUD - the single source of truth for every level's UI.
 # PlayerController spawns it at runtime (Scene.Instantiate("GameHud")), so all
 # levels share one layout; HudController drives the live values.
 [[entities]]
