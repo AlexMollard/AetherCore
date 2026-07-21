@@ -60,6 +60,7 @@ namespace aether::ui
 			glm::vec4 params{0.f};
 			glm::vec4 color0{0.f};
 			glm::vec4 color1{0.f};
+			bool background = false;
 		};
 
 		struct Frame

@@ -349,7 +349,7 @@ namespace aether::ui
 			{
 				continue;
 			}
-			frame.effects.push_back({pipe, rect.resolvedRect, effect.params, effect.color0, effect.color1});
+			frame.effects.push_back({pipe, rect.resolvedRect, effect.params, effect.color0, effect.color1, effect.background});
 		}
 
 		// Lazily upload the atlas of every font the scene's text references -
@@ -408,6 +408,32 @@ namespace aether::ui
 
 			                gpu::CommandList& cmd = ctx.recorder;
 
+			                const auto drawEffect = [&](const EffectDraw& fx)
+			                {
+				                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(fx.pipeline);
+				                cmd.BindPipeline(resolved.state);
+				                bindless.CmdBindHeaps(cmd);
+
+				                const EffectPush push{
+				                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
+				                        .rect = fx.rect,
+				                        .params = fx.params,
+				                        .color0 = fx.color0,
+				                        .color1 = fx.color1,
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(6, 1, 0, 0);
+			                };
+
+			                // Background effects (menu backdrops) draw behind the batched UI.
+			                for (const EffectDraw& fx: frame.effects)
+			                {
+				                if (fx.background)
+				                {
+					                drawEffect(fx);
+				                }
+			                }
+
 			                // Batched UI shapes (one instanced draw of the whole command list).
 			                if (frame.count != 0 && m_pipeline.IsValid())
 			                {
@@ -425,22 +451,13 @@ namespace aether::ui
 				                cmd.Draw(6, frame.count, 0, 0);
 			                }
 
-			                // Custom-shader effects, each with its own pipeline, on top.
+			                // Overlay effects (transitions) draw on top of the batched UI.
 			                for (const EffectDraw& fx: frame.effects)
 			                {
-				                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(fx.pipeline);
-				                cmd.BindPipeline(resolved.state);
-				                bindless.CmdBindHeaps(cmd);
-
-				                const EffectPush push{
-				                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
-				                        .rect = fx.rect,
-				                        .params = fx.params,
-				                        .color0 = fx.color0,
-				                        .color1 = fx.color1,
-				                };
-				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
-				                cmd.Draw(6, 1, 0, 0);
+				                if (!fx.background)
+				                {
+					                drawEffect(fx);
+				                }
 			                }
 		                });
 	}

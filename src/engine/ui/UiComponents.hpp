@@ -143,9 +143,10 @@ namespace aether::ui
 	// entities that carry this, so an effect element emits nothing into ui_shapes.
 	struct UIEffect
 	{
-		std::string shader;    // e.g. "ui_ink" -> shaders://ui_ink.spv
-		glm::vec4 params{0.f}; // shader-defined (ink: coverage, time, noiseAmp, edgeWidth)
-		glm::vec4 color0{0.f}; // shader-defined (ink: ink body colour)
-		glm::vec4 color1{0.f}; // shader-defined (ink: edge/rim colour)
+		std::string shader;      // e.g. "ui_ink" -> shaders://ui_ink.spv
+		glm::vec4 params{0.f};   // shader-defined (ink: coverage, time, noiseAmp, edgeWidth)
+		glm::vec4 color0{0.f};   // shader-defined (ink: ink body colour)
+		glm::vec4 color1{0.f};   // shader-defined (ink: edge/rim colour)
+		bool background = false; // true = drawn BEHIND the batched UI (menu backdrops); false = on top (overlays)
 	};
 } // namespace aether::ui

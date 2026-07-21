@@ -22,6 +22,7 @@ using UiSliderComponent = aether::ui::UISlider;
 using UiToggleComponent = aether::ui::UIToggle;
 using UiButtonComponent = aether::ui::UIButton;
 using UiProgressBarComponent = aether::ui::UIProgressBar;
+using UiEffectComponent = aether::ui::UIEffect;
 
 namespace
 {
@@ -277,5 +278,26 @@ AE_FIELD_N("track_color", trackColor, Color4)
 AE_FIELD_N("fill_color", fillColor, Color4)
 AE_FIELD_N("corner_radius", cornerRadius, Float)
 b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, false); });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiEffectComponent, "UI Effect", "UI", ICON_FA_WAND_MAGIC_SPARKLES)
+AE_FIELD_N("shader", shader, String)
+AE_FIELD_N("color0", color0, Color4)
+AE_FIELD_N("color1", color1, Color4)
+AE_FIELD_N("background", background, Bool)
+b.PostSet(
+        [](World& w, Entity e)
+        {
+	        // Effects are full-screen quads; ensure a stretched UIRect so a bare add just works.
+	        if (!w.Has<aether::ui::UIRect>(e))
+	        {
+		        auto& r = w.Emplace<aether::ui::UIRect>(e);
+		        r.anchorMin = {0.f, 0.f};
+		        r.anchorMax = {1.f, 1.f};
+		        r.offsetMin = {0.f, 0.f};
+		        r.offsetMax = {0.f, 0.f};
+	        }
+        });
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
