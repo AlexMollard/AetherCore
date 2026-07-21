@@ -124,17 +124,36 @@ namespace aether::editor
 			return false;
 		}
 
-		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS " -o " + Quoted(outFile) + " " + Quoted(slangFile);
+		// Compile to a temp file and only promote it over the real .spv on success. A failed,
+		// crashed, or interrupted slangc then never leaves the shaders:// overlay serving a
+		// partial or truncated binary - the last-good .spv survives untouched, so a broken edit
+		// keeps rendering the previous shader instead of feeding garbage SPIR-V to Vulkan.
+		// (Format is fixed by "-target spirv" in AETHER_SLANG_ARGS, so the .tmp extension is safe.)
+		const fs::path tmpFile = outDir / (slangFile.stem().string() + ".spv.tmp");
+		std::error_code tmpEc;
+		fs::remove(tmpFile, tmpEc); // clear any leftover temp from a previously interrupted run
+
+		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS " -o " + Quoted(tmpFile) + " " + Quoted(slangFile);
 		const fs::path logFile = outDir / (slangFile.stem().string() + ".slangc.log");
 		const int rc = io::RunProcessToLog(command, logFile);
 		if (rc != 0)
 		{
+			fs::remove(tmpFile, tmpEc); // discard partial output; keep the last-good outFile intact
 			std::string message = "slangc failed (exit " + std::to_string(rc) + ") on " + slangFile.filename().string() + ".";
 			if (const std::string excerpt = ReadLogExcerpt(logFile); !excerpt.empty())
 			{
 				message += " " + excerpt;
 			}
 			error = std::move(message);
+			return false;
+		}
+
+		std::error_code renameEc;
+		fs::rename(tmpFile, outFile, renameEc);
+		if (renameEc)
+		{
+			fs::remove(tmpFile, tmpEc);
+			error = "Could not replace shader output '" + outFile.filename().string() + "': " + renameEc.message();
 			return false;
 		}
 
