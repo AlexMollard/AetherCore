@@ -144,6 +144,13 @@ namespace aether::app::scene
 		// and PrefabLink route by this guid, so reordering a prefab's entities never
 		// misaligns overrides. 0 = unassigned (falls back to the entity index).
 		std::uint64_t guid = 0;
+		// Stable per-entity scene id (serialized as `node`), distinct from the prefab guid.
+		// `parent` is resolved from the parent's nodeId when available, so hand-editing entity
+		// order/membership in a .scene.toml does not corrupt parenting. 0 = unassigned (legacy).
+		std::uint64_t nodeId = 0;
+		// Transient: the parent's node id as read from `parent_node`, resolved to parentIndex after
+		// the whole entity list is parsed. 0 = not present (fall back to the positional `parent`).
+		std::uint64_t parentNodeId = 0;
 		std::string name;
 		std::vector<std::string> tags;
 		bool disabled = false;
@@ -278,6 +285,10 @@ namespace aether::app::scene
 	// Assign a fresh, stable guid to every entity that lacks one (max existing + 1).
 	// Existing guids are preserved, so reordering never remaps them. Called on save.
 	void AssignPrefabGuids(SceneDescription& prefab);
+
+	// A fresh random 64-bit scene-node id (never 0). Used to stamp entities that lack a stable
+	// SceneNodeComponent so scene parenting can reference nodes by id instead of array position.
+	std::uint64_t GenerateSceneNodeId();
 
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer = nullptr);
 

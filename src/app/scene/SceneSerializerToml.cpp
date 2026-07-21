@@ -824,6 +824,11 @@ namespace aether::app::scene
 			{
 				t.insert("guid", static_cast<std::int64_t>(rec.guid));
 			}
+			// Stable scene-node id (top-level scene entities only; prefab added-entities leave nodeId 0).
+			if (rec.nodeId != 0)
+			{
+				t.insert("node", static_cast<std::int64_t>(rec.nodeId));
+			}
 			if (!rec.tags.empty())
 			{
 				toml::array tags;
@@ -1031,7 +1036,19 @@ namespace aether::app::scene
 		toml::array entities;
 		for (const EntityRecord& rec: scene.entities)
 		{
-			entities.push_back(buildEntityTable(rec));
+			toml::table t = buildEntityTable(rec);
+			// Also reference the parent by its stable node id, so hand-editing entity order or
+			// membership in the .toml can't corrupt parenting; the positional `parent` stays as a
+			// legacy fallback for scenes saved before node ids existed.
+			if (rec.parentIndex >= 0 && static_cast<std::size_t>(rec.parentIndex) < scene.entities.size())
+			{
+				const std::uint64_t parentNode = scene.entities[static_cast<std::size_t>(rec.parentIndex)].nodeId;
+				if (parentNode != 0)
+				{
+					t.insert("parent_node", static_cast<std::int64_t>(parentNode));
+				}
+			}
+			entities.push_back(std::move(t));
 		}
 		root.insert("entities", std::move(entities));
 
@@ -1233,6 +1250,8 @@ namespace aether::app::scene
 			EntityRecord rec;
 			rec.name = tv["name"].value_or(std::string{});
 			rec.guid = static_cast<std::uint64_t>(tv["guid"].value_or(std::int64_t{0}));
+			rec.nodeId = static_cast<std::uint64_t>(tv["node"].value_or(std::int64_t{0}));
+			rec.parentNodeId = static_cast<std::uint64_t>(tv["parent_node"].value_or(std::int64_t{0}));
 			if (const auto* tags = tv["tags"].as_array())
 			{
 				for (const auto& tag: *tags)
@@ -1475,6 +1494,30 @@ namespace aether::app::scene
 				if (const auto* t = node.as_table())
 				{
 					scene.entities.push_back(parseEntityTable(*t));
+				}
+			}
+		}
+
+		// Resolve stable parent-by-node references to positional parent indices. When present and
+		// resolvable, `parent_node` wins over the legacy `parent` index - so a hand-edited .toml (an
+		// entity block deleted or reordered) keeps correct parenting even though the indices shifted.
+		{
+			std::unordered_map<std::uint64_t, int> nodeToIndex;
+			for (std::size_t i = 0; i < scene.entities.size(); ++i)
+			{
+				if (scene.entities[i].nodeId != 0)
+				{
+					nodeToIndex.emplace(scene.entities[i].nodeId, static_cast<int>(i));
+				}
+			}
+			for (EntityRecord& rec: scene.entities)
+			{
+				if (rec.parentNodeId != 0)
+				{
+					if (const auto it = nodeToIndex.find(rec.parentNodeId); it != nodeToIndex.end())
+					{
+						rec.parentIndex = it->second;
+					}
 				}
 			}
 		}

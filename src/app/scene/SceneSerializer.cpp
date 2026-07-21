@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -236,6 +237,17 @@ namespace aether::app::scene
 				e.guid = ++maxGuid;
 			}
 		}
+	}
+
+	std::uint64_t GenerateSceneNodeId()
+	{
+		static std::mt19937_64 rng{std::random_device{}()};
+		std::uint64_t id = 0;
+		while (id == 0) // 0 is the "unassigned" sentinel
+		{
+			id = rng();
+		}
+		return id;
 	}
 
 	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefabIn)

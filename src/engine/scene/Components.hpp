@@ -189,6 +189,16 @@ namespace aether
 		std::uint64_t prefabGuid = 0;
 	};
 
+	// Stable per-entity scene id, distinct from the prefab guid. Assigned on scene load (or on the
+	// next capture for entities created in-editor) and serialized as `node`; a scene entity's `parent`
+	// references its parent's node id (`parent_node`), so hand-deleting or reordering entity blocks in
+	// a .scene.toml no longer corrupts parenting the way positional indices did. Not reflected - the
+	// scene serializer persists it specially.
+	struct SceneNodeComponent
+	{
+		std::uint64_t id = 0;
+	};
+
 	struct ScriptPropertyValue
 	{
 		enum class Type : std::int32_t

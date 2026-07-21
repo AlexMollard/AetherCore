@@ -18,6 +18,7 @@ type = 'texture'
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Main Camera'
+node = -7298032120589555610
 parent = -1
 position = [ 8.0, 3.0, 10.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -43,6 +44,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 name = 'MenuUI'
+node = 4360251023798411520
 parent = -1
 
     [entities.ui_canvas]
@@ -66,7 +68,9 @@ parent = -1
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShellScanlines'
+node = 4179054414633999727
 parent = 1
+parent_node = 4360251023798411520
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -86,7 +90,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShellVignette'
+node = 3189907960195154093
 parent = 1
+parent_node = 4360251023798411520
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -106,7 +112,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsRoot'
+node = -5049363935602637638
 parent = 1
+parent_node = 4360251023798411520
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -123,7 +131,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsHeader'
+node = 989994936864212274
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -146,7 +156,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsBack'
+node = 6615657827783655451
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -176,7 +188,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsUnderline'
+node = 7299961597748424621
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -195,7 +209,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsSubtitle'
+node = -2609048680816985511
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -218,7 +234,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShakeLabel'
+node = 914122831765854087
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -241,7 +259,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShakeToggle'
+node = 3928266525306429591
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -267,7 +287,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'RedactLabel'
+node = 8351990184456779518
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -290,7 +312,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'RedactBars'
+node = -1384419891001574728
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -309,7 +333,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsFooter'
+node = -3305589321843920503
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -332,7 +358,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderMusicLabel'
+node = 1467490986486432780
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -355,7 +383,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderMusic'
+node = 843061328599021071
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -384,7 +414,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderSfxLabel'
+node = 1424412506924175904
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -407,7 +439,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderSfx'
+node = 7627379122288783453
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -436,7 +470,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderInkGlowLabel'
+node = -6421984203992270897
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -459,7 +495,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SliderInkGlow'
+node = -1453015123085419946
 parent = 4
+parent_node = -5049363935602637638
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -488,7 +526,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LevelSelectRoot'
+node = 5435090176886098998
 parent = 1
+parent_node = 4360251023798411520
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -505,7 +545,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSPathLine'
+node = 2485429639114576929
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -524,7 +566,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node0'
+node = -3285154860853679701
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -547,7 +591,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node1'
+node = -689382293514807714
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -570,7 +616,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node2'
+node = 2899641236332701915
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -593,7 +641,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node3'
+node = -2891694772370622737
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -616,7 +666,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node4'
+node = 8770131253086297858
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -639,7 +691,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node5'
+node = -3555428611998921736
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -662,7 +716,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum0'
+node = -1128144060914254007
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -685,7 +741,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum1'
+node = -8548316067821585775
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -708,7 +766,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum2'
+node = 7753273743807979332
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -731,7 +791,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum3'
+node = 3236549158264853215
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -754,7 +816,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum4'
+node = -1565293792163852831
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -777,7 +841,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum5'
+node = -1054370837569354620
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -800,7 +866,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSHeader'
+node = -3921046376941142051
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -823,7 +891,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailBorder'
+node = 7452068450914385241
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -842,7 +912,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailHeader'
+node = 621667256318576715
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -865,7 +937,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailName'
+node = 2329053323848709179
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -888,7 +962,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreview'
+node = -3940062732567453732
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -907,7 +983,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreviewLabel'
+node = -6482205440691259330
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -930,7 +1008,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailStats'
+node = -6456985158803420281
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -953,7 +1033,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailFlavor'
+node = -298957810911308616
 parent = 20
+parent_node = 5435090176886098998
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -976,7 +1058,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleRoot'
+node = 6299553004898250026
 parent = 1
+parent_node = 4360251023798411520
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -993,7 +1077,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleWordmark'
+node = -7547959836448767777
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1016,7 +1102,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleTagline'
+node = -4487213034352630281
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1039,7 +1127,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker0'
+node = -3052573877010345089
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1058,7 +1148,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label0'
+node = 1107065419400204970
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1088,7 +1180,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss0'
+node = 6245380884181139848
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1111,7 +1205,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker1'
+node = 68703841616710622
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1130,7 +1226,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label1'
+node = -7525206412894681910
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1160,7 +1258,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss1'
+node = 2668725228049837260
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1183,7 +1283,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker2'
+node = 438777268560788561
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1202,7 +1304,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label2'
+node = 3842900644832209902
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1232,7 +1336,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss2'
+node = 4636158530293035106
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1255,7 +1361,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker3'
+node = -7015812067495489401
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1274,7 +1382,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label3'
+node = -5969711903111605855
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1304,7 +1414,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss3'
+node = -1376852558127338636
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1327,7 +1439,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBL'
+node = -6916419775558749284
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1350,7 +1464,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBR'
+node = -1706007579691951040
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1373,7 +1489,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'DripInk0'
+node = 8677156552336061772
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1392,7 +1510,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'DripInk1'
+node = -3655813720224831138
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1411,7 +1531,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'DripInk2'
+node = 2742362399961659030
 parent = 42
+parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1430,7 +1552,9 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'MenuBg'
+node = -7038421272484118803
 parent = 1
+parent_node = 4360251023798411520
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 

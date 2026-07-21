@@ -345,6 +345,11 @@ namespace aether::app::scene
 					impliedFeatures |= SceneFeatureFlags::Meshes3D;
 				}
 
+				// Stable scene-node id: keep the one from the .toml, or mint one for legacy scenes that
+				// predate node ids, so a subsequent save writes stable parent-by-node references.
+				// EmplaceOrReplace (not Emplace) so re-applying onto a reused entity stays idempotent.
+				world.EmplaceOrReplace<SceneNodeComponent>(e, SceneNodeComponent{rec.nodeId != 0 ? rec.nodeId : GenerateSceneNodeId()});
+
 				if (!rec.name.empty())
 				{
 					world.Emplace<NameComponent>(e, NameComponent{.name = rec.name});

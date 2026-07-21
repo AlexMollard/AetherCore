@@ -371,6 +371,26 @@ namespace aether::app::scene
 
 		AppendEntityRecords(scene, world, order, indexOf, materials, textures);
 
+		// Stamp each top-level scene entity with a stable node id (reuse its existing one, or mint +
+		// store one so it survives future saves). This lets the .toml reference parents by node id, so
+		// hand-editing entity order/membership can't corrupt parenting. scene.entities is parallel to
+		// `order` here (CaptureScene starts with an empty record list). Prefab/subtree captures go
+		// through CaptureSubtrees and are intentionally left index-based.
+		for (std::size_t i = 0; i < order.size() && i < scene.entities.size(); ++i)
+		{
+			const Entity e = order[i];
+			if (const auto* node = world.TryGet<SceneNodeComponent>(e))
+			{
+				scene.entities[i].nodeId = node->id;
+			}
+			else
+			{
+				const std::uint64_t id = GenerateSceneNodeId();
+				scene.entities[i].nodeId = id;
+				world.Emplace<SceneNodeComponent>(e, SceneNodeComponent{id});
+			}
+		}
+
 		// Linked prefab instances: emit a reference (path + world transform +
 		// overrides) for each instance root. Their expanded subtrees were tagged
 		// SceneTransient, so they are already excluded from the flat records above.
