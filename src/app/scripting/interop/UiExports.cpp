@@ -204,6 +204,85 @@ AE_SCRIPT_API void aether_ui_set_interactable(std::uint32_t id, std::int32_t val
 	}
 }
 
+// ── Widgets ─────────────────────────────────────────────────────────────────────
+AE_SCRIPT_API float aether_ui_get_slider_value(std::uint32_t id)
+{
+	const auto* s = ActiveWorld().TryGet<aether::ui::UISlider>(aether::Entity{id});
+	return s != nullptr ? s->value : 0.f;
+}
+
+AE_SCRIPT_API void aether_ui_set_slider_value(std::uint32_t id, float value)
+{
+	if (auto* s = ActiveWorld().TryGet<aether::ui::UISlider>(aether::Entity{id}))
+	{
+		s->value = std::clamp(value, s->minValue, s->maxValue);
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_get_toggle(std::uint32_t id)
+{
+	const auto* t = ActiveWorld().TryGet<aether::ui::UIToggle>(aether::Entity{id});
+	return (t != nullptr && t->on) ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_ui_set_toggle(std::uint32_t id, std::int32_t on)
+{
+	if (auto* t = ActiveWorld().TryGet<aether::ui::UIToggle>(aether::Entity{id}))
+	{
+		t->on = (on != 0);
+	}
+}
+
+AE_SCRIPT_API float aether_ui_get_progress(std::uint32_t id)
+{
+	const auto* p = ActiveWorld().TryGet<aether::ui::UIProgressBar>(aether::Entity{id});
+	return p != nullptr ? p->value : 0.f;
+}
+
+AE_SCRIPT_API void aether_ui_set_progress(std::uint32_t id, float value)
+{
+	if (auto* p = ActiveWorld().TryGet<aether::ui::UIProgressBar>(aether::Entity{id}))
+	{
+		p->value = std::clamp(value, 0.f, 1.f);
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_get_button_label(std::uint32_t id, char* buf, std::int32_t bufLen)
+{
+	const auto* b = ActiveWorld().TryGet<aether::ui::UIButton>(aether::Entity{id});
+	if (b == nullptr || buf == nullptr || bufLen <= 0)
+	{
+		return 0;
+	}
+	const std::int32_t n = std::min<std::int32_t>(bufLen, static_cast<std::int32_t>(b->label.size()));
+	std::memcpy(buf, b->label.data(), static_cast<std::size_t>(n));
+	return n;
+}
+
+AE_SCRIPT_API void aether_ui_set_button_label(std::uint32_t id, const char* text)
+{
+	if (auto* b = ActiveWorld().TryGet<aether::ui::UIButton>(aether::Entity{id}))
+	{
+		b->label = text != nullptr ? text : "";
+	}
+}
+
+// True if a UISlider or UIToggle on this entity changed by user input this frame.
+AE_SCRIPT_API std::int32_t aether_ui_was_changed(std::uint32_t id)
+{
+	auto& world = ActiveWorld();
+	const aether::Entity e{id};
+	if (const auto* s = world.TryGet<aether::ui::UISlider>(e); s != nullptr && s->changed)
+	{
+		return 1;
+	}
+	if (const auto* t = world.TryGet<aether::ui::UIToggle>(e); t != nullptr && t->changed)
+	{
+		return 1;
+	}
+	return 0;
+}
+
 // frame's layout pass. Useful for placing things relative to an element.
 AE_SCRIPT_API Vec4 aether_ui_get_rect(std::uint32_t id)
 {

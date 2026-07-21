@@ -148,6 +148,34 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_ui_set_interactable(uint id, int value);
 
+    // ── Widgets ──────────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial float aether_ui_get_slider_value(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_slider_value(uint id, float value);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_get_toggle(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_toggle(uint id, int on);
+
+    [LibraryImport(Lib)]
+    internal static partial float aether_ui_get_progress(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_progress(uint id, float value);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_get_button_label(uint id, byte* buf, int bufLen);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_ui_set_button_label(uint id, string text);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_was_changed(uint id);
+
     // ── Debug draw (Module 08) ──────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial void aether_debug_set_enabled(int enabled);
