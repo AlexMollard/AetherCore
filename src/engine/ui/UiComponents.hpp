@@ -135,4 +135,17 @@ namespace aether::ui
 		glm::vec4 fillColor{0.30f, 0.85f, 1.f, 1.f};
 		float cornerRadius = 4.f;
 	};
+
+	// A UI element drawn by its OWN shader pipeline ("shaders://<shader>.spv"), on top of the
+	// batched UI shapes. The element's UIRect gives the quad; params/colors are handed to the
+	// shader as push constants (shader-defined meaning). Used for full-screen effects like the
+	// ink transition; created at runtime and never serialized. The batched shape builder ignores
+	// entities that carry this, so an effect element emits nothing into ui_shapes.
+	struct UIEffect
+	{
+		std::string shader;    // e.g. "ui_ink" -> shaders://ui_ink.spv
+		glm::vec4 params{0.f}; // shader-defined (ink: coverage, time, noiseAmp, edgeWidth)
+		glm::vec4 color0{0.f}; // shader-defined (ink: ink body colour)
+		glm::vec4 color1{0.f}; // shader-defined (ink: edge/rim colour)
+	};
 } // namespace aether::ui

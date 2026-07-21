@@ -13,8 +13,10 @@
 #include "io/FileSystem.hpp"
 #include "material/TextureRegistry.hpp"
 #include "rendering/RenderGraph.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "ui/FontRegistry.hpp"
+#include "ui/UiComponents.hpp"
 #include "ui/UiDrawBuilder.hpp"
 #include "ui/UiLayoutSystem.hpp"
 #include "utils/Logger.hpp"
@@ -36,6 +38,19 @@ namespace aether::ui
 
 		static_assert(sizeof(ShapesPush) == 32, "ShapesPush must match shaders/ui_shapes.slang ShapesPush layout");
 
+		// Push-constant layout for UIEffect shaders - MUST match the InkPush in shaders/ui_ink.slang
+		// (and any other effect shader that opts into this generic layout).
+		struct EffectPush
+		{
+			glm::vec4 screenSize; // xy = viewport
+			glm::vec4 rect;       // x, y, w, h in px
+			glm::vec4 params;     // shader-defined
+			glm::vec4 color0;
+			glm::vec4 color1;
+		};
+
+		static_assert(sizeof(EffectPush) == 80, "EffectPush must match the effect-shader push layout");
+
 		constexpr std::uint32_t kInitialCommandCapacity = 256;
 		constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
 	} // namespace
@@ -47,6 +62,7 @@ namespace aether::ui
 		m_gpu = &gpu;
 		m_upload = &upload;
 		m_textures = &textures;
+		m_colorFormat = colorFormat;
 
 		const gpu::GraphicsPipelineDesc desc{
 		        .shaderVfsPath = "shaders://ui_shapes.spv",
@@ -92,6 +108,15 @@ namespace aether::ui
 			gpu::ResourceRegistry::Destroy(m_pipeline);
 			m_pipeline = {};
 		}
+
+		for (auto& [name, pipe]: m_effectPipelines)
+		{
+			if (pipe.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(pipe);
+			}
+		}
+		m_effectPipelines.clear();
 
 		if (m_defaultFontAtlas.IsValid())
 		{
@@ -213,6 +238,44 @@ namespace aether::ui
 		return true;
 	}
 
+	gpu::PipelineHandle UiRenderer::EffectPipeline(const std::string& shader)
+	{
+		if (const auto it = m_effectPipelines.find(shader); it != m_effectPipelines.end())
+		{
+			return it->second;
+		}
+
+		gpu::PipelineHandle handle{};
+		if (m_gpu != nullptr && !shader.empty())
+		{
+			const std::string path = "shaders://" + shader + ".spv";
+			const gpu::GraphicsPipelineDesc desc{
+			        .shaderVfsPath = path.c_str(),
+			        .fragmentVfsPath = nullptr,
+			        .vertexEntry = "vertexMain",
+			        .fragmentEntry = "fragmentMain",
+			        .colorFormat = m_colorFormat,
+			        .depthFormat = gpu::Format::Undefined,
+			        .depthTestEnable = false,
+			        .depthWriteEnable = false,
+			        .blendEnable = true,
+			        .topology = gpu::PrimitiveTopology::TriangleList,
+			        .polygonMode = gpu::PolygonMode::Fill,
+			        .cullMode = gpu::CullMode::None,
+			        .debugName = "UI.Effect",
+			        .descriptorHeapMappings = m_gpu->GetBindlessManager().GetDescriptorHeapMappings(),
+			};
+			handle = gpu::ResourceRegistry::CreateGraphicsPipeline(m_gpu->GetDevice(), desc);
+			if (!handle.IsValid())
+			{
+				AE_ERROR(LogCategory::UI, "UiRenderer: failed to create effect pipeline for '{}'", shader);
+			}
+		}
+		// Cache even an invalid handle so a missing shader is not retried (and re-logged) every frame.
+		m_effectPipelines.emplace(shader, handle);
+		return handle;
+	}
+
 	void UiRenderer::EnsureCapacity(Frame& frame, std::uint32_t count)
 	{
 		if (frame.capacity >= count && frame.buffer.IsValid())
@@ -260,6 +323,7 @@ namespace aether::ui
 
 		Frame& frame = m_frames[frameSlot % kFrames];
 		frame.count = 0;
+		frame.effects.clear();
 		// thread later executes the pass.
 		frame.extent = outputExtent;
 
@@ -269,6 +333,24 @@ namespace aether::ui
 		}
 
 		ResolveCanvases(*m_world, outputExtent);
+
+		// Custom-shader UI elements (UIEffect) are drawn on top of the batched shapes, each with
+		// its own pipeline. Collected here from the resolved layout; skipped when in a disabled
+		// (hidden) subtree so they follow screen visibility like everything else.
+		for (auto&& [ent, effect, rect]: m_world->View<UIEffect, UIRect>().each())
+		{
+			const Entity e = World::FromEntt(ent);
+			if (ecs::HasDisabledAncestor(*m_world, e))
+			{
+				continue;
+			}
+			const gpu::PipelineHandle pipe = EffectPipeline(effect.shader);
+			if (!pipe.IsValid())
+			{
+				continue;
+			}
+			frame.effects.push_back({pipe, rect.resolvedRect, effect.params, effect.color0, effect.color1});
+		}
 
 		// Lazily upload the atlas of every font the scene's text references -
 		// project fonts appear here the first frame a UIText names them.
@@ -319,25 +401,47 @@ namespace aether::ui
 		                [this, &bindless](PassContext& ctx)
 		                {
 			                const Frame& frame = m_frames[ctx.frameSlot % kFrames];
-			                if (frame.count == 0 || !m_pipeline.IsValid())
+			                if (frame.count == 0 && frame.effects.empty())
 			                {
 				                return;
 			                }
 
 			                gpu::CommandList& cmd = ctx.recorder;
 
-			                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_pipeline);
-			                cmd.BindPipeline(resolved.state);
-			                bindless.CmdBindHeaps(cmd);
+			                // Batched UI shapes (one instanced draw of the whole command list).
+			                if (frame.count != 0 && m_pipeline.IsValid())
+			                {
+				                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_pipeline);
+				                cmd.BindPipeline(resolved.state);
+				                bindless.CmdBindHeaps(cmd);
 
-			                const ShapesPush push{
-			                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
-			                        .commandData = frame.address,
-			                        .pad0 = 0,
-			                        .pad1 = 0,
-			                };
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
-			                cmd.Draw(6, frame.count, 0, 0);
+				                const ShapesPush push{
+				                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
+				                        .commandData = frame.address,
+				                        .pad0 = 0,
+				                        .pad1 = 0,
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(6, frame.count, 0, 0);
+			                }
+
+			                // Custom-shader effects, each with its own pipeline, on top.
+			                for (const EffectDraw& fx: frame.effects)
+			                {
+				                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(fx.pipeline);
+				                cmd.BindPipeline(resolved.state);
+				                bindless.CmdBindHeaps(cmd);
+
+				                const EffectPush push{
+				                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
+				                        .rect = fx.rect,
+				                        .params = fx.params,
+				                        .color0 = fx.color0,
+				                        .color1 = fx.color1,
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(6, 1, 0, 0);
+			                }
 		                });
 	}
 } // namespace aether::ui

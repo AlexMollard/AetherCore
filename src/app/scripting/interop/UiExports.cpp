@@ -283,6 +283,30 @@ AE_SCRIPT_API std::int32_t aether_ui_was_changed(std::uint32_t id)
 	return 0;
 }
 
+// ── Custom-shader effects (UIEffect, drawn by their own pipeline) ─────────────────
+AE_SCRIPT_API std::uint32_t aether_ui_create_effect(std::uint32_t canvas, const char* shader)
+{
+	auto& world = ActiveWorld();
+	return aether::ui::CreateEffectEntity(world, ResolveCanvas(world, canvas), shader != nullptr ? shader : "").id;
+}
+
+AE_SCRIPT_API void aether_ui_set_effect_params(std::uint32_t id, Vec4 params)
+{
+	if (auto* fx = ActiveWorld().TryGet<aether::ui::UIEffect>(aether::Entity{id}))
+	{
+		fx->params = ToGlm(params);
+	}
+}
+
+AE_SCRIPT_API void aether_ui_set_effect_colors(std::uint32_t id, Vec4 color0, Vec4 color1)
+{
+	if (auto* fx = ActiveWorld().TryGet<aether::ui::UIEffect>(aether::Entity{id}))
+	{
+		fx->color0 = ToGlm(color0);
+		fx->color1 = ToGlm(color1);
+	}
+}
+
 // frame's layout pass. Useful for placing things relative to an element.
 AE_SCRIPT_API Vec4 aether_ui_get_rect(std::uint32_t id)
 {

@@ -176,6 +176,16 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_was_changed(uint id);
 
+    // ── Custom-shader effects ────────────────────────────────────────────────────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_ui_create_effect(uint canvas, string shader);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_effect_params(uint id, Vector4 param);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_effect_colors(uint id, Vector4 color0, Vector4 color1);
+
     // ── Debug draw (Module 08) ──────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial void aether_debug_set_enabled(int enabled);

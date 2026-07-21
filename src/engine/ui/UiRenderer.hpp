@@ -2,7 +2,9 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -50,6 +52,16 @@ namespace aether::ui
 	private:
 		static constexpr std::uint32_t kFrames = aether::kMaxFramesInFlight;
 
+		// A UI element rendered by its own pipeline (UIEffect), on top of the batched shapes.
+		struct EffectDraw
+		{
+			gpu::PipelineHandle pipeline{};
+			glm::vec4 rect{0.f};
+			glm::vec4 params{0.f};
+			glm::vec4 color0{0.f};
+			glm::vec4 color1{0.f};
+		};
+
 		struct Frame
 		{
 			gpu::BufferHandle buffer{};
@@ -59,10 +71,13 @@ namespace aether::ui
 			std::uint32_t count = 0;
 			// (not a shared member) so a producer-thread BuildFrame for the next
 			glm::vec2 extent{0.f};
+			std::vector<EffectDraw> effects;
 		};
 
 		void EnsureCapacity(Frame& frame, std::uint32_t count);
 		bool EnsureFontAtlasUploaded(std::string_view name);
+		// Lazily create + cache a pipeline for a UIEffect shader ("shaders://<shader>.spv").
+		gpu::PipelineHandle EffectPipeline(const std::string& shader);
 
 		World* m_world = nullptr;
 		GpuDevice* m_gpu = nullptr;
@@ -74,6 +89,8 @@ namespace aether::ui
 		// Font names whose atlas upload was attempted (success or not) - one try each.
 		std::unordered_set<std::string> m_fontsTried;
 		gpu::PipelineHandle m_pipeline{};
+		gpu::Format m_colorFormat{};
+		std::unordered_map<std::string, gpu::PipelineHandle> m_effectPipelines;
 		std::array<Frame, kFrames> m_frames{};
 		std::vector<UiDrawCommand> m_scratch;
 	};

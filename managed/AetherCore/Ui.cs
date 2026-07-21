@@ -160,4 +160,18 @@ public static class Ui
     /// <summary>True on the frame a slider or toggle on this entity was changed by the user
     /// (keyboard/drag/activation). Poll this to persist settings.</summary>
     public static bool WasChanged(Entity e) => Native.aether_ui_was_changed(e.Id) != 0;
+
+    // ── Custom-shader effects ─────────────────────────────────────────────────────
+    // A UI element rendered by its own shader ("shaders://&lt;shader&gt;.spv"), drawn on top of the
+    // batched UI. The shader reads params + two colours as push constants; meaning is shader-defined
+    // (e.g. "ui_ink": params = (coverage, time, noiseAmp, edgeWidth), color0 = ink, color1 = edge).
+
+    /// <summary>Create a full-screen effect element driven by the named UI shader.</summary>
+    public static Entity CreateEffect(Entity canvas, string shader) => new(Native.aether_ui_create_effect(canvas.Id, shader));
+
+    /// <summary>Set the effect's shader params (meaning is shader-defined).</summary>
+    public static void SetEffectParams(Entity e, Vector4 param) => Native.aether_ui_set_effect_params(e.Id, param);
+
+    /// <summary>Set the effect's two shader colours.</summary>
+    public static void SetEffectColors(Entity e, Vector4 color0, Vector4 color1) => Native.aether_ui_set_effect_colors(e.Id, color0, color1);
 }

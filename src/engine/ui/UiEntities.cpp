@@ -169,4 +169,26 @@ namespace aether::ui
 		ecs::SetParent(world, e, canvas);
 		return e;
 	}
+
+	Entity CreateEffectEntity(World& world, Entity canvas, const std::string& shader)
+	{
+		canvas = EnsureCanvas(world, canvas);
+
+		const Entity e = world.Create();
+		world.Emplace<NameComponent>(e, NameComponent{.name = "Effect"});
+		world.Emplace<HierarchyComponent>(e);
+
+		// Full-screen by default; effects are typically overlays.
+		auto& rect = world.Emplace<UIRect>(e);
+		rect.anchorMin = {0.f, 0.f};
+		rect.anchorMax = {1.f, 1.f};
+		rect.offsetMin = {0.f, 0.f};
+		rect.offsetMax = {0.f, 0.f};
+
+		auto& fx = world.Emplace<UIEffect>(e);
+		fx.shader = shader;
+
+		ecs::SetParent(world, e, canvas);
+		return e;
+	}
 } // namespace aether::ui
