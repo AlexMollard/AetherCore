@@ -1553,6 +1553,22 @@ namespace aether::editor
 					{
 						selection.Select(ui::CreateTextEntity(world, FindOrCreateCanvas(world)));
 					}
+					if (ImGui::MenuItem("Slider"))
+					{
+						selection.Select(ui::CreateSliderEntity(world, FindOrCreateCanvas(world)));
+					}
+					if (ImGui::MenuItem("Toggle"))
+					{
+						selection.Select(ui::CreateToggleEntity(world, FindOrCreateCanvas(world)));
+					}
+					if (ImGui::MenuItem("Button"))
+					{
+						selection.Select(ui::CreateButtonEntity(world, FindOrCreateCanvas(world)));
+					}
+					if (ImGui::MenuItem("Progress Bar"))
+					{
+						selection.Select(ui::CreateProgressBarEntity(world, FindOrCreateCanvas(world)));
+					}
 					ImGui::EndMenu();
 				}
 				ImGui::EndPopup();

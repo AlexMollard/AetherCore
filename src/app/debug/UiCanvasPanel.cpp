@@ -978,6 +978,24 @@ namespace aether::editor
 			return ImTextureID_Invalid;
 		};
 
+		// Create a UI element via `factory` under the active canvas (creating one if needed),
+		// parent it beneath the selection, and select it. Shared by the Add-Element popup and
+		// the canvas context menu so both offer the same element set.
+		const auto addElement = [&](Entity (*factory)(World&, Entity))
+		{
+			canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+			const Entity parent = CreateParentForNewElement(world, selection, canvas);
+			const Entity created = factory(world, canvas);
+			if (parent != canvas)
+			{
+				ecs::SetParent(world, created, parent);
+			}
+			if (selection != nullptr)
+			{
+				selection->Select(created);
+			}
+		};
+
 		if (ImGui::Button(ICON_FA_PLUS "  Add Element"))
 		{
 			ImGui::OpenPopup("##AddElementPopup");
@@ -987,31 +1005,27 @@ namespace aether::editor
 		{
 			if (ImGui::MenuItem(ICON_FA_IMAGE " Image"))
 			{
-				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
-				const Entity parent = CreateParentForNewElement(world, selection, canvas);
-				const Entity created = ui::CreateImageEntity(world, canvas);
-				if (parent != canvas)
-				{
-					ecs::SetParent(world, created, parent);
-				}
-				if (selection != nullptr)
-				{
-					selection->Select(created);
-				}
+				addElement(ui::CreateImageEntity);
 			}
 			if (ImGui::MenuItem(ICON_FA_CODE " Text"))
 			{
-				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
-				const Entity parent = CreateParentForNewElement(world, selection, canvas);
-				const Entity created = ui::CreateTextEntity(world, canvas);
-				if (parent != canvas)
-				{
-					ecs::SetParent(world, created, parent);
-				}
-				if (selection != nullptr)
-				{
-					selection->Select(created);
-				}
+				addElement(ui::CreateTextEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_SLIDERS " Slider"))
+			{
+				addElement(ui::CreateSliderEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_TOGGLE_ON " Toggle"))
+			{
+				addElement(ui::CreateToggleEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_SQUARE " Button"))
+			{
+				addElement(ui::CreateButtonEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_BARS_PROGRESS " Progress Bar"))
+			{
+				addElement(ui::CreateProgressBarEntity);
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_FA_SITEMAP " Canvas (Root)"))
@@ -1660,31 +1674,27 @@ namespace aether::editor
 		{
 			if (ImGui::MenuItem(ICON_FA_IMAGE " Add Image"))
 			{
-				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
-				const Entity parent = CreateParentForNewElement(world, selection, canvas);
-				const Entity created = ui::CreateImageEntity(world, canvas);
-				if (parent != canvas)
-				{
-					ecs::SetParent(world, created, parent);
-				}
-				if (selection != nullptr)
-				{
-					selection->Select(created);
-				}
+				addElement(ui::CreateImageEntity);
 			}
 			if (ImGui::MenuItem(ICON_FA_CODE " Add Text"))
 			{
-				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
-				const Entity parent = CreateParentForNewElement(world, selection, canvas);
-				const Entity created = ui::CreateTextEntity(world, canvas);
-				if (parent != canvas)
-				{
-					ecs::SetParent(world, created, parent);
-				}
-				if (selection != nullptr)
-				{
-					selection->Select(created);
-				}
+				addElement(ui::CreateTextEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_SLIDERS " Add Slider"))
+			{
+				addElement(ui::CreateSliderEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_TOGGLE_ON " Add Toggle"))
+			{
+				addElement(ui::CreateToggleEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_SQUARE " Add Button"))
+			{
+				addElement(ui::CreateButtonEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_BARS_PROGRESS " Add Progress Bar"))
+			{
+				addElement(ui::CreateProgressBarEntity);
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Reset View"))
