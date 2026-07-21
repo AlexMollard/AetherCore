@@ -10,6 +10,7 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
 {
     private int _sel;
     private float _t;
+    private Vector2 _lastMouse;
     private Entity _wordmark;
     private readonly Entity[] _markers = new Entity[4];
     private readonly Entity[] _labels = new Entity[4];
@@ -41,7 +42,35 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
     {
         if (Input.IsKeyPressed(Key.Down)) { _sel = (_sel + 1) & 3; Apply(); }
         if (Input.IsKeyPressed(Key.Up)) { _sel = (_sel + 3) & 3; Apply(); }
-        if (Input.IsKeyPressed(Key.Enter) || Input.IsKeyPressed(Key.Space)) Activate();
+
+        // Mouse: hovering a menu item selects it (gated on actual mouse movement so it
+        // never fights keyboard navigation); clicking an item activates it.
+        Vector2 mouse = Input.MousePosition;
+        if (mouse != _lastMouse)
+        {
+            _lastMouse = mouse;
+            for (int i = 0; i < 4; i++)
+            {
+                if (_labels[i].IsValid && Ui.IsHovered(_labels[i]))
+                {
+                    if (i != _sel) { _sel = i; Apply(); }
+                    break;
+                }
+            }
+        }
+
+        bool activate = Input.IsKeyPressed(Key.Enter) || Input.IsKeyPressed(Key.Space);
+        for (int i = 0; i < 4; i++)
+        {
+            if (_labels[i].IsValid && Ui.WasClicked(_labels[i]))
+            {
+                _sel = i;
+                Apply();
+                activate = true;
+                break;
+            }
+        }
+        if (activate) Activate();
     }
 
     private void Activate()
