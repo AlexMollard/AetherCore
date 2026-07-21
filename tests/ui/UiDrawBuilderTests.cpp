@@ -130,6 +130,65 @@ TEST_CASE("Builder emits image before glyphs on the same entity")
 	CHECK(cmds[1].layer == 1);
 }
 
+TEST_CASE("Builder emits track, fill, and handle for a UISlider")
+{
+	World w;
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity s = w.Create();
+	auto& sr = w.Emplace<ui::UIRect>(s);
+	sr.resolvedRect = {100, 100, 200, 20};
+	auto& slider = w.Emplace<ui::UISlider>(s);
+	slider.minValue = 0.f;
+	slider.maxValue = 1.f;
+	slider.value = 0.5f;
+	slider.handleRadius = 10.f;
+	w.Emplace<HierarchyComponent>(s);
+	ecs::SetParent(w, s, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	ui::BuildDrawCommands(w, cmds);
+
+	REQUIRE(cmds.size() == 3);
+	CHECK(cmds[0].type == ui::kShapeRect);   // track
+	CHECK(cmds[1].type == ui::kShapeRect);   // fill
+	CHECK(cmds[2].type == ui::kShapeCircle); // handle
+	// inner track x0 = 102, inner width = 196, fill = 98 -> handle centre x = 200
+	CHECK(cmds[2].data0.x == doctest::Approx(200.f));
+	CHECK(cmds[2].data0.z == doctest::Approx(10.f)); // radius (unfocused)
+}
+
+TEST_CASE("Builder emits track and fill for a UIProgressBar")
+{
+	World w;
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity p = w.Create();
+	auto& pr = w.Emplace<ui::UIRect>(p);
+	pr.resolvedRect = {0, 0, 200, 16};
+	auto& bar = w.Emplace<ui::UIProgressBar>(p);
+	bar.value = 0.25f;
+	w.Emplace<HierarchyComponent>(p);
+	ecs::SetParent(w, p, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	ui::BuildDrawCommands(w, cmds);
+
+	REQUIRE(cmds.size() == 2);
+	CHECK(cmds[0].type == ui::kShapeRect);
+	CHECK(cmds[1].type == ui::kShapeRect);
+	// inner width 196 * 0.25 = 49
+	CHECK(cmds[1].data0.z == doctest::Approx(49.f));
+}
+
 TEST_CASE("Builder emits parent image before child image")
 {
 	World w;
