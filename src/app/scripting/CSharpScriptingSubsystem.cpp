@@ -104,6 +104,30 @@ namespace aether::app::scripting
 			return time;
 		}
 
+		// A cheap identity fingerprint (size + mtime) for a deployed assembly. Used to detect when the
+		// staged AetherGame.dll / AetherCore.dll we built has been replaced out from under us - notably
+		// when an editor rebuild re-stages the default stub AetherGame.dll and a fresh SDK dll over the
+		// project's deployed build. mtime alone is not enough (the editor stages all dlls at one time).
+		std::string DeployedDllFingerprint(const std::filesystem::path& path)
+		{
+			std::error_code ec;
+			const auto size = std::filesystem::file_size(path, ec);
+			if (ec)
+			{
+				return "missing";
+			}
+			const auto time = LatestWriteTime(path);
+			const long long ticks = time ? static_cast<long long>(time->time_since_epoch().count()) : 0;
+			return std::to_string(size) + ":" + std::to_string(ticks);
+		}
+
+		std::string BuildProfileStamp(const std::filesystem::path& managedDir)
+		{
+			return std::string(kEditorScriptBuildProfile) + "\n"
+			       + "game=" + DeployedDllFingerprint(managedDir / "AetherGame.dll") + "\n"
+			       + "sdk=" + DeployedDllFingerprint(managedDir / "AetherCore.dll") + "\n";
+		}
+
 		bool AccumulateLatestScriptInputTime(const std::filesystem::path& root, std::optional<std::filesystem::file_time_type>& latest)
 		{
 			const auto rememberLatest = [&latest](const std::filesystem::file_time_type time)
@@ -173,8 +197,11 @@ namespace aether::app::scripting
 
 		bool IsScriptBuildRequired(const std::filesystem::path& gameProject, const std::filesystem::path& managedDir, const std::filesystem::path& artifactsDir)
 		{
+			// Rebuild if the profile is missing/for a different config, OR if the deployed AetherGame.dll
+			// / SDK dll no longer match what we last built (they were clobbered by an editor rebuild, or
+			// the SDK changed). Comparing the recorded stamp against the current one catches both.
 			const auto profile = io::file_util::ReadText(artifactsDir / kEditorScriptBuildProfileFile);
-			if (!profile || *profile != std::string(kEditorScriptBuildProfile) + "\n")
+			if (!profile || *profile != BuildProfileStamp(managedDir))
 			{
 				return true;
 			}
@@ -248,7 +275,9 @@ namespace aether::app::scripting
 				}
 			}
 
-			if (auto result = io::file_util::WriteText(artifactsDir / kEditorScriptBuildProfileFile, std::string(kEditorScriptBuildProfile) + "\n"); !result)
+			// Record the fingerprints of the dlls we just deployed, so a later editor rebuild that
+			// re-stages a stub AetherGame.dll (or a new SDK) is detected and triggers a rebuild.
+			if (auto result = io::file_util::WriteText(artifactsDir / kEditorScriptBuildProfileFile, BuildProfileStamp(managedDir)); !result)
 			{
 				AE_WARN(LogCategory::App, "Could not record the C# script build profile: {}", result.error().message);
 			}
