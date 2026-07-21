@@ -4,9 +4,9 @@ using AetherCore;
 
 namespace AetherGame;
 
-/// <summary>Title screen behaviour. Selection (keyboard + mouse) is handled by the engine's
-/// UiNavigationSystem via the labels' UI Selectable components; this script only styles by
-/// focus, reacts to activation, and flickers the wordmark.</summary>
+/// <summary>Title screen behaviour. The menu items are engine UIButtons now: the nav system
+/// handles keyboard + mouse selection and each button draws its own focus colour. This script
+/// reacts to activation, pulses the marker blots by focus, and flickers the wordmark.</summary>
 public sealed class TitleScreen : EntityScript, IMenuScreen
 {
     private float _t;
@@ -15,7 +15,6 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
     private readonly Entity[] _labels = new Entity[4];
 
     private static readonly Vector4 Cyan = GameSettings.Accent;
-    private static readonly Vector4 UnselLabel = new(0.337f, 0.361f, 0.431f, 1f); // #565c6e
     private static readonly Vector4 UnselMarker = new(0.227f, 0.251f, 0.314f, 1f);
     private static readonly Vector4 WordmarkColor = new(0.933f, 0.945f, 0.969f, 1f);
 
@@ -51,24 +50,17 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
 
         for (int i = 0; i < 4; i++)
         {
+            if (!_markers[i].IsValid) continue;
             bool on = _labels[i].IsValid && Ui.IsFocused(_labels[i]);
-            if (_labels[i].IsValid)
+            if (on)
             {
-                Ui.SetTextColor(_labels[i], on ? Cyan : UnselLabel);
-                Ui.SetFontSize(_labels[i], on ? 34f : 30f);
+                Vector4 c = Cyan;
+                c.W = 0.75f + 0.25f * MathF.Sin(_t * 4.5f); // selected blot breathes
+                Ui.SetImageColor(_markers[i], c);
             }
-            if (_markers[i].IsValid)
+            else
             {
-                if (on)
-                {
-                    Vector4 c = Cyan;
-                    c.W = 0.75f + 0.25f * MathF.Sin(_t * 4.5f); // selected blot breathes
-                    Ui.SetImageColor(_markers[i], c);
-                }
-                else
-                {
-                    Ui.SetImageColor(_markers[i], UnselMarker);
-                }
+                Ui.SetImageColor(_markers[i], UnselMarker);
             }
         }
 

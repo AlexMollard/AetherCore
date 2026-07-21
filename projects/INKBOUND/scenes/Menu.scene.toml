@@ -1138,6 +1138,18 @@ parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'PixelStorm'
+    h_align = 'left'
+    label = 'descend'
+    pixel_size = 30.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
     [entities.ui_rect]
     anchor_max = [ 0.087, 0.44 ]
     anchor_min = [ 0.087, 0.44 ]
@@ -1148,15 +1160,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_selectable]
     group = 'titlemenu'
     interactable = true
-
-    [entities.ui_text]
-    color = [ 0.302, 0.851, 1.0, 1.0 ]
-    font = 'PixelStorm'
-    h_align = 'left'
-    pixel_size = 34.0
-    text = 'descend'
-    v_align = 'middle'
-    wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -1207,6 +1210,18 @@ parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'PixelStorm'
+    h_align = 'left'
+    label = 'return'
+    pixel_size = 30.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
     [entities.ui_rect]
     anchor_max = [ 0.087, 0.52 ]
     anchor_min = [ 0.087, 0.52 ]
@@ -1217,15 +1232,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_selectable]
     group = 'titlemenu'
     interactable = true
-
-    [entities.ui_text]
-    color = [ 0.337, 0.361, 0.431, 1.0 ]
-    font = 'PixelStorm'
-    h_align = 'left'
-    pixel_size = 30.0
-    text = 'return'
-    v_align = 'middle'
-    wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -1276,6 +1282,18 @@ parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'PixelStorm'
+    h_align = 'left'
+    label = 'attune'
+    pixel_size = 30.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
     [entities.ui_rect]
     anchor_max = [ 0.087, 0.6 ]
     anchor_min = [ 0.087, 0.6 ]
@@ -1286,15 +1304,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_selectable]
     group = 'titlemenu'
     interactable = true
-
-    [entities.ui_text]
-    color = [ 0.337, 0.361, 0.431, 1.0 ]
-    font = 'PixelStorm'
-    h_align = 'left'
-    pixel_size = 30.0
-    text = 'attune'
-    v_align = 'middle'
-    wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -1345,6 +1354,18 @@ parent = 46
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'PixelStorm'
+    h_align = 'left'
+    label = 'release'
+    pixel_size = 30.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
     [entities.ui_rect]
     anchor_max = [ 0.087, 0.68 ]
     anchor_min = [ 0.087, 0.68 ]
@@ -1355,15 +1376,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_selectable]
     group = 'titlemenu'
     interactable = true
-
-    [entities.ui_text]
-    color = [ 0.337, 0.361, 0.431, 1.0 ]
-    font = 'PixelStorm'
-    h_align = 'left'
-    pixel_size = 30.0
-    text = 'release'
-    v_align = 'middle'
-    wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
