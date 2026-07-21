@@ -55,6 +55,12 @@ public sealed class InkBlock : EntityScript
             _baseTint = new Vector4(1.0f, 0.34f, 0.3f, 0.7f);
             SpriteRenderer.SetTint(Self, _baseTint);
         }
+        else
+        {
+            // The Ink Glow setting scales the conjured-ink glow (Settings screen, persisted).
+            _baseTint.W *= 0.4f + 0.6f * GameSettings.InkGlow;
+            SpriteRenderer.SetTint(Self, _baseTint);
+        }
     }
 
     /// <summary>Is real geometry (or a crystal) within reach? Other ink does not

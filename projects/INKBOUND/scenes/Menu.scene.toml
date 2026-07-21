@@ -193,6 +193,506 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_min = [ 0.0, 0.0 ]
     pivot = [ 0.5, 0.5 ]
 
+    [[entities.scripts]]
+    type = 'SettingsScreen'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SettingsHeader'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.14 ]
+    anchor_min = [ 0.07, 0.14 ]
+    offset_max = [ 520.0, 46.0 ]
+    offset_min = [ 0.0, -46.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 58.0
+    text = 'attune'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SettingsBack'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.08 ]
+    anchor_min = [ 0.07, 0.08 ]
+    offset_max = [ 360.0, 18.0 ]
+    offset_min = [ 0.0, -18.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'settings'
+    interactable = true
+
+    [entities.ui_text]
+    color = [ 0.337, 0.361, 0.431, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 20.0
+    text = '< back to the dark'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SettingsUnderline'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 0.55 ]
+    corner_radius = 0.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.2, 0.185 ]
+    anchor_min = [ 0.07, 0.185 ]
+    offset_max = [ 0.0, 2.0 ]
+    offset_min = [ 0.0, -2.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SettingsSubtitle'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.22 ]
+    anchor_min = [ 0.07, 0.22 ]
+    offset_max = [ 760.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.478, 0.51, 0.588, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'the dark listens differently to each of these.'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShakeLabel'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.68 ]
+    anchor_min = [ 0.07, 0.68 ]
+    offset_max = [ 340.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.784, 0.808, 0.871, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'screen shake'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShakeSocket'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.02, 0.024, 0.031, 1.0 ]
+    corner_radius = 6.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.3, 0.68 ]
+    anchor_min = [ 0.3, 0.68 ]
+    offset_max = [ 15.0, 15.0 ]
+    offset_min = [ -15.0, -15.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'settings'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShakeOrb'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 9.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.3, 0.68 ]
+    anchor_min = [ 0.3, 0.68 ]
+    offset_max = [ 9.0, 9.0 ]
+    offset_min = [ -9.0, -9.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ShakeValue'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.325, 0.68 ]
+    anchor_min = [ 0.325, 0.68 ]
+    offset_max = [ 120.0, 16.0 ]
+    offset_min = [ 0.0, -16.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 16.0
+    text = 'FULL'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'RedactLabel'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.78 ]
+    anchor_min = [ 0.07, 0.78 ]
+    offset_max = [ 420.0, 16.0 ]
+    offset_min = [ 0.0, -16.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.173, 0.184, 0.227, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 20.0
+    text = 'the thing you keep hearing'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'RedactBars'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.102, 0.11, 0.141, 0.92 ]
+    corner_radius = 0.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.29, 0.78 ]
+    anchor_min = [ 0.07, 0.78 ]
+    offset_max = [ 0.0, 15.0 ]
+    offset_min = [ 0.0, -15.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SettingsFooter'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.05, 0.93 ]
+    anchor_min = [ 0.05, 0.93 ]
+    offset_max = [ 760.0, 16.0 ]
+    offset_min = [ 0.0, -16.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.227, 0.251, 0.314, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 17.0
+    text = 'some settings settle back on their own after you leave.'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderMusicLabel'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.35 ]
+    anchor_min = [ 0.07, 0.35 ]
+    offset_max = [ 300.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.784, 0.808, 0.871, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'music volume'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderMusicTrack'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.02, 0.024, 0.031, 1.0 ]
+    corner_radius = 6.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.3, 0.35 ]
+    anchor_min = [ 0.3, 0.35 ]
+    offset_max = [ 210.0, 7.0 ]
+    offset_min = [ 0.0, -7.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'settings'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderMusicFill'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 4.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.0, 0.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 10.0, 10.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.0, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderMusicOrb'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 8.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.0, 0.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 16.0, 16.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.0, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderSfxLabel'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.46 ]
+    anchor_min = [ 0.07, 0.46 ]
+    offset_max = [ 300.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.784, 0.808, 0.871, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'sfx volume'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderSfxTrack'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.02, 0.024, 0.031, 1.0 ]
+    corner_radius = 6.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.3, 0.46 ]
+    anchor_min = [ 0.3, 0.46 ]
+    offset_max = [ 210.0, 7.0 ]
+    offset_min = [ 0.0, -7.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'settings'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderSfxFill'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 4.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.0, 0.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 10.0, 10.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.0, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderSfxOrb'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 8.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.0, 0.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 16.0, 16.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.0, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderInkGlowLabel'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.07, 0.57 ]
+    anchor_min = [ 0.07, 0.57 ]
+    offset_max = [ 300.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.784, 0.808, 0.871, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'ink glow'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderInkGlowTrack'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.02, 0.024, 0.031, 1.0 ]
+    corner_radius = 6.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.3, 0.57 ]
+    anchor_min = [ 0.3, 0.57 ]
+    offset_max = [ 210.0, 7.0 ]
+    offset_min = [ 0.0, -7.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'settings'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderInkGlowFill'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 4.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.0, 0.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 10.0, 10.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.0, 0.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SliderInkGlowOrb'
+parent = 8
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.302, 0.851, 1.0, 1.0 ]
+    corner_radius = 8.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.0, 0.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 16.0, 16.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.0, 0.0 ]
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LevelSelectRoot'
@@ -213,7 +713,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSPathLine'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -232,7 +732,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node0'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -255,7 +755,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node1'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -278,7 +778,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node2'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -301,7 +801,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node3'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -324,7 +824,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node4'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -347,7 +847,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Node5'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -370,7 +870,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum0'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -393,7 +893,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum1'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -416,7 +916,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum2'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -439,7 +939,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum3'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -462,7 +962,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum4'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -485,7 +985,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NodeNum5'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -508,7 +1008,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSHeader'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -531,7 +1031,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailBorder'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -550,7 +1050,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailHeader'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -573,7 +1073,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailName'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -596,7 +1096,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreview'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -615,7 +1115,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailPreviewLabel'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -638,7 +1138,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailStats'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -661,7 +1161,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LSDetailFlavor'
-parent = 9
+parent = 32
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -701,7 +1201,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleWordmark'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -724,7 +1224,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleTagline'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -747,7 +1247,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker0'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -766,7 +1266,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label0'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -793,7 +1293,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss0'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -816,7 +1316,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker1'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -835,7 +1335,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label1'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -862,7 +1362,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss1'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -885,7 +1385,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker2'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -904,7 +1404,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label2'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -931,7 +1431,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss2'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -954,7 +1454,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Marker3'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -973,7 +1473,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Label3'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1000,7 +1500,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Gloss3'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1023,7 +1523,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBL'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
@@ -1046,7 +1546,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'FlavorBR'
-parent = 31
+parent = 54
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
