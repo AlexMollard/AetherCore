@@ -30,30 +30,31 @@ namespace aether::ui
 		out.push_back(cmd);
 	}
 
-	static void EmitText(const UIRect& rect, const UIText& text, FontRegistry& fonts, int& layer, std::vector<UiDrawCommand>& out)
+	static void EmitTextRun(const glm::vec4& rect, const std::string& text, const std::string& fontName, float pixelSize, const glm::vec4& color, UIText::HAlign hAlign, UIText::VAlign vAlign, bool wrap, FontRegistry& fonts, int& layer, std::vector<UiDrawCommand>& out)
 	{
-		const FontAsset* font = fonts.Load(text.fontName);
-		if (font == nullptr)
-		{
-			return;
-		}
-		if (font->atlasBindlessSlot == 0xFFFFFFFFu)
+		const FontAsset* font = fonts.Load(fontName);
+		if (font == nullptr || font->atlasBindlessSlot == 0xFFFFFFFFu)
 		{
 			return;
 		}
 
-		const std::vector<ShapedGlyph> glyphs = ShapeText(*font, text.text, text.pixelSize, rect.resolvedRect, text.wrap, static_cast<int>(text.hAlign), static_cast<int>(text.vAlign));
+		const std::vector<ShapedGlyph> glyphs = ShapeText(*font, text, pixelSize, rect, wrap, static_cast<int>(hAlign), static_cast<int>(vAlign));
 		for (const ShapedGlyph& glyph: glyphs)
 		{
 			UiDrawCommand cmd;
 			cmd.data0 = glyph.rect;
 			cmd.data1 = glyph.uv;
-			cmd.color = text.color;
+			cmd.color = color;
 			cmd.type = kShapeSdfGlyph;
 			cmd.layer = layer++;
 			cmd.textureSlot = font->atlasBindlessSlot;
 			out.push_back(cmd);
 		}
+	}
+
+	static void EmitText(const UIRect& rect, const UIText& text, FontRegistry& fonts, int& layer, std::vector<UiDrawCommand>& out)
+	{
+		EmitTextRun(rect.resolvedRect, text.text, text.fontName, text.pixelSize, text.color, text.hAlign, text.vAlign, text.wrap, fonts, layer, out);
 	}
 
 	// shared across the whole canvas, so it must be threaded through by reference.
