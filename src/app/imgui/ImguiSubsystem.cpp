@@ -148,6 +148,26 @@ namespace aether
 			}
 		}
 
+		// Merge the Regular style after Solid: shared codepoints keep the Solid glyph (added
+		// first), and Regular-only icons fill in so every ICON_FA_* has a glyph.
+		constexpr std::string_view kIconRegularPath = "engine://fonts/fa-regular-400.ttf";
+		if (!io.Fonts->Fonts.empty() && io::FileSystem::Exists(kIconRegularPath))
+		{
+			auto regularResult = io::FileSystem::ReadFile(kIconRegularPath);
+			if (regularResult)
+			{
+				m_iconFontDataRegular = std::move(*regularResult);
+				static const ImWchar kIconRangeRegular[] = {0xE000, 0xF8FF, 0};
+				ImFontConfig regularConfig{};
+				regularConfig.FontDataOwnedByAtlas = false;
+				regularConfig.MergeMode = true;
+				regularConfig.PixelSnapH = true;
+				regularConfig.SizePixels = 15.0f;
+				regularConfig.GlyphMinAdvanceX = 15.0f;
+				io.Fonts->AddFontFromMemoryTTF(m_iconFontDataRegular.data(), static_cast<int>(m_iconFontDataRegular.size()), regularConfig.SizePixels, &regularConfig, kIconRangeRegular);
+			}
+		}
+
 		m_initialized = true;
 		InitBackends(services);
 		AE_INFO(LogCategory::UI, "Dear ImGui subsystem initialized.");

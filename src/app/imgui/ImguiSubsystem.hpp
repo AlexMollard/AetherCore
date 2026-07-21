@@ -117,6 +117,7 @@ namespace aether
 
 		std::vector<std::byte> m_fontData;
 		std::vector<std::byte> m_iconFontData;
+		std::vector<std::byte> m_iconFontDataRegular;
 
 		std::vector<PendingTextureRelease> m_pendingTextureReleases;
 		std::unique_ptr<ImguiViewportRenderer> m_viewportRenderer;
