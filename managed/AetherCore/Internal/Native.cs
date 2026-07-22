@@ -90,6 +90,10 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_get_text(uint id, byte* buf, int bufLen);
 
+    // ── Assets (generic data-asset text read) ───────────────────────────────────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_assets_read_text(string vpath, byte* buf, int cap);
+
     // ── UI toolkit (Module 02) ──────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial uint aether_ui_create_canvas();

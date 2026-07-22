@@ -579,8 +579,8 @@ namespace AetherGame;
 /// Task 1 (DlgRoot).</summary>
 public static class Dialogue
 {
-    // Pin to the working prefix discovered by the Task 1 probe:
-    private const string DlgRoot = "project://dialogue/"; // TODO: replace with the pinned prefix if different
+    // Pinned by the Task 1 probe (project:// maps to the project ROOT, assets live under it):
+    private const string DlgRoot = "project://assets/dialogue/";
 
     private static DialogueRunner? s_runner;
 
