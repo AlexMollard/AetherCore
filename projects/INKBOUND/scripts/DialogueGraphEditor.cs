@@ -21,7 +21,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
-    private const float NodeW = 228f, NodeH = 100f, TitleH = 27f, SidePanelW = 330f, GridStep = 32f;
+    private const float NodeW = 236f, NodeH = 122f, TitleH = 28f, SidePanelW = 330f, GridStep = 32f;
     private static readonly Vector4 Current = new(1f, 0.78f, 0.30f, 1f); // play-mode "current node" (fixed warm)
 
     // Theme colours, refreshed each frame from the editor's live ImGui style (see RefreshTheme).
@@ -216,7 +216,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
             int d = depth.TryGetValue(n.Id, out int dv) ? dv : 0;
             int row = rowInDepth.TryGetValue(d, out int rv) ? rv : 0;
             rowInDepth[d] = row + 1;
-            n.Pos = new Vector2(48f + d * 290f, 48f + row * 128f);
+            n.Pos = new Vector2(48f + d * 300f, 48f + row * 152f);
         }
     }
 
@@ -375,17 +375,17 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
         // Header: id + a right-aligned type tag.
         Vector4 headText = isStart ? EditorGui.ThemeColor(EditorColor.WindowBg) : _cText;
-        EditorGui.AddText(new Vector2(inX, s.Y + 5f), headText, Fit(n.Id, innerW - 52f));
+        EditorGui.AddText(new Vector2(inX, s.Y + 6f), headText, Fit(n.Id, innerW - 52f));
         string tag = isStart ? "START" : n.HasChoices ? "BRANCH" : isEnd ? "END" : "LINE";
         Vector4 tagCol = new(headText.X, headText.Y, headText.Z, 0.65f);
-        EditorGui.AddText(new Vector2(e.X - 10f - EditorGui.CalcTextSize(tag).X, s.Y + 6f), tagCol, tag);
+        EditorGui.AddText(new Vector2(e.X - 10f - EditorGui.CalcTextSize(tag).X, s.Y + 7f), tagCol, tag);
 
-        // Body: speaker + text preview.
-        EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 8f), _cAccent, Fit(n.Speaker.Length > 0 ? n.Speaker : "(no speaker)", innerW));
-        EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 28f), _cText, Fit(n.Text.Length > 0 ? n.Text : "...", innerW));
+        // Body: speaker + text preview, with breathing room between rows.
+        EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 13f), _cAccent, Fit(n.Speaker.Length > 0 ? n.Speaker : "(no speaker)", innerW));
+        EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 37f), _cText, Fit(n.Text.Length > 0 ? n.Text : "...", innerW));
 
         // Footer pills: effect + destination. Dark chip + bright text so labels stay legible on the card.
-        float fy = e.Y - 24f;
+        float fy = e.Y - 28f;
         float fx = inX;
         if (n.Effect != "normal") { fx = Pill(fx, fy, n.Effect, PillBg(), _cAccent); }
         string dest = n.HasChoices ? $"{n.Choices.Count} choices" : n.Goto.Length > 0 ? $"-> {n.Goto}" : "end";
