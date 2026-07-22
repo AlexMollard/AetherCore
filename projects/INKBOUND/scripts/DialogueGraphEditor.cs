@@ -21,7 +21,10 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
-    private const float NodeW = 236f, NodeH = 134f, TitleH = 28f, SidePanelW = 330f, GridStep = 32f;
+    private const float NodeW = 236f, NodeH = 134f, TitleH = 28f, GridStep = 32f;
+
+    // Editor-side edit panel width, draggable via the splitter between canvas and panel.
+    private float _sidePanelW = 400f;
 
     // Font Awesome 6 glyphs baked into the editor font (0xE000-0xF8FF; solid+regular). Same set the
     // editor menus use, so these render rather than tofu.
@@ -75,10 +78,18 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
         if (_graph == null) { EditorGui.Text("Pick a conversation to edit."); EditorGui.End(); return; }
 
-        float canvasW = EditorGui.ContentAvail().X - SidePanelW;
+        float rowStartX = EditorGui.CursorScreenPos().X;
+        float avail = EditorGui.ContentAvail().X;
+        float rightEdge = rowStartX + avail;
+        const float splitterW = 8f;
+        // Clamp the panel so both sides always keep a usable width.
+        _sidePanelW = System.Math.Clamp(_sidePanelW, 260f, System.Math.Max(300f, avail - 260f));
+        float canvasW = avail - _sidePanelW - splitterW;
         if (canvasW < 200f) { canvasW = 200f; }
 
         DrawCanvas(canvasW);
+        EditorGui.SameLine();
+        DrawSplitter(rightEdge);
         EditorGui.SameLine();
         DrawSidePanel();
 
@@ -468,9 +479,29 @@ public sealed class DialogueGraphEditor : IEditorWindow
     }
 
     // ── Side panel (edit the selected node) ───────────────────────────────────
+    // A draggable divider between the canvas and the edit panel; drag it to resize the panel.
+    private void DrawSplitter(float rightEdge)
+    {
+        Vector2 p = EditorGui.CursorScreenPos();
+        float h = EditorGui.ContentAvail().Y;
+        if (h < 20f) { h = 500f; }
+        EditorGui.InvisibleButton("##split", new Vector2(8f, h));
+        bool active = EditorGui.IsItemActive();
+        bool hover = EditorGui.IsItemHovered();
+        // A faint full-height line, plus an always-visible grip handle in the middle that lights up on
+        // hover/drag so it reads as draggable.
+        EditorGui.AddRectFilled(new Vector2(p.X + 3f, p.Y), new Vector2(p.X + 5f, p.Y + h), _cBorder, 1f);
+        Vector4 grip = active ? _cAccent : hover ? _cAccent : _cDim;
+        EditorGui.AddRectFilled(new Vector2(p.X + 1f, p.Y + h * 0.5f - 20f), new Vector2(p.X + 7f, p.Y + h * 0.5f + 20f), grip, 3f);
+        if (active)
+        {
+            _sidePanelW = System.Math.Clamp(rightEdge - EditorGui.MousePos().X, 260f, 720f);
+        }
+    }
+
     private void DrawSidePanel()
     {
-        EditorGui.BeginChild("side", new Vector2(SidePanelW - 8f, 0f), true);
+        EditorGui.BeginChild("side", new Vector2(_sidePanelW - 8f, 0f), true);
         if (_selected == null)
         {
             EditorGui.Spacing();
@@ -493,7 +524,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
         Field("speaker", Ico.User, "speaker", ref n.Speaker);
 
         EditorGui.TextColored(_cDim, $"{Ico.Font}  text");
-        EditorGui.InputTextMultiline("##text", ref n.Text, new Vector2(-1f, 70f), 512);
+        EditorGui.InputTextMultiline("##text", ref n.Text, new Vector2(-1f, 120f), 512);
 
         Field("portrait", Ico.Image, "portrait", ref n.Portrait);
 
