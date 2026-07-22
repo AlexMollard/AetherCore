@@ -1,0 +1,36 @@
+{
+  "id": "npc_wraith",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "speaker": "The Wraith",
+      "portrait": "textures/portraits/void.png",
+      "text": "You still have [flicker]colour[/flicker] in you. How quaint. Down here that fades fast.",
+      "effect": "whisper",
+      "choices": [
+        { "text": "What are you?", "goto": "who" },
+        { "text": "How do I get deeper?", "goto": "deeper" },
+        { "text": "(say nothing and leave)", "goto": "leave" }
+      ]
+    },
+    "who": {
+      "speaker": "The Wraith",
+      "portrait": "textures/portraits/void.png",
+      "text": "A light that stopped drawing. I forgot my own line, and the dark filled the rest.",
+      "goto": "greet"
+    },
+    "deeper": {
+      "speaker": "The Wraith",
+      "portrait": "textures/portraits/void.png",
+      "text": "Follow the ink that runs [shake]downhill[/shake]. And do not let your hand go still.",
+      "effect": "flicker",
+      "goto": "greet"
+    },
+    "leave": {
+      "speaker": "The Wraith",
+      "portrait": "textures/portraits/void.png",
+      "text": "Go on, then. The deep is patient. It will have your colour soon enough.",
+      "effect": "whisper"
+    }
+  }
+}

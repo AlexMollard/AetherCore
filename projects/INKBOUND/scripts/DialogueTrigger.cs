@@ -12,6 +12,8 @@ public sealed class DialogueTrigger : EntityScript
     public string DialogueId = "";
     public bool Once = true;
     public bool RequireInteract = false;
+    /// <summary>Interact-prompt text shown while the player is in range (e.g. "> read", "> talk").</summary>
+    public string PromptLabel = "> read";
     /// <summary>Trigger box size in world units (self-provisioned sensor; drop the script and go).</summary>
     public Vector2 Size = new(2.0f, 3.0f);
 
@@ -71,7 +73,7 @@ public sealed class DialogueTrigger : EntityScript
     {
         if (on && !_prompt.IsValid)
         {
-            _prompt = Ui.CreateText(default, "> read");
+            _prompt = Ui.CreateText(default, PromptLabel);
             Ui.SetFont(_prompt, "PixelStorm");
             Ui.SetFontSize(_prompt, 20f);
             Ui.SetTextColor(_prompt, GameSettings.Accent);

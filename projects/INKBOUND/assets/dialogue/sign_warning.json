@@ -1,0 +1,17 @@
+{
+  "id": "sign_warning",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scrawled in ink",
+      "text": "TURN BACK. The floor below was drawn in a [shake]hurry[/shake].",
+      "effect": "glitch",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scrawled in ink",
+      "text": "If the ink runs out, so do you. Keep something in the well.",
+      "effect": "whisper"
+    }
+  }
+}
