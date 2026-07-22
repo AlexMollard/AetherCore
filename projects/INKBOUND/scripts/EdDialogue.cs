@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using AetherCore;
 
@@ -97,7 +98,9 @@ public sealed class EdGraph
     public string ToJson()
     {
         using var stream = new MemoryStream();
-        using (var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        // Relaxed escaping so ">=" in conditions and "[tag]" markup in text stay human-readable
+        // (matches the hand-authored files) instead of ">" etc.
+        using (var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             w.WriteStartObject();
             w.WriteString("id", Id);
