@@ -17,7 +17,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
-    private const float NodeW = 210f, NodeH = 74f, TitleH = 24f, SidePanelW = 330f, GridStep = 32f;
+    private const float NodeW = 228f, NodeH = 100f, TitleH = 27f, SidePanelW = 330f, GridStep = 32f;
     private static readonly Vector4 Current = new(1f, 0.78f, 0.30f, 1f); // play-mode "current node" (fixed warm)
 
     // Theme colours, refreshed each frame from the editor's live ImGui style (see RefreshTheme).
@@ -153,7 +153,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
             int d = depth.TryGetValue(n.Id, out int dv) ? dv : 0;
             int row = rowInDepth.TryGetValue(d, out int rv) ? rv : 0;
             rowInDepth[d] = row + 1;
-            n.Pos = new Vector2(40f + d * 250f, 40f + row * 96f);
+            n.Pos = new Vector2(48f + d * 290f, 48f + row * 128f);
         }
     }
 
@@ -278,6 +278,11 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private Vector2 NodeScreen(EdNode n, Vector2 origin) => origin + _pan + n.Pos;
 
+    private static int OutCount(EdNode n) => n.HasChoices ? n.Choices.Count : (n.Goto.Length > 0 ? 1 : 0);
+
+    private Vector2 OutPort(EdNode n, int i, int count, Vector2 s)
+        => s + new Vector2(count <= 1 ? NodeW * 0.5f : NodeW * (i + 1f) / (count + 1f), NodeH);
+
     private void DrawNode(EdNode n, Vector2 origin)
     {
         Vector2 s = NodeScreen(n, origin);
@@ -286,52 +291,73 @@ public sealed class DialogueGraphEditor : IEditorWindow
         bool isCurrent = Dialogue.IsActive && n.Id == Dialogue.CurrentNodeId;
         bool isSel = n == _selected;
         bool isHover = n == _hover;
+        bool isEnd = !n.HasChoices && n.Goto.Length == 0;
 
-        // Drop shadow, body, header bar.
-        EditorGui.AddRectFilled(s + new Vector2(3f, 4f), e + new Vector2(3f, 4f), new Vector4(0f, 0f, 0f, 0.35f), 7f);
-        EditorGui.AddRectFilled(s, e, isHover ? _cNodeHover : _cNode, 7f);
-        EditorGui.AddRectFilled(s, new Vector2(e.X, s.Y + TitleH), isStart ? _cAccent : _cHeader, 7f);
-        EditorGui.AddRectFilled(new Vector2(s.X, s.Y + TitleH - 6f), new Vector2(e.X, s.Y + TitleH), isStart ? _cAccent : _cHeader, 0f); // square the header's bottom
+        // Type accent: start = accent, branch = accent-dim, end = faint red-ish (from dim), linear = border.
+        Vector4 typeCol = isStart ? _cAccent : n.HasChoices ? _cAccent : isEnd ? new Vector4(0.7f, 0.35f, 0.3f, 1f) : _cBorder;
 
-        Vector4 border = isCurrent ? Current : (isSel ? _cAccent : _cBorder);
-        EditorGui.AddRect(s, e, border, 7f, (isSel || isCurrent) ? 2.5f : 1f);
+        // Shadow, body, header, left type stripe.
+        EditorGui.AddRectFilled(s + new Vector2(4f, 5f), e + new Vector2(4f, 5f), new Vector4(0f, 0f, 0f, 0.40f), 9f);
+        EditorGui.AddRectFilled(s, e, isHover ? _cNodeHover : _cNode, 9f);
+        Vector4 head = isStart ? _cAccent : _cHeader;
+        EditorGui.AddRectFilled(s, new Vector2(e.X, s.Y + TitleH), head, 9f);
+        EditorGui.AddRectFilled(new Vector2(s.X, s.Y + TitleH - 9f), new Vector2(e.X, s.Y + TitleH), head, 0f);
+        EditorGui.AddRectFilled(s, new Vector2(s.X + 4f, e.Y), typeCol, 0f); // type stripe
+        Vector4 border = isCurrent ? Current : isSel ? _cAccent : _cBorder;
+        EditorGui.AddRect(s, e, border, 9f, (isSel || isCurrent) ? 2.5f : 1f);
 
-        // Header: id (contrast text on the accent header for the start node).
+        // Clip all inner text/pills to the card interior so nothing spills past the border.
+        float inX = s.X + 12f, innerW = NodeW - 22f;
+        EditorGui.PushClipRect(new Vector2(s.X + 5f, s.Y), new Vector2(e.X - 3f, e.Y), true);
+
+        // Header: id + a right-aligned type tag.
         Vector4 headText = isStart ? EditorGui.ThemeColor(EditorColor.WindowBg) : _cText;
-        if (isStart)
-        {
-            Vector2 t0 = s + new Vector2(9f, 6f);
-            EditorGui.AddTriangleFilled(t0, t0 + new Vector2(0f, 11f), t0 + new Vector2(9f, 5.5f), headText); // start marker
-            EditorGui.AddText(s + new Vector2(24f, 4f), headText, n.Id);
-        }
-        else
-        {
-            EditorGui.AddText(s + new Vector2(10f, 4f), headText, n.Id);
-        }
+        EditorGui.AddText(new Vector2(inX, s.Y + 5f), headText, Fit(n.Id, innerW - 52f));
+        string tag = isStart ? "START" : n.HasChoices ? "BRANCH" : isEnd ? "END" : "LINE";
+        Vector4 tagCol = new(headText.X, headText.Y, headText.Z, 0.65f);
+        EditorGui.AddText(new Vector2(e.X - 10f - EditorGui.CalcTextSize(tag).X, s.Y + 6f), tagCol, tag);
 
-        // Body: speaker (accent), text preview (text), badge row (dim).
-        EditorGui.AddText(s + new Vector2(10f, TitleH + 7f), _cAccent, Trunc(n.Speaker, 24));
-        EditorGui.AddText(s + new Vector2(10f, TitleH + 25f), _cText, Trunc(n.Text, 26));
-        string badge = n.HasChoices ? $"{n.Choices.Count} choices" : (n.Goto.Length > 0 ? $"-> {n.Goto}" : "end");
-        if (n.Effect != "normal") { badge = $"[{n.Effect}]  {badge}"; }
-        EditorGui.AddText(s + new Vector2(10f, TitleH + 43f), _cDim, Trunc(badge, 26));
+        // Body: speaker + text preview.
+        EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 8f), _cAccent, Fit(n.Speaker.Length > 0 ? n.Speaker : "(no speaker)", innerW));
+        EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 28f), _cText, Fit(n.Text.Length > 0 ? n.Text : "...", innerW));
+
+        // Footer pills: effect + destination.
+        float fy = e.Y - 24f;
+        float fx = inX;
+        if (n.Effect != "normal") { fx = Pill(fx, fy, n.Effect, _cAccentPillBg(), _cAccent); }
+        string dest = n.HasChoices ? $"{n.Choices.Count} choices" : n.Goto.Length > 0 ? $"-> {n.Goto}" : "end";
+        Pill(fx, fy, dest, new Vector4(_cNodeHover.X, _cNodeHover.Y, _cNodeHover.Z, 1f), _cDim);
+
+        EditorGui.PopClipRect();
+
+        // Ports: input (top-centre) + one output per destination (bottom).
+        EditorGui.AddCircleFilled(new Vector2(s.X + NodeW * 0.5f, s.Y), 4f, _cBorder);
+        int outs = OutCount(n);
+        for (int i = 0; i < outs; i++) { EditorGui.AddCircleFilled(OutPort(n, i, outs, s), 4f, _cAccent); }
+    }
+
+    private Vector4 _cAccentPillBg()
+    {
+        Vector4 a = _cAccent;
+        return new Vector4(a.X, a.Y, a.Z, 0.22f);
+    }
+
+    private float Pill(float x, float y, string label, Vector4 bg, Vector4 fg)
+    {
+        Vector2 sz = EditorGui.CalcTextSize(label);
+        EditorGui.AddRectFilled(new Vector2(x, y), new Vector2(x + sz.X + 12f, y + 18f), bg, 4f);
+        EditorGui.AddText(new Vector2(x + 6f, y + 2f), fg, label);
+        return x + sz.X + 12f + 5f;
     }
 
     private void DrawLinks(EdNode n, Vector2 origin)
     {
         Vector2 s = NodeScreen(n, origin);
-        if (n.HasChoices)
+        int count = OutCount(n);
+        for (int i = 0; i < count; i++)
         {
-            int count = n.Choices.Count;
-            for (int i = 0; i < count; i++)
-            {
-                Vector2 outP = s + new Vector2(NodeW * (i + 1f) / (count + 1f), NodeH);
-                LinkTo(outP, n.Choices[i].Goto, origin);
-            }
-        }
-        else if (n.Goto.Length > 0)
-        {
-            LinkTo(s + new Vector2(NodeW * 0.5f, NodeH), n.Goto, origin);
+            string goTo = n.HasChoices ? n.Choices[i].Goto : n.Goto;
+            LinkTo(OutPort(n, i, count, s), goTo, origin);
         }
     }
 
@@ -340,9 +366,8 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EdNode? t = _graph!.Find(targetId);
         if (t == null) { return; }
         Vector2 inP = NodeScreen(t, origin) + new Vector2(NodeW * 0.5f, 0f);
-        EditorGui.AddBezierCubic(outP, outP + new Vector2(0f, 60f), inP - new Vector2(0f, 60f), inP, _cLink, 2.5f);
-        EditorGui.AddCircleFilled(outP, 3.5f, _cAccent);
-        // Arrowhead pointing down into the target's top edge.
+        float bow = System.Math.Max(45f, System.Math.Abs(inP.Y - outP.Y) * 0.5f);
+        EditorGui.AddBezierCubic(outP, outP + new Vector2(0f, bow), inP - new Vector2(0f, bow), inP, _cLink, 2.5f);
         EditorGui.AddTriangleFilled(inP + new Vector2(-5f, -9f), inP + new Vector2(5f, -9f), inP + new Vector2(0f, 1f), _cLink);
     }
 
@@ -416,5 +441,11 @@ public sealed class DialogueGraphEditor : IEditorWindow
         }
     }
 
-    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "~";
+    // Trim to fit maxW pixels with an ellipsis (measured against the editor font).
+    private static string Fit(string s, float maxW)
+    {
+        if (s.Length == 0 || EditorGui.CalcTextSize(s).X <= maxW) { return s; }
+        while (s.Length > 1 && EditorGui.CalcTextSize(s + "...").X > maxW) { s = s[..^1]; }
+        return s + "...";
+    }
 }
