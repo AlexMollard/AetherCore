@@ -26,9 +26,11 @@ public sealed class DialogueGraphEditor : IEditorWindow
     // Editor-side edit panel width, draggable via the splitter between canvas and panel.
     private float _sidePanelW = 400f;
 
-    // Goto node-picker state: the filter text and which goto combo is currently open.
-    private string _gotoFilter = "";
-    private string _openGoto = "";
+    // Filterable-picker state (shared by the goto + portrait combos; only one is open at a time):
+    // the filter text, which combo is open, and the cached portrait list (globbed when a picker opens).
+    private string _pickFilter = "";
+    private string _openPick = "";
+    private string[] _portraits = System.Array.Empty<string>();
 
     // Font Awesome 6 glyphs baked into the editor font (0xE000-0xF8FF; solid+regular). Same set the
     // editor menus use, so these render rather than tofu.
@@ -530,7 +532,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.TextColored(_cDim, $"{Ico.Font}  text");
         EditorGui.InputTextMultiline("##text", ref n.Text, new Vector2(-1f, 120f), 512);
 
-        Field("portrait", Ico.Image, "portrait", ref n.Portrait);
+        PortraitField("portrait", Ico.Image, "portrait", ref n.Portrait);
 
         EditorGui.TextColored(_cDim, $"{Ico.Wand}  effect");
         int eff = System.Array.IndexOf(Effects, n.Effect);
@@ -611,10 +613,10 @@ public sealed class DialogueGraphEditor : IEditorWindow
         string preview = value.Length > 0 ? value : "(pick a node)";
         if (EditorGui.BeginCombo("##" + id, preview))
         {
-            if (_openGoto != id) { _openGoto = id; _gotoFilter = ""; EditorGui.SetKeyboardFocusHere(0); }
+            if (_openPick != id) { _openPick = id; _pickFilter = ""; EditorGui.SetKeyboardFocusHere(0); }
             EditorGui.SetNextItemWidth(-1f);
-            EditorGui.InputText("##flt" + id, ref _gotoFilter, 64);
-            string f = _gotoFilter.ToLowerInvariant();
+            EditorGui.InputText("##flt" + id, ref _pickFilter, 64);
+            string f = _pickFilter.ToLowerInvariant();
             if (f.Length == 0 || "end".Contains(f))
             {
                 if (EditorGui.Selectable("end", value == "end")) { value = "end"; }
@@ -628,7 +630,47 @@ public sealed class DialogueGraphEditor : IEditorWindow
             }
             EditorGui.EndCombo();
         }
-        else if (_openGoto == id) { _openGoto = ""; }
+        else if (_openPick == id) { _openPick = ""; }
+    }
+
+    // A filterable picker over the portrait textures in assets/textures/portraits, plus "(none)".
+    // Stored value is the path relative to assets/ (DialogueRunner prefixes "project://assets/").
+    private void PortraitField(string id, string icon, string label, ref string value)
+    {
+        EditorGui.TextColored(_cDim, $"{icon}  {label}");
+        EditorGui.SetNextItemWidth(-1f);
+        string preview = value.Length > 0 ? value : "(none)";
+        if (EditorGui.BeginCombo("##" + id, preview))
+        {
+            if (_openPick != id) { _openPick = id; _pickFilter = ""; EditorGui.SetKeyboardFocusHere(0); RefreshPortraits(); }
+            EditorGui.SetNextItemWidth(-1f);
+            EditorGui.InputText("##flt" + id, ref _pickFilter, 64);
+            string f = _pickFilter.ToLowerInvariant();
+            if (f.Length == 0 || "none".Contains(f))
+            {
+                if (EditorGui.Selectable("(none)", value.Length == 0)) { value = ""; }
+            }
+            foreach (string p in _portraits)
+            {
+                if (f.Length == 0 || p.ToLowerInvariant().Contains(f))
+                {
+                    if (EditorGui.Selectable(p, p == value)) { value = p; }
+                }
+            }
+            EditorGui.EndCombo();
+        }
+        else if (_openPick == id) { _openPick = ""; }
+    }
+
+    private void RefreshPortraits()
+    {
+        var list = new List<string>();
+        foreach (string vpath in Assets.List("project://assets/textures/portraits/*.png"))
+        {
+            list.Add("textures/portraits/" + Path.GetFileName(vpath));
+        }
+        list.Sort(System.StringComparer.Ordinal);
+        _portraits = list.ToArray();
     }
 
     // ── Structural ────────────────────────────────────────────────────────────
