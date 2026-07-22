@@ -48,8 +48,22 @@ VSOutput vertexMain(uint vertexId : SV_VertexID)
         float2(0, 0), float2(1, 1), float2(0, 1),
     };
     const float2 c = corners[vertexId % 6u];
+
+    // Bound the quad to the ink's world-space AABB (params = world min.xy, max.xy) so the fullscreen
+    // SDF loop only runs over pixels near actual ink, not the whole screen. Degenerate (collapsed)
+    // when there is no ink, so nothing is rasterised.
+    FrameConstantsData* frame = pc.frameConstants.Ptr();
+    const float2 mn = pc.params.xy;
+    const float2 mx = pc.params.zw;
     VSOutput o;
-    o.position = float4(c * 2.0 - 1.0, 0.0, 1.0);
+    if (mx.x <= mn.x || mx.y <= mn.y)
+    {
+        o.position = float4(0.0, 0.0, 2.0, 1.0); // behind the near plane -> clipped
+        o.uv = c;
+        return o;
+    }
+    const float2 world = lerp(mn, mx, c);
+    o.position = mul(frame->viewProj, float4(world, 0.0, 1.0));
     o.uv = c;
     return o;
 }
@@ -110,12 +124,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const uint segmentCount = pc.count / 2u; // 2 float4 per InkSegment
     float best = 1e9;
     float bAlpha = 0.0, bGlow = 0.0, bGhost = 0.0;
+    // Cheap inner loop: just capsule distances (no per-segment noise - that would be O(pixels*segments)
+    // fbm evaluations). Edge roughening is applied once per pixel after the loop.
     for (uint i = 0u; i < segmentCount; ++i)
     {
         const InkSegment s = segs[i];
-        // Roughen the boundary with fbm so the edge looks brushed, not machined.
-        const float n = fbm(wq * 6.5 + s.a * 3.1) - 0.5;
-        const float d = (sdSegment(wq, s.a, s.b) - s.width) + n * 0.07;
+        const float d = sdSegment(wq, s.a, s.b) - s.width;
         if (d < best)
         {
             best = d;
@@ -124,6 +138,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             bGhost = s.ghost;
         }
     }
+    // One fbm per pixel roughens the whole ink boundary (brushed, not machined).
+    best += (fbm(wq * 6.5) - 0.5) * 0.07;
 
     const float aa = cell; // ~one pixel-cell soft edge
     if (best > aa * 1.5)

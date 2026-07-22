@@ -127,8 +127,10 @@ public sealed class AetherInk : EntityScript
         }
 
         // 2. Age segments, expire the dead (and their colliders), and pack the live ones into the
-        //    scratch buffer. Rebuilt every frame so the shader always has the current stroke.
+        //    scratch buffer. Rebuilt every frame so the shader always has the current stroke. Track the
+        //    world AABB so the pass quad only covers the ink (not the whole screen).
         _buf.Clear();
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
         for (int i = _segs.Count - 1; i >= 0; i--)
         {
             Seg s = _segs[i];
@@ -153,12 +155,25 @@ public sealed class AetherInk : EntityScript
             float ghost = s.Anchored ? 0.0f : 1.0f;                              // ghost = red
             _buf.Add(new Vector4(s.A.X, s.A.Y, s.B.X, s.B.Y));
             _buf.Add(new Vector4(Thickness * grow, s.Anchored ? alpha : alpha * 0.85f, glow, ghost));
+            minX = Math.Min(minX, Math.Min(s.A.X, s.B.X));
+            minY = Math.Min(minY, Math.Min(s.A.Y, s.B.Y));
+            maxX = Math.Max(maxX, Math.Max(s.A.X, s.B.X));
+            maxY = Math.Max(maxY, Math.Max(s.A.Y, s.B.Y));
             _segs[i] = s;
+        }
+
+        // params = world AABB of the ink (min.xy, max.xy), padded for thickness + rim + edge noise, so
+        // the shader's fullscreen pass only rasterises pixels near the ink. Zero = degenerate = no draw.
+        Vector4 aabb = Vector4.Zero;
+        if (_buf.Count > 0)
+        {
+            const float pad = 0.5f;
+            aabb = new Vector4(minX - pad, minY - pad, maxX + pad, maxY + pad);
         }
 
         // Submit the whole stroke to the ink pass (body + rim colours as color0/color1). Even an
         // empty buffer submits so the pass stays registered; the shader just draws nothing.
-        CustomPass.Submit(PassName, CollectionsMarshal.AsSpan(_buf), Vector4.Zero, BodyColor, RimColor);
+        CustomPass.Submit(PassName, CollectionsMarshal.AsSpan(_buf), aabb, BodyColor, RimColor);
     }
 
     private void LaySegment(Vector2 a, Vector2 b)
