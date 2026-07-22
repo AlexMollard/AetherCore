@@ -110,6 +110,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
 [[entities]]
+disabled = true
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SettingsRoot'
 node = -5049363935602637638
@@ -524,6 +525,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     value = 1.0
 
 [[entities]]
+disabled = true
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LevelSelectRoot'
 node = 5435090176886098998
@@ -1500,6 +1502,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     color0 = [ 0.0, 0.0, 0.0, 0.0 ]
     color1 = [ 0.0, 0.0, 0.0, 0.0 ]
     shader = 'ui_ink_drips'
+    sort_order = 0
 
     [entities.ui_rect]
     anchor_max = [ 1.0, 1.0 ]
@@ -1522,6 +1525,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     color0 = [ 0.045, 0.055, 0.075, 1.0 ]
     color1 = [ 0.302, 0.851, 1.0, 1.0 ]
     shader = 'ui_void_bg'
+    sort_order = 0
 
     [entities.ui_rect]
     anchor_max = [ 1.0, 1.0 ]
