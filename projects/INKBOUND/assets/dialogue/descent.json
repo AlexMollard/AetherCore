@@ -1,0 +1,164 @@
+{
+  "id": "descent",
+  "start": "wake",
+  "nodes": {
+    "wake": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "You have fallen [shake]far[/shake], little light. Farther than the ink was meant to reach.",
+      "effect": "whisper",
+      "choices": [
+        { "text": "Who are you?", "goto": "who" },
+        { "text": "(say nothing)", "goto": "silence", "set": "quiet" },
+        { "text": "(3 shards) I can pay to pass.", "goto": "offer", "if": "coins>=3" }
+      ]
+    },
+    "who": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "I am the [glitch]dark[/glitch] your ink has not yet named. Name me and we begin.",
+      "goto": "hub"
+    },
+    "silence": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Silence. Good. The deep prefers those who listen before they draw.",
+      "goto": "hub"
+    },
+    "offer": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Three sparks, already spent on fear. You [glitch]bargain[/glitch] before you understand the price.",
+      "effect": "glitch",
+      "choices": [
+        { "text": "Take them.", "goto": "gift", "set": "bargained" },
+        { "text": "On second thought, no.", "goto": "hub" }
+      ]
+    },
+    "gift": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Then the ink owes you a debt. It is not kind to its creditors.",
+      "set": "debt",
+      "goto": "hub"
+    },
+    "hub": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "The descent forks. Where does your ink pull you?",
+      "choices": [
+        { "text": "Down. Always down.", "goto": "deeper" },
+        { "text": "Toward the murmurs.", "goto": "memory" },
+        { "text": "Back the way I came.", "goto": "flee" }
+      ]
+    },
+    "flee": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "There is no up. There is only [whisper]less down[/whisper]. Choose again.",
+      "set": "fled",
+      "goto": "hub"
+    },
+    "memory": {
+      "speaker": "The Murmurs",
+      "text": "The murmurs are old lights that [flicker]stopped drawing[/flicker]. They still remember how.",
+      "effect": "flicker",
+      "choices": [
+        { "text": "Listen closer.", "goto": "listen", "set": "saw_memory" },
+        { "text": "Ignore them.", "goto": "hub" }
+      ]
+    },
+    "listen": {
+      "speaker": "The Murmurs",
+      "text": "They say your name the way water says a stone: slowly, and then all at once.",
+      "effect": "whisper",
+      "goto": "deeper"
+    },
+    "deeper": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Down is the only honest direction here. Will you fall, or will you [wave]draw[/wave]?",
+      "effect": "whisper",
+      "choices": [
+        { "text": "Draw a path down.", "goto": "draw", "set": "chose_ink" },
+        { "text": "Just fall.", "goto": "fall" }
+      ]
+    },
+    "draw": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Good. [wave]Draw[/wave]. The walls remember every stroke you make down here.",
+      "effect": "wave",
+      "goto": "trial"
+    },
+    "fall": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Falling is only [shake]drawing[/shake] without a hand. The dark will hold the pen.",
+      "goto": "trial"
+    },
+    "trial": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Then prove the ink is yours. Speak a truth, or a lie, and I will taste which.",
+      "choices": [
+        { "text": "A truth.", "goto": "truth" },
+        { "text": "A lie.", "goto": "lie" },
+        { "text": "A name the murmurs gave me.", "goto": "name", "if": "saw_memory" }
+      ]
+    },
+    "truth": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Truth. How quaint. It will not save you, but it is pretty while it lasts.",
+      "set": "honest",
+      "goto": "verdict"
+    },
+    "lie": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "A [glitch]lie[/glitch]. The ink drinks those the fastest. You'll feel it thin.",
+      "effect": "glitch",
+      "set": "liar",
+      "goto": "verdict"
+    },
+    "name": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "You remember a [flicker]name[/flicker]. Old. Buried. The dark flinches to hear it spoken.",
+      "effect": "flicker",
+      "set": "namer",
+      "goto": "verdict"
+    },
+    "verdict": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "So. This is the light you are. Now show me how it ends.",
+      "choices": [
+        { "text": "(5 shards) Burn bright and climb.", "goto": "ascend", "if": "coins>=5" },
+        { "text": "Descend. It always was down.", "goto": "end_descend" },
+        { "text": "Draw my own ending.", "goto": "end_draw", "if": "chose_ink" }
+      ]
+    },
+    "ascend": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Five sparks and a spine. [shake]Rare[/shake]. Go on then. Blind the deep, if you can.",
+      "goto": "end"
+    },
+    "end_descend": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Down, then. It always was. The ink will meet you at the bottom.",
+      "effect": "whisper",
+      "goto": "end"
+    },
+    "end_draw": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "You drew your way in. [wave]Draw[/wave] your way through. I will be the paper.",
+      "effect": "wave",
+      "goto": "end"
+    }
+  }
+}

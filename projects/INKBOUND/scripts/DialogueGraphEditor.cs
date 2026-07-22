@@ -48,7 +48,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
         // Toolbar.
         if (_files.Length > 0 && EditorGui.Combo("##file", ref _fileIdx, _files)) { Load(_files[_fileIdx]); }
         EditorGui.SameLine();
-        if (EditorGui.Button("Reload") && _loadedId.Length > 0) { Load(_loadedId); }
+        if (EditorGui.Button("Reload")) { RefreshFiles(); if (_loadedId.Length > 0) { Load(_loadedId); } }
         EditorGui.SameLine();
         if (EditorGui.Button("Save") && _graph != null) { Save(); }
         EditorGui.SameLine();
