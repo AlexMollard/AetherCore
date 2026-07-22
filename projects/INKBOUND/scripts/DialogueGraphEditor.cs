@@ -21,7 +21,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
-    private const float NodeW = 236f, NodeH = 122f, TitleH = 28f, SidePanelW = 330f, GridStep = 32f;
+    private const float NodeW = 236f, NodeH = 134f, TitleH = 28f, SidePanelW = 330f, GridStep = 32f;
 
     // Font Awesome 6 glyphs baked into the editor font (0xE000-0xF8FF; solid+regular). Same set the
     // editor menus use, so these render rather than tofu.
@@ -410,7 +410,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 37f), _cText, Fit(n.Text.Length > 0 ? n.Text : "...", innerW));
 
         // Footer pills: effect + destination. Dark chip + bright text so labels stay legible on the card.
-        float fy = e.Y - 28f;
+        float fy = e.Y - 34f;
         float fx = inX;
         if (n.Effect != "normal") { fx = Pill(fx, fy, $"{Ico.Wand} {n.Effect}", PillBg(), _cAccent); }
         string dest = n.HasChoices ? $"{Ico.Branch} {n.Choices.Count} choices" : n.Goto.Length > 0 ? $"{Ico.ArrowRight} {n.Goto}" : $"{Ico.Dot} end";
