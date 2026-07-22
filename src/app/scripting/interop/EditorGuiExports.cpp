@@ -62,6 +62,10 @@ AE_SCRIPT_API std::int32_t aether_editorgui_begin_child(const char* id, Vec2 siz
 AE_SCRIPT_API void aether_editorgui_end_child() { ImGui::EndChild(); }
 
 AE_SCRIPT_API void aether_editorgui_same_line() { ImGui::SameLine(); }
+// Width of the next framed widget (combo/input/etc.); <0 means "fill to the right edge".
+AE_SCRIPT_API void aether_editorgui_set_next_item_width(float w) { ImGui::SetNextItemWidth(w); }
+// Height of a standard framed widget (font + frame padding) - for centering custom draw-list layout.
+AE_SCRIPT_API float aether_editorgui_frame_height() { return ImGui::GetFrameHeight(); }
 AE_SCRIPT_API Vec2 aether_editorgui_calc_text_size(const char* s) { const ImVec2 v = ImGui::CalcTextSize(s != nullptr ? s : ""); return {v.x, v.y}; }
 // Clip subsequent draw-list drawing to a rect (e.g. a node's interior so text never spills). Must be
 // balanced with pop_clip_rect.

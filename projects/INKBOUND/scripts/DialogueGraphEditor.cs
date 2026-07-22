@@ -15,6 +15,10 @@ public sealed class DialogueGraphEditor : IEditorWindow
 {
     public string Title => "Dialogue Graph";
 
+    // Backed by _open so the editor's Project menu can show/hide this window, and the window's own X
+    // button (which clears _open) keeps that menu toggle in sync.
+    public bool Visible { get => _open; set => _open = value; }
+
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
     private const float NodeW = 228f, NodeH = 100f, TitleH = 27f, SidePanelW = 330f, GridStep = 32f;
@@ -45,20 +49,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
         if (_files.Length == 0) { RefreshFiles(); }
         if (!_autoLoaded && _files.Length > 0) { _autoLoaded = true; Load(_files[0]); }
 
-        // Toolbar.
-        if (_files.Length > 0 && EditorGui.Combo("##file", ref _fileIdx, _files)) { Load(_files[_fileIdx]); }
-        EditorGui.SameLine();
-        if (EditorGui.Button("Reload")) { RefreshFiles(); if (_loadedId.Length > 0) { Load(_loadedId); } }
-        EditorGui.SameLine();
-        if (EditorGui.Button("Save") && _graph != null) { Save(); }
-        EditorGui.SameLine();
-        if (EditorGui.Button("+ Node") && _graph != null) { AddNode(); }
-        if (_graph != null)
-        {
-            EditorGui.SameLine();
-            EditorGui.TextColored(_cDim, $"   {_graph.Nodes.Count} nodes  -  drag empty space to pan, a node to move");
-        }
-        EditorGui.Separator();
+        DrawToolbar();
 
         if (_graph == null) { EditorGui.Text("Pick a conversation to edit."); EditorGui.End(); return; }
 
@@ -71,6 +62,78 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
         EditorGui.End();
     }
+
+    // ── Toolbar ───────────────────────────────────────────────────────────────
+    // A themed bar: accent title chip, conversation picker, custom-drawn action buttons with hover
+    // states, and a right-aligned node/status badge. Drawn on the window draw list so it follows the
+    // editor's live theme like the rest of the graph.
+    private void DrawToolbar()
+    {
+        Vector2 p0 = EditorGui.CursorScreenPos();
+        float w = EditorGui.ContentAvail().X;
+        float frameH = EditorGui.FrameHeight();      // real combo/button height (font + frame padding)
+        float barH = frameH + 12f;                    // 6px breathing room above and below the controls
+        float midY = p0.Y + barH * 0.5f;
+        float lineH = EditorGui.CalcTextSize("Xg").Y;
+        float textY = midY - lineH * 0.5f;            // centre plain text on the bar
+
+        var barBg = new Vector4(_cNode.X, _cNode.Y, _cNode.Z, 1f);
+        EditorGui.AddRectFilled(p0, new Vector2(p0.X + w, p0.Y + barH), barBg, 5f);
+        EditorGui.AddRect(p0, new Vector2(p0.X + w, p0.Y + barH), _cBorder, 5f, 1f);
+        EditorGui.AddLine(new Vector2(p0.X + 4f, p0.Y + barH), new Vector2(p0.X + w - 4f, p0.Y + barH),
+            new Vector4(_cAccent.X, _cAccent.Y, _cAccent.Z, 0.45f), 1.5f);
+
+        // Accent chip + loaded conversation id.
+        Vector2 chip = new(p0.X + 12f, midY - 7f);
+        EditorGui.AddRectFilled(chip, chip + new Vector2(5f, 14f), _cAccent, 1.5f);
+        string id = _loadedId.Length > 0 ? _loadedId.ToUpperInvariant() : "DIALOGUE";
+        EditorGui.AddText(new Vector2(p0.X + 24f, textY), _cAccent, id);
+        float titleW = EditorGui.CalcTextSize(id).X;
+
+        // Controls row: centre the frame-height widgets in the bar; combo width fixed so buttons follow.
+        float rowY = midY - frameH * 0.5f;
+        EditorGui.SetCursorScreenPos(new Vector2(p0.X + 24f + titleW + 16f, rowY));
+        EditorGui.SetNextItemWidth(150f);
+        if (_files.Length > 0 && EditorGui.Combo("##file", ref _fileIdx, _files)) { Load(_files[_fileIdx]); }
+        EditorGui.SameLine();
+        if (ToolButton("##reload", "Reload", false, frameH)) { RefreshFiles(); if (_loadedId.Length > 0) { Load(_loadedId); } }
+        EditorGui.SameLine();
+        if (ToolButton("##save", "Save", true, frameH) && _graph != null) { Save(); }
+        EditorGui.SameLine();
+        if (ToolButton("##addnode", "+ Node", true, frameH) && _graph != null) { AddNode(); }
+
+        // Right-aligned status/hint.
+        if (_graph != null)
+        {
+            string status = $"{_graph.Nodes.Count} nodes   drag to pan, node to move";
+            float sw = EditorGui.CalcTextSize(status).X;
+            EditorGui.AddText(new Vector2(p0.X + w - sw - 12f, textY), _cDim, status);
+        }
+
+        EditorGui.SetCursorScreenPos(new Vector2(p0.X, p0.Y + barH + 6f));
+    }
+
+    // A rounded, hover-lit toolbar button drawn on the draw list, sized to the given height so it lines
+    // up with the combo. Accent = filled amber with dark text (primary actions); else a bordered chip.
+    private bool ToolButton(string id, string label, bool accent, float h)
+    {
+        Vector2 ts = EditorGui.CalcTextSize(label);
+        const float padX = 11f;
+        var size = new Vector2(ts.X + padX * 2f, h);
+        Vector2 p = EditorGui.CursorScreenPos();
+        bool clicked = EditorGui.InvisibleButton(id, size);
+        bool hover = EditorGui.IsItemHovered();
+        Vector4 bg = accent ? (hover ? Lighten(_cAccent, 0.15f) : _cAccent)
+                            : (hover ? _cNodeHover : _cNode);
+        Vector4 fg = accent ? _cBg : _cText;
+        EditorGui.AddRectFilled(p, p + size, bg, 5f);
+        if (!accent) { EditorGui.AddRect(p, p + size, _cBorder, 5f, 1f); }
+        EditorGui.AddText(new Vector2(p.X + padX, p.Y + (h - ts.Y) * 0.5f), fg, label);
+        return clicked;
+    }
+
+    private static Vector4 Lighten(Vector4 c, float t) =>
+        new(c.X + (1f - c.X) * t, c.Y + (1f - c.Y) * t, c.Z + (1f - c.Z) * t, c.W);
 
     // ── Files / load / save ───────────────────────────────────────────────────
     private void RefreshFiles()
@@ -321,12 +384,12 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 8f), _cAccent, Fit(n.Speaker.Length > 0 ? n.Speaker : "(no speaker)", innerW));
         EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 28f), _cText, Fit(n.Text.Length > 0 ? n.Text : "...", innerW));
 
-        // Footer pills: effect + destination.
+        // Footer pills: effect + destination. Dark chip + bright text so labels stay legible on the card.
         float fy = e.Y - 24f;
         float fx = inX;
-        if (n.Effect != "normal") { fx = Pill(fx, fy, n.Effect, _cAccentPillBg(), _cAccent); }
+        if (n.Effect != "normal") { fx = Pill(fx, fy, n.Effect, PillBg(), _cAccent); }
         string dest = n.HasChoices ? $"{n.Choices.Count} choices" : n.Goto.Length > 0 ? $"-> {n.Goto}" : "end";
-        Pill(fx, fy, dest, new Vector4(_cNodeHover.X, _cNodeHover.Y, _cNodeHover.Z, 1f), _cDim);
+        Pill(fx, fy, dest, PillBg(), _cText);
 
         EditorGui.PopClipRect();
 
@@ -336,16 +399,16 @@ public sealed class DialogueGraphEditor : IEditorWindow
         for (int i = 0; i < outs; i++) { EditorGui.AddCircleFilled(OutPort(n, i, outs, s), 4f, _cAccent); }
     }
 
-    private Vector4 _cAccentPillBg()
-    {
-        Vector4 a = _cAccent;
-        return new Vector4(a.X, a.Y, a.Z, 0.22f);
-    }
+    // Dark chip (the darker canvas colour) so bright pill text reads clearly against the node body.
+    private Vector4 PillBg() => new(_cBg.X, _cBg.Y, _cBg.Z, 0.92f);
 
     private float Pill(float x, float y, string label, Vector4 bg, Vector4 fg)
     {
         Vector2 sz = EditorGui.CalcTextSize(label);
-        EditorGui.AddRectFilled(new Vector2(x, y), new Vector2(x + sz.X + 12f, y + 18f), bg, 4f);
+        var a = new Vector2(x, y);
+        var b = new Vector2(x + sz.X + 12f, y + 18f);
+        EditorGui.AddRectFilled(a, b, bg, 4f);
+        EditorGui.AddRect(a, b, new Vector4(fg.X, fg.Y, fg.Z, 0.35f), 4f, 1f); // subtle tint border for definition
         EditorGui.AddText(new Vector2(x + 6f, y + 2f), fg, label);
         return x + sz.X + 12f + 5f;
     }

@@ -43,6 +43,10 @@ public static unsafe class EditorGui
     public static bool BeginChild(string id, Vector2 size = default, bool border = false) => Native.aether_editorgui_begin_child(id, size, border ? 1 : 0) != 0;
     public static void EndChild() => Native.aether_editorgui_end_child();
     public static void SameLine() => Native.aether_editorgui_same_line();
+    /// <summary>Width of the next framed widget (Combo/InputText/...); negative fills to the right edge.</summary>
+    public static void SetNextItemWidth(float width) => Native.aether_editorgui_set_next_item_width(width);
+    /// <summary>Height of a standard framed widget (font + frame padding) - for centering custom layout.</summary>
+    public static float FrameHeight() => Native.aether_editorgui_frame_height();
     public static Vector2 CalcTextSize(string s) => Native.aether_editorgui_calc_text_size(s);
     /// <summary>Clip subsequent draw-list drawing to a rect (balance with PopClipRect).</summary>
     public static void PushClipRect(Vector2 min, Vector2 max, bool intersectCurrent = true) => Native.aether_editorgui_push_clip_rect(min, max, intersectCurrent ? 1 : 0);

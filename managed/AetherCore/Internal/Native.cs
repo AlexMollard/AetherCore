@@ -113,6 +113,8 @@ internal static unsafe partial class Native
     internal static partial int aether_editorgui_begin_child(string id, Vector2 size, int border);
     [LibraryImport(Lib)] internal static partial void aether_editorgui_end_child();
     [LibraryImport(Lib)] internal static partial void aether_editorgui_same_line();
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_set_next_item_width(float w);
+    [LibraryImport(Lib)] internal static partial float aether_editorgui_frame_height();
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial Vector2 aether_editorgui_calc_text_size(string s);
     [LibraryImport(Lib)] internal static partial void aether_editorgui_push_clip_rect(Vector2 mn, Vector2 mx, int intersect);
