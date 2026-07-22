@@ -1592,6 +1592,17 @@ namespace aether::editor
 			}
 		}
 
+		// Project-defined editor windows (IEditorWindow): pump their ImGui after the built-in panels.
+		// Generic hook - the editor knows nothing about what any project draws. Each window Begins/Ends
+		// itself; DrawEditorWindows isolates a throwing window so it can't crash the editor.
+		if (const auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
+		{
+			if (const auto* api = scripting->Api(); api != nullptr && api->DrawEditorWindows != nullptr)
+			{
+				api->DrawEditorWindows();
+			}
+		}
+
 		DrawCommandPalette(context);
 
 		// Finalize an in-flight edit once the mouse is released, so a multi-frame
