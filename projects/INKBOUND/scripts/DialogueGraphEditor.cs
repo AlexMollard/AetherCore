@@ -410,11 +410,13 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 37f), _cText, Fit(n.Text.Length > 0 ? n.Text : "...", innerW));
 
         // Footer pills: effect + destination. Dark chip + bright text so labels stay legible on the card.
+        // Pills are budgeted against a right margin so the second pill never spills past the card edge.
         float fy = e.Y - 34f;
         float fx = inX;
-        if (n.Effect != "normal") { fx = Pill(fx, fy, $"{Ico.Wand} {n.Effect}", PillBg(), _cAccent); }
-        string dest = n.HasChoices ? $"{Ico.Branch} {n.Choices.Count} choices" : n.Goto.Length > 0 ? $"{Ico.ArrowRight} {n.Goto}" : $"{Ico.Dot} end";
-        Pill(fx, fy, dest, PillBg(), _cText);
+        float pillRight = e.X - 12f;
+        if (n.Effect != "normal") { fx = Pill(fx, fy, $"{Ico.Wand} {n.Effect}", PillBg(), _cAccent, pillRight); }
+        string dest = n.HasChoices ? $"{Ico.Branch} {n.Choices.Count}" : n.Goto.Length > 0 ? $"{Ico.ArrowRight} {n.Goto}" : $"{Ico.Dot} end";
+        Pill(fx, fy, dest, PillBg(), _cText, pillRight);
 
         EditorGui.PopClipRect();
 
@@ -427,17 +429,20 @@ public sealed class DialogueGraphEditor : IEditorWindow
     // Dark chip (the darker canvas colour) so bright pill text reads clearly against the node body.
     private Vector4 PillBg() => new(_cBg.X, _cBg.Y, _cBg.Z, 0.92f);
 
-    private float Pill(float x, float y, string label, Vector4 bg, Vector4 fg)
+    private float Pill(float x, float y, string label, Vector4 bg, Vector4 fg, float maxRight)
     {
-        // Size the chip to the text (icon glyphs are taller than a fixed 18px, so derive the height).
-        Vector2 sz = EditorGui.CalcTextSize(label);
         const float padX = 6f, padY = 3f;
+        float avail = maxRight - x - padX * 2f;
+        if (avail < 14f) { return x; } // no room left for another pill
+        string shown = Fit(label, avail); // truncate rather than spill past the card edge
+        // Size the chip to the text (icon glyphs are taller than a fixed 18px, so derive the height).
+        Vector2 sz = EditorGui.CalcTextSize(shown);
         float h = sz.Y + padY * 2f;
         var a = new Vector2(x, y);
         var b = new Vector2(x + sz.X + padX * 2f, y + h);
         EditorGui.AddRectFilled(a, b, bg, 4f);
         EditorGui.AddRect(a, b, new Vector4(fg.X, fg.Y, fg.Z, 0.35f), 4f, 1f); // subtle tint border for definition
-        EditorGui.AddText(new Vector2(x + padX, y + padY), fg, label);
+        EditorGui.AddText(new Vector2(x + padX, y + padY), fg, shown);
         return b.X + 5f;
     }
 
