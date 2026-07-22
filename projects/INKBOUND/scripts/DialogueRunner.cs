@@ -43,11 +43,23 @@ public sealed class DialogueRunner : EntityScript
     private readonly Entity[] _runUi = new Entity[MaxRuns];
     private bool _multiRun;
 
+    // Animation (all on UnscaledTime): the box slides up on open and back down on close, each node's
+    // speaker/portrait fade in, and choices stagger in one by one.
+    private const float OpenDur = 0.30f;
+    private const float CloseDur = 0.22f;
+    private const float NodeFadeDur = 0.18f;
+    private const float ChoiceStagger = 0.07f;
+    private const float ChoiceFadeDur = 0.16f;
+
     public bool Active { get; private set; }
     private DialogueGraph? _graph;
     private DialogueNode? _node;
     private float _reveal;      // characters revealed so far (grows on UnscaledTime)
     private bool _fullShown;
+    private float _boxT;        // 0 = tucked below the screen, 1 = seated
+    private bool _closing;      // playing the close slide, then FinishClose
+    private float _nodeT;       // per-node content fade-in
+    private float _choiceStartU; // UnscaledTime when choices were shown (drives the stagger)
 
     // Choices (created at runtime; runtime elements can't be given the scene-authored Selectable nav
     // component, so the runner tracks the focused index itself and styles it like the menu markers).
@@ -176,9 +188,12 @@ public sealed class DialogueRunner : EntityScript
     {
         _graph = graph;
         Active = true;
+        _closing = false;
+        _boxT = 0f;
         _lastU = -1f;
         Time.Pause();
         Show();
+        ApplyBoxSlide(0f); // start tucked below the screen so it slides up
         GoTo(graph.Start);
     }
 
@@ -186,9 +201,10 @@ public sealed class DialogueRunner : EntityScript
     {
         HideChoices();
         _node = _graph?.NodeOrNull(nodeId);
-        if (_node == null) { End(); return; }
+        if (_node == null) { RequestClose(); return; }
         _reveal = 0f;
         _fullShown = false;
+        _nodeT = 0f; // restart the per-node fade-in
         _hint.SetActive(true);
 
         // Portrait: show + widen-inset the text column when the node has one, else hide + fill.
@@ -237,11 +253,28 @@ public sealed class DialogueRunner : EntityScript
 
     public override void OnUpdate(float dt)
     {
-        if (!Active || _node == null) return;
+        if (!Active) return;
         float udt = UnscaledDelta(Time.UnscaledTime);
+
+        // Box close slide owns the frame: animate down, swallow input, then finish.
+        if (_closing)
+        {
+            _boxT = Math.Max(0f, _boxT - udt / CloseDur);
+            ApplyBoxSlide(_boxT);
+            if (_boxT <= 0f) { FinishClose(); }
+            return;
+        }
+
+        // Open slide + per-node content fade-in.
+        _boxT = Math.Min(1f, _boxT + udt / OpenDur);
+        ApplyBoxSlide(_boxT);
+        _nodeT = Math.Min(1f, _nodeT + udt / NodeFadeDur);
+        ApplyNodeFade(_nodeT);
+
+        if (_node == null) return;
         float strength = 0.6f + 0.4f * GameSettings.InkGlow;
 
-        if (Input.IsKeyPressed(Key.Escape)) { End(); return; }
+        if (Input.IsKeyPressed(Key.Escape)) { RequestClose(); return; }
 
         bool tap = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.Enter)
                    || Input.IsMousePressed(MouseButton.Left);
@@ -330,6 +363,7 @@ public sealed class DialogueRunner : EntityScript
         }
         _focus = 0;
         _choicesShown = true;
+        _choiceStartU = Time.UnscaledTime;
         _hint.SetActive(false);
         for (int i = 0; i < MaxChoices; i++)
         {
@@ -359,11 +393,20 @@ public sealed class DialogueRunner : EntityScript
         }
 
         float breathe = 0.72f + 0.28f * MathF.Sin(Time.UnscaledTime * 4.5f);
+        float ct = Time.UnscaledTime - _choiceStartU;
         for (int i = 0; i < n; i++)
         {
+            // Stagger: each choice fades + slides up shortly after the previous.
+            float reveal = Math.Clamp((ct - i * ChoiceStagger) / ChoiceFadeDur, 0f, 1f);
+            float slide = (1f - reveal) * 10f;
+            Ui.SetOffsets(_choiceUi[i], new Vector2(_bodyLeft, ChoiceTop + i * ChoiceH + slide),
+                          new Vector2(-Pad, ChoiceTop + (i + 1) * ChoiceH + slide));
+
             bool on = i == _focus;
             Ui.SetText(_choiceUi[i], (on ? "> " : "  ") + _visible[i].Text);
-            Ui.SetTextColor(_choiceUi[i], on ? new Vector4(Accent.X, Accent.Y, Accent.Z, breathe) : ChoiceDim);
+            Vector4 col = on ? new Vector4(Accent.X, Accent.Y, Accent.Z, breathe * reveal)
+                             : new Vector4(ChoiceDim.X, ChoiceDim.Y, ChoiceDim.Z, ChoiceDim.W * reveal);
+            Ui.SetTextColor(_choiceUi[i], col);
         }
 
         bool activate = Input.IsKeyPressed(Key.Enter) || Input.IsKeyPressed(Key.Space)
@@ -378,13 +421,44 @@ public sealed class DialogueRunner : EntityScript
         GoTo(c.Goto); // GoTo hides the choices
     }
 
-    private void End()
+    // Begin the close slide (world stays frozen until it finishes, so the closing key never leaks
+    // into gameplay). FinishClose does the actual teardown once the box is tucked away.
+    private void RequestClose()
+    {
+        if (_closing) return;
+        _closing = true;
+        _node = null;
+        HideChoices();
+    }
+
+    private void FinishClose()
     {
         Active = false;
+        _closing = false;
         _graph = null;
         _node = null;
         Hide();
         Time.Resume();
+    }
+
+    private static float EaseOut(float x) => 1f - (1f - x) * (1f - x);
+
+    // Slide the whole box (children ride along, being parented to the panel): tucked BoxH+ below the
+    // bottom at t=0, eased into its seated offsets at t=1.
+    private void ApplyBoxSlide(float t)
+    {
+        float yShift = (1f - EaseOut(Math.Clamp(t, 0f, 1f))) * (BoxH + Margin + 40f);
+        Ui.SetOffsets(_panel, new Vector2(Margin, -(Margin + BoxH) + yShift), new Vector2(-Margin, -Margin + yShift));
+    }
+
+    // Fade the node's speaker + portrait in on a node change (the body already types on, so it needs
+    // no separate fade).
+    private void ApplyNodeFade(float t)
+    {
+        float a = Math.Clamp(t, 0f, 1f);
+        Vector4 sc = Accent; sc.W = a;
+        Ui.SetTextColor(_speaker, sc);
+        if (_portrait.IsValid) { Ui.SetImageColor(_portrait, new Vector4(1f, 1f, 1f, a)); }
     }
 
     // ── helpers ──
