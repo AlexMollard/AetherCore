@@ -15,10 +15,15 @@ namespace aether::ui
 		kShapeSdfGlyph = 4,
 	};
 
-	// UiDrawCommand::flags layout: bit 0 = pixel-art (nearest) sampling; bits 8..15 = shaderId,
-	// a per-frame index into the material table (0 = default ui_shapes fragment). The id lets the
-	// renderer split the one batch into runs drawn with different custom fragment shaders.
+	// UiDrawCommand::flags layout: bit 0 = pixel-art (nearest) sampling; bit 1 = exclude this command
+	// from its owning element's material (build-time only, stripped before upload); bits 8..15 =
+	// shaderId, a per-frame index into the material table (0 = default ui_shapes fragment). The id lets
+	// the renderer split the one batch into runs drawn with different custom fragment shaders.
 	inline constexpr std::uint32_t kFlagPixelArt = 1u;
+	// A sub-shape a widget wants drawn on the default pipeline even when the element carries a material
+	// (e.g. a toggle's knob, which must stay a crisp sliding dot instead of dissolving into the ink
+	// fill). UiDrawBuilder honours this while tagging, then clears the bit so it never reaches the GPU.
+	inline constexpr std::uint32_t kFlagNoMaterial = 1u << 1;
 	inline constexpr std::uint32_t kShaderIdShift = 8u;
 	inline constexpr std::uint32_t kShaderIdMask = 0xFFu;
 

@@ -126,6 +126,9 @@ namespace aether::ui
 		knob.color = tg.knobColor;
 		knob.color.a *= tg.pulse;
 		knob.layer = layer++;
+		// Keep the knob on the default pipeline: if the toggle carries the ink material, the track picks
+		// it up but the knob stays a crisp, bright sliding dot instead of a muddy pixel-snapped blob.
+		knob.flags |= kFlagNoMaterial;
 		out.push_back(knob);
 	}
 
@@ -228,17 +231,28 @@ namespace aether::ui
 		// If this element carries a custom material, tag the commands it just emitted (its glyphs /
 		// image / rect - not its children) with a per-frame shaderId so the renderer draws them with
 		// the material's fragment shader. Children keep the default pipeline unless they carry their own.
+		// A command may opt out via kFlagNoMaterial (e.g. a toggle's knob): it keeps the default
+		// pipeline. The bit is build-time only, so it is stripped here before the command reaches the GPU.
+		const std::size_t emitEnd = out.size();
+		std::uint32_t shaderId = 0;
 		if (const auto* mat = world.TryGet<UIMaterial>(entity))
 		{
-			const std::size_t emitEnd = out.size();
 			if (!mat->shader.empty() && emitEnd > emitBegin && materials.size() < kShaderIdMask)
 			{
-				const std::uint32_t shaderId = static_cast<std::uint32_t>(materials.size()) + 1u;
+				shaderId = static_cast<std::uint32_t>(materials.size()) + 1u;
 				materials.push_back(UiMaterialDraw{mat->shader, mat->params, mat->color0, mat->color1});
-				for (std::size_t i = emitBegin; i < emitEnd; ++i)
-				{
-					out[i].flags = UiFlagsWithShaderId(out[i].flags, shaderId);
-				}
+			}
+		}
+		for (std::size_t i = emitBegin; i < emitEnd; ++i)
+		{
+			if ((out[i].flags & kFlagNoMaterial) != 0u)
+			{
+				out[i].flags &= ~kFlagNoMaterial; // consumed; never uploaded
+				continue;                         // this sub-shape stays on the default pipeline
+			}
+			if (shaderId != 0u)
+			{
+				out[i].flags = UiFlagsWithShaderId(out[i].flags, shaderId);
 			}
 		}
 
