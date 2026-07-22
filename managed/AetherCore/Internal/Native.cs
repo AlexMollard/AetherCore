@@ -100,6 +100,60 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_assets_read_text(string vpath, byte* buf, int cap);
 
+    // ── EditorGui (editor-only ImGui bridge; resolves lazily, never called in a shipped game) ────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_begin(string title, int* open);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_end();
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_begin_child(string id, Vector2 size, int border);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_end_child();
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_same_line();
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_separator();
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_spacing();
+    [LibraryImport(Lib)] internal static partial Vector2 aether_editorgui_content_avail();
+    [LibraryImport(Lib)] internal static partial Vector2 aether_editorgui_cursor_screen_pos();
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_set_cursor_screen_pos(Vector2 p);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_editorgui_text(string s);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_editorgui_text_colored(Vector4 col, string s);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_button(string label, Vector2 size);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_small_button(string label);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_checkbox(string label, int* v);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_input_text(string label, byte* buf, int bufLen);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_input_float(string label, float* v);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_selectable(string label, int selected);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_tree_node(string label);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_tree_pop();
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_combo(string label, int* current, string itemsNewlineJoined);
+
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_add_line(Vector2 a, Vector2 b, Vector4 col, float thick);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_add_rect_filled(Vector2 mn, Vector2 mx, Vector4 col, float rounding);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_add_rect(Vector2 mn, Vector2 mx, Vector4 col, float rounding, float thick);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_add_bezier(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4, Vector4 col, float thick);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_add_circle_filled(Vector2 c, float r, Vector4 col);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_editorgui_add_text(Vector2 p, Vector4 col, string s);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_invisible_button(string id, Vector2 size);
+    [LibraryImport(Lib)] internal static partial int aether_editorgui_is_item_active();
+    [LibraryImport(Lib)] internal static partial int aether_editorgui_is_item_hovered();
+    [LibraryImport(Lib)] internal static partial int aether_editorgui_is_item_clicked();
+    [LibraryImport(Lib)] internal static partial Vector2 aether_editorgui_mouse_pos();
+    [LibraryImport(Lib)] internal static partial Vector2 aether_editorgui_mouse_drag_delta();
+    [LibraryImport(Lib)] internal static partial int aether_editorgui_is_mouse_dragging();
+    [LibraryImport(Lib)] internal static partial float aether_editorgui_mouse_wheel();
+
     // ── UI toolkit (Module 02) ──────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial uint aether_ui_create_canvas();
