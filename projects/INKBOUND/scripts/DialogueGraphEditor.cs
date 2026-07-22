@@ -17,16 +17,12 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
-    private const float NodeW = 200f, NodeH = 66f, TitleH = 22f, SidePanelW = 320f;
+    private const float NodeW = 210f, NodeH = 74f, TitleH = 24f, SidePanelW = 330f, GridStep = 32f;
+    private static readonly Vector4 Current = new(1f, 0.78f, 0.30f, 1f); // play-mode "current node" (fixed warm)
 
-    private static readonly Vector4 Bg = new(0.05f, 0.06f, 0.09f, 1f);
-    private static readonly Vector4 NodeCol = new(0.10f, 0.12f, 0.16f, 1f);
-    private static readonly Vector4 TitleCol = new(0.16f, 0.19f, 0.25f, 1f);
-    private static readonly Vector4 Accent = new(0.30f, 0.85f, 1f, 1f);
-    private static readonly Vector4 White = new(0.90f, 0.93f, 0.96f, 1f);
-    private static readonly Vector4 Dim = new(0.58f, 0.64f, 0.70f, 1f);
-    private static readonly Vector4 Link = new(0.45f, 0.55f, 0.62f, 1f);
-    private static readonly Vector4 Current = new(1f, 0.78f, 0.30f, 1f);
+    // Theme colours, refreshed each frame from the editor's live ImGui style (see RefreshTheme).
+    private Vector4 _cBg, _cNode, _cNodeHover, _cHeader, _cText, _cDim, _cBorder, _cAccent, _cLink;
+    private EdNode? _hover;
 
     private bool _open = true;
     private bool _autoLoaded;
@@ -45,17 +41,23 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.SetNextWindowSize(new Vector2(1180f, 720f));
         if (!EditorGui.Begin(Title, ref _open)) { EditorGui.End(); return; }
 
+        RefreshTheme();
         if (_files.Length == 0) { RefreshFiles(); }
         if (!_autoLoaded && _files.Length > 0) { _autoLoaded = true; Load(_files[0]); }
 
         // Toolbar.
-        if (_files.Length > 0 && EditorGui.Combo("file", ref _fileIdx, _files)) { Load(_files[_fileIdx]); }
+        if (_files.Length > 0 && EditorGui.Combo("##file", ref _fileIdx, _files)) { Load(_files[_fileIdx]); }
         EditorGui.SameLine();
         if (EditorGui.Button("Reload") && _loadedId.Length > 0) { Load(_loadedId); }
         EditorGui.SameLine();
         if (EditorGui.Button("Save") && _graph != null) { Save(); }
         EditorGui.SameLine();
-        if (EditorGui.Button("Add Node") && _graph != null) { AddNode(); }
+        if (EditorGui.Button("+ Node") && _graph != null) { AddNode(); }
+        if (_graph != null)
+        {
+            EditorGui.SameLine();
+            EditorGui.TextColored(_cDim, $"   {_graph.Nodes.Count} nodes  -  drag empty space to pan, a node to move");
+        }
         EditorGui.Separator();
 
         if (_graph == null) { EditorGui.Text("Pick a conversation to edit."); EditorGui.End(); return; }
@@ -190,13 +192,30 @@ public sealed class DialogueGraphEditor : IEditorWindow
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    // ── Theme ─────────────────────────────────────────────────────────────────
+    private void RefreshTheme()
+    {
+        Vector4 win = EditorGui.ThemeColor(EditorColor.WindowBg);
+        _cBg = new Vector4(win.X * 0.55f, win.Y * 0.55f, win.Z * 0.55f, 1f); // canvas: a touch darker for depth
+        _cNode = EditorGui.ThemeColor(EditorColor.PanelBg);
+        _cNodeHover = EditorGui.ThemeColor(EditorColor.PanelHover);
+        _cHeader = EditorGui.ThemeColor(EditorColor.Header);
+        _cText = EditorGui.ThemeColor(EditorColor.Text);
+        _cDim = EditorGui.ThemeColor(EditorColor.TextDim);
+        _cBorder = EditorGui.ThemeColor(EditorColor.Border);
+        _cAccent = EditorGui.ThemeColor(EditorColor.Accent);
+        _cLink = EditorGui.ThemeColor(EditorColor.Link);
+        if (_cLink.W < 0.2f) { _cLink = _cDim; } // some themes leave PlotLines faint
+    }
+
     // ── Canvas ────────────────────────────────────────────────────────────────
     private void DrawCanvas(float width)
     {
         EditorGui.BeginChild("canvas", new Vector2(width, 0f), true);
         Vector2 origin = EditorGui.CursorScreenPos();
         Vector2 size = EditorGui.ContentAvail();
-        EditorGui.AddRectFilled(origin, origin + size, Bg, 0f);
+        EditorGui.AddRectFilled(origin, origin + size, _cBg, 0f);
+        DrawGrid(origin, size);
 
         HandleInput(origin, size);
 
@@ -206,10 +225,26 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.EndChild();
     }
 
+    private void DrawGrid(Vector2 origin, Vector2 size)
+    {
+        var line = new Vector4(_cBorder.X, _cBorder.Y, _cBorder.Z, 0.22f);
+        float ox = ((_pan.X % GridStep) + GridStep) % GridStep;
+        float oy = ((_pan.Y % GridStep) + GridStep) % GridStep;
+        for (float x = ox; x < size.X; x += GridStep)
+        {
+            EditorGui.AddLine(new Vector2(origin.X + x, origin.Y), new Vector2(origin.X + x, origin.Y + size.Y), line, 1f);
+        }
+        for (float y = oy; y < size.Y; y += GridStep)
+        {
+            EditorGui.AddLine(new Vector2(origin.X, origin.Y + y), new Vector2(origin.X + size.X, origin.Y + y), line, 1f);
+        }
+    }
+
     private void HandleInput(Vector2 origin, Vector2 size)
     {
         Vector2 mouse = EditorGui.MousePos();
         bool inCanvas = mouse.X >= origin.X && mouse.X <= origin.X + size.X && mouse.Y >= origin.Y && mouse.Y <= origin.Y + size.Y;
+        _hover = inCanvas && _dragMode == 0 ? TopNodeAt(mouse, origin) : null;
 
         if (EditorGui.IsMouseClicked() && inCanvas)
         {
@@ -249,15 +284,37 @@ public sealed class DialogueGraphEditor : IEditorWindow
         Vector2 e = s + new Vector2(NodeW, NodeH);
         bool isStart = n.Id == _graph!.Start;
         bool isCurrent = Dialogue.IsActive && n.Id == Dialogue.CurrentNodeId;
+        bool isSel = n == _selected;
+        bool isHover = n == _hover;
 
-        EditorGui.AddRectFilled(s, e, NodeCol, 5f);
-        EditorGui.AddRectFilled(s, new Vector2(e.X, s.Y + TitleH), isStart ? new Vector4(0.10f, 0.28f, 0.34f, 1f) : TitleCol, 5f);
-        if (isCurrent) { EditorGui.AddRect(s, e, Current, 5f, 3f); }
-        else if (n == _selected) { EditorGui.AddRect(s, e, Accent, 5f, 2f); }
+        // Drop shadow, body, header bar.
+        EditorGui.AddRectFilled(s + new Vector2(3f, 4f), e + new Vector2(3f, 4f), new Vector4(0f, 0f, 0f, 0.35f), 7f);
+        EditorGui.AddRectFilled(s, e, isHover ? _cNodeHover : _cNode, 7f);
+        EditorGui.AddRectFilled(s, new Vector2(e.X, s.Y + TitleH), isStart ? _cAccent : _cHeader, 7f);
+        EditorGui.AddRectFilled(new Vector2(s.X, s.Y + TitleH - 6f), new Vector2(e.X, s.Y + TitleH), isStart ? _cAccent : _cHeader, 0f); // square the header's bottom
 
-        EditorGui.AddText(s + new Vector2(7f, 3f), isStart ? Accent : White, isStart ? n.Id + "  *" : n.Id);
-        EditorGui.AddText(s + new Vector2(7f, TitleH + 5f), Dim, Trunc($"{n.Speaker}: {n.Text}", 28));
-        EditorGui.AddText(s + new Vector2(7f, TitleH + 24f), Dim, n.HasChoices ? $"{n.Choices.Count} choices" : (n.Goto.Length > 0 ? $"-> {n.Goto}" : "end"));
+        Vector4 border = isCurrent ? Current : (isSel ? _cAccent : _cBorder);
+        EditorGui.AddRect(s, e, border, 7f, (isSel || isCurrent) ? 2.5f : 1f);
+
+        // Header: id (contrast text on the accent header for the start node).
+        Vector4 headText = isStart ? EditorGui.ThemeColor(EditorColor.WindowBg) : _cText;
+        if (isStart)
+        {
+            Vector2 t0 = s + new Vector2(9f, 6f);
+            EditorGui.AddTriangleFilled(t0, t0 + new Vector2(0f, 11f), t0 + new Vector2(9f, 5.5f), headText); // start marker
+            EditorGui.AddText(s + new Vector2(24f, 4f), headText, n.Id);
+        }
+        else
+        {
+            EditorGui.AddText(s + new Vector2(10f, 4f), headText, n.Id);
+        }
+
+        // Body: speaker (accent), text preview (text), badge row (dim).
+        EditorGui.AddText(s + new Vector2(10f, TitleH + 7f), _cAccent, Trunc(n.Speaker, 24));
+        EditorGui.AddText(s + new Vector2(10f, TitleH + 25f), _cText, Trunc(n.Text, 26));
+        string badge = n.HasChoices ? $"{n.Choices.Count} choices" : (n.Goto.Length > 0 ? $"-> {n.Goto}" : "end");
+        if (n.Effect != "normal") { badge = $"[{n.Effect}]  {badge}"; }
+        EditorGui.AddText(s + new Vector2(10f, TitleH + 43f), _cDim, Trunc(badge, 26));
     }
 
     private void DrawLinks(EdNode n, Vector2 origin)
@@ -283,48 +340,56 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EdNode? t = _graph!.Find(targetId);
         if (t == null) { return; }
         Vector2 inP = NodeScreen(t, origin) + new Vector2(NodeW * 0.5f, 0f);
-        EditorGui.AddBezierCubic(outP, outP + new Vector2(0f, 52f), inP - new Vector2(0f, 52f), inP, Link, 2f);
-        EditorGui.AddCircleFilled(outP, 3f, Accent);
+        EditorGui.AddBezierCubic(outP, outP + new Vector2(0f, 60f), inP - new Vector2(0f, 60f), inP, _cLink, 2.5f);
+        EditorGui.AddCircleFilled(outP, 3.5f, _cAccent);
+        // Arrowhead pointing down into the target's top edge.
+        EditorGui.AddTriangleFilled(inP + new Vector2(-5f, -9f), inP + new Vector2(5f, -9f), inP + new Vector2(0f, 1f), _cLink);
     }
 
     // ── Side panel (edit the selected node) ───────────────────────────────────
     private void DrawSidePanel()
     {
         EditorGui.BeginChild("side", new Vector2(SidePanelW - 8f, 0f), true);
-        if (_selected == null) { EditorGui.Text("Select a node to edit."); EditorGui.EndChild(); return; }
+        if (_selected == null) { EditorGui.TextColored(_cDim, "Select a node to edit."); EditorGui.EndChild(); return; }
         EdNode n = _selected;
 
-        EditorGui.Text($"node: {n.Id}");
+        EditorGui.TextColored(_cAccent, "NODE");
+        EditorGui.Text(n.Id);
+        if (n.Id == _graph!.Start) { EditorGui.SameLine(); EditorGui.TextColored(_cAccent, "(start)"); }
+        EditorGui.Spacing();
+
         EditorGui.InputText("speaker", ref n.Speaker);
         EditorGui.InputText("text", ref n.Text, 512);
         EditorGui.InputText("portrait", ref n.Portrait);
-
         int eff = System.Array.IndexOf(Effects, n.Effect);
         if (eff < 0) { eff = 0; }
         if (EditorGui.Combo("effect", ref eff, Effects)) { n.Effect = Effects[eff]; }
+        if (!n.HasChoices) { EditorGui.InputText("goto", ref n.Goto); }
 
+        EditorGui.Spacing();
         EditorGui.Separator();
-        if (!n.HasChoices)
-        {
-            EditorGui.InputText("goto", ref n.Goto);
-        }
-        EditorGui.Text("choices:");
+        EditorGui.TextColored(_cAccent, "CHOICES");
+        int del = -1;
         for (int i = 0; i < n.Choices.Count; i++)
         {
             EdChoice c = n.Choices[i];
+            EditorGui.TextColored(_cDim, $"#{i + 1}");
+            EditorGui.SameLine();
+            if (EditorGui.SmallButton($"x##{i}")) { del = i; }
             EditorGui.InputText($"text##{i}", ref c.Text);
             EditorGui.InputText($"goto##{i}", ref c.Goto);
             EditorGui.InputText($"if##{i}", ref c.If);
             EditorGui.InputText($"set##{i}", ref c.Set);
-            if (EditorGui.SmallButton($"delete choice##{i}")) { n.Choices.RemoveAt(i); break; }
             EditorGui.Separator();
         }
-        if (EditorGui.Button("+ choice")) { n.Choices.Add(new EdChoice { Text = "...", Goto = "end" }); }
+        if (del >= 0) { n.Choices.RemoveAt(del); }
+        if (EditorGui.Button("+ Choice")) { n.Choices.Add(new EdChoice { Text = "...", Goto = "end" }); }
 
+        EditorGui.Spacing();
         EditorGui.Separator();
-        if (EditorGui.Button("set as start")) { _graph!.Start = n.Id; }
+        if (EditorGui.Button("Set as Start")) { _graph.Start = n.Id; }
         EditorGui.SameLine();
-        if (EditorGui.Button("delete node")) { DeleteNode(n); }
+        if (EditorGui.Button("Delete Node")) { DeleteNode(n); }
 
         EditorGui.EndChild();
     }
