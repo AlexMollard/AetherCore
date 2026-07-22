@@ -37,7 +37,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
         [entities.scripts.properties.MaxX]
         t = 'float'
-        v = 15.0
+        v = 30.0
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -274,9 +274,96 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'AetherCrystal'
 
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Goal'
+parent = -1
+position = [ 36.0, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.6, 6.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = false
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'GoalFlag'
+
+        [entities.scripts.properties.NextScene]
+        t = 'string'
+        v = 'Sandbox'
+
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Parallax Background'
 position = [ 0.0, 0.0, 0.0 ]
 prefab = 'ParallaxBackground'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+position = [ 7.0, 3.0, 0.0 ]
+prefab = 'Coin'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+position = [ 9.0, 2.4, 0.0 ]
+prefab = 'Coin'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+position = [ 13.0, 2.4, 0.0 ]
+prefab = 'Coin'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+position = [ 23.0, 2.2, 0.0 ]
+prefab = 'Coin'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+position = [ 31.0, 3.7, 0.0 ]
+prefab = 'Coin'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+position = [ 34.0, 1.6, 0.0 ]
+prefab = 'Coin'
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Chomper'
+position = [ 24.0, 2.0, 0.0 ]
+prefab = 'Chomper'
 scale = [ 1.0, 1.0, 1.0 ]
