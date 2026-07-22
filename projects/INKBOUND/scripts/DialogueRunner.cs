@@ -34,6 +34,15 @@ public sealed class DialogueRunner : EntityScript
     private bool _built;
     private float _bodyLeft = Pad;
 
+    // Inline rich-text spans: a line with >1 run (i.e. it has [tag] markup) is laid out as one text
+    // element per run on a monospace grid (IBM Plex Mono => fixed cell width). A plain/whole-line node
+    // (1 run) keeps the single _body element with the engine's own word-wrap. Keep spanned lines short.
+    private const int MaxRuns = 16;
+    private const float MonoAdvance = 0.60f; // IBM Plex Mono advance in ems
+    private const float LineH = BodyFont + 6f;
+    private readonly Entity[] _runUi = new Entity[MaxRuns];
+    private bool _multiRun;
+
     public bool Active { get; private set; }
     private DialogueGraph? _graph;
     private DialogueNode? _node;
@@ -142,6 +151,24 @@ public sealed class DialogueRunner : EntityScript
             _choiceUi[i] = c;
         }
 
+        // Run slots for inline-span lines (mono grid, no wrap, one material per run).
+        for (int i = 0; i < MaxRuns; i++)
+        {
+            Entity r = Ui.CreateText(_canvas, "");
+            r.SetParent(_panel);
+            Ui.SetAnchors(r, new Vector2(0f, 0f), new Vector2(0f, 0f));
+            Ui.SetPivot(r, new Vector2(0f, 0f));
+            Ui.SetFont(r, BodyFontName);
+            Ui.SetFontSize(r, BodyFont);
+            Ui.SetTextColor(r, BodyCol);
+            Ui.SetTextAlign(r, UiHAlign.Left, UiVAlign.Top);
+            Ui.SetTextWrap(r, false);
+            Ui.SetMaterial(r, "ui_dialogue_text");
+            Ui.SetMaterialColors(r, Vector4.Zero, Accent);
+            r.SetActive(false);
+            _runUi[i] = r;
+        }
+
         _built = true;
     }
 
@@ -178,6 +205,21 @@ public sealed class DialogueRunner : EntityScript
         }
         RelayoutText(_bodyLeft);
 
+        // Inline spans: >1 run means the line has [tag] markup -> lay out per-run on the mono grid,
+        // otherwise use the single wrapped body element.
+        HideRuns();
+        _multiRun = _node.Runs.Count > 1;
+        if (_multiRun)
+        {
+            _body.SetActive(false);
+            int count = Math.Min(_node.Runs.Count, MaxRuns);
+            for (int i = 0; i < count; i++) { _runUi[i].SetActive(true); Ui.SetText(_runUi[i], ""); }
+        }
+        else
+        {
+            _body.SetActive(true);
+        }
+
         Ui.SetText(_speaker, _node.Speaker);
         Ui.SetText(_body, "");
     }
@@ -197,10 +239,7 @@ public sealed class DialogueRunner : EntityScript
     {
         if (!Active || _node == null) return;
         float udt = UnscaledDelta(Time.UnscaledTime);
-
-        // Drive the rich-text material (per-glyph effect) off the node effect + Ink Glow strength.
         float strength = 0.6f + 0.4f * GameSettings.InkGlow;
-        Ui.SetMaterialParams(_body, new Vector4(Time.UnscaledTime, (float)_node.Effect, strength, 0f));
 
         if (Input.IsKeyPressed(Key.Escape)) { End(); return; }
 
@@ -214,7 +253,7 @@ public sealed class DialogueRunner : EntityScript
             _reveal += udt * CharsPerSec;
             int shown = Math.Min(_node.Text.Length, (int)_reveal);
             if (tap) { shown = _node.Text.Length; }
-            Ui.SetText(_body, _node.Text.Substring(0, shown));
+            RenderBody(shown, strength);
             if (shown >= _node.Text.Length)
             {
                 _fullShown = true;
@@ -223,10 +262,63 @@ public sealed class DialogueRunner : EntityScript
             return;
         }
 
-        // Phase 2 - fully shown.
+        // Phase 2 - fully shown; keep the per-glyph effects (and any inline-run motion) animating.
+        RenderBody(_node.Text.Length, strength);
+
         if (_choicesShown) { UpdateChoices(); return; }
 
         if (tap) { GoTo(_node.Goto); } // linear advance
+    }
+
+    // Draw the body up to `shown` characters, routing to the single wrapped element or the mono
+    // run grid depending on whether the line has inline spans.
+    private void RenderBody(int shown, float strength)
+    {
+        if (_multiRun) { UpdateRuns(shown, strength); return; }
+        Ui.SetText(_body, _node!.Text.Substring(0, shown));
+        InkEffect eff = _node.Runs.Count > 0 ? _node.Runs[0].Effect : _node.Effect;
+        Ui.SetMaterialParams(_body, new Vector4(Time.UnscaledTime, (float)eff, strength, 0f));
+    }
+
+    // Lay out inline-span runs on a monospace grid (wrap whole runs at the panel edge) and reveal a
+    // global character count across them in order. Recomputed each frame so it self-corrects once the
+    // panel rect is resolved and the shake/wave motion stays live.
+    private void UpdateRuns(int revealed, float strength)
+    {
+        float cellW = BodyFont * MonoAdvance;
+        float bodyTop = Pad + SpeakerH + 6f;
+        float panelW = Ui.GetRect(_panel).Z;
+        float availW = panelW - _bodyLeft - Pad;
+        int maxCols = availW > cellW ? (int)(availW / cellW) : 9999;
+
+        int col = 0, row = 0, acc = 0;
+        int count = Math.Min(_node!.Runs.Count, MaxRuns);
+        for (int i = 0; i < count; i++)
+        {
+            TextRun r = _node.Runs[i];
+            int len = r.Text.Length;
+            if (col > 0 && col + len > maxCols) { col = 0; row++; }
+
+            Entity e = _runUi[i];
+            float x = _bodyLeft + col * cellW;
+            float y = bodyTop + row * LineH;
+            Ui.SetOffsets(e, new Vector2(x, y), new Vector2(x + len * cellW + 6f, y + LineH));
+            int show = Math.Clamp(revealed - acc, 0, len);
+            Ui.SetText(e, r.Text.Substring(0, show));
+            Ui.SetMaterialParams(e, new Vector4(Time.UnscaledTime, (float)r.Effect, strength, 0f));
+
+            col += len;
+            acc += len;
+        }
+    }
+
+    private void HideRuns()
+    {
+        _multiRun = false;
+        for (int i = 0; i < MaxRuns; i++)
+        {
+            if (_runUi[i].IsValid) { _runUi[i].SetActive(false); }
+        }
     }
 
     private void ShowChoices()
@@ -324,6 +416,7 @@ public sealed class DialogueRunner : EntityScript
         _body.SetActive(false);
         _hint.SetActive(false);
         HideChoices();
+        HideRuns();
         _lastU = -1f;
     }
 }
