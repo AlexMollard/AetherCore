@@ -74,7 +74,7 @@ namespace aether
 		m_gpu = std::make_unique<GpuDevice>();
 		m_services.Register<GpuDevice>(*m_gpu);
 		m_services.Register<ScreenshotService>(m_screenshotService);
-		m_services.Register<InkField>(m_inkField);
+		m_services.Register<CustomPassRegistry>(m_customPasses);
 		if (fullRuntime)
 		{
 			m_cameras = std::make_unique<CameraSubsystem>();
@@ -657,11 +657,12 @@ namespace aether
 		}
 		Finalize2DFrame(packet.render2D);
 
-		// Conjured-ink field: scripts push their live stroke segments into m_inkField during the
-		// update; hand that snapshot to the render packet for the one-pass ink SDF layer.
+		// Project custom passes: scripts submit their pass buffers into m_customPasses during the
+		// update; hand this frame's submissions to the render packet, then clear for the next frame.
 		if (!collisionOnly)
 		{
-			packet.renderInk = m_inkField.data;
+			packet.renderCustom = std::move(m_customPasses.frame);
+			m_customPasses.frame.passes.clear();
 		}
 
 		packet.sunDirectionIntensity = sunDirIntensity;
@@ -742,7 +743,7 @@ namespace aether
 			if (m_profile == RuntimeProfile::Full)
 			{
 				m_rendering->GetRenderer2D().BeginFrame(packet.render2D, packet.drawSlot);
-				m_rendering->GetInkRenderer().BeginFrame(packet.renderInk, packet.drawSlot);
+				m_rendering->GetCustomPassRenderer().BeginFrame(packet.renderCustom, packet.drawSlot);
 			}
 		}
 
@@ -750,7 +751,7 @@ namespace aether
 		if (m_rendering && m_profile == RuntimeProfile::Full)
 		{
 			m_rendering->GetRenderer2D().EndFrame();
-			m_rendering->GetInkRenderer().EndFrame();
+			m_rendering->GetCustomPassRenderer().EndFrame();
 		}
 
 		// (render thread owns the queue; the readback is self-contained).

@@ -131,7 +131,10 @@ target_compile_definitions(Editor PRIVATE
 if(SLANGC_EXECUTABLE)
     target_compile_definitions(Editor PRIVATE
         AETHER_SLANGC_EXE="${SLANGC_EXECUTABLE}"
-        AETHER_SLANG_ARGS="${AETHERCORE_SLANG_SHADER_ARGS}")
+        AETHER_SLANG_ARGS="${AETHERCORE_SLANG_SHADER_ARGS}"
+        # Engine shader include dir, so project shaders can #include the engine's shared shader
+        # headers ("include/DevicePointer.slangh", "include/FrameConstants.slangh", etc.).
+        AETHER_SHADER_INCLUDE_DIR="${AETHERCORE_SHADER_SOURCE_DIR}")
 endif()
 
 target_compile_definitions(GameRuntime PRIVATE

@@ -55,26 +55,32 @@ namespace aether
 	// Deterministic sort of the merged 2D instance stream (stable, by sortKey).
 	void Finalize2DFrame(Render2DFrameData& frame);
 
-	// One drawn ink capsule (world-space segment a->b, half-thickness `width`). The ink
-	// field pass SDF-unions all of these into a single continuous wet-ink layer. 32 bytes,
-	// laid out to match the InkSegment struct in shaders/ink_field.slang.
-	struct InkSegmentGpu
+	// Where a project-registered custom render pass is injected into the frame graph. Both stages draw
+	// into the scene HDR colour (before tonemap); more insertion points can be added as needed.
+	enum class CustomPassStage : std::uint8_t
 	{
-		glm::vec2 a{0.0f};   // world endpoint A
-		glm::vec2 b{0.0f};   // world endpoint B
-		float width = 0.2f;  // half-thickness, world units
-		float alpha = 1.0f;  // 0..1 age fade
-		float glow = 1.0f;   // rim-glow strength
-		float ghost = 0.0f;  // 0 = solid ink, 1 = unanchored (red, crumbling)
+		BehindScene2D = 0, // before sprites/tiles
+		OverScene2D = 1,   // after sprites/tiles
 	};
-	static_assert(sizeof(InkSegmentGpu) == 32);
 
-	// Packet-owned snapshot of the live ink field for the render thread.
-	struct RenderInkFrameData
+	// One submission of a project-registered custom pass for this frame. The engine knows nothing
+	// about what the pass draws: it binds `data` (a raw float4 buffer the project shader interprets)
+	// plus params/colours as push constants and runs the named project shader over a fullscreen quad
+	// at the requested stage. See shaders' generic CustomPass push contract.
+	struct CustomPassDraw
 	{
-		std::vector<InkSegmentGpu> segments;
-		glm::vec4 bodyColor{0.05f, 0.09f, 0.13f, 1.0f}; // dark ink body
-		glm::vec4 rimColor{0.30f, 0.85f, 1.0f, 1.0f};   // cyan wet rim
+		std::string shader;                               // project shader stem -> shaders://<shader>.spv
+		CustomPassStage stage = CustomPassStage::OverScene2D;
+		std::vector<glm::vec4> data;                      // script-filled records (shader-defined layout)
+		glm::vec4 params{0.0f};
+		glm::vec4 color0{0.0f};
+		glm::vec4 color1{0.0f};
+	};
+
+	// Packet-owned snapshot of every custom pass submitted by scripts this frame.
+	struct RenderCustomPassData
+	{
+		std::vector<CustomPassDraw> passes;
 	};
 
 	// Per-frame render data snapshot produced by the game thread and consumed by
@@ -117,7 +123,7 @@ namespace aether
 		std::vector<PhysicsDebugInstance> physicsDebugShapes;
 
 		Render2DFrameData render2D;
-		RenderInkFrameData renderInk;
+		RenderCustomPassData renderCustom;
 
 		// the debug toggle and puts the decision here; the render thread branches on
 		bool debugRenderingEnabled = false;

@@ -1,8 +1,12 @@
-// One-pass conjured-ink field. A single fullscreen draw SDF-unions every live ink capsule
-// (world-space segment a->b with a half-thickness) into a continuous wet-ink layer: dark inky
-// body, glowing cyan rim, organic fbm-noised edges, pixel-snapped to match the game's pixel-art,
-// with a subtle animated wetness. Unanchored ("ghost") ink shades red. Fed by RenderInkFrameData
-// (see rendering/RenderFramePacket.hpp) - the InkSegment layout MUST match InkSegmentGpu (32 bytes).
+// INKBOUND's conjured-ink field - a project custom pass (CustomPass, stage OverScene). A single
+// fullscreen draw SDF-unions every live ink capsule (world-space segment a->b with a half-thickness)
+// into a continuous wet-ink layer: dark inky body, glowing cyan rim, organic fbm-noised edges,
+// pixel-snapped to match the game's pixel-art, with a subtle animated wetness. Unanchored ("ghost")
+// ink shades red.
+//
+// Uses the engine's generic CustomPass push contract: `data` is a raw float4 buffer this shader
+// reinterprets as InkSegments (2 float4 each), `count` is the float4 element count, color0/color1
+// are the ink body/rim. The engine knows nothing about "ink"; the packing lives in AetherInk.cs.
 #include "include/DevicePointer.slangh"
 #include "include/FrameConstants.slangh"
 
@@ -16,18 +20,19 @@ struct InkSegment
     float  ghost;
 };
 
-struct InkPush
+struct CustomPassPush
 {
     DevicePtr<FrameConstantsData> frameConstants;
-    DevicePtr<InkSegment> segments;
-    uint   segmentCount;
+    DevicePtr<InkSegment> data; // the float4 buffer, read as 32-byte InkSegments (2 float4 each)
+    uint   count;               // number of float4 elements (segmentCount = count / 2)
     uint   pad;
     float2 viewportSize;
-    float4 bodyColor;
-    float4 rimColor;
+    float4 params;
+    float4 color0;              // ink body
+    float4 color1;              // ink rim
 };
 
-[[vk::push_constant]] InkPush pc;
+[[vk::push_constant]] CustomPassPush pc;
 
 struct VSOutput
 {
@@ -101,10 +106,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float cell = (1.0 / 16.0) * 2.0;
     const float2 wq = (floor(world / cell) + 0.5) * cell;
 
-    InkSegment* segs = pc.segments.Ptr();
+    InkSegment* segs = pc.data.Ptr();
+    const uint segmentCount = pc.count / 2u; // 2 float4 per InkSegment
     float best = 1e9;
     float bAlpha = 0.0, bGlow = 0.0, bGhost = 0.0;
-    for (uint i = 0u; i < pc.segmentCount; ++i)
+    for (uint i = 0u; i < segmentCount; ++i)
     {
         const InkSegment s = segs[i];
         // Roughen the boundary with fbm so the edge looks brushed, not machined.
@@ -128,8 +134,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float time = frame->elapsedTime;
     const float wet = 0.5 + 0.5 * sin(time * 2.0 + wq.x * 4.0 + wq.y * 3.0);
 
-    float3 body = pc.bodyColor.rgb;
-    float3 rim = pc.rimColor.rgb;
+    float3 body = pc.color0.rgb;
+    float3 rim = pc.color1.rgb;
     if (bGhost > 0.5)
     {
         body = float3(0.34, 0.05, 0.06);

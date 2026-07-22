@@ -218,15 +218,15 @@ internal static unsafe partial class Native
     internal static partial void aether_debug_draw_box(Vector3 center, Vector3 halfExtents, Vector4 color);
 
     // ── Time (Module 05) ────────────────────────────────────────────────────────
-    // ── Conjured-ink field ───────────────────────────────────────────────────────
-    [LibraryImport(Lib)]
-    internal static partial void aether_ink_clear();
+    // ── Project custom render passes ───────────────────────────────────────────────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_custompass_register(string name, string shader, int stage);
 
-    [LibraryImport(Lib)]
-    internal static partial void aether_ink_set_colors(Vector4 body, Vector4 rim);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_custompass_unregister(string name);
 
-    [LibraryImport(Lib)]
-    internal static partial void aether_ink_add_segment(float ax, float ay, float bx, float by, float width, float alpha, float glow, float ghost);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_custompass_submit(string name, Vector4* data, int count, Vector4 param, Vector4 color0, Vector4 color1);
 
     [LibraryImport(Lib)]
     internal static partial float aether_time_total();

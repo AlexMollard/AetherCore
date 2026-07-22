@@ -133,7 +133,13 @@ namespace aether::editor
 		std::error_code tmpEc;
 		fs::remove(tmpFile, tmpEc); // clear any leftover temp from a previously interrupted run
 
-		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS " -o " + Quoted(tmpFile) + " " + Quoted(slangFile);
+		// Let project shaders #include the engine's shared shader headers (DevicePointer,
+		// FrameConstants, ...) by adding the engine shader dir to slangc's include search path.
+		std::string includeArg;
+#ifdef AETHER_SHADER_INCLUDE_DIR
+		includeArg = " -I " + Quoted(AETHER_SHADER_INCLUDE_DIR);
+#endif
+		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS + includeArg + " -o " + Quoted(tmpFile) + " " + Quoted(slangFile);
 		const fs::path logFile = outDir / (slangFile.stem().string() + ".slangc.log");
 		const int rc = io::RunProcessToLog(command, logFile);
 		if (rc != 0)

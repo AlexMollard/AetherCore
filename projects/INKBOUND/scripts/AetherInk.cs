@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using AetherCore;
 
 namespace AetherGame;
@@ -8,10 +9,11 @@ namespace AetherGame;
 /// <summary>
 /// The signature mechanic: hold the left mouse button and move the cursor to paint a glowing ink
 /// stroke wherever you point - no reach limit. The visual is a single continuous wet-ink layer
-/// rendered entirely in a shader (see the Ink field / shaders/ink_field.slang): this script only
-/// owns the stroke geometry, feeding every live segment to Ink each frame. Physics is separate and
-/// proper - each anchored segment gets one capsule collider aligned to the segment, so a stroke
-/// reads as a smooth rounded ledge rather than a pile of boxes.
+/// rendered entirely in a shader via the engine's generic CustomPass hook: this script registers a
+/// pass running our project shader (assets/shaders/ink_field.slang) and submits the live stroke
+/// segments to it each frame. Physics is separate and proper - each anchored segment gets one capsule
+/// collider aligned to the segment, so a stroke reads as a smooth rounded ledge rather than a pile of
+/// boxes.
 ///
 /// Ink only holds where it can anchor to real geometry or a crystal; drawn in open air it turns to
 /// red "ghost" ink - non-solid and crumbling - so you extend real ledges and bridge real gaps
@@ -39,6 +41,11 @@ public sealed class AetherInk : EntityScript
     private static readonly Vector4 BodyColor = new(0.05f, 0.09f, 0.13f, 1.0f); // dark ink
     private static readonly Vector4 RimColor = GameSettings.Accent;             // cyan wet rim
 
+    // The engine's generic project-pass hook renders the ink; this project owns the shader + packing.
+    private const string PassName = "inkfield";
+    // Reused scratch buffer: two Vector4 per segment (a.xy,b.xy | width,alpha,glow,ghost).
+    private readonly List<Vector4> _buf = new();
+
     private struct Seg
     {
         public Vector2 A, B;
@@ -64,13 +71,15 @@ public sealed class AetherInk : EntityScript
         _segs.Clear();
         s_inkColliders.Clear(); // stale ids from a previous level never carry over
         _hasLast = false;
-        Ink.SetColors(BodyColor, RimColor);
+        // Register the ink field as a project custom pass: the engine runs our ink_field shader over
+        // the scene each frame we submit segments to it.
+        CustomPass.Register(PassName, "ink_field", CustomPassStage.OverScene);
     }
 
     public override void OnDetach()
     {
-        // Leaving the level: clear the field so no stray ink renders over the next scene.
-        Ink.Clear();
+        // Leaving the level: stop drawing the pass so no stray ink renders over the next scene.
+        CustomPass.Unregister(PassName);
         s_inkColliders.Clear();
     }
 
@@ -117,9 +126,9 @@ public sealed class AetherInk : EntityScript
             }
         }
 
-        // 2. Age segments, expire the dead (and their colliders), and re-feed the live ones to the
-        //    ink field. Rebuilt every frame so the shader always has the current stroke.
-        Ink.Clear();
+        // 2. Age segments, expire the dead (and their colliders), and pack the live ones into the
+        //    scratch buffer. Rebuilt every frame so the shader always has the current stroke.
+        _buf.Clear();
         for (int i = _segs.Count - 1; i >= 0; i--)
         {
             Seg s = _segs[i];
@@ -140,17 +149,16 @@ public sealed class AetherInk : EntityScript
 
             float alpha = s.Age > life - fade ? Math.Clamp((life - s.Age) / fade, 0.0f, 1.0f) : 1.0f;
             float grow = Math.Clamp(s.Age / 0.08f, 0.4f, 1.0f); // quick pop-in
-            if (s.Anchored)
-            {
-                float glow = 0.4f + 0.6f * GameSettings.InkGlow; // Ink Glow setting scales the rim
-                Ink.AddSegment(s.A, s.B, Thickness * grow, alpha, glow, 0.0f);
-            }
-            else
-            {
-                Ink.AddSegment(s.A, s.B, Thickness * grow, alpha * 0.85f, 0.5f, 1.0f); // ghost = red
-            }
+            float glow = s.Anchored ? 0.4f + 0.6f * GameSettings.InkGlow : 0.5f; // Ink Glow scales the rim
+            float ghost = s.Anchored ? 0.0f : 1.0f;                              // ghost = red
+            _buf.Add(new Vector4(s.A.X, s.A.Y, s.B.X, s.B.Y));
+            _buf.Add(new Vector4(Thickness * grow, s.Anchored ? alpha : alpha * 0.85f, glow, ghost));
             _segs[i] = s;
         }
+
+        // Submit the whole stroke to the ink pass (body + rim colours as color0/color1). Even an
+        // empty buffer submits so the pass stays registered; the shader just draws nothing.
+        CustomPass.Submit(PassName, CollectionsMarshal.AsSpan(_buf), Vector4.Zero, BodyColor, RimColor);
     }
 
     private void LaySegment(Vector2 a, Vector2 b)

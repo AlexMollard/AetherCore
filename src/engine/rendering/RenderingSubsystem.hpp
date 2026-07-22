@@ -20,7 +20,7 @@
 #include "passes/PostProcessStack.hpp"
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
-#include "rendering/InkRenderer.hpp"
+#include "rendering/CustomPassRenderer.hpp"
 #include "rendering/Renderer2D.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
@@ -131,9 +131,9 @@ namespace aether
 			return m_renderer2D;
 		}
 
-		[[nodiscard]] InkRenderer& GetInkRenderer()
+		[[nodiscard]] CustomPassRenderer& GetCustomPassRenderer()
 		{
-			return m_inkRenderer;
+			return m_customPassRenderer;
 		}
 
 		[[nodiscard]] FrameConstantsBuffer& GetFrameConstantsBuffer()
@@ -231,7 +231,7 @@ namespace aether
 		RenderQueue m_renderQueue;
 		Renderer m_renderer;
 		Renderer2D m_renderer2D;
-		InkRenderer m_inkRenderer;
+		CustomPassRenderer m_customPassRenderer;
 		FrameConstantsBuffer m_frameConstantsBuffer;
 		std::array<PerFrameResourceTable, kMaxFramesInFlight> m_resourceTableBuffers{};
 		ShadowService m_shadowService;
