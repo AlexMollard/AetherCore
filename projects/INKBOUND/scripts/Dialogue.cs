@@ -13,6 +13,10 @@ public static class Dialogue
 
     public static bool IsActive => s_runner != null && s_runner.Active;
 
+    /// <summary>The node the runner is currently showing (null when idle). Set by DialogueRunner; read
+    /// by the graph editor to highlight the live node during play.</summary>
+    public static string? CurrentNodeId;
+
     internal static void Register(DialogueRunner r) => s_runner = r;
     internal static void Unregister(DialogueRunner r) { if (s_runner == r) s_runner = null; }
 

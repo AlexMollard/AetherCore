@@ -214,6 +214,7 @@ public sealed class DialogueRunner : EntityScript
         HideChoices();
         _node = _graph?.NodeOrNull(nodeId);
         if (_node == null) { RequestClose(); return; }
+        Dialogue.CurrentNodeId = nodeId; // graph editor highlights this node during play
         _reveal = 0f;
         _fullShown = false;
         _nodeT = 0f; // restart the per-node fade-in
@@ -455,6 +456,7 @@ public sealed class DialogueRunner : EntityScript
         _closing = false;
         _graph = null;
         _node = null;
+        Dialogue.CurrentNodeId = null;
         Hide();
         Time.Resume();
     }
