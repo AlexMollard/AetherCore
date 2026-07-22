@@ -96,9 +96,13 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_get_text(uint id, byte* buf, int bufLen);
 
-    // ── Assets (generic data-asset text read) ───────────────────────────────────
+    // ── Assets (generic data-asset text read/write/list) ────────────────────────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_assets_read_text(string vpath, byte* buf, int cap);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_assets_write_text(string vpath, string text);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_assets_list(string pattern, byte* buf, int cap);
 
     // ── EditorGui (editor-only ImGui bridge; resolves lazily, never called in a shipped game) ────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]

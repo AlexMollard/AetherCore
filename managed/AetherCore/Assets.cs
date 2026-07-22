@@ -36,4 +36,32 @@ public static class Assets
             return n > 0 ? Encoding.UTF8.GetString(ptr, Math.Min(n, heap.Length)) : string.Empty;
         }
     }
+
+    /// <summary>Write UTF-8 text to a data asset (loose project dir in-editor). Returns false on
+    /// failure. Editor-tooling write; a shipped read-only pak fails gracefully. Symmetric with ReadText.</summary>
+    public static bool WriteText(string virtualPath, string text) => Native.aether_assets_write_text(virtualPath, text) != 0;
+
+    /// <summary>Glob a VFS pattern (e.g. "project://assets/dialogue/*.json"); returns matching virtual
+    /// paths (empty on none/error).</summary>
+    public static unsafe string[] List(string pattern)
+    {
+        Span<byte> buffer = stackalloc byte[4096];
+        int full;
+        fixed (byte* ptr = buffer)
+        {
+            full = Native.aether_assets_list(pattern, ptr, buffer.Length);
+            if (full <= 0) { return Array.Empty<string>(); }
+            if (full <= buffer.Length)
+            {
+                return Encoding.UTF8.GetString(ptr, full).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            }
+        }
+        byte[] heap = new byte[full];
+        fixed (byte* ptr = heap)
+        {
+            int n = Native.aether_assets_list(pattern, ptr, heap.Length);
+            string s = n > 0 ? Encoding.UTF8.GetString(ptr, Math.Min(n, heap.Length)) : string.Empty;
+            return s.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        }
+    }
 }
