@@ -146,6 +146,8 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)] internal static partial void aether_editorgui_add_rect(Vector2 mn, Vector2 mx, Vector4 col, float rounding, float thick);
     [LibraryImport(Lib)] internal static partial void aether_editorgui_add_bezier(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4, Vector4 col, float thick);
     [LibraryImport(Lib)] internal static partial void aether_editorgui_add_circle_filled(Vector2 c, float r, Vector4 col);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_add_triangle_filled(Vector2 a, Vector2 b, Vector2 c, Vector4 col);
+    [LibraryImport(Lib)] internal static partial Vector4 aether_editorgui_theme_color(int id);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_editorgui_add_text(Vector2 p, Vector4 col, string s);
 

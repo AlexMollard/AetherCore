@@ -7,8 +7,19 @@ namespace AetherCore;
 /// <summary>Immediate-mode ImGui, callable from an <see cref="IEditorWindow"/>.OnGui(). Editor/dev-tooling
 /// only - these forward to the editor's live ImGui context. In a shipped game the underlying exports are
 /// absent, but nothing calls them, so they resolve lazily and are never hit.</summary>
+/// <summary>Semantic slots mapped to the editor's live ImGui theme colours (see EditorGui.ThemeColor).
+/// Use these for custom draw-list drawing so a project window follows whatever theme is active.</summary>
+public enum EditorColor
+{
+    WindowBg = 0, ChildBg = 1, PanelBg = 2, PanelHover = 3, Header = 4,
+    Text = 5, TextDim = 6, Border = 7, Accent = 8, AccentDim = 9, Link = 10,
+}
+
 public static unsafe class EditorGui
 {
+    /// <summary>A colour from the editor's current theme (follows the active ImGui style).</summary>
+    public static Vector4 ThemeColor(EditorColor c) => Native.aether_editorgui_theme_color((int)c);
+
     // ── Windows / layout ──────────────────────────────────────────────────────
     /// <summary>Initial size the next window opens at; the user can still resize (persists).</summary>
     public static void SetNextWindowSize(Vector2 size) => Native.aether_editorgui_set_next_window_size(size);
@@ -96,6 +107,7 @@ public static unsafe class EditorGui
     public static void AddRect(Vector2 min, Vector2 max, Vector4 color, float rounding = 0f, float thickness = 1f) => Native.aether_editorgui_add_rect(min, max, color, rounding, thickness);
     public static void AddBezierCubic(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4, Vector4 color, float thickness = 1f) => Native.aether_editorgui_add_bezier(p1, p2, p3, p4, color, thickness);
     public static void AddCircleFilled(Vector2 center, float radius, Vector4 color) => Native.aether_editorgui_add_circle_filled(center, radius, color);
+    public static void AddTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Vector4 color) => Native.aether_editorgui_add_triangle_filled(a, b, c, color);
     public static void AddText(Vector2 pos, Vector4 color, string s) => Native.aether_editorgui_add_text(pos, color, s);
 
     // ── Interaction ───────────────────────────────────────────────────────────

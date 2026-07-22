@@ -16,6 +16,27 @@ namespace
 	inline ImVec2 V2(Vec2 v) { return {v.x, v.y}; }
 	inline ImVec4 V4(Vec4 v) { return {v.x, v.y, v.z, v.w}; }
 	inline ImU32 U32(Vec4 v) { return ImGui::ColorConvertFloat4ToU32(V4(v)); }
+
+	// Semantic theme slots -> the editor's LIVE ImGui style colors, so project windows follow whatever
+	// theme is active. Keeps C# decoupled from raw ImGuiCol_ index values.
+	ImVec4 ThemeColor(std::int32_t id)
+	{
+		switch (id)
+		{
+			case 0: return ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+			case 1: return ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
+			case 2: return ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
+			case 3: return ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered);
+			case 4: return ImGui::GetStyleColorVec4(ImGuiCol_Header);
+			case 5: return ImGui::GetStyleColorVec4(ImGuiCol_Text);
+			case 6: return ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+			case 7: return ImGui::GetStyleColorVec4(ImGuiCol_Border);
+			case 8: return ImGui::GetStyleColorVec4(ImGuiCol_CheckMark);      // Accent (brand)
+			case 9: return ImGui::GetStyleColorVec4(ImGuiCol_Button);        // AccentDim
+			case 10: return ImGui::GetStyleColorVec4(ImGuiCol_PlotLines);    // Link
+			default: return ImGui::GetStyleColorVec4(ImGuiCol_Text);
+		}
+	}
 } // namespace
 
 // ── Windows / layout ────────────────────────────────────────────────────────
@@ -111,7 +132,11 @@ AE_SCRIPT_API void aether_editorgui_add_rect_filled(Vec2 mn, Vec2 mx, Vec4 col, 
 AE_SCRIPT_API void aether_editorgui_add_rect(Vec2 mn, Vec2 mx, Vec4 col, float rounding, float thick) { ImGui::GetWindowDrawList()->AddRect(V2(mn), V2(mx), U32(col), rounding, 0, thick); }
 AE_SCRIPT_API void aether_editorgui_add_bezier(Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4, Vec4 col, float thick) { ImGui::GetWindowDrawList()->AddBezierCubic(V2(p1), V2(p2), V2(p3), V2(p4), U32(col), thick); }
 AE_SCRIPT_API void aether_editorgui_add_circle_filled(Vec2 c, float r, Vec4 col) { ImGui::GetWindowDrawList()->AddCircleFilled(V2(c), r, U32(col)); }
+AE_SCRIPT_API void aether_editorgui_add_triangle_filled(Vec2 a, Vec2 b, Vec2 c, Vec4 col) { ImGui::GetWindowDrawList()->AddTriangleFilled(V2(a), V2(b), V2(c), U32(col)); }
 AE_SCRIPT_API void aether_editorgui_add_text(Vec2 p, Vec4 col, const char* s) { ImGui::GetWindowDrawList()->AddText(V2(p), U32(col), s); }
+
+// Semantic theme colour (0..10; see the ThemeColor map + EditorColor enum). Follows the live theme.
+AE_SCRIPT_API Vec4 aether_editorgui_theme_color(std::int32_t id) { const ImVec4 c = ThemeColor(id); return {c.x, c.y, c.z, c.w}; }
 
 // ── Interaction ─────────────────────────────────────────────────────────────
 AE_SCRIPT_API std::int32_t aether_editorgui_invisible_button(const char* id, Vec2 size) { return ImGui::InvisibleButton(id, V2(size)) ? 1 : 0; }
