@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using AetherCore;
 
@@ -37,6 +38,18 @@ public sealed class DialogueRunner : EntityScript
     private DialogueNode? _node;
     private float _reveal;      // characters revealed so far (grows on UnscaledTime)
     private bool _fullShown;
+
+    // Choices (created at runtime; runtime elements can't be given the scene-authored Selectable nav
+    // component, so the runner tracks the focused index itself and styles it like the menu markers).
+    private const int MaxChoices = 6;
+    private const float ChoiceTop = 112f;
+    private const float ChoiceH = 30f;
+    private const float ChoiceFont = 22f;
+    private static readonly Vector4 ChoiceDim = new(0.60f, 0.66f, 0.72f, 0.80f);
+    private readonly Entity[] _choiceUi = new Entity[MaxChoices];
+    private readonly List<DialogueChoice> _visible = new();
+    private int _focus;
+    private bool _choicesShown;
 
     public override void OnAttach()
     {
@@ -109,6 +122,21 @@ public sealed class DialogueRunner : EntityScript
         Ui.SetTextColor(_hint, new Vector4(Accent.X, Accent.Y, Accent.Z, 0.55f));
         Ui.SetTextAlign(_hint, UiHAlign.Right, UiVAlign.Bottom);
 
+        // Choice slots, stacked below the body (single line each, no wrap).
+        for (int i = 0; i < MaxChoices; i++)
+        {
+            Entity c = Ui.CreateText(_canvas, "");
+            c.SetParent(_panel);
+            Ui.SetAnchors(c, new Vector2(0f, 0f), new Vector2(1f, 0f));
+            Ui.SetOffsets(c, new Vector2(_bodyLeft, ChoiceTop + i * ChoiceH), new Vector2(-Pad, ChoiceTop + (i + 1) * ChoiceH));
+            Ui.SetFont(c, BodyFontName);
+            Ui.SetFontSize(c, ChoiceFont);
+            Ui.SetTextAlign(c, UiHAlign.Left, UiVAlign.Top);
+            Ui.SetTextWrap(c, false);
+            c.SetActive(false);
+            _choiceUi[i] = c;
+        }
+
         _built = true;
     }
 
@@ -124,10 +152,12 @@ public sealed class DialogueRunner : EntityScript
 
     private void GoTo(string? nodeId)
     {
+        HideChoices();
         _node = _graph?.NodeOrNull(nodeId);
         if (_node == null) { End(); return; }
         _reveal = 0f;
         _fullShown = false;
+        _hint.SetActive(true);
         Ui.SetText(_speaker, _node.Speaker);
         Ui.SetText(_body, "");
     }
@@ -137,30 +167,88 @@ public sealed class DialogueRunner : EntityScript
         if (!Active || _node == null) return;
         float udt = UnscaledDelta(Time.UnscaledTime);
 
-        // Typewriter reveal.
+        if (Input.IsKeyPressed(Key.Escape)) { End(); return; }
+
+        bool tap = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.Enter)
+                   || Input.IsMousePressed(MouseButton.Left);
+
+        // Phase 1 - typewriter. A tap snaps the line to full. On the frame the line completes we
+        // reveal choices (if any) and return, so the same tap never also advances/activates.
         if (!_fullShown)
         {
             _reveal += udt * CharsPerSec;
             int shown = Math.Min(_node.Text.Length, (int)_reveal);
+            if (tap) { shown = _node.Text.Length; }
             Ui.SetText(_body, _node.Text.Substring(0, shown));
-            if (shown >= _node.Text.Length) { _fullShown = true; }
+            if (shown >= _node.Text.Length)
+            {
+                _fullShown = true;
+                if (_node.HasChoices) { ShowChoices(); }
+            }
+            return;
         }
 
-        // Escape ends the whole conversation; Space/Enter/Click advances (or snaps to full first).
-        if (Input.IsKeyPressed(Key.Escape)) { End(); return; }
-        bool advance = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.Enter)
-                       || Input.IsMousePressed(MouseButton.Left);
-        if (advance)
+        // Phase 2 - fully shown.
+        if (_choicesShown) { UpdateChoices(); return; }
+
+        if (tap) { GoTo(_node.Goto); } // linear advance
+    }
+
+    private void ShowChoices()
+    {
+        _visible.Clear();
+        foreach (DialogueChoice c in _node!.Choices)
         {
-            if (!_fullShown) { _reveal = _node.Text.Length; _fullShown = true; Ui.SetText(_body, _node.Text); }
-            else { Next(); }
+            if (DialogueState.Evaluate(c.If)) { _visible.Add(c); }
+        }
+        _focus = 0;
+        _choicesShown = true;
+        _hint.SetActive(false);
+        for (int i = 0; i < MaxChoices; i++)
+        {
+            _choiceUi[i].SetActive(i < _visible.Count);
         }
     }
 
-    private void Next()
+    private void HideChoices()
     {
-        // Linear only for now (choices land in Task 5).
-        GoTo(_node!.Goto);
+        _choicesShown = false;
+        for (int i = 0; i < MaxChoices; i++)
+        {
+            if (_choiceUi[i].IsValid) { _choiceUi[i].SetActive(false); }
+        }
+    }
+
+    private void UpdateChoices()
+    {
+        int n = _visible.Count;
+        if (n == 0) { GoTo(_node!.Goto); return; } // every choice gated out -> fall through
+
+        if (Input.IsKeyPressed(Key.Up) || Input.IsKeyPressed(Key.W)) { _focus = (_focus - 1 + n) % n; }
+        if (Input.IsKeyPressed(Key.Down) || Input.IsKeyPressed(Key.S)) { _focus = (_focus + 1) % n; }
+        for (int i = 0; i < n; i++)
+        {
+            if (Ui.IsHovered(_choiceUi[i])) { _focus = i; }
+        }
+
+        float breathe = 0.72f + 0.28f * MathF.Sin(Time.UnscaledTime * 4.5f);
+        for (int i = 0; i < n; i++)
+        {
+            bool on = i == _focus;
+            Ui.SetText(_choiceUi[i], (on ? "> " : "  ") + _visible[i].Text);
+            Ui.SetTextColor(_choiceUi[i], on ? new Vector4(Accent.X, Accent.Y, Accent.Z, breathe) : ChoiceDim);
+        }
+
+        bool activate = Input.IsKeyPressed(Key.Enter) || Input.IsKeyPressed(Key.Space)
+                        || (Input.IsMousePressed(MouseButton.Left) && Ui.IsHovered(_choiceUi[_focus]));
+        if (activate) { Choose(_focus); }
+    }
+
+    private void Choose(int i)
+    {
+        DialogueChoice c = _visible[i];
+        if (!string.IsNullOrEmpty(c.Set)) { DialogueState.SetFlag(c.Set); }
+        GoTo(c.Goto); // GoTo hides the choices
     }
 
     private void End()
@@ -200,6 +288,7 @@ public sealed class DialogueRunner : EntityScript
         _speaker.SetActive(false);
         _body.SetActive(false);
         _hint.SetActive(false);
+        HideChoices();
         _lastU = -1f;
     }
 }
