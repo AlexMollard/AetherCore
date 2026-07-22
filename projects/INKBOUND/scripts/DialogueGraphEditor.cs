@@ -438,48 +438,100 @@ public sealed class DialogueGraphEditor : IEditorWindow
     private void DrawSidePanel()
     {
         EditorGui.BeginChild("side", new Vector2(SidePanelW - 8f, 0f), true);
-        if (_selected == null) { EditorGui.TextColored(_cDim, "Select a node to edit."); EditorGui.EndChild(); return; }
+        if (_selected == null)
+        {
+            EditorGui.Spacing();
+            EditorGui.TextColored(_cDim, "No node selected.");
+            EditorGui.TextColored(_cDim, "Click a node on the canvas to edit it,");
+            EditorGui.TextColored(_cDim, "or press + Node to add one.");
+            EditorGui.EndChild();
+            return;
+        }
         EdNode n = _selected;
+        bool isEnd = !n.HasChoices && n.Goto.Length == 0;
+        string type = n.Id == _graph!.Start ? "START" : n.HasChoices ? "BRANCH" : isEnd ? "END" : "LINE";
 
-        EditorGui.TextColored(_cAccent, "NODE");
+        // ── Node ──
+        Section("NODE");
         EditorGui.Text(n.Id);
-        if (n.Id == _graph!.Start) { EditorGui.SameLine(); EditorGui.TextColored(_cAccent, "(start)"); }
-        EditorGui.Spacing();
+        EditorGui.SameLine();
+        EditorGui.TextColored(_cAccent, type);
 
-        EditorGui.InputText("speaker", ref n.Speaker);
-        EditorGui.InputText("text", ref n.Text, 512);
-        EditorGui.InputText("portrait", ref n.Portrait);
+        Field("speaker", "speaker", ref n.Speaker);
+
+        EditorGui.TextColored(_cDim, "text");
+        EditorGui.InputTextMultiline("##text", ref n.Text, new Vector2(-1f, 70f), 512);
+
+        Field("portrait", "portrait", ref n.Portrait);
+
+        EditorGui.TextColored(_cDim, "effect");
         int eff = System.Array.IndexOf(Effects, n.Effect);
         if (eff < 0) { eff = 0; }
-        if (EditorGui.Combo("effect", ref eff, Effects)) { n.Effect = Effects[eff]; }
-        if (!n.HasChoices) { EditorGui.InputText("goto", ref n.Goto); }
+        EditorGui.SetNextItemWidth(-1f);
+        if (EditorGui.Combo("##effect", ref eff, Effects)) { n.Effect = Effects[eff]; }
 
-        EditorGui.Spacing();
-        EditorGui.Separator();
-        EditorGui.TextColored(_cAccent, "CHOICES");
+        if (!n.HasChoices) { Field("goto", "goto ->", ref n.Goto); }
+
+        // ── Choices ──
+        Section("CHOICES");
+        if (n.Choices.Count == 0)
+        {
+            EditorGui.TextColored(_cDim, "None yet - add one to branch");
+            EditorGui.TextColored(_cDim, "(choices override goto).");
+        }
         int del = -1;
+        (int from, int to) move = (-1, -1);
         for (int i = 0; i < n.Choices.Count; i++)
         {
             EdChoice c = n.Choices[i];
-            EditorGui.TextColored(_cDim, $"#{i + 1}");
+            EditorGui.TextColored(_cAccent, $"Choice {i + 1}");
             EditorGui.SameLine();
-            if (EditorGui.SmallButton($"x##{i}")) { del = i; }
-            EditorGui.InputText($"text##{i}", ref c.Text);
-            EditorGui.InputText($"goto##{i}", ref c.Goto);
-            EditorGui.InputText($"if##{i}", ref c.If);
-            EditorGui.InputText($"set##{i}", ref c.Set);
+            if (EditorGui.SmallButton($"x##ch{i}")) { del = i; }
+            if (i > 0) { EditorGui.SameLine(); if (EditorGui.SmallButton($"^##up{i}")) { move = (i, i - 1); } }
+            if (i < n.Choices.Count - 1) { EditorGui.SameLine(); if (EditorGui.SmallButton($"v##dn{i}")) { move = (i, i + 1); } }
+
+            Field($"ctext{i}", "text", ref c.Text);
+            Field($"cgoto{i}", "goto ->", ref c.Goto);
+            Field($"cif{i}", "show if", ref c.If);
+            Field($"cset{i}", "on pick set", ref c.Set);
             EditorGui.Separator();
         }
         if (del >= 0) { n.Choices.RemoveAt(del); }
-        if (EditorGui.Button("+ Choice")) { n.Choices.Add(new EdChoice { Text = "...", Goto = "end" }); }
+        else if (move.from >= 0)
+        {
+            EdChoice t = n.Choices[move.from];
+            n.Choices.RemoveAt(move.from);
+            n.Choices.Insert(move.to, t);
+        }
+        if (EditorGui.Button("+ Choice", new Vector2(-1f, 0f))) { n.Choices.Add(new EdChoice { Text = "...", Goto = "end" }); }
 
-        EditorGui.Spacing();
-        EditorGui.Separator();
-        if (EditorGui.Button("Set as Start")) { _graph.Start = n.Id; }
-        EditorGui.SameLine();
-        if (EditorGui.Button("Delete Node")) { DeleteNode(n); }
+        // ── Actions ──
+        Section("ACTIONS");
+        bool isStart = n.Id == _graph.Start;
+        if (!isStart) { if (EditorGui.Button("Set as Start")) { _graph.Start = n.Id; } }
+        else { EditorGui.TextColored(_cDim, "This is the start node."); }
+        if (EditorGui.Button("Delete Node", new Vector2(-1f, 0f))) { DeleteNode(n); }
 
         EditorGui.EndChild();
+    }
+
+    // A left-accent-barred section header, matching the toolbar's accent styling.
+    private void Section(string label)
+    {
+        EditorGui.Spacing();
+        Vector2 p = EditorGui.CursorScreenPos();
+        EditorGui.AddRectFilled(new Vector2(p.X, p.Y + 2f), new Vector2(p.X + 3f, p.Y + 15f), _cAccent, 1f);
+        EditorGui.SetCursorScreenPos(new Vector2(p.X + 9f, p.Y));
+        EditorGui.TextColored(_cAccent, label);
+        EditorGui.Spacing();
+    }
+
+    // A dim label above a full-width input. Returns true on change.
+    private bool Field(string id, string label, ref string value, int maxLen = 256)
+    {
+        EditorGui.TextColored(_cDim, label);
+        EditorGui.SetNextItemWidth(-1f);
+        return EditorGui.InputText("##" + id, ref value, maxLen);
     }
 
     // ── Structural ────────────────────────────────────────────────────────────

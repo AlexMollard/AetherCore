@@ -108,6 +108,14 @@ AE_SCRIPT_API std::int32_t aether_editorgui_input_text(const char* label, char* 
 	}
 	return ImGui::InputText(label, buf, static_cast<std::size_t>(bufLen)) ? 1 : 0;
 }
+AE_SCRIPT_API std::int32_t aether_editorgui_input_text_multiline(const char* label, char* buf, std::int32_t bufLen, Vec2 size)
+{
+	if (buf == nullptr || bufLen <= 0)
+	{
+		return 0;
+	}
+	return ImGui::InputTextMultiline(label, buf, static_cast<std::size_t>(bufLen), V2(size)) ? 1 : 0;
+}
 AE_SCRIPT_API std::int32_t aether_editorgui_input_float(const char* label, float* v) { return ImGui::InputFloat(label, v) ? 1 : 0; }
 AE_SCRIPT_API std::int32_t aether_editorgui_selectable(const char* label, std::int32_t selected) { return ImGui::Selectable(label, selected != 0) ? 1 : 0; }
 AE_SCRIPT_API std::int32_t aether_editorgui_tree_node(const char* label) { return ImGui::TreeNode(label) ? 1 : 0; }

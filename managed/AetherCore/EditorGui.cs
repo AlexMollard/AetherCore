@@ -92,6 +92,27 @@ public static unsafe class EditorGui
         return changed;
     }
 
+    /// <summary>Multi-line editable text field of the given size. Returns true on the frame it changed.</summary>
+    public static bool InputTextMultiline(string label, ref string text, Vector2 size, int maxLen = 1024)
+    {
+        if (maxLen < 2) { maxLen = 2; }
+        byte[] buf = new byte[maxLen];
+        int n = Encoding.UTF8.GetBytes(text ?? string.Empty, 0, Math.Min((text ?? string.Empty).Length, maxLen - 1), buf, 0);
+        buf[n] = 0;
+        bool changed;
+        fixed (byte* p = buf)
+        {
+            changed = Native.aether_editorgui_input_text_multiline(label, p, buf.Length, size) != 0;
+            if (changed)
+            {
+                int len = 0;
+                while (len < buf.Length && p[len] != 0) { len++; }
+                text = Encoding.UTF8.GetString(p, len);
+            }
+        }
+        return changed;
+    }
+
     public static bool InputFloat(string label, ref float v)
     {
         fixed (float* p = &v) { return Native.aether_editorgui_input_float(label, p) != 0; }

@@ -138,6 +138,8 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_editorgui_input_text(string label, byte* buf, int bufLen);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_input_text_multiline(string label, byte* buf, int bufLen, Vector2 size);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_editorgui_input_float(string label, float* v);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_editorgui_selectable(string label, int selected);
