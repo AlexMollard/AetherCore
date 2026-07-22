@@ -84,6 +84,10 @@ public static class Physics2D
     public static RaycastHit2D CircleCast(Vector2 origin, float radius, Vector2 direction, float maxDistance)
         => Native.aether_physics2d_circlecast(origin, radius, direction, maxDistance);
 
+    /// <summary>True if a solid (two-way) tile covers this world point - correct even deep inside a
+    /// solid block, where an overlap query against the hollow tilemap chain colliders reports nothing.</summary>
+    public static bool IsPointSolid(Vector2 point) => Native.aether_physics2d_is_point_solid(point) != 0;
+
     /// <summary>Every entity whose body overlaps a circle at <paramref name="center"/>.</summary>
     public static Entity[] OverlapCircle(Vector2 center, float radius)
         => Overlaps(Native.aether_physics2d_overlap_circle(center, radius));

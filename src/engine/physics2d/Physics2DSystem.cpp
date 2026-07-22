@@ -1239,6 +1239,67 @@ namespace aether
 		}
 	} // namespace
 
+	bool Physics2DSystem::IsWorldPointSolid(World& world, glm::vec2 point) const
+	{
+		if (m_tileAssets == nullptr)
+		{
+			return false;
+		}
+		bool solid = false;
+		for (const auto& [enttEntity, component, transform]: world.View<TileMapComponent, TransformComponent>().each())
+		{
+			if (solid || component.tilemapPath.empty())
+			{
+				continue;
+			}
+			const auto mapResult = m_tileAssets->LoadTileMap(component.tilemapPath);
+			if (!mapResult.has_value())
+			{
+				continue;
+			}
+			const TileMapAsset& map = **mapResult;
+			const auto tileSetResult = m_tileAssets->LoadTileSet(map.tileSetPath);
+			if (!tileSetResult.has_value())
+			{
+				continue;
+			}
+			const TileSetAsset& tileSet = **tileSetResult;
+			const float cellSize = map.cellSize > 0.0f ? map.cellSize : tileSet.cellSize;
+			if (cellSize <= 0.0f)
+			{
+				continue;
+			}
+
+			// world -> tilemap-local -> cell (matches the editor's tile-picking math).
+			const glm::vec2 local = glm::vec2(glm::inverse(transform.localToWorld) * glm::vec4(point, 0.0f, 1.0f));
+			const glm::ivec2 cell{static_cast<std::int32_t>(std::floor(local.x / cellSize)), static_cast<std::int32_t>(std::floor(local.y / cellSize))};
+
+			for (std::size_t layerIndex = 0; layerIndex < map.layers.size() && !solid; ++layerIndex)
+			{
+				if (!map.layers[layerIndex].collision)
+				{
+					continue;
+				}
+				const std::uint32_t c = map.GetCell(layerIndex, cell);
+				if (tilecell::Empty(c))
+				{
+					continue;
+				}
+				const std::uint16_t idx = tilecell::PaletteIndex(c);
+				if (idx >= map.tilePalette.size())
+				{
+					continue;
+				}
+				const TileDefinition* tile = tileSet.Find(map.tilePalette[idx]);
+				if (tile != nullptr && tile->collision == TileCollisionKind::Full && tile->oneWay == TileOneWay::None)
+				{
+					solid = true;
+				}
+			}
+		}
+		return solid;
+	}
+
 	Physics2DSystem::RayHit2D Physics2DSystem::CastRay(glm::vec2 origin, glm::vec2 direction, float maxDistance) const
 	{
 		RayHit2D hit;

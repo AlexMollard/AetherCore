@@ -92,6 +92,10 @@ namespace aether
 		[[nodiscard]] std::vector<std::uint32_t> OverlapPoint(glm::vec2 point) const;
 		[[nodiscard]] RayHit2D CastCircle(glm::vec2 center, float radius, glm::vec2 direction, float maxDistance) const;
 
+		// True if a two-way-solid tile covers this world point. Uses the tilemap cell data (not the
+		// chain colliders, whose interior is hollow), so it answers correctly deep inside a solid block.
+		[[nodiscard]] bool IsWorldPointSolid(World& world, glm::vec2 point) const;
+
 		// Tile collision geometry for the physics debug overlay: invokes the
 		// callback with world-space polylines (chain outlines and rect loops).
 		void ForEachTileDebugOutline(const std::function<void(const std::vector<glm::vec2>& outline, TileOneWay oneWay)>& callback) const;

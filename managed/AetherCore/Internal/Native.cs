@@ -524,6 +524,9 @@ internal static unsafe partial class Native
     internal static partial RaycastHit2D aether_physics2d_circlecast(Vector2 origin, float radius, Vector2 direction, float maxDistance);
 
     [LibraryImport(Lib)]
+    internal static partial int aether_physics2d_is_point_solid(Vector2 point);
+
+    [LibraryImport(Lib)]
     internal static partial int aether_physics2d_overlap_circle(Vector2 center, float radius);
 
     [LibraryImport(Lib)]

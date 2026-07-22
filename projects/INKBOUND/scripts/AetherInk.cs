@@ -116,8 +116,10 @@ public sealed class AetherInk : EntityScript
                     while (gap >= Spacing && Aether > 0.0f)
                     {
                         Vector2 next = _last + Vector2.Normalize(point - _last) * Spacing;
-                        LaySegment(_last, next);
-                        Aether = Math.Max(0.0f, Aether - DrainPerSegment);
+                        if (LaySegment(_last, next)) // no aether spent on ink that can't be placed (inside a wall)
+                        {
+                            Aether = Math.Max(0.0f, Aether - DrainPerSegment);
+                        }
                         _last = next;
                         gap = Vector2.Distance(point, _last);
                     }
@@ -187,16 +189,23 @@ public sealed class AetherInk : EntityScript
         CustomPass.Submit(PassName, CollectionsMarshal.AsSpan(_buf), aabb, BodyColor, RimColor);
     }
 
-    private void LaySegment(Vector2 a, Vector2 b)
+    /// <summary>Lay one segment. Returns false (and lays nothing) if it would sit inside solid
+    /// geometry - you can't draw ink through walls or into objects.</summary>
+    private bool LaySegment(Vector2 a, Vector2 b)
     {
-        bool anchored = EvaluateAnchor((a + b) * 0.5f);
+        Vector2 mid = (a + b) * 0.5f;
+        if (IsInsideSolid(mid))
+        {
+            return false;
+        }
+
+        bool anchored = EvaluateAnchor(mid);
         Seg s = new() { A = a, B = b, Age = 0.0f, Anchored = anchored };
 
         if (anchored)
         {
             // Proper collider: one capsule aligned to the segment (local Y is the capsule's long
             // axis, so rotate the entity by the segment angle minus 90 degrees).
-            Vector2 mid = (a + b) * 0.5f;
             Vector2 d = b - a;
             float len = d.Length();
             float angleDeg = MathF.Atan2(d.Y, d.X) * (180.0f / MathF.PI);
@@ -210,7 +219,14 @@ public sealed class AetherInk : EntityScript
         }
 
         _segs.Add(s);
+        return true;
     }
+
+    /// <summary>Does this point sit inside solid terrain (a wall/ground tile)? Uses the tilemap tile
+    /// solidity so it's correct deep inside a block - the ground's chain colliders are hollow, so an
+    /// overlap query only caught the surface edge and let ink be drawn inside. Points in empty cells
+    /// (including just above a surface) return false, so you can still draw ledges onto walls.</summary>
+    private static bool IsInsideSolid(Vector2 p) => Physics2D.IsPointSolid(p);
 
     /// <summary>Is real geometry (or a crystal) within reach of this point? Other ink does not count
     /// - a span must ultimately reach the actual world to hold.</summary>

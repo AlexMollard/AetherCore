@@ -199,6 +199,17 @@ AE_SCRIPT_API RaycastHit2D aether_physics2d_circlecast(Vec2 origin, float radius
 	return {};
 }
 
+// True if a solid (two-way) tile covers this world point - correct even deep inside a solid block,
+// where the hollow chain colliders would report nothing.
+AE_SCRIPT_API std::int32_t aether_physics2d_is_point_solid(Vec2 point)
+{
+	if (auto* physics = System2D())
+	{
+		return physics->IsWorldPointSolid(ActiveWorld(), ToGlm(point)) ? 1 : 0;
+	}
+	return 0;
+}
+
 AE_SCRIPT_API std::int32_t aether_physics2d_overlap_circle(Vec2 center, float radius)
 {
 	const auto* physics = System2D();

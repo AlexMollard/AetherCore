@@ -116,16 +116,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float4 wp = mul(frame->invViewProj, float4(ndc, 0.0, 1.0));
     const float2 world = wp.xy / wp.w;
 
-    // Pixel-snap to a coarse world grid (16 px/unit) so the ink reads as chunky pixel-art.
-    const float cell = (1.0 / 16.0) * 2.0;
-    const float2 wq = (floor(world / cell) + 0.5) * cell;
+    // Pixel-art: snap the sample to the game's ART grid (16 px/unit, same as the sprites/tiles) and
+    // shade with HARD edges - no anti-aliasing - so the ink renders as crisp uniform pixels that match
+    // the pixel art, not a muddy low-res brush. Everything below is evaluated at wq, so ink, veins and
+    // glow are all per-pixel-cell constant (blocky), world-locked like the sprites' nearest sampling.
+    const float P = 1.0 / 16.0;
+    const float2 wq = (floor(world / P) + 0.5) * P;
 
     InkSegment* segs = pc.data.Ptr();
     const uint segmentCount = pc.count / 2u; // 2 float4 per InkSegment
     float best = 1e9;
     float bAlpha = 0.0, bGlow = 0.0, bGhost = 0.0;
-    // Cheap inner loop: just capsule distances (no per-segment noise - that would be O(pixels*segments)
-    // fbm evaluations). Edge roughening is applied once per pixel after the loop.
     for (uint i = 0u; i < segmentCount; ++i)
     {
         const InkSegment s = segs[i];
@@ -138,19 +139,21 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             bGhost = s.ghost;
         }
     }
-    // One fbm per pixel roughens the whole ink boundary (brushed, not machined).
-    best += (fbm(wq * 6.5) - 0.5) * 0.045;
+    // One fbm per cell wobbles the boundary so the pixel edge looks brushed, not machined.
+    best += (fbm(wq * 6.5) - 0.5) * 0.06;
 
-    const float aa = cell;      // ~one pixel-cell soft edge
-    const float bleedBand = aa * 1.25; // tight feathered bleed so a thin stroke stays thin
-    if (best > bleedBand)
+    const float glowRadius = 0.26; // pixel glow halo reach beyond the ink surface
+    if (best > glowRadius)
     {
         discard;
     }
 
     const float time = frame->elapsedTime;
 
-    // Slow inky turbulence for pooling + veins inside the body (one fbm; drifts eerily).
+    // Hard pixel coverage: fully opaque inside, nothing past the surface (crisp blocks, no AA).
+    const float inkMask = best < 0.0 ? 1.0 : 0.0;
+
+    // Slow inky turbulence for pooling + veins (evaluated per cell -> blocky, matches the pixel look).
     const float turb = fbm(wq * 2.8 + float2(time * 0.04, -time * 0.03));
     const float depth = saturate(-best / 0.5); // 0 at the edge -> ~1 deep inside the ink
 
@@ -162,18 +165,25 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         rim = float3(0.92, 0.22, 0.22);
     }
 
-    // Ink pools darkest where it is thick and where the turbulence gathers - murky depth, not a flat
-    // fill - then thread it with slightly darker veins where the turbulence crosses a narrow band.
-    float3 col = lerp(body, body * 0.28, depth * (0.35 + 0.65 * turb));
-    col *= 1.0 - 0.32 * (smoothstep(0.44, 0.5, turb) - smoothstep(0.5, 0.58, turb));
-
-    // A faint wet meniscus at the very edge - a thin, dim sheen, not a glowing line.
+    // Murky pooling + veins inside the body.
+    float3 ink = lerp(body, body * 0.30, depth * (0.35 + 0.65 * turb));
+    ink *= 1.0 - 0.30 * (smoothstep(0.44, 0.5, turb) - smoothstep(0.5, 0.58, turb));
+    // Wet meniscus sheen on the outermost pixel ring.
     const float flick = 0.72 + 0.28 * sin(time * 1.1 + wq.x * 1.7 + wq.y * 2.1);
-    const float rimWidth = 0.05;
+    const float rimWidth = 0.08;
     const float rimT = 1.0 - saturate(-best / rimWidth);
-    col = lerp(col, rim, rimT * rimT * 0.28 * bGlow * flick);
+    ink = lerp(ink, rim, rimT * rimT * 0.5 * bGlow * flick);
 
-    // Feathered, noisy bleed at the very edge so the ink soaks into the scene.
-    const float bleed = 1.0 - smoothstep(-aa, bleedBand, best);
-    return float4(col, bleed * bAlpha * (0.78 + 0.22 * turb));
+    // Pixel glow halo OUTSIDE the ink, quantised into a few steps so it reads as blocky pixel glow.
+    float halo = 1.0 - saturate(max(best, 0.0) / glowRadius);
+    halo = floor(halo * halo * 4.0 + 0.5) / 4.0;
+    const float pulse = 0.82 + 0.18 * sin(time * 1.6);
+    const float glowA = halo * (1.0 - inkMask) * 0.55 * bGlow * pulse;
+    const float3 glowCol = rim * 1.5;
+
+    // Composite the opaque ink over its glow halo (straight alpha).
+    const float inkA = inkMask * bAlpha;
+    const float a = saturate(inkA + glowA);
+    const float3 col = (ink * inkA + glowCol * glowA) / max(a, 1e-4);
+    return float4(col, a);
 }
