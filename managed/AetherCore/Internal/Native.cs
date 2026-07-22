@@ -148,6 +148,10 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)] internal static partial void aether_editorgui_tree_pop();
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_editorgui_combo(string label, int* current, string itemsNewlineJoined);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_editorgui_begin_combo(string label, string preview);
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_end_combo();
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_set_keyboard_focus_here(int offset);
 
     [LibraryImport(Lib)] internal static partial void aether_editorgui_add_line(Vector2 a, Vector2 b, Vector4 col, float thick);
     [LibraryImport(Lib)] internal static partial void aether_editorgui_add_rect_filled(Vector2 mn, Vector2 mx, Vector4 col, float rounding);

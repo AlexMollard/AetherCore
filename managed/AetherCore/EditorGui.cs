@@ -130,6 +130,13 @@ public static unsafe class EditorGui
         return changed;
     }
 
+    /// <summary>Open-ended combo for custom (e.g. filterable) content. When it returns true, draw the
+    /// popup body (a filter field, Selectables, ...) and then call <see cref="EndCombo"/>.</summary>
+    public static bool BeginCombo(string label, string preview) => Native.aether_editorgui_begin_combo(label, preview) != 0;
+    public static void EndCombo() => Native.aether_editorgui_end_combo();
+    /// <summary>Focus the next widget (offset 0) - e.g. a filter field the frame its popup opens.</summary>
+    public static void SetKeyboardFocusHere(int offset = 0) => Native.aether_editorgui_set_keyboard_focus_here(offset);
+
     // ── Canvas draw list ──────────────────────────────────────────────────────
     public static void AddLine(Vector2 a, Vector2 b, Vector4 color, float thickness = 1f) => Native.aether_editorgui_add_line(a, b, color, thickness);
     public static void AddRectFilled(Vector2 min, Vector2 max, Vector4 color, float rounding = 0f) => Native.aether_editorgui_add_rect_filled(min, max, color, rounding);

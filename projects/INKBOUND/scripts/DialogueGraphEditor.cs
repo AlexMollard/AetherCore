@@ -26,6 +26,10 @@ public sealed class DialogueGraphEditor : IEditorWindow
     // Editor-side edit panel width, draggable via the splitter between canvas and panel.
     private float _sidePanelW = 400f;
 
+    // Goto node-picker state: the filter text and which goto combo is currently open.
+    private string _gotoFilter = "";
+    private string _openGoto = "";
+
     // Font Awesome 6 glyphs baked into the editor font (0xE000-0xF8FF; solid+regular). Same set the
     // editor menus use, so these render rather than tofu.
     private static class Ico
@@ -534,7 +538,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.SetNextItemWidth(-1f);
         if (EditorGui.Combo("##effect", ref eff, Effects)) { n.Effect = Effects[eff]; }
 
-        if (!n.HasChoices) { Field("goto", Ico.ArrowRight, "goto", ref n.Goto); }
+        if (!n.HasChoices) { GotoField("goto", Ico.ArrowRight, "goto", ref n.Goto); }
 
         // ── Choices ──
         Section(Ico.Branch, "CHOICES");
@@ -555,7 +559,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
             if (i < n.Choices.Count - 1) { EditorGui.SameLine(); if (EditorGui.SmallButton($"{Ico.ChevDown}##dn{i}")) { move = (i, i + 1); } }
 
             Field($"ctext{i}", Ico.Comment, "text", ref c.Text);
-            Field($"cgoto{i}", Ico.ArrowRight, "goto", ref c.Goto);
+            GotoField($"cgoto{i}", Ico.ArrowRight, "goto", ref c.Goto);
             Field($"cif{i}", Ico.Branch, "show if", ref c.If);
             Field($"cset{i}", Ico.Flag, "on pick set", ref c.Set);
             EditorGui.Separator();
@@ -596,6 +600,35 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.TextColored(_cDim, $"{icon}  {label}");
         EditorGui.SetNextItemWidth(-1f);
         return EditorGui.InputText("##" + id, ref value, maxLen);
+    }
+
+    // A filterable node picker for goto targets: type to filter the graph's node ids (plus "end").
+    // Beats typing an exact id - you pick from what actually exists.
+    private void GotoField(string id, string icon, string label, ref string value)
+    {
+        EditorGui.TextColored(_cDim, $"{icon}  {label}");
+        EditorGui.SetNextItemWidth(-1f);
+        string preview = value.Length > 0 ? value : "(pick a node)";
+        if (EditorGui.BeginCombo("##" + id, preview))
+        {
+            if (_openGoto != id) { _openGoto = id; _gotoFilter = ""; EditorGui.SetKeyboardFocusHere(0); }
+            EditorGui.SetNextItemWidth(-1f);
+            EditorGui.InputText("##flt" + id, ref _gotoFilter, 64);
+            string f = _gotoFilter.ToLowerInvariant();
+            if (f.Length == 0 || "end".Contains(f))
+            {
+                if (EditorGui.Selectable("end", value == "end")) { value = "end"; }
+            }
+            foreach (EdNode n in _graph!.Nodes)
+            {
+                if (f.Length == 0 || n.Id.ToLowerInvariant().Contains(f))
+                {
+                    if (EditorGui.Selectable(n.Id, n.Id == value)) { value = n.Id; }
+                }
+            }
+            EditorGui.EndCombo();
+        }
+        else if (_openGoto == id) { _openGoto = ""; }
     }
 
     // ── Structural ────────────────────────────────────────────────────────────

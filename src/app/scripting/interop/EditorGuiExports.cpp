@@ -119,6 +119,12 @@ AE_SCRIPT_API std::int32_t aether_editorgui_input_text_multiline(const char* lab
 }
 AE_SCRIPT_API std::int32_t aether_editorgui_input_float(const char* label, float* v) { return ImGui::InputFloat(label, v) ? 1 : 0; }
 AE_SCRIPT_API std::int32_t aether_editorgui_selectable(const char* label, std::int32_t selected) { return ImGui::Selectable(label, selected != 0) ? 1 : 0; }
+// Open-ended combo: returns 1 while the popup is open; fill it with your own filter box + selectables,
+// then call end_combo (only if this returned 1). For building filterable pickers.
+AE_SCRIPT_API std::int32_t aether_editorgui_begin_combo(const char* label, const char* preview) { return ImGui::BeginCombo(label, preview) ? 1 : 0; }
+AE_SCRIPT_API void aether_editorgui_end_combo() { ImGui::EndCombo(); }
+// Focus the next widget (offset 0) - e.g. a filter field the moment its popup opens.
+AE_SCRIPT_API void aether_editorgui_set_keyboard_focus_here(std::int32_t offset) { ImGui::SetKeyboardFocusHere(offset); }
 AE_SCRIPT_API std::int32_t aether_editorgui_tree_node(const char* label) { return ImGui::TreeNode(label) ? 1 : 0; }
 AE_SCRIPT_API void aether_editorgui_tree_pop() { ImGui::TreePop(); }
 
