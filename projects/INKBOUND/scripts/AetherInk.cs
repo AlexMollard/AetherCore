@@ -63,6 +63,8 @@ public sealed class AetherInk : EntityScript
 
     private Vector2 _last;
     private bool _hasLast;
+    private float _t;
+    private float _dripCd; // throttles ink-droplet spawns while drawing
 
     public override void OnAttach()
     {
@@ -86,6 +88,8 @@ public sealed class AetherInk : EntityScript
     public override void OnUpdate(float deltaTime)
     {
         AetherMax = MaxAether;
+        _t += deltaTime;
+        _dripCd -= deltaTime;
 
         // 1. Drawing input -> lay evenly spaced segments along the cursor's path.
         if (!GameState.Won)
@@ -117,6 +121,13 @@ public sealed class AetherInk : EntityScript
                         _last = next;
                         gap = Vector2.Distance(point, _last);
                     }
+                }
+
+                // Drip: throttled ink droplets fall off the freshly drawn point and splat on the ground.
+                if (_dripCd <= 0.0f)
+                {
+                    Scene.Instantiate("InkDroplet", new Vector3(_last.X, _last.Y - 0.1f, 0.0f));
+                    _dripCd = 0.11f + 0.08f * (0.5f + 0.5f * MathF.Sin(_t * 27.3f)); // ~0.11-0.19s, jittered
                 }
             }
             else if (IsOnRealGround())
@@ -167,7 +178,7 @@ public sealed class AetherInk : EntityScript
         Vector4 aabb = Vector4.Zero;
         if (_buf.Count > 0)
         {
-            const float pad = 0.5f;
+            const float pad = 0.7f; // covers thickness + rim + feathered bleed edge
             aabb = new Vector4(minX - pad, minY - pad, maxX + pad, maxY + pad);
         }
 

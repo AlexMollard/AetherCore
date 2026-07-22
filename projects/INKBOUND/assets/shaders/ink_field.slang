@@ -141,31 +141,39 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // One fbm per pixel roughens the whole ink boundary (brushed, not machined).
     best += (fbm(wq * 6.5) - 0.5) * 0.07;
 
-    const float aa = cell; // ~one pixel-cell soft edge
-    if (best > aa * 1.5)
+    const float aa = cell;      // ~one pixel-cell soft edge
+    const float bleedBand = aa * 2.5; // feathered outer bleed so ink soaks, not cuts
+    if (best > bleedBand)
     {
         discard;
     }
 
     const float time = frame->elapsedTime;
-    const float wet = 0.5 + 0.5 * sin(time * 2.0 + wq.x * 4.0 + wq.y * 3.0);
+
+    // Slow inky turbulence for pooling + veins inside the body (one fbm; drifts eerily).
+    const float turb = fbm(wq * 2.8 + float2(time * 0.04, -time * 0.03));
+    const float depth = saturate(-best / 0.5); // 0 at the edge -> ~1 deep inside the ink
 
     float3 body = pc.color0.rgb;
     float3 rim = pc.color1.rgb;
     if (bGhost > 0.5)
     {
-        body = float3(0.34, 0.05, 0.06);
-        rim = float3(1.0, 0.30, 0.28);
+        body = float3(0.30, 0.04, 0.05);
+        rim = float3(0.92, 0.22, 0.22);
     }
 
-    // Rim glow that rides the wet edge (best in [-rimWidth, 0]).
-    const float rimWidth = 0.11;
+    // Ink pools darkest where it is thick and where the turbulence gathers - murky depth, not a flat
+    // fill - then thread it with slightly darker veins where the turbulence crosses a narrow band.
+    float3 col = lerp(body, body * 0.28, depth * (0.35 + 0.65 * turb));
+    col *= 1.0 - 0.32 * (smoothstep(0.44, 0.5, turb) - smoothstep(0.5, 0.58, turb));
+
+    // Dim, cold rim riding the wet edge, with a slow ominous flicker (not a bright neon line).
+    const float flick = 0.66 + 0.34 * sin(time * 1.2 + wq.x * 1.7 + wq.y * 2.1);
+    const float rimWidth = 0.12;
     const float rimT = 1.0 - saturate(-best / rimWidth);
-    float3 col = lerp(body, rim, rimT * rimT * (0.55 + 0.45 * wet) * bGlow);
+    col = lerp(col, rim, rimT * rimT * 0.5 * bGlow * flick);
 
-    // A little inner grain so the body isn't a flat fill.
-    col *= 0.9 + 0.1 * floor(vnoise(wq * 9.0 + time * 0.1) * 3.0) / 3.0;
-
-    const float fill = 1.0 - smoothstep(-aa, aa, best);
-    return float4(col, fill * bAlpha);
+    // Feathered, noisy bleed at the very edge so the ink soaks into the scene.
+    const float bleed = 1.0 - smoothstep(-aa, bleedBand, best);
+    return float4(col, bleed * bAlpha * (0.78 + 0.22 * turb));
 }

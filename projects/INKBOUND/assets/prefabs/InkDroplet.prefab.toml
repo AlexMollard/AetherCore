@@ -1,0 +1,37 @@
+# A small burst of ink droplets that drip off the conjured stroke, fall under gravity, and splat
+# when they hit the ground (collide_world). AetherInk instantiates one every so often while drawing;
+# it bursts once and auto-destroys. Dark teal ink so it reads with the ink field.
+[[entities]]
+name = 'Ink Droplet'
+guid = 1
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    texture = 'project://assets/textures/particles/dot_soft.png'
+    rate = 0.0
+    burst_count = 2
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 6
+    lifetime_min = 1.1
+    lifetime_max = 2.0
+    speed_min = 0.4
+    speed_max = 1.6
+    direction_deg = 270.0
+    spread_deg = 34.0
+    gravity = [ 0.0, -20.0 ]
+    start_size = 0.19
+    end_size = 0.11
+    start_color = [ 0.24, 0.60, 0.74, 1.0 ]
+    end_color = [ 0.08, 0.18, 0.24, 0.0 ]
+    blend_mode = 'alpha'
+    sorting_layer = 22
+    order_in_layer = 1
+    collide_world = true
+    bounce = 0.16
+    collision_damping = 0.55
+    collision_radius = 0.06
