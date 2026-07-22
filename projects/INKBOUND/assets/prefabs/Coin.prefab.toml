@@ -1,0 +1,60 @@
+# A spinning collectible coin. Trigger-only so it never blocks the player; the Coin script
+# handles pickup + counting. Drop it and position it.
+[[entities]]
+name = 'Coin'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = false
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'

@@ -1,0 +1,17 @@
+# A trigger area that fires a conversation when the player walks in (zone mode).
+# Drop it, set DialogueId, and position it - the DialogueTrigger self-provisions its sensor box.
+# Invisible in play; the editor draws its trigger gizmo. For a "press E" prompt instead, set
+# RequireInteract = true (see the Npc / Sign prefabs).
+[[entities]]
+name = 'Dialogue Zone'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = ''

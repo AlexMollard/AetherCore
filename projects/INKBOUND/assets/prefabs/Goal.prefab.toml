@@ -1,0 +1,39 @@
+# The level-end goal: an invisible trigger column. Touching it advances to NextScene (GoalFlag.cs).
+# Set NextScene per instance. Tall + thin so the player hits it from any height.
+[[entities]]
+name = 'Goal'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.6, 6.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = false
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'GoalFlag'
+
+        [entities.scripts.properties.NextScene]
+        t = 'string'
+        v = 'Level2'
