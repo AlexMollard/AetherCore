@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using AetherCore;
 
@@ -5,7 +6,9 @@ namespace AetherGame;
 
 /// <summary>Level select. The engine's UiNavigationSystem handles ←/→ movement over the
 /// node UI Selectables and skips the locked (non-interactable) ones; this script styles the
-/// nodes by focus, mirrors the focused node into the detail panel, and loads on activation.</summary>
+/// nodes by focus, mirrors the focused node into the detail panel, and loads on activation.
+/// The nodes, connector line and preview panel carry the ui_ink_ui material so the screen reads
+/// as brushed pixel-ink like the title/settings screens rather than clean vector.</summary>
 public sealed class LevelSelectScreen : EntityScript, IMenuScreen
 {
     private readonly struct Node
@@ -30,8 +33,10 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
 
     private readonly Entity[] _nodes = new Entity[6];
     private readonly Entity[] _nums = new Entity[6];
+    private Entity _path, _preview;
     private Entity _name, _stats, _flavor;
     private int _shown = -1;
+    private float _t;
 
     private static readonly Vector4 Cyan = GameSettings.Accent;
     private static readonly Vector4 Dim = new(0.106f, 0.125f, 0.188f, 1f);
@@ -39,6 +44,9 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
     private static readonly Vector4 NumOnDark = new(0.04f, 0.06f, 0.10f, 1f);
     private static readonly Vector4 NumMuted = new(0.6f, 0.63f, 0.7f, 1f);
     private static readonly Vector4 NumLocked = new(0.35f, 0.37f, 0.43f, 1f);
+
+    // Dark teal ink rim shared with the settings widgets, so the node blots read as brushed ink.
+    private static readonly Vector4 InkEdge = new(0.02f, 0.06f, 0.09f, 1f);
 
     public override void OnAttach()
     {
@@ -48,9 +56,25 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
             _nodes[i] = Scene.Find($"Node{i}");
             _nums[i] = Scene.Find($"NodeNum{i}");
         }
+        _path = Scene.Find("LSPathLine");
+        _preview = Scene.Find("LSDetailPreview");
         _name = Scene.Find("LSDetailName");
         _stats = Scene.Find("LSDetailStats");
         _flavor = Scene.Find("LSDetailFlavor");
+
+        // Ink the shapes (not the numbers/text): the nodes become pixel-ink blots and the preview
+        // panel a wet-ink frame. The thin connector line darkens its own colour (edge = 0) so it stays
+        // a visible brushed stroke instead of dissolving into the dark rim like the chunky shapes do.
+        foreach (Entity n in _nodes) ApplyInk(n, InkEdge);
+        ApplyInk(_preview, InkEdge);
+        ApplyInk(_path, Vector4.Zero);
+    }
+
+    private static void ApplyInk(Entity e, Vector4 edge)
+    {
+        if (!e.IsValid) return;
+        Ui.SetMaterial(e, "ui_ink_ui");
+        Ui.SetMaterialColors(e, Vector4.Zero, edge);
     }
 
     public void OnShown()
@@ -73,13 +97,33 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
 
     public override void OnUpdate(float dt)
     {
+        _t += dt;
+
+        // Drift the ink grain so the blots/panel shimmer slowly (material params.x = time).
+        Vector4 p = new(_t, 0f, 0f, 0f);
+        foreach (Entity n in _nodes) if (n.IsValid) Ui.SetMaterialParams(n, p);
+        if (_path.IsValid) Ui.SetMaterialParams(_path, p);
+        if (_preview.IsValid) Ui.SetMaterialParams(_preview, p);
+
         int focused = -1;
         for (int i = 0; i < 6; i++)
         {
             bool on = _nodes[i].IsValid && Ui.IsFocused(_nodes[i]);
             if (on) focused = i;
             if (_nodes[i].IsValid)
-                Ui.SetImageColor(_nodes[i], on ? Cyan : (Nodes[i].Locked ? LockedCol : Dim));
+            {
+                Vector4 col;
+                if (on)
+                {
+                    col = Cyan;
+                    col.W = 0.78f + 0.22f * MathF.Sin(_t * 4.2f); // focused blot breathes, like the title markers
+                }
+                else
+                {
+                    col = Nodes[i].Locked ? LockedCol : Dim;
+                }
+                Ui.SetImageColor(_nodes[i], col);
+            }
             if (_nums[i].IsValid)
                 Ui.SetTextColor(_nums[i], on ? NumOnDark : (Nodes[i].Locked ? NumLocked : NumMuted));
         }

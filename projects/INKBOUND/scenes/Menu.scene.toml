@@ -1001,7 +1001,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'center'
     pixel_size = 18.0
-    text = 'level preview art'
+    text = 'no ink drawn here yet'
     v_align = 'middle'
     wrap = false
 
