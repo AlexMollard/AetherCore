@@ -74,6 +74,13 @@ public static class Ui
 
     public static void SetTextColor(Entity e, Vector4 color) => Native.aether_ui_set_text_color(e.Id, color);
     public static void SetFontSize(Entity e, float pixelSize) => Native.aether_ui_set_font_size(e.Id, pixelSize);
+
+    /// <summary>Set the text element's font by baked name (e.g. "IBMPlexMono-Italic", "PixelStorm").</summary>
+    public static void SetFont(Entity e, string fontName) => Native.aether_ui_set_font(e.Id, fontName);
+
+    /// <summary>Toggle word-wrap to the element's rect width (default on). Off = single line, for
+    /// manually laid-out runs.</summary>
+    public static void SetTextWrap(Entity e, bool wrap) => Native.aether_ui_set_text_wrap(e.Id, wrap ? 1 : 0);
     public static void SetTextAlign(Entity e, UiHAlign h, UiVAlign v) => Native.aether_ui_set_text_align(e.Id, (int)h, (int)v);
 
     // ── Image style ───────────────────────────────────────────────────────────────

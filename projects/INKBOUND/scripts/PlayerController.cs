@@ -100,9 +100,9 @@ public sealed class PlayerController : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
-        // Frozen by the pause menu: scripts still tick at dt=0, so skip input/movement
-        // entirely (otherwise a jump pressed on the pause screen would buffer).
-        if (Time.IsPaused)
+        // Frozen by the pause menu or an open dialogue: scripts still tick at dt=0, so skip
+        // input/movement entirely (otherwise a jump/draw pressed while frozen would buffer).
+        if (Time.IsPaused || Dialogue.IsActive)
         {
             return;
         }

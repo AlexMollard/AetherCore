@@ -125,6 +125,22 @@ AE_SCRIPT_API void aether_ui_set_font_size(std::uint32_t id, float pixelSize)
 	}
 }
 
+AE_SCRIPT_API void aether_ui_set_font(std::uint32_t id, const char* name)
+{
+	if (auto* t = ActiveWorld().TryGet<aether::ui::UIText>(aether::Entity{id}))
+	{
+		t->fontName = name != nullptr ? name : "";
+	}
+}
+
+AE_SCRIPT_API void aether_ui_set_text_wrap(std::uint32_t id, std::int32_t wrap)
+{
+	if (auto* t = ActiveWorld().TryGet<aether::ui::UIText>(aether::Entity{id}))
+	{
+		t->wrap = wrap != 0;
+	}
+}
+
 AE_SCRIPT_API void aether_ui_set_text_align(std::uint32_t id, std::int32_t h, std::int32_t v)
 {
 	if (auto* t = ActiveWorld().TryGet<aether::ui::UIText>(aether::Entity{id}))

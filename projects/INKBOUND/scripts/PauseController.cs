@@ -56,6 +56,13 @@ public sealed class PauseController : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
+        // While a conversation is open it owns Escape and freezes the game itself; the pause menu
+        // stays inert so the two don't fight over input or the time scale.
+        if (Dialogue.IsActive)
+        {
+            return;
+        }
+
         if ((Input.IsKeyPressed(Key.Escape) || Input.IsKeyPressed(Key.P)) && !GameState.Won)
         {
             if (_paused) { Resume(); } else { Pause(); }

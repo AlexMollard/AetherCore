@@ -87,6 +87,12 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_ui_set_text(uint id, string text);
 
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_ui_set_font(uint id, string name);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_text_wrap(uint id, int wrap);
+
     [LibraryImport(Lib)]
     internal static partial int aether_ui_get_text(uint id, byte* buf, int bufLen);
 
