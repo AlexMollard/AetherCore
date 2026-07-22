@@ -145,9 +145,11 @@ so flags persist across conversations within a run; cleared on new game.
   - **Typewriter**: reveal `text` progressively (across runs in order); a click/advance-key while
     revealing snaps to full.
   - **Advance** (full text shown, linear node): key/click → follow `goto`, or end.
-  - **Choices**: spawn one `UIButton` per *visible* choice (condition passed), drive with the
-    existing `Ui.SetFocus`/`IsFocused`/`WasActivated` nav; focused choice glows cyan with the `▸`
-    marker. Activating a choice applies `set`, follows `goto`.
+  - **Choices**: spawn one text element per *visible* choice (condition passed). Runtime elements
+    can't be given the scene-authored `Selectable` nav component, so the runner tracks the focused
+    index itself (Up/Down + mouse `IsHovered`/`WasClicked`) and styles the focused choice cyan with
+    the `▸` marker — matching the menu's look without depending on the nav system while paused.
+    Activating a choice applies `set`, follows `goto`.
 - On end: hide box, `Time.Resume()`, clear active graph.
 - **Pause coordination**: while `Dialogue.IsActive`, `Escape` advances/closes the dialogue and
   `PauseController` must not open the pause menu (add an `IsActive` guard there).
