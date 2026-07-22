@@ -1,0 +1,19 @@
+{
+  "id": "sandbox",
+  "start": "hello",
+  "nodes": {
+    "hello": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "A [flicker]quiet[/flicker] shelf of the deep. Nothing here but a witness, a warning, and a little light.",
+      "effect": "whisper",
+      "goto": "hint"
+    },
+    "hint": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "Go on. Poke at it all. This is where the ink lets you [shake]practice[/shake].",
+      "effect": "whisper"
+    }
+  }
+}
