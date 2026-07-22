@@ -111,6 +111,10 @@ public sealed class DialogueRunner : EntityScript
         Ui.SetFontSize(_body, BodyFont);
         Ui.SetTextColor(_body, BodyCol);
         Ui.SetTextAlign(_body, UiHAlign.Left, UiVAlign.Top);
+        // Rich-text material: always applied; effectId 0 (Normal) renders as plain SDF text, so no
+        // separate clear path is needed when a line has no effect.
+        Ui.SetMaterial(_body, "ui_dialogue_text");
+        Ui.SetMaterialColors(_body, Vector4.Zero, Accent);
 
         // Advance hint, bottom-right.
         _hint = Ui.CreateText(_canvas, "> continue");
@@ -193,6 +197,10 @@ public sealed class DialogueRunner : EntityScript
     {
         if (!Active || _node == null) return;
         float udt = UnscaledDelta(Time.UnscaledTime);
+
+        // Drive the rich-text material (per-glyph effect) off the node effect + Ink Glow strength.
+        float strength = 0.6f + 0.4f * GameSettings.InkGlow;
+        Ui.SetMaterialParams(_body, new Vector4(Time.UnscaledTime, (float)_node.Effect, strength, 0f));
 
         if (Input.IsKeyPressed(Key.Escape)) { End(); return; }
 
