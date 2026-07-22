@@ -43,6 +43,10 @@ public static unsafe class EditorGui
     public static bool BeginChild(string id, Vector2 size = default, bool border = false) => Native.aether_editorgui_begin_child(id, size, border ? 1 : 0) != 0;
     public static void EndChild() => Native.aether_editorgui_end_child();
     public static void SameLine() => Native.aether_editorgui_same_line();
+    public static Vector2 CalcTextSize(string s) => Native.aether_editorgui_calc_text_size(s);
+    /// <summary>Clip subsequent draw-list drawing to a rect (balance with PopClipRect).</summary>
+    public static void PushClipRect(Vector2 min, Vector2 max, bool intersectCurrent = true) => Native.aether_editorgui_push_clip_rect(min, max, intersectCurrent ? 1 : 0);
+    public static void PopClipRect() => Native.aether_editorgui_pop_clip_rect();
     public static void Separator() => Native.aether_editorgui_separator();
     public static void Spacing() => Native.aether_editorgui_spacing();
     public static Vector2 ContentAvail() => Native.aether_editorgui_content_avail();

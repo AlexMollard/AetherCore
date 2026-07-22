@@ -62,6 +62,11 @@ AE_SCRIPT_API std::int32_t aether_editorgui_begin_child(const char* id, Vec2 siz
 AE_SCRIPT_API void aether_editorgui_end_child() { ImGui::EndChild(); }
 
 AE_SCRIPT_API void aether_editorgui_same_line() { ImGui::SameLine(); }
+AE_SCRIPT_API Vec2 aether_editorgui_calc_text_size(const char* s) { const ImVec2 v = ImGui::CalcTextSize(s != nullptr ? s : ""); return {v.x, v.y}; }
+// Clip subsequent draw-list drawing to a rect (e.g. a node's interior so text never spills). Must be
+// balanced with pop_clip_rect.
+AE_SCRIPT_API void aether_editorgui_push_clip_rect(Vec2 mn, Vec2 mx, std::int32_t intersect) { ImGui::GetWindowDrawList()->PushClipRect(V2(mn), V2(mx), intersect != 0); }
+AE_SCRIPT_API void aether_editorgui_pop_clip_rect() { ImGui::GetWindowDrawList()->PopClipRect(); }
 AE_SCRIPT_API void aether_editorgui_separator() { ImGui::Separator(); }
 AE_SCRIPT_API void aether_editorgui_spacing() { ImGui::Spacing(); }
 AE_SCRIPT_API Vec2 aether_editorgui_content_avail()
