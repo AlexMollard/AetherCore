@@ -22,6 +22,28 @@ public sealed class DialogueGraphEditor : IEditorWindow
     private const string Dir = "project://assets/dialogue/";
     private static readonly string[] Effects = { "normal", "shake", "wave", "flicker", "whisper", "glitch" };
     private const float NodeW = 236f, NodeH = 122f, TitleH = 28f, SidePanelW = 330f, GridStep = 32f;
+
+    // Font Awesome 6 glyphs baked into the editor font (0xE000-0xF8FF; solid+regular). Same set the
+    // editor menus use, so these render rather than tofu.
+    private static class Ico
+    {
+        public const string Save = "\uf0c7";       // floppy-disk
+        public const string Reload = "\uf021";     // arrows-rotate
+        public const string Plus = "\uf055";       // circle-plus
+        public const string Comment = "\uf075";    // comment
+        public const string Branch = "\uf126";     // code-branch
+        public const string Play = "\uf04b";       // play
+        public const string Dot = "\uf111";        // circle
+        public const string User = "\uf007";       // user
+        public const string Font = "\uf031";       // font
+        public const string Image = "\uf03e";      // image
+        public const string Wand = "\ue2ca";       // wand-magic-sparkles
+        public const string ArrowRight = "\uf061"; // arrow-right
+        public const string Flag = "\uf024";       // flag
+        public const string Trash = "\uf1f8";      // trash
+        public const string ChevUp = "\uf077";     // chevron-up
+        public const string ChevDown = "\uf078";   // chevron-down
+    }
     private static readonly Vector4 Current = new(1f, 0.78f, 0.30f, 1f); // play-mode "current node" (fixed warm)
 
     // Theme colours, refreshed each frame from the editor's live ImGui style (see RefreshTheme).
@@ -87,8 +109,9 @@ public sealed class DialogueGraphEditor : IEditorWindow
         Vector2 chip = new(p0.X + 12f, midY - 7f);
         EditorGui.AddRectFilled(chip, chip + new Vector2(5f, 14f), _cAccent, 1.5f);
         string id = _loadedId.Length > 0 ? _loadedId.ToUpperInvariant() : "DIALOGUE";
-        EditorGui.AddText(new Vector2(p0.X + 24f, textY), _cAccent, id);
-        float titleW = EditorGui.CalcTextSize(id).X;
+        string title = $"{Ico.Comment}  {id}";
+        EditorGui.AddText(new Vector2(p0.X + 24f, textY), _cAccent, title);
+        float titleW = EditorGui.CalcTextSize(title).X;
 
         // Controls row: centre the frame-height widgets in the bar; combo width fixed so buttons follow.
         float rowY = midY - frameH * 0.5f;
@@ -96,11 +119,11 @@ public sealed class DialogueGraphEditor : IEditorWindow
         EditorGui.SetNextItemWidth(150f);
         if (_files.Length > 0 && EditorGui.Combo("##file", ref _fileIdx, _files)) { Load(_files[_fileIdx]); }
         EditorGui.SameLine();
-        if (ToolButton("##reload", "Reload", false, frameH)) { RefreshFiles(); if (_loadedId.Length > 0) { Load(_loadedId); } }
+        if (ToolButton("##reload", $"{Ico.Reload}  Reload", false, frameH)) { RefreshFiles(); if (_loadedId.Length > 0) { Load(_loadedId); } }
         EditorGui.SameLine();
-        if (ToolButton("##save", "Save", true, frameH) && _graph != null) { Save(); }
+        if (ToolButton("##save", $"{Ico.Save}  Save", true, frameH) && _graph != null) { Save(); }
         EditorGui.SameLine();
-        if (ToolButton("##addnode", "+ Node", true, frameH) && _graph != null) { AddNode(); }
+        if (ToolButton("##addnode", $"{Ico.Plus}  Node", true, frameH) && _graph != null) { AddNode(); }
 
         // Right-aligned status/hint.
         if (_graph != null)
@@ -377,8 +400,10 @@ public sealed class DialogueGraphEditor : IEditorWindow
         Vector4 headText = isStart ? EditorGui.ThemeColor(EditorColor.WindowBg) : _cText;
         EditorGui.AddText(new Vector2(inX, s.Y + 6f), headText, Fit(n.Id, innerW - 52f));
         string tag = isStart ? "START" : n.HasChoices ? "BRANCH" : isEnd ? "END" : "LINE";
+        string tagIco = isStart ? Ico.Play : n.HasChoices ? Ico.Branch : isEnd ? Ico.Dot : Ico.ArrowRight;
+        string tagStr = $"{tagIco} {tag}";
         Vector4 tagCol = new(headText.X, headText.Y, headText.Z, 0.65f);
-        EditorGui.AddText(new Vector2(e.X - 10f - EditorGui.CalcTextSize(tag).X, s.Y + 7f), tagCol, tag);
+        EditorGui.AddText(new Vector2(e.X - 10f - EditorGui.CalcTextSize(tagStr).X, s.Y + 7f), tagCol, tagStr);
 
         // Body: speaker + text preview, with breathing room between rows.
         EditorGui.AddText(new Vector2(inX, s.Y + TitleH + 13f), _cAccent, Fit(n.Speaker.Length > 0 ? n.Speaker : "(no speaker)", innerW));
@@ -387,8 +412,8 @@ public sealed class DialogueGraphEditor : IEditorWindow
         // Footer pills: effect + destination. Dark chip + bright text so labels stay legible on the card.
         float fy = e.Y - 28f;
         float fx = inX;
-        if (n.Effect != "normal") { fx = Pill(fx, fy, n.Effect, PillBg(), _cAccent); }
-        string dest = n.HasChoices ? $"{n.Choices.Count} choices" : n.Goto.Length > 0 ? $"-> {n.Goto}" : "end";
+        if (n.Effect != "normal") { fx = Pill(fx, fy, $"{Ico.Wand} {n.Effect}", PillBg(), _cAccent); }
+        string dest = n.HasChoices ? $"{Ico.Branch} {n.Choices.Count} choices" : n.Goto.Length > 0 ? $"{Ico.ArrowRight} {n.Goto}" : $"{Ico.Dot} end";
         Pill(fx, fy, dest, PillBg(), _cText);
 
         EditorGui.PopClipRect();
@@ -404,14 +429,16 @@ public sealed class DialogueGraphEditor : IEditorWindow
 
     private float Pill(float x, float y, string label, Vector4 bg, Vector4 fg)
     {
+        // Size the chip to the text (icon glyphs are taller than a fixed 18px, so derive the height).
         Vector2 sz = EditorGui.CalcTextSize(label);
-        const float h = 18f;
+        const float padX = 6f, padY = 3f;
+        float h = sz.Y + padY * 2f;
         var a = new Vector2(x, y);
-        var b = new Vector2(x + sz.X + 12f, y + h);
+        var b = new Vector2(x + sz.X + padX * 2f, y + h);
         EditorGui.AddRectFilled(a, b, bg, 4f);
         EditorGui.AddRect(a, b, new Vector4(fg.X, fg.Y, fg.Z, 0.35f), 4f, 1f); // subtle tint border for definition
-        EditorGui.AddText(new Vector2(x + 6f, y + (h - sz.Y) * 0.5f), fg, label);
-        return x + sz.X + 12f + 5f;
+        EditorGui.AddText(new Vector2(x + padX, y + padY), fg, label);
+        return b.X + 5f;
     }
 
     private void DrawLinks(EdNode n, Vector2 origin)
@@ -453,28 +480,28 @@ public sealed class DialogueGraphEditor : IEditorWindow
         string type = n.Id == _graph!.Start ? "START" : n.HasChoices ? "BRANCH" : isEnd ? "END" : "LINE";
 
         // ── Node ──
-        Section("NODE");
+        Section(Ico.Comment, "NODE");
         EditorGui.Text(n.Id);
         EditorGui.SameLine();
         EditorGui.TextColored(_cAccent, type);
 
-        Field("speaker", "speaker", ref n.Speaker);
+        Field("speaker", Ico.User, "speaker", ref n.Speaker);
 
-        EditorGui.TextColored(_cDim, "text");
+        EditorGui.TextColored(_cDim, $"{Ico.Font}  text");
         EditorGui.InputTextMultiline("##text", ref n.Text, new Vector2(-1f, 70f), 512);
 
-        Field("portrait", "portrait", ref n.Portrait);
+        Field("portrait", Ico.Image, "portrait", ref n.Portrait);
 
-        EditorGui.TextColored(_cDim, "effect");
+        EditorGui.TextColored(_cDim, $"{Ico.Wand}  effect");
         int eff = System.Array.IndexOf(Effects, n.Effect);
         if (eff < 0) { eff = 0; }
         EditorGui.SetNextItemWidth(-1f);
         if (EditorGui.Combo("##effect", ref eff, Effects)) { n.Effect = Effects[eff]; }
 
-        if (!n.HasChoices) { Field("goto", "goto ->", ref n.Goto); }
+        if (!n.HasChoices) { Field("goto", Ico.ArrowRight, "goto", ref n.Goto); }
 
         // ── Choices ──
-        Section("CHOICES");
+        Section(Ico.Branch, "CHOICES");
         if (n.Choices.Count == 0)
         {
             EditorGui.TextColored(_cDim, "None yet - add one to branch");
@@ -487,14 +514,14 @@ public sealed class DialogueGraphEditor : IEditorWindow
             EdChoice c = n.Choices[i];
             EditorGui.TextColored(_cAccent, $"Choice {i + 1}");
             EditorGui.SameLine();
-            if (EditorGui.SmallButton($"x##ch{i}")) { del = i; }
-            if (i > 0) { EditorGui.SameLine(); if (EditorGui.SmallButton($"^##up{i}")) { move = (i, i - 1); } }
-            if (i < n.Choices.Count - 1) { EditorGui.SameLine(); if (EditorGui.SmallButton($"v##dn{i}")) { move = (i, i + 1); } }
+            if (EditorGui.SmallButton($"{Ico.Trash}##ch{i}")) { del = i; }
+            if (i > 0) { EditorGui.SameLine(); if (EditorGui.SmallButton($"{Ico.ChevUp}##up{i}")) { move = (i, i - 1); } }
+            if (i < n.Choices.Count - 1) { EditorGui.SameLine(); if (EditorGui.SmallButton($"{Ico.ChevDown}##dn{i}")) { move = (i, i + 1); } }
 
-            Field($"ctext{i}", "text", ref c.Text);
-            Field($"cgoto{i}", "goto ->", ref c.Goto);
-            Field($"cif{i}", "show if", ref c.If);
-            Field($"cset{i}", "on pick set", ref c.Set);
+            Field($"ctext{i}", Ico.Comment, "text", ref c.Text);
+            Field($"cgoto{i}", Ico.ArrowRight, "goto", ref c.Goto);
+            Field($"cif{i}", Ico.Branch, "show if", ref c.If);
+            Field($"cset{i}", Ico.Flag, "on pick set", ref c.Set);
             EditorGui.Separator();
         }
         if (del >= 0) { n.Choices.RemoveAt(del); }
@@ -504,33 +531,33 @@ public sealed class DialogueGraphEditor : IEditorWindow
             n.Choices.RemoveAt(move.from);
             n.Choices.Insert(move.to, t);
         }
-        if (EditorGui.Button("+ Choice", new Vector2(-1f, 0f))) { n.Choices.Add(new EdChoice { Text = "...", Goto = "end" }); }
+        if (EditorGui.Button($"{Ico.Plus}  Choice", new Vector2(-1f, 0f))) { n.Choices.Add(new EdChoice { Text = "...", Goto = "end" }); }
 
         // ── Actions ──
-        Section("ACTIONS");
+        Section(Ico.Play, "ACTIONS");
         bool isStart = n.Id == _graph.Start;
-        if (!isStart) { if (EditorGui.Button("Set as Start")) { _graph.Start = n.Id; } }
+        if (!isStart) { if (EditorGui.Button($"{Ico.Play}  Set as Start")) { _graph.Start = n.Id; } }
         else { EditorGui.TextColored(_cDim, "This is the start node."); }
-        if (EditorGui.Button("Delete Node", new Vector2(-1f, 0f))) { DeleteNode(n); }
+        if (EditorGui.Button($"{Ico.Trash}  Delete Node", new Vector2(-1f, 0f))) { DeleteNode(n); }
 
         EditorGui.EndChild();
     }
 
     // A left-accent-barred section header, matching the toolbar's accent styling.
-    private void Section(string label)
+    private void Section(string icon, string label)
     {
         EditorGui.Spacing();
         Vector2 p = EditorGui.CursorScreenPos();
         EditorGui.AddRectFilled(new Vector2(p.X, p.Y + 2f), new Vector2(p.X + 3f, p.Y + 15f), _cAccent, 1f);
         EditorGui.SetCursorScreenPos(new Vector2(p.X + 9f, p.Y));
-        EditorGui.TextColored(_cAccent, label);
+        EditorGui.TextColored(_cAccent, $"{icon}  {label}");
         EditorGui.Spacing();
     }
 
-    // A dim label above a full-width input. Returns true on change.
-    private bool Field(string id, string label, ref string value, int maxLen = 256)
+    // A dim icon+label above a full-width input. Returns true on change.
+    private bool Field(string id, string icon, string label, ref string value, int maxLen = 256)
     {
-        EditorGui.TextColored(_cDim, label);
+        EditorGui.TextColored(_cDim, $"{icon}  {label}");
         EditorGui.SetNextItemWidth(-1f);
         return EditorGui.InputText("##" + id, ref value, maxLen);
     }
