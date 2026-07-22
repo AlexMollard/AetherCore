@@ -1,3 +1,4 @@
+using System.Numerics;
 using AetherCore;
 
 namespace AetherGame;
@@ -11,6 +12,10 @@ public sealed class SettingsScreen : EntityScript, IMenuScreen
 {
     private Entity _back;
     private Entity _music, _sfx, _ink, _shake;
+    private float _t;
+
+    // Dark teal ink rim the widgets share, so the sliders/toggle read as brushed ink under the shader.
+    private static readonly Vector4 InkEdge = new(0.02f, 0.06f, 0.09f, 1f);
 
     public override void OnAttach()
     {
@@ -20,6 +25,28 @@ public sealed class SettingsScreen : EntityScript, IMenuScreen
         _sfx = Scene.Find("SliderSfx");
         _ink = Scene.Find("SliderInkGlow");
         _shake = Scene.Find("ShakeToggle");
+
+        // Give the sliders + toggle a chunky, brushed-ink pixel look via the ui_ink_ui material
+        // (applied to their own shapes). The text/back button stay clean.
+        foreach (Entity w in new[] { _music, _sfx, _ink, _shake })
+        {
+            if (w.IsValid)
+            {
+                Ui.SetMaterial(w, "ui_ink_ui");
+                Ui.SetMaterialColors(w, Vector4.Zero, InkEdge);
+            }
+        }
+    }
+
+    public override void OnUpdate(float dt)
+    {
+        _t += dt;
+        // Drift the ink grain slowly (material params.x = time).
+        Vector4 p = new(_t, 0f, 0f, 0f);
+        if (_music.IsValid) Ui.SetMaterialParams(_music, p);
+        if (_sfx.IsValid) Ui.SetMaterialParams(_sfx, p);
+        if (_ink.IsValid) Ui.SetMaterialParams(_ink, p);
+        if (_shake.IsValid) Ui.SetMaterialParams(_shake, p);
     }
 
     public void OnShown()

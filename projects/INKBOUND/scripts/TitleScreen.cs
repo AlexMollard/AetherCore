@@ -12,19 +12,17 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
 {
     private float _t;
     private Entity _wordmark;
+    private Entity _drips; // TitleDrips: a ui_ink_drips UIEffect that renders ink running off the title
     private readonly Entity[] _markers = new Entity[4];
     private readonly Entity[] _labels = new Entity[4];
-    private readonly Entity[] _drips = new Entity[3];
 
     private static readonly Vector4 Cyan = GameSettings.Accent;
+    private static readonly Vector4 DripInk = new(0.06f, 0.30f, 0.42f, 1f); // drip body (dim teal)
     private static readonly Vector4 UnselMarker = new(0.227f, 0.251f, 0.314f, 1f);
     private static readonly Vector4 WordmarkColor = new(0.933f, 0.945f, 0.969f, 1f);
 
     // Wordmark base rect (anchored-space SetRect params; see the authored TitleWordmark UI Rect).
     private const float WordmarkW = 1000f, WordmarkH = 170f;
-    // Ink drips: staggered so they run and dry out of sync.
-    private static readonly float[] DripPhase = { 0f, 1.4f, 2.7f };
-    private const float DripPeriod = 4.0f, DripWidth = 6f, DripMaxLen = 28f, DripAlpha = 0.72f;
 
     public override void OnAttach()
     {
@@ -35,7 +33,8 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             _markers[i] = Scene.Find($"Marker{i}");
             _labels[i] = Scene.Find($"Label{i}");
         }
-        for (int i = 0; i < 3; i++) _drips[i] = Scene.Find($"DripInk{i}");
+        _drips = Scene.Find("TitleDrips");
+        if (_drips.IsValid) Ui.SetEffectColors(_drips, DripInk, Cyan); // ink body + accent rim
 
         // Apply the glitch-ink material to the wordmark's glyphs themselves (a custom fragment shader
         // masked to the letter shapes, not a backing quad). color0 = 0 keeps the flicker driving the
@@ -96,25 +95,16 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             Ui.SetTextColor(_wordmark, c);
         }
 
-        // Ink drips: each runs down (length grows) then dries (fades) on a staggered loop.
-        for (int i = 0; i < 3; i++)
+        // Drive the ink-drips effect from the wordmark's live screen rect, so the drips fall from just
+        // under the actual letters at any canvas scale. params = (time, originY, xMin, xMax) in px;
+        // the resolved rect is (x, y, width, height), so the bottom edge is Y + W.
+        if (_drips.IsValid && _wordmark.IsValid)
         {
-            if (!_drips[i].IsValid) continue;
-            float p = ((_t + DripPhase[i]) % DripPeriod) / DripPeriod;
-            float len = 4f + (DripMaxLen - 4f) * Smooth(0f, 0.5f, p);
-            Ui.SetRect(_drips[i], 0f, 0f, DripWidth, len);
-            Vector4 c = Cyan;
-            c.W = DripAlpha * (1f - Smooth(0.62f, 1f, p));
-            Ui.SetImageColor(_drips[i], c);
+            Vector4 wr = Ui.GetRect(_wordmark);
+            float originY = wr.Y + wr.W * 0.72f; // a touch above the tall text box, near the glyph feet
+            Ui.SetEffectParams(_drips, new Vector4(_t, originY, wr.X, wr.X + wr.Z));
         }
     }
 
     private static float Frac(float v) => v - MathF.Floor(v);
-
-    // Smoothstep in [a,b].
-    private static float Smooth(float a, float b, float x)
-    {
-        float t = Math.Clamp((x - a) / (b - a), 0f, 1f);
-        return t * t * (3f - 2f * t);
-    }
 }

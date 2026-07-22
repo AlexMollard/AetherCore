@@ -111,6 +111,10 @@ namespace aether::ui
 		float cornerRadius = 12.f; // pill
 		bool changed = false;      // runtime
 		float pulse = 1.f;         // runtime
+		// Animated knob position 0 (off/left) .. 1 (on/right). Eased toward `on` each frame so the
+		// knob slides and the track cross-fades instead of snapping. Seeded to `on` on a programmatic
+		// SetToggle so opening a screen doesn't animate; a user flip animates from the current value.
+		float knobT = -1.f; // <0 = uninitialised: first update snaps to `on`
 	};
 
 	struct UIButton

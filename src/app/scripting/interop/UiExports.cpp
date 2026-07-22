@@ -230,6 +230,7 @@ AE_SCRIPT_API void aether_ui_set_toggle(std::uint32_t id, std::int32_t on)
 	if (auto* t = ActiveWorld().TryGet<aether::ui::UIToggle>(aether::Entity{id}))
 	{
 		t->on = (on != 0);
+		t->knobT = t->on ? 1.f : 0.f; // programmatic set snaps; only user flips animate
 	}
 }
 

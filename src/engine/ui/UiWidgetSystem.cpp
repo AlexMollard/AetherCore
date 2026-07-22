@@ -70,6 +70,12 @@ namespace aether::ui
 		const bool right = input.IsKeyPressed(Key::Right);
 		const bool left = input.IsKeyPressed(Key::Left);
 
+		// Frame delta derived from the absolute time this system is handed, for framerate-independent
+		// widget animation (the toggle knob slide). Clamped so a pause / scene switch can't jump it.
+		static float s_prevTime = time;
+		const float dt = std::clamp(time - s_prevTime, 0.f, 0.1f);
+		s_prevTime = time;
+
 		world.View<UISlider, UIRect>().each(
 		        [&](entt::entity ent, UISlider& s, UIRect& rect)
 		        {
@@ -126,6 +132,22 @@ namespace aether::ui
 			        {
 				        tg.on = !tg.on;
 				        tg.changed = true;
+			        }
+			        // Ease the knob toward its target so it slides (and the track cross-fades) instead of
+			        // snapping. knobT < 0 means "not yet initialised" - snap on first frame so opening a
+			        // screen shows the settled state, then animate on user flips.
+			        const float target = tg.on ? 1.f : 0.f;
+			        if (tg.knobT < 0.f)
+			        {
+				        tg.knobT = target;
+			        }
+			        else
+			        {
+				        tg.knobT += (target - tg.knobT) * std::min(dt * 16.f, 1.f);
+				        if (std::abs(target - tg.knobT) < 0.001f)
+				        {
+					        tg.knobT = target;
+				        }
 			        }
 		        });
 	}

@@ -1488,66 +1488,25 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'DripInk0'
-node = 8677156552336061772
+name = 'TitleDrips'
+node = 7863029324393553023
 parent = 42
 parent_node = 6299553004898250026
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 0.55 ]
-    corner_radius = 2.0
-    pixel_art = false
+    [entities.ui_effect]
+    background = false
+    color0 = [ 0.0, 0.0, 0.0, 0.0 ]
+    color1 = [ 0.0, 0.0, 0.0, 0.0 ]
+    shader = 'ui_ink_drips'
 
     [entities.ui_rect]
-    anchor_max = [ 0.1, 0.165 ]
-    anchor_min = [ 0.1, 0.165 ]
-    offset_max = [ 2.0, 22.0 ]
-    offset_min = [ -2.0, 0.0 ]
-    pivot = [ 0.5, 0.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'DripInk1'
-node = -3655813720224831138
-parent = 42
-parent_node = 6299553004898250026
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 0.55 ]
-    corner_radius = 2.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.18, 0.165 ]
-    anchor_min = [ 0.18, 0.165 ]
-    offset_max = [ 2.0, 22.0 ]
-    offset_min = [ -2.0, 0.0 ]
-    pivot = [ 0.5, 0.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'DripInk2'
-node = 2742362399961659030
-parent = 42
-parent_node = 6299553004898250026
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_image]
-    color = [ 0.302, 0.851, 1.0, 0.55 ]
-    corner_radius = 2.0
-    pixel_art = false
-
-    [entities.ui_rect]
-    anchor_max = [ 0.25, 0.165 ]
-    anchor_min = [ 0.25, 0.165 ]
-    offset_max = [ 2.0, 22.0 ]
-    offset_min = [ -2.0, 0.0 ]
-    pivot = [ 0.5, 0.0 ]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]

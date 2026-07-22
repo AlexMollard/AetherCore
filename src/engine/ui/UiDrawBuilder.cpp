@@ -106,11 +106,13 @@ namespace aether::ui
 	{
 		const glm::vec4 r = rect.resolvedRect;
 
+		const float t = std::clamp(tg.knobT, 0.f, 1.f); // animated 0=off .. 1=on
+
 		UiDrawCommand track;
 		track.type = kShapeRect;
 		track.data0 = r;
 		track.data1.x = std::min(tg.cornerRadius, r.w * 0.5f);
-		track.color = tg.on ? tg.onColor : tg.trackColor;
+		track.color = glm::mix(tg.trackColor, tg.onColor, t); // cross-fade instead of snap
 		track.layer = layer++;
 		out.push_back(track);
 
@@ -120,7 +122,7 @@ namespace aether::ui
 		const bool focused = WidgetFocused(world, e);
 		UiDrawCommand knob;
 		knob.type = kShapeCircle;
-		knob.data0 = {tg.on ? rightX : leftX, r.y + r.w * 0.5f, tg.knobRadius + (focused ? 1.f : 0.f), 0.f};
+		knob.data0 = {glm::mix(leftX, rightX, t), r.y + r.w * 0.5f, tg.knobRadius + (focused ? 1.f : 0.f), 0.f};
 		knob.color = tg.knobColor;
 		knob.color.a *= tg.pulse;
 		knob.layer = layer++;
