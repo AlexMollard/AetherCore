@@ -88,6 +88,12 @@ public sealed class PlayerController : EntityScript
         {
             Scene.Instantiate("GameHud");
         }
+
+        // Same one-instance pattern for the dialogue presenter (DontDestroyOnLoad; carried across levels).
+        if (!Scene.Find("DialogueRunner").IsValid)
+        {
+            Scene.Instantiate("DialogueRunner");
+        }
     }
 
     public override void OnDetach()

@@ -1297,16 +1297,6 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'DialogueRunner'
-parent = -1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [[entities.scripts]]
-    type = 'DialogueRunner'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
 name = 'IntroTrigger'
 parent = -1
 position = [ 5.0, 1.6, 0.0 ]

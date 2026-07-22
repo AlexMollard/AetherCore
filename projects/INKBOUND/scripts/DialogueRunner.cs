@@ -13,6 +13,7 @@ public sealed class DialogueRunner : EntityScript
 {
     // Palette (matches the menu theme).
     private static readonly Vector4 InkPanel = new(0.02f, 0.03f, 0.05f, 0.94f);
+    private static readonly Vector4 InkRimEdge = new(0.05f, 0.16f, 0.20f, 1f); // wet teal-ink rim for the panel
     private static readonly Vector4 Accent = GameSettings.Accent;
     private static readonly Vector4 BodyCol = new(0.93f, 0.95f, 0.97f, 1f);
 
@@ -73,29 +74,19 @@ public sealed class DialogueRunner : EntityScript
     private int _focus;
     private bool _choicesShown;
 
-    // One presenter survives across levels (DontDestroyOnLoad); a scene that authors its own is the
-    // duplicate and removes itself - so every level can carry a host and still get exactly one box.
-    private static DialogueRunner? s_instance;
-
+    // Exactly one runner is guaranteed by PlayerController, which spawns this prefab only when
+    // Scene.Find turns up none live - so there is NO static singleton here. A static reference would
+    // outlive a play/scene reload pointing at a destroyed entity, and the fresh runner would then
+    // "see a duplicate" and delete itself, leaving the game with no runner at all.
     public override void OnAttach()
     {
-        if (s_instance != null && s_instance != this)
-        {
-            Self.Destroy();
-            return;
-        }
-        s_instance = this;
         Self.DontDestroyOnLoad();
         Dialogue.Register(this);
         Build();
         Hide();
     }
 
-    public override void OnDetach()
-    {
-        if (s_instance == this) { s_instance = null; }
-        Dialogue.Unregister(this);
-    }
+    public override void OnDetach() => Dialogue.Unregister(this);
 
     private void Build()
     {
@@ -107,7 +98,11 @@ public sealed class DialogueRunner : EntityScript
         Ui.SetAnchors(_panel, new Vector2(0f, 1f), new Vector2(1f, 1f));
         Ui.SetOffsets(_panel, new Vector2(Margin, -(Margin + BoxH)), new Vector2(-Margin, -Margin));
         Ui.SetImageColor(_panel, InkPanel);
-        Ui.SetImageCornerRadius(_panel, 8f);
+        Ui.SetImageCornerRadius(_panel, 10f);
+        // Brushed pixel-ink material (same one the menu/pause panels use): roughened edges + grain +
+        // a wet rim, so the box reads as soaked ink instead of a flat rounded rectangle.
+        Ui.SetMaterial(_panel, "ui_ink_ui");
+        Ui.SetMaterialColors(_panel, Vector4.Zero, InkRimEdge);
 
         // Accent rule along the panel's top edge.
         _rule = Ui.CreateImage(_canvas);
@@ -136,6 +131,9 @@ public sealed class DialogueRunner : EntityScript
         Ui.SetFontSize(_speaker, SpeakerFont);
         Ui.SetTextColor(_speaker, Accent);
         Ui.SetTextAlign(_speaker, UiHAlign.Left, UiVAlign.Top);
+        // Glitch-ink the speaker name like the title wordmark (occasional eerie flicker).
+        Ui.SetMaterial(_speaker, "ui_glitch_text");
+        Ui.SetMaterialColors(_speaker, Vector4.Zero, Accent);
 
         // Body (mono italic, wraps to the panel width minus insets).
         _body = Ui.CreateText(_canvas, "");
@@ -269,6 +267,12 @@ public sealed class DialogueRunner : EntityScript
     {
         if (!Active) return;
         float udt = UnscaledDelta(Time.UnscaledTime);
+
+        // Keep the ink materials breathing on the unscaled clock (panel grain + speaker glitch),
+        // even during the open/close slides.
+        Vector4 mt = new(Time.UnscaledTime, 0f, 0f, 0f);
+        Ui.SetMaterialParams(_panel, mt);
+        Ui.SetMaterialParams(_speaker, mt);
 
         // Box close slide owns the frame: animate down, swallow input, then finish.
         if (_closing)

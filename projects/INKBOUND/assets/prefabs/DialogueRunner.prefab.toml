@@ -1,0 +1,9 @@
+# The dialogue presenter. PlayerController spawns it at runtime (Scene.Instantiate("DialogueRunner"))
+# if one isn't already live, so every level shares one - the same pattern as GameHud. DialogueRunner
+# builds its whole ink box UI in code, so this prefab is just the script host.
+[[entities]]
+name = 'DialogueRunner'
+parent = -1
+
+    [[entities.scripts]]
+    type = 'DialogueRunner'
