@@ -12,6 +12,11 @@ public static class Time
     /// <summary>Seconds of play time elapsed since the scene started playing.</summary>
     public static float TotalTime => Native.aether_time_total();
 
+    /// <summary>Real (wall-clock) seconds since play started, ignoring <see cref="Scale"/>. Keeps
+    /// advancing while the game is frozen (scale 0), so pause-menu UI can still animate. This is the
+    /// Unity Time.unscaledTime model.</summary>
+    public static float UnscaledTime => Native.aether_time_unscaled();
+
     /// <summary>Number of frames rendered since play started.</summary>
     public static long FrameCount => Native.aether_time_frame_count();
 

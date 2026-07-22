@@ -7,31 +7,51 @@ namespace AetherGame;
 /// In-game pause menu. Lives on the GameHud canvas (which is DontDestroyOnLoad, so
 /// one instance serves every level). Esc/P toggles a freeze - Time.Pause() sets the
 /// global time scale to 0, stopping physics, particles and animation while scripts
-/// keep ticking - and shows a dim overlay with RESUME and MENU buttons. Because the
+/// keep ticking - and shows a dim ink overlay with RESUME and ABANDON buttons. Because the
 /// script system still runs at dt=0 while frozen, this update keeps reading input to
-/// resume. Never pauses during the level-complete beat.
+/// resume and drives the ink materials from Time.UnscaledTime (which keeps advancing while
+/// the game clock is stopped). Matches the menu's eerie ink theme. Never pauses during the
+/// level-complete beat.
 /// </summary>
 public sealed class PauseController : EntityScript
 {
-    private Entity _overlay, _title, _resumeBtn, _resumeLabel, _menuBtn, _menuLabel;
+    private Entity _overlay, _title, _subtitle, _resumeBtn, _resumeLabel, _menuBtn, _menuLabel;
     private bool _paused;
 
-    private static readonly Vector4 ResumeIdle = new(0.16f, 0.55f, 0.30f, 0.96f);
-    private static readonly Vector4 ResumeHover = new(0.22f, 0.72f, 0.40f, 1.0f);
-    private static readonly Vector4 MenuIdle = new(0.30f, 0.34f, 0.46f, 0.96f);
-    private static readonly Vector4 MenuHover = new(0.42f, 0.48f, 0.62f, 1.0f);
+    // Ink palette: buttons rest as dark ink slate and flood cyan on hover (matches the menu toggle).
+    private static readonly Vector4 ButtonIdle = new(0.09f, 0.12f, 0.17f, 0.92f);
+    private static readonly Vector4 ResumeHover = new(0.16f, 0.42f, 0.52f, 0.96f);
+    private static readonly Vector4 MenuHover = new(0.34f, 0.16f, 0.20f, 0.96f); // colder, faintly bloodier for "abandon"
+    private static readonly Vector4 Cyan = GameSettings.Accent;
+    private static readonly Vector4 InkEdge = new(0.02f, 0.06f, 0.09f, 1f);
 
     public override void OnAttach()
     {
         _overlay = Scene.Find("PauseOverlay");
         _title = Scene.Find("PauseTitle");
+        _subtitle = Scene.Find("PauseSubtitle");
         _resumeBtn = Scene.Find("PauseResumeBtn");
         _resumeLabel = Scene.Find("PauseResumeLabel");
         _menuBtn = Scene.Find("PauseMenuBtn");
         _menuLabel = Scene.Find("PauseMenuLabel");
         _paused = false;
         Time.Resume();
+
+        // Ink theming: the title glyphs get the glitch-ink material (like the main wordmark) and the
+        // overlay + buttons get the brushed pixel-ink material. Applied once; params drive the anim.
+        ApplyMaterial(_title, "ui_glitch_text", Cyan);
+        ApplyMaterial(_overlay, "ui_ink_ui", InkEdge);
+        ApplyMaterial(_resumeBtn, "ui_ink_ui", InkEdge);
+        ApplyMaterial(_menuBtn, "ui_ink_ui", InkEdge);
+
         ShowOverlay(false);
+    }
+
+    private static void ApplyMaterial(Entity e, string shader, Vector4 edge)
+    {
+        if (!e.IsValid) return;
+        Ui.SetMaterial(e, shader);
+        Ui.SetMaterialColors(e, Vector4.Zero, edge);
     }
 
     public override void OnUpdate(float deltaTime)
@@ -45,9 +65,17 @@ public sealed class PauseController : EntityScript
             return;
         }
 
+        // Drive the ink materials from the unscaled clock so the glitch/grain keeps breathing while the
+        // game clock is frozen (Time.DeltaTime is 0 and Time.TotalTime is stopped during pause).
+        Vector4 t = new(Time.UnscaledTime, 0f, 0f, 0f);
+        if (_title.IsValid) Ui.SetMaterialParams(_title, t);
+        if (_overlay.IsValid) Ui.SetMaterialParams(_overlay, t);
+        if (_resumeBtn.IsValid) Ui.SetMaterialParams(_resumeBtn, t);
+        if (_menuBtn.IsValid) Ui.SetMaterialParams(_menuBtn, t);
+
         // Hover highlight + clicks. This runs while frozen because dt=0 frames still tick.
-        if (_resumeBtn.IsValid) { Ui.SetImageColor(_resumeBtn, Ui.IsHovered(_resumeBtn) ? ResumeHover : ResumeIdle); }
-        if (_menuBtn.IsValid) { Ui.SetImageColor(_menuBtn, Ui.IsHovered(_menuBtn) ? MenuHover : MenuIdle); }
+        if (_resumeBtn.IsValid) { Ui.SetImageColor(_resumeBtn, Ui.IsHovered(_resumeBtn) ? ResumeHover : ButtonIdle); }
+        if (_menuBtn.IsValid) { Ui.SetImageColor(_menuBtn, Ui.IsHovered(_menuBtn) ? MenuHover : ButtonIdle); }
 
         // Mouse click OR keyboard (Enter = resume, M = quit to menu) - both paths work.
         if ((_resumeBtn.IsValid && Ui.WasClicked(_resumeBtn)) || Input.IsKeyPressed(Key.Enter))
@@ -87,6 +115,7 @@ public sealed class PauseController : EntityScript
     {
         SetActive(_overlay, on);
         SetActive(_title, on);
+        SetActive(_subtitle, on);
         SetActive(_resumeBtn, on);
         SetActive(_resumeLabel, on);
         SetActive(_menuBtn, on);

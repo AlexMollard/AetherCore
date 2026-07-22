@@ -222,6 +222,9 @@ internal static unsafe partial class Native
     internal static partial float aether_time_total();
 
     [LibraryImport(Lib)]
+    internal static partial float aether_time_unscaled();
+
+    [LibraryImport(Lib)]
     internal static partial float aether_time_delta();
 
     [LibraryImport(Lib)]

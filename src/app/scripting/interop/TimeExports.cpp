@@ -1,5 +1,6 @@
 #include "scripting/interop/InteropCommon.hpp"
 
+#include "IEngineRuntime.hpp"
 #include "PlayState.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -9,6 +10,15 @@ using namespace aether::app::scripting::interop;
 AE_SCRIPT_API float aether_time_total()
 {
 	return ActiveContext().elapsedTime;
+}
+
+// Real (wall-clock) seconds since the frame loop started, ignoring the play-speed / pause time
+// scale - so UI can keep animating while the game is frozen (e.g. the pause menu). Falls back to
+// the scaled clock if the engine runtime is unavailable (e.g. outside a play session).
+AE_SCRIPT_API float aether_time_unscaled()
+{
+	const auto& ctx = ActiveContext();
+	return ctx.engineRuntime != nullptr ? static_cast<float>(ctx.engineRuntime->RealElapsedSeconds()) : ctx.elapsedTime;
 }
 
 AE_SCRIPT_API float aether_time_delta()

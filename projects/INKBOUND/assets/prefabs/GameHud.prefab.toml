@@ -95,7 +95,7 @@ disabled = true
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_image]
-    color = [ 0.03, 0.04, 0.08, 0.66 ]
+    color = [ 0.015, 0.02, 0.035, 0.9 ]
     corner_radius = 0.0
     pixel_art = false
 
@@ -105,17 +105,17 @@ parent = 0
 disabled = true
 
     [entities.ui_rect]
-    anchor_min = [ 0.5, 0.26 ]
-    anchor_max = [ 0.5, 0.26 ]
-    offset_min = [ -600.0, -110.0 ]
-    offset_max = [ 600.0, 110.0 ]
+    anchor_min = [ 0.5, 0.24 ]
+    anchor_max = [ 0.5, 0.24 ]
+    offset_min = [ -600.0, -100.0 ]
+    offset_max = [ 600.0, 100.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
     text = 'PAUSED'
     font = 'PixelStorm'
-    pixel_size = 130.0
-    color = [ 1.0, 0.96, 0.7, 1.0 ]
+    pixel_size = 118.0
+    color = [ 0.86, 0.93, 0.96, 1.0 ]
     h_align = 1
     v_align = 1
     wrap = false
@@ -152,8 +152,8 @@ disabled = true
     [entities.ui_text]
     text = 'RESUME'
     font = 'PixelStorm'
-    pixel_size = 52.0
-    color = [ 1.0, 1.0, 1.0, 1.0 ]
+    pixel_size = 48.0
+    color = [ 0.88, 0.94, 0.97, 1.0 ]
     h_align = 1
     v_align = 1
     wrap = false
@@ -188,10 +188,31 @@ disabled = true
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    text = 'MENU'
+    text = 'ABANDON'
     font = 'PixelStorm'
-    pixel_size = 52.0
-    color = [ 1.0, 1.0, 1.0, 1.0 ]
+    pixel_size = 48.0
+    color = [ 0.88, 0.94, 0.97, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
+name = 'PauseSubtitle'
+parent = 0
+disabled = true
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 0.33 ]
+    anchor_max = [ 0.5, 0.33 ]
+    offset_min = [ -600.0, -22.0 ]
+    offset_max = [ 600.0, 22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    text = 'the descent holds its breath.'
+    font = 'IBMPlexMono-Italic'
+    pixel_size = 30.0
+    color = [ 0.4, 0.51, 0.58, 1.0 ]
     h_align = 1
     v_align = 1
     wrap = false

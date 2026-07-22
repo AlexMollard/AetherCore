@@ -331,6 +331,7 @@ namespace aether
 			Tick(static_cast<float>(rawDt));
 			const double gameDt = rawDt * client.GetTimeScale();
 			m_gameElapsedSeconds += gameDt;
+			m_realElapsedSeconds += rawDt; // advances even when the game is paused (time scale 0)
 
 			const auto drawSlot = static_cast<std::uint32_t>(m_producerFrameIndex % Swapchain::kMaxFramesInFlight);
 			if (m_profile == RuntimeProfile::Full)

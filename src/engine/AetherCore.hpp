@@ -79,6 +79,11 @@ namespace aether
 
 		void RunExclusive(QuiesceMode mode, std::function<void()> mutation) override;
 
+		[[nodiscard]] double RealElapsedSeconds() const override
+		{
+			return m_realElapsedSeconds;
+		}
+
 		void SetTargetFps(float fps)
 		{
 			m_framePacer.SetTargetFps(fps);
@@ -162,6 +167,7 @@ namespace aether
 		FramePacer m_framePacer;
 		std::uint64_t m_producerFrameIndex = 0;
 		double m_gameElapsedSeconds = 0.0;
+		double m_realElapsedSeconds = 0.0; // wall-clock elapsed, ignores time scale (for pause-menu UI)
 
 		gpu::CommandList m_currentCmdList;
 		std::uint64_t m_frameIndex = 0;
