@@ -10,6 +10,9 @@ namespace AetherCore;
 public static unsafe class EditorGui
 {
     // ── Windows / layout ──────────────────────────────────────────────────────
+    /// <summary>Initial size the next window opens at; the user can still resize (persists).</summary>
+    public static void SetNextWindowSize(Vector2 size) => Native.aether_editorgui_set_next_window_size(size);
+
     public static bool Begin(string title)
     {
         int open = 1;
@@ -103,5 +106,7 @@ public static unsafe class EditorGui
     public static Vector2 MousePos() => Native.aether_editorgui_mouse_pos();
     public static Vector2 MouseDragDelta() => Native.aether_editorgui_mouse_drag_delta();
     public static bool IsMouseDragging() => Native.aether_editorgui_is_mouse_dragging() != 0;
+    public static bool IsMouseClicked() => Native.aether_editorgui_is_mouse_clicked() != 0;
+    public static bool IsMouseDown() => Native.aether_editorgui_is_mouse_down() != 0;
     public static float MouseWheel() => Native.aether_editorgui_mouse_wheel();
 }

@@ -19,6 +19,9 @@ namespace
 } // namespace
 
 // ── Windows / layout ────────────────────────────────────────────────────────
+// Initial size the next window opens at (FirstUseEver: the user can still resize + it persists).
+AE_SCRIPT_API void aether_editorgui_set_next_window_size(Vec2 size) { ImGui::SetNextWindowSize(V2(size), ImGuiCond_FirstUseEver); }
+
 AE_SCRIPT_API std::int32_t aether_editorgui_begin(const char* title, std::int32_t* open)
 {
 	bool o = open != nullptr ? (*open != 0) : true;
@@ -126,4 +129,6 @@ AE_SCRIPT_API Vec2 aether_editorgui_mouse_drag_delta()
 	return {d.x, d.y};
 }
 AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_dragging() { return ImGui::IsMouseDragging(ImGuiMouseButton_Left) ? 1 : 0; }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_clicked() { return ImGui::IsMouseClicked(ImGuiMouseButton_Left) ? 1 : 0; }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_down() { return ImGui::IsMouseDown(ImGuiMouseButton_Left) ? 1 : 0; }
 AE_SCRIPT_API float aether_editorgui_mouse_wheel() { return ImGui::GetIO().MouseWheel; }

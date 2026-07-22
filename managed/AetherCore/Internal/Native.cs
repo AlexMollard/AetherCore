@@ -105,6 +105,7 @@ internal static unsafe partial class Native
     internal static partial int aether_assets_list(string pattern, byte* buf, int cap);
 
     // ── EditorGui (editor-only ImGui bridge; resolves lazily, never called in a shipped game) ────
+    [LibraryImport(Lib)] internal static partial void aether_editorgui_set_next_window_size(Vector2 size);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_editorgui_begin(string title, int* open);
     [LibraryImport(Lib)] internal static partial void aether_editorgui_end();
@@ -156,6 +157,8 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)] internal static partial Vector2 aether_editorgui_mouse_pos();
     [LibraryImport(Lib)] internal static partial Vector2 aether_editorgui_mouse_drag_delta();
     [LibraryImport(Lib)] internal static partial int aether_editorgui_is_mouse_dragging();
+    [LibraryImport(Lib)] internal static partial int aether_editorgui_is_mouse_clicked();
+    [LibraryImport(Lib)] internal static partial int aether_editorgui_is_mouse_down();
     [LibraryImport(Lib)] internal static partial float aether_editorgui_mouse_wheel();
 
     // ── UI toolkit (Module 02) ──────────────────────────────────────────────────
