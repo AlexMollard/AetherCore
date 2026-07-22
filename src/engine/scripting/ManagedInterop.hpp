@@ -56,6 +56,8 @@ namespace aether::scripting
 		void (*CollectFull)() = nullptr;
 
 		std::int32_t (*GetDefaultProperty)(const char* typeNameUtf8, std::int32_t index, PropertyValue* outValue) = nullptr;
+
+		void (*DrawEditorWindows)() = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

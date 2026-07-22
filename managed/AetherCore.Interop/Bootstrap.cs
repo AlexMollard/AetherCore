@@ -73,6 +73,9 @@ internal static unsafe class Bootstrap
             outApi->SetPlayMode = &Api_SetPlayMode;
             outApi->CollectFull = &Api_CollectFull;
 
+            // Editor tooling
+            outApi->DrawEditorWindows = &ScriptRegistry.DrawEditorWindows;
+
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;
         }

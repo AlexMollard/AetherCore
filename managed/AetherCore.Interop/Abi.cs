@@ -72,4 +72,7 @@ internal unsafe struct ManagedScriptApi
 
     // Default field value from a cached default instance (inspector, edit mode).
     public delegate* unmanaged<byte*, int, PropertyValue*, int> GetDefaultProperty;
+
+    // Editor tooling (editor-only; never called from a shipped GameRuntime).
+    public delegate* unmanaged<void> DrawEditorWindows;
 }

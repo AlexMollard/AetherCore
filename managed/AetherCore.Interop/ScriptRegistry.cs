@@ -73,6 +73,8 @@ internal static unsafe class ScriptRegistry
 
     // A default-constructed instance per type, so the inspector can show default
     // field values when no live instance exists (edit mode).
+    // Editor-tooling windows discovered from the project assembly (IEditorWindow implementers).
+    private static readonly List<IEditorWindow> s_editorWindows = new();
     private static readonly Dictionary<string, EntityScript> s_defaults = new(StringComparer.Ordinal);
 
     // Scratch for returning a string property across the boundary. GetProperty is
@@ -170,6 +172,7 @@ internal static unsafe class ScriptRegistry
         s_types.Clear();
         s_props.Clear();
         s_defaults.Clear();
+        s_editorWindows.Clear();
         s_typeNames = Array.Empty<string>();
         ScriptsLoadContext? old = s_context;
         s_context = null;
@@ -205,6 +208,13 @@ internal static unsafe class ScriptRegistry
         var names = new List<string>();
         foreach (Type type in assembly.GetTypes())
         {
+            // Editor-tooling windows (not mutually exclusive with scripts, so a separate check).
+            if (!type.IsAbstract && typeof(IEditorWindow).IsAssignableFrom(type))
+            {
+                try { s_editorWindows.Add((IEditorWindow)Activator.CreateInstance(type)!); }
+                catch (Exception ex) { Bootstrap.ReportError($"IEditorWindow {type.Name} ctor: {ex}"); }
+            }
+
             if (type.IsAbstract || !typeof(EntityScript).IsAssignableFrom(type))
             {
                 continue;
@@ -313,6 +323,18 @@ internal static unsafe class ScriptRegistry
         {
             try { script.OnDetach(); }
             catch (Exception ex) { Bootstrap.ReportError($"{script.GetType().Name}.OnDetach: {ex}"); }
+        }
+    }
+
+    // Editor-only pump: each discovered IEditorWindow draws its own ImGui window. A throwing window
+    // is isolated so a bad tool can't take down the editor. Never called from a shipped GameRuntime.
+    [UnmanagedCallersOnly]
+    internal static void DrawEditorWindows()
+    {
+        for (int i = 0; i < s_editorWindows.Count; i++)
+        {
+            try { s_editorWindows[i].OnGui(); }
+            catch (Exception ex) { Bootstrap.ReportError($"{s_editorWindows[i].GetType().Name}.OnGui: {ex}"); }
         }
     }
 
