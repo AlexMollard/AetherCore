@@ -28,7 +28,7 @@ public sealed class AetherInk : EntityScript
     /// <summary>World distance between segment nodes as the stroke is laid.</summary>
     public float Spacing = 0.5f;
     /// <summary>Ink half-thickness in world units (drives both the shader width and the collider radius).</summary>
-    public float Thickness = 0.22f;
+    public float Thickness = 0.11f;
     public float Lifetime = 5.0f;
     public float FadeTime = 1.6f;
     /// <summary>How close to real geometry (or a crystal) a segment must be to hold.</summary>
@@ -38,8 +38,8 @@ public sealed class AetherInk : EntityScript
     public static float Aether;
     public static float AetherMax = 100.0f;
 
-    private static readonly Vector4 BodyColor = new(0.05f, 0.09f, 0.13f, 1.0f); // dark ink
-    private static readonly Vector4 RimColor = GameSettings.Accent;             // cyan wet rim
+    private static readonly Vector4 BodyColor = new(0.03f, 0.055f, 0.08f, 1.0f); // near-black ink
+    private static readonly Vector4 RimColor = new(0.12f, 0.28f, 0.34f, 1.0f);   // dim cool sheen, not neon
 
     // The engine's generic project-pass hook renders the ink; this project owns the shader + packing.
     private const string PassName = "inkfield";

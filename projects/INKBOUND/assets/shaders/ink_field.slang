@@ -139,10 +139,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         }
     }
     // One fbm per pixel roughens the whole ink boundary (brushed, not machined).
-    best += (fbm(wq * 6.5) - 0.5) * 0.07;
+    best += (fbm(wq * 6.5) - 0.5) * 0.045;
 
     const float aa = cell;      // ~one pixel-cell soft edge
-    const float bleedBand = aa * 2.5; // feathered outer bleed so ink soaks, not cuts
+    const float bleedBand = aa * 1.25; // tight feathered bleed so a thin stroke stays thin
     if (best > bleedBand)
     {
         discard;
@@ -167,11 +167,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 col = lerp(body, body * 0.28, depth * (0.35 + 0.65 * turb));
     col *= 1.0 - 0.32 * (smoothstep(0.44, 0.5, turb) - smoothstep(0.5, 0.58, turb));
 
-    // Dim, cold rim riding the wet edge, with a slow ominous flicker (not a bright neon line).
-    const float flick = 0.66 + 0.34 * sin(time * 1.2 + wq.x * 1.7 + wq.y * 2.1);
-    const float rimWidth = 0.12;
+    // A faint wet meniscus at the very edge - a thin, dim sheen, not a glowing line.
+    const float flick = 0.72 + 0.28 * sin(time * 1.1 + wq.x * 1.7 + wq.y * 2.1);
+    const float rimWidth = 0.05;
     const float rimT = 1.0 - saturate(-best / rimWidth);
-    col = lerp(col, rim, rimT * rimT * 0.5 * bGlow * flick);
+    col = lerp(col, rim, rimT * rimT * 0.28 * bGlow * flick);
 
     // Feathered, noisy bleed at the very edge so the ink soaks into the scene.
     const float bleed = 1.0 - smoothstep(-aa, bleedBand, best);
