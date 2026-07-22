@@ -114,7 +114,8 @@ AE_SCRIPT_API std::int32_t aether_editorgui_input_text_multiline(const char* lab
 	{
 		return 0;
 	}
-	return ImGui::InputTextMultiline(label, buf, static_cast<std::size_t>(bufLen), V2(size)) ? 1 : 0;
+	// Word-wrap long lines instead of scrolling horizontally, so the whole block stays visible.
+	return ImGui::InputTextMultiline(label, buf, static_cast<std::size_t>(bufLen), V2(size), ImGuiInputTextFlags_WordWrap) ? 1 : 0;
 }
 AE_SCRIPT_API std::int32_t aether_editorgui_input_float(const char* label, float* v) { return ImGui::InputFloat(label, v) ? 1 : 0; }
 AE_SCRIPT_API std::int32_t aether_editorgui_selectable(const char* label, std::int32_t selected) { return ImGui::Selectable(label, selected != 0) ? 1 : 0; }
