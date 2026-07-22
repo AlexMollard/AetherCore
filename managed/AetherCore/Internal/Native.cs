@@ -218,6 +218,16 @@ internal static unsafe partial class Native
     internal static partial void aether_debug_draw_box(Vector3 center, Vector3 halfExtents, Vector4 color);
 
     // ── Time (Module 05) ────────────────────────────────────────────────────────
+    // ── Conjured-ink field ───────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_ink_clear();
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ink_set_colors(Vector4 body, Vector4 rim);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ink_add_segment(float ax, float ay, float bx, float by, float width, float alpha, float glow, float ghost);
+
     [LibraryImport(Lib)]
     internal static partial float aether_time_total();
 

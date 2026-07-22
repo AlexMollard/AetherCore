@@ -211,6 +211,7 @@ namespace aether
 		}
 
 		m_renderer2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
+		m_inkRenderer.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
 
 		auto& cameras = services.Get<CameraManager>();
 		auto& lighting = services.Get<LightingManager>();
@@ -318,6 +319,7 @@ namespace aether
 		if (m_profile == RuntimeProfile::Full)
 		{
 			m_renderer2D.Shutdown();
+			m_inkRenderer.Shutdown();
 			DestroySceneViewportDepth();
 			m_gtaoPass.Destroy();
 			m_postProcessStack.Destroy();
@@ -702,6 +704,8 @@ namespace aether
 		}
 
 		m_renderer2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent, bindless);
+		// Conjured-ink field draws over the 2D scene as a single SDF pass.
+		m_inkRenderer.RegisterPass(m_renderGraph, hdrColor, sceneExtent, bindless);
 
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline(), m_renderer2D);
