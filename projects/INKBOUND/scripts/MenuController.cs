@@ -109,6 +109,9 @@ public sealed class MenuController : EntityScript
     {
         _inkFx = Ui.CreateEffect(Self, "ui_ink");
         Ui.SetEffectColors(_inkFx, InkColor, EdgeColor);
+        // The flood must sit above every per-screen overlay (e.g. the title's ink drips) so it fully
+        // swallows the outgoing screen instead of the drips bleeding through the transition.
+        Ui.SetEffectSortOrder(_inkFx, 1000);
         SetInk(0f);
     }
 

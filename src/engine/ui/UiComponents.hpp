@@ -152,6 +152,8 @@ namespace aether::ui
 		glm::vec4 color0{0.f};   // shader-defined (ink: ink body colour)
 		glm::vec4 color1{0.f};   // shader-defined (ink: edge/rim colour)
 		bool background = false; // true = drawn BEHIND the batched UI (menu backdrops); false = on top (overlays)
+		int sortOrder = 0;       // draw order within the background/overlay group: higher = later = on top
+		                         // (e.g. a screen-transition overlay sits above per-screen overlays like ink drips)
 	};
 
 	// A custom fragment shader applied to THIS element's own draw commands (its text glyphs, image,

@@ -287,6 +287,7 @@ AE_FIELD_N("shader", shader, String)
 AE_FIELD_N("color0", color0, Color4)
 AE_FIELD_N("color1", color1, Color4)
 AE_FIELD_N("background", background, Bool)
+AE_FIELD_N("sort_order", sortOrder, Int)
 b.PostSet(
         [](World& w, Entity e)
         {

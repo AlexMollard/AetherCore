@@ -175,6 +175,10 @@ public static class Ui
     /// <summary>Set the effect's two shader colours.</summary>
     public static void SetEffectColors(Entity e, Vector4 color0, Vector4 color1) => Native.aether_ui_set_effect_colors(e.Id, color0, color1);
 
+    /// <summary>Set the effect's draw order within its background/overlay group: higher = drawn later
+    /// (on top). Use a high value for a screen-transition overlay so it sits above per-screen overlays.</summary>
+    public static void SetEffectSortOrder(Entity e, int sortOrder) => Native.aether_ui_set_effect_sort_order(e.Id, sortOrder);
+
     // ── Per-element materials ────────────────────────────────────────────────────
     // A UIMaterial applies a custom fragment shader to the element's OWN draw commands (its text
     // glyphs / image / rect), masked to their shapes - not a separate quad. params.x is conventionally

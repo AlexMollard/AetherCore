@@ -308,6 +308,14 @@ AE_SCRIPT_API void aether_ui_set_effect_colors(std::uint32_t id, Vec4 color0, Ve
 	}
 }
 
+AE_SCRIPT_API void aether_ui_set_effect_sort_order(std::uint32_t id, int sortOrder)
+{
+	if (auto* fx = ActiveWorld().TryGet<aether::ui::UIEffect>(aether::Entity{id}))
+	{
+		fx->sortOrder = sortOrder;
+	}
+}
+
 // UIMaterial: a custom fragment shader on the element's own draw (glyph/quad-masked). set_material
 // get-or-adds so a script can apply a shader to any UI element at runtime.
 AE_SCRIPT_API void aether_ui_set_material(std::uint32_t id, const char* shader)

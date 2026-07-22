@@ -186,6 +186,9 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_ui_set_effect_colors(uint id, Vector4 color0, Vector4 color1);
 
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_effect_sort_order(uint id, int sortOrder);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_ui_set_material(uint id, string shader);
 

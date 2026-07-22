@@ -61,6 +61,7 @@ namespace aether::ui
 			glm::vec4 color0{0.f};
 			glm::vec4 color1{0.f};
 			bool background = false;
+			int sortOrder = 0; // draw order within the background/overlay group (higher = on top)
 		};
 
 		// A contiguous run of batched draw commands sharing one shaderId (0 = default fragment).

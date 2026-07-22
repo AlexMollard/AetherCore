@@ -1,5 +1,6 @@
 #include "ui/UiRenderer.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -462,8 +463,16 @@ namespace aether::ui
 			{
 				continue;
 			}
-			frame.effects.push_back({pipe, rect.resolvedRect, effect.params, effect.color0, effect.color1, effect.background});
+			frame.effects.push_back({pipe, rect.resolvedRect, effect.params, effect.color0, effect.color1, effect.background, effect.sortOrder});
 		}
+
+		// Deterministic compositing: order effects by sortOrder (ascending = drawn earlier = underneath).
+		// ECS iteration order is unspecified, so without this a per-screen overlay (e.g. the title's ink
+		// drips) could draw over the screen-transition overlay instead of being swallowed by it. Stable so
+		// equal-order effects keep their collection order. The background/overlay split below still applies
+		// within this ordering.
+		std::stable_sort(frame.effects.begin(), frame.effects.end(),
+		        [](const EffectDraw& a, const EffectDraw& b) { return a.sortOrder < b.sortOrder; });
 
 		// Lazily upload the atlas of every font the scene's text references -
 		// project fonts appear here the first frame a UIText names them.
