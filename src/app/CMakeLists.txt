@@ -15,6 +15,7 @@ list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "EditorGuiExports")  # ImGui bridge: editor-only, never in a shipped runtime
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]project[/\\\\]")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
