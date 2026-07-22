@@ -25,6 +25,7 @@ public sealed class DialogueRunner : EntityScript
     private const float BodyFont = 26f;
     private const float SpeakerH = 30f;
     private const float CharsPerSec = 42f;
+    private const float PortraitSize = BoxH - 2f * Pad;
 
     private const string BodyFontName = "IBMPlexMono-Italic";
     private const string DisplayFontName = "PixelStorm";
@@ -80,13 +81,13 @@ public sealed class DialogueRunner : EntityScript
         Ui.SetOffsets(_rule, new Vector2(0f, 0f), new Vector2(0f, RuleH));
         Ui.SetImageColor(_rule, Accent);
 
-        // Portrait region on the left (reserved; wired in Task 6, hidden for now).
-        float portraitSize = BoxH - 2f * Pad;
+        // Portrait region on the left (shown per node when it declares a portrait).
         _portrait = Ui.CreateImage(_canvas);
         _portrait.SetParent(_panel);
         Ui.SetAnchors(_portrait, new Vector2(0f, 0f), new Vector2(0f, 0f));
         Ui.SetPivot(_portrait, new Vector2(0f, 0f));
-        Ui.SetRect(_portrait, Pad, Pad, portraitSize, portraitSize);
+        Ui.SetRect(_portrait, Pad, Pad, PortraitSize, PortraitSize);
+        Ui.SetImageColor(_portrait, new Vector4(0.06f, 0.09f, 0.13f, 1f)); // frame/backing behind the art
         Ui.SetImageCornerRadius(_portrait, 6f);
         _portrait.SetActive(false);
 
@@ -158,8 +159,34 @@ public sealed class DialogueRunner : EntityScript
         _reveal = 0f;
         _fullShown = false;
         _hint.SetActive(true);
+
+        // Portrait: show + widen-inset the text column when the node has one, else hide + fill.
+        if (!string.IsNullOrEmpty(_node.Portrait))
+        {
+            Ui.SetImageTexture(_portrait, "project://assets/" + _node.Portrait);
+            _portrait.SetActive(true);
+            _bodyLeft = Pad + PortraitSize + Pad;
+        }
+        else
+        {
+            _portrait.SetActive(false);
+            _bodyLeft = Pad;
+        }
+        RelayoutText(_bodyLeft);
+
         Ui.SetText(_speaker, _node.Speaker);
         Ui.SetText(_body, "");
+    }
+
+    // Re-place the speaker/body/choice columns to start at bodyLeft (shifts right of a portrait).
+    private void RelayoutText(float bodyLeft)
+    {
+        Ui.SetRect(_speaker, bodyLeft, Pad, 600f, SpeakerH);
+        Ui.SetOffsets(_body, new Vector2(bodyLeft, Pad + SpeakerH + 6f), new Vector2(-Pad, BoxH - Pad));
+        for (int i = 0; i < MaxChoices; i++)
+        {
+            Ui.SetOffsets(_choiceUi[i], new Vector2(bodyLeft, ChoiceTop + i * ChoiceH), new Vector2(-Pad, ChoiceTop + (i + 1) * ChoiceH));
+        }
     }
 
     public override void OnUpdate(float dt)
