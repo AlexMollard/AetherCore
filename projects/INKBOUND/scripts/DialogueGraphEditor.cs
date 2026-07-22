@@ -405,11 +405,12 @@ public sealed class DialogueGraphEditor : IEditorWindow
     private float Pill(float x, float y, string label, Vector4 bg, Vector4 fg)
     {
         Vector2 sz = EditorGui.CalcTextSize(label);
+        const float h = 18f;
         var a = new Vector2(x, y);
-        var b = new Vector2(x + sz.X + 12f, y + 18f);
+        var b = new Vector2(x + sz.X + 12f, y + h);
         EditorGui.AddRectFilled(a, b, bg, 4f);
         EditorGui.AddRect(a, b, new Vector4(fg.X, fg.Y, fg.Z, 0.35f), 4f, 1f); // subtle tint border for definition
-        EditorGui.AddText(new Vector2(x + 6f, y + 2f), fg, label);
+        EditorGui.AddText(new Vector2(x + 6f, y + (h - sz.Y) * 0.5f), fg, label);
         return x + sz.X + 12f + 5f;
     }
 
