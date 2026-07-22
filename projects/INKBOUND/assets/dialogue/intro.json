@@ -1,0 +1,33 @@
+{
+  "id": "intro",
+  "start": "wake",
+  "nodes": {
+    "wake": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "So. Another [shake]spark[/shake] falls into the dark.",
+      "effect": "whisper",
+      "goto": "warn"
+    },
+    "warn": {
+      "speaker": "The Void",
+      "portrait": "textures/portraits/void.png",
+      "text": "The ink down here remembers everything. Will you use it?",
+      "choices": [
+        { "text": "I will draw my own path.", "goto": "brave", "set": "chose_ink" },
+        { "text": "I want no part of this.", "goto": "refuse" },
+        { "text": "(3 coins) Offer the shards you carry.", "goto": "brave", "if": "coins>=3" }
+      ]
+    },
+    "brave": {
+      "speaker": "The Void",
+      "text": "Good. [glitch]Draw[/glitch], little light. The descent is long.",
+      "goto": "end"
+    },
+    "refuse": {
+      "speaker": "The Void",
+      "text": "There is no path back up. Only [whisper]down[/whisper].",
+      "goto": "end"
+    }
+  }
+}

@@ -1295,6 +1295,30 @@ scale = [ 1.0, 1.0, 1.0 ]
     type = 'Hazard'
 
 
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DialogueRunner'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'DialogueRunner'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'IntroTrigger'
+parent = -1
+position = [ 5.0, 1.6, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = 'intro'
+
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Parallax Background'

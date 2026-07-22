@@ -73,15 +73,29 @@ public sealed class DialogueRunner : EntityScript
     private int _focus;
     private bool _choicesShown;
 
+    // One presenter survives across levels (DontDestroyOnLoad); a scene that authors its own is the
+    // duplicate and removes itself - so every level can carry a host and still get exactly one box.
+    private static DialogueRunner? s_instance;
+
     public override void OnAttach()
     {
+        if (s_instance != null && s_instance != this)
+        {
+            Self.Destroy();
+            return;
+        }
+        s_instance = this;
         Self.DontDestroyOnLoad();
         Dialogue.Register(this);
         Build();
         Hide();
     }
 
-    public override void OnDetach() => Dialogue.Unregister(this);
+    public override void OnDetach()
+    {
+        if (s_instance == this) { s_instance = null; }
+        Dialogue.Unregister(this);
+    }
 
     private void Build()
     {
