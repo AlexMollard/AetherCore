@@ -58,6 +58,13 @@ namespace aether::scripting
 		std::int32_t (*GetDefaultProperty)(const char* typeNameUtf8, std::int32_t index, PropertyValue* outValue) = nullptr;
 
 		void (*DrawEditorWindows)() = nullptr;
+
+		// Project editor-window registry (editor-only). Lets the main editor menu enumerate and toggle
+		// whatever IEditorWindow tools the loaded project registered, without knowing any of them.
+		std::int32_t (*GetEditorWindowCount)() = nullptr;
+		std::int32_t (*GetEditorWindowTitle)(std::int32_t index, char* utf8Buf, std::int32_t bufLen) = nullptr;
+		std::int32_t (*GetEditorWindowVisible)(std::int32_t index) = nullptr;
+		void (*SetEditorWindowVisible)(std::int32_t index, std::int32_t visible) = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

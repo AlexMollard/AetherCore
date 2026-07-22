@@ -75,4 +75,10 @@ internal unsafe struct ManagedScriptApi
 
     // Editor tooling (editor-only; never called from a shipped GameRuntime).
     public delegate* unmanaged<void> DrawEditorWindows;
+
+    // Project editor-window registry: enumerate + toggle IEditorWindow tools from the editor menu.
+    public delegate* unmanaged<int> GetEditorWindowCount;
+    public delegate* unmanaged<int, byte*, int, int> GetEditorWindowTitle;
+    public delegate* unmanaged<int, int> GetEditorWindowVisible;
+    public delegate* unmanaged<int, int, void> SetEditorWindowVisible;
 }

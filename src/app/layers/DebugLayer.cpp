@@ -1507,6 +1507,45 @@ namespace aether::editor
 				ImGui::EndMenu();
 			}
 
+			// Project menu: show/hide the debug panels the loaded project registered via IEditorWindow.
+			// Fully generic - the editor enumerates + toggles whatever the project exposes, knowing none
+			// of them. Only appears when the project actually registered at least one window.
+			if (const auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())
+			{
+				const auto* api = scripting->Api();
+				const int windowCount = (api != nullptr && api->GetEditorWindowCount != nullptr) ? api->GetEditorWindowCount() : 0;
+				if (windowCount > 0 && ImGui::BeginMenu("Project"))
+				{
+					ImGui::TextDisabled("Debug Panels");
+					for (int i = 0; i < windowCount; ++i)
+					{
+						char title[128] = {};
+						if (api->GetEditorWindowTitle != nullptr)
+						{
+							api->GetEditorWindowTitle(i, title, static_cast<std::int32_t>(sizeof(title)));
+						}
+						bool visible = api->GetEditorWindowVisible != nullptr && api->GetEditorWindowVisible(i) != 0;
+						if (ImGui::MenuItem(title[0] != '\0' ? title : "(window)", nullptr, &visible) && api->SetEditorWindowVisible != nullptr)
+						{
+							api->SetEditorWindowVisible(i, visible ? 1 : 0);
+						}
+					}
+					if (api->SetEditorWindowVisible != nullptr)
+					{
+						ImGui::Separator();
+						if (ImGui::MenuItem("Show All"))
+						{
+							for (int i = 0; i < windowCount; ++i) { api->SetEditorWindowVisible(i, 1); }
+						}
+						if (ImGui::MenuItem("Hide All"))
+						{
+							for (int i = 0; i < windowCount; ++i) { api->SetEditorWindowVisible(i, 0); }
+						}
+					}
+					ImGui::EndMenu();
+				}
+			}
+
 			{
 				using namespace chrome;
 				const auto* playState = context.TryGet<app::PlayState>();

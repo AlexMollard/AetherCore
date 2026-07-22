@@ -326,16 +326,52 @@ internal static unsafe class ScriptRegistry
         }
     }
 
-    // Editor-only pump: each discovered IEditorWindow draws its own ImGui window. A throwing window
-    // is isolated so a bad tool can't take down the editor. Never called from a shipped GameRuntime.
+    // Editor-only pump: each discovered IEditorWindow draws its own ImGui window while it is Visible.
+    // A throwing window is isolated so a bad tool can't take down the editor. Never called from a
+    // shipped GameRuntime.
     [UnmanagedCallersOnly]
     internal static void DrawEditorWindows()
     {
         for (int i = 0; i < s_editorWindows.Count; i++)
         {
-            try { s_editorWindows[i].OnGui(); }
-            catch (Exception ex) { Bootstrap.ReportError($"{s_editorWindows[i].GetType().Name}.OnGui: {ex}"); }
+            IEditorWindow w = s_editorWindows[i];
+            bool visible;
+            try { visible = w.Visible; }
+            catch { visible = true; }
+            if (!visible) { continue; }
+            try { w.OnGui(); }
+            catch (Exception ex) { Bootstrap.ReportError($"{w.GetType().Name}.OnGui: {ex}"); }
         }
+    }
+
+    // ── Project editor-window registry (editor menu enumeration + toggling) ────
+    [UnmanagedCallersOnly]
+    internal static int GetEditorWindowCount() => s_editorWindows.Count;
+
+    [UnmanagedCallersOnly]
+    internal static int GetEditorWindowTitle(int index, byte* buffer, int bufferLength)
+    {
+        if (index < 0 || index >= s_editorWindows.Count) { return 0; }
+        string title;
+        try { title = s_editorWindows[index].Title ?? string.Empty; }
+        catch { title = string.Empty; }
+        return Utf8.Write(title, buffer, bufferLength);
+    }
+
+    [UnmanagedCallersOnly]
+    internal static int GetEditorWindowVisible(int index)
+    {
+        if (index < 0 || index >= s_editorWindows.Count) { return 0; }
+        try { return s_editorWindows[index].Visible ? 1 : 0; }
+        catch { return 0; }
+    }
+
+    [UnmanagedCallersOnly]
+    internal static void SetEditorWindowVisible(int index, int visible)
+    {
+        if (index < 0 || index >= s_editorWindows.Count) { return; }
+        try { s_editorWindows[index].Visible = visible != 0; }
+        catch (Exception ex) { Bootstrap.ReportError($"{s_editorWindows[index].GetType().Name}.Visible: {ex.Message}"); }
     }
 
     private static EntityScript? Resolve(ulong handle)

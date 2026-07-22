@@ -75,6 +75,10 @@ internal static unsafe class Bootstrap
 
             // Editor tooling
             outApi->DrawEditorWindows = &ScriptRegistry.DrawEditorWindows;
+            outApi->GetEditorWindowCount = &ScriptRegistry.GetEditorWindowCount;
+            outApi->GetEditorWindowTitle = &ScriptRegistry.GetEditorWindowTitle;
+            outApi->GetEditorWindowVisible = &ScriptRegistry.GetEditorWindowVisible;
+            outApi->SetEditorWindowVisible = &ScriptRegistry.SetEditorWindowVisible;
 
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;
