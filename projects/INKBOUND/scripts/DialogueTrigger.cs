@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using AetherCore;
 
@@ -19,8 +20,10 @@ public sealed class DialogueTrigger : EntityScript
 
     private const Key InteractKey = Key.E; // free of the player's move/jump bindings (A/D/arrows, Space/W/Up)
 
-    private bool _fired;
+    private bool _fired;       // has ever fired (gates Once)
+    private bool _armed = true; // can fire on the current visit; consumed on fire, re-armed on exit
     private bool _playerInside;
+    private float _promptT;
     private Entity _prompt;
 
     public override void OnAttach()
@@ -34,7 +37,7 @@ public sealed class DialogueTrigger : EntityScript
     {
         if (!IsPlayer(other)) { return; }
         _playerInside = true;
-        if (RequireInteract) { ShowPrompt(true); }
+        if (RequireInteract) { _promptT = 0f; ShowPrompt(true); }
         else { TryFire(); }
     }
 
@@ -42,24 +45,41 @@ public sealed class DialogueTrigger : EntityScript
     {
         if (!IsPlayer(other)) { return; }
         _playerInside = false;
+        _armed = true; // re-arm for the next approach (so "talk again" needs leaving + returning)
         ShowPrompt(false);
     }
 
     public override void OnUpdate(float dt)
     {
-        if (RequireInteract && _playerInside && !Dialogue.IsActive && Input.IsKeyPressed(InteractKey))
+        if (!RequireInteract || !_playerInside) { return; }
+
+        // Fire only while armed and idle. Consuming the arm on fire means the same in-range session
+        // can't restart the conversation the moment it ends - the player must step out and back in.
+        if (_armed && !Dialogue.IsActive && Input.IsKeyPressed(InteractKey))
         {
             TryFire();
             ShowPrompt(false);
+            return;
+        }
+
+        // Breathe the prompt while it is actually offering an interaction, so it reads as live.
+        if (_armed && !Dialogue.IsActive && _prompt.IsValid)
+        {
+            _promptT += dt;
+            Vector4 c = GameSettings.Accent;
+            c.W = 0.72f + 0.28f * MathF.Sin(_promptT * 4.5f);
+            Ui.SetTextColor(_prompt, c);
         }
     }
 
     private void TryFire()
     {
+        if (!_armed) { return; }
         if (_fired && Once) { return; }
         if (string.IsNullOrEmpty(DialogueId)) { Log.Warn("[INKBOUND] DialogueTrigger has no DialogueId"); return; }
         Dialogue.Play(DialogueId);
         _fired = true;
+        _armed = false;
     }
 
     private static bool IsPlayer(Entity e)
@@ -75,12 +95,12 @@ public sealed class DialogueTrigger : EntityScript
         {
             _prompt = Ui.CreateText(default, PromptLabel);
             Ui.SetFont(_prompt, "PixelStorm");
-            Ui.SetFontSize(_prompt, 20f);
+            Ui.SetFontSize(_prompt, 38f);
             Ui.SetTextColor(_prompt, GameSettings.Accent);
             Ui.SetTextAlign(_prompt, UiHAlign.Center, UiVAlign.Middle);
             Ui.SetAnchors(_prompt, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f)); // bottom-centre
             Ui.SetPivot(_prompt, new Vector2(0.5f, 1f));
-            Ui.SetRect(_prompt, 0f, -150f, 220f, 34f);
+            Ui.SetRect(_prompt, 0f, -180f, 420f, 60f);
         }
         if (_prompt.IsValid) { _prompt.SetActive(on); }
     }
