@@ -31,18 +31,22 @@ public sealed class DialogueRunner : EntityScript
     private const string BodyFontName = "IBMPlexMono-Italic";
     private const string DisplayFontName = "PixelStorm";
 
-    private Entity _canvas, _panel, _rule, _portrait, _speaker, _body, _hint;
+    private Entity _canvas, _panel, _rule, _portrait, _speaker, _hint;
     private bool _built;
     private float _bodyLeft = Pad;
 
-    // Inline rich-text spans: a line with >1 run (i.e. it has [tag] markup) is laid out as one text
-    // element per run on a monospace grid (IBM Plex Mono => fixed cell width). A plain/whole-line node
-    // (1 run) keeps the single _body element with the engine's own word-wrap. Keep spanned lines short.
-    private const int MaxRuns = 16;
+    // Per-glyph reveal cells: every body glyph is its own text element, laid out on a monospace
+    // word-wrap grid (IBM Plex Mono => fixed cell width). Each cell carries its run's effect and a
+    // per-glyph "birth" (0 = freshly revealed wet ink blob, 1 = dried crisp letter), so every letter
+    // blooms in independently. This one path subsumes both plain lines and inline [tag] spans.
+    private const int MaxCells = 192;
     private const float MonoAdvance = 0.60f; // IBM Plex Mono advance in ems
     private const float LineH = BodyFont + 6f;
-    private readonly Entity[] _runUi = new Entity[MaxRuns];
-    private bool _multiRun;
+    private const float BirthChars = 4.5f;   // reveal-distance (in glyphs) over which a letter dries
+    private readonly Entity[] _cellUi = new Entity[MaxCells];
+    private char[] _chars = System.Array.Empty<char>();
+    private InkEffect[] _cellFx = System.Array.Empty<InkEffect>();
+    private int _cellCount;
 
     // Animation (all on UnscaledTime): the box slides up on open and back down on close, each node's
     // speaker/portrait fade in, and choices stagger in one by one.
@@ -135,20 +139,6 @@ public sealed class DialogueRunner : EntityScript
         Ui.SetMaterial(_speaker, "ui_glitch_text");
         Ui.SetMaterialColors(_speaker, Vector4.Zero, Accent);
 
-        // Body (mono italic, wraps to the panel width minus insets).
-        _body = Ui.CreateText(_canvas, "");
-        _body.SetParent(_panel);
-        Ui.SetAnchors(_body, new Vector2(0f, 0f), new Vector2(1f, 0f));
-        Ui.SetOffsets(_body, new Vector2(_bodyLeft, Pad + SpeakerH + 6f), new Vector2(-Pad, BoxH - Pad));
-        Ui.SetFont(_body, BodyFontName);
-        Ui.SetFontSize(_body, BodyFont);
-        Ui.SetTextColor(_body, BodyCol);
-        Ui.SetTextAlign(_body, UiHAlign.Left, UiVAlign.Top);
-        // Rich-text material: always applied; effectId 0 (Normal) renders as plain SDF text, so no
-        // separate clear path is needed when a line has no effect.
-        Ui.SetMaterial(_body, "ui_dialogue_text");
-        Ui.SetMaterialColors(_body, Vector4.Zero, Accent);
-
         // Advance hint, bottom-right.
         _hint = Ui.CreateText(_canvas, "> continue");
         _hint.SetParent(_panel);
@@ -175,22 +165,22 @@ public sealed class DialogueRunner : EntityScript
             _choiceUi[i] = c;
         }
 
-        // Run slots for inline-span lines (mono grid, no wrap, one material per run).
-        for (int i = 0; i < MaxRuns; i++)
+        // Per-glyph cell pool (one text element per body glyph, mono grid, no wrap, ink material).
+        for (int i = 0; i < MaxCells; i++)
         {
-            Entity r = Ui.CreateText(_canvas, "");
-            r.SetParent(_panel);
-            Ui.SetAnchors(r, new Vector2(0f, 0f), new Vector2(0f, 0f));
-            Ui.SetPivot(r, new Vector2(0f, 0f));
-            Ui.SetFont(r, BodyFontName);
-            Ui.SetFontSize(r, BodyFont);
-            Ui.SetTextColor(r, BodyCol);
-            Ui.SetTextAlign(r, UiHAlign.Left, UiVAlign.Top);
-            Ui.SetTextWrap(r, false);
-            Ui.SetMaterial(r, "ui_dialogue_text");
-            Ui.SetMaterialColors(r, Vector4.Zero, Accent);
-            r.SetActive(false);
-            _runUi[i] = r;
+            Entity c = Ui.CreateText(_canvas, "");
+            c.SetParent(_panel);
+            Ui.SetAnchors(c, new Vector2(0f, 0f), new Vector2(0f, 0f));
+            Ui.SetPivot(c, new Vector2(0f, 0f));
+            Ui.SetFont(c, BodyFontName);
+            Ui.SetFontSize(c, BodyFont);
+            Ui.SetTextColor(c, BodyCol);
+            Ui.SetTextAlign(c, UiHAlign.Left, UiVAlign.Top);
+            Ui.SetTextWrap(c, false);
+            Ui.SetMaterial(c, "ui_dialogue_text");
+            Ui.SetMaterialColors(c, Vector4.Zero, Accent);
+            c.SetActive(false);
+            _cellUi[i] = c;
         }
 
         _built = true;
@@ -233,31 +223,38 @@ public sealed class DialogueRunner : EntityScript
             _bodyLeft = Pad;
         }
         RelayoutText(_bodyLeft);
-
-        // Inline spans: >1 run means the line has [tag] markup -> lay out per-run on the mono grid,
-        // otherwise use the single wrapped body element.
-        HideRuns();
-        _multiRun = _node.Runs.Count > 1;
-        if (_multiRun)
-        {
-            _body.SetActive(false);
-            int count = Math.Min(_node.Runs.Count, MaxRuns);
-            for (int i = 0; i < count; i++) { _runUi[i].SetActive(true); Ui.SetText(_runUi[i], ""); }
-        }
-        else
-        {
-            _body.SetActive(true);
-        }
-
+        BuildCells();
         Ui.SetText(_speaker, _node.Speaker);
-        Ui.SetText(_body, "");
+    }
+
+    // Flatten the node's styled runs into per-glyph cells (char + effect), clamped to the pool. Positions
+    // and per-glyph birth are computed each frame in RenderCells; here we just seed the data and clear
+    // any cells left over from the previous node.
+    private void BuildCells()
+    {
+        for (int i = 0; i < MaxCells; i++) { if (_cellUi[i].IsValid) { _cellUi[i].SetActive(false); } }
+
+        int total = 0;
+        foreach (TextRun r in _node!.Runs) { total += r.Text.Length; }
+        total = Math.Min(total, MaxCells);
+        if (_chars.Length != total) { _chars = new char[total]; _cellFx = new InkEffect[total]; }
+
+        int k = 0;
+        foreach (TextRun r in _node.Runs)
+        {
+            foreach (char ch in r.Text)
+            {
+                if (k >= total) { break; }
+                _chars[k] = ch; _cellFx[k] = r.Effect; k++;
+            }
+        }
+        _cellCount = total;
     }
 
     // Re-place the speaker/body/choice columns to start at bodyLeft (shifts right of a portrait).
     private void RelayoutText(float bodyLeft)
     {
         Ui.SetRect(_speaker, bodyLeft, Pad, 600f, SpeakerH);
-        Ui.SetOffsets(_body, new Vector2(bodyLeft, Pad + SpeakerH + 6f), new Vector2(-Pad, BoxH - Pad));
         for (int i = 0; i < MaxChoices; i++)
         {
             Ui.SetOffsets(_choiceUi[i], new Vector2(bodyLeft, ChoiceTop + i * ChoiceH), new Vector2(-Pad, ChoiceTop + (i + 1) * ChoiceH));
@@ -298,15 +295,16 @@ public sealed class DialogueRunner : EntityScript
         bool tap = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.Enter)
                    || Input.IsMousePressed(MouseButton.Left);
 
-        // Phase 1 - typewriter. A tap snaps the line to full. On the frame the line completes we
-        // reveal choices (if any) and return, so the same tap never also advances/activates.
+        // Phase 1 - typewriter. A tap snaps the line to full (and dries every glyph at once). On the
+        // frame the line completes we reveal choices (if any) and return, so the same tap never also
+        // advances/activates.
         if (!_fullShown)
         {
             _reveal += udt * CharsPerSec;
-            int shown = Math.Min(_node.Text.Length, (int)_reveal);
-            if (tap) { shown = _node.Text.Length; }
-            RenderBody(shown, strength);
-            if (shown >= _node.Text.Length)
+            int shown = Math.Min(_cellCount, (int)_reveal);
+            if (tap) { _reveal = _cellCount + BirthChars; shown = _cellCount; }
+            RenderCells(shown, strength);
+            if (shown >= _cellCount)
             {
                 _fullShown = true;
                 if (_node.HasChoices) { ShowChoices(); }
@@ -314,62 +312,77 @@ public sealed class DialogueRunner : EntityScript
             return;
         }
 
-        // Phase 2 - fully shown; keep the per-glyph effects (and any inline-run motion) animating.
-        RenderBody(_node.Text.Length, strength);
+        // Phase 2 - fully shown; keep advancing the reveal clock so the final letters finish drying,
+        // and keep the per-glyph effects animating.
+        _reveal += udt * CharsPerSec;
+        RenderCells(_cellCount, strength);
 
         if (_choicesShown) { UpdateChoices(); return; }
 
         if (tap) { GoTo(_node.Goto); } // linear advance
     }
 
-    // Draw the body up to `shown` characters, routing to the single wrapped element or the mono
-    // run grid depending on whether the line has inline spans.
-    private void RenderBody(int shown, float strength)
-    {
-        if (_multiRun) { UpdateRuns(shown, strength); return; }
-        Ui.SetText(_body, _node!.Text.Substring(0, shown));
-        InkEffect eff = _node.Runs.Count > 0 ? _node.Runs[0].Effect : _node.Effect;
-        Ui.SetMaterialParams(_body, new Vector4(Time.UnscaledTime, (float)eff, strength, 0f));
-    }
-
-    // Lay out inline-span runs on a monospace grid (wrap whole runs at the panel edge) and reveal a
-    // global character count across them in order. Recomputed each frame so it self-corrects once the
-    // panel rect is resolved and the shake/wave motion stays live.
-    private void UpdateRuns(int revealed, float strength)
+    // Lay the revealed glyphs out on a monospace word-wrap grid and draw each as its own cell, passing a
+    // per-glyph "birth" (0 = fresh wet blob, 1 = dried crisp letter) to the ink material. Recomputed each
+    // frame so it self-corrects once the panel rect resolves and the per-glyph effects stay live.
+    private void RenderCells(int shown, float strength)
     {
         float cellW = BodyFont * MonoAdvance;
         float bodyTop = Pad + SpeakerH + 6f;
         float panelW = Ui.GetRect(_panel).Z;
         float availW = panelW - _bodyLeft - Pad;
-        int maxCols = availW > cellW ? (int)(availW / cellW) : 9999;
+        int maxCols = availW > cellW ? Math.Max(1, (int)(availW / cellW)) : 9999;
 
-        int col = 0, row = 0, acc = 0;
-        int count = Math.Min(_node!.Runs.Count, MaxRuns);
-        for (int i = 0; i < count; i++)
+        int n = _cellCount;
+        int col = 0, row = 0, i = 0;
+        while (i < n)
         {
-            TextRun r = _node.Runs[i];
-            int len = r.Text.Length;
-            if (col > 0 && col + len > maxCols) { col = 0; row++; }
+            // Measure the next word (run of non-spaces) and wrap it whole if it fits on a line but not
+            // in the remaining columns.
+            int j = i;
+            while (j < n && _chars[j] != ' ') { j++; }
+            int wordLen = j - i;
+            if (col > 0 && wordLen <= maxCols && col + wordLen > maxCols) { col = 0; row++; }
 
-            Entity e = _runUi[i];
-            float x = _bodyLeft + col * cellW;
-            float y = bodyTop + row * LineH;
-            Ui.SetOffsets(e, new Vector2(x, y), new Vector2(x + len * cellW + 6f, y + LineH));
-            int show = Math.Clamp(revealed - acc, 0, len);
-            Ui.SetText(e, r.Text.Substring(0, show));
-            Ui.SetMaterialParams(e, new Vector4(Time.UnscaledTime, (float)r.Effect, strength, 0f));
+            for (int p = i; p < j; p++)
+            {
+                PlaceCell(p, col, row, shown, cellW, bodyTop, strength);
+                col++;
+                if (col >= maxCols) { col = 0; row++; }
+            }
 
-            col += len;
-            acc += len;
+            // Spaces: consume them, keep their (glyph-less) cells hidden, and advance the column while
+            // collapsing runs of spaces at the start of a wrapped line.
+            while (j < n && _chars[j] == ' ')
+            {
+                if (_cellUi[j].IsValid) { _cellUi[j].SetActive(false); }
+                if (col > 0) { col++; if (col >= maxCols) { col = 0; row++; } }
+                j++;
+            }
+            i = j;
         }
     }
 
-    private void HideRuns()
+    private void PlaceCell(int i, int col, int row, int shown, float cellW, float bodyTop, float strength)
     {
-        _multiRun = false;
-        for (int i = 0; i < MaxRuns; i++)
+        Entity e = _cellUi[i];
+        if (!e.IsValid) { return; }
+        if (i >= shown) { e.SetActive(false); return; }
+        e.SetActive(true);
+        float x = _bodyLeft + col * cellW;
+        float y = bodyTop + row * LineH;
+        Ui.SetOffsets(e, new Vector2(x, y), new Vector2(x + cellW + 2f, y + LineH));
+        Ui.SetText(e, _chars[i].ToString());
+        float birth = Math.Clamp((_reveal - i) / BirthChars, 0f, 1f);
+        Ui.SetMaterialParams(e, new Vector4(Time.UnscaledTime, (float)_cellFx[i], strength, birth));
+    }
+
+    private void HideCells()
+    {
+        _cellCount = 0;
+        for (int i = 0; i < MaxCells; i++)
         {
-            if (_runUi[i].IsValid) { _runUi[i].SetActive(false); }
+            if (_cellUi[i].IsValid) { _cellUi[i].SetActive(false); }
         }
     }
 
@@ -496,7 +509,6 @@ public sealed class DialogueRunner : EntityScript
         _panel.SetActive(true);
         _rule.SetActive(true);
         _speaker.SetActive(true);
-        _body.SetActive(true);
         _hint.SetActive(true);
     }
 
@@ -507,10 +519,9 @@ public sealed class DialogueRunner : EntityScript
         _rule.SetActive(false);
         _portrait.SetActive(false);
         _speaker.SetActive(false);
-        _body.SetActive(false);
         _hint.SetActive(false);
         HideChoices();
-        HideRuns();
+        HideCells();
         _lastU = -1f;
     }
 }

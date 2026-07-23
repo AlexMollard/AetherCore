@@ -101,21 +101,42 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         off = float2((rny - 0.5) * texel.x * (1.5 + 9.0 * jump), 0.0);
     }
 
-    const float cov = SdfCov(input.textureSlot, input.texUV + off);
+    // Per-glyph ink birth: params.w = 1 settled, 0 freshly revealed. A fresh glyph reads as a fat, wet
+    // ink blob - the SDF iso is lowered (dilated) with a noisy irregular edge and tinted deep teal - then
+    // it dries into the crisp letter as birth -> 1.
+    const float birth = saturate(pc.params.w);
+    const float wet   = 1.0 - birth;
+
+    const float2 sampUV = input.texUV + off;
+    const float  d = g_textures[input.textureSlot].Sample(g_linearSampler, sampUV).r;
+
+    // Irregular blob edge: perturb the iso threshold with position/time value-noise while wet.
+    const float en  = hash11(floor(input.position.x * 0.7) + floor(input.position.y * 0.7) * 91.0
+                             + floor(time * 12.0)) - 0.5;
+    const float iso = 0.5 - wet * 0.16 - wet * 0.08 * en; // fatter + rougher when wet
+    const float aa  = clamp(fwidth(d) * 0.7, 0.001, 0.5) + wet * 0.09; // gooier edge when wet
+    const float cov = smoothstep(iso - aa, iso + aa, d);
     if (cov <= 0.003)
     {
         discard;
     }
 
-    float3 base = dot(pc.color0.rgb, float3(1.0, 1.0, 1.0)) > 0.001 ? pc.color0.rgb : input.color.rgb;
-    float3 rgb = base * tint * bright;
+    float3 base  = dot(pc.color0.rgb, float3(1.0, 1.0, 1.0)) > 0.001 ? pc.color0.rgb : input.color.rgb;
+    float3 crisp = base * tint * bright;
 
-    if (fx == 5) // add an accent fringe on the split
+    // Wet ink is a dark teal; sharpen toward the glyph colour as it dries, with a brief accent sheen
+    // that peaks mid-birth so the letter "sets" with a wet highlight.
+    const float3 inkWet = float3(0.05, 0.20, 0.26);
+    float3 rgb = lerp(crisp, inkWet, wet * 0.85);
+    rgb += pc.color1.rgb * wet * (1.0 - wet) * 0.6;
+
+    if (fx == 5) // glitch: add an accent fringe on the split
     {
         const float split = texel.x * 1.6;
         const float cr = SdfCov(input.textureSlot, input.texUV + off + float2(split, 0.0));
         rgb += pc.color1.rgb * max(cr - cov, 0.0) * 1.1;
     }
 
-    return float4(rgb, input.color.a * cov * alphaMul);
+    const float birthAlpha = smoothstep(0.0, 0.15, birth); // quick fade-in so the blob never hard-pops
+    return float4(rgb, input.color.a * cov * alphaMul * birthAlpha);
 }
