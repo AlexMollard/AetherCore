@@ -444,6 +444,7 @@ namespace aether
 		FlushPendingBodies(world);
 		FlushPendingJoints(world);
 		SyncTileMapCollision(world);
+		ReconcileStaticBodies(world);
 
 		// Enter/exit buffers are per-game-frame; 'overlapping' persists as the
 		// live contact/trigger "stay" set.
@@ -509,6 +510,50 @@ namespace aether
 			b2Body_SetTransform(body, {pos.x, pos.y}, b2MakeRot(glm::radians(eulerDeg.z)));
 			state.prevPosition = state.currPosition = {pos.x, pos.y};
 			state.prevAngle = state.currAngle = glm::radians(eulerDeg.z);
+			state.depthZ = pos.z;
+			state.scale = scale;
+		}
+	}
+
+	void Physics2DSystem::ReconcileStaticBodies(World& world)
+	{
+		// A static body's Box2D transform is only ever set at creation, so if the
+		// entity's world transform changes afterwards the body is left behind. That
+		// happens for prefab instances (the body is built from the prefab's base
+		// pose before the instance position override lands, stranding sensors at the
+		// origin) and for editor/script set_transform on a static entity. Push the
+		// ECS pose into Box2D whenever it has diverged; the divergence gate keeps
+		// stable ground/collider bodies from being churned every frame. Requiring a
+		// Collider2DComponent scopes this to standard bodies, excluding tilemap
+		// chain bodies (which live on the Tile Map entity without one).
+		for (const auto& [enttEntity, rigid, collider, state, transform]:
+		     world.View<RigidBody2DComponent, Collider2DComponent, Physics2DStateComponent, TransformComponent>().each())
+		{
+			(void) collider;
+			if (rigid.bodyType != Body2DType::Static || !rigid.body.IsValid())
+			{
+				continue;
+			}
+			const b2BodyId body = LoadBody(rigid.body);
+			if (!b2Body_IsValid(body))
+			{
+				continue;
+			}
+			glm::vec3 pos{};
+			glm::vec3 eulerDeg{};
+			glm::vec3 scale{};
+			DecomposeTRS(transform.localToWorld, pos, eulerDeg, scale);
+			const b2Vec2 cur = b2Body_GetPosition(body);
+			const float targetAngle = glm::radians(eulerDeg.z);
+			const float posDelta = std::abs(cur.x - pos.x) + std::abs(cur.y - pos.y);
+			const float angleDelta = std::abs(ShortestAngleDelta(b2Rot_GetAngle(b2Body_GetRotation(body)), targetAngle));
+			if (posDelta < 1e-4f && angleDelta < 1e-4f)
+			{
+				continue; // already in place - never wake a stable static body
+			}
+			b2Body_SetTransform(body, {pos.x, pos.y}, b2MakeRot(targetAngle));
+			state.prevPosition = state.currPosition = {pos.x, pos.y};
+			state.prevAngle = state.currAngle = targetAngle;
 			state.depthZ = pos.z;
 			state.scale = scale;
 		}

@@ -114,6 +114,10 @@ namespace aether
 		void DrainEvents(World& world);
 		void SyncTransforms(World& world, float alpha);
 		void PushKinematicTargets(World& world);
+		// Static bodies are authored-transform authoritative but rarely move: push
+		// the ECS pose into Box2D only when it has diverged (e.g. a prefab-instance
+		// body built before its instance position was applied, or a set_transform).
+		void ReconcileStaticBodies(World& world);
 
 		struct Impl;
 		std::unique_ptr<Impl> m_impl;
