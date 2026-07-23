@@ -13,6 +13,7 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
     private float _t;
     private Entity _wordmark;
     private Entity _drips; // TitleDrips: a ui_ink_drips UIEffect that renders ink running off the title
+    private Entity _sandbox; // bottom-right dev shortcut into the Sandbox test level
     private readonly Entity[] _markers = new Entity[4];
     private readonly Entity[] _labels = new Entity[4];
 
@@ -33,6 +34,7 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
             _markers[i] = Scene.Find($"Marker{i}");
             _labels[i] = Scene.Find($"Label{i}");
         }
+        _sandbox = Scene.Find("TitleSandbox");
         _drips = Scene.Find("TitleDrips");
         if (_drips.IsValid) Ui.SetEffectColors(_drips, DripInk, Cyan); // ink body + accent rim
 
@@ -57,6 +59,7 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
         else if (Activated(1)) MenuController.Instance?.Go(MenuScreen.LevelSelect);
         else if (Activated(2)) MenuController.Instance?.Go(MenuScreen.Settings);
         else if (Activated(3)) Log.Info("[INKBOUND] release (quit)");
+        else if (_sandbox.IsValid && Ui.WasActivated(_sandbox)) { Log.Info("[INKBOUND] sandbox"); Scene.Load("Sandbox"); }
     }
 
     private bool Activated(int i) => _labels[i].IsValid && Ui.WasActivated(_labels[i]);

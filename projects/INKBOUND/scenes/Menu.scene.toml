@@ -1490,6 +1490,38 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'TitleSandbox'
+node = 5566778899001122334
+parent = 42
+parent_node = 6299553004898250026
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'IBMPlexMono-Italic'
+    h_align = 'right'
+    label = '// sandbox'
+    pixel_size = 19.0
+    text_color = [ 0.227, 0.251, 0.314, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
+    [entities.ui_rect]
+    anchor_max = [ 0.955, 0.9 ]
+    anchor_min = [ 0.955, 0.9 ]
+    offset_max = [ 0.0, 20.0 ]
+    offset_min = [ -260.0, -20.0 ]
+    pivot = [ 1.0, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'titlemenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'TitleDrips'
 node = 7863029324393553023
 parent = 42
