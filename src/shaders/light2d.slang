@@ -62,9 +62,16 @@ float SampleOccluder(float2 uv)
 }
 
 // Fraction [0..1] of this light that reaches `world`, 1 = unshadowed. Marches the pixel->light line
-// through the occluder mask in screen-UV space (ortho: the world line maps to a straight UV line). At
-// each step it also samples two taps perpendicular to the ray, spread wider toward the light, so shadow
-// edges get a soft penumbra scaled by `softness`.
+// through the occluder mask in screen-UV space (ortho: the world line maps to a straight UV line), with
+// perpendicular taps that widen toward the light for a soft penumbra.
+//
+// Light must STOP at solid surfaces, not bleed into them. So we branch on whether the shaded pixel is
+// itself inside a solid tile:
+//   * Air pixel        -> crisp line-of-sight: a tiny bias, shadowed the instant the ray meets a wall.
+//   * Solid, face lit   -> the tile one step toward the light is empty, so this is a surface facing the
+//                          light: lit, but skip its own tile so it doesn't self-shadow.
+//   * Solid, buried     -> the tile toward the light is also solid: an interior/back face -> full shadow.
+// This is what keeps a torch from lighting tiles two-deep under the ground.
 float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, float worldDist)
 {
     if (pc.shadowParams.x < 0.5 || pc.occluderSlot == 0xFFFFFFFFu)
@@ -76,9 +83,24 @@ float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, floa
     const float2 ray = lightUV - fragUV;
     const float2 perp = normalize(float2(-ray.y, ray.x) + float2(1e-6, 0.0));
     const float softness = max(pc.shadowParams.z, 0.0);
+    const float strength = pc.shadowParams.y;
 
-    // Skip the pixel's own cell so a lit wall face isn't shadowed by itself (world-unit bias -> ray frac).
-    const float t0 = clamp(pc.shadowParams.w / max(worldDist, 1e-3), 0.0, 0.9);
+    const float uvPerUnit = 1.0 / max(worldDist, 1e-3); // uv fraction spanning ~1 world unit along the ray
+
+    float t0;
+    if (SampleOccluder(fragUV) > 0.5) // shaded pixel is inside a solid tile
+    {
+        const float ahead = SampleOccluder(fragUV + ray * uvPerUnit); // one tile toward the light
+        if (ahead > 0.5)
+        {
+            return 1.0 - strength; // buried: no exposed face toward this light
+        }
+        t0 = clamp(uvPerUnit, 0.0, 0.9); // exposed face: skip its own tile, then march for further walls
+    }
+    else
+    {
+        t0 = min(0.04, uvPerUnit * 0.5); // air: crisp, near-zero bias
+    }
 
     float occ = 0.0;
     for (int s = 0; s < kShadowSteps; ++s)
@@ -91,7 +113,7 @@ float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, floa
         const float b = SampleOccluder(uv - perp * spread);
         occ = max(occ, (c * 2.0 + a + b) * 0.25);
     }
-    return 1.0 - saturate(occ) * pc.shadowParams.y;
+    return 1.0 - saturate(occ) * strength;
 }
 
 [shader("fragment")]
