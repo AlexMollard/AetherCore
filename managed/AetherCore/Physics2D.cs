@@ -76,6 +76,10 @@ public static class Physics2D
 
     public static void SetGravityScale(Entity entity, float scale) => Native.aether_physics2d_set_gravity_scale(entity.Id, scale);
 
+    /// <summary>Let this body fall through one-way platforms for the next <paramref name="seconds"/>
+    /// (0 cancels). Long enough to clear the platform is plenty - a quarter second or so.</summary>
+    public static void SetDropThrough(Entity entity, float seconds) => Native.aether_physics2d_set_drop_through(entity.Id, seconds);
+
     // ── Queries ───────────────────────────────────────────────────────────────
     /// <summary><paramref name="direction"/> must be normalized.</summary>
     public static RaycastHit2D Raycast(Vector2 origin, Vector2 direction, float maxDistance)

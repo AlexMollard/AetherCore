@@ -75,7 +75,11 @@ namespace aether
 		// solid side (approaching that face); from any other side it passes straight
 		// through. b2Manifold.normal points from shape A to shape B, so orient it by
 		// which shape is the platform, then project onto the solid-face normal.
-		bool OneWayPreSolve(b2ShapeId shapeIdA, b2ShapeId shapeIdB, b2Manifold* manifold, void* /*context*/)
+		// Entity -> seconds left of a "let me fall through one-way platforms" request.
+		// Handed to the pre-solve callback as its context (see OnRegister).
+		using DropThroughMap = std::unordered_map<std::uint32_t, float>;
+
+		bool OneWayPreSolve(b2ShapeId shapeIdA, b2ShapeId shapeIdB, b2Manifold* manifold, void* context)
 		{
 			const auto tag = [](b2ShapeId shape) -> TileOneWay
 			{
@@ -89,6 +93,19 @@ namespace aether
 				return true; // neither (or both) is one-way: solve normally
 			}
 			const bool platformIsA = dirA != TileOneWay::None;
+
+			// Drop-through: while the rider has an active request, this platform is not
+			// there at all, so a held Down + jump falls cleanly instead of landing again.
+			if (context != nullptr)
+			{
+				const auto* drops = static_cast<const DropThroughMap*>(context);
+				const auto it = drops->find(UnpackEntity(b2Shape_GetBody(platformIsA ? shapeIdB : shapeIdA)));
+				if (it != drops->end() && it->second > 0.0f)
+				{
+					return false;
+				}
+			}
+
 			const float sign = platformIsA ? 1.0f : -1.0f; // orient normal platform -> body
 			const glm::vec2 solid = OneWaySolidNormal(platformIsA ? dirA : dirB);
 			return (sign * manifold->normal.x) * solid.x + (sign * manifold->normal.y) * solid.y > 0.5f;
@@ -167,6 +184,7 @@ namespace aether
 	{
 		b2WorldId world = b2_nullWorldId;
 		std::unordered_map<TileBodyKey, TileBodyEntry, TileBodyKeyHash> tileBodies;
+		DropThroughMap dropThrough;
 	};
 
 	Physics2DSystem::Physics2DSystem() : m_impl(std::make_unique<Impl>())
@@ -181,7 +199,7 @@ namespace aether
 		worldDef.gravity = {0.0f, -9.81f};
 		m_impl->world = b2CreateWorld(&worldDef);
 		// One-way tile platforms disable their contact from below via this callback.
-		b2World_SetPreSolveCallback(m_impl->world, &OneWayPreSolve, nullptr);
+		b2World_SetPreSolveCallback(m_impl->world, &OneWayPreSolve, &m_impl->dropThrough);
 
 		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBody2DComponent>().connect<&Physics2DSystem::OnRigidBody2DDestroyed>(this);
 		m_jointDestroyConn = world.GetRegistry().on_destroy<Joint2DComponent>().connect<&Physics2DSystem::OnJoint2DDestroyed>(this);
@@ -477,6 +495,40 @@ namespace aether
 
 		m_lastAlpha = std::clamp(m_accumulator / kFixedTimestep, 0.0f, 1.0f);
 		SyncTransforms(world, m_lastAlpha);
+
+		// Expire drop-through requests after they have had the step(s) above to take
+		// effect, so a request always survives at least one solve.
+		for (auto it = m_impl->dropThrough.begin(); it != m_impl->dropThrough.end();)
+		{
+			it->second -= dt;
+			it = it->second <= 0.0f ? m_impl->dropThrough.erase(it) : std::next(it);
+		}
+	}
+
+	void Physics2DSystem::SetDropThrough(World& world, Entity entity, float seconds)
+	{
+		if (!entity.IsValid())
+		{
+			return;
+		}
+		if (seconds <= 0.0f)
+		{
+			m_impl->dropThrough.erase(entity.id);
+			return;
+		}
+		m_impl->dropThrough[entity.id] = seconds;
+
+		// A body resting on the platform has almost certainly gone to sleep, and
+		// dropping its contact does not wake it - it would just hang there. Wake it so
+		// gravity is applied on the very next step.
+		if (const auto* rigid = world.TryGet<RigidBody2DComponent>(entity); rigid != nullptr && rigid->body.IsValid())
+		{
+			const b2BodyId body = LoadBody(rigid->body);
+			if (b2Body_IsValid(body))
+			{
+				b2Body_SetAwake(body, true);
+			}
+		}
 	}
 
 	void Physics2DSystem::SavePrevState(World& world)

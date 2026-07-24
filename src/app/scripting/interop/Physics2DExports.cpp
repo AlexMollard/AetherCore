@@ -167,6 +167,14 @@ AE_SCRIPT_API void aether_physics2d_add_angular_impulse(std::uint32_t id, float 
 	}
 }
 
+AE_SCRIPT_API void aether_physics2d_set_drop_through(std::uint32_t id, float seconds)
+{
+	if (auto* physics = System2D())
+	{
+		physics->SetDropThrough(ActiveWorld(), aether::Entity{id}, seconds);
+	}
+}
+
 AE_SCRIPT_API void aether_physics2d_set_gravity_scale(std::uint32_t id, float scale)
 {
 	if (auto* rigid = ActiveWorld().TryGet<aether::RigidBody2DComponent>(aether::Entity{id}))

@@ -57,6 +57,10 @@ namespace aether
 		// Editor support: create/destroy backing bodies without stepping
 		// (scene load, play/stop restore, inspector edits).
 		void FlushPendingOnly(World& world);
+		/// <summary>Let this body fall through one-way platforms for the next `seconds`
+		/// (0 cancels). Drives the hold-Down-and-jump drop-through.</summary>
+		void SetDropThrough(World& world, Entity entity, float seconds);
+
 		void RebuildBody(World& world, Entity entity);
 		void RebuildJoint(World& world, Entity entity);
 		void RemoveBody(World& world, Entity entity);

@@ -603,6 +603,9 @@ internal static unsafe partial class Native
     internal static partial void aether_physics2d_set_gravity_scale(uint id, float scale);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_physics2d_set_drop_through(uint id, float seconds);
+
+    [LibraryImport(Lib)]
     internal static partial RaycastHit2D aether_physics2d_raycast(Vector2 origin, Vector2 direction, float maxDistance);
 
     [LibraryImport(Lib)]

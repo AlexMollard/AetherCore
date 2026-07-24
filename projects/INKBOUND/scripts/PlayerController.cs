@@ -16,6 +16,9 @@ public sealed class PlayerController : EntityScript
     public float JumpBuffer = 0.15f;
     public float FallRespawnY = -8.0f;
 
+    /// <summary>How long holding Down + jump keeps one-way platforms non-solid.</summary>
+    public float DropThroughTime = 0.25f;
+
     /// <summary>Snappy platformer arc: ~0.33 s to apex instead of a floaty
     /// full-second hang (applied to the body's gravity scale on attach).</summary>
     public float GravityScale = 4.0f;
@@ -160,11 +163,24 @@ public sealed class PlayerController : EntityScript
         }
         if (_sinceJumpPressed < JumpBuffer && _sinceGrounded < CoyoteTime)
         {
-            velocity.Y = JumpSpeed;
-            _sinceGrounded = 99.0f;
-            _sinceJumpPressed = 99.0f;
-            _jumpCutDone = false;
-            _squash = -0.24f; // launch stretch
+            bool holdingDown = Input.IsKeyDown(Key.S) || Input.IsKeyDown(Key.Down);
+            if (holdingDown)
+            {
+                // Down + jump drops through a one-way platform instead of hopping. The
+                // window only needs to outlast the fall past the platform's lip; if we
+                // were standing on solid ground this simply does nothing and the jump
+                // is spent, which is the same as every other platformer.
+                Physics2D.SetDropThrough(Self, DropThroughTime);
+                _sinceJumpPressed = 99.0f;
+            }
+            else
+            {
+                velocity.Y = JumpSpeed;
+                _sinceGrounded = 99.0f;
+                _sinceJumpPressed = 99.0f;
+                _jumpCutDone = false;
+                _squash = -0.24f; // launch stretch
+            }
         }
         // Variable jump height: releasing early clips the ascent ONCE (a
         // per-frame multiplier would be framerate-dependent).
