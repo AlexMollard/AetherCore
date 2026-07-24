@@ -1565,3 +1565,284 @@ scale = [ 1.0, 1.0, 1.0 ]
     offset_max = [ 0.0, 0.0 ]
     offset_min = [ 0.0, 0.0 ]
     pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+disabled = true
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotSelectRoot'
+node = -2693087714271065772
+parent = 1
+parent_node = 4360251023798411520
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [[entities.scripts]]
+    type = 'SlotSelectScreen'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Slot0'
+node = -7752589696448099600
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 12.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.9, 0.62 ]
+    anchor_min = [ 0.1, 0.62 ]
+    offset_max = [ 0.0, 40.0 ]
+    offset_min = [ 0.0, -40.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'slots'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Slot1'
+node = 2939784590287430930
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 12.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.9, 0.5 ]
+    anchor_min = [ 0.1, 0.5 ]
+    offset_max = [ 0.0, 40.0 ]
+    offset_min = [ 0.0, -40.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'slots'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Slot2'
+node = -734696957196786574
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.106, 0.125, 0.188, 1.0 ]
+    corner_radius = 12.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.9, 0.38 ]
+    anchor_min = [ 0.1, 0.38 ]
+    offset_max = [ 0.0, 40.0 ]
+    offset_min = [ 0.0, -40.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'slots'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotText0'
+node = 2651477251114464109
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.13, 0.62 ]
+    anchor_min = [ 0.13, 0.62 ]
+    offset_max = [ 1600.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'SLOT I   empty - a new dark'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotText1'
+node = 2472744513787615032
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.13, 0.5 ]
+    anchor_min = [ 0.13, 0.5 ]
+    offset_max = [ 1600.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'SLOT II   empty - a new dark'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotText2'
+node = -2209722605927760896
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.13, 0.38 ]
+    anchor_min = [ 0.13, 0.38 ]
+    offset_max = [ 1600.0, 20.0 ]
+    offset_min = [ 0.0, -20.0 ]
+    pivot = [ 0.0, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.6, 0.63, 0.7, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'left'
+    pixel_size = 22.0
+    text = 'SLOT III   empty - a new dark'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+disabled = true
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotConfirm'
+node = -2400883948542785314
+parent = 62
+parent_node = -2693087714271065772
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.09, 0.1, 0.135, 0.98 ]
+    corner_radius = 10.0
+    pixel_art = false
+
+    [entities.ui_rect]
+    anchor_max = [ 0.72, 0.66 ]
+    anchor_min = [ 0.28, 0.34 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotConfirmText'
+node = -7878401858885622645
+parent = 69
+parent_node = -2400883948542785314
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.42 ]
+    anchor_min = [ 0.5, 0.42 ]
+    offset_max = [ 380.0, 24.0 ]
+    offset_min = [ -380.0, -24.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.784, 0.808, 0.871, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 20.0
+    text = 'overwrite this dark? [y] descend anew  [n] keep it'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotConfirmYes'
+node = -9171654564228995549
+parent = 69
+parent_node = -2400883948542785314
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = '[y] descend anew'
+    pixel_size = 22.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
+    [entities.ui_rect]
+    anchor_max = [ 0.42, 0.58 ]
+    anchor_min = [ 0.42, 0.58 ]
+    offset_max = [ 160.0, 18.0 ]
+    offset_min = [ -160.0, -18.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'slots'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SlotConfirmNo'
+node = 9129297976646521300
+parent = 69
+parent_node = -2400883948542785314
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.0, 0.0, 0.0, 0.0 ]
+    bg_color_focused = [ 0.0, 0.0, 0.0, 0.0 ]
+    corner_radius = 0.0
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = '[n] keep it'
+    pixel_size = 22.0
+    text_color = [ 0.337, 0.361, 0.431, 1.0 ]
+    text_color_focused = [ 0.302, 0.851, 1.0, 1.0 ]
+    v_align = 'middle'
+
+    [entities.ui_rect]
+    anchor_max = [ 0.58, 0.58 ]
+    anchor_min = [ 0.58, 0.58 ]
+    offset_max = [ 160.0, 18.0 ]
+    offset_min = [ -160.0, -18.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = 'slots'
+    interactable = true

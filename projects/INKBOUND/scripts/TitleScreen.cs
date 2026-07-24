@@ -55,11 +55,11 @@ public sealed class TitleScreen : EntityScript, IMenuScreen
 
     public void HandleInput()
     {
-        if (Activated(0)) { Log.Info("[INKBOUND] descend"); Scene.Load("Level1"); }
-        else if (Activated(1)) MenuController.Instance?.Go(MenuScreen.LevelSelect);
+        if (Activated(0)) { Log.Info("[INKBOUND] descend"); SlotSelectScreen.Open(resumeOnly: false); }
+        else if (Activated(1)) { Log.Info("[INKBOUND] return"); SlotSelectScreen.Open(resumeOnly: true); }
         else if (Activated(2)) MenuController.Instance?.Go(MenuScreen.Settings);
         else if (Activated(3)) Log.Info("[INKBOUND] release (quit)");
-        else if (_sandbox.IsValid && Ui.WasActivated(_sandbox)) { Log.Info("[INKBOUND] sandbox"); Scene.Load("Sandbox"); }
+        else if (_sandbox.IsValid && Ui.WasActivated(_sandbox)) { Log.Info("[INKBOUND] sandbox"); GameState.CurrentLevel = ""; Scene.Load("Sandbox"); }
     }
 
     private bool Activated(int i) => _labels[i].IsValid && Ui.WasActivated(_labels[i]);

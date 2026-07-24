@@ -5,7 +5,7 @@ using AetherCore;
 
 namespace AetherGame;
 
-public enum MenuScreen { Title, LevelSelect, Settings }
+public enum MenuScreen { Title, LevelSelect, Settings, SlotSelect }
 
 /// <summary>Uniform interface the controller drives on the active screen.</summary>
 public interface IMenuScreen
@@ -32,7 +32,7 @@ public sealed class MenuController : EntityScript
     public static MenuController? Instance;
     public MenuScreen Current { get; private set; } = MenuScreen.Title;
 
-    private Entity _titleRoot, _levelRoot, _settingsRoot;
+    private Entity _titleRoot, _levelRoot, _settingsRoot, _slotRoot;
 
     // Ink-flood transition: a custom-shader effect ("ui_ink") whose coverage animates 0..1..0.
     // Created on attach; lives only during Play. The shader owns the liquid look.
@@ -52,9 +52,11 @@ public sealed class MenuController : EntityScript
         Instance = this;
         Time.Resume();
         GameSettings.Load();
+        SaveSystem.EnsureLoaded();
         _titleRoot = Scene.Find("TitleRoot");
         _levelRoot = Scene.Find("LevelSelectRoot");
         _settingsRoot = Scene.Find("SettingsRoot");
+        _slotRoot = Scene.Find("SlotSelectRoot");
         CreateInk();
         ShowInstant(MenuScreen.Title);
     }
@@ -101,6 +103,7 @@ public sealed class MenuController : EntityScript
         if (_titleRoot.IsValid) _titleRoot.SetActive(s == MenuScreen.Title);
         if (_levelRoot.IsValid) _levelRoot.SetActive(s == MenuScreen.LevelSelect);
         if (_settingsRoot.IsValid) _settingsRoot.SetActive(s == MenuScreen.Settings);
+        if (_slotRoot.IsValid) _slotRoot.SetActive(s == MenuScreen.SlotSelect);
         ActiveScreen()?.OnShown();
     }
 
@@ -131,6 +134,7 @@ public sealed class MenuController : EntityScript
         MenuScreen.Title => ScreenRegistry<TitleScreen>.Get("TitleRoot"),
         MenuScreen.LevelSelect => ScreenRegistry<LevelSelectScreen>.Get("LevelSelectRoot"),
         MenuScreen.Settings => ScreenRegistry<SettingsScreen>.Get("SettingsRoot"),
+        MenuScreen.SlotSelect => ScreenRegistry<SlotSelectScreen>.Get("SlotSelectRoot"),
         _ => null,
     };
 }
