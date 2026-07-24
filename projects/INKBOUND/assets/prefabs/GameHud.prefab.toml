@@ -61,6 +61,26 @@ parent = 0
     wrap = false
 
 [[entities]]
+name = 'HudTrialClock'
+parent = 0
+
+    [entities.ui_rect]
+    anchor_min = [ 0.5, 1.0 ]
+    anchor_max = [ 0.5, 1.0 ]
+    offset_min = [ -160.0, -64.0 ]
+    offset_max = [ 160.0, -16.0 ]
+    pivot = [ 0.5, 1.0 ]
+
+    [entities.ui_text]
+    text = ''
+    font = 'PixelStorm'
+    pixel_size = 40.0
+    color = [ 0.86, 0.93, 0.96, 1.0 ]
+    h_align = 1
+    v_align = 1
+    wrap = false
+
+[[entities]]
 name = 'HudBanner'
 parent = 0
 disabled = true

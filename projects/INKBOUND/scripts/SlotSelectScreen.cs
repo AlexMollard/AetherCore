@@ -136,7 +136,7 @@ public sealed class SlotSelectScreen : EntityScript, IMenuScreen
         GameState.ResumeLevel = "";
         GameState.ResumeCheckpoint = 0;
         Log.Info($"[INKBOUND] new dark in slot {i}");
-        Scene.Load("Level1");
+        MenuController.Instance?.Go(MenuScreen.LevelSelect);
     }
 
     private void Resume(int i)
@@ -147,7 +147,7 @@ public sealed class SlotSelectScreen : EntityScript, IMenuScreen
         GameState.ResumeLevel = p.FurthestLevel;
         GameState.ResumeCheckpoint = p.Level(p.FurthestLevel).FurthestCheckpoint;
         Log.Info($"[INKBOUND] resume slot {i} at {p.FurthestLevel} cp {GameState.ResumeCheckpoint}");
-        Scene.Load(p.FurthestLevel);
+        MenuController.Instance?.Go(MenuScreen.LevelSelect);
     }
 
     public override void OnUpdate(float dt)

@@ -14,21 +14,20 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
     private readonly struct Node
     {
         public readonly string Name, Scene, Stats, Flavor;
-        public readonly bool Locked;
-        public Node(string name, string scene, string stats, string flavor, bool locked)
+        public Node(string name, string scene, string stats, string flavor)
         {
-            Name = name; Scene = scene; Stats = stats; Flavor = flavor; Locked = locked;
+            Name = name; Scene = scene; Stats = stats; Flavor = flavor;
         }
     }
 
     private static readonly Node[] Nodes =
     {
-        new("1-1  The Cheerful Plunge", "Level1", "INK 3/5     PAR 01:10", "you were smiling when you fell in.", false),
-        new("1-2  Quiet, Please", "Level2", "INK 4/5     PAR 01:25", "the dark prefers you keep your voice down.", false),
-        new("1-3  The Hollow Descent", "Level3", "INK 4/5     PAR 01:40", "the walls here still remember every route you've drawn.", false),
-        new("1-4  The Fourth Descent", "Level4", "INK 5/5     PAR 02:05", "you don't remember a fourth. and yet.", false),
-        new("it's not ready for you yet", "", "INK -/-     PAR --:--", "best not to look too closely.", true),
-        new("best not to think about this one", "", "INK -/-     PAR --:--", "...", true),
+        new("1-1  The Cheerful Plunge", "Level1", "INK 3/5     PAR 01:10", "you were smiling when you fell in."),
+        new("1-2  Quiet, Please", "Level2", "INK 4/5     PAR 01:25", "the dark prefers you keep your voice down."),
+        new("1-3  The Hollow Descent", "Level3", "INK 4/5     PAR 01:40", "the walls here still remember every route you've drawn."),
+        new("1-4  The Fourth Descent", "Level4", "INK 5/5     PAR 02:05", "you don't remember a fourth. and yet."),
+        new("it's not ready for you yet", "", "INK -/-     PAR --:--", "best not to look too closely."),
+        new("best not to think about this one", "", "INK -/-     PAR --:--", "..."),
     };
 
     private readonly Entity[] _nodes = new Entity[6];
@@ -37,6 +36,7 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
     private Entity _name, _stats, _flavor;
     private int _shown = -1;
     private float _t;
+    private bool _trialArmed;   // T on a completed focused node arms trial mode for the next descend
 
     private static readonly Vector4 Cyan = GameSettings.Accent;
     private static readonly Vector4 Dim = new(0.106f, 0.125f, 0.188f, 1f);
@@ -81,6 +81,7 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
     {
         if (_nodes[0].IsValid) Ui.SetFocus(_nodes[0]);
         _shown = -1;
+        _trialArmed = false;
     }
 
     // A real level (index 0-3) is locked when the active slot has not unlocked it; the two
@@ -106,14 +107,37 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
 
     public void HandleInput()
     {
+        int focused = FocusedIndex();
+        if (focused >= 0 && IsDone(focused) && Input.IsKeyPressed(Key.T))
+        {
+            _trialArmed = !_trialArmed;
+            _shown = -1; // force the detail panel to redraw with/without the TRIAL ARMED tag
+            Log.Info($"[INKBOUND] time trial {(_trialArmed ? "armed" : "off")} for {Nodes[focused].Scene}");
+        }
+
         for (int i = 0; i < 6; i++)
         {
             if (!IsLocked(i) && _nodes[i].IsValid && Ui.WasActivated(_nodes[i]))
             {
-                Log.Info($"[INKBOUND] descend to {Nodes[i].Scene}");
+                bool trial = _trialArmed && IsDone(i);
+                GameState.TrialMode = trial;
+                // Preserve a pending checkpoint-resume ONLY when entering the resume-target level
+                // normally (not a trial/replay, which always starts from the top).
+                if (trial || Nodes[i].Scene != GameState.ResumeLevel)
+                {
+                    GameState.ResumeLevel = "";
+                    GameState.ResumeCheckpoint = 0;
+                }
+                Log.Info($"[INKBOUND] descend to {Nodes[i].Scene}{(trial ? " [TRIAL]" : "")}");
                 Scene.Load(Nodes[i].Scene);
             }
         }
+    }
+
+    private int FocusedIndex()
+    {
+        for (int i = 0; i < 6; i++) if (_nodes[i].IsValid && Ui.IsFocused(_nodes[i])) return i;
+        return -1;
     }
 
     public override void OnUpdate(float dt)
@@ -163,6 +187,7 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
                 string best = r.BestTimeSeconds == null ? "--:--" : FormatTime(r.BestTimeSeconds.Value);
                 stats = $"BEST COINS {r.BestCoins}     TRIAL {best}";
             }
+            if (_trialArmed && IsDone(focused)) stats += "  > TRIAL ARMED (T)";
             if (_stats.IsValid) Ui.SetText(_stats, stats);
             if (_flavor.IsValid) Ui.SetText(_flavor, Nodes[focused].Flavor);
         }

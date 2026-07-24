@@ -12,6 +12,7 @@ public sealed class HudController : EntityScript
 {
     private Entity _coinText;
     private Entity _banner;
+    private Entity _clock;
     private int _shownCoins = -1;
     private bool _bannerShown;
 
@@ -32,6 +33,7 @@ public sealed class HudController : EntityScript
         Self.DontDestroyOnLoad();
         _coinText = Scene.Find("HudCoinText");
         _banner = Scene.Find("HudBanner");
+        _clock = Scene.Find("HudTrialClock");
     }
 
     /// <summary>Create the aether bar if it does not exist yet (also re-runs
@@ -99,6 +101,16 @@ public sealed class HudController : EntityScript
             _bannerShown = true;
             _banner.SetActive(true);
             Ui.SetText(_banner, GameState.NextSceneQueued ? "LEVEL COMPLETE!" : "YOU WIN!");
+        }
+
+        if (_clock.IsValid)
+        {
+            if (GameState.TrialMode)
+            {
+                int total = (int)GameState.TrialElapsed;
+                Ui.SetText(_clock, $"{total / 60:00}:{total % 60:00}.{(int)((GameState.TrialElapsed - total) * 100):00}");
+            }
+            else Ui.SetText(_clock, "");
         }
     }
 }
