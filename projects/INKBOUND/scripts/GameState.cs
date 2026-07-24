@@ -30,6 +30,24 @@ public static class GameState
     /// <summary>Elapsed trial seconds; ticked by PlayerController while unpaused, reset per level.</summary>
     public static float TrialElapsed;
 
+    /// <summary>Pending resume target set by 'return' from the menu; consumed once by the matching
+    /// checkpoint on level load. "" / 0 = start the level from its authored spawn.</summary>
+    public static string ResumeLevel = "";
+    public static int ResumeCheckpoint;
+
+    /// <summary>True exactly once, for the checkpoint whose level+index match the pending resume.
+    /// Clears the pending resume so it fires a single time.</summary>
+    public static bool ConsumeResume(string level, int index)
+    {
+        if (ResumeLevel == level && ResumeCheckpoint == index && index > 0)
+        {
+            ResumeLevel = "";
+            ResumeCheckpoint = 0;
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>Called by the player on level start: per-level state resets, run totals persist.</summary>
     public static void BeginLevel()
     {

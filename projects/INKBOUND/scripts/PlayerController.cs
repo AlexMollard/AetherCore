@@ -116,6 +116,8 @@ public sealed class PlayerController : EntityScript
             return;
         }
 
+        if (GameState.TrialMode && !GameState.Won) GameState.TrialElapsed += deltaTime;
+
         if (GameState.Won)
         {
             Physics2D.SetLinearVelocity(Self, new Vector2(0.0f, Physics2D.GetLinearVelocity(Self).Y));
@@ -227,6 +229,14 @@ public sealed class PlayerController : EntityScript
     public void SetCheckpoint(Vector3 position)
     {
         _spawn = position;
+    }
+
+    /// <summary>Hard-move the player (used by checkpoint resume) and reset the checkpoint anchor there.</summary>
+    public void TeleportTo(Vector3 position)
+    {
+        _spawn = position;
+        Self.Position = position;
+        Physics2D.SetLinearVelocity(Self, Vector2.Zero);
     }
 
     /// <summary>Kill the player. Instead of snapping straight back, the corpse pops

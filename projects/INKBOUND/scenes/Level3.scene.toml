@@ -992,6 +992,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'Checkpoint'
 
+        [entities.scripts.properties.Index]
+        t = 'int'
+        v = 1
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spikes'
