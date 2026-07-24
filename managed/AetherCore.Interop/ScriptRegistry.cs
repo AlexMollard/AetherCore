@@ -75,6 +75,11 @@ internal static unsafe class ScriptRegistry
     // field values when no live instance exists (edit mode).
     // Editor-tooling windows discovered from the project assembly (IEditorWindow implementers).
     private static readonly List<IEditorWindow> s_editorWindows = new();
+    // Open/closed state remembered by window Title across a C# reload. The windows are re-instantiated
+    // on every reload (which resets their Visible field to its default), so without this a closed tool
+    // window re-opens on every scene load / hot compile. Lives in the stable boot assembly, keyed by a
+    // plain string so it never roots the collectible script context.
+    private static readonly Dictionary<string, bool> s_editorWindowVisible = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, EntityScript> s_defaults = new(StringComparer.Ordinal);
 
     // Scratch for returning a string property across the boundary. GetProperty is
@@ -172,6 +177,9 @@ internal static unsafe class ScriptRegistry
         s_types.Clear();
         s_props.Clear();
         s_defaults.Clear();
+        // Remember each tool window's open/closed state (by Title) so a reload restores it instead of
+        // reverting to the window's default; string keys don't root the context being unloaded.
+        foreach (IEditorWindow w in s_editorWindows) { s_editorWindowVisible[w.Title] = w.Visible; }
         s_editorWindows.Clear();
         s_typeNames = Array.Empty<string>();
         ScriptsLoadContext? old = s_context;
@@ -211,7 +219,13 @@ internal static unsafe class ScriptRegistry
             // Editor-tooling windows (not mutually exclusive with scripts, so a separate check).
             if (!type.IsAbstract && typeof(IEditorWindow).IsAssignableFrom(type))
             {
-                try { s_editorWindows.Add((IEditorWindow)Activator.CreateInstance(type)!); }
+                try
+                {
+                    var win = (IEditorWindow)Activator.CreateInstance(type)!;
+                    // Restore the pre-reload open/closed state so a closed tool window stays closed.
+                    if (s_editorWindowVisible.TryGetValue(win.Title, out bool wasVisible)) { win.Visible = wasVisible; }
+                    s_editorWindows.Add(win);
+                }
                 catch (Exception ex) { Bootstrap.ReportError($"IEditorWindow {type.Name} ctor: {ex}"); }
             }
 
