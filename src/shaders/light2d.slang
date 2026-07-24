@@ -2,8 +2,8 @@
 // the scene HDR colour and BEFORE tonemap, with MULTIPLY blend (DstColor, Zero) so the hardware does
 //   hdrColor.rgb *= light.rgb
 // The light map is: ambient (a dark floor) + the radial contribution of every point light and the
-// cone contribution of every spot light, each ATTENUATED BY SHADOWS ray-marched through an occluder
-// mask (solid tiles). Lit spots brighten/tint the pixel art; walls cast shadow pools behind them.
+// cone contribution of every spot light, DIRECTIONALLY shaded off a surface normal derived from the
+// occluder mask (so geometry looks sculpted and light stops at solids) and cast-shadowed by walls.
 // Consumes the SAME lights the 3D renderer uses (engine PointLight/SpotLight components).
 //
 // World reconstruction is exact for a 2D ortho camera: world.xy depends only on screen ndc, not depth.
@@ -13,7 +13,7 @@
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
-// Packed light record (48 bytes). Mirrors aether::GpuLight2D in Light2DCompositor.cpp.
+// Packed light record (64 bytes). Mirrors aether::GpuLight2D in Light2DCompositor.cpp.
 struct GpuLight2D
 {
     float4 posRadiusKind;  // xy = world position, z = radius (world units), w = kind (0 point, 1 spot)
@@ -27,10 +27,10 @@ struct Light2DPush
     DevicePtr<FrameConstantsData> frameConstants;
     DevicePtr<GpuLight2D> lights;
     uint   count;          // number of GpuLight2D records
-    uint   occluderSlot;   // bindless slot of the R8 occluder mask (0xFFFFFFFF = shadows off)
+    uint   occluderSlot;   // bindless slot of the R8 occluder mask (0xFFFFFFFF = no mask)
     float2 viewportSize;
     float4 ambient;        // rgb = ambient floor, a = per-channel clamp ceiling
-    float4 shadowParams;   // x = enabled, y = strength, z = softness, w = world-space bias
+    float4 shadowParams;   // x = cast-shadows enabled, y = strength, z = softness, w = world bias
 };
 
 static const int kShadowSteps = 16;
@@ -61,53 +61,24 @@ float SampleOccluder(float2 uv)
     return g_textures[pc.occluderSlot].SampleLevel(g_linearSampler, uv, 0.0).r;
 }
 
-// Fraction [0..1] of this light that reaches `world`, 1 = unshadowed. Marches the pixel->light line
-// through the occluder mask in screen-UV space (ortho: the world line maps to a straight UV line), with
-// perpendicular taps that widen toward the light for a soft penumbra.
-//
-// Light must STOP at solid surfaces, not bleed into them. So we branch on whether the shaded pixel is
-// itself inside a solid tile:
-//   * Air pixel        -> crisp line-of-sight: a tiny bias, shadowed the instant the ray meets a wall.
-//   * Solid, face lit   -> the tile one step toward the light is empty, so this is a surface facing the
-//                          light: lit, but skip its own tile so it doesn't self-shadow.
-//   * Solid, buried     -> the tile toward the light is also solid: an interior/back face -> full shadow.
-// This is what keeps a torch from lighting tiles two-deep under the ground.
-float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, float worldDist)
+// Cast-shadow term [0..1], 1 = unshadowed. Marches the pixel->light line through the occluder mask in
+// screen-UV space (ortho: the world line maps to a straight UV line), with perpendicular taps that widen
+// toward the light for a soft penumbra. Surface/interior darkening is done by the N.L term in the
+// fragment; here we only occlude line-of-sight, with a modest bias so a lit face doesn't self-shadow.
+float ShadowTerm(float2 fragUV, float2 lightUV, float worldDist)
 {
-    if (pc.shadowParams.x < 0.5 || pc.occluderSlot == 0xFFFFFFFFu)
-    {
-        return 1.0;
-    }
-    const float4 lc = mul(frame->viewProj, float4(lightPos, 0.0, 1.0));
-    const float2 lightUV = (lc.xy / lc.w) * 0.5 + 0.5;
     const float2 ray = lightUV - fragUV;
     const float2 perp = normalize(float2(-ray.y, ray.x) + float2(1e-6, 0.0));
     const float softness = max(pc.shadowParams.z, 0.0);
     const float strength = pc.shadowParams.y;
-
-    const float uvPerUnit = 1.0 / max(worldDist, 1e-3); // uv fraction spanning ~1 world unit along the ray
-
-    float t0;
-    if (SampleOccluder(fragUV) > 0.5) // shaded pixel is inside a solid tile
-    {
-        const float ahead = SampleOccluder(fragUV + ray * uvPerUnit); // one tile toward the light
-        if (ahead > 0.5)
-        {
-            return 1.0 - strength; // buried: no exposed face toward this light
-        }
-        t0 = clamp(uvPerUnit, 0.0, 0.9); // exposed face: skip its own tile, then march for further walls
-    }
-    else
-    {
-        t0 = min(0.04, uvPerUnit * 0.5); // air: crisp, near-zero bias
-    }
+    const float t0 = clamp(0.35 / max(worldDist, 1e-3), 0.0, 0.6); // ~0.35 world-unit bias
 
     float occ = 0.0;
     for (int s = 0; s < kShadowSteps; ++s)
     {
         const float t = lerp(t0, 1.0, (float(s) + 0.5) / float(kShadowSteps));
         const float2 uv = lerp(fragUV, lightUV, t);
-        const float spread = softness * 0.004 * t;
+        const float spread = softness * 0.005 * t;
         const float c = SampleOccluder(uv);
         const float a = SampleOccluder(uv + perp * spread);
         const float b = SampleOccluder(uv - perp * spread);
@@ -126,6 +97,40 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float2 ndc = fragUV * 2.0 - 1.0;
     const float4 wp = mul(frame->invViewProj, float4(ndc, 0.0, 1.0));
     const float2 world = wp.xy / wp.w;
+
+    const bool haveMask = pc.occluderSlot != 0xFFFFFFFFu;
+    const bool doShadows = pc.shadowParams.x > 0.5 && haveMask;
+
+    // Derive a surface from the occluder field so lights shade DIRECTIONALLY (sculpted, not flat) and
+    // stop at solids. Sample the mask at world-space offsets: uv deltas for +1 world unit in x/y (ortho
+    // makes this basis uniform, but computing it per-pixel is cheap and robust to the projection).
+    float2 nrm = float2(0.0, 0.0); // outward surface normal (toward air), world space
+    float solidMask = 0.0;         // 1 = this pixel is inside a solid tile
+    float surfaceness = 0.0;       // 1 = a well-defined surface, 0 = flat / open / symmetric
+    float buried = 0.0;            // 1 = deep interior (surrounded by solid) -> takes no light
+    if (haveMask)
+    {
+        const float4 cX = mul(frame->viewProj, float4(world + float2(1.0, 0.0), 0.0, 1.0));
+        const float4 cY = mul(frame->viewProj, float4(world + float2(0.0, 1.0), 0.0, 1.0));
+        const float2 duvX = (cX.xy / cX.w) * 0.5 + 0.5 - fragUV;
+        const float2 duvY = (cY.xy / cY.w) * 0.5 + 0.5 - fragUV;
+
+        const float self = SampleOccluder(fragUV);
+        const float mR = SampleOccluder(fragUV + duvX * 0.5);
+        const float mL = SampleOccluder(fragUV - duvX * 0.5);
+        const float mU = SampleOccluder(fragUV + duvY * 0.5);
+        const float mD = SampleOccluder(fragUV - duvY * 0.5);
+        const float2 grad = float2(mR - mL, mU - mD); // points INTO solid
+        const float gmag = length(grad);
+        nrm = gmag > 1e-4 ? -grad / gmag : float2(0.0, 0.0);
+        solidMask = smoothstep(0.3, 0.6, self);
+        surfaceness = smoothstep(0.05, 0.35, gmag);
+
+        // "Buried" = solid AND surrounded by solid a tile-and-a-half out. A thin platform is NOT buried,
+        // so it stays lit instead of going black when its symmetric field yields no usable normal.
+        const float wide = 0.25 * (SampleOccluder(fragUV + duvX * 1.6) + SampleOccluder(fragUV - duvX * 1.6) + SampleOccluder(fragUV + duvY * 1.6) + SampleOccluder(fragUV - duvY * 1.6));
+        buried = solidMask * smoothstep(0.82, 0.99, wide);
+    }
 
     float3 light = pc.ambient.rgb;
 
@@ -150,10 +155,29 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             atten *= smoothstep(L.spotDirCone.w, L.spotDirCone.z, cosAng); // cosOuter -> cosInner
         }
 
-        // Only pay for shadows on shadow-casting lights that actually reach this pixel.
-        if (atten > 0.001 && L.flags.x > 0.5)
+        if (atten <= 0.001)
         {
-            atten *= ShadowTerm(frame, fragUV, p, d);
+            continue;
+        }
+
+        // Directional (half-Lambert N.L) shading: a solid surface takes light by how much it faces the
+        // light; back-faces and interiors take none, so light stops at solids and geometry looks sculpted.
+        // Open air (solidMask 0) and thin/symmetric solids (surfaceness 0) stay fully lit.
+        if (haveMask)
+        {
+            const float2 Ldir = d > 1e-4 ? (p - world) / d : float2(0.0, 1.0);
+            const float ndl = saturate(dot(nrm, Ldir) * 0.5 + 0.5);
+            const float surf = lerp(1.0, ndl, surfaceness);
+            const float directional = lerp(1.0, surf, solidMask) * (1.0 - buried);
+            atten *= directional;
+        }
+
+        // Cast shadows for shadow-casting lights that still reach this pixel.
+        if (atten > 0.001 && L.flags.x > 0.5 && doShadows)
+        {
+            const float4 lc = mul(frame->viewProj, float4(p, 0.0, 1.0));
+            const float2 lightUV = (lc.xy / lc.w) * 0.5 + 0.5;
+            atten *= ShadowTerm(fragUV, lightUV, d);
         }
 
         light += L.colorIntensity.rgb * L.colorIntensity.a * atten;

@@ -300,17 +300,20 @@ namespace aether
 			                }
 			                bindless.CmdBindHeaps(ctx.recorder);
 			                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(m_pipeline).state);
-			                const bool hasShadows = frame.occluders.count > 0 && occluderSlot != 0xFFFFFFFFu && frame.shadowParams.x > 0.0f;
+			                // The mask drives both directional (normal) shading and cast shadows, so bind it
+			                // whenever occluders exist; shadow STRENGTH separately gates the cast-shadow march.
+			                const bool haveMask = frame.occluders.count > 0 && occluderSlot != 0xFFFFFFFFu;
+			                const bool doShadows = haveMask && frame.shadowParams.x > 0.0f;
 			                const Light2DPush push{
 			                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
 			                        .lights = frame.lights.address,
 			                        .count = frame.lights.count,
-			                        .occluderSlot = hasShadows ? occluderSlot : 0xFFFFFFFFu,
+			                        .occluderSlot = haveMask ? occluderSlot : 0xFFFFFFFFu,
 			                        .viewportWidth = static_cast<float>(extent.width),
 			                        .viewportHeight = static_cast<float>(extent.height),
 			                        .ambient = frame.ambient,
-			                        // x = enabled, y = strength, z = softness, w = world bias. Steps are a shader constant.
-			                        .shadowParams = glm::vec4(hasShadows ? 1.0f : 0.0f, frame.shadowParams.x, frame.shadowParams.y, kShadowWorldBias),
+			                        // x = cast-shadows enabled, y = strength, z = softness, w = world bias. Steps are a shader constant.
+			                        .shadowParams = glm::vec4(doShadows ? 1.0f : 0.0f, frame.shadowParams.x, frame.shadowParams.y, kShadowWorldBias),
 			                };
 			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                ctx.recorder.Draw(6, 1, 0, 0);
