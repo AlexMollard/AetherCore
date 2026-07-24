@@ -90,8 +90,24 @@ namespace aether::ui
 		}
 
 		Entity focused = prevFocused;
-		if (!focused.IsValid())
+		// Drop focus that has become unusable: the previously-focused element may have been removed,
+		// or a script may have turned it non-interactable this frame (e.g. a Level Select node that
+		// locked once the active save slot resolved - the nodes default to interactable in the scene,
+		// so the nav system can briefly focus one before the script disables it). Without this, focus
+		// sticks on a disabled element: keyboard Enter then targets something that can't be activated
+		// and the real interactable node can never be reached.
+		bool focusedUsable = false;
+		for (const Candidate& c: cands)
 		{
+			if (c.entity == focused && c.interactable)
+			{
+				focusedUsable = true;
+				break;
+			}
+		}
+		if (!focusedUsable)
+		{
+			focused = Entity{};
 			for (const Candidate& c: cands)
 			{
 				if (c.interactable)
