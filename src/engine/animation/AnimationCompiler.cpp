@@ -14,18 +14,12 @@
 
 namespace aether
 {
-	void CompileAnimations(World& world, std::uint32_t entityId, gpu::CommandPool uploadPool)
+	void CompileAnimations(World& world, std::uint32_t entityId)
 	{
 		AE_PROFILE_ZONE();
-		if (uploadPool == nullptr)
-		{
-			AE_WARN(LogCategory::Animation, "CompileAnimations: upload pool is null");
-			return;
-		}
-
 		auto* const hier = world.TryGet<HierarchyComponent>(Entity{entityId});
 
-		auto compileOne = [&uploadPool](SkinnedMeshComponent& smc)
+		auto compileOne = [](SkinnedMeshComponent& smc)
 		{
 			if (smc.pendingExternalAnims.empty() || !smc.animDb)
 			{
@@ -132,7 +126,7 @@ namespace aether
 				clips.push_back(clip);
 			}
 
-			auto result = smc.animDb->AppendAnimations(uploadPool, clips, channels, times, values, clipNames);
+			auto result = smc.animDb->AppendAnimations(clips, channels, times, values, clipNames);
 			if (result)
 			{
 				AE_VERBOSE(LogCategory::Animation, "CompileAnimations: baked {} clip(s) into DB (first at index {})", clips.size(), *result);

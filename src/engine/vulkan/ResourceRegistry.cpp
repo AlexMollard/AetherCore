@@ -192,6 +192,27 @@ namespace aether
 		m_pipelines.reserve(256);
 	}
 
+	void ResourceRegistry::SetSharedBufferQueueFamilies(std::initializer_list<std::uint32_t> families) noexcept
+	{
+		m_sharedBufferFamilyCount = 0;
+		for (const std::uint32_t family: families)
+		{
+			bool known = false;
+			for (std::uint32_t i = 0; i < m_sharedBufferFamilyCount; ++i)
+			{
+				known = known || m_sharedBufferFamilies[i] == family;
+			}
+			if (!known && m_sharedBufferFamilyCount < 3)
+			{
+				m_sharedBufferFamilies[m_sharedBufferFamilyCount++] = family;
+			}
+		}
+		if (m_sharedBufferFamilyCount < 2)
+		{
+			m_sharedBufferFamilyCount = 0; // single family: keep buffers exclusive
+		}
+	}
+
 	gpu::BufferHandle ResourceRegistry::CreateBuffer(const gpu::BufferDesc& desc, std::source_location loc) noexcept
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
@@ -204,12 +225,18 @@ namespace aether
 		        .usage = vkUsage,
 		};
 
-		const VkBufferCreateInfo bufInfo{
+		VkBufferCreateInfo bufInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		        .pNext = &usageFlags2,
 		        .size = desc.size,
 		        .usage = 0,
 		};
+		if (m_sharedBufferFamilyCount > 1)
+		{
+			bufInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			bufInfo.queueFamilyIndexCount = m_sharedBufferFamilyCount;
+			bufInfo.pQueueFamilyIndices = m_sharedBufferFamilies;
+		}
 
 		const VmaAllocationCreateInfo allocInfo = MakeDeviceLocalAllocInfo();
 
@@ -268,12 +295,18 @@ namespace aether
 		        .usage = vkUsage,
 		};
 
-		const VkBufferCreateInfo bufInfo{
+		VkBufferCreateInfo bufInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		        .pNext = &usageFlags2,
 		        .size = desc.size,
 		        .usage = 0,
 		};
+		if (m_sharedBufferFamilyCount > 1)
+		{
+			bufInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			bufInfo.queueFamilyIndexCount = m_sharedBufferFamilyCount;
+			bufInfo.pQueueFamilyIndices = m_sharedBufferFamilies;
+		}
 
 		const VmaAllocationCreateInfo allocInfo = MakeMappedAllocInfo(desc.memoryUsage);
 

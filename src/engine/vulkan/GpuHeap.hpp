@@ -11,6 +11,11 @@
 #include "vulkan/GpuSpan.hpp"
 #include "vulkan/volk.hpp"
 
+namespace aether::vulkan
+{
+	class TransferManager;
+}
+
 namespace aether
 {
 	class VulkanContext;
@@ -71,16 +76,13 @@ namespace aether
 			span = {};
 		}
 
+		// Non-blocking upload via the transfer queue: returns the transfer ticket the
+		// copies signal (the frame submission waits on it; the staging buffer is
+		// reclaimed once it completes).
 		template<typename T>
-		void Upload(GpuSpan<T> dst, std::span<const T> src, gpu::Device device, gpu::Queue queue, gpu::CommandPool pool)
+		std::uint64_t Upload(GpuSpan<T> dst, std::span<const T> src, vulkan::TransferManager& transfer)
 		{
-			UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), static_cast<VkDevice>(device), static_cast<VkQueue>(queue), static_cast<VkCommandPool>(pool));
-		}
-
-		template<typename T>
-		void Upload(GpuSpan<T> dst, std::span<const T> src, VkDevice device, VkQueue queue, VkCommandPool pool)
-		{
-			UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), device, queue, pool);
+			return UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), transfer);
 		}
 
 		[[nodiscard]] VkBuffer GetBuffer() const
@@ -115,6 +117,6 @@ namespace aether
 
 		VkDeviceSize AllocBytes(VkDeviceSize bytes);
 		void FreeBytes(gpu::DeviceAddress addr);
-		void UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool);
+		std::uint64_t UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer);
 	};
 } // namespace aether

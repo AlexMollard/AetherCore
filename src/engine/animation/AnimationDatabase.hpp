@@ -83,12 +83,12 @@ namespace aether
 			return m_aliveSentinel == kAliveSentinel;
 		}
 
-		// ctx / uploadPool must outlive the Create call (not stored).
-		static AnimationDatabase Create(const VulkanContext& ctx, gpu::CommandPool uploadPool, const assets::GltfAsset& asset);
+		// ctx must outlive the Create call (stored for later appends).
+		static AnimationDatabase Create(const VulkanContext& ctx, const assets::GltfAsset& asset);
 
 		// The channels must already be remapped to this skeleton's node indices.
 		Expected<std::uint32_t> AppendAnimations(
-		        gpu::CommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
+		        std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
 
 		void Destroy();
 

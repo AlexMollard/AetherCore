@@ -7,14 +7,15 @@ namespace aether::vulkan
 	// Vulkan requires vkQueueSubmit / vkQueueSubmit2 / vkQueuePresentKHR on a given
 	// queue to be *externally synchronized* - the driver does no locking of its own.
 	//
-	// AetherCore submits from more than one thread: the render loop drives the
-	// swapchain, while asset uploads (OneShotCmd, GpuHeap), the screenshot service and
-	// the imgui viewport renderer all submit from whichever thread asked for the work.
-	// Without a shared lock those race, which the validation layer reports as
-	// "THREADING ERROR : object of type VkQueue is simultaneously used in ...".
+	// Uploads live on the TransferManager's own queue and textures finish with host
+	// image copy (no queue at all), so in steady state the graphics queue is only
+	// submitted from the render loop. This lock remains the correctness backstop for
+	// the paths that still share it - screenshots, the imgui viewport renderer, the
+	// rare one-shot fallback - and for hardware where the transfer queue falls back to
+	// aliasing the graphics queue.
 	//
 	// One lock covers every queue rather than one per queue: submission only *enqueues*
-	// work (the GPU still runs graphics and async compute concurrently), so the hold is
+	// work (the GPU still runs graphics, compute and DMA concurrently), so the hold is
 	// a few microseconds and splitting it buys nothing measurable. It must also stay a
 	// single lock while the graphics and present queues can be the same VkQueue.
 	//

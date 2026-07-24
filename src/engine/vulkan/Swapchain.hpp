@@ -42,7 +42,10 @@ namespace aether
 		void BeginFrame(VkDevice device);
 
 		// Engine-side end-of-frame submission. Transitions to present layout,
-		void SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore = nullptr, std::uint64_t extraWaitValue = 0);
+		// The transfer wait orders TransferManager uploads (mesh/buffer copies on the
+		// transfer queue) before anything this frame renders, and publishes their memory.
+		void SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore = nullptr, std::uint64_t extraWaitValue = 0, void* transferWaitSemaphore = nullptr,
+		        std::uint64_t transferWaitValue = 0);
 
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] gpu::Extent2D GetExtent() const;

@@ -5,6 +5,7 @@
 
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/TransferManager.hpp"
 
 namespace aether
 {
@@ -53,6 +54,16 @@ namespace aether
 			return false;
 		}
 
+		// First write of a new cycle: the previous flush's copies may still be reading
+		// the staging ring on the transfer queue - never overwrite until they are done.
+		// A frame later this ticket is virtually always complete, so this is a no-op in
+		// steady state, not a stall.
+		if (m_ringHead == 0 && m_lastFlushTicket != 0 && m_transfer != nullptr)
+		{
+			m_transfer->WaitFor(m_lastFlushTicket);
+			m_lastFlushTicket = 0;
+		}
+
 		auto* mapped = static_cast<std::uint8_t*>(m_stagingMapped);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
@@ -66,22 +77,30 @@ namespace aether
 		return true;
 	}
 
-	void MeshUploadQueue::Flush(gpu::CommandList& cmdList)
+	std::uint64_t MeshUploadQueue::FlushAsync(vulkan::TransferManager& transfer)
 	{
 		AE_PROFILE_ZONE();
 		if (m_pendingCopies.empty())
 		{
-			return;
+			return 0;
 		}
 
+		m_transfer = &transfer;
+		m_lastFlushTicket = transfer.Submit([this](gpu::CommandList& cmdList) { RecordCopies(cmdList); });
+		return m_lastFlushTicket;
+	}
+
+	// No barrier after the copies: consuming stages (vertex input) are not legal on a
+	// transfer-only queue, and the frame submission's wait on the transfer timeline
+	// already orders the copies before any rendering and makes them visible.
+	void MeshUploadQueue::RecordCopies(gpu::CommandList& cmdList)
+	{
 		gpu::ResourceRegistry::FlushMappedBuffer(m_stagingHandle, 0, m_ringHead);
 
 		for (const PendingCopy& copy: m_pendingCopies)
 		{
 			cmdList.CopyBuffer(copy.srcBuffer, copy.dstBuffer, copy.srcOffset, copy.dstOffset, copy.size);
 		}
-
-		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::VertexInput, gpu::AccessFlags::VertexAttributeRead | gpu::AccessFlags::IndexRead);
 
 		m_pendingCopies.clear();
 		m_ringHead = 0;

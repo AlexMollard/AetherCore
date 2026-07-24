@@ -30,6 +30,7 @@ namespace aether
 		AE_TRY(ctxResult, VulkanContext::Create(window, config.appName, config.enableGpuDiagnostics, config.enableValidation));
 		m_vulkanContext = std::move(*ctxResult);
 		m_resourceRegistry.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetAllocator());
+		m_resourceRegistry.SetSharedBufferQueueFamilies({m_vulkanContext->GetGraphicsQueueFamily(), m_vulkanContext->GetComputeQueueFamily(), m_vulkanContext->GetTransferQueueFamily()});
 		m_diagnosticEngine.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetPhysicalDevice(), m_vulkanContext->GetGraphicsQueue());
 		gpu::CommandList::SetDiagnosticEngine(&m_diagnosticEngine);
 		g_activeDiagnosticEngine = &m_diagnosticEngine;

@@ -334,9 +334,10 @@ namespace aether
 		m_frameValid = true;
 	}
 
-	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore, std::uint64_t extraWaitValue)
+	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore, std::uint64_t extraWaitValue, void* transferWaitSemaphore, std::uint64_t transferWaitValue)
 	{
 		auto* vkExtraWait = extraWaitSemaphore ? extraWaitSemaphore->semaphore : VK_NULL_HANDLE;
+		auto* vkTransferWait = static_cast<VkSemaphore>(transferWaitSemaphore);
 
 		if (!m_frameValid)
 		{
@@ -387,11 +388,25 @@ namespace aether
 		        .stageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 		};
 
-		VkSemaphoreSubmitInfo waitInfos[2] = {imageWait, extraWait};
+		// TransferManager uploads feed vertex input, indirect args and shader reads, so
+		// the whole frame waits (once per frame; the value is almost always signalled
+		// long before this submit reaches the GPU).
+		const VkSemaphoreSubmitInfo transferWait{
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = vkTransferWait,
+		        .value = transferWaitValue,
+		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		};
+
+		VkSemaphoreSubmitInfo waitInfos[3] = {imageWait, imageWait, imageWait};
 		std::uint32_t waitCount = 1;
 		if (extraWaitSemaphore != VK_NULL_HANDLE)
 		{
-			waitCount = 2;
+			waitInfos[waitCount++] = extraWait;
+		}
+		if (vkTransferWait != VK_NULL_HANDLE)
+		{
+			waitInfos[waitCount++] = transferWait;
 		}
 
 		const VkCommandBufferSubmitInfo cmdInfo{

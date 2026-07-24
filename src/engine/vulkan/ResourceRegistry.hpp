@@ -148,6 +148,13 @@ namespace aether
 
 		void Init(VkDevice device, VmaAllocator allocator) noexcept;
 
+		// Queue families that access buffers (graphics/compute/transfer). When more than
+		// one distinct family is supplied, buffers are created VK_SHARING_MODE_CONCURRENT
+		// so transfer-queue uploads need no queue-family ownership transfer barriers
+		// (concurrent sharing costs nothing measurable for buffers). Images stay
+		// exclusive - they never touch the transfer queue (host image copy is CPU-side).
+		void SetSharedBufferQueueFamilies(std::initializer_list<std::uint32_t> families) noexcept;
+
 		[[nodiscard]] gpu::BufferHandle CreateBuffer(const gpu::BufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 		[[nodiscard]] gpu::BufferHandle CreateMappedBuffer(const gpu::MappedBufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 		[[nodiscard]] gpu::TextureHandle CreateTexture(const gpu::TextureDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
@@ -256,6 +263,8 @@ namespace aether
 
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		std::uint32_t m_sharedBufferFamilies[3] = {};
+		std::uint32_t m_sharedBufferFamilyCount = 0;
 		BindlessManager* m_bindlessManager = nullptr;
 		GpuMemoryTracker* m_memoryTracker = nullptr;
 

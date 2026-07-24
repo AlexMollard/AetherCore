@@ -286,12 +286,6 @@ AE_SCRIPT_API std::int32_t aether_anim_load_external(std::uint32_t id, const cha
 AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 {
 	auto& ctx = ActiveContext();
-	if (ctx.uploadPool == nullptr)
-	{
-		AE_WARN(aether::LogCategory::Animation, "compile_animations: no upload pool available");
-		return;
-	}
-
 	auto& world = ActiveWorld();
 	if (FindSmcOrSpawned(world, id) == nullptr)
 	{
@@ -300,14 +294,13 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 	}
 
 	// AppendAnimations reallocates GPU animation buffers the render thread reads.
-	auto* uploadPool = ctx.uploadPool;
 	if (ctx.engineRuntime != nullptr)
 	{
-		ctx.engineRuntime->RunExclusive(aether::QuiesceMode::Drain, [&world, id, uploadPool]() { aether::CompileAnimations(world, id, uploadPool); });
+		ctx.engineRuntime->RunExclusive(aether::QuiesceMode::Drain, [&world, id]() { aether::CompileAnimations(world, id); });
 	}
 	else
 	{
-		aether::CompileAnimations(world, id, uploadPool);
+		aether::CompileAnimations(world, id);
 	}
 }
 

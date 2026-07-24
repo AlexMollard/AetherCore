@@ -20,6 +20,11 @@ namespace aether
 	class GpuMemoryTracker;
 }
 
+namespace aether::vulkan
+{
+	class TransferManager;
+}
+
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 #	include "vulkan/AftermathContext.hpp"
 #endif
@@ -51,8 +56,13 @@ namespace aether
 		[[nodiscard]] VkQueue GetGraphicsQueue() const;
 		[[nodiscard]] VkQueue GetComputeQueue() const;
 		[[nodiscard]] VkQueue GetPresentQueue() const;
+		[[nodiscard]] VkQueue GetTransferQueue() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
+		[[nodiscard]] std::uint32_t GetTransferQueueFamily() const;
+
+		// The engine's upload path (dedicated transfer queue + timeline tickets).
+		[[nodiscard]] vulkan::TransferManager& GetTransferManager() const;
 
 		[[nodiscard]] const VkPhysicalDeviceDescriptorHeapPropertiesEXT& GetDescriptorHeapProperties() const;
 
@@ -95,8 +105,11 @@ namespace aether
 		VkQueue m_graphicsQueue = VK_NULL_HANDLE;
 		VkQueue m_computeQueue = VK_NULL_HANDLE;
 		VkQueue m_presentQueue = VK_NULL_HANDLE;
+		VkQueue m_transferQueue = VK_NULL_HANDLE;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
+		std::uint32_t m_transferQueueFamily = 0;
+		std::unique_ptr<vulkan::TransferManager> m_transferManager;
 		VkPhysicalDeviceDescriptorHeapPropertiesEXT m_descriptorHeapProps{};
 		tracy::VkCtx* m_tracyVkCtx = nullptr;
 		gpu::ProfilerContextHandle m_tracyProfilerHandle = nullptr;

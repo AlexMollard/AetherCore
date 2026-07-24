@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <vector>
 
 #include "vulkan/volk.hpp"
 #include "gpu/GpuEnums.hpp"
@@ -8,6 +10,40 @@
 
 namespace aether::vkutil
 {
+	// Host-image-copy destination layouts the device supports, cached once at context
+	// init (vkTransitionImageLayout may only target layouts from this list).
+	inline std::vector<VkImageLayout> g_hostImageCopyDstLayouts;
+
+	inline void SetHostImageCopyDstLayouts(std::vector<VkImageLayout> layouts)
+	{
+		g_hostImageCopyDstLayouts = std::move(layouts);
+	}
+
+	inline bool SupportsHostImageLayout(VkImageLayout layout)
+	{
+		return std::find(g_hostImageCopyDstLayouts.begin(), g_hostImageCopyDstLayouts.end(), layout) != g_hostImageCopyDstLayouts.end();
+	}
+
+	// Host-side layout transition (no queue, no command buffer, returns complete).
+	inline VkResult HostTransitionImage(VkDevice device, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+	{
+		const VkHostImageLayoutTransitionInfo transition{
+		        .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
+		        .image = image,
+		        .oldLayout = oldLayout,
+		        .newLayout = newLayout,
+		        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1},
+		};
+		return vkTransitionImageLayout(device, 1, &transition);
+	}
+
+	// Finish a host-copied texture on the CPU: GENERAL -> SHADER_READ_ONLY_OPTIMAL with
+	// no queue submission. Only valid when SupportsHostImageLayout(SHADER_READ_ONLY).
+	inline std::int32_t HostTransitionImageToShaderRead(gpu::Device device, gpu::ImageView image)
+	{
+		return static_cast<std::int32_t>(HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+	}
+
 	inline void TransitionImage(VkCommandBuffer cmd,
 	        VkImage image,
 	        VkImageLayout oldLayout,

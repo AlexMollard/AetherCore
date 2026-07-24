@@ -240,20 +240,34 @@ namespace aether::ui
 			return false;
 		}
 
-		gpu::OneShotCmd cmd;
-		if (!cmd.Begin(m_gpu->GetDevice(), m_upload->GetCommandPool()))
+		// Finish on the host when supported (no queue submit / fence); fall back to the
+		// one-shot barrier on devices without SHADER_READ_ONLY in the host-copy layouts.
+		if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
 		{
-			gpu::ResourceRegistry::Destroy(atlas);
-			AE_ERROR(LogCategory::UI, "UiRenderer: failed to begin font atlas upload barrier command");
-			return false;
+			if (vkutil::HostTransitionImageToShaderRead(m_gpu->GetDevice(), image) != 0)
+			{
+				gpu::ResourceRegistry::Destroy(atlas);
+				AE_ERROR(LogCategory::UI, "UiRenderer: host layout transition failed for '{}'", atlasPath);
+				return false;
+			}
 		}
-		cmd.CmdList().ImageMemoryBarrier(
-		        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
-		if (!cmd.EndAndSubmit(m_gpu->GetGraphicsQueue()))
+		else
 		{
-			gpu::ResourceRegistry::Destroy(atlas);
-			AE_ERROR(LogCategory::UI, "UiRenderer: failed to submit font atlas upload barrier command");
-			return false;
+			gpu::OneShotCmd cmd;
+			if (!cmd.Begin(m_gpu->GetDevice(), m_upload->GetCommandPool()))
+			{
+				gpu::ResourceRegistry::Destroy(atlas);
+				AE_ERROR(LogCategory::UI, "UiRenderer: failed to begin font atlas upload barrier command");
+				return false;
+			}
+			cmd.CmdList().ImageMemoryBarrier(
+			        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			if (!cmd.EndAndSubmit(m_gpu->GetGraphicsQueue()))
+			{
+				gpu::ResourceRegistry::Destroy(atlas);
+				AE_ERROR(LogCategory::UI, "UiRenderer: failed to submit font atlas upload barrier command");
+				return false;
+			}
 		}
 
 		gpu::ResourceRegistry::EnsureBindlessSampled(atlas, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);

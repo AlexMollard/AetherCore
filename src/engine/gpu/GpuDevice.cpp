@@ -11,6 +11,7 @@
 #include "utils/Expected.hpp"
 #include "vulkan/GraphicsDevice.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/TransferManager.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -143,7 +144,14 @@ namespace aether
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		const VulkanContext& vk = m_gfx->GetVulkanContext();
 
-		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue);
+		// Order this frame after every TransferManager upload submitted so far. Skipped
+		// entirely until the first upload; waiting an already-signalled timeline value
+		// is a no-op, so steady state costs nothing.
+		vulkan::TransferManager& transfer = vk.GetTransferManager();
+		const std::uint64_t transferTicket = transfer.LastSubmitted();
+		void* transferSemaphore = transferTicket > 0 ? static_cast<void*>(transfer.TimelineSemaphore()) : nullptr;
+
+		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue, transferSemaphore, transferTicket);
 	}
 
 	FrameTarget GpuDevice::BuildFrameTarget() const

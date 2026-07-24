@@ -61,16 +61,30 @@ namespace aether
 				}
 			}
 
-			gpu::OneShotCmd cmd;
-			if (!cmd.Begin(device, uploadPool))
+			// Finish on the host when the device allows it: a host layout transition
+			// needs no queue, no fence, and no cross-thread submit. The one-shot
+			// barrier below only remains for devices whose host-image-copy layout
+			// list omits SHADER_READ_ONLY_OPTIMAL.
+			if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
 			{
-				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to begin OneShotCmd"));
+				if (vkutil::HostTransitionImageToShaderRead(device, image) != 0)
+				{
+					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host layout transition failed"));
+				}
 			}
-			cmd.CmdList().ImageMemoryBarrier(
-			        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
-			if (!cmd.EndAndSubmit(uploadQueue))
+			else
 			{
-				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
+				gpu::OneShotCmd cmd;
+				if (!cmd.Begin(device, uploadPool))
+				{
+					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to begin OneShotCmd"));
+				}
+				cmd.CmdList().ImageMemoryBarrier(
+				        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+				if (!cmd.EndAndSubmit(uploadQueue))
+				{
+					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
+				}
 			}
 
 			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);
@@ -178,16 +192,27 @@ namespace aether
 				}
 			}
 
-			gpu::OneShotCmd cmd;
-			if (!cmd.Begin(device, uploadPool))
+			// Same host-side finish as UploadRgbaToGpuImage (see comment there).
+			if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
 			{
-				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to begin OneShotCmd"));
+				if (vkutil::HostTransitionImageToShaderRead(device, image) != 0)
+				{
+					Throw(AetherError::Vulkan(0, "UploadBcnDds: host layout transition failed"));
+				}
 			}
-			cmd.CmdList().ImageMemoryBarrier(
-			        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
-			if (!cmd.EndAndSubmit(uploadQueue))
+			else
 			{
-				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
+				gpu::OneShotCmd cmd;
+				if (!cmd.Begin(device, uploadPool))
+				{
+					Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to begin OneShotCmd"));
+				}
+				cmd.CmdList().ImageMemoryBarrier(
+				        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+				if (!cmd.EndAndSubmit(uploadQueue))
+				{
+					Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
+				}
 			}
 
 			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);

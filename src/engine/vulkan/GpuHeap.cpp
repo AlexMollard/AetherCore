@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cstring>
 
+#include "gpu/CommandList.hpp"
+
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
@@ -10,7 +12,7 @@
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
-#include "vulkan/QueueSubmit.hpp"
+#include "vulkan/TransferManager.hpp"
 
 namespace aether
 {
@@ -28,12 +30,38 @@ namespace aether
 		        .usage = vkUsage,
 		};
 
-		const VkBufferCreateInfo bufferInfo{
+		// Uploads run on the transfer queue while graphics/compute consume the heap, so
+		// the buffer is shared CONCURRENT across those families when they differ - the
+		// transfer timeline wait then orders and publishes the copies with no
+		// queue-family ownership transfer barriers. Buffers pay no measurable cost for
+		// concurrent sharing (it mainly affects image compression).
+		std::uint32_t sharedFamilies[3] = {};
+		std::uint32_t sharedFamilyCount = 0;
+		for (const std::uint32_t family: {ctx.GetGraphicsQueueFamily(), ctx.GetComputeQueueFamily(), ctx.GetTransferQueueFamily()})
+		{
+			bool known = false;
+			for (std::uint32_t i = 0; i < sharedFamilyCount; ++i)
+			{
+				known = known || sharedFamilies[i] == family;
+			}
+			if (!known)
+			{
+				sharedFamilies[sharedFamilyCount++] = family;
+			}
+		}
+
+		VkBufferCreateInfo bufferInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		        .pNext = &usageFlags2,
 		        .size = desc.capacityBytes,
 		        .usage = 0,
 		};
+		if (sharedFamilyCount > 1)
+		{
+			bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			bufferInfo.queueFamilyIndexCount = sharedFamilyCount;
+			bufferInfo.pQueueFamilyIndices = sharedFamilies;
+		}
 		const VmaAllocationCreateInfo allocInfo{
 		        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
 		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
@@ -152,7 +180,7 @@ namespace aether
 		m_allocations.erase(it);
 	}
 
-	void GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool)
+	std::uint64_t GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer)
 	{
 		assert(dstAddr >= m_baseAddress);
 		const auto dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
@@ -182,70 +210,16 @@ namespace aether
 		std::memcpy(stagingVmaInfo.pMappedData, src, static_cast<std::size_t>(bytes));
 		vmaFlushAllocation(m_allocatorRef, stagingAllocation, 0, bytes);
 
-		const VkCommandBufferAllocateInfo allocInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		        .commandPool = pool,
-		        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		        .commandBufferCount = 1,
-		};
-		VkCommandBuffer cmd = VK_NULL_HANDLE;
-		const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
-		if (allocResult != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), "GpuHeap: failed to allocate upload command buffer"));
-		}
-
-		const VkCommandBufferBeginInfo beginInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-		};
-		const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
-		if (beginResult != VK_SUCCESS)
-		{
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-			Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "GpuHeap: failed to begin upload command buffer"));
-		}
-
-		const VkBufferCopy region{.srcOffset = 0, .dstOffset = dstOffset, .size = bytes};
-		vkCmdCopyBuffer(cmd, stagingBuffer, m_buffer, 1, &region);
-
-		const VkResult endResult = vkEndCommandBuffer(cmd);
-		if (endResult != VK_SUCCESS)
-		{
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-			Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "GpuHeap: failed to end upload command buffer"));
-		}
-
-		const VkCommandBufferSubmitInfo cbInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-		        .commandBuffer = cmd,
-		};
-		const VkSubmitInfo2 submitInfo{
-		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-		        .commandBufferInfoCount = 1,
-		        .pCommandBufferInfos = &cbInfo,
-		};
-		const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-		VkFence fence = VK_NULL_HANDLE;
-		if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-		{
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create upload fence"));
-		}
-		VkResult submitResult = VK_SUCCESS;
-		{
-			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
-			submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
-		}
-		if (submitResult != VK_SUCCESS)
-		{
-			vkDestroyFence(device, fence, nullptr);
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-			Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "GpuHeap: failed to submit upload command buffer"));
-		}
-		AE_ASSERT_ALWAYS(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS, "GpuHeap: fence wait failed (device lost?)");
-		vkDestroyFence(device, fence, nullptr);
-		vkFreeCommandBuffers(device, pool, 1, &cmd);
-		vmaDestroyBuffer(m_allocatorRef, stagingBuffer, stagingAllocation);
+		// Non-blocking: the copy runs on the transfer queue; the frame submission's
+		// timeline wait orders it before any GPU consumption, and the staging buffer is
+		// reclaimed once the ticket completes.
+		VmaAllocator allocator = m_allocatorRef;
+		VkBuffer dstBuffer = m_buffer;
+		return transfer.Submit(
+		        [stagingBuffer, dstBuffer, dstOffset, bytes](gpu::CommandList& cmdList)
+		        {
+			        cmdList.CopyBuffer(static_cast<void*>(stagingBuffer), static_cast<void*>(dstBuffer), 0, dstOffset, bytes);
+		        },
+		        [allocator, stagingBuffer, stagingAllocation]() { vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation); });
 	}
 } // namespace aether

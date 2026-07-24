@@ -24,6 +24,7 @@
 #include <GLFW/glfw3.h>
 
 #include "utils/AetherExceptions.hpp"
+#include "vulkan/TransferManager.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuProfiler.hpp"
@@ -575,6 +576,25 @@ namespace aether
 		}
 		m_presentQueue = presentQueueResult.value();
 
+		// Upload queue: prefer the dedicated DMA family (transfer-only), then any
+		// separate transfer-capable family, and fall back to the graphics queue when
+		// the hardware exposes neither (TransferManager stays correct either way).
+		m_transferQueue = m_graphicsQueue;
+		m_transferQueueFamily = m_graphicsQueueFamily;
+		if (const auto dedicatedTransfer = m_device->get_dedicated_queue(vkb::QueueType::transfer))
+		{
+			m_transferQueue = dedicatedTransfer.value();
+			m_transferQueueFamily = m_device->get_dedicated_queue_index(vkb::QueueType::transfer).value();
+		}
+		else if (const auto separateTransfer = m_device->get_queue(vkb::QueueType::transfer))
+		{
+			m_transferQueue = separateTransfer.value();
+			if (const auto transferIndex = m_device->get_queue_index(vkb::QueueType::transfer))
+			{
+				m_transferQueueFamily = transferIndex.value();
+			}
+		}
+
 		gpu::CommandList::SetDebugLabelFunctions(reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT"))),
 		        reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT"))));
 		gpu::CommandList::SetAlphaToOneDynamicStateSupported(extendedDynamicState3Features.extendedDynamicState3AlphaToOneEnable == VK_TRUE);
@@ -591,6 +611,28 @@ namespace aether
 		{
 			vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_presentQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
 		}
+		if (m_transferQueue != m_graphicsQueue && m_transferQueue != m_computeQueue && m_transferQueue != m_presentQueue)
+		{
+			vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_transferQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Transfer");
+		}
+
+		// Host image copy: cache which layouts the implementation lets the host
+		// transition to, so texture uploads can finish entirely on the CPU (no queue
+		// submission) when SHADER_READ_ONLY_OPTIMAL is supported.
+		{
+			VkPhysicalDeviceHostImageCopyProperties hostCopyProps{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES};
+			VkPhysicalDeviceProperties2 props2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &hostCopyProps};
+			vkGetPhysicalDeviceProperties2(m_device->physical_device, &props2);
+			std::vector<VkImageLayout> dstLayouts(hostCopyProps.copyDstLayoutCount);
+			hostCopyProps.pCopyDstLayouts = dstLayouts.data();
+			hostCopyProps.copySrcLayoutCount = 0;
+			hostCopyProps.pCopySrcLayouts = nullptr;
+			vkGetPhysicalDeviceProperties2(m_device->physical_device, &props2);
+			vkutil::SetHostImageCopyDstLayouts(std::move(dstLayouts));
+		}
+
+		m_transferManager = std::make_unique<vulkan::TransferManager>();
+		m_transferManager->Initialize(m_device->device, m_transferQueue, m_transferQueueFamily, m_graphicsQueueFamily);
 
 		{
 			VkPhysicalDeviceProperties props{};
@@ -742,6 +784,14 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		AE_VERBOSE(LogCategory::Vulkan, "Destroying Vulkan context resources.");
+
+		// Waits the transfer timeline idle and reclaims staging; must precede device destroy.
+		if (m_transferManager != nullptr)
+		{
+			m_transferManager->Shutdown();
+			m_transferManager.reset();
+		}
+		vkutil::SetHostImageCopyDstLayouts({});
 
 		if (m_pipelineCache != VK_NULL_HANDLE && m_device.has_value())
 		{
@@ -981,6 +1031,22 @@ namespace aether
 	std::uint32_t VulkanContext::GetComputeQueueFamily() const
 	{
 		return m_computeQueueFamily;
+	}
+
+	VkQueue VulkanContext::GetTransferQueue() const
+	{
+		return m_transferQueue;
+	}
+
+	std::uint32_t VulkanContext::GetTransferQueueFamily() const
+	{
+		return m_transferQueueFamily;
+	}
+
+	vulkan::TransferManager& VulkanContext::GetTransferManager() const
+	{
+		AE_ASSERT(m_transferManager != nullptr, "VulkanContext: transfer manager not initialised");
+		return *m_transferManager;
 	}
 
 	const VkPhysicalDeviceDescriptorHeapPropertiesEXT& VulkanContext::GetDescriptorHeapProperties() const

@@ -8,5 +8,5 @@ namespace aether
 {
 	class World;
 
-	void CompileAnimations(World& world, std::uint32_t entityId, gpu::CommandPool uploadPool);
+	void CompileAnimations(World& world, std::uint32_t entityId);
 } // namespace aether

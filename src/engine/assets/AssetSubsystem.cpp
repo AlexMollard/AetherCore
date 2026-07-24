@@ -19,6 +19,7 @@
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/ResourceRegistry.hpp"
+#include "vulkan/TransferManager.hpp"
 #include "gpu/OneShotCmd.hpp"
 
 namespace aether
@@ -101,21 +102,9 @@ namespace aether
 			return;
 		}
 
-		const VulkanContext& vk = *m_context;
-		void* device = static_cast<void*>(vk.GetDevice().device);
-		void* pool = m_uploadContext.GetCommandPool();
-		void* queue = static_cast<void*>(vk.GetGraphicsQueue());
-
-		gpu::OneShotCmd cmd;
-		if (!cmd.Begin(device, pool))
-		{
-			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to begin one-shot command buffer."));
-		}
-		m_meshUploadQueue.Flush(cmd.CmdList());
-		if (!cmd.EndAndSubmit(queue))
-		{
-			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to submit mesh upload."));
-		}
+		// Non-blocking: the copies run on the transfer queue and the frame submission
+		// waits on the transfer timeline before rendering (GpuDevice::SubmitAndPresent).
+		m_meshUploadQueue.FlushAsync(m_context->GetTransferManager());
 	}
 
 	void AssetSubsystem::Shutdown()
