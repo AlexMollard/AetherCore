@@ -111,7 +111,17 @@ public sealed class SlotSelectScreen : EntityScript, IMenuScreen
             if (!_slots[i].IsValid || !Selectable(i) || !Ui.WasActivated(_slots[i])) continue;
             SaveProfile p = SaveSystem.Slot(i);
             if (s_resumeOnly) { Resume(i); return; }
-            if (p.Exists) { _pendingOverwrite = i; if (_confirm.IsValid) _confirm.SetActive(true); return; }
+            if (p.Exists)
+            {
+                _pendingOverwrite = i;
+                if (_confirm.IsValid) _confirm.SetActive(true);
+                // Disable the rows so nav/hover can't steal focus back off the dialog, then move
+                // focus onto the default confirm button (the nav system won't focus a
+                // newly-shown element on its own).
+                for (int j = 0; j < SaveSystem.SlotCount; j++) if (_slots[j].IsValid) Ui.SetInteractable(_slots[j], false);
+                if (_confirmYes.IsValid) Ui.SetFocus(_confirmYes);
+                return;
+            }
             StartFresh(i);
             return;
         }
@@ -119,6 +129,7 @@ public sealed class SlotSelectScreen : EntityScript, IMenuScreen
 
     private void StartFresh(int i)
     {
+        _pendingOverwrite = -1;
         SaveSystem.Wipe(i);
         SaveSystem.SetActive(i);
         GameState.TrialMode = false;
