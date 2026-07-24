@@ -42,6 +42,7 @@
 #include "physics2d/Physics2DDebugDraw.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/EcsHelpers.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -666,6 +667,19 @@ namespace aether
 		packet.sunDirectionIntensity = sunDirIntensity;
 		packet.directionalShadowEnabled = directionalShadowEnabled;
 		packet.ambientColor = renderer.GetAmbientLightVector();
+
+		// 2D light-map settings: default to the shared ambient + engine shadow defaults; the first
+		// Light2DSettingsComponent in the scene (if any) overrides for authored per-scene mood.
+		packet.light2DAmbient = packet.ambientColor;
+		packet.light2DShadowParams = glm::vec4(0.94f, 1.0f, 0.0f, 0.0f);
+		for (const auto e: world.GetRegistry().view<Light2DSettingsComponent>())
+		{
+			const auto& s = world.GetRegistry().get<Light2DSettingsComponent>(e);
+			packet.light2DAmbient = glm::vec4(s.ambientColor * s.ambientIntensity, 1.0f);
+			packet.light2DShadowParams = glm::vec4(s.shadowStrength, s.shadowSoftness, 0.0f, 0.0f);
+			break;
+		}
+
 		packet.sunColor = renderer.GetSunColorVector();
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();

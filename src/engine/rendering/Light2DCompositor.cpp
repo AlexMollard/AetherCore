@@ -20,13 +20,10 @@ namespace aether
 {
 	namespace
 	{
-		constexpr std::uint32_t kInitialLightCapacity = 64;
-		constexpr std::uint32_t kInitialOccluderCapacity = 256;
 		constexpr float kLightClampCeiling = 4.0f; // multiply ceiling: over-bright stacks saturate
 
-		// Shadow tuning: how hard the walls block light, how many mask taps per ray, and how far (world
-		// units) to skip near the shading point so a lit wall face doesn't shadow itself.
-		constexpr float kShadowStrength = 0.94f;
+		// Shadow tuning: march resolution and how far (world units) to skip near the shading point so a
+		// lit wall face doesn't shadow itself. Strength/softness come per-scene from the packet.
 		constexpr float kShadowSteps = 16.0f;
 		constexpr float kShadowWorldBias = 0.9f;
 
@@ -54,7 +51,7 @@ namespace aether
 
 		static_assert(sizeof(Light2DPush) == 64);
 		static_assert(sizeof(OccluderPush) == 24);
-		static_assert(sizeof(GpuLight2D) == 48);
+		static_assert(sizeof(GpuLight2D) == 64);
 	} // namespace
 
 	void Light2DCompositor::Initialize(GpuDevice& gpu, gpu::Format colorFormat)
@@ -192,6 +189,7 @@ namespace aether
 			g.posRadiusKind = glm::vec4(l.position.x, l.position.y, l.radius, 0.0f);
 			g.colorIntensity = glm::vec4(l.color, l.intensity);
 			g.spotDirCone = glm::vec4(0.0f);
+			g.flags = glm::vec4(l.castsShadow ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
 			lights.push_back(g);
 		}
 		for (const Renderer::SpotLight& l: packet.spotLights)
@@ -203,6 +201,7 @@ namespace aether
 			g.posRadiusKind = glm::vec4(l.position.x, l.position.y, l.radius, 1.0f);
 			g.colorIntensity = glm::vec4(l.color, l.intensity);
 			g.spotDirCone = glm::vec4(dir.x, dir.y, std::cos(l.innerAngleRad), std::cos(l.outerAngleRad));
+			g.flags = glm::vec4(l.castsShadow ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
 			lights.push_back(g);
 		}
 
@@ -215,7 +214,8 @@ namespace aether
 		std::memcpy(frame.lights.mapped, lights.data(), static_cast<std::size_t>(lightCount) * sizeof(GpuLight2D));
 		gpu::ResourceRegistry::FlushMappedBuffer(frame.lights.buffer, 0, static_cast<gpu::DeviceSize>(lightCount) * sizeof(GpuLight2D));
 		frame.lights.count = lightCount;
-		frame.ambient = glm::vec4(glm::vec3(packet.ambientColor), kLightClampCeiling);
+		frame.ambient = glm::vec4(glm::vec3(packet.light2DAmbient), kLightClampCeiling);
+		frame.shadowParams = packet.light2DShadowParams; // x = strength, y = softness
 
 		// Shadow occluders: solid tile cells emitted by the tilemap system this frame.
 		const auto occluderCount = static_cast<std::uint32_t>(packet.render2D.occluders.size());
@@ -300,7 +300,7 @@ namespace aether
 			                }
 			                bindless.CmdBindHeaps(ctx.recorder);
 			                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(m_pipeline).state);
-			                const bool hasShadows = frame.occluders.count > 0 && occluderSlot != 0xFFFFFFFFu;
+			                const bool hasShadows = frame.occluders.count > 0 && occluderSlot != 0xFFFFFFFFu && frame.shadowParams.x > 0.0f;
 			                const Light2DPush push{
 			                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
 			                        .lights = frame.lights.address,
@@ -309,7 +309,8 @@ namespace aether
 			                        .viewportWidth = static_cast<float>(extent.width),
 			                        .viewportHeight = static_cast<float>(extent.height),
 			                        .ambient = frame.ambient,
-			                        .shadowParams = glm::vec4(hasShadows ? 1.0f : 0.0f, kShadowStrength, kShadowSteps, kShadowWorldBias),
+			                        // x = enabled, y = strength, z = softness, w = world bias. Steps are a shader constant.
+			                        .shadowParams = glm::vec4(hasShadows ? 1.0f : 0.0f, frame.shadowParams.x, frame.shadowParams.y, kShadowWorldBias),
 			                };
 			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                ctx.recorder.Draw(6, 1, 0, 0);

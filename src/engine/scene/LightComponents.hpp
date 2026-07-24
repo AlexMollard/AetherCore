@@ -18,6 +18,10 @@ namespace aether
 		float intensity = 20.0f;
 		float radius = 15.0f;
 		bool castsShadow = false;
+		// Flame-style flicker: intensity dips by up to `flicker` [0..1] at `flickerSpeed` (Hz-ish),
+		// with an organic per-light phase. 0 = steady. Applied on the CPU so it affects 2D and 3D alike.
+		float flicker = 0.0f;
+		float flickerSpeed = 8.0f;
 	};
 
 	struct SpotLightComponent
@@ -28,6 +32,19 @@ namespace aether
 		float innerAngleRad = 0.35f;
 		float outerAngleRad = 0.60f;
 		bool castsShadow = false;
+		float flicker = 0.0f;
+		float flickerSpeed = 8.0f;
+	};
+
+	// Per-scene 2D lighting settings for the screen-space light map. The first enabled instance in a
+	// scene drives ambient (the dark floor everything sinks toward) and the global shadow look. Absent =
+	// engine defaults, so scenes without one behave exactly as before.
+	struct Light2DSettingsComponent
+	{
+		glm::vec3 ambientColor{0.03f, 0.04f, 0.06f};
+		float ambientIntensity = 1.0f; // scales ambientColor
+		float shadowStrength = 0.94f;  // 0 = no shadows, 1 = fully black
+		float shadowSoftness = 1.0f;   // penumbra width multiplier
 	};
 
 	// Animated sun/sky environment driver. Scene content, not a global: the

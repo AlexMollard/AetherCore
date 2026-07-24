@@ -103,6 +103,11 @@ namespace aether
 
 		glm::vec4 sunDirectionIntensity{0.0f, -1.0f, 0.0f, 1.0f};
 		glm::vec4 ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
+
+		// 2D light-map settings (from Light2DSettingsComponent, else defaults). Decoupled from the shared
+		// ambientColor so 2D mood doesn't disturb 3D. rgb = ambient floor; shadowParams = (strength, softness).
+		glm::vec4 light2DAmbient{0.03f, 0.04f, 0.06f, 1.0f};
+		glm::vec4 light2DShadowParams{0.94f, 1.0f, 0.0f, 0.0f};
 		glm::vec4 sunColor{1.0f};
 		glm::vec4 skyHorizonColor{1.0f};
 		glm::vec4 skyZenithColor{0.5f, 0.7f, 1.0f, 1.0f};

@@ -19,6 +19,7 @@ struct GpuLight2D
     float4 posRadiusKind;  // xy = world position, z = radius (world units), w = kind (0 point, 1 spot)
     float4 colorIntensity; // rgb = colour, a = intensity (peak added brightness at the centre)
     float4 spotDirCone;    // xy = aim direction (2D, normalized), z = cosInner, w = cosOuter
+    float4 flags;          // x = castsShadow (0/1)
 };
 
 struct Light2DPush
@@ -29,8 +30,10 @@ struct Light2DPush
     uint   occluderSlot;   // bindless slot of the R8 occluder mask (0xFFFFFFFF = shadows off)
     float2 viewportSize;
     float4 ambient;        // rgb = ambient floor, a = per-channel clamp ceiling
-    float4 shadowParams;   // x = enabled, y = strength, z = step count, w = world-space bias
+    float4 shadowParams;   // x = enabled, y = strength, z = softness, w = world-space bias
 };
+
+static const int kShadowSteps = 16;
 
 [[vk::push_constant]] Light2DPush pc;
 
@@ -53,8 +56,15 @@ VSOutput vertexMain(uint vertexId : SV_VertexID)
     return o;
 }
 
+float SampleOccluder(float2 uv)
+{
+    return g_textures[pc.occluderSlot].SampleLevel(g_linearSampler, uv, 0.0).r;
+}
+
 // Fraction [0..1] of this light that reaches `world`, 1 = unshadowed. Marches the pixel->light line
-// through the occluder mask in screen-UV space (ortho: the world line maps to a straight UV line).
+// through the occluder mask in screen-UV space (ortho: the world line maps to a straight UV line). At
+// each step it also samples two taps perpendicular to the ray, spread wider toward the light, so shadow
+// edges get a soft penumbra scaled by `softness`.
 float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, float worldDist)
 {
     if (pc.shadowParams.x < 0.5 || pc.occluderSlot == 0xFFFFFFFFu)
@@ -63,20 +73,25 @@ float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, floa
     }
     const float4 lc = mul(frame->viewProj, float4(lightPos, 0.0, 1.0));
     const float2 lightUV = (lc.xy / lc.w) * 0.5 + 0.5;
+    const float2 ray = lightUV - fragUV;
+    const float2 perp = normalize(float2(-ray.y, ray.x) + float2(1e-6, 0.0));
+    const float softness = max(pc.shadowParams.z, 0.0);
 
-    const int steps = max(1, int(pc.shadowParams.z));
-    // Skip the pixel's own cell so a lit wall face isn't shadowed by itself (bias in world units,
-    // converted to a fraction of the ray).
+    // Skip the pixel's own cell so a lit wall face isn't shadowed by itself (world-unit bias -> ray frac).
     const float t0 = clamp(pc.shadowParams.w / max(worldDist, 1e-3), 0.0, 0.9);
 
     float occ = 0.0;
-    for (int s = 0; s < steps; ++s)
+    for (int s = 0; s < kShadowSteps; ++s)
     {
-        const float t = lerp(t0, 1.0, (float(s) + 0.5) / float(steps));
+        const float t = lerp(t0, 1.0, (float(s) + 0.5) / float(kShadowSteps));
         const float2 uv = lerp(fragUV, lightUV, t);
-        occ = max(occ, g_textures[pc.occluderSlot].SampleLevel(g_linearSampler, uv, 0.0).r);
+        const float spread = softness * 0.004 * t;
+        const float c = SampleOccluder(uv);
+        const float a = SampleOccluder(uv + perp * spread);
+        const float b = SampleOccluder(uv - perp * spread);
+        occ = max(occ, (c * 2.0 + a + b) * 0.25);
     }
-    return 1.0 - occ * pc.shadowParams.y;
+    return 1.0 - saturate(occ) * pc.shadowParams.y;
 }
 
 [shader("fragment")]
@@ -113,8 +128,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             atten *= smoothstep(L.spotDirCone.w, L.spotDirCone.z, cosAng); // cosOuter -> cosInner
         }
 
-        // Only pay for shadows on lights that actually reach this pixel.
-        if (atten > 0.001)
+        // Only pay for shadows on shadow-casting lights that actually reach this pixel.
+        if (atten > 0.001 && L.flags.x > 0.5)
         {
             atten *= ShadowTerm(frame, fragUV, p, d);
         }

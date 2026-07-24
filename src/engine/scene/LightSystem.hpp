@@ -29,5 +29,6 @@ namespace aether
 		Renderer& m_renderer;
 		std::vector<entt::entity> m_pointLightScratch;
 		std::vector<entt::entity> m_spotLightScratch;
+		float m_flickerTime = 0.0f; // accumulates dt for CPU light flicker (stays 0 in edit preview)
 	};
 } // namespace aether

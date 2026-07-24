@@ -24,6 +24,7 @@ namespace aether
 		glm::vec4 posRadiusKind{0.0f}; // xy = world pos, z = radius, w = kind (0 point, 1 spot)
 		glm::vec4 colorIntensity{0.0f}; // rgb = colour, a = intensity
 		glm::vec4 spotDirCone{0.0f};    // xy = aim dir, z = cosInner, w = cosOuter
+		glm::vec4 flags{0.0f};          // x = castsShadow (0/1)
 	};
 
 	// Screen-space 2D light map. After the sprite/tile layer is drawn into the scene HDR colour, this
@@ -69,7 +70,8 @@ namespace aether
 		{
 			GpuBuffer lights;
 			GpuBuffer occluders;
-			glm::vec4 ambient{0.0f}; // rgb ambient floor, a = clamp ceiling
+			glm::vec4 ambient{0.0f};      // rgb ambient floor, a = clamp ceiling
+			glm::vec4 shadowParams{0.0f}; // x = strength, y = softness (from the scene settings)
 		};
 
 		void EnsureCapacity(GpuBuffer& buffer, std::uint32_t count, std::size_t stride, const char* debugName);

@@ -1,6 +1,8 @@
 #include "scene/LightSystem.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 #include <glm/glm.hpp>
 
@@ -13,9 +15,28 @@
 
 namespace aether
 {
-	void LightSystem::Update(World& world, float)
+	namespace
+	{
+		// Organic flame flicker: intensity dips by up to `flicker` at `speed`, with a per-light phase so
+		// neighbouring torches don't pulse in lockstep. Returns a multiplier in [1 - flicker, 1].
+		float FlickerMultiplier(float flicker, float speed, float time, std::uint32_t seed)
+		{
+			if (flicker <= 0.0f)
+			{
+				return 1.0f;
+			}
+			const float s = static_cast<float>(seed & 0xFFFFu) * 0.001f;
+			const float t = time * speed;
+			float n = 0.5f + 0.35f * std::sin(t * 0.7f + s * 6.3f) + 0.25f * std::sin(t * 1.73f + s * 11.1f + 1.1f);
+			n = std::clamp(n, 0.0f, 1.0f);
+			return 1.0f - flicker * (1.0f - n); // dip toward (1 - flicker) at the troughs
+		}
+	} // namespace
+
+	void LightSystem::Update(World& world, float dt)
 	{
 		AE_PROFILE_ZONE();
+		m_flickerTime += dt;
 		auto& reg = world.GetRegistry();
 
 		auto& points = m_pointLightScratch;
@@ -49,11 +70,12 @@ namespace aether
 		{
 			const auto& tc = reg.get<TransformComponent>(e);
 			const auto& l = reg.get<PointLightComponent>(e);
+			const float flick = FlickerMultiplier(l.flicker, l.flickerSpeed, m_flickerTime, static_cast<std::uint32_t>(e));
 			m_renderer.AddPointLight(Renderer::PointLight{
 			        .position = glm::vec3(tc.localToWorld[3]),
 			        .radius = l.radius,
 			        .color = l.color,
-			        .intensity = l.intensity,
+			        .intensity = l.intensity * flick,
 			        .castsShadow = l.castsShadow,
 			});
 		}
@@ -64,13 +86,14 @@ namespace aether
 			const auto& tc = reg.get<TransformComponent>(e);
 			const auto& l = reg.get<SpotLightComponent>(e);
 			const glm::vec3 forward = -glm::normalize(glm::vec3(tc.localToWorld[2]));
+			const float flick = FlickerMultiplier(l.flicker, l.flickerSpeed, m_flickerTime, static_cast<std::uint32_t>(e));
 			m_renderer.AddSpotLight(Renderer::SpotLight{
 			        .position = glm::vec3(tc.localToWorld[3]),
 			        .radius = l.radius,
 			        .direction = forward,
 			        .innerAngleRad = l.innerAngleRad,
 			        .color = l.color,
-			        .intensity = l.intensity,
+			        .intensity = l.intensity * flick,
 			        .outerAngleRad = l.outerAngleRad,
 			        .castsShadow = l.castsShadow,
 			});
