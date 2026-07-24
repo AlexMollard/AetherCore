@@ -1411,7 +1411,6 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'string'
         v = 'Level3'
 
-
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Parallax Background'

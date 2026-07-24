@@ -25,9 +25,11 @@ public sealed class SaveProfile
     }
 
     /// <summary>Read-only lookup that never inserts into <see cref="Levels"/>. Use for pure
-    /// queries (IsUnlocked, CompletedCount) so per-frame calls don't fill the save with empty
-    /// entries for levels never played. Never mutate the returned record.</summary>
-    private LevelRecord Peek(string key) => Levels.TryGetValue(key, out LevelRecord? r) ? r : s_empty;
+    /// queries and display/read paths (IsUnlocked, CompletedCount, detail panels, slot labels) so
+    /// per-frame or per-focus calls don't fill the save with empty entries for levels never played.
+    /// The returned record may be the shared empty placeholder - never mutate it; writers must
+    /// keep using the vivifying <see cref="Level"/> instead.</summary>
+    public LevelRecord Peek(string key) => Levels.TryGetValue(key, out LevelRecord? r) ? r : s_empty;
 
     public bool IsUnlocked(string key)
     {
@@ -44,6 +46,16 @@ public sealed class SaveProfile
         if (coins > r.BestCoins) r.BestCoins = coins;
         r.FurthestCheckpoint = 0;     // finished: no partial-progress checkpoint to resume to
         Exists = true;
+
+        // Advance FurthestLevel to the next level in the chain when this completion is
+        // ahead of the current furthest. Level1/Level2 have no checkpoints (only
+        // RecordCheckpoint moved FurthestLevel before), so without this a level with no
+        // checkpoints could complete and never move FurthestLevel off its default.
+        int i = Array.IndexOf(LevelKeys, key);
+        if (i >= 0 && i + 1 < LevelKeys.Length && i + 1 > Array.IndexOf(LevelKeys, FurthestLevel))
+        {
+            FurthestLevel = LevelKeys[i + 1];
+        }
     }
 
     public void RecordCheckpoint(string key, int index)

@@ -77,6 +77,11 @@ public sealed class PlayerController : EntityScript
         if (GameState.NextSceneQueued)
         {
             GameState.BeginLevel();
+            // A time trial only ever covers the single level it was armed for (Win()
+            // already recorded that level's best time before this scene load); clear it
+            // here so the auto-advance chain doesn't keep running the trial clock and
+            // recording best-times for every level after it.
+            GameState.TrialMode = false;
         }
         else
         {

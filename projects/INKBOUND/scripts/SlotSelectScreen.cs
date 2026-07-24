@@ -82,7 +82,7 @@ public sealed class SlotSelectScreen : EntityScript, IMenuScreen
     private static int SlotCoins(SaveProfile p)
     {
         int c = 0;
-        foreach (string k in SaveProfile.LevelKeys) c += p.Level(k).BestCoins;
+        foreach (string k in SaveProfile.LevelKeys) c += p.Peek(k).BestCoins;
         return c;
     }
 

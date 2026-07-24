@@ -14,6 +14,9 @@ public static class SaveSystem
     private static readonly SaveProfile[] s_slots = new SaveProfile[SlotCount];
     private static bool s_loaded;
 
+    // Statics persist across editor Stop/Play within one process (only a fresh process launch
+    // resets them), so direct-Play of a level after a slot was selected still records into that
+    // slot; the shipped game always boots through the menu, so this never surfaces there.
     public static int ActiveIndex { get; private set; } = -1;
     public static SaveProfile? Active => ActiveIndex >= 0 ? s_slots[ActiveIndex] : null;
     public static SaveProfile Slot(int i) => s_slots[i];

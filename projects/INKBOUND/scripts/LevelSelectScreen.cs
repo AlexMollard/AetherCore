@@ -96,7 +96,7 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
     private static bool IsDone(int i)
     {
         SaveProfile? p = SaveSystem.Active;
-        return Nodes[i].Scene.Length > 0 && p != null && p.Level(Nodes[i].Scene).Completed;
+        return Nodes[i].Scene.Length > 0 && p != null && p.Peek(Nodes[i].Scene).Completed;
     }
 
     private static string FormatTime(float s)
@@ -183,7 +183,7 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
             string stats = Nodes[focused].Stats;
             if (prof != null && Nodes[focused].Scene.Length > 0)
             {
-                LevelRecord r = prof.Level(Nodes[focused].Scene);
+                LevelRecord r = prof.Peek(Nodes[focused].Scene);
                 string best = r.BestTimeSeconds == null ? "--:--" : FormatTime(r.BestTimeSeconds.Value);
                 stats = $"BEST COINS {r.BestCoins}     TRIAL {best}";
             }
