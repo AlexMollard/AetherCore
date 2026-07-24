@@ -283,7 +283,7 @@ namespace aether::app
 			// Persistent (DontDestroyOnLoad / SceneTransient) entities survive
 			// the switch WITH their live script instances; everything else's
 			// instances are torn down before their entities are.
-			PruneInstancesForSceneSwitch(world, *csScripting);
+			PruneInstancesForSceneSwitch(world, *csScripting, *sceneCtx);
 			if (scene::LoadSceneFile(sceneName, world, scene::MakeApplySceneDeps(m_services), scene::SceneLoadMode::GameplaySwitch))
 			{
 				if (auto* scenes = m_services.TryGet<SceneSubsystem>())
@@ -299,10 +299,15 @@ namespace aether::app
 		}
 	}
 
-	void ScriptComponentSystem::PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs)
+	void ScriptComponentSystem::PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx)
 	{
 		const auto* api = cs.Api();
 		auto& reg = world.GetRegistry();
+		// The OnDetach callbacks invoked below read ActiveContext() (e.g. CustomPass.Unregister ->
+		// Registry() -> ActiveContext().services). Establish the active context first, exactly like the
+		// sibling teardown helpers PurgeStaleCSharpInstances / DestroyAllCSharpInstances do - otherwise
+		// g_activeContext is null here and any such OnDetach dereferences it and crashes.
+		const ActiveContextScope scope(ctx);
 		for (auto it = m_instances.begin(); it != m_instances.end();)
 		{
 			const Entity entity{InstanceEntityId(it->first)};

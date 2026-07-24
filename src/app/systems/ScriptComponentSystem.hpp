@@ -48,7 +48,7 @@ namespace aether::app
 
 		// Scene.Load support: destroys instances whose entities die in the switch
 		// while keeping persistent (SceneTransient) entities' instances alive.
-		void PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs);
+		void PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
 
 		[[nodiscard]] std::uint64_t GetInstanceHandle(std::uint32_t entityId, std::uint32_t scriptIndex) const;
 
