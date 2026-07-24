@@ -14,7 +14,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.camera]
     background = 'solid_colour'
-    clear_color = [ 0.47, 0.55, 0.75 ]
+    clear_color = [ 0.04, 0.047, 0.063 ]
     far = 1000.0
     fov = 60.0
     gradient_angle = 0.0
