@@ -211,6 +211,55 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'bool'
         v = true
 
+# Tileset gallery marker. The board itself is tilemap layer 2 ("Tileset Gallery"),
+# which has collision off - every tile in the tileset laid out 9x4 in the air above
+# this sign (world x 26..35, y 3..7) purely to eyeball a tileset. You walk and jump
+# straight through it.
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SignTileset'
+node = 5211900011000000007
+parent = -1
+position = [ 27.0, 1.65, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/sign_post.png'
+    tint = [ 1.0, 0.88, 0.55, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = 'sign_warning'
+
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = false
+
+        [entities.scripts.properties.PromptLabel]
+        t = 'string'
+        v = '> read'
+
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
+
 # ------------------------------------------------- LEFT BAY 1 (y=6): one-way + coins
 # A one-way wood platform sits at y=8 above this floor - jump up through it from
 # below, then stand on it. Coins sit on both levels.
