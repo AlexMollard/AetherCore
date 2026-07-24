@@ -83,11 +83,32 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
         _shown = -1;
     }
 
+    // A real level (index 0-3) is locked when the active slot has not unlocked it; the two
+    // placeholder nodes (4-5) are always locked flavor.
+    private static bool IsLocked(int i)
+    {
+        if (Nodes[i].Scene.Length == 0) return true;              // placeholder nodes
+        SaveProfile? p = SaveSystem.Active;
+        return p != null && !p.IsUnlocked(Nodes[i].Scene);
+    }
+
+    private static bool IsDone(int i)
+    {
+        SaveProfile? p = SaveSystem.Active;
+        return Nodes[i].Scene.Length > 0 && p != null && p.Level(Nodes[i].Scene).Completed;
+    }
+
+    private static string FormatTime(float s)
+    {
+        int total = (int)s;
+        return $"{total / 60:00}:{total % 60:00}";
+    }
+
     public void HandleInput()
     {
         for (int i = 0; i < 6; i++)
         {
-            if (!Nodes[i].Locked && _nodes[i].IsValid && Ui.WasActivated(_nodes[i]))
+            if (!IsLocked(i) && _nodes[i].IsValid && Ui.WasActivated(_nodes[i]))
             {
                 Log.Info($"[INKBOUND] descend to {Nodes[i].Scene}");
                 Scene.Load(Nodes[i].Scene);
@@ -120,19 +141,29 @@ public sealed class LevelSelectScreen : EntityScript, IMenuScreen
                 }
                 else
                 {
-                    col = Nodes[i].Locked ? LockedCol : Dim;
+                    col = IsLocked(i) ? LockedCol : Dim;
                 }
                 Ui.SetImageColor(_nodes[i], col);
             }
             if (_nums[i].IsValid)
-                Ui.SetTextColor(_nums[i], on ? NumOnDark : (Nodes[i].Locked ? NumLocked : NumMuted));
+                Ui.SetTextColor(_nums[i], on ? NumOnDark : (IsLocked(i) ? NumLocked : NumMuted));
+            if (_nodes[i].IsValid) Ui.SetInteractable(_nodes[i], !IsLocked(i));
         }
 
         if (focused >= 0 && focused != _shown)
         {
             _shown = focused;
-            if (_name.IsValid) Ui.SetText(_name, Nodes[focused].Name);
-            if (_stats.IsValid) Ui.SetText(_stats, Nodes[focused].Stats);
+            SaveProfile? prof = SaveSystem.Active;
+            string done = IsDone(focused) ? "  DONE" : "";
+            if (_name.IsValid) Ui.SetText(_name, Nodes[focused].Name + done);
+            string stats = Nodes[focused].Stats;
+            if (prof != null && Nodes[focused].Scene.Length > 0)
+            {
+                LevelRecord r = prof.Level(Nodes[focused].Scene);
+                string best = r.BestTimeSeconds == null ? "--:--" : FormatTime(r.BestTimeSeconds.Value);
+                stats = $"BEST COINS {r.BestCoins}     TRIAL {best}";
+            }
+            if (_stats.IsValid) Ui.SetText(_stats, stats);
             if (_flavor.IsValid) Ui.SetText(_flavor, Nodes[focused].Flavor);
         }
     }
