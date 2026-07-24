@@ -8,6 +8,7 @@ version = 16
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Main Camera'
+node = -6427163155062791924
 parent = -1
 position = [ 8.0, 3.0, 10.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -49,6 +50,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Tile World'
+node = -2214917860197718164
 parent = -1
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -64,6 +66,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Player'
+node = -4203968549029637352
 parent = -1
 position = [ 2.0, 1.8, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -77,10 +80,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.3
     restitution = 0.0
     shape = 'capsule'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.6, 0.85, 1.0 ]
+    intensity = 2.6
+    radius = 6.5
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -130,6 +140,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = 6384816684835588375
 parent = -1
 position = [ 10.0, 2.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -143,10 +154,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -189,6 +207,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = -40835432697835218
 parent = -1
 position = [ 23.0, 4.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -202,10 +221,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -248,6 +274,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = 7770709995989701024
 parent = -1
 position = [ 24.0, 4.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -261,10 +288,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -307,6 +341,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = 584765734967880558
 parent = -1
 position = [ 37.0, 5.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -320,10 +355,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -366,6 +408,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = -2143025219267275567
 parent = -1
 position = [ 43.0, 5.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -379,10 +422,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -425,6 +475,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = 6470342942167269835
 parent = -1
 position = [ 49.0, 6.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -438,10 +489,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -484,6 +542,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = 6933981411637259375
 parent = -1
 position = [ 6.0, 5.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -497,10 +556,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -543,6 +609,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = 3320796147686534830
 parent = -1
 position = [ 61.0, 5.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -556,10 +623,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -602,6 +676,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
+node = -4132313483403986067
 parent = -1
 position = [ 30.0, 5.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -615,10 +690,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.35
     restitution = 0.0
     shape = 'circle'
     size = [ 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -661,6 +743,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = -4533590922441216064
 parent = -1
 position = [ 16.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -674,10 +757,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -724,6 +814,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = -1379227498726205745
 parent = -1
 position = [ 29.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -737,10 +828,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -787,6 +885,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = -9105531329811714515
 parent = -1
 position = [ 55.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -800,10 +899,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -850,6 +956,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = 6846870888972198785
 parent = -1
 position = [ 60.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -863,10 +970,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -913,6 +1027,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Goal'
+node = -1338308263267839313
 parent = -1
 position = [ 68.5, 3.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -926,10 +1041,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.6, 6.0 ]
+
+    [entities.point_light]
+    color = [ 0.45, 0.9, 1.0 ]
+    intensity = 3.2
+    radius = 6.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -951,6 +1073,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = 5102952306838222591
 parent = -1
 position = [ 10.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -964,10 +1087,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -1014,6 +1144,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = 5722177082497111699
 parent = -1
 position = [ 40.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1027,10 +1158,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -1077,6 +1215,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Chomper'
+node = -4724602761014158320
 parent = -1
 position = [ 48.0, 1.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1090,10 +1229,17 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
     size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    intensity = 1.5
+    radius = 3.0
+    shadow = false
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -1140,6 +1286,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spikes'
+node = -7575083496713746388
 parent = -1
 position = [ 22.0, 1.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1153,6 +1300,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
@@ -1191,6 +1339,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spikes'
+node = -1330373262791374923
 parent = -1
 position = [ 52.0, 1.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1204,6 +1353,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     is_trigger = true
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
+    points = []
     radius = 0.5
     restitution = 0.0
     shape = 'box'
@@ -1242,6 +1392,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'LevelInfo'
+node = -5272156793393838817
 parent = -1
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
