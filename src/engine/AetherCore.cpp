@@ -98,8 +98,6 @@ namespace aether
 
 		assetsSub.Init(m_services);
 		m_services.Register<AssetManager>(assetsSub.GetAssetManager());
-		m_services.Register<MeshArena>(assetsSub.GetMeshArena());
-		m_services.Register<MeshUploadQueue>(assetsSub.GetMeshUploadQueue());
 		m_services.Register<MaterialBuffer>(assetsSub.GetMaterialBuffer());
 		m_services.Register<EffectParamBuffer>(assetsSub.GetEffectParamBuffer());
 		m_services.Register<MaterialRegistry>(assetsSub.GetMaterialRegistry());

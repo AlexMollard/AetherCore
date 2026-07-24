@@ -17,10 +17,7 @@
 #include "rendering/RenderTargetService.hpp"
 #include "scene/World.hpp"
 #include "vulkan/VulkanContext.hpp"
-#include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/ResourceRegistry.hpp"
-#include "vulkan/TransferManager.hpp"
-#include "gpu/OneShotCmd.hpp"
 
 namespace aether
 {
@@ -58,14 +55,6 @@ namespace aether
 		defaultAsset.metallicFactor = 0.0f;
 		m_materialRegistry.InitializeDefault(defaultAsset);
 
-		m_meshArena.Initialize(vk, {});
-
-		if (services.TryGet<DiagnosticEngine>() != nullptr)
-		{
-			m_meshArena.SetMemoryTracker(&services.Get<DiagnosticEngine>().GetMemoryTracker());
-		}
-
-		m_meshUploadQueue.Initialize();
 		m_primitiveMeshes.Initialize(m_uploadContext);
 		services.Register<AssetDatabase>(m_assetDatabase);
 		m_assetDatabase.RegisterBuiltinPrimitives();
@@ -94,18 +83,6 @@ namespace aether
 		m_effectParamBuffer.AdvanceFrame(frameIndex);
 	}
 
-	void AssetSubsystem::FlushMeshUploads()
-	{
-		AE_PROFILE_ZONE();
-		if (!m_meshUploadQueue.HasPendingUploads())
-		{
-			return;
-		}
-
-		// Non-blocking: the copies run on the transfer queue and the frame submission
-		// waits on the transfer timeline before rendering (GpuDevice::SubmitAndPresent).
-		m_meshUploadQueue.FlushAsync(m_context->GetTransferManager());
-	}
 
 	void AssetSubsystem::Shutdown()
 	{
@@ -124,8 +101,6 @@ namespace aether
 		m_textureRegistry.ReleaseAll();
 		m_assetManager = AssetManager{};
 		m_primitiveMeshes.Destroy();
-		m_meshUploadQueue.Shutdown();
-		m_meshArena.Shutdown();
 		m_materialBuffer.Shutdown();
 		m_effectParamBuffer.Shutdown();
 		// The cache borrows BindlessManager's heap mappings; it must shut down

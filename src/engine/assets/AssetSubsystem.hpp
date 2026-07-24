@@ -3,8 +3,6 @@
 #include <cstdint>
 
 #include "gpu/UploadContext.hpp"
-#include "mesh/MeshArena.hpp"
-#include "mesh/MeshUploadQueue.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "material/AssetTextureSink.hpp"
 #include "material/TextureRegistry.hpp"
@@ -46,15 +44,6 @@ namespace aether
 			return m_assetManager;
 		}
 
-		[[nodiscard]] MeshArena& GetMeshArena()
-		{
-			return m_meshArena;
-		}
-
-		[[nodiscard]] MeshUploadQueue& GetMeshUploadQueue()
-		{
-			return m_meshUploadQueue;
-		}
 
 		[[nodiscard]] MaterialBuffer& GetMaterialBuffer()
 		{
@@ -123,14 +112,10 @@ namespace aether
 			return m_spriteAssetStore;
 		}
 
-		void FlushMeshUploads();
-
 		void AdvanceFrame(std::uint64_t frameIndex);
 
 	private:
 		AssetManager m_assetManager;
-		MeshArena m_meshArena;
-		MeshUploadQueue m_meshUploadQueue;
 		MaterialBuffer m_materialBuffer;
 		AssetTextureSink m_textureSink;
 		TextureRegistry m_textureRegistry{m_textureSink};
