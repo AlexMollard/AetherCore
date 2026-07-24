@@ -14,6 +14,7 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "platform/Window.hpp"
+#include "vulkan/QueueSubmit.hpp"
 
 namespace aether
 {
@@ -417,6 +418,7 @@ namespace aether
 		{
 			const auto submitStart = std::chrono::steady_clock::now();
 			AE_PROFILE_ZONE_N("Swapchain.QueueSubmit");
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
 			const VkResult submitResult = vkQueueSubmit2(graphicsQueue, 1, &submit, frame.inFlight);
 			AE_PROFILE_PLOT("Swapchain/QueueSubmitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - submitStart).count()));
 			if (submitResult == VK_ERROR_DEVICE_LOST)
@@ -442,6 +444,7 @@ namespace aether
 		{
 			const auto presentStart = std::chrono::steady_clock::now();
 			AE_PROFILE_ZONE_N("Swapchain.QueuePresent");
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
 			presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
 			AE_PROFILE_PLOT("Swapchain/PresentNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - presentStart).count()));
 		}

@@ -17,6 +17,7 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
+#include "vulkan/QueueSubmit.hpp"
 
 namespace aether
 {
@@ -252,7 +253,12 @@ namespace aether
 		        .pSignalSemaphoreInfos = &signalInfo,
 		};
 
-		if (vkQueueSubmit2(m_computeQueue, 1, &submitInfo, frame.fence) != VK_SUCCESS)
+		VkResult computeSubmit = VK_SUCCESS;
+		{
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
+			computeSubmit = vkQueueSubmit2(m_computeQueue, 1, &submitInfo, frame.fence);
+		}
+		if (computeSubmit != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to submit compute queue."));
 		}

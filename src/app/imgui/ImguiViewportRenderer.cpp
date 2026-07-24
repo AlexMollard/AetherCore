@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include "vulkan/QueueSubmit.hpp"
 
 // The stock ImGui_ImplVulkanH_CreateOrResizeWindow submits an "initial layout
 void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, VkDevice device, ImGui_ImplVulkanH_Window* wd, const VkAllocationCallbacks* allocator, int w, int h, uint32_t min_image_count, VkImageUsageFlags image_usage);
@@ -1074,7 +1075,10 @@ namespace aether
 		submit.pCommandBuffers = &fd.CommandBuffer;
 		submit.signalSemaphoreCount = 1;
 		submit.pSignalSemaphores = &fsd.RenderCompleteSemaphore;
-		vkQueueSubmit(queue, 1, &submit, fd.Fence);
+		{
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
+			vkQueueSubmit(queue, 1, &submit, fd.Fence);
+		}
 
 		VkPresentInfoKHR present{.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
 		present.waitSemaphoreCount = 1;
@@ -1082,7 +1086,11 @@ namespace aether
 		present.swapchainCount = 1;
 		present.pSwapchains = &wd.Swapchain;
 		present.pImageIndices = &imageIndex;
-		const VkResult presented = vkQueuePresentKHR(queue, &present);
+		VkResult presented = VK_SUCCESS;
+		{
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
+			presented = vkQueuePresentKHR(queue, &present);
+		}
 		wd.SemaphoreIndex = (wd.SemaphoreIndex + 1) % wd.SemaphoreCount;
 		if (presented == VK_ERROR_OUT_OF_DATE_KHR || presented == VK_SUBOPTIMAL_KHR)
 		{

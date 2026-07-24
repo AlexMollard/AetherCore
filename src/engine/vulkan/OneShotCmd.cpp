@@ -4,6 +4,7 @@
 
 #include "utils/Assert.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/QueueSubmit.hpp"
 
 namespace aether::gpu
 {
@@ -112,7 +113,10 @@ namespace aether::gpu
 			return false;
 		}
 
-		result = vkQueueSubmit2(vkQueue, 1, &si, fence);
+		{
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
+			result = vkQueueSubmit2(vkQueue, 1, &si, fence);
+		}
 		if (result != VK_SUCCESS)
 		{
 			vkDestroyFence(vkDevice, fence, nullptr);

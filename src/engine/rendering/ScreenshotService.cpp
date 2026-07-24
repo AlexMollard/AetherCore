@@ -15,6 +15,7 @@
 #include "gpu/GpuDeviceFactory.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "utils/Logger.hpp"
+#include "vulkan/QueueSubmit.hpp"
 
 namespace aether
 {
@@ -506,7 +507,11 @@ namespace aether
 		VkFence fence = VK_NULL_HANDLE;
 		vkCreateFence(device, &fi, nullptr, &fence);
 		const VkSubmitInfo si{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &cmd};
-		bool ok = vkQueueSubmit(static_cast<VkQueue>(m_queue), 1, &si, fence) == VK_SUCCESS;
+		bool ok = false;
+		{
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
+			ok = vkQueueSubmit(static_cast<VkQueue>(m_queue), 1, &si, fence) == VK_SUCCESS;
+		}
 		if (ok)
 		{
 			ok = vkWaitForFences(device, 1, &fence, VK_TRUE, 2'000'000'000ull) == VK_SUCCESS; // 2s

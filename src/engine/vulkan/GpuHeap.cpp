@@ -10,6 +10,7 @@
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
+#include "vulkan/QueueSubmit.hpp"
 
 namespace aether
 {
@@ -231,7 +232,11 @@ namespace aether
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create upload fence"));
 		}
-		const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
+		VkResult submitResult = VK_SUCCESS;
+		{
+			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
+			submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
+		}
 		if (submitResult != VK_SUCCESS)
 		{
 			vkDestroyFence(device, fence, nullptr);
