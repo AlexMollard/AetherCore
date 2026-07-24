@@ -20,6 +20,7 @@
 #include "mesh/Mesh.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
@@ -188,6 +189,26 @@ namespace aether::app::scene
 				SceneDescription mini;
 				mini.entities.push_back(std::move(merged));
 				RestoreSubtreeInPlace(mini, world, deps, parent);
+			}
+		}
+
+		// Rebuild every 2D body in a subtree. Applying a collider/rigid-body component
+		// already builds its body (component apply calls RebuildBody), which for a
+		// prefab instance happens while the subtree still sits at the prefab's base
+		// pose. Re-running it once the instance transform is set rebuilds each body
+		// from the final world pose.
+		void RebuildSubtreeBodies2D(World& world, Physics2DSystem& physics2D, Entity entity)
+		{
+			if (world.Has<RigidBody2DComponent>(entity))
+			{
+				physics2D.RebuildBody(world, entity);
+			}
+			if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
+			{
+				for (const Entity child: hierarchy->children)
+				{
+					RebuildSubtreeBodies2D(world, physics2D, child);
+				}
 			}
 		}
 
@@ -681,6 +702,12 @@ namespace aether::app::scene
 		// kind-dependent path (2D grid/tile painting in the editor, and any
 		// gameplay/render logic that keys off the world kind). Preserve the world's
 		// existing kind and only ever *add* the features the prefab's entities imply.
+		// Depth guard: ApplyScene below re-enters this function for nested prefabs, and
+		// at that point the inner instance still sits at its prefab-local pose. Only the
+		// outermost call may build physics bodies (see the flush at the end).
+		static thread_local int s_instantiateDepth = 0;
+		++s_instantiateDepth;
+
 		const SceneKind savedKind = world.GetSceneKind();
 		const SceneFeatureFlags savedFeatures = world.GetSceneFeatures();
 		std::vector<Entity> created = ApplyScene(prefab, world, deps);
@@ -700,6 +727,20 @@ namespace aether::app::scene
 		if (outCreated != nullptr)
 		{
 			*outCreated = std::move(created);
+		}
+
+		// Applying the prefab's components already built their 2D bodies, but that
+		// happened above while the subtree still sat at the prefab's base pose - so a
+		// static sensor stayed at the origin while its sprite moved here, and a dynamic
+		// body spawned at the origin and fell out of the world. Now that the instance
+		// carries its final pose, rebuild the bodies from it.
+		--s_instantiateDepth;
+		if (s_instantiateDepth == 0 && root.IsValid())
+		{
+			if (auto* physics2D = dynamic_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem")))
+			{
+				RebuildSubtreeBodies2D(world, *physics2D, root);
+			}
 		}
 		return root;
 	}
