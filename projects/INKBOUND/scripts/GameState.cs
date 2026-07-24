@@ -21,12 +21,22 @@ public static class GameState
     /// <summary>True while a next-level load is pending (drives HUD copy).</summary>
     public static bool NextSceneQueued;
 
+    /// <summary>Scene key of the running level (set by LevelInfo); "" = untracked.</summary>
+    public static string CurrentLevel = "";
+
+    /// <summary>A time-trial run is in progress (set by Level Select).</summary>
+    public static bool TrialMode;
+
+    /// <summary>Elapsed trial seconds; ticked by PlayerController while unpaused, reset per level.</summary>
+    public static float TrialElapsed;
+
     /// <summary>Called by the player on level start: per-level state resets, run totals persist.</summary>
     public static void BeginLevel()
     {
         Coins = 0;
         Won = false;
         NextSceneQueued = false;
+        TrialElapsed = 0.0f;
     }
 
     /// <summary>Reset everything, including run totals (fresh play session).</summary>
@@ -50,6 +60,12 @@ public static class GameState
             return;
         }
         Won = true;
+        if (CurrentLevel.Length > 0 && SaveSystem.Active != null)
+        {
+            SaveSystem.Active.RecordCompletion(CurrentLevel, Coins);
+            if (TrialMode) SaveSystem.Active.RecordBestTime(CurrentLevel, TrialElapsed);
+            SaveSystem.SaveActive();
+        }
         Log.Info($"[INKBOUND] Level complete with {Coins} coins ({TotalCoins} this run)!");
     }
 }

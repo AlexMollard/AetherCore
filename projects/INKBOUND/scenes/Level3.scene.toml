@@ -1393,6 +1393,20 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'Hazard'
 
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'LevelInfo'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'LevelInfo'
+
+        [entities.scripts.properties.Key]
+        t = 'string'
+        v = 'Level3'
+
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
