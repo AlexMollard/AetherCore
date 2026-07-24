@@ -42,6 +42,11 @@ public sealed class MenuController : EntityScript
     private Phase _phase = Phase.Idle;
     private float _tt;
     private MenuScreen _pending;
+    // Enabling a screen root queues its script's OnAttach (registration) for the NEXT frame, so the
+    // screen may not resolve via ActiveScreen() the same frame it is shown. When that happens we defer
+    // OnShown to the next update instead of dropping it - otherwise a first-shown screen skips its
+    // per-show setup (label refresh, focus, interactable gating).
+    private bool _pendingShow;
     private const float CoverDur = 0.34f, RevealDur = 0.42f;
     private const float NoiseAmp = 0.05f, EdgeWidth = 0.028f; // shader params (uv-space)
     private static readonly Vector4 InkColor = new(0.02f, 0.025f, 0.035f, 1f);
@@ -74,6 +79,13 @@ public sealed class MenuController : EntityScript
     {
         _inkTime += dt; // keep the ink noise rolling whenever it is on screen
 
+        // A screen shown while its script was not yet registered defers OnShown to here.
+        if (_pendingShow)
+        {
+            IMenuScreen? deferred = ActiveScreen();
+            if (deferred != null) { deferred.OnShown(); _pendingShow = false; }
+        }
+
         if (_phase == Phase.Idle)
         {
             if (Current != MenuScreen.Title && Input.IsKeyPressed(Key.Escape)) { Go(MenuScreen.Title); return; }
@@ -104,7 +116,9 @@ public sealed class MenuController : EntityScript
         if (_levelRoot.IsValid) _levelRoot.SetActive(s == MenuScreen.LevelSelect);
         if (_settingsRoot.IsValid) _settingsRoot.SetActive(s == MenuScreen.Settings);
         if (_slotRoot.IsValid) _slotRoot.SetActive(s == MenuScreen.SlotSelect);
-        ActiveScreen()?.OnShown();
+        IMenuScreen? scr = ActiveScreen();
+        if (scr != null) { scr.OnShown(); _pendingShow = false; }
+        else { _pendingShow = true; } // script attaches next frame; OnShown fires from OnUpdate then
     }
 
     // A full-screen custom-shader effect, drawn on top of every screen and the shell.
