@@ -59,7 +59,7 @@ public sealed class DialogueGraphEditor : IEditorWindow
     private Vector4 _cBg, _cNode, _cNodeHover, _cHeader, _cText, _cDim, _cBorder, _cAccent, _cLink;
     private EdNode? _hover;
 
-    private bool _open = true;
+    private bool _open = false; // start hidden; open on demand from the Project menu
     private bool _autoLoaded;
     private string[] _files = System.Array.Empty<string>();
     private int _fileIdx = -1;
