@@ -116,3 +116,7 @@ AetherGame.slnx
 # Cooked scene/prefab binaries (derived from the .toml source)
 *.scene.bin
 *.prefab.bin
+
+# ImGui window layout state - written next to whatever the working directory is
+# when the editor runs, so it turns up at the repo root and under projects/
+imgui.ini
