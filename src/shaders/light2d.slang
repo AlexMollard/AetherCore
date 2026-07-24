@@ -107,29 +107,25 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float2 nrm = float2(0.0, 0.0); // outward surface normal (toward air), world space
     float solidMask = 0.0;         // 1 = this pixel is inside a solid tile
     float surfaceness = 0.0;       // 1 = a well-defined surface, 0 = flat / open / symmetric
-    float buried = 0.0;            // 1 = deep interior (surrounded by solid) -> takes no light
+    float2 duvX = float2(0.0, 0.0); // uv delta for +1 world unit in x
+    float2 duvY = float2(0.0, 0.0); // uv delta for +1 world unit in y
     if (haveMask)
     {
         const float4 cX = mul(frame->viewProj, float4(world + float2(1.0, 0.0), 0.0, 1.0));
         const float4 cY = mul(frame->viewProj, float4(world + float2(0.0, 1.0), 0.0, 1.0));
-        const float2 duvX = (cX.xy / cX.w) * 0.5 + 0.5 - fragUV;
-        const float2 duvY = (cY.xy / cY.w) * 0.5 + 0.5 - fragUV;
+        duvX = (cX.xy / cX.w) * 0.5 + 0.5 - fragUV;
+        duvY = (cY.xy / cY.w) * 0.5 + 0.5 - fragUV;
 
         const float self = SampleOccluder(fragUV);
-        const float mR = SampleOccluder(fragUV + duvX * 0.5);
-        const float mL = SampleOccluder(fragUV - duvX * 0.5);
-        const float mU = SampleOccluder(fragUV + duvY * 0.5);
-        const float mD = SampleOccluder(fragUV - duvY * 0.5);
+        const float mR = SampleOccluder(fragUV + duvX * 0.35);
+        const float mL = SampleOccluder(fragUV - duvX * 0.35);
+        const float mU = SampleOccluder(fragUV + duvY * 0.35);
+        const float mD = SampleOccluder(fragUV - duvY * 0.35);
         const float2 grad = float2(mR - mL, mU - mD); // points INTO solid
         const float gmag = length(grad);
         nrm = gmag > 1e-4 ? -grad / gmag : float2(0.0, 0.0);
         solidMask = smoothstep(0.3, 0.6, self);
         surfaceness = smoothstep(0.05, 0.35, gmag);
-
-        // "Buried" = solid AND surrounded by solid a tile-and-a-half out. A thin platform is NOT buried,
-        // so it stays lit instead of going black when its symmetric field yields no usable normal.
-        const float wide = 0.25 * (SampleOccluder(fragUV + duvX * 1.6) + SampleOccluder(fragUV - duvX * 1.6) + SampleOccluder(fragUV + duvY * 1.6) + SampleOccluder(fragUV - duvY * 1.6));
-        buried = solidMask * smoothstep(0.82, 0.99, wide);
     }
 
     float3 light = pc.ambient.rgb;
@@ -161,15 +157,25 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         }
 
         // Directional (half-Lambert N.L) shading: a solid surface takes light by how much it faces the
-        // light; back-faces and interiors take none, so light stops at solids and geometry looks sculpted.
-        // Open air (solidMask 0) and thin/symmetric solids (surfaceness 0) stay fully lit.
+        // light, so geometry looks sculpted. Open air (solidMask 0) and thin/symmetric solids
+        // (surfaceness 0) stay fully lit.
         if (haveMask)
         {
             const float2 Ldir = d > 1e-4 ? (p - world) / d : float2(0.0, 1.0);
             const float ndl = saturate(dot(nrm, Ldir) * 0.5 + 0.5);
-            const float surf = lerp(1.0, ndl, surfaceness);
-            const float directional = lerp(1.0, surf, solidMask) * (1.0 - buried);
-            atten *= directional;
+            float surf = lerp(1.0, ndl, surfaceness);
+
+            // Depth-into-solid TOWARD THIS LIGHT: if the material just in front of the pixel (on the way
+            // to the light) is also solid, the pixel is behind the surface and gets no light. Sampling
+            // along the light direction - rather than at a fixed radius - is what keeps light from
+            // seeping under the ground WITHOUT painting a dark band parallel to the terrain.
+            const float2 stepUV = (duvX * Ldir.x + duvY * Ldir.y) * 0.45; // ~0.45 world units toward the light
+            const float s1 = SampleOccluder(fragUV + stepUV);
+            const float s2 = SampleOccluder(fragUV + stepUV * 2.0);
+            const float behind = saturate(max(s1, s2 * 0.65));
+            surf *= 1.0 - behind;
+
+            atten *= lerp(1.0, surf, solidMask);
         }
 
         // Cast shadows for shadow-casting lights that still reach this pixel.

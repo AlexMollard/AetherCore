@@ -199,13 +199,6 @@ namespace aether
 
 								const glm::vec2 cellCentre{(static_cast<float>(chunkKey.x * kTileChunkSize + localX) + 0.5f) * cellSize, (static_cast<float>(chunkKey.y * kTileChunkSize + localY) + 0.5f) * cellSize};
 
-								// Solid cells cast 2D shadows: record the world-space cell as an occluder.
-								if (tile->collision != TileCollisionKind::None)
-								{
-									const glm::vec2 worldCentre = glm::vec2(entityTransform * glm::vec4(cellCentre, 0.0f, 1.0f));
-									cache.occluders.push_back(glm::vec4(worldCentre, cellSize * 0.5f, 0.0f));
-								}
-
 								SpriteInstanceFlags flags = atlas.filterRecommendation == "nearest" ? SpriteInstanceFlags::NearestFilter : SpriteInstanceFlags::None;
 								if ((cell & tilecell::kFlipX) != 0u)
 								{
@@ -221,6 +214,28 @@ namespace aether
 								if (textureSlot == kInvalidTextureSlot && m_textures != nullptr)
 								{
 									textureSlot = m_textures->ResolveSlot(m_textures->DefaultHandle());
+								}
+
+								// Solid cells cast 2D shadows. Carry the tile's texture region so the occluder
+								// mask samples the ARTWORK's alpha - shadows follow the drawn shape, not the cell.
+								if (tile->collision != TileCollisionKind::None)
+								{
+									const glm::vec2 worldCentre = glm::vec2(entityTransform * glm::vec4(cellCentre, 0.0f, 1.0f));
+									std::uint32_t occFlags = 0;
+									if ((cell & tilecell::kFlipX) != 0u)
+									{
+										occFlags |= 1u;
+									}
+									if ((cell & tilecell::kFlipY) != 0u)
+									{
+										occFlags |= 2u;
+									}
+									cache.occluders.push_back(Occluder2D{
+									        .posHalfSize = glm::vec4(worldCentre, cellSize * 0.5f, 0.0f),
+									        .uvRect = InsetAtlasUvRect(region->uvRect, atlas.textureWidth, atlas.textureHeight),
+									        .textureIndex = textureSlot,
+									        .flags = occFlags,
+									});
 								}
 
 								if (!tile->animationFrames.empty())

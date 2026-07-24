@@ -52,6 +52,7 @@ namespace aether
 		static_assert(sizeof(Light2DPush) == 64);
 		static_assert(sizeof(OccluderPush) == 24);
 		static_assert(sizeof(GpuLight2D) == 64);
+		static_assert(sizeof(Occluder2D) == 48);
 	} // namespace
 
 	void Light2DCompositor::Initialize(GpuDevice& gpu, gpu::Format colorFormat)
@@ -221,10 +222,10 @@ namespace aether
 		const auto occluderCount = static_cast<std::uint32_t>(packet.render2D.occluders.size());
 		if (occluderCount > 0)
 		{
-			EnsureCapacity(frame.occluders, occluderCount, sizeof(glm::vec4), "Light2D.Occluders");
+			EnsureCapacity(frame.occluders, occluderCount, sizeof(Occluder2D), "Light2D.Occluders");
 			if (frame.occluders.buffer.IsValid())
 			{
-				const auto bytes = static_cast<gpu::DeviceSize>(occluderCount) * sizeof(glm::vec4);
+				const auto bytes = static_cast<gpu::DeviceSize>(occluderCount) * sizeof(Occluder2D);
 				std::memcpy(frame.occluders.mapped, packet.render2D.occluders.data(), bytes);
 				gpu::ResourceRegistry::FlushMappedBuffer(frame.occluders.buffer, 0, bytes);
 				frame.occluders.count = occluderCount;

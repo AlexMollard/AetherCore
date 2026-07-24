@@ -40,6 +40,19 @@ namespace aether
 		std::uint32_t blendMode = 0;
 	};
 
+	// One shadow-casting tile cell. The occluder pass draws it as a quad and samples the tile's own
+	// texture, so occlusion follows the ARTWORK's alpha (sub-tile) rather than the whole cell.
+	// Mirrors GpuOccluder2D in shaders/occluder2d.slang (48 bytes).
+	struct Occluder2D
+	{
+		glm::vec4 posHalfSize{0.0f};              // xy = world centre, z = half cell size, w unused
+		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f}; // atlas region (image space, begin/end)
+		std::uint32_t textureIndex = 0;
+		std::uint32_t flags = 0; // bit0 = flipX, bit1 = flipY
+		std::uint32_t pad0 = 0;
+		std::uint32_t pad1 = 0;
+	};
+
 	// Owned by RenderFramePacket and moved through the render-thread queue with
 	// it. The game thread finishes extraction before submission; the render
 	// thread may retain references only for the synchronous execution of that
@@ -51,11 +64,10 @@ namespace aether
 		// producer and before submission.
 		std::vector<SpriteRenderInstance> sprites;
 
-		// Shadow occluders for 2D lighting: one entry per SOLID tile cell
-		// (xy = world centre, z = half-cell size, w unused). The Light2D pass
-		// rasterises these into an occluder mask and ray-marches it for shadows.
-		// Backgrounds and sprites do not occlude.
-		std::vector<glm::vec4> occluders;
+		// Shadow occluders for 2D lighting: one entry per SOLID tile cell. The Light2D pass rasterises
+		// these into an occluder mask (sampling each tile's texture, so occlusion is sub-tile) and
+		// ray-marches it for shadows. Backgrounds and sprites do not occlude.
+		std::vector<Occluder2D> occluders;
 	};
 
 	// Deterministic sort of the merged 2D instance stream (stable, by sortKey).
