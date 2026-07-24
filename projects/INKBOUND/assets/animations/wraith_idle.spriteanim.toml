@@ -1,0 +1,18 @@
+# AetherCore sprite animation
+[animation]
+atlas = "project://assets/textures/wraith/wraith32x32.spriteatlas.toml"
+event_count = 0.00
+frame_count = 4.00
+loop_mode = "loop"
+name = "wraith_idle"
+schema_version = 1.00
+
+[frame]
+0.duration = 0.18
+0.sprite_id = "aaaa000000000001"
+1.duration = 0.18
+1.sprite_id = "aaaa000000000002"
+2.duration = 0.18
+2.sprite_id = "aaaa000000000003"
+3.duration = 0.18
+3.sprite_id = "aaaa000000000004"
