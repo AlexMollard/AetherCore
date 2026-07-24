@@ -21,6 +21,7 @@
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/CustomPassRenderer.hpp"
+#include "rendering/Light2DCompositor.hpp"
 #include "rendering/Renderer2D.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
@@ -136,6 +137,11 @@ namespace aether
 			return m_customPassRenderer;
 		}
 
+		[[nodiscard]] Light2DCompositor& GetLight2DCompositor()
+		{
+			return m_light2D;
+		}
+
 		[[nodiscard]] FrameConstantsBuffer& GetFrameConstantsBuffer()
 		{
 			return m_frameConstantsBuffer;
@@ -232,6 +238,7 @@ namespace aether
 		Renderer m_renderer;
 		Renderer2D m_renderer2D;
 		CustomPassRenderer m_customPassRenderer;
+		Light2DCompositor m_light2D;
 		FrameConstantsBuffer m_frameConstantsBuffer;
 		std::array<PerFrameResourceTable, kMaxFramesInFlight> m_resourceTableBuffers{};
 		ShadowService m_shadowService;

@@ -212,6 +212,7 @@ namespace aether
 
 		m_renderer2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
 		m_customPassRenderer.Initialize(gpu);
+		m_light2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
 
 		auto& cameras = services.Get<CameraManager>();
 		auto& lighting = services.Get<LightingManager>();
@@ -320,6 +321,7 @@ namespace aether
 		{
 			m_renderer2D.Shutdown();
 			m_customPassRenderer.Shutdown();
+			m_light2D.Shutdown();
 			DestroySceneViewportDepth();
 			m_gtaoPass.Destroy();
 			m_postProcessStack.Destroy();
@@ -709,6 +711,9 @@ namespace aether
 		m_customPassRenderer.RegisterPass(m_renderGraph, CustomPassStage::BehindScene2D, hdrColor, sceneExtent, kSceneColorFormat, bindless, "$CustomPassBehind2D");
 		m_renderer2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent, bindless);
 		m_customPassRenderer.RegisterPass(m_renderGraph, CustomPassStage::OverScene2D, hdrColor, sceneExtent, kSceneColorFormat, bindless, "$CustomPassOver2D");
+		// Screen-space 2D light map: multiplies the sprite/tile layer by (ambient + point/spot lights).
+		// Self-skips on non-2D scenes and unlit 2D scenes (BeginFrame records zero lights there).
+		m_light2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent, bindless);
 
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline(), m_renderer2D);

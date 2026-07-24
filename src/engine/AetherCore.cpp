@@ -742,6 +742,7 @@ namespace aether
 			{
 				m_rendering->GetRenderer2D().BeginFrame(packet.render2D, packet.drawSlot);
 				m_rendering->GetCustomPassRenderer().BeginFrame(packet.renderCustom, packet.drawSlot);
+				m_rendering->GetLight2DCompositor().BeginFrame(packet, packet.drawSlot);
 			}
 		}
 
