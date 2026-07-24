@@ -159,6 +159,7 @@ namespace aether
 						++m_rebuildCount;
 						cache.instances.clear();
 						cache.animated.clear();
+						cache.occluders.clear();
 						cache.builtRevision = chunk.revision;
 						cache.builtTransform = entityTransform;
 
@@ -197,6 +198,14 @@ namespace aether
 								}
 
 								const glm::vec2 cellCentre{(static_cast<float>(chunkKey.x * kTileChunkSize + localX) + 0.5f) * cellSize, (static_cast<float>(chunkKey.y * kTileChunkSize + localY) + 0.5f) * cellSize};
+
+								// Solid cells cast 2D shadows: record the world-space cell as an occluder.
+								if (tile->collision != TileCollisionKind::None)
+								{
+									const glm::vec2 worldCentre = glm::vec2(entityTransform * glm::vec4(cellCentre, 0.0f, 1.0f));
+									cache.occluders.push_back(glm::vec4(worldCentre, cellSize * 0.5f, 0.0f));
+								}
+
 								SpriteInstanceFlags flags = atlas.filterRecommendation == "nearest" ? SpriteInstanceFlags::NearestFilter : SpriteInstanceFlags::None;
 								if ((cell & tilecell::kFlipX) != 0u)
 								{
@@ -233,6 +242,8 @@ namespace aether
 							}
 						}
 					}
+
+					output.occluders.insert(output.occluders.end(), cache.occluders.begin(), cache.occluders.end());
 
 					const std::size_t firstAppended = output.sprites.size();
 					output.sprites.insert(output.sprites.end(), cache.instances.begin(), cache.instances.end());

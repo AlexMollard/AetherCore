@@ -76,6 +76,8 @@ namespace aether
 		{
 			std::vector<SpriteRenderInstance> instances;
 			std::vector<AnimatedSlot> animated;
+			// Solid tile cells as shadow occluders (xy = world centre, z = half cell).
+			std::vector<glm::vec4> occluders;
 			std::uint32_t builtRevision = 0;
 			glm::mat4 builtTransform{1.0f};
 			std::uint64_t lastTouchedFrame = 0;

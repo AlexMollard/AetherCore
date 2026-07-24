@@ -1,5 +1,6 @@
 #include "rendering/Light2DCompositor.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -20,28 +21,46 @@ namespace aether
 	namespace
 	{
 		constexpr std::uint32_t kInitialLightCapacity = 64;
+		constexpr std::uint32_t kInitialOccluderCapacity = 256;
 		constexpr float kLightClampCeiling = 4.0f; // multiply ceiling: over-bright stacks saturate
 
-		// MUST match Light2DPush in shaders/light2d.slang (48 bytes).
+		// Shadow tuning: how hard the walls block light, how many mask taps per ray, and how far (world
+		// units) to skip near the shading point so a lit wall face doesn't shadow itself.
+		constexpr float kShadowStrength = 0.94f;
+		constexpr float kShadowSteps = 16.0f;
+		constexpr float kShadowWorldBias = 0.9f;
+
+		// MUST match Light2DPush in shaders/light2d.slang (64 bytes).
 		struct Light2DPush
 		{
 			gpu::DeviceAddress frameConstants;
 			gpu::DeviceAddress lights;
 			std::uint32_t count;
-			std::uint32_t pad;
+			std::uint32_t occluderSlot;
 			float viewportWidth;
 			float viewportHeight;
 			glm::vec4 ambient;
+			glm::vec4 shadowParams;
 		};
 
-		static_assert(sizeof(Light2DPush) == 48);
+		// MUST match OccluderPush in shaders/occluder2d.slang (24 bytes).
+		struct OccluderPush
+		{
+			gpu::DeviceAddress frameConstants;
+			gpu::DeviceAddress occluders;
+			std::uint32_t count;
+			std::uint32_t pad;
+		};
+
+		static_assert(sizeof(Light2DPush) == 64);
+		static_assert(sizeof(OccluderPush) == 24);
 		static_assert(sizeof(GpuLight2D) == 48);
 	} // namespace
 
 	void Light2DCompositor::Initialize(GpuDevice& gpu, gpu::Format colorFormat)
 	{
 		AE_PROFILE_ZONE();
-		const gpu::GraphicsPipelineDesc desc{
+		const gpu::GraphicsPipelineDesc composite{
 		        .shaderVfsPath = "shaders://light2d.spv",
 		        .colorFormat = colorFormat,
 		        .depthFormat = gpu::Format::Undefined,
@@ -55,10 +74,30 @@ namespace aether
 		        .debugName = "Light2DCompositor",
 		        .descriptorHeapMappings = gpu.GetBindlessManager().GetDescriptorHeapMappings(),
 		};
-		m_pipeline = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), desc);
+		m_pipeline = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), composite);
 		if (!m_pipeline.IsValid())
 		{
-			AE_ERROR(LogCategory::Render, "Light2DCompositor: failed to create pipeline");
+			AE_ERROR(LogCategory::Render, "Light2DCompositor: failed to create composite pipeline");
+		}
+
+		const gpu::GraphicsPipelineDesc occluder{
+		        .shaderVfsPath = "shaders://occluder2d.spv",
+		        .colorFormat = gpu::Format::R8Unorm,
+		        .depthFormat = gpu::Format::Undefined,
+		        .depthTestEnable = false,
+		        .depthWriteEnable = false,
+		        .blendEnable = false,
+		        .blendMode = gpu::BlendMode::Opaque,
+		        .topology = gpu::PrimitiveTopology::TriangleList,
+		        .polygonMode = gpu::PolygonMode::Fill,
+		        .cullMode = gpu::CullMode::None,
+		        .debugName = "Light2DOccluder",
+		        .descriptorHeapMappings = gpu.GetBindlessManager().GetDescriptorHeapMappings(),
+		};
+		m_occluderPipeline = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), occluder);
+		if (!m_occluderPipeline.IsValid())
+		{
+			AE_ERROR(LogCategory::Render, "Light2DCompositor: failed to create occluder pipeline");
 		}
 	}
 
@@ -67,9 +106,13 @@ namespace aether
 		AE_PROFILE_ZONE();
 		for (Frame& frame: m_frames)
 		{
-			if (frame.buffer.IsValid())
+			if (frame.lights.buffer.IsValid())
 			{
-				gpu::ResourceRegistry::Destroy(frame.buffer);
+				gpu::ResourceRegistry::Destroy(frame.lights.buffer);
+			}
+			if (frame.occluders.buffer.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(frame.occluders.buffer);
 			}
 			frame = Frame{};
 		}
@@ -78,49 +121,55 @@ namespace aether
 			gpu::ResourceRegistry::Destroy(m_pipeline);
 			m_pipeline = {};
 		}
+		if (m_occluderPipeline.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_occluderPipeline);
+			m_occluderPipeline = {};
+		}
 	}
 
-	void Light2DCompositor::EnsureCapacity(Frame& frame, std::uint32_t count)
+	void Light2DCompositor::EnsureCapacity(GpuBuffer& buffer, std::uint32_t count, std::size_t stride, const char* debugName)
 	{
-		if (frame.capacity >= count && frame.buffer.IsValid())
+		if (buffer.capacity >= count && buffer.buffer.IsValid())
 		{
 			return;
 		}
-		std::uint32_t capacity = frame.capacity == 0 ? kInitialLightCapacity : frame.capacity;
+		std::uint32_t capacity = buffer.capacity == 0 ? static_cast<std::uint32_t>(std::max<std::size_t>(1, 4096 / stride)) : buffer.capacity;
 		while (capacity < count)
 		{
 			capacity *= 2;
 		}
-		if (frame.buffer.IsValid())
+		if (buffer.buffer.IsValid())
 		{
-			gpu::ResourceRegistry::Destroy(frame.buffer);
+			gpu::ResourceRegistry::Destroy(buffer.buffer);
 		}
 		const gpu::MappedBufferDesc desc{
-		        .size = static_cast<gpu::DeviceSize>(capacity) * sizeof(GpuLight2D),
+		        .size = static_cast<gpu::DeviceSize>(capacity) * stride,
 		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
 		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-		        .debugName = "Light2D.Lights",
+		        .debugName = debugName,
 		};
-		frame.buffer = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-		if (!frame.buffer.IsValid())
+		buffer.buffer = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!buffer.buffer.IsValid())
 		{
-			frame.mapped = nullptr;
-			frame.address = 0;
-			frame.capacity = 0;
-			AE_ERROR(LogCategory::Render, "Light2DCompositor: failed to allocate {} lights", capacity);
+			buffer.mapped = nullptr;
+			buffer.address = 0;
+			buffer.capacity = 0;
+			AE_ERROR(LogCategory::Render, "Light2DCompositor: failed to allocate {} records for {}", capacity, debugName);
 			return;
 		}
-		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(frame.buffer);
-		frame.mapped = view.mappedPtr;
-		frame.address = view.deviceAddress;
-		frame.capacity = capacity;
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(buffer.buffer);
+		buffer.mapped = view.mappedPtr;
+		buffer.address = view.deviceAddress;
+		buffer.capacity = capacity;
 	}
 
 	void Light2DCompositor::BeginFrame(const RenderFramePacket& packet, std::uint32_t frameSlot)
 	{
 		AE_PROFILE_ZONE();
 		Frame& frame = m_frames[frameSlot % kFrames];
-		frame.count = 0;
+		frame.lights.count = 0;
+		frame.occluders.count = 0;
 
 		// Content-driven gate, NOT scene metadata: this project's scenes serialize every SceneFeatureFlag
 		// regardless of kind ("every feature in every scene"), so the flags can't tell 2D from 3D. Instead
@@ -157,17 +206,30 @@ namespace aether
 			lights.push_back(g);
 		}
 
-		const auto count = static_cast<std::uint32_t>(lights.size());
-		EnsureCapacity(frame, count);
-		if (!frame.buffer.IsValid())
+		const auto lightCount = static_cast<std::uint32_t>(lights.size());
+		EnsureCapacity(frame.lights, lightCount, sizeof(GpuLight2D), "Light2D.Lights");
+		if (!frame.lights.buffer.IsValid())
 		{
 			return;
 		}
-		const auto byteSize = static_cast<gpu::DeviceSize>(count) * sizeof(GpuLight2D);
-		std::memcpy(frame.mapped, lights.data(), byteSize);
-		gpu::ResourceRegistry::FlushMappedBuffer(frame.buffer, 0, byteSize);
-		frame.count = count;
+		std::memcpy(frame.lights.mapped, lights.data(), static_cast<std::size_t>(lightCount) * sizeof(GpuLight2D));
+		gpu::ResourceRegistry::FlushMappedBuffer(frame.lights.buffer, 0, static_cast<gpu::DeviceSize>(lightCount) * sizeof(GpuLight2D));
+		frame.lights.count = lightCount;
 		frame.ambient = glm::vec4(glm::vec3(packet.ambientColor), kLightClampCeiling);
+
+		// Shadow occluders: solid tile cells emitted by the tilemap system this frame.
+		const auto occluderCount = static_cast<std::uint32_t>(packet.render2D.occluders.size());
+		if (occluderCount > 0)
+		{
+			EnsureCapacity(frame.occluders, occluderCount, sizeof(glm::vec4), "Light2D.Occluders");
+			if (frame.occluders.buffer.IsValid())
+			{
+				const auto bytes = static_cast<gpu::DeviceSize>(occluderCount) * sizeof(glm::vec4);
+				std::memcpy(frame.occluders.mapped, packet.render2D.occluders.data(), bytes);
+				gpu::ResourceRegistry::FlushMappedBuffer(frame.occluders.buffer, 0, bytes);
+				frame.occluders.count = occluderCount;
+			}
+		}
 	}
 
 	void Light2DCompositor::EndFrame() {}
@@ -180,34 +242,74 @@ namespace aether
 	        const FrameConstantsBuffer* frameConstants,
 	        const std::atomic<bool>* enabled)
 	{
+		// Graph-managed transient occluder mask (auto-sized, sampled by the composite). R8: 1 = solid.
+		const RGImage occluderMask = graph.CreateTransientColor(gpu::Format::R8Unorm, extent, gpu::ImageUsage::Sampled);
+
+		// Pass 1: rasterise solid tile cells into the mask.
 		graph.AddFullscreenPass({
-		             .name = std::string(name),
-		             .color = color,
+		             .name = "$Light2DOccluders",
+		             .color = occluderMask,
 		             .extent = extent,
-		             .loadOp = gpu::LoadOp::Load,
+		             .loadOp = gpu::LoadOp::Clear,
 		     })
 		        .Execute(
-		                [this, &bindless, extent, frameConstants, enabled](PassContext& ctx)
+		                [this, &bindless, frameConstants, enabled](PassContext& ctx)
 		                {
 			                if (enabled != nullptr && !enabled->load(std::memory_order_relaxed))
 			                {
 				                return;
 			                }
 			                Frame& frame = m_frames[ctx.frameSlot % kFrames];
-			                if (frame.count == 0 || !m_pipeline.IsValid() || !frame.buffer.IsValid())
+			                if (frame.lights.count == 0 || frame.occluders.count == 0 || !m_occluderPipeline.IsValid())
+			                {
+				                return; // mask stays cleared to 0 (no shadows)
+			                }
+			                bindless.CmdBindHeaps(ctx.recorder);
+			                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(m_occluderPipeline).state);
+			                const OccluderPush push{
+			                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
+			                        .occluders = frame.occluders.address,
+			                        .count = frame.occluders.count,
+			                        .pad = 0,
+			                };
+			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+			                ctx.recorder.Draw(6, frame.occluders.count, 0, 0);
+		                });
+
+		const std::uint32_t occluderSlot = graph.EnsureBindlessSampled(occluderMask);
+
+		// Pass 2: multiply the scene HDR colour by (ambient + shadowed lights).
+		graph.AddFullscreenPass({
+		             .name = std::string(name),
+		             .color = color,
+		             .extent = extent,
+		             .loadOp = gpu::LoadOp::Load,
+		     })
+		        .ReadTexture(occluderMask)
+		        .Execute(
+		                [this, &bindless, extent, frameConstants, enabled, occluderSlot](PassContext& ctx)
+		                {
+			                if (enabled != nullptr && !enabled->load(std::memory_order_relaxed))
+			                {
+				                return;
+			                }
+			                Frame& frame = m_frames[ctx.frameSlot % kFrames];
+			                if (frame.lights.count == 0 || !m_pipeline.IsValid() || !frame.lights.buffer.IsValid())
 			                {
 				                return;
 			                }
 			                bindless.CmdBindHeaps(ctx.recorder);
 			                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(m_pipeline).state);
+			                const bool hasShadows = frame.occluders.count > 0 && occluderSlot != 0xFFFFFFFFu;
 			                const Light2DPush push{
 			                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
-			                        .lights = frame.address,
-			                        .count = frame.count,
-			                        .pad = 0,
+			                        .lights = frame.lights.address,
+			                        .count = frame.lights.count,
+			                        .occluderSlot = hasShadows ? occluderSlot : 0xFFFFFFFFu,
 			                        .viewportWidth = static_cast<float>(extent.width),
 			                        .viewportHeight = static_cast<float>(extent.height),
 			                        .ambient = frame.ambient,
+			                        .shadowParams = glm::vec4(hasShadows ? 1.0f : 0.0f, kShadowStrength, kShadowSteps, kShadowWorldBias),
 			                };
 			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                ctx.recorder.Draw(6, 1, 0, 0);

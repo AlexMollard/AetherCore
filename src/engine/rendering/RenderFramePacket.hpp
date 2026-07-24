@@ -50,6 +50,12 @@ namespace aether
 		// interleaves both by sort key. Finalize2DFrame must run after the last
 		// producer and before submission.
 		std::vector<SpriteRenderInstance> sprites;
+
+		// Shadow occluders for 2D lighting: one entry per SOLID tile cell
+		// (xy = world centre, z = half-cell size, w unused). The Light2D pass
+		// rasterises these into an occluder mask and ray-marches it for shadows.
+		// Backgrounds and sprites do not occlude.
+		std::vector<glm::vec4> occluders;
 	};
 
 	// Deterministic sort of the merged 2D instance stream (stable, by sortKey).

@@ -2,13 +2,16 @@
 // the scene HDR colour and BEFORE tonemap, with MULTIPLY blend (DstColor, Zero) so the hardware does
 //   hdrColor.rgb *= light.rgb
 // The light map is: ambient (a dark floor) + the radial contribution of every point light and the
-// cone contribution of every spot light in the scene. Lit spots brighten/tint the pixel art; the rest
-// sinks toward ambient. This consumes the SAME lights the 3D renderer uses (engine PointLight/SpotLight
-// components) - one light concept, lighting both 2D sprites and 3D meshes.
+// cone contribution of every spot light, each ATTENUATED BY SHADOWS ray-marched through an occluder
+// mask (solid tiles). Lit spots brighten/tint the pixel art; walls cast shadow pools behind them.
+// Consumes the SAME lights the 3D renderer uses (engine PointLight/SpotLight components).
 //
 // World reconstruction is exact for a 2D ortho camera: world.xy depends only on screen ndc, not depth.
 #include "include/DevicePointer.slangh"
 #include "include/FrameConstants.slangh"
+
+[[vk::binding(0, 0)]] Texture2D g_textures[];
+[[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
 // Packed light record (48 bytes). Mirrors aether::GpuLight2D in Light2DCompositor.cpp.
 struct GpuLight2D
@@ -23,9 +26,10 @@ struct Light2DPush
     DevicePtr<FrameConstantsData> frameConstants;
     DevicePtr<GpuLight2D> lights;
     uint   count;          // number of GpuLight2D records
-    uint   pad;
+    uint   occluderSlot;   // bindless slot of the R8 occluder mask (0xFFFFFFFF = shadows off)
     float2 viewportSize;
     float4 ambient;        // rgb = ambient floor, a = per-channel clamp ceiling
+    float4 shadowParams;   // x = enabled, y = strength, z = step count, w = world-space bias
 };
 
 [[vk::push_constant]] Light2DPush pc;
@@ -49,13 +53,40 @@ VSOutput vertexMain(uint vertexId : SV_VertexID)
     return o;
 }
 
+// Fraction [0..1] of this light that reaches `world`, 1 = unshadowed. Marches the pixel->light line
+// through the occluder mask in screen-UV space (ortho: the world line maps to a straight UV line).
+float ShadowTerm(FrameConstantsData* frame, float2 fragUV, float2 lightPos, float worldDist)
+{
+    if (pc.shadowParams.x < 0.5 || pc.occluderSlot == 0xFFFFFFFFu)
+    {
+        return 1.0;
+    }
+    const float4 lc = mul(frame->viewProj, float4(lightPos, 0.0, 1.0));
+    const float2 lightUV = (lc.xy / lc.w) * 0.5 + 0.5;
+
+    const int steps = max(1, int(pc.shadowParams.z));
+    // Skip the pixel's own cell so a lit wall face isn't shadowed by itself (bias in world units,
+    // converted to a fraction of the ray).
+    const float t0 = clamp(pc.shadowParams.w / max(worldDist, 1e-3), 0.0, 0.9);
+
+    float occ = 0.0;
+    for (int s = 0; s < steps; ++s)
+    {
+        const float t = lerp(t0, 1.0, (float(s) + 0.5) / float(steps));
+        const float2 uv = lerp(fragUV, lightUV, t);
+        occ = max(occ, g_textures[pc.occluderSlot].SampleLevel(g_linearSampler, uv, 0.0).r);
+    }
+    return 1.0 - occ * pc.shadowParams.y;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
     FrameConstantsData* frame = pc.frameConstants.Ptr();
 
     // Reconstruct the world-space point under this fragment (2D ortho: world.xy is depth-independent).
-    const float2 ndc = input.position.xy / max(pc.viewportSize, float2(1.0, 1.0)) * 2.0 - 1.0;
+    const float2 fragUV = input.position.xy / max(pc.viewportSize, float2(1.0, 1.0));
+    const float2 ndc = fragUV * 2.0 - 1.0;
     const float4 wp = mul(frame->invViewProj, float4(ndc, 0.0, 1.0));
     const float2 world = wp.xy / wp.w;
 
@@ -80,6 +111,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             const float2 aim = normalize(L.spotDirCone.xy + float2(1e-6, 0.0));
             const float cosAng = dot(toFrag, aim);
             atten *= smoothstep(L.spotDirCone.w, L.spotDirCone.z, cosAng); // cosOuter -> cosInner
+        }
+
+        // Only pay for shadows on lights that actually reach this pixel.
+        if (atten > 0.001)
+        {
+            atten *= ShadowTerm(frame, fragUV, p, d);
         }
 
         light += L.colorIntensity.rgb * L.colorIntensity.a * atten;
