@@ -1,5 +1,6 @@
 #include "debug/EditorCommand.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -8,13 +9,21 @@
 #include <utility>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "assets/AssetManager.hpp"
 #include "assets/TileAssetStore.hpp"
+#include "editor/ComponentCatalog.hpp"
+#include "editor/ComponentFields.hpp"
+#include "editor/ReflectionJson.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/TagSlots.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/World.hpp"
+#include "scene/SceneSubsystem.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::editor
@@ -49,9 +58,7 @@ namespace aether::editor
 	}
 
 	SpriteAnimationEditCommand::SpriteAnimationEditCommand(SpriteAnimationAsset before, SpriteAnimationAsset after, std::function<void(const SpriteAnimationAsset&)> apply)
-	      : m_before(std::move(before))
-	      , m_after(std::move(after))
-	      , m_apply(std::move(apply))
+	      : m_before(std::move(before)), m_after(std::move(after)), m_apply(std::move(apply))
 	{
 	}
 
@@ -72,8 +79,7 @@ namespace aether::editor
 	}
 
 	TileStrokeCommand::TileStrokeCommand(std::string tilemapPath, std::vector<TilePaintEdit> edits)
-	      : m_tilemapPath(std::move(tilemapPath))
-	      , m_edits(std::move(edits))
+	      : m_tilemapPath(std::move(tilemapPath)), m_edits(std::move(edits))
 	{
 	}
 
@@ -134,10 +140,7 @@ namespace aether::editor
 	}
 
 	SubtreeLifetimeCommand::SubtreeLifetimeCommand(app::scene::SceneDescription subtree, std::vector<std::uint32_t> parentIds, bool createdByThisEdit, const char* label)
-	      : m_subtree(std::move(subtree))
-	      , m_parentIds(std::move(parentIds))
-	      , m_createdByThisEdit(createdByThisEdit)
-	      , m_label(label)
+	      : m_subtree(std::move(subtree)), m_parentIds(std::move(parentIds)), m_createdByThisEdit(createdByThisEdit), m_label(label)
 	{
 	}
 
@@ -214,253 +217,563 @@ namespace aether::editor
 		return entity;
 	}
 
-	namespace
+	// ── RenameCommand ────────────────────────────────────────────────
+
+	RenameCommand::RenameCommand(std::uint32_t entityId, std::string oldName, std::string newName)
+	      : m_entityId(entityId), m_oldName(std::move(oldName)), m_newName(std::move(newName))
 	{
-		using app::scene::EntityRecord;
-		using app::scene::SceneDescription;
+	}
 
-		std::unordered_map<std::uint32_t, std::size_t> BuildIndex(const SceneDescription& desc)
+	void RenameCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		world.EmplaceOrReplace<NameComponent>(entity, NameComponent{.name = m_oldName});
+	}
+
+	void RenameCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		world.EmplaceOrReplace<NameComponent>(entity, NameComponent{.name = m_newName});
+	}
+
+	// ── ReparentCommand ──────────────────────────────────────────────
+
+	ReparentCommand::ReparentCommand(std::uint32_t entityId, std::uint32_t oldParentId, std::uint32_t newParentId)
+	      : m_entityId(entityId), m_oldParentId(oldParentId), m_newParentId(newParentId)
+	{
+	}
+
+	void ReparentCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		aether::ecs::SetParent(world, Entity{m_entityId}, Entity{m_oldParentId});
+	}
+
+	void ReparentCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		aether::ecs::SetParent(world, Entity{m_entityId}, Entity{m_newParentId});
+	}
+
+	// ── Component command helpers ──────────────────────────────────────
+
+	bool CaptureComponentFields(World& world, Entity entity, const std::string& type, ServiceContainer& services, nlohmann::json& out, bool& isReflected)
+	{
+		if (const auto* rt = reflect::FindComponentType(type))
 		{
-			std::unordered_map<std::uint32_t, std::size_t> index;
-			index.reserve(desc.entities.size());
-			for (std::size_t i = 0; i < desc.entities.size(); ++i)
+			const void* comp = rt->tryGetRawConst(world, entity);
+			if (comp == nullptr)
 			{
-				index[desc.entities[i].entityId] = i;
+				return false;
 			}
-			return index;
-		}
-
-		std::vector<std::vector<std::size_t>> BuildChildren(const SceneDescription& desc)
-		{
-			std::vector<std::vector<std::size_t>> children(desc.entities.size());
-			for (std::size_t i = 0; i < desc.entities.size(); ++i)
+			isReflected = true;
+			nlohmann::json fields = nlohmann::json::object();
+			for (const auto& f: rt->fields)
 			{
-				const int parent = desc.entities[i].parentIndex;
-				if (parent >= 0 && static_cast<std::size_t>(parent) < desc.entities.size())
+				const reflect::FieldValue fv = f.get(comp);
+				if (f.type == reflect::FieldType::Enum && f.meta.enumTable != nullptr)
 				{
-					children[static_cast<std::size_t>(parent)].push_back(i);
-				}
-			}
-			return children;
-		}
-
-		std::size_t RootIndexOf(const SceneDescription& desc, std::size_t start)
-		{
-			std::size_t cur = start;
-			for (std::size_t guard = 0; guard < desc.entities.size() + 1; ++guard)
-			{
-				const int parent = desc.entities[cur].parentIndex;
-				if (parent < 0 || static_cast<std::size_t>(parent) >= desc.entities.size())
-				{
-					break;
-				}
-				cur = static_cast<std::size_t>(parent);
-			}
-			return cur;
-		}
-
-		std::uint32_t ParentIdOf(const SceneDescription& desc, std::size_t i)
-		{
-			const int parent = desc.entities[i].parentIndex;
-			return (parent >= 0 && static_cast<std::size_t>(parent) < desc.entities.size()) ? desc.entities[static_cast<std::size_t>(parent)].entityId : 0u;
-		}
-
-		// Content identity of a record: its own serialized fields plus its parent's
-		// id. Independent of array position, so an index shift alone is not a change,
-		// but a component edit or a reparent is.
-		std::string RecordKey(const SceneDescription& desc, std::size_t i)
-		{
-			SceneDescription mini;
-			mini.entities.push_back(desc.entities[i]);
-			EntityRecord& record = mini.entities[0];
-			record.parentIndex = -1;
-			// A SpriteAnimator drives the renderer's frame every edit-mode preview
-			// frame; canonicalize it (shared with capture) so a previewing animation is
-			// not mistaken for an authored edit and does not flood undo with frames.
-			app::scene::CanonicalizeAnimatedSpriteFrame(record);
-			return app::scene::WriteToml(mini) + "|p=" + std::to_string(ParentIdOf(desc, i));
-		}
-
-		// Extract the top-level subtree rooted at rootIndex (root + all descendants)
-		// as a self-contained snapshot with subtree-local parentIndex. Records are
-		// ordered parent-before-child.
-		void ExtractSubtree(const SceneDescription& full, std::size_t rootIndex, const std::vector<std::vector<std::size_t>>& children, SceneDescription& outDesc, std::uint32_t& outParentId, std::vector<std::uint32_t>& outIds)
-		{
-			std::vector<std::size_t> order;
-			std::vector<std::size_t> stack{rootIndex};
-			while (!stack.empty())
-			{
-				const std::size_t node = stack.back();
-				stack.pop_back();
-				order.push_back(node);
-				for (const std::size_t child: children[node])
-				{
-					stack.push_back(child);
-				}
-			}
-			std::unordered_map<std::size_t, std::size_t> localOf;
-			localOf.reserve(order.size());
-			for (std::size_t k = 0; k < order.size(); ++k)
-			{
-				localOf[order[k]] = k;
-			}
-			outDesc = SceneDescription{};
-			outDesc.kind = full.kind;
-			outDesc.features = full.features;
-			outIds.clear();
-			outIds.reserve(order.size());
-			for (const std::size_t fullIndex: order)
-			{
-				EntityRecord record = full.entities[fullIndex];
-				const int parent = record.parentIndex;
-				if (parent >= 0 && localOf.contains(static_cast<std::size_t>(parent)))
-				{
-					record.parentIndex = static_cast<int>(localOf[static_cast<std::size_t>(parent)]);
+					fields[f.name] = f.meta.enumTable->NameOf(fv.enumValue);
 				}
 				else
 				{
-					record.parentIndex = -1;
+					fields[f.name] = editor::FieldValueToJson(fv, &f);
 				}
-				outDesc.entities.push_back(std::move(record));
-				outIds.push_back(full.entities[fullIndex].entityId);
 			}
-			outParentId = ParentIdOf(full, rootIndex);
+			out = std::move(fields);
+			return true;
 		}
-	} // namespace
+		const auto* fields = editor::FindComponentFields(type);
+		if (fields == nullptr)
+		{
+			return false;
+		}
+		isReflected = false;
+		nlohmann::json snapshot = nlohmann::json::object();
+		if (!fields->read(world, entity, services, snapshot))
+		{
+			return false;
+		}
+		out = std::move(snapshot);
+		return true;
+	}
 
-	EntityDiffCommand::EntityDiffCommand(const app::scene::SceneDescription& before, const app::scene::SceneDescription& after)
+	void ApplyComponentFields(World& world, Entity entity, const std::string& type, const nlohmann::json& values, bool isReflected, ServiceContainer& services)
 	{
-		const std::unordered_map<std::uint32_t, std::size_t> beforeIndex = BuildIndex(before);
-		const std::unordered_map<std::uint32_t, std::size_t> afterIndex = BuildIndex(after);
+		if (isReflected)
+		{
+			if (const auto* rt = reflect::FindComponentType(type))
+			{
+				void* comp = rt->tryGetRaw(world, entity);
+				if (comp == nullptr)
+				{
+					return;
+				}
+				for (const auto& f: rt->fields)
+				{
+					if (values.contains(f.name))
+					{
+						f.set(comp, editor::JsonToFieldValue(values.at(f.name), f));
+					}
+				}
+				if (rt->postSet)
+				{
+					rt->postSet(world, entity);
+				}
+			}
+			return;
+		}
+		const auto* fields = editor::FindComponentFields(type);
+		if (fields != nullptr)
+		{
+			fields->write(world, entity, values, services);
+		}
+	}
 
-		// Which entities changed: created, deleted, or content-edited.
-		std::unordered_set<std::uint32_t> changed;
-		for (const auto& [id, bi]: beforeIndex)
-		{
-			const auto it = afterIndex.find(id);
-			if (it == afterIndex.end() || RecordKey(before, bi) != RecordKey(after, it->second))
-			{
-				changed.insert(id);
-			}
-		}
-		for (const auto& [id, ai]: afterIndex)
-		{
-			if (!beforeIndex.contains(id))
-			{
-				changed.insert(id);
-			}
-		}
-		if (changed.empty())
+	// ── AddComponentCommand ────────────────────────────────────────────
+
+	AddComponentCommand::AddComponentCommand(std::uint32_t entityId, std::string componentName)
+	      : m_entityId(entityId), m_componentName(std::move(componentName))
+	{
+	}
+
+	void AddComponentCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
 		{
 			return;
 		}
-
-		// The top-level subtree root each change belongs to, in both states.
-		std::unordered_set<std::uint32_t> rootIds;
-		for (const std::uint32_t id: changed)
+		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
+		if (entry != nullptr && entry->remove)
 		{
-			if (const auto it = beforeIndex.find(id); it != beforeIndex.end())
-			{
-				rootIds.insert(before.entities[RootIndexOf(before, it->second)].entityId);
-			}
-			if (const auto it = afterIndex.find(id); it != afterIndex.end())
-			{
-				rootIds.insert(after.entities[RootIndexOf(after, it->second)].entityId);
-			}
-		}
-
-		const std::vector<std::vector<std::size_t>> beforeChildren = BuildChildren(before);
-		const std::vector<std::vector<std::size_t>> afterChildren = BuildChildren(after);
-		for (const std::uint32_t rootId: rootIds)
-		{
-			Group group;
-			if (const auto it = beforeIndex.find(rootId); it != beforeIndex.end())
-			{
-				group.existsBefore = true;
-				ExtractSubtree(before, it->second, beforeChildren, group.beforeSubtree, group.beforeParent, group.beforeIds);
-			}
-			if (const auto it = afterIndex.find(rootId); it != afterIndex.end())
-			{
-				group.existsAfter = true;
-				ExtractSubtree(after, it->second, afterChildren, group.afterSubtree, group.afterParent, group.afterIds);
-			}
-			m_groups.push_back(std::move(group));
+			entry->remove(world, entity);
 		}
 	}
 
-	void EntityDiffCommand::ApplyState(Group& group, bool toAfter, World& world, ServiceContainer& services)
+	void AddComponentCommand::Redo(World& world, ServiceContainer& services)
 	{
-		const bool targetExists = toAfter ? group.existsAfter : group.existsBefore;
-		const app::scene::SceneDescription& targetDesc = toAfter ? group.afterSubtree : group.beforeSubtree;
-		const std::uint32_t targetParent = toAfter ? group.afterParent : group.beforeParent;
-		const std::vector<std::uint32_t>& targetIds = toAfter ? group.afterIds : group.beforeIds;
-		const std::vector<std::uint32_t>& otherIds = toAfter ? group.beforeIds : group.afterIds;
-
-		// Remove entities that exist in the state we're leaving but not the target
-		// (entities created inside this subtree by the edit being reverted).
-		const std::unordered_set<std::uint32_t> targetSet(targetIds.begin(), targetIds.end());
-		for (const std::uint32_t id: otherIds)
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
 		{
-			if (targetSet.contains(id))
+			return;
+		}
+		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
+		if (entry != nullptr && entry->add)
+		{
+			entry->add(world, entity, services);
+			EnableComponentFeatures(world, *entry);
+		}
+	}
+
+	// ── RemoveComponentCommand ─────────────────────────────────────────
+
+	RemoveComponentCommand::RemoveComponentCommand(std::uint32_t entityId, std::string componentName, nlohmann::json snapshot, bool isReflected)
+	      : m_entityId(entityId), m_componentName(std::move(componentName)), m_snapshot(std::move(snapshot)), m_isReflected(isReflected)
+	{
+	}
+
+	void RemoveComponentCommand::Undo(World& world, ServiceContainer& services)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
+		if (entry != nullptr && entry->add)
+		{
+			entry->add(world, entity, services);
+			EnableComponentFeatures(world, *entry);
+		}
+		if (!m_snapshot.empty())
+		{
+			ApplyComponentFields(world, entity, m_componentName, m_snapshot, m_isReflected, services);
+		}
+	}
+
+	void RemoveComponentCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
+		if (entry != nullptr && entry->remove)
+		{
+			entry->remove(world, entity);
+		}
+	}
+
+	// ── SetComponentCommand ────────────────────────────────────────────
+
+	SetComponentCommand::SetComponentCommand(std::uint32_t entityId, std::string componentName, nlohmann::json before, nlohmann::json after, bool isReflected)
+	      : m_entityId(entityId), m_componentName(std::move(componentName)), m_before(std::move(before)), m_after(std::move(after)), m_isReflected(isReflected)
+	{
+	}
+
+	void SetComponentCommand::Undo(World& world, ServiceContainer& services)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		ApplyComponentFields(world, entity, m_componentName, m_before, m_isReflected, services);
+	}
+
+	void SetComponentCommand::Redo(World& world, ServiceContainer& services)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		ApplyComponentFields(world, entity, m_componentName, m_after, m_isReflected, services);
+	}
+
+	// ── AddScriptCommand ────────────────────────────────────────────────
+
+	AddScriptCommand::AddScriptCommand(std::uint32_t entityId, std::string scriptType, ScriptEntry entry)
+	      : m_entityId(entityId), m_scriptType(std::move(scriptType)), m_entry(std::move(entry))
+	{
+	}
+
+	void AddScriptCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		auto* sc = world.TryGet<ScriptComponent>(entity);
+		if (sc == nullptr)
+		{
+			return;
+		}
+		// Remove the last script whose path matches the type.
+		for (auto it = sc->scripts.begin(); it != sc->scripts.end(); ++it)
+		{
+			if (it->path == m_scriptType)
+			{
+				sc->scripts.erase(it);
+				break;
+			}
+		}
+	}
+
+	void AddScriptCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		auto& sc = world.EmplaceOrReplace<ScriptComponent>(entity);
+		sc.scripts.push_back(m_entry);
+	}
+
+	// ── RemoveScriptCommand ────────────────────────────────────────────
+
+	RemoveScriptCommand::RemoveScriptCommand(std::uint32_t entityId, std::string scriptType, ScriptEntry entry)
+	      : m_entityId(entityId), m_scriptType(std::move(scriptType)), m_entry(std::move(entry))
+	{
+	}
+
+	void RemoveScriptCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		auto& sc = world.EmplaceOrReplace<ScriptComponent>(entity);
+		sc.scripts.push_back(m_entry);
+	}
+
+	void RemoveScriptCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		auto* sc = world.TryGet<ScriptComponent>(entity);
+		if (sc == nullptr)
+		{
+			return;
+		}
+		std::erase_if(sc->scripts, [this](const ScriptEntry& s) { return s.path == m_scriptType; });
+	}
+
+	// ── SceneReplaceCommand ────────────────────────────────────────────────
+
+	SceneReplaceCommand::SceneReplaceCommand(const app::scene::SceneDescription& before, const app::scene::SceneDescription& after, const std::string& beforeSceneName, const std::string& afterSceneName)
+	      : m_before(before), m_after(after), m_beforeSceneName(beforeSceneName), m_afterSceneName(afterSceneName)
+	{
+	}
+
+	void SceneReplaceCommand::Apply(app::scene::SceneDescription& desc, const std::string& sceneName, World& world, ServiceContainer& services)
+	{
+		auto deps = app::scene::MakeApplySceneDeps(services);
+		app::scene::ReplaceScene(desc, world, deps);
+		auto* scenes = services.TryGet<SceneSubsystem>();
+		if (scenes != nullptr)
+		{
+			scenes->SetCurrentScene(sceneName);
+		}
+	}
+
+	void SceneReplaceCommand::Undo(World& world, ServiceContainer& services)
+	{
+		Apply(m_before, m_beforeSceneName, world, services);
+	}
+
+	void SceneReplaceCommand::Redo(World& world, ServiceContainer& services)
+	{
+		Apply(m_after, m_afterSceneName, world, services);
+	}
+
+	// ── UnpackPrefabCommand ─────────────────────────────────────────────
+
+	std::unique_ptr<UnpackPrefabCommand> UnpackPrefabCommand::Capture(World& world, Entity root)
+	{
+		if (!root.IsValid() || !world.GetRegistry().valid(World::ToEntt(root)))
+		{
+			return nullptr;
+		}
+		const auto* inst = world.TryGet<PrefabInstanceComponent>(root);
+		if (inst == nullptr)
+		{
+			return nullptr;
+		}
+		auto cmd = std::unique_ptr<UnpackPrefabCommand>(new UnpackPrefabCommand());
+		cmd->m_rootId = root.id;
+		cmd->m_prefabPath = inst->prefabPath;
+
+		// Walk the subtree in the same order the unpack handler does, snapshotting
+		// each node's prefab linkage so undo can restore it exactly.
+		std::vector<Entity> subtree{root};
+		for (std::size_t i = 0; i < subtree.size(); ++i)
+		{
+			if (const auto* h = world.TryGet<HierarchyComponent>(subtree[i]))
+			{
+				subtree.insert(subtree.end(), h->children.begin(), h->children.end());
+			}
+		}
+		cmd->m_records.reserve(subtree.size());
+		for (const Entity e: subtree)
+		{
+			LinkRecord rec;
+			rec.entityId = e.id;
+			if (const auto* link = world.TryGet<PrefabLinkComponent>(e))
+			{
+				rec.hasLink = true;
+				rec.instanceRoot = link->instanceRoot.id;
+				rec.prefabGuid = link->prefabGuid;
+			}
+			rec.transient = world.Has<SceneTransientComponent>(e);
+			cmd->m_records.push_back(rec);
+		}
+		return cmd;
+	}
+
+	void UnpackPrefabCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		const Entity root{m_rootId};
+		if (!root.IsValid() || !world.GetRegistry().valid(World::ToEntt(root)))
+		{
+			return;
+		}
+		world.EmplaceOrReplace<PrefabInstanceComponent>(root, PrefabInstanceComponent{.prefabPath = m_prefabPath});
+		for (const LinkRecord& rec: m_records)
+		{
+			const Entity e{rec.entityId};
+			if (!world.GetRegistry().valid(World::ToEntt(e)))
 			{
 				continue;
 			}
-			const Entity entity{id};
-			if (entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity)))
+			if (rec.hasLink)
 			{
-				ecs::DetachFromParent(world, entity);
-				world.Destroy(entity);
+				world.EmplaceOrReplace<PrefabLinkComponent>(e, PrefabLinkComponent{.instanceRoot = Entity{rec.instanceRoot}, .prefabGuid = rec.prefabGuid});
+			}
+			if (rec.transient)
+			{
+				world.EmplaceOrReplace<SceneTransientComponent>(e);
 			}
 		}
-
-		if (targetExists)
-		{
-			group.lastApplied = app::scene::RestoreSubtreeInPlace(targetDesc, world, app::scene::MakeApplySceneDeps(services), Entity{targetParent});
-			group.lastAppliedDesc = &targetDesc;
-		}
-		else
-		{
-			group.lastApplied.clear();
-			group.lastAppliedDesc = nullptr;
-		}
 	}
 
-	void EntityDiffCommand::Undo(World& world, ServiceContainer& services)
+	void UnpackPrefabCommand::Redo(World& world, ServiceContainer& /*services*/)
 	{
-		for (Group& group: m_groups)
+		const Entity root{m_rootId};
+		if (!root.IsValid() || !world.GetRegistry().valid(World::ToEntt(root)))
 		{
-			ApplyState(group, /*toAfter=*/false, world, services);
+			return;
 		}
-	}
-
-	void EntityDiffCommand::Redo(World& world, ServiceContainer& services)
-	{
-		for (Group& group: m_groups)
+		for (const LinkRecord& rec: m_records)
 		{
-			ApplyState(group, /*toAfter=*/true, world, services);
-		}
-	}
-
-	Entity EntityDiffCommand::Remap(Entity entity) const
-	{
-		if (!entity.IsValid())
-		{
-			return entity;
-		}
-		for (const Group& group: m_groups)
-		{
-			if (group.lastAppliedDesc == nullptr)
+			const Entity e{rec.entityId};
+			if (!world.GetRegistry().valid(World::ToEntt(e)))
 			{
 				continue;
 			}
-			for (std::size_t i = 0; i < group.lastAppliedDesc->entities.size() && i < group.lastApplied.size(); ++i)
+			world.Remove<PrefabLinkComponent>(e);
+			world.Remove<SceneTransientComponent>(e);
+		}
+		world.Remove<PrefabInstanceComponent>(root);
+	}
+
+	// ── SetScriptsCommand ───────────────────────────────────────────────
+
+	namespace
+	{
+		bool ScriptPropertiesEqual(const ScriptPropertyValue& a, const ScriptPropertyValue& b)
+		{
+			return a.type == b.type && a.i64 == b.i64 && a.str == b.str && a.f4[0] == b.f4[0] && a.f4[1] == b.f4[1] && a.f4[2] == b.f4[2] && a.f4[3] == b.f4[3];
+		}
+	} // namespace
+
+	bool ScriptListsEqual(const std::vector<ScriptEntry>& a, const std::vector<ScriptEntry>& b)
+	{
+		if (a.size() != b.size())
+		{
+			return false;
+		}
+		for (std::size_t i = 0; i < a.size(); ++i)
+		{
+			if (a[i].path != b[i].path || a[i].properties.size() != b[i].properties.size())
 			{
-				if (group.lastAppliedDesc->entities[i].entityId == entity.id)
+				return false;
+			}
+			for (const auto& [key, value]: a[i].properties)
+			{
+				const auto it = b[i].properties.find(key);
+				if (it == b[i].properties.end() || !ScriptPropertiesEqual(value, it->second))
 				{
-					return group.lastApplied[i];
+					return false;
 				}
 			}
 		}
-		return entity;
+		return true;
+	}
+
+	SetScriptsCommand::SetScriptsCommand(std::uint32_t entityId, std::vector<ScriptEntry> before, std::vector<ScriptEntry> after)
+	      : m_entityId(entityId), m_before(std::move(before)), m_after(std::move(after))
+	{
+	}
+
+	void SetScriptsCommand::Apply(World& world, const std::vector<ScriptEntry>& scripts)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		auto& sc = world.EmplaceOrReplace<ScriptComponent>(entity);
+		sc.scripts = scripts;
+		// The managed instances behind the previous list are gone; let the script
+		// system re-attach rather than trusting a stale flag.
+		for (ScriptEntry& script: sc.scripts)
+		{
+			script.attached = false;
+		}
+	}
+
+	void SetScriptsCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		Apply(world, m_before);
+	}
+
+	void SetScriptsCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		Apply(world, m_after);
+	}
+
+	// ── SetTagsCommand ──────────────────────────────────────────────────
+
+	SetTagsCommand::SetTagsCommand(std::uint32_t entityId, std::vector<std::uint32_t> before, std::vector<std::uint32_t> after)
+	      : m_entityId(entityId), m_before(std::move(before)), m_after(std::move(after))
+	{
+	}
+
+	void SetTagsCommand::Apply(World& world, const std::vector<std::uint32_t>& tags)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		// Restore exact membership: every known tag is either added or dropped, so a
+		// tag added since capture is cleared rather than left behind.
+		ForEachTag(
+		        [&](const std::string&, std::uint32_t tagId)
+		        {
+			        if (std::find(tags.begin(), tags.end(), tagId) != tags.end())
+			        {
+				        TagAdd(&world, m_entityId, tagId);
+			        }
+			        else
+			        {
+				        TagRemove(&world, m_entityId, tagId);
+			        }
+		        });
+	}
+
+	void SetTagsCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		Apply(world, m_before);
+	}
+
+	void SetTagsCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		Apply(world, m_after);
+	}
+
+	// ── HierarchyMoveCommand ────────────────────────────────────────────
+
+	HierarchyMoveCommand::HierarchyMoveCommand(std::vector<Item> items)
+	      : m_items(std::move(items))
+	{
+	}
+
+	void HierarchyMoveCommand::Apply(World& world, bool toAfter)
+	{
+		// Re-insert in ascending target index: rebuilding a sibling list one entity at
+		// a time only lands each at its recorded position if earlier slots are filled
+		// first, so capture order must not matter here.
+		std::vector<std::size_t> order(m_items.size());
+		for (std::size_t i = 0; i < order.size(); ++i)
+		{
+			order[i] = i;
+		}
+		std::stable_sort(order.begin(), order.end(), [this, toAfter](std::size_t a, std::size_t b) { return (toAfter ? m_items[a].newIndex : m_items[a].oldIndex) < (toAfter ? m_items[b].newIndex : m_items[b].oldIndex); });
+
+		for (const std::size_t i: order)
+		{
+			const Item& item = m_items[i];
+			const Entity entity{item.id};
+			if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				continue;
+			}
+			// id 0 means "no parent" (a scene root); a parent that no longer exists
+			// cannot take the child back, so leave that entity where it is.
+			const Entity parent{toAfter ? item.newParent : item.oldParent};
+			if (parent.IsValid() && !world.GetRegistry().valid(World::ToEntt(parent)))
+			{
+				continue;
+			}
+			ecs::InsertChildAt(world, entity, parent, toAfter ? item.newIndex : item.oldIndex);
+		}
+	}
+
+	void HierarchyMoveCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		Apply(world, /*toAfter=*/false);
+	}
+
+	void HierarchyMoveCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		Apply(world, /*toAfter=*/true);
 	}
 } // namespace aether::editor

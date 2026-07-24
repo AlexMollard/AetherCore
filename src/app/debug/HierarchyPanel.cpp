@@ -29,6 +29,7 @@
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "rendering/Renderer.hpp"
+#include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/UndoStack.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
@@ -242,6 +243,33 @@ namespace aether::editor
 			drawList->AddText(textPos, ImGui::ColorConvertFloat4ToU32(badge.color), badge.icon);
 			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x, textPos.y), ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
 			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x + nameSize.x, textPos.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), idText.c_str());
+		}
+
+		// Where an entity currently sits in the hierarchy: its parent (id 0 means a
+		// scene root) and its index among that parent's children. A hierarchy drag
+		// can change either, so undo needs both to put the entity back exactly.
+		struct HierarchySlot
+		{
+			std::uint32_t parent = 0;
+			int index = -1;
+		};
+
+		HierarchySlot HierarchySlotOf(World& world, Entity entity)
+		{
+			const auto* hierarchy = world.TryGet<HierarchyComponent>(entity);
+			const Entity parent = hierarchy != nullptr ? hierarchy->parent : Entity{};
+			const std::vector<Entity>* siblings = &world.Roots();
+			if (parent.IsValid())
+			{
+				const auto* parentHierarchy = world.TryGet<HierarchyComponent>(parent);
+				if (parentHierarchy == nullptr)
+				{
+					return {parent.id, -1};
+				}
+				siblings = &parentHierarchy->children;
+			}
+			const auto it = std::find(siblings->begin(), siblings->end(), entity);
+			return {parent.id, it != siblings->end() ? static_cast<int>(std::distance(siblings->begin(), it)) : -1};
 		}
 
 		std::vector<Entity> CollectSelectionRoots(World& world, const SceneSelection& selection)
@@ -607,7 +635,14 @@ namespace aether::editor
 				if (p->DataSize == sizeof(dragdrop::ScriptPayload))
 				{
 					const auto* script = static_cast<const dragdrop::ScriptPayload*>(p->Data);
+					// Dropping onto the hierarchy can target an entity the inspector is
+					// not showing, so this path records its own script command.
+					const std::vector<ScriptEntry> scriptsBefore = CaptureScripts(world, e);
 					AddScriptToEntity(world, e, script->typeName);
+					if (auto* scriptUndo = context.TryGet<UndoStack>())
+					{
+						RecordScriptEdits(*scriptUndo, world, e, scriptsBefore);
+					}
 				}
 			}
 
@@ -1251,7 +1286,8 @@ namespace aether::editor
 		std::string firstVisible;
 		for (const SceneListEntry& entry: m_sceneEntries)
 		{
-			if (!needle.empty() && std::search(entry.name.begin(), entry.name.end(), needle.begin(), needle.end(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); }) == entry.name.end())
+			if (!needle.empty()
+			        && std::search(entry.name.begin(), entry.name.end(), needle.begin(), needle.end(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); }) == entry.name.end())
 			{
 				continue;
 			}
@@ -1899,9 +1935,12 @@ namespace aether::editor
 					ImGui::SetClipboardText(app::scene::WriteToml(app::scene::CaptureSubtrees(world, roots, clipAssets->GetMaterialRegistry(), clipAssets->GetTextureRegistry())).c_str());
 					if (cutKey)
 					{
+						// Snapshot the subtrees before they are destroyed; undo restores
+						// them under their original ids and parents.
+						std::unique_ptr<SubtreeLifetimeCommand> cutCommand;
 						if (undo != nullptr)
 						{
-							undo->Push(world, context.services);
+							cutCommand = SubtreeLifetimeCommand::Capture(world, context.services, roots, /*createdByThisEdit=*/false, "Cut");
 						}
 						for (const Entity r: roots)
 						{
@@ -1909,6 +1948,10 @@ namespace aether::editor
 							{
 								ecs::DestroyHierarchy(world, r);
 							}
+						}
+						if (cutCommand != nullptr)
+						{
+							undo->Record(std::move(cutCommand));
 						}
 						selection.Clear();
 					}
@@ -1920,11 +1963,8 @@ namespace aether::editor
 				{
 					if (const auto parsed = app::scene::ParseToml(clip); parsed.has_value() && !parsed->entities.empty())
 					{
-						if (undo != nullptr)
-						{
-							undo->Push(world, context.services);
-						}
 						const auto created = app::scene::ApplyScene(*parsed, world, app::scene::MakeApplySceneDeps(context.services));
+						std::vector<Entity> pastedRoots;
 						bool first = true;
 						for (std::size_t i = 0; i < parsed->entities.size() && i < created.size(); ++i)
 						{
@@ -1938,6 +1978,7 @@ namespace aether::editor
 								m[3].x += 1.0f;
 								ecs::SetWorldTransform(world, created[i], m);
 							}
+							pastedRoots.push_back(created[i]);
 							if (first)
 							{
 								selection.Select(created[i]);
@@ -1946,6 +1987,14 @@ namespace aether::editor
 							else
 							{
 								selection.ToggleSelection(created[i]);
+							}
+						}
+						// Captured after the paste offset lands, so redo recreates them in place.
+						if (undo != nullptr && !pastedRoots.empty())
+						{
+							if (auto pasteCommand = SubtreeLifetimeCommand::Capture(world, context.services, pastedRoots, /*createdByThisEdit=*/true, "Paste"))
+							{
+								undo->Record(std::move(pasteCommand));
 							}
 						}
 					}
@@ -1959,10 +2008,7 @@ namespace aether::editor
 				if (dupAssets != nullptr)
 				{
 					const std::vector<Entity> roots = CollectSelectionRoots(world, selection);
-					if (!roots.empty() && undo != nullptr)
-					{
-						undo->Push(world, context.services);
-					}
+					std::vector<Entity> duplicated;
 					bool first = true;
 					for (const Entity root: roots)
 					{
@@ -1976,6 +2022,7 @@ namespace aether::editor
 						const Entity copy = app::scene::InstantiatePrefab(prefab, world, app::scene::MakeApplySceneDeps(context.services), placed);
 						if (copy.IsValid())
 						{
+							duplicated.push_back(copy);
 							if (first)
 							{
 								selection.Select(copy);
@@ -1985,6 +2032,13 @@ namespace aether::editor
 							{
 								selection.ToggleSelection(copy);
 							}
+						}
+					}
+					if (undo != nullptr && !duplicated.empty())
+					{
+						if (auto dupCommand = SubtreeLifetimeCommand::Capture(world, context.services, duplicated, /*createdByThisEdit=*/true, "Duplicate"))
+						{
+							undo->Record(std::move(dupCommand));
 						}
 					}
 				}
@@ -2028,6 +2082,16 @@ namespace aether::editor
 					{
 						moved.push_back(pr.child);
 					}
+					// Snapshot each mover's slot up front; the post-move slots are read
+					// back below so one drag becomes one undo step.
+					std::vector<HierarchyMoveCommand::Item> moveItems;
+					moveItems.reserve(moved.size());
+					for (const Entity e: moved)
+					{
+						const HierarchySlot slot = HierarchySlotOf(world, e);
+						moveItems.push_back({e.id, slot.parent, slot.index, 0, -1});
+					}
+
 					int afterOffset = 0;
 					bool changed = false;
 					for (const Entity e: moved)
@@ -2089,6 +2153,20 @@ namespace aether::editor
 					if (changed)
 					{
 						m_dirty = true;
+						if (undo != nullptr)
+						{
+							for (std::size_t i = 0; i < moveItems.size() && i < moved.size(); ++i)
+							{
+								const HierarchySlot slot = HierarchySlotOf(world, moved[i]);
+								moveItems[i].newParent = slot.parent;
+								moveItems[i].newIndex = slot.index;
+							}
+							std::erase_if(moveItems, [](const HierarchyMoveCommand::Item& item) { return item.oldParent == item.newParent && item.oldIndex == item.newIndex; });
+							if (!moveItems.empty())
+							{
+								undo->Record(std::make_unique<HierarchyMoveCommand>(std::move(moveItems)));
+							}
+						}
 					}
 				}
 			}
@@ -2097,17 +2175,24 @@ namespace aether::editor
 			{
 				if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !selection.All().empty())
 				{
-					if (auto* undoStack = context.TryGet<UndoStack>())
+					const std::vector<Entity> doomed = CollectSelectionRoots(world, selection);
+					// Snapshot before destroying so undo brings the subtrees back in place.
+					std::unique_ptr<SubtreeLifetimeCommand> deleteCommand;
+					auto* undoStack = context.TryGet<UndoStack>();
+					if (undoStack != nullptr)
 					{
-						undoStack->Push(world, context.services);
+						deleteCommand = SubtreeLifetimeCommand::Capture(world, context.services, doomed, /*createdByThisEdit=*/false, "Delete");
 					}
-					const std::vector<Entity> doomed = selection.All();
 					for (const Entity e: doomed)
 					{
 						if (world.GetRegistry().valid(World::ToEntt(e)))
 						{
 							ecs::DestroyHierarchy(world, e);
 						}
+					}
+					if (deleteCommand != nullptr)
+					{
+						undoStack->Record(std::move(deleteCommand));
 					}
 					selection.Clear();
 				}

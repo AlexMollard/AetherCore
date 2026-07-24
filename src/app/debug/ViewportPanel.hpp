@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
 
 #include "debug/DebugPanel.hpp"
 #include "debug/TilePaintingState.hpp"
@@ -37,6 +38,8 @@ namespace aether::editor
 		void HandleViewportPicking(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// Returns whether a gizmo was submitted so callers do not use stale ImGuizmo state.
 		bool DrawTransformGizmo(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		// Record a just-released gizmo drag as one TransformCommand. No-op when nothing moved.
+		void FinishGizmoDrag(app::LayerContext& context);
 		void Draw2DGrid(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void Handle2DNavigation(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		void DrawPlayControls(app::LayerContext& context);
@@ -79,16 +82,33 @@ namespace aether::editor
 		int m_gizmoOp = 0;
 		bool m_gizmoLocal = false;
 
+		// Gizmo drag -> exactly one TransformCommand per drag. While the gizmo is
+		// idle the affected entities' world matrices are re-snapshotted every frame,
+		// so the frame a drag starts already holds its pre-drag state; the command is
+		// recorded when the drag releases (a multi-frame drag stays one undo step).
+		struct GizmoDragEntry
+		{
+			std::uint32_t id = 0;
+			glm::mat4 before{1.0f};
+		};
+
+		bool m_gizmoDragging = false;
+		std::vector<GizmoDragEntry> m_gizmoDragBefore;
+
 		std::uint32_t m_editorCamId = 0;
 		std::uint32_t m_gameCamId = 0;
 		bool m_editorCamActive = false;
 		bool m_editor2DMode = false;
 
 		// Collider 2D handle interaction (edit mode). Capture suppresses viewport
-	// picking while a handle is hovered or dragged.
-	int m_collider2DActiveHandle = -1;
-	bool m_collider2DMouseCapture = false;
-	bool m_collider2DUndoPushed = false;
+		// picking while a handle is hovered or dragged.
+		int m_collider2DActiveHandle = -1;
+		bool m_collider2DMouseCapture = false;
+		// Set once a gesture has snapshotted the collider; m_collider2DBefore then holds
+		// the pre-edit fields so the whole gesture records as one SetComponentCommand.
+		bool m_collider2DUndoPushed = false;
+		nlohmann::json m_collider2DBefore;
+		bool m_collider2DBeforeReflected = false;
 
 		// Tile painting gesture state (tool selection lives in TilePaintingState).
 		bool m_tilePaintCapture = false;
@@ -100,7 +120,7 @@ namespace aether::editor
 		std::vector<glm::ivec2> m_tileStrokeCells;
 		std::vector<editor::TilePaintEdit> m_tileStrokeEdits;
 
-	std::uint32_t m_lookThroughEntityId = 0;
+		std::uint32_t m_lookThroughEntityId = 0;
 		glm::vec3 m_saved2DEditorPosition{0.0f, 0.0f, 10.0f};
 		float m_saved2DEditorHeight = 10.0f;
 		bool m_hasSaved2DEditorCamera = false;

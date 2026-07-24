@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,7 +19,9 @@
 #include "assets/SpriteAtlasAsset.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/EditorChrome.hpp"
+#include "debug/EditorCommand.hpp"
 #include "debug/EditorDragDrop.hpp"
+#include "debug/UndoStack.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
@@ -71,6 +74,7 @@ namespace aether::editor
 	using iw::PropText;
 	using iw::RemovableSection;
 	using iw::SectionHeader;
+
 	void AssignScriptType(ScriptEntry& script, std::string typeName)
 	{
 		if (script.path == typeName)
@@ -414,6 +418,7 @@ namespace aether::editor
 		}
 		ImGui::PopID();
 	}
+
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName)
 	{
 		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))

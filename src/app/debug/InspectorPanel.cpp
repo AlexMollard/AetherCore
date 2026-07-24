@@ -20,6 +20,7 @@
 #include "assets/AssetTypes.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/ReflectedComponentDrawer.hpp"
+#include "debug/UndoStack.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
@@ -693,8 +694,33 @@ namespace aether::editor
 			// registrations like Day Night or future 2D physics additions) list
 			// here automatically, honoring the same feature/conflict visibility.
 			{
-				static constexpr std::string_view kHandAuthored[] = {"Bob", "Box Collider", "Camera", "Capsule Collider", "Collision Events", "Cylinder Collider", "Hierarchy", "Joint", "Look At", "Material", "Material Pulse", "Name", "Orbit",
-				        "Point Light", "Rigid Body", "Scale Pulse", "Scene Transient", "Sphere Collider", "Spin", "Spot Light", "Sprite Animator", "Sprite Renderer", "Trigger Volume", "UI Text", "Transform", "Rigid Body 2D", "Collider 2D",
+				static constexpr std::string_view kHandAuthored[] = {"Bob",
+				        "Box Collider",
+				        "Camera",
+				        "Capsule Collider",
+				        "Collision Events",
+				        "Cylinder Collider",
+				        "Hierarchy",
+				        "Joint",
+				        "Look At",
+				        "Material",
+				        "Material Pulse",
+				        "Name",
+				        "Orbit",
+				        "Point Light",
+				        "Rigid Body",
+				        "Scale Pulse",
+				        "Scene Transient",
+				        "Sphere Collider",
+				        "Spin",
+				        "Spot Light",
+				        "Sprite Animator",
+				        "Sprite Renderer",
+				        "Trigger Volume",
+				        "UI Text",
+				        "Transform",
+				        "Rigid Body 2D",
+				        "Collider 2D",
 				        "Joint 2D"};
 				bool headerShown = false;
 				for (const editor::ComponentCatalogEntry& entry: editor::ComponentCatalog())
@@ -714,11 +740,22 @@ namespace aether::editor
 					}
 					if (PaletteEntry((entry.icon + "  " + entry.name).c_str(), m_addFilter, entry.has(world, entity)))
 					{
+						auto* addUndo = context.TryGet<UndoStack>();
+						// The implicit Transform is recorded separately so undoing the
+						// add does not strand a component the user never asked for.
 						if (!world.Has<TransformComponent>(entity))
 						{
 							world.Emplace<TransformComponent>(entity);
+							if (addUndo != nullptr)
+							{
+								addUndo->Record(std::make_unique<AddComponentCommand>(entity.id, "Transform"));
+							}
 						}
 						entry.add(world, entity, context.services);
+						if (addUndo != nullptr)
+						{
+							addUndo->Record(std::make_unique<AddComponentCommand>(entity.id, entry.name));
+						}
 					}
 				}
 			}
@@ -734,6 +771,35 @@ namespace aether::editor
 
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 6.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+
+		// The bespoke drawers below mutate components directly, so their edits are
+		// attributed by diffing the entity's reflected fields around the whole block
+		// instead of hooking each widget. Only worth doing on frames where a widget is
+		// actually being driven; on any frame this misses, the edit still falls back to
+		// the scene-diff safety net rather than being lost.
+		auto* fieldUndo = context.TryGet<UndoStack>();
+		const ImGuiIO& inspectorIo = ImGui::GetIO();
+		const bool watchFieldEdits = fieldUndo != nullptr && (ImGui::IsAnyItemActive() || inspectorIo.MouseDown[0] || inspectorIo.MouseReleased[0]);
+		// Every selected entity, not just the inspected one: the transform drawer
+		// applies its delta across the whole selection, and recording only the primary
+		// would drop the baseline and lose the rest.
+		std::vector<std::pair<Entity, std::vector<ReflectedComponentFields>>> fieldsBefore;
+		std::vector<ScriptEntry> scriptsBefore;
+		std::vector<std::uint32_t> tagsBefore;
+		if (watchFieldEdits)
+		{
+			scriptsBefore = CaptureScripts(world, entity);
+			tagsBefore = CaptureTags(world, entity);
+			fieldsBefore.emplace_back(entity, CaptureReflectedFields(world, entity, context.services));
+			for (const Entity other: selection.All())
+			{
+				if (other != entity && world.GetRegistry().valid(World::ToEntt(other)))
+				{
+					fieldsBefore.emplace_back(other, CaptureReflectedFields(world, other, context.services));
+				}
+			}
+		}
+
 		DrawTransform(context, world, entity);
 		DrawSkinnedMesh(world, entity);
 		DrawMaterial(context, world, entity);
@@ -747,7 +813,7 @@ namespace aether::editor
 		// UI Canvas/Rect/Image/Text have richer bespoke drawers above; exclude them here so the
 		// reflected pass does not draw them a second time. UI Slider/Toggle/Button/Progress Bar and
 		// UI Selectable have no bespoke drawer, so they are intentionally drawn by the reflected pass.
-		DrawReflectedComponents(world, entity, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer", "Sprite Animator", "UI Canvas", "UI Rect", "UI Image", "UI Text"});
+		DrawReflectedComponents(world, entity, context.services, {"Transform", "Skinned Mesh", "Material", "Camera", "Rigid Body", "Collider", "Joint", "Name", "Sprite Renderer", "Sprite Animator", "UI Canvas", "UI Rect", "UI Image", "UI Text"});
 		DrawCollider2DTools(context, world, entity);
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
@@ -758,6 +824,18 @@ namespace aether::editor
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);
+		for (const auto& [snapshotEntity, snapshotFields]: fieldsBefore)
+		{
+			if (world.GetRegistry().valid(World::ToEntt(snapshotEntity)))
+			{
+				RecordReflectedFieldEdits(*fieldUndo, world, snapshotEntity, context.services, snapshotFields);
+			}
+		}
+		if (watchFieldEdits && world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			RecordScriptEdits(*fieldUndo, world, entity, scriptsBefore);
+			RecordTagEdits(*fieldUndo, world, entity, tagsBefore);
+		}
 		ImGui::PopStyleVar(2);
 
 		if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload != nullptr && (activePayload->IsDataType(dragdrop::kScriptPayload) || activePayload->IsDataType(dragdrop::kFilePayload)))

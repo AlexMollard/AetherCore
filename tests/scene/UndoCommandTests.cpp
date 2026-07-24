@@ -1,12 +1,12 @@
-// Regression tests for the editor undo/redo command logic (command-based history
-// that replaced the whole-scene snapshot system). These exercise the commands
-// directly against a World - no editor, no GPU - so they lock in the invariants
-// that were previously only checked by hand through the MCP control endpoints:
-//   - transform undo/redo restores exactly the affected entities
-//   - the surgical EntityDiffCommand detects create / delete / edit and only
-//     touches those subtrees, preserving ids and (crucially) not orphaning the
-//     unchanged children of an edited parent
-//   - UndoStack ordering + redo-invalidation-on-new-command
+// Regression tests for the editor undo/redo command logic. Every edit is a typed
+// command recorded at the point of mutation - there is no scene-snapshot fallback -
+// so these exercise the commands directly against a World (no editor, no GPU) and
+// lock in the invariants that were previously only checked by hand through the MCP
+// control endpoints:
+//   - each command restores exactly what it captured, in place, preserving ids
+//   - hierarchy moves restore the original sibling index, not just the parent
+//   - UndoStack ordering, redo-invalidation, and the coalescing of a multi-frame
+//     (and multi-entity) inspector drag into one command per touched component
 
 #include <doctest/doctest.h>
 
@@ -17,32 +17,19 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "../material/FakeSlotSink.hpp"
-#include "../material/FakeTextureSink.hpp"
-
 #include "debug/EditorCommand.hpp"
 #include "debug/UndoStack.hpp"
-#include "material/MaterialRegistry.hpp"
-#include "material/TextureRegistry.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
-#include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
 #include "utils/ServiceContainer.hpp"
 
 using namespace aether;
 using namespace aether::editor;
-using aether::app::scene::CaptureScene;
-using aether::app::scene::SceneDescription;
 
 namespace
 {
-	bool Alive(World& world, Entity entity)
-	{
-		return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
-	}
-
 	std::string NameOf(World& world, Entity entity)
 	{
 		const auto* name = world.TryGet<NameComponent>(entity);
@@ -63,20 +50,7 @@ namespace
 		return entity;
 	}
 
-	// A capture context (standalone registries; no AssetManager/GPU needed).
-	struct CaptureCtx
-	{
-		FakeSlotSink sink{16};
-		FakeTextureSink tsink{};
-		TextureRegistry treg{tsink};
-		MaterialRegistry mreg{sink, treg};
-
-		SceneDescription Snap(World& world)
-		{
-			return CaptureScene(world, mreg, treg);
-		}
-	};
-}
+} // namespace
 
 TEST_CASE("TransformCommand restores exactly the affected entity's world matrix")
 {
@@ -93,138 +67,6 @@ TEST_CASE("TransformCommand restores exactly the affected entity's world matrix"
 	command.Undo(world, services);
 	CHECK(PosOf(world, entity).x == doctest::Approx(1.0f));
 	CHECK(PosOf(world, entity).z == doctest::Approx(3.0f));
-}
-
-TEST_CASE("EntityDiffCommand: edit reverts and redoes, other entities untouched")
-{
-	World world;
-	ServiceContainer services;
-	CaptureCtx ctx;
-
-	const Entity a = MakeEntity(world, "Alpha", glm::vec3(0.0f));
-	const Entity b = MakeEntity(world, "Beta", glm::vec3(5.0f, 0.0f, 0.0f));
-
-	const SceneDescription before = ctx.Snap(world);
-	world.Get<NameComponent>(a).name = "AlphaRenamed";
-	const SceneDescription after = ctx.Snap(world);
-
-	EntityDiffCommand command(before, after);
-	CHECK_FALSE(command.Empty());
-
-	command.Undo(world, services);
-	CHECK(NameOf(world, a) == "Alpha");
-	CHECK(NameOf(world, b) == "Beta"); // untouched
-	CHECK(Alive(world, b));
-
-	command.Redo(world, services);
-	CHECK(NameOf(world, a) == "AlphaRenamed");
-}
-
-TEST_CASE("EntityDiffCommand: create is removed on undo and restored on redo")
-{
-	World world;
-	ServiceContainer services;
-	CaptureCtx ctx;
-
-	const Entity a = MakeEntity(world, "Keep", glm::vec3(0.0f));
-	const SceneDescription before = ctx.Snap(world);
-	const Entity b = MakeEntity(world, "New", glm::vec3(1.0f, 1.0f, 0.0f));
-	const SceneDescription after = ctx.Snap(world);
-
-	EntityDiffCommand command(before, after);
-	command.Undo(world, services);
-	CHECK(Alive(world, a));
-	CHECK_FALSE(Alive(world, b)); // the created entity is gone
-
-	command.Redo(world, services);
-	CHECK(Alive(world, a));
-	// Recreated under the same id (its slot was free), so the original handle is valid again.
-	CHECK(Alive(world, b));
-	CHECK(NameOf(world, b) == "New");
-}
-
-TEST_CASE("EntityDiffCommand: delete is restored (same id) on undo")
-{
-	World world;
-	ServiceContainer services;
-	CaptureCtx ctx;
-
-	const Entity a = MakeEntity(world, "Alpha", glm::vec3(0.0f));
-	const Entity b = MakeEntity(world, "Beta", glm::vec3(7.0f, 0.0f, 0.0f));
-	const SceneDescription before = ctx.Snap(world);
-	ecs::DestroyHierarchy(world, b);
-	const SceneDescription after = ctx.Snap(world);
-
-	EntityDiffCommand command(before, after);
-	command.Undo(world, services);
-	CHECK(Alive(world, a));
-	CHECK(Alive(world, b)); // restored under the same id
-	CHECK(NameOf(world, b) == "Beta");
-	CHECK(PosOf(world, b).x == doctest::Approx(7.0f));
-
-	command.Redo(world, services);
-	CHECK_FALSE(Alive(world, b));
-}
-
-TEST_CASE("EntityDiffCommand: editing a parent does not orphan its children")
-{
-	World world;
-	ServiceContainer services;
-	CaptureCtx ctx;
-
-	const Entity parent = MakeEntity(world, "Parent", glm::vec3(0.0f));
-	const Entity child = MakeEntity(world, "Child", glm::vec3(1.0f, 0.0f, 0.0f));
-	ecs::SetParent(world, child, parent);
-
-	const SceneDescription before = ctx.Snap(world);
-	world.Get<NameComponent>(parent).name = "ParentEdited";
-	const SceneDescription after = ctx.Snap(world);
-
-	EntityDiffCommand command(before, after);
-	command.Undo(world, services);
-
-	CHECK(NameOf(world, parent) == "Parent");
-	REQUIRE(Alive(world, child));
-	const auto* childHierarchy = world.TryGet<HierarchyComponent>(child);
-	REQUIRE(childHierarchy != nullptr);
-	CHECK(childHierarchy->parent == parent); // still parented, not orphaned
-	const auto* parentHierarchy = world.TryGet<HierarchyComponent>(parent);
-	REQUIRE(parentHierarchy != nullptr);
-	CHECK(std::find(parentHierarchy->children.begin(), parentHierarchy->children.end(), child) != parentHierarchy->children.end());
-}
-
-TEST_CASE("EntityDiffCommand ignores animator-driven sprite frame changes")
-{
-	World world;
-	CaptureCtx ctx;
-	const Entity e = MakeEntity(world, "Anim", glm::vec3(0.0f));
-	world.Emplace<SpriteRendererComponent>(e, SpriteRendererComponent{});
-	world.Emplace<SpriteAnimatorComponent>(e, SpriteAnimatorComponent{});
-
-	const app::scene::SceneDescription before = ctx.Snap(world);
-	// Simulate an edit-mode preview advancing the frame (ApplyFrame writes these).
-	world.Get<SpriteRendererComponent>(e).uvRect = glm::vec4(0.1f, 0.2f, 0.3f, 0.4f);
-	world.Get<SpriteRendererComponent>(e).pixelSize = glm::vec2(999.0f);
-	const app::scene::SceneDescription after = ctx.Snap(world);
-
-	EntityDiffCommand command(before, after);
-	CHECK(command.Empty()); // a previewing animation is runtime state, not an authored edit
-}
-
-TEST_CASE("EntityDiffCommand still catches authored edits on an animated entity")
-{
-	World world;
-	CaptureCtx ctx;
-	const Entity e = MakeEntity(world, "Anim", glm::vec3(0.0f));
-	world.Emplace<SpriteRendererComponent>(e, SpriteRendererComponent{});
-	world.Emplace<SpriteAnimatorComponent>(e, SpriteAnimatorComponent{});
-
-	const app::scene::SceneDescription before = ctx.Snap(world);
-	world.Get<NameComponent>(e).name = "Renamed";
-	const app::scene::SceneDescription after = ctx.Snap(world);
-
-	EntityDiffCommand command(before, after);
-	CHECK_FALSE(command.Empty()); // renaming is a real edit even with an animator present
 }
 
 TEST_CASE("UndoStack ordering and redo invalidation")
@@ -283,4 +125,249 @@ TEST_CASE("UndoStack tracks unsaved changes across edits, save, undo and load")
 	CHECK(stack.HasUnsavedChanges());
 	stack.Clear();
 	CHECK_FALSE(stack.HasUnsavedChanges());
+}
+
+TEST_CASE("RenameCommand restores the old name on undo and reapplies on redo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "Original", glm::vec3(0.0f));
+
+	RenameCommand command(entity.id, "Original", "Renamed");
+	command.Redo(world, services);
+	CHECK(NameOf(world, entity) == "Renamed");
+	command.Undo(world, services);
+	CHECK(NameOf(world, entity) == "Original");
+}
+
+TEST_CASE("ReparentCommand restores the previous parent on undo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity parentA = MakeEntity(world, "ParentA", glm::vec3(0.0f));
+	const Entity parentB = MakeEntity(world, "ParentB", glm::vec3(1.0f, 0.0f, 0.0f));
+	const Entity child = MakeEntity(world, "Child", glm::vec3(2.0f, 0.0f, 0.0f));
+	ecs::SetParent(world, child, parentA);
+
+	// The edit reparents child from A to B; the command records that transition.
+	ecs::SetParent(world, child, parentB);
+	ReparentCommand command(child.id, parentA.id, parentB.id);
+
+	command.Undo(world, services);
+	CHECK(world.TryGet<HierarchyComponent>(child)->parent == parentA);
+	command.Redo(world, services);
+	CHECK(world.TryGet<HierarchyComponent>(child)->parent == parentB);
+}
+
+TEST_CASE("AddScriptCommand removes the script on undo and re-adds it on redo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	auto& sc = world.Emplace<ScriptComponent>(entity);
+	ScriptEntry entry;
+	entry.path = "Player";
+	sc.scripts.push_back(entry);
+
+	AddScriptCommand command(entity.id, "Player", entry);
+	command.Undo(world, services);
+	CHECK(world.TryGet<ScriptComponent>(entity)->scripts.empty());
+	command.Redo(world, services);
+	REQUIRE(world.TryGet<ScriptComponent>(entity)->scripts.size() == 1);
+	CHECK(world.TryGet<ScriptComponent>(entity)->scripts[0].path == "Player");
+}
+
+TEST_CASE("RemoveScriptCommand re-adds the script on undo and erases it on redo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	world.Emplace<ScriptComponent>(entity);
+	ScriptEntry entry;
+	entry.path = "Enemy";
+
+	RemoveScriptCommand command(entity.id, "Enemy", entry);
+	command.Undo(world, services);
+	REQUIRE(world.TryGet<ScriptComponent>(entity)->scripts.size() == 1);
+	CHECK(world.TryGet<ScriptComponent>(entity)->scripts[0].path == "Enemy");
+	command.Redo(world, services);
+	CHECK(world.TryGet<ScriptComponent>(entity)->scripts.empty());
+}
+
+TEST_CASE("SetScriptsCommand restores the whole script list and forces re-attach")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	auto& sc = world.Emplace<ScriptComponent>(entity);
+	ScriptEntry player;
+	player.path = "Player";
+	sc.scripts.push_back(player);
+
+	const std::vector<ScriptEntry> before = sc.scripts;
+	ScriptEntry enemy;
+	enemy.path = "Enemy";
+	sc.scripts.push_back(enemy);
+	sc.scripts[0].attached = true;
+	const std::vector<ScriptEntry> after = sc.scripts;
+
+	SetScriptsCommand command(entity.id, before, after);
+	command.Undo(world, services);
+	REQUIRE(world.TryGet<ScriptComponent>(entity)->scripts.size() == 1);
+	CHECK(world.TryGet<ScriptComponent>(entity)->scripts[0].path == "Player");
+	// The managed instance is gone, so the restored entry must re-attach.
+	CHECK_FALSE(world.TryGet<ScriptComponent>(entity)->scripts[0].attached);
+
+	command.Redo(world, services);
+	REQUIRE(world.TryGet<ScriptComponent>(entity)->scripts.size() == 2);
+	CHECK(world.TryGet<ScriptComponent>(entity)->scripts[1].path == "Enemy");
+}
+
+TEST_CASE("ScriptListsEqual ignores the runtime attached flag but sees authored edits")
+{
+	std::vector<ScriptEntry> a(1);
+	a[0].path = "Player";
+	std::vector<ScriptEntry> b = a;
+
+	b[0].attached = true; // flipped by the script system, not a user edit
+	CHECK(ScriptListsEqual(a, b));
+
+	b[0].path = "Enemy";
+	CHECK_FALSE(ScriptListsEqual(a, b));
+}
+
+TEST_CASE("HierarchyMoveCommand restores both parent and sibling index on undo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity parentA = MakeEntity(world, "A", glm::vec3(0.0f));
+	const Entity parentB = MakeEntity(world, "B", glm::vec3(0.0f));
+	const Entity first = MakeEntity(world, "First", glm::vec3(0.0f));
+	const Entity mover = MakeEntity(world, "Mover", glm::vec3(0.0f));
+	const Entity last = MakeEntity(world, "Last", glm::vec3(0.0f));
+	ecs::SetParent(world, first, parentA);
+	ecs::SetParent(world, mover, parentA); // index 1 under A
+	ecs::SetParent(world, last, parentA);
+
+	// The edit moves it under B; the command records that slot transition.
+	ecs::InsertChildAt(world, mover, parentB, 0);
+	HierarchyMoveCommand command(std::vector<HierarchyMoveCommand::Item>{{mover.id, parentA.id, 1, parentB.id, 0}});
+
+	command.Undo(world, services);
+	REQUIRE(world.TryGet<HierarchyComponent>(mover) != nullptr);
+	CHECK(world.TryGet<HierarchyComponent>(mover)->parent == parentA);
+	const auto& restored = world.TryGet<HierarchyComponent>(parentA)->children;
+	REQUIRE(restored.size() == 3);
+	CHECK(restored[1] == mover); // back in its original slot, not just its original parent
+
+	command.Redo(world, services);
+	CHECK(world.TryGet<HierarchyComponent>(mover)->parent == parentB);
+}
+
+TEST_CASE("UndoStack coalesces an inspector field drag into a single command")
+{
+	UndoStack stack;
+	// A drag fires every frame with the intermediate values.
+	stack.RecordFieldEdit(7, "Point Light", "intensity", 1.0, 2.0, true);
+	stack.RecordFieldEdit(7, "Point Light", "intensity", 2.0, 3.0, true);
+	stack.RecordFieldEdit(7, "Point Light", "intensity", 3.0, 4.0, true);
+	CHECK(stack.UndoDepth() == 0); // nothing lands until the interaction ends
+
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 1); // the whole drag is one undo step
+}
+
+TEST_CASE("Recording a command finalizes an in-flight field edit instead of dropping it")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	const glm::mat4 origin = world.TryGet<TransformComponent>(entity)->localToWorld;
+	const glm::mat4 moved = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+	UndoStack stack;
+	stack.RecordFieldEdit(entity.id, "Point Light", "intensity", 1.0, 2.0, true);
+	// An unrelated command lands mid-drag (e.g. deleting something); the drag must
+	// be finalized ahead of it, not swallowed.
+	stack.Record(std::make_unique<TransformCommand>(std::vector<TransformCommand::Item>{{entity.id, origin, moved}}));
+	CHECK(stack.UndoDepth() == 2);
+
+	// Undo order proves the field edit was recorded first.
+	CHECK(stack.Undo(world, services) != nullptr);
+	CHECK(PosOf(world, entity).x == doctest::Approx(0.0f));
+}
+
+TEST_CASE("UndoStack drops a field edit that ends where it started")
+{
+	UndoStack stack;
+	stack.RecordFieldEdit(7, "Point Light", "intensity", 1.0, 2.0, true);
+	stack.RecordFieldEdit(7, "Point Light", "intensity", 2.0, 1.0, true);
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 0);
+}
+
+TEST_CASE("UndoStack keeps separate components pending until the interaction ends")
+{
+	UndoStack stack;
+	stack.RecordFieldEdit(7, "Point Light", "intensity", 1.0, 2.0, true);
+	stack.RecordFieldEdit(7, "Camera", "fov", 60.0, 70.0, true);
+	CHECK(stack.UndoDepth() == 0); // still in flight
+
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 2); // one command per touched component
+}
+
+TEST_CASE("UndoStack coalesces a multi-selection drag per entity, not per frame")
+{
+	UndoStack stack;
+	// One transform drag across a 3-entity selection: every frame touches all three.
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		const double from = 1.0 + frame;
+		const double to = 2.0 + frame;
+		stack.RecordFieldEdit(1, "Transform", "position", from, to, true);
+		stack.RecordFieldEdit(2, "Transform", "position", from, to, true);
+		stack.RecordFieldEdit(3, "Transform", "position", from, to, true);
+	}
+	CHECK(stack.UndoDepth() == 0); // nothing lands mid-drag
+
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 3); // one command per entity, not one per frame
+}
+
+TEST_CASE("UnpackPrefabCommand re-links the prefab instance in place on undo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity root = MakeEntity(world, "InstanceRoot", glm::vec3(0.0f));
+	const Entity child = MakeEntity(world, "InstanceChild", glm::vec3(1.0f, 0.0f, 0.0f));
+	ecs::SetParent(world, child, root);
+	world.Emplace<PrefabInstanceComponent>(root, PrefabInstanceComponent{.prefabPath = "prefabs/Hero.prefab"});
+	world.Emplace<SceneTransientComponent>(root);
+	world.Emplace<PrefabLinkComponent>(child, PrefabLinkComponent{.instanceRoot = root, .prefabGuid = 42});
+	world.Emplace<SceneTransientComponent>(child);
+
+	// Snapshot before the unpack strips the linkage (mirrors the control handler).
+	auto command = UnpackPrefabCommand::Capture(world, root);
+	REQUIRE(command != nullptr);
+	for (const Entity e: {root, child})
+	{
+		world.Remove<PrefabLinkComponent>(e);
+		world.Remove<SceneTransientComponent>(e);
+	}
+	world.Remove<PrefabInstanceComponent>(root);
+
+	command->Undo(world, services);
+	REQUIRE(world.Has<PrefabInstanceComponent>(root));
+	CHECK(world.TryGet<PrefabInstanceComponent>(root)->prefabPath == "prefabs/Hero.prefab");
+	CHECK(world.Has<SceneTransientComponent>(root));
+	REQUIRE(world.Has<PrefabLinkComponent>(child));
+	CHECK(world.TryGet<PrefabLinkComponent>(child)->prefabGuid == 42);
+	CHECK(world.TryGet<PrefabLinkComponent>(child)->instanceRoot == root);
+	CHECK(world.Has<SceneTransientComponent>(child));
+
+	command->Redo(world, services);
+	CHECK_FALSE(world.Has<PrefabInstanceComponent>(root));
+	CHECK_FALSE(world.Has<PrefabLinkComponent>(child));
+	CHECK_FALSE(world.Has<SceneTransientComponent>(child));
 }

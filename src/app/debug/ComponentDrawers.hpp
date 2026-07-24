@@ -9,6 +9,7 @@
 namespace aether
 {
 	class World;
+	class ServiceContainer;
 	struct Entity;
 } // namespace aether
 
@@ -50,8 +51,8 @@ namespace aether::editor
 	void DrawScript(app::LayerContext& context, World& world, Entity entity);
 	void DrawSceneTransient(World& world, Entity entity);
 	void DrawPhysics(app::LayerContext& context, World& world, Entity entity);
-// Spatial tools for the reflected Collider 2D section (sprite-outline -> polygon).
-void DrawCollider2DTools(app::LayerContext& context, World& world, Entity entity);
+	// Spatial tools for the reflected Collider 2D section (sprite-outline -> polygon).
+	void DrawCollider2DTools(app::LayerContext& context, World& world, Entity entity);
 	void DrawCollisionEvents(World& world, Entity entity);
 	void DrawJoint(app::LayerContext& context, World& world, Entity entity);
 	void DrawMeshRenderer(app::LayerContext& context, World& world, Entity entity);

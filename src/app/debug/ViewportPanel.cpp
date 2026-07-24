@@ -52,6 +52,13 @@
 
 namespace aether::editor
 {
+	namespace
+	{
+		// Reflected catalog name of Collider2DComponent (see Physics2D.reflect.cpp),
+		// used to snapshot/restore the collider through the generic field path.
+		const std::string kCollider2DTypeName{"Collider 2D"};
+	} // namespace
+
 	void ViewportPanel::OnUpdate(app::LayerContext& context)
 	{
 		auto* playState = context.TryGet<app::PlayState>();
@@ -511,6 +518,13 @@ namespace aether::editor
 			}
 		}
 
+		// A released drag is finalized before any early-out below, so losing the
+		// selection on the release frame still records the command.
+		if (m_gizmoDragging && !ImGuizmo::IsUsingAny())
+		{
+			FinishGizmoDrag(context);
+		}
+
 		auto& selection = context.Get<SceneSelection>();
 		World& world = context.Get<World>();
 		const Entity primary = selection.Primary();
@@ -557,10 +571,12 @@ namespace aether::editor
 		{
 			constrain2D |= world.Has<SpriteRendererComponent>(entity);
 		}
-		const ImGuizmo::OPERATION op = constrain2D
-		        ? (m_gizmoOp == 0 ? static_cast<ImGuizmo::OPERATION>(ImGuizmo::TRANSLATE_X | ImGuizmo::TRANSLATE_Y)
-		                          : m_gizmoOp == 1 ? ImGuizmo::ROTATE_Z : static_cast<ImGuizmo::OPERATION>(ImGuizmo::SCALE_X | ImGuizmo::SCALE_Y))
-		        : (m_gizmoOp == 0 ? ImGuizmo::TRANSLATE : m_gizmoOp == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE);
+		const ImGuizmo::OPERATION op = constrain2D ? (m_gizmoOp == 0          ? static_cast<ImGuizmo::OPERATION>(ImGuizmo::TRANSLATE_X | ImGuizmo::TRANSLATE_Y)
+		                                                     : m_gizmoOp == 1 ? ImGuizmo::ROTATE_Z
+		                                                                      : static_cast<ImGuizmo::OPERATION>(ImGuizmo::SCALE_X | ImGuizmo::SCALE_Y))
+		                                           : (m_gizmoOp == 0          ? ImGuizmo::TRANSLATE
+		                                                     : m_gizmoOp == 1 ? ImGuizmo::ROTATE
+		                                                                      : ImGuizmo::SCALE);
 		const ImGuizmo::MODE mode = (m_gizmoOp == 2 || m_gizmoLocal) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
 		float snapValues[3] = {0.5f, 0.5f, 0.5f};
@@ -574,9 +590,33 @@ namespace aether::editor
 		}
 		const float* snap = ImGui::GetIO().KeyCtrl ? snapValues : nullptr;
 
+		// While the gizmo is idle, keep a fresh pre-drag snapshot of every entity the
+		// gizmo would move. ImGuizmo only reports "using" once a drag has begun, so
+		// the snapshot has to already exist by the time Manipulate first returns true.
+		if (!m_gizmoDragging)
+		{
+			m_gizmoDragBefore.clear();
+			m_gizmoDragBefore.push_back({primary.id, tc->localToWorld});
+			if (selection.All().size() > 1)
+			{
+				for (const Entity other: selection.All())
+				{
+					if (other == primary || HasSelectedAncestor(world, other, selection))
+					{
+						continue;
+					}
+					if (const auto* otc = world.TryGet<TransformComponent>(other))
+					{
+						m_gizmoDragBefore.push_back({other.id, otc->localToWorld});
+					}
+				}
+			}
+		}
+
 		glm::mat4 model = tc->localToWorld;
 		if (ImGuizmo::Manipulate(&view[0][0], &proj[0][0], op, mode, &model[0][0], nullptr, snap))
 		{
+			m_gizmoDragging = true;
 			if (constrain2D)
 			{
 				glm::vec3 position{}, rotation{}, scale{};
@@ -604,6 +644,40 @@ namespace aether::editor
 			}
 		}
 		return true;
+	}
+
+	void ViewportPanel::FinishGizmoDrag(app::LayerContext& context)
+	{
+		m_gizmoDragging = false;
+		std::vector<GizmoDragEntry> before;
+		before.swap(m_gizmoDragBefore);
+
+		auto* undo = context.TryGet<UndoStack>();
+		if (undo == nullptr || before.empty())
+		{
+			return;
+		}
+		World& world = context.Get<World>();
+		std::vector<TransformCommand::Item> items;
+		items.reserve(before.size());
+		for (const GizmoDragEntry& entry: before)
+		{
+			const Entity entity{entry.id};
+			if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				continue;
+			}
+			const auto* tc = world.TryGet<TransformComponent>(entity);
+			if (tc == nullptr || tc->localToWorld == entry.before)
+			{
+				continue; // untouched by the drag (or gone) - nothing to record
+			}
+			items.push_back({entry.id, entry.before, tc->localToWorld});
+		}
+		if (!items.empty())
+		{
+			undo->Record(std::make_unique<TransformCommand>(std::move(items)));
+		}
 	}
 
 	void ViewportPanel::Draw2DGrid(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
@@ -722,7 +796,10 @@ namespace aether::editor
 		const ImU32 handleHotColor = chrome::U32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
 
 		// -- Shape outline ------------------------------------------------------
-		const auto lineBaked = [&](glm::vec2 a, glm::vec2 b) { drawList->AddLine(toScreen(bakedToWorld(a)), toScreen(bakedToWorld(b)), outlineColor, 1.5f); };
+		const auto lineBaked = [&](glm::vec2 a, glm::vec2 b)
+		{
+			drawList->AddLine(toScreen(bakedToWorld(a)), toScreen(bakedToWorld(b)), outlineColor, 1.5f);
+		};
 		switch (collider->shape)
 		{
 			case Collider2DShape::Box:
@@ -756,7 +833,8 @@ namespace aether::editor
 					const float a0 = glm::pi<float>() * static_cast<float>(i) / 12.0f;
 					const float a1 = glm::pi<float>() * static_cast<float>(i + 1) / 12.0f;
 					lineBaked(center + glm::vec2{radius * std::cos(a0), half + radius * std::sin(a0)}, center + glm::vec2{radius * std::cos(a1), half + radius * std::sin(a1)});
-					lineBaked(center + glm::vec2{radius * std::cos(glm::pi<float>() + a0), -half + radius * std::sin(glm::pi<float>() + a0)}, center + glm::vec2{radius * std::cos(glm::pi<float>() + a1), -half + radius * std::sin(glm::pi<float>() + a1)});
+					lineBaked(center + glm::vec2{radius * std::cos(glm::pi<float>() + a0), -half + radius * std::sin(glm::pi<float>() + a0)},
+					        center + glm::vec2{radius * std::cos(glm::pi<float>() + a1), -half + radius * std::sin(glm::pi<float>() + a1)});
 				}
 				lineBaked(center + glm::vec2{-radius, -half}, center + glm::vec2{-radius, half});
 				lineBaked(center + glm::vec2{radius, -half}, center + glm::vec2{radius, half});
@@ -782,6 +860,7 @@ namespace aether::editor
 			int id;
 			glm::vec2 baked;
 		};
+
 		std::vector<HandleSpot> handles;
 		handles.push_back({0, center});
 		switch (collider->shape)
@@ -839,16 +918,38 @@ namespace aether::editor
 		}
 		m_collider2DMouseCapture = hovered >= 0 || m_collider2DActiveHandle >= 0;
 
+		// Snapshot the collider's fields once per gesture (drag, point insert, point
+		// removal); finishColliderEdit turns that into one SetComponentCommand.
 		const auto pushUndoOnce = [&]
 		{
 			if (!m_collider2DUndoPushed)
 			{
-				if (auto* undo = context.TryGet<UndoStack>())
-				{
-					undo->Push(world, context.services);
-				}
+				m_collider2DBefore = nlohmann::json{};
+				m_collider2DBeforeReflected = false;
+				CaptureComponentFields(world, entity, kCollider2DTypeName, context.services, m_collider2DBefore, m_collider2DBeforeReflected);
 				m_collider2DUndoPushed = true;
 			}
+		};
+		const auto finishColliderEdit = [&]
+		{
+			if (!m_collider2DUndoPushed)
+			{
+				return;
+			}
+			m_collider2DUndoPushed = false;
+			auto* undo = context.TryGet<UndoStack>();
+			if (undo == nullptr || m_collider2DBefore.empty())
+			{
+				return;
+			}
+			nlohmann::json after;
+			bool afterReflected = false;
+			CaptureComponentFields(world, entity, kCollider2DTypeName, context.services, after, afterReflected);
+			if (!after.empty() && after != m_collider2DBefore)
+			{
+				undo->Record(std::make_unique<SetComponentCommand>(entity.id, kCollider2DTypeName, std::move(m_collider2DBefore), std::move(after), m_collider2DBeforeReflected));
+			}
+			m_collider2DBefore = nlohmann::json{};
 		};
 		const auto rebuild = [&]
 		{
@@ -863,7 +964,7 @@ namespace aether::editor
 		{
 			pushUndoOnce();
 			collider->points.erase(collider->points.begin() + (hovered - 100));
-			m_collider2DUndoPushed = false;
+			finishColliderEdit();
 			rebuild();
 			return;
 		}
@@ -939,7 +1040,7 @@ namespace aether::editor
 		if (m_collider2DActiveHandle >= 0 && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		{
 			m_collider2DActiveHandle = -1;
-			m_collider2DUndoPushed = false;
+			finishColliderEdit();
 			rebuild();
 		}
 
@@ -1209,10 +1310,10 @@ namespace aether::editor
 								}
 							}
 							if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr && !m_tileStrokeEdits.empty())
-						{
-							undo->Record(std::make_unique<editor::TileStrokeCommand>(component->tilemapPath, std::move(m_tileStrokeEdits)));
-							state->mapDirty = true;
-						}
+							{
+								undo->Record(std::make_unique<editor::TileStrokeCommand>(component->tilemapPath, std::move(m_tileStrokeEdits)));
+								state->mapDirty = true;
+							}
 							m_tileStrokeEdits.clear();
 							m_tileStrokeCells.clear();
 						}
@@ -1327,8 +1428,7 @@ namespace aether::editor
 		}
 
 		const glm::mat4 viewProj = camera->GetProjectionMatrix(renderAspect) * camera->GetViewMatrix();
-		const Ray ray = BuildCameraRay(
-		        glm::inverse(viewProj), uv, camera->GetPosition(), camera->GetProjection() == CameraProjection::Orthographic);
+		const Ray ray = BuildCameraRay(glm::inverse(viewProj), uv, camera->GetPosition(), camera->GetProjection() == CameraProjection::Orthographic);
 
 		auto& selection = context.Get<SceneSelection>();
 		const PickHit hit = PickEntity(context.Get<World>(), context.TryGet<PhysicsSystem>(), ray, camera->GetFarPlane());
@@ -1542,12 +1642,7 @@ namespace aether::editor
 				if (const Camera* backing = context.Get<CameraManager>().TryGet(CameraHandle{cc->backingCamera}))
 				{
 					constexpr float aspect = static_cast<float>(CameraPreviewService::kWidth) / static_cast<float>(CameraPreviewService::kHeight);
-					preview.SetRequest(true,
-					        backing->GetViewMatrix(),
-					        backing->GetProjectionMatrix(aspect),
-					        backing->GetPosition(),
-					        backing->GetNearPlane(),
-					        world.GetSceneKind() != SceneKind::Scene2D);
+					preview.SetRequest(true, backing->GetViewMatrix(), backing->GetProjectionMatrix(aspect), backing->GetPosition(), backing->GetNearPlane(), world.GetSceneKind() != SceneKind::Scene2D);
 					enabled = true;
 				}
 			}
@@ -1827,8 +1922,8 @@ namespace aether::editor
 		if (editorViewportInteractive)
 		{
 			Draw2DGrid(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
-		DrawCollider2DHandles(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
-		HandleTilePainting(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+			DrawCollider2DHandles(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+			HandleTilePainting(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			DrawSpriteOutlines(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 			DrawCameraGizmos(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
@@ -1859,10 +1954,6 @@ namespace aether::editor
 					World& world = context.Get<World>();
 					if (file->kind == dragdrop::FileKind::Texture && camera != nullptr && camera->GetProjection() == CameraProjection::Orthographic)
 					{
-						if (auto* undo = context.TryGet<UndoStack>())
-						{
-							undo->Push(world, context.services);
-						}
 						const glm::vec2 mouse{ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y};
 						const glm::vec2 uv = (mouse - glm::vec2{imageMin.x, imageMin.y}) / glm::vec2{imageSize.x, imageSize.y};
 						const glm::vec3 cameraPosition = camera->GetPosition();
@@ -1879,6 +1970,14 @@ namespace aether::editor
 							database->Register(MakeTextureSource(file->path));
 						}
 						context.Get<SceneSelection>().Select(entity);
+						// Captured once the entity is fully built, so redo recreates it complete.
+						if (auto* undo = context.TryGet<UndoStack>())
+						{
+							if (auto dropCommand = SubtreeLifetimeCommand::Capture(world, context.services, {entity}, /*createdByThisEdit=*/true, "Add Sprite"))
+							{
+								undo->Record(std::move(dropCommand));
+							}
+						}
 					}
 				}
 				ImGui::EndDragDropTarget();

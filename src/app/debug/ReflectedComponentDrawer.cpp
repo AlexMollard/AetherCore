@@ -1,17 +1,25 @@
 #include "debug/ReflectedComponentDrawer.hpp"
 
+#include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
 
+#include "debug/EditorCommand.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/UndoStack.hpp"
+#include "editor/ComponentFields.hpp"
+#include "editor/ReflectionJson.hpp"
 #include "scene/Entity.hpp"
+#include "scene/TagSlots.hpp"
 #include "scene/World.hpp"
 #include "scene/reflection/Reflection.hpp"
+#include "utils/ServiceContainer.hpp"
 
 namespace aether::editor
 {
@@ -195,18 +203,38 @@ namespace aether::editor
 			return changed;
 		}
 
-		bool DrawField(const reflect::FieldDesc& f, void* comp)
+		// Routes one field's before/after into the undo stack, which coalesces the
+		// per-frame stream of a drag into a single command.
+		struct FieldEditSink
+		{
+			UndoStack* undo = nullptr;
+			std::uint32_t entityId = 0;
+			const std::string* componentName = nullptr;
+
+			void Record(const reflect::FieldDesc& f, const reflect::FieldValue& before, const reflect::FieldValue& after) const
+			{
+				if (undo == nullptr || componentName == nullptr)
+				{
+					return;
+				}
+				undo->RecordFieldEdit(entityId, *componentName, f.name, FieldValueToJson(before, &f), FieldValueToJson(after, &f), /*isReflected=*/true);
+			}
+		};
+
+		bool DrawField(const reflect::FieldDesc& f, void* comp, const FieldEditSink& sink)
 		{
 			reflect::FieldValue v = f.get(comp);
+			const reflect::FieldValue before = v; // the widget mutates v in place
 			const bool changed = f.type == FieldType::List ? DrawListField(f, v) : DrawScalarField(f.name.c_str(), f.type, f.meta, v);
 			if (changed)
 			{
 				f.set(comp, v);
+				sink.Record(f, before, v);
 			}
 			return changed;
 		}
 
-		void DrawReflectedComponent(World& world, Entity entity, const reflect::ComponentType& rt)
+		void DrawReflectedComponent(World& world, Entity entity, const reflect::ComponentType& rt, ServiceContainer& services, UndoStack* undo)
 		{
 			void* comp = rt.tryGetRaw(world, entity);
 			if (comp == nullptr)
@@ -221,16 +249,30 @@ namespace aether::editor
 			const bool open = iw::RemovableSection(label.c_str(), removeId.c_str(), removed);
 			if (removed)
 			{
-				rt.remove(world, entity);
+				// Snapshot the fields first so undo restores the component's values,
+				// not just its presence.
+				if (undo != nullptr)
+				{
+					nlohmann::json snapshot;
+					bool isReflected = false;
+					CaptureComponentFields(world, entity, rt.name, services, snapshot, isReflected);
+					rt.remove(world, entity);
+					undo->Record(std::make_unique<RemoveComponentCommand>(entity.id, rt.name, std::move(snapshot), isReflected));
+				}
+				else
+				{
+					rt.remove(world, entity);
+				}
 				ImGui::PopID();
 				return;
 			}
 			if (open)
 			{
+				const FieldEditSink sink{undo, entity.id, &rt.name};
 				bool anyChanged = false;
 				for (const auto& f: rt.fields)
 				{
-					anyChanged |= DrawField(f, comp);
+					anyChanged |= DrawField(f, comp, sink);
 				}
 				if (anyChanged && rt.postSet)
 				{
@@ -241,8 +283,125 @@ namespace aether::editor
 		}
 	} // namespace
 
-	void DrawReflectedComponents(World& world, Entity entity, std::initializer_list<std::string_view> exclude)
+	std::vector<ReflectedComponentFields> CaptureReflectedFields(World& world, Entity entity, ServiceContainer& services)
 	{
+		std::vector<ReflectedComponentFields> snapshot;
+		for (const reflect::ComponentType& rt: reflect::ComponentTypes())
+		{
+			const void* comp = rt.tryGetRawConst(world, entity);
+			if (comp == nullptr)
+			{
+				continue;
+			}
+			nlohmann::json fields = nlohmann::json::object();
+			for (const auto& f: rt.fields)
+			{
+				fields[f.name] = FieldValueToJson(f.get(comp), &f);
+			}
+			snapshot.push_back({rt.name, std::move(fields), /*isReflected=*/true});
+		}
+		// Hand-authored sets (currently just Material) are not in the reflection
+		// registry but are edited by the same bespoke drawers.
+		for (const ComponentFieldSet& set: ComponentFieldSets())
+		{
+			nlohmann::json fields = nlohmann::json::object();
+			if (set.read(world, entity, services, fields))
+			{
+				snapshot.push_back({set.name, std::move(fields), /*isReflected=*/false});
+			}
+		}
+		return snapshot;
+	}
+
+	void RecordReflectedFieldEdits(UndoStack& undo, World& world, Entity entity, ServiceContainer& services, const std::vector<ReflectedComponentFields>& before)
+	{
+		for (const ReflectedComponentFields& entry: before)
+		{
+			if (!entry.isReflected)
+			{
+				const ComponentFieldSet* set = FindComponentFields(entry.name);
+				nlohmann::json now = nlohmann::json::object();
+				if (set == nullptr || !set->read(world, entity, services, now))
+				{
+					continue;
+				}
+				for (const auto& [key, value]: now.items())
+				{
+					const auto it = entry.fields.find(key);
+					if (it != entry.fields.end() && *it != value)
+					{
+						undo.RecordFieldEdit(entity.id, entry.name, key, *it, value, /*isReflected=*/false);
+					}
+				}
+				continue;
+			}
+			const reflect::ComponentType* rt = reflect::FindComponentType(entry.name);
+			if (rt == nullptr)
+			{
+				continue;
+			}
+			const void* comp = rt->tryGetRawConst(world, entity);
+			if (comp == nullptr)
+			{
+				continue; // removed this frame; component lifetime is recorded elsewhere
+			}
+			for (const auto& f: rt->fields)
+			{
+				const auto it = entry.fields.find(f.name);
+				if (it == entry.fields.end())
+				{
+					continue;
+				}
+				const nlohmann::json now = FieldValueToJson(f.get(comp), &f);
+				if (*it != now)
+				{
+					undo.RecordFieldEdit(entity.id, entry.name, f.name, *it, now, /*isReflected=*/true);
+				}
+			}
+		}
+	}
+
+	std::vector<ScriptEntry> CaptureScripts(World& world, Entity entity)
+	{
+		const auto* sc = world.TryGet<ScriptComponent>(entity);
+		return sc != nullptr ? sc->scripts : std::vector<ScriptEntry>{};
+	}
+
+	void RecordScriptEdits(UndoStack& undo, World& world, Entity entity, const std::vector<ScriptEntry>& before)
+	{
+		const std::vector<ScriptEntry> after = CaptureScripts(world, entity);
+		if (!ScriptListsEqual(before, after))
+		{
+			undo.Record(std::make_unique<SetScriptsCommand>(entity.id, before, after));
+		}
+	}
+
+	std::vector<std::uint32_t> CaptureTags(World& world, Entity entity)
+	{
+		std::vector<std::uint32_t> tags;
+		ForEachTag(
+		        [&](const std::string&, std::uint32_t tagId)
+		        {
+			        if (TagHas(&world, entity.id, tagId))
+			        {
+				        tags.push_back(tagId);
+			        }
+		        });
+		return tags;
+	}
+
+	void RecordTagEdits(UndoStack& undo, World& world, Entity entity, const std::vector<std::uint32_t>& before)
+	{
+		const std::vector<std::uint32_t> after = CaptureTags(world, entity);
+		if (before != after)
+		{
+			undo.Record(std::make_unique<SetTagsCommand>(entity.id, before, after));
+		}
+	}
+
+	void DrawReflectedComponents(World& world, Entity entity, ServiceContainer& services, std::initializer_list<std::string_view> exclude)
+	{
+		auto* undo = services.TryGet<UndoStack>();
 		for (const reflect::ComponentType& rt: reflect::ComponentTypes())
 		{
 			bool skip = false;
@@ -256,7 +415,7 @@ namespace aether::editor
 			}
 			if (!skip)
 			{
-				DrawReflectedComponent(world, entity, rt);
+				DrawReflectedComponent(world, entity, rt, services, undo);
 			}
 		}
 	}

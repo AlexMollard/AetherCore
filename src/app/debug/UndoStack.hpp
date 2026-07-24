@@ -2,12 +2,10 @@
 
 #include <cstddef>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "debug/EditorCommand.hpp"
-#include "scene/SceneSerializer.hpp"
 
 namespace aether
 {
@@ -17,41 +15,35 @@ namespace aether
 
 namespace aether::editor
 {
-	// Command-history undo/redo. Edits are captured as reversible commands and
-	// applied in place, so undo/redo preserve entity ids and the current
-	// selection, and never destroy-and-recreate the whole hierarchy.
-	//
-	// Coarse capture model for edits without a dedicated typed command:
-	//   - CaptureBaseline() snapshots the pre-edit scene once per interaction.
-	//   - CommitPending() snapshots the post-edit scene and, if it differs,
-	//     records a surgical EntityDiffCommand(before, after). Call it at end of
-	//     frame when the mouse is up, so a multi-frame drag becomes one command.
+	// Command-history undo/redo. Every edit is recorded as a typed, reversible
+	// command at the point of mutation and applied in place, so undo/redo preserve
+	// entity ids and the current selection, and never destroy-and-recreate the whole
+	// hierarchy. There is no scene-snapshot fallback: a mutation that records nothing
+	// is not undoable, by design.
 	class UndoStack
 	{
 	public:
 		static constexpr std::size_t kMaxDepth = 64;
 
-		// Snapshot the current scene as the baseline for the edit about to happen.
-		// No-op if a baseline is already pending this interaction.
-		void CaptureBaseline(World& world, ServiceContainer& services);
-
-		// Back-compat alias for existing edit sites that snapshot before mutating.
-		void Push(World& world, ServiceContainer& services)
-		{
-			CaptureBaseline(world, services);
-		}
-
-		// Record an already-applied typed command directly (bypassing the coarse
-		// baseline/commit path). Drops any pending baseline so a site that records a
-		// precise command doesn't also emit a redundant generic one.
+		// Record an already-applied typed command. Any coalesced field edit still in
+		// flight is finalized first, so history stays in the order the user made it.
 		void Record(std::unique_ptr<IEditorCommand> command);
 
-		// Finalize a pending baseline: if the scene changed, record a command.
-		void CommitPending(World& world, ServiceContainer& services);
+		// Inspector field edits fire every frame a widget is active (one slider drag
+		// is hundreds of calls), so they are coalesced instead of recorded per frame:
+		// the first value seen for a field is kept as its "before", the latest as its
+		// "after". Several (entity, component) targets can accumulate at once - one
+		// drag on a multi-selection edits every selected entity - and all of them are
+		// emitted together by FlushFieldEdit.
+		void RecordFieldEdit(std::uint32_t entityId, const std::string& componentName, const std::string& field, const nlohmann::json& before, const nlohmann::json& after, bool isReflected);
 
-		// Drop an in-flight baseline without recording anything. Used when the
-		// editor leaves an editable state (entering compile/play), so a baseline
-		// captured just before does not turn a later restore into a phantom edit.
+		// Turn a coalesced field edit into one SetComponentCommand. Call when no
+		// widget is active (i.e. the interaction finished).
+		void FlushFieldEdit();
+
+		// Drop an in-flight coalesced field edit without recording it. Used when the
+		// editor leaves an editable state (entering compile/play), so a drag that was
+		// mid-flight does not turn a later restore into a phantom edit.
 		void AbandonPending();
 
 		// Apply the top undo/redo command in place. Returns the command that ran
@@ -88,11 +80,20 @@ namespace aether::editor
 		}
 
 	private:
-		[[nodiscard]] bool CaptureScene(World& world, ServiceContainer& services, app::scene::SceneDescription& outDesc, std::string& outKey) const;
 		void RecordCommand(std::unique_ptr<IEditorCommand> command);
 
-		std::optional<app::scene::SceneDescription> m_pendingBefore;
-		std::string m_pendingBeforeKey;
+		// In-flight inspector field edits, one entry per (entity, component) touched by
+		// the current interaction (see RecordFieldEdit).
+		struct PendingFieldEdit
+		{
+			std::uint32_t entityId = 0;
+			std::string componentName;
+			bool isReflected = true;
+			nlohmann::json before;
+			nlohmann::json after;
+		};
+
+		std::vector<PendingFieldEdit> m_pendingFields;
 
 		std::vector<std::unique_ptr<IEditorCommand>> m_undo;
 		std::vector<std::unique_ptr<IEditorCommand>> m_redo;

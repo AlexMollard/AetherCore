@@ -33,9 +33,13 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/project/ProjectPaths.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
-    # Editor undo/redo command logic under test.
+    # Editor undo/redo command logic under test. The typed component commands
+    # (add/remove/set) resolve components through the editor catalog and the
+    # hand-authored field sets, so both TUs are compiled in alongside them.
     "${CMAKE_SOURCE_DIR}/src/app/debug/UndoStack.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/debug/EditorCommand.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentCatalog.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentFields.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests

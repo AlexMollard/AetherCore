@@ -23,6 +23,7 @@
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "debug/ComponentDrawers.hpp"
+#include "debug/EditorCommand.hpp"
 #include "debug/EditorWindowActions.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/UndoStack.hpp"
@@ -68,7 +69,6 @@ namespace aether::editor
 		constexpr std::size_t kMaxBatchItems = 10'000;
 		const json kVec3 = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}};
 
-
 		// GLFW key code for a key name (same vocabulary as engine.send_input): a-z,
 		// 0-9, or left/right/up/down/space/enter/escape/tab/shift/ctrl/alt. -1 if unknown.
 		int KeyCodeFromName(std::string name)
@@ -85,17 +85,50 @@ namespace aether::editor
 			{
 				return 48 + (name[0] - '0');
 			}
-			if (name == "left") return 263;
-			if (name == "right") return 262;
-			if (name == "up") return 265;
-			if (name == "down") return 264;
-			if (name == "space") return 32;
-			if (name == "enter" || name == "return") return 257;
-			if (name == "escape" || name == "esc") return 256;
-			if (name == "tab") return 258;
-			if (name == "shift" || name == "lshift") return 340;
-			if (name == "ctrl" || name == "lctrl") return 341;
-			if (name == "alt" || name == "lalt") return 342;
+			if (name == "left")
+			{
+				return 263;
+			}
+			if (name == "right")
+			{
+				return 262;
+			}
+			if (name == "up")
+			{
+				return 265;
+			}
+			if (name == "down")
+			{
+				return 264;
+			}
+			if (name == "space")
+			{
+				return 32;
+			}
+			if (name == "enter" || name == "return")
+			{
+				return 257;
+			}
+			if (name == "escape" || name == "esc")
+			{
+				return 256;
+			}
+			if (name == "tab")
+			{
+				return 258;
+			}
+			if (name == "shift" || name == "lshift")
+			{
+				return 340;
+			}
+			if (name == "ctrl" || name == "lctrl")
+			{
+				return 341;
+			}
+			if (name == "alt" || name == "lalt")
+			{
+				return 342;
+			}
 			return -1;
 		}
 
@@ -504,16 +537,12 @@ namespace aether::editor
 			}
 			return json{{"id", entity.id}, {"name", name}};
 		};
-		methods.push_back({"scene.create",
-		        "create_entity",
-		        "Create an entity in the live scene. Returns its id.",
-		        true,
-		        Obj({{"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}),
-		        createEntity});
+		methods.push_back({"scene.create", "create_entity", "Create an entity in the live scene. Returns its id.", true, Obj({{"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}), createEntity});
 
 		methods.push_back({"scene.add_prefab_instance",
 		        "add_prefab_instance",
-		        "Place a LINKED prefab instance in the live scene: the scene stores a reference (not a copy), so editing the prefab propagates to every instance. 'prefab' is the prefab's save name; optional 'position'/'rotationEuler'/'scale' place the instance root. Returns the root id.",
+		        "Place a LINKED prefab instance in the live scene: the scene stores a reference (not a copy), so editing the prefab propagates to every instance. 'prefab' is the prefab's save name; optional 'position'/'rotationEuler'/'scale' place "
+		        "the instance root. Returns the root id.",
 		        true,
 		        Obj({{"prefab", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"prefab"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -543,6 +572,14 @@ namespace aether::editor
 			        {
 				        return json{{"error", "failed to instantiate prefab"}};
 			        }
+			        if (auto* undo = ctx.services.TryGet<UndoStack>())
+			        {
+				        auto cmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {root}, true, "Add Prefab");
+				        if (cmd)
+				        {
+					        undo->Record(std::move(cmd));
+				        }
+			        }
 			        return json{{"id", root.id}, {"prefab", prefabName}};
 		        }});
 
@@ -564,6 +601,8 @@ namespace aether::editor
 			        {
 				        return json{{"error", "not a prefab instance root"}};
 			        }
+			        // Snapshot the linkage before stripping it so undo can re-link in place.
+			        auto cmd = UnpackPrefabCommand::Capture(world, root);
 			        std::vector<Entity> subtree{root};
 			        for (std::size_t i = 0; i < subtree.size(); ++i)
 			        {
@@ -578,6 +617,13 @@ namespace aether::editor
 				        world.Remove<SceneTransientComponent>(e);
 			        }
 			        world.Remove<PrefabInstanceComponent>(root);
+			        if (cmd)
+			        {
+				        if (auto* undo = ctx.services.TryGet<UndoStack>())
+				        {
+					        undo->Record(std::move(cmd));
+				        }
+			        }
 			        return json{{"id", root.id}, {"unpacked", subtree.size()}};
 		        }});
 
@@ -640,8 +686,25 @@ namespace aether::editor
 			        {
 				        return json{{"error", "prefab not found: " + prefabName}};
 			        }
+			        auto* undo = ctx.services.TryGet<UndoStack>();
+			        if (undo)
+			        {
+				        auto oldCmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {root}, false, "Revert Prefab");
+				        if (oldCmd)
+				        {
+					        undo->Record(std::move(oldCmd));
+				        }
+			        }
 			        ecs::DestroyHierarchy(world, root);
 			        const Entity newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(ctx.services), xform);
+			        if (undo)
+			        {
+				        auto newCmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {newRoot}, true, "Revert Prefab");
+				        if (newCmd)
+				        {
+					        undo->Record(std::move(newCmd));
+				        }
+			        }
 			        return json{{"id", newRoot.id}, {"prefab", prefabName}, {"reverted", true}};
 		        }});
 
@@ -691,6 +754,14 @@ namespace aether::editor
 					        prims = app::scene::ModelPrimitiveCount(*assets, *sc, path);
 				        }
 			        }
+			        if (auto* undo = ctx.services.TryGet<UndoStack>())
+			        {
+				        auto cmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {root}, true, "Add Model");
+				        if (cmd)
+				        {
+					        undo->Record(std::move(cmd));
+				        }
+			        }
 			        return json{{"id", root.id}, {"name", name}, {"primitives", prims}};
 		        }});
 
@@ -717,7 +788,13 @@ namespace aether::editor
 			        {
 				        return json{{"error", "'name' is required"}};
 			        }
+			        const auto* nc = world.TryGet<NameComponent>(entity);
+			        const std::string oldName = nc != nullptr ? nc->name : std::string{};
 			        world.EmplaceOrReplace<NameComponent>(entity, NameComponent{.name = name});
+			        if (auto* undo = ctx.services.TryGet<UndoStack>())
+			        {
+				        undo->Record(std::make_unique<RenameCommand>(entity.id, oldName, name));
+			        }
 			        return json{{"id", entity.id}, {"name", name}};
 		        }});
 
@@ -744,7 +821,14 @@ namespace aether::editor
 			        {
 				        return json{{"error", "no such parent"}};
 			        }
+			        const auto* hc = world.TryGet<HierarchyComponent>(child);
+			        const std::uint32_t oldParentId = hc != nullptr ? hc->parent.id : 0;
 			        const bool ok = aether::ecs::SetParent(world, child, parent);
+			        auto* undo = ctx.services.TryGet<UndoStack>();
+			        if (ok && undo)
+			        {
+				        undo->Record(std::make_unique<ReparentCommand>(child.id, oldParentId, parent.id));
+			        }
 			        return json{{"id", child.id}, {"parent", parent.id}, {"ok", ok}};
 		        }});
 
@@ -810,12 +894,7 @@ namespace aether::editor
 			ecs::DestroyHierarchy(world, entity);
 			return json{{"id", entity.id}, {"deleted", true}};
 		};
-		methods.push_back({"scene.delete",
-		        "delete_entity",
-		        "Delete an entity from the live scene by id.",
-		        true,
-		        Obj({{"id", IntProp()}}, {"id"}),
-		        deleteEntity});
+		methods.push_back({"scene.delete", "delete_entity", "Delete an entity from the live scene by id.", true, Obj({{"id", IntProp()}}, {"id"}), deleteEntity});
 
 		// the Inspector's Add-Component palette uses, so the two never drift.
 		const auto componentOp = [](bool add)
@@ -851,10 +930,21 @@ namespace aether::editor
 					}
 					entry->add(world, entity, ctx.services);
 					EnableComponentFeatures(world, *entry);
+					if (auto* undo = ctx.services.TryGet<UndoStack>())
+					{
+						undo->Record(std::make_unique<AddComponentCommand>(entity.id, type));
+					}
 				}
 				else
 				{
+					bool isReflected = false;
+					json snapshot;
+					CaptureComponentFields(world, entity, type, ctx.services, snapshot, isReflected);
 					entry->remove(world, entity);
+					if (auto* undo = ctx.services.TryGet<UndoStack>())
+					{
+						undo->Record(std::make_unique<RemoveComponentCommand>(entity.id, type, std::move(snapshot), isReflected));
+					}
 				}
 				return json{{"id", entity.id}, {"type", type}, {add ? "added" : "removed", true}};
 			};
@@ -925,58 +1015,74 @@ namespace aether::editor
 		        }});
 
 		const auto setComponent = [](const json& p, MethodContext& ctx) -> json
-		        {
-			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
-			        if (scenes == nullptr)
-			        {
-				        return ErrNoScene();
-			        }
-			        World& world = scenes->GetWorld();
-			        const Entity entity{IdOf(p)};
-			        if (!world.GetRegistry().valid(World::ToEntt(entity)))
-			        {
-				        return ErrNoEntity();
-			        }
-			        const std::string type = p.value("type", std::string{});
-			        const json values = (p.contains("values") && p["values"].is_object()) ? p["values"] : json::object();
-			        if (const auto* rt = reflect::FindComponentType(type))
-			        {
-				        void* comp = rt->tryGetRaw(world, entity);
-				        if (comp == nullptr)
-				        {
-					        return json{{"error", "entity has no '" + type + "' component"}};
-				        }
-				        json applied = json::array();
-				        for (const auto& f: rt->fields)
-				        {
-					        if (values.contains(f.name))
-					        {
-						        f.set(comp, editor::JsonToFieldValue(values.at(f.name), f));
-						        applied.push_back(f.name);
-					        }
-				        }
-				        if (applied.empty())
-				        {
-					        return json{{"error", "'values' named no known fields of '" + type + "'"}};
-				        }
-				        if (rt->postSet)
-				        {
-					        rt->postSet(world, entity);
-				        }
-				        return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
-			        }
-			        const auto* fields = editor::FindComponentFields(type);
-			        if (fields == nullptr)
-			        {
-				        return json{{"error", "component '" + type + "' has no editable fields"}};
-			        }
-			        const auto applied = fields->write(world, entity, values, ctx.services);
-			        if (applied.empty())
-			        {
-				        return json{{"error", "entity has no '" + type + "' component, or 'values' named no known fields"}};
-			        }
-			        return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
-		        };
+		{
+			auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			if (scenes == nullptr)
+			{
+				return ErrNoScene();
+			}
+			World& world = scenes->GetWorld();
+			const Entity entity{IdOf(p)};
+			if (!world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				return ErrNoEntity();
+			}
+			const std::string type = p.value("type", std::string{});
+			const json values = (p.contains("values") && p["values"].is_object()) ? p["values"] : json::object();
+			// Capture the before-state for undo.
+			json beforeSnapshot;
+			bool isReflected = false;
+			editor::CaptureComponentFields(world, entity, type, ctx.services, beforeSnapshot, isReflected);
+			if (const auto* rt = reflect::FindComponentType(type))
+			{
+				void* comp = rt->tryGetRaw(world, entity);
+				if (comp == nullptr)
+				{
+					return json{{"error", "entity has no '" + type + "' component"}};
+				}
+				json applied = json::array();
+				for (const auto& f: rt->fields)
+				{
+					if (values.contains(f.name))
+					{
+						f.set(comp, editor::JsonToFieldValue(values.at(f.name), f));
+						applied.push_back(f.name);
+					}
+				}
+				if (applied.empty())
+				{
+					return json{{"error", "'values' named no known fields of '" + type + "'"}};
+				}
+				if (rt->postSet)
+				{
+					rt->postSet(world, entity);
+				}
+				if (auto* undo = ctx.services.TryGet<UndoStack>())
+				{
+					undo->Record(std::make_unique<SetComponentCommand>(entity.id, type, std::move(beforeSnapshot), values, isReflected));
+				}
+				return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
+			}
+			const auto* fields = editor::FindComponentFields(type);
+			if (fields == nullptr)
+			{
+				return json{{"error", "component '" + type + "' has no editable fields"}};
+			}
+			const auto applied = fields->write(world, entity, values, ctx.services);
+			if (applied.empty())
+			{
+				return json{{"error", "entity has no '" + type + "' component, or 'values' named no known fields"}};
+			}
+			// Capture the after-state for redo.
+			json afterSnapshot;
+			bool dummy = false;
+			editor::CaptureComponentFields(world, entity, type, ctx.services, afterSnapshot, dummy);
+			if (auto* undo = ctx.services.TryGet<UndoStack>())
+			{
+				undo->Record(std::make_unique<SetComponentCommand>(entity.id, type, std::move(beforeSnapshot), std::move(afterSnapshot), isReflected));
+			}
+			return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
+		};
 		methods.push_back({"scene.set_component",
 		        "set_component",
 		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change "
@@ -986,11 +1092,7 @@ namespace aether::editor
 		        setComponent});
 
 		const json componentSpec = Obj({{"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"type"});
-		const json entitySpec = Obj({{"name", StrProp()},
-		        {"position", kVec3},
-		        {"rotationEuler", kVec3},
-		        {"scale", kVec3},
-		        {"components", json{{"type", "array"}, {"items", componentSpec}, {"maxItems", 64}}}});
+		const json entitySpec = Obj({{"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}, {"components", json{{"type", "array"}, {"items", componentSpec}, {"maxItems", 64}}}});
 		const json transformSpec = Obj({{"id", IntProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"id"});
 		const json componentItemSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type"});
 		const json setComponentSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"});
@@ -1042,7 +1144,8 @@ namespace aether::editor
 
 		methods.push_back({"scene.create_many",
 		        "create_entities",
-		        "Create up to 10,000 entities in one request. Each item accepts name/transform plus optional components with initial reflected values. Processing is one editor-frame command; failures are reported per item and a failed item's partial entity is rolled back.",
+		        "Create up to 10,000 entities in one request. Each item accepts name/transform plus optional components with initial reflected values. Processing is one editor-frame command; failures are reported per item and a failed item's "
+		        "partial entity is rolled back.",
 		        true,
 		        BatchSchema(entitySpec),
 		        BatchOperation(createEntityWithComponents)});
@@ -1052,12 +1155,8 @@ namespace aether::editor
 		        true,
 		        BatchSchema(transformSpec),
 		        BatchOperation(setTransform)});
-		methods.push_back({"scene.delete_many",
-		        "delete_entities",
-		        "Delete up to 10,000 entities in one request. Returns ordered per-item results with partial failures.",
-		        true,
-		        BatchSchema(Obj({{"id", IntProp()}}, {"id"})),
-		        BatchOperation(deleteEntity)});
+		methods.push_back(
+		        {"scene.delete_many", "delete_entities", "Delete up to 10,000 entities in one request. Returns ordered per-item results with partial failures.", true, BatchSchema(Obj({{"id", IntProp()}}, {"id"})), BatchOperation(deleteEntity)});
 		methods.push_back({"scene.add_component_many",
 		        "add_components",
 		        "Add components to up to 10,000 entities in one request. Each item may also provide reflected field values, combining add and initialize without another round trip.",
@@ -1172,11 +1271,27 @@ namespace aether::editor
 			        {
 				        return json{{"error", "'name' is required"}};
 			        }
+
+			        // Capture before state for undo.
+			        auto* undo = ctx.services.TryGet<UndoStack>();
+			        auto* assets = ctx.services.TryGet<AssetManager>();
+			        World& world = scenes->GetWorld();
+			        const std::string beforeScene = scenes->GetCurrentScene();
+			        auto beforeDesc = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
+
 			        const bool loaded = app::scene::SwitchScene(name, scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services));
 			        if (loaded)
 			        {
 				        scenes->SetCurrentScene(name);
 			        }
+
+			        if (undo != nullptr && loaded)
+			        {
+				        auto afterDesc = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
+				        SceneReplaceCommand cmd(beforeDesc, afterDesc, beforeScene, name);
+				        undo->Record(std::make_unique<SceneReplaceCommand>(std::move(cmd)));
+			        }
+
 			        return json{{"scene", name}, {"loaded", loaded}};
 		        }});
 
@@ -1192,12 +1307,27 @@ namespace aether::editor
 			        {
 				        return ErrNoScene();
 			        }
+
+			        // Capture before state for undo.
+			        auto* undo = ctx.services.TryGet<UndoStack>();
+			        auto* assets = ctx.services.TryGet<AssetManager>();
+			        World& world = scenes->GetWorld();
+			        const std::string beforeScene = scenes->GetCurrentScene();
+			        auto beforeDesc = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
+
 			        const SceneKind kind = p.value("kind", std::string{"3d"}) == "2d" ? SceneKind::Scene2D : SceneKind::Scene3D;
 			        const std::string name = app::scene::NewScene(scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services), kind);
 			        if (!name.empty())
 			        {
 				        scenes->SetCurrentScene(name);
 			        }
+
+			        if (undo != nullptr && !name.empty())
+			        {
+				        auto afterDesc = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
+				        undo->Record(std::make_unique<SceneReplaceCommand>(std::move(beforeDesc), std::move(afterDesc), beforeScene, name));
+			        }
+
 			        return json{{"scene", name}, {"kind", kind == SceneKind::Scene2D ? "2d" : "3d"}, {"ok", !name.empty()}};
 		        }});
 
@@ -1260,8 +1390,7 @@ namespace aether::editor
 		methods.push_back({"engine.toggle_play", "toggle_play", "Toggle Play/Stop.", true, Obj(), playHandler("toggle")});
 		methods.push_back({"engine.pause", "pause", "Freeze the running simulation (state='paused'). Session stays live; no-op unless playing.", true, Obj(), playHandler("pause")});
 		methods.push_back({"engine.resume", "resume", "Unfreeze a paused simulation (state='playing'). No-op unless playing.", true, Obj(), playHandler("resume")});
-		methods.push_back(
-		        {"engine.step", "step", "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.", true, Obj(), playHandler("step")});
+		methods.push_back({"engine.step", "step", "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.", true, Obj(), playHandler("step")});
 		methods.push_back({"engine.set_speed",
 		        "set_speed",
 		        "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
@@ -1282,7 +1411,8 @@ namespace aether::editor
 		        }});
 		methods.push_back({"engine.send_input",
 		        "send_input",
-		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire.",
+		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single "
+		        "letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire.",
 		        true,
 		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}}, {"up", json{{"type", "array"}, {"items", StrProp()}}}, {"clear", json{{"type", "boolean"}}}}),
 		        [](const json& params, MethodContext& ctx) -> json
@@ -1330,7 +1460,9 @@ namespace aether::editor
 
 		methods.push_back({"engine.play_input_sequence",
 		        "play_input_sequence",
-		        "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
+		        "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), "
+		        "release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a "
+		        "running sequence. Returns {events, duration}.",
 		        true,
 		        Obj({{"text", StrProp()}, {"file", StrProp()}, {"stop", json{{"type", "boolean"}}}}),
 		        [](const json& params, MethodContext& ctx) -> json
@@ -1972,38 +2104,11 @@ namespace aether::editor
 		        undoRedo(false)});
 		methods.push_back({"edit.redo", "redo", "Redo the last undone scene edit (mirrors Ctrl+Y). Returns ok=false when the redo stack is empty.", true, Obj(), undoRedo(true)});
 
-		// Make every scene-mutating method undoable: snapshot a baseline before it
-		// runs and commit after. CommitPending only records a command when the
-		// serialized scene actually changed, so non-scene mutations (camera, window
-		// toggles, selection, save, tile-asset paints) add nothing to the history.
-		// Play/stop and the undo ops manage their own state and are excluded.
-		for (ControlMethod& method: methods)
-		{
-			if (!method.mutates || method.name == "engine.play" || method.name == "engine.stop" || method.name == "engine.toggle_play" || method.name == "edit.undo" || method.name == "edit.redo"
-			        // Methods that record their own precise typed command:
-			        || method.name == "scene.transform" || method.name == "scene.create" || method.name == "scene.delete")
-			{
-				continue;
-			}
-			MethodHandler inner = std::move(method.handler);
-			method.handler = [inner = std::move(inner)](const json& params, MethodContext& ctx) -> json
-			{
-				auto* undo = ctx.services.TryGet<UndoStack>();
-				auto* scenes = ctx.services.TryGet<SceneSubsystem>();
-				World* world = scenes != nullptr ? &scenes->GetWorld() : nullptr;
-				if (undo != nullptr && world != nullptr)
-				{
-					undo->CaptureBaseline(*world, ctx.services);
-				}
-				json result = inner(params, ctx);
-				if (undo != nullptr && world != nullptr)
-				{
-					undo->CommitPending(*world, ctx.services);
-				}
-				return result;
-			};
-		}
-
+		// Every scene-mutating method records its own typed command at the point of
+		// mutation - there is no generic snapshot-diff wrapper. A method that mutates
+		// only files or editor view state (save, atlas.slice, animation.create,
+		// tiles.add_layer, editor.camera) records nothing, which is correct: there is
+		// no scene state to restore.
 		return methods;
 	}
 } // namespace aether::editor

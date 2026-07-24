@@ -23,6 +23,7 @@
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "debug/TilePaintingState.hpp"
+#include "debug/EditorCommand.hpp"
 #include "debug/UndoStack.hpp"
 #include "io/FileGlobOptions.hpp"
 #include "io/FileSystem.hpp"
@@ -44,6 +45,9 @@ namespace aether::editor
 
 		// Everything the tile methods need, resolved from an entity id. `error`
 		// is non-null when resolution failed.
+		// Reflected catalog name of TileMapComponent (see Physics2D/CoreComponents reflect).
+		const std::string kTileMapTypeName{"Tile Map"};
+
 		struct TileContext
 		{
 			json error;
@@ -228,12 +232,7 @@ namespace aether::editor
 		        "create_tile_assets",
 		        "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. Returns tileset/tilemap paths and the paintable tile list.",
 		        true,
-		        Obj({{"atlas", StrProp()},
-		                {"id", IntProp()},
-		                {"name", StrProp()},
-		                {"directory", StrProp()},
-		                {"cellSize", NumProp()},
-		                {"solid", json{{"type", "boolean"}, {"description", "give every tile Full collision (default false)"}}}},
+		        Obj({{"atlas", StrProp()}, {"id", IntProp()}, {"name", StrProp()}, {"directory", StrProp()}, {"cellSize", NumProp()}, {"solid", json{{"type", "boolean"}, {"description", "give every tile Full collision (default false)"}}}},
 		                {"atlas"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -290,7 +289,22 @@ namespace aether::editor
 				        }
 				        else
 				        {
+					        // Binding the map is the only scene mutation here (the tile
+					        // assets themselves are files), so it records as a field edit.
+					        nlohmann::json before;
+					        bool isReflected = false;
+					        CaptureComponentFields(*tc.world, tc.entity, kTileMapTypeName, ctx.services, before, isReflected);
 					        tc.component->tilemapPath = mapPath;
+					        if (auto* undo = ctx.services.TryGet<UndoStack>())
+					        {
+						        nlohmann::json after;
+						        bool afterReflected = false;
+						        CaptureComponentFields(*tc.world, tc.entity, kTileMapTypeName, ctx.services, after, afterReflected);
+						        if (!before.empty() && before != after)
+						        {
+							        undo->Record(std::make_unique<SetComponentCommand>(tc.entity.id, kTileMapTypeName, std::move(before), std::move(after), isReflected));
+						        }
+					        }
 					        result["boundTo"] = tc.entity.id;
 				        }
 			        }
@@ -315,26 +329,24 @@ namespace aether::editor
 				        const TileDefinition& tile = tc.tileSet->tiles[i];
 				        tiles.push_back(json{{"index", i},
 				                {"name", tile.name},
-				                {"collision", tile.collision == TileCollisionKind::Full ? "full" : tile.collision == TileCollisionKind::Rect ? "rect" : "none"},
-				                {"oneWay", tile.collision == TileCollisionKind::None ? "none"
-				                        : tile.oneWay == TileOneWay::Up      ? "up"
-				                        : tile.oneWay == TileOneWay::Down    ? "down"
-				                        : tile.oneWay == TileOneWay::Left    ? "left"
-				                        : tile.oneWay == TileOneWay::Right   ? "right"
-				                                                             : "none"},
+				                {"collision",
+				                        tile.collision == TileCollisionKind::Full   ? "full"
+				                        : tile.collision == TileCollisionKind::Rect ? "rect"
+				                                                                    : "none"},
+				                {"oneWay",
+				                        tile.collision == TileCollisionKind::None ? "none"
+				                        : tile.oneWay == TileOneWay::Up           ? "up"
+				                        : tile.oneWay == TileOneWay::Down         ? "down"
+				                        : tile.oneWay == TileOneWay::Left         ? "left"
+				                        : tile.oneWay == TileOneWay::Right        ? "right"
+				                                                                  : "none"},
 				                {"animated", !tile.animationFrames.empty()}});
 			        }
 			        json layers = json::array();
 			        for (std::size_t i = 0; i < tc.map->layers.size(); ++i)
 			        {
 				        const TileMapLayer& layer = tc.map->layers[i];
-				        layers.push_back(json{{"index", i},
-				                {"name", layer.name},
-				                {"visible", layer.visible},
-				                {"collision", layer.collision},
-				                {"opacity", layer.opacity},
-				                {"sortingLayer", layer.sortingLayer},
-				                {"orderInLayer", layer.orderInLayer}});
+				        layers.push_back(json{{"index", i}, {"name", layer.name}, {"visible", layer.visible}, {"collision", layer.collision}, {"opacity", layer.opacity}, {"sortingLayer", layer.sortingLayer}, {"orderInLayer", layer.orderInLayer}});
 			        }
 			        glm::ivec2 minCell{std::numeric_limits<std::int32_t>::max()};
 			        glm::ivec2 maxCell{std::numeric_limits<std::int32_t>::lowest()};
@@ -359,12 +371,7 @@ namespace aether::editor
 					        }
 				        }
 			        }
-			        json result{{"tilemap", tc.component->tilemapPath},
-			                {"tileset", tc.map->tileSetPath},
-			                {"cellSize", tc.map->cellSize},
-			                {"cellCount", cellCount},
-			                {"tiles", std::move(tiles)},
-			                {"layers", std::move(layers)}};
+			        json result{{"tilemap", tc.component->tilemapPath}, {"tileset", tc.map->tileSetPath}, {"cellSize", tc.map->cellSize}, {"cellCount", cellCount}, {"tiles", std::move(tiles)}, {"layers", std::move(layers)}};
 			        if (cellCount > 0)
 			        {
 				        result["bounds"] = json{{"min", json::array({minCell.x, minCell.y})}, {"max", json::array({maxCell.x, maxCell.y})}};
@@ -374,12 +381,13 @@ namespace aether::editor
 
 		methods.push_back({"tiles.paint",
 		        "paint_tiles",
-		        "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Edits join the editor's undo stack. 'save' (default true) persists the tilemap asset.",
+		        "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Edits join the editor's undo stack. 'save' (default true) persists the tilemap "
+		        "asset.",
 		        true,
 		        Obj({{"id", IntProp()},
-		                {"layer", IntProp()},
-		                {"cells", json{{"type", "array"}, {"minItems", 1}, {"maxItems", kMaxPaintCells}, {"items", Obj({{"x", IntProp()}, {"y", IntProp()}, {"tile", IntProp()}, {"flipX", BoolProp()}, {"flipY", BoolProp()}}, {"x", "y"})}}},
-		                {"save", BoolProp()}},
+		                    {"layer", IntProp()},
+		                    {"cells", json{{"type", "array"}, {"minItems", 1}, {"maxItems", kMaxPaintCells}, {"items", Obj({{"x", IntProp()}, {"y", IntProp()}, {"tile", IntProp()}, {"flipX", BoolProp()}, {"flipY", BoolProp()}}, {"x", "y"})}}},
+		                    {"save", BoolProp()}},
 		                {"id", "cells"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -435,14 +443,7 @@ namespace aether::editor
 		        "fill_tiles",
 		        "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack.",
 		        true,
-		        Obj({{"id", IntProp()},
-		                {"layer", IntProp()},
-		                {"rect", RectProp()},
-		                {"tile", IntProp()},
-		                {"flipX", BoolProp()},
-		                {"flipY", BoolProp()},
-		                {"save", BoolProp()}},
-		                {"id", "rect"}),
+		        Obj({{"id", IntProp()}, {"layer", IntProp()}, {"rect", RectProp()}, {"tile", IntProp()}, {"flipX", BoolProp()}, {"flipY", BoolProp()}, {"save", BoolProp()}}, {"id", "rect"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        TileContext tc = ResolveTileContext(p, ctx);
@@ -543,11 +544,7 @@ namespace aether::editor
 						        truncated = true;
 						        break;
 					        }
-					        cells.push_back(json{{"x", x},
-					                {"y", y},
-					                {"tile", TileSetIndexOf(*tc.map, *tc.tileSet, tilecell::PaletteIndex(cell))},
-					                {"flipX", (cell & tilecell::kFlipX) != 0u},
-					                {"flipY", (cell & tilecell::kFlipY) != 0u}});
+					        cells.push_back(json{{"x", x}, {"y", y}, {"tile", TileSetIndexOf(*tc.map, *tc.tileSet, tilecell::PaletteIndex(cell))}, {"flipX", (cell & tilecell::kFlipX) != 0u}, {"flipY", (cell & tilecell::kFlipY) != 0u}});
 				        }
 			        }
 			        return json{{"cells", std::move(cells)}, {"truncated", truncated}};
@@ -557,14 +554,7 @@ namespace aether::editor
 		        "add_tile_layer",
 		        "Append a layer to an entity's tilemap and return its index (paint_tiles' 'layer' parameter).",
 		        true,
-		        Obj({{"id", IntProp()},
-		                {"name", StrProp()},
-		                {"collision", BoolProp()},
-		                {"opacity", NumProp()},
-		                {"sortingLayer", IntProp()},
-		                {"orderInLayer", IntProp()},
-		                {"save", BoolProp()}},
-		                {"id"}),
+		        Obj({{"id", IntProp()}, {"name", StrProp()}, {"collision", BoolProp()}, {"opacity", NumProp()}, {"sortingLayer", IntProp()}, {"orderInLayer", IntProp()}, {"save", BoolProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        TileContext tc = ResolveTileContext(p, ctx);
@@ -586,15 +576,15 @@ namespace aether::editor
 		        "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. Returns the atlas path and sprite list.",
 		        true,
 		        Obj({{"texture", StrProp()},
-		                {"cellWidth", IntProp()},
-		                {"cellHeight", IntProp()},
-		                {"paddingX", IntProp()},
-		                {"paddingY", IntProp()},
-		                {"spacingX", IntProp()},
-		                {"spacingY", IntProp()},
-		                {"trimAlpha", BoolProp()},
-		                {"pixelsPerUnit", NumProp()},
-		                {"out", StrProp()}},
+		                    {"cellWidth", IntProp()},
+		                    {"cellHeight", IntProp()},
+		                    {"paddingX", IntProp()},
+		                    {"paddingY", IntProp()},
+		                    {"spacingX", IntProp()},
+		                    {"spacingY", IntProp()},
+		                    {"trimAlpha", BoolProp()},
+		                    {"pixelsPerUnit", NumProp()},
+		                    {"out", StrProp()}},
 		                {"texture", "cellWidth", "cellHeight"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -675,24 +665,21 @@ namespace aether::editor
 				        const SpriteRegion& region = (*atlas)->sprites[i];
 				        spriteList.push_back(json{{"index", i}, {"name", region.name}, {"x", region.pixelRect.x}, {"y", region.pixelRect.y}, {"width", region.pixelRect.width}, {"height", region.pixelRect.height}});
 			        }
-			        return json{{"atlas", path},
-			                {"texture", (*atlas)->texturePath},
-			                {"textureWidth", (*atlas)->textureWidth},
-			                {"textureHeight", (*atlas)->textureHeight},
-			                {"pixelsPerUnit", (*atlas)->pixelsPerUnit},
-			                {"sprites", std::move(spriteList)}};
+			        return json{
+			                {"atlas", path}, {"texture", (*atlas)->texturePath}, {"textureWidth", (*atlas)->textureWidth}, {"textureHeight", (*atlas)->textureHeight}, {"pixelsPerUnit", (*atlas)->pixelsPerUnit}, {"sprites", std::move(spriteList)}};
 		        }});
 
 		methods.push_back({"animation.create",
 		        "create_sprite_animation",
-		        "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play it.",
+		        "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play "
+		        "it.",
 		        true,
 		        Obj({{"atlas", StrProp()},
-		                {"name", StrProp()},
-		                {"frames", json{{"type", "array"}, {"minItems", 1}, {"maxItems", 1024}}},
-		                {"fps", NumProp()},
-		                {"loop", json{{"type", "string"}, {"enum", json::array({"loop", "once", "pingpong", "hold"})}}},
-		                {"out", StrProp()}},
+		                    {"name", StrProp()},
+		                    {"frames", json{{"type", "array"}, {"minItems", 1}, {"maxItems", 1024}}},
+		                    {"fps", NumProp()},
+		                    {"loop", json{{"type", "string"}, {"enum", json::array({"loop", "once", "pingpong", "hold"})}}},
+		                    {"out", StrProp()}},
 		                {"atlas", "name", "frames"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
@@ -745,9 +732,7 @@ namespace aether::editor
 		        "set_editor_camera",
 		        "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Edit mode only - the play camera belongs to the game.",
 		        true,
-		        Obj({{"position", json{{"type", "array"}, {"items", NumProp()}, {"minItems", 2}, {"maxItems", 3}}},
-		                {"height", NumProp()},
-		                {"frame", json{{"type", "integer"}, {"description", "entity id to centre on"}}}}),
+		        Obj({{"position", json{{"type", "array"}, {"items", NumProp()}, {"minItems", 2}, {"maxItems", 3}}}, {"height", NumProp()}, {"frame", json{{"type", "integer"}, {"description", "entity id to centre on"}}}}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        const auto* playState = ctx.services.TryGet<app::PlayState>();
@@ -869,6 +854,10 @@ namespace aether::editor
 					        script.properties[name] = std::move(property);
 				        }
 			        }
+			        if (auto* undo = ctx.services.TryGet<UndoStack>())
+			        {
+				        undo->Record(std::make_unique<AddScriptCommand>(entity.id, type, script));
+			        }
 			        return json{{"id", entity.id}, {"type", type}, {"scriptCount", sc.scripts.size()}};
 		        }});
 
@@ -922,9 +911,31 @@ namespace aether::editor
 			        const std::string type = p.value("type", std::string{});
 			        auto* sc = world.TryGet<ScriptComponent>(entity);
 			        const std::size_t before = sc != nullptr ? sc->scripts.size() : 0;
+			        // Snapshot the first matching script before erasing, for undo.
+			        ScriptEntry captured;
+			        bool hasCaptured = false;
+			        if (sc != nullptr)
+			        {
+				        for (const ScriptEntry& s: sc->scripts)
+				        {
+					        if (s.path == type)
+					        {
+						        captured = s;
+						        hasCaptured = true;
+						        break;
+					        }
+				        }
+			        }
 			        if (sc != nullptr)
 			        {
 				        std::erase_if(sc->scripts, [&](const ScriptEntry& script) { return script.path == type; });
+			        }
+			        if (hasCaptured)
+			        {
+				        if (auto* undo = ctx.services.TryGet<UndoStack>())
+				        {
+					        undo->Record(std::make_unique<RemoveScriptCommand>(entity.id, type, std::move(captured)));
+				        }
 			        }
 			        const std::size_t removed = sc != nullptr ? before - sc->scripts.size() : 0;
 			        return json{{"id", entity.id}, {"removed", removed}};

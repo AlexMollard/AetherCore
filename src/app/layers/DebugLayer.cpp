@@ -1034,8 +1034,7 @@ namespace aether::editor
 				// serialization + disk write (~15-20 ms) to the background writer so the
 				// frame never stalls on a save. Pending writes flush on shutdown, so a
 				// last-moment Ctrl+S is never lost.
-				app::scene::SceneDescription desc =
-				        app::scene::CaptureScene(context.Get<World>(), assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+				app::scene::SceneDescription desc = app::scene::CaptureScene(context.Get<World>(), assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
 				m_sceneWriter.RequestSave(currentName, std::move(desc));
 
 				// Tilemap cells live in their own .tiles asset, not the scene TOML, so a
@@ -1233,12 +1232,6 @@ namespace aether::editor
 		if (undoEditable)
 		{
 			const ImGuiIO& io = ImGui::GetIO();
-			// Snapshot the pre-edit baseline when an interaction starts; the matching
-			// commit runs at end of frame (see CommitPending below).
-			if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-			{
-				m_undoStack.CaptureBaseline(context.Get<World>(), context.services);
-			}
 			if (io.KeyCtrl && !io.WantTextInput)
 			{
 				const bool zKey = ImGui::IsKeyPressed(ImGuiKey_Z, false);
@@ -1535,11 +1528,17 @@ namespace aether::editor
 						ImGui::Separator();
 						if (ImGui::MenuItem("Show All"))
 						{
-							for (int i = 0; i < windowCount; ++i) { api->SetEditorWindowVisible(i, 1); }
+							for (int i = 0; i < windowCount; ++i)
+							{
+								api->SetEditorWindowVisible(i, 1);
+							}
 						}
 						if (ImGui::MenuItem("Hide All"))
 						{
-							for (int i = 0; i < windowCount; ++i) { api->SetEditorWindowVisible(i, 0); }
+							for (int i = 0; i < windowCount; ++i)
+							{
+								api->SetEditorWindowVisible(i, 0);
+							}
 						}
 					}
 					ImGui::EndMenu();
@@ -1605,9 +1604,7 @@ namespace aether::editor
 
 		if (m_resetLayout || (!m_dockspaceBuilt && !hasSavedDockspace))
 		{
-			const WorkflowLayout layout = (m_pendingWorkflowLayout >= 0 && m_pendingWorkflowLayout < static_cast<int>(WorkflowLayout::Count))
-			                                      ? static_cast<WorkflowLayout>(m_pendingWorkflowLayout)
-			                                      : WorkflowLayout::Default;
+			const WorkflowLayout layout = (m_pendingWorkflowLayout >= 0 && m_pendingWorkflowLayout < static_cast<int>(WorkflowLayout::Count)) ? static_cast<WorkflowLayout>(m_pendingWorkflowLayout) : WorkflowLayout::Default;
 			BuildWorkflowLayout(layout, dockspace_id, viewport->WorkSize);
 		}
 		m_dockspaceBuilt = true;
@@ -1644,11 +1641,12 @@ namespace aether::editor
 
 		DrawCommandPalette(context);
 
-		// Finalize an in-flight edit once the mouse is released, so a multi-frame
-		// drag (gizmo, collider handle, tile stroke) becomes a single undo command.
-		if (undoEditable && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		// An inspector field edit ends when its widget stops being active - a slider
+		// drag and a focused text box both stay active across frames, so this is what
+		// turns the whole interaction into one command rather than one per frame.
+		if (undoEditable && !ImGui::IsAnyItemActive())
 		{
-			m_undoStack.CommitPending(context.Get<World>(), context.services);
+			m_undoStack.FlushFieldEdit();
 		}
 
 		PersistSettings(context);
