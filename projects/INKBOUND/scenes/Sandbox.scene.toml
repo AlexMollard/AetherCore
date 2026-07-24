@@ -432,7 +432,7 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Checkpoint'
 node = 5211900011000000004
 parent = -1
-position = [ 25.5, 21.65, 0.0 ]
+position = [ 25.5, 22.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -448,7 +448,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     radius = 0.5
     restitution = 0.0
     shape = 'box'
-    size = [ 1.2, 2.0 ]
+    size = [ 1.25, 2.0 ]
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -468,12 +468,12 @@ scale = [ 1.0, 1.0, 1.0 ]
     order_in_layer = 4
     pivot = [ 0.5, 0.5 ]
     pixel_art = true
-    pixel_size = [ 20.0, 20.0 ]
+    pixel_size = [ 20.0, 32.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    texture = 'project://assets/textures/sign_post.png'
-    tint = [ 0.45, 1.0, 0.65, 1.0 ]
+    texture = 'project://assets/textures/checkpoint_flag.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 
@@ -485,8 +485,8 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'HazardStrip'
 node = 5211900011000000005
 parent = -1
-position = [ 31.0, 21.35, 0.0 ]
-scale = [ 2.5, 0.45, 1.0 ]
+position = [ 31.0, 21.37, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
     capsule_height = 1.0
@@ -501,7 +501,7 @@ scale = [ 2.5, 0.45, 1.0 ]
     radius = 0.5
     restitution = 0.0
     shape = 'box'
-    size = [ 1.0, 1.0 ]
+    size = [ 2.8, 0.7 ]
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -521,12 +521,12 @@ scale = [ 2.5, 0.45, 1.0 ]
     order_in_layer = 3
     pivot = [ 0.5, 0.5 ]
     pixel_art = true
-    pixel_size = [ 20.0, 20.0 ]
+    pixel_size = [ 48.0, 12.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    texture = 'project://assets/textures/sign_post.png'
-    tint = [ 1.0, 0.25, 0.3, 1.0 ]
+    texture = 'project://assets/textures/spikes.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 
@@ -538,8 +538,8 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'SpringPad'
 node = 5211900011000000006
 parent = -1
-position = [ 34.0, 21.4, 0.0 ]
-scale = [ 1.4, 0.5, 1.0 ]
+position = [ 34.0, 21.37, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
     capsule_height = 1.0
@@ -554,7 +554,7 @@ scale = [ 1.4, 0.5, 1.0 ]
     radius = 0.5
     restitution = 0.0
     shape = 'box'
-    size = [ 1.0, 1.0 ]
+    size = [ 1.5, 0.7 ]
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -574,12 +574,12 @@ scale = [ 1.4, 0.5, 1.0 ]
     order_in_layer = 3
     pivot = [ 0.5, 0.5 ]
     pixel_art = true
-    pixel_size = [ 20.0, 20.0 ]
+    pixel_size = [ 24.0, 12.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    texture = 'project://assets/textures/sign_post.png'
-    tint = [ 0.3, 0.85, 1.0, 1.0 ]
+    texture = 'project://assets/textures/spring_pad.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 
