@@ -128,6 +128,10 @@ public sealed class AetherInk : EntityScript
         _petrified.Clear();
         s_inkColliders.Clear(); // stale ids from a previous level never carry over
         s_petrifiedColliders.Clear();
+        // Puzzle wiring is per level: a dead zone or a latched channel from the last one would be
+        // invisible and inexplicable in this one.
+        ClearDeadZones();
+        Signal.Clear();
         _hasLast = false;
         // Register the ink field as a project custom pass: the engine runs our ink_field shader over
         // the scene each frame we submit segments to it.
@@ -405,6 +409,10 @@ public sealed class AetherInk : EntityScript
     /// Terrain is the only thing that holds ink, plus crystals, which advertise themselves.</summary>
     private bool EvaluateAnchor(Vector2 p)
     {
+        // 0. Dead stone refuses ink outright, however solid it looks. This is how a level says
+        //    "not here" without a wall - you can see the route, you just cannot build on it.
+        if (InDeadZone(p)) { return false; }
+
         // 1. Touching real stone holds outright.
         if (TouchesTerrain(p)) { return true; }
 
@@ -427,6 +435,71 @@ public sealed class AetherInk : EntityScript
         foreach (Entity e in Physics2D.OverlapCircle(p, CrystalReach))
         {
             if (AetherCrystal.IsCrystal(e.Id)) { return true; }
+        }
+        return false;
+    }
+
+    /// <summary>Is there an unbroken run of ink from one point to another? Walks the stroke graph -
+    /// live spans and set ones both conduct - joining segments whose ends meet. This is what lets ink
+    /// be a WIRE as well as a floor: a socket can ask "am I joined to that source?" and the puzzle
+    /// becomes the shape you draw rather than the ground you stand on.</summary>
+    public bool HasInkPath(Vector2 from, Vector2 to, float reach)
+    {
+        List<Seg> all = new(_segs.Count + _petrified.Count);
+        for (int i = 0; i < _segs.Count; i++) { if (_segs[i].Anchored) { all.Add(_segs[i]); } }
+        all.AddRange(_petrified);
+        if (all.Count == 0) { return false; }
+
+        float r2 = reach * reach;
+        float joinR2 = (Spacing + Thickness * 2.0f + 0.35f);
+        joinR2 *= joinR2;
+
+        bool[] seen = new bool[all.Count];
+        Stack<int> open = new();
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (Vector2.DistanceSquared(all[i].A, from) <= r2 || Vector2.DistanceSquared(all[i].B, from) <= r2)
+            {
+                seen[i] = true;
+                open.Push(i);
+            }
+        }
+
+        while (open.Count > 0)
+        {
+            Seg s = all[open.Pop()];
+            if (Vector2.DistanceSquared(s.A, to) <= r2 || Vector2.DistanceSquared(s.B, to) <= r2)
+            {
+                return true;
+            }
+            for (int j = 0; j < all.Count; j++)
+            {
+                if (seen[j]) { continue; }
+                Seg t = all[j];
+                if (Vector2.DistanceSquared(s.B, t.A) <= joinR2 || Vector2.DistanceSquared(s.B, t.B) <= joinR2 ||
+                    Vector2.DistanceSquared(s.A, t.A) <= joinR2 || Vector2.DistanceSquared(s.A, t.B) <= joinR2)
+                {
+                    seen[j] = true;
+                    open.Push(j);
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Regions where ink refuses to set - see <see cref="DeadStone"/>. Registered as world
+    /// rects so the anchor test can reject them without knowing what a DeadStone is.</summary>
+    private static readonly List<Vector4> s_deadZones = new(); // (minX, minY, maxX, maxY)
+
+    public static void AddDeadZone(Vector4 rect) => s_deadZones.Add(rect);
+    public static void ClearDeadZones() => s_deadZones.Clear();
+
+    private static bool InDeadZone(Vector2 p)
+    {
+        for (int i = 0; i < s_deadZones.Count; i++)
+        {
+            Vector4 r = s_deadZones[i];
+            if (p.X >= r.X && p.X <= r.Z && p.Y >= r.Y && p.Y <= r.W) { return true; }
         }
         return false;
     }

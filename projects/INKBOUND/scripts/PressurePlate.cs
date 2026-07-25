@@ -21,11 +21,9 @@ public sealed class PressurePlate : EntityScript
     /// "the plate is over there and so are you", and standing on it must not be the answer.</summary>
     public bool AllowPlayer = false;
 
-    private static readonly Dictionary<string, int> s_held = new();
-
-    /// <summary>Is anything currently holding this channel down?</summary>
-    public static bool IsHeld(string channel)
-        => !string.IsNullOrEmpty(channel) && s_held.TryGetValue(channel, out int n) && n > 0;
+    /// <summary>Is anything currently holding this channel down? (Kept for readability at call
+    /// sites; the state itself lives on the shared <see cref="Signal"/> bus.)</summary>
+    public static bool IsHeld(string channel) => Signal.IsOn(channel);
 
     private readonly HashSet<uint> _resting = new();
     private Vector3 _up;
@@ -41,10 +39,7 @@ public sealed class PressurePlate : EntityScript
     public override void OnDetach()
     {
         // Drop this plate's contribution so a scene change cannot leave a channel stuck open.
-        if (_resting.Count > 0 && s_held.TryGetValue(Channel, out int n))
-        {
-            s_held[Channel] = System.Math.Max(0, n - _resting.Count);
-        }
+        Signal.Set(Channel, Self.Id, false);
         _resting.Clear();
     }
 
@@ -54,13 +49,13 @@ public sealed class PressurePlate : EntityScript
     public override void OnTriggerEnter2D(Entity other)
     {
         if (!Qualifies(other) || !_resting.Add(other.Id)) { return; }
-        s_held[Channel] = (s_held.TryGetValue(Channel, out int n) ? n : 0) + 1;
+        Signal.Set(Channel, Self.Id, true);
     }
 
     public override void OnTriggerExit2D(Entity other)
     {
         if (!_resting.Remove(other.Id)) { return; }
-        if (s_held.TryGetValue(Channel, out int n)) { s_held[Channel] = System.Math.Max(0, n - 1); }
+        if (_resting.Count == 0) { Signal.Set(Channel, Self.Id, false); }
     }
 
     public override void OnUpdate(float deltaTime)
