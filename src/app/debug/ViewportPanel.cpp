@@ -432,7 +432,7 @@ namespace aether::editor
 	void ViewportPanel::DrawPlayHud(app::LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize)
 	{
 		const auto* playState = context.TryGet<app::PlayState>();
-		if (playState == nullptr || !playState->IsPlaying())
+		if (!m_viewportShowPlayHud || playState == nullptr || !playState->IsPlaying())
 		{
 			return;
 		}
@@ -2208,6 +2208,8 @@ namespace aether::editor
 				ImGui::Spacing();
 				ImGui::Checkbox("Maximize on Play", &m_maximizeOnPlay);
 				ImGui::SetItemTooltip("Fullscreen the viewport while playing; re-docks on Stop");
+				ImGui::Checkbox("Play overlay", &m_viewportShowPlayHud);
+				ImGui::SetItemTooltip("Show the state / elapsed / FPS chip over the game view while playing");
 
 				ImGui::Spacing();
 				chrome::SectionTag("SCENE");
