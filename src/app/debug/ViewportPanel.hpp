@@ -78,8 +78,9 @@ namespace aether::editor
 		bool m_wasMaximized = false;
 		// The play-state overlay (state / elapsed / FPS) sits over the top-left of the game view,
 		// which is exactly where a lot of games put their own HUD. Toggleable so it can be moved out
-		// of the way while looking at the game rather than at the session.
-		bool m_viewportShowPlayHud = true;
+		// of the way while looking at the game rather than at the session. Off by default: the game's
+		// own HUD lives in that corner, and the same numbers are in the Performance panel.
+		bool m_viewportShowPlayHud = false;
 		bool m_viewportShowMouse = true;
 		bool m_viewportShow2DGrid = true;
 

@@ -76,7 +76,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // out-of-phase waves keep it from reading as a clean sine.
     const float slosh = (sin(time * 2.1 + ux * 5.0) * 0.012 + sin(time * 1.3 - ux * 3.1) * 0.008)
                       * smoothstep(0.02, 0.25, fill);   // an almost-empty well barely moves
-    const float surface = fill + slosh;
+    const float surface = lerp(0.07, 0.86, fill) + slosh;   // always an air gap under the lip
     const float below = smoothstep(surface + 0.012, surface - 0.012, uy); // 1 under the surface
 
     // --- colour --------------------------------------------------------------------------------
@@ -88,7 +88,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     // Depth shading: darker the further under the surface, so the pot has volume.
     const float depth = saturate((surface - uy) / max(surface, 0.001));
-    float3 ink = lerp(inkTop, inkDeep, depth * 0.85);
+    float3 ink = lerp(inkTop, inkDeep, saturate(depth * 1.15));
 
     // Grain, so the fill is brushed rather than flat.
     ink *= 0.90 + 0.10 * vnoise(float2(ux * 14.0, uy * 22.0 - time * 0.6));
@@ -105,9 +105,18 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     col += float3(0.10, 0.16, 0.22) * smoothstep(0.35, 0.0, abs(p.x + halfW * 0.62)) * 0.25;
     col *= lerp(0.45, 1.0, edge);
 
-    // The lip of the well: a solid band across the top so it reads as an opening.
-    const float lip = smoothstep(0.90, 0.97, uy);
-    col = lerp(col, float3(0.16, 0.22, 0.30), lip);
+    // The vessel itself, drawn OVER the ink: a bright glass edge down both sides and a heavy lip.
+    // Without this the pot disappeared behind a full well and the meter read as a solid block.
+    const float wall = smoothstep(halfW - 0.16, halfW - 0.03, abs(p.x));
+    col = lerp(col, float3(0.34, 0.46, 0.60), wall * 0.85);
+
+    const float lip = smoothstep(0.88, 0.95, uy);
+    col = lerp(col, float3(0.22, 0.30, 0.40), lip);
+    const float lipEdge = smoothstep(0.95, 1.0, uy);
+    col = lerp(col, float3(0.40, 0.54, 0.68), lipEdge);
+
+    // Base shadow so it sits on something.
+    col *= lerp(0.55, 1.0, smoothstep(0.0, 0.10, uy));
 
     // Alpha: solid pot, with the glass wall fading a touch so it sits on the HUD rather than on top.
     const float a = lerp(0.80, 1.0, edge) * input.color.a;
