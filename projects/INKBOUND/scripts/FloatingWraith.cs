@@ -42,6 +42,19 @@ public sealed class FloatingWraith : EntityScript
         _baseY = Self.Position.Y;
         _baseSize = SpriteRenderer.GetPixelSize(Self);
         _baseTint = SpriteRenderer.GetTint(Self);
+        Creature.Register(Self.Id, Smother);
+    }
+
+    public override void OnDetach() => Creature.Unregister(Self.Id);
+
+    /// <summary>Drowned in ink - the only way it dies. Ink is the weapon; there is no stomp.</summary>
+    private void Smother()
+    {
+        if (_dispel >= 0.0f) { return; }
+        _dispel = DispelSeconds;
+        CameraFollow.Instance?.AddShake(0.06f);
+        Scene.Instantiate("DeathInk", new Vector3(Self.Position.X, Self.Position.Y, 0.0f));
+        Log.Info("[INKBOUND] The wraith came apart in the ink.");
     }
 
     public override void OnUpdate(float deltaTime)
@@ -89,20 +102,8 @@ public sealed class FloatingWraith : EntityScript
             return;
         }
 
-        // Stomp when the player's feet clear the wraith's midline (geometry, never post-solve velocity).
-        bool stomp = other.Position.Y - 0.6f > Self.Position.Y;
-        if (stomp)
-        {
-            _dispel = DispelSeconds;
-            player.Bounce();
-            CameraFollow.Instance?.AddShake(0.06f);
-            Scene.Instantiate("DeathBurst", new Vector3(Self.Position.X, Self.Position.Y, 0.0f));
-            Log.Info("[INKBOUND] Wraith dispelled!");
-        }
-        else
-        {
-            Log.Info("[INKBOUND] The wraith caught you.");
-            player.Die();
-        }
+        // Touching it is fatal from any angle. Draw over it instead.
+        Log.Info("[INKBOUND] The wraith caught you.");
+        player.Die();
     }
 }

@@ -164,6 +164,14 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         body = float3(0.30, 0.04, 0.05);
         rim = float3(0.92, 0.22, 0.22);
     }
+    else if (bGhost < -0.5)
+    {
+        // Set ink: the stuff a dead wanderer left behind. Dull stone with a cold mineral edge -
+        // clearly part of the cave now, and clearly not something you conjured a moment ago.
+        body = float3(0.085, 0.10, 0.135);
+        rim = float3(0.22, 0.30, 0.38);
+        bGlow = 0.25;
+    }
 
     // Murky pooling + veins inside the body.
     float3 ink = lerp(body, body * 0.30, depth * (0.35 + 0.65 * turb));

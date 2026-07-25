@@ -4,9 +4,9 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// Goomba-style patroller: walks until it meets a wall or a ledge, then turns.
-/// Stomping it from above squashes it (bouncing the player); touching it from
-/// the side sends the player back to spawn.
+/// A crawling thing: walks until it meets a wall or a ledge, then turns. Touching it kills you,
+/// from any direction - there is no jumping on heads here. You unmake it the way you do everything
+/// else, by drawing ink across it (see <see cref="Creature"/> and <see cref="AetherInk"/>).
 /// </summary>
 public sealed class EnemyPatrol : EntityScript
 {
@@ -24,6 +24,26 @@ public sealed class EnemyPatrol : EntityScript
         Physics2D.EnableEvents(Self);
         SpriteAnimator.SetAnimation(Self, AnimWalk);
         SpriteAnimator.Play(Self);
+        Creature.Register(Self.Id, Smother);
+    }
+
+    public override void OnDetach() => Creature.Unregister(Self.Id);
+
+    /// <summary>Drowned in ink: it stops, goes limp and is unmade. Called by the ink, not by a stomp.</summary>
+    private void Smother()
+    {
+        if (_squashTimer >= 0.0f) { return; }
+        _squashTimer = SquashSeconds;
+        Physics2D.SetLinearVelocity(Self, Vector2.Zero);
+        Physics2D.SetGravityScale(Self, 0.0f);
+        Physics2D.SetTrigger(Self, true);
+        SpriteAnimator.SetAnimation(Self, AnimSquash);
+        SpriteAnimator.SetLoopMode(Self, SpriteAnimationLoopMode.Hold);
+        SpriteAnimator.Play(Self);
+        SpriteRenderer.SetTint(Self, new System.Numerics.Vector4(0.25f, 0.35f, 0.45f, 1.0f));
+        Scene.Instantiate("DeathInk", Self.Position);
+        CameraFollow.Instance?.AddShake(0.06f);
+        Log.Info("[INKBOUND] Something drowned in the ink.");
     }
 
     public override void OnUpdate(float deltaTime)
@@ -61,31 +81,9 @@ public sealed class EnemyPatrol : EntityScript
         {
             return;
         }
-        // Stomp when the player's feet are above the slime's midline; the
-        // capsule's half extent is ~0.65, the slime box's half height 0.35.
-        float feetY = other.Position.Y - 0.6f;
-        bool stomp = feetY > Self.Position.Y;
-        if (stomp)
-        {
-            _squashTimer = SquashSeconds;
-            // Death: stop moving, and drop solid collision so the player can't
-            // stand on the corpse mid-squash. Sensor keeps the body from
-            // sinking oddly - zeroed gravity + velocity pin it in place while
-            // the squash animation plays out, then OnUpdate destroys it.
-            Physics2D.SetLinearVelocity(Self, Vector2.Zero);
-            Physics2D.SetGravityScale(Self, 0.0f);
-            Physics2D.SetTrigger(Self, true);
-            SpriteAnimator.SetAnimation(Self, AnimSquash);
-            SpriteAnimator.SetLoopMode(Self, SpriteAnimationLoopMode.Hold);
-            SpriteAnimator.Play(Self);
-            player.Bounce();
-            CameraFollow.Instance?.AddShake(0.07f); // subtle kill feedback
-            Log.Info("[INKBOUND] Enemy stomped!");
-        }
-        else
-        {
-            Log.Info("[INKBOUND] Ouch! The slime got you.");
-            player.Die();
-        }
+        // No stomping. Touching one of these is fatal from every angle - the answer is to draw over
+        // it, not to land on it.
+        Log.Info("[INKBOUND] It found you in the dark.");
+        player.Die();
     }
 }

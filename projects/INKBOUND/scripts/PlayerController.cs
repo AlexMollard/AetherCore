@@ -56,6 +56,10 @@ public sealed class PlayerController : EntityScript
     private float _deathTimer;
     private float _meltY; // floor level the body melts down onto
 
+    /// <summary>Hold Q this long to come apart on purpose.</summary>
+    public float CommitHoldSeconds = 0.45f;
+    private float _commitHeld;
+
     public override void OnAttach()
     {
         // Singleton guard (the Unity pattern for persistent actors): when a
@@ -133,6 +137,24 @@ public sealed class PlayerController : EntityScript
         {
             UpdateDeath(deltaTime);
             return;
+        }
+
+        // Commit: hold Q to come apart on purpose. Whatever ink you are holding up sets into the cave
+        // and stays there for the next attempt, so giving yourself to the dark is a move you make -
+        // not something you have to go and find a spike for.
+        if (Input.IsKeyDown(Key.Q))
+        {
+            _commitHeld += deltaTime;
+            if (_commitHeld >= CommitHoldSeconds)
+            {
+                Log.Info("[INKBOUND] Committed - the ink stays.");
+                Die();
+                return;
+            }
+        }
+        else
+        {
+            _commitHeld = 0.0f;
         }
 
         float move = 0.0f;
@@ -256,7 +278,11 @@ public sealed class PlayerController : EntityScript
         }
         _dead = true;
         _deathTimer = 0.0f;
+        _commitHeld = 0.0f;
         _meltY = Self.Position.Y;
+        // Everything you were holding up SETS. However you died, the cave keeps what you drew - which
+        // is why the walls down here are made of the people who came before.
+        AetherInk.Instance?.Petrify();
         // The body stops dead and melts where it stands - no hop, no arc. Trigger so it
         // sinks through the floor it is dissolving into; no gravity so the sink is ours.
         Physics2D.SetTrigger(Self, true);

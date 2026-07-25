@@ -78,22 +78,48 @@ public sealed class AetherInk : EntityScript
 
     private readonly List<Seg> _segs = new();
 
+    /// <summary>Ink that has SET. When the wanderer comes apart, whatever they were holding up stops
+    /// being conjured and becomes part of the cave - the ledge you died on is still there for the next
+    /// attempt. Petrified ink never ages, and it is real ground: you can anchor to it and stand on it.
+    /// It is also a bank, not a monument - hold the right mouse button over it to draw it back into
+    /// the well, so nothing you fossilise can wall the level off for good.</summary>
+    private readonly List<Seg> _petrified = new();
+
+    /// <summary>How close the cursor must be to petrified ink to reclaim it.</summary>
+    public float ReclaimRadius = 0.9f;
+    /// <summary>Aether returned per segment reclaimed. Slightly under what it cost, so shuffling ink
+    /// around the cave is a real decision and not a free undo.</summary>
+    public float ReclaimRefund = 3.0f;
+    /// <summary>Aether returned for unmaking a creature - killing feeds the well.</summary>
+    public float SmotherRefund = 8.0f;
+
     // Live ink-collider ids, so anchoring and "is the player on real ground?" checks can tell
     // conjured ink from actual terrain.
     private static readonly HashSet<uint> s_inkColliders = new();
     public static bool IsInk(uint id) => s_inkColliders.Contains(id);
+
+    // Petrified ink IS terrain as far as the game is concerned, so it is deliberately NOT in the
+    // ink set - the player counts as standing on real ground when they stand on it.
+    private static readonly HashSet<uint> s_petrifiedColliders = new();
+    public static bool IsPetrified(uint id) => s_petrifiedColliders.Contains(id);
 
     private Vector2 _last;
     private bool _hasLast;
     private float _t;
     private float _dripCd; // throttles ink-droplet spawns while drawing
 
+    /// <summary>The live ink for this run, so the player can hand it their death.</summary>
+    public static AetherInk? Instance;
+
     public override void OnAttach()
     {
+        Instance = this;
         Aether = MaxAether;
         AetherMax = MaxAether;
         _segs.Clear();
+        _petrified.Clear();
         s_inkColliders.Clear(); // stale ids from a previous level never carry over
+        s_petrifiedColliders.Clear();
         _hasLast = false;
         // Register the ink field as a project custom pass: the engine runs our ink_field shader over
         // the scene each frame we submit segments to it.
@@ -107,6 +133,76 @@ public sealed class AetherInk : EntityScript
         // Leaving the level: stop drawing the pass so no stray ink renders over the next scene.
         CustomPass.Unregister(PassName);
         s_inkColliders.Clear();
+        s_petrifiedColliders.Clear();
+        if (Instance == this) { Instance = null; }
+    }
+
+    /// <summary>The wanderer comes apart: every span they were holding up SETS. Called by
+    /// PlayerController on death, however that death came about. The colliders are kept exactly as
+    /// they are - what was a conjured ledge a moment ago is now simply part of the cave.</summary>
+    public void Petrify()
+    {
+        int set = 0;
+        for (int i = 0; i < _segs.Count; i++)
+        {
+            Seg s = _segs[i];
+            if (!s.Anchored || !s.Collider.IsValid) { continue; }
+            s_inkColliders.Remove(s.Collider.Id);
+            s_petrifiedColliders.Add(s.Collider.Id);
+            s.Age = 0.0f;
+            _petrified.Add(s);
+            set++;
+        }
+        // Ghost ink was never real, so it simply goes with the body.
+        for (int i = 0; i < _segs.Count; i++)
+        {
+            Seg s = _segs[i];
+            if (s.Anchored) { continue; }
+            if (s.Collider.IsValid) { s.Collider.Destroy(); }
+        }
+        _segs.Clear();
+        _hasLast = false;
+        if (set > 0)
+        {
+            Log.Info($"[INKBOUND] {set} span(s) set into the cave.");
+        }
+    }
+
+    /// <summary>Draw petrified ink back into the well: hold the right mouse button over it. This is
+    /// what keeps fossilised ink from ever becoming a wall you cannot undo.</summary>
+    private void Reclaim(Vector2 at)
+    {
+        float r2 = ReclaimRadius * ReclaimRadius;
+        for (int i = _petrified.Count - 1; i >= 0; i--)
+        {
+            Seg s = _petrified[i];
+            Vector2 mid = (s.A + s.B) * 0.5f;
+            if (Vector2.DistanceSquared(at, mid) > r2) { continue; }
+            if (s.Collider.IsValid)
+            {
+                s_petrifiedColliders.Remove(s.Collider.Id);
+                s.Collider.Destroy();
+            }
+            _petrified.RemoveAt(i);
+            Aether = Math.Min(MaxAether, Aether + ReclaimRefund);
+            Scene.Instantiate("InkDroplet", new Vector3(mid.X, mid.Y, 0.0f));
+            return; // one segment per frame, so reclaiming reads as a steady drain rather than a pop
+        }
+    }
+
+    /// <summary>Ink is the weapon. Anything smotherable under a freshly laid span is unmade, and its
+    /// substance goes to the well - so a kill is also a refill.</summary>
+    private void SmotherUnder(Vector2 a, Vector2 b)
+    {
+        Vector2 mid = (a + b) * 0.5f;
+        foreach (Entity e in Physics2D.OverlapCircle(mid, Thickness + 0.45f))
+        {
+            if (e.Id == Self.Id || IsInk(e.Id) || IsPetrified(e.Id)) { continue; }
+            if (Creature.TrySmother(e.Id))
+            {
+                Aether = Math.Min(MaxAether, Aether + SmotherRefund);
+            }
+        }
     }
 
     public override void OnUpdate(float deltaTime)
@@ -121,6 +217,13 @@ public sealed class AetherInk : EntityScript
             if (Input.IsMousePressed(MouseButton.Left))
             {
                 _hasLast = false;
+            }
+
+            // Right button takes matter back out of the cave: hold it over set ink to drink it in.
+            if (Input.IsMouseDown(MouseButton.Right) && _petrified.Count > 0)
+            {
+                Vector3 c = Camera.ScreenToWorld(Input.MousePosition);
+                Reclaim(new Vector2(c.X, c.Y));
             }
 
             bool drawing = Input.IsMouseDown(MouseButton.Left) && Aether > 0.0f;
@@ -214,6 +317,19 @@ public sealed class AetherInk : EntityScript
             _segs[i] = s;
         }
 
+        // Set ink draws in the same pass, flagged ghost = -1 so the shader renders it as dull rock
+        // instead of glowing ink. It never ages, so it is packed straight through at full alpha.
+        for (int i = 0; i < _petrified.Count; i++)
+        {
+            Seg s = _petrified[i];
+            _buf.Add(new Vector4(s.A.X, s.A.Y, s.B.X, s.B.Y));
+            _buf.Add(new Vector4(Thickness * 1.15f, 1.0f, 0.0f, -1.0f));
+            minX = Math.Min(minX, Math.Min(s.A.X, s.B.X));
+            minY = Math.Min(minY, Math.Min(s.A.Y, s.B.Y));
+            maxX = Math.Max(maxX, Math.Max(s.A.X, s.B.X));
+            maxY = Math.Max(maxY, Math.Max(s.A.Y, s.B.Y));
+        }
+
         // params = world AABB of the ink (min.xy, max.xy), padded for thickness + rim + edge noise, so
         // the shader's fullscreen pass only rasterises pixels near the ink. Zero = degenerate = no draw.
         Vector4 aabb = Vector4.Zero;
@@ -258,6 +374,7 @@ public sealed class AetherInk : EntityScript
         }
 
         _segs.Add(s);
+        SmotherUnder(a, b); // drawing across a creature drowns it
         return true;
     }
 
