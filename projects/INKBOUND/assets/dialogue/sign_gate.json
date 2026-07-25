@@ -1,0 +1,23 @@
+{
+  "id": "sign_gate",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "The slab answers to the plate, and the plate answers only to [shake]weight[/shake].",
+      "effect": "glitch",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "Ink is not weight. Yours runs out. Find something that stays.",
+      "effect": "whisper",
+      "goto": "line3"
+    },
+    "line3": {
+      "speaker": "Scratched into the rock",
+      "text": "There is a stone on the shelf above. Give it a road and let it fall.",
+      "effect": "whisper"
+    }
+  }
+}
