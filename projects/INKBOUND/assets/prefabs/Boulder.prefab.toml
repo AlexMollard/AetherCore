@@ -1,0 +1,62 @@
+# A heavy rock the world can move - the counterweight ink cannot be, since drawn ink expires.
+# Dynamic body: it rolls down whatever slope you draw and stops against whatever wall you draw.
+# Drop it in, put a PressurePlate somewhere it can reach, and you have a puzzle.
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Boulder'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/boulder.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 6.0
+    friction = 0.55
+    group_index = 0
+    is_trigger = false
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.6
+    restitution = 0.02
+    shape = 'circle'
+    size = [ 1.2, 1.2 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.35
+    body_type = 'dynamic'
+    continuous_collision = true
+    fixed_rotation = false
+    gravity_scale = 1.6
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.5, 0.75, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 0.9
+    radius = 2.2
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'Boulder'

@@ -1,0 +1,70 @@
+# Holds its Channel down while real weight rests on it, driving every Gate on the same Channel.
+# Ink cannot hold it (ink expires) and the player does not count unless AllowPlayer is set - so the
+# answer is always 'get a Boulder here'. Set Channel per instance in the scene.
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PressurePlate'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 2
+    pixel_art = true
+    pivot = [ 0.5, 0.5 ]
+    pixel_size = [ 24.0, 8.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/pressure_plate.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.2 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 1.5, 0.9 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.35, 0.9, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.3
+    radius = 2.8
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'PressurePlate'
+
+        [entities.scripts.properties.Channel]
+        t = 'string'
+        v = 'l1gate'
+
+        [entities.scripts.properties.AllowPlayer]
+        t = 'bool'
+        v = false
