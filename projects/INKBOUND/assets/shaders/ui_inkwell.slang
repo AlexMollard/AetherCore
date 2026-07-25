@@ -1,7 +1,10 @@
-// The aether meter, drawn as an INK WELL instead of a progress bar (UIMaterial, "ui_inkwell").
-// A squat glass pot with a heavy rim: the ink sits in the bottom and its surface rises and falls with
-// how much you have left. The surface has weight - it wobbles, it catches a bright meniscus line, and
-// it goes warm and restless when the well is nearly dry.
+// The aether meter, drawn as an INK WELL (UIMaterial, "ui_inkwell").
+//
+// Not a bottle of blue liquid - a squat, hand-blown well of something black and awake. The ink is
+// near-black like the ink you actually draw with; all its light lives in the skin on top, a cold
+// meniscus with a sick glow under it. It creeps: strands cling to the inside of the glass above the
+// surface and slide back down, the surface breathes rather than sloshes, and grit turns over in the
+// depths. As the well runs dry the ink sours to a dark rust and gets agitated.
 //   params.x = time,  params.y = fill (0..1)
 // Reuses the shared ui_shapes vertex, so it receives the real widget geometry.
 
@@ -51,74 +54,96 @@ float vnoise(float2 p)
                 lerp(hash21(i + float2(0, 1)), hash21(i + float2(1, 1)), u.x), u.y);
 }
 
+float fbm(float2 p)
+{
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 3; ++i) { s += a * vnoise(p); p *= 2.07; a *= 0.5; }
+    return s;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
     const float time = pc.params.x;
     const float fill = saturate(pc.params.y);
 
-    // Widget space: x,y in [-1,1]. Work in a "pot" space where 0 is the bottom of the ink.
     const float2 p = input.local;
     const float ux = p.x * 0.5 + 0.5;          // 0..1 across
     const float uy = 1.0 - (p.y * 0.5 + 0.5);  // 0 at the bottom, 1 at the top
 
-    // --- the vessel: a rounded pot, narrower at the neck ------------------------------------
-    // Waist profile: full width low down, pinched near the top so it reads as a well, not a box.
-    const float neck = smoothstep(0.62, 1.0, uy);
-    const float halfW = lerp(0.94, 0.66, neck);
-    const float inside = step(abs(p.x), halfW);
-    if (inside < 0.5) { discard; }
+    // --- silhouette: bulbous belly, short choked neck, heavy uneven lip ------------------------
+    // Hand-made, not moulded: the profile is a curve and the edge carries a little noise so the
+    // glass looks old and blown rather than machined.
+    // Wide rounded belly, shoulders drawing in to a choked neck, and a lip that stays NARROWER than
+    // the body - an inkwell squats, it does not stand like a bottle.
+    float halfW = 0.95;
+    halfW -= 0.40 * smoothstep(0.52, 0.88, uy);                        // shoulders pull in
+    halfW += 0.09 * smoothstep(0.90, 1.0, uy);                         // a small lip, not a tabletop
+    halfW *= 1.0 - 0.55 * pow(saturate(1.0 - uy / 0.13), 2.0);         // round the base off the floor
+    halfW += (vnoise(float2(uy * 7.0, 3.7)) - 0.5) * 0.035;            // wobble in the blown glass
+    if (abs(p.x) > halfW) { discard; }
 
-    const float edge = smoothstep(halfW, halfW - 0.10, abs(p.x)); // 0 at the glass wall, 1 inside
+    const float inner = smoothstep(halfW, halfW - 0.13, abs(p.x));     // 0 at the glass, 1 inside
 
-    // --- the ink surface ---------------------------------------------------------------------
-    // The level sits at `fill`, with a little slosh so it never looks like a static gauge. Two
-    // out-of-phase waves keep it from reading as a clean sine.
-    const float slosh = (sin(time * 2.1 + ux * 5.0) * 0.012 + sin(time * 1.3 - ux * 3.1) * 0.008)
-                      * smoothstep(0.02, 0.25, fill);   // an almost-empty well barely moves
-    const float surface = lerp(0.07, 0.86, fill) + slosh;   // always an air gap under the lip
-    const float below = smoothstep(surface + 0.012, surface - 0.012, uy); // 1 under the surface
+    // --- the surface: thick, so it heaves rather than ripples ----------------------------------
+    const float heave = (sin(time * 0.85 + ux * 3.1) * 0.010 + sin(time * 0.53 - ux * 1.9) * 0.007)
+                      * smoothstep(0.02, 0.30, fill);
+    const float surface = lerp(0.10, 0.82, fill) + heave;
+    const float below = smoothstep(surface + 0.010, surface - 0.010, uy);
 
-    // --- colour --------------------------------------------------------------------------------
-    // Cyan ink normally; it turns warm and anxious as the well runs down, which is the same warning
-    // the old bar gave, just carried by the liquid itself.
-    const float low = smoothstep(0.35, 0.10, fill);
-    const float3 inkDeep = lerp(float3(0.05, 0.20, 0.34), float3(0.30, 0.13, 0.04), low);
-    const float3 inkTop  = lerp(float3(0.36, 0.80, 1.00), float3(1.00, 0.62, 0.24), low);
+    // --- the ink -------------------------------------------------------------------------------
+    // Near-black, the same ink you draw with. All the colour is light sitting ON it, never in it.
+    const float sour = smoothstep(0.35, 0.08, fill);                   // running dry
+    const float3 glowCol = lerp(float3(0.22, 0.72, 0.95), float3(0.95, 0.30, 0.12), sour);
 
-    // Depth shading: darker the further under the surface, so the pot has volume.
     const float depth = saturate((surface - uy) / max(surface, 0.001));
-    float3 ink = lerp(inkTop, inkDeep, saturate(depth * 1.15));
+    float3 ink = lerp(float3(0.045, 0.075, 0.100), float3(0.010, 0.014, 0.022), depth); // black body
 
-    // Grain, so the fill is brushed rather than flat.
-    ink *= 0.90 + 0.10 * vnoise(float2(ux * 14.0, uy * 22.0 - time * 0.6));
+    // Something turning over down there: slow sediment, and a faint bloom of light from under the
+    // skin that never quite resolves into anything.
+    const float churn = fbm(float2(ux * 3.4, uy * 5.0 - time * 0.16));
+    ink += glowCol * 0.055 * churn * (1.0 - depth * 0.6);
+    ink *= 0.86 + 0.14 * fbm(float2(ux * 9.0, uy * 13.0 + time * 0.07));
 
-    // Meniscus: a bright line right at the surface, brighter when the level is moving.
-    const float meniscus = smoothstep(0.030, 0.0, abs(uy - surface));
-    ink += inkTop * meniscus * 0.85;
+    // The skin: a bright cold meniscus, with the glow bleeding a little way down into the ink.
+    const float skin = smoothstep(0.028, 0.0, abs(uy - surface));
+    const float underGlow = smoothstep(0.16, 0.0, max(0.0, surface - uy));
+    ink += glowCol * (skin * 1.15 + underGlow * 0.22);
 
-    // --- glass and rim ---------------------------------------------------------------------------
-    const float3 empty = float3(0.045, 0.060, 0.095);       // the unfilled pot
+    // --- creeping strands above the surface ------------------------------------------------------
+    // Ink climbing the inside of the glass and sliding back. This is the bit that makes it read as
+    // alive rather than as a drink.
+    const float above = max(0.0, uy - surface);
+    const float lane = vnoise(float2(floor(ux * 7.0), 11.3));                   // a few fixed lanes
+    const float crawl = frac(lane * 3.1 + time * 0.055);                        // each creeps at its own rate
+    const float reach = (0.10 + 0.22 * lane) * (0.35 + 0.65 * crawl);
+    const float strand = smoothstep(reach, 0.0, above)
+                       * smoothstep(0.30, 0.72, vnoise(float2(ux * 16.0, uy * 4.0 - time * 0.20)))
+                       * (1.0 - inner * 0.35);                                  // hugs the glass
+    const float3 empty = float3(0.030, 0.038, 0.055);
     float3 col = lerp(empty, ink, below);
+    col = lerp(col, lerp(float3(0.020, 0.030, 0.042), glowCol * 0.55, 0.25), strand * (1.0 - below));
 
-    // A cold highlight down the left of the glass, and a dark rim all round.
-    col += float3(0.10, 0.16, 0.22) * smoothstep(0.35, 0.0, abs(p.x + halfW * 0.62)) * 0.25;
-    col *= lerp(0.45, 1.0, edge);
+    // --- the glass ------------------------------------------------------------------------------
+    // Dim, smeared, faintly lit from the ink below rather than from any room light.
+    col += glowCol * 0.10 * smoothstep(0.55, 0.0, abs(p.x + halfW * 0.55)) * below;
+    col *= lerp(0.40, 1.0, inner);
 
-    // The vessel itself, drawn OVER the ink: a bright glass edge down both sides and a heavy lip.
-    // Without this the pot disappeared behind a full well and the meter read as a solid block.
-    const float wall = smoothstep(halfW - 0.16, halfW - 0.03, abs(p.x));
-    col = lerp(col, float3(0.34, 0.46, 0.60), wall * 0.85);
+    const float wall = smoothstep(halfW - 0.15, halfW - 0.02, abs(p.x));
+    col = lerp(col, float3(0.115, 0.140, 0.175), wall * 0.9);                   // dull, dirty glass
 
-    const float lip = smoothstep(0.88, 0.95, uy);
-    col = lerp(col, float3(0.22, 0.30, 0.40), lip);
-    const float lipEdge = smoothstep(0.95, 1.0, uy);
-    col = lerp(col, float3(0.40, 0.54, 0.68), lipEdge);
+    // Heavy lip, and a cold catch-light on its rim.
+    const float lip = smoothstep(0.90, 0.96, uy);
+    col = lerp(col, float3(0.085, 0.105, 0.135), lip);
+    const float lipEdge = smoothstep(0.975, 1.0, uy);
+    col = lerp(col, float3(0.26, 0.34, 0.44), lipEdge);
 
-    // Base shadow so it sits on something.
-    col *= lerp(0.55, 1.0, smoothstep(0.0, 0.10, uy));
+    // The mouth swallows light - a dark throat under the lip so it reads as an opening, not a cap.
+    const float throat = smoothstep(0.86, 0.94, uy) * smoothstep(0.55, 0.95, 1.0 - abs(p.x) / halfW);
+    col *= lerp(1.0, 0.30, throat * (1.0 - below));
 
-    // Alpha: solid pot, with the glass wall fading a touch so it sits on the HUD rather than on top.
-    const float a = lerp(0.80, 1.0, edge) * input.color.a;
-    return float4(col, a);
+    // Sit it on a shadow.
+    col *= lerp(0.45, 1.0, smoothstep(0.0, 0.09, uy));
+
+    return float4(col, input.color.a);
 }
