@@ -29,7 +29,11 @@ public sealed class AetherInk : EntityScript
     // most of a tank.
     public float MaxAether = 75.0f;
     public float DrainPerSegment = 4.0f;
-    public float RefillPerSecond = 25.5f;
+    // Slow. The well used to refill in about three seconds, so waiting was always free and the budget
+    // never actually bit - you could solve anything by standing still first. Now a full well is the
+    // best part of ten seconds, which makes crystals worth crossing a room for and makes spending
+    // twenty of it on a creature something you feel.
+    public float RefillPerSecond = 8.5f;
     /// <summary>World distance between segment nodes as the stroke is laid.</summary>
     public float Spacing = 0.5f;
     /// <summary>Ink half-thickness in world units (drives both the shader width and the collider radius).</summary>
@@ -90,8 +94,12 @@ public sealed class AetherInk : EntityScript
     /// <summary>Aether returned per segment reclaimed. Slightly under what it cost, so shuffling ink
     /// around the cave is a real decision and not a free undo.</summary>
     public float ReclaimRefund = 3.0f;
-    /// <summary>Aether returned for unmaking a creature - killing feeds the well.</summary>
-    public float SmotherRefund = 8.0f;
+    /// <summary>What it COSTS to unmake a creature. Smothering used to refund more ink than the
+    /// stroke spent, which made killing everything strictly better than avoiding anything - there was
+    /// never a reason to be careful. Now drowning something is the most expensive thing you can do
+    /// with your substance, so the real question at every creature is "pay, or find a way past".
+    /// Too poor to pay and the ink simply washes over it, still alive.</summary>
+    public float SmotherCost = 20.0f;
 
     // Live ink-collider ids, so anchoring and "is the player on real ground?" checks can tell
     // conjured ink from actual terrain.
@@ -195,12 +203,16 @@ public sealed class AetherInk : EntityScript
     private void SmotherUnder(Vector2 a, Vector2 b)
     {
         Vector2 mid = (a + b) * 0.5f;
+        // Drawing is not quiet. Anything alive nearby notices, whether or not this stroke touches it.
+        Creature.InkDrawnAt(mid);
+
         foreach (Entity e in Physics2D.OverlapCircle(mid, Thickness + 0.45f))
         {
             if (e.Id == Self.Id || IsInk(e.Id) || IsPetrified(e.Id)) { continue; }
+            if (Aether < SmotherCost) { continue; } // cannot afford to unmake it - it lives
             if (Creature.TrySmother(e.Id))
             {
-                Aether = Math.Min(MaxAether, Aether + SmotherRefund);
+                Aether = Math.Max(0.0f, Aether - SmotherCost);
             }
         }
     }

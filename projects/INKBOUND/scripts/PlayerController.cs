@@ -283,6 +283,9 @@ public sealed class PlayerController : EntityScript
         // Everything you were holding up SETS. However you died, the cave keeps what you drew - which
         // is why the walls down here are made of the people who came before.
         AetherInk.Instance?.Petrify();
+        // The cave keeps your scaffolding, but it also gets its teeth back: everything you drowned is
+        // standing again. Deaths make the route easier and the danger no easier.
+        Creature.ReviveAll();
         // The body stops dead and melts where it stands - no hop, no arc. Trigger so it
         // sinks through the floor it is dissolving into; no gravity so the sink is ours.
         Physics2D.SetTrigger(Self, true);

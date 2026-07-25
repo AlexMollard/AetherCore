@@ -7,8 +7,8 @@ namespace AetherGame;
 /// <summary>
 /// A floating wraith. It drifts back and forth adrift in the dark, bobbing up and down, and turns
 /// at walls or at the edge of its patrol range - it never falls, so it happily crosses gaps a ground
-/// enemy can't. Touching it from the side or below sends the player back to the last checkpoint;
-/// dropping onto it from above dispels it (a stomp that bounces the player, same as the ground enemy).
+/// enemy can't. Touching it is fatal from any angle; the only way to be rid of it is to draw ink
+/// across it, and it re-forms every time the wanderer comes apart.
 /// A kinematic trigger sensor: it passes through the player rather than shoving them, and is moved
 /// purely by velocity so Box2D keeps the sensor sweeps clean. Pairs with the slime sprite tinted a
 /// spectral violet. Attach to a kinematic body whose collider is a trigger.
@@ -23,7 +23,7 @@ public sealed class FloatingWraith : EntityScript
     public float BobAmplitude = 0.55f;
     /// <summary>Seconds per bob cycle.</summary>
     public float BobPeriod = 2.4f;
-    /// <summary>Shrink-and-fade time after a stomp before the wraith vanishes.</summary>
+    /// <summary>Shrink-and-fade time after being smothered, before it lies dormant.</summary>
     public float DispelSeconds = 0.4f;
 
     private float _spawnX;
@@ -42,10 +42,28 @@ public sealed class FloatingWraith : EntityScript
         _baseY = Self.Position.Y;
         _baseSize = SpriteRenderer.GetPixelSize(Self);
         _baseTint = SpriteRenderer.GetTint(Self);
-        Creature.Register(Self.Id, Smother);
+        Creature.Register(Self.Id, Smother, Revive, OnInkNearby);
     }
 
     public override void OnDetach() => Creature.Unregister(Self.Id);
+
+    /// <summary>It drifts toward ink it hears being conjured.</summary>
+    private void OnInkNearby(Vector2 at)
+    {
+        if (_dispel >= 0.0f) { return; }
+        float dx = at.X - Self.Position.X;
+        if (MathF.Abs(dx) > 8.0f) { return; }
+        _direction = dx >= 0.0f ? 1.0f : -1.0f;
+    }
+
+    /// <summary>Re-forms when the wanderer comes apart - the dark does not stay dispelled.</summary>
+    private void Revive()
+    {
+        _dispel = -1.0f;
+        SpriteRenderer.SetVisible(Self, true);
+        SpriteRenderer.SetPixelSize(Self, _baseSize);
+        SpriteRenderer.SetTint(Self, _baseTint);
+    }
 
     /// <summary>Drowned in ink - the only way it dies. Ink is the weapon; there is no stomp.</summary>
     private void Smother()
@@ -59,16 +77,22 @@ public sealed class FloatingWraith : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
-        // Dispel: shrink and fade after a stomp, then remove.
+        // Coming apart: shrink and fade, then lie dormant. It is never destroyed - it has to still be
+        // here to re-form when the wanderer next dies. Only tick while it is still fading; at exactly
+        // zero it is asleep and must stay there.
         if (_dispel >= 0.0f)
         {
-            _dispel -= deltaTime;
-            float k = Math.Clamp(_dispel / DispelSeconds, 0.0f, 1.0f);
-            SpriteRenderer.SetPixelSize(Self, _baseSize * (0.35f + 0.65f * k));
-            SpriteRenderer.SetTint(Self, new Vector4(_baseTint.X, _baseTint.Y, _baseTint.Z, _baseTint.W * k));
-            if (_dispel <= 0.0f)
+            if (_dispel > 0.0f)
             {
-                Self.Destroy();
+                _dispel -= deltaTime;
+                float k = Math.Clamp(_dispel / DispelSeconds, 0.0f, 1.0f);
+                SpriteRenderer.SetPixelSize(Self, _baseSize * (0.35f + 0.65f * k));
+                SpriteRenderer.SetTint(Self, new Vector4(_baseTint.X, _baseTint.Y, _baseTint.Z, _baseTint.W * k));
+                if (_dispel <= 0.0f)
+                {
+                    _dispel = 0.0f;
+                    SpriteRenderer.SetVisible(Self, false);
+                }
             }
             return;
         }
