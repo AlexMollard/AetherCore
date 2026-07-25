@@ -256,18 +256,33 @@ public sealed class AetherInk : EntityScript
     private static bool IsInsideSolid(Vector2 p) => Physics2D.IsPointSolid(p);
 
     /// <summary>Is real geometry (or a crystal) within reach of this point? Other ink does not count
-    /// - a span must ultimately reach the actual world to hold.</summary>
+    /// - a span must ultimately reach the actual world to hold.
+    ///
+    /// Anchoring reads off the TILEMAP, not off a physics overlap. An overlap query counted every
+    /// collider in range, so a floating coin, a dialogue zone or a chomper wandering past silently
+    /// anchored ink in mid-air - the rule looked random because its real anchors were invisible.
+    /// Terrain is the only thing that holds ink, plus crystals, which advertise themselves.</summary>
     private bool EvaluateAnchor(Vector2 p)
     {
-        uint playerId = Self.Id;
+        // Walk a disc of tilemap samples around the point. The grid is indexed off zero so it always
+        // samples straight down/left/right/up from the point - stepping from -radius instead skipped
+        // the axes entirely and made anchoring miss ground that was plainly in reach.
+        const float Step = 0.4f;
+        int n = (int)MathF.Ceiling(AnchorRadius / Step);
+        for (int iy = -n; iy <= n; iy++)
+        {
+            for (int ix = -n; ix <= n; ix++)
+            {
+                float dx = ix * Step, dy = iy * Step;
+                if (dx * dx + dy * dy > AnchorRadius * AnchorRadius) { continue; }
+                if (Physics2D.IsPointSolid(new Vector2(p.X + dx, p.Y + dy))) { return true; }
+            }
+        }
+
+        // Crystals are deliberate anchors - they are the "you may build here" markers in a chasm.
         foreach (Entity e in Physics2D.OverlapCircle(p, AnchorRadius))
         {
-            uint id = e.Id;
-            if (id == playerId || IsInk(id))
-            {
-                continue;
-            }
-            return true; // terrain or crystal within reach
+            if (AetherCrystal.IsCrystal(e.Id)) { return true; }
         }
         return false;
     }

@@ -22,13 +22,22 @@ public sealed class AetherCrystal : EntityScript
     private Vector4 _baseTint = new(0.45f, 0.85f, 1.0f, 1.0f);
     private Vector2 _baseSize;
 
+    // Live crystal ids, so AetherInk can treat a crystal as a valid anchor without counting every
+    // other trigger in the level (coins, dialogue zones, enemies) as one too.
+    private static readonly System.Collections.Generic.HashSet<uint> s_crystals = new();
+
+    public static bool IsCrystal(uint id) => s_crystals.Contains(id);
+
     public override void OnAttach()
     {
         Physics2D.SetTrigger(Self, true); // force the fixture to be a sensor at runtime
         Physics2D.EnableEvents(Self);
         _baseTint = SpriteRenderer.GetTint(Self);
         _baseSize = SpriteRenderer.GetPixelSize(Self);
+        s_crystals.Add(Self.Id);
     }
+
+    public override void OnDetach() => s_crystals.Remove(Self.Id);
 
     public override void OnUpdate(float deltaTime)
     {
