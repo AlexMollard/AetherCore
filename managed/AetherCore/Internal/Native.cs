@@ -313,6 +313,13 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_custompass_submit(string name, Vector4* data, int count, Vector4 param, Vector4 color0, Vector4 color1);
 
+    // ── Transient 2D lights / shadow occluders ─────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_light2d_submit_light(float x, float y, float radius, Vector3 color, float intensity, int castsShadow);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_light2d_submit_occluder_capsule(float ax, float ay, float bx, float by, float radius);
+
     [LibraryImport(Lib)]
     internal static partial float aether_time_total();
 

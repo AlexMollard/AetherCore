@@ -41,6 +41,14 @@ public sealed class AetherInk : EntityScript
     private static readonly Vector4 BodyColor = new(0.03f, 0.055f, 0.08f, 1.0f); // near-black ink
     private static readonly Vector4 RimColor = new(0.12f, 0.28f, 0.34f, 1.0f);   // dim cool sheen, not neon
 
+    // Lighting cast by the stroke itself (see the pack loop). One light every LightStride segments
+    // keeps the per-pixel light loop cheap while still reading as a continuous glow.
+    private const int LightStride = 4;
+    private const float InkLightRadius = 2.6f;
+    private const float InkLightIntensity = 1.7f;
+    private static readonly Vector3 InkLightColor = new(0.35f, 0.85f, 1.0f);   // ink-cyan
+    private static readonly Vector3 GhostLightColor = new(1.0f, 0.30f, 0.26f); // ghost ink = red
+
     // The engine's generic project-pass hook renders the ink; this project owns the shader + packing.
     private const string PassName = "inkfield";
     // Reused scratch buffer: two Vector4 per segment (a.xy,b.xy | width,alpha,glow,ghost).
@@ -168,6 +176,21 @@ public sealed class AetherInk : EntityScript
             float ghost = s.Anchored ? 0.0f : 1.0f;                              // ghost = red
             _buf.Add(new Vector4(s.A.X, s.A.Y, s.B.X, s.B.Y));
             _buf.Add(new Vector4(Thickness * grow, s.Anchored ? alpha : alpha * 0.85f, glow, ghost));
+
+            // The stroke lights the cave and blocks light. Anchored ink is real matter, so it casts a
+            // shadow capsule matching its drawn thickness; ghost ink is crumbling and non-solid, so it
+            // only glows. Lights are sampled every LightStride segments - one per segment would flood
+            // the per-pixel light loop - which still reads as a continuous glowing line.
+            if (s.Anchored)
+            {
+                Lighting2D.SubmitOccluder(s.A, s.B, Thickness * grow);
+            }
+            if (i % LightStride == 0)
+            {
+                Vector2 mid = (s.A + s.B) * 0.5f;
+                Vector3 tint = s.Anchored ? InkLightColor : GhostLightColor;
+                Lighting2D.SubmitLight(mid, InkLightRadius, tint, InkLightIntensity * alpha * glow);
+            }
             minX = Math.Min(minX, Math.Min(s.A.X, s.B.X));
             minY = Math.Min(minY, Math.Min(s.A.Y, s.B.Y));
             maxX = Math.Max(maxX, Math.Max(s.A.X, s.B.X));

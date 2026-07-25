@@ -40,15 +40,22 @@ namespace aether
 		std::uint32_t blendMode = 0;
 	};
 
-	// One shadow-casting tile cell. The occluder pass draws it as a quad and samples the tile's own
-	// texture, so occlusion follows the ARTWORK's alpha (sub-tile) rather than the whole cell.
+	// Occluder2D::flags bits.
+	inline constexpr std::uint32_t kOccluder2DFlipX = 1u << 0u;
+	inline constexpr std::uint32_t kOccluder2DFlipY = 1u << 1u;
+	// Capsule form (scripts): posHalfSize = (a.xy, radius), uvRect.xy = b; no texture is sampled.
+	inline constexpr std::uint32_t kOccluder2DCapsule = 1u << 2u;
+
+	// One shadow caster. Tiles use the quad form: the pass draws the cell and samples the tile's own
+	// texture, so occlusion follows the ARTWORK's alpha (sub-tile) rather than the whole cell. Scripts
+	// use the capsule form for transient strokes/trails.
 	// Mirrors GpuOccluder2D in shaders/occluder2d.slang (48 bytes).
 	struct Occluder2D
 	{
-		glm::vec4 posHalfSize{0.0f};              // xy = world centre, z = half cell size, w unused
-		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f}; // atlas region (image space, begin/end)
+		glm::vec4 posHalfSize{0.0f};              // quad: xy = world centre, z = half cell | capsule: xy = a, z = radius
+		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f}; // quad: atlas region (image space) | capsule: xy = b
 		std::uint32_t textureIndex = 0;
-		std::uint32_t flags = 0; // bit0 = flipX, bit1 = flipY
+		std::uint32_t flags = 0; // see kOccluder2D* above
 		std::uint32_t pad0 = 0;
 		std::uint32_t pad1 = 0;
 	};

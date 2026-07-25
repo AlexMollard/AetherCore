@@ -76,6 +76,7 @@ namespace aether
 		m_services.Register<GpuDevice>(*m_gpu);
 		m_services.Register<ScreenshotService>(m_screenshotService);
 		m_services.Register<CustomPassRegistry>(m_customPasses);
+		m_services.Register<Light2DSubmissionRegistry>(m_light2DSubmissions);
 		if (fullRuntime)
 		{
 			m_cameras = std::make_unique<CameraSubsystem>();
@@ -717,6 +718,19 @@ namespace aether
 		}
 
 		packet.pointLights.assign(renderer.GetPointLights().begin(), renderer.GetPointLights().end());
+
+		// Script-submitted transient 2D lights/occluders (a drawn ink stroke, an effect): appended after
+		// the ECS lights so they light and cast shadows like any other, then cleared for the next frame.
+		// A script that stops submitting simply stops lighting - no entity lifetime to manage.
+		if (!m_light2DSubmissions.lights.empty())
+		{
+			packet.pointLights.insert(packet.pointLights.end(), m_light2DSubmissions.lights.begin(), m_light2DSubmissions.lights.end());
+		}
+		if (!m_light2DSubmissions.occluders.empty())
+		{
+			packet.render2D.occluders.insert(packet.render2D.occluders.end(), m_light2DSubmissions.occluders.begin(), m_light2DSubmissions.occluders.end());
+		}
+		m_light2DSubmissions.Clear();
 
 		// Hand the game-thread debug vertex buffer to the packet. This is the
 		packet.debugVertices = std::move(m_pendingDebugVertices);

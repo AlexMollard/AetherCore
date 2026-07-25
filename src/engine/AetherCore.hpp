@@ -12,6 +12,7 @@
 #include "rendering/IUiOverlay.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/CustomPassRegistry.hpp"
+#include "rendering/Light2DSubmission.hpp"
 #include "rendering/RenderThread.hpp"
 #include "rendering/ScreenshotService.hpp"
 #include "utils/EngineSettings.hpp"
@@ -156,6 +157,7 @@ namespace aether
 		std::unique_ptr<GpuDevice> m_gpu;
 		ScreenshotService m_screenshotService;
 		CustomPassRegistry m_customPasses; // game-thread project-pass registry + submissions, copied into the packet each frame
+		Light2DSubmissionRegistry m_light2DSubmissions; // script-submitted 2D lights/occluders, drained into the packet each frame
 		std::unique_ptr<CameraSubsystem> m_cameras;
 		std::unique_ptr<IUiOverlay> m_uiOverlay;
 		std::unique_ptr<RenderingSubsystem> m_rendering;
