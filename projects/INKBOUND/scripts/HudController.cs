@@ -20,6 +20,11 @@ public sealed class HudController : EntityScript
     // is needed; see AetherInk). Sits just above the coin counter, bottom-left.
     private Entity _aetherFill;
     private float _shownAether = -1.0f;
+    // Said beside the well the first couple of times a whole stroke comes to nothing (see AetherInk).
+    // The cursor guide is what actually teaches the anchoring rule; this only names it once, for the
+    // player who drew a bridge into open air and is still not sure what the game just did.
+    private Entity _hintText;
+    private string _shownHint = "";
     // The meter is an ink WELL, not a bar: a squat pot in the corner whose level drops as you draw.
     // Reading your remaining ink off the amount of ink in a pot needs no legend.
     private const float WellX = 28.0f;
@@ -57,6 +62,14 @@ public sealed class HudController : EntityScript
         Ui.SetImageCornerRadius(_aetherFill, 6.0f);
         Ui.SetMaterial(_aetherFill, "ui_inkwell");
         _shownAether = -1.0f;
+
+        _hintText = Ui.CreateText(Self, " ");
+        Ui.SetText(_hintText, ""); // CreateText falls back to a "Text" placeholder for an empty string
+        Ui.SetAnchors(_hintText, new Vector2(0.0f, 0.0f), new Vector2(0.0f, 0.0f));
+        Ui.SetPivot(_hintText, new Vector2(0.0f, 0.0f));
+        Ui.SetRect(_hintText, WellX + WellW + 14.0f, WellY + 6.0f, 420.0f, 30.0f);
+        Ui.SetFontSize(_hintText, 21.0f);
+        Ui.SetTextColor(_hintText, new Vector4(1.0f, 0.74f, 0.30f, 1.0f)); // the guide tether's amber
     }
 
     public override void OnUpdate(float deltaTime)
@@ -72,6 +85,12 @@ public sealed class HudController : EntityScript
             _shownAether = _shownAether < 0.0f ? frac : _shownAether + (frac - _shownAether)
                                                       * System.Math.Clamp(9.0f * deltaTime, 0.0f, 1.0f);
             Ui.SetMaterialParams(_aetherFill, new Vector4(Time.UnscaledTime, _shownAether, 0.0f, 0.0f));
+        }
+
+        if (_hintText.IsValid && AetherInk.Hint != _shownHint)
+        {
+            _shownHint = AetherInk.Hint;
+            Ui.SetText(_hintText, _shownHint);
         }
 
         // A new level began (win state cleared): hide the banner again.

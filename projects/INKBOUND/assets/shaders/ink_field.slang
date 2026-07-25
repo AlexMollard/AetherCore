@@ -139,8 +139,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             bGhost = s.ghost;
         }
     }
-    // One fbm per cell wobbles the boundary so the pixel edge looks brushed, not machined.
-    best += (fbm(wq * 6.5) - 0.5) * 0.06;
+    // One fbm per cell wobbles the boundary so the pixel edge looks brushed, not machined. Guide marks
+    // (kind >= 2) are instrumentation, not paint - a brushed edge on a two-pixel line just eats it.
+    const int kind = int(round(bGhost));
+    if (kind < 2)
+    {
+        best += (fbm(wq * 6.5) - 0.5) * 0.06;
+    }
 
     const float glowRadius = 0.26; // pixel glow halo reach beyond the ink surface
     if (best > glowRadius)
@@ -157,20 +162,46 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float turb = fbm(wq * 2.8 + float2(time * 0.04, -time * 0.03));
     const float depth = saturate(-best / 0.5); // 0 at the edge -> ~1 deep inside the ink
 
+    // The ghost channel is really a segment KIND. 0 = live ink, 1 = ghost, -1 = set ink, and 2..4 are
+    // the anchor guide: the cursor's verdict and the gap it has to close. Guide marks are thin, fully
+    // emissive line work - they are UI wearing the ink's clothes, so they read as the game telling you
+    // something rather than as more substance in the world.
     float3 body = pc.color0.rgb;
     float3 rim = pc.color1.rgb;
-    if (bGhost > 0.5)
+    if (kind == 1)
     {
         body = float3(0.30, 0.04, 0.05);
         rim = float3(0.92, 0.22, 0.22);
     }
-    else if (bGhost < -0.5)
+    else if (kind == -1)
     {
         // Set ink: the stuff a dead wanderer left behind. Dull stone with a cold mineral edge -
         // clearly part of the cave now, and clearly not something you conjured a moment ago.
         body = float3(0.085, 0.10, 0.135);
         rim = float3(0.22, 0.30, 0.38);
         bGlow = 0.25;
+    }
+    else if (kind >= 2)
+    {
+        // Guide: hold = cold cyan (the colour ink goes when it takes), miss = the same red the crumbling
+        // ghost uses, tether = amber, which belongs to neither state and so reads as an instruction.
+        // Over 1.0 on purpose: this draws after the light map and through the tonemap, and at LDR values
+        // the marks came out pastel - a dusty pink that read as another rock rather than as a warning.
+        float3 c = kind == 2 ? float3(0.30, 1.50, 1.90)
+                 : kind == 3 ? float3(2.20, 0.30, 0.22)
+                             : float3(2.00, 1.15, 0.28);
+        // Flat and self-lit: no pooling, no veins, no depth shading. A guide mark pulses instead, so it
+        // never sits still long enough to be mistaken for scenery.
+        //
+        // Its halo is deliberately TIGHT. Sharing the ink's wide glow made a small ring bloom into a
+        // filled blob that read as a prop lying in the cave rather than as the game answering a
+        // question - the line work has to stay line work.
+        const float beat = kind == 2 ? 1.0 : 0.82 + 0.18 * sin(time * 7.0);
+        const float ga = inkMask * bAlpha;
+        const float gh = 1.0 - saturate(max(best, 0.0) / 0.05);
+        const float gga = gh * gh * (1.0 - inkMask) * 0.45;
+        const float ta = saturate(ga + gga);
+        return float4(c * beat, ta * beat);
     }
 
     // Murky pooling + veins inside the body.

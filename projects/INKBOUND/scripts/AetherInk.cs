@@ -49,6 +49,11 @@ public sealed class AetherInk : EntityScript
     public float LinkReach = 0.75f;
     /// <summary>Crystals are deliberate anchor points, so they hold ink from a bit further off.</summary>
     public float CrystalReach = 1.1f;
+    /// <summary>How far the guide looks for stone when the cursor will not hold. Generous on purpose:
+    /// the failure that feels like a bug is the NEAR miss, so the range has to comfortably cover
+    /// "I thought I was touching that wall". Past it there is nothing to have nearly hit, and the guide
+    /// says "no" without pointing anywhere.</summary>
+    public float HintReach = 2.2f;
 
     // Read by HudController for the meter bar.
     public static float Aether;
@@ -276,6 +281,10 @@ public sealed class AetherInk : EntityScript
             {
                 _hasLast = false;
             }
+            if (Input.IsMouseReleased(MouseButton.Left))
+            {
+                EndStroke();
+            }
 
             // Right button takes matter back out of the cave: hold it over set ink to drink it in.
             if (Input.IsMouseDown(MouseButton.Right) && _petrified.Count > 0)
@@ -350,9 +359,15 @@ public sealed class AetherInk : EntityScript
             float alpha = s.Age > life - fade ? Math.Clamp((life - s.Age) / fade, 0.0f, 1.0f) : 1.0f;
             float grow = Math.Clamp(s.Age / 0.08f, 0.4f, 1.0f); // quick pop-in
             float glow = s.Anchored ? 0.4f + 0.6f * GameSettings.InkGlow : 0.5f; // Ink Glow scales the rim
-            float ghost = s.Anchored ? 0.0f : 1.0f;                              // ghost = red
-            _buf.Add(new Vector4(s.A.X, s.A.Y, s.B.X, s.B.Y));
-            _buf.Add(new Vector4(Thickness * grow, s.Anchored ? alpha : alpha * 0.85f, glow, ghost));
+
+            // Ink that found nothing to hold onto SLIDES OFF. It used to just fade in place, which is
+            // indistinguishable from a stroke timing out - or from the game losing the input. Ink that
+            // visibly sags and drops away is never read as a bug; it is read as a wall you missed.
+            float sag = s.Anchored ? 0.0f : 2.8f * s.Age * s.Age;
+            Vector2 a = new(s.A.X, s.A.Y - sag);
+            Vector2 b = new(s.B.X, s.B.Y - sag);
+            Emit(a, b, Thickness * grow, s.Anchored ? alpha : alpha * 0.85f, glow,
+                 s.Anchored ? KindInk : KindGhost);
 
             // The stroke lights the cave and blocks light. Anchored ink is real matter, so it casts a
             // shadow capsule matching its drawn thickness; ghost ink is crumbling and non-solid, so it
@@ -364,14 +379,14 @@ public sealed class AetherInk : EntityScript
             }
             if (i % LightStride == 0)
             {
-                Vector2 mid = (s.A + s.B) * 0.5f;
+                Vector2 mid = (a + b) * 0.5f;
                 Vector3 tint = s.Anchored ? InkLightColor : GhostLightColor;
                 Lighting2D.SubmitLight(mid, InkLightRadius, tint, InkLightIntensity * alpha * glow);
             }
-            minX = Math.Min(minX, Math.Min(s.A.X, s.B.X));
-            minY = Math.Min(minY, Math.Min(s.A.Y, s.B.Y));
-            maxX = Math.Max(maxX, Math.Max(s.A.X, s.B.X));
-            maxY = Math.Max(maxY, Math.Max(s.A.Y, s.B.Y));
+            minX = Math.Min(minX, Math.Min(a.X, b.X));
+            minY = Math.Min(minY, Math.Min(a.Y, b.Y));
+            maxX = Math.Max(maxX, Math.Max(a.X, b.X));
+            maxY = Math.Max(maxY, Math.Max(a.Y, b.Y));
             _segs[i] = s;
         }
 
@@ -380,12 +395,27 @@ public sealed class AetherInk : EntityScript
         for (int i = 0; i < _petrified.Count; i++)
         {
             Seg s = _petrified[i];
-            _buf.Add(new Vector4(s.A.X, s.A.Y, s.B.X, s.B.Y));
-            _buf.Add(new Vector4(Thickness * 1.15f, 1.0f, 0.0f, -1.0f));
+            Emit(s.A, s.B, Thickness * 1.15f, 1.0f, 0.0f, KindSet);
             minX = Math.Min(minX, Math.Min(s.A.X, s.B.X));
             minY = Math.Min(minY, Math.Min(s.A.Y, s.B.Y));
             maxX = Math.Max(maxX, Math.Max(s.A.X, s.B.X));
             maxY = Math.Max(maxY, Math.Max(s.A.Y, s.B.Y));
+        }
+
+        // 3. The anchor guide rides in the same pass, so the cursor's verdict is drawn with the ink it
+        //    is predicting. Suppressed once the level is won - there is nothing left to build.
+        if (!GameState.Won)
+        {
+            // A cursor outside the game view projects to nonsense (thousands of units out in the
+            // editor, where the mouse spends most of its time over panels). Nothing to guide there, and
+            // an absurd point would blow the pass quad up to cover the world.
+            Vector3 c = Camera.ScreenToWorld(Input.MousePosition);
+            Vector2 cursor = new(c.X, c.Y);
+            Vector3 here = Self.Position;
+            if (Vector2.DistanceSquared(cursor, new Vector2(here.X, here.Y)) < 60.0f * 60.0f)
+            {
+                PackGuide(cursor, deltaTime, ref minX, ref minY, ref maxX, ref maxY);
+            }
         }
 
         // params = world AABB of the ink (min.xy, max.xy), padded for thickness + rim + edge noise, so
@@ -413,6 +443,9 @@ public sealed class AetherInk : EntityScript
         }
 
         bool anchored = EvaluateAnchor(mid);
+        _strokeLaid++;
+        if (anchored) { _strokeHeld++; }
+        else if (InDeadZone(mid)) { _strokeHitDeadRock = true; }
         Seg s = new() { A = a, B = b, Age = 0.0f, Anchored = anchored };
 
         if (anchored)
@@ -546,6 +579,212 @@ public sealed class AetherInk : EntityScript
             if (p.X >= r.X && p.X <= r.Z && p.Y >= r.Y && p.Y <= r.W) { return true; }
         }
         return false;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The anchor guide.
+    //
+    // Ink either bites stone or it does not, and that rule used to be entirely invisible: you found
+    // out by drawing and watching the stroke crumble, which reads as the game dropping your input
+    // rather than as a rule you broke. Missing a wall by a hand's width looked exactly like missing it
+    // by a mile, and both looked like a bug.
+    //
+    // So the verdict is now stated BEFORE you commit anything. The cursor carries it every frame, and
+    // when the answer is "no" but there is stone nearby it draws the gap you actually have to close -
+    // the near miss becomes a measurable distance instead of a mystery. Everything here is pure
+    // decoration: it goes straight into the ink pass's segment buffer and never becomes a collider, a
+    // light or an occluder.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>Segment kinds understood by ink_field.slang's <c>ghost</c> channel.</summary>
+    private const float KindInk = 0.0f;
+    private const float KindGhost = 1.0f;
+    private const float KindSet = -1.0f;
+    private const float KindGuideHold = 2.0f;   // cursor: this will hold
+    private const float KindGuideMiss = 3.0f;   // cursor: this will not hold
+    private const float KindGuideTether = 4.0f; // the gap between the cursor and the nearest stone
+
+    // Two art pixels wide at 16 px/unit. Thinner than this and the shader's hard pixel edges eat the
+    // line in places, which looks like the guide itself is glitching.
+    private const float GuideWidth = 0.06f;
+
+    /// <summary>Sample offsets for the nearest-stone search, ordered nearest-first so the walk stops as
+    /// soon as it finds rock. Built once from <see cref="HintReach"/>.</summary>
+    private Vector2[]? _probe;
+
+    private Vector2[] BuildProbe()
+    {
+        const float Step = 0.15f;
+        int n = (int)MathF.Ceiling(HintReach / Step);
+        List<Vector2> pts = new();
+        for (int iy = -n; iy <= n; iy++)
+        {
+            for (int ix = -n; ix <= n; ix++)
+            {
+                Vector2 d = new(ix * Step, iy * Step);
+                if (d.LengthSquared() <= HintReach * HintReach) { pts.Add(d); }
+            }
+        }
+        pts.Sort((a, b) => a.LengthSquared().CompareTo(b.LengthSquared()));
+        return pts.ToArray();
+    }
+
+    private Vector2 _stoneAt, _stoneFor;
+    private bool _stoneFound;
+    private float _stoneAge = 999.0f;
+
+    /// <summary>Nearest solid tile point to <paramref name="p"/> within <see cref="HintReach"/>. The
+    /// probe is sorted nearest-first, so this returns on the first hit instead of scanning the disc.
+    ///
+    /// Cached across frames: the miss case walks the whole disc before giving up, which is several
+    /// hundred tile queries, and out in open air that is EVERY frame. The tether only has to keep up
+    /// with a hand moving a mouse, so it is re-solved when the cursor has actually moved or the answer
+    /// has gone stale - never once per frame for a cursor sitting still.</summary>
+    private bool TryFindNearestStone(Vector2 p, float deltaTime, out Vector2 stone)
+    {
+        _stoneAge += deltaTime;
+        if (_stoneAge < 0.1f && Vector2.DistanceSquared(p, _stoneFor) < 0.02f)
+        {
+            stone = _stoneAt;
+            return _stoneFound;
+        }
+
+        _stoneAge = 0.0f;
+        _stoneFor = p;
+        _probe ??= BuildProbe();
+        foreach (Vector2 d in _probe)
+        {
+            Vector2 q = new(p.X + d.X, p.Y + d.Y);
+            if (Physics2D.IsPointSolid(q)) { _stoneAt = q; stone = q; return _stoneFound = true; }
+        }
+        _stoneAt = p;
+        stone = p;
+        return _stoneFound = false;
+    }
+
+    private void Emit(Vector2 a, Vector2 b, float width, float alpha, float glow, float kind)
+    {
+        _buf.Add(new Vector4(a.X, a.Y, b.X, b.Y));
+        _buf.Add(new Vector4(width, alpha, glow, kind));
+    }
+
+    /// <summary>Draw the cursor's verdict and, on a near miss, the gap to the stone it failed to reach.
+    /// Returns the world AABB of everything it emitted so the caller can grow the pass quad.</summary>
+    private void PackGuide(Vector2 cursor, float deltaTime, ref float minX, ref float minY, ref float maxX, ref float maxY)
+    {
+        bool dead = InDeadZone(cursor);
+        bool hold = !dead && EvaluateAnchor(cursor);
+        float kind = hold ? KindGuideHold : KindGuideMiss;
+
+        // Four corner brackets, not a ring. A ring drawn in a cave full of round glowing things reads as
+        // one more prop lying on the floor; brackets read as a viewfinder, which is what this is.
+        //
+        // Held: the brackets are drawn in tight and square - closed on the point, nothing moving.
+        // Refused: they are flung out wide, turned off-axis, and spinning. The two states differ in
+        // size, angle and motion as well as colour, so the answer is legible at a glance and to a player
+        // who cannot tell the colours apart.
+        float radius = hold ? 0.20f : 0.42f;
+        if (hold)
+        {
+            // Quiet: four short ticks and a dot. This is the state the cursor is in most of the time, so
+            // it has to confirm without shouting - big chrome on the normal case is just noise you learn
+            // to stop seeing, which would cost the refused state its impact.
+            for (int i = 0; i < 4; i++)
+            {
+                float a = i * (MathF.PI * 0.5f);
+                Vector2 d = new(MathF.Cos(a), MathF.Sin(a));
+                Emit(cursor + d * (radius - 0.09f), cursor + d * radius, GuideWidth, 0.8f, 1.0f, kind);
+            }
+            Emit(cursor - new Vector2(0.02f, 0.0f), cursor + new Vector2(0.02f, 0.0f), GuideWidth, 0.8f, 1.0f, kind);
+        }
+        else
+        {
+            // Loud: four corner brackets flung wide and turned off-axis, breathing. Nothing is holding
+            // the point, and the mark is literally opening away from it.
+            const float Arm = 0.16f; // well under half the radius, so the corners never close into a box
+            float spin = MathF.PI * 0.25f + MathF.Sin(_t * 2.2f) * 0.10f;
+            float cs = MathF.Cos(spin), sn = MathF.Sin(spin);
+            Vector2 Rot(float x, float y) => cursor + new Vector2(x * cs - y * sn, x * sn + y * cs);
+            for (int i = 0; i < 4; i++)
+            {
+                float sx = (i & 1) == 0 ? 1.0f : -1.0f;
+                float sy = (i & 2) == 0 ? 1.0f : -1.0f;
+                Emit(Rot(sx * radius, sy * radius), Rot(sx * (radius - Arm), sy * radius), GuideWidth, 1.0f, 1.0f, kind);
+                Emit(Rot(sx * radius, sy * radius), Rot(sx * radius, sy * (radius - Arm)), GuideWidth, 1.0f, 1.0f, kind);
+            }
+        }
+
+        if (dead)
+        {
+            // Dead rock is a different refusal from empty air: there is no gap to close, the stone
+            // simply will not take ink. Strike it out so the player stops hunting for a better angle.
+            float d = radius * 0.55f;
+            Emit(cursor + new Vector2(-d, -d), cursor + new Vector2(d, d), GuideWidth, 1.0f, 1.0f, kind);
+            Emit(cursor + new Vector2(-d, d), cursor + new Vector2(d, -d), GuideWidth, 1.0f, 1.0f, kind);
+        }
+        else if (!hold && TryFindNearestStone(cursor, deltaTime, out Vector2 stone))
+        {
+            // The whole point of the guide: you missed by THIS much. A dashed run from the cursor to
+            // the rock turns "it just doesn't work here" into a distance you can see and close.
+            Vector2 d = stone - cursor;
+            float len = d.Length();
+            if (len > 0.01f)
+            {
+                Vector2 dir = d / len;
+                Vector2 from = cursor + dir * radius;
+                float span = MathF.Max(0.0f, len - radius);
+                const float Dash = 0.17f, Gap = 0.19f; // gaps wide enough to survive the rounded caps
+                float o = (_t * 0.55f) % (Dash + Gap); // the dashes crawl toward the stone
+                for (float s = -o; s < span; s += Dash + Gap)
+                {
+                    float s0 = MathF.Max(0.0f, s);
+                    float s1 = MathF.Min(span, s + Dash);
+                    if (s1 <= s0) { continue; }
+                    Emit(from + dir * s0, from + dir * s1, GuideWidth * 0.85f, 1.0f, 1.0f, KindGuideTether);
+                }
+                // A tick on the rock itself, so the eye lands on what it has to touch.
+                Vector2 n = new(-dir.Y, dir.X);
+                Emit(stone - n * 0.16f, stone + n * 0.16f, GuideWidth, 1.0f, 1.0f, KindGuideTether);
+            }
+        }
+
+        float pad = radius + HintReach;
+        minX = Math.Min(minX, cursor.X - pad);
+        minY = Math.Min(minY, cursor.Y - pad);
+        maxX = Math.Max(maxX, cursor.X + pad);
+        maxY = Math.Max(maxY, cursor.Y + pad);
+    }
+
+    // --- The hint line ----------------------------------------------------------------------------
+    // Said out loud only when a whole stroke came to nothing, and only the first few times: the guide
+    // is meant to teach the rule, and once it has, repeating it is nagging.
+
+    private static string s_hint = "";
+    private static float s_hintUntil;
+    private static int s_hintsShown;
+
+    /// <summary>What the HUD should print under the well right now, or empty.</summary>
+    public static string Hint => Time.UnscaledTime < s_hintUntil ? s_hint : "";
+
+    private int _strokeLaid;
+    private int _strokeHeld;
+    private bool _strokeHitDeadRock;
+
+    private void EndStroke()
+    {
+        int laid = _strokeLaid;
+        bool held = _strokeHeld > 0;
+        bool deadRock = _strokeHitDeadRock;
+        _strokeLaid = 0;
+        _strokeHeld = 0;
+        _strokeHitDeadRock = false;
+
+        // Nothing to explain unless the player spent a real stroke and got nothing solid for it.
+        if (laid < 2 || held || s_hintsShown >= 3 || Time.UnscaledTime < s_hintUntil) { return; }
+
+        s_hint = deadRock ? "Dead rock will not take ink." : "Ink has to touch stone to hold.";
+        s_hintUntil = Time.UnscaledTime + 3.0f;
+        s_hintsShown++;
     }
 
     /// <summary>Is this point actually against solid terrain? Samples the tilemap in a tight disc,
