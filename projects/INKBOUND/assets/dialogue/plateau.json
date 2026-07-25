@@ -1,0 +1,17 @@
+{
+  "id": "plateau",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "The Void",
+      "text": "You climbed on something that wasn't there a moment ago.",
+      "effect": "whisper",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "The Void",
+      "text": "Careful, spark. Keep that up and the dark will start [shake]believing[/shake] you.",
+      "effect": "glitch"
+    }
+  }
+}

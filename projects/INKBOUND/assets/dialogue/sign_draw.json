@@ -1,0 +1,23 @@
+{
+  "id": "sign_draw",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "The gap ahead is wider than you are brave.",
+      "effect": "whisper",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "Hold the [shake]ink[/shake] and drag it across. What you draw, you can stand on.",
+      "effect": "glitch",
+      "goto": "line3"
+    },
+    "line3": {
+      "speaker": "Scratched into the rock",
+      "text": "Everyone who came before drew their own way down. None of them drew a way back.",
+      "effect": "whisper"
+    }
+  }
+}

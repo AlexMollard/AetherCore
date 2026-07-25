@@ -1,0 +1,23 @@
+{
+  "id": "sign_anchor",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "Ink holds where the stone remembers it. Out in the open it forgets, and [shake]crumbles[/shake].",
+      "effect": "glitch",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "Red ink is ink that never took. Start your line at something solid.",
+      "effect": "whisper",
+      "goto": "line3"
+    },
+    "line3": {
+      "speaker": "Scratched into the rock",
+      "text": "The wall ahead does not care how high you can jump. Draw yourself a slope.",
+      "effect": "whisper"
+    }
+  }
+}
