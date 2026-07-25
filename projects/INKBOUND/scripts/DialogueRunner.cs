@@ -98,6 +98,11 @@ public sealed class DialogueRunner : EntityScript
     {
         if (_built) return;
         _canvas = Ui.CreateCanvas();
+        // The runner itself survives scene loads, and its UI must survive with it. Without this the
+        // canvas (an ordinary scene entity) is destroyed on the next Scene.Load while the runner lives
+        // on with _built still true - so replaying a level gave a runner with no widgets, and dialogue
+        // silently paused the game with nothing on screen.
+        _canvas.DontDestroyOnLoad();
 
         // Panel: bottom-anchored stretch (anchor Y=1 is the bottom edge; offsets go up = negative Y).
         _panel = Ui.CreateImage(_canvas);
