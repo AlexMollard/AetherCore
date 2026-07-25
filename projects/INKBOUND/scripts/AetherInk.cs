@@ -22,9 +22,14 @@ namespace AetherGame;
 /// </summary>
 public sealed class AetherInk : EntityScript
 {
-    public float MaxAether = 100.0f;
+    // A full well draws ~9.4 world units of ink (75 / 4 segments at 0.5 spacing). Deliberately short
+    // of the widest spans, so crossing one is a decision - go now, or top up at a crystal first -
+    // rather than something a full meter solves without thinking. Refill rate and crystal value are
+    // scaled to match, so the well still fills in about three seconds and a crystal is still worth
+    // most of a tank.
+    public float MaxAether = 75.0f;
     public float DrainPerSegment = 4.0f;
-    public float RefillPerSecond = 34.0f;
+    public float RefillPerSecond = 25.5f;
     /// <summary>World distance between segment nodes as the stroke is laid.</summary>
     public float Spacing = 0.5f;
     /// <summary>Ink half-thickness in world units (drives both the shader width and the collider radius).</summary>

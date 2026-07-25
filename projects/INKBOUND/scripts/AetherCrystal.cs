@@ -13,7 +13,7 @@ namespace AetherGame;
 /// </summary>
 public sealed class AetherCrystal : EntityScript
 {
-    public float RefillAmount = 45.0f;
+    public float RefillAmount = 34.0f; // ~45% of a well, matching the tightened ink budget
     public float RespawnDelay = 6.0f;
 
     private float _phase;
