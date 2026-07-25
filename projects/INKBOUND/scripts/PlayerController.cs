@@ -26,11 +26,9 @@ public sealed class PlayerController : EntityScript
     /// <summary>Releasing jump while rising cuts the ascent to this fraction, once.</summary>
     public float JumpCutFactor = 0.45f;
 
-    /// <summary>Death feel: the corpse pops up with this speed and falls through the
-    /// world, and the whole death beat lasts <see cref="DeathDuration"/> before the
-    /// respawn at the last checkpoint.</summary>
-    public float DeathHopSpeed = 13.0f;
-    public float DeathDuration = 0.7f;
+    /// <summary>Death feel: the body melts into ink where it stands over this long,
+    /// then respawns at the last checkpoint.</summary>
+    public float DeathDuration = 0.9f;
 
     private const string AnimIdle = "project://assets/animations/player_idle.spriteanim.toml";
     private const string AnimRun = "project://assets/animations/player_run.spriteanim.toml";
@@ -56,6 +54,7 @@ public sealed class PlayerController : EntityScript
     // input and world collision and plays out the death beat.
     private bool _dead;
     private float _deathTimer;
+    private float _meltY; // floor level the body melts down onto
 
     public override void OnAttach()
     {
@@ -244,11 +243,11 @@ public sealed class PlayerController : EntityScript
         Physics2D.SetLinearVelocity(Self, Vector2.Zero);
     }
 
-    /// <summary>Kill the player. Instead of snapping straight back, the corpse pops
-    /// up and arcs down THROUGH the world (Mario-style) with a hurt flash and a
-    /// screen shake, then <see cref="RespawnNow"/> restores control at the last
-    /// checkpoint after <see cref="DeathDuration"/>. Called by hazards, enemies and
-    /// the fall-off-the-world check; re-entrant calls are ignored while already dead.</summary>
+    /// <summary>Kill the player. The body stops where it stands and comes apart into ink -
+    /// it loses its colour, slumps, flattens into a spreading pool and drains away - then
+    /// <see cref="RespawnNow"/> restores control at the last checkpoint after
+    /// <see cref="DeathDuration"/>. Called by hazards, enemies and the fall-off-the-world
+    /// check; re-entrant calls are ignored while already dead.</summary>
     public void Die()
     {
         if (_dead)
@@ -257,30 +256,42 @@ public sealed class PlayerController : EntityScript
         }
         _dead = true;
         _deathTimer = 0.0f;
-        // Sensor so the body ignores the ground and floats off; gravity still pulls
-        // it back down for the arc.
+        _meltY = Self.Position.Y;
+        // The body stops dead and melts where it stands - no hop, no arc. Trigger so it
+        // sinks through the floor it is dissolving into; no gravity so the sink is ours.
         Physics2D.SetTrigger(Self, true);
-        Physics2D.SetGravityScale(Self, GravityScale);
-        Physics2D.SetLinearVelocity(Self, new Vector2(0.0f, DeathHopSpeed));
-        SetAnim(AnimJump);
-        SpriteRenderer.SetTint(Self, new Vector4(1.0f, 0.4f, 0.35f, 1.0f)); // hurt flash
-        CameraFollow.Instance?.AddShake(0.22f);
-        // Layered burst: spark explosion + debris + smoke (all in the one prefab),
-        // plus a ground puff at the feet.
-        Scene.Instantiate("DeathBurst", new Vector3(Self.Position.X, Self.Position.Y, 0.0f));
-        Scene.Instantiate("Dust", new Vector3(Self.Position.X, Self.Position.Y - 0.5f, 0.0f));
-        Log.Info("[INKBOUND] Player down - respawning at the checkpoint.");
+        Physics2D.SetGravityScale(Self, 0.0f);
+        Physics2D.SetLinearVelocity(Self, Vector2.Zero);
+        SetAnim(AnimIdle);
+        CameraFollow.Instance?.AddShake(0.16f);
+        // Ink runs out of the body and pools on the floor.
+        Scene.Instantiate("DeathInk", new Vector3(Self.Position.X, Self.Position.Y - 0.35f, 0.0f));
+        Log.Info("[INKBOUND] Player unmade - respawning at the checkpoint.");
     }
 
-    /// <summary>Per-frame death beat: the corpse shrinks and fades as it falls, then
-    /// respawns when the timer runs out.</summary>
+    /// <summary>Per-frame death beat: the body loses its colour to ink, slumps, flattens
+    /// into the floor and drains away, then respawns when the timer runs out.</summary>
     private void UpdateDeath(float deltaTime)
     {
         _deathTimer += deltaTime;
         float k = System.Math.Clamp(_deathTimer / DeathDuration, 0.0f, 1.0f);
-        float scale = 1.0f - 0.55f * k;
-        SpriteRenderer.SetPixelSize(Self, new Vector2(_baseSpriteSize.X * scale, _baseSpriteSize.Y * scale));
-        SpriteRenderer.SetTint(Self, new Vector4(1.0f, 0.4f, 0.35f, 1.0f - k));
+
+        // Squash: height collapses toward the floor while the puddle spreads wider.
+        float squash = 1.0f - 0.92f * k * k;                    // slow start, then it goes
+        float spread = 1.0f + 0.55f * System.MathF.Sqrt(k);     // widens as it flattens
+        SpriteRenderer.SetPixelSize(Self, new Vector2(_baseSpriteSize.X * spread, _baseSpriteSize.Y * squash));
+        // Sink so the flattening body stays sitting ON the floor instead of hovering.
+        Self.Position = new Vector3(Self.Position.X, _meltY - _baseSpriteSize.Y / 32.0f * (1.0f - squash) * 0.5f, Self.Position.Z);
+
+        // Colour drains to ink-black, then the whole pool soaks away.
+        float toInk = System.Math.Clamp(k / 0.45f, 0.0f, 1.0f);
+        float fade = k < 0.65f ? 1.0f : 1.0f - (k - 0.65f) / 0.35f;
+        SpriteRenderer.SetTint(Self, new Vector4(
+                1.0f - 0.85f * toInk,
+                1.0f - 0.80f * toInk,
+                1.0f - 0.60f * toInk,
+                System.Math.Clamp(fade, 0.0f, 1.0f)));
+
         if (_deathTimer >= DeathDuration)
         {
             RespawnNow();

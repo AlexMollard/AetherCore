@@ -1,0 +1,68 @@
+# One-shot death effect: the player comes apart into ink. PlayerController instantiates it at the
+# body's feet when Die() runs, alongside the melt-and-drain the controller plays on the sprite itself.
+# Two layers - heavy ink that runs down and pools, and a thin cyan wisp of the spark leaving.
+[[entities]]
+name = 'DeathInk'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    # Ink runs: dark, heavy, low spread - they fall and gather rather than spraying.
+    [entities.particles]
+    texture = 'project://assets/textures/particles/dot_soft.png'
+    rate = 0.0
+    burst_count = 22
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 48
+    lifetime_min = 0.45
+    lifetime_max = 0.95
+    speed_min = 0.4
+    speed_max = 2.2
+    direction_deg = 90.0
+    spread_deg = 120.0
+    gravity = [ 0.0, -9.0 ]
+    start_size = 0.34
+    end_size = 0.10
+    start_color = [ 0.05, 0.09, 0.13, 1.0 ]
+    end_color = [ 0.02, 0.04, 0.07, 0.0 ]
+    blend_mode = 'alpha'
+    sorting_layer = 1
+    order_in_layer = 0
+    collide_world = true
+    bounce = 0.05
+    collision_damping = 0.55
+    collision_radius = 0.06
+
+[[entities]]
+name = 'DeathInkSpark'
+parent = 0
+position = [ 0.0, 0.35, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    # The spark escaping upward: sparse, cyan, drifting - the light leaving the body.
+    [entities.particles]
+    texture = 'project://assets/textures/particles/dot_soft.png'
+    rate = 0.0
+    burst_count = 9
+    emit_on_start = true
+    emitting = true
+    auto_destroy = true
+    max_particles = 16
+    lifetime_min = 0.5
+    lifetime_max = 1.1
+    speed_min = 0.5
+    speed_max = 1.4
+    direction_deg = 90.0
+    spread_deg = 45.0
+    gravity = [ 0.0, 0.7 ]
+    start_size = 0.20
+    end_size = 0.01
+    start_color = [ 0.45, 0.9, 1.0, 0.95 ]
+    end_color = [ 0.25, 0.6, 0.85, 0.0 ]
+    blend_mode = 'additive'
+    sorting_layer = 2
+    order_in_layer = 0
