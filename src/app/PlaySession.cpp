@@ -152,11 +152,12 @@ namespace aether::app
 			return false;
 		}
 
-		// Drop any synthetic keys a headless playtest was holding so they don't
+		// Drop any synthetic keys/mouse a headless playtest was holding so they don't
 		// leak into edit mode.
 		if (auto* input = context.TryGet<Input>())
 		{
 			input->ClearSyntheticKeys();
+			input->ClearSyntheticMouse();
 		}
 
 		World& world = context.Get<World>();

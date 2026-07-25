@@ -96,7 +96,9 @@ namespace aether
 
 		for (int i = 0; i < kMaxMouseButtons; ++i)
 		{
-			m_currMouseButtons[i] = (glfwGetMouseButton(m_window, i) == GLFW_PRESS);
+			// Synthetic buttons OR in like synthetic keys, so injected clicks drive the
+			// same IsMouseButtonDown/Pressed/Released paths a real click does.
+			m_currMouseButtons[i] = (glfwGetMouseButton(m_window, i) == GLFW_PRESS) || m_syntheticMouseButtons[i];
 		}
 
 		m_prevMousePos = m_mousePos;
@@ -179,6 +181,13 @@ namespace aether
 
 	glm::vec2 Input::GetMousePos() const
 	{
+		// An injected cursor wins outright: it is already expressed in the space this
+		// returns (see GetMouseTargetSize), and it must work even when the real cursor
+		// sits outside the viewport - otherwise a headless test could never aim.
+		if (m_hasSyntheticMousePos)
+		{
+			return m_syntheticMousePos;
+		}
 		return TransformMousePos(m_mousePos);
 	}
 

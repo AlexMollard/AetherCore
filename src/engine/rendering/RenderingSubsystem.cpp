@@ -714,6 +714,9 @@ namespace aether
 		// Screen-space 2D light map: multiplies the sprite/tile layer by (ambient + point/spot lights).
 		// Self-skips on non-2D scenes and unlit 2D scenes (BeginFrame records zero lights there).
 		m_light2D.RegisterPass(m_renderGraph, hdrColor, sceneExtent, bindless);
+		// Emissive project passes run AFTER the light map, so they keep their own brightness instead of
+		// being darkened by it (a glowing ink stroke lights the cave without being dimmed by the cave).
+		m_customPassRenderer.RegisterPass(m_renderGraph, CustomPassStage::EmissiveOverLight2D, hdrColor, sceneExtent, kSceneColorFormat, bindless, "$CustomPassEmissive2D");
 
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline(), m_renderer2D);

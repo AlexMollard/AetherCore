@@ -38,8 +38,10 @@ public sealed class AetherInk : EntityScript
     public static float Aether;
     public static float AetherMax = 100.0f;
 
-    private static readonly Vector4 BodyColor = new(0.03f, 0.055f, 0.08f, 1.0f); // near-black ink
-    private static readonly Vector4 RimColor = new(0.12f, 0.28f, 0.34f, 1.0f);   // dim cool sheen, not neon
+    // The stroke draws emissive (after the light map), so these are its final on-screen colours: the
+    // body stays dark ink, the rim carries the glow that reads against a black cave.
+    private static readonly Vector4 BodyColor = new(0.05f, 0.10f, 0.14f, 1.0f); // dark ink body
+    private static readonly Vector4 RimColor = new(0.40f, 0.88f, 1.00f, 1.0f);  // ink-cyan glow
 
     // Lighting cast by the stroke itself (see the pack loop). One light every LightStride segments
     // keeps the per-pixel light loop cheap while still reading as a continuous glow.
@@ -83,7 +85,9 @@ public sealed class AetherInk : EntityScript
         _hasLast = false;
         // Register the ink field as a project custom pass: the engine runs our ink_field shader over
         // the scene each frame we submit segments to it.
-        CustomPass.Register(PassName, "ink_field", CustomPassStage.OverScene);
+        // Emissive: the ink glows, so it draws after the 2D light map and keeps its own brightness.
+        // It still lights and shadows the cave through the Lighting2D submissions in OnUpdate.
+        CustomPass.Register(PassName, "ink_field", CustomPassStage.EmissiveOverLight);
     }
 
     public override void OnDetach()

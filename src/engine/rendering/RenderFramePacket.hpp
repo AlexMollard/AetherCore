@@ -85,7 +85,11 @@ namespace aether
 	enum class CustomPassStage : std::uint8_t
 	{
 		BehindScene2D = 0, // before sprites/tiles
-		OverScene2D = 1,   // after sprites/tiles
+		OverScene2D = 1,   // after sprites/tiles, before the 2D light map (so the pass is lit/shadowed)
+		// After the 2D light map: the pass is NOT darkened by lighting. For things that emit their own
+		// light (a glowing ink stroke, a spell, a magic projectile) - they still light and shadow the
+		// world via their own submitted lights/occluders, but keep their full brightness themselves.
+		EmissiveOverLight2D = 2,
 	};
 
 	// One submission of a project-registered custom pass for this frame. The engine knows nothing

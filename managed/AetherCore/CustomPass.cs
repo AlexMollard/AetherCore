@@ -9,8 +9,13 @@ public enum CustomPassStage
 {
     /// <summary>Before sprites/tiles - drawn behind the 2D scene.</summary>
     BehindScene = 0,
-    /// <summary>After sprites/tiles - drawn over the 2D scene.</summary>
+    /// <summary>After sprites/tiles, before the 2D light map - so the pass is lit and shadowed like
+    /// the rest of the scene.</summary>
     OverScene = 1,
+    /// <summary>After the 2D light map - the pass keeps its own brightness instead of being darkened
+    /// by lighting. For things that emit light (a glowing stroke, a spell). Pair with
+    /// <see cref="Lighting2D"/> submissions so it still lights and shadows the world around it.</summary>
+    EmissiveOverLight = 2,
 }
 
 /// <summary>

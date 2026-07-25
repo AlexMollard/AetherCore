@@ -36,6 +36,8 @@
 #include "io/PlatformPaths.hpp"
 #include "platform/Input.hpp"
 #include "rendering/ScreenshotService.hpp"
+#include "scene/CameraComponents.hpp"
+#include "scene/EcsHelpers.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/SettingsService.hpp"
 #include "layers/AppLayer.hpp"
@@ -1414,7 +1416,13 @@ namespace aether::editor
 		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single "
 		        "letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire.",
 		        true,
-		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}}, {"up", json{{"type", "array"}, {"items", StrProp()}}}, {"clear", json{{"type", "boolean"}}}}),
+		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}},
+		                {"up", json{{"type", "array"}, {"items", StrProp()}}},
+		                {"clear", json{{"type", "boolean"}}},
+		                {"mouse_down", json{{"type", "array"}, {"items", StrProp()}}},
+		                {"mouse_up", json{{"type", "array"}, {"items", StrProp()}}},
+		                {"mouse_world", json{{"type", "array"}, {"items", json{{"type", "number"}}}}},
+		                {"mouse_pos", json{{"type", "array"}, {"items", json{{"type", "number"}}}}}}),
 		        [](const json& params, MethodContext& ctx) -> json
 		        {
 			        auto* input = ctx.services.TryGet<Input>();
@@ -1425,6 +1433,7 @@ namespace aether::editor
 			        if (params.value("clear", false))
 			        {
 				        input->ClearSyntheticKeys();
+				        input->ClearSyntheticMouse();
 			        }
 			        json applied = json::array();
 			        json unknown = json::array();
@@ -1455,6 +1464,82 @@ namespace aether::editor
 			        };
 			        apply("down", true);
 			        apply("up", false);
+
+			        // Mouse: buttons by name, and an injected cursor. `mouse_world` is the useful one for
+			        // tests - aim at a world position and let the main camera do the projection, so a
+			        // click-and-drag tool (drawing, painting) can be driven without knowing pixels.
+			        const auto mouseButton = [](const std::string& n) -> int
+			        {
+				        if (n == "left")
+				        {
+					        return 0;
+				        }
+				        if (n == "right")
+				        {
+					        return 1;
+				        }
+				        if (n == "middle")
+				        {
+					        return 2;
+				        }
+				        return -1;
+			        };
+			        const auto applyMouse = [&](const char* field, bool down)
+			        {
+				        if (!params.contains(field) || !params[field].is_array())
+				        {
+					        return;
+				        }
+				        for (const auto& entry: params[field])
+				        {
+					        if (!entry.is_string())
+					        {
+						        continue;
+					        }
+					        const std::string name = entry.get<std::string>();
+					        if (const int b = mouseButton(name); b >= 0)
+					        {
+						        input->SetSyntheticMouseButton(b, down);
+						        applied.push_back(name);
+					        }
+					        else
+					        {
+						        unknown.push_back(name);
+					        }
+				        }
+			        };
+			        applyMouse("mouse_down", true);
+			        applyMouse("mouse_up", false);
+
+			        if (params.contains("mouse_pos") && params["mouse_pos"].is_array() && params["mouse_pos"].size() == 2)
+			        {
+				        input->SetSyntheticMousePos({params["mouse_pos"][0].get<float>(), params["mouse_pos"][1].get<float>()});
+				        applied.push_back("mouse_pos");
+			        }
+			        else if (params.contains("mouse_world") && params["mouse_world"].is_array() && params["mouse_world"].size() == 2)
+			        {
+				        // Invert the ortho screen->world the scripts use (see aether_camera_screen_to_world).
+				        auto& world = ctx.services.Get<World>();
+				        const aether::Entity cam = aether::ecs::GetMainCameraEntity(world);
+				        const auto* cc = world.TryGet<aether::CameraComponent>(cam);
+				        const auto* tc = world.TryGet<aether::TransformComponent>(cam);
+				        const glm::vec2 target = input->GetMouseTargetSize();
+				        if (cc == nullptr || tc == nullptr || target.x <= 0.0f || target.y <= 0.0f)
+				        {
+					        unknown.push_back("mouse_world");
+				        }
+				        else
+				        {
+					        const glm::vec2 wp{params["mouse_world"][0].get<float>(), params["mouse_world"][1].get<float>()};
+					        const glm::vec3 camPos = glm::vec3(tc->localToWorld[3]);
+					        const float halfH = cc->orthographicHeight * 0.5f;
+					        const float halfW = halfH * (target.x / target.y);
+					        const float ndcX = halfW > 0.0f ? (wp.x - camPos.x) / halfW : 0.0f;
+					        const float ndcY = halfH > 0.0f ? (wp.y - camPos.y) / halfH : 0.0f;
+					        input->SetSyntheticMousePos({(ndcX + 1.0f) * 0.5f * target.x, (1.0f - ndcY) * 0.5f * target.y});
+					        applied.push_back("mouse_world");
+				        }
+			        }
 			        return json{{"ok", true}, {"applied", applied}, {"unknown", unknown}};
 		        }});
 

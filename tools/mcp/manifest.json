@@ -1647,6 +1647,30 @@
             },
             "type": "array"
           },
+          "mouse_down": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mouse_pos": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "mouse_up": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mouse_world": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
           "up": {
             "items": {
               "type": "string"

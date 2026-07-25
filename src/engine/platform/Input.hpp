@@ -208,6 +208,32 @@ namespace aether
 			m_syntheticKeys.fill(false);
 		}
 
+		// Synthetic MOUSE injection, same contract as keys: buttons OR into the real
+		// state each Update() so IsMouseButtonDown and the Pressed/Released edges all
+		// fire. A synthetic cursor position, once set, overrides the real one until
+		// cleared - together these let a headless test drive click-and-drag tools
+		// (drawing, painting) exactly like a player would.
+		void SetSyntheticMouseButton(int button, bool down)
+		{
+			if (button >= 0 && button < kMaxMouseButtons)
+			{
+				m_syntheticMouseButtons[button] = down;
+			}
+		}
+
+		// Position is in the same pixel space GetMousePos() reports (see GetMouseTargetSize).
+		void SetSyntheticMousePos(glm::vec2 pos)
+		{
+			m_syntheticMousePos = pos;
+			m_hasSyntheticMousePos = true;
+		}
+
+		void ClearSyntheticMouse()
+		{
+			m_syntheticMouseButtons.fill(false);
+			m_hasSyntheticMousePos = false;
+		}
+
 		// Timed synthetic-input playback for auto-testing. A sequence is a list of
 		// events (seconds-from-start, key, down/up); keyCode < 0 means "release all".
 		// Driven off a wall clock in Update(), so it survives variable framerate and
@@ -241,6 +267,9 @@ namespace aether
 		std::array<bool, kMaxKeys> m_currKeys{};
 		std::array<bool, kMaxKeys> m_prevKeys{};
 		std::array<bool, kMaxKeys> m_syntheticKeys{};
+		std::array<bool, kMaxMouseButtons> m_syntheticMouseButtons{};
+		glm::vec2 m_syntheticMousePos{0.0f};
+		bool m_hasSyntheticMousePos = false;
 		std::array<bool, kMaxMouseButtons> m_currMouseButtons{};
 		std::array<bool, kMaxMouseButtons> m_prevMouseButtons{};
 
