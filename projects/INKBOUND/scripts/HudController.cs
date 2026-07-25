@@ -18,13 +18,14 @@ public sealed class HudController : EntityScript
 
     // Aether meter for the ink mechanic (created at runtime so no prefab edit
     // is needed; see AetherInk). Sits just above the coin counter, bottom-left.
-    private Entity _aetherBg;
     private Entity _aetherFill;
     private float _shownAether = -1.0f;
-    private const float BarX = 28.0f;
-    private const float BarY = 86.0f;
-    private const float BarW = 220.0f;
-    private const float BarH = 18.0f;
+    // The meter is an ink WELL, not a bar: a squat pot in the corner whose level drops as you draw.
+    // Reading your remaining ink off the amount of ink in a pot needs no legend.
+    private const float WellX = 28.0f;
+    private const float WellY = 74.0f;
+    private const float WellW = 54.0f;
+    private const float WellH = 66.0f;
 
     public override void OnAttach()
     {
@@ -45,18 +46,16 @@ public sealed class HudController : EntityScript
             return;
         }
 
-        _aetherBg = Ui.CreateImage(Self);
-        Ui.SetAnchors(_aetherBg, new Vector2(0.0f, 0.0f), new Vector2(0.0f, 0.0f));
-        Ui.SetPivot(_aetherBg, new Vector2(0.0f, 0.0f));
-        Ui.SetRect(_aetherBg, BarX, BarY, BarW, BarH);
-        Ui.SetImageColor(_aetherBg, new Vector4(0.04f, 0.06f, 0.10f, 0.72f));
-        Ui.SetImageCornerRadius(_aetherBg, 4.0f);
-
+        // One widget does the whole thing: the ui_inkwell material draws the pot, the liquid and its
+        // meniscus, driven by a single fill parameter. No separate background and fill rect to keep
+        // in sync, and the level can slosh.
         _aetherFill = Ui.CreateImage(Self);
         Ui.SetAnchors(_aetherFill, new Vector2(0.0f, 0.0f), new Vector2(0.0f, 0.0f));
         Ui.SetPivot(_aetherFill, new Vector2(0.0f, 0.0f));
-        Ui.SetRect(_aetherFill, BarX + 2.0f, BarY + 2.0f, BarW - 4.0f, BarH - 4.0f);
-        Ui.SetImageCornerRadius(_aetherFill, 3.0f);
+        Ui.SetRect(_aetherFill, WellX, WellY, WellW, WellH);
+        Ui.SetImageColor(_aetherFill, Vector4.One);
+        Ui.SetImageCornerRadius(_aetherFill, 6.0f);
+        Ui.SetMaterial(_aetherFill, "ui_inkwell");
         _shownAether = -1.0f;
     }
 
@@ -66,15 +65,13 @@ public sealed class HudController : EntityScript
 
         float max = AetherInk.AetherMax > 0.0f ? AetherInk.AetherMax : 1.0f;
         float frac = System.Math.Clamp(AetherInk.Aether / max, 0.0f, 1.0f);
-        if (_aetherFill.IsValid && System.Math.Abs(frac - _shownAether) > 0.001f)
+        if (_aetherFill.IsValid)
         {
-            _shownAether = frac;
-            Ui.SetRect(_aetherFill, BarX + 2.0f, BarY + 2.0f, (BarW - 4.0f) * frac, BarH - 4.0f);
-            // Aether-cyan normally; warm amber when nearly spent so the player
-            // knows the ink is about to cut out.
-            Ui.SetImageColor(_aetherFill, frac < 0.25f
-                ? new Vector4(1.0f, 0.62f, 0.24f, 0.95f)
-                : new Vector4(0.34f, 0.72f, 1.0f, 0.95f));
+            // Ease the shown level toward the real one so spending ink pours out rather than snapping,
+            // and feed time as well so the surface keeps sloshing even while the value is steady.
+            _shownAether = _shownAether < 0.0f ? frac : _shownAether + (frac - _shownAether)
+                                                      * System.Math.Clamp(9.0f * deltaTime, 0.0f, 1.0f);
+            Ui.SetMaterialParams(_aetherFill, new Vector4(Time.UnscaledTime, _shownAether, 0.0f, 0.0f));
         }
 
         // A new level began (win state cleared): hide the banner again.
