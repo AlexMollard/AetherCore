@@ -36,6 +36,9 @@ public static class Creature
 
     public static void Unregister(uint id) => s_all.Remove(id);
 
+    /// <summary>Is this a living creature? Lets the ink soak only things that can actually drown.</summary>
+    public static bool IsCreature(uint id) => s_all.TryGetValue(id, out Entry? e) && !e.Dead;
+
     /// <summary>Smother this entity if it is a living creature. True if something died.</summary>
     public static bool TrySmother(uint id)
     {

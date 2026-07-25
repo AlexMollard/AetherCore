@@ -203,21 +203,63 @@ public sealed class AetherInk : EntityScript
 
     /// <summary>Ink is the weapon. Anything smotherable under a freshly laid span is unmade, and its
     /// substance goes to the well - so a kill is also a refill.</summary>
+    /// <summary>How much ink a creature has taken lately, by entity id. Drowning something is not a
+    /// graze - it has to be covered, which is what makes a kill deliberate instead of accidental.</summary>
+    private readonly Dictionary<uint, float> _soaked = new();
+
+    /// <summary>Segments that must land on a creature before it drowns.</summary>
+    public float SmotherHits = 3.0f;
+    /// <summary>How fast coverage drains away, so a stroke that merely clips something on the way
+    /// past does not bank progress toward killing it later.</summary>
+    public float SoakDecayPerSecond = 1.2f;
+
     private void SmotherUnder(Vector2 a, Vector2 b)
     {
         Vector2 mid = (a + b) * 0.5f;
         // Drawing is not quiet. Anything alive nearby notices, whether or not this stroke touches it.
         Creature.InkDrawnAt(mid);
 
-        foreach (Entity e in Physics2D.OverlapCircle(mid, Thickness + 0.45f))
+        // Sample the WHOLE segment, not just its midpoint. Testing one point meant a fast cursor could
+        // sweep a stroke straight through a creature and miss it, which read as the kill "not working".
+        float reach = Thickness + 0.55f;
+        HashSet<uint> hitThisSegment = new();
+        foreach (Vector2 at in new[] { a, mid, b })
         {
-            if (e.Id == Self.Id || IsInk(e.Id) || IsPetrified(e.Id)) { continue; }
-            if (Aether < SmotherCost) { continue; } // cannot afford to unmake it - it lives
-            if (Creature.TrySmother(e.Id))
+            foreach (Entity e in Physics2D.OverlapCircle(at, reach))
             {
-                Aether = Math.Max(0.0f, Aether - SmotherCost);
+                if (e.Id == Self.Id || IsInk(e.Id) || IsPetrified(e.Id)) { continue; }
+                if (!Creature.IsCreature(e.Id)) { continue; }
+                hitThisSegment.Add(e.Id);
             }
         }
+
+        foreach (uint id in hitThisSegment)
+        {
+            float soak = (_soaked.TryGetValue(id, out float s) ? s : 0.0f) + 1.0f;
+            _soaked[id] = soak;
+            if (soak < SmotherHits) { continue; }        // not covered yet - keep drawing over it
+            if (Aether < SmotherCost) { continue; }      // cannot afford to unmake it - it lives
+            if (Creature.TrySmother(id))
+            {
+                Aether = Math.Max(0.0f, Aether - SmotherCost);
+                _soaked.Remove(id);
+            }
+        }
+    }
+
+    /// <summary>Coverage bleeds off, so smothering has to be one committed act rather than the sum of
+    /// every stroke that ever brushed past.</summary>
+    private void DecaySoak(float deltaTime)
+    {
+        if (_soaked.Count == 0) { return; }
+        float d = SoakDecayPerSecond * deltaTime;
+        List<uint> dry = new();
+        foreach (uint id in new List<uint>(_soaked.Keys))
+        {
+            float v = _soaked[id] - d;
+            if (v <= 0.0f) { dry.Add(id); } else { _soaked[id] = v; }
+        }
+        foreach (uint id in dry) { _soaked.Remove(id); }
     }
 
     public override void OnUpdate(float deltaTime)
@@ -225,6 +267,7 @@ public sealed class AetherInk : EntityScript
         AetherMax = MaxAether;
         _t += deltaTime;
         _dripCd -= deltaTime;
+        DecaySoak(deltaTime);
 
         // 1. Drawing input -> lay evenly spaced segments along the cursor's path.
         if (!GameState.Won)

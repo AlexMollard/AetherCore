@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using AetherCore;
 
@@ -30,6 +31,7 @@ public sealed class InkConduit : EntityScript
 
     private float _poll;
     private bool _live;
+    private float _pulse;
     private Vector4 _baseTint = Vector4.One;
 
     public override void OnAttach()
@@ -42,6 +44,16 @@ public sealed class InkConduit : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
+        // Breathe while it is waiting to be joined. An unlit socket that just sits there reads as
+        // scenery; one that pulses reads as a thing asking for something.
+        _pulse += deltaTime;
+        if (!_live)
+        {
+            float k = 0.55f + 0.45f * MathF.Sin(_pulse * 3.2f);
+            SpriteRenderer.SetTint(Self, new Vector4(_baseTint.X + 0.25f * k, _baseTint.Y + 0.20f * k,
+                                                     _baseTint.Z + 0.45f * k, 1.0f));
+        }
+
         _poll -= deltaTime;
         if (_poll > 0.0f) { return; }
         _poll = PollSeconds;
