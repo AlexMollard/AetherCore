@@ -65,6 +65,35 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'LevelInfo'
+node = -6124189900128750485
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'LevelInfo'
+
+        [entities.scripts.properties.Key]
+        t = 'string'
+        v = 'Level1'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Lighting'
+node = 879492768829902653
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.light_2d_settings]
+    ambientIntensity = 1.0
+    ambient_color = [ 0.035, 0.04, 0.055 ]
+    shadowSoftness = 2.2
+    shadowStrength = 0.9
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'Player'
 node = 2977957077192501037
 parent = -1
@@ -139,1142 +168,10 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'AetherInk'
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = 8551382493330366615
-parent = -1
-position = [ 4.0, 2.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -3430971973377848185
-parent = -1
-position = [ 8.0, 2.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -7895518262998851251
-parent = -1
-position = [ 13.0, 3.4, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -4216561878813809721
-parent = -1
-position = [ 20.0, 2.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -5823897881298961251
-parent = -1
-position = [ 29.0, 6.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -8829709349003772947
-parent = -1
-position = [ 31.0, 6.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = 6417744313434440141
-parent = -1
-position = [ 37.0, 6.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -9114517165417418191
-parent = -1
-position = [ 46.0, 6.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = 8181937470546568316
-parent = -1
-position = [ 51.0, 6.8, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -3850653446903728961
-parent = -1
-position = [ 64.0, 6.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -4129038571000770067
-parent = -1
-position = [ 74.0, 6.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Chomper'
-node = 783182197966301269
-parent = -1
-position = [ 33.0, 5.5, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.05
-    group_index = 0
-    is_trigger = false
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.9, 0.7 ]
-
-    [entities.point_light]
-    color = [ 1.0, 0.28, 0.22 ]
-    flicker = 0.3
-    flickerSpeed = 7.0
-    intensity = 1.5
-    radius = 3.0
-    shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'dynamic'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/slime/walk32x32.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/slime/walk32x32.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/enemy_walk.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'EnemyPatrol'
-
-        [entities.scripts.properties.WalkSpeed]
-        t = 'float'
-        v = 2.8
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Chomper'
-node = 2996868467216612641
-parent = -1
-position = [ 44.0, 5.5, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.05
-    group_index = 0
-    is_trigger = false
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.9, 0.7 ]
-
-    [entities.point_light]
-    color = [ 1.0, 0.28, 0.22 ]
-    flicker = 0.3
-    flickerSpeed = 7.0
-    intensity = 1.5
-    radius = 3.0
-    shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'dynamic'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/slime/walk32x32.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/slime/walk32x32.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/enemy_walk.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'EnemyPatrol'
-
-        [entities.scripts.properties.WalkSpeed]
-        t = 'float'
-        v = 2.8
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Chomper'
-node = 9216491875188770188
-parent = -1
-position = [ 67.0, 5.5, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.05
-    group_index = 0
-    is_trigger = false
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.9, 0.7 ]
-
-    [entities.point_light]
-    color = [ 1.0, 0.28, 0.22 ]
-    flicker = 0.3
-    flickerSpeed = 7.0
-    intensity = 1.5
-    radius = 3.0
-    shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'dynamic'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/slime/walk32x32.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/slime/walk32x32.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/enemy_walk.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'EnemyPatrol'
-
-        [entities.scripts.properties.WalkSpeed]
-        t = 'float'
-        v = 2.8
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Goal'
-node = 4409502276714986038
-parent = -1
-position = [ 76.0, 6.2, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.6, 6.0 ]
-
-    [entities.point_light]
-    color = [ 0.45, 0.9, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 3.2
-    radius = 6.0
-    shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [[entities.scripts]]
-    type = 'GoalFlag'
-
-        [entities.scripts.properties.NextScene]
-        t = 'string'
-        v = 'Level2'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Spikes'
-node = -3004489438876804706
-parent = -1
-position = [ 41.0, 5.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 2.4, 0.6 ]
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 1
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 44.0, 16.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/world/spikes.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'Hazard'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Spikes'
-node = -5713198737562541522
-parent = -1
-position = [ 70.0, 5.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 2.4, 0.6 ]
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 1
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 44.0, 16.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/world/spikes.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'Hazard'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'IntroTrigger'
-node = -7599356703198056292
 parent = -1
 position = [ 5.0, 1.6, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1286,12 +183,470 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'string'
         v = 'intro'
 
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SignDraw'
+parent = -1
+position = [ 7.0, 1.65, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/sign_post.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = 'sign_draw'
+
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
+
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = false
+
+        [entities.scripts.properties.PromptLabel]
+        t = 'string'
+        v = '> read'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 4, 2.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 9, 2.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 6, 6.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 7.5, 6.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 13, 3.4, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Checkpoint'
+parent = -1
+position = [ 17.0, 2.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.8, 2.6 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.5, 1.0, 0.6 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.2
+    radius = 3.5
+    shadow = true
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 32.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/checkpoint_flag.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'Checkpoint'
+
+        [entities.scripts.properties.Index]
+        t = 'int'
+        v = 1
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'NpcWraith'
 node = 4507558116101574276
 parent = -1
-position = [ 18.0, 1.75, 0.0 ]
+position = [ 19.0, 1.75, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.point_light]
@@ -1341,146 +696,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'Npc'
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SignWarning'
-node = -3038049320002667590
-parent = -1
-position = [ 62.0, 5.65, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 4
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 20.0, 20.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/sign_post.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'DialogueTrigger'
-
-        [entities.scripts.properties.DialogueId]
-        t = 'string'
-        v = 'sign_warning'
-
-        [entities.scripts.properties.Once]
-        t = 'bool'
-        v = false
-
-        [entities.scripts.properties.PromptLabel]
-        t = 'string'
-        v = '> read'
-
-        [entities.scripts.properties.RequireInteract]
-        t = 'bool'
-        v = true
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'LevelInfo'
-node = -6124189900128750485
-parent = -1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [[entities.scripts]]
-    type = 'LevelInfo'
-
-        [entities.scripts.properties.Key]
-        t = 'string'
-        v = 'Level1'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Lighting'
-node = 879492768829902653
-parent = -1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.light_2d_settings]
-    ambientIntensity = 1.0
-    ambient_color = [ 0.035, 0.04, 0.055 ]
-    shadowSoftness = 2.2
-    shadowStrength = 0.9
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'SignDraw'
-node = -191625393973654109
-parent = -1
-position = [ 7.0, 1.65, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.55, 0.8, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 1.1
-    radius = 2.6
-    shadow = false
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 4
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 20.0, 20.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/sign_post.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'DialogueTrigger'
-
-        [entities.scripts.properties.DialogueId]
-        t = 'string'
-        v = 'sign_draw'
-
-        [entities.scripts.properties.Once]
-        t = 'bool'
-        v = false
-
-        [entities.scripts.properties.PromptLabel]
-        t = 'string'
-        v = '> read'
-
-        [entities.scripts.properties.RequireInteract]
-        t = 'bool'
-        v = true
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SignAnchor'
-node = 6396151043270139776
 parent = -1
 position = [ 22.0, 1.65, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.55, 0.8, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 1.1
-    radius = 2.6
-    shadow = false
 
     [entities.sprite]
     atlas = ''
@@ -1498,6 +720,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
 
     [[entities.scripts]]
     type = 'DialogueTrigger'
@@ -1506,6 +736,10 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'string'
         v = 'sign_anchor'
 
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
+
         [entities.scripts.properties.Once]
         t = 'bool'
         v = false
@@ -1514,138 +748,122 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'string'
         v = '> read'
 
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'AetherCrystal'
+parent = -1
+position = [ 24.0, 2.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 12.0, 18.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/crystal.png'
+    tint = [ 0.45, 0.85, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.4, 0.95, 1.0 ]
+    flicker = 0.15
+    flickerSpeed = 3.0
+    intensity = 3.4
+    radius = 5.0
+    shadow = true
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.9, 1.3 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'AetherCrystal'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SignSmother'
+parent = -1
+position = [ 26.0, 5.65, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/sign_post.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = 'sign_smother'
+
         [entities.scripts.properties.RequireInteract]
         t = 'bool'
         v = true
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'CrystalWall'
-node = -3482390273541981731
-parent = -1
-position = [ 23.0, 2.3, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = false
 
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.0
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.9, 1.3 ]
-
-    [entities.point_light]
-    color = [ 0.4, 0.95, 1.0 ]
-    flicker = 0.15
-    flickerSpeed = 3.0
-    intensity = 3.4
-    radius = 5.0
-    shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 3
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 12.0, 18.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/crystal.png'
-    tint = [ 0.45, 0.85, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'AetherCrystal'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'CrystalIsland'
-node = -3027690584078985027
-parent = -1
-position = [ 53.5, 6.3, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.0
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.9, 1.3 ]
-
-    [entities.point_light]
-    color = [ 0.4, 0.95, 1.0 ]
-    flicker = 0.15
-    flickerSpeed = 3.0
-    intensity = 3.4
-    radius = 5.0
-    shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 3
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 12.0, 18.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/crystal.png'
-    tint = [ 0.45, 0.85, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'AetherCrystal'
+        [entities.scripts.properties.PromptLabel]
+        t = 'string'
+        v = '> read'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'PlateauTrigger'
-node = 8713829120100893769
 parent = -1
-position = [ 27.0, 5.8, 0.0 ]
+position = [ 28.0, 5.8, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
@@ -1662,9 +880,8 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
-node = 7447205997667895584
 parent = -1
-position = [ 6.0, 6.5, 0.0 ]
+position = [ 30, 6.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -1682,6 +899,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     shape = 'circle'
     size = [ 1.0, 1.0 ]
 
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
     [entities.point_light]
     color = [ 0.3, 0.85, 1.0 ]
     flicker = 0.0
@@ -1689,16 +916,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     intensity = 2.0
     radius = 3.0
     shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
 
     [entities.sprite]
     atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
@@ -1731,9 +948,8 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
-node = -9160612379352537054
 parent = -1
-position = [ 7.5, 6.5, 0.0 ]
+position = [ 33, 6.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -1751,6 +967,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     shape = 'circle'
     size = [ 1.0, 1.0 ]
 
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
     [entities.point_light]
     color = [ 0.3, 0.85, 1.0 ]
     flicker = 0.0
@@ -1758,16 +984,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     intensity = 2.0
     radius = 3.0
     shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
 
     [entities.sprite]
     atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
@@ -1800,9 +1016,8 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
-node = 8690827563128148822
 parent = -1
-position = [ 18.5, 5.6, 0.0 ]
+position = [ 31, 10.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -1820,6 +1035,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     shape = 'circle'
     size = [ 1.0, 1.0 ]
 
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
     [entities.point_light]
     color = [ 0.3, 0.85, 1.0 ]
     flicker = 0.0
@@ -1827,16 +1052,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     intensity = 2.0
     radius = 3.0
     shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
 
     [entities.sprite]
     atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
@@ -1869,9 +1084,8 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Coin'
-node = -6914814186036846981
 parent = -1
-position = [ 19.5, 5.6, 0.0 ]
+position = [ 33, 10.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -1889,6 +1103,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     shape = 'circle'
     size = [ 1.0, 1.0 ]
 
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
     [entities.point_light]
     color = [ 0.3, 0.85, 1.0 ]
     flicker = 0.0
@@ -1896,16 +1120,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     intensity = 2.0
     radius = 3.0
     shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
 
     [entities.sprite]
     atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
@@ -1934,50 +1148,49 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'Coin'
-
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = 2664238957813876139
+name = 'Chomper'
+node = 783182197966301269
 parent = -1
-position = [ 29.0, 9.6, 0.0 ]
+position = [ 34.0, 5.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
     capsule_height = 1.0
     category_bits = 1
     density = 1.0
-    friction = 0.5
+    friction = 0.05
     group_index = 0
-    is_trigger = true
+    is_trigger = false
     mask_bits = 4294967295
     offset = [ 0.0, 0.0 ]
     points = []
-    radius = 0.35
+    radius = 0.5
     restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
+    shape = 'box'
+    size = [ 0.9, 0.7 ]
 
     [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
+    color = [ 1.0, 0.28, 0.22 ]
+    flicker = 0.3
+    flickerSpeed = 7.0
+    intensity = 1.5
     radius = 3.0
-    shadow = false
+    shadow = true
 
     [entities.rigid_body_2d]
     allow_sleeping = true
     angular_damping = 0.05
-    body_type = 'static'
+    body_type = 'dynamic'
     continuous_collision = false
-    fixed_rotation = false
+    fixed_rotation = true
     gravity_scale = 1.0
     linear_damping = 0.0
     start_awake = true
 
     [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    atlas = 'project://assets/textures/slime/walk32x32.spriteatlas.toml'
     blend_mode = 'alpha'
     flip_x = false
     flip_y = false
@@ -1988,13 +1201,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
+    texture = 'project://assets/textures/slime/walk32x32.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 
     [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    animation = 'project://assets/animations/enemy_walk.spriteanim.toml'
     autoplay = true
     loop_mode = 'loop'
     speed = 1.0
@@ -2002,290 +1215,18 @@ scale = [ 1.0, 1.0, 1.0 ]
     use_asset_loop_mode = true
 
     [[entities.scripts]]
-    type = 'Coin'
+    type = 'EnemyPatrol'
 
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = 1610102395031590880
-parent = -1
-position = [ 30.5, 9.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
+        [entities.scripts.properties.WalkSpeed]
+        t = 'float'
+        v = 2.8
 
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = 2894470787044386125
-parent = -1
-position = [ 32.0, 9.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -2998038819933370946
-parent = -1
-position = [ 63.0, 9.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Coin'
-node = -332137878178035247
-parent = -1
-position = [ 64.5, 9.6, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.35
-    restitution = 0.0
-    shape = 'circle'
-    size = [ 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.3, 0.85, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.0
-    radius = 3.0
-    shadow = false
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = false
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.sprite]
-    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 0
-    pivot = [ 0.0, 0.0 ]
-    pixel_art = false
-    pixel_size = [ 0.0, 0.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/tex_Coin.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.sprite_animator]
-    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
-    autoplay = true
-    loop_mode = 'loop'
-    speed = 1.0
-    start_frame = 0
-    use_asset_loop_mode = true
-
-    [[entities.scripts]]
-    type = 'Coin'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Checkpoint'
-node = -2111683199277067333
 parent = -1
-position = [ 16.5, 2.0, 0.0 ]
+position = [ 36.0, 5.9, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.collider_2d]
@@ -2303,14 +1244,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     shape = 'box'
     size = [ 0.8, 2.6 ]
 
-    [entities.point_light]
-    color = [ 0.5, 1.0, 0.6 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 2.2
-    radius = 3.5
-    shadow = true
-
     [entities.rigid_body_2d]
     allow_sleeping = true
     angular_damping = 0.05
@@ -2321,53 +1254,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     linear_damping = 0.0
     start_awake = true
 
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 4
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 20.0, 32.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/checkpoint_flag.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [[entities.scripts]]
-    type = 'Checkpoint'
-
-        [entities.scripts.properties.Index]
-        t = 'int'
-        v = 1
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Checkpoint'
-node = 4474200943925141691
-parent = -1
-position = [ 59.5, 5.9, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 1.0
-    friction = 0.5
-    group_index = 0
-    is_trigger = true
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.5
-    restitution = 0.0
-    shape = 'box'
-    size = [ 0.8, 2.6 ]
-
     [entities.point_light]
     color = [ 0.5, 1.0, 0.6 ]
     flicker = 0.0
@@ -2375,16 +1261,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     intensity = 2.2
     radius = 3.5
     shadow = true
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.05
-    body_type = 'static'
-    continuous_collision = false
-    fixed_rotation = true
-    gravity_scale = 1.0
-    linear_damping = 0.0
-    start_awake = true
 
     [entities.sprite]
     atlas = ''
@@ -2412,19 +1288,10 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'SignChasm'
-node = -2740619020215602078
+name = 'SignCommit'
 parent = -1
-position = [ 47.0, 5.65, 0.0 ]
+position = [ 35.0, 5.65, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.55, 0.8, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 1.1
-    radius = 2.6
-    shadow = false
 
     [entities.sprite]
     atlas = ''
@@ -2443,12 +1310,24 @@ scale = [ 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
+
     [[entities.scripts]]
     type = 'DialogueTrigger'
 
         [entities.scripts.properties.DialogueId]
         t = 'string'
-        v = 'sign_chasm'
+        v = 'sign_commit'
+
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
 
         [entities.scripts.properties.Once]
         t = 'bool'
@@ -2458,113 +1337,12 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'string'
         v = '> read'
 
-        [entities.scripts.properties.RequireInteract]
-        t = 'bool'
-        v = true
-
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'ChasmTrigger'
-node = -2789409464119990808
+name = 'Coin'
 parent = -1
-position = [ 48.5, 5.9, 0.0 ]
+position = [ 39.0, 13.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
-
-    [[entities.scripts]]
-    type = 'DialogueTrigger'
-
-        [entities.scripts.properties.DialogueId]
-        t = 'string'
-        v = 'chasm'
-
-        [entities.scripts.properties.Once]
-        t = 'bool'
-        v = true
-
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Boulder'
-parent = -1
-position = [ 63.0, 9.8, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 3
-    pivot = [ 0.5, 0.5 ]
-    pixel_art = true
-    pixel_size = [ 20.0, 20.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/boulder.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
-
-    [entities.collider_2d]
-    capsule_height = 1.0
-    category_bits = 1
-    density = 6.0
-    friction = 0.55
-    group_index = 0
-    is_trigger = false
-    mask_bits = 4294967295
-    offset = [ 0.0, 0.0 ]
-    points = []
-    radius = 0.6
-    restitution = 0.02
-    shape = 'circle'
-    size = [ 1.2, 1.2 ]
-
-    [entities.rigid_body_2d]
-    allow_sleeping = true
-    angular_damping = 0.35
-    body_type = 'dynamic'
-    continuous_collision = true
-    fixed_rotation = false
-    gravity_scale = 1.6
-    linear_damping = 0.0
-    start_awake = true
-
-    [entities.point_light]
-    color = [ 0.5, 0.75, 1.0 ]
-    flicker = 0.0
-    flickerSpeed = 8.0
-    intensity = 0.9
-    radius = 2.2
-    shadow = false
-
-    [[entities.scripts]]
-    type = 'Boulder'
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'PressurePlate'
-parent = -1
-position = [ 61.0, 5.3, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.sprite]
-    atlas = ''
-    blend_mode = 'alpha'
-    flip_x = false
-    flip_y = false
-    order_in_layer = 2
-    pixel_art = true
-    pivot = [ 0.5, 0.5 ]
-    pixel_size = [ 24.0, 8.0 ]
-    pixel_snap = false
-    pixels_per_unit = 16.0
-    sorting_layer = 0
-    texture = 'project://assets/textures/pressure_plate.png'
-    tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
-    visible = true
 
     [entities.collider_2d]
     capsule_height = 1.0
@@ -2574,12 +1352,12 @@ scale = [ 1.0, 1.0, 1.0 ]
     group_index = 0
     is_trigger = true
     mask_bits = 4294967295
-    offset = [ 0.0, 0.2 ]
+    offset = [ 0.0, 0.0 ]
     points = []
-    radius = 0.5
+    radius = 0.35
     restitution = 0.0
-    shape = 'box'
-    size = [ 1.5, 0.9 ]
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
 
     [entities.rigid_body_2d]
     allow_sleeping = true
@@ -2592,29 +1370,46 @@ scale = [ 1.0, 1.0, 1.0 ]
     start_awake = true
 
     [entities.point_light]
-    color = [ 0.35, 0.9, 1.0 ]
+    color = [ 0.3, 0.85, 1.0 ]
     flicker = 0.0
     flickerSpeed = 8.0
-    intensity = 1.3
-    radius = 2.8
+    intensity = 2.0
+    radius = 3.0
     shadow = false
 
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
     [[entities.scripts]]
-    type = 'PressurePlate'
-
-        [entities.scripts.properties.Channel]
-        t = 'string'
-        v = 'l1gate'
-
-        [entities.scripts.properties.AllowPlayer]
-        t = 'bool'
-        v = false
+    type = 'Coin'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Gate'
+name = 'AetherCrystal'
 parent = -1
-position = [ 66.0, 6.5, 0.0 ]
+position = [ 42.5, 5.4, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.sprite]
@@ -2625,11 +1420,157 @@ scale = [ 1.0, 1.0, 1.0 ]
     order_in_layer = 3
     pivot = [ 0.5, 0.5 ]
     pixel_art = true
-    pixel_size = [ 16.0, 48.0 ]
+    pixel_size = [ 12.0, 18.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    texture = 'project://assets/textures/gate.png'
+    texture = 'project://assets/textures/crystal.png'
+    tint = [ 0.45, 0.85, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.4, 0.95, 1.0 ]
+    flicker = 0.15
+    flickerSpeed = 3.0
+    intensity = 3.4
+    radius = 5.0
+    shadow = true
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.9, 1.3 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'AetherCrystal'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DeadStone'
+parent = -1
+position = [ 47.0, 7.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 1
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 128.0, 96.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/dead_stone.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'DeadStone'
+
+        [entities.scripts.properties.HalfWidth]
+        t = 'float'
+        v = 4.0
+
+        [entities.scripts.properties.HalfHeight]
+        t = 'float'
+        v = 3.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SignDead'
+parent = -1
+position = [ 43.0, 5.65, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/sign_post.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = 'sign_dead'
+
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
+
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = false
+
+        [entities.scripts.properties.PromptLabel]
+        t = 'string'
+        v = '> read'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'CrumbleLedge'
+parent = -1
+position = [ 46.0, 6.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 2
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 32.0, 10.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/crumble_ledge.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
     uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
@@ -2638,7 +1579,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     capsule_height = 1.0
     category_bits = 1
     density = 1.0
-    friction = 0.4
+    friction = 0.5
     group_index = 0
     is_trigger = false
     mask_bits = 4294967295
@@ -2647,42 +1588,473 @@ scale = [ 1.0, 1.0, 1.0 ]
     radius = 0.5
     restitution = 0.0
     shape = 'box'
-    size = [ 1.0, 3.0 ]
+    size = [ 2.0, 0.55 ]
 
     [entities.rigid_body_2d]
-    allow_sleeping = false
+    allow_sleeping = true
     angular_damping = 0.05
-    body_type = 'kinematic'
+    body_type = 'static'
     continuous_collision = false
     fixed_rotation = true
-    gravity_scale = 0.0
+    gravity_scale = 1.0
     linear_damping = 0.0
     start_awake = true
 
     [entities.point_light]
-    color = [ 0.3, 0.8, 1.0 ]
+    color = [ 0.6, 0.5, 0.45 ]
     flicker = 0.0
     flickerSpeed = 8.0
-    intensity = 1.5
-    radius = 3.2
+    intensity = 0.8
+    radius = 2.0
     shadow = false
 
     [[entities.scripts]]
-    type = 'Gate'
+    type = 'CrumbleLedge'
 
-        [entities.scripts.properties.Channel]
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'CrumbleLedge'
+parent = -1
+position = [ 49.0, 6.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 2
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 32.0, 10.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/crumble_ledge.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = false
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 2.0, 0.55 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.6, 0.5, 0.45 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 0.8
+    radius = 2.0
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'CrumbleLedge'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 45, 6.2, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 51, 6.2, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SignChasm'
+parent = -1
+position = [ 52.0, 5.65, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/sign_post.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
         t = 'string'
-        v = 'l1gate'
+        v = 'sign_chasm'
 
-        [entities.scripts.properties.OpenDrop]
-        t = 'float'
-        v = 3.2
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
+
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = false
+
+        [entities.scripts.properties.PromptLabel]
+        t = 'string'
+        v = '> read'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'AetherCrystal'
+parent = -1
+position = [ 57.0, 6.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 12.0, 18.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/crystal.png'
+    tint = [ 0.45, 0.85, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.4, 0.95, 1.0 ]
+    flicker = 0.15
+    flickerSpeed = 3.0
+    intensity = 3.4
+    radius = 5.0
+    shadow = true
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.9, 1.3 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'AetherCrystal'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 55.0, 6.9, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Checkpoint'
+parent = -1
+position = [ 62.5, 5.9, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.8, 2.6 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.5, 1.0, 0.6 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.2
+    radius = 3.5
+    shadow = true
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 32.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/checkpoint_flag.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'Checkpoint'
+
+        [entities.scripts.properties.Index]
+        t = 'int'
+        v = 3
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'SignGate'
 parent = -1
-position = [ 59.8, 5.65, 0.0 ]
+position = [ 63.5, 5.65, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.sprite]
@@ -2728,6 +2100,696 @@ scale = [ 1.0, 1.0, 1.0 ]
         [entities.scripts.properties.PromptLabel]
         t = 'string'
         v = '> read'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Boulder'
+parent = -1
+position = [ 67.0, 10.8, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/boulder.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.5, 0.75, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 0.9
+    radius = 2.2
+    shadow = false
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 6.0
+    friction = 0.55
+    group_index = 0
+    is_trigger = false
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.6
+    restitution = 0.02
+    shape = 'circle'
+    size = [ 1.2, 1.2 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.35
+    body_type = 'dynamic'
+    continuous_collision = true
+    fixed_rotation = false
+    gravity_scale = 1.6
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'Boulder'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PressurePlate'
+parent = -1
+position = [ 64.0, 5.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 2
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 24.0, 8.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/pressure_plate.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.35, 0.9, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.3
+    radius = 2.8
+    shadow = false
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 1.5, 0.9 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'PressurePlate'
+
+        [entities.scripts.properties.Channel]
+        t = 'string'
+        v = 'l1gate'
+
+        [entities.scripts.properties.AllowPlayer]
+        t = 'bool'
+        v = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Gate'
+parent = -1
+position = [ 71.0, 6.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 16.0, 48.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/gate.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.5
+    radius = 3.2
+    shadow = false
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.4
+    group_index = 0
+    is_trigger = false
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 1.0, 3.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'kinematic'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 0.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'Gate'
+
+        [entities.scripts.properties.Channel]
+        t = 'string'
+        v = 'l1gate'
+
+        [entities.scripts.properties.OpenDrop]
+        t = 'float'
+        v = 3.2
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Chomper'
+node = 783182197966301269
+parent = -1
+position = [ 66.0, 5.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.05
+    group_index = 0
+    is_trigger = false
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.9, 0.7 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.28, 0.22 ]
+    flicker = 0.3
+    flickerSpeed = 7.0
+    intensity = 1.5
+    radius = 3.0
+    shadow = true
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'dynamic'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/slime/walk32x32.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/slime/walk32x32.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/enemy_walk.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'EnemyPatrol'
+
+        [entities.scripts.properties.WalkSpeed]
+        t = 'float'
+        v = 2.8
+
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'SignCircuit'
+parent = -1
+position = [ 74.0, 5.65, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 4
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/sign_post.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.1
+    radius = 2.6
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'DialogueTrigger'
+
+        [entities.scripts.properties.DialogueId]
+        t = 'string'
+        v = 'sign_circuit'
+
+        [entities.scripts.properties.RequireInteract]
+        t = 'bool'
+        v = true
+
+        [entities.scripts.properties.Once]
+        t = 'bool'
+        v = false
+
+        [entities.scripts.properties.PromptLabel]
+        t = 'string'
+        v = '> read'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'InkSource'
+parent = -1
+position = [ 75.0, 6.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 14.0, 20.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/ink_source.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.55, 0.3, 0.95 ]
+    flicker = 0.2
+    flickerSpeed = 2.0
+    intensity = 2.2
+    radius = 3.6
+    shadow = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DeadStoneCircuit'
+parent = -1
+position = [ 78.5, 6.6, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 1
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 96.0, 80.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/dead_stone.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'DeadStone'
+
+        [entities.scripts.properties.HalfWidth]
+        t = 'float'
+        v = 3.0
+
+        [entities.scripts.properties.HalfHeight]
+        t = 'float'
+        v = 2.5
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'InkConduit'
+parent = -1
+position = [ 82.0, 6.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 12.0, 18.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/crystal.png'
+    tint = [ 0.30, 0.40, 0.55, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.4, 0.7, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.4
+    radius = 3.0
+    shadow = false
+
+    [[entities.scripts]]
+    type = 'InkConduit'
+
+        [entities.scripts.properties.Channel]
+        t = 'string'
+        v = 'l1circuit'
+
+        [entities.scripts.properties.SourceX]
+        t = 'float'
+        v = 75.0
+
+        [entities.scripts.properties.SourceY]
+        t = 'float'
+        v = 6.0
+
+        [entities.scripts.properties.CoupleRadius]
+        t = 'float'
+        v = 1.2
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'GateFinal'
+parent = -1
+position = [ 84.0, 6.5, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 3
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    pixel_size = [ 16.0, 48.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/gate.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.8, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 1.5
+    radius = 3.2
+    shadow = false
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.4
+    group_index = 0
+    is_trigger = false
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 1.0, 3.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'kinematic'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 0.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'Gate'
+
+        [entities.scripts.properties.Channel]
+        t = 'string'
+        v = 'l1circuit'
+
+        [entities.scripts.properties.OpenDrop]
+        t = 'float'
+        v = 3.2
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 73, 6.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Coin'
+parent = -1
+position = [ 86, 6.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.35
+    restitution = 0.0
+    shape = 'circle'
+    size = [ 1.0, 1.0 ]
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = true
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [entities.point_light]
+    color = [ 0.3, 0.85, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 2.0
+    radius = 3.0
+    shadow = false
+
+    [entities.sprite]
+    atlas = 'project://assets/textures/tex_Coin.spriteatlas.toml'
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.0, 0.0 ]
+    pixel_art = false
+    pixel_size = [ 0.0, 0.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = 'project://assets/textures/tex_Coin.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.sprite_animator]
+    animation = 'project://assets/animations/coin_spin.spriteanim.toml'
+    autoplay = true
+    loop_mode = 'loop'
+    speed = 1.0
+    start_frame = 0
+    use_asset_loop_mode = true
+
+    [[entities.scripts]]
+    type = 'Coin'
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Goal'
+node = 4409502276714986038
+parent = -1
+position = [ 85.5, 6.2, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider_2d]
+    capsule_height = 1.0
+    category_bits = 1
+    density = 1.0
+    friction = 0.5
+    group_index = 0
+    is_trigger = true
+    mask_bits = 4294967295
+    offset = [ 0.0, 0.0 ]
+    points = []
+    radius = 0.5
+    restitution = 0.0
+    shape = 'box'
+    size = [ 0.6, 6.0 ]
+
+    [entities.point_light]
+    color = [ 0.45, 0.9, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 3.2
+    radius = 6.0
+    shadow = true
+
+    [entities.rigid_body_2d]
+    allow_sleeping = true
+    angular_damping = 0.05
+    body_type = 'static'
+    continuous_collision = false
+    fixed_rotation = false
+    gravity_scale = 1.0
+    linear_damping = 0.0
+    start_awake = true
+
+    [[entities.scripts]]
+    type = 'GoalFlag'
+
+        [entities.scripts.properties.NextScene]
+        t = 'string'
+        v = 'Level2'
+
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]

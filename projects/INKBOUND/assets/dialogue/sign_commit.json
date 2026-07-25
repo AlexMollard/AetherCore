@@ -1,0 +1,23 @@
+{
+  "id": "sign_commit",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "This face is taller than one breath of ink. Nobody climbs it in one go.",
+      "effect": "whisper",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "So draw what you can reach, then hold [shake]Q[/shake] and let go of yourself. What you drew will set.",
+      "effect": "glitch",
+      "goto": "line3"
+    },
+    "line3": {
+      "speaker": "Scratched into the rock",
+      "text": "Come back and start from your own bones. That is how all of this was built.",
+      "effect": "whisper"
+    }
+  }
+}

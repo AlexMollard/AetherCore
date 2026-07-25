@@ -1,0 +1,17 @@
+{
+  "id": "sign_dead",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "The black rock ahead is dead. It remembers nothing, so ink will not stay on it.",
+      "effect": "whisper",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "The shelves over it are rotten. Stand still on one and you will find out how rotten.",
+      "effect": "glitch"
+    }
+  }
+}

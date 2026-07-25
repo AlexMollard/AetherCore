@@ -1,0 +1,17 @@
+{
+  "id": "sign_circuit",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "The well and the lock are the same colour. They only need [shake]joining[/shake].",
+      "effect": "glitch",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "A line of ink carries it, unbroken, end to end. The dead rock between will not hold your line, so go over.",
+      "effect": "whisper"
+    }
+  }
+}

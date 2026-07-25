@@ -21,7 +21,9 @@ public sealed class DeadStone : EntityScript
     public override void OnAttach()
     {
         Vector3 p = Self.Position;
-        AetherInk.AddDeadZone(new Vector4(p.X - HalfWidth, p.Y - HalfHeight, p.X + HalfWidth, p.Y + HalfHeight));
+        AetherInk.AddDeadZone(Self.Id, new Vector4(p.X - HalfWidth, p.Y - HalfHeight, p.X + HalfWidth, p.Y + HalfHeight));
         Log.Info($"[INKBOUND] Dead stone at ({p.X:0.#}, {p.Y:0.#}) - ink will not set here.");
     }
+
+    public override void OnDetach() => AetherInk.RemoveDeadZone(Self.Id);
 }

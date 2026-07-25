@@ -128,9 +128,8 @@ public sealed class AetherInk : EntityScript
         _petrified.Clear();
         s_inkColliders.Clear(); // stale ids from a previous level never carry over
         s_petrifiedColliders.Clear();
-        // Puzzle wiring is per level: a dead zone or a latched channel from the last one would be
-        // invisible and inexplicable in this one.
-        ClearDeadZones();
+        // Latched channels are per level; dead zones are not cleared here - each DeadStone owns its
+        // own and drops it on detach, which keeps it independent of script attach order.
         Signal.Clear();
         _hasLast = false;
         // Register the ink field as a project custom pass: the engine runs our ink_field shader over
@@ -489,16 +488,18 @@ public sealed class AetherInk : EntityScript
 
     /// <summary>Regions where ink refuses to set - see <see cref="DeadStone"/>. Registered as world
     /// rects so the anchor test can reject them without knowing what a DeadStone is.</summary>
-    private static readonly List<Vector4> s_deadZones = new(); // (minX, minY, maxX, maxY)
+    /// Keyed by the owning entity so each zone lives and dies with its DeadStone. A global "clear on
+    /// level load" looked tidier but depended on the ink attaching before every DeadStone did - and
+    /// when it attached after them instead, it wiped the zones and dead rock silently took ink again.
+    private static readonly Dictionary<uint, Vector4> s_deadZones = new(); // id -> (minX, minY, maxX, maxY)
 
-    public static void AddDeadZone(Vector4 rect) => s_deadZones.Add(rect);
-    public static void ClearDeadZones() => s_deadZones.Clear();
+    public static void AddDeadZone(uint id, Vector4 rect) => s_deadZones[id] = rect;
+    public static void RemoveDeadZone(uint id) => s_deadZones.Remove(id);
 
     private static bool InDeadZone(Vector2 p)
     {
-        for (int i = 0; i < s_deadZones.Count; i++)
+        foreach (Vector4 r in s_deadZones.Values)
         {
-            Vector4 r = s_deadZones[i];
             if (p.X >= r.X && p.X <= r.Z && p.Y >= r.Y && p.Y <= r.W) { return true; }
         }
         return false;

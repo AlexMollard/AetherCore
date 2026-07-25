@@ -1,0 +1,17 @@
+{
+  "id": "sign_smother",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "Scratched into the rock",
+      "text": "The crawling things drown in ink the same as everything else down here.",
+      "effect": "whisper",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "Scratched into the rock",
+      "text": "Drawing over one costs a [shake]quarter of you[/shake]. Ask whether it is in your way, or merely near you.",
+      "effect": "glitch"
+    }
+  }
+}
