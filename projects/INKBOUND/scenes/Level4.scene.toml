@@ -919,21 +919,20 @@ scale = [ 1.0, 1.0, 1.0 ]
     start_awake = true
 
     [entities.sprite]
-    atlas = 'project://assets/textures/world/tileset_16x16.spriteatlas.toml'
+    atlas = ''
     blend_mode = 'alpha'
     flip_x = false
     flip_y = false
-    order_in_layer = 1
+    order_in_layer = 4
     pivot = [ 0.5, 0.5 ]
-    pixel_art = false
-    pixel_size = [ 10.0, 44.0 ]
+    pixel_art = true
+    pixel_size = [ 20.0, 32.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = 0
-    sprite_id = 1779138752344887899
-    texture = 'project://assets/textures/world/tileset_16x16.png'
-    tint = [ 0.4, 1.0, 0.5, 1.0 ]
-    uv_rect = [ 0.4444, 0.0, 0.5556, 0.25 ]
+    texture = 'project://assets/textures/checkpoint_flag.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
     visible = true
 
     [[entities.scripts]]
