@@ -31,8 +31,15 @@ public sealed class AetherInk : EntityScript
     public float Thickness = 0.11f;
     public float Lifetime = 5.0f;
     public float FadeTime = 1.6f;
-    /// <summary>How close to real geometry (or a crystal) a segment must be to hold.</summary>
-    public float AnchorRadius = 1.7f;
+    /// <summary>How close to real geometry a segment must be to count as TOUCHING it. Deliberately
+    /// tight - ink has to meet the stone, not hover near it. Spans hold by staying joined to ink that
+    /// is itself anchored (see LinkReach), not by being vaguely close to scenery.</summary>
+    public float AnchorRadius = 0.4f;
+    /// <summary>How far a segment may sit from already-anchored ink and still join onto it. A little
+    /// over Spacing, so an unbroken stroke chains, but a fresh stroke in open air does not.</summary>
+    public float LinkReach = 0.75f;
+    /// <summary>Crystals are deliberate anchor points, so they hold ink from a bit further off.</summary>
+    public float CrystalReach = 1.1f;
 
     // Read by HudController for the meter bar.
     public static float Aether;
@@ -264,10 +271,37 @@ public sealed class AetherInk : EntityScript
     /// Terrain is the only thing that holds ink, plus crystals, which advertise themselves.</summary>
     private bool EvaluateAnchor(Vector2 p)
     {
-        // Walk a disc of tilemap samples around the point. The grid is indexed off zero so it always
-        // samples straight down/left/right/up from the point - stepping from -radius instead skipped
-        // the axes entirely and made anchoring miss ground that was plainly in reach.
-        const float Step = 0.4f;
+        // 1. Touching real stone holds outright.
+        if (TouchesTerrain(p)) { return true; }
+
+        // 2. Joined to ink that is itself anchored. This is what lets a span cross a gap: you start
+        //    the stroke on the ledge and every following segment holds onto the one before it, all the
+        //    way back to the rock. It also makes reach honest - how far you get depends on your line
+        //    staying connected, not on how much scenery happens to sit within some radius.
+        float link = LinkReach * LinkReach;
+        for (int i = _segs.Count - 1; i >= 0; i--)
+        {
+            Seg s = _segs[i];
+            if (!s.Anchored) { continue; }
+            if (Vector2.DistanceSquared(p, s.B) <= link || Vector2.DistanceSquared(p, s.A) <= link)
+            {
+                return true;
+            }
+        }
+
+        // 3. Crystals are deliberate anchor points out in a chasm, so they reach a little further.
+        foreach (Entity e in Physics2D.OverlapCircle(p, CrystalReach))
+        {
+            if (AetherCrystal.IsCrystal(e.Id)) { return true; }
+        }
+        return false;
+    }
+
+    /// <summary>Is this point actually against solid terrain? Samples the tilemap in a tight disc,
+    /// indexed off zero so the straight-down/left/right/up samples are always taken.</summary>
+    private bool TouchesTerrain(Vector2 p)
+    {
+        const float Step = 0.2f;
         int n = (int)MathF.Ceiling(AnchorRadius / Step);
         for (int iy = -n; iy <= n; iy++)
         {
@@ -277,12 +311,6 @@ public sealed class AetherInk : EntityScript
                 if (dx * dx + dy * dy > AnchorRadius * AnchorRadius) { continue; }
                 if (Physics2D.IsPointSolid(new Vector2(p.X + dx, p.Y + dy))) { return true; }
             }
-        }
-
-        // Crystals are deliberate anchors - they are the "you may build here" markers in a chasm.
-        foreach (Entity e in Physics2D.OverlapCircle(p, AnchorRadius))
-        {
-            if (AetherCrystal.IsCrystal(e.Id)) { return true; }
         }
         return false;
     }
