@@ -72,6 +72,7 @@ namespace aether
 			GpuBuffer occluders;
 			glm::vec4 ambient{0.0f};      // rgb ambient floor, a = clamp ceiling
 			glm::vec4 shadowParams{0.0f}; // x = strength, y = softness (from the scene settings)
+			bool active = false;          // this scene is lit (has lights and/or Light2DSettings)
 		};
 
 		void EnsureCapacity(GpuBuffer& buffer, std::uint32_t count, std::size_t stride, const char* debugName);

@@ -168,6 +168,7 @@ namespace aether
 		Frame& frame = m_frames[frameSlot % kFrames];
 		frame.lights.count = 0;
 		frame.occluders.count = 0;
+		frame.active = false;
 
 		// Content-driven gate, NOT scene metadata: this project's scenes serialize every SceneFeatureFlag
 		// regardless of kind ("every feature in every scene"), so the flags can't tell 2D from 3D. Instead
@@ -177,7 +178,10 @@ namespace aether
 		{
 			return;
 		}
-		if (packet.pointLights.empty() && packet.spotLights.empty())
+		// Opt-in: a scene is lit if it has lights, or declares Light2DSettings. With settings but no
+		// lights the map still runs so the scene sits at its authored (dark) ambient rather than
+		// rendering unlit and washed-out; a scene with neither is untouched.
+		if (packet.pointLights.empty() && packet.spotLights.empty() && !packet.light2DHasSettings)
 		{
 			return;
 		}
@@ -207,14 +211,18 @@ namespace aether
 		}
 
 		const auto lightCount = static_cast<std::uint32_t>(lights.size());
-		EnsureCapacity(frame.lights, lightCount, sizeof(GpuLight2D), "Light2D.Lights");
+		EnsureCapacity(frame.lights, std::max(lightCount, 1u), sizeof(GpuLight2D), "Light2D.Lights");
 		if (!frame.lights.buffer.IsValid())
 		{
 			return;
 		}
-		std::memcpy(frame.lights.mapped, lights.data(), static_cast<std::size_t>(lightCount) * sizeof(GpuLight2D));
-		gpu::ResourceRegistry::FlushMappedBuffer(frame.lights.buffer, 0, static_cast<gpu::DeviceSize>(lightCount) * sizeof(GpuLight2D));
+		if (lightCount > 0)
+		{
+			std::memcpy(frame.lights.mapped, lights.data(), static_cast<std::size_t>(lightCount) * sizeof(GpuLight2D));
+			gpu::ResourceRegistry::FlushMappedBuffer(frame.lights.buffer, 0, static_cast<gpu::DeviceSize>(lightCount) * sizeof(GpuLight2D));
+		}
 		frame.lights.count = lightCount;
+		frame.active = true; // ambient-only (zero lights) is valid: the scene sits at its dark ambient
 		frame.ambient = glm::vec4(glm::vec3(packet.light2DAmbient), kLightClampCeiling);
 		frame.shadowParams = packet.light2DShadowParams; // x = strength, y = softness
 
@@ -261,7 +269,7 @@ namespace aether
 				                return;
 			                }
 			                Frame& frame = m_frames[ctx.frameSlot % kFrames];
-			                if (frame.lights.count == 0 || frame.occluders.count == 0 || !m_occluderPipeline.IsValid())
+			                if (!frame.active || frame.occluders.count == 0 || !m_occluderPipeline.IsValid())
 			                {
 				                return; // mask stays cleared to 0 (no shadows)
 			                }
@@ -295,7 +303,7 @@ namespace aether
 				                return;
 			                }
 			                Frame& frame = m_frames[ctx.frameSlot % kFrames];
-			                if (frame.lights.count == 0 || !m_pipeline.IsValid() || !frame.lights.buffer.IsValid())
+			                if (!frame.active || !m_pipeline.IsValid() || !frame.lights.buffer.IsValid())
 			                {
 				                return;
 			                }

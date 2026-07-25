@@ -12,8 +12,10 @@ namespace AetherGame;
 public sealed class DialogueRunner : EntityScript
 {
     // Palette (matches the menu theme).
-    private static readonly Vector4 InkPanel = new(0.02f, 0.03f, 0.05f, 0.94f);
-    private static readonly Vector4 InkRimEdge = new(0.05f, 0.16f, 0.20f, 1f); // wet teal-ink rim for the panel
+    // Lifted off pure black and fully opaque: the levels are lit now, so a near-black panel just
+    // disappeared into the dark cave and the dialogue read as a frozen game.
+    private static readonly Vector4 InkPanel = new(0.07f, 0.10f, 0.14f, 1.0f);
+    private static readonly Vector4 InkRimEdge = new(0.24f, 0.62f, 0.74f, 1f); // wet teal-ink rim for the panel
     private static readonly Vector4 Accent = GameSettings.Accent;
     private static readonly Vector4 BodyCol = new(0.93f, 0.95f, 0.97f, 1f);
 

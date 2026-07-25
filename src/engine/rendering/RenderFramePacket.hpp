@@ -131,6 +131,10 @@ namespace aether
 		// ambientColor so 2D mood doesn't disturb 3D. rgb = ambient floor; shadowParams = (strength, softness).
 		glm::vec4 light2DAmbient{0.03f, 0.04f, 0.06f, 1.0f};
 		glm::vec4 light2DShadowParams{0.94f, 1.0f, 0.0f, 0.0f};
+		// A scene opts into the 2D light map by having lights OR a Light2DSettings component. With
+		// settings but no lights the map still runs, so the scene sits at its authored ambient (dark)
+		// instead of rendering unlit - otherwise a lightless scene looks washed-out next to lit ones.
+		bool light2DHasSettings = false;
 		glm::vec4 sunColor{1.0f};
 		glm::vec4 skyHorizonColor{1.0f};
 		glm::vec4 skyZenithColor{0.5f, 0.7f, 1.0f, 1.0f};
