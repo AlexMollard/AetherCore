@@ -1,0 +1,17 @@
+{
+  "id": "chasm",
+  "start": "line1",
+  "nodes": {
+    "line1": {
+      "speaker": "The Void",
+      "text": "Look down. That is not a floor waiting for you, that is just more dark.",
+      "effect": "whisper",
+      "goto": "line2"
+    },
+    "line2": {
+      "speaker": "The Void",
+      "text": "You will have to make the way over. Again. And it will hold, [shake]probably[/shake].",
+      "effect": "glitch"
+    }
+  }
+}
