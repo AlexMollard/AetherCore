@@ -69,7 +69,7 @@ public sealed class HudController : EntityScript
         Ui.SetPivot(_hintText, new Vector2(0.0f, 0.0f));
         Ui.SetRect(_hintText, WellX + WellW + 14.0f, WellY + 6.0f, 420.0f, 30.0f);
         Ui.SetFontSize(_hintText, 21.0f);
-        Ui.SetTextColor(_hintText, new Vector4(1.0f, 0.74f, 0.30f, 1.0f)); // the guide tether's amber
+        Ui.SetTextColor(_hintText, new Vector4(0.62f, 0.80f, 0.95f, 1.0f)); // the guide trail's pale mineral
     }
 
     public override void OnUpdate(float deltaTime)

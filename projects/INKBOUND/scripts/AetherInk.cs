@@ -604,9 +604,9 @@ public sealed class AetherInk : EntityScript
     private const float KindGuideMiss = 3.0f;   // cursor: this will not hold
     private const float KindGuideTether = 4.0f; // the gap between the cursor and the nearest stone
 
-    // Two art pixels wide at 16 px/unit. Thinner than this and the shader's hard pixel edges eat the
-    // line in places, which looks like the guide itself is glitching.
-    private const float GuideWidth = 0.06f;
+    // The marks are drops and beads, so each one carries its own width; there is no single line weight.
+    // Nothing below about 0.045 survives the shader's hard pixel edges at 16 px/unit - it breaks up and
+    // reads as the guide itself glitching.
 
     /// <summary>Sample offsets for the nearest-stone search, ordered nearest-first so the walk stops as
     /// soon as it finds rock. Built once from <see cref="HintReach"/>.</summary>
@@ -676,75 +676,79 @@ public sealed class AetherInk : EntityScript
         bool hold = !dead && EvaluateAnchor(cursor);
         float kind = hold ? KindGuideHold : KindGuideMiss;
 
-        // Four corner brackets, not a ring. A ring drawn in a cave full of round glowing things reads as
-        // one more prop lying on the floor; brackets read as a viewfinder, which is what this is.
+        // The marks are made OF INK, not out of targeting chrome. A crosshair and a set of corner
+        // brackets said the right thing but said it in another game's voice - sci-fi HUD furniture
+        // floating in a cave about wet black substance. So the whole vocabulary is drawn from what ink
+        // physically does on a surface:
         //
-        // Held: the brackets are drawn in tight and square - closed on the point, nothing moving.
-        // Refused: they are flung out wide, turned off-axis, and spinning. The two states differ in
-        // size, angle and motion as well as colour, so the answer is legible at a glance and to a player
-        // who cannot tell the colours apart.
-        float radius = hold ? 0.20f : 0.42f;
+        //   holds    - a drop hangs at the point, swollen and about to fall. It has found something.
+        //   refused  - the ink BEADS: it cannot wet this, so it breaks into droplets and scatters off
+        //              the point, leaving the middle empty. Nothing is holding it, and it looks it.
+        //   dead     - the same beading, struck through, the way you cross out a written word.
+        //
+        // Both states still differ in size, motion and colour as well as shape, so the answer stays
+        // legible at a glance and to a player who cannot separate the hues.
+        float radius = hold ? 0.16f : 0.34f;
         if (hold)
         {
-            // Quiet: four short ticks and a dot. This is the state the cursor is in most of the time, so
-            // it has to confirm without shouting - big chrome on the normal case is just noise you learn
-            // to stop seeing, which would cost the refused state its impact.
-            for (int i = 0; i < 4; i++)
-            {
-                float a = i * (MathF.PI * 0.5f);
-                Vector2 d = new(MathF.Cos(a), MathF.Sin(a));
-                Emit(cursor + d * (radius - 0.09f), cursor + d * radius, GuideWidth, 0.8f, 1.0f, kind);
-            }
-            Emit(cursor - new Vector2(0.02f, 0.0f), cursor + new Vector2(0.02f, 0.0f), GuideWidth, 0.8f, 1.0f, kind);
+            // A drop gathering at the nib: round and heavy at the point, tapering to a thread above.
+            // Quiet on purpose - this is the state the cursor is in most of the time, and chrome you
+            // learn to stop seeing costs the refused state its impact.
+            float swell = 1.0f + 0.10f * MathF.Sin(_t * 2.4f); // it breathes, the way a hanging drop does
+            Emit(cursor, cursor + new Vector2(0.0f, 0.045f), 0.105f * swell, 1.0f, 1.0f, kind);
+            Emit(cursor + new Vector2(0.0f, 0.05f), cursor + new Vector2(0.0f, 0.14f), 0.055f, 0.95f, 1.0f, kind);
+            Emit(cursor + new Vector2(0.0f, 0.15f), cursor + new Vector2(0.0f, 0.26f), 0.022f, 0.8f, 1.0f, kind);
         }
         else
         {
-            // Loud: four corner brackets flung wide and turned off-axis, breathing. Nothing is holding
-            // the point, and the mark is literally opening away from it.
-            const float Arm = 0.16f; // well under half the radius, so the corners never close into a box
-            float spin = MathF.PI * 0.25f + MathF.Sin(_t * 2.2f) * 0.10f;
-            float cs = MathF.Cos(spin), sn = MathF.Sin(spin);
-            Vector2 Rot(float x, float y) => cursor + new Vector2(x * cs - y * sn, x * sn + y * cs);
-            for (int i = 0; i < 4; i++)
+            // Beading. Seven droplets thrown off the point, each drifting out and easing back on its own
+            // cycle - ink recoiling from something it cannot take hold of.
+            for (int i = 0; i < 7; i++)
             {
-                float sx = (i & 1) == 0 ? 1.0f : -1.0f;
-                float sy = (i & 2) == 0 ? 1.0f : -1.0f;
-                Emit(Rot(sx * radius, sy * radius), Rot(sx * (radius - Arm), sy * radius), GuideWidth, 1.0f, 1.0f, kind);
-                Emit(Rot(sx * radius, sy * radius), Rot(sx * radius, sy * (radius - Arm)), GuideWidth, 1.0f, 1.0f, kind);
+                float a = (i / 7.0f) * MathF.Tau + 0.4f * MathF.Sin(_t * 0.7f + i);
+                float phase = 0.5f + 0.5f * MathF.Sin(_t * 2.6f + i * 1.7f);
+                float r = radius * (0.62f + 0.38f * phase);
+                float w = 0.048f + 0.030f * (1.0f - phase); // a bead fattens as it slows at the far end
+                Vector2 at = cursor + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+                Emit(at, at + new Vector2(0.012f, 0.0f), w, 1.0f, 1.0f, kind);
             }
         }
 
         if (dead)
         {
             // Dead rock is a different refusal from empty air: there is no gap to close, the stone
-            // simply will not take ink. Strike it out so the player stops hunting for a better angle.
-            float d = radius * 0.55f;
-            Emit(cursor + new Vector2(-d, -d), cursor + new Vector2(d, d), GuideWidth, 1.0f, 1.0f, kind);
-            Emit(cursor + new Vector2(-d, d), cursor + new Vector2(d, -d), GuideWidth, 1.0f, 1.0f, kind);
+            // simply will not take ink. Strike it through, the way you cross out a written word, so the
+            // player stops hunting for a better angle into it.
+            float d = radius * 0.95f;
+            Emit(cursor + new Vector2(-d, -d * 0.35f), cursor + new Vector2(d, d * 0.35f), 0.05f, 1.0f, 1.0f, kind);
         }
         else if (!hold && TryFindNearestStone(cursor, deltaTime, out Vector2 stone))
         {
-            // The whole point of the guide: you missed by THIS much. A dashed run from the cursor to
-            // the rock turns "it just doesn't work here" into a distance you can see and close.
+            // The whole point of the guide: you missed by THIS much. A run of drips straining toward the
+            // rock turns "it just doesn't work here" into a distance you can see and close - and it is
+            // ink doing the straining, not a dotted line drawn over the top of the game.
             Vector2 d = stone - cursor;
             float len = d.Length();
             if (len > 0.01f)
             {
                 Vector2 dir = d / len;
+                Vector2 nrm = new(-dir.Y, dir.X);
                 Vector2 from = cursor + dir * radius;
                 float span = MathF.Max(0.0f, len - radius);
-                const float Dash = 0.17f, Gap = 0.19f; // gaps wide enough to survive the rounded caps
-                float o = (_t * 0.55f) % (Dash + Gap); // the dashes crawl toward the stone
-                for (float s = -o; s < span; s += Dash + Gap)
+                const float Step = 0.30f; // far enough apart that the drips stay drips, not a rod
+                float o = (_t * 0.6f) % Step; // the drips creep toward the stone
+                for (float s = span - o; s > 0.0f; s -= Step)
                 {
-                    float s0 = MathF.Max(0.0f, s);
-                    float s1 = MathF.Min(span, s + Dash);
-                    if (s1 <= s0) { continue; }
-                    Emit(from + dir * s0, from + dir * s1, GuideWidth * 0.85f, 1.0f, 1.0f, KindGuideTether);
+                    // Bigger and steadier the closer they get: the trail reads as reaching for the rock
+                    // rather than as leaking away from the cursor.
+                    float k = s / MathF.Max(span, 0.001f);
+                    float w = 0.026f + 0.026f * (1.0f - k);
+                    Vector2 at = from + dir * s + nrm * MathF.Sin(s * 6.0f + _t * 1.6f) * 0.035f;
+                    Emit(at, at + dir * 0.012f, w, 1.0f, 1.0f, KindGuideTether);
                 }
-                // A tick on the rock itself, so the eye lands on what it has to touch.
-                Vector2 n = new(-dir.Y, dir.X);
-                Emit(stone - n * 0.16f, stone + n * 0.16f, GuideWidth, 1.0f, 1.0f, KindGuideTether);
+                // A wet smear where the ink WANTS to land, so the eye finishes on the rock rather than
+                // trailing off into the dark next to it.
+                Emit(stone - nrm * 0.10f, stone + nrm * 0.10f, 0.045f, 1.0f, 1.0f, KindGuideTether);
             }
         }
 

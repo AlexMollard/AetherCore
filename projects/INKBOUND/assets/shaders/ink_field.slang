@@ -183,13 +183,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
     else if (kind >= 2)
     {
-        // Guide: hold = cold cyan (the colour ink goes when it takes), miss = the same red the crumbling
-        // ghost uses, tether = amber, which belongs to neither state and so reads as an instruction.
+        // The guide borrows its palette from the game rather than introducing one. Hold takes the cyan
+        // that ink turns when it takes; refused takes the red that crumbling ghost ink already means.
+        // The trail is deliberately NOT a third warning colour - it is the pale mineral tone of set ink
+        // and cave rock, because what it is pointing at IS rock. An amber "instruction" line read as
+        // HUD furniture from another game.
+        //
         // Over 1.0 on purpose: this draws after the light map and through the tonemap, and at LDR values
-        // the marks came out pastel - a dusty pink that read as another rock rather than as a warning.
+        // the marks came out pastel - a dusty pink that read as another prop rather than as a warning.
         float3 c = kind == 2 ? float3(0.30, 1.50, 1.90)
                  : kind == 3 ? float3(2.20, 0.30, 0.22)
-                             : float3(2.00, 1.15, 0.28);
+                             : float3(0.42, 0.62, 0.86);
         // Flat and self-lit: no pooling, no veins, no depth shading. A guide mark pulses instead, so it
         // never sits still long enough to be mistaken for scenery.
         //
