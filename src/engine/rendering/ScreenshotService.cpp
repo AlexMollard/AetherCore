@@ -460,31 +460,38 @@ namespace aether
 			vkCmdPipelineBarrier(cmd, srcS, dstS, 0, 0, nullptr, 0, nullptr, 1, &b);
 		};
 
+		// Narrow the barrier for the layouts a screenshot source is actually ever in; anything else keeps
+		// the conservative all-commands/all-access wait, which is correct if pessimistic.
+		//
+		// Deliberately an if-chain, not a switch. VkImageLayout is an open vendor enum that grows with
+		// every extension and SDK bump, so an exhaustive switch is neither writable nor maintainable -
+		// and -Wswitch-enum, which exists to force a review when one of OUR enums gains a case, would
+		// fire on every Vulkan header update instead.
 		VkAccessFlags sourceAccess = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-		switch (srcLayout)
+		if (srcLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
-			case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-				sourceAccess = VK_ACCESS_SHADER_READ_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-				sourceAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-				sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-				sourceAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-				sourceStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-				sourceAccess = VK_ACCESS_TRANSFER_READ_BIT;
-				sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-				sourceAccess = 0;
-				sourceStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-				break;
-			default:
-				break;
+			sourceAccess = VK_ACCESS_SHADER_READ_BIT;
+		}
+		else if (srcLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		{
+			sourceAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		}
+		else if (srcLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		{
+			sourceAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			sourceStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+		}
+		else if (srcLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+		{
+			sourceAccess = VK_ACCESS_TRANSFER_READ_BIT;
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		}
+		else if (srcLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+		{
+			sourceAccess = 0;
+			sourceStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 		}
 
 		barrier(srcLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, sourceAccess, VK_ACCESS_TRANSFER_READ_BIT, sourceStage, VK_PIPELINE_STAGE_TRANSFER_BIT);

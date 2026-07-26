@@ -22,9 +22,9 @@ namespace aether
 	{
 		constexpr float kLightClampCeiling = 4.0f; // multiply ceiling: over-bright stacks saturate
 
-		// Shadow tuning: march resolution and how far (world units) to skip near the shading point so a
-		// lit wall face doesn't shadow itself. Strength/softness come per-scene from the packet.
-		constexpr float kShadowSteps = 16.0f;
+		// How far (world units) to skip near the shading point so a lit wall face doesn't shadow itself.
+		// Strength/softness come per-scene from the packet; the march step count is a shader constant
+		// (kShadowSteps in light2d.slang) and is deliberately not duplicated here.
 		constexpr float kShadowWorldBias = 0.9f;
 
 		// MUST match Light2DPush in shaders/light2d.slang (64 bytes).

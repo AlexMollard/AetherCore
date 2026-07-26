@@ -69,6 +69,10 @@ namespace aether
 		static constexpr JPH::ObjectLayer kMoving = 1;
 		static constexpr JPH::ObjectLayer kSensor = 2;
 		static constexpr uint32_t kNumLayers = 3;
+		// Nothing consults the count at runtime - Jolt only asks for the BROAD PHASE layer count - so
+		// make it earn its keep as a compile-time check instead. Adding a layer without bumping this
+		// now fails the build rather than leaving a stale number sitting next to the ids.
+		static_assert(kSensor + 1u == kNumLayers, "kNumLayers must be one past the last object layer");
 	} // namespace Layers
 
 	namespace BroadPhaseLayers

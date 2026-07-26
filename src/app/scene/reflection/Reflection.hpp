@@ -365,7 +365,7 @@ namespace aether::reflect
 			f.name = name;
 			f.type = FieldType::Enum;
 			f.meta.enumTable = &table;
-			f.get = [member, &table](const void* comp) -> FieldValue
+			f.get = [member](const void* comp) -> FieldValue // the table is reached via f.meta, not captured
 			{
 				FieldValue v;
 				v.type = FieldType::Enum;

@@ -941,7 +941,6 @@ namespace aether
 		const GraphicsPipeline* lastPipeline = nullptr;
 		gpu::BufferHandle lastIndexBuffer{};
 		gpu::DeviceSize lastIndexOffset = ~0ull;
-		const GraphicsPipeline* lastSetPipeline = nullptr;
 
 		for (const auto& batch: prepared.batchRenderInfos)
 		{
@@ -955,7 +954,6 @@ namespace aether
 					cmd.SetCullMode(*cullModeOverride);
 				}
 				lastPipeline = activePipeline;
-				lastSetPipeline = nullptr;
 			}
 
 			if (activePipeline != nullptr)

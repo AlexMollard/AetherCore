@@ -465,7 +465,9 @@ namespace aether::assets
 			return result;
 		}
 
-		bool TryLoadCrossSkeletonAnimations(const std::string& animSetPath, GltfAsset& asset, uint32_t boneNodeOffset, uint32_t jointCount)
+		// Cross-skeleton (retargeted) AnimSet loading: complete, but nothing calls it yet - the loader
+		// below only handles the same-skeleton case. Left in place deliberately; see BuildBoneNameMap.
+		[[maybe_unused]] bool TryLoadCrossSkeletonAnimations(const std::string& animSetPath, GltfAsset& asset, uint32_t boneNodeOffset, uint32_t jointCount)
 		{
 			if (animSetPath.empty() || !io::FileSystem::Exists(animSetPath))
 			{

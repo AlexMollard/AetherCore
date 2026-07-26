@@ -283,8 +283,10 @@ namespace aether::app::scripting
 			}
 			return true;
 		}
-#endif
 
+		// Inside the AETHER_DOTNET_EXE guard with its only callers: this exists solely to quiet and
+		// de-daemonise the dotnet CLI we are about to shell out to, so without a CLI to shell out to
+		// there is nothing for it to configure.
 		void ConfigureDotnetEnvironmentOnce()
 		{
 			static const bool done = []()
@@ -304,6 +306,7 @@ namespace aether::app::scripting
 			}();
 			(void) done;
 		}
+#endif
 	} // namespace
 
 	// release ordering; the main thread reads them with acquire. `ok` and `error`

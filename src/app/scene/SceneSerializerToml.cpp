@@ -1778,7 +1778,15 @@ namespace aether::app::scene
 					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Bool));
 					writer.Write<std::uint8_t>(node.as_boolean()->get() ? 1u : 0u);
 					break;
-				default:
+				// TOML's date/time types have no scene-format equivalent and nothing authors them, so
+				// they collapse to Null - the same as an empty node. Spelled out rather than left to a
+				// default so that adding a date-valued field is a deliberate decision here (the .bin is
+				// a cache of the .toml, and the runtime prefers it, so anything dropped here is dropped
+				// for real) instead of quietly round-tripping to nothing.
+				case toml::node_type::none:
+				case toml::node_type::date:
+				case toml::node_type::time:
+				case toml::node_type::date_time:
 					writer.Write<std::uint8_t>(static_cast<std::uint8_t>(TomlTag::Null));
 					break;
 			}

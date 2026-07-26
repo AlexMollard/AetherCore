@@ -120,6 +120,7 @@ namespace aether::editor
 					return SceneSelection::AssetKind::Prefab;
 				case dragdrop::FileKind::Scene:
 					return SceneSelection::AssetKind::Scene;
+				case dragdrop::FileKind::Shader:
 				case dragdrop::FileKind::Unknown:
 				default:
 					return SceneSelection::AssetKind::File;
@@ -229,6 +230,8 @@ namespace aether::editor
 					return "SCENE";
 				case dragdrop::FileKind::Material:
 					return "MATERIAL";
+				case dragdrop::FileKind::Shader:
+					return "SHADER";
 				case dragdrop::FileKind::Unknown:
 				default:
 					return "FILE";

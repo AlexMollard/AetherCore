@@ -191,9 +191,11 @@ namespace aether::editor
 					return AssignMaterialPreset(context, world, entity, payload.path);
 				case dragdrop::FileKind::Texture:
 					return AssignTextureToEntity(context, world, entity, payload.path);
+				// Nothing here can be dropped ONTO an entity.
 				case dragdrop::FileKind::Unknown:
 				case dragdrop::FileKind::Script:
 				case dragdrop::FileKind::Scene:
+				case dragdrop::FileKind::Shader:
 				default:
 					return false;
 			}

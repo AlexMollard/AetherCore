@@ -49,7 +49,6 @@ namespace aether::editor
 		std::int32_t m_textureHeight = 1;
 		std::int32_t m_selectedRegion = -1;
 		float m_zoom = 2.0f;
-		glm::vec2 m_pan{0.0f};
 		int m_preset = 1;
 		bool m_checkerboard = true;
 		bool m_showPixelGrid = true;

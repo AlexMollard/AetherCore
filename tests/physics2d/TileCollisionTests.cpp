@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <system_error>
 
 #include "assets/TileAssetStore.hpp"
 #include "physics2d/Physics2DComponents.hpp"
@@ -18,8 +19,15 @@ namespace
 {
 	std::filesystem::path TempDir()
 	{
-		const char* base = std::getenv("TEMP");
-		auto dir = std::filesystem::path(base != nullptr ? base : ".") / "aethercore_tile_collision_tests";
+		// std::filesystem, not getenv("TEMP"): it already consults the platform's temp-dir
+		// variables and needs no deprecated CRT call to do it.
+		std::error_code ec;
+		std::filesystem::path base = std::filesystem::temp_directory_path(ec);
+		if (ec)
+		{
+			base = ".";
+		}
+		auto dir = base / "aethercore_tile_collision_tests";
 		std::filesystem::create_directories(dir);
 		return dir;
 	}

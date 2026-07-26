@@ -146,8 +146,5 @@ namespace aether::editor
 
 		Entity m_scrollToEntity{};
 
-		bool m_pendingGroup = false;
-		bool m_pendingUngroup = false;
-
 	};
 } // namespace aether::editor

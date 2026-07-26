@@ -336,7 +336,12 @@ namespace aether::editor
 					case Tool::Ellipse:
 						doc.DrawEllipse(m_shapeX0, m_shapeY0, m_shapeX1, m_shapeY1, doc.Color(), m_filledShape);
 						break;
-					default:
+					// Not drag-to-shape tools: they act per pixel as the mouse moves, so a release
+					// has nothing left to commit.
+					case Tool::Pencil:
+					case Tool::Eraser:
+					case Tool::Fill:
+					case Tool::Eyedropper:
 						break;
 				}
 				m_shaping = false;

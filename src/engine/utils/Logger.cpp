@@ -366,11 +366,6 @@ namespace aether
 			WritePlainMessage(message, ToMessageColor(LogLevel::Error), fileStream);
 		}
 
-		void WritePlainInfo(std::string_view message, std::ofstream& fileStream)
-		{
-			WritePlainMessage(message, ToMessageColor(LogLevel::Info), fileStream);
-		}
-
 		void WritePlainInfo(std::string_view message, LogPlainColor color, std::ofstream& fileStream)
 		{
 			WritePlainMessage(message, ToPlainColor(color), fileStream);

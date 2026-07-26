@@ -144,6 +144,8 @@ namespace aether::editor
 #endif
 		}
 
+#ifndef AETHER_GAME_RUNTIME_EXE_NAME
+		// Fallback only: when the build names the runtime for us, this has no call site at all.
 		std::string DefaultRuntimeExecutableName()
 		{
 #ifdef _WIN32
@@ -152,6 +154,7 @@ namespace aether::editor
 			return "AetherGame";
 #endif
 		}
+#endif
 
 		std::string EditorExecutableName()
 		{

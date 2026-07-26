@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <system_error>
 
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/SpriteAtlasAsset.hpp"
@@ -23,8 +24,15 @@ namespace
 {
 	std::filesystem::path TempDir()
 	{
-		const char* base = std::getenv("TEMP");
-		auto dir = std::filesystem::path(base != nullptr ? base : ".") / "aethercore_tilemap_extract_tests";
+		// std::filesystem, not getenv("TEMP"): it already consults the platform's temp-dir
+		// variables and needs no deprecated CRT call to do it.
+		std::error_code ec;
+		std::filesystem::path base = std::filesystem::temp_directory_path(ec);
+		if (ec)
+		{
+			base = ".";
+		}
+		auto dir = base / "aethercore_tilemap_extract_tests";
 		std::filesystem::create_directories(dir);
 		return dir;
 	}

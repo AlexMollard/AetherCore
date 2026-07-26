@@ -18,6 +18,26 @@ namespace
 		std::cerr << message << "\n";
 		return 1;
 	}
+
+	// The engine has PlatformPaths::ReadEnvironmentVariable for this, but aether-ctl deliberately links
+	// nothing from the engine (see CMakeLists), so it carries its own six lines rather than a dependency.
+	std::string ReadEnvironmentVariable(const char* name)
+	{
+#ifdef _MSC_VER
+		char* value = nullptr;
+		std::size_t size = 0;
+		if (_dupenv_s(&value, &size, name) != 0 || value == nullptr)
+		{
+			return {};
+		}
+		std::string result(value);
+		std::free(value);
+		return result;
+#else
+		const char* value = std::getenv(name);
+		return value != nullptr ? value : "";
+#endif
+	}
 } // namespace
 
 int main(int argc, char** argv)
@@ -62,9 +82,9 @@ int main(int argc, char** argv)
 
 	if (port == 0)
 	{
-		if (const char* env = std::getenv("AETHER_CONTROL_PORT"))
+		if (const std::string env = ReadEnvironmentVariable("AETHER_CONTROL_PORT"); !env.empty())
 		{
-			port = std::atoi(env);
+			port = std::atoi(env.c_str());
 		}
 	}
 	if (port <= 0)

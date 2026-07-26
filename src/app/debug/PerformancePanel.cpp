@@ -82,7 +82,7 @@ namespace aether::editor
 			ImGui::TableSetColumnIndex(0);
 			ImGui::TextUnformatted("Frame");
 			ImGui::SameLine();
-			ImGui::Text("#%u", context.frameIndex);
+			ImGui::Text("#%llu", static_cast<unsigned long long>(context.frameIndex));
 
 			ImGui::TableSetColumnIndex(1);
 			ImGui::TextUnformatted("FPS ");

@@ -1090,7 +1090,7 @@ namespace aether
 		}
 		m_freePipelineSlots.push_back(idx);
 		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
-		        .fn = [this, entry]() { DestroyPipelineEntryNow(entry); },
+		        .fn = [entry]() { DestroyPipelineEntryNow(entry); },
 		});
 	}
 
