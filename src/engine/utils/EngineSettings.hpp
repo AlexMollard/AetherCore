@@ -30,6 +30,19 @@ namespace aether
 			std::string startupScene;
 			bool autoplay = false;
 		} app;
+
+		// The engine draws the mouse pointer itself when a project asks it to (see ui::CursorService),
+		// which is how a game gets its own cursor without writing one. Off by default: tools and the
+		// editor want the real OS pointer.
+		struct Cursor
+		{
+			bool custom = false;
+			std::string texture;       // VFS path to the pointer art; empty draws nothing
+			float size = 32.0f;        // on-screen square size in pixels
+			float hotspotX = 0.0f;     // 0..1 across the image: the pixel that sits on the mouse
+			float hotspotY = 0.0f;
+			bool pixelArt = true;      // nearest sampling, so small art scales up crisp
+		} cursor;
 	};
 
 	[[nodiscard]] inline std::pair<std::string_view, std::string_view> SplitSettingKey(std::string_view key)
@@ -56,6 +69,12 @@ namespace aether
 		f("app.targetFps", settings.app.targetFps);
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);
+		f("cursor.custom", settings.cursor.custom);
+		f("cursor.texture", settings.cursor.texture);
+		f("cursor.size", settings.cursor.size);
+		f("cursor.hotspotX", settings.cursor.hotspotX);
+		f("cursor.hotspotY", settings.cursor.hotspotY);
+		f("cursor.pixelArt", settings.cursor.pixelArt);
 	}
 
 	struct LoadedEngineSettings

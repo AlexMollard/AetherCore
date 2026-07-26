@@ -77,6 +77,16 @@ namespace aether
 		m_services.Register<ScreenshotService>(m_screenshotService);
 		m_services.Register<CustomPassRegistry>(m_customPasses);
 		m_services.Register<Light2DSubmissionRegistry>(m_light2DSubmissions);
+		m_services.Register<ui::CursorService>(m_cursor);
+
+		// A project turns its own pointer on and names its art in ProjectSettings.toml - no code.
+		m_cursor.Configure(m_settings.cursor.custom,
+		        {
+		                .texture = m_settings.cursor.texture,
+		                .hotspot = {m_settings.cursor.hotspotX, m_settings.cursor.hotspotY},
+		                .size = m_settings.cursor.size,
+		                .pixelArt = m_settings.cursor.pixelArt,
+		        });
 		if (fullRuntime)
 		{
 			m_cameras = std::make_unique<CameraSubsystem>();
@@ -388,6 +398,7 @@ namespace aether
 			{
 				ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
 				uiRenderer.SetWorld(&m_services.Get<SceneSubsystem>().GetWorld());
+				uiRenderer.SetCursorService(&m_cursor);
 				uiRenderer.BuildFrame({static_cast<float>(packet.renderExtent.width), static_cast<float>(packet.renderExtent.height)}, packet.drawSlot);
 			}
 
@@ -423,6 +434,17 @@ namespace aether
 		auto& platform = m_services.Get<PlatformSubsystem>();
 		auto& input = platform.GetInput();
 		input.Update();
+
+		// Feed the engine cursor and keep the OS pointer in step with it. Done here, once, off the same
+		// Input the game reads, so a project never has to remember to hide the real cursor when it turns
+		// its own on - or to put it back when it turns it off.
+		m_cursor.SetPosition(input.GetMousePos());
+		// The game only owns the pointer where the game actually is. Hosted in a tool that means the game
+		// viewport and nowhere else - the editor's panels need the real one back the instant you leave.
+		// A shipped game sets no viewport transform, so it owns the pointer everywhere.
+		m_cursor.SetSuppressed(input.HasMouseViewportTransform() && !input.IsMouseViewportInputActive());
+		input.SetOsCursorVisible(m_cursor.WantsOsCursor());
+
 		if (m_uiOverlay)
 		{
 			input.SetMouseCaptured(m_uiOverlay->WantsInputCapture() && !input.IsMouseViewportInputActive());

@@ -1,4 +1,5 @@
 #include "utils/SettingsService.hpp"
+#include "ui/CursorService.hpp"
 
 #include "AetherCore.hpp"
 #include "platform/PlatformSubsystem.hpp"
@@ -18,7 +19,23 @@ namespace aether
 
 	void SettingsService::ApplyLive(std::string_view key)
 	{
-		if (key == "graphics.fxaa")
+		// The whole cursor block reconfigures together - the look is one thing, not six - and it has to
+		// re-apply on every load, because a project's settings arrive well after the engine is built
+		// (the editor opens a project seconds into the session).
+		if (key.starts_with("cursor."))
+		{
+			if (auto* cursor = m_services.TryGet<ui::CursorService>())
+			{
+				cursor->Configure(m_values.cursor.custom,
+				        {
+				                .texture = m_values.cursor.texture,
+				                .hotspot = {m_values.cursor.hotspotX, m_values.cursor.hotspotY},
+				                .size = m_values.cursor.size,
+				                .pixelArt = m_values.cursor.pixelArt,
+				        });
+			}
+		}
+		else if (key == "graphics.fxaa")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())
 			{

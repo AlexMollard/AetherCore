@@ -361,6 +361,21 @@ internal static unsafe partial class Native
     internal static partial void aether_input_set_os_cursor_visible(int visible);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_cursor_set_visible(int visible);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_cursor_get_visible();
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_cursor_enabled();
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_cursor_set_look(string texture, float hotspotX, float hotspotY, float size, int pixelArt);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_cursor_reset();
+
+    [LibraryImport(Lib)]
     internal static partial int aether_input_get_os_cursor_visible();
 
 

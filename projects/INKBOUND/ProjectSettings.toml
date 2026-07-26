@@ -4,6 +4,17 @@
 startupscene = "Menu"
 targetfps = 0
 
+# The engine draws our pointer; the OS one is switched off for us. CursorController swaps this for a
+# quill while ink can be drawn, and hides it entirely in gameplay - the anchor guide already marks the
+# point, and two pointers on one spot is one too many.
+[cursor]
+custom = true
+texture = "project://assets/textures/ui/cursor_ink.png"
+size = 40.0
+hotspotx = 0.0
+hotspoty = 0.0
+pixelart = true
+
 [graphics]
 asynccompute = true
 fxaa = false

@@ -10,7 +10,9 @@
 #include "material/TextureRegistry.hpp"
 #include "scene/World.hpp"
 #include "ui/UiComponents.hpp"
+#include "ui/CursorService.hpp"
 #include "ui/UiEntities.hpp"
+#include "utils/ServiceContainer.hpp"
 
 // In-game UI control exported to C#. Text is read live each frame, and the layout
 
@@ -381,4 +383,59 @@ AE_SCRIPT_API std::int32_t aether_ui_contains_point(std::uint32_t id, Vec2 pt)
 	const glm::vec4 rect = r->resolvedRect;
 	const bool inside = pt.x >= rect.x && pt.x <= rect.x + rect.z && pt.y >= rect.y && pt.y <= rect.y + rect.w;
 	return inside ? 1 : 0;
+}
+
+// ── Mouse pointer ─────────────────────────────────────────────────────────────
+// The engine draws the pointer (see ui::CursorService) and the project configures it in
+// ProjectSettings.toml. These are only for games that need MORE than one pointer - a pen while
+// drawing, an arrow in menus - or that want it out of the way while they draw their own marker.
+
+namespace
+{
+	aether::ui::CursorService* Cursor()
+	{
+		auto* services = ActiveContext().services;
+		return services != nullptr ? services->TryGet<aether::ui::CursorService>() : nullptr;
+	}
+} // namespace
+
+AE_SCRIPT_API void aether_cursor_set_visible(std::int32_t visible)
+{
+	if (auto* cursor = Cursor())
+	{
+		cursor->SetVisible(visible != 0);
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_cursor_get_visible()
+{
+	auto* cursor = Cursor();
+	return cursor != nullptr && cursor->IsVisible() ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_cursor_enabled()
+{
+	auto* cursor = Cursor();
+	return cursor != nullptr && cursor->IsEnabled() ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_cursor_set_look(const char* texture, float hotspotX, float hotspotY, float size, std::int32_t pixelArt)
+{
+	if (auto* cursor = Cursor())
+	{
+		cursor->SetLook({
+		        .texture = texture != nullptr ? texture : "",
+		        .hotspot = {hotspotX, hotspotY},
+		        .size = size,
+		        .pixelArt = pixelArt != 0,
+		});
+	}
+}
+
+AE_SCRIPT_API void aether_cursor_reset()
+{
+	if (auto* cursor = Cursor())
+	{
+		cursor->Reset();
+	}
 }

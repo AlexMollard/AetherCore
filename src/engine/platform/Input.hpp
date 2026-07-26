@@ -177,6 +177,13 @@ namespace aether
 			return m_mouseViewportInputActive;
 		}
 
+		// True when mouse coordinates are being remapped into a game viewport, i.e. the game is being
+		// hosted inside a tool rather than owning the window. A shipped game never sets one.
+		[[nodiscard]] bool HasMouseViewportTransform() const
+		{
+			return m_mouseViewportTransformActive;
+		}
+
 		[[nodiscard]] glm::vec2 GetScrollDelta() const;
 
 		// layout, dead keys, and IME - far more reliable than manual key->char mapping.

@@ -500,6 +500,7 @@ namespace aether::ui
 		}
 
 		BuildDrawCommands(*m_world, m_scratch, frame.materials, m_defaultFontReady ? &m_fontRegistry : nullptr, m_textures);
+		AppendCursor();
 
 		const auto count = static_cast<std::uint32_t>(m_scratch.size());
 		if (count == 0)
@@ -545,6 +546,56 @@ namespace aether::ui
 		std::memcpy(frame.mapped, m_scratch.data(), byteSize);
 		gpu::ResourceRegistry::FlushMappedBuffer(frame.buffer, 0, byteSize);
 		frame.count = count;
+	}
+
+	// The engine's mouse pointer, emitted after every canvas so it composites over all of them. It is
+	// not an entity and belongs to no scene: a pointer that a scene load can destroy, or that another
+	// canvas can sort above, is a pointer that will fail at the worst moment.
+	namespace
+	{
+		// Above every element any canvas can produce; the command is also appended last, so order and
+		// layer agree.
+		constexpr int kCursorLayer = 1 << 20;
+	} // namespace
+
+	void UiRenderer::AppendCursor()
+	{
+		if (m_cursor == nullptr || !m_cursor->ShouldDraw() || m_textures == nullptr)
+		{
+			return;
+		}
+
+		// Acquire takes a reference, so the handle is cached and only re-taken when the art actually
+		// changes - re-acquiring every frame would leak a reference per frame.
+		const CursorService::Look& look = m_cursor->GetLook();
+		if (look.texture != m_cursorTexturePath)
+		{
+			if (m_cursorTexture.IsValid())
+			{
+				m_textures->Release(m_cursorTexture);
+			}
+			m_cursorTexturePath = look.texture;
+			m_cursorTexture = m_textures->Acquire(m_cursorTexturePath);
+		}
+		if (!m_cursorTexture.IsValid())
+		{
+			return;
+		}
+
+		// The hotspot is the pixel of the art that sits on the mouse, so the rect is placed back from
+		// the pointer by that fraction of its size - an arrow points from its corner, a pen writes from
+		// its tip, and neither should have to know how the other is anchored.
+		const glm::vec2 pos = m_cursor->GetPosition() - look.hotspot * look.size;
+
+		UiDrawCommand cmd;
+		cmd.type = kShapeTexturedRect;
+		cmd.data0 = {pos.x, pos.y, pos.x + look.size, pos.y + look.size};
+		cmd.data1 = {0.f, 0.f, 1.f, 1.f};
+		cmd.color = glm::vec4(1.f);
+		cmd.layer = kCursorLayer;
+		cmd.textureSlot = m_textures->ResolveSlot(m_cursorTexture);
+		cmd.flags = look.pixelArt ? kFlagPixelArt : 0u;
+		m_scratch.push_back(cmd);
 	}
 
 	void UiRenderer::RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent, BindlessManager& bindless)

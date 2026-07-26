@@ -11,6 +11,8 @@
 #include <glm/glm.hpp>
 
 #include "gpu/ResourceRegistry.hpp"
+#include "material/TextureHandle.hpp"
+#include "ui/CursorService.hpp"
 #include "rendering/RenderGraphTypes.hpp"
 #include "ui/FontRegistry.hpp"
 #include "ui/UiDrawCommand.hpp"
@@ -38,6 +40,13 @@ namespace aether::ui
 	public:
 		void Init(GpuDevice& gpu, gpu::UploadContext& upload, TextureRegistry& textures, gpu::Format colorFormat);
 		void Shutdown();
+
+		// The engine pointer (see ui::CursorService). Set once at startup; drawn as the last command of
+		// every frame so it is over every canvas, every overlay and every scene load.
+		void SetCursorService(CursorService* cursor)
+		{
+			m_cursor = cursor;
+		}
 
 		void SetWorld(World* world)
 		{
@@ -89,6 +98,7 @@ namespace aether::ui
 			std::vector<DrawGroup> groups;
 		};
 
+		void AppendCursor();
 		void EnsureCapacity(Frame& frame, std::uint32_t count);
 		bool EnsureFontAtlasUploaded(std::string_view name);
 		// Lazily create + cache a pipeline for a UIEffect shader ("shaders://<shader>.spv").
@@ -98,6 +108,9 @@ namespace aether::ui
 		gpu::PipelineHandle MaterialPipeline(const std::string& shader);
 
 		World* m_world = nullptr;
+		CursorService* m_cursor = nullptr;
+		std::string m_cursorTexturePath;
+		TextureHandle m_cursorTexture{};
 		GpuDevice* m_gpu = nullptr;
 		gpu::UploadContext* m_upload = nullptr;
 		TextureRegistry* m_textures = nullptr;

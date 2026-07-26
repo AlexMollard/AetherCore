@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "EngineClient.hpp"
+#include "ui/CursorService.hpp"
 #include "IEngineRuntime.hpp"
 #include "RuntimeProfile.hpp"
 #include "gpu/CommandList.hpp"
@@ -157,6 +158,7 @@ namespace aether
 		std::unique_ptr<GpuDevice> m_gpu;
 		ScreenshotService m_screenshotService;
 		CustomPassRegistry m_customPasses; // game-thread project-pass registry + submissions, copied into the packet each frame
+		ui::CursorService m_cursor; // engine-drawn mouse pointer; projects configure it via settings
 		Light2DSubmissionRegistry m_light2DSubmissions; // script-submitted 2D lights/occluders, drained into the packet each frame
 		std::unique_ptr<CameraSubsystem> m_cameras;
 		std::unique_ptr<IUiOverlay> m_uiOverlay;
