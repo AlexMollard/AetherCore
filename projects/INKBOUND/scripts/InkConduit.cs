@@ -29,14 +29,24 @@ public sealed class InkConduit : EntityScript
     /// it every frame.</summary>
     public float PollSeconds = 0.15f;
 
+    /// <summary>The socket, bone dry. Same font as the source so the two read as a pair - one brimming,
+    /// one empty - which states the whole puzzle in silhouette without a legend.</summary>
+    public string DryTexture = "project://assets/textures/conduit_socket.png";
+    /// <summary>The socket once the line is joined: identical to the source. Filling it IS the payoff.</summary>
+    public string FullTexture = "project://assets/textures/conduit_filled.png";
+
     private float _poll;
     private bool _live;
     private float _pulse;
-    private Vector4 _baseTint = Vector4.One;
+    private bool _applied;
+
+    // Ink cyan, the colour ink turns when it takes; the dry socket only ever gets a thin, cold breath
+    // of it, so a lit font is unmistakably different from a waiting one.
+    private static readonly Vector3 LiveLight = new(0.35f, 0.85f, 1.0f);
+    private static readonly Vector3 WaitLight = new(0.30f, 0.44f, 0.58f);
 
     public override void OnAttach()
     {
-        _baseTint = SpriteRenderer.GetTint(Self);
         Apply(false);
     }
 
@@ -44,14 +54,20 @@ public sealed class InkConduit : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
-        // Breathe while it is waiting to be joined. An unlit socket that just sits there reads as
-        // scenery; one that pulses reads as a thing asking for something.
+        // The state lives in the ART now - a dry font or a brimming one - so the light only has to sell
+        // it. Waiting, it breathes: a slow cold pull, like something drawing breath in the dark. Joined,
+        // it burns steady and ink-coloured. Submitted per frame rather than parked on the entity so the
+        // two states can differ by more than a tint.
         _pulse += deltaTime;
-        if (!_live)
+        Vector2 at = new(Self.Position.X, Self.Position.Y + 0.35f); // the bowl, not the foot
+        if (_live)
         {
-            float k = 0.55f + 0.45f * MathF.Sin(_pulse * 3.2f);
-            SpriteRenderer.SetTint(Self, new Vector4(_baseTint.X + 0.25f * k, _baseTint.Y + 0.20f * k,
-                                                     _baseTint.Z + 0.45f * k, 1.0f));
+            Lighting2D.SubmitLight(at, 3.4f, LiveLight, 2.3f);
+        }
+        else
+        {
+            float breath = 0.55f + 0.45f * MathF.Sin(_pulse * 2.1f);
+            Lighting2D.SubmitLight(at, 2.2f, WaitLight, 0.35f + 0.5f * breath);
         }
 
         _poll -= deltaTime;
@@ -64,14 +80,18 @@ public sealed class InkConduit : EntityScript
                 new Vector2(Self.Position.X, Self.Position.Y),
                 CoupleRadius);
 
-        if (live != _live) { Apply(live); }
+        if (live != _live || !_applied) { Apply(live); }
     }
 
     private void Apply(bool live)
     {
         _live = live;
         Signal.Set(Channel, Self.Id, live);
-        SpriteRenderer.SetTint(Self, live ? new Vector4(0.45f, 1.0f, 1.0f, 1.0f) : _baseTint);
+        // Swap the whole vessel, not its colour. A stone font washed cyan reads as a lighting bug; a
+        // dry font that fills with ink reads as the thing you just did.
+        SpriteRenderer.SetTexture(Self, live ? FullTexture : DryTexture);
+        SpriteRenderer.SetTint(Self, Vector4.One);
+        _applied = true;
         if (live) { Log.Info($"[INKBOUND] Circuit '{Channel}' closed."); }
     }
 }
