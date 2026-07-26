@@ -40,10 +40,13 @@ public sealed class AetherInk : EntityScript
     public float Thickness = 0.11f;
     public float Lifetime = 5.0f;
     public float FadeTime = 1.6f;
-    /// <summary>How close to real geometry a segment must be to count as TOUCHING it. Deliberately
-    /// tight - ink has to meet the stone, not hover near it. Spans hold by staying joined to ink that
-    /// is itself anchored (see LinkReach), not by being vaguely close to scenery.</summary>
-    public float AnchorRadius = 0.4f;
+    /// <summary>How close to real geometry a segment must be to count as TOUCHING it. Ink has to MEET
+    /// the stone, not hover near it: at 0.4 this was a halo six art pixels deep, so ink anchored in
+    /// plainly visible air beside any wall or pillar - most obviously next to the signs, which is what
+    /// made it look like their colliders were to blame. Just over the ink's own half-thickness, so a
+    /// stroke whose edge kisses the rock holds and one drawn a body-width off it does not. Spans hold by
+    /// staying joined to ink that is itself anchored (see LinkReach), not by being near scenery.</summary>
+    public float AnchorRadius = 0.2f;
     /// <summary>How far a segment may sit from already-anchored ink and still join onto it. A little
     /// over Spacing, so an unbroken stroke chains, but a fresh stroke in open air does not.</summary>
     public float LinkReach = 0.75f;
@@ -275,7 +278,13 @@ public sealed class AetherInk : EntityScript
         DecaySoak(deltaTime);
 
         // 1. Drawing input -> lay evenly spaced segments along the cursor's path.
-        if (!GameState.Won)
+        //
+        // Gated on the game CLOCK, not on a list of things that might be open. Scripts keep ticking at
+        // dt = 0 while the world is frozen, so a dialogue or the pause menu did not stop you drawing -
+        // you could ink a bridge through a conversation. Dialogue and pause both stop the clock, so
+        // asking the clock covers them and every future modal that does the same, without AetherInk
+        // having to know what a dialogue is.
+        if (!GameState.Won && !Time.IsPaused)
         {
             if (Input.IsMousePressed(MouseButton.Left))
             {
@@ -293,7 +302,13 @@ public sealed class AetherInk : EntityScript
                 Reclaim(new Vector2(c.X, c.Y));
             }
 
-            bool drawing = Input.IsMouseDown(MouseButton.Left) && Aether > 0.0f;
+            // "Wants to draw" and "is drawing" are different things, and conflating them made the well
+            // bottomless: the frame the meter hit zero, `drawing` went false, the refill branch below ran
+            // even though the button was still held, and the next frame bought another segment. Holding
+            // the button down drew forever at the refill rate. Spending and recovering are now mutually
+            // exclusive states of the same verb - let go to recover.
+            bool wantsToDraw = Input.IsMouseDown(MouseButton.Left);
+            bool drawing = wantsToDraw && Aether > 0.0f;
             if (drawing)
             {
                 Vector3 cursor = Camera.ScreenToWorld(Input.MousePosition);
@@ -326,11 +341,19 @@ public sealed class AetherInk : EntityScript
                     _dripCd = 0.11f + 0.08f * (0.5f + 0.5f * MathF.Sin(_t * 27.3f)); // ~0.11-0.19s, jittered
                 }
             }
-            else if (IsOnRealGround())
+            else if (!wantsToDraw && IsOnRealGround())
             {
-                // Refill only on real terrain (crystals handled by AetherCrystal) - never on your own ink.
+                // Refill only on real terrain (crystals handled by AetherCrystal) - never on your own ink,
+                // and never while the draw button is still down.
                 Aether = Math.Min(MaxAether, Aether + RefillPerSecond * deltaTime);
             }
+        }
+        else
+        {
+            // Hold the button through a dialogue and the cursor will have moved a long way by the time
+            // the clock restarts. Forget where the stroke was so it resumes from the new position
+            // instead of laying one enormous segment across whatever is in between.
+            _hasLast = false;
         }
 
         // 2. Age segments, expire the dead (and their colliders), and pack the live ones into the
@@ -403,8 +426,9 @@ public sealed class AetherInk : EntityScript
         }
 
         // 3. The anchor guide rides in the same pass, so the cursor's verdict is drawn with the ink it
-        //    is predicting. Suppressed once the level is won - there is nothing left to build.
-        if (!GameState.Won)
+        //    is predicting. Suppressed whenever the ink verb is - nothing to predict when you cannot
+        //    draw, and a verdict marker floating over a dialogue box is just noise.
+        if (!GameState.Won && !Time.IsPaused)
         {
             // A cursor outside the game view projects to nonsense (thousands of units out in the
             // editor, where the mouse spends most of its time over panels). Nothing to guide there, and
@@ -442,7 +466,12 @@ public sealed class AetherInk : EntityScript
             return false;
         }
 
-        bool anchored = EvaluateAnchor(mid);
+        // Test the WHOLE segment, not just its midpoint. A midpoint-only test made the cursor guide a
+        // liar: the guide answers for the point under your hand, while the segment it predicts spans
+        // half a Spacing either side of it, so ink whose END grazed a wall was refused at a spot the
+        // cursor had just called good. A segment that touches stone anywhere along its length is
+        // touching stone.
+        bool anchored = EvaluateAnchor(mid) || EvaluateAnchor(a) || EvaluateAnchor(b);
         _strokeLaid++;
         if (anchored) { _strokeHeld++; }
         else if (InDeadZone(mid)) { _strokeHitDeadRock = true; }
@@ -672,8 +701,12 @@ public sealed class AetherInk : EntityScript
     /// Returns the world AABB of everything it emitted so the caller can grow the pass quad.</summary>
     private void PackGuide(Vector2 cursor, float deltaTime, ref float minX, ref float minY, ref float maxX, ref float maxY)
     {
+        // The guide has to answer the same question LaySegment will, or it is worse than no guide. Being
+        // INSIDE rock is a refusal too - TouchesTerrain is happily true deep inside a block, so the
+        // cursor used to promise a hold at a spot where laying is rejected outright for being buried.
         bool dead = InDeadZone(cursor);
-        bool hold = !dead && EvaluateAnchor(cursor);
+        bool buried = !dead && IsInsideSolid(cursor);
+        bool hold = !dead && !buried && EvaluateAnchor(cursor);
         float kind = hold ? KindGuideHold : KindGuideMiss;
 
         // The marks are made OF INK, not out of targeting chrome. A crosshair and a set of corner
@@ -721,6 +754,11 @@ public sealed class AetherInk : EntityScript
             // player stops hunting for a better angle into it.
             float d = radius * 0.95f;
             Emit(cursor + new Vector2(-d, -d * 0.35f), cursor + new Vector2(d, d * 0.35f), 0.05f, 1.0f, 1.0f, kind);
+        }
+        else if (buried)
+        {
+            // Buried in rock. Also nothing to point at - the stone you would be reaching for is the
+            // stone you are inside - so the beads say no on their own.
         }
         else if (!hold && TryFindNearestStone(cursor, deltaTime, out Vector2 stone))
         {
@@ -795,7 +833,9 @@ public sealed class AetherInk : EntityScript
     /// indexed off zero so the straight-down/left/right/up samples are always taken.</summary>
     private bool TouchesTerrain(Vector2 p)
     {
-        const float Step = 0.2f;
+        // Fine enough that the disc is actually a disc. At the old 0.2 step a 0.2 radius degenerates to
+        // a five-point cross that misses stone sitting diagonally off the point.
+        const float Step = 0.07f;
         int n = (int)MathF.Ceiling(AnchorRadius / Step);
         for (int iy = -n; iy <= n; iy++)
         {
