@@ -1494,7 +1494,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     sorting_layer = -20
     texture = 'project://assets/textures/dead_stone.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 4.0, 3.0 ]
     visible = true
 
     [[entities.scripts]]
@@ -2476,13 +2476,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     order_in_layer = -5
     pivot = [ 0.5, 0.5 ]
     pixel_art = true
-    pixel_size = [ 96.0, 72.0 ]
+    pixel_size = [ 96.0, 64.0 ]
     pixel_snap = false
     pixels_per_unit = 16.0
     sorting_layer = -20
     texture = 'project://assets/textures/dead_stone.png'
     tint = [ 1.0, 1.0, 1.0, 1.0 ]
-    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 3.0, 2.0 ]
     visible = true
 
     [[entities.scripts]]
