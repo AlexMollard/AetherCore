@@ -287,6 +287,27 @@ namespace aether::editor
 		{
 			if (m.name == method)
 			{
+				// Enforce the schema's required fields BEFORE the handler runs. Handlers read declared
+				// fields with the plain `p["key"]`, which on a const json asserts when the key is absent -
+				// so a caller that merely misspelled an argument took the whole editor down with it. The
+				// required list was already declared on every method and simply nobody checked it; doing
+				// it here covers every method at once instead of hardening call sites one at a time.
+				if (const auto req = m.paramsSchema.find("required"); req != m.paramsSchema.end() && req->is_array())
+				{
+					for (const auto& key: *req)
+					{
+						if (!key.is_string())
+						{
+							continue;
+						}
+						const auto name = key.get<std::string>();
+						if (!params.is_object() || !params.contains(name))
+						{
+							return json{{"error", "missing required parameter: " + name}}.dump();
+						}
+					}
+				}
+
 				MethodContext ctx{m_services, m_frameIndex.load(std::memory_order_relaxed), m_fps.load(std::memory_order_relaxed)};
 				return m.handler(params, ctx).dump();
 			}
