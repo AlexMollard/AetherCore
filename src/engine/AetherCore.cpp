@@ -439,10 +439,8 @@ namespace aether
 		// Input the game reads, so a project never has to remember to hide the real cursor when it turns
 		// its own on - or to put it back when it turns it off.
 		m_cursor.SetPosition(input.GetMousePos());
-		// The game only owns the pointer where the game actually is. Hosted in a tool that means the game
-		// viewport and nowhere else - the editor's panels need the real one back the instant you leave.
-		// A shipped game sets no viewport transform, so it owns the pointer everywhere.
-		m_cursor.SetSuppressed(input.HasMouseViewportTransform() && !input.IsMouseViewportInputActive());
+		// Suppression is not inferred here: only a host tool knows whether the game is actually presenting
+		// (see ViewportPanel). A game running for real is never suppressed, which is the default.
 		input.SetOsCursorVisible(m_cursor.WantsOsCursor());
 
 		if (m_uiOverlay)

@@ -1,4 +1,5 @@
 #include "ViewportPanel.hpp"
+#include "ui/CursorService.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -2299,6 +2300,17 @@ namespace aether::editor
 		// into camera capture. Toolbar hover is intentionally ignored: the camera
 		// should only lose the mouse while a control/popup/gizmo is actually active.
 		context.Get<Input>().SetMouseViewportInputActive(editorViewportInteractive && mouseOverImage && !gizmoActive && !toolbarControlActive);
+
+		// The game's pointer belongs to the game: it exists inside a live play session, over the game
+		// image, and nowhere else. Decided here because this is the only place that knows both facts -
+		// the engine cannot tell "hosted in an editor" from "running for real", and guessing it from the
+		// viewport input flag gets it exactly backwards (that flag means EDIT-mode camera navigation, so
+		// the pointer appeared over the editor and vanished the moment you pressed Play).
+		if (auto* cursor = context.TryGet<ui::CursorService>())
+		{
+			const bool playing = viewportPlayState != nullptr && viewportPlayState->IsPlaying();
+			cursor->SetSuppressed(!(playing && mouseOverImage));
+		}
 
 		if (viewportSettingsChanged)
 		{

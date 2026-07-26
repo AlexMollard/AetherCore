@@ -269,7 +269,31 @@ namespace aether::ui
 	{
 		out.clear();
 		materials.clear();
+
+		// Canvas order decides what draws over what, and ECS iteration order is unspecified: entt is
+		// free to reshuffle a view whenever components are created or destroyed. Walking canvases in
+		// whatever order the view happened to hand back meant the compositing order could change from
+		// frame to frame - a dialogue typing itself out, or a pause menu opening, was enough to swap the
+		// HUD in front of or behind the screen it shares with, one frame at a time. That reads as the
+		// top-left UI flickering and the ink well flashing, and no amount of looking at the ink well
+		// explains it, because the ink well was never the thing changing.
+		//
+		// So state the order instead of inheriting it: sortBias first - the field exists for exactly
+		// this and was being ignored - then entity id, so canvases at equal bias keep a fixed order
+		// rather than trading places when a neighbour appears. (The effects list above already learned
+		// this lesson; the batched shapes never did.)
+		static std::vector<std::pair<int, Entity>> canvases;
+		canvases.clear();
+		world.View<UICanvas>().each([&](entt::entity canvasEntity, UICanvas& canvas)
+		        { canvases.emplace_back(canvas.sortBias, World::FromEntt(canvasEntity)); });
+		std::sort(canvases.begin(), canvases.end(),
+		        [](const std::pair<int, Entity>& a, const std::pair<int, Entity>& b)
+		        { return a.first != b.first ? a.first < b.first : a.second.id < b.second.id; });
+
 		int layer = 0;
-		world.View<UICanvas>().each([&](entt::entity canvasEntity, UICanvas&) { Walk(world, World::FromEntt(canvasEntity), fonts, textures, layer, out, materials); });
+		for (const auto& [bias, canvas]: canvases)
+		{
+			Walk(world, canvas, fonts, textures, layer, out, materials);
+		}
 	}
 } // namespace aether::ui

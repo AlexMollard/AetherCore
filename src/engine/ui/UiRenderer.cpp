@@ -553,9 +553,9 @@ namespace aether::ui
 	// canvas can sort above, is a pointer that will fail at the worst moment.
 	namespace
 	{
-		// Above every element any canvas can produce; the command is also appended last, so order and
-		// layer agree.
-		constexpr int kCursorLayer = 1 << 20;
+		// Above every element any canvas can produce. Layers count up from zero per canvas walk, so this
+		// only has to clear a realistic element count - not be astronomically large.
+		constexpr int kCursorLayer = 1 << 16;
 	} // namespace
 
 	void UiRenderer::AppendCursor()
@@ -589,7 +589,7 @@ namespace aether::ui
 
 		UiDrawCommand cmd;
 		cmd.type = kShapeTexturedRect;
-		cmd.data0 = {pos.x, pos.y, pos.x + look.size, pos.y + look.size};
+		cmd.data0 = {pos.x, pos.y, look.size, look.size}; // data0.zw is SIZE, not the far corner
 		cmd.data1 = {0.f, 0.f, 1.f, 1.f};
 		cmd.color = glm::vec4(1.f);
 		cmd.layer = kCursorLayer;
