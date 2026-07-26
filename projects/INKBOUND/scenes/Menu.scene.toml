@@ -65,6 +65,9 @@ parent = -1
     [[entities.scripts]]
     type = 'MenuShell'
 
+    [[entities.scripts]]
+    type = 'CursorController'
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'ShellScanlines'

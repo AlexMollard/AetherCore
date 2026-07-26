@@ -52,6 +52,19 @@ AE_SCRIPT_API Vec2 aether_input_mouse_delta()
 	return {p.x, p.y};
 }
 
+// A game that draws its own pointer has to be able to put the OS one away. Lives here rather than in
+// a window API because GLFW models cursor visibility as an input mode, and Input already owns the
+// window handle - no new plumbing, and nothing new to reach through from a script.
+AE_SCRIPT_API void aether_input_set_os_cursor_visible(std::int32_t visible)
+{
+	ActiveContext().input->SetOsCursorVisible(visible != 0);
+}
+
+AE_SCRIPT_API std::int32_t aether_input_get_os_cursor_visible()
+{
+	return ActiveContext().input->IsOsCursorVisible() ? 1 : 0;
+}
+
 AE_SCRIPT_API Vec2 aether_input_scroll_delta()
 {
 	const glm::vec2 p = ActiveContext().input->GetScrollDelta();

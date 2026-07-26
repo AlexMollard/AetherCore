@@ -309,4 +309,14 @@ namespace aether
 			self->m_pendingChars += static_cast<char>(0x80u | (codepoint & 0x3Fu));
 		}
 	}
+	void Input::SetOsCursorVisible(bool visible)
+	{
+		if (m_window == nullptr || visible == m_osCursorVisible)
+		{
+			return;
+		}
+		m_osCursorVisible = visible;
+		glfwSetInputMode(m_window, GLFW_CURSOR, visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+	}
+
 } // namespace aether

@@ -357,6 +357,13 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial Vector2 aether_input_scroll_delta();
 
+    [LibraryImport(Lib)]
+    internal static partial void aether_input_set_os_cursor_visible(int visible);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_get_os_cursor_visible();
+
+
     // ── Entity & scene (Module 01) ──────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial void aether_entity_set_parent(uint child, uint parent);

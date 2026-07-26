@@ -23,6 +23,9 @@ parent = -1
     [[entities.scripts]]
     type = 'PauseController'
 
+    [[entities.scripts]]
+    type = 'CursorController'
+
 [[entities]]
 name = 'HudCoinIcon'
 parent = 0

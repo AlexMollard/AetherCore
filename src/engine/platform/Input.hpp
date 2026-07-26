@@ -187,6 +187,18 @@ namespace aether
 			m_mouseCaptured = captured;
 		}
 
+		// Hide the OS pointer so a game can draw its own. HIDDEN, not DISABLED: the pointer keeps its
+		// real screen position and reports normally, it simply is not painted - so mouse input, window
+		// chrome and alt-tab all behave exactly as before. DISABLED would lock the pointer to the window
+		// and switch to raw virtual motion, which is what an FPS wants and what a game drawing a pointer
+		// at a true screen position very much does not.
+		void SetOsCursorVisible(bool visible);
+
+		[[nodiscard]] bool IsOsCursorVisible() const
+		{
+			return m_osCursorVisible;
+		}
+
 		[[nodiscard]] bool IsMouseCaptured() const
 		{
 			return m_mouseCaptured;
@@ -263,6 +275,7 @@ namespace aether
 		static constexpr int kMaxMouseButtons = 8;
 
 		GLFWwindow* m_window = nullptr;
+		bool m_osCursorVisible = true;
 
 		std::array<bool, kMaxKeys> m_currKeys{};
 		std::array<bool, kMaxKeys> m_prevKeys{};

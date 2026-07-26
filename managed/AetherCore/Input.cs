@@ -27,6 +27,15 @@ public static class Input
     /// <summary>Scroll-wheel movement since the previous frame (y = vertical).</summary>
     public static Vector2 ScrollDelta => Native.aether_input_scroll_delta();
 
+    /// <summary>Whether the operating system draws its own pointer. Turn it off to draw your own -
+    /// the pointer keeps its real screen position and keeps reporting normally, it is just not
+    /// painted, so nothing about input, window chrome or alt-tab changes.</summary>
+    public static bool OsCursorVisible
+    {
+        get => Native.aether_input_get_os_cursor_visible() != 0;
+        set => Native.aether_input_set_os_cursor_visible(value ? 1 : 0);
+    }
+
     public static bool IsMouseDown(MouseButton button) => Native.aether_input_mouse_down((int)button) != 0;
     public static bool IsMousePressed(MouseButton button) => Native.aether_input_mouse_pressed((int)button) != 0;
     public static bool IsMouseReleased(MouseButton button) => Native.aether_input_mouse_released((int)button) != 0;
