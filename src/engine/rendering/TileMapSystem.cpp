@@ -218,7 +218,12 @@ namespace aether
 
 								// Solid cells cast 2D shadows. Carry the tile's texture region so the occluder
 								// mask samples the ARTWORK's alpha - shadows follow the drawn shape, not the cell.
-								if (tile->collision != TileCollisionKind::None)
+								//
+								// The LAYER has to be a collision layer too, exactly as IsWorldPointSolid requires.
+								// Testing only the tile meant a cell painted on a non-colliding backdrop threw hard
+								// shadows and swallowed light while the player walked straight through it - a shadow
+								// with nothing casting it. Solidity and shadow-casting answer to the same rule.
+								if (layer.collision && tile->collision != TileCollisionKind::None)
 								{
 									const glm::vec2 worldCentre = glm::vec2(entityTransform * glm::vec4(cellCentre, 0.0f, 1.0f));
 									std::uint32_t occFlags = 0;
