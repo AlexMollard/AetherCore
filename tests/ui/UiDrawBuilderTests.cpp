@@ -226,3 +226,13 @@ TEST_CASE("Builder emits parent image before child image")
 	CHECK(cmds[1].color.g == doctest::Approx(1.f));
 	CHECK(cmds[1].layer == 1);
 }
+
+TEST_CASE("Draw commands are unclipped by default")
+{
+	static_assert(sizeof(ui::UiDrawCommand) == 80, "must match DrawCommandData std430 layout");
+
+	const ui::UiDrawCommand cmd;
+	CHECK((cmd.flags & ui::kFlagClip) == 0u);
+	CHECK(cmd.clipRect.x == doctest::Approx(0.f));
+	CHECK(cmd.clipRect.z == doctest::Approx(0.f));
+}

@@ -25,6 +25,8 @@ struct BuildPush
 // Single dispatch of kThreads threads.  Loads elements into groupshared memory,
 // runs a full in-workgroup bitonic sort, then writes back.
 
+// 256 x sizeof(DrawCommandData) = 256 x 80 = 20 KB of groupshared, against a 32 KB floor.
+// Growing DrawCommandData past 128 bytes/element would exceed it - size the sort, don't assume.
 groupshared DrawCommandData g_LocalData[kMaxLocalSort];
 
 [shader("compute")]

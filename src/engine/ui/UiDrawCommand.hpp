@@ -24,6 +24,9 @@ namespace aether::ui
 	// (e.g. a toggle's knob, which must stay a crisp sliding dot instead of dissolving into the ink
 	// fill). UiDrawBuilder honours this while tagging, then clears the bit so it never reaches the GPU.
 	inline constexpr std::uint32_t kFlagNoMaterial = 1u << 1;
+	// Clip rect in pixels, honoured only when this bit is set. A flag rather than a sentinel
+	// so a zero-size clip legitimately hides content instead of reading as "unclipped".
+	inline constexpr std::uint32_t kFlagClip = 1u << 2;
 	inline constexpr std::uint32_t kShaderIdShift = 8u;
 	inline constexpr std::uint32_t kShaderIdMask = 0xFFu;
 
@@ -52,11 +55,16 @@ namespace aether::ui
 		glm::vec4 data0{0.f};
 		glm::vec4 data1{0.f};
 		glm::vec4 color{1.f};
+		// (x, y, w, h) px. Read by the fragment stage only when kFlagClip is set; a fragment
+		// whose SV_Position falls outside is discarded.
+		glm::vec4 clipRect{0.f};
+		// Field order below is load-bearing: it must stay byte-for-byte with DrawCommandData
+		// in shaders/include/UIStructs.slangh (std430).
 		std::uint32_t type = kShapeRect;
 		std::int32_t layer = 0;
 		std::uint32_t textureSlot = 0;
-		std::uint32_t flags = 0; // bit 0 = pixel-art (nearest) sampling
+		std::uint32_t flags = 0;
 	};
 
-	static_assert(sizeof(UiDrawCommand) == 64, "must match DrawCommandData std430 layout");
+	static_assert(sizeof(UiDrawCommand) == 80, "must match DrawCommandData std430 layout");
 } // namespace aether::ui

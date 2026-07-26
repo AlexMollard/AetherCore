@@ -8,6 +8,7 @@ struct DrawCommandData
     float4 data0;        // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1
     float4 data1;        // Rect/Line: cornerRadius/thickness | TexturedRect: u0,v0,u1,v1
     float4 color;        // RGBA tint
+    float4 clipRect;     // x,y,w,h px; honoured only when (flags & 4) is set
     uint   type;
     int    layer;
     uint   textureSlot;  // bindless slot (TexturedRect only)
