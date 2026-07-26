@@ -67,7 +67,15 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float time = pc.params.x;
     const float fill = saturate(pc.params.y);
 
-    const float2 p = input.local;
+    // Snap every sample to a coarse ART GRID before anything is computed with it, exactly as
+    // ink_field.slang does for the ink in the world. Everything downstream then evaluates once per
+    // cell instead of once per screen pixel, so the silhouette, the meniscus, the strands and the
+    // glass all come out as chunky uniform blocks. Without this the well was a smooth high-resolution
+    // render sitting in a game made of 16-pixel tiles - the one object on screen that was not pixel
+    // art, which is exactly how it read.
+    const float2 kCells = float2(20.0, 26.0); // art pixels across the widget
+    const float2 raw = input.local;
+    const float2 p = (floor((raw * 0.5 + 0.5) * kCells) + 0.5) / kCells * 2.0 - 1.0;
     const float ux = p.x * 0.5 + 0.5;          // 0..1 across
     const float uy = 1.0 - (p.y * 0.5 + 0.5);  // 0 at the bottom, 1 at the top
 
@@ -80,7 +88,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     halfW -= 0.40 * smoothstep(0.52, 0.88, uy);                        // shoulders pull in
     halfW += 0.09 * smoothstep(0.90, 1.0, uy);                         // a small lip, not a tabletop
     halfW *= 1.0 - 0.55 * pow(saturate(1.0 - uy / 0.13), 2.0);         // round the base off the floor
-    halfW += (vnoise(float2(uy * 7.0, 3.7)) - 0.5) * 0.035;            // wobble in the blown glass
+    // No edge wobble any more: the art grid already gives the silhouette its handmade steps, and
+    // noise on top of a 20-cell profile just reads as a ragged, broken outline.
     if (abs(p.x) > halfW) { discard; }
 
     const float inner = smoothstep(halfW, halfW - 0.13, abs(p.x));     // 0 at the glass, 1 inside
@@ -97,7 +106,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float3 glowCol = lerp(float3(0.22, 0.72, 0.95), float3(0.95, 0.30, 0.12), sour);
 
     const float depth = saturate((surface - uy) / max(surface, 0.001));
-    float3 ink = lerp(float3(0.045, 0.075, 0.100), float3(0.010, 0.014, 0.022), depth); // black body
+    float3 ink = lerp(float3(0.060, 0.098, 0.130), float3(0.014, 0.020, 0.030), depth); // black body
 
     // Something turning over down there: slow sediment, and a faint bloom of light from under the
     // skin that never quite resolves into anything.
@@ -130,7 +139,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     col *= lerp(0.40, 1.0, inner);
 
     const float wall = smoothstep(halfW - 0.15, halfW - 0.02, abs(p.x));
-    col = lerp(col, float3(0.115, 0.140, 0.175), wall * 0.9);                   // dull, dirty glass
+    col = lerp(col, float3(0.180, 0.215, 0.260), wall * 0.95);                  // dull glass, but a readable rim
 
     // Heavy lip, and a cold catch-light on its rim.
     const float lip = smoothstep(0.90, 0.96, uy);
@@ -144,6 +153,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     // Sit it on a shadow.
     col *= lerp(0.45, 1.0, smoothstep(0.0, 0.09, uy));
+
+    // Posterise to a small palette. Pixel art is a grid AND a limited set of colours; keeping the
+    // full gradient would leave soft banding inside otherwise crisp blocks.
+    col = floor(col * 16.0 + 0.5) / 16.0;
 
     return float4(col, input.color.a);
 }
