@@ -1,7 +1,5 @@
 #include "net/NetSnapshot.hpp"
 
-#include <unordered_set>
-
 #include "net/NetComponents.hpp"
 #include "scene/World.hpp"
 
@@ -42,13 +40,6 @@ namespace aether::net
 			return false;
 		}
 
-		// Packs a (componentIndex, fieldIndex) pair into one key for the replicated-field
-		// lookup set. Both indices are std::uint16_t, so they fit side by side in 32 bits
-		// with no collisions.
-		std::uint32_t PackFieldKey(std::uint16_t componentIndex, std::uint16_t fieldIndex)
-		{
-			return (static_cast<std::uint32_t>(componentIndex) << 16) | fieldIndex;
-		}
 	} // namespace
 
 	bool SnapshotCache::Changed(const FieldKey& key, const reflect::FieldValue& value)
@@ -125,16 +116,6 @@ namespace aether::net
 	void ApplySnapshot(World& world, const ReplicationSchema& schema,
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet)
 	{
-		// The set of (componentIndex, fieldIndex) pairs actually marked AE_FIELD_REP.
-		// Catalog bounds-checking alone lets a peer name ANY reflected field in the whole
-		// engine; only fields in the schema may be written.
-		std::unordered_set<std::uint32_t> replicatedFields;
-		replicatedFields.reserve(schema.fields.size());
-		for (const ReplicatedField& field: schema.fields)
-		{
-			replicatedFields.insert(PackFieldKey(field.componentIndex, field.fieldIndex));
-		}
-
 		ByteReader r{packet};
 		const std::uint16_t count = r.U16();
 
@@ -165,7 +146,9 @@ namespace aether::net
 				return;
 			}
 
-			if (!replicatedFields.contains(PackFieldKey(componentIndex, fieldIndex)))
+			// Catalog bounds-checking alone lets a peer name ANY reflected field in the
+			// whole engine; only fields actually marked AE_FIELD_REP may be written.
+			if (!schema.IsReplicated(componentIndex, fieldIndex))
 			{
 				continue; // in range, but not a field this schema allows a peer to set
 			}

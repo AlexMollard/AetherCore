@@ -23,6 +23,7 @@ namespace aether::net
 				        .fieldIndex = static_cast<std::uint16_t>(f),
 				        .type = field.type,
 				});
+				schema.fieldKeys.insert(PackFieldKey(static_cast<std::uint16_t>(c), static_cast<std::uint16_t>(f)));
 			}
 		}
 		return schema;
