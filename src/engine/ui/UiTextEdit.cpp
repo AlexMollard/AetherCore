@@ -25,7 +25,8 @@ namespace aether::ui
 			case TextContentType::Alphanumeric:
 				return digit || alpha;
 			case TextContentType::Host:
-				return digit || alpha || c == '.' || c == ':';
+				// '-' is legal in DNS labels (my-host.local); ':' carries the port or an IPv6 literal.
+				return digit || alpha || c == '.' || c == ':' || c == '-';
 			case TextContentType::Any:
 				break;
 			}

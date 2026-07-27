@@ -50,6 +50,9 @@ TEST_CASE("FilterInsert honours the content type")
 	ip.contentType = ui::TextContentType::Host;
 	CHECK(ui::FilterInsert(s, ip, "192.168.0.1:7777") == "192.168.0.1:7777");
 	CHECK(ui::FilterInsert(s, ip, "host name") == "hostname");
+	CHECK(ui::FilterInsert(s, ip, "my-host.local:7777") == "my-host.local:7777"); // DNS label hyphen
+	CHECK(ui::FilterInsert(s, ip, "fe80::1") == "fe80::1");                       // IPv6 literal
+	CHECK(ui::FilterInsert(s, ip, "a/b?c") == "abc");                             // still filters
 }
 
 TEST_CASE("FilterInsert intersects contentType with allowedChars")
@@ -79,6 +82,12 @@ TEST_CASE("FilterInsert respects maxLength against the current text")
 	// A selection is about to be replaced, so its length is budget.
 	s.selectionAnchor = 0;
 	CHECK(ui::FilterInsert(s, limits, "defg") == "defg");
+
+	// Already full with nothing selected: no budget at all, so everything is rejected.
+	s.text = "abcde";
+	s.caret = 5;
+	s.selectionAnchor = 5;
+	CHECK(ui::FilterInsert(s, limits, "f").empty());
 }
 
 TEST_CASE("InsertText inserts at the caret and advances it")

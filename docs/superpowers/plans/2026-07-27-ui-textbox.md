@@ -948,7 +948,7 @@ namespace aether::ui
 		Integer,
 		Decimal,
 		Alphanumeric,
-		Host // network address: letters, digits, dots, colons - "192.168.0.1:7777", "localhost", "fe80::1"
+		Host // network address: letters, digits, dots, colons, hyphens - "192.168.0.1:7777", "my-host.local", "fe80::1"
 	};
 
 	struct TextEditState
