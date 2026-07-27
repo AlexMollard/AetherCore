@@ -380,6 +380,89 @@ TEST_CASE("Text box emits a background and clips its glyphs to the padded inner 
 	}
 }
 
+TEST_CASE("Text box clip intersects an ancestor UIMask instead of replacing it")
+{
+	World w;
+	ui::FontRegistry fonts;
+	fonts.InjectForTest("Roboto", MakeMonoFont());
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	// A mask whose right edge cuts through the middle of the field.
+	Entity mask = w.Create();
+	auto& mr = w.Emplace<ui::UIRect>(mask);
+	mr.resolvedRect = {0, 0, 150, 800};
+	w.Emplace<ui::UIMask>(mask);
+	w.Emplace<HierarchyComponent>(mask);
+	ecs::SetParent(w, mask, canvas);
+
+	Entity field = w.Create();
+	auto& fr = w.Emplace<ui::UIRect>(field);
+	fr.resolvedRect = {100, 100, 200, 40};
+	auto& box = w.Emplace<ui::UITextBox>(field);
+	box.text = "AB";
+	box.pixelSize = 48.f;
+	box.padding = 8.f;
+	w.Emplace<HierarchyComponent>(field);
+	ecs::SetParent(w, field, mask);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	std::vector<ui::UiMaterialDraw> materials;
+	ui::BuildDrawCommands(w, cmds, materials, &fonts, nullptr);
+
+	REQUIRE(cmds.size() == 3); // background + two glyphs
+	for (std::size_t i = 1; i < cmds.size(); ++i)
+	{
+		CHECK((cmds[i].flags & ui::kFlagClip) != 0u);
+		// The glyphs already carry the box's own self-clip. Composing must INTERSECT it with the
+		// mask, not overwrite it: an overwrite would hand back the mask's full 150px width and let
+		// the text spill over the field's padding.
+		CHECK(cmds[i].clipRect.x == doctest::Approx(108)); // 100 + 8 padding, kept from the self-clip
+		CHECK(cmds[i].clipRect.z == doctest::Approx(42));  // 108 -> the mask's right edge at 150
+	}
+}
+
+TEST_CASE("Text box draws no selection highlight while it is not editing")
+{
+	World w;
+	ui::FontRegistry fonts;
+	fonts.InjectForTest("Roboto", MakeMonoFont());
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity field = w.Create();
+	auto& fr = w.Emplace<ui::UIRect>(field);
+	fr.resolvedRect = {100, 100, 200, 40};
+	auto& box = w.Emplace<ui::UITextBox>(field);
+	box.text = "AB";
+	box.pixelSize = 48.f;
+	// The selection an entry SelectAll left behind. Nothing clears it on a plain commit, so an
+	// idle unfocused field would otherwise sit there with a full-width highlight bar forever.
+	box.selectionAnchor = 0;
+	box.caret = 2;
+	w.Emplace<HierarchyComponent>(field);
+	ecs::SetParent(w, field, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	std::vector<ui::UiMaterialDraw> materials;
+	ui::BuildDrawCommands(w, cmds, materials, &fonts, nullptr);
+
+	CHECK(cmds.size() == 3); // background + two glyphs: no selection rect, no caret
+
+	box.editing = true;
+	std::vector<ui::UiDrawCommand> editing;
+	ui::BuildDrawCommands(w, editing, materials, &fonts, nullptr);
+	CHECK(editing.size() > cmds.size()); // ...but editing still highlights
+}
+
 TEST_CASE("Text box does not chop a font taller than its padded height")
 {
 	World w;
@@ -434,6 +517,7 @@ TEST_CASE("Text box emits a caret only while editing")
 	box.text = "AB";
 	box.pixelSize = 48.f;
 	box.caret = 2;
+	box.selectionAnchor = 2; // no selection either way, so the delta below is the caret alone
 	w.Emplace<HierarchyComponent>(field);
 	ecs::SetParent(w, field, canvas);
 

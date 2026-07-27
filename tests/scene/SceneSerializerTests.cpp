@@ -1379,6 +1379,29 @@ TEST_CASE("RestoreSceneInPlace round-trips the Play/Stop path without asserting"
     CHECK(world.GetRegistry().valid(World::ToEntt(spawned)) == false);
 }
 
+TEST_CASE("Restoring strips a live keyboard capture left behind by Play") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    World world = MakeWorld();
+    Entity field = world.Create();
+    world.Emplace<NameComponent>(field, NameComponent{.name = "Field"});
+    world.Emplace<TransformComponent>(field, TransformComponent{});
+
+    const SceneDescription snapshot = CaptureScene(world, mreg, treg);
+
+    // Stopping while a text box is mid-edit: the marker is runtime-only, so it is never in the
+    // snapshot and re-applying cannot overwrite it. Left behind, it wedges every editor shortcut
+    // that stands down for in-game text input, for the rest of the session.
+    world.Emplace<ui::UIKeyboardCapture>(field);
+
+    const std::vector<Entity> restored = RestoreSceneInPlace(snapshot, world, ApplySceneDeps{});
+    REQUIRE(restored.size() == 1);
+    CHECK_FALSE(world.Has<ui::UIKeyboardCapture>(restored[0]));
+}
+
 TEST_CASE("2D sprite authoring fields survive a scene save and load round trip") {
     FakeSlotSink sink(8);
     FakeTextureSink tsink;

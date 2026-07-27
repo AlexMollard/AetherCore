@@ -88,6 +88,10 @@ namespace aether::app::scene
 			RemoveIf<CollisionEvents2DComponent>(world, entity);
 			RemoveIf<Physics2DStateComponent>(world, entity);
 			RemoveIf<ui::UIImage>(world, entity);
+			// Runtime-only marker, so it is never in the snapshot and re-applying cannot overwrite
+			// it. Stopping while a text box is mid-edit would otherwise strand it: the sweep that
+			// releases it lives in UiTextBoxSystem, which stops ticking the moment Play ends.
+			RemoveIf<ui::UIKeyboardCapture>(world, entity);
 			RemoveIf<EffectRefComponent>(world, entity);
 			RemoveIf<EffectParamsComponent>(world, entity);
 			// Every genericSerialize component (Bob/Spin/Orbit/lights/tile map/day night/

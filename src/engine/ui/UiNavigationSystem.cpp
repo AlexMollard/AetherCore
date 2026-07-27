@@ -147,16 +147,22 @@ namespace aether::ui
 				break;
 			}
 		}
-		const glm::vec2 mouseDelta = input.GetMouseDelta();
-		if ((mouseDelta.x != 0.0f || mouseDelta.y != 0.0f) && hovered.IsValid())
-		{
-			focused = hovered;
-		}
-
 		// An element that has claimed the keyboard (a text field being edited) keeps the keys the
 		// nav system would otherwise spend: arrows must move its caret, Enter must submit to it.
 		// Tab is deliberately exempt - it is the guaranteed keyboard exit from a captured field.
+		// Computed BEFORE the hover steal below, so it describes the element that actually owns
+		// the keyboard right now rather than whatever the cursor happens to be sitting over.
 		const bool captured = focused.IsValid() && world.Has<UIKeyboardCapture>(focused);
+
+		// Mouse movement focuses what it passes over - but not while a field owns the keyboard.
+		// Losing focus is how UiTextBoxSystem ends editing, with no `submitted` and no `cancelled`,
+		// so an unguarded steal throws away a half-typed value the moment the mouse is nudged.
+		// A real click still moves focus (below): clicking away is the documented way out.
+		const glm::vec2 mouseDelta = input.GetMouseDelta();
+		if (!captured && (mouseDelta.x != 0.0f || mouseDelta.y != 0.0f) && hovered.IsValid())
+		{
+			focused = hovered;
+		}
 
 		// Keyboard: spatial move to the nearest selectable in the pressed direction.
 		if (focused.IsValid() && !captured)

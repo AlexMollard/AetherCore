@@ -364,9 +364,13 @@ AE_SCRIPT_API void aether_ui_begin_edit(std::uint32_t id)
 	// a one-shot channel UiTextBoxSystem consumes itself, so the entry logic (snapshot, select
 	// all, capture) still lives in exactly one place - the system - rather than being duplicated
 	// here.
-	if (auto* sel = world.TryGet<aether::ui::UISelectable>(e))
+	// Focus is exclusive, so it is cleared everywhere else rather than just set here - the same
+	// thing aether_ui_set_focus does. Leaving a second element focused makes the next
+	// UiNavigationSystem tick pick `prevFocused` by last-write-wins over an unspecified view
+	// order: if the other one wins, the box enters editing and loses it one frame later.
+	if (world.TryGet<aether::ui::UISelectable>(e) != nullptr)
 	{
-		sel->focused = true;
+		world.View<aether::ui::UISelectable>().each([&](entt::entity ent, aether::ui::UISelectable& s) { s.focused = (aether::World::FromEntt(ent) == e); });
 	}
 	if (auto* box = world.TryGet<aether::ui::UITextBox>(e))
 	{

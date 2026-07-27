@@ -223,7 +223,10 @@ namespace aether::ui
 		const float markY = r.y + 2.f;
 		const float markH = std::max(r.w - 4.f, 1.f);
 
-		if (!showPlaceholder && box.selectionAnchor != box.caret)
+		// Editing-only, alongside the caret below: a selection is a live editing affordance, and an
+		// idle unfocused field showing a highlight bar just reads as broken. UiTextBoxSystem also
+		// collapses the selection on the way out, so neither end relies on the other.
+		if (box.editing && !showPlaceholder && box.selectionAnchor != box.caret)
 		{
 			const int begin = std::min(box.caret, box.selectionAnchor);
 			const int end = std::max(box.caret, box.selectionAnchor);

@@ -147,6 +147,9 @@ namespace aether::ui
 				        box.lastClickTime = -1.0;
 				        SetCapture(world, e, false);
 				        box.pendingEdit = false; // leaving editing drops any stale request too
+				        // Entry does a SelectAll and only Escape ever undoes it, so an idle field
+				        // would otherwise keep a full-width highlight bar drawn over it forever.
+				        box.selectionAnchor = box.caret;
 			        }
 
 			        // Activation (click, or Enter/Space while focused) starts editing.
@@ -326,17 +329,19 @@ namespace aether::ui
 				        box.repeatKey = 0;
 				        box.lastClickTime = -1.0; // leaving and clicking back in places a caret, not a word select
 				        box.committedText = box.text;
-				        box.pendingEdit = false; // leaving editing drops any stale request too
+				        box.pendingEdit = false;         // leaving editing drops any stale request too
+				        box.selectionAnchor = box.caret; // an idle field must not keep a highlight bar drawn
 				        SetCapture(world, e, false);
 			        }
 		        });
 
 		// Sweep stranded capture markers, so "no capture without an editing box" is an invariant
 		// rather than something inferred from the paths above. The loop can only release capture for
-		// entities it still sees: an entity that lost its UITextBox or UIRect at runtime, or one whose
-		// `editing` was cleared from outside (it is a plain public field - the inspector and MCP both
-		// reach it), would keep the marker forever and navigation would go on handing arrows, Enter and
-		// Space to a dead element with no recovery short of a scene reload.
+		// entities it still sees, and three things put an entity out of its reach: losing the
+		// UITextBox, losing the UIRect (the inspector and MCP remove_component both do this), or
+		// having `editing` cleared from outside (it is a plain public field). Any of them would keep
+		// the marker forever and navigation would go on handing arrows, Enter and Space to a dead
+		// element with no recovery short of a scene reload.
 		//
 		// If a second widget type ever claims the keyboard (the dropdown/spinner UIKeyboardCapture was
 		// designed for), it has to be taught here too or this sweep will pull the marker out from under it.
@@ -344,7 +349,17 @@ namespace aether::ui
 		for (const entt::entity ent : world.View<UIKeyboardCapture>())
 		{
 			const Entity e = World::FromEntt(ent);
-			const auto* box = world.TryGet<UITextBox>(e);
+			auto* box = world.TryGet<UITextBox>(e);
+			// A box that lost its UIRect drops out of the driving view above, so its `editing`
+			// is never cleared from inside it. Clearing it here rather than only pulling the
+			// marker keeps the two in step: a rect put back later re-enters through activation,
+			// not through a stale `editing` flag nobody set.
+			if (box != nullptr && !world.Has<UIRect>(e))
+			{
+				box->editing = false;
+				box->dragging = false;
+				box->pendingEdit = false;
+			}
 			if (box == nullptr || !box->editing)
 			{
 				stranded.push_back(e);

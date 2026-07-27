@@ -222,6 +222,115 @@ TEST_CASE("A stranded keyboard capture is swept")
 	CHECK_FALSE(w.Has<ui::UIKeyboardCapture>(idle));
 }
 
+TEST_CASE("A capture marker outlives the driving view when the UIRect goes away")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).editing);
+	REQUIRE(w.Has<ui::UIKeyboardCapture>(e));
+
+	// The inspector or MCP remove_component drops the rect. The entity falls out of the
+	// <UITextBox, UIRect> driving view, so `editing` is never cleared from inside it - the sweep
+	// is the only thing left that can release the keyboard.
+	w.Remove<ui::UIRect>(e);
+	TickIdle(w, 0.016f);
+
+	CHECK_FALSE(w.Has<ui::UIKeyboardCapture>(e));
+}
+
+TEST_CASE("Typed characters reach the field")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).editing);
+
+	Sel(w, e).activated = false;
+
+	Input input;
+	input.SetSyntheticChars("192.168"); // seeds the live buffer directly: windowless, so no Update()
+	Tick(w, input, 0.016f);
+
+	CHECK(Box(w, e).text == "192.168");
+	CHECK(Box(w, e).changed);
+}
+
+TEST_CASE("maxLength and contentType reach the insert through the system")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).contentType = ui::TextContentType::Host;
+	Box(w, e).maxLength = 21;
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).editing);
+
+	Sel(w, e).activated = false;
+
+	Input typed;
+	typed.SetSyntheticChars("my host!"); // space and '!' are not host characters
+	Tick(w, typed, 0.016f);
+	CHECK(Box(w, e).text == "myhost");
+
+	// ...and the cap is carried through the same struct, so a dropped field here would be silent.
+	Input overflow;
+	overflow.SetSyntheticChars("0123456789012345678901234567890");
+	Tick(w, overflow, 0.032f);
+	CHECK(Box(w, e).text.size() == 21);
+}
+
+TEST_CASE("Leaving editing clears the selection")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "abc";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f); // entry selects all
+	REQUIRE(Box(w, e).editing);
+	REQUIRE(Box(w, e).selectionAnchor != Box(w, e).caret);
+
+	Sel(w, e).activated = false;
+
+	Input input;
+	input.SetSyntheticKey(static_cast<int>(Key::Enter), true);
+	Tick(w, input, 0.016f);
+
+	REQUIRE_FALSE(Box(w, e).editing);
+	// Nothing else clears it, and the draw builder would keep painting a highlight bar over an
+	// idle, unfocused field.
+	CHECK(Box(w, e).selectionAnchor == Box(w, e).caret);
+}
+
+TEST_CASE("Losing focus clears the selection too")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "abc";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).selectionAnchor != Box(w, e).caret);
+
+	Sel(w, e).activated = false;
+	Sel(w, e).focused = false;
+	TickIdle(w, 0.016f);
+
+	CHECK_FALSE(Box(w, e).editing);
+	CHECK(Box(w, e).selectionAnchor == Box(w, e).caret);
+}
+
 TEST_CASE("pendingEdit starts editing on the next tick and is consumed")
 {
 	World w;

@@ -60,11 +60,21 @@ namespace aether::editor
 		// shortcuts must stand down, exactly as they already do for ImGui's own text fields
 		// via WantTextInput. Same UIKeyboardCapture marker UiNavigationSystem yields to, so a
 		// future capture-owning widget gets this for free.
+		//
+		// The marker alone is not enough: the sweep that guarantees "no capture without an
+		// editing box" lives in UiTextBoxSystem, which only ticks while PLAYING. Stop while a
+		// field is mid-edit and the marker survives with nothing left to clear it, which would
+		// wedge every shortcut below for the rest of the editor session. So the gate is tied to
+		// LIVE state the editor can see for itself - a marker owner that really is editing.
 		bool GameKeyboardCaptured(World& world)
 		{
-			for ([[maybe_unused]] const auto captured: world.View<ui::UIKeyboardCapture>())
+			for (const auto captured: world.View<ui::UIKeyboardCapture>())
 			{
-				return true;
+				const auto* box = world.TryGet<ui::UITextBox>(World::FromEntt(captured));
+				if (box != nullptr && box->editing)
+				{
+					return true;
+				}
 			}
 			return false;
 		}

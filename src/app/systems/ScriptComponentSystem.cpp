@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 
+#include "IEngineRuntime.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -222,9 +223,15 @@ namespace aether::app
 		// see this frame's committed values + change flags.
 		if (sceneCtx->input != nullptr)
 		{
+			// Text editing runs on the UNSCALED clock - the same wall-clock counter Time.Unscaled
+			// reads. `elapsedTime` accumulates scaled dt, so at timeScale = 0 the text box derives
+			// dt = 0: held Backspace would delete exactly one character and the caret would freeze
+			// mid-blink. A text field on a pause menu or settings overlay is exactly where this
+			// lands. Falls back to the scaled clock when there is no runtime (headless tools).
+			const float uiTime = sceneCtx->engineRuntime != nullptr ? static_cast<float>(sceneCtx->engineRuntime->RealElapsedSeconds()) : sceneCtx->elapsedTime;
 			aether::ui::UiNavigationSystem::Update(world, *sceneCtx->input);
 			aether::ui::UiWidgetSystem::Update(world, *sceneCtx->input, static_cast<float>(sceneCtx->elapsedTime));
-			aether::ui::UiTextBoxSystem::Update(world, *sceneCtx->input, m_services.TryGet<aether::ui::FontRegistry>(), static_cast<float>(sceneCtx->elapsedTime));
+			aether::ui::UiTextBoxSystem::Update(world, *sceneCtx->input, m_services.TryGet<aether::ui::FontRegistry>(), uiTime);
 		}
 
 		std::vector<Entity> scripted;
