@@ -9,6 +9,7 @@
 #include <entt/entt.hpp>
 
 #include "net/NetComponents.hpp"
+#include "net/NetInput.hpp"
 #include "net/NetRelevancy.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
@@ -16,6 +17,7 @@
 #include "net/NetSnapshot.hpp"
 #include "net/NetSpawn.hpp"
 #include "net/NetworkContext.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
@@ -349,6 +351,31 @@ namespace aether::net
 			return;
 		}
 
+		case NetMessage::Input:
+		{
+			// One direction only, unlike Rpc: input travels client-to-host and nothing
+			// else, so the role gate belongs here and there is no target byte for a
+			// sender to choose. A client receiving one is a peer trying to drive this
+			// machine's simulation, which nothing is ever allowed to do.
+			if (!context.IsHost())
+			{
+				return;
+			}
+			ByteReader reader{payload};
+			const std::optional<InputMessage> msg = DecodeInput(reader);
+			if (!msg.has_value())
+			{
+				return;
+			}
+			if (const RpcBridge* bridge = context.Rpcs())
+			{
+				// The ownership gate (a client may drive only what it owns) and the
+				// staleness gate both live in ApplyInput.
+				ApplyInput(world, context.Session(), *bridge, *msg, peer, context.InputGate());
+			}
+			return;
+		}
+
 		case NetMessage::Welcome:
 		{
 			if (!context.IsClient())
@@ -411,8 +438,14 @@ namespace aether::net
 		const ConnectionId local = context.Session().LocalConnection();
 		const float now = context.Now();
 
+		// Entities whose predicted pose this tick actually moved. Collected rather
+		// than pushed into physics inline: the push is what makes the correction
+		// survive the frame at all (see the note below), and it needs one lookup of
+		// the physics system rather than one per entity.
+		std::vector<Entity> corrected;
+
 		world.View<NetworkIdentity, NetworkTransform, TransformComponent>().each(
-		        [&](entt::entity, NetworkIdentity& identity, NetworkTransform& tuning, TransformComponent& transform)
+		        [&](entt::entity ent, NetworkIdentity& identity, NetworkTransform& tuning, TransformComponent& transform)
 		        {
 			        if (identity.netId == 0)
 			        {
@@ -467,10 +500,14 @@ namespace aether::net
 				        // from lossy trig and re-inject float error into channels this
 				        // branch never meant to touch (see the "position" field setter's
 				        // note in CoreComponents.reflect.cpp).
-				        const glm::vec3 corrected = EaseToward(rendered.position, state.authoritativePosition,
+				        const glm::vec3 eased = EaseToward(rendered.position, state.authoritativePosition,
 				                tuning.correctionRate, dt, tuning.snapDistance);
 				        transform.localToWorld = rendered.matrix;
-				        transform.localToWorld[3] = glm::vec4(corrected, 1.f);
+				        transform.localToWorld[3] = glm::vec4(eased, 1.f);
+				        if (Differs(eased, rendered.position))
+				        {
+					        corrected.push_back(World::FromEntt(ent));
+				        }
 				        return;
 			        }
 
@@ -496,6 +533,51 @@ namespace aether::net
 			        }
 			        transform.localToWorld = ComposeTransform(sample->position, sample->rotation, applied.scale);
 		        });
+
+		PushCorrectionsToPhysics(world, corrected);
+	}
+
+	// Why this exists at all, and why NOTHING above it was enough on its own.
+	//
+	// A locally-owned 2D body deliberately stays DYNAMIC on a client - it is the one
+	// entity this peer predicts, so SyncSimulationAuthority leaves it on local
+	// simulation (see the note there). Dynamic is also the exact body type
+	// Physics2DSystem::SyncTransforms writes the transform back FOR, from the Box2D
+	// pose, later in the same frame. So the ease/snap computed above was being
+	// recomputed correctly every single tick and then overwritten before anything
+	// could render it: the owner branch ran, the correction was real, and the frame
+	// ended with the body exactly where prediction had put it. That is why an error
+	// of fourteen units survived thirty seconds against a snapDistance of four.
+	//
+	// TeleportToTransform is the engine's existing answer to "something outside
+	// physics moved this transform" - it sets the Box2D pose AND the interpolation
+	// state, which is what stops the write-back from undoing it. Its own header
+	// comment says as much.
+	//
+	// Only entities whose correction actually MOVED them are pushed: a prediction
+	// that already agrees with the host must not have its body woken and re-seated
+	// every frame just to arrive where it already was.
+	void NetworkReceiveSystem::PushCorrectionsToPhysics(World& world, const std::vector<Entity>& corrected)
+	{
+		if (corrected.empty())
+		{
+			return;
+		}
+		// A world with no 2D physics registered (a 3D scene, a headless test) is not
+		// an error: there is no body fighting the transform, so writing it was already
+		// the whole of the correction.
+		auto* physics = static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem"));
+		if (physics == nullptr)
+		{
+			return;
+		}
+		for (const Entity entity: corrected)
+		{
+			if (world.Has<RigidBody2DComponent>(entity))
+			{
+				physics->TeleportToTransform(world, entity);
+			}
+		}
 	}
 
 	// ── Send ────────────────────────────────────────────────────────────────────

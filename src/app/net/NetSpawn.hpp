@@ -26,7 +26,8 @@ namespace aether::net
 	// WHO WRITES THE KIND BYTE is not uniform, and it is load-bearing - adding a
 	// kind without matching one of these two conventions produces a packet the
 	// receiver misparses with no error:
-	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy.
+	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy,
+	//     Input.
 	//     Their encoders lead with w.U8(kind), so the sender passes the result
 	//     straight to Send/Broadcast.
 	//   WRAPPED (the sender writes it): Snapshot, ScriptFields. BuildSnapshot and
@@ -41,6 +42,7 @@ namespace aether::net
 		Welcome = 5,
 		ScriptFields = 6,
 		Relevancy = 7,
+		Input = 8,
 	};
 
 	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
@@ -55,7 +57,7 @@ namespace aether::net
 	// promised it could not. Anchored to the enum, adding kind 8 without a row breaks
 	// the BUILD, which is the only version of that promise worth making. Keep this on
 	// the last enumerator.
-	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Relevancy);
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Input);
 
 	// Prefixes `payload` with its NetMessage byte - the WRAPPED half of the
 	// convention above. NetworkContext::Frame is a thin forwarder to this, so both

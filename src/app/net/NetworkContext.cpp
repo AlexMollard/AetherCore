@@ -182,6 +182,11 @@ namespace aether::net
 		m_transport.Disconnect();
 		m_session.Clear();
 		m_caches.clear();
+		// Net ids are re-derived from scratch by the next session, so a surviving
+		// sequence high-water mark would reject every input for that id until the new
+		// session's counter climbed past it - a player who could not move, silently.
+		m_inputPacer.Clear();
+		m_inputGate.Clear();
 	}
 
 	void NetworkContext::ForgetNetId(std::uint32_t netId)
@@ -190,6 +195,8 @@ namespace aether::net
 		{
 			cache.Forget(netId);
 		}
+		m_inputPacer.Forget(netId);
+		m_inputGate.Forget(netId);
 	}
 
 	std::vector<std::byte> NetworkContext::Frame(NetMessage kind, std::span<const std::byte> payload)

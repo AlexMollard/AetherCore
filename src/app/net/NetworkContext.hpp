@@ -11,6 +11,7 @@
 
 #include <glm/glm.hpp>
 
+#include "net/NetInput.hpp"
 #include "net/NetRelevancy.hpp"
 #include "net/NetSession.hpp"
 #include "net/NetSnapshot.hpp"
@@ -135,6 +136,37 @@ namespace aether::net
 		void SetSendRateHz(float hz)
 		{
 			m_sendRateHz = hz;
+		}
+
+		// ── Client input ─────────────────────────────────────────────────────
+		// How often an UNCHANGED input payload is repeated on the wire, per owned
+		// entity. A changed payload is always sent immediately regardless (see
+		// InputSendPacer), so this bounds the cost of an idle player and the window
+		// in which a lost "stopped moving" packet leaves the host running - it is not
+		// the rate at which input is sampled.
+		[[nodiscard]] float InputSendRateHz() const
+		{
+			return m_inputSendRateHz;
+		}
+
+		void SetInputSendRateHz(float hz)
+		{
+			m_inputSendRateHz = hz;
+		}
+
+		// Send-side pacing (this peer's owned entities) and receive-side staleness
+		// rejection (the host's view of every client's stream). Both live here rather
+		// than in a system because the send half is driven from the Net.SendInput
+		// export, which cannot reach a System's members - the same reason the session
+		// and the transport live here.
+		[[nodiscard]] InputSendPacer& InputPacer()
+		{
+			return m_inputPacer;
+		}
+
+		[[nodiscard]] InputSequenceGate& InputGate()
+		{
+			return m_inputGate;
 		}
 
 		// One change-detection cache PER CONNECTION. A single shared cache would
@@ -271,7 +303,10 @@ namespace aether::net
 		ReplicationSchema m_schema;
 		RelevancySettings m_relevancy;
 		float m_sendRateHz = 20.f;
+		float m_inputSendRateHz = 30.f;
 		std::unordered_map<ConnectionId, SnapshotCache> m_caches;
+		InputSendPacer m_inputPacer;
+		InputSequenceGate m_inputGate;
 
 		std::chrono::steady_clock::time_point m_epoch = std::chrono::steady_clock::now();
 

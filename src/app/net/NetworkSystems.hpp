@@ -66,6 +66,12 @@ namespace aether::net
 		void CaptureRenderedTransforms(World& world);
 		void ResolveTransforms(World& world, float dt);
 
+		// Re-seats the Box2D body of every owned entity whose correction moved it.
+		// Without this the eased/snapped pose is overwritten by
+		// Physics2DSystem::SyncTransforms later in the same frame and reconciliation
+		// has no observable effect at all - see the long note on the definition.
+		static void PushCorrectionsToPhysics(World& world, const std::vector<Entity>& corrected);
+
 		NetworkContext& m_context;
 
 		// Last authoritative pose per net id, kept apart from the rendered transform:

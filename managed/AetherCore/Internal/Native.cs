@@ -829,6 +829,13 @@ internal static unsafe partial class Native
     internal static unsafe partial int aether_net_call_rpc(uint entityId, string methodName, byte* argBlob, int argLen,
         int expectedTarget);
 
+    // Client -> host input. Same [NetRpc(Server)] handler resolution as the call
+    // above, but the payload is paced/deduped and goes out unreliable on the input
+    // channel, and the owner always runs the handler locally as well (prediction).
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial int aether_net_send_input(uint entityId, string methodName, byte* payload,
+        int payloadLen);
+
     // ── Networking: session ──────────────────────────────────────────────────────
     // Every one of these is safe with no session and no NetworkContext registered:
     // they report 0/false rather than failing, so a title screen can ask before

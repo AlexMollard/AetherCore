@@ -21,10 +21,16 @@ namespace aether::net
 	// snapshots, where a dropped packet is superseded by the next one and
 	// retransmitting it is worse than dropping it. Channel 2 is reserved for
 	// voice so it can never share ordering with state - do not use it here.
+	// Channel 3 is unreliable-sequenced client input, and it is a SEPARATE channel
+	// from the snapshot one on purpose: ENet's unreliable sequencing is per-channel,
+	// so two independent streams sharing a channel each make the other look
+	// out-of-order and get it dropped. Host->client state and client->host input are
+	// exactly two such streams.
 	inline constexpr int kChannelReliable = 0;
 	inline constexpr int kChannelSnapshot = 1;
 	inline constexpr int kChannelVoiceReserved = 2;
-	inline constexpr int kChannelCount = 3;
+	inline constexpr int kChannelInput = 3;
+	inline constexpr int kChannelCount = 4;
 
 	struct NetEvent
 	{

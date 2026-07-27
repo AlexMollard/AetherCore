@@ -240,6 +240,74 @@ public static class Net
     public static void CallServer(Entity entity, string methodName, params object[] args)
         => Dispatch(entity, methodName, args, expectedTarget: (int)NetRpcTarget.Server, nameof(CallServer));
 
+    // ── Input ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Submits one frame of input for an entity this peer OWNS, to be applied
+    /// wherever the simulation is authoritative. The named method - an ordinary
+    /// <c>[NetRpc(NetRpcTarget.Server)]</c> handler on a script attached to
+    /// <paramref name="entity"/> - runs locally straight away, and on a client the
+    /// payload is also sent to the host so it runs there too.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the client-to-host half of a host-authoritative session, and the
+    /// reason a client's character moves on everybody else's screen: state
+    /// replication only ever flows host-to-client, so without this the host has no
+    /// input for a client's player and simulates it as an unattended body.
+    /// </para>
+    /// <para>
+    /// The local invoke is not a convenience - it IS the client-side prediction. The
+    /// owner acts on its own input immediately, the host applies the same payload
+    /// through the same handler a round trip later, and the framework eases the
+    /// owner's predicted position toward the host's answer (see the
+    /// <c>NetworkTransform</c> remarks on <see cref="Net"/>). Both peers therefore
+    /// run one implementation of the movement, not two.
+    /// </para>
+    /// <para>
+    /// WHAT IS IN THE PAYLOAD IS ENTIRELY YOURS. The framework moves the bytes and
+    /// never looks inside: it has no idea what "jump" means. Call this every frame
+    /// with the current input state - transmission is paced and deduplicated for you,
+    /// so an unchanged payload does not flood the wire, while a payload that changed
+    /// (the one frame a button went down) is sent at once.
+    /// </para>
+    /// <para>
+    /// Delivery is unreliable and sequenced on its own channel: input that arrives
+    /// late is worthless, and the host applies only strictly-newer submissions, so a
+    /// reordered packet is dropped rather than rewinding the character.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// False, having done nothing, when no attached script declares that handler,
+    /// when the handler declares a direction other than
+    /// <see cref="NetRpcTarget.Server"/>, or when a client submits input for an
+    /// entity it does not own. True when the input was applied locally, sent, or
+    /// both - as with <see cref="Call"/>, never that it arrived.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// More than one argument was passed, or a single argument was passed that is
+    /// not a <see cref="string"/> - see the marshalling note on <see cref="Net"/>.
+    /// </exception>
+    public static unsafe bool SendInput(Entity entity, string methodName, params object[] args)
+    {
+        if (args.Length > 1 || (args.Length == 1 && args[0] is not string))
+        {
+            throw new ArgumentException(
+                $"Net.{nameof(SendInput)} supports at most one string argument today.", nameof(args));
+        }
+
+        if (args.Length == 0)
+        {
+            return Native.aether_net_send_input(entity.Id, methodName, null, 0) != 0;
+        }
+
+        byte[] blob = Encoding.UTF8.GetBytes((string)args[0]);
+        fixed (byte* ptr = blob)
+        {
+            return Native.aether_net_send_input(entity.Id, methodName, ptr, blob.Length) != 0;
+        }
+    }
+
     // The one marshalling site. `expectedTarget` is -1 for "whatever the method
     // declares" and a NetRpcTarget value for the explicit spellings, which the native
     // half compares against the declaration and refuses on a mismatch.

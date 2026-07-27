@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "net/NetInput.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetSpawn.hpp"
 
@@ -54,14 +55,14 @@ namespace
 	//   - a kind in kAllKinds classified in neither table, or in both
 	//   - a kind listed twice, or the enum renumbered off contiguous-from-1
 	//   - a self-framing kind with no actual round-trip row in the test below
-	constexpr std::array<net::NetMessage, 7> kAllKinds{
+	constexpr std::array<net::NetMessage, 8> kAllKinds{
 	        net::NetMessage::Snapshot, net::NetMessage::Spawn, net::NetMessage::Despawn,
 	        net::NetMessage::Rpc, net::NetMessage::Welcome, net::NetMessage::ScriptFields,
-	        net::NetMessage::Relevancy,
+	        net::NetMessage::Relevancy, net::NetMessage::Input,
 	};
-	constexpr std::array<net::NetMessage, 5> kSelfFraming{
+	constexpr std::array<net::NetMessage, 6> kSelfFraming{
 	        net::NetMessage::Spawn, net::NetMessage::Despawn, net::NetMessage::Rpc, net::NetMessage::Welcome,
-	        net::NetMessage::Relevancy,
+	        net::NetMessage::Relevancy, net::NetMessage::Input,
 	};
 	constexpr std::array<net::NetMessage, 2> kWrapped{net::NetMessage::Snapshot, net::NetMessage::ScriptFields};
 
@@ -120,12 +121,13 @@ TEST_CASE("Self-framing encoders lead with their own NetMessage byte")
 	// One row per kind in kSelfFraming, and the static_assert below is what keeps it
 	// that way: Relevancy was a self-framing kind with no row here at all, so its
 	// encoder's leading byte was never checked by anything.
-	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 5> selfFraming{{
+	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 6> selfFraming{{
 	        {net::NetMessage::Spawn, net::EncodeSpawn(1, 2, "player", {0.f, 0.f, 0.f})},
 	        {net::NetMessage::Despawn, net::EncodeDespawn(1)},
 	        {net::NetMessage::Rpc, net::EncodeRpc(1, 0xABCDu, 0, net::NetRpcTarget::Server, {})},
 	        {net::NetMessage::Welcome, EncodeWelcome(3)},
 	        {net::NetMessage::Relevancy, net::EncodeRelevancyLeave(1)},
+	        {net::NetMessage::Input, net::EncodeInput(1, 0xABCDu, 0, 1, {})},
 	}};
 	static_assert(selfFraming.size() == kSelfFraming.size(),
 	        "Every self-framing kind needs a round-trip row here, not just a classification.");
@@ -179,5 +181,6 @@ TEST_CASE("Every NetMessage kind is covered by one of the two framing convention
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Welcome) == 5);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::ScriptFields) == 6);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Relevancy) == 7);
-	CHECK(net::kNetMessageMax == 7);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::Input) == 8);
+	CHECK(net::kNetMessageMax == 8);
 }
