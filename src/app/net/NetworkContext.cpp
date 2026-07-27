@@ -290,6 +290,18 @@ namespace aether::net
 			// on a client an unreplicated entity is local-only, so it is mine too.
 			return true;
 		}
+		// A client has no connection id of its own until the host's Welcome
+		// arrives, and LocalConnection() reads kInvalidConnection until then - the
+		// same value every host-owned entity's owner defaults to. Left unguarded,
+		// a client briefly "owns" the entire world between Connect() and Welcome.
+		// A host's own LocalConnection is kInvalidConnection permanently (that is
+		// how it owns its own entities), so the guard only applies to a client.
+		// See the identical guard on the transform-resolution path in
+		// NetworkSystems.cpp.
+		if (IsClient() && m_session.LocalConnection() == kInvalidConnection)
+		{
+			return false;
+		}
 		return identity->owner == m_session.LocalConnection();
 	}
 } // namespace aether::net

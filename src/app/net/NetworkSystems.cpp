@@ -269,6 +269,16 @@ namespace aether::net
 			{
 				return; // a client cannot assign the host an id
 			}
+			if (context.Session().LocalConnection() != kInvalidConnection)
+			{
+				// Already welcomed. A repeated (or hostile) Welcome mid-session must
+				// not run this again: ResetForNewSession would zero every already
+				// -spawned entity's netId while their session bindings survive, and
+				// a fresh AssignScenePlacedNetIds would then bind none of them.
+				AE_VERBOSE(LogCategory::App, "Net: dropping unexpected Welcome from connection {} - already connected",
+				        peer);
+				return;
+			}
 			ByteReader reader{payload};
 			const ConnectionId assigned = reader.U32();
 			if (!reader.Ok() || assigned == kInvalidConnection)
@@ -303,6 +313,7 @@ namespace aether::net
 				        return;
 			        }
 			        Pose pose;
+			        pose.matrix = transform.localToWorld;
 			        DecomposeTRS(transform.localToWorld, pose.position, pose.euler, pose.scale);
 			        m_renderedBefore[identity.netId] = pose;
 		        });
@@ -364,9 +375,16 @@ namespace aether::net
 				        // frame; ease it toward the host's answer instead of snapping, and
 				        // leave the rotation alone - yanking the local player's facing to a
 				        // stale authoritative value is worse than a small positional error.
+				        // Only position changes here, so restore the pre-apply matrix
+				        // bit-exact and touch nothing but its translation column: a
+				        // decompose/recompose round trip would rebuild rotation and scale
+				        // from lossy trig and re-inject float error into channels this
+				        // branch never meant to touch (see the "position" field setter's
+				        // note in CoreComponents.reflect.cpp).
 				        const glm::vec3 corrected = EaseToward(rendered.position, state.authoritativePosition,
 				                tuning.correctionRate, dt, tuning.snapDistance);
-				        transform.localToWorld = ComposeTransform(corrected, rendered.euler, rendered.scale);
+				        transform.localToWorld = rendered.matrix;
+				        transform.localToWorld[3] = glm::vec4(corrected, 1.f);
 				        return;
 			        }
 

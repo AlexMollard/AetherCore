@@ -7,6 +7,7 @@
 #include "net/NetComponents.hpp"
 #include "net/NetworkContext.hpp"
 #include "scene/Entity.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -39,9 +40,17 @@ namespace
 		{
 			return 0;
 		}
-		const auto n = static_cast<std::int32_t>(std::min<std::size_t>(static_cast<std::size_t>(capacity), value.size()));
-		std::memcpy(buffer, value.data(), static_cast<std::size_t>(n));
-		return n;
+		auto n = std::min<std::size_t>(static_cast<std::size_t>(capacity), value.size());
+		// Back off to a UTF-8 code-point boundary: a byte with the high bits
+		// `10xxxxxx` is a continuation byte, never the first byte of a character, so
+		// cutting there would split a multi-byte character and hand the managed side
+		// a dangling continuation sequence that decodes to a replacement character.
+		while (n > 0 && (static_cast<unsigned char>(value[n]) & 0xC0u) == 0x80u)
+		{
+			--n;
+		}
+		std::memcpy(buffer, value.data(), n);
+		return static_cast<std::int32_t>(n);
 	}
 } // namespace
 
@@ -118,8 +127,10 @@ AE_SCRIPT_API void aether_net_despawn(std::uint32_t entityId)
 	if (context == nullptr)
 	{
 		// Offline, Net.Despawn still has to mean "this entity goes away", or a script
-		// written for both modes leaks entities in single-player.
-		ActiveWorld().Destroy(entity);
+		// written for both modes leaks entities in single-player. A bare Destroy
+		// would only remove the root and strand every child - see the identical
+		// note on ecs::DestroyHierarchy in ControlMethods.cpp.
+		aether::ecs::DestroyHierarchy(ActiveWorld(), entity);
 		return;
 	}
 	context->Despawn(ActiveWorld(), entity);

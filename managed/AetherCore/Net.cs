@@ -23,6 +23,14 @@ namespace AetherCore;
 /// client each tick, and clients apply them. Nothing here has to be pumped.
 /// </para>
 /// <para>
+/// Transform smoothing is an opt-in on top of that: an entity needs a
+/// <c>NetworkTransform</c> component, alongside its <c>NetworkIdentity</c>, before a
+/// client eases the owned entity's position or interpolates a remote one. An entity
+/// with a <c>NetworkIdentity</c> but no <c>NetworkTransform</c> still replicates, but
+/// each received snapshot is applied straight to its transform with no smoothing, so
+/// it visibly snaps.
+/// </para>
+/// <para>
 /// RPC argument marshalling is deliberately minimal: a call carries either no
 /// arguments or a single <see cref="string"/> argument. Passing anything else
 /// throws <see cref="ArgumentException"/> here, in the calling script's own code,

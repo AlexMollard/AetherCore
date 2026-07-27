@@ -72,6 +72,10 @@ namespace aether::net
 
 		struct Pose
 		{
+			// The exact pre-apply matrix, kept alongside the decomposed channels so the
+			// owned-entity correction can restore rotation/scale bit-exact instead of
+			// rebuilding them from a lossy decompose/recompose round trip.
+			glm::mat4 matrix{1.f};
 			glm::vec3 position{0.f};
 			glm::vec3 euler{0.f};
 			glm::vec3 scale{1.f};
