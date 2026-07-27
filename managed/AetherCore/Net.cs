@@ -149,7 +149,17 @@ public static class Net
     /// test.
     /// </para>
     /// </remarks>
-    /// <returns>True if the call was dispatched (sent, run locally, or both).</returns>
+    /// <returns>
+    /// True if the call was routed - encoded and sent to at least one recipient, run
+    /// locally, or both. This reports that the call was ALLOWED and addressed, never
+    /// that it arrived: nothing is acknowledged, and one routed case reaches nobody at
+    /// all. On the host a <see cref="NetRpcTarget.Client"/> call is addressed to the
+    /// connection owning the entity, and if that connection has already dropped the
+    /// call is still allowed, has no recipient left, does not run locally, and still
+    /// returns true. That is deliberate - "the owner left" is not a caller error, and
+    /// reporting it as a refusal would be indistinguishable from the genuine refusals
+    /// listed above, which a caller may well want to treat differently.
+    /// </returns>
     /// <exception cref="ArgumentException">
     /// More than one argument was passed, or a single argument was passed that is
     /// not a <see cref="string"/> - see the marshalling note on <see cref="Net"/>.

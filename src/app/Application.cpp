@@ -218,6 +218,25 @@ namespace aether::app
 
 		// (AETHERCORE_SCENE_APP undefined) never wires them, so it never links the
 #ifdef AETHERCORE_SCENE_APP
+		// FIRST, before anything they point at is torn down. CSharpScriptFieldBridge
+		// and CSharpRpcBridge hold `const&` to CSharpScriptingSubsystem and
+		// ScriptComponentSystem, and neither outlives this destructor: main.cpp
+		// declares the Application BEFORE csharpScripting, so the scripting subsystem
+		// is destroyed first, and the UnregisterSystem block just below takes the
+		// script system out from under them - while the ServiceContainer owning the
+		// NetworkContext (and therefore the bridges) is not cleared until later still.
+		// Both references dangle across that whole window.
+		//
+		// Nothing dereferences them there today, which is exactly why this is worth
+		// making explicit rather than leaving to luck: the branch that gave the
+		// bridges their ownership never gave them a lifetime. A null bridge is legal
+		// everywhere and already pinned by tests (the CLR-less build runs that way).
+		if (auto* network = context.TryGet<aether::net::NetworkContext>())
+		{
+			network->SetFieldBridge(nullptr);
+			network->SetRpcBridge(nullptr);
+		}
+
 		// Both hold a reference to the NetworkContext the ServiceContainer owns, so
 		// they must go before the container does.
 		context.Get<World>().UnregisterSystem("NetworkSendSystem");
