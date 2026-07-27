@@ -1,5 +1,9 @@
 #include <doctest/doctest.h>
 
+#include <map>
+#include <utility>
+#include <vector>
+
 #include "net/NetSpawn.hpp"
 
 #include "net/NetComponents.hpp"
@@ -78,6 +82,50 @@ TEST_CASE("Scene-placed net ids follow the persisted node id, not creation order
 	CHECK(id30 != 0);
 	CHECK(id10 < id20);
 	CHECK(id20 < id30);
+}
+
+TEST_CASE("Host and client derive the same scene-placed ids from the same scene")
+{
+	// The invariant this whole mechanism rests on is CROSS-MACHINE agreement: two
+	// processes loading the same scene file must land on the same nodeId -> netId
+	// map with no handshake. Testing ordering within one world does not prove that -
+	// the two ends create their entities in whatever order their own scene apply
+	// produced, so the ids must not depend on it.
+	const std::vector<std::uint64_t> nodeIds{4001, 12, 900, 7, 65535};
+
+	const auto derive = [&](const std::vector<std::uint64_t>& creationOrder)
+	{
+		World world;
+		net::NetSession session;
+		std::vector<std::pair<std::uint64_t, Entity>> entities;
+		for (const std::uint64_t nodeId: creationOrder)
+		{
+			const Entity e = world.Create();
+			world.Emplace<net::NetworkIdentity>(e);
+			world.Emplace<SceneNodeComponent>(e, SceneNodeComponent{.id = nodeId});
+			entities.emplace_back(nodeId, e);
+		}
+		net::AssignScenePlacedNetIds(world, session);
+
+		std::map<std::uint64_t, std::uint32_t> byNode;
+		for (const auto& [nodeId, entity]: entities)
+		{
+			byNode[nodeId] = world.Get<net::NetworkIdentity>(entity).netId;
+		}
+		return byNode;
+	};
+
+	// "Host": the file's own order. "Client": reversed, standing in for any other
+	// creation order the same file could produce on another machine.
+	const std::map<std::uint64_t, std::uint32_t> host = derive(nodeIds);
+	std::vector<std::uint64_t> reversed(nodeIds.rbegin(), nodeIds.rend());
+	const std::map<std::uint64_t, std::uint32_t> client = derive(reversed);
+
+	CHECK(host == client);
+	for (const auto& [nodeId, netId]: host)
+	{
+		CHECK(netId != 0);
+	}
 }
 
 TEST_CASE("Scene-placed net id assignment skips entities with no persisted node id")

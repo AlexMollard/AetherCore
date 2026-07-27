@@ -359,7 +359,16 @@ AE_FIELD_N("color1", color1, Color4)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
+// Deliberately reflects NO fields: netId/owner/spawnPrefab/scenePlaced are all runtime
+// state a session assigns, and persisting them would fight the deterministic
+// scene-placed id derivation (NetSpawn.cpp). AE_GENERIC_SERIALIZE is still required -
+// without it all three serializer paths skip the type entirely and the component's
+// PRESENCE does not survive a save/load, so AssignScenePlacedNetIds would find nothing
+// outside tests that emplace it programmatically. A zero-field generic component
+// round-trips as an empty table, which is exactly the "this entity is replicated" mark
+// this component is.
 AE_COMPONENT(NetworkIdentityComponent, "Network Identity", "Networking", ICON_FA_TOWER_BROADCAST)
+AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(NetworkTransformComponent, "Network Transform", "Networking", ICON_FA_ARROWS_LEFT_RIGHT)
