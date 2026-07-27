@@ -72,6 +72,24 @@ namespace aether::net
 		return netId;
 	}
 
+	std::vector<std::byte> EncodeRelevancyLeave(std::uint32_t netId)
+	{
+		ByteWriter w;
+		w.U8(static_cast<std::uint8_t>(NetMessage::Relevancy));
+		w.U32(netId);
+		return w.Take();
+	}
+
+	std::optional<std::uint32_t> DecodeRelevancyLeave(ByteReader& r)
+	{
+		const std::uint32_t netId = r.U32();
+		if (!r.Ok() || netId == 0)
+		{
+			return std::nullopt;
+		}
+		return netId;
+	}
+
 	void AssignScenePlacedNetIds(World& world, NetSession& session)
 	{
 		// SceneNodeComponent::id is the persisted, stable scene-node id - identical on

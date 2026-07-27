@@ -90,6 +90,32 @@ namespace
 		return out;
 	}
 
+	ScriptPropertyValue BoolValue(bool v)
+	{
+		ScriptPropertyValue out;
+		out.type = ScriptPropertyValue::Type::Bool;
+		out.i64 = v ? 1 : 0;
+		return out;
+	}
+
+	ScriptPropertyValue Vector3Value(float x, float y, float z)
+	{
+		ScriptPropertyValue out;
+		out.type = ScriptPropertyValue::Type::Vector3;
+		out.f4[0] = x;
+		out.f4[1] = y;
+		out.f4[2] = z;
+		return out;
+	}
+
+	ScriptPropertyValue EnumValue(std::int64_t v)
+	{
+		ScriptPropertyValue out;
+		out.type = ScriptPropertyValue::Type::Enum;
+		out.i64 = v;
+		return out;
+	}
+
 	// A host world and a client world, each with one networked entity carrying the
 	// same "Health" script bound to net id 1 - what replication actually operates on.
 	struct TwoScriptedWorlds
@@ -384,6 +410,115 @@ TEST_CASE("A string script field round-trips")
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 1);
 	REQUIRE(applied != nullptr);
 	CHECK(applied->str == "wounded");
+}
+
+TEST_CASE("A float script field round-trips")
+{
+	TwoScriptedWorlds tw;
+	tw.hostBridge.Declare("Health", {{.index = 3, .type = ScriptPropertyValue::Type::Float}});
+	tw.clientBridge.Declare("Health", {{.index = 3, .type = ScriptPropertyValue::Type::Float}});
+	tw.hostBridge.Seed(tw.hostEntity.id, 0, 3, FloatValue(2.5f));
+
+	net::SnapshotCache cache;
+	const std::vector<std::byte> packet =
+	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
+	REQUIRE_FALSE(packet.empty());
+
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+
+	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 3);
+	REQUIRE(applied != nullptr);
+	CHECK(applied->type == ScriptPropertyValue::Type::Float);
+	CHECK(applied->f4[0] == doctest::Approx(2.5f));
+}
+
+TEST_CASE("A bool script field round-trips")
+{
+	TwoScriptedWorlds tw;
+	tw.hostBridge.Declare("Health", {{.index = 4, .type = ScriptPropertyValue::Type::Bool}});
+	tw.clientBridge.Declare("Health", {{.index = 4, .type = ScriptPropertyValue::Type::Bool}});
+	tw.hostBridge.Seed(tw.hostEntity.id, 0, 4, BoolValue(true));
+
+	net::SnapshotCache cache;
+	const std::vector<std::byte> packet =
+	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
+	REQUIRE_FALSE(packet.empty());
+
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+
+	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 4);
+	REQUIRE(applied != nullptr);
+	CHECK(applied->type == ScriptPropertyValue::Type::Bool);
+	CHECK(applied->i64 == 1);
+}
+
+TEST_CASE("A Vector3 script field round-trips")
+{
+	TwoScriptedWorlds tw;
+	tw.hostBridge.Declare("Health", {{.index = 5, .type = ScriptPropertyValue::Type::Vector3}});
+	tw.clientBridge.Declare("Health", {{.index = 5, .type = ScriptPropertyValue::Type::Vector3}});
+	tw.hostBridge.Seed(tw.hostEntity.id, 0, 5, Vector3Value(1.f, 2.f, 3.f));
+
+	net::SnapshotCache cache;
+	const std::vector<std::byte> packet =
+	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
+	REQUIRE_FALSE(packet.empty());
+
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+
+	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 5);
+	REQUIRE(applied != nullptr);
+	CHECK(applied->type == ScriptPropertyValue::Type::Vector3);
+	CHECK(applied->f4[0] == doctest::Approx(1.f));
+	CHECK(applied->f4[1] == doctest::Approx(2.f));
+	CHECK(applied->f4[2] == doctest::Approx(3.f));
+}
+
+TEST_CASE("An enum script field round-trips within 32 bits")
+{
+	TwoScriptedWorlds tw;
+	tw.hostBridge.Declare("Health", {{.index = 6, .type = ScriptPropertyValue::Type::Enum}});
+	tw.clientBridge.Declare("Health", {{.index = 6, .type = ScriptPropertyValue::Type::Enum}});
+	tw.hostBridge.Seed(tw.hostEntity.id, 0, 6, EnumValue(3));
+
+	net::SnapshotCache cache;
+	const std::vector<std::byte> packet =
+	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
+	REQUIRE_FALSE(packet.empty());
+
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+
+	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 6);
+	REQUIRE(applied != nullptr);
+	CHECK(applied->type == ScriptPropertyValue::Type::Enum);
+	CHECK(applied->i64 == 3);
+}
+
+TEST_CASE("An enum value that does not fit in 32 bits is truncated - documented, not a surprise")
+{
+	// enumValue on the wire (and in reflect::FieldValue, see Reflection.hpp) is a
+	// plain 32-bit int, while ScriptPropertyValue::i64 - what a managed enum
+	// property actually reports through - is 64 bits. ToFieldValue's Enum branch
+	// narrows with a bare static_cast<int>, so a managed value outside the 32-bit
+	// range loses everything above the low 32 bits the moment it hits the wire.
+	// Pinned here as observed behaviour rather than left as a silent surprise:
+	// 0x1_0000_0007 round-trips as 7, not as itself.
+	TwoScriptedWorlds tw;
+	tw.hostBridge.Declare("Health", {{.index = 6, .type = ScriptPropertyValue::Type::Enum}});
+	tw.clientBridge.Declare("Health", {{.index = 6, .type = ScriptPropertyValue::Type::Enum}});
+	constexpr std::int64_t kOverflowing = (std::int64_t{1} << 32) + 7;
+	tw.hostBridge.Seed(tw.hostEntity.id, 0, 6, EnumValue(kOverflowing));
+
+	net::SnapshotCache cache;
+	const std::vector<std::byte> packet =
+	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
+	REQUIRE_FALSE(packet.empty());
+
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+
+	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 6);
+	REQUIRE(applied != nullptr);
+	CHECK(applied->i64 == 7); // NOT kOverflowing - the high 32 bits are gone
 }
 
 TEST_CASE("A duplicate script of the same type on one entity replicates only once")

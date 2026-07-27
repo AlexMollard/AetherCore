@@ -279,6 +279,11 @@ namespace aether::net
 		}
 	}
 
+	void NetworkContext::ApplyRelevancyLeave(World& world, std::uint32_t netId)
+	{
+		ApplyDespawn(world, netId);
+	}
+
 	bool NetworkContext::HasAuthority(World& world, Entity entity) const
 	{
 		if (!IsClient())
@@ -290,6 +295,19 @@ namespace aether::net
 
 	bool NetworkContext::IsOwner(World& world, Entity entity) const
 	{
+		// A stale handle - kept around by a script or a cached reference after the
+		// entity behind it died - carries no components at all: entt strips them on
+		// destroy(). That made the identity == nullptr branch below misread it as
+		// "not replicated, so it's mine", which is the right answer for a genuinely
+		// local entity and the wrong one for a dead replicated one. Reject it before
+		// the identity lookup even runs, so a destroyed handle can never read as
+		// owned - and Entity carries no version (see Entity.hpp), so `valid()` here
+		// really is the only test available; it also catches the trivial case of an
+		// id that was never created at all.
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return false;
+		}
 		const auto* identity = world.TryGet<NetworkIdentity>(entity);
 		if (identity == nullptr)
 		{

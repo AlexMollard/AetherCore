@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -15,6 +17,7 @@
 namespace aether::net
 {
 	class NetworkContext;
+	class SnapshotCache;
 
 	// Drains the transport and lands inbound authoritative state on the world.
 	//
@@ -116,10 +119,39 @@ namespace aether::net
 	private:
 		[[nodiscard]] static glm::vec3 ViewerPosition(World& world, ConnectionId viewer);
 
+		// Diffs `relevant` for `connection` against what was relevant to it a moment
+		// ago. An entity that fell out (still alive elsewhere, just not bound here
+		// any more - a destroyed one was already handled by Despawn) gets a
+		// NetMessage::Relevancy so the connection stops rendering the frozen last-seen
+		// copy, and that connection's SnapshotCache entry for it is cleared - the
+		// change-detection state that would otherwise report "unchanged" on
+		// re-entry, when the client that lost it needs the FULL current value
+		// resent. An entity that appeared gets a fresh Spawn: the leave message
+		// destroyed it client-side, and a Snapshot has nothing to write onto without
+		// one.
+		void UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
+		        const std::vector<Entity>& relevant, SnapshotCache& cache);
+
+		// Drops tracking for a connection no longer in the session. Both maps below
+		// are keyed by ConnectionId and outlive any one connection, so a long run of
+		// join/leave churn - or a peer id reused after a Stop/StartHost cycle resets
+		// NetworkSubsystem's id counter - would otherwise leak, or worse inherit,
+		// another connection's stale state.
+		void PruneDisconnected(const std::vector<ConnectionId>& live);
+
 		NetworkContext& m_context;
 
-		// Wall-clock time of the next send. Wall clock, not accumulated frame dt, so
-		// pausing or time-scaling the game does not silently change the send rate.
-		float m_nextSendTime = 0.f;
+		// Wall-clock deadline of the next send, PER CONNECTION rather than one shared
+		// deadline for the whole host: a single deadline means every connection's
+		// cadence shifts the instant any other one joins or leaves, since the next
+		// fire time was computed from `now` at a moment with a different connection
+		// count. Paced independently, each connection's own 20Hz cadence is stable
+		// regardless of who else is connected. Wall clock, not accumulated frame dt,
+		// so pausing or time-scaling the game does not silently change the send rate.
+		std::unordered_map<ConnectionId, float> m_nextSendTimeByConnection;
+
+		// Net ids relevant to each connection as of the last tick this system
+		// actually sent to it - see UpdateRelevancyMembership.
+		std::unordered_map<ConnectionId, std::unordered_set<std::uint32_t>> m_relevantNetIds;
 	};
 } // namespace aether::net

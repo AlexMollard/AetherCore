@@ -301,6 +301,39 @@ TEST_CASE("A Despawn inbound on the host is dropped")
 	}
 }
 
+TEST_CASE("A Relevancy leave message inbound on the host is dropped")
+{
+	// Only the host decides relevancy. Ungated, a client could tell itself (or a
+	// hostile peer could tell another client) to forget an entity that is still
+	// perfectly relevant - exactly the same trust boundary as Despawn, just for a
+	// weaker claim.
+	const std::vector<std::byte> packet = aether::net::EncodeRelevancyLeave(5);
+
+	{
+		Endpoint host;
+		host.BecomeHost();
+		const Entity entity = host.Replicate(5, {0.f, 0.f, 0.f});
+
+		host.receive.OnData(host.world, kPeer, packet);
+
+		CHECK(host.world.GetRegistry().valid(World::ToEntt(entity)));
+		CHECK(host.context.Session().EntityFor(5) == entity);
+	}
+
+	// Positive control: the same bytes DO remove the entity on a client, so the drop
+	// above is the role gate and not a malformed packet.
+	{
+		Endpoint client;
+		client.BecomeClient();
+		const Entity entity = client.Replicate(5, {0.f, 0.f, 0.f});
+
+		client.receive.OnData(client.world, kPeer, packet);
+
+		CHECK_FALSE(client.world.GetRegistry().valid(World::ToEntt(entity)));
+		CHECK_FALSE(client.context.Session().EntityFor(5).IsValid());
+	}
+}
+
 TEST_CASE("A ScriptFields packet inbound on the host is dropped")
 {
 	// Script fields are arbitrary gameplay state - the packet writes straight into a
@@ -726,6 +759,48 @@ TEST_CASE("A host despawns everything a leaving connection owned, and nothing el
 	CHECK(host.context.Session().Connections().front() == kPeer + 1);
 	// The host is still hosting - only the peer left.
 	CHECK(host.context.IsHost());
+}
+
+TEST_CASE("A host releases a scene-placed entity's ownership on disconnect instead of destroying it")
+{
+	// Unreachable today - nothing in the framework assigns ownership of a
+	// scene-placed entity to a connection - but latent the moment something does.
+	// Stop() already treats scenePlaced as sacrosanct when the WHOLE session ends;
+	// OnDisconnected must make the same call for a single connection leaving while
+	// the session continues, or a scene-placed entity handed to a connection would
+	// be destroyed permanently on the host the moment that connection dropped.
+	Endpoint host;
+	host.BecomeHost();
+
+	const Entity scenePlaced = MakeScenePlaced(host.world, 1);
+	auto* identity = host.world.TryGet<aether::net::NetworkIdentity>(scenePlaced);
+	identity->netId = host.context.Session().AllocateNetId();
+	identity->owner = kPeer;
+	// MakeScenePlaced leaves scenePlaced false - only AssignScenePlacedNetIds sets
+	// it, and this test bypasses that to hand ownership to a connection directly.
+	identity->scenePlaced = true;
+	host.context.Session().Bind(identity->netId, scenePlaced);
+	const std::uint32_t scenePlacedNetId = identity->netId;
+
+	const Entity sessionSpawned = MakeSessionSpawned(host.world, host.context, kPeer);
+	host.context.Session().AddConnection(kPeer);
+	REQUIRE(CountIdentities(host.world) == 2);
+
+	host.receive.OnDisconnected(host.world, kPeer);
+
+	// The scene-placed entity survives, its net id and binding intact, with
+	// ownership released rather than assigned to nobody-in-particular by omission.
+	REQUIRE(host.world.GetRegistry().valid(World::ToEntt(scenePlaced)));
+	const auto* afterIdentity = host.world.TryGet<aether::net::NetworkIdentity>(scenePlaced);
+	REQUIRE(afterIdentity != nullptr);
+	CHECK(afterIdentity->owner == aether::net::kInvalidConnection);
+	CHECK(afterIdentity->netId == scenePlacedNetId);
+	CHECK(afterIdentity->scenePlaced);
+	CHECK(host.context.Session().EntityFor(scenePlacedNetId) == scenePlaced);
+
+	// The session-spawned one is despawned exactly as before this fix.
+	CHECK_FALSE(host.world.GetRegistry().valid(World::ToEntt(sessionSpawned)));
+	CHECK(CountIdentities(host.world) == 1);
 }
 
 TEST_CASE("A host ignores a connect event for the invalid connection id")

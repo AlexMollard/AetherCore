@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -161,16 +162,39 @@ namespace aether::net
 			return;
 		}
 
-		// Collect first: Despawn destroys entities, which invalidates the view.
+		// Collect first: Despawn destroys entities, which invalidates the view. A
+		// scene-placed entity owned by the leaver is never destroyed here - it came
+		// from the scene file, every other peer (and the next joiner) still expects
+		// to find it there, and it has no spawn record to replay it from if it were
+		// gone. Only its ownership is released. A session-spawned one has no scene
+		// origin to fall back to, so it really is despawned. Mirrors the same
+		// `scenePlaced` split Stop() makes when the whole session ends, for the same
+		// reason - see the note there.
 		std::vector<Entity> owned;
+		std::vector<Entity> released;
 		world.View<NetworkIdentity>().each(
 		        [&](entt::entity ent, NetworkIdentity& identity)
 		        {
-			        if (identity.owner == peer && identity.netId != 0)
+			        if (identity.owner != peer || identity.netId == 0)
+			        {
+				        return;
+			        }
+			        if (identity.scenePlaced)
+			        {
+				        released.push_back(World::FromEntt(ent));
+			        }
+			        else
 			        {
 				        owned.push_back(World::FromEntt(ent));
 			        }
 		        });
+		for (const Entity entity: released)
+		{
+			if (auto* identity = world.TryGet<NetworkIdentity>(entity))
+			{
+				identity->owner = kInvalidConnection;
+			}
+		}
 		for (const Entity entity: owned)
 		{
 			context.Despawn(world, entity);
@@ -178,7 +202,8 @@ namespace aether::net
 
 		context.Session().RemoveConnection(peer);
 		context.DropCacheFor(peer);
-		AE_INFO(LogCategory::App, "Net: connection {} left ({} entity/entities despawned)", peer, owned.size());
+		AE_INFO(LogCategory::App, "Net: connection {} left ({} entity/entities despawned, {} released)", peer,
+		        owned.size(), released.size());
 	}
 
 	void NetworkReceiveSystem::OnData(World& world, ConnectionId peer, std::span<const std::byte> data)
@@ -242,6 +267,23 @@ namespace aether::net
 			{
 				m_remote.erase(*netId);
 				context.ApplyDespawn(world, *netId);
+			}
+			return;
+		}
+
+		case NetMessage::Relevancy:
+		{
+			// Only the host decides what is relevant to whom; a client cannot tell
+			// itself (or, worse, could try to tell the host) to forget something.
+			if (context.IsHost())
+			{
+				return;
+			}
+			ByteReader reader{payload};
+			if (const std::optional<std::uint32_t> netId = DecodeRelevancyLeave(reader))
+			{
+				m_remote.erase(*netId);
+				context.ApplyRelevancyLeave(world, *netId);
 			}
 			return;
 		}
@@ -431,21 +473,27 @@ namespace aether::net
 
 		const float now = context.Now();
 		const float rate = std::max(1.f, context.SendRateHz());
-		if (now < m_nextSendTime)
-		{
-			return;
-		}
-		// Advance from `now` rather than by accumulating intervals: a long frame (a
-		// scene load, a shader compile) must not leave the host owing a burst of
-		// back-to-back snapshots it then fires on consecutive frames.
-		m_nextSendTime = now + 1.f / rate;
+
+		PruneDisconnected(context.Session().Connections());
 
 		for (const ConnectionId connection: context.Session().Connections())
 		{
+			float& nextSend = m_nextSendTimeByConnection[connection];
+			if (now < nextSend)
+			{
+				continue;
+			}
+			// Advance from `now` rather than by accumulating intervals: a long frame (a
+			// scene load, a shader compile) must not leave this connection owing a
+			// burst of back-to-back snapshots it then fires on consecutive frames.
+			nextSend = now + 1.f / rate;
+
 			const glm::vec3 viewerPos = ViewerPosition(world, connection);
 			const std::vector<Entity> relevant = RelevantWithTransformless(world, connection, viewerPos,
 			        context.Relevancy());
 			SnapshotCache& cache = context.CacheFor(connection);
+
+			UpdateRelevancyMembership(world, context, connection, relevant, cache);
 
 			const std::vector<std::byte> snapshot = BuildSnapshot(world, context.Schema(), context.Catalog(),
 			        context.Session(), cache, relevant);
@@ -490,5 +538,78 @@ namespace aether::net
 			        found = true;
 		        });
 		return position;
+	}
+
+	void NetworkSendSystem::UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
+	        const std::vector<Entity>& relevant, SnapshotCache& cache)
+	{
+		std::unordered_set<std::uint32_t> currentIds;
+		currentIds.reserve(relevant.size());
+		for (const Entity entity: relevant)
+		{
+			const std::uint32_t netId = context.Session().NetIdFor(entity);
+			if (netId != 0)
+			{
+				currentIds.insert(netId);
+			}
+		}
+
+		const auto [slot, firstTick] = m_relevantNetIds.try_emplace(connection);
+		std::unordered_set<std::uint32_t>& previousIds = slot->second;
+
+		// The very first tick this connection is seen it has already been given
+		// every currently-networked entity unconditionally, by OnConnected's join
+		// replay - which is not filtered by relevancy at all. Diffing against an
+		// empty "previous" here would treat everything already relevant on day one
+		// as a fresh re-entry and fire a redundant Spawn for each one.
+		if (!firstTick)
+		{
+			// Left: still bound (alive), but no longer in this connection's current
+			// set. A netId no longer bound at all was destroyed outright - Despawn
+			// already told this connection about that, so there is nothing left to
+			// say here.
+			for (const std::uint32_t netId: previousIds)
+			{
+				if (currentIds.contains(netId) || !context.Session().EntityFor(netId).IsValid())
+				{
+					continue;
+				}
+				context.Transport().Send(connection, kChannelReliable, true, EncodeRelevancyLeave(netId));
+				// Or the next re-entry's snapshot would see "unchanged" against a
+				// cached value this connection was told to forget, and send nothing.
+				cache.Forget(netId);
+			}
+
+			// Re-entered: relevant now, was not a moment ago. A Snapshot alone has
+			// nothing client-side to write onto once the leave message destroyed the
+			// entity there - only a Spawn brings it back.
+			for (const std::uint32_t netId: currentIds)
+			{
+				if (previousIds.contains(netId))
+				{
+					continue;
+				}
+				const Entity entity = context.Session().EntityFor(netId);
+				const auto* identity = entity.IsValid() ? world.TryGet<NetworkIdentity>(entity) : nullptr;
+				if (identity == nullptr)
+				{
+					continue;
+				}
+				const auto* transform = world.TryGet<TransformComponent>(entity);
+				const glm::vec3 position = transform != nullptr ? glm::vec3(transform->localToWorld[3])
+				                                                 : glm::vec3(0.f);
+				context.Transport().Send(connection, kChannelReliable, true,
+				        EncodeSpawn(netId, identity->owner, identity->spawnPrefab, position));
+			}
+		}
+
+		previousIds = std::move(currentIds);
+	}
+
+	void NetworkSendSystem::PruneDisconnected(const std::vector<ConnectionId>& live)
+	{
+		const std::unordered_set<ConnectionId> liveSet(live.begin(), live.end());
+		std::erase_if(m_nextSendTimeByConnection, [&](const auto& kv) { return !liveSet.contains(kv.first); });
+		std::erase_if(m_relevantNetIds, [&](const auto& kv) { return !liveSet.contains(kv.first); });
 	}
 } // namespace aether::net

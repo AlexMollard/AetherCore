@@ -216,6 +216,17 @@ namespace aether::net
 		void ApplySpawn(World& world, const SpawnMessage& msg);
 		void ApplyDespawn(World& world, std::uint32_t netId);
 
+		// Client-side reaction to NetMessage::Relevancy - this connection no longer
+		// needs to care about `netId`, though it is still alive on the host. Behaves
+		// exactly like ApplyDespawn today: the client has no representation for
+		// "exists somewhere, just not here", only "have it" or "don't". Kept as a
+		// separate entry point rather than a straight ApplyDespawn call from OnData
+		// so a future difference - a network debug overlay distinguishing a real
+		// destroy from relevancy churn, client-side pooling that recycles instead of
+		// destroying - is a one-function change here instead of a wire-format
+		// cutover across every deployed client.
+		void ApplyRelevancyLeave(World& world, std::uint32_t netId);
+
 		// Authority: the host decides everything; a client decides only what it
 		// owns. Offline every entity is local, so both are true and single-player
 		// code written against them just works.

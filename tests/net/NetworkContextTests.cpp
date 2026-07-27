@@ -273,6 +273,41 @@ TEST_CASE("A host owns its own entities even though its connection id is invalid
 	context.Stop(world);
 }
 
+TEST_CASE("IsOwner is false for a stale handle to a destroyed entity, not a leftover true")
+{
+	// A destroyed entity's components are gone - entt strips them at destroy() - so
+	// the identity == nullptr branch below, correctly "not replicated, so it's mine"
+	// for a genuinely local entity, used to misread a dead REPLICATED one the same
+	// way and hand back true. The handle used here is deliberately the SAME Entity
+	// value the entity held while alive - a script's cached reference outliving the
+	// entity behind it, or a Despawn racing a second one - rather than an id nobody
+	// ever created; Entity carries no version of its own (see Entity.hpp), so this
+	// is the only shape of "stale" that exists.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4);
+
+	const Entity entity = world.Create();
+	world.Emplace<TransformComponent>(entity);
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(entity);
+	identity.netId = 1;
+	identity.owner = 4;
+	context.Session().Bind(1, entity);
+
+	REQUIRE(context.IsOwner(world, entity)); // true while it is alive and owned
+	REQUIRE(context.HasAuthority(world, entity));
+
+	world.Destroy(entity); // the SAME handle, now stale rather than merely unbound
+
+	CHECK_FALSE(context.IsOwner(world, entity));
+	CHECK_FALSE(context.HasAuthority(world, entity));
+
+	context.Stop(world);
+}
+
 TEST_CASE("Offline, every entity is local so ownership and authority are both true")
 {
 	ServiceContainer services;

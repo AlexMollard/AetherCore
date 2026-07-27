@@ -26,9 +26,9 @@ namespace aether::net
 	// WHO WRITES THE KIND BYTE is not uniform, and it is load-bearing - adding a
 	// kind 7 without matching one of these two conventions produces a packet the
 	// receiver misparses with no error:
-	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome. Their
-	//     encoders lead with w.U8(kind), so the sender passes the result straight to
-	//     Send/Broadcast.
+	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy.
+	//     Their encoders lead with w.U8(kind), so the sender passes the result
+	//     straight to Send/Broadcast.
 	//   WRAPPED (the sender writes it): Snapshot, ScriptFields. BuildSnapshot and
 	//     BuildScriptFieldPacket emit a bare body, which the sender must pass through
 	//     FrameMessage below.
@@ -40,6 +40,7 @@ namespace aether::net
 		Rpc = 4,
 		Welcome = 5,
 		ScriptFields = 6,
+		Relevancy = 7,
 	};
 
 	// Prefixes `payload` with its NetMessage byte - the WRAPPED half of the
@@ -70,6 +71,17 @@ namespace aether::net
 
 	[[nodiscard]] std::vector<std::byte> EncodeDespawn(std::uint32_t netId);
 	[[nodiscard]] std::optional<std::uint32_t> DecodeDespawn(ByteReader& r);
+
+	// A connection-scoped "you can stop caring about this" notice: the entity is
+	// still alive on the host, it has simply left THIS connection's relevancy
+	// radius (another connection may still be receiving it normally). Wire-identical
+	// to Despawn - one netId - but deliberately a DISTINCT kind rather than a reuse
+	// of NetMessage::Despawn. See the design note on NetworkContext::ApplyRelevancyLeave
+	// for why: the client reacts to both the same way today, but "the host destroyed
+	// this" and "this walked out of range" are different facts, and a reused kind
+	// would make them permanently indistinguishable on the wire.
+	[[nodiscard]] std::vector<std::byte> EncodeRelevancyLeave(std::uint32_t netId);
+	[[nodiscard]] std::optional<std::uint32_t> DecodeRelevancyLeave(ByteReader& r);
 
 	// Gives every scene-placed NetworkIdentity a deterministic id. Iterates in
 	// order of SceneNodeComponent::id - the stable, persisted scene-node id that
