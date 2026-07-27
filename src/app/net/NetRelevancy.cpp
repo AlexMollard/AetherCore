@@ -14,6 +14,12 @@ namespace aether::net
 		std::vector<Entity> out;
 		const float radiusSq = settings.radius * settings.radius;
 
+		// This view silently excludes a networked entity that has no TransformComponent -
+		// there is no position to measure, so it can never pass a distance test and would
+		// be replicated to nobody. That is correct for spatial entities but WRONG for a
+		// transformless one (a game-state entity replicating only script fields), which
+		// must bypass relevancy entirely rather than be dropped. The system that drives
+		// this is responsible for treating those as always-relevant.
 		world.View<NetworkIdentity, TransformComponent>().each(
 		        [&](entt::entity ent, NetworkIdentity& id, TransformComponent& transform)
 		        {
