@@ -474,12 +474,15 @@ namespace aether::app::scripting
 			return {};
 		}
 		std::vector<std::int32_t> indices(static_cast<std::size_t>(count));
-		const int written = api->GetReplicatedPropertyIndices(typeName.c_str(), indices.data(), count);
-		if (written <= 0)
+		// The managed export always returns the TOTAL index count (ScriptRegistry.cs'
+		// GetReplicatedPropertyIndices returns indices.Length regardless of maxIndices),
+		// not how many entries it actually wrote into the buffer - name it accordingly.
+		const int total = api->GetReplicatedPropertyIndices(typeName.c_str(), indices.data(), count);
+		if (total <= 0)
 		{
 			return {};
 		}
-		indices.resize(static_cast<std::size_t>(written < count ? written : count));
+		indices.resize(static_cast<std::size_t>(total < count ? total : count));
 		return std::vector<int>(indices.begin(), indices.end());
 	}
 

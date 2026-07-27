@@ -38,6 +38,9 @@ list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scripting[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]systems[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scene[/\\\\]")
+# The hub links no networking at all, and net/ reaches into scripting/ and systems/,
+# both already excluded above - exclude the whole directory rather than chase it TU by TU.
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]net[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]ScriptedSceneLayer\\.cpp$")
 list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug/ProjectLauncherWindow.cpp")

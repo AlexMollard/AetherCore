@@ -7,9 +7,19 @@ namespace aether::net
 {
 	std::vector<ScriptPropertyDesc> CSharpScriptFieldBridge::ReplicatedProperties(const std::string& typeName) const
 	{
+		// One CLR transition (plus one per property) per unknown type, not per call: the
+		// build/apply paths call this once per entity per script per tick, so re-marshalling
+		// the table every time would defeat the managed side's own cache (s_props).
+		const auto cached = m_propertyCache.find(typeName);
+		if (cached != m_propertyCache.end())
+		{
+			return cached->second;
+		}
+
 		const std::vector<int> indices = m_scripting.GetReplicatedPropertyIndices(typeName);
 		if (indices.empty())
 		{
+			m_propertyCache.emplace(typeName, std::vector<ScriptPropertyDesc>{});
 			return {};
 		}
 
@@ -29,7 +39,7 @@ namespace aether::net
 			        .type = props[static_cast<std::size_t>(index)].type,
 			});
 		}
-		return out;
+		return m_propertyCache.emplace(typeName, std::move(out)).first->second;
 	}
 
 	bool CSharpScriptFieldBridge::GetProperty(Entity entity, std::uint32_t scriptIndex, std::uint16_t propertyIndex,

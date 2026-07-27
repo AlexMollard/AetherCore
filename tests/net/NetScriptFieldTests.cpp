@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <map>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -167,10 +169,13 @@ TEST_CASE("The script-field record is exactly the documented layout")
 	constexpr std::size_t kRecordPrefix = 4 + 4 + 2 + 1; // netId, typeHash, propertyIndex, fieldType
 	CHECK(packet.size() == kHeader + kRecordPrefix + 4); // an Int value is four bytes
 
-	// And the value bytes really are what WriteFieldValue produces for the same value.
+	// And the value bytes really are what WriteFieldValue produces for the same value -
+	// not just the same length. Compare the packet's trailing 4 bytes byte-for-byte.
 	net::ByteWriter expected;
 	net::WriteFieldValue(expected, reflect::MakeValue(7));
-	CHECK(expected.Size() == 4);
+	REQUIRE(expected.Size() == 4);
+	const std::span<const std::byte> trailing{packet.data() + (packet.size() - expected.Size()), expected.Size()};
+	CHECK(std::equal(trailing.begin(), trailing.end(), expected.View().begin()));
 }
 
 TEST_CASE("An unmarked script field is never sent")
@@ -405,10 +410,32 @@ TEST_CASE("A duplicate script of the same type on one entity replicates only onc
 
 TEST_CASE("Only entities in the relevant set contribute script fields")
 {
-	TwoScriptedWorlds tw;
-	tw.hostBridge.Declare("Health", {{.index = 0, .type = ScriptPropertyValue::Type::Int}});
-	tw.hostBridge.Seed(tw.hostEntity.id, 0, 0, IntValue(3));
+	// Two networked, scripted entities on the host; only one is passed as "relevant".
+	// An empty relevant vector would only prove the loop runs zero times - this proves
+	// the loop actually filters by entity rather than by, say, whether netId != 0.
+	World host;
+	net::NetSession hostSession;
+	FakeBridge hostBridge;
+	hostBridge.Declare("Health", {{.index = 0, .type = ScriptPropertyValue::Type::Int}});
+
+	const Entity relevantEntity = host.Create();
+	host.Emplace<net::NetworkIdentity>(relevantEntity).netId = 1;
+	host.Emplace<ScriptComponent>(relevantEntity).scripts.push_back(ScriptEntry{.path = "Health"});
+	hostSession.Bind(1, relevantEntity);
+	hostBridge.Seed(relevantEntity.id, 0, 0, IntValue(3));
+
+	const Entity irrelevantEntity = host.Create();
+	host.Emplace<net::NetworkIdentity>(irrelevantEntity).netId = 2;
+	host.Emplace<ScriptComponent>(irrelevantEntity).scripts.push_back(ScriptEntry{.path = "Health"});
+	hostSession.Bind(2, irrelevantEntity);
+	hostBridge.Seed(irrelevantEntity.id, 0, 0, IntValue(99));
 
 	net::SnapshotCache cache;
-	CHECK(net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {}).empty());
+	const std::vector<std::byte> packet =
+	        net::BuildScriptFieldPacket(host, hostSession, cache, hostBridge, {relevantEntity});
+	REQUIRE_FALSE(packet.empty());
+
+	net::ByteReader r{packet};
+	CHECK(r.U16() == 1); // exactly one field: the relevant entity's
+	CHECK(r.U32() == 1); // its net id, not the irrelevant entity's (2)
 }
