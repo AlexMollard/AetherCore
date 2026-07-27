@@ -65,6 +65,13 @@ namespace aether::app::scripting
 
 		const int count = api->LoadScripts(m_scriptsAssemblyPath.c_str());
 		RefreshTypeNames();
+
+		// Every reload path - the initial load in the constructor, the editor's
+		// in-place reload, EditorProjectManager's project open, PlaySession - funnels
+		// through here, so bumping the generation here is the one place that cannot
+		// be missed. Anything caching per-type reflection (net replication's
+		// CSharpScriptFieldBridge) compares this and drops its table.
+		++m_reloadGeneration;
 		if (count < 0)
 		{
 			AE_WARN(LogCategory::App, "C# scripts failed to load from '{}'", m_scriptsAssemblyPath);

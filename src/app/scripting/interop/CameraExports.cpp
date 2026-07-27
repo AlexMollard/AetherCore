@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "platform/Input.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
@@ -276,4 +278,55 @@ AE_SCRIPT_API Vec3 aether_camera_screen_to_world(Vec2 screenPos)
 	const glm::vec3 up = glm::normalize(glm::vec3(tc->localToWorld[1]));
 	const glm::vec3 pointOnPlane = camPos + right * (ndcX * halfW) + up * (ndcY * halfH);
 	return Vec3{pointOnPlane.x, pointOnPlane.y, 0.0f};
+}
+
+AE_SCRIPT_API Vec2 aether_camera_world_to_screen(Vec3 worldPos)
+{
+	// Inverse of aether_camera_screen_to_world. Returns render-target pixels with a
+	// top-left origin, matching Input.MousePosition and the UI's coordinate space,
+	// so a caller can hand the result straight to Ui.SetRect.
+	// Behind the camera, returns (-1, -1) so callers can cheaply cull.
+	auto& ctx = ActiveContext();
+	auto& world = ActiveWorld();
+	const aether::Entity cam = aether::ecs::GetMainCameraEntity(world);
+	const auto* cc = world.TryGet<aether::CameraComponent>(cam);
+	const auto* tc = world.TryGet<aether::TransformComponent>(cam);
+	if (cc == nullptr || tc == nullptr || ctx.input == nullptr)
+	{
+		return Vec2{-1.0f, -1.0f};
+	}
+
+	const glm::vec2 target = ctx.input->GetMouseTargetSize();
+	if (target.x <= 0.0f || target.y <= 0.0f)
+	{
+		return Vec2{-1.0f, -1.0f};
+	}
+
+	// Mirrors Camera::GetProjectionMatrix, including the [1][1] flip that makes NDC
+	// Y grow DOWNWARD under Vulkan - which is why the pixel mapping below is a plain
+	// (ndc * 0.5 + 0.5) on both axes and not a flip on one of them.
+	const float aspect = target.x / target.y;
+	glm::mat4 proj;
+	if (cc->projection == aether::CameraProjection::Orthographic)
+	{
+		const float height = glm::max(0.001f, cc->orthographicHeight);
+		const float width = height * glm::max(0.001f, aspect);
+		proj = glm::ortho(-width * 0.5f, width * 0.5f, -height * 0.5f, height * 0.5f, cc->nearPlane, cc->farPlane);
+	}
+	else
+	{
+		proj = glm::perspective(glm::radians(cc->fovDegrees), aspect, cc->nearPlane, cc->farPlane);
+	}
+	proj[1][1] *= -1.0f;
+
+	const glm::vec4 clip = proj * glm::inverse(tc->localToWorld) * glm::vec4(ToGlm(worldPos), 1.0f);
+	// An orthographic projection always yields w = 1, so this culls only the
+	// perspective case - which is correct: screen_to_world maps an orthographic
+	// cursor onto the camera plane regardless of depth, and its inverse must agree.
+	if (clip.w <= 0.0f)
+	{
+		return Vec2{-1.0f, -1.0f};
+	}
+	const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+	return Vec2{(ndc.x * 0.5f + 0.5f) * target.x, (ndc.y * 0.5f + 0.5f) * target.y};
 }

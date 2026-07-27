@@ -545,6 +545,10 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial Vector3 aether_camera_screen_to_world(Vector2 screenPos);
 
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector2 aether_camera_world_to_screen(Vector3 worldPos);
+
     // ── Physics ───────────────────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial void aether_physics_add_box(uint id, Vector3 halfExtents, int dynamic);
@@ -821,6 +825,58 @@ internal static unsafe partial class Native
     // string blob.
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static unsafe partial int aether_net_call_server(uint entityId, string methodName, byte* argBlob, int argLen);
+
+    // ── Networking: session ──────────────────────────────────────────────────────
+    // Every one of these is safe with no session and no NetworkContext registered:
+    // they report 0/false rather than failing, so a title screen can ask before
+    // anything has connected.
+    [LibraryImport(Lib)]
+    internal static partial int aether_net_host(ushort port, int maxPeers);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_net_connect(string host, ushort port);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_net_disconnect();
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_is_host();
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_is_client();
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_is_connected();
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_net_local_connection_id();
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_net_spawn(string prefab, Vector3 position, uint owner);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_net_despawn(uint entityId);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_has_authority(uint entityId);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_is_owner(uint entityId);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_net_set_player_name(uint entityId, string name);
+
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_get_player_name(uint entityId, byte* buffer, int capacity);
+
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_last_error(byte* buffer, int capacity);
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_scene_file_exists(string name);

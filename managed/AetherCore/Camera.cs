@@ -71,4 +71,10 @@ public static class Camera
     /// Exact for orthographic 2D cameras. Handles both the editor viewport and a
     /// shipped fullscreen window.</summary>
     public static Vector3 ScreenToWorld(Vector2 screenPos) => Native.aether_camera_screen_to_world(screenPos);
+
+    /// <summary>Project a world position to render-target pixels (top-left origin),
+    /// matching <see cref="Input.MousePosition"/> and the UI canvas space - so the
+    /// result can be handed straight to <c>Ui.SetRect</c>. Returns (-1, -1) when the
+    /// position is behind the camera, so a caller can cull with one comparison.</summary>
+    public static Vector2 WorldToScreen(Vector3 worldPos) => Native.aether_camera_world_to_screen(worldPos);
 }

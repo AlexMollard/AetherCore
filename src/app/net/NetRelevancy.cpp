@@ -37,4 +37,20 @@ namespace aether::net
 		        });
 		return out;
 	}
+
+	std::vector<Entity> RelevantWithTransformless(World& world, ConnectionId viewer, glm::vec3 viewerPos,
+	        const RelevancySettings& settings)
+	{
+		std::vector<Entity> out = RelevantFor(world, viewer, viewerPos, settings);
+
+		// The union half of the contract documented on RelevantFor's view: a
+		// NetworkIdentity with no TransformComponent is never spatial, so it is
+		// always relevant to every connection. Appending rather than re-filtering
+		// keeps RelevantFor's result untouched, and the exclude_t on the view means
+		// nothing here can duplicate an entity RelevantFor already returned.
+		world.GetRegistry()
+		        .view<NetworkIdentity>(entt::exclude<TransformComponent>)
+		        .each([&](entt::entity ent, NetworkIdentity&) { out.push_back(World::FromEntt(ent)); });
+		return out;
+	}
 } // namespace aether::net

@@ -1,0 +1,218 @@
+#pragma once
+
+#include <chrono>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+#include <glm/glm.hpp>
+
+#include "net/NetRelevancy.hpp"
+#include "net/NetSession.hpp"
+#include "net/NetSnapshot.hpp"
+#include "net/NetSpawn.hpp"
+#include "net/NetworkSubsystem.hpp"
+#include "net/ReplicationSchema.hpp"
+#include "scene/Entity.hpp"
+#include "scene/reflection/Reflection.hpp"
+
+namespace aether
+{
+	class ServiceContainer;
+	class World;
+} // namespace aether
+
+namespace aether::net
+{
+	class RpcBridge;
+	class ScriptFieldBridge;
+
+	// The one live networking object in a running app: the transport, the session,
+	// the replication schema they share, and the tuning both network systems read.
+	//
+	// It exists because three separate consumers - NetworkReceiveSystem,
+	// NetworkSendSystem and the Net.* script exports - must all drive the SAME
+	// session, and a System cannot reach another System's members. Registering the
+	// shared object in the ServiceContainer and resolving it with TryGet<> is the
+	// established pattern here (RenderingSubsystem registers ui::FontRegistry the
+	// same way for ScriptComponentSystem to pick up), so this follows it rather
+	// than inventing a second one.
+	//
+	// Every accessor is safe to call with no session: a title screen asks
+	// IsHost/IsConnected before anything has connected, and the two systems tick
+	// every frame of an unnetworked game.
+	class NetworkContext
+	{
+	public:
+		explicit NetworkContext(ServiceContainer& services);
+		~NetworkContext();
+
+		NetworkContext(const NetworkContext&) = delete;
+		NetworkContext& operator=(const NetworkContext&) = delete;
+		NetworkContext(NetworkContext&&) = delete;
+		NetworkContext& operator=(NetworkContext&&) = delete;
+
+		// ── Session lifecycle ────────────────────────────────────────────────
+		// Both take the world so scene-placed entities get their deterministic net
+		// ids at the moment the session starts, before a single packet moves.
+		bool StartHost(World& world, std::uint16_t port, int maxPeers);
+		bool StartClient(std::string_view host, std::uint16_t port);
+		void Stop();
+
+		[[nodiscard]] bool IsActive() const
+		{
+			return m_transport.IsActive();
+		}
+
+		[[nodiscard]] bool IsHost() const
+		{
+			return m_transport.Role() == NetRole::Host;
+		}
+
+		[[nodiscard]] bool IsClient() const
+		{
+			return m_transport.Role() == NetRole::Client;
+		}
+
+		// A host is connected the moment it is listening; a client only once the
+		// host has answered with its Welcome and given it a connection id.
+		[[nodiscard]] bool IsConnected() const
+		{
+			return IsHost() || (IsClient() && m_session.LocalConnection() != kInvalidConnection);
+		}
+
+		[[nodiscard]] ConnectionId LocalConnectionId() const
+		{
+			return m_session.LocalConnection();
+		}
+
+		[[nodiscard]] std::string LastError() const
+		{
+			return m_transport.LastError();
+		}
+
+		// ── Shared state ─────────────────────────────────────────────────────
+		[[nodiscard]] NetworkSubsystem& Transport()
+		{
+			return m_transport;
+		}
+
+		[[nodiscard]] NetSession& Session()
+		{
+			return m_session;
+		}
+
+		[[nodiscard]] const ReplicationSchema& Schema() const
+		{
+			return m_schema;
+		}
+
+		[[nodiscard]] const std::vector<reflect::ComponentType>& Catalog() const;
+
+		[[nodiscard]] RelevancySettings& Relevancy()
+		{
+			return m_relevancy;
+		}
+
+		// Snapshots per connection per second. State replication is rate-limited
+		// rather than frame-locked: at 144 fps a frame-locked host would spend most
+		// of its upstream retransmitting sub-millimetre motion no client can show.
+		[[nodiscard]] float SendRateHz() const
+		{
+			return m_sendRateHz;
+		}
+
+		void SetSendRateHz(float hz)
+		{
+			m_sendRateHz = hz;
+		}
+
+		// One change-detection cache PER CONNECTION. A single shared cache would
+		// record a field as sent the moment any one connection received it, so a
+		// connection that only just became relevant to that entity would never be
+		// told the field's current value.
+		[[nodiscard]] SnapshotCache& CacheFor(ConnectionId connection)
+		{
+			return m_caches[connection];
+		}
+
+		void DropCacheFor(ConnectionId connection)
+		{
+			m_caches.erase(connection);
+		}
+
+		// Net ids are never reused, so a stale entry is only wasted memory - but a
+		// long session that spawns and despawns constantly would grow every cache
+		// without bound, so a despawn drops the entity from all of them.
+		void ForgetNetId(std::uint32_t netId);
+
+		[[nodiscard]] ServiceContainer& Services() const
+		{
+			return m_services;
+		}
+
+		// Seconds since the process started, from a monotonic clock rather than the
+		// frame delta: interpolation is a jitter buffer over wall-clock arrival
+		// times, and a paused or time-scaled game must not warp it.
+		[[nodiscard]] float Now() const;
+
+		// Lazily resolved from the ServiceContainer - ScriptComponentSystem is
+		// registered after this object is constructed, and neither bridge exists at
+		// all in a build with no CLR. Null until both halves are available.
+		[[nodiscard]] const ScriptFieldBridge* FieldBridge() const;
+		[[nodiscard]] const RpcBridge* Rpcs() const;
+
+		// ── Framing ──────────────────────────────────────────────────────────
+		// Every packet leads with one NetMessage byte so the receive system can
+		// dispatch without a second framing layer. Spawn/Despawn/Rpc already carry
+		// theirs from their encoders; snapshots and script-field packets do not, so
+		// they are wrapped here.
+		[[nodiscard]] static std::vector<std::byte> Frame(NetMessage kind, std::span<const std::byte> payload);
+		[[nodiscard]] static std::vector<std::byte> EncodeWelcome(ConnectionId assigned);
+
+		// ── Replicated entity lifecycle ──────────────────────────────────────
+		// Host-only. Instantiates `prefab`, gives it a net id owned by `owner`, and
+		// tells every connection to do the same. Returns an invalid entity when not
+		// hosting or when the prefab cannot be read.
+		Entity SpawnPrefab(World& world, const std::string& prefab, glm::vec3 position, ConnectionId owner);
+
+		// Host-only. Broadcasts the despawn and destroys the entity locally.
+		void Despawn(World& world, Entity entity);
+
+		// Clears every NetworkIdentity's net id. A session assigns scene-placed ids by
+		// walking identities whose id is still 0, so ids left over from a previous
+		// session would make the next one skip those entities entirely. Called for the
+		// host in StartHost and for a client the moment the host's Welcome arrives.
+		static void ResetForNewSession(World& world);
+
+		// Client-side application of a replayed or live Spawn. Ignores a net id it
+		// already knows (a scene-placed entity both ends already have) and a spawn
+		// message naming no prefab, or one that could reach outside the prefab folder.
+		void ApplySpawn(World& world, const SpawnMessage& msg);
+		void ApplyDespawn(World& world, std::uint32_t netId);
+
+		// Authority: the host decides everything; a client decides only what it
+		// owns. Offline every entity is local, so both are true and single-player
+		// code written against them just works.
+		[[nodiscard]] bool HasAuthority(World& world, Entity entity) const;
+		[[nodiscard]] bool IsOwner(World& world, Entity entity) const;
+
+	private:
+		ServiceContainer& m_services;
+		NetworkSubsystem m_transport;
+		NetSession m_session;
+		ReplicationSchema m_schema;
+		RelevancySettings m_relevancy;
+		float m_sendRateHz = 20.f;
+		std::unordered_map<ConnectionId, SnapshotCache> m_caches;
+
+		std::chrono::steady_clock::time_point m_epoch = std::chrono::steady_clock::now();
+
+		mutable std::unique_ptr<ScriptFieldBridge> m_fieldBridge;
+		mutable std::unique_ptr<RpcBridge> m_rpcBridge;
+	};
+} // namespace aether::net

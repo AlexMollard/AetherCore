@@ -53,6 +53,15 @@ namespace aether::net
 		[[nodiscard]] Entity EntityFor(std::uint32_t netId) const;
 		[[nodiscard]] std::uint32_t NetIdFor(Entity entity) const;
 
+		// Every live binding. A binding outlives its entity whenever the entity dies
+		// by a route replication never sees - a scene load, a script's Entity.Destroy -
+		// and EntityFor would then hand a caller a dangling handle to try_get with, so
+		// the driving system sweeps these against the registry each tick.
+		[[nodiscard]] const std::unordered_map<std::uint32_t, Entity>& Bindings() const
+		{
+			return m_byNetId;
+		}
+
 		void AddConnection(ConnectionId id);
 		void RemoveConnection(ConnectionId id);
 

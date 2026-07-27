@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -39,20 +40,28 @@ namespace aether::net
 		        const ScriptPropertyValue& value) const override;
 
 		// Drops the cached per-type replicated-property tables built by ReplicatedProperties.
-		// CSharpScriptingSubsystem exposes no reload signal (version counter or callback) this
-		// bridge can hook itself, so nothing calls this yet - whoever wires this bridge into a
-		// live NetSession must call it after CSharpScriptingSubsystem::LoadScripts() runs (the
-		// single choke point every reload path - initial load, in-place reload, PlaySession -
-		// funnels through), or a hot-reload that changes a script's fields keeps serving the
-		// stale table.
+		// ReplicatedProperties() calls this itself whenever CSharpScriptingSubsystem's reload
+		// generation moves, which covers every reload path (initial load, in-place reload,
+		// project open, PlaySession) because they all funnel through LoadScripts(). It stays
+		// public so a caller that reloads scripts by some future route can still force it.
 		void ClearCache() const
 		{
 			m_propertyCache.clear();
 		}
 
 	private:
+		// Drops the cache if scripts reloaded since it was built. Hooking the reload
+		// this way rather than calling ClearCache() from each LoadScripts() call site is
+		// deliberate: a new call site cannot forget to invalidate a cache that checks
+		// for itself, and a stale table silently replicates the wrong property.
+		void SyncToScriptReload() const;
+
 		const aether::app::scripting::CSharpScriptingSubsystem& m_scripting;
 		const aether::app::ScriptComponentSystem& m_instances;
+
+		// Reload generation the cached tables were built against.
+		mutable std::uint32_t m_cacheGeneration = 0;
+		mutable bool m_cacheSeeded = false;
 
 		// Per-type replicated-property descriptors, built once per type on first request.
 		// ReplicatedProperties() is called once per entity per script per tick from the

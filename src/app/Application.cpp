@@ -43,6 +43,8 @@
 #include "camera/CameraManager.hpp"
 #include "scene/LightSystem.hpp"
 #ifdef AETHERCORE_SCENE_APP
+#	include "net/NetworkContext.hpp"
+#	include "net/NetworkSystems.hpp"
 #	include "systems/DayNightSystem.hpp"
 #	include "systems/ScriptComponentSystem.hpp"
 #	include "PlaySession.hpp"
@@ -213,6 +215,10 @@ namespace aether::app
 
 		// (AETHERCORE_SCENE_APP undefined) never wires them, so it never links the
 #ifdef AETHERCORE_SCENE_APP
+		// Both hold a reference to the NetworkContext the ServiceContainer owns, so
+		// they must go before the container does.
+		context.Get<World>().UnregisterSystem("NetworkSendSystem");
+		context.Get<World>().UnregisterSystem("NetworkReceiveSystem");
 		context.Get<World>().UnregisterSystem("ScriptComponentSystem");
 		context.Get<World>().UnregisterSystem("CameraSystem");
 		context.Get<World>().UnregisterSystem("LightSystem");
@@ -270,6 +276,18 @@ namespace aether::app
 
 #ifdef AETHERCORE_SCENE_APP
 			{
+				// The one live networking object: transport + session + replication
+				// schema. Registered as a service because three consumers - both network
+				// systems and the Net.* script exports - must drive the SAME session.
+				auto networkContext = std::make_unique<aether::net::NetworkContext>(services);
+				auto& networkRef = *networkContext;
+				services.RegisterOwned<aether::net::NetworkContext>(std::move(networkContext));
+
+				// Before everything: inbound authoritative state must land before physics,
+				// scripts or animation read it, or every system spends a frame acting on
+				// data the host has already superseded.
+				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::net::NetworkReceiveSystem>(networkRef));
+
 				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 				auto spriteAnimationSystem = std::make_unique<aether::SpriteAnimationSystem>(attachContext.Get<aether::SpriteAssetStore>());
 				auto* spriteAnimationPtr = spriteAnimationSystem.get();
@@ -315,6 +333,10 @@ namespace aether::app
 				auto* particlePtr = particleSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(particleSystem));
 				services.Register<aether::ParticleSystem>(*particlePtr);
+
+				// After everything: the host broadcasts post-simulation state, so clients
+				// receive the world as it ended the frame rather than mid-update.
+				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::net::NetworkSendSystem>(networkRef));
 			}
 #endif
 		}

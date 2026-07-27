@@ -33,6 +33,16 @@ namespace aether::app::scripting
 
 		int LoadScripts();
 
+		// Bumped by every successful or failed LoadScripts(). A consumer that caches
+		// anything derived from the loaded script types (property tables, RPC method
+		// indices) stores the generation alongside its cache and drops it when this
+		// changes; there is no callback to subscribe to, and polling a counter cannot
+		// be forgotten at a new reload call site the way an explicit invalidation can.
+		[[nodiscard]] std::uint32_t ScriptReloadGeneration() const
+		{
+			return m_reloadGeneration;
+		}
+
 		bool RebuildFromSource(std::string& error);
 
 		// on project open; GameRuntime never does, so it only loads the deployed
@@ -117,6 +127,7 @@ namespace aether::app::scripting
 		std::filesystem::path m_managedDir;
 		std::string m_scriptsAssemblyPath;
 		std::vector<std::string> m_typeNames;
+		std::uint32_t m_reloadGeneration = 0;
 
 		std::filesystem::path m_scriptProject;
 		std::filesystem::path m_scriptArtifactsDir;

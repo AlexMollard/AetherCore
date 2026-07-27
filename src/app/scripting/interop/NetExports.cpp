@@ -1,0 +1,176 @@
+#include "scripting/interop/InteropCommon.hpp"
+
+#include <algorithm>
+#include <cstring>
+#include <string>
+
+#include "net/NetComponents.hpp"
+#include "net/NetworkContext.hpp"
+#include "scene/Entity.hpp"
+#include "scene/World.hpp"
+#include "utils/ServiceContainer.hpp"
+
+using namespace aether::app::scripting;
+using namespace aether::app::scripting::interop;
+
+// The Net.* script API's native half.
+//
+// EVERY export here is offline-safe. A title screen asks Net.IsHost before anything
+// has connected, and a single-player build never registers a NetworkContext at all,
+// so a missing context is a normal state that returns false/0/empty - never a crash
+// and never a log line.
+namespace
+{
+	aether::net::NetworkContext* Context()
+	{
+		const auto& ctx = ActiveContext();
+		if (ctx.services == nullptr)
+		{
+			return nullptr;
+		}
+		return ctx.services->TryGet<aether::net::NetworkContext>();
+	}
+
+	// Shared with Ui's string getters: write into the caller's buffer and return the
+	// byte count, so no allocation crosses the managed boundary.
+	std::int32_t CopyOut(const std::string& value, char* buffer, std::int32_t capacity)
+	{
+		if (buffer == nullptr || capacity <= 0 || value.empty())
+		{
+			return 0;
+		}
+		const auto n = static_cast<std::int32_t>(std::min<std::size_t>(static_cast<std::size_t>(capacity), value.size()));
+		std::memcpy(buffer, value.data(), static_cast<std::size_t>(n));
+		return n;
+	}
+} // namespace
+
+AE_SCRIPT_API std::int32_t aether_net_host(std::uint16_t port, std::int32_t maxPeers)
+{
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		return 0;
+	}
+	return context->StartHost(ActiveWorld(), port, maxPeers) ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_net_connect(const char* hostUtf8, std::uint16_t port)
+{
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr || hostUtf8 == nullptr)
+	{
+		return 0;
+	}
+	return context->StartClient(hostUtf8, port) ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_net_disconnect()
+{
+	if (aether::net::NetworkContext* context = Context())
+	{
+		context->Stop();
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_net_is_host()
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr && context->IsHost() ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_net_is_client()
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr && context->IsClient() ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_net_is_connected()
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr && context->IsConnected() ? 1 : 0;
+}
+
+AE_SCRIPT_API std::uint32_t aether_net_local_connection_id()
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr ? context->LocalConnectionId() : 0u;
+}
+
+AE_SCRIPT_API std::uint32_t aether_net_spawn(const char* prefabUtf8, Vec3 position, std::uint32_t owner)
+{
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr || prefabUtf8 == nullptr)
+	{
+		return 0;
+	}
+	return context->SpawnPrefab(ActiveWorld(), prefabUtf8, ToGlm(position), owner).id;
+}
+
+AE_SCRIPT_API void aether_net_despawn(std::uint32_t entityId)
+{
+	aether::net::NetworkContext* context = Context();
+	const aether::Entity entity{entityId};
+	if (!entity.IsValid())
+	{
+		return;
+	}
+	if (context == nullptr)
+	{
+		// Offline, Net.Despawn still has to mean "this entity goes away", or a script
+		// written for both modes leaks entities in single-player.
+		ActiveWorld().Destroy(entity);
+		return;
+	}
+	context->Despawn(ActiveWorld(), entity);
+}
+
+AE_SCRIPT_API std::int32_t aether_net_has_authority(std::uint32_t entityId)
+{
+	const aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		return 1; // offline: local state is the only state
+	}
+	return context->HasAuthority(ActiveWorld(), aether::Entity{entityId}) ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_net_is_owner(std::uint32_t entityId)
+{
+	const aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		return 1;
+	}
+	return context->IsOwner(ActiveWorld(), aether::Entity{entityId}) ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_net_set_player_name(std::uint32_t entityId, const char* nameUtf8)
+{
+	// Deliberately independent of any session: NetPlayer is a plain component, so a
+	// name set on the menu survives into the session that replicates it later.
+	const aether::Entity entity{entityId};
+	if (!entity.IsValid() || nameUtf8 == nullptr)
+	{
+		return;
+	}
+	auto& world = ActiveWorld();
+	if (auto* player = world.TryGet<aether::net::NetPlayer>(entity))
+	{
+		player->displayName = nameUtf8;
+		return;
+	}
+	world.Emplace<aether::net::NetPlayer>(entity, aether::net::NetPlayer{.displayName = nameUtf8});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_get_player_name(std::uint32_t entityId, char* buffer, std::int32_t capacity)
+{
+	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(aether::Entity{entityId});
+	return player != nullptr ? CopyOut(player->displayName, buffer, capacity) : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_net_last_error(char* buffer, std::int32_t capacity)
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr ? CopyOut(context->LastError(), buffer, capacity) : 0;
+}

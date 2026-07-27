@@ -5,8 +5,24 @@
 
 namespace aether::net
 {
+	void CSharpScriptFieldBridge::SyncToScriptReload() const
+	{
+		const std::uint32_t generation = m_scripting.ScriptReloadGeneration();
+		if (m_cacheSeeded && generation == m_cacheGeneration)
+		{
+			return;
+		}
+		// A reload can reorder, retype or remove [Replicated] properties, so every
+		// cached table is suspect - not just the ones whose type names changed.
+		ClearCache();
+		m_cacheGeneration = generation;
+		m_cacheSeeded = true;
+	}
+
 	std::vector<ScriptPropertyDesc> CSharpScriptFieldBridge::ReplicatedProperties(const std::string& typeName) const
 	{
+		SyncToScriptReload();
+
 		// One CLR transition (plus one per property) per unknown type, not per call: the
 		// build/apply paths call this once per entity per script per tick, so re-marshalling
 		// the table every time would defeat the managed side's own cache (s_props).
