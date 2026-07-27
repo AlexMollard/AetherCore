@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Numerics;
 using AetherCore;
 
@@ -28,14 +29,43 @@ public sealed class PlayerController : EntityScript
     /// <summary>Releasing jump while rising cuts the ascent to this fraction, once.</summary>
     public float JumpCutFactor = 0.45f;
 
-    private const string AnimIdle = "project://assets/animations/player_idle.spriteanim.toml";
-    private const string AnimRun = "project://assets/animations/player_run.spriteanim.toml";
-    private const string AnimJump = "project://assets/animations/player_jump.spriteanim.toml";
+    // Internal (not private) so NetPlayerSync - the sole place that actually calls
+    // SpriteAnimator, see that script's header comment - can resolve an AnimIndex
+    // into a clip path.
+    internal const string AnimIdle = "project://assets/animations/player_idle.spriteanim.toml";
+    internal const string AnimRun = "project://assets/animations/player_run.spriteanim.toml";
+    internal const string AnimJump = "project://assets/animations/player_jump.spriteanim.toml";
+
+    /// <summary>Wire/AnimIndex values for the three clips above.</summary>
+    internal const int AnimIndexIdle = 0;
+    internal const int AnimIndexRun = 1;
+    internal const int AnimIndexJump = 2;
+
+    // NetPlayerSync needs to read this entity's PlayerController, but the engine has
+    // no generic "get sibling script on this entity" API. Rather than add one at the
+    // engine layer for a single call site, PlayerController tracks its own live
+    // instances by entity id - confined to this game assembly, cleaned up in
+    // OnDetach below.
+    private static readonly Dictionary<uint, PlayerController> s_byEntity = new();
+
+    /// <summary>The PlayerController instance attached to <paramref name="entity"/>,
+    /// or null if none is live there.</summary>
+    internal static PlayerController? For(Entity entity)
+        => s_byEntity.TryGetValue(entity.Id, out PlayerController? controller) ? controller : null;
+
+    /// <summary>
+    /// The clip that movement/physics state currently calls for - one of the
+    /// AnimIndex* constants above. Computed here every frame (this script already
+    /// owns the grounded/movement state that decides it) but NOT applied to the
+    /// sprite here; NetPlayerSync reads it, replicates it, and is the one place
+    /// that calls SpriteAnimator, so the owner and every remote copy switch clips
+    /// through the identical path instead of two scripts guessing independently.
+    /// </summary>
+    public int AnimIndex { get; private set; }
 
     private Vector3 _spawn;
     private float _sinceGrounded = 99.0f;
     private float _sinceJumpPressed = 99.0f;
-    private string _anim = "";
     private bool _jumpCutDone;
     private bool _nameReported;
 
@@ -47,11 +77,16 @@ public sealed class PlayerController : EntityScript
 
     public override void OnAttach()
     {
+        s_byEntity[Self.Id] = this;
         _spawn = Self.Position;
         _baseSpriteSize = SpriteRenderer.GetPixelSize(Self);
         Physics2D.EnableEvents(Self);
         Physics2D.SetGravityScale(Self, GravityScale);
-        SetAnim(AnimIdle);
+    }
+
+    public override void OnDetach()
+    {
+        s_byEntity.Remove(Self.Id);
     }
 
     public override void OnUpdate(float deltaTime)
@@ -136,7 +171,7 @@ public sealed class PlayerController : EntityScript
             SpriteRenderer.SetFlipX(Self, move < 0.0f);
         }
 
-        SetAnim(!grounded ? AnimJump : move != 0.0f ? AnimRun : AnimIdle);
+        AnimIndex = !grounded ? AnimIndexJump : move != 0.0f ? AnimIndexRun : AnimIndexIdle;
 
         // Drive squash/stretch: motion-stretch while airborne, ease to neutral
         // on the ground, then push the sprite quad size (feet stay put enough
@@ -221,16 +256,5 @@ public sealed class PlayerController : EntityScript
             }
         }
         return false;
-    }
-
-    private void SetAnim(string path)
-    {
-        if (_anim == path)
-        {
-            return;
-        }
-        _anim = path;
-        SpriteAnimator.SetAnimation(Self, path);
-        SpriteAnimator.Play(Self);
     }
 }

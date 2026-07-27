@@ -75,3 +75,6 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'PlayerController'
+
+    [[entities.scripts]]
+    type = 'NetPlayerSync'

@@ -148,6 +148,19 @@ public static class Net
     /// test for "is this my player". True offline.</summary>
     public static bool IsOwner(Entity entity) => Native.aether_net_is_owner(entity.Id) != 0;
 
+    /// <summary>
+    /// Writes <paramref name="correctionRate"/> and <paramref name="snapDistance"/>
+    /// into <paramref name="entity"/>'s <c>NetworkTransform</c> component (see the
+    /// remarks on <see cref="Net"/> for what that component does). A no-op if the
+    /// entity has no <c>NetworkTransform</c> - there is nothing to tune.
+    /// </summary>
+    /// <param name="correctionRate">How fast the locally-owned entity's predicted
+    /// position eases toward the host's authoritative one.</param>
+    /// <param name="snapDistance">Position error beyond which correction snaps
+    /// instead of easing.</param>
+    public static void SetTransformTuning(Entity entity, float correctionRate, float snapDistance)
+        => Native.aether_net_set_transform_tuning(entity.Id, correctionRate, snapDistance);
+
     // ── Players ─────────────────────────────────────────────────────────────────
 
     /// <summary>Set a player entity's display name, adding the Net Player component if

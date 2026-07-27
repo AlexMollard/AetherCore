@@ -878,6 +878,11 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial int aether_net_is_owner(uint entityId);
 
+    // Writes the two correction-feel tunables into entityId's NetworkTransform
+    // component; a no-op if the entity has none.
+    [LibraryImport(Lib)]
+    internal static partial void aether_net_set_transform_tuning(uint entityId, float correctionRate, float snapDistance);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_net_set_player_name(uint entityId, string name);
 
