@@ -1432,8 +1432,8 @@ namespace aether::editor
 		        }});
 		methods.push_back({"engine.send_input",
 		        "send_input",
-		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single "
-		        "letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to inject typed characters (text fields) alongside key state.",
+		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, "
+		        "backspace, delete, home, end, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
 		        true,
 		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"up", json{{"type", "array"}, {"items", StrProp()}}},
