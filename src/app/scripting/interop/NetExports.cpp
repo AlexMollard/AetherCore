@@ -71,14 +71,14 @@ AE_SCRIPT_API std::int32_t aether_net_connect(const char* hostUtf8, std::uint16_
 	{
 		return 0;
 	}
-	return context->StartClient(hostUtf8, port) ? 1 : 0;
+	return context->StartClient(ActiveWorld(), hostUtf8, port) ? 1 : 0;
 }
 
 AE_SCRIPT_API void aether_net_disconnect()
 {
 	if (aether::net::NetworkContext* context = Context())
 	{
-		context->Stop();
+		context->Stop(ActiveWorld());
 	}
 }
 

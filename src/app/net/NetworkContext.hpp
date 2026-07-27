@@ -57,11 +57,17 @@ namespace aether::net
 		NetworkContext& operator=(NetworkContext&&) = delete;
 
 		// ── Session lifecycle ────────────────────────────────────────────────
-		// Both take the world so scene-placed entities get their deterministic net
-		// ids at the moment the session starts, before a single packet moves.
+		// All three take the world: the host's scene-placed entities get their
+		// deterministic net ids the moment the session starts (before a single packet
+		// moves), and Stop destroys the entities the session spawned.
 		bool StartHost(World& world, std::uint16_t port, int maxPeers);
-		bool StartClient(std::string_view host, std::uint16_t port);
-		void Stop();
+		bool StartClient(World& world, std::string_view host, std::uint16_t port);
+
+		// Tears the session down AND destroys every replicated entity this session
+		// spawned (NetworkIdentity with scenePlaced == false). Leaving them behind
+		// makes the next join replay a duplicate of each one - see the note in the
+		// definition.
+		void Stop(World& world);
 
 		[[nodiscard]] bool IsActive() const
 		{
@@ -168,9 +174,11 @@ namespace aether::net
 
 		// ── Framing ──────────────────────────────────────────────────────────
 		// Every packet leads with one NetMessage byte so the receive system can
-		// dispatch without a second framing layer. Spawn/Despawn/Rpc already carry
-		// theirs from their encoders; snapshots and script-field packets do not, so
-		// they are wrapped here.
+		// dispatch without a second framing layer. Spawn/Despawn/Rpc/Welcome already
+		// carry theirs from their encoders; snapshots and script-field packets do
+		// not, so they are wrapped here. The convention is documented, per kind, next
+		// to the NetMessage enum in NetSpawn.hpp - Frame just forwards to
+		// FrameMessage there.
 		[[nodiscard]] static std::vector<std::byte> Frame(NetMessage kind, std::span<const std::byte> payload);
 		[[nodiscard]] static std::vector<std::byte> EncodeWelcome(ConnectionId assigned);
 
@@ -180,7 +188,9 @@ namespace aether::net
 		// hosting or when the prefab cannot be read.
 		Entity SpawnPrefab(World& world, const std::string& prefab, glm::vec3 position, ConnectionId owner);
 
-		// Host-only. Broadcasts the despawn and destroys the entity locally.
+		// Broadcasts the despawn (host only) and destroys the entity locally. A client
+		// is refused outright for an entity it does not own: destroying it locally
+		// while the host keeps replicating it desyncs this client permanently.
 		void Despawn(World& world, Entity entity);
 
 		// Clears every NetworkIdentity's net id. A session assigns scene-placed ids by

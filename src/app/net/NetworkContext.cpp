@@ -1,5 +1,6 @@
 #include "net/NetworkContext.hpp"
 
+#include <entt/entt.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "net/CSharpRpcBridge.hpp"
@@ -32,14 +33,6 @@ namespace aether::net
 			       && name.find(':') == std::string_view::npos;
 		}
 
-		// Clears every net id in the world. A session assigns scene-placed ids by
-		// walking entities whose id is still 0, so ids left behind by a previous
-		// session would make the next one silently skip those entities and never bind
-		// them - they would exist, be replicated by nobody, and update never.
-		void ResetNetIds(World& world)
-		{
-			world.View<NetworkIdentity>().each([](NetworkIdentity& identity) { identity.netId = 0; });
-		}
 	} // namespace
 
 	NetworkContext::NetworkContext(ServiceContainer& services)
@@ -99,7 +92,7 @@ namespace aether::net
 
 	bool NetworkContext::StartHost(World& world, std::uint16_t port, int maxPeers)
 	{
-		Stop();
+		Stop(world);
 		if (!m_transport.Host(port, maxPeers > 0 ? maxPeers : kDefaultMaxPeers))
 		{
 			AE_WARN(LogCategory::App, "Net: host failed - {}", m_transport.LastError());
@@ -109,14 +102,14 @@ namespace aether::net
 		m_session.SetLocalConnection(kInvalidConnection);
 		// The host's own scene-placed entities get their ids now; every client that
 		// loads the same scene derives the identical ids with no handshake.
-		ResetNetIds(world);
+		ResetForNewSession(world);
 		AssignScenePlacedNetIds(world, m_session);
 		return true;
 	}
 
-	bool NetworkContext::StartClient(std::string_view host, std::uint16_t port)
+	bool NetworkContext::StartClient(World& world, std::string_view host, std::uint16_t port)
 	{
-		Stop();
+		Stop(world);
 		if (!m_transport.Connect(host, port))
 		{
 			AE_WARN(LogCategory::App, "Net: connect failed - {}", m_transport.LastError());
@@ -129,8 +122,39 @@ namespace aether::net
 		return true;
 	}
 
-	void NetworkContext::Stop()
+	void NetworkContext::Stop(World& world)
 	{
+		// Everything ApplySpawn/SpawnPrefab instantiated for this session goes with it.
+		// Scene-placed entities stay - they came from the scene file and the next
+		// session re-derives their ids from it - but a prefab-spawned one has no source
+		// but the session that created it. Left behind, ResetForNewSession zeroes its
+		// netId, AssignScenePlacedNetIds skips it (no node id), and the next join's
+		// replay instantiates a second copy: every join/leave cycle doubles the
+		// prefab-spawned population. `scenePlaced` exists precisely to tell them apart.
+		//
+		// BOTH halves of the predicate are load-bearing. `scenePlaced` is only set by
+		// AssignScenePlacedNetIds, so before the first session every scene-placed
+		// entity still reads false - and Stop also runs at the TOP of StartHost /
+		// StartClient. Testing `scenePlaced` alone would therefore delete the entire
+		// replicated scene the moment hosting began. A live net id is what marks an
+		// entity as belonging to the session now ending.
+		//
+		// Collect first, destroy second: DestroyHierarchy mutates the registry the view
+		// is iterating.
+		std::vector<Entity> spawned;
+		world.View<NetworkIdentity>().each(
+		        [&](entt::entity ent, NetworkIdentity& identity)
+		        {
+			        if (identity.netId != 0 && !identity.scenePlaced)
+			        {
+				        spawned.push_back(World::FromEntt(ent));
+			        }
+		        });
+		for (const Entity entity: spawned)
+		{
+			ecs::DestroyHierarchy(world, entity);
+		}
+
 		m_transport.Disconnect();
 		m_session.Clear();
 		m_caches.clear();
@@ -146,10 +170,7 @@ namespace aether::net
 
 	std::vector<std::byte> NetworkContext::Frame(NetMessage kind, std::span<const std::byte> payload)
 	{
-		ByteWriter w;
-		w.U8(static_cast<std::uint8_t>(kind));
-		w.Bytes(payload);
-		return w.Take();
+		return FrameMessage(kind, payload);
 	}
 
 	std::vector<std::byte> NetworkContext::EncodeWelcome(ConnectionId assigned)
@@ -197,6 +218,15 @@ namespace aether::net
 	void NetworkContext::Despawn(World& world, Entity entity)
 	{
 		if (!entity.IsValid())
+		{
+			return;
+		}
+		// A client destroying something it does not own desyncs only itself: the
+		// broadcast below is host-only, so the host keeps replicating a net id that now
+		// resolves to nothing on this machine and the entity never comes back. Refuse
+		// instead. IsOwner is true for an entity with no NetworkIdentity, so a client's
+		// purely local entities are still destroyable through Net.Despawn.
+		if (IsClient() && !IsOwner(world, entity))
 		{
 			return;
 		}
@@ -258,7 +288,7 @@ namespace aether::net
 
 	void NetworkContext::ResetForNewSession(World& world)
 	{
-		ResetNetIds(world);
+		world.View<NetworkIdentity>().each([](NetworkIdentity& identity) { identity.netId = 0; });
 	}
 
 	void NetworkContext::ApplyDespawn(World& world, std::uint32_t netId)
