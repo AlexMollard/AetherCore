@@ -65,8 +65,9 @@ namespace aether::net
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, SnapshotCache& cache,
 	        const std::vector<Entity>& relevant);
 
-	// Client side. Ignores unknown net ids, out-of-range indices, entities missing
-	// the component, and truncated packets - a peer can send anything.
+	// Client side. Ignores unknown net ids, out-of-range indices, fields not present in
+	// the replication schema, entities missing the component, and truncated packets - a
+	// peer can send anything.
 	void ApplySnapshot(World& world, const ReplicationSchema& schema,
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet);
 } // namespace aether::net
