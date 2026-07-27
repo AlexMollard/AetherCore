@@ -22,6 +22,7 @@ using UiSliderComponent = aether::ui::UISlider;
 using UiToggleComponent = aether::ui::UIToggle;
 using UiButtonComponent = aether::ui::UIButton;
 using UiProgressBarComponent = aether::ui::UIProgressBar;
+using UiTextBoxComponent = aether::ui::UITextBox;
 using UiMaskComponent = aether::ui::UIMask;
 using UiEffectComponent = aether::ui::UIEffect;
 using UiMaterialComponent = aether::ui::UIMaterial;
@@ -64,6 +65,18 @@ namespace
 		        {"top", static_cast<int>(UiTextComponent::VAlign::Top)},
 		        {"middle", static_cast<int>(UiTextComponent::VAlign::Middle)},
 		        {"bottom", static_cast<int>(UiTextComponent::VAlign::Bottom)},
+		}};
+		return table;
+	}
+
+	const reflect::EnumTable& UiContentTypeEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"any", static_cast<int>(aether::ui::TextContentType::Any)},
+		        {"integer", static_cast<int>(aether::ui::TextContentType::Integer)},
+		        {"decimal", static_cast<int>(aether::ui::TextContentType::Decimal)},
+		        {"alphanumeric", static_cast<int>(aether::ui::TextContentType::Alphanumeric)},
+		        {"host", static_cast<int>(aether::ui::TextContentType::Host)},
 		}};
 		return table;
 	}
@@ -280,6 +293,27 @@ AE_FIELD_N("track_color", trackColor, Color4)
 AE_FIELD_N("fill_color", fillColor, Color4)
 AE_FIELD_N("corner_radius", cornerRadius, Float)
 b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, false); });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiTextBoxComponent, "UI Text Box", "UI", ICON_FA_KEYBOARD)
+AE_FIELD_N("text", text, String)
+AE_FIELD_N("placeholder", placeholder, String)
+AE_FIELD_N("font", fontName, String)
+AE_FIELD_ENUM("content_type", contentType, UiContentTypeEnum())
+AE_FIELD_N("allowed_chars", allowedChars, String)
+AE_FIELD_N("max_length", maxLength, Int)
+AE_FIELD_N("password", password, Bool)
+AE_FIELD_N("pixel_size", pixelSize, Float)
+AE_FIELD_N("corner_radius", cornerRadius, Float)
+AE_FIELD_N("padding", padding, Float)
+AE_FIELD_N("bg_color", bgColor, Color4)
+AE_FIELD_N("bg_color_focused", bgColorFocused, Color4)
+AE_FIELD_N("text_color", textColor, Color4)
+AE_FIELD_N("placeholder_color", placeholderColor, Color4)
+AE_FIELD_N("caret_color", caretColor, Color4)
+AE_FIELD_N("selection_color", selectionColor, Color4)
+b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, true); });
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 

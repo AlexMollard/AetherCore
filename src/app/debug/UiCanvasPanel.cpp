@@ -829,6 +829,14 @@ namespace aether::editor
 				const float fillW = (element.max.x - element.min.x) * std::clamp(bar->value, 0.f, 1.f);
 				drawList->AddRectFilled(element.min, ImVec2(element.min.x + fillW, element.max.y), ToU32(bar->fillColor), 0.f);
 			}
+			if (const auto* textBox = world.TryGet<ui::UITextBox>(element.entity))
+			{
+				drawList->AddRectFilled(element.min, element.max, ToU32(textBox->bgColor), textBox->cornerRadius * zoom);
+				// The canvas preview does not shape text; a caret tick is enough to read the
+				// element as a field rather than a plain panel.
+				const float pad = textBox->padding * zoom;
+				drawList->AddLine(ImVec2(element.min.x + pad, element.min.y + pad), ImVec2(element.min.x + pad, element.max.y - pad), ToU32(textBox->caretColor), 2.f);
+			}
 			if (const auto* button = world.TryGet<ui::UIButton>(element.entity))
 			{
 				drawList->AddRectFilled(element.min, element.max, ToU32(button->bgColor), button->cornerRadius * zoom);

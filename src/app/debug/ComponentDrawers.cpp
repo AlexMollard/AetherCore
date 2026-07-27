@@ -125,6 +125,10 @@ namespace aether::editor
 		{
 			return {ICON_FA_BARS_PROGRESS, ToImVec4(colors::Info)};
 		}
+		if (world.Has<ui::UITextBox>(entity))
+		{
+			return {ICON_FA_KEYBOARD, ToImVec4(colors::Info)};
+		}
 		if (world.Has<ui::UIText>(entity))
 		{
 			return {ICON_FA_FONT, ToImVec4(colors::Info)};

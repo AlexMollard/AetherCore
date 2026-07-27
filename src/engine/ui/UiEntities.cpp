@@ -150,6 +150,28 @@ namespace aether::ui
 		return e;
 	}
 
+	Entity CreateTextBoxEntity(World& world, Entity canvas)
+	{
+		canvas = EnsureCanvas(world, canvas);
+
+		const Entity e = world.Create();
+		world.Emplace<NameComponent>(e, NameComponent{.name = "TextBox"});
+		world.Emplace<HierarchyComponent>(e);
+
+		auto& rect = world.Emplace<UIRect>(e);
+		rect.anchorMin = {0.5f, 0.5f};
+		rect.anchorMax = {0.5f, 0.5f};
+		rect.offsetMin = {-140.f, -18.f};
+		rect.offsetMax = {140.f, 18.f};
+
+		auto& box = world.Emplace<UITextBox>(e);
+		box.placeholder = "Enter text";
+		world.Emplace<UISelectable>(e);
+
+		ecs::SetParent(world, e, canvas);
+		return e;
+	}
+
 	Entity CreateProgressBarEntity(World& world, Entity canvas)
 	{
 		canvas = EnsureCanvas(world, canvas);
