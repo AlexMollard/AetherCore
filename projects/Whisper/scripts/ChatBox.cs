@@ -43,6 +43,13 @@ namespace AetherGame;
 /// <see cref="Ui.CreateTextBox"/> and <see cref="Ui.CreateText"/> with a default
 /// canvas argument attach to the first canvas, creating one if none exists.
 /// </para>
+/// <para>
+/// The transcript also carries the session's own announcements - who joined, who
+/// left - written by the host through <see cref="Announce"/>. They are not a second
+/// mechanism: they are ordinary chat lines the host composed itself, delivered by the
+/// same <see cref="ReceiveChat"/> multicast, so there is exactly one path that puts
+/// text in front of a player and one set of delivery rules to get right.
+/// </para>
 /// </remarks>
 public sealed class ChatBox : EntityScript
 {
@@ -311,5 +318,47 @@ public sealed class ChatBox : EntityScript
             s_lines.RemoveAt(0);
         }
         s_revision++;
+    }
+
+    /// <summary>
+    /// Host only: put a session announcement - somebody joining, somebody leaving - in
+    /// every peer's transcript, on the same multicast the chat itself rides.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <paramref name="carrier"/> has to be an entity the HOST owns that carries this
+    /// script, in practice the host's own player. Two independent rules force that: a
+    /// multicast is refused outright unless it originates on the host, and the call is
+    /// addressed on the wire by the carrier's net id, so the carrier must be replicated
+    /// as well. <see cref="WhisperSession"/> has the third reason - a leave
+    /// announcement outlives the entity it is about.
+    /// </para>
+    /// <para>
+    /// Returning false means "not yet", not "failed". A player entity that has only
+    /// just spawned has no live <see cref="ChatBox"/> instance for the local half of
+    /// the multicast to land on, and the framework drops an RPC aimed at a script that
+    /// has not been instantiated - reporting success there would lose the line
+    /// silently. The caller is expected to hold it and try again on a later frame.
+    /// </para>
+    /// </remarks>
+    /// <param name="carrier">The host-owned, replicated player the line rides on.</param>
+    /// <param name="line">The finished line, e.g. "Alice joined". Sanitised here, so a
+    /// display name carrying something the font has no glyph for cannot reach the
+    /// transcript by the back door that <see cref="SendChat"/> already closes.</param>
+    /// <returns>True once the line has been routed and the caller can forget it.</returns>
+    public static bool Announce(Entity carrier, string line)
+    {
+        if (!carrier.IsValid || carrier.GetScript<ChatBox>() is null)
+        {
+            return false;
+        }
+        string clean = Sanitize(line);
+        if (clean.Length == 0)
+        {
+            // Nothing printable survived, so there is nothing to send - but report it
+            // done, or a caller queueing this line would retry it forever.
+            return true;
+        }
+        return Net.Call(carrier, nameof(ReceiveChat), clean);
     }
 }
