@@ -70,6 +70,49 @@ public static class Net
     /// also the id the host owns entities under.</summary>
     public static uint LocalConnectionId => Native.aether_net_local_connection_id();
 
+    /// <summary>
+    /// Host only: the connection ids currently joined, newest last. Empty on a client
+    /// and offline - a client is told nothing about its peers, and an unnetworked
+    /// build has none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the only way a project learns that somebody joined or left: there is no
+    /// join/leave callback, so the host polls this and diffs it against what it saw
+    /// last frame. The ids themselves are stable for a connection's lifetime and never
+    /// reused within a session, so they are safe to key per-player state by.
+    /// </para>
+    /// <para>
+    /// A leaver's entities are already gone by the time it disappears from here - the
+    /// framework despawns everything a dropped connection owned before the frame's
+    /// scripts run - so a project reacting to a departure is freeing its OWN
+    /// bookkeeping, not the entity.
+    /// </para>
+    /// </remarks>
+    public static unsafe uint[] Connections
+    {
+        get
+        {
+            int count = Native.aether_net_connections(null, 0);
+            if (count <= 0)
+            {
+                return [];
+            }
+            uint[] ids = new uint[count];
+            fixed (uint* ptr = ids)
+            {
+                int written = Native.aether_net_connections(ptr, count);
+                // A connection can drop between the two calls, so trust the second
+                // count rather than the array we sized from the first.
+                return written == count ? ids : ids[..System.Math.Max(written, 0)];
+            }
+        }
+    }
+
+    /// <summary>How many connections have joined, without allocating the id array.
+    /// 0 on a client and offline - see <see cref="Connections"/>.</summary>
+    public static unsafe int ConnectionCount => Native.aether_net_connections(null, 0);
+
     /// <summary>The last transport error, or an empty string if there was none.</summary>
     public static unsafe string LastError
     {

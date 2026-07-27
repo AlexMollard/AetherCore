@@ -106,6 +106,30 @@ AE_SCRIPT_API std::uint32_t aether_net_local_connection_id()
 	return context != nullptr ? context->LocalConnectionId() : 0u;
 }
 
+AE_SCRIPT_API std::int32_t aether_net_connections(std::uint32_t* buffer, std::int32_t capacity)
+{
+	// Host-only by construction: NetSession only ever records a connection on the
+	// host (NetworkReceiveSystem::OnConnected), so a client and an offline build both
+	// report an empty list rather than a special case here.
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		return 0;
+	}
+	const std::vector<aether::net::ConnectionId>& connections = context->Session().Connections();
+	const auto total = static_cast<std::int32_t>(connections.size());
+	if (buffer == nullptr || capacity <= 0)
+	{
+		// Size query: the managed side asks for the count first, then asks again with
+		// a buffer, so no allocation crosses the boundary and neither side guesses a
+		// maximum peer count.
+		return total;
+	}
+	const std::int32_t written = std::min(total, capacity);
+	std::memcpy(buffer, connections.data(), static_cast<std::size_t>(written) * sizeof(std::uint32_t));
+	return written;
+}
+
 AE_SCRIPT_API std::uint32_t aether_net_spawn(const char* prefabUtf8, Vec3 position, std::uint32_t owner)
 {
 	aether::net::NetworkContext* context = Context();

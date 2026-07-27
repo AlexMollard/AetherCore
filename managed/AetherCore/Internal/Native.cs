@@ -858,6 +858,12 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial uint aether_net_local_connection_id();
 
+    // Host only: copies up to `capacity` joined connection ids into `buffer` and
+    // returns how many were written. A null buffer (or a non-positive capacity) is a
+    // size query returning the total, so the managed side never guesses a peer cap.
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_connections(uint* buffer, int capacity);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint aether_net_spawn(string prefab, Vector3 position, uint owner);
 
