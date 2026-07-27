@@ -222,6 +222,62 @@ TEST_CASE("A stranded keyboard capture is swept")
 	CHECK_FALSE(w.Has<ui::UIKeyboardCapture>(idle));
 }
 
+TEST_CASE("pendingEdit starts editing on the next tick and is consumed")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Sel(w, e).focused = true;
+	Box(w, e).pendingEdit = true; // what Ui.BeginEdit does instead of writing `activated` directly
+
+	TickIdle(w, 0.f);
+
+	CHECK(Box(w, e).editing);
+	CHECK_FALSE(Box(w, e).pendingEdit); // one-shot: consumed by the system
+	CHECK(w.Has<ui::UIKeyboardCapture>(e));
+}
+
+TEST_CASE("A pending request on a box with a disabled ancestor is cleared, not banked")
+{
+	World w;
+
+	const Entity parent = w.Create();
+	w.Emplace<DisabledComponent>(parent);
+
+	const Entity e = MakeTextBox(w);
+	w.Emplace<HierarchyComponent>(e).parent = parent;
+	Sel(w, e).focused = true;
+	Box(w, e).pendingEdit = true;
+
+	TickIdle(w, 0.f);
+
+	CHECK_FALSE(Box(w, e).editing);
+	CHECK_FALSE(Box(w, e).pendingEdit); // must not survive to fire once the ancestor re-enables
+
+	w.Remove<DisabledComponent>(parent);
+	TickIdle(w, 0.016f);
+
+	CHECK_FALSE(Box(w, e).editing); // the stale request did not fire later
+}
+
+TEST_CASE("Entering via pendingEdit selects all and snapshots committedText")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "hello";
+	Sel(w, e).focused = true;
+	Box(w, e).pendingEdit = true;
+
+	TickIdle(w, 0.f);
+
+	REQUIRE(Box(w, e).editing);
+	CHECK(Box(w, e).committedText == "hello");
+	// SelectAll: anchor at 0, caret at the end - same entry semantics as a click/Enter activation.
+	CHECK(Box(w, e).selectionAnchor == 0);
+	CHECK(Box(w, e).caret == static_cast<int>(Box(w, e).text.size()));
+}
+
 TEST_CASE("Copy and cut leave a password field's plaintext off the clipboard")
 {
 	World w;

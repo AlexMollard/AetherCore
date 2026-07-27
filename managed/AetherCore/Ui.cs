@@ -167,8 +167,8 @@ public static class Ui
     /// <summary>Set a button's label (ASCII only).</summary>
     public static void SetButtonLabel(Entity e, string label) => Native.aether_ui_set_button_label(e.Id, label);
 
-    /// <summary>True on the frame a slider or toggle on this entity was changed by the user
-    /// (keyboard/drag/activation). Poll this to persist settings.</summary>
+    /// <summary>True on the frame a slider, toggle, or text box on this entity was changed by the
+    /// user (keyboard/drag/activation/typing). Poll this to persist settings.</summary>
     public static bool WasChanged(Entity e) => Native.aether_ui_was_changed(e.Id) != 0;
 
     // ── Text box ──────────────────────────────────────────────────────────────────

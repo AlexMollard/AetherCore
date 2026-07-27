@@ -186,6 +186,12 @@ namespace aether::ui
 		bool submitted = false; // Enter committed this frame
 		bool cancelled = false; // Escape reverted this frame
 		bool dragging = false;  // mouse selection drag in progress
+		// Script-driven begin-edit request, consumed by UiTextBoxSystem. A script's write to
+		// UISelectable::activated cannot survive to the frame UiTextBoxSystem observes it:
+		// UiNavigationSystem::Update runs first next frame and unconditionally re-stamps
+		// `activated` from live mouse/Enter/Space input, clobbering whatever the script set. This
+		// flag is a one-shot channel that bypasses that race, so Ui.BeginEdit has a way in.
+		bool pendingEdit = false;
 		int caret = 0;
 		int selectionAnchor = 0;
 		float scrollX = 0.f;

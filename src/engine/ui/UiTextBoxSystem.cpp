@@ -129,6 +129,7 @@ namespace aether::ui
 				        box.editing = false;
 				        box.dragging = false;
 				        box.lastClickTime = -1.0;
+				        box.pendingEdit = false; // do not let a stale request fire once re-enabled
 				        SetCapture(world, e, false);
 				        return;
 			        }
@@ -145,17 +146,19 @@ namespace aether::ui
 				        box.dragging = false;
 				        box.lastClickTime = -1.0;
 				        SetCapture(world, e, false);
+				        box.pendingEdit = false; // leaving editing drops any stale request too
 			        }
 
 			        // Activation (click, or Enter/Space while focused) starts editing.
 			        bool justActivated = false;
-			        if (!box.editing && Activated(world, e))
+			        if (!box.editing && (Activated(world, e) || box.pendingEdit))
 			        {
 				        box.editing = true;
 				        box.committedText = box.text;
 				        box.caretTimer = 0.f;
 				        box.repeatKey = 0;
 				        justActivated = true;
+				        box.pendingEdit = false; // one-shot: consumed on entry, same path as a click/Enter activation
 				        SetCapture(world, e, true);
 				        TextEditState s = ToEditState(box);
 				        SelectAll(s); // entering a field selects it, so typing replaces
@@ -164,6 +167,7 @@ namespace aether::ui
 
 			        if (!box.editing)
 			        {
+				        box.pendingEdit = false; // a request cannot outlive this tick if entry never happened
 				        return;
 			        }
 
@@ -322,6 +326,7 @@ namespace aether::ui
 				        box.repeatKey = 0;
 				        box.lastClickTime = -1.0; // leaving and clicking back in places a caret, not a word select
 				        box.committedText = box.text;
+				        box.pendingEdit = false; // leaving editing drops any stale request too
 				        SetCapture(world, e, false);
 			        }
 		        });

@@ -357,12 +357,20 @@ AE_SCRIPT_API void aether_ui_begin_edit(std::uint32_t id)
 {
 	auto& world = ActiveWorld();
 	const aether::Entity e{id};
+	// `activated` cannot be used here: this export runs from a C# Update(), which fires after
+	// UiNavigationSystem, UiWidgetSystem and UiTextBoxSystem have already run this frame. By the
+	// time UiTextBoxSystem next runs, UiNavigationSystem will have already re-stamped `activated`
+	// from live input for every UISelectable, clobbering whatever this call set. `pendingEdit` is
+	// a one-shot channel UiTextBoxSystem consumes itself, so the entry logic (snapshot, select
+	// all, capture) still lives in exactly one place - the system - rather than being duplicated
+	// here.
 	if (auto* sel = world.TryGet<aether::ui::UISelectable>(e))
 	{
-		// Route through activation so the system runs its normal entry path (snapshot, select
-		// all, capture) rather than duplicating it here.
 		sel->focused = true;
-		sel->activated = true;
+	}
+	if (auto* box = world.TryGet<aether::ui::UITextBox>(e))
+	{
+		box->pendingEdit = true;
 	}
 }
 
