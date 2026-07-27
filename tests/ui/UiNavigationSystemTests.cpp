@@ -121,16 +121,24 @@ TEST_CASE("With no UIKeyboardCapture anywhere, arrows and Enter navigate normall
 	CHECK(Sel(w, bottom).activated);
 }
 
-TEST_CASE("Tab from nothing focused lands on the first control in reading order")
+TEST_CASE("Tab orders by row before column, not by creation order")
 {
 	World w;
 	Input input;
 
-	const Entity first = MakeSelectable(w, {0, 0, 100, 20});
-	MakeSelectable(w, {0, 100, 100, 20});
+	// Created bottom-first so creation order and reading order disagree: Tab must follow
+	// the layout (top row left-to-right, then the row below), not the order entities exist in.
+	const Entity below = MakeSelectable(w, {0, 100, 100, 20});
+	const Entity topLeft = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity topRight = MakeSelectable(w, {200, 4, 100, 20}); // same row as topLeft (4px drift)
+
+	Sel(w, topLeft).focused = true;
 
 	input.SetSyntheticKey(static_cast<int>(Key::Tab), true);
 	ui::UiNavigationSystem::Update(w, input);
+	CHECK(Sel(w, topRight).focused); // across the top row first
 
-	CHECK(Sel(w, first).focused);
+	input.SetSyntheticKey(static_cast<int>(Key::Tab), true);
+	ui::UiNavigationSystem::Update(w, input);
+	CHECK(Sel(w, below).focused); // then down to the next row
 }
