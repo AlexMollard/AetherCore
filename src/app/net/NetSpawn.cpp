@@ -10,6 +10,14 @@
 
 namespace aether::net
 {
+	std::vector<std::byte> FrameMessage(NetMessage kind, std::span<const std::byte> payload)
+	{
+		ByteWriter w;
+		w.U8(static_cast<std::uint8_t>(kind));
+		w.Bytes(payload);
+		return w.Take();
+	}
+
 	std::vector<std::byte> EncodeSpawn(std::uint32_t netId, ConnectionId owner, std::string_view prefab, glm::vec3 position)
 	{
 		ByteWriter w;
