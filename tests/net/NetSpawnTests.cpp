@@ -141,3 +141,25 @@ TEST_CASE("Scene-placed net id assignment skips entities with no persisted node 
 
 	CHECK(world.Get<net::NetworkIdentity>(prefabSpawned).netId == 0);
 }
+
+// The framework's only path-traversal defence. A prefab name arrives from a remote
+// peer and is handed to a file loader, so this is the check standing between a
+// hostile Spawn and an arbitrary read off the host's disk. It lived file-local in a
+// CLR-linked TU with no coverage until the spawn validation moved here.
+TEST_CASE("IsSafePrefabName accepts a bare prefab name and rejects anything path-like")
+{
+	CHECK(net::IsSafePrefabName("player"));
+	CHECK(net::IsSafePrefabName("enemy_grunt_v2"));
+	CHECK(net::IsSafePrefabName("Weapon-Rifle.01"));
+
+	CHECK_FALSE(net::IsSafePrefabName(""));                   // names nothing
+	CHECK_FALSE(net::IsSafePrefabName("../../etc/passwd"));   // the canonical escape
+	CHECK_FALSE(net::IsSafePrefabName(".."));                 // the parent alone
+	CHECK_FALSE(net::IsSafePrefabName("a/b"));                // any subdirectory
+	CHECK_FALSE(net::IsSafePrefabName(R"(a\b)"));             // ...on either separator
+	CHECK_FALSE(net::IsSafePrefabName(R"(C:\x)"));            // an absolute Windows path
+	CHECK_FALSE(net::IsSafePrefabName("C:x"));                // a drive-relative one
+	CHECK_FALSE(net::IsSafePrefabName("/etc/passwd"));        // an absolute POSIX path
+	CHECK_FALSE(net::IsSafePrefabName(R"(..\..\windows\system32)"));
+	CHECK_FALSE(net::IsSafePrefabName(R"(\\server\share)"));  // a UNC path
+}
