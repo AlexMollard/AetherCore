@@ -219,6 +219,62 @@ TEST_CASE("A send on an invalid channel is a no-op")
 	host.Disconnect();
 }
 
+TEST_CASE("An over-MTU unreliable payload arrives intact on the snapshot channel")
+{
+	// A snapshot carries ~12 bytes per changed field across the whole relevant set,
+	// so a payload past the ~1400-byte MTU is routine rather than an edge case, and
+	// the non-reliable send path has to fragment it. Nothing else in the suite sends
+	// an unreliable packet big enough to fragment at all.
+	net::NetworkSubsystem host;
+	net::NetworkSubsystem client;
+
+	REQUIRE(host.Host(24686, 4));
+	REQUIRE(client.Connect("127.0.0.1", 24686));
+
+	net::ConnectionId peer = 0;
+	const bool connected = PumpUntil(host, client,
+	        [&]
+	        {
+		        for (const net::NetEvent& e: host.Events())
+		        {
+			        if (e.kind == net::NetEvent::Kind::Connected)
+			        {
+				        peer = e.peer;
+			        }
+		        }
+		        return peer != 0;
+	        });
+	REQUIRE(connected);
+
+	// Well past the MTU, with a position-dependent pattern so a mis-stitched
+	// reassembly is visible rather than merely a length mismatch.
+	std::vector<std::byte> body(8000);
+	for (std::size_t i = 0; i < body.size(); ++i)
+	{
+		body[i] = static_cast<std::byte>((i * 31u + 7u) & 0xFFu);
+	}
+
+	host.Send(peer, net::kChannelSnapshot, false, Frame(net::NetMessage::Snapshot, body));
+
+	std::vector<std::byte> received;
+	bool got = false;
+	const bool arrived = PumpUntil(host, client,
+	        [&]
+	        {
+		        if (!got && FindMessage(client.Events(), net::kChannelSnapshot, net::NetMessage::Snapshot, received))
+		        {
+			        got = true;
+		        }
+		        return got;
+	        });
+	REQUIRE(arrived);
+	REQUIRE(received.size() == body.size());
+	CHECK(received == body);
+
+	client.Disconnect();
+	host.Disconnect();
+}
+
 // This is the one test in the suite that drives the whole replication stack over a
 // real socket: NetworkSubsystem, NetSession, ReplicationSchema, BuildSnapshot /
 // ApplySnapshot, and Encode/DecodeSpawn / Encode/DecodeDespawn, composed exactly as

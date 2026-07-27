@@ -9,6 +9,25 @@
 
 namespace aether::net
 {
+	namespace
+	{
+		// The flag for a non-reliable send. ENet's default (no flags) is already
+		// unreliable-SEQUENCED: the receiving channel drops a packet whose sequence
+		// number is older than one it has already delivered, which is exactly what
+		// kChannelSnapshot is documented to give (NetTypes.hpp). UNRELIABLE_FRAGMENT
+		// adds the one thing the default lacks - a payload over the MTU is fragmented
+		// unreliably instead of being silently promoted to a reliable, retransmitted,
+		// head-of-line-blocking transfer. A snapshot carries ~12 bytes per changed
+		// field across the whole relevant set, so exceeding the MTU is routine.
+		//
+		// ENET_PACKET_FLAG_UNSEQUENCED would be WRONG here and is a different flag
+		// entirely: it bypasses the channel's sequence check, so a reordered snapshot
+		// is delivered and applied. Combined with per-field change detection that
+		// never resends an unchanged value, a stale field applied out of order stays
+		// wrong until that field next changes - permanently, in the common case.
+		constexpr enet_uint32 kUnreliableSequenced = ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT;
+	} // namespace
+
 	NetworkSubsystem::~NetworkSubsystem()
 	{
 		Disconnect();
@@ -139,7 +158,7 @@ namespace aether::net
 			return;
 		}
 		ENetPacket* packet = enet_packet_create(bytes.data(), bytes.size(),
-		        reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNSEQUENCED);
+		        reliable ? ENET_PACKET_FLAG_RELIABLE : kUnreliableSequenced);
 		// enet_peer_send only takes ownership of the packet on success; on failure
 		// (bad channel, oversized payload, allocation failure) it leaves the packet
 		// with a zero refcount for us to free, or it leaks.
@@ -156,7 +175,7 @@ namespace aether::net
 			return;
 		}
 		ENetPacket* packet = enet_packet_create(bytes.data(), bytes.size(),
-		        reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNSEQUENCED);
+		        reliable ? ENET_PACKET_FLAG_RELIABLE : kUnreliableSequenced);
 		// enet_host_broadcast frees the packet itself when no peer accepts it, unlike
 		// enet_peer_send - do not destroy it here.
 		enet_host_broadcast(m_host, static_cast<enet_uint8>(channel), packet);
