@@ -1,0 +1,20 @@
+# AetherCore project file.
+
+[app]
+startupscene = "Title"
+targetfps = 0
+
+[graphics]
+asynccompute = true
+fxaa = false
+vsync = false
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+name = "Whisper"
+version = 1
