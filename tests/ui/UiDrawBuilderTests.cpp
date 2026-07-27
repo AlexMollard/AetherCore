@@ -334,3 +334,112 @@ TEST_CASE("A disabled UIMask does not clip")
 	REQUIRE(cmds.size() == 1);
 	CHECK((cmds[0].flags & ui::kFlagClip) == 0u);
 }
+
+TEST_CASE("Text box emits a background and clips its glyphs to the padded inner rect")
+{
+	World w;
+	ui::FontRegistry fonts;
+	fonts.InjectForTest("Roboto", MakeMonoFont());
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity field = w.Create();
+	auto& fr = w.Emplace<ui::UIRect>(field);
+	fr.resolvedRect = {100, 100, 200, 40};
+	auto& box = w.Emplace<ui::UITextBox>(field);
+	box.text = "AB";
+	box.pixelSize = 48.f;
+	box.padding = 8.f;
+	w.Emplace<HierarchyComponent>(field);
+	ecs::SetParent(w, field, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	std::vector<ui::UiMaterialDraw> materials;
+	ui::BuildDrawCommands(w, cmds, materials, &fonts, nullptr);
+
+	REQUIRE(cmds.size() == 3); // background + two glyphs
+
+	CHECK(cmds[0].type == ui::kShapeRect);
+	CHECK((cmds[0].flags & ui::kFlagClip) == 0u); // the box IS the boundary; it is not clipped
+	CHECK(cmds[0].data0.z == doctest::Approx(200));
+
+	for (std::size_t i = 1; i < cmds.size(); ++i)
+	{
+		CHECK(cmds[i].type == ui::kShapeSdfGlyph);
+		CHECK((cmds[i].flags & ui::kFlagClip) != 0u);
+		CHECK(cmds[i].clipRect.x == doctest::Approx(108)); // 100 + 8 padding
+		CHECK(cmds[i].clipRect.z == doctest::Approx(184)); // 200 - 2 * 8
+	}
+}
+
+TEST_CASE("Text box emits a caret only while editing")
+{
+	World w;
+	ui::FontRegistry fonts;
+	fonts.InjectForTest("Roboto", MakeMonoFont());
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity field = w.Create();
+	auto& fr = w.Emplace<ui::UIRect>(field);
+	fr.resolvedRect = {100, 100, 200, 40};
+	auto& box = w.Emplace<ui::UITextBox>(field);
+	box.text = "AB";
+	box.pixelSize = 48.f;
+	box.caret = 2;
+	w.Emplace<HierarchyComponent>(field);
+	ecs::SetParent(w, field, canvas);
+
+	std::vector<ui::UiDrawCommand> notEditing;
+	std::vector<ui::UiMaterialDraw> materials;
+	ui::BuildDrawCommands(w, notEditing, materials, &fonts, nullptr);
+	const std::size_t idleCount = notEditing.size();
+
+	box.editing = true;
+	box.caretTimer = 0.f; // blink's visible half
+	std::vector<ui::UiDrawCommand> editing;
+	ui::BuildDrawCommands(w, editing, materials, &fonts, nullptr);
+
+	CHECK(editing.size() == idleCount + 1);
+	CHECK(editing.back().type == ui::kShapeRect);
+	CHECK(editing.back().data0.x == doctest::Approx(156)); // 108 inner + 2 glyphs * 24 px
+}
+
+TEST_CASE("Text box shows the placeholder when empty")
+{
+	World w;
+	ui::FontRegistry fonts;
+	fonts.InjectForTest("Roboto", MakeMonoFont());
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity field = w.Create();
+	auto& fr = w.Emplace<ui::UIRect>(field);
+	fr.resolvedRect = {100, 100, 200, 40};
+	auto& box = w.Emplace<ui::UITextBox>(field);
+	box.text = "";
+	box.placeholder = "AB";
+	box.pixelSize = 48.f;
+	box.placeholderColor = {0.5f, 0.5f, 0.5f, 1.f};
+	w.Emplace<HierarchyComponent>(field);
+	ecs::SetParent(w, field, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	std::vector<ui::UiMaterialDraw> materials;
+	ui::BuildDrawCommands(w, cmds, materials, &fonts, nullptr);
+
+	REQUIRE(cmds.size() == 3);
+	CHECK(cmds[1].color.r == doctest::Approx(0.5f)); // drawn in the placeholder colour
+}

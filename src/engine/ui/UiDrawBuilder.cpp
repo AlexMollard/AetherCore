@@ -9,6 +9,7 @@
 #include "material/TextureRegistry.hpp"
 #include "ui/FontRegistry.hpp"
 #include "ui/UiComponents.hpp"
+#include "ui/UiTextEdit.hpp"
 
 namespace aether::ui
 {
@@ -172,6 +173,74 @@ namespace aether::ui
 		}
 	}
 
+	static void EmitTextBox(World& world, Entity e, const UIRect& rect, const UITextBox& box, FontRegistry& fonts, int& layer, std::vector<UiDrawCommand>& out)
+	{
+		const glm::vec4 r = rect.resolvedRect;
+		const bool focused = WidgetFocused(world, e);
+
+		UiDrawCommand bg;
+		bg.type = kShapeRect;
+		bg.data0 = r;
+		bg.data1.x = box.cornerRadius;
+		bg.color = (focused || box.editing) ? box.bgColorFocused : box.bgColor;
+		bg.layer = layer++;
+		out.push_back(bg);
+
+		const glm::vec4 inner{r.x + box.padding, r.y + box.padding, std::max(r.z - 2.f * box.padding, 0.f), std::max(r.w - 2.f * box.padding, 0.f)};
+
+		const FontAsset* font = fonts.Load(box.fontName);
+		if (font == nullptr)
+		{
+			return;
+		}
+
+		const bool showPlaceholder = box.text.empty();
+		const std::string display = showPlaceholder ? box.placeholder : DisplayText(box.text, box.password);
+		const float originX = inner.x - box.scrollX;
+
+		// Everything past the background is clipped to the padded inner rect, so long text
+		// scrolls under the edges instead of spilling out of the field. The builder's clip
+		// stack intersects rather than overwrites, so an ancestor UIMask still applies.
+		const std::size_t clipBegin = out.size();
+
+		if (!showPlaceholder && box.selectionAnchor != box.caret)
+		{
+			const int begin = std::min(box.caret, box.selectionAnchor);
+			const int end = std::max(box.caret, box.selectionAnchor);
+			const float x0 = originX + CaretToPixelX(*font, display, box.pixelSize, begin);
+			const float x1 = originX + CaretToPixelX(*font, display, box.pixelSize, end);
+
+			UiDrawCommand sel;
+			sel.type = kShapeRect;
+			sel.data0 = {x0, inner.y, std::max(x1 - x0, 1.f), inner.w};
+			sel.color = box.selectionColor;
+			sel.layer = layer++;
+			out.push_back(sel);
+		}
+
+		// Left-aligned, vertically centred, never wrapped: the run box starts at the scrolled
+		// origin and is exactly as wide as the text, so ShapeText lays it out in one line.
+		const glm::vec4 runRect{originX, inner.y, TextWidth(*font, display, box.pixelSize), inner.w};
+		EmitTextRun(runRect, display, box.fontName, box.pixelSize, showPlaceholder ? box.placeholderColor : box.textColor, UIText::HAlign::Left, UIText::VAlign::Middle, false, fonts, layer, out);
+
+		// Caret: on for the first half of each second, so it blinks without a timer service.
+		if (box.editing && std::fmod(box.caretTimer, 1.f) < 0.5f)
+		{
+			UiDrawCommand caret;
+			caret.type = kShapeRect;
+			caret.data0 = {originX + CaretToPixelX(*font, display, box.pixelSize, box.caret), inner.y, 2.f, inner.w};
+			caret.color = box.caretColor;
+			caret.layer = layer++;
+			out.push_back(caret);
+		}
+
+		for (std::size_t i = clipBegin; i < out.size(); ++i)
+		{
+			out[i].clipRect = inner;
+			out[i].flags |= kFlagClip;
+		}
+	}
+
 	// The active clip as Walk descends. Rect is (x, y, w, h) px; `active` false = unclipped.
 	struct ClipState
 	{
@@ -253,6 +322,10 @@ namespace aether::ui
 				if (const auto* button = world.TryGet<UIButton>(entity))
 				{
 					EmitButton(world, entity, *rect, *button, fonts, layer, out);
+				}
+				if (const auto* textBox = world.TryGet<UITextBox>(entity))
+				{
+					EmitTextBox(world, entity, *rect, *textBox, *fonts, layer, out);
 				}
 			}
 		}
