@@ -1,0 +1,31 @@
+# AetherCore sprite animation
+
+[animation]
+atlas = "project://assets/textures/player/walk32x32.spriteatlas.toml"
+event_count = 0.00
+frame_count = 10.00
+loop_mode = "loop"
+name = "player_run"
+schema_version = 1.00
+
+[frame]
+0.duration = 0.07
+0.sprite_id = "1984ca2a282d057e"
+1.duration = 0.07
+1.sprite_id = "1984cb2a282d0731"
+2.duration = 0.07
+2.sprite_id = "1984c82a282d0218"
+3.duration = 0.07
+3.sprite_id = "1984c92a282d03cb"
+4.duration = 0.07
+4.sprite_id = "1984ce2a282d0c4a"
+5.duration = 0.07
+5.sprite_id = "1984cf2a282d0dfd"
+6.duration = 0.07
+6.sprite_id = "1984cc2a282d08e4"
+7.duration = 0.07
+7.sprite_id = "1984cd2a282d0a97"
+8.duration = 0.07
+8.sprite_id = "1984c22a282cf7e6"
+9.duration = 0.07
+9.sprite_id = "1984c32a282cf999"
