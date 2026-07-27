@@ -36,6 +36,28 @@ namespace aether::net
 			return std::abs(a.x - b.x) > kPoseEpsilon || std::abs(a.y - b.y) > kPoseEpsilon
 			       || std::abs(a.z - b.z) > kPoseEpsilon;
 		}
+
+		// Whether a client that destroyed this entity could get it back from a Spawn
+		// message. A Spawn names a prefab, and ApplySpawn refuses an empty one - a
+		// scene-placed entity is something "nothing generic can recreate", since the
+		// framework does not know how the project loads scenes.
+		//
+		// Relevancy MUST consult this before telling a connection to forget anything.
+		// A relevancy leave is a straight ecs::DestroyHierarchy client-side, and for an
+		// entity with no prefab to rebuild from that delete is PERMANENT: the re-entry
+		// Spawn is rejected on arrival, and the join replay only ever runs once. Stop()
+		// and OnDisconnected both already treat `scenePlaced` as sacrosanct for exactly
+		// this reason; relevancy was the one path that did not, so at the default
+		// 60-unit radius every replicated scene entity a player walked away from was
+		// deleted on that player's machine for the rest of the session.
+		//
+		// Both halves are checked, not just `scenePlaced`: the flag is only set by
+		// AssignScenePlacedNetIds, so anything else that binds a net id without a prefab
+		// name is equally unrecoverable and equally must not be despawned.
+		[[nodiscard]] bool ClientCanRecreate(const NetworkIdentity& identity)
+		{
+			return !identity.scenePlaced && !identity.spawnPrefab.empty();
+		}
 	} // namespace
 
 	// ── Receive ─────────────────────────────────────────────────────────────────
@@ -127,24 +149,34 @@ namespace aether::net
 		const std::vector<std::byte> welcome = NetworkContext::EncodeWelcome(peer);
 		context.Transport().Send(peer, kChannelReliable, true, welcome);
 
-		// Replay the world. A scene-placed entity the joiner already has resolves to
-		// a net id it already knows and its ApplySpawn is a no-op; a prefab-spawned
-		// one is instantiated. Either way the joiner ends the handshake bound to the
-		// same net ids as everyone else.
-		world.View<NetworkIdentity>().each(
-		        [&](entt::entity ent, NetworkIdentity& identity)
-		        {
-			        if (identity.netId == 0)
-			        {
-				        return;
-			        }
-			        const Entity entity = World::FromEntt(ent);
-			        const auto* transform = world.TryGet<TransformComponent>(entity);
-			        const glm::vec3 position = transform != nullptr ? glm::vec3(transform->localToWorld[3]) : glm::vec3(0.f);
-			        const std::vector<std::byte> packet = EncodeSpawn(identity.netId, identity.owner,
-			                identity.spawnPrefab, position);
-			        context.Transport().Send(peer, kChannelReliable, true, packet);
-		        });
+		// Replay the world, FILTERED BY THE JOINER'S RELEVANCY - the same set, from the
+		// same viewer position, that the first send tick will compute a moment later.
+		// An unfiltered replay hands the joiner every bound entity in the world; the
+		// send system then diffs against only the relevant ones, so anything out of
+		// range at join exists on that client and is in no connection's "previous" set,
+		// which means it can never appear in the leave loop either. It sits frozen at
+		// its join-time pose for the rest of the session - the exact symptom relevancy
+		// exists to prevent.
+		//
+		// A scene-placed entity out of range is not lost by this: the client derives its
+		// net id from the same scene file (AssignScenePlacedNetIds) and its ApplySpawn
+		// was always a no-op. It is the prefab-spawned ones that are genuinely withheld
+		// until they become relevant, which is what relevancy means.
+		const glm::vec3 viewerPos = ViewerPosition(world, peer);
+		const std::vector<Entity> relevant = RelevantWithTransformless(world, peer, viewerPos, context.Relevancy());
+		for (const Entity entity: relevant)
+		{
+			const auto* identity = world.TryGet<NetworkIdentity>(entity);
+			if (identity == nullptr || identity->netId == 0)
+			{
+				continue;
+			}
+			const auto* transform = world.TryGet<TransformComponent>(entity);
+			const glm::vec3 position = transform != nullptr ? glm::vec3(transform->localToWorld[3]) : glm::vec3(0.f);
+			const std::vector<std::byte> packet = EncodeSpawn(identity->netId, identity->owner,
+			        identity->spawnPrefab, position);
+			context.Transport().Send(peer, kChannelReliable, true, packet);
+		}
 
 		AE_INFO(LogCategory::App, "Net: connection {} joined", peer);
 	}
@@ -493,15 +525,24 @@ namespace aether::net
 			        context.Relevancy());
 			SnapshotCache& cache = context.CacheFor(connection);
 
-			UpdateRelevancyMembership(world, context, connection, relevant, cache);
+			const bool admitted = UpdateRelevancyMembership(world, context, connection, relevant, cache);
 
 			const std::vector<std::byte> snapshot = BuildSnapshot(world, context.Schema(), context.Catalog(),
 			        context.Session(), cache, relevant);
 			if (!snapshot.empty())
 			{
-				// Unreliable: a dropped snapshot is superseded by the next one, and
-				// retransmitting stale state costs more than skipping it.
-				context.Transport().Send(connection, kChannelSnapshot, false,
+				// Normally unreliable: a dropped snapshot is superseded by the next
+				// one, and retransmitting stale state costs more than skipping it.
+				//
+				// A tick that ADMITTED an entity is the exception, and the reason is
+				// cache.Forget: forgetting is what makes this snapshot a FULL state
+				// send rather than a diff, and BuildSnapshot has already recorded
+				// every value it just wrote as sent - so nothing resends them. Dropped
+				// unreliably, every replicated field except the position the Spawn
+				// carried would sit at prefab default on that client until it happened
+				// to change again. "The next one supersedes it" is true of a diff and
+				// false of a resync, so the resync goes reliable.
+				context.Transport().Send(connection, admitted ? kChannelReliable : kChannelSnapshot, admitted,
 				        NetworkContext::Frame(NetMessage::Snapshot, snapshot));
 			}
 
@@ -520,27 +561,7 @@ namespace aether::net
 		}
 	}
 
-	glm::vec3 NetworkSendSystem::ViewerPosition(World& world, ConnectionId viewer)
-	{
-		// A connection sees from whatever it owns. The first owned entity with a
-		// transform wins; a connection that owns nothing positioned yet views from
-		// the origin, which only affects what it receives, never what it may own.
-		glm::vec3 position{0.f};
-		bool found = false;
-		world.View<NetworkIdentity, TransformComponent>().each(
-		        [&](entt::entity, NetworkIdentity& identity, TransformComponent& transform)
-		        {
-			        if (found || identity.owner != viewer)
-			        {
-				        return;
-			        }
-			        position = glm::vec3(transform.localToWorld[3]);
-			        found = true;
-		        });
-		return position;
-	}
-
-	void NetworkSendSystem::UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
+	bool NetworkSendSystem::UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
 	        const std::vector<Entity>& relevant, SnapshotCache& cache)
 	{
 		std::unordered_set<std::uint32_t> currentIds;
@@ -554,56 +575,76 @@ namespace aether::net
 			}
 		}
 
-		const auto [slot, firstTick] = m_relevantNetIds.try_emplace(connection);
-		std::unordered_set<std::uint32_t>& previousIds = slot->second;
+		// No first-tick special case. A connection starts with an empty "previous"
+		// set, which is exactly true: OnConnected's replay is filtered through the
+		// SAME relevancy call this tick makes, so the only entities the joiner has are
+		// ones the re-entry loop below would send anyway - and ApplySpawn on a net id
+		// the client is already bound to is a documented no-op. The alternative, a
+		// suppressed first tick, only holds while the replay and the tick agree about
+		// what is relevant, and they stop agreeing the moment the joiner acquires an
+		// owned entity between the two (its viewer position moves, so the sets differ)
+		// - at which point the difference is silently never sent.
+		std::unordered_set<std::uint32_t>& previousIds = m_relevantNetIds[connection];
 
-		// The very first tick this connection is seen it has already been given
-		// every currently-networked entity unconditionally, by OnConnected's join
-		// replay - which is not filtered by relevancy at all. Diffing against an
-		// empty "previous" here would treat everything already relevant on day one
-		// as a fresh re-entry and fire a redundant Spawn for each one.
-		if (!firstTick)
+		// Left: still bound (alive), but no longer in this connection's current set. A
+		// netId no longer bound at all was destroyed outright - Despawn already told
+		// this connection about that, so there is nothing left to say here.
+		for (const std::uint32_t netId: previousIds)
 		{
-			// Left: still bound (alive), but no longer in this connection's current
-			// set. A netId no longer bound at all was destroyed outright - Despawn
-			// already told this connection about that, so there is nothing left to
-			// say here.
-			for (const std::uint32_t netId: previousIds)
+			if (currentIds.contains(netId))
 			{
-				if (currentIds.contains(netId) || !context.Session().EntityFor(netId).IsValid())
-				{
-					continue;
-				}
-				context.Transport().Send(connection, kChannelReliable, true, EncodeRelevancyLeave(netId));
-				// Or the next re-entry's snapshot would see "unchanged" against a
-				// cached value this connection was told to forget, and send nothing.
-				cache.Forget(netId);
+				continue;
 			}
+			const Entity entity = context.Session().EntityFor(netId);
+			if (!entity.IsValid())
+			{
+				continue;
+			}
+			const auto* identity = world.TryGet<NetworkIdentity>(entity);
+			if (identity == nullptr || !ClientCanRecreate(*identity))
+			{
+				// Unrecreatable client-side: a leave here is a permanent delete. See
+				// ClientCanRecreate. Nothing is sent and nothing is forgotten - the
+				// client still has the entity, so the cache still describes what it
+				// holds and the next diff that matters is still correct.
+				continue;
+			}
+			context.Transport().Send(connection, kChannelReliable, true, EncodeRelevancyLeave(netId));
+			// Or the next re-entry's snapshot would see "unchanged" against a cached
+			// value this connection was told to forget, and send nothing.
+			cache.Forget(netId);
+		}
 
-			// Re-entered: relevant now, was not a moment ago. A Snapshot alone has
-			// nothing client-side to write onto once the leave message destroyed the
-			// entity there - only a Spawn brings it back.
-			for (const std::uint32_t netId: currentIds)
+		// Re-entered (or newly relevant): a Snapshot alone has nothing client-side to
+		// write onto once the leave message destroyed the entity there - only a Spawn
+		// brings it back.
+		bool admitted = false;
+		for (const std::uint32_t netId: currentIds)
+		{
+			if (previousIds.contains(netId))
 			{
-				if (previousIds.contains(netId))
-				{
-					continue;
-				}
-				const Entity entity = context.Session().EntityFor(netId);
-				const auto* identity = entity.IsValid() ? world.TryGet<NetworkIdentity>(entity) : nullptr;
-				if (identity == nullptr)
-				{
-					continue;
-				}
-				const auto* transform = world.TryGet<TransformComponent>(entity);
-				const glm::vec3 position = transform != nullptr ? glm::vec3(transform->localToWorld[3])
-				                                                 : glm::vec3(0.f);
-				context.Transport().Send(connection, kChannelReliable, true,
-				        EncodeSpawn(netId, identity->owner, identity->spawnPrefab, position));
+				continue;
 			}
+			const Entity entity = context.Session().EntityFor(netId);
+			const auto* identity = entity.IsValid() ? world.TryGet<NetworkIdentity>(entity) : nullptr;
+			if (identity == nullptr || !ClientCanRecreate(*identity))
+			{
+				// The mirror of the skip above, and it must be the SAME predicate: one
+				// of these was never sent a leave, so it was never destroyed, so there
+				// is nothing to bring back - and a Spawn naming no prefab is rejected
+				// by ApplySpawn regardless.
+				continue;
+			}
+			const auto* transform = world.TryGet<TransformComponent>(entity);
+			const glm::vec3 position = transform != nullptr ? glm::vec3(transform->localToWorld[3])
+			                                                 : glm::vec3(0.f);
+			context.Transport().Send(connection, kChannelReliable, true,
+			        EncodeSpawn(netId, identity->owner, identity->spawnPrefab, position));
+			admitted = true;
 		}
 
 		previousIds = std::move(currentIds);
+		return admitted;
 	}
 
 	void NetworkSendSystem::PruneDisconnected(const std::vector<ConnectionId>& live)

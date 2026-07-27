@@ -116,9 +116,21 @@ namespace aether::net
 
 		void Update(World& world, float dt) override;
 
-	private:
-		[[nodiscard]] static glm::vec3 ViewerPosition(World& world, ConnectionId viewer);
+		// Connections this system is still tracking state for, split by map so each
+		// half of PruneDisconnected is separately observable. Both maps are keyed by
+		// ConnectionId and outlive any one connection, so "the entry went away when the
+		// connection did" is a real invariant with no other way to see it from outside.
+		[[nodiscard]] std::size_t PacedConnectionCount() const
+		{
+			return m_nextSendTimeByConnection.size();
+		}
 
+		[[nodiscard]] std::size_t TrackedRelevancyCount() const
+		{
+			return m_relevantNetIds.size();
+		}
+
+	private:
 		// Diffs `relevant` for `connection` against what was relevant to it a moment
 		// ago. An entity that fell out (still alive elsewhere, just not bound here
 		// any more - a destroyed one was already handled by Despawn) gets a
@@ -129,7 +141,15 @@ namespace aether::net
 		// resent. An entity that appeared gets a fresh Spawn: the leave message
 		// destroyed it client-side, and a Snapshot has nothing to write onto without
 		// one.
-		void UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
+		//
+		// An entity the client could not rebuild from a Spawn (scene-placed, or any
+		// other binding with no prefab name) is exempt from BOTH halves - see
+		// ClientCanRecreate in the .cpp.
+		//
+		// Returns whether anything was admitted this tick, which is what makes the
+		// snapshot that follows a full resync rather than a diff - and therefore what
+		// decides the channel it goes out on.
+		[[nodiscard]] bool UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
 		        const std::vector<Entity>& relevant, SnapshotCache& cache);
 
 		// Drops tracking for a connection no longer in the session. Both maps below

@@ -38,4 +38,15 @@ namespace aether::net
 	// entirely: there is no distance at which they stop mattering.
 	[[nodiscard]] std::vector<Entity> RelevantWithTransformless(World& world, ConnectionId viewer, glm::vec3 viewerPos,
 	        const RelevancySettings& settings);
+
+	// Where `viewer` sees from: the first entity it owns that has a transform. A
+	// connection that owns nothing positioned yet views from the origin, which only
+	// affects what it receives, never what it may own.
+	//
+	// Lives here rather than on either network system because BOTH must agree on it:
+	// the host's join replay filters by relevancy from this position and every send
+	// tick after it does the same, and two copies of "where does this connection look
+	// from" drifting apart is precisely how an entity ends up sent once and then never
+	// spoken about again.
+	[[nodiscard]] glm::vec3 ViewerPosition(World& world, ConnectionId viewer);
 } // namespace aether::net

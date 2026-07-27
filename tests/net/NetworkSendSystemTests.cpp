@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <thread>
 #include <vector>
 
@@ -22,6 +23,8 @@
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "utils/ServiceContainer.hpp"
+
+#include "NetTestSupport.hpp"
 
 using namespace aether;
 
@@ -118,8 +121,19 @@ namespace
 		aether::net::NetworkSendSystem send{host.context};
 		aether::net::ConnectionId hostSawPeer = aether::net::kInvalidConnection;
 
-		explicit Pair(std::uint16_t port)
+		// `seed` runs on BOTH worlds before either end starts, which is the only
+		// window in which a scene-placed entity can be set up: the host numbers its
+		// scene entities inside StartHost and the client numbers its own the moment
+		// the Welcome lands, and both derivations walk SceneNodeComponent::id. An
+		// entity created after either point is simply not part of the scene as far as
+		// the deterministic id derivation is concerned.
+		explicit Pair(std::uint16_t port, const std::function<void(World&)>& seed = {})
 		{
+			if (seed)
+			{
+				seed(host.world);
+				seed(client.world);
+			}
 			REQUIRE(host.context.StartHost(host.world, port, 4));
 			REQUIRE(client.context.StartClient(client.world, "127.0.0.1", port));
 
@@ -142,6 +156,25 @@ namespace
 	void MoveTo(World& world, Entity entity, glm::vec3 position)
 	{
 		world.TryGet<TransformComponent>(entity)->localToWorld = ComposeTransform(position, {0.f, 0.f, 0.f}, {1.f, 1.f, 1.f});
+	}
+
+	void MoveWithRotation(World& world, Entity entity, glm::vec3 position, glm::vec3 euler)
+	{
+		world.TryGet<TransformComponent>(entity)->localToWorld = ComposeTransform(position, euler, {1.f, 1.f, 1.f});
+	}
+
+	glm::vec3 EulerOf(World& world, Entity entity)
+	{
+		const auto* transform = world.TryGet<TransformComponent>(entity);
+		if (transform == nullptr)
+		{
+			return glm::vec3(-999.f);
+		}
+		glm::vec3 position;
+		glm::vec3 euler;
+		glm::vec3 scale;
+		DecomposeTRS(transform->localToWorld, position, euler, scale);
+		return euler;
 	}
 } // namespace
 
@@ -175,8 +208,208 @@ TEST_CASE("An entity that leaves a connection's relevancy radius is despawned cl
 	CHECK(p.host.world.GetRegistry().valid(World::ToEntt(hostEntity)));
 }
 
+TEST_CASE("An entity the client cannot recreate is never relevancy-despawned")
+{
+	// THE case this file was missing, and the one defect it let through. A relevancy
+	// leave is ecs::DestroyHierarchy client-side, and the re-entry that is supposed to
+	// undo it is an EncodeSpawn naming `spawnPrefab` - which is EMPTY for a
+	// scene-placed entity by design, so ApplySpawn refuses it. Culling one is
+	// therefore not "stop caring for now", it is a permanent delete that nothing in
+	// the framework can reverse: not re-entry, not the join replay, only a full scene
+	// reload. At the default 60-unit radius that is every replicated scene entity a
+	// player walks away from.
+	//
+	// Three entities, one radius change, so the exemption is measured against a live
+	// control rather than asserted on its own:
+	//   - scene-placed        exempt (nothing can recreate it)
+	//   - bound, no prefab    exempt for the same reason, without the flag
+	//   - prefab-spawned      NOT exempt: this is the control, and it must still go
+	const PrefabFixture prefabs;
+	Pair p(24735, [](World& world) { aether::net::test::MakeScenePlaced(world, 1); });
+	p.host.context.Relevancy().radius = 50.f;
+	p.host.context.SetSendRateHz(1'000'000.f);
+
+	// The scene-placed entity, numbered identically on both ends off the scene node id.
+	const std::vector<std::uint32_t> sceneIds = aether::net::test::ScenePlacedNetIds(p.host.world);
+	REQUIRE(sceneIds.size() == 1);
+	const std::uint32_t sceneNetId = sceneIds.front();
+	const Entity hostScene = p.host.context.Session().EntityFor(sceneNetId);
+	REQUIRE(hostScene.IsValid());
+	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return p.client.context.IsConnected(); }));
+	const Entity clientScene = p.client.context.Session().EntityFor(sceneNetId);
+	REQUIRE(clientScene.IsValid()); // derived locally, never spawned across the wire
+
+	// A replicated entity with no prefab name and no scenePlaced flag: the other half
+	// of the same predicate. Nothing in the framework produces one today, which is
+	// exactly why it needs pinning - the flag is only set by AssignScenePlacedNetIds,
+	// so "not flagged" must not be read as "recreatable". Bound by hand on both ends
+	// because no spawn message could establish it.
+	const std::uint32_t prefablessNetId = p.host.context.Session().AllocateNetId();
+	{
+		const Entity onHost = p.host.world.Create();
+		p.host.world.Emplace<TransformComponent>(onHost);
+		p.host.world.Emplace<aether::net::NetworkIdentity>(onHost,
+		        aether::net::NetworkIdentity{.netId = prefablessNetId, .owner = aether::net::kInvalidConnection});
+		p.host.context.Session().Bind(prefablessNetId, onHost);
+
+		const Entity onClient = p.client.world.Create();
+		p.client.world.Emplace<TransformComponent>(onClient);
+		p.client.world.Emplace<aether::net::NetworkIdentity>(onClient,
+		        aether::net::NetworkIdentity{.netId = prefablessNetId, .owner = aether::net::kInvalidConnection});
+		p.client.context.Session().Bind(prefablessNetId, onClient);
+	}
+	const Entity hostPrefabless = p.host.context.Session().EntityFor(prefablessNetId);
+
+	// The control: an ordinary prefab-spawned entity, which the client CAN rebuild.
+	const Entity hostSpawned = p.host.context.SpawnPrefab(p.host.world, kPrefab, {6.f, 0.f, 0.f},
+	        aether::net::kInvalidConnection);
+	REQUIRE(hostSpawned.IsValid());
+	const std::uint32_t spawnedNetId = p.host.world.TryGet<aether::net::NetworkIdentity>(hostSpawned)->netId;
+	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return p.client.context.Session().EntityFor(spawnedNetId).IsValid(); }));
+
+	// All three inside the radius, so all three enter this connection's relevant set.
+	MoveTo(p.host.world, hostScene, {5.f, 0.f, 0.f});
+	MoveTo(p.host.world, hostPrefabless, {7.f, 0.f, 0.f});
+	p.send.Update(p.host.world, 0.f); // tick 1: seeds the baseline with all three
+
+	// All three walk out together.
+	MoveTo(p.host.world, hostScene, {5000.f, 0.f, 0.f});
+	MoveTo(p.host.world, hostPrefabless, {5000.f, 0.f, 0.f});
+	MoveTo(p.host.world, hostSpawned, {5000.f, 0.f, 0.f});
+	p.send.Update(p.host.world, 0.f); // tick 2: all three leave the relevant set
+
+	// The control leaving is what proves the leave path ran at all this tick - without
+	// it, "the scene entity survived" would pass just as well against a system that
+	// sent nothing whatsoever.
+	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return !p.client.context.Session().EntityFor(spawnedNetId).IsValid(); },
+	        3000));
+
+	// Give any wrongly-sent leave for the other two every chance to land. Both ends
+	// have to keep pumping: a host's sends only leave the box when its own Poll()
+	// services enet_host, so a queued-but-unflushed leave would otherwise let this
+	// case pass for the wrong reason.
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+	while (std::chrono::steady_clock::now() < deadline)
+	{
+		p.host.receive.Update(p.host.world, 0.f);
+		p.client.receive.Update(p.client.world, 0.f);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	CHECK(p.client.context.Session().EntityFor(sceneNetId) == clientScene);
+	CHECK(p.client.world.GetRegistry().valid(World::ToEntt(clientScene)));
+	CHECK(p.client.context.Session().EntityFor(prefablessNetId).IsValid());
+	// And the host kept all three - a leave was never a host-side destroy either way.
+	CHECK(p.host.world.GetRegistry().valid(World::ToEntt(hostScene)));
+	CHECK(p.host.world.GetRegistry().valid(World::ToEntt(hostSpawned)));
+}
+
+TEST_CASE("An entity outside a joiner's radius is not replayed to it, so it cannot freeze there")
+{
+	// The join replay used to be unfiltered while the send system diffed only the
+	// relevant set, so an entity out of range AT JOIN existed on the client and was in
+	// no connection's "previous" set - it could never reach the leave loop, and sat
+	// frozen at its join-time pose for the rest of the session. Filtering the replay
+	// through the same relevancy call the send tick makes is what closes that: what a
+	// connection has is exactly what relevancy admitted, with no third state.
+	//
+	// Cannot use Pair: the entity has to exist BEFORE the client connects, which is
+	// the whole point.
+	constexpr std::uint16_t kPort = 24736;
+	const PrefabFixture prefabs;
+
+	Node host;
+	Node client;
+	REQUIRE(host.context.StartHost(host.world, kPort, 4));
+	aether::net::NetworkSendSystem send(host.context);
+	host.context.Relevancy().radius = 50.f;
+	host.context.SetSendRateHz(1'000'000.f);
+
+	// Far outside the radius, and spawned while nobody is connected - so the ONLY way
+	// it could reach the joiner is the replay.
+	const Entity hostEntity = host.context.SpawnPrefab(host.world, kPrefab, {5000.f, 0.f, 0.f},
+	        aether::net::kInvalidConnection);
+	REQUIRE(hostEntity.IsValid());
+	const std::uint32_t netId = host.world.TryGet<aether::net::NetworkIdentity>(hostEntity)->netId;
+
+	REQUIRE(client.context.StartClient(client.world, "127.0.0.1", kPort));
+	REQUIRE(PumpUntil({&host, &client}, [&] { return client.context.IsConnected(); }));
+
+	// Several send ticks with the entity still out of range, then a settling window:
+	// whatever the replay and the ticks are going to send has been sent by now.
+	for (int i = 0; i < 3; ++i)
+	{
+		send.Update(host.world, 0.f);
+	}
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+	while (std::chrono::steady_clock::now() < deadline)
+	{
+		host.receive.Update(host.world, 0.f);
+		client.receive.Update(client.world, 0.f);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	// Not present at all is the only non-frozen answer available: the client either
+	// has an entity relevancy keeps updated, or it does not have it.
+	CHECK_FALSE(client.context.Session().EntityFor(netId).IsValid());
+	CHECK(aether::net::test::CountIdentities(client.world) == 0);
+
+	// And withholding it is only safe because re-entry genuinely restores it. It comes
+	// into range somewhere it has never been announced from.
+	MoveTo(host.world, hostEntity, {12.f, 3.f, -4.f});
+	send.Update(host.world, 0.f);
+
+	REQUIRE(PumpUntil({&host, &client}, [&] { return client.context.Session().EntityFor(netId).IsValid(); }, 3000));
+	const glm::vec3 pos = PositionOf(client.world, client.context.Session().EntityFor(netId));
+	CHECK(pos.x == doctest::Approx(12.f));
+	CHECK(pos.y == doctest::Approx(3.f));
+	CHECK(pos.z == doctest::Approx(-4.f));
+}
+
+TEST_CASE("A disconnected connection is dropped from both of the send system's per-connection maps")
+{
+	// PruneDisconnected had no coverage at all - deleting it outright kept the suite
+	// green. Both maps are keyed by ConnectionId and outlive any one connection, so a
+	// leak here is not just memory: NetworkSubsystem's id counter resets across a
+	// Stop/StartHost cycle, and a reused id inheriting a stale relevant set would make
+	// the new connection's first tick diff against the OLD connection's world.
+	const PrefabFixture prefabs;
+	Pair p(24737);
+	p.host.context.SetSendRateHz(1'000'000.f);
+
+	const Entity hostEntity = p.host.context.SpawnPrefab(p.host.world, kPrefab, {0.f, 0.f, 0.f},
+	        aether::net::kInvalidConnection);
+	REQUIRE(hostEntity.IsValid());
+
+	p.send.Update(p.host.world, 0.f);
+
+	// Positive control: both maps are genuinely populated, so the checks after the
+	// disconnect are measuring a removal and not an entry that was never made.
+	REQUIRE(p.send.PacedConnectionCount() == 1);
+	REQUIRE(p.send.TrackedRelevancyCount() == 1);
+
+	p.client.context.Stop(p.client.world);
+	REQUIRE(PumpUntil({&p.host}, [&] { return p.host.context.Session().Connections().empty(); }, 3000));
+
+	p.send.Update(p.host.world, 0.f);
+
+	CHECK(p.send.PacedConnectionCount() == 0);
+	CHECK(p.send.TrackedRelevancyCount() == 0);
+}
+
 TEST_CASE("An entity that re-enters relevancy is restored with its current state, not its state when it left")
 {
+	// Position ALONE proves nothing here, and this case used to assert only that: the
+	// position rides the re-entry Spawn packet, which is sent whether or not
+	// cache.Forget was ever called - so the whole "the cache is cleared on leave" half
+	// could be deleted and this case would stay green. What actually needs pinning is
+	// a replicated field the Spawn does NOT carry, held UNCHANGED across the away
+	// window: the host cached its value on tick 1, the client destroyed and rebuilt
+	// the entity from the prefab (which knows nothing of it), and only a forgotten
+	// cache makes the snapshot resend a value that never changed. Rotation is that
+	// field - AE_FIELD_CUSTOM_REP("euler") on TransformComponent.
+	constexpr float kEulerY = 0.75f;
+
 	const PrefabFixture prefabs;
 	Pair p(24731);
 	p.host.context.Relevancy().radius = 50.f;
@@ -189,16 +422,20 @@ TEST_CASE("An entity that re-enters relevancy is restored with its current state
 
 	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return p.client.context.Session().EntityFor(netId).IsValid(); }));
 
+	// Set before tick 1 and never touched again, so the host's cache records it as
+	// sent and no later change can cause a resend.
+	MoveWithRotation(p.host.world, hostEntity, {5.f, 0.f, 0.f}, {0.f, kEulerY, 0.f});
 	p.send.Update(p.host.world, 0.f); // tick 1: relevant, seeds the baseline
 
-	MoveTo(p.host.world, hostEntity, {5000.f, 0.f, 0.f});
+	MoveWithRotation(p.host.world, hostEntity, {5000.f, 0.f, 0.f}, {0.f, kEulerY, 0.f});
 	p.send.Update(p.host.world, 0.f); // tick 2: leaves
 
 	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return !p.client.context.Session().EntityFor(netId).IsValid(); }, 3000));
 
 	// It comes back somewhere it has never been - not the spawn position (5,0,0)
-	// and not the far-away position it left from (5000,0,0).
-	MoveTo(p.host.world, hostEntity, {42.f, 7.f, -3.f});
+	// and not the far-away position it left from (5000,0,0) - still rotated exactly
+	// as it was before it left.
+	MoveWithRotation(p.host.world, hostEntity, {42.f, 7.f, -3.f}, {0.f, kEulerY, 0.f});
 	p.send.Update(p.host.world, 0.f); // tick 3: re-enters
 
 	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return p.client.context.Session().EntityFor(netId).IsValid(); }, 3000));
@@ -208,6 +445,19 @@ TEST_CASE("An entity that re-enters relevancy is restored with its current state
 	CHECK(pos.x == doctest::Approx(42.f));
 	CHECK(pos.y == doctest::Approx(7.f));
 	CHECK(pos.z == doctest::Approx(-3.f));
+
+	// The half the Spawn cannot deliver. Pumped for rather than read immediately: the
+	// Spawn and the resync snapshot are separate packets, and only the first is what
+	// PumpUntil above waited on.
+	bool rotated = false;
+	PumpUntil({&p.host, &p.client},
+	        [&]
+	        {
+		        rotated = std::abs(EulerOf(p.client.world, clientEntity).y - kEulerY) < 1e-3f;
+		        return rotated;
+	        },
+	        3000);
+	CHECK(rotated);
 }
 
 TEST_CASE("Leaving relevancy forgets the connection's cache, so re-entry is not silently skipped")

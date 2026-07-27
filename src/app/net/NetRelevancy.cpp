@@ -53,4 +53,21 @@ namespace aether::net
 		        .each([&](entt::entity ent, NetworkIdentity&) { out.push_back(World::FromEntt(ent)); });
 		return out;
 	}
+
+	glm::vec3 ViewerPosition(World& world, ConnectionId viewer)
+	{
+		glm::vec3 position{0.f};
+		bool found = false;
+		world.View<NetworkIdentity, TransformComponent>().each(
+		        [&](entt::entity, NetworkIdentity& identity, TransformComponent& transform)
+		        {
+			        if (found || identity.owner != viewer)
+			        {
+				        return;
+			        }
+			        position = glm::vec3(transform.localToWorld[3]);
+			        found = true;
+		        });
+		return position;
+	}
 } // namespace aether::net
