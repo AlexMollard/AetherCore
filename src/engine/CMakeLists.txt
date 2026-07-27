@@ -92,6 +92,15 @@ target_include_directories(Engine PUBLIC
 
 target_link_libraries(Engine PUBLIC zstd::libzstd_static)
 
+# ENet (UDP transport). PUBLIC so GameRuntime and EngineTests inherit the include
+# directory that Dependencies.cmake exports on the enet target.
+target_link_libraries(Engine PUBLIC enet)
+if(WIN32)
+    # enet's own CMakeLists only links winmm/ws2_32 under MINGW; MSVC/clang-cl builds
+    # (every consumer here) need them supplied explicitly, same as Editor/Launcher/aether-ctl.
+    target_link_libraries(Engine PUBLIC ws2_32 winmm)
+endif()
+
 # VMA + stb are header-only; SYSTEM on VMA silences its header warnings. Jolt's include is
 # explicit because EXCLUDE_FROM_ALL can block propagation through target_link_libraries.
 target_include_directories(Engine SYSTEM PUBLIC "${VMA_SOURCE_DIR}/include")
