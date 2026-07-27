@@ -193,7 +193,8 @@ namespace aether::ui
 		float repeatTimer = 0.f;
 		int repeatKey = 0;              // GLFW code of the key currently repeating (0 = none)
 		std::string committedText;      // snapshot taken on edit entry, restored by Escape
-		double lastClickTime = -1.0;    // for double-click word select
+		double lastClickTime = -1.0;    // for double-click word select (-1 = no click to pair with)
+		glm::vec2 lastClickPos{0.f};    // ...which also has to be near the previous click, not just soon after
 	};
 
 	// A UI element drawn by its OWN shader pipeline ("shaders://<shader>.spv"), on top of the

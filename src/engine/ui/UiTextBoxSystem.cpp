@@ -1,7 +1,7 @@
 #include "ui/UiTextBoxSystem.hpp"
 
 #include <algorithm>
-#include <cmath>
+#include <vector>
 
 #include <entt/entt.hpp>
 
@@ -21,6 +21,9 @@ namespace aether::ui
 		constexpr float kRepeatDelay = 0.4f;
 		constexpr float kRepeatRate = 0.03f;
 		constexpr double kDoubleClickSeconds = 0.35;
+		// A second click only pairs with the first if it lands on roughly the same spot. Without this,
+		// two clicks at opposite ends of a long field select a word neither of them was near.
+		constexpr float kDoubleClickRadius = 5.f;
 
 		TextEditState ToEditState(const UITextBox& box)
 		{
@@ -125,6 +128,7 @@ namespace aether::ui
 			        {
 				        box.editing = false;
 				        box.dragging = false;
+				        box.lastClickTime = -1.0;
 				        SetCapture(world, e, false);
 				        return;
 			        }
@@ -139,16 +143,19 @@ namespace aether::ui
 			        {
 				        box.editing = false;
 				        box.dragging = false;
+				        box.lastClickTime = -1.0;
 				        SetCapture(world, e, false);
 			        }
 
 			        // Activation (click, or Enter/Space while focused) starts editing.
+			        bool justActivated = false;
 			        if (!box.editing && Activated(world, e))
 			        {
 				        box.editing = true;
 				        box.committedText = box.text;
 				        box.caretTimer = 0.f;
 				        box.repeatKey = 0;
+				        justActivated = true;
 				        SetCapture(world, e, true);
 				        TextEditState s = ToEditState(box);
 				        SelectAll(s); // entering a field selects it, so typing replaces
@@ -171,7 +178,9 @@ namespace aether::ui
 				        const float localX = mouse.x - innerX + s.scrollX;
 				        const int index = CaretFromPixelX(*font, display, box.pixelSize, localX);
 				        const double now = static_cast<double>(time);
-				        if (box.lastClickTime >= 0.0 && now - box.lastClickTime < kDoubleClickSeconds)
+				        const glm::vec2 fromLast = mouse - box.lastClickPos;
+				        const bool nearLast = glm::dot(fromLast, fromLast) <= kDoubleClickRadius * kDoubleClickRadius;
+				        if (box.lastClickTime >= 0.0 && now - box.lastClickTime < kDoubleClickSeconds && nearLast)
 				        {
 					        SelectWordAt(s, index);
 				        }
@@ -185,6 +194,7 @@ namespace aether::ui
 					        box.dragging = true;
 				        }
 				        box.lastClickTime = now;
+				        box.lastClickPos = mouse;
 				        box.caretTimer = 0.f;
 			        }
 			        else if (font != nullptr && box.dragging && mouseDown)
@@ -202,13 +212,19 @@ namespace aether::ui
 			        {
 				        SelectAll(s);
 			        }
-			        if (ctrl && input.IsKeyPressed(Key::C) && HasSelection(s))
+			        // A masked field never publishes its plaintext: SelectedText reads the real string, so
+			        // without this Ctrl+C on a password box hands the OS clipboard the password verbatim.
+			        // Cut still deletes - it just has nowhere to put what it removed.
+			        if (ctrl && input.IsKeyPressed(Key::C) && HasSelection(s) && !box.password)
 			        {
 				        input.SetClipboardText(SelectedText(s));
 			        }
 			        if (ctrl && input.IsKeyPressed(Key::X) && HasSelection(s))
 			        {
-				        input.SetClipboardText(SelectedText(s));
+				        if (!box.password)
+				        {
+					        input.SetClipboardText(SelectedText(s));
+				        }
 				        textChanged = DeleteSelection(s) || textChanged;
 			        }
 			        if (ctrl && input.IsKeyPressed(Key::V))
@@ -219,7 +235,10 @@ namespace aether::ui
 			        // ── Typed characters ────────────────────────────────────────────────────────
 			        // Ctrl chords are shortcuts, not text; GLFW does not emit chars for them anyway,
 			        // but skipping keeps a stray char from a chord out of the field.
-			        if (!ctrl && !input.GetTypedChars().empty())
+			        // The activation frame is skipped too: nav activates on the Space down-edge and GLFW
+			        // emits a char for that same Space, which would land on the just-selected-all field
+			        // and replace the entire contents with a single space.
+			        if (!ctrl && !justActivated && !input.GetTypedChars().empty())
 			        {
 				        textChanged = InsertText(s, LimitsOf(box), input.GetTypedChars()) || textChanged;
 			        }
@@ -251,8 +270,16 @@ namespace aether::ui
 			        }
 
 			        // ── Commit / cancel ─────────────────────────────────────────────────────────
+			        // Not on the activation frame: nav activates on the Enter down-edge, and that same
+			        // edge is still pressed here, so an unguarded commit would take and release the
+			        // keyboard inside one frame and pulse `submitted` on a field nobody ever edited -
+			        // leaving a keyboard-only user with no way into a text box at all.
 			        bool leaveEditing = false;
-			        if (input.IsKeyPressed(Key::Enter) || input.IsKeyPressed(Key::KpEnter))
+			        if (justActivated)
+			        {
+				        // the activation key is not a commit
+			        }
+			        else if (input.IsKeyPressed(Key::Enter) || input.IsKeyPressed(Key::KpEnter))
 			        {
 				        box.submitted = true;
 				        leaveEditing = true;
@@ -264,6 +291,9 @@ namespace aether::ui
 					        s.text = box.committedText;
 					        s.caret = static_cast<int>(s.text.size());
 					        ClearSelection(s);
+					        // `changed` fires alongside `cancelled` here: the text really did change, back
+					        // to what it was. A consumer reading `changed` as "the user edited this" will
+					        // see one phantom edit on cancel, so check `cancelled` first if that matters.
 					        textChanged = true;
 				        }
 				        box.cancelled = true;
@@ -271,7 +301,10 @@ namespace aether::ui
 			        }
 			        else if (input.IsKeyPressed(Key::Tab))
 			        {
-				        leaveEditing = true; // navigation already moved focus on this key
+				        // Only reachable when this box is the sole interactable candidate and Tab wrapped
+				        // focus back onto it: any other layout moves focus, and the focus-loss branch above
+				        // has already ended editing before the code gets here.
+				        leaveEditing = true;
 			        }
 
 			        if (font != nullptr)
@@ -287,9 +320,35 @@ namespace aether::ui
 				        box.editing = false;
 				        box.dragging = false;
 				        box.repeatKey = 0;
+				        box.lastClickTime = -1.0; // leaving and clicking back in places a caret, not a word select
 				        box.committedText = box.text;
 				        SetCapture(world, e, false);
 			        }
 		        });
+
+		// Sweep stranded capture markers, so "no capture without an editing box" is an invariant
+		// rather than something inferred from the paths above. The loop can only release capture for
+		// entities it still sees: an entity that lost its UITextBox or UIRect at runtime, or one whose
+		// `editing` was cleared from outside (it is a plain public field - the inspector and MCP both
+		// reach it), would keep the marker forever and navigation would go on handing arrows, Enter and
+		// Space to a dead element with no recovery short of a scene reload.
+		//
+		// If a second widget type ever claims the keyboard (the dropdown/spinner UIKeyboardCapture was
+		// designed for), it has to be taught here too or this sweep will pull the marker out from under it.
+		std::vector<Entity> stranded;
+		for (const entt::entity ent : world.View<UIKeyboardCapture>())
+		{
+			const Entity e = World::FromEntt(ent);
+			const auto* box = world.TryGet<UITextBox>(e);
+			if (box == nullptr || !box->editing)
+			{
+				stranded.push_back(e);
+			}
+		}
+		// Collected first: mutating a view's own storage while iterating it is not safe in EnTT.
+		for (const Entity e : stranded)
+		{
+			world.Remove<UIKeyboardCapture>(e);
+		}
 	}
 } // namespace aether::ui

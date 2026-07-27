@@ -242,11 +242,23 @@ namespace aether
 		void SetSyntheticChars(std::string_view chars)
 		{
 			m_pendingChars.append(chars);
+			// Seed the live buffer too, the way SetSyntheticKey seeds m_currKeys. Only when there is
+			// no window: Update() rebuilds m_typedChars from m_pendingChars every frame, so seeding a
+			// windowed Input would deliver the text twice. Windowless unit tests never call Update(),
+			// and without this they could never observe a typed character at all.
+			if (m_window == nullptr)
+			{
+				m_typedChars.append(chars);
+			}
 		}
 
 		void ClearSyntheticChars()
 		{
 			m_pendingChars.clear();
+			if (m_window == nullptr)
+			{
+				m_typedChars.clear();
+			}
 		}
 
 		// Synthetic MOUSE injection, same contract as keys: buttons OR into the real
