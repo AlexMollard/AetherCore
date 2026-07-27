@@ -11,38 +11,15 @@
 #include <nlohmann/json.hpp>
 
 #include "editor/ControlMethods.hpp"
+#include "net/EnetInit.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::editor
 {
 	using nlohmann::json;
-
-	namespace
-	{
-		std::mutex g_enetInitMutex;
-		int g_enetRefCount = 0;
-
-		bool AcquireEnet()
-		{
-			const std::lock_guard<std::mutex> lock(g_enetInitMutex);
-			if (g_enetRefCount == 0 && enet_initialize() != 0)
-			{
-				return false;
-			}
-			++g_enetRefCount;
-			return true;
-		}
-
-		void ReleaseEnet()
-		{
-			const std::lock_guard<std::mutex> lock(g_enetInitMutex);
-			if (g_enetRefCount > 0 && --g_enetRefCount == 0)
-			{
-				enet_deinitialize();
-			}
-		}
-	} // namespace
+	using aether::net::AcquireEnet;
+	using aether::net::ReleaseEnet;
 
 	struct ControlServer::Impl
 	{

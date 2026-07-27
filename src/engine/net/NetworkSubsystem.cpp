@@ -1,43 +1,14 @@
 #include "net/NetworkSubsystem.hpp"
 
 #include <cstring>
-#include <mutex>
 
 #include <enet/enet.h>
 
+#include "net/EnetInit.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::net
 {
-	namespace
-	{
-		// ENet's global init is process-wide and not refcounted by the library.
-		// Same pattern as editor/ControlServer.cpp so two hosts in one process
-		// (loopback tests, editor + game) cannot tear each other down.
-		std::mutex g_enetInitMutex;
-		int g_enetRefCount = 0;
-
-		bool AcquireEnet()
-		{
-			const std::lock_guard<std::mutex> lock(g_enetInitMutex);
-			if (g_enetRefCount == 0 && enet_initialize() != 0)
-			{
-				return false;
-			}
-			++g_enetRefCount;
-			return true;
-		}
-
-		void ReleaseEnet()
-		{
-			const std::lock_guard<std::mutex> lock(g_enetInitMutex);
-			if (g_enetRefCount > 0 && --g_enetRefCount == 0)
-			{
-				enet_deinitialize();
-			}
-		}
-	} // namespace
-
 	NetworkSubsystem::~NetworkSubsystem()
 	{
 		Disconnect();
@@ -158,7 +129,7 @@ namespace aether::net
 
 	void NetworkSubsystem::Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes)
 	{
-		if (m_host == nullptr || bytes.empty())
+		if (m_host == nullptr || bytes.empty() || channel < 0 || channel >= kChannelCount)
 		{
 			return;
 		}
@@ -169,17 +140,25 @@ namespace aether::net
 		}
 		ENetPacket* packet = enet_packet_create(bytes.data(), bytes.size(),
 		        reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNSEQUENCED);
-		enet_peer_send(target, static_cast<enet_uint8>(channel), packet);
+		// enet_peer_send only takes ownership of the packet on success; on failure
+		// (bad channel, oversized payload, allocation failure) it leaves the packet
+		// with a zero refcount for us to free, or it leaks.
+		if (enet_peer_send(target, static_cast<enet_uint8>(channel), packet) != 0)
+		{
+			enet_packet_destroy(packet);
+		}
 	}
 
 	void NetworkSubsystem::Broadcast(int channel, bool reliable, std::span<const std::byte> bytes)
 	{
-		if (m_host == nullptr || bytes.empty())
+		if (m_host == nullptr || bytes.empty() || channel < 0 || channel >= kChannelCount)
 		{
 			return;
 		}
 		ENetPacket* packet = enet_packet_create(bytes.data(), bytes.size(),
 		        reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNSEQUENCED);
+		// enet_host_broadcast frees the packet itself when no peer accepts it, unlike
+		// enet_peer_send - do not destroy it here.
 		enet_host_broadcast(m_host, static_cast<enet_uint8>(channel), packet);
 	}
 
