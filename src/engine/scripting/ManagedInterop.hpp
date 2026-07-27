@@ -65,6 +65,13 @@ namespace aether::scripting
 		std::int32_t (*GetEditorWindowTitle)(std::int32_t index, char* utf8Buf, std::int32_t bufLen) = nullptr;
 		std::int32_t (*GetEditorWindowVisible)(std::int32_t index) = nullptr;
 		void (*SetEditorWindowVisible)(std::int32_t index, std::int32_t visible) = nullptr;
+
+		// Networking. Reports which of a script type's properties carry [Replicated],
+		// as indices into the property table above; returns the total count and fills
+		// at most `maxIndices`. The values themselves still travel through
+		// GetProperty/SetProperty, so a replicated script field has exactly one
+		// marshalling path.
+		std::int32_t (*GetReplicatedPropertyIndices)(const char* typeNameUtf8, std::int32_t* outIndices, std::int32_t maxIndices) = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

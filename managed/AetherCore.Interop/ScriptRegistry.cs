@@ -67,9 +67,18 @@ internal static unsafe class ScriptRegistry
         // component (from the IComponentRef wrapper's static ComponentType). The
         // inspector reads it (via the value's Str) to validate entity drops.
         public string? ComponentType;
+
+        /// <summary>Field carries [Replicated]; the network layer syncs it host to client.</summary>
+        public bool Replicated;
     }
 
     private static readonly Dictionary<string, Prop[]> s_props = new(StringComparer.Ordinal);
+
+    // The indices (into s_props[type]) of that type's [Replicated] fields, in
+    // property-table order. Built once alongside s_props so the network path never
+    // re-reflects, and expressed as indices so replication reuses the existing
+    // GetProperty/SetProperty bridge rather than adding a second value encoding.
+    private static readonly Dictionary<string, int[]> s_replicated = new(StringComparer.Ordinal);
 
     // A default-constructed instance per type, so the inspector can show default
     // field values when no live instance exists (edit mode).
@@ -125,7 +134,14 @@ internal static unsafe class ScriptRegistry
                         .GetProperty("ComponentType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
                         ?.GetValue(null) as string;
                 }
-                props.Add(new Prop { Name = field.Name, Type = pt, Field = field, ComponentType = componentType });
+                props.Add(new Prop
+                {
+                    Name = field.Name,
+                    Type = pt,
+                    Field = field,
+                    ComponentType = componentType,
+                    Replicated = field.IsDefined(typeof(ReplicatedAttribute), inherit: true),
+                });
             }
         }
         int selfIndex = props.FindIndex(static p => p.Name == "Self");
@@ -136,6 +152,22 @@ internal static unsafe class ScriptRegistry
             props.Insert(0, self);
         }
         return props.ToArray();
+    }
+
+    // Positions of the [Replicated] props within `props`. Derived from the finished
+    // table (BuildProps moves "Self" to the front), so an index is always valid to
+    // hand straight to GetProperty/SetProperty.
+    private static int[] BuildReplicatedIndices(Prop[] props)
+    {
+        var indices = new List<int>();
+        for (int i = 0; i < props.Length; i++)
+        {
+            if (props[i].Replicated)
+            {
+                indices.Add(i);
+            }
+        }
+        return indices.ToArray();
     }
 
     // ── Assembly / registry lifecycle ─────────────────────────────────────────
@@ -176,6 +208,7 @@ internal static unsafe class ScriptRegistry
     {
         s_types.Clear();
         s_props.Clear();
+        s_replicated.Clear();
         s_defaults.Clear();
         // Remember each tool window's open/closed state (by Title) so a reload restores it instead of
         // reverting to the window's default; string keys don't root the context being unloaded.
@@ -234,7 +267,9 @@ internal static unsafe class ScriptRegistry
                 continue;
             }
             s_types[type.Name] = type;
-            s_props[type.Name] = BuildProps(type);
+            Prop[] props = BuildProps(type);
+            s_props[type.Name] = props;
+            s_replicated[type.Name] = BuildReplicatedIndices(props);
             names.Add(type.Name);
             try
             {
@@ -414,6 +449,32 @@ internal static unsafe class ScriptRegistry
             *outType = (int)p.Type;
         }
         return Utf8.Write(p.Name, nameBuf, nameBufLen);
+    }
+
+    /// <summary>
+    /// Reports which of a type's properties carry [Replicated], as indices into the
+    /// same table GetPropertyInfo/GetProperty/SetProperty use. Returns the total
+    /// count (so a caller can detect truncation) and writes at most
+    /// <paramref name="maxIndices"/> of them. The network layer reads and writes the
+    /// values through the existing by-index property bridge, so there is exactly one
+    /// marshalling path for a script field.
+    /// </summary>
+    [UnmanagedCallersOnly]
+    internal static int GetReplicatedPropertyIndices(byte* typeNameUtf8, int* outIndices, int maxIndices)
+    {
+        if (!s_replicated.TryGetValue(Utf8.ToString(typeNameUtf8), out int[]? indices))
+        {
+            return 0;
+        }
+        if (outIndices != null)
+        {
+            int writable = maxIndices < indices.Length ? maxIndices : indices.Length;
+            for (int i = 0; i < writable; i++)
+            {
+                outIndices[i] = indices[i];
+            }
+        }
+        return indices.Length;
     }
 
     [UnmanagedCallersOnly]

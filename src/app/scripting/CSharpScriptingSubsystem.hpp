@@ -64,6 +64,10 @@ namespace aether::app::scripting
 
 		[[nodiscard]] std::vector<ScriptPropertyInfo> GetScriptProperties(const std::string& typeName) const;
 		[[nodiscard]] int FindPropertyIndex(const std::string& typeName, const std::string& name) const;
+		// Property indices marked [Replicated] on `typeName`, in property-table order.
+		// Indices address the same table GetScriptProperties/GetPropertyValue use, so
+		// replication reuses the existing bridge instead of a second value path.
+		[[nodiscard]] std::vector<int> GetReplicatedPropertyIndices(const std::string& typeName) const;
 		[[nodiscard]] bool GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const;
 		void SetPropertyValue(std::uint64_t handle, int index, const aether::ScriptPropertyValue& value) const;
 		[[nodiscard]] bool GetDefaultPropertyValue(const std::string& typeName, int index, aether::ScriptPropertyValue& out) const;

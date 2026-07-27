@@ -80,6 +80,9 @@ internal static unsafe class Bootstrap
             outApi->GetEditorWindowVisible = &ScriptRegistry.GetEditorWindowVisible;
             outApi->SetEditorWindowVisible = &ScriptRegistry.SetEditorWindowVisible;
 
+            // Networking
+            outApi->GetReplicatedPropertyIndices = &ScriptRegistry.GetReplicatedPropertyIndices;
+
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;
         }

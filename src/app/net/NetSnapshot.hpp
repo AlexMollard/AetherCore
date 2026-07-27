@@ -17,16 +17,20 @@ namespace aether
 
 namespace aether::net
 {
-	// Identifies one replicated field on one networked entity.
+	// Identifies one replicated field on one networked entity. Component fields leave
+	// scriptTypeHash at 0; replicated C# script fields set it (and park componentIndex
+	// on a sentinel) so both kinds share one change-detection cache with no aliasing.
 	struct FieldKey
 	{
 		std::uint32_t netId = 0;
 		std::uint16_t componentIndex = 0;
 		std::uint16_t fieldIndex = 0;
+		std::uint32_t scriptTypeHash = 0;
 
 		friend bool operator==(const FieldKey& a, const FieldKey& b)
 		{
-			return a.netId == b.netId && a.componentIndex == b.componentIndex && a.fieldIndex == b.fieldIndex;
+			return a.netId == b.netId && a.componentIndex == b.componentIndex && a.fieldIndex == b.fieldIndex
+			       && a.scriptTypeHash == b.scriptTypeHash;
 		}
 	};
 } // namespace aether::net
@@ -37,7 +41,7 @@ struct std::hash<aether::net::FieldKey>
 	std::size_t operator()(const aether::net::FieldKey& k) const noexcept
 	{
 		return (static_cast<std::size_t>(k.netId) * 1315423911u) ^ (static_cast<std::size_t>(k.componentIndex) << 16)
-		       ^ static_cast<std::size_t>(k.fieldIndex);
+		       ^ static_cast<std::size_t>(k.fieldIndex) ^ (static_cast<std::size_t>(k.scriptTypeHash) * 2654435761u);
 	}
 };
 

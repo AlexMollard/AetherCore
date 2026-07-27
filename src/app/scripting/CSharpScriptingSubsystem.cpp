@@ -459,6 +459,30 @@ namespace aether::app::scripting
 		return -1;
 	}
 
+	std::vector<int> CSharpScriptingSubsystem::GetReplicatedPropertyIndices(const std::string& typeName) const
+	{
+		const auto* api = Api();
+		if (api == nullptr || api->GetReplicatedPropertyIndices == nullptr)
+		{
+			return {};
+		}
+		// Ask for the count first rather than guessing a buffer size: a truncated
+		// answer would silently stop replicating a script's later fields.
+		const int count = api->GetReplicatedPropertyIndices(typeName.c_str(), nullptr, 0);
+		if (count <= 0)
+		{
+			return {};
+		}
+		std::vector<std::int32_t> indices(static_cast<std::size_t>(count));
+		const int written = api->GetReplicatedPropertyIndices(typeName.c_str(), indices.data(), count);
+		if (written <= 0)
+		{
+			return {};
+		}
+		indices.resize(static_cast<std::size_t>(written < count ? written : count));
+		return std::vector<int>(indices.begin(), indices.end());
+	}
+
 	bool CSharpScriptingSubsystem::GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const
 	{
 		const auto* api = Api();

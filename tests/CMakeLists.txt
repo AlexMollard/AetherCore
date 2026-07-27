@@ -34,6 +34,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/net/NetRelevancy.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetInterpolation.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetSpawn.cpp"
+    # NetScriptFields only, NOT CSharpScriptFieldBridge.cpp: the packet logic goes
+    # through the abstract ScriptFieldBridge so it links without the CoreCLR host.
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetScriptFields.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"

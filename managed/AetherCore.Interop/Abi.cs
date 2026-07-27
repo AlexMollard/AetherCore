@@ -81,4 +81,8 @@ internal unsafe struct ManagedScriptApi
     public delegate* unmanaged<int, byte*, int, int> GetEditorWindowTitle;
     public delegate* unmanaged<int, int> GetEditorWindowVisible;
     public delegate* unmanaged<int, int, void> SetEditorWindowVisible;
+
+    // Networking: which of a type's properties carry [Replicated], as indices into
+    // the property table above. Values still travel through GetProperty/SetProperty.
+    public delegate* unmanaged<byte*, int*, int, int> GetReplicatedPropertyIndices;
 }
