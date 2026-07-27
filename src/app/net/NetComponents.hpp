@@ -4,6 +4,7 @@
 #include <string>
 
 #include "net/NetTypes.hpp"
+#include "physics2d/Physics2DComponents.hpp"
 
 namespace aether::net
 {
@@ -38,5 +39,19 @@ namespace aether::net
 	struct NetPlayer
 	{
 		std::string displayName;
+	};
+
+	// Present on a replicated entity whose 2D body this peer has taken OFF local
+	// simulation because it is not authoritative for it - see
+	// NetworkContext::SyncSimulationAuthority. Runtime-only and deliberately
+	// unreflected: it is never authored, never serialized, and never replicated.
+	//
+	// It carries the authored body type so the switch is reversible, and its mere
+	// PRESENCE is what makes the switch idempotent: an entity already carrying one
+	// is already handed over, so the reconcile pass leaves it alone instead of
+	// rebuilding its body every frame.
+	struct NetSimulationOverride
+	{
+		Body2DType authoredBodyType = Body2DType::Dynamic;
 	};
 } // namespace aether::net

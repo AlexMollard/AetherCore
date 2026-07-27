@@ -109,6 +109,13 @@ namespace aether::net
 
 		if (context.IsClient())
 		{
+			// After the inbound events, because a Welcome or a Spawn handled above is
+			// what establishes authority in the first place, and the entity a Spawn just
+			// created must be handed over on the frame it appears - Physics2DSystem runs
+			// later in this same frame and would otherwise integrate it once before
+			// anything noticed. Before ResolveTransforms only for readability; the two
+			// are independent.
+			context.SyncSimulationAuthority(world);
 			ResolveTransforms(world, dt);
 		}
 	}

@@ -7,6 +7,7 @@
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
 #include "net/NetSerialize.hpp"
+#include "physics2d/Physics2DSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -21,6 +22,44 @@ namespace aether::net
 		// Default peer budget for a listen server. Deliberately a local default and
 		// not a tunable: a project that needs a different one passes it to StartHost.
 		constexpr int kDefaultMaxPeers = 32;
+
+		// A body's type is baked into its b2BodyDef at creation and nothing re-reads
+		// it afterwards, so changing RigidBody2DComponent::bodyType only takes effect
+		// once the backing body is recreated. This is the same route the inspector and
+		// MCP take for a body_type edit (RebuildBody2D in Physics2D.reflect.cpp), found
+		// the same way - by name, through the world - so nothing about Physics2DSystem
+		// has to know networking exists.
+		//
+		// A world with no physics system registered (a headless test, a 3D scene) is
+		// not an error: setting the field is then the whole of the change, and the body
+		// will be built with the right type if one is ever created.
+		void RebuildBody2D(World& world, Entity entity)
+		{
+			if (auto* physics = static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem")))
+			{
+				physics->RebuildBody(world, entity);
+			}
+		}
+
+		// Puts a handed-over body back on local simulation, at whatever type it was
+		// authored as. Both routes back - this client gaining ownership, and the
+		// session ending - go through here so the two can never disagree about what
+		// "restored" means.
+		void ReclaimBody(World& world, Entity entity)
+		{
+			const auto* marker = world.TryGet<NetSimulationOverride>(entity);
+			if (marker == nullptr)
+			{
+				return;
+			}
+			const Body2DType authored = marker->authoredBodyType;
+			world.Remove<NetSimulationOverride>(entity);
+			if (auto* rigid = world.TryGet<RigidBody2DComponent>(entity))
+			{
+				rigid->bodyType = authored;
+				RebuildBody2D(world, entity);
+			}
+		}
 	} // namespace
 
 	NetworkContext::NetworkContext(ServiceContainer& services)
@@ -101,6 +140,14 @@ namespace aether::net
 
 	void NetworkContext::Stop(World& world)
 	{
+		// Before anything else: a body this client took off local simulation belongs
+		// to the local simulation again the moment there is no session driving it.
+		// Scene-placed entities survive Stop, so one left kinematic here is a player
+		// character that never falls again in single-player. Stop also runs at the TOP
+		// of StartHost/StartClient, which is what un-does a previous client session's
+		// handovers when the same process goes on to host.
+		RestoreSimulationAuthority(world);
+
 		// Everything ApplySpawn/SpawnPrefab instantiated for this session goes with it.
 		// Scene-placed entities stay - they came from the scene file and the next
 		// session re-derives their ids from it - but a prefab-spawned one has no source
@@ -328,5 +375,91 @@ namespace aether::net
 			return false;
 		}
 		return identity->owner == m_session.LocalConnection();
+	}
+
+	void NetworkContext::SyncSimulationAuthority(World& world)
+	{
+		// A host is authoritative over its whole world and an offline game has no
+		// other authority to defer to, so neither ever hands a body over. Nothing
+		// happens before the Welcome either: until LocalConnection is real, IsOwner
+		// answers false for everything (see its guard), and acting on that would hand
+		// over this client's OWN character for the length of the handshake and then
+		// rebuild its body a second time to give it back.
+		if (!IsClient() || !IsConnected())
+		{
+			return;
+		}
+
+		// Collected first, applied second: both branches below add or remove a
+		// component, and RebuildBody2D strips Physics2DStateComponent - all of which
+		// invalidate the view being walked.
+		std::vector<Entity> handover;
+		std::vector<Entity> reclaim;
+		world.View<NetworkIdentity, RigidBody2DComponent>().each(
+		        [&](entt::entity ent, NetworkIdentity& identity, RigidBody2DComponent& rigid)
+		        {
+			        if (identity.netId == 0)
+			        {
+				        return; // not part of this session yet; nothing is replicating it
+			        }
+			        const Entity entity = World::FromEntt(ent);
+			        const bool handedOver = world.Has<NetSimulationOverride>(entity);
+			        if (IsOwner(world, entity))
+			        {
+				        // Locally predicted: scripts drive it here and the receive system
+				        // eases it toward the host's answer, so it must keep simulating.
+				        if (handedOver)
+				        {
+					        reclaim.push_back(entity);
+				        }
+				        return;
+			        }
+			        // These two together are what make the reconcile idempotent, and
+			        // this runs EVERY frame, so an unconditional handover here would
+			        // destroy and rebuild the Box2D body of every remote entity on every
+			        // tick - and, worse, re-record the CURRENT body type as the authored
+			        // one, so the type to restore would decay to Kinematic after a single
+			        // frame and nothing could ever be given back.
+			        if (handedOver)
+			        {
+				        return;
+			        }
+			        // Only a Dynamic body is a problem: Static and Kinematic ones are
+			        // already not integrated, and SyncTransforms skips both, so the
+			        // replicated transform already survives the frame untouched.
+			        if (rigid.bodyType != Body2DType::Dynamic)
+			        {
+				        return;
+			        }
+			        handover.push_back(entity);
+		        });
+
+		for (const Entity entity: handover)
+		{
+			auto* rigid = world.TryGet<RigidBody2DComponent>(entity);
+			if (rigid == nullptr)
+			{
+				continue;
+			}
+			world.EmplaceOrReplace<NetSimulationOverride>(entity,
+			        NetSimulationOverride{.authoredBodyType = rigid->bodyType});
+			rigid->bodyType = Body2DType::Kinematic;
+			RebuildBody2D(world, entity);
+		}
+		for (const Entity entity: reclaim)
+		{
+			ReclaimBody(world, entity);
+		}
+	}
+
+	void NetworkContext::RestoreSimulationAuthority(World& world)
+	{
+		std::vector<Entity> handedOver;
+		world.View<NetSimulationOverride>().each(
+		        [&](entt::entity ent, NetSimulationOverride&) { handedOver.push_back(World::FromEntt(ent)); });
+		for (const Entity entity: handedOver)
+		{
+			ReclaimBody(world, entity);
+		}
 	}
 } // namespace aether::net

@@ -233,6 +233,37 @@ namespace aether::net
 		[[nodiscard]] bool HasAuthority(World& world, Entity entity) const;
 		[[nodiscard]] bool IsOwner(World& world, Entity entity) const;
 
+		// ── Simulation authority ─────────────────────────────────────────────
+		// Aligns every replicated entity's 2D body with who is allowed to simulate
+		// it, and is the reason a client can see a remote character move at all.
+		//
+		// NetworkReceiveSystem runs FIRST in the frame and writes the replicated
+		// transform; Physics2DSystem runs later and, for a DYNAMIC body, writes the
+		// transform again from its own integration of a body this peer has no
+		// authority over. The network's answer loses every frame, so a remotely
+		// owned character stands still while its snapshots arrive perfectly.
+		//
+		// The fix is the body type the engine already has for exactly this: a
+		// Kinematic 2D body is TRANSFORM-DRIVEN - Physics2DSystem::PushKinematicTargets
+		// pushes the ECS pose into Box2D each frame and SyncTransforms writes back
+		// only for Dynamic bodies - which is precisely replication's semantics. So a
+		// body this peer does not own becomes Kinematic, and goes back to what it was
+		// authored as the moment this peer does own it.
+		//
+		// Host and offline are untouched: both are authoritative over everything, so
+		// every body stays exactly as authored. Only a client changes anything.
+		//
+		// Called once per frame from the receive system rather than from each of the
+		// events that can change authority (Spawn, Welcome, ownership release on a
+		// disconnect): those are several call sites that must never be forgotten, and
+		// a reconcile that only acts on divergence costs one view walk and cannot be.
+		void SyncSimulationAuthority(World& world);
+
+		// Undoes every handover SyncSimulationAuthority made, restoring the authored
+		// body type. Called from Stop, so a player leaving a session and returning to
+		// single-player does not find a character that no longer falls.
+		static void RestoreSimulationAuthority(World& world);
+
 	private:
 		ServiceContainer& m_services;
 		NetworkSubsystem m_transport;

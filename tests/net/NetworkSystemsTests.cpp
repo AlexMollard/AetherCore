@@ -25,6 +25,7 @@
 #include "net/NetSpawn.hpp"
 #include "net/NetworkContext.hpp"
 #include "net/NetworkSystems.hpp"
+#include "physics2d/Physics2DComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/TransformUtils.hpp"
@@ -856,4 +857,193 @@ TEST_CASE("A host ignores a connect event for the invalid connection id")
 	host.BecomeHost();
 	host.receive.OnConnected(host.world, aether::net::kInvalidConnection);
 	CHECK(host.context.Session().Connections().empty());
+}
+
+// ── Simulation authority ────────────────────────────────────────────────────
+//
+// The bug these cover: a client received a remote character's transform every
+// tick and then overwrote it, in the SAME frame, with Physics2DSystem's own
+// integration of a body it had no authority over - so a remotely owned character
+// never appeared to move at all. Everything below drives NetworkReceiveSystem's
+// real Update, because the point is that the reconcile actually happens on the
+// frame the packets land, not merely that a function exists.
+//
+// No Physics2DSystem is registered in these worlds, so RebuildBody2D finds
+// nothing and the observable effect is exactly the authored state change - which
+// is the whole of the decision. Whether Box2D honours a rebuilt Kinematic body is
+// Physics2DSystem's own contract (PushKinematicTargets / SyncTransforms), covered
+// by tests/physics2d.
+
+namespace
+{
+	// A replicated entity with a 2D body - the shape of every networked character,
+	// and the only shape the local simulation fights the network over.
+	Entity ReplicateWithBody(Endpoint& endpoint, std::uint32_t netId, aether::net::ConnectionId owner,
+	        Body2DType type = Body2DType::Dynamic)
+	{
+		const Entity entity = endpoint.Replicate(netId, {0.f, 0.f, 0.f}, owner);
+		endpoint.world.Emplace<RigidBody2DComponent>(entity, RigidBody2DComponent{.bodyType = type});
+		return entity;
+	}
+
+	[[nodiscard]] Body2DType BodyTypeOf(World& world, Entity entity)
+	{
+		const auto* rigid = world.TryGet<RigidBody2DComponent>(entity);
+		REQUIRE(rigid != nullptr);
+		return rigid->bodyType;
+	}
+} // namespace
+
+TEST_CASE("A client stops locally simulating a body it has no authority over")
+{
+	Endpoint client;
+	client.BecomeClient();
+	client.context.Session().SetLocalConnection(4); // the Welcome landed
+
+	const Entity remote = ReplicateWithBody(client, 1, aether::net::kInvalidConnection); // host-owned
+
+	REQUIRE(BodyTypeOf(client.world, remote) == Body2DType::Dynamic);
+
+	client.receive.Update(client.world, 1.f / 60.f);
+
+	// Kinematic is transform-driven in this engine, which is precisely what a
+	// replicated pose needs: Physics2DSystem pushes the ECS transform into Box2D
+	// instead of integrating over it, and its dynamic write-back skips the body.
+	CHECK(BodyTypeOf(client.world, remote) == Body2DType::Kinematic);
+	REQUIRE(client.world.Has<aether::net::NetSimulationOverride>(remote));
+	CHECK(client.world.Get<aether::net::NetSimulationOverride>(remote).authoredBodyType == Body2DType::Dynamic);
+}
+
+TEST_CASE("A client keeps simulating the entity it owns, which is locally predicted")
+{
+	// The owned entity is the one this client's scripts drive and the receive system
+	// eases toward the host's answer. Take its body off local simulation and the
+	// player's own character stops responding to input entirely - a strictly worse
+	// bug than the one being fixed.
+	Endpoint client;
+	client.BecomeClient();
+	client.context.Session().SetLocalConnection(4);
+
+	const Entity owned = ReplicateWithBody(client, 1, 4);
+	const Entity remote = ReplicateWithBody(client, 2, aether::net::kInvalidConnection);
+
+	client.receive.Update(client.world, 1.f / 60.f);
+
+	CHECK(BodyTypeOf(client.world, owned) == Body2DType::Dynamic);
+	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(owned));
+	// The positive control: the same tick DID hand over the entity it does not own,
+	// so "owned stayed dynamic" is a decision and not a no-op pass.
+	CHECK(BodyTypeOf(client.world, remote) == Body2DType::Kinematic);
+}
+
+TEST_CASE("A host never takes a body off local simulation")
+{
+	// The host IS the simulation. Every body stays dynamic there, including the ones
+	// a connected client owns - the host is authoritative over those too, and its
+	// integration of them is what it replicates back out.
+	Endpoint host;
+	host.BecomeHost();
+
+	const Entity hostOwned = ReplicateWithBody(host, 1, aether::net::kInvalidConnection);
+	const Entity clientOwned = ReplicateWithBody(host, 2, kPeer);
+
+	host.receive.Update(host.world, 1.f / 60.f);
+	// Driven a second time straight into the reconcile, bypassing the receive
+	// system's own IsClient gate: without this the case only proves that the CALL is
+	// client-only, and a host gate lost from SyncSimulationAuthority itself - the one
+	// that has to hold for every other caller - would go unnoticed.
+	host.context.SyncSimulationAuthority(host.world);
+
+	CHECK(BodyTypeOf(host.world, hostOwned) == Body2DType::Dynamic);
+	CHECK(BodyTypeOf(host.world, clientOwned) == Body2DType::Dynamic);
+	CHECK_FALSE(host.world.Has<aether::net::NetSimulationOverride>(hostOwned));
+	CHECK_FALSE(host.world.Has<aether::net::NetSimulationOverride>(clientOwned));
+}
+
+TEST_CASE("Nothing is handed over before the host's Welcome arrives")
+{
+	// Pre-Welcome a client has no connection id, so IsOwner answers false for
+	// everything - including the character it is about to be given. Acting on that
+	// would hand over its own entity and then rebuild the body a second time to give
+	// it straight back.
+	Endpoint client;
+	client.BecomeClient();
+	REQUIRE(client.context.Session().LocalConnection() == aether::net::kInvalidConnection);
+
+	const Entity soonToBeOwned = ReplicateWithBody(client, 1, 4);
+
+	client.receive.Update(client.world, 1.f / 60.f);
+
+	CHECK(BodyTypeOf(client.world, soonToBeOwned) == Body2DType::Dynamic);
+	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(soonToBeOwned));
+
+	// And once the Welcome lands it is recognised as this client's own.
+	client.context.Session().SetLocalConnection(4);
+	client.receive.Update(client.world, 1.f / 60.f);
+	CHECK(BodyTypeOf(client.world, soonToBeOwned) == Body2DType::Dynamic);
+}
+
+TEST_CASE("The handover happens once, not on every tick")
+{
+	// The reconcile runs every frame, so it must be a decision about divergence and
+	// not an unconditional write. Re-running it would re-capture the CURRENT body
+	// type as the authored one, and the recorded original would decay to Kinematic -
+	// at which point nothing can ever be restored. The recorded type is where that
+	// damage is visible; what it costs is covered by the Stop cases in
+	// NetworkContextTests.cpp.
+	Endpoint client;
+	client.BecomeClient();
+	client.context.Session().SetLocalConnection(4);
+
+	const Entity remote = ReplicateWithBody(client, 1, aether::net::kInvalidConnection);
+
+	for (int tick = 0; tick < 5; ++tick)
+	{
+		client.receive.Update(client.world, 1.f / 60.f);
+	}
+
+	CHECK(BodyTypeOf(client.world, remote) == Body2DType::Kinematic);
+	REQUIRE(client.world.Has<aether::net::NetSimulationOverride>(remote));
+	CHECK(client.world.Get<aether::net::NetSimulationOverride>(remote).authoredBodyType == Body2DType::Dynamic);
+}
+
+TEST_CASE("A client that gains ownership of an entity gets its body back")
+{
+	// Ownership is not fixed for an entity's lifetime: a re-sent Spawn can name a new
+	// owner, and a host releases a leaver's scene-placed entities. The entity that
+	// becomes this client's must start simulating again or it can never be driven.
+	Endpoint client;
+	client.BecomeClient();
+	client.context.Session().SetLocalConnection(4);
+
+	const Entity entity = ReplicateWithBody(client, 1, aether::net::kInvalidConnection);
+	client.receive.Update(client.world, 1.f / 60.f);
+	REQUIRE(BodyTypeOf(client.world, entity) == Body2DType::Kinematic);
+
+	client.world.TryGet<aether::net::NetworkIdentity>(entity)->owner = 4;
+	client.receive.Update(client.world, 1.f / 60.f);
+
+	CHECK(BodyTypeOf(client.world, entity) == Body2DType::Dynamic);
+	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(entity));
+}
+
+TEST_CASE("A remote body that was never dynamic is left exactly as authored")
+{
+	// Static and Kinematic bodies are already transform-driven - Physics2DSystem's
+	// write-back only ever touches Dynamic ones - so there is nothing to take over,
+	// and marking one would mean a pointless body rebuild plus a restore that has to
+	// remember a type that never changed.
+	Endpoint client;
+	client.BecomeClient();
+	client.context.Session().SetLocalConnection(4);
+
+	const Entity platform = ReplicateWithBody(client, 1, aether::net::kInvalidConnection, Body2DType::Static);
+	const Entity lift = ReplicateWithBody(client, 2, aether::net::kInvalidConnection, Body2DType::Kinematic);
+
+	client.receive.Update(client.world, 1.f / 60.f);
+
+	CHECK(BodyTypeOf(client.world, platform) == Body2DType::Static);
+	CHECK(BodyTypeOf(client.world, lift) == Body2DType::Kinematic);
+	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(platform));
+	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(lift));
 }

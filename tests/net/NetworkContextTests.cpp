@@ -20,6 +20,7 @@
 #include "net/NetScriptFields.hpp"
 #include "net/NetSpawn.hpp"
 #include "net/NetworkContext.hpp"
+#include "physics2d/Physics2DComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
@@ -435,6 +436,77 @@ TEST_CASE("ApplySpawn refuses a prefab name that could leave the prefab folder")
 		CHECK_FALSE(context.Session().EntityFor(msg.netId).IsValid());
 	}
 	CHECK(CountIdentities(world) == 0);
+
+	context.Stop(world);
+}
+
+TEST_CASE("Stop puts every body it took off local simulation back")
+{
+	// A client hands a body it has no authority over to the network by making it
+	// kinematic (see SyncSimulationAuthority). Scene-placed entities SURVIVE Stop, so
+	// one left kinematic is a character that never falls again once the player is
+	// back in single-player - and nothing in an offline game would ever put it right.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity remote = world.Create();
+	world.Emplace<TransformComponent>(remote);
+	world.Emplace<aether::net::NetworkIdentity>(remote,
+	        aether::net::NetworkIdentity{.netId = 7, .owner = aether::net::kInvalidConnection, .scenePlaced = true});
+	world.Emplace<RigidBody2DComponent>(remote, RigidBody2DComponent{.bodyType = Body2DType::Dynamic});
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4); // the Welcome landed
+
+	context.SyncSimulationAuthority(world);
+	REQUIRE(world.TryGet<RigidBody2DComponent>(remote)->bodyType == Body2DType::Kinematic);
+	REQUIRE(world.Has<aether::net::NetSimulationOverride>(remote));
+
+	context.Stop(world);
+
+	CHECK(world.TryGet<RigidBody2DComponent>(remote)->bodyType == Body2DType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride>(remote));
+
+	// And offline it stays that way: with no session there is no authority to defer
+	// to, so a reconcile must be a no-op rather than hand everything over again.
+	context.SyncSimulationAuthority(world);
+	CHECK(world.TryGet<RigidBody2DComponent>(remote)->bodyType == Body2DType::Dynamic);
+}
+
+TEST_CASE("Hosting after a client session leaves nothing kinematic")
+{
+	// Stop runs at the TOP of StartHost, which is the only thing that un-does a
+	// previous client session's handovers when the same process goes on to host. A
+	// host is authoritative over everything, so a body still on the network here is
+	// one the host would replicate out without ever simulating it.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity entity = MakeScenePlaced(world, 11);
+	world.Emplace<RigidBody2DComponent>(entity, RigidBody2DComponent{.bodyType = Body2DType::Dynamic});
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4);
+	// A live net id is what puts the entity in the session; `scenePlaced` is what
+	// makes it survive the Stop at the top of StartHost, which is the whole point of
+	// this case - a session-spawned one would simply be destroyed there instead.
+	auto* identity = world.TryGet<aether::net::NetworkIdentity>(entity);
+	identity->netId = 3;
+	identity->scenePlaced = true;
+	context.SyncSimulationAuthority(world);
+	REQUIRE(world.TryGet<RigidBody2DComponent>(entity)->bodyType == Body2DType::Kinematic);
+
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+
+	CHECK(world.TryGet<RigidBody2DComponent>(entity)->bodyType == Body2DType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride>(entity));
+
+	// A host reconciling changes nothing, whoever owns what.
+	world.TryGet<aether::net::NetworkIdentity>(entity)->owner = 9;
+	context.SyncSimulationAuthority(world);
+	CHECK(world.TryGet<RigidBody2DComponent>(entity)->bodyType == Body2DType::Dynamic);
 
 	context.Stop(world);
 }
