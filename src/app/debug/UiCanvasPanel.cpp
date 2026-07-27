@@ -1031,6 +1031,10 @@ namespace aether::editor
 			{
 				addElement(ui::CreateButtonEntity);
 			}
+			if (ImGui::MenuItem(ICON_FA_KEYBOARD " Text Box"))
+			{
+				addElement(ui::CreateTextBoxEntity);
+			}
 			if (ImGui::MenuItem(ICON_FA_BARS_PROGRESS " Progress Bar"))
 			{
 				addElement(ui::CreateProgressBarEntity);
@@ -1699,6 +1703,10 @@ namespace aether::editor
 			if (ImGui::MenuItem(ICON_FA_SQUARE " Add Button"))
 			{
 				addElement(ui::CreateButtonEntity);
+			}
+			if (ImGui::MenuItem(ICON_FA_KEYBOARD " Add Text Box"))
+			{
+				addElement(ui::CreateTextBoxEntity);
 			}
 			if (ImGui::MenuItem(ICON_FA_BARS_PROGRESS " Add Progress Bar"))
 			{

@@ -1603,6 +1603,10 @@ namespace aether::editor
 					{
 						selection.Select(ui::CreateButtonEntity(world, FindOrCreateCanvas(world)));
 					}
+					if (ImGui::MenuItem(ICON_FA_KEYBOARD "  Text Box"))
+					{
+						selection.Select(ui::CreateTextBoxEntity(world, FindOrCreateCanvas(world)));
+					}
 					if (ImGui::MenuItem(ICON_FA_BARS_PROGRESS "  Progress Bar"))
 					{
 						selection.Select(ui::CreateProgressBarEntity(world, FindOrCreateCanvas(world)));
