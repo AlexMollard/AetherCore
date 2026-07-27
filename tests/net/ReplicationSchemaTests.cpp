@@ -24,7 +24,7 @@ TEST_CASE("The schema contains only fields marked replicated")
 	}
 }
 
-TEST_CASE("Transform position and rotation are replicated")
+TEST_CASE("Transform position and euler are replicated")
 {
 	const net::ReplicationSchema schema = net::BuildReplicationSchema(reflect::ComponentTypes());
 
