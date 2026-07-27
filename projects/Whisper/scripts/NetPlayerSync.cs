@@ -73,7 +73,12 @@ public sealed class NetPlayerSync : EntityScript
         // Looked up per frame rather than cached in OnAttach: scripts on an entity
         // attach one at a time in list order, so a sibling is only guaranteed to be
         // live from OnUpdate onward (see Entity.GetScript).
-        if (Net.IsOwner(Self) && GetScript<PlayerController>() is { } controller)
+        // HasAuthority, not IsOwner: the host now simulates every player from the
+        // input its owner submits, so the host is where a CLIENT's animation is
+        // decided too. Gated on ownership, a client's AnimState was written nowhere
+        // the host could replicate it, and every remote copy of that player animated
+        // from a value that never left idle.
+        if (Net.HasAuthority(Self) && GetScript<PlayerController>() is { } controller)
         {
             AnimState = controller.AnimIndex;
         }
