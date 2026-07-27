@@ -236,3 +236,101 @@ TEST_CASE("Draw commands are unclipped by default")
 	CHECK(cmd.clipRect.x == doctest::Approx(0.f));
 	CHECK(cmd.clipRect.z == doctest::Approx(0.f));
 }
+
+TEST_CASE("UIMask clips its subtree to its own rect")
+{
+	World w;
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity mask = w.Create();
+	auto& mr = w.Emplace<ui::UIRect>(mask);
+	mr.resolvedRect = {100, 100, 200, 50};
+	w.Emplace<ui::UIMask>(mask);
+	w.Emplace<HierarchyComponent>(mask);
+	ecs::SetParent(w, mask, canvas);
+
+	Entity child = w.Create();
+	auto& chr = w.Emplace<ui::UIRect>(child);
+	chr.resolvedRect = {0, 0, 1000, 800}; // deliberately overflows the mask
+	w.Emplace<ui::UIImage>(child);
+	w.Emplace<HierarchyComponent>(child);
+	ecs::SetParent(w, child, mask);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	ui::BuildDrawCommands(w, cmds);
+
+	REQUIRE(cmds.size() == 1);
+	CHECK((cmds[0].flags & ui::kFlagClip) != 0u);
+	CHECK(cmds[0].clipRect.x == doctest::Approx(100));
+	CHECK(cmds[0].clipRect.y == doctest::Approx(100));
+	CHECK(cmds[0].clipRect.z == doctest::Approx(200));
+	CHECK(cmds[0].clipRect.w == doctest::Approx(50));
+}
+
+TEST_CASE("Nested UIMasks intersect, and padding shrinks the clip")
+{
+	World w;
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity outer = w.Create();
+	auto& our = w.Emplace<ui::UIRect>(outer);
+	our.resolvedRect = {0, 0, 300, 300};
+	w.Emplace<ui::UIMask>(outer);
+	w.Emplace<HierarchyComponent>(outer);
+	ecs::SetParent(w, outer, canvas);
+
+	Entity inner = w.Create();
+	auto& inr = w.Emplace<ui::UIRect>(inner);
+	inr.resolvedRect = {100, 100, 400, 400}; // overhangs `outer` to the right and bottom
+	auto& innerMask = w.Emplace<ui::UIMask>(inner);
+	innerMask.padding = 10.f;
+	w.Emplace<ui::UIImage>(inner);
+	w.Emplace<HierarchyComponent>(inner);
+	ecs::SetParent(w, inner, outer);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	ui::BuildDrawCommands(w, cmds);
+
+	REQUIRE(cmds.size() == 1);
+	CHECK((cmds[0].flags & ui::kFlagClip) != 0u);
+	CHECK(cmds[0].clipRect.x == doctest::Approx(110)); // 100 + 10 padding
+	CHECK(cmds[0].clipRect.y == doctest::Approx(110));
+	CHECK(cmds[0].clipRect.z == doctest::Approx(190)); // clipped by outer's right edge at 300
+	CHECK(cmds[0].clipRect.w == doctest::Approx(190));
+}
+
+TEST_CASE("A disabled UIMask does not clip")
+{
+	World w;
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity mask = w.Create();
+	auto& mr = w.Emplace<ui::UIRect>(mask);
+	mr.resolvedRect = {100, 100, 200, 50};
+	auto& m = w.Emplace<ui::UIMask>(mask);
+	m.enabled = false;
+	w.Emplace<ui::UIImage>(mask);
+	w.Emplace<HierarchyComponent>(mask);
+	ecs::SetParent(w, mask, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	ui::BuildDrawCommands(w, cmds);
+
+	REQUIRE(cmds.size() == 1);
+	CHECK((cmds[0].flags & ui::kFlagClip) == 0u);
+}

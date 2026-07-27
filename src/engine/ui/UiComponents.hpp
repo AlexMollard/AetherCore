@@ -140,6 +140,15 @@ namespace aether::ui
 		float cornerRadius = 4.f;
 	};
 
+	// Clips this element's own draws and its whole subtree to its UIRect (Unity's RectMask2D).
+	// Nested masks intersect. The clip is a screen-space pixel rect tested per fragment, so it
+	// costs nothing extra in the batch - masked and unmasked commands share one draw.
+	struct UIMask
+	{
+		bool enabled = true;
+		float padding = 0.f; // shrink the clip inwards on every side
+	};
+
 	// A UI element drawn by its OWN shader pipeline ("shaders://<shader>.spv"), on top of the
 	// batched UI shapes. The element's UIRect gives the quad; params/colors are handed to the
 	// shader as push constants (shader-defined meaning). Used for full-screen effects like the

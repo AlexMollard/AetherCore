@@ -22,6 +22,7 @@ using UiSliderComponent = aether::ui::UISlider;
 using UiToggleComponent = aether::ui::UIToggle;
 using UiButtonComponent = aether::ui::UIButton;
 using UiProgressBarComponent = aether::ui::UIProgressBar;
+using UiMaskComponent = aether::ui::UIMask;
 using UiEffectComponent = aether::ui::UIEffect;
 using UiMaterialComponent = aether::ui::UIMaterial;
 
@@ -278,6 +279,13 @@ AE_FIELD_N("value", value, Float)
 AE_FIELD_N("track_color", trackColor, Color4)
 AE_FIELD_N("fill_color", fillColor, Color4)
 AE_FIELD_N("corner_radius", cornerRadius, Float)
+b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, false); });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(UiMaskComponent, "UI Mask", "UI", ICON_FA_CROP)
+AE_FIELD_N("enabled", enabled, Bool)
+AE_FIELD_N("padding", padding, Float)
 b.PostSet([](World& w, Entity e) { EnsureWidgetCompanions(w, e, false); });
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()

@@ -172,13 +172,42 @@ namespace aether::ui
 		}
 	}
 
+	// The active clip as Walk descends. Rect is (x, y, w, h) px; `active` false = unclipped.
+	struct ClipState
+	{
+		glm::vec4 rect{0.f};
+		bool active = false;
+	};
+
+	static glm::vec4 IntersectRects(const glm::vec4& a, const glm::vec4& b)
+	{
+		const float x0 = std::max(a.x, b.x);
+		const float y0 = std::max(a.y, b.y);
+		const float x1 = std::min(a.x + a.z, b.x + b.z);
+		const float y1 = std::min(a.y + a.w, b.y + b.w);
+		return {x0, y0, std::max(x1 - x0, 0.f), std::max(y1 - y0, 0.f)};
+	}
+
 	// shared across the whole canvas, so it must be threaded through by reference.
-	static void Walk(World& world, Entity entity, FontRegistry* fonts, TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out, std::vector<UiMaterialDraw>& materials)
+	static void Walk(World& world, Entity entity, FontRegistry* fonts, TextureRegistry* textures, int& layer, std::vector<UiDrawCommand>& out, std::vector<UiMaterialDraw>& materials, ClipState clip)
 	{
 		// walk simply stops recursing, so its children never emit either.
 		if (world.Has<DisabledComponent>(entity))
 		{
 			return;
+		}
+
+		// A mask narrows the clip for this element's own draws AND everything below it.
+		if (const auto* mask = world.TryGet<UIMask>(entity); mask != nullptr && mask->enabled)
+		{
+			if (const auto* maskRect = world.TryGet<UIRect>(entity))
+			{
+				const glm::vec4 r = maskRect->resolvedRect;
+				const float p = mask->padding;
+				const glm::vec4 padded{r.x + p, r.y + p, std::max(r.z - 2.f * p, 0.f), std::max(r.w - 2.f * p, 0.f)};
+				clip.rect = clip.active ? IntersectRects(clip.rect, padded) : padded;
+				clip.active = true;
+			}
 		}
 
 		const std::size_t emitBegin = out.size();
@@ -245,6 +274,21 @@ namespace aether::ui
 		}
 		for (std::size_t i = emitBegin; i < emitEnd; ++i)
 		{
+			// An element may have clipped its own sub-shapes already (a text box clips its text
+			// to its padded inner rect). Compose rather than overwrite, so a self-clip nested in
+			// an ancestor mask ends up with the intersection of both.
+			if (clip.active)
+			{
+				if ((out[i].flags & kFlagClip) != 0u)
+				{
+					out[i].clipRect = IntersectRects(out[i].clipRect, clip.rect);
+				}
+				else
+				{
+					out[i].clipRect = clip.rect;
+					out[i].flags |= kFlagClip;
+				}
+			}
 			if ((out[i].flags & kFlagNoMaterial) != 0u)
 			{
 				out[i].flags &= ~kFlagNoMaterial; // consumed; never uploaded
@@ -260,7 +304,7 @@ namespace aether::ui
 		{
 			for (const Entity child: hierarchy->children)
 			{
-				Walk(world, child, fonts, textures, layer, out, materials);
+				Walk(world, child, fonts, textures, layer, out, materials, clip);
 			}
 		}
 	}
@@ -293,7 +337,7 @@ namespace aether::ui
 		int layer = 0;
 		for (const auto& [bias, canvas]: canvases)
 		{
-			Walk(world, canvas, fonts, textures, layer, out, materials);
+			Walk(world, canvas, fonts, textures, layer, out, materials, ClipState{});
 		}
 	}
 } // namespace aether::ui
