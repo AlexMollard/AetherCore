@@ -31,6 +31,7 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/net/ReplicationSchema.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetSession.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetSnapshot.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetRelevancy.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
