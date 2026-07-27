@@ -47,6 +47,15 @@ namespace aether::net
 	// the shipping path and the tests exercise the same bytes.
 	[[nodiscard]] std::vector<std::byte> FrameMessage(NetMessage kind, std::span<const std::byte> payload);
 
+	// A prefab name arrives from a remote peer and is used to open a file, so it is
+	// the framework's one path-traversal boundary: anything that could name a
+	// directory, a parent, or a drive is rejected before it reaches the loader. A
+	// safe name is a bare, non-empty prefab identifier - no "..", no '/' or '\\',
+	// no ':'. Lives here, next to the spawn message it validates, rather than
+	// file-local in NetworkContext.cpp: a security check with no test is a check
+	// nobody can be sure still works.
+	[[nodiscard]] bool IsSafePrefabName(std::string_view name);
+
 	struct SpawnMessage
 	{
 		std::uint32_t netId = 0;

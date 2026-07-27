@@ -10,6 +10,13 @@
 
 namespace aether::net
 {
+	bool IsSafePrefabName(std::string_view name)
+	{
+		return !name.empty() && name.find("..") == std::string_view::npos
+		       && name.find('/') == std::string_view::npos && name.find('\\') == std::string_view::npos
+		       && name.find(':') == std::string_view::npos;
+	}
+
 	std::vector<std::byte> FrameMessage(NetMessage kind, std::span<const std::byte> payload)
 	{
 		ByteWriter w;

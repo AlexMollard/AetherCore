@@ -37,16 +37,22 @@ namespace aether::net
 
 		void Update(World& world, float dt) override;
 
+		// The three transport-event handlers Update dispatches to. Public because
+		// OnData is the framework's inbound trust boundary - the only place a remote
+		// peer's bytes are gated by role - and reaching it through Update means
+		// standing up a real socket, a peer and a handshake for every case in that
+		// matrix. Calling them directly is precisely what Update does; this is a
+		// reachable seam, not a separate test path.
+		void OnConnected(World& world, ConnectionId peer);
+		void OnDisconnected(World& world, ConnectionId peer);
+		void OnData(World& world, ConnectionId peer, std::span<const std::byte> data);
+
 	private:
 		// Drops bindings whose entity no longer exists. A net id whose entity died by
 		// a route replication never sees - a scene load, a script's Entity.Destroy -
 		// would otherwise resolve to a dangling handle that an inbound packet hands
 		// straight to try_get.
 		void PruneDeadBindings(World& world);
-
-		void OnConnected(World& world, ConnectionId peer);
-		void OnDisconnected(World& world, ConnectionId peer);
-		void OnData(World& world, ConnectionId peer, std::span<const std::byte> data);
 
 		// Snapshot fields are written straight onto TransformComponent by
 		// ApplySnapshot, which is right for the authoritative value and wrong for

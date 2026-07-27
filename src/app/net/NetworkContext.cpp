@@ -3,16 +3,14 @@
 #include <entt/entt.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "net/CSharpRpcBridge.hpp"
-#include "net/CSharpScriptFieldBridge.hpp"
 #include "net/NetComponents.hpp"
+#include "net/NetRpc.hpp"
+#include "net/NetScriptFields.hpp"
 #include "net/NetSerialize.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
-#include "scripting/CSharpScriptingSubsystem.hpp"
-#include "systems/ScriptComponentSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -23,16 +21,6 @@ namespace aether::net
 		// Default peer budget for a listen server. Deliberately a local default and
 		// not a tunable: a project that needs a different one passes it to StartHost.
 		constexpr int kDefaultMaxPeers = 32;
-
-		// A prefab name arrives from a remote peer and is used to open a file. Reject
-		// anything that could escape the prefab directory before it reaches the loader.
-		bool IsSafePrefabName(std::string_view name)
-		{
-			return !name.empty() && name.find("..") == std::string_view::npos
-			       && name.find('/') == std::string_view::npos && name.find('\\') == std::string_view::npos
-			       && name.find(':') == std::string_view::npos;
-		}
-
 	} // namespace
 
 	NetworkContext::NetworkContext(ServiceContainer& services)
@@ -55,38 +43,27 @@ namespace aether::net
 		return elapsed.count();
 	}
 
+	// Held for the life of the context rather than rebuilt per frame: the field
+	// bridge caches a per-type replicated-property table (invalidated by
+	// CSharpScriptingSubsystem's reload generation) that a per-frame temporary would
+	// throw away every tick.
+	void NetworkContext::SetFieldBridge(std::unique_ptr<ScriptFieldBridge> bridge)
+	{
+		m_fieldBridge = std::move(bridge);
+	}
+
+	void NetworkContext::SetRpcBridge(std::unique_ptr<RpcBridge> bridge)
+	{
+		m_rpcBridge = std::move(bridge);
+	}
+
 	const ScriptFieldBridge* NetworkContext::FieldBridge() const
 	{
-		if (m_fieldBridge != nullptr)
-		{
-			return m_fieldBridge.get();
-		}
-		const auto* scripting = m_services.TryGet<aether::app::scripting::CSharpScriptingSubsystem>();
-		const auto* instances = m_services.TryGet<aether::app::ScriptComponentSystem>();
-		if (scripting == nullptr || instances == nullptr)
-		{
-			return nullptr; // no CLR, or the script system is not registered yet
-		}
-		// Built once and kept: the bridge caches a per-type replicated-property table
-		// (invalidated by CSharpScriptingSubsystem's reload generation), which a
-		// per-frame temporary would throw away every tick.
-		m_fieldBridge = std::make_unique<CSharpScriptFieldBridge>(*scripting, *instances);
 		return m_fieldBridge.get();
 	}
 
 	const RpcBridge* NetworkContext::Rpcs() const
 	{
-		if (m_rpcBridge != nullptr)
-		{
-			return m_rpcBridge.get();
-		}
-		const auto* scripting = m_services.TryGet<aether::app::scripting::CSharpScriptingSubsystem>();
-		const auto* instances = m_services.TryGet<aether::app::ScriptComponentSystem>();
-		if (scripting == nullptr || instances == nullptr)
-		{
-			return nullptr;
-		}
-		m_rpcBridge = std::make_unique<CSharpRpcBridge>(*scripting, *instances);
 		return m_rpcBridge.get();
 	}
 

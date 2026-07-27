@@ -43,8 +43,11 @@
 #include "camera/CameraManager.hpp"
 #include "scene/LightSystem.hpp"
 #ifdef AETHERCORE_SCENE_APP
+#	include "net/CSharpRpcBridge.hpp"
+#	include "net/CSharpScriptFieldBridge.hpp"
 #	include "net/NetworkContext.hpp"
 #	include "net/NetworkSystems.hpp"
+#	include "scripting/CSharpScriptingSubsystem.hpp"
 #	include "systems/DayNightSystem.hpp"
 #	include "systems/ScriptComponentSystem.hpp"
 #	include "PlaySession.hpp"
@@ -327,6 +330,19 @@ namespace aether::app
 				auto* scriptPtr = scriptSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(scriptSystem));
 				services.Register<ScriptComponentSystem>(*scriptPtr);
+
+				// The CLR-backed script bridges are constructed HERE, not inside
+				// NetworkContext: keeping the CoreCLR host out of NetworkContext.cpp is
+				// what lets EngineTests compile that TU (and both network systems) and
+				// pass fakes instead. This is also why the wiring sits after the script
+				// system rather than beside the context - both halves must exist first.
+				// A build with no CLR simply leaves the bridges null, which every
+				// consumer already treats as "no script replication".
+				if (auto* csharp = services.TryGet<scripting::CSharpScriptingSubsystem>())
+				{
+					networkRef.SetFieldBridge(std::make_unique<aether::net::CSharpScriptFieldBridge>(*csharp, *scriptPtr));
+					networkRef.SetRpcBridge(std::make_unique<aether::net::CSharpRpcBridge>(*csharp, *scriptPtr));
+				}
 
 				// After scripts, so a burst a script queues this frame emits now.
 				auto particleSystem = std::make_unique<aether::ParticleSystem>(attachContext.Get<AssetManager>().GetTextureRegistry());

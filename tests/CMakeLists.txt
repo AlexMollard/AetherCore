@@ -40,6 +40,13 @@ add_executable(EngineTests
     # NetRpc only, NOT CSharpRpcBridge.cpp/NetRpcExports.cpp: encode/decode is pure
     # and links without the CoreCLR host; the dispatch bridge does not.
     "${CMAKE_SOURCE_DIR}/src/app/net/NetRpc.cpp"
+    # The integration layer. Both TUs became linkable here once NetworkContext stopped
+    # constructing the CLR-backed script bridges itself and started taking them from
+    # its wiring site (Application.cpp) - see NetworkContext::SetFieldBridge. This is
+    # where the role gating, the net-id lifecycle and the session teardown rules live,
+    # so it is the half of the framework most worth pinning.
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetworkContext.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetworkSystems.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"

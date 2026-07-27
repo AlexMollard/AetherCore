@@ -166,9 +166,20 @@ namespace aether::net
 		// times, and a paused or time-scaled game must not warp it.
 		[[nodiscard]] float Now() const;
 
-		// Lazily resolved from the ServiceContainer - ScriptComponentSystem is
-		// registered after this object is constructed, and neither bridge exists at
-		// all in a build with no CLR. Null until both halves are available.
+		// ── Script bridges ───────────────────────────────────────────────────
+		// INJECTED, not constructed here. The concrete bridges are CoreCLR-backed
+		// (CSharpScriptFieldBridge / CSharpRpcBridge), and building them in this TU
+		// pulled the CLR host into everything that links it - which is why neither
+		// this class nor the two network systems could be compiled into EngineTests
+		// at all. The wiring site (Application.cpp, right after ScriptComponentSystem
+		// is registered - which is also the ordering the old lazy resolve existed to
+		// work around) constructs the real ones; a test passes a fake.
+		//
+		// Both stay null in a build with no CLR, and every consumer already
+		// null-checks: the headless paths depend on that and must keep working.
+		void SetFieldBridge(std::unique_ptr<ScriptFieldBridge> bridge);
+		void SetRpcBridge(std::unique_ptr<RpcBridge> bridge);
+
 		[[nodiscard]] const ScriptFieldBridge* FieldBridge() const;
 		[[nodiscard]] const RpcBridge* Rpcs() const;
 
@@ -222,7 +233,7 @@ namespace aether::net
 
 		std::chrono::steady_clock::time_point m_epoch = std::chrono::steady_clock::now();
 
-		mutable std::unique_ptr<ScriptFieldBridge> m_fieldBridge;
-		mutable std::unique_ptr<RpcBridge> m_rpcBridge;
+		std::unique_ptr<ScriptFieldBridge> m_fieldBridge;
+		std::unique_ptr<RpcBridge> m_rpcBridge;
 	};
 } // namespace aether::net
