@@ -186,7 +186,16 @@ namespace aether::ui
 		bg.layer = layer++;
 		out.push_back(bg);
 
+		// Padding insets the text from the border on all sides for LAYOUT (the line is centred in
+		// this rect, and scrolling measures against its width).
 		const glm::vec4 inner{r.x + box.padding, r.y + box.padding, std::max(r.z - 2.f * box.padding, 0.f), std::max(r.w - 2.f * box.padding, 0.f)};
+
+		// ...but the CLIP is horizontal-only, spanning the box's full height. A single-line field
+		// scrolls sideways, so the horizontal clip is what the feature needs; clipping vertically
+		// to the padded rect just decapitates the glyphs whenever the font is taller than
+		// (height - 2*padding), which is easy to hit at default sizes. Ascenders and descenders
+		// now run to the box edge instead of being chopped top and bottom.
+		const glm::vec4 clipRect{inner.x, r.y, inner.z, r.w};
 
 		const FontAsset* font = fonts.Load(box.fontName);
 		if (font == nullptr)
@@ -201,10 +210,18 @@ namespace aether::ui
 		// shifted off-screen - ScrollToCaret only zeroes scrollX on frames the box is being edited.
 		const float originX = showPlaceholder ? inner.x : inner.x - box.scrollX;
 
-		// Everything past the background is clipped to the padded inner rect, so long text
-		// scrolls under the edges instead of spilling out of the field. The builder's clip
-		// stack intersects rather than overwrites, so an ancestor UIMask still applies.
+		// Everything past the background is clipped, so long text scrolls under the edges instead
+		// of spilling out of the field. The builder's clip stack intersects rather than
+		// overwrites, so an ancestor UIMask still applies.
 		const std::size_t clipBegin = out.size();
+
+		// The line is laid out and centred in the FULL field height, not the padded rect: padding
+		// is a horizontal inset from the border, and letting it squeeze the line vertically is
+		// what made default-sized boxes centre their text in a 12px band. Caret and selection
+		// span the same band (inset 2px) so they read as field-height, not as a stub.
+		const glm::vec4 lineRect{inner.x, r.y, inner.z, r.w};
+		const float markY = r.y + 2.f;
+		const float markH = std::max(r.w - 4.f, 1.f);
 
 		if (!showPlaceholder && box.selectionAnchor != box.caret)
 		{
@@ -215,7 +232,7 @@ namespace aether::ui
 
 			UiDrawCommand sel;
 			sel.type = kShapeRect;
-			sel.data0 = {x0, inner.y, std::max(x1 - x0, 1.f), inner.w};
+			sel.data0 = {x0, markY, std::max(x1 - x0, 1.f), markH};
 			sel.color = box.selectionColor;
 			sel.layer = layer++;
 			out.push_back(sel);
@@ -223,7 +240,7 @@ namespace aether::ui
 
 		// Left-aligned, vertically centred, never wrapped: the run box starts at the scrolled
 		// origin and is exactly as wide as the text, so ShapeText lays it out in one line.
-		const glm::vec4 runRect{originX, inner.y, TextWidth(*font, display, box.pixelSize), inner.w};
+		const glm::vec4 runRect{originX, lineRect.y, TextWidth(*font, display, box.pixelSize), lineRect.w};
 		EmitTextRun(runRect, display, box.fontName, box.pixelSize, showPlaceholder ? box.placeholderColor : box.textColor, UIText::HAlign::Left, UIText::VAlign::Middle, false, fonts, layer, out);
 
 		// Caret: on for the first half of each second, so it blinks without a timer service.
@@ -231,7 +248,7 @@ namespace aether::ui
 		{
 			UiDrawCommand caret;
 			caret.type = kShapeRect;
-			caret.data0 = {originX + CaretToPixelX(*font, display, box.pixelSize, box.caret), inner.y, 2.f, inner.w};
+			caret.data0 = {originX + CaretToPixelX(*font, display, box.pixelSize, box.caret), markY, 2.f, markH};
 			caret.color = box.caretColor;
 			caret.layer = layer++;
 			out.push_back(caret);
@@ -239,7 +256,7 @@ namespace aether::ui
 
 		for (std::size_t i = clipBegin; i < out.size(); ++i)
 		{
-			out[i].clipRect = inner;
+			out[i].clipRect = clipRect;
 			out[i].flags |= kFlagClip;
 		}
 	}

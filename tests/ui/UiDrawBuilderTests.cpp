@@ -373,6 +373,45 @@ TEST_CASE("Text box emits a background and clips its glyphs to the padded inner 
 		CHECK((cmds[i].flags & ui::kFlagClip) != 0u);
 		CHECK(cmds[i].clipRect.x == doctest::Approx(108)); // 100 + 8 padding
 		CHECK(cmds[i].clipRect.z == doctest::Approx(184)); // 200 - 2 * 8
+		// Horizontal-only: padding must NOT clip vertically, or a font taller than
+		// (height - 2 * padding) gets its ascenders and descenders chopped off.
+		CHECK(cmds[i].clipRect.y == doctest::Approx(100)); // the box's own top edge
+		CHECK(cmds[i].clipRect.w == doctest::Approx(40));  // the box's full height
+	}
+}
+
+TEST_CASE("Text box does not chop a font taller than its padded height")
+{
+	World w;
+	ui::FontRegistry fonts;
+	fonts.InjectForTest("Roboto", MakeMonoFont());
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity field = w.Create();
+	auto& fr = w.Emplace<ui::UIRect>(field);
+	fr.resolvedRect = {100, 100, 200, 28}; // the default widget height
+	auto& box = w.Emplace<ui::UITextBox>(field);
+	box.text = "AB";
+	box.pixelSize = 28.f; // taller than 28 - 2 * 8 padding, the case that used to clip
+	box.padding = 8.f;
+	w.Emplace<HierarchyComponent>(field);
+	ecs::SetParent(w, field, canvas);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	std::vector<ui::UiMaterialDraw> materials;
+	ui::BuildDrawCommands(w, cmds, materials, &fonts, nullptr);
+
+	REQUIRE(cmds.size() == 3);
+	for (std::size_t i = 1; i < cmds.size(); ++i)
+	{
+		// The glyph band must fit inside the clip, not overflow it top or bottom.
+		CHECK(cmds[i].clipRect.y <= cmds[i].data0.y + 0.001f);
+		CHECK(cmds[i].clipRect.y + cmds[i].clipRect.w >= cmds[i].data0.y + cmds[i].data0.w - 0.001f);
 	}
 }
 

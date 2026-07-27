@@ -55,6 +55,20 @@ namespace aether::editor
 {
 	namespace
 	{
+		// True while a game UI element owns the keyboard - an in-game text box being edited
+		// during Play. Its Ctrl+C/X/V and Delete are TEXT operations, so the editor's scene
+		// shortcuts must stand down, exactly as they already do for ImGui's own text fields
+		// via WantTextInput. Same UIKeyboardCapture marker UiNavigationSystem yields to, so a
+		// future capture-owning widget gets this for free.
+		bool GameKeyboardCaptured(World& world)
+		{
+			for ([[maybe_unused]] const auto captured: world.View<ui::UIKeyboardCapture>())
+			{
+				return true;
+			}
+			return false;
+		}
+
 		std::string ToLower(std::string_view s)
 		{
 			std::string out(s);
@@ -1920,7 +1934,7 @@ namespace aether::editor
 			}
 
 			// gizmo drag then Ctrl+D again must work without re-clicking the
-			const bool panelKeys = !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl;
+			const bool panelKeys = !ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world) && ImGui::GetIO().KeyCtrl;
 			auto* clipAssets = context.TryGet<AssetManager>();
 			auto* undo = context.TryGet<UndoStack>();
 
@@ -2177,7 +2191,7 @@ namespace aether::editor
 				}
 			}
 
-			if (!ImGui::GetIO().WantTextInput)
+			if (!ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world))
 			{
 				if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !selection.All().empty())
 				{

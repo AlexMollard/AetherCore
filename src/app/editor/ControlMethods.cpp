@@ -131,6 +131,25 @@ namespace aether::editor
 			{
 				return 342;
 			}
+			// Text-editing keys. send_input {text} can type into a UI Text Box, but a playtest
+			// also has to be able to correct and navigate what it typed - without these it can
+			// only ever append.
+			if (name == "backspace")
+			{
+				return 259;
+			}
+			if (name == "delete" || name == "del")
+			{
+				return 261;
+			}
+			if (name == "home")
+			{
+				return 268;
+			}
+			if (name == "end")
+			{
+				return 269;
+			}
 			return -1;
 		}
 
