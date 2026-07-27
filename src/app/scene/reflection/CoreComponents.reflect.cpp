@@ -258,25 +258,26 @@ AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(TransformComponent, "Transform", "Core", ICON_FA_UP_DOWN_LEFT_RIGHT)
+// These accessors are deliberately SURGICAL rather than decompose-then-recompose.
+// The matrix is the source of truth and position/euler/scale are only views onto it,
+// so a setter that rebuilds the whole matrix to change one channel re-injects float
+// error into the other two: dragging position in the inspector quietly degraded
+// rotation and scale, and replicating position every tick perturbed a networked
+// entity's scale with nothing to correct it. Touch only what the field owns.
 AE_FIELD_CUSTOM_REP(
         "position",
         Vec3,
         [](const void* c)
         {
-	        glm::vec3 p;
-	        glm::vec3 e;
-	        glm::vec3 s;
-	        DecomposeTRS(static_cast<const TransformComponent*>(c)->localToWorld, p, e, s);
-	        return reflect::MakeValue(p);
+	        // Translation IS column 3. Decomposing to read it costs an asin and two
+	        // atan2s per call, and this getter runs per replicated entity per tick.
+	        return reflect::MakeValue(glm::vec3(static_cast<const TransformComponent*>(c)->localToWorld[3]));
         },
         [](void* c, const FieldValue& v)
         {
 	        auto* t = static_cast<TransformComponent*>(c);
-	        glm::vec3 p;
-	        glm::vec3 e;
-	        glm::vec3 s;
-	        DecomposeTRS(t->localToWorld, p, e, s);
-	        t->localToWorld = ComposeTransform(glm::vec3(v.vec), e, s);
+	        // Writing the column leaves the three basis columns bit-identical.
+	        t->localToWorld[3] = glm::vec4(glm::vec3(v.vec), 1.0f);
         })
 AE_FIELD_CUSTOM_REP(
         "euler",
@@ -292,31 +293,30 @@ AE_FIELD_CUSTOM_REP(
         [](void* c, const FieldValue& v)
         {
 	        auto* t = static_cast<TransformComponent*>(c);
-	        glm::vec3 p;
-	        glm::vec3 e;
-	        glm::vec3 s;
-	        DecomposeTRS(t->localToWorld, p, e, s);
-	        t->localToWorld = ComposeTransform(p, glm::vec3(v.vec), s);
+	        // Rotation must be rebuilt, but the euler we would decompose is about to be
+	        // overwritten - so decomposing it is pure cost and pure error. Take position
+	        // exactly from column 3 and scale from the column lengths instead.
+	        t->localToWorld = ComposeTransform(glm::vec3(t->localToWorld[3]), glm::vec3(v.vec), ExtractScale(t->localToWorld));
         })
 AE_FIELD_CUSTOM(
         "scale",
         Vec3,
         [](const void* c)
         {
-	        glm::vec3 p;
-	        glm::vec3 e;
-	        glm::vec3 s;
-	        DecomposeTRS(static_cast<const TransformComponent*>(c)->localToWorld, p, e, s);
-	        return reflect::MakeValue(s);
+	        // Column lengths are the scale; no need to solve for euler to read it.
+	        return reflect::MakeValue(ExtractScale(static_cast<const TransformComponent*>(c)->localToWorld));
         },
         [](void* c, const FieldValue& v)
         {
 	        auto* t = static_cast<TransformComponent*>(c);
+	        // Scale genuinely needs the rotation rebuilt from euler, so this one has to
+	        // decompose - but position still comes exactly from column 3, not from the
+	        // decomposition.
 	        glm::vec3 p;
 	        glm::vec3 e;
 	        glm::vec3 s;
 	        DecomposeTRS(t->localToWorld, p, e, s);
-	        t->localToWorld = ComposeTransform(p, e, glm::vec3(v.vec));
+	        t->localToWorld = ComposeTransform(glm::vec3(t->localToWorld[3]), e, glm::vec3(v.vec));
         })
 AE_COMPONENT_END()
 
