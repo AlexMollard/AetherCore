@@ -93,7 +93,7 @@ commands with its padded inner rect regardless of any ancestor mask.
 ```cpp
 struct UITextBox
 {
-    enum class ContentType : std::uint8_t { Any, Integer, Decimal, Alphanumeric, IpAddress };
+    enum class ContentType : std::uint8_t { Any, Integer, Decimal, Alphanumeric, Host };
 
     std::string text, placeholder, fontName = "Roboto";
     std::string allowedChars;       // escape hatch: non-empty = whitelist, ANDed with contentType

@@ -21,7 +21,7 @@ namespace aether::ui
 		Integer,
 		Decimal,
 		Alphanumeric,
-		IpAddress // digits, dots and colons: "192.168.0.1:7777"
+		Host // network address: letters, digits, dots, colons - "192.168.0.1:7777", "localhost", "fe80::1"
 	};
 
 	struct TextEditState

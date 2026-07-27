@@ -47,7 +47,7 @@ TEST_CASE("FilterInsert honours the content type")
 	CHECK(ui::FilterInsert(s, alnum, "ab-12_") == "ab12");
 
 	ui::TextEditLimits ip;
-	ip.contentType = ui::TextContentType::IpAddress;
+	ip.contentType = ui::TextContentType::Host;
 	CHECK(ui::FilterInsert(s, ip, "192.168.0.1:7777") == "192.168.0.1:7777");
 	CHECK(ui::FilterInsert(s, ip, "host name") == "hostname");
 }

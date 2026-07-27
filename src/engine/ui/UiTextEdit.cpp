@@ -24,7 +24,7 @@ namespace aether::ui
 				return digit || c == '-' || c == '.';
 			case TextContentType::Alphanumeric:
 				return digit || alpha;
-			case TextContentType::IpAddress:
+			case TextContentType::Host:
 				return digit || alpha || c == '.' || c == ':';
 			case TextContentType::Any:
 				break;

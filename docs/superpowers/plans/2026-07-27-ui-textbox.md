@@ -756,7 +756,7 @@ git commit -m "Add clipboard access and synthetic typed text to Input
 **Interfaces:**
 - Consumes: nothing (pure).
 - Produces, all in `namespace aether::ui`:
-  - `enum class TextContentType : std::uint8_t { Any, Integer, Decimal, Alphanumeric, IpAddress }`
+  - `enum class TextContentType : std::uint8_t { Any, Integer, Decimal, Alphanumeric, Host }`
   - `struct TextEditState { std::string text; int caret = 0; int selectionAnchor = 0; float scrollX = 0.f; }`
   - `struct TextEditLimits { TextContentType contentType = TextContentType::Any; std::string allowedChars; int maxLength = 0; }`
   - `int SelectionBegin(const TextEditState&)`, `int SelectionEnd(const TextEditState&)`, `bool HasSelection(const TextEditState&)`, `void ClearSelection(TextEditState&)`, `void SelectAll(TextEditState&)`, `std::string SelectedText(const TextEditState&)`
@@ -799,7 +799,7 @@ TEST_CASE("FilterInsert honours the content type")
 	CHECK(ui::FilterInsert(s, alnum, "ab-12_") == "ab12");
 
 	ui::TextEditLimits ip;
-	ip.contentType = ui::TextContentType::IpAddress;
+	ip.contentType = ui::TextContentType::Host;
 	CHECK(ui::FilterInsert(s, ip, "192.168.0.1:7777") == "192.168.0.1:7777");
 	CHECK(ui::FilterInsert(s, ip, "host name") == "hostname");
 }
@@ -948,7 +948,7 @@ namespace aether::ui
 		Integer,
 		Decimal,
 		Alphanumeric,
-		IpAddress // digits, dots and colons: "192.168.0.1:7777"
+		Host // network address: letters, digits, dots, colons - "192.168.0.1:7777", "localhost", "fe80::1"
 	};
 
 	struct TextEditState
@@ -1018,7 +1018,7 @@ namespace aether::ui
 				return digit || c == '-' || c == '.';
 			case TextContentType::Alphanumeric:
 				return digit || alpha;
-			case TextContentType::IpAddress:
+			case TextContentType::Host:
 				return digit || c == '.' || c == ':';
 			case TextContentType::Any:
 				break;
@@ -2616,7 +2616,7 @@ In the anonymous namespace, beside the other enum tables:
 		        {"integer", static_cast<int>(aether::ui::TextContentType::Integer)},
 		        {"decimal", static_cast<int>(aether::ui::TextContentType::Decimal)},
 		        {"alphanumeric", static_cast<int>(aether::ui::TextContentType::Alphanumeric)},
-		        {"ip_address", static_cast<int>(aether::ui::TextContentType::IpAddress)},
+		        {"host", static_cast<int>(aether::ui::TextContentType::Host)},
 		}};
 		return table;
 	}
@@ -2739,7 +2739,7 @@ git commit -m "Make the text box authorable from the editor and MCP"
 - Consumes: `UITextBox` (Task 7), `CreateTextBoxEntity` (Task 10), `Input` clipboard (Task 4).
 - Produces, in C#:
   - `Ui.CreateTextBox(Entity canvas = default)`, `Ui.GetTextBoxText(Entity)`, `Ui.SetTextBoxText(Entity, string)`, `Ui.SetPlaceholder(Entity, string)`, `Ui.SetContentType(Entity, UiContentType)`, `Ui.WasSubmitted(Entity)`, `Ui.WasCancelled(Entity)`, `Ui.IsEditing(Entity)`, `Ui.BeginEdit(Entity)`
-  - `enum UiContentType { Any, Integer, Decimal, Alphanumeric, IpAddress }`
+  - `enum UiContentType { Any, Integer, Decimal, Alphanumeric, Host }`
   - `Input.Clipboard { get; set; }`
   - `Ui.WasChanged` extended to report text-box changes.
 
@@ -2908,7 +2908,7 @@ In `managed/AetherCore/Ui.cs`, add the enum beside `UiHAlign`:
 
 ```csharp
 /// <summary>Characters a text box accepts. ANDed with its allowed-characters string.</summary>
-public enum UiContentType { Any = 0, Integer = 1, Decimal = 2, Alphanumeric = 3, IpAddress = 4 }
+public enum UiContentType { Any = 0, Integer = 1, Decimal = 2, Alphanumeric = 3, Host = 4 }
 ```
 
 And a section after the widget accessors:
@@ -3025,7 +3025,7 @@ cd build/ninja-clang && ./Editor.exe
 Then, via MCP against the running editor:
 1. `new_scene` with `kind=2d`.
 2. `create_entity` named `Canvas` with a `UiCanvasComponent`.
-3. `create_entity` named `Address` parented to it, with a `UiTextBoxComponent` (`placeholder="127.0.0.1:7777"`, `content_type="ip_address"`, `max_length=21`).
+3. `create_entity` named `Address` parented to it, with a `UiTextBoxComponent` (`placeholder="127.0.0.1:7777"`, `content_type="host"`, `max_length=21`).
 4. `create_entity` named `Connect` with a `UiButtonComponent` below it.
 5. `play`, then `screenshot`.
 
