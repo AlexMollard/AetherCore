@@ -76,7 +76,13 @@ namespace aether::net
 			        ordered.emplace_back(node.id, World::FromEntt(ent));
 		        });
 
-		std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+		// Node ids are unique in a well-formed scene, but a hand-edited or corrupt TOML
+		// could duplicate one - and an unstable sort would then order those two by
+		// whatever the collection happened to produce, i.e. ECS order, which is the
+		// single thing this function exists to avoid. Break ties on the entity id so the
+		// result is total and deterministic even when the invariant is violated.
+		std::sort(ordered.begin(), ordered.end(),
+		        [](const auto& a, const auto& b) { return a.first != b.first ? a.first < b.first : a.second.id < b.second.id; });
 
 		for (const auto& [nodeId, entity]: ordered)
 		{
