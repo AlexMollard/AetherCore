@@ -73,10 +73,11 @@ namespace aether::scripting
 		// marshalling path.
 		std::int32_t (*GetReplicatedPropertyIndices)(const char* typeNameUtf8, std::int32_t* outIndices, std::int32_t maxIndices) = nullptr;
 
-		// Networking: RPCs. GetNetRpcMethodIndex resolves a [NetRpc] method's wire
-		// index by name (the encode side - a caller building an outbound call turns
-		// a method name into the index that goes on the wire, in the type's
-		// declaration-order [NetRpc] table). Returns -1 if the type is unknown or
+		// Networking: RPCs. GetNetRpcMethod resolves a [NetRpc] method by name (the
+		// encode side - a caller building an outbound call turns a method name into
+		// the index that goes on the wire, in the type's declaration-order [NetRpc]
+		// table) and writes the NetRpcTarget its attribute declared to `outTarget`.
+		// Returns -1, leaving `outTarget` untouched, if the type is unknown or
 		// declares no such method. InvokeNetRpc is the decode side: it runs method
 		// `methodIndex` on the live instance `handle` names. argBlob is a single
 		// value - null/empty for a parameterless method, otherwise a UTF-8 string -
@@ -84,7 +85,7 @@ namespace aether::scripting
 		// Never throws across the boundary: an unresolvable handle, an out-of-range
 		// index, or a managed exception during the call are all swallowed on the
 		// managed side and simply produce no call.
-		std::int32_t (*GetNetRpcMethodIndex)(const char* typeNameUtf8, const char* methodNameUtf8) = nullptr;
+		std::int32_t (*GetNetRpcMethod)(const char* typeNameUtf8, const char* methodNameUtf8, std::int32_t* outTarget) = nullptr;
 		void (*InvokeNetRpc)(std::uint64_t handle, std::int32_t methodIndex, const std::uint8_t* argBlob, std::int32_t argLen) = nullptr;
 	};
 

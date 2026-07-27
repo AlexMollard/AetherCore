@@ -248,12 +248,13 @@ namespace aether::net
 
 		case NetMessage::Rpc:
 		{
-			// Client to host only, today: Net.CallServer is the single send path
-			// (NetRpcExports.cpp), and nothing dispatches host to client - see the
-			// note on NetRpcTarget in managed/AetherCore/NetAttributes.cs. The decode
-			// path is direction-agnostic so adding that later needs no change here,
-			// but the ownership gate below is what makes the inbound half safe: it is
-			// the only route by which a client can affect host state at all.
+			// Both directions arrive here - a client's Server call on the host, and
+			// the host's Client/Multicast calls on a client - so the role is NOT
+			// checked at this level. ApplyRpc checks it instead, against the target
+			// the packet carries, because "which direction is legal" is a property of
+			// the call and not of the message kind. Its two gates (direction, then
+			// ownership) are what make the inbound half safe: this is the only route
+			// by which a client can affect host state at all.
 			ByteReader reader{payload};
 			const std::optional<RpcMessage> msg = DecodeRpc(reader);
 			if (!msg.has_value())

@@ -369,7 +369,8 @@ TEST_CASE("An RPC is dispatched only for the connection that owns the target")
 	        aether::net::NetworkIdentity{.netId = 8, .owner = kPeer});
 	host.context.Session().Bind(8, entity);
 
-	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0, {});
+	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	        aether::net::NetRpcTarget::Server, {});
 
 	// A different connection asking to run a method on someone else's entity.
 	host.receive.OnData(host.world, kPeer + 1, packet);
@@ -378,6 +379,118 @@ TEST_CASE("An RPC is dispatched only for the connection that owns the target")
 	// The owner asking is allowed.
 	host.receive.OnData(host.world, kPeer, packet);
 	CHECK(raw->Invocations() == 1);
+}
+
+namespace
+{
+	// Gives `endpoint` a scripted, replicated entity on `netId` owned by `owner`, plus
+	// the counting bridge that would be asked to dispatch a call aimed at it. The
+	// bridge is owned by the context, so the raw pointer lives as long as the endpoint.
+	FakeRpcCounter* AttachRpcTarget(Endpoint& endpoint, std::uint32_t netId, aether::net::ConnectionId owner)
+	{
+		const Entity entity = endpoint.world.Create();
+		endpoint.world.Emplace<ScriptComponent>(entity).scripts.push_back(ScriptEntry{.path = "Chat"});
+		endpoint.world.Emplace<aether::net::NetworkIdentity>(entity,
+		        aether::net::NetworkIdentity{.netId = netId, .owner = owner});
+		endpoint.context.Session().Bind(netId, entity);
+
+		auto bridge = std::make_unique<FakeRpcCounter>();
+		auto* raw = bridge.get();
+		endpoint.context.SetRpcBridge(std::move(bridge));
+		return raw;
+	}
+} // namespace
+
+TEST_CASE("A host-to-client RPC inbound on the host is dropped")
+{
+	// The direction gate, driven through the real packet path. A client putting
+	// Multicast in the target byte is trying to make the host relay for it; a client
+	// putting Client there is trying to run host-authoritative code on a peer. Both
+	// are refused BEFORE the ownership check, so even the legitimate owner of the
+	// entity cannot get one through.
+	for (const aether::net::NetRpcTarget target:
+	        {aether::net::NetRpcTarget::Client, aether::net::NetRpcTarget::Multicast})
+	{
+		const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+		        target, {});
+
+		{
+			Endpoint host;
+			host.BecomeHost();
+			FakeRpcCounter* bridge = AttachRpcTarget(host, 8, kPeer);
+
+			host.receive.OnData(host.world, kPeer, packet); // from the owner, no less
+			CHECK(bridge->Invocations() == 0);
+		}
+
+		// Positive control: the very same bytes DO dispatch on a client, so the drop
+		// above is the direction gate and not a malformed packet.
+		{
+			Endpoint client;
+			client.BecomeClient();
+			FakeRpcCounter* bridge = AttachRpcTarget(client, 8, kPeer);
+
+			client.receive.OnData(client.world, kPeer, packet);
+			CHECK(bridge->Invocations() == 1);
+		}
+	}
+}
+
+TEST_CASE("A Server-target RPC inbound on a client is dropped")
+{
+	// The other direction. A Server call is one a client sends, never one it
+	// receives - accepting it would run server-authoritative logic on a client.
+	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	        aether::net::NetRpcTarget::Server, {});
+
+	{
+		Endpoint client;
+		client.BecomeClient();
+		FakeRpcCounter* bridge = AttachRpcTarget(client, 8, kPeer);
+
+		client.receive.OnData(client.world, kPeer, packet);
+		CHECK(bridge->Invocations() == 0);
+	}
+
+	// Positive control: the same bytes on the host, from the owner, do dispatch.
+	{
+		Endpoint host;
+		host.BecomeHost();
+		FakeRpcCounter* bridge = AttachRpcTarget(host, 8, kPeer);
+
+		host.receive.OnData(host.world, kPeer, packet);
+		CHECK(bridge->Invocations() == 1);
+	}
+}
+
+TEST_CASE("An RPC with an unrecognised target byte is dropped on both roles")
+{
+	// The decode-side half: an out-of-range target is not coerced to Server, so it
+	// cannot be used to pick which direction gate the packet is measured against.
+	aether::net::ByteWriter w;
+	w.U8(static_cast<std::uint8_t>(aether::net::NetMessage::Rpc));
+	w.U32(8);
+	w.U32(aether::net::ScriptTypeHash("Chat"));
+	w.U16(0);
+	w.U8(200); // no such target
+	w.U32(0);
+	const std::vector<std::byte> packet = w.Take();
+
+	{
+		Endpoint host;
+		host.BecomeHost();
+		FakeRpcCounter* bridge = AttachRpcTarget(host, 8, kPeer);
+		host.receive.OnData(host.world, kPeer, packet);
+		CHECK(bridge->Invocations() == 0);
+	}
+
+	{
+		Endpoint client;
+		client.BecomeClient();
+		FakeRpcCounter* bridge = AttachRpcTarget(client, 8, kPeer);
+		client.receive.OnData(client.world, kPeer, packet);
+		CHECK(bridge->Invocations() == 0);
+	}
 }
 
 // ── Malformed input ─────────────────────────────────────────────────────────────

@@ -80,8 +80,12 @@ namespace aether::app::scripting
 		// replication reuses the existing bridge instead of a second value path.
 		[[nodiscard]] std::vector<int> GetReplicatedPropertyIndices(const std::string& typeName) const;
 		// Index of `methodName` in `typeName`'s [NetRpc] method table, or -1 if the
-		// type is unknown or declares no such RPC.
-		[[nodiscard]] int FindNetRpcMethodIndex(const std::string& typeName, const std::string& methodName) const;
+		// type is unknown or declares no such RPC. `outTarget` receives the
+		// NetRpcTarget the method's attribute declared (untouched when the lookup
+		// fails) - the declaration is the single source of truth for direction, so
+		// the caller reads it here rather than being told at the call site.
+		[[nodiscard]] int FindNetRpcMethod(const std::string& typeName, const std::string& methodName,
+		        int& outTarget) const;
 		// Invokes RPC method `methodIndex` on the live instance `handle` names. A
 		// no-op if the api is unavailable or the handle is 0.
 		void InvokeNetRpc(std::uint64_t handle, int methodIndex, std::span<const std::byte> args) const;

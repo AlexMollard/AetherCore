@@ -818,13 +818,16 @@ internal static unsafe partial class Native
     internal static partial void aether_add_script(uint id, string typeName);
 
     // ── Networking: RPCs ─────────────────────────────────────────────────────────
-    // Runs a [NetRpc(NetRpcTarget.Server)] method declared on a script attached to
-    // `entityId`. Returns 0 if no attached script declares that method (dropped
-    // silently - see Net.CallServer). argBlob/argLen carry the single argument
-    // shape Net.CallServer supports today: null/0 for none, otherwise a UTF-8
-    // string blob.
+    // Runs a [NetRpc] method declared on a script attached to `entityId`, routed by
+    // the target the attribute declared. `expectedTarget` is -1 for "whatever the
+    // method declares" or a NetRpcTarget value the declaration must match. Returns 0
+    // when the call is refused - no such RPC, a target mismatch, a client trying to
+    // originate a host-to-client call, or an unreplicated entity that has no name on
+    // the wire (see Net.Call). argBlob/argLen carry the single argument shape RPCs
+    // support today: null/0 for none, otherwise a UTF-8 string blob.
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
-    internal static unsafe partial int aether_net_call_server(uint entityId, string methodName, byte* argBlob, int argLen);
+    internal static unsafe partial int aether_net_call_rpc(uint entityId, string methodName, byte* argBlob, int argLen,
+        int expectedTarget);
 
     // ── Networking: session ──────────────────────────────────────────────────────
     // Every one of these is safe with no session and no NetworkContext registered:

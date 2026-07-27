@@ -505,28 +505,51 @@ internal static unsafe class ScriptRegistry
     // ── Networking: RPCs ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Resolves a [NetRpc] method's wire index by name - the encode side, mirroring
-    /// GetReplicatedPropertyIndices: a caller building an outbound call (Net.CallServer,
-    /// or the native CSharpRpcBridge) turns a method name into the index that goes on
+    /// Resolves a [NetRpc] method by name - the encode side, mirroring
+    /// GetReplicatedPropertyIndices: a caller building an outbound call (Net.Call, or
+    /// the native CSharpRpcBridge) turns a method name into the index that goes on
     /// the wire, which is the type's declaration-order [NetRpc] table built alongside
-    /// s_props/s_replicated. Returns -1 if the type is unknown or declares no such RPC.
+    /// s_props/s_replicated. <paramref name="outTarget"/> receives the
+    /// <see cref="NetRpcTarget"/> the attribute declared, so the direction of a call
+    /// is stated once, on the method, and never at the call site. Returns -1 - leaving
+    /// <paramref name="outTarget"/> untouched - if the type is unknown or declares no
+    /// such RPC.
     /// </summary>
+    /// <remarks>
+    /// Reflection over a custom attribute can throw (a torn assembly load, a missing
+    /// dependency), and nothing may escape into native code, so the whole body is
+    /// guarded - the same discipline as InvokeNetRpc.
+    /// </remarks>
     [UnmanagedCallersOnly]
-    internal static int GetNetRpcMethodIndex(byte* typeNameUtf8, byte* methodNameUtf8)
+    internal static int GetNetRpcMethod(byte* typeNameUtf8, byte* methodNameUtf8, int* outTarget)
     {
-        if (!s_rpcMethods.TryGetValue(Utf8.ToString(typeNameUtf8), out MethodInfo[]? methods))
+        try
         {
-            return -1;
-        }
-        string methodName = Utf8.ToString(methodNameUtf8);
-        for (int i = 0; i < methods.Length; i++)
-        {
-            if (methods[i].Name == methodName)
+            if (!s_rpcMethods.TryGetValue(Utf8.ToString(typeNameUtf8), out MethodInfo[]? methods))
             {
+                return -1;
+            }
+            string methodName = Utf8.ToString(methodNameUtf8);
+            for (int i = 0; i < methods.Length; i++)
+            {
+                if (methods[i].Name != methodName)
+                {
+                    continue;
+                }
+                if (outTarget != null)
+                {
+                    var attribute = methods[i].GetCustomAttribute<NetRpcAttribute>(inherit: true);
+                    *outTarget = (int)(attribute?.Target ?? NetRpcTarget.Server);
+                }
                 return i;
             }
+            return -1;
         }
-        return -1;
+        catch (Exception ex)
+        {
+            Bootstrap.ReportError($"GetNetRpcMethod failed: {ex.Message}");
+            return -1;
+        }
     }
 
     /// <summary>

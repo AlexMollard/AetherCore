@@ -129,36 +129,73 @@ public static class Net
 
     /// <summary>
     /// Invokes a <see cref="NetRpcAttribute"/> method declared on a script attached
-    /// to <paramref name="entity"/>, resolved by <paramref name="methodName"/>.
+    /// to <paramref name="entity"/>, resolved by <paramref name="methodName"/>, and
+    /// dispatches it to wherever the method's <see cref="NetRpcTarget"/> says it
+    /// runs. This is the one send path; the direction is read off the declaration, so
+    /// a call site cannot contradict it.
     /// </summary>
     /// <remarks>
-    /// On a client a <see cref="NetRpcTarget.Server"/> call is sent to the host and
-    /// invoked there. On the host, and in an unnetworked game, the host is this
-    /// process, so the same call runs locally.
+    /// <para>
+    /// Returns false, having sent nothing, whenever the call cannot be made: no
+    /// attached script declares that RPC; a client tried to originate a
+    /// <see cref="NetRpcTarget.Client"/> or <see cref="NetRpcTarget.Multicast"/> call
+    /// (only the host may); or the call has to cross the wire and
+    /// <paramref name="entity"/> is not replicated, so it has no name to be addressed
+    /// by on the far end. A refused call is never quietly downgraded to a local one -
+    /// that would run against unreplicated state and report success.
+    /// </para>
+    /// <para>
+    /// With no session every target runs locally, so single-player code needs no role
+    /// test.
+    /// </para>
+    /// </remarks>
+    /// <returns>True if the call was dispatched (sent, run locally, or both).</returns>
+    /// <exception cref="ArgumentException">
+    /// More than one argument was passed, or a single argument was passed that is
+    /// not a <see cref="string"/> - see the marshalling note on <see cref="Net"/>.
+    /// </exception>
+    public static bool Call(Entity entity, string methodName, params object[] args)
+        => Dispatch(entity, methodName, args, expectedTarget: -1, nameof(Call));
+
+    /// <summary>
+    /// <see cref="Call"/> restricted to <see cref="NetRpcTarget.Server"/> methods: on
+    /// a client the call is sent to the host and invoked there, and on the host (or
+    /// in an unnetworked game) it runs locally.
+    /// </summary>
+    /// <remarks>
+    /// The explicit spelling, kept because a server RPC reads better at the call site
+    /// when the direction is the point. A method whose attribute declares a different
+    /// target is refused rather than re-routed.
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// More than one argument was passed, or a single argument was passed that is
     /// not a <see cref="string"/> - see the marshalling note on <see cref="Net"/>.
     /// </exception>
-    public static unsafe void CallServer(Entity entity, string methodName, params object[] args)
+    public static void CallServer(Entity entity, string methodName, params object[] args)
+        => Dispatch(entity, methodName, args, expectedTarget: (int)NetRpcTarget.Server, nameof(CallServer));
+
+    // The one marshalling site. `expectedTarget` is -1 for "whatever the method
+    // declares" and a NetRpcTarget value for the explicit spellings, which the native
+    // half compares against the declaration and refuses on a mismatch.
+    private static unsafe bool Dispatch(Entity entity, string methodName, object[] args, int expectedTarget,
+        string caller)
     {
         if (args.Length > 1 || (args.Length == 1 && args[0] is not string))
         {
             throw new ArgumentException(
-                "Net.CallServer supports at most one string argument today.", nameof(args));
+                $"Net.{caller} supports at most one string argument today.", nameof(args));
         }
 
         if (args.Length == 0)
         {
-            Native.aether_net_call_server(entity.Id, methodName, null, 0);
-            return;
+            return Native.aether_net_call_rpc(entity.Id, methodName, null, 0, expectedTarget) != 0;
         }
 
         string arg = (string)args[0];
         byte[] blob = Encoding.UTF8.GetBytes(arg);
         fixed (byte* ptr = blob)
         {
-            Native.aether_net_call_server(entity.Id, methodName, ptr, blob.Length);
+            return Native.aether_net_call_rpc(entity.Id, methodName, ptr, blob.Length, expectedTarget) != 0;
         }
     }
 }

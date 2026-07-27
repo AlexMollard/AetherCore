@@ -147,9 +147,9 @@ namespace aether::net::test
 			return m_invocations;
 		}
 
-		[[nodiscard]] int FindMethodIndex(const std::string&, const std::string&) const override
+		[[nodiscard]] RpcMethod FindMethod(const std::string&, const std::string&) const override
 		{
-			return 0;
+			return RpcMethod{.index = 0, .target = NetRpcTarget::Server};
 		}
 
 		void Invoke(Entity, std::uint32_t, std::uint16_t, std::span<const std::byte>) const override

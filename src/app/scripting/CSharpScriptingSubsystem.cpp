@@ -493,14 +493,22 @@ namespace aether::app::scripting
 		return std::vector<int>(indices.begin(), indices.end());
 	}
 
-	int CSharpScriptingSubsystem::FindNetRpcMethodIndex(const std::string& typeName, const std::string& methodName) const
+	int CSharpScriptingSubsystem::FindNetRpcMethod(const std::string& typeName, const std::string& methodName,
+	        int& outTarget) const
 	{
 		const auto* api = Api();
-		if (api == nullptr || api->GetNetRpcMethodIndex == nullptr)
+		if (api == nullptr || api->GetNetRpcMethod == nullptr)
 		{
 			return -1;
 		}
-		return api->GetNetRpcMethodIndex(typeName.c_str(), methodName.c_str());
+		std::int32_t target = 0;
+		const std::int32_t index = api->GetNetRpcMethod(typeName.c_str(), methodName.c_str(), &target);
+		if (index < 0)
+		{
+			return -1;
+		}
+		outTarget = target;
+		return index;
 	}
 
 	void CSharpScriptingSubsystem::InvokeNetRpc(std::uint64_t handle, int methodIndex, std::span<const std::byte> args) const

@@ -20,12 +20,17 @@
 
 using namespace aether::app::scripting::interop;
 
-// Net.CallServer's native half. On a client the call is encoded and sent to the
-// host, which invokes it there (NetworkReceiveSystem's Rpc case). Anywhere else -
-// on the host, or in an unnetworked game - the host IS this process, so the same
-// call runs locally.
-AE_SCRIPT_API std::int32_t aether_net_call_server(std::uint32_t entityId, const char* methodNameUtf8,
-        const std::uint8_t* argBlob, std::int32_t argLen)
+// Net.Call's native half, and the framework's ONLY RPC send path. The method's
+// [NetRpc] attribute states where it runs; this resolves that target, asks RouteRpc
+// where the call therefore goes, and then does exactly what it was told - the policy
+// (including "a client may not originate a multicast") lives in RouteRpc, which is
+// pure and unit-tested, not here.
+//
+// `expectedTarget` is -1 for "whatever the method declares"; Net.CallServer passes a
+// NetRpcTarget value the declaration must match, so the explicit spelling cannot
+// silently dispatch a method that declares something else.
+AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const char* methodNameUtf8,
+        const std::uint8_t* argBlob, std::int32_t argLen, std::int32_t expectedTarget)
 {
 	if (methodNameUtf8 == nullptr)
 	{
@@ -68,17 +73,11 @@ AE_SCRIPT_API std::int32_t aether_net_call_server(std::uint32_t entityId, const 
 	}
 	const aether::net::RpcBridge& bridge = *bridgePtr;
 
-	const bool remote = network != nullptr && network->IsClient();
-	// A client can only ask about an entity the host also knows; an unbound one has
-	// no name on the wire, so the call would arrive addressed to nothing.
-	const std::uint32_t netId = remote ? network->Session().NetIdFor(entity) : 0;
-	if (remote && netId == 0)
-	{
-		// Fail the call rather than fall through and run it here. A server
-		// -authoritative RPC that silently becomes a client-local one is worse than a
-		// dropped one: it runs against unreplicated local state and reports success.
-		return 0;
-	}
+	// No NetworkContext at all (a single-player build) is the offline case, which a
+	// default-constructed session already describes: role Offline, so RouteRpc answers
+	// "run it here" and never asks for a recipient.
+	static const aether::net::NetSession kOfflineSession;
+	const aether::net::NetSession& session = network != nullptr ? network->Session() : kOfflineSession;
 
 	// First script attached to the entity whose [NetRpc] table names this method
 	// wins - mirrors NetScriptFields' "first entry wins" simplification for a
@@ -87,24 +86,45 @@ AE_SCRIPT_API std::int32_t aether_net_call_server(std::uint32_t entityId, const 
 	for (std::size_t i = 0; i < scripts->scripts.size(); ++i)
 	{
 		const std::string& typeName = scripts->scripts[i].path;
-		const int methodIndex = bridge.FindMethodIndex(typeName, methodName);
-		if (methodIndex < 0)
+		const aether::net::RpcMethod method = bridge.FindMethod(typeName, methodName);
+		if (!method.Found())
 		{
 			continue;
 		}
-
-		if (remote)
+		if (expectedTarget >= 0 && expectedTarget != static_cast<std::int32_t>(method.target))
 		{
-			// The method index is resolved from THIS peer's assembly; the host resolves
-			// the script by type hash and bounds-checks the index against its own table,
-			// so an assembly mismatch drops the call rather than invoking the wrong one.
-			const std::vector<std::byte> packet = aether::net::EncodeRpc(netId,
-			        aether::net::ScriptTypeHash(typeName), static_cast<std::uint16_t>(methodIndex), args);
-			network->Transport().Send(aether::net::kInvalidConnection, aether::net::kChannelReliable, true, packet);
-			return 1;
+			// Net.CallServer naming a method that declares Client or Multicast. Refuse
+			// rather than re-route: the call site and the declaration disagree, and
+			// picking a winner silently would make one of the two a lie.
+			return 0;
 		}
 
-		bridge.Invoke(entity, static_cast<std::uint32_t>(i), static_cast<std::uint16_t>(methodIndex), args);
+		const aether::net::RpcRoute route = aether::net::RouteRpc(world, session, method.target, entity);
+		if (!route.allowed)
+		{
+			return 0;
+		}
+
+		if (!route.recipients.empty() && network != nullptr)
+		{
+			// The method index is resolved from THIS peer's assembly; the receiver
+			// resolves the script by type hash and bounds-checks the index against its
+			// own table, so an assembly mismatch drops the call rather than invoking the
+			// wrong one. Encoded once and sent to each recipient - a multicast to eight
+			// connections is one buffer, not eight.
+			const std::vector<std::byte> packet = aether::net::EncodeRpc(session.NetIdFor(entity),
+			        aether::net::ScriptTypeHash(typeName), static_cast<std::uint16_t>(method.index), method.target,
+			        args);
+			for (const aether::net::ConnectionId recipient: route.recipients)
+			{
+				network->Transport().Send(recipient, aether::net::kChannelReliable, true, packet);
+			}
+		}
+
+		if (route.invokeLocally)
+		{
+			bridge.Invoke(entity, static_cast<std::uint32_t>(i), static_cast<std::uint16_t>(method.index), args);
+		}
 		return 1;
 	}
 	return 0; // no script on this entity declares that RPC

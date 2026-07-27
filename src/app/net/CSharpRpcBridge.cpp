@@ -5,9 +5,17 @@
 
 namespace aether::net
 {
-	int CSharpRpcBridge::FindMethodIndex(const std::string& typeName, const std::string& methodName) const
+	RpcMethod CSharpRpcBridge::FindMethod(const std::string& typeName, const std::string& methodName) const
 	{
-		return m_scripting.FindNetRpcMethodIndex(typeName, methodName);
+		int target = 0;
+		const int index = m_scripting.FindNetRpcMethod(typeName, methodName, target);
+		if (index < 0 || target < 0 || target > static_cast<int>(kNetRpcTargetMax))
+		{
+			// A target the registry reports that this build does not know is treated
+			// as no method at all: the alternative is guessing a direction for it.
+			return RpcMethod{};
+		}
+		return RpcMethod{.index = index, .target = static_cast<NetRpcTarget>(target)};
 	}
 
 	void CSharpRpcBridge::Invoke(Entity entity, std::uint32_t scriptIndex, std::uint16_t methodIndex,

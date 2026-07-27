@@ -45,7 +45,7 @@ TEST_CASE("Self-framing encoders lead with their own NetMessage byte")
 	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 4> selfFraming{{
 	        {net::NetMessage::Spawn, net::EncodeSpawn(1, 2, "player", {0.f, 0.f, 0.f})},
 	        {net::NetMessage::Despawn, net::EncodeDespawn(1)},
-	        {net::NetMessage::Rpc, net::EncodeRpc(1, 0xABCDu, 0, {})},
+	        {net::NetMessage::Rpc, net::EncodeRpc(1, 0xABCDu, 0, net::NetRpcTarget::Server, {})},
 	        {net::NetMessage::Welcome, EncodeWelcome(3)},
 	}};
 

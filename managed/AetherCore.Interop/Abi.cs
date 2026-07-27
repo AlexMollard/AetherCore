@@ -86,10 +86,11 @@ internal unsafe struct ManagedScriptApi
     // the property table above. Values still travel through GetProperty/SetProperty.
     public delegate* unmanaged<byte*, int*, int, int> GetReplicatedPropertyIndices;
 
-    // Networking: RPCs. GetNetRpcMethodIndex resolves a [NetRpc] method's wire index
-    // by name (encode side); InvokeNetRpc runs method `methodIndex` on instance
-    // `handle` (decode side). argBlob is a single value - null/empty, or a UTF-8
-    // string for a one-string-parameter method.
-    public delegate* unmanaged<byte*, byte*, int> GetNetRpcMethodIndex;
+    // Networking: RPCs. GetNetRpcMethod resolves a [NetRpc] method's wire index by
+    // name and writes its declared NetRpcTarget to the out parameter (encode side);
+    // InvokeNetRpc runs method `methodIndex` on instance `handle` (decode side).
+    // argBlob is a single value - null/empty, or a UTF-8 string for a
+    // one-string-parameter method.
+    public delegate* unmanaged<byte*, byte*, int*, int> GetNetRpcMethod;
     public delegate* unmanaged<ulong, int, byte*, int, void> InvokeNetRpc;
 }
