@@ -80,6 +80,11 @@ internal static unsafe class ScriptRegistry
     // GetProperty/SetProperty bridge rather than adding a second value encoding.
     private static readonly Dictionary<string, int[]> s_replicated = new(StringComparer.Ordinal);
 
+    // One [NetRpc] method table per script type (built once at load, alongside
+    // s_props/s_replicated so the three tables cannot drift). The array index is
+    // what travels on the wire (NetRpc.hpp's methodIndex), in declaration order.
+    private static readonly Dictionary<string, MethodInfo[]> s_rpcMethods = new(StringComparer.Ordinal);
+
     // A default-constructed instance per type, so the inspector can show default
     // field values when no live instance exists (edit mode).
     // Editor-tooling windows discovered from the project assembly (IEditorWindow implementers).
@@ -170,6 +175,24 @@ internal static unsafe class ScriptRegistry
         return indices.ToArray();
     }
 
+    // Public instance methods of `type` marked [NetRpc], sorted into declaration
+    // order. GetMethods does not itself guarantee declaration order, so the sort
+    // by MetadataToken (assigned in declaration order within a type) makes the
+    // wire index deterministic - it must never silently shift between loads.
+    private static MethodInfo[] BuildRpcMethods(Type type)
+    {
+        var methods = new List<MethodInfo>();
+        foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (method.IsDefined(typeof(NetRpcAttribute), inherit: true))
+            {
+                methods.Add(method);
+            }
+        }
+        methods.Sort(static (a, b) => a.MetadataToken.CompareTo(b.MetadataToken));
+        return methods.ToArray();
+    }
+
     // ── Assembly / registry lifecycle ─────────────────────────────────────────
 
     [UnmanagedCallersOnly]
@@ -209,6 +232,7 @@ internal static unsafe class ScriptRegistry
         s_types.Clear();
         s_props.Clear();
         s_replicated.Clear();
+        s_rpcMethods.Clear();
         s_defaults.Clear();
         // Remember each tool window's open/closed state (by Title) so a reload restores it instead of
         // reverting to the window's default; string keys don't root the context being unloaded.
@@ -270,6 +294,7 @@ internal static unsafe class ScriptRegistry
             Prop[] props = BuildProps(type);
             s_props[type.Name] = props;
             s_replicated[type.Name] = BuildReplicatedIndices(props);
+            s_rpcMethods[type.Name] = BuildRpcMethods(type);
             names.Add(type.Name);
             try
             {
@@ -475,6 +500,90 @@ internal static unsafe class ScriptRegistry
             }
         }
         return indices.Length;
+    }
+
+    // ── Networking: RPCs ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a [NetRpc] method's wire index by name - the encode side, mirroring
+    /// GetReplicatedPropertyIndices: a caller building an outbound call (Net.CallServer,
+    /// or the native CSharpRpcBridge) turns a method name into the index that goes on
+    /// the wire, which is the type's declaration-order [NetRpc] table built alongside
+    /// s_props/s_replicated. Returns -1 if the type is unknown or declares no such RPC.
+    /// </summary>
+    [UnmanagedCallersOnly]
+    internal static int GetNetRpcMethodIndex(byte* typeNameUtf8, byte* methodNameUtf8)
+    {
+        if (!s_rpcMethods.TryGetValue(Utf8.ToString(typeNameUtf8), out MethodInfo[]? methods))
+        {
+            return -1;
+        }
+        string methodName = Utf8.ToString(methodNameUtf8);
+        for (int i = 0; i < methods.Length; i++)
+        {
+            if (methods[i].Name == methodName)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// The decode side: runs [NetRpc] method <paramref name="methodIndex"/> of the
+    /// script instance <paramref name="handle"/> names. <paramref name="argBlob"/> is
+    /// a single value - null/empty for a parameterless method, otherwise interpreted
+    /// as a UTF-8 string for a method with one string parameter (see Net.CallServer's
+    /// argument-marshalling note; a richer argument shape is not supported yet).
+    ///
+    /// An unresolvable handle, an out-of-range index, or a method whose parameter
+    /// shape is not one of the two supported above all drop the call silently rather
+    /// than throwing - a peer can send anything, and a script assembly can reload
+    /// out from under it. Any exception the method body itself raises is caught here
+    /// too: nothing may escape across the native boundary.
+    /// </summary>
+    [UnmanagedCallersOnly]
+    internal static void InvokeNetRpc(ulong handle, int methodIndex, byte* argBlob, int argLen)
+    {
+        if (Resolve(handle) is not { } script)
+        {
+            return;
+        }
+        if (!s_rpcMethods.TryGetValue(script.GetType().Name, out MethodInfo[]? methods)
+            || methodIndex < 0 || methodIndex >= methods.Length)
+        {
+            return;
+        }
+
+        MethodInfo method = methods[methodIndex];
+        try
+        {
+            ParameterInfo[] parameters = method.GetParameters();
+            object?[] callArgs;
+            if (parameters.Length == 0)
+            {
+                callArgs = Array.Empty<object?>();
+            }
+            else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
+            {
+                string arg = argBlob != null && argLen > 0
+                    ? System.Text.Encoding.UTF8.GetString(argBlob, argLen)
+                    : string.Empty;
+                callArgs = new object?[] { arg };
+            }
+            else
+            {
+                // Only parameterless and single-string-parameter RPC methods are
+                // supported today; see Net.CallServer's argument-marshalling note.
+                Bootstrap.ReportError($"{script.GetType().Name}.{method.Name}: unsupported RPC parameter shape");
+                return;
+            }
+            method.Invoke(script, callArgs);
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.ReportError($"{script.GetType().Name}.{method.Name} RPC: {ex}");
+        }
     }
 
     [UnmanagedCallersOnly]

@@ -37,6 +37,9 @@ add_executable(EngineTests
     # NetScriptFields only, NOT CSharpScriptFieldBridge.cpp: the packet logic goes
     # through the abstract ScriptFieldBridge so it links without the CoreCLR host.
     "${CMAKE_SOURCE_DIR}/src/app/net/NetScriptFields.cpp"
+    # NetRpc only, NOT CSharpRpcBridge.cpp/NetRpcExports.cpp: encode/decode is pure
+    # and links without the CoreCLR host; the dispatch bridge does not.
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetRpc.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"

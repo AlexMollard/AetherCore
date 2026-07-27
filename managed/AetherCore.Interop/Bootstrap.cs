@@ -82,6 +82,8 @@ internal static unsafe class Bootstrap
 
             // Networking
             outApi->GetReplicatedPropertyIndices = &ScriptRegistry.GetReplicatedPropertyIndices;
+            outApi->GetNetRpcMethodIndex = &ScriptRegistry.GetNetRpcMethodIndex;
+            outApi->InvokeNetRpc = &ScriptRegistry.InvokeNetRpc;
 
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;

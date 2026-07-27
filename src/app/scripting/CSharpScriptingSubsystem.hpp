@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -68,6 +69,12 @@ namespace aether::app::scripting
 		// Indices address the same table GetScriptProperties/GetPropertyValue use, so
 		// replication reuses the existing bridge instead of a second value path.
 		[[nodiscard]] std::vector<int> GetReplicatedPropertyIndices(const std::string& typeName) const;
+		// Index of `methodName` in `typeName`'s [NetRpc] method table, or -1 if the
+		// type is unknown or declares no such RPC.
+		[[nodiscard]] int FindNetRpcMethodIndex(const std::string& typeName, const std::string& methodName) const;
+		// Invokes RPC method `methodIndex` on the live instance `handle` names. A
+		// no-op if the api is unavailable or the handle is 0.
+		void InvokeNetRpc(std::uint64_t handle, int methodIndex, std::span<const std::byte> args) const;
 		[[nodiscard]] bool GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const;
 		void SetPropertyValue(std::uint64_t handle, int index, const aether::ScriptPropertyValue& value) const;
 		[[nodiscard]] bool GetDefaultPropertyValue(const std::string& typeName, int index, aether::ScriptPropertyValue& out) const;

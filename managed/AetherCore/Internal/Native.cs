@@ -813,6 +813,15 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_add_script(uint id, string typeName);
 
+    // ── Networking: RPCs ─────────────────────────────────────────────────────────
+    // Runs a [NetRpc(NetRpcTarget.Server)] method declared on a script attached to
+    // `entityId`. Returns 0 if no attached script declares that method (dropped
+    // silently - see Net.CallServer). argBlob/argLen carry the single argument
+    // shape Net.CallServer supports today: null/0 for none, otherwise a UTF-8
+    // string blob.
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial int aether_net_call_server(uint entityId, string methodName, byte* argBlob, int argLen);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_scene_file_exists(string name);
 
