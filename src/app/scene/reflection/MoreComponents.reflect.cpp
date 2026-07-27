@@ -1,6 +1,7 @@
 #include "scene/reflection/Reflection.hpp"
 
 #include "debug/Icons.hpp"
+#include "net/NetComponents.hpp"
 #include "particles/ParticleComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
@@ -26,6 +27,9 @@ using UiTextBoxComponent = aether::ui::UITextBox;
 using UiMaskComponent = aether::ui::UIMask;
 using UiEffectComponent = aether::ui::UIEffect;
 using UiMaterialComponent = aether::ui::UIMaterial;
+using NetworkIdentityComponent = aether::net::NetworkIdentity;
+using NetworkTransformComponent = aether::net::NetworkTransform;
+using NetPlayerComponent = aether::net::NetPlayer;
 
 namespace
 {
@@ -352,5 +356,20 @@ AE_COMPONENT(UiMaterialComponent, "UI Material", "UI", ICON_FA_WAND_MAGIC_SPARKL
 AE_FIELD_N("shader", shader, String)
 AE_FIELD_N("color0", color0, Color4)
 AE_FIELD_N("color1", color1, Color4)
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(NetworkIdentityComponent, "Network Identity", "Networking", ICON_FA_TOWER_BROADCAST)
+AE_COMPONENT_END()
+
+AE_COMPONENT(NetworkTransformComponent, "Network Transform", "Networking", ICON_FA_ARROWS_LEFT_RIGHT)
+AE_FIELD_N("interpolation_delay", interpolationDelaySeconds, Float)
+AE_FIELD_N("correction_rate", correctionRate, Float)
+AE_FIELD_N("snap_distance", snapDistance, Float)
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(NetPlayerComponent, "Net Player", "Networking", ICON_FA_USER)
+AE_FIELD_REP("display_name", displayName, String)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
