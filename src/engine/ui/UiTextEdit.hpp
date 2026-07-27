@@ -4,6 +4,8 @@
 #include <string>
 #include <string_view>
 
+#include "ui/FontAsset.hpp"
+
 namespace aether::ui
 {
 	// Pure single-line text editing. No World, no Input, no GLFW - so every rule here is
@@ -57,4 +59,37 @@ namespace aether::ui
 
 	// `text` with every character replaced by '*' when password is set.
 	[[nodiscard]] std::string DisplayText(std::string_view text, bool password);
+
+	enum class CaretMove : std::uint8_t
+	{
+		Left,
+		Right,
+		WordLeft,
+		WordRight,
+		Home,
+		End
+	};
+
+	// A plain Left/Right with a live selection collapses to that end rather than stepping -
+	// what every text field does, and what stops the caret jumping over a character the user
+	// just selected.
+	void MoveCaret(TextEditState& s, CaretMove move, bool extendSelection);
+
+	// The index one word away from `from` in direction `dir` (-1 back, +1 forward): skip any
+	// run of separators, then the run of word characters.
+	[[nodiscard]] int WordBoundary(std::string_view text, int from, int dir);
+
+	bool DeleteBackward(TextEditState& s, bool wholeWord);
+	bool DeleteForward(TextEditState& s, bool wholeWord);
+
+	void SelectWordAt(TextEditState& s, int index);
+
+	// Measurement. Advance-only: single line, no kerning, matching what ShapeText does.
+	[[nodiscard]] float TextWidth(const FontAsset& font, std::string_view text, float pixelSize);
+	[[nodiscard]] float CaretToPixelX(const FontAsset& font, std::string_view text, float pixelSize, int caret);
+	// `localX` is relative to the text origin (i.e. mouse x - inner.x + scrollX).
+	[[nodiscard]] int CaretFromPixelX(const FontAsset& font, std::string_view text, float pixelSize, float localX);
+
+	// Adjust scrollX so the caret is inside [0, innerWidth]. Text that fits never scrolls.
+	void ScrollToCaret(TextEditState& s, const FontAsset& font, float pixelSize, float innerWidth, bool password);
 } // namespace aether::ui

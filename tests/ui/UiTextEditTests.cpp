@@ -3,6 +3,7 @@
 #include <string>
 
 #include "platform/Input.hpp"
+#include "ui/FontAsset.hpp"
 #include "ui/UiTextEdit.hpp"
 
 using namespace aether;
@@ -166,4 +167,191 @@ TEST_CASE("DisplayText masks a password")
 	CHECK(ui::DisplayText("secret", false) == "secret");
 	CHECK(ui::DisplayText("secret", true) == "******");
 	CHECK(ui::DisplayText("", true).empty());
+}
+
+// Mirrors MakeMonoFont in UiDrawBuilderTests: bakeSize 48, advance 24 -> at pixelSize 48 every
+// glyph is exactly 24 px wide, so expected pixel positions are caret * 24.
+static ui::FontAsset MakeTextEditFont()
+{
+	ui::FontAsset f;
+	f.atlasBindlessSlot = 42;
+	f.atlasWidth = f.atlasHeight = 128;
+	f.ascent = 40;
+	f.descent = 10;
+	f.lineHeight = 50;
+	f.bakeSize = 48;
+	for (char c = 0x20; c > 0 && c <= 0x7E; ++c)
+	{
+		f.glyphs[static_cast<std::uint32_t>(c)] = ui::GlyphMeta{static_cast<std::uint32_t>(c), 0.f, 0.f, 0.1f, 0.1f, 20.f, 30.f, 0.f, 30.f, 24.f};
+	}
+	return f;
+}
+
+TEST_CASE("MoveCaret steps by character and clamps at the ends")
+{
+	ui::TextEditState s;
+	s.text = "abc";
+	s.caret = 1;
+	s.selectionAnchor = 1;
+
+	ui::MoveCaret(s, ui::CaretMove::Right, false);
+	CHECK(s.caret == 2);
+	ui::MoveCaret(s, ui::CaretMove::Right, false);
+	ui::MoveCaret(s, ui::CaretMove::Right, false);
+	CHECK(s.caret == 3); // clamped
+
+	ui::MoveCaret(s, ui::CaretMove::Left, false);
+	CHECK(s.caret == 2);
+	ui::MoveCaret(s, ui::CaretMove::Home, false);
+	CHECK(s.caret == 0);
+	ui::MoveCaret(s, ui::CaretMove::Left, false);
+	CHECK(s.caret == 0); // clamped
+	ui::MoveCaret(s, ui::CaretMove::End, false);
+	CHECK(s.caret == 3);
+}
+
+TEST_CASE("MoveCaret collapses a selection instead of stepping")
+{
+	ui::TextEditState s;
+	s.text = "hello world";
+	s.selectionAnchor = 2;
+	s.caret = 7;
+
+	ui::MoveCaret(s, ui::CaretMove::Left, false);
+	CHECK(s.caret == 2); // collapses to the selection start, does not step to 6
+	CHECK_FALSE(ui::HasSelection(s));
+
+	s.selectionAnchor = 2;
+	s.caret = 7;
+	ui::MoveCaret(s, ui::CaretMove::Right, false);
+	CHECK(s.caret == 7); // collapses to the selection end
+	CHECK_FALSE(ui::HasSelection(s));
+}
+
+TEST_CASE("MoveCaret with extendSelection keeps the anchor")
+{
+	ui::TextEditState s;
+	s.text = "hello";
+	s.caret = 2;
+	s.selectionAnchor = 2;
+
+	ui::MoveCaret(s, ui::CaretMove::Right, true);
+	CHECK(s.caret == 3);
+	CHECK(s.selectionAnchor == 2);
+	CHECK(ui::SelectedText(s) == "l");
+
+	ui::MoveCaret(s, ui::CaretMove::End, true);
+	CHECK(s.caret == 5);
+	CHECK(s.selectionAnchor == 2);
+	CHECK(ui::SelectedText(s) == "llo");
+}
+
+TEST_CASE("WordBoundary skips runs of word characters and separators")
+{
+	const std::string_view text = "hello big world";
+
+	CHECK(ui::WordBoundary(text, 15, -1) == 10); // back over "world"
+	CHECK(ui::WordBoundary(text, 10, -1) == 6);  // back over " big" -> start of "big"
+	CHECK(ui::WordBoundary(text, 0, -1) == 0);   // clamped
+
+	CHECK(ui::WordBoundary(text, 0, 1) == 5);    // forward over "hello"
+	CHECK(ui::WordBoundary(text, 5, 1) == 9);    // forward over " big"
+	CHECK(ui::WordBoundary(text, 15, 1) == 15);  // clamped
+}
+
+TEST_CASE("DeleteBackward and DeleteForward remove one character or one word")
+{
+	ui::TextEditState s;
+	s.text = "hello world";
+	s.caret = 11;
+	s.selectionAnchor = 11;
+
+	CHECK(ui::DeleteBackward(s, false));
+	CHECK(s.text == "hello worl");
+	CHECK(s.caret == 10);
+
+	CHECK(ui::DeleteBackward(s, true));
+	CHECK(s.text == "hello ");
+	CHECK(s.caret == 6);
+
+	s.caret = 0;
+	s.selectionAnchor = 0;
+	CHECK_FALSE(ui::DeleteBackward(s, false)); // nothing to the left
+
+	CHECK(ui::DeleteForward(s, false));
+	CHECK(s.text == "ello ");
+	CHECK(s.caret == 0);
+
+	s.text = "abc";
+	s.caret = 3;
+	s.selectionAnchor = 3;
+	CHECK_FALSE(ui::DeleteForward(s, false)); // nothing to the right
+}
+
+TEST_CASE("Delete keys remove the selection when there is one")
+{
+	ui::TextEditState s;
+	s.text = "hello world";
+	s.selectionAnchor = 0;
+	s.caret = 6;
+
+	CHECK(ui::DeleteBackward(s, false));
+	CHECK(s.text == "world");
+	CHECK(s.caret == 0);
+}
+
+TEST_CASE("Text measurement maps carets to pixels and back")
+{
+	const ui::FontAsset font = MakeTextEditFont();
+
+	CHECK(ui::TextWidth(font, "abc", 48.f) == doctest::Approx(72.f));
+	CHECK(ui::TextWidth(font, "", 48.f) == doctest::Approx(0.f));
+
+	CHECK(ui::CaretToPixelX(font, "abc", 48.f, 0) == doctest::Approx(0.f));
+	CHECK(ui::CaretToPixelX(font, "abc", 48.f, 2) == doctest::Approx(48.f));
+	CHECK(ui::CaretToPixelX(font, "abc", 48.f, 3) == doctest::Approx(72.f));
+
+	// Hit-testing snaps to the nearest gap between characters.
+	CHECK(ui::CaretFromPixelX(font, "abc", 48.f, -5.f) == 0);
+	CHECK(ui::CaretFromPixelX(font, "abc", 48.f, 10.f) == 0);
+	CHECK(ui::CaretFromPixelX(font, "abc", 48.f, 14.f) == 1);
+	CHECK(ui::CaretFromPixelX(font, "abc", 48.f, 500.f) == 3);
+}
+
+TEST_CASE("ScrollToCaret keeps the caret inside the visible window")
+{
+	const ui::FontAsset font = MakeTextEditFont();
+
+	ui::TextEditState s;
+	s.text = "abcdefghij"; // 240 px at 24 px/char
+	s.caret = 10;
+	s.selectionAnchor = 10;
+
+	ui::ScrollToCaret(s, font, 48.f, 100.f, false);
+	CHECK(s.scrollX == doctest::Approx(140.f)); // caret at 240 sits on the right edge
+
+	s.caret = 0;
+	ui::ScrollToCaret(s, font, 48.f, 100.f, false);
+	CHECK(s.scrollX == doctest::Approx(0.f)); // scrolled back to reveal the start
+
+	// Short text never scrolls, whatever the caret did before.
+	s.text = "ab";
+	s.caret = 2;
+	s.scrollX = 90.f;
+	ui::ScrollToCaret(s, font, 48.f, 100.f, false);
+	CHECK(s.scrollX == doctest::Approx(0.f));
+}
+
+TEST_CASE("SelectWordAt selects the word under an index")
+{
+	ui::TextEditState s;
+	s.text = "hello big world";
+
+	ui::SelectWordAt(s, 7);
+	CHECK(ui::SelectedText(s) == "big");
+	CHECK(s.caret == 9);
+	CHECK(s.selectionAnchor == 6);
+
+	ui::SelectWordAt(s, 0);
+	CHECK(ui::SelectedText(s) == "hello");
 }
