@@ -234,6 +234,11 @@ internal static unsafe class ScriptRegistry
         s_replicated.Clear();
         s_rpcMethods.Clear();
         s_defaults.Clear();
+        // The live-instance table holds strong references into the context being
+        // unloaded. The native side frees every handle (ScriptComponentSystem::
+        // Invalidate) before getting here, so this is a backstop - but a missed
+        // entry would keep the whole ALC alive, so clear it unconditionally.
+        ScriptInstances.Clear();
         // Remember each tool window's open/closed state (by Title) so a reload restores it instead of
         // reverting to the window's default; string keys don't root the context being unloaded.
         foreach (IEditorWindow w in s_editorWindows) { s_editorWindowVisible[w.Title] = w.Visible; }
@@ -345,6 +350,10 @@ internal static unsafe class ScriptRegistry
 
             var script = (EntityScript)Activator.CreateInstance(type)!;
             script.Bind(new Entity(entityId));
+            // Publish it as live on that entity before the handle exists, so the
+            // instance is already findable via Entity.GetScript by the time the
+            // native side can invoke anything on it.
+            ScriptInstances.Register(entityId, script);
             GCHandle handle = GCHandle.Alloc(script);
             return (ulong)GCHandle.ToIntPtr(handle).ToInt64();
         }
@@ -362,7 +371,14 @@ internal static unsafe class ScriptRegistry
         {
             return;
         }
-        GCHandle.FromIntPtr((IntPtr)(long)handle).Free();
+        GCHandle gc = GCHandle.FromIntPtr((IntPtr)(long)handle);
+        // Stop reporting it as live on its entity first: the instance table is the
+        // mirror of these handles, so it must never outlive one.
+        if (gc.Target is EntityScript script)
+        {
+            ScriptInstances.Unregister(script);
+        }
+        gc.Free();
     }
 
     [UnmanagedCallersOnly]

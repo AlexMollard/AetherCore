@@ -23,6 +23,14 @@ public abstract class EntityScript
 
     internal void Bind(Entity self) => Self = self;
 
+    /// <summary>
+    /// Another script of type <typeparamref name="T"/> on this same entity, or
+    /// <c>null</c> if there is none - shorthand for <c>Self.GetScript&lt;T&gt;()</c>,
+    /// which is where the full behaviour (duplicate types, attach ordering) is
+    /// documented. Returns null rather than throwing, like Unity's GetComponent.
+    /// </summary>
+    public T? GetScript<T>() where T : EntityScript => ScriptInstances.Find<T>(Self.Id);
+
     public virtual void OnAttach() { }
 
     public virtual void OnUpdate(float deltaTime) { }

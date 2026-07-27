@@ -81,6 +81,28 @@ public readonly struct Entity : IEquatable<Entity>
     /// entity doesn't actually carry the component.</summary>
     public T Get<T>() where T : IComponentRef => (T)Activator.CreateInstance(typeof(T), this)!;
 
+    /// <summary>
+    /// The live script instance of type <typeparamref name="T"/> attached to this
+    /// entity, or <c>null</c> if it carries no such script - Unity's
+    /// <c>GetComponent&lt;T&gt;()</c>. Works for any entity, so a collision or
+    /// trigger callback can query <c>other</c>, not just <c>Self</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An entity may carry the same script type more than once; the first one
+    /// attached is returned.
+    /// </para>
+    /// <para>
+    /// Attach ordering: scripts on an entity are created and attached one at a
+    /// time, in the order they are listed on the entity, so during
+    /// <see cref="EntityScript.OnAttach"/> only the scripts listed BEFORE the
+    /// caller exist. Code that must not depend on that order should look the
+    /// sibling up in <see cref="EntityScript.OnUpdate"/> instead, where every
+    /// script on the entity is live.
+    /// </para>
+    /// </remarks>
+    public T? GetScript<T>() where T : EntityScript => ScriptInstances.Find<T>(Id);
+
     /// <summary>Exclude this entity (and subtree) from scene serialization.</summary>
     public void MarkTransient() => Native.aether_mark_transient(Id);
 
