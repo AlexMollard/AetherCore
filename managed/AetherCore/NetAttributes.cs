@@ -19,21 +19,22 @@ namespace AetherCore;
 public sealed class ReplicatedAttribute : Attribute;
 
 /// <summary>Where a <see cref="NetRpcAttribute"/> method runs.</summary>
+/// <remarks>
+/// Only client-to-host dispatch exists. Host-to-client targets (an owning-client
+/// call, a multicast) are deliberately absent rather than declared and ignored: the
+/// framework has exactly one RPC send path, <see cref="Net.CallServer"/>, so a
+/// declared-but-unwired target would compile, run on the host, and tell nobody.
+/// </remarks>
 public enum NetRpcTarget
 {
     /// <summary>Called on a client, executed on the host.</summary>
     Server = 0,
-
-    /// <summary>Called on the host, executed on the owning client.</summary>
-    Client = 1,
-
-    /// <summary>Called on the host, executed on every client.</summary>
-    Multicast = 2,
 }
 
 /// <summary>
-/// Marks a script method as a remote procedure call. Invoking it locally sends the
-/// call to the target instead of (or as well as) running it here.
+/// Marks a script method as a remote procedure call. Invoking it through
+/// <see cref="Net.CallServer"/> on a client sends the call to the host and runs it
+/// there; on the host, and in an unnetworked game, it runs locally.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = true)]
 public sealed class NetRpcAttribute : Attribute
