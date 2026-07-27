@@ -97,3 +97,40 @@ TEST_CASE("Shift+Tab moves focus backwards and wraps")
 
 	CHECK(Sel(w, second).focused); // wrapped from first to last
 }
+
+TEST_CASE("With no UIKeyboardCapture anywhere, arrows and Enter navigate normally")
+{
+	World w;
+	Input input;
+
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity bottom = MakeSelectable(w, {0, 100, 100, 20});
+
+	Sel(w, top).focused = true;
+
+	input.SetSyntheticKey(static_cast<int>(Key::Down), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK_FALSE(Sel(w, top).focused);
+	CHECK(Sel(w, bottom).focused);
+
+	input.SetSyntheticKey(static_cast<int>(Key::Down), false);
+	input.SetSyntheticKey(static_cast<int>(Key::Enter), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, bottom).activated);
+}
+
+TEST_CASE("Tab from nothing focused lands on the first control in reading order")
+{
+	World w;
+	Input input;
+
+	const Entity first = MakeSelectable(w, {0, 0, 100, 20});
+	MakeSelectable(w, {0, 100, 100, 20});
+
+	input.SetSyntheticKey(static_cast<int>(Key::Tab), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, first).focused);
+}

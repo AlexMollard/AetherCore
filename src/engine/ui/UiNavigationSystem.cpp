@@ -65,14 +65,19 @@ namespace aether::ui
 			return best;
 		}
 
-		// Reading order: top-to-bottom, then left-to-right. Rows are compared with a tolerance so
-		// controls that are visually on one line do not reorder because of a pixel of drift.
+		// Reading order: top-to-bottom, then left-to-right. Rows are QUANTIZED rather than
+		// compared with a pairwise tolerance: "within 8px counts as the same row" is not a
+		// strict weak ordering (y = 0, 8, 16 makes a cycle), and std::sort on such a
+		// comparator is undefined behaviour. Bucketing is transitive, so the sort is safe;
+		// the cost is that two controls straddling a bucket edge can order by x instead of y.
 		bool BeforeInReadingOrder(const glm::vec4& a, const glm::vec4& b)
 		{
-			constexpr float kRowTolerance = 8.f;
-			if (std::fabs(a.y - b.y) > kRowTolerance)
+			constexpr float kRowHeight = 16.f;
+			const int rowA = static_cast<int>(std::floor(a.y / kRowHeight));
+			const int rowB = static_cast<int>(std::floor(b.y / kRowHeight));
+			if (rowA != rowB)
 			{
-				return a.y < b.y;
+				return rowA < rowB;
 			}
 			return a.x < b.x;
 		}
@@ -212,16 +217,27 @@ namespace aether::ui
 			if (!ordered.empty())
 			{
 				std::size_t index = 0;
+				bool found = false;
 				for (std::size_t i = 0; i < ordered.size(); ++i)
 				{
 					if (ordered[i].entity == focused)
 					{
 						index = i;
+						found = true;
 						break;
 					}
 				}
 				const std::size_t count = ordered.size();
-				index = backwards ? (index + count - 1) % count : (index + 1) % count;
+				if (!found)
+				{
+					// Nothing focused yet: land on the first control going forward, or the
+					// last going backward, rather than stepping past it from an assumed index 0.
+					index = backwards ? count - 1 : 0;
+				}
+				else
+				{
+					index = backwards ? (index + count - 1) % count : (index + 1) % count;
+				}
 				focused = ordered[index].entity;
 			}
 		}
