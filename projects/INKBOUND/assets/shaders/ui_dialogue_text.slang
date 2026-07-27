@@ -9,6 +9,9 @@
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
+// Shared with the engine's UI vertex stage. Do not hand-copy VSOutput - include it.
+#include "include/UiVertexOut.slangh"
+
 struct ShapesPush
 {
     float4   screenSize;
@@ -20,20 +23,6 @@ struct ShapesPush
     float4   color1;      // accent colour
 };
 [[vk::push_constant]] ShapesPush pc;
-
-// Must match ui_shapes.slang VSOutput exactly (locations + interpolation).
-struct VSOutput
-{
-    float4 position      : SV_Position;
-    float4 color         : TEXCOORD0;
-    float2 local         : TEXCOORD1;
-    float2 localScale    : TEXCOORD2;
-    float  cornerRadius  : TEXCOORD3;
-    nointerpolation uint type        : TEXCOORD4;
-    float2 texUV         : TEXCOORD5;
-    nointerpolation uint textureSlot : TEXCOORD6;
-    nointerpolation uint flags       : TEXCOORD7;
-};
 
 static const uint kShapeSdfGlyph = 4;
 
@@ -50,6 +39,8 @@ float SdfCov(uint slot, float2 uv)
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
+    UiClipDiscard(input);
+
     // Non-text shapes wearing this material: pass their colour through untouched.
     if (input.type != kShapeSdfGlyph)
     {

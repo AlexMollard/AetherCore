@@ -1,0 +1,43 @@
+#ifndef AETHER_UI_VERTEX_OUT_SLANGH
+#define AETHER_UI_VERTEX_OUT_SLANGH
+
+// The interface between the shared UI vertex shader (ui_shapes.slang) and every fragment
+// shader that pairs with it - the engine's own, and each project UIMaterial shader.
+//
+// Project shaders MUST include this rather than copying the struct. A copy that drifts from
+// the vertex stage's layout does not fail to compile; it silently reads the wrong varyings.
+struct VSOutput
+{
+    float4 position      : SV_Position;
+    float4 color         : TEXCOORD0;
+    float2 local         : TEXCOORD1; // [-1,1] for SDF corner/circle tests
+    float2 localScale    : TEXCOORD2; // rect pixel size (for corner radius)
+    float  cornerRadius  : TEXCOORD3;
+    nointerpolation uint type        : TEXCOORD4;
+    float2 texUV         : TEXCOORD5; // UV for TexturedRect
+    nointerpolation uint textureSlot : TEXCOORD6;
+    nointerpolation uint flags       : TEXCOORD7;
+    nointerpolation float4 clipRect  : TEXCOORD8; // x,y,w,h px; live only when kUiFlagClip
+};
+
+// Mirrors aether::ui::kFlagClip in engine/ui/UiDrawCommand.hpp.
+static const uint kUiFlagClip = 4u;
+
+// Discard fragments outside the command's clip rect. SV_Position.xy in the fragment stage is
+// already window pixels - the same space UI rects are authored in - so no transform is needed.
+// Call this FIRST in every UI fragment entry point, engine or project.
+void UiClipDiscard(VSOutput input)
+{
+    if ((input.flags & kUiFlagClip) != 0u)
+    {
+        const float2 p = input.position.xy;
+        if (p.x < input.clipRect.x || p.y < input.clipRect.y ||
+            p.x > input.clipRect.x + input.clipRect.z ||
+            p.y > input.clipRect.y + input.clipRect.w)
+        {
+            discard;
+        }
+    }
+}
+
+#endif

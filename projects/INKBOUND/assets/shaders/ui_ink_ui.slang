@@ -7,6 +7,9 @@
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
+// Shared with the engine's UI vertex stage. Do not hand-copy VSOutput - include it.
+#include "include/UiVertexOut.slangh"
+
 struct ShapesPush
 {
     float4   screenSize;
@@ -19,20 +22,6 @@ struct ShapesPush
 };
 
 [[vk::push_constant]] ShapesPush pc;
-
-// MUST match ui_shapes.slang VSOutput exactly.
-struct VSOutput
-{
-    float4 position      : SV_Position;
-    float4 color         : TEXCOORD0;
-    float2 local         : TEXCOORD1; // [-1,1]
-    float2 localScale    : TEXCOORD2; // rect px size
-    float  cornerRadius  : TEXCOORD3;
-    nointerpolation uint type        : TEXCOORD4;
-    float2 texUV         : TEXCOORD5;
-    nointerpolation uint textureSlot : TEXCOORD6;
-    nointerpolation uint flags       : TEXCOORD7;
-};
 
 static const uint kShapeRect   = 0;
 static const uint kShapeCircle = 1;
@@ -56,6 +45,8 @@ float vnoise(float2 p)
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
+    UiClipDiscard(input);
+
     const float time = pc.params.x;
     const float2 sizePx = max(input.localScale, float2(1.0, 1.0));
 

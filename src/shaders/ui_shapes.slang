@@ -3,6 +3,7 @@
 // from a device-addressable command buffer.
 
 #include "include/UIStructs.slangh"
+#include "include/UiVertexOut.slangh"
 #include "text_sdf.slangh"
 
 static const uint kShapeRect        = 0;
@@ -24,19 +25,6 @@ struct ShapesPush
 };
 
 [[vk::push_constant]] ShapesPush pc;
-
-struct VSOutput
-{
-    float4 position      : SV_Position;
-    float4 color         : TEXCOORD0;
-    float2 local         : TEXCOORD1; // [-1,1] for SDF corner/circle tests
-    float2 localScale    : TEXCOORD2; // rect pixel size (for corner radius)
-    float  cornerRadius  : TEXCOORD3;
-    nointerpolation uint type        : TEXCOORD4;
-    float2 texUV         : TEXCOORD5; // UV for TexturedRect
-    nointerpolation uint textureSlot : TEXCOORD6;
-    nointerpolation uint flags       : TEXCOORD7;
-};
 
 [shader("vertex")]
 VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
@@ -105,12 +93,15 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.texUV       = outTexUV;
     output.textureSlot = cmd.textureSlot;
     output.flags       = cmd.flags;
+    output.clipRect    = cmd.clipRect;
     return output;
 }
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
+    UiClipDiscard(input);
+
     if (input.type == kShapeCircle)
     {
         if (dot(input.local, input.local) > 1.0)
