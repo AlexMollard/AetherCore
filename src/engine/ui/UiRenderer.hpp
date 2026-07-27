@@ -53,6 +53,14 @@ namespace aether::ui
 			m_world = world;
 		}
 
+		// The atlases this renderer bakes are the only ones in the process. UI systems that
+		// measure text (text-box hit-testing, scrolling) need them, so hand out a reference
+		// rather than letting anyone build a second, empty registry.
+		[[nodiscard]] FontRegistry& Fonts()
+		{
+			return m_fontRegistry;
+		}
+
 		// Resolves layout + builds draw commands for m_world, uploads into frame
 		void BuildFrame(glm::vec2 outputExtent, std::uint32_t frameSlot);
 

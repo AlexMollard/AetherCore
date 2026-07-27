@@ -204,6 +204,7 @@ namespace aether
 
 		auto& assets = services.Get<AssetSubsystem>();
 		m_uiRenderer.Init(gpu, assets.GetUploadContext(), assets.GetTextureRegistry(), swapchain.GetImageFormat());
+		services.Register<ui::FontRegistry>(m_uiRenderer.Fonts());
 
 		if (m_profile != RuntimeProfile::Full)
 		{

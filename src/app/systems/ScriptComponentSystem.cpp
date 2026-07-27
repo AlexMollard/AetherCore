@@ -10,7 +10,9 @@
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
+#include "ui/FontRegistry.hpp"
 #include "ui/UiNavigationSystem.hpp"
+#include "ui/UiTextBoxSystem.hpp"
 #include "ui/UiWidgetSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -222,6 +224,7 @@ namespace aether::app
 		{
 			aether::ui::UiNavigationSystem::Update(world, *sceneCtx->input);
 			aether::ui::UiWidgetSystem::Update(world, *sceneCtx->input, static_cast<float>(sceneCtx->elapsedTime));
+			aether::ui::UiTextBoxSystem::Update(world, *sceneCtx->input, m_services.TryGet<aether::ui::FontRegistry>(), static_cast<float>(sceneCtx->elapsedTime));
 		}
 
 		std::vector<Entity> scripted;
