@@ -433,6 +433,11 @@ TEST_CASE("Text box shows the placeholder when empty")
 	box.placeholder = "AB";
 	box.pixelSize = 48.f;
 	box.placeholderColor = {0.5f, 0.5f, 0.5f, 1.f};
+	// Stale state a script can leave behind by clearing text outside the editing update:
+	// neither should reach the placeholder.
+	box.scrollX = 90.f;
+	box.selectionAnchor = 0;
+	box.caret = 2;
 	w.Emplace<HierarchyComponent>(field);
 	ecs::SetParent(w, field, canvas);
 
@@ -440,6 +445,7 @@ TEST_CASE("Text box shows the placeholder when empty")
 	std::vector<ui::UiMaterialDraw> materials;
 	ui::BuildDrawCommands(w, cmds, materials, &fonts, nullptr);
 
-	REQUIRE(cmds.size() == 3);
+	REQUIRE(cmds.size() == 3); // background + two glyphs: no selection rect for a placeholder
 	CHECK(cmds[1].color.r == doctest::Approx(0.5f)); // drawn in the placeholder colour
+	CHECK(cmds[1].data0.x == doctest::Approx(108));  // at the left edge, not shifted by scrollX
 }

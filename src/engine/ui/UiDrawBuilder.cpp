@@ -196,7 +196,10 @@ namespace aether::ui
 
 		const bool showPlaceholder = box.text.empty();
 		const std::string display = showPlaceholder ? box.placeholder : DisplayText(box.text, box.password);
-		const float originX = inner.x - box.scrollX;
+		// The placeholder always sits at the left edge. scrollX belongs to the real text, and a box
+		// cleared from a script (or authored empty with a stale scroll) would otherwise draw its hint
+		// shifted off-screen - ScrollToCaret only zeroes scrollX on frames the box is being edited.
+		const float originX = showPlaceholder ? inner.x : inner.x - box.scrollX;
 
 		// Everything past the background is clipped to the padded inner rect, so long text
 		// scrolls under the edges instead of spilling out of the field. The builder's clip
