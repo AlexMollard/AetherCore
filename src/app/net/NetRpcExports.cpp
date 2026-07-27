@@ -69,7 +69,7 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 	const aether::net::RpcBridge* bridgePtr = network != nullptr ? network->Rpcs() : nullptr;
 	if (bridgePtr == nullptr)
 	{
-		bridgePtr = &ownedBridge.emplace(*scripting, *instances);
+		bridgePtr = &ownedBridge.emplace(*scripting, *instances, *ctx.services);
 	}
 	const aether::net::RpcBridge& bridge = *bridgePtr;
 

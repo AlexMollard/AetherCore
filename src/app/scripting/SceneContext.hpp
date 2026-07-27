@@ -90,4 +90,39 @@ namespace aether::app::scripting
 	{
 		return *g_activeContext;
 	}
+
+	// Publishes `ctx` as the active context for the duration of a call into managed
+	// code, and restores whatever was active before on the way out.
+	//
+	// EVERY path that invokes a script callback must be wrapped in one of these. The
+	// script bodies behind those callbacks call the Net.*/Entity.*/Ui.* exports, and
+	// every one of those exports reaches ActiveContext()/ActiveWorld() - which
+	// dereferences this pointer unconditionally. Without a scope the callback does not
+	// fail gracefully; it segfaults on the first engine call the script makes.
+	//
+	// Restoring the PREVIOUS value rather than nulling out is what makes it safe to
+	// nest: an inbound RPC dispatched from a system tick has no context to restore,
+	// while a locally-routed one dispatched from inside a script update must leave the
+	// update's own context in place when it returns.
+	struct ActiveContextScope
+	{
+		explicit ActiveContextScope(SceneContext& ctx)
+		      : m_previous(g_activeContext)
+		{
+			g_activeContext = &ctx;
+		}
+
+		~ActiveContextScope()
+		{
+			g_activeContext = m_previous;
+		}
+
+		ActiveContextScope(const ActiveContextScope&) = delete;
+		ActiveContextScope& operator=(const ActiveContextScope&) = delete;
+		ActiveContextScope(ActiveContextScope&&) = delete;
+		ActiveContextScope& operator=(ActiveContextScope&&) = delete;
+
+	private:
+		SceneContext* m_previous = nullptr;
+	};
 } // namespace aether::app::scripting

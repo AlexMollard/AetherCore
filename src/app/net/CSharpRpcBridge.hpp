@@ -7,6 +7,11 @@
 #include "net/NetRpc.hpp"
 #include "scene/Entity.hpp"
 
+namespace aether
+{
+	class ServiceContainer;
+}
+
 namespace aether::app
 {
 	class ScriptComponentSystem;
@@ -28,10 +33,15 @@ namespace aether::net
 	class CSharpRpcBridge final : public RpcBridge
 	{
 	public:
+		// `services` is where Invoke finds the SceneContext it must publish around the
+		// managed dispatch - resolved per call rather than captured, because the
+		// context is registered and unregistered with the scene layer while this
+		// bridge outlives it.
 		CSharpRpcBridge(const aether::app::scripting::CSharpScriptingSubsystem& scripting,
-		        const aether::app::ScriptComponentSystem& instances)
+		        const aether::app::ScriptComponentSystem& instances, const ServiceContainer& services)
 		      : m_scripting(scripting)
 		      , m_instances(instances)
+		      , m_services(services)
 		{
 		}
 
@@ -51,5 +61,6 @@ namespace aether::net
 	private:
 		const aether::app::scripting::CSharpScriptingSubsystem& m_scripting;
 		const aether::app::ScriptComponentSystem& m_instances;
+		const ServiceContainer& m_services;
 	};
 } // namespace aether::net

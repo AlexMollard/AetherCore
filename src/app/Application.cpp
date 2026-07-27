@@ -360,7 +360,7 @@ namespace aether::app
 				if (auto* csharp = services.TryGet<scripting::CSharpScriptingSubsystem>())
 				{
 					networkRef.SetFieldBridge(std::make_unique<aether::net::CSharpScriptFieldBridge>(*csharp, *scriptPtr));
-					networkRef.SetRpcBridge(std::make_unique<aether::net::CSharpRpcBridge>(*csharp, *scriptPtr));
+					networkRef.SetRpcBridge(std::make_unique<aether::net::CSharpRpcBridge>(*csharp, *scriptPtr, services));
 				}
 
 				// After scripts, so a burst a script queues this frame emits now.

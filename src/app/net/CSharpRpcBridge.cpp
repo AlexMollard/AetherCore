@@ -1,7 +1,9 @@
 #include "net/CSharpRpcBridge.hpp"
 
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/SceneContext.hpp"
 #include "systems/ScriptComponentSystem.hpp"
+#include "utils/ServiceContainer.hpp"
 
 namespace aether::net
 {
@@ -26,6 +28,23 @@ namespace aether::net
 		{
 			return; // no live instance yet (not attached, or edit mode)
 		}
+
+		// An RPC body is ordinary script code: it calls Net.*, Entity.*, Ui.* like any
+		// other callback, and every one of those exports dereferences the active scene
+		// context. An INBOUND call arrives on the network system's tick, where nothing
+		// has published one - so without this scope the first engine call the method
+		// makes takes the process down (an access violation inside the P/Invoke, with
+		// the managed stack as the only clue). The locally-routed case already runs
+		// inside a script update; the scope restores rather than clears, so nesting
+		// there is harmless.
+		auto* sceneCtx = m_services.TryGet<aether::app::scripting::SceneContext>();
+		if (sceneCtx == nullptr)
+		{
+			// No scene context registered at all (a headless/tools build). Better to
+			// drop the call than to invoke script code that cannot reach the engine.
+			return;
+		}
+		const aether::app::scripting::ActiveContextScope scope(*sceneCtx);
 		m_scripting.InvokeNetRpc(handle, static_cast<int>(methodIndex), args);
 	}
 } // namespace aether::net

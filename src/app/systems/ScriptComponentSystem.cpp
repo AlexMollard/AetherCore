@@ -38,21 +38,10 @@ namespace aether::app
 			return static_cast<std::uint32_t>(key & 0xffffffffu);
 		}
 
-		struct ActiveContextScope
-		{
-			explicit ActiveContextScope(scripting::SceneContext& ctx)
-			{
-				scripting::g_activeContext = &ctx;
-			}
-
-			~ActiveContextScope()
-			{
-				scripting::g_activeContext = nullptr;
-			}
-
-			ActiveContextScope(const ActiveContextScope&) = delete;
-			ActiveContextScope& operator=(const ActiveContextScope&) = delete;
-		};
+		// ActiveContextScope now lives in SceneContext.hpp: the RPC bridge needs the
+		// same guard around its own managed dispatch, and two definitions of "publish
+		// the active context" would be two places to get the restore rule wrong.
+		using scripting::ActiveContextScope;
 	} // namespace
 
 	ScriptComponentSystem::~ScriptComponentSystem()

@@ -47,6 +47,9 @@ add_executable(EngineTests
     # so it is the half of the framework most worth pinning.
     "${CMAKE_SOURCE_DIR}/src/app/net/NetworkContext.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetworkSystems.cpp"
+    # The one definition of g_activeContext, which ActiveContextScope publishes and
+    # every script/RPC callback path depends on.
+    "${CMAKE_SOURCE_DIR}/src/app/scripting/SceneContext.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
