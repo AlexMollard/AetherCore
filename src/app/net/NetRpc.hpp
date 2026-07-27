@@ -156,6 +156,19 @@ namespace aether::net
 		std::vector<ConnectionId> recipients;
 	};
 
+	// Whether an explicit call-site target contradicts the method's [NetRpc]
+	// declaration. `expectedTarget` is the raw integer Net.CallServer sends across
+	// interop: negative means "whatever the method declares" (Net.Call), so only a
+	// non-negative value that differs from the declaration is a mismatch, and a
+	// mismatch is refused rather than re-routed - the call site and the declaration
+	// disagree, and silently picking a winner would make one of the two a lie.
+	//
+	// A predicate rather than an inline comparison in NetRpcExports.cpp because that
+	// TU is CLR-linked and EngineTests cannot link it, so the refusal it guards had no
+	// way of being tested where it lived. RouteRpc never sees `expectedTarget` either,
+	// so nothing else covered it.
+	[[nodiscard]] bool RpcTargetMismatch(std::int32_t expectedTarget, NetRpcTarget declared);
+
 	// The delivery plan for calling `target` on `entity` from THIS peer.
 	//
 	//   Offline           any target -> local invoke. A single-player build runs

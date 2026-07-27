@@ -113,6 +113,11 @@ namespace aether::net
 		bridge.Invoke(entity, *scriptIndex, msg.methodIndex, msg.args);
 	}
 
+	bool RpcTargetMismatch(std::int32_t expectedTarget, NetRpcTarget declared)
+	{
+		return expectedTarget >= 0 && expectedTarget != static_cast<std::int32_t>(declared);
+	}
+
 	RpcRoute RouteRpc(const World& world, const NetSession& session, NetRpcTarget target, Entity entity)
 	{
 		RpcRoute route;

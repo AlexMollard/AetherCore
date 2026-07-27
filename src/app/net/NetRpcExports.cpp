@@ -91,11 +91,11 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 		{
 			continue;
 		}
-		if (expectedTarget >= 0 && expectedTarget != static_cast<std::int32_t>(method.target))
+		if (aether::net::RpcTargetMismatch(expectedTarget, method.target))
 		{
-			// Net.CallServer naming a method that declares Client or Multicast. Refuse
-			// rather than re-route: the call site and the declaration disagree, and
-			// picking a winner silently would make one of the two a lie.
+			// Net.CallServer naming a method that declares Client or Multicast. The
+			// rule lives in NetRpc.cpp so it is reachable from EngineTests - this TU is
+			// CLR-linked and cannot be.
 			return 0;
 		}
 

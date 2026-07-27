@@ -576,3 +576,44 @@ TEST_CASE("Offline every target runs locally")
 		CHECK(route.recipients.empty());
 	}
 }
+
+TEST_CASE("An explicit call-site target that contradicts the declaration is a mismatch")
+{
+	// The Net.CallServer guard, which used to live inline in NetRpcExports.cpp - a
+	// CLR-linked TU EngineTests cannot link - and which RouteRpc never sees, so the
+	// refusal had no coverage anywhere. Extracted as a predicate precisely so it can
+	// have some.
+
+	// Net.Call passes -1: the declaration is the only opinion, whatever it declares.
+	for (const net::NetRpcTarget declared:
+	        {net::NetRpcTarget::Server, net::NetRpcTarget::Client, net::NetRpcTarget::Multicast})
+	{
+		CAPTURE(static_cast<std::uint32_t>(declared));
+		CHECK_FALSE(net::RpcTargetMismatch(-1, declared));
+	}
+
+	// Net.CallServer passes Server: it agrees only with a method that declares Server.
+	constexpr auto kServer = static_cast<std::int32_t>(net::NetRpcTarget::Server);
+	CHECK_FALSE(net::RpcTargetMismatch(kServer, net::NetRpcTarget::Server));
+	CHECK(net::RpcTargetMismatch(kServer, net::NetRpcTarget::Client));
+	CHECK(net::RpcTargetMismatch(kServer, net::NetRpcTarget::Multicast));
+
+	// Every other explicit spelling agrees with exactly its own declaration. Written
+	// as a matrix rather than as the two rows Net.CallServer happens to use today, so
+	// a second explicit helper cannot arrive uncovered.
+	for (const net::NetRpcTarget expected:
+	        {net::NetRpcTarget::Server, net::NetRpcTarget::Client, net::NetRpcTarget::Multicast})
+	{
+		for (const net::NetRpcTarget declared:
+		        {net::NetRpcTarget::Server, net::NetRpcTarget::Client, net::NetRpcTarget::Multicast})
+		{
+			CAPTURE(static_cast<std::uint32_t>(expected));
+			CAPTURE(static_cast<std::uint32_t>(declared));
+			CHECK(net::RpcTargetMismatch(static_cast<std::int32_t>(expected), declared) == (expected != declared));
+		}
+	}
+
+	// A value no enumerator has - an assembly built against a newer NetRpcTarget than
+	// this binary knows. It matches nothing, so it is refused rather than coerced.
+	CHECK(net::RpcTargetMismatch(99, net::NetRpcTarget::Server));
+}
