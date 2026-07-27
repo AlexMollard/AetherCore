@@ -469,6 +469,39 @@ TEST_CASE("A host-to-client RPC inbound on the host is dropped")
 	}
 }
 
+TEST_CASE("On the host the direction gate and the ownership gate each refuse on their own")
+{
+	// The case above changes TWO things at once between its drop and its positive
+	// control - the target byte AND the role - so it proves the bytes are well-formed
+	// but not that, on the host, with ownership already satisfied, the target byte
+	// alone decides. That left the two gates only ever agreeing, and a build with
+	// either one deleted still passed every host-side direction case.
+	//
+	// One fixture, one entity, one owner; exactly one variable moves per row:
+	//   owner  + Server  -> dispatched   (both gates pass: the positive control)
+	//   owner  + Client  -> refused      (ownership passes, direction refuses)
+	//   other  + Server  -> refused      (direction passes, ownership refuses)
+	Endpoint host;
+	host.BecomeHost();
+	FakeRpcCounter* bridge = AttachRpcTarget(host, 8, kPeer);
+
+	const std::vector<std::byte> serverCall = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	        aether::net::NetRpcTarget::Server, {});
+	const std::vector<std::byte> clientCall = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	        aether::net::NetRpcTarget::Client, {});
+
+	host.receive.OnData(host.world, kPeer, serverCall);
+	CHECK(bridge->Invocations() == 1);
+
+	// Same sender, same entity, same owner - only the declared direction differs.
+	host.receive.OnData(host.world, kPeer, clientCall);
+	CHECK(bridge->Invocations() == 1); // unchanged: the direction gate alone refused
+
+	// Same direction as the call that worked - only the sender differs.
+	host.receive.OnData(host.world, kPeer + 1, serverCall);
+	CHECK(bridge->Invocations() == 1); // unchanged: the ownership gate alone refused
+}
+
 TEST_CASE("A Server-target RPC inbound on a client is dropped")
 {
 	// The other direction. A Server call is one a client sends, never one it
@@ -535,7 +568,13 @@ TEST_CASE("An unknown leading byte is discarded without touching anything")
 	client.receive.OnData(client.world, kPeer, aether::net::NetworkContext::EncodeWelcome(5));
 	const Entity entity = client.Replicate(1, {4.f, 5.f, 6.f});
 
-	for (const std::uint8_t leading: {std::uint8_t{0}, std::uint8_t{7}, std::uint8_t{99}, std::uint8_t{255}})
+	// 7 used to be in this list and is now NetMessage::Relevancy, so the case kept
+	// passing while no longer meaning anything: the packet decoded as a valid
+	// relevancy leave for an unbound net id, which is a no-op for entirely different
+	// reasons. Derived from the enum's own bound instead, so the first genuinely
+	// unassigned value is always the one tested.
+	constexpr auto kFirstUnassigned = static_cast<std::uint8_t>(aether::net::kNetMessageMax + 1);
+	for (const std::uint8_t leading: {std::uint8_t{0}, kFirstUnassigned, std::uint8_t{99}, std::uint8_t{255}})
 	{
 		aether::net::ByteWriter w;
 		w.U8(leading);
@@ -556,7 +595,15 @@ TEST_CASE("An empty packet and a lone kind byte are safe on both roles")
 {
 	// Every decoder past the switch reads from a zero-length payload here. They are
 	// bounds-checked and report failure rather than throwing - this pins that.
-	const std::vector<std::uint8_t> kinds{1, 2, 3, 4, 5, 6};
+	//
+	// Built from the enum's own bound rather than written out: the hand-written
+	// {1..6} silently stopped covering the newest kind the moment Relevancy was
+	// added, so DecodeRelevancyLeave on an empty payload was never fed anything.
+	std::vector<std::uint8_t> kinds;
+	for (std::uint8_t kind = 1; kind <= aether::net::kNetMessageMax; ++kind)
+	{
+		kinds.push_back(kind);
+	}
 
 	{
 		Endpoint host;

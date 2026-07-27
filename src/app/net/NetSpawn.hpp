@@ -24,7 +24,7 @@ namespace aether::net
 	// hands data.subspan(1) to the decoder).
 	//
 	// WHO WRITES THE KIND BYTE is not uniform, and it is load-bearing - adding a
-	// kind 7 without matching one of these two conventions produces a packet the
+	// kind without matching one of these two conventions produces a packet the
 	// receiver misparses with no error:
 	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy.
 	//     Their encoders lead with w.U8(kind), so the sender passes the result
@@ -42,6 +42,20 @@ namespace aether::net
 		ScriptFields = 6,
 		Relevancy = 7,
 	};
+
+	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
+	// NetRpc.hpp. Kinds are numbered contiguously from 1, so this is also how many
+	// there are.
+	//
+	// It exists so the framing coverage check in NetFramingTests can be a
+	// static_assert instead of a hand-maintained count. That test claims a kind added
+	// without being classified "fails here rather than silently going untested", and
+	// against a hand-written array that claim was FALSE - kind 7 was added and the
+	// array stayed at 6, so Relevancy's framing went untested exactly as the comment
+	// promised it could not. Anchored to the enum, adding kind 8 without a row breaks
+	// the BUILD, which is the only version of that promise worth making. Keep this on
+	// the last enumerator.
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Relevancy);
 
 	// Prefixes `payload` with its NetMessage byte - the WRAPPED half of the
 	// convention above. NetworkContext::Frame is a thin forwarder to this, so both
