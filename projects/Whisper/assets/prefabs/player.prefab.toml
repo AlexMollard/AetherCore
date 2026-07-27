@@ -78,3 +78,6 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'NetPlayerSync'
+
+    [[entities.scripts]]
+    type = 'NameTag'
