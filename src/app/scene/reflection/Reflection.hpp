@@ -47,6 +47,10 @@ namespace aether::reflect
 		float speed = 0.0f;
 		bool isAngleDegrees = false;
 		bool serialize = true;
+		// Marks the field for network replication. One flag here is what makes
+		// "mark it replicated" a one-line change in the same declaration that
+		// already drives MCP, the inspector and the serializer.
+		bool replicated = false;
 		const EnumTable* enumTable = nullptr;
 		std::string tooltip;
 		// TOML key to serialize under, when it differs from the field name (e.g. an
@@ -451,6 +455,9 @@ namespace aether::reflect
 
 #define AE_FIELD_N(name, member, TypeTag) b.Field(name, ::aether::reflect::FieldType::TypeTag, &C::member);
 
+// Replicated counterpart of AE_FIELD_N: identical, plus the network schema picks it up.
+#define AE_FIELD_REP(name, member, TypeTag) b.Field(name, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.replicated = true});
+
 #define AE_FIELD_R(member, TypeTag, lo, hi) \
 	b.Field(#member, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.min = (lo), .max = (hi)});
 
@@ -463,6 +470,10 @@ namespace aether::reflect
 
 #define AE_FIELD_CUSTOM(name, TypeTag, getLambda, setLambda) \
 	b.CustomField(name, ::aether::reflect::FieldType::TypeTag, getLambda, setLambda);
+
+// Replicated counterpart of AE_FIELD_CUSTOM: identical, plus the network schema picks it up.
+#define AE_FIELD_CUSTOM_REP(name, TypeTag, getLambda, setLambda) \
+	b.CustomField(name, ::aether::reflect::FieldType::TypeTag, getLambda, setLambda, ::aether::reflect::FieldMeta{.replicated = true});
 
 // so the preprocessor never sees their commas).
 #define AE_FIELD_ENUM(name, member, tableRef) b.EnumField(name, &C::member, tableRef);

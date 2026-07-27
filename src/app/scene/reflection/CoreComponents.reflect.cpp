@@ -258,7 +258,7 @@ AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(TransformComponent, "Transform", "Core", ICON_FA_UP_DOWN_LEFT_RIGHT)
-AE_FIELD_CUSTOM(
+AE_FIELD_CUSTOM_REP(
         "position",
         Vec3,
         [](const void* c)
@@ -278,7 +278,7 @@ AE_FIELD_CUSTOM(
 	        DecomposeTRS(t->localToWorld, p, e, s);
 	        t->localToWorld = ComposeTransform(glm::vec3(v.vec), e, s);
         })
-AE_FIELD_CUSTOM(
+AE_FIELD_CUSTOM_REP(
         "euler",
         Vec3,
         [](const void* c)
