@@ -74,6 +74,17 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'Session'
+node = 4471903355277188611
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'WhisperSession'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn3'
 node = 6110158631851107524
 parent = -1

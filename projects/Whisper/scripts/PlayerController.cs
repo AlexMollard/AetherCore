@@ -37,6 +37,7 @@ public sealed class PlayerController : EntityScript
     private float _sinceJumpPressed = 99.0f;
     private string _anim = "";
     private bool _jumpCutDone;
+    private bool _nameReported;
 
     // Squash & stretch is purely visual (drives the sprite quad size, never the
     // collider): stretch while airborne, squash impulse on landing, eased back.
@@ -55,6 +56,16 @@ public sealed class PlayerController : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
+        // Every client runs this script on every player entity, including other
+        // people's. Only the owner reads input; the rest are driven by replication.
+        // Net.IsOwner is true offline, so single-player is unaffected.
+        if (!Net.IsOwner(Self))
+        {
+            return;
+        }
+
+        ReportNameOnce();
+
         // Frozen by a pause: scripts still tick at dt=0, so skip input/movement
         // entirely (otherwise a jump pressed while frozen would buffer).
         if (Time.IsPaused)
@@ -145,6 +156,48 @@ public sealed class PlayerController : EntityScript
         {
             Respawn();
         }
+    }
+
+    // ── Networking ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Client -> host: adopt the name this player chose on the connect screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This lives on the player rather than on <see cref="WhisperSession"/> because
+    /// the host only accepts a server RPC aimed at an entity the SENDING connection
+    /// owns. The session entity is scene-placed and host-owned, so a call on it would
+    /// be dropped by that ownership gate; the caller's own player is the one entity it
+    /// is entitled to drive.
+    /// </para>
+    /// <para>
+    /// <c>NetPlayer.displayName</c> is a replicated field, so the host writing it here
+    /// is all that is needed - the value reaches every other client on the next
+    /// snapshot with no further code.
+    /// </para>
+    /// </remarks>
+    /// <param name="name">The chosen display name; blanks fall back to "Player".</param>
+    [NetRpc(NetRpcTarget.Server)]
+    public void SubmitName(string name)
+    {
+        string trimmed = (name ?? string.Empty).Trim();
+        Net.SetPlayerName(Self, trimmed.Length == 0 ? "Player" : trimmed);
+    }
+
+    /// <summary>Tell the host who we are, once, as soon as the call can be routed.
+    /// Retried every frame until it is: this entity needs a live net id before the
+    /// call has anything to address on the far end, and the id arrives with the
+    /// spawn that created it, which may not have landed on the first tick.</summary>
+    private void ReportNameOnce()
+    {
+        if (_nameReported || !Net.IsClient)
+        {
+            // The host sets its own player's name directly (WhisperSession), and
+            // offline there is nobody to tell.
+            return;
+        }
+        _nameReported = Net.Call(Self, nameof(SubmitName), WhisperSession.LocalPlayerName);
     }
 
     /// <summary>Snap back to the entity's starting position after falling out of

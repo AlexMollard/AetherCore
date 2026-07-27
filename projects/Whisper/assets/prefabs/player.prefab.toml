@@ -1,7 +1,11 @@
 # Whisper test player: run/jump platformer body borrowed from INKBOUND
-# (PlayerController.cs, pruned of checkpoints/ink/death-melt). Single-player
-# only for now - no NetworkIdentity/NetworkTransform/NetPlayer here, those
-# land in Task 5.
+# (PlayerController.cs, pruned of checkpoints/ink/death-melt), plus the three
+# networking components every replicated player needs.
+#
+# `network_identity` is deliberately an empty table: netId/owner/spawnPrefab are
+# runtime state the host assigns at Net.Spawn, and authoring them here would fight
+# that. The table's PRESENCE is the whole point - it is the "this entity is
+# replicated" mark.
 [[entities]]
 name = 'Player'
 parent = -1
@@ -23,6 +27,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     restitution = 0.0
     shape = 'box'
     size = [ 1.0, 1.3 ]
+
+    [entities.net_player]
+    display_name = ''
+
+    [entities.network_identity]
+
+    [entities.network_transform]
+    correction_rate = 12.0
+    interpolation_delay = 0.10000000000000001
+    snap_distance = 4.0
 
     [entities.rigid_body_2d]
     allow_sleeping = true

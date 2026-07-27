@@ -30,6 +30,19 @@ public sealed class ConnectScreen : EntityScript
     public ushort DefaultPort = 7777;
 
     /// <inheritdoc/>
+    public override void OnAttach()
+    {
+        // Explain an involuntary return - the arena sends us back here when the host
+        // goes away, and an unexplained title screen looks like a crash. Consumed on
+        // read so a later voluntary visit is not still apologising for it.
+        if (WhisperSession.StatusMessage.Length > 0)
+        {
+            Ui.SetText(StatusText, WhisperSession.StatusMessage);
+            WhisperSession.StatusMessage = "";
+        }
+    }
+
+    /// <inheritdoc/>
     public override void OnUpdate(float deltaTime)
     {
         if (Ui.WasClicked(HostButton))

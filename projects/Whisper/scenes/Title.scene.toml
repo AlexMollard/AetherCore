@@ -38,23 +38,23 @@ scale = [ 1.0, 1.0, 1.0 ]
     type = 'ConnectScreen'
 
         [entities.scripts.properties.AddressField]
-        t = 'int'
+        t = 'entity'
         v = 2
 
         [entities.scripts.properties.HostButton]
-        t = 'int'
+        t = 'entity'
         v = 3
 
         [entities.scripts.properties.JoinButton]
-        t = 'int'
+        t = 'entity'
         v = 4
 
         [entities.scripts.properties.NameField]
-        t = 'int'
+        t = 'entity'
         v = 1
 
         [entities.scripts.properties.StatusText]
-        t = 'int'
+        t = 'entity'
         v = 5
 
 [[entities]]
