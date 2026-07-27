@@ -225,6 +225,9 @@ namespace aether
 			if (key >= 0 && key < kMaxKeys)
 			{
 				m_syntheticKeys[key] = down;
+				// Seed the live state too: Update() re-derives this from GLFW every frame, so
+				// this only matters where Update() is never called - windowless unit tests.
+				m_currKeys[key] = m_currKeys[key] || down;
 			}
 		}
 

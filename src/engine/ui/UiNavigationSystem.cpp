@@ -1,5 +1,6 @@
 #include "ui/UiNavigationSystem.hpp"
 
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <vector>
@@ -62,6 +63,18 @@ namespace aether::ui
 				}
 			}
 			return best;
+		}
+
+		// Reading order: top-to-bottom, then left-to-right. Rows are compared with a tolerance so
+		// controls that are visually on one line do not reorder because of a pixel of drift.
+		bool BeforeInReadingOrder(const glm::vec4& a, const glm::vec4& b)
+		{
+			constexpr float kRowTolerance = 8.f;
+			if (std::fabs(a.y - b.y) > kRowTolerance)
+			{
+				return a.y < b.y;
+			}
+			return a.x < b.x;
 		}
 	} // namespace
 
@@ -135,8 +148,13 @@ namespace aether::ui
 			focused = hovered;
 		}
 
+		// An element that has claimed the keyboard (a text field being edited) keeps the keys the
+		// nav system would otherwise spend: arrows must move its caret, Enter must submit to it.
+		// Tab is deliberately exempt - it is the guaranteed keyboard exit from a captured field.
+		const bool captured = focused.IsValid() && world.Has<UIKeyboardCapture>(focused);
+
 		// Keyboard: spatial move to the nearest selectable in the pressed direction.
-		if (focused.IsValid())
+		if (focused.IsValid() && !captured)
 		{
 			glm::vec4 focusedRect{};
 			for (const Candidate& c: cands)
@@ -177,9 +195,40 @@ namespace aether::ui
 			}
 		}
 
+		// Tab cycles focus in reading order - what a connect form needs (address, port, connect).
+		if (input.IsKeyPressed(Key::Tab) && !cands.empty())
+		{
+			const bool backwards = input.IsKeyDown(Key::LeftShift) || input.IsKeyDown(Key::RightShift);
+			std::vector<Candidate> ordered;
+			for (const Candidate& c: cands)
+			{
+				if (c.interactable)
+				{
+					ordered.push_back(c);
+				}
+			}
+			std::sort(ordered.begin(), ordered.end(),
+			        [](const Candidate& a, const Candidate& b) { return BeforeInReadingOrder(a.rect, b.rect); });
+			if (!ordered.empty())
+			{
+				std::size_t index = 0;
+				for (std::size_t i = 0; i < ordered.size(); ++i)
+				{
+					if (ordered[i].entity == focused)
+					{
+						index = i;
+						break;
+					}
+				}
+				const std::size_t count = ordered.size();
+				index = backwards ? (index + count - 1) % count : (index + 1) % count;
+				focused = ordered[index].entity;
+			}
+		}
+
 		// Activation: Enter/Space on the focused element, or a left-click on the hovered one.
 		Entity toActivate{};
-		if ((input.IsKeyPressed(Key::Enter) || input.IsKeyPressed(Key::Space)) && focused.IsValid())
+		if (!captured && (input.IsKeyPressed(Key::Enter) || input.IsKeyPressed(Key::Space)) && focused.IsValid())
 		{
 			toActivate = focused;
 		}

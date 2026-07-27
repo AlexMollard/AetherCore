@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include "material/TextureHandle.hpp"
+#include "ui/UiTextEdit.hpp"
 
 namespace aether::ui
 {
@@ -147,6 +148,52 @@ namespace aether::ui
 	{
 		bool enabled = true;
 		float padding = 0.f; // shrink the clip inwards on every side
+	};
+
+	// While the focused element carries this, UiNavigationSystem yields its keys: arrows, Enter
+	// and Space reach the element instead of moving or activating focus. Tab still navigates, so
+	// there is always a keyboard way out. A marker rather than a flag on UITextBox, so a future
+	// dropdown or spinner claims the keyboard the same way without nav learning new types.
+	struct UIKeyboardCapture
+	{
+	};
+
+	// Interactive single-line text field. One entity: the draw builder renders background, text,
+	// selection and caret, and UiTextBoxSystem drives editing. Composes a UISelectable for focus
+	// (added by the reflection PostSet hook). Editing logic lives in UiTextEdit as pure functions.
+	struct UITextBox
+	{
+		std::string text;
+		std::string placeholder;
+		std::string fontName = "Roboto";
+		std::string allowedChars; // non-empty = whitelist, ANDed with contentType
+		TextContentType contentType = TextContentType::Any;
+		int maxLength = 0;   // 0 = unlimited
+		bool password = false;
+		float pixelSize = 20.f;
+		float cornerRadius = 4.f;
+		float padding = 8.f;
+		glm::vec4 bgColor{0.07f, 0.08f, 0.10f, 1.f};
+		glm::vec4 bgColorFocused{0.10f, 0.12f, 0.16f, 1.f};
+		glm::vec4 textColor{0.90f, 0.94f, 1.f, 1.f};
+		glm::vec4 placeholderColor{0.45f, 0.48f, 0.55f, 1.f};
+		glm::vec4 caretColor{0.30f, 0.85f, 1.f, 1.f};
+		glm::vec4 selectionColor{0.20f, 0.45f, 0.70f, 1.f};
+
+		// runtime, never authored
+		bool editing = false;
+		bool changed = false;   // text changed this frame
+		bool submitted = false; // Enter committed this frame
+		bool cancelled = false; // Escape reverted this frame
+		bool dragging = false;  // mouse selection drag in progress
+		int caret = 0;
+		int selectionAnchor = 0;
+		float scrollX = 0.f;
+		float caretTimer = 0.f;
+		float repeatTimer = 0.f;
+		int repeatKey = 0;              // GLFW code of the key currently repeating (0 = none)
+		std::string committedText;      // snapshot taken on edit entry, restored by Escape
+		double lastClickTime = -1.0;    // for double-click word select
 	};
 
 	// A UI element drawn by its OWN shader pipeline ("shaders://<shader>.spv"), on top of the
