@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -51,16 +52,33 @@ AE_SCRIPT_API std::int32_t aether_net_call_server(std::uint32_t entityId, const 
 		return 0;
 	}
 
-	const aether::net::CSharpRpcBridge bridge{*scripting, *instances};
 	const std::string methodName = methodNameUtf8;
 	const std::size_t argCount = (argLen > 0 && argBlob != nullptr) ? static_cast<std::size_t>(argLen) : 0;
 	const std::span<const std::byte> args(reinterpret_cast<const std::byte*>(argBlob), argCount);
 
 	auto* network = ctx.services->TryGet<aether::net::NetworkContext>();
+	// Borrow the context's cached bridge - it holds the per-type [NetRpc] method
+	// table a per-call temporary would rebuild. A single-player build registers no
+	// NetworkContext at all, so fall back to a local one for the offline path.
+	std::optional<aether::net::CSharpRpcBridge> ownedBridge;
+	const aether::net::RpcBridge* bridgePtr = network != nullptr ? network->Rpcs() : nullptr;
+	if (bridgePtr == nullptr)
+	{
+		bridgePtr = &ownedBridge.emplace(*scripting, *instances);
+	}
+	const aether::net::RpcBridge& bridge = *bridgePtr;
+
 	const bool remote = network != nullptr && network->IsClient();
 	// A client can only ask about an entity the host also knows; an unbound one has
 	// no name on the wire, so the call would arrive addressed to nothing.
 	const std::uint32_t netId = remote ? network->Session().NetIdFor(entity) : 0;
+	if (remote && netId == 0)
+	{
+		// Fail the call rather than fall through and run it here. A server
+		// -authoritative RPC that silently becomes a client-local one is worse than a
+		// dropped one: it runs against unreplicated local state and reports success.
+		return 0;
+	}
 
 	// First script attached to the entity whose [NetRpc] table names this method
 	// wins - mirrors NetScriptFields' "first entry wins" simplification for a
@@ -75,7 +93,7 @@ AE_SCRIPT_API std::int32_t aether_net_call_server(std::uint32_t entityId, const 
 			continue;
 		}
 
-		if (remote && netId != 0)
+		if (remote)
 		{
 			// The method index is resolved from THIS peer's assembly; the host resolves
 			// the script by type hash and bounds-checks the index against its own table,

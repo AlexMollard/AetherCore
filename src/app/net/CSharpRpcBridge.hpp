@@ -39,7 +39,7 @@ namespace aether::net
 		// type is unknown or declares no such RPC. Used by the encode side (a caller
 		// building an outbound call, e.g. Net.CallServer's native half) to turn a
 		// method name into the index that goes on the wire.
-		[[nodiscard]] int FindMethodIndex(const std::string& typeName, const std::string& methodName) const;
+		[[nodiscard]] int FindMethodIndex(const std::string& typeName, const std::string& methodName) const override;
 
 		// Invokes RPC method `methodIndex` on the live instance of
 		// ScriptComponent::scripts[scriptIndex] on `entity`. A silent no-op when

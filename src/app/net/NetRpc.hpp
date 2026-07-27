@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "net/NetScriptFields.hpp" // ScriptTypeHash - reused rather than redefined, see NetRpc.cpp
@@ -49,6 +50,13 @@ namespace aether::net
 		RpcBridge(RpcBridge&&) = delete;
 		RpcBridge& operator=(RpcBridge&&) = delete;
 
+		// Index of `methodName` in `typeName`'s [NetRpc] method table, or -1 if the
+		// type is unknown or declares no such RPC. The encode side: turns a method
+		// name into the index that goes on the wire. Part of the interface so a
+		// caller building an outbound call can use the cached bridge
+		// (NetworkContext::Rpcs) instead of constructing a concrete one.
+		[[nodiscard]] virtual int FindMethodIndex(const std::string& typeName, const std::string& methodName) const = 0;
+
 		// Invokes RPC method `methodIndex` on the live instance of
 		// ScriptComponent::scripts[scriptIndex] on `entity`. A silent no-op when
 		// there is no live instance (not attached, or edit mode).
@@ -64,5 +72,15 @@ namespace aether::net
 	// to scriptTypeHash. An out-of-range methodIndex is bounds-checked on the other
 	// side of `bridge` (the managed dispatch), since only the CLR side can see a
 	// script assembly that reloaded with a shorter [NetRpc] table.
-	void ApplyRpc(World& world, NetSession& session, const RpcBridge& bridge, const RpcMessage& msg);
+	//
+	// OWNERSHIP GATE. RPC is the ONLY channel by which a client can affect host state
+	// (every other inbound message is dropped by a role guard), so on the host the
+	// call is additionally rejected unless the target entity carries a
+	// NetworkIdentity whose `owner` is `sender`. Without it any connected client
+	// could invoke any [NetRpc] method on any replicated entity - another player's
+	// TakeDamage, Respawn, whatever the project marks up. `localIsHost` selects the
+	// gate: a client applying a host-sent call is not owner-checked (the host is
+	// authoritative over everything), and `sender` is ignored there.
+	void ApplyRpc(World& world, NetSession& session, const RpcBridge& bridge, const RpcMessage& msg,
+	        ConnectionId sender, bool localIsHost);
 } // namespace aether::net

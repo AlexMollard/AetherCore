@@ -155,7 +155,7 @@ namespace aether::net
 		{
 			// The link to the host dropped. Tear the session down rather than keep a
 			// half-live client applying nothing.
-			context.Stop();
+			context.Stop(world);
 			m_remote.clear();
 			AE_INFO(LogCategory::App, "Net: disconnected from host");
 			return;
@@ -248,8 +248,12 @@ namespace aether::net
 
 		case NetMessage::Rpc:
 		{
-			// The one message that travels in both directions: a client asks the host
-			// to run something, and the host tells clients something happened.
+			// Client to host only, today: Net.CallServer is the single send path
+			// (NetRpcExports.cpp), and nothing dispatches host to client - see the
+			// note on NetRpcTarget in managed/AetherCore/NetAttributes.cs. The decode
+			// path is direction-agnostic so adding that later needs no change here,
+			// but the ownership gate below is what makes the inbound half safe: it is
+			// the only route by which a client can affect host state at all.
 			ByteReader reader{payload};
 			const std::optional<RpcMessage> msg = DecodeRpc(reader);
 			if (!msg.has_value())
@@ -258,7 +262,7 @@ namespace aether::net
 			}
 			if (const RpcBridge* bridge = context.Rpcs())
 			{
-				ApplyRpc(world, context.Session(), *bridge, *msg);
+				ApplyRpc(world, context.Session(), *bridge, *msg, peer, context.IsHost());
 			}
 			return;
 		}

@@ -1,5 +1,6 @@
 #include "net/NetRpc.hpp"
 
+#include "net/NetComponents.hpp"
 #include "net/NetSession.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
@@ -58,12 +59,23 @@ namespace aether::net
 		return msg;
 	}
 
-	void ApplyRpc(World& world, NetSession& session, const RpcBridge& bridge, const RpcMessage& msg)
+	void ApplyRpc(World& world, NetSession& session, const RpcBridge& bridge, const RpcMessage& msg,
+	        ConnectionId sender, bool localIsHost)
 	{
 		const Entity entity = session.EntityFor(msg.netId);
 		if (!entity.IsValid())
 		{
 			return;
+		}
+		if (localIsHost)
+		{
+			// A client may only drive what it owns. An entity with no NetworkIdentity
+			// is not a replicated entity at all, so nothing a peer says addresses it.
+			const auto* identity = world.TryGet<NetworkIdentity>(entity);
+			if (identity == nullptr || identity->owner != sender)
+			{
+				return;
+			}
 		}
 		const auto* scripts = world.TryGet<ScriptComponent>(entity);
 		if (scripts == nullptr)
