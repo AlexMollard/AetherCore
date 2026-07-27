@@ -73,8 +73,15 @@ public static class Camera
     public static Vector3 ScreenToWorld(Vector2 screenPos) => Native.aether_camera_screen_to_world(screenPos);
 
     /// <summary>Project a world position to render-target pixels (top-left origin),
-    /// matching <see cref="Input.MousePosition"/> and the UI canvas space - so the
-    /// result can be handed straight to <c>Ui.SetRect</c>. Returns (-1, -1) when the
-    /// position is behind the camera, so a caller can cull with one comparison.</summary>
+    /// matching <see cref="Input.MousePosition"/> and the UI canvas space. Returns
+    /// (-1, -1) when the position is behind the camera, so a caller can cull with one
+    /// comparison.</summary>
+    /// <remarks>
+    /// To drive a UI element from this, anchor it to the top-left first
+    /// (<c>Ui.SetAnchors(e, Vector2.Zero, Vector2.Zero)</c>): <c>Ui.SetRect</c> takes
+    /// x/y as an offset FROM the element's anchor, and elements default to
+    /// centre-anchored, so passing these pixels to a freshly created element without
+    /// re-anchoring puts it half a screen away from the intended point.
+    /// </remarks>
     public static Vector2 WorldToScreen(Vector3 worldPos) => Native.aether_camera_world_to_screen(worldPos);
 }
