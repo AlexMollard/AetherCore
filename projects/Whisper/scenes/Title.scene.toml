@@ -5,7 +5,7 @@ sky_horizon = [ 0.34000000000000002, 0.52000000000000002, 0.81999999999999995 ]
 sky_void = [ 0.001, 0.002, 0.0050000000000000001 ]
 sky_zenith = [ 0.080000000000000002, 0.19, 0.45000000000000001 ]
 sun_color = [ 1.0, 0.95999999999999996, 0.90000000000000002 ]
-sun_direction = [ 0.57735029999999998, 0.57735029999999998, 0.57735029999999998 ]
+sun_direction = [ 0.57735026, 0.57735026, 0.57735026 ]
 sun_intensity = 3.0
 
 [scene]
@@ -221,3 +221,30 @@ scale = [ 1.0, 1.0, 1.0 ]
     text = ''
     v_align = 'middle'
     wrap = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 5426089052944043011
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    background = 'sky_gradient'
+    clear_color = [ 0.10000000000000001, 0.10000000000000001, 0.12 ]
+    far = 1000.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.10000000000000001
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.050000000000000003, 0.059999999999999998, 0.10000000000000001 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.029999999999999999 ]
+        position = 1.0

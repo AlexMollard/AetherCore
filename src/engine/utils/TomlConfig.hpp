@@ -29,6 +29,15 @@ namespace aether
 		void Set(std::string_view key, float value);
 		void Set(std::string_view key, std::string_view value);
 
+		// Without this, Set(key, "some string") silently writes `true`: a const char*
+		// converts to bool by a standard conversion, which beats the user-defined
+		// conversion to string_view during overload resolution. Every string literal
+		// passed to Set would land in the bool overload and destroy the value.
+		void Set(std::string_view key, const char* value)
+		{
+			Set(key, std::string_view(value != nullptr ? value : ""));
+		}
+
 		[[nodiscard]] bool IsDirty() const
 		{
 			return m_dirty;

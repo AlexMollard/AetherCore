@@ -331,7 +331,17 @@ namespace aether::editor
 	{
 		TomlConfig config;
 		{
-			auto text = io::file_util::ReadText(SettingsPath(project));
+			const std::filesystem::path settingsPath = SettingsPath(project);
+			auto text = io::file_util::ReadText(settingsPath);
+			if (!text && std::filesystem::exists(settingsPath))
+			{
+				// The file is there but we could not read it. Carrying on would write a
+				// config built from nothing but the keys set below, silently destroying
+				// the project's paths, graphics and project sections. Refuse instead.
+				m_status = "Could not read project settings; refusing to overwrite " + settingsPath.generic_string();
+				AE_ERROR(LogCategory::App, "{}", m_status);
+				return;
+			}
 			if (text)
 			{
 				try
@@ -395,7 +405,18 @@ namespace aether::editor
 	{
 		TomlConfig config;
 		{
-			auto text = io::file_util::ReadText(PublishSettingsPath(project));
+			const std::filesystem::path settingsPath = PublishSettingsPath(project);
+			auto text = io::file_util::ReadText(settingsPath);
+			if (!text && std::filesystem::exists(settingsPath))
+			{
+				// Same hazard as SaveProjectSettings: this writes the SAME file, so a
+				// failed read here would replace the whole project file with nothing but
+				// the publish keys below.
+				m_publishStatus = "Could not read project settings; refusing to overwrite " + settingsPath.generic_string();
+				m_publishSucceeded = false;
+				AE_ERROR(LogCategory::App, "{}", m_publishStatus);
+				return;
+			}
 			if (text)
 			{
 				try
