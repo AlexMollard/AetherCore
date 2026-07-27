@@ -60,6 +60,20 @@ TEST_CASE("The buffer discards samples far older than the render window")
 	}
 	// Unbounded growth over a long session is a leak; the buffer keeps a bounded window.
 	CHECK(buf.Size() <= 64);
+
+	// ...and it must keep the NEWEST samples. A trim from the wrong end would still
+	// leave 64 entries and pass the size check above while silently discarding exactly
+	// the samples the renderer needs, so assert the recent end survived and the ancient
+	// one did not.
+	const auto recent = buf.Sample(199.f * 0.05f);
+	REQUIRE(recent.has_value());
+	CHECK(recent->position.x == doctest::Approx(199.f));
+
+	// Sampling before the retained window holds the oldest SURVIVING sample, which must
+	// be far newer than sample 0 - if the old end had been kept this would be near 0.
+	const auto oldest = buf.Sample(0.f);
+	REQUIRE(oldest.has_value());
+	CHECK(oldest->position.x > 100.f);
 }
 
 TEST_CASE("EaseToward converges, and snaps past the snap distance")
