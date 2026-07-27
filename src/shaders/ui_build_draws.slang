@@ -6,7 +6,7 @@
 
 #include "include/UIStructs.slangh"
 
-static const uint kMaxLocalSort = 256u;
+static const uint kMaxLocalSort = 192u;
 static const uint kThreads      = 256u;
 
 struct BuildPush
@@ -25,8 +25,12 @@ struct BuildPush
 // Single dispatch of kThreads threads.  Loads elements into groupshared memory,
 // runs a full in-workgroup bitonic sort, then writes back.
 
-// 256 x sizeof(DrawCommandData) = 256 x 80 = 20 KB of groupshared, against a 32 KB floor.
-// Growing DrawCommandData past 128 bytes/element would exceed it - size the sort, don't assume.
+// Vulkan only GUARANTEES maxComputeSharedMemorySize = 16384 bytes. Desktop parts usually offer
+// 32 KB or more, but nothing queries the limit, so this has to fit the guarantee:
+//   192 x sizeof(DrawCommandData) = 192 x 80 = 15360 bytes <= 16384.
+// pc.N is padded to a power of two, so the local path really covers N <= 128; the global path
+// takes everything above it, which is why moving this threshold is a perf choice, not a
+// correctness one. Grow DrawCommandData and kMaxLocalSort must come down with it.
 groupshared DrawCommandData g_LocalData[kMaxLocalSort];
 
 [shader("compute")]

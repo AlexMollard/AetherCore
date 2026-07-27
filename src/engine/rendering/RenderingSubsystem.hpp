@@ -59,7 +59,9 @@ namespace aether
 	{
 	public:
 		void Init(ServiceContainer& services, RuntimeProfile profile = RuntimeProfile::Full);
-		void Shutdown();
+		// Takes the container so it can withdraw the services Init registered by reference
+		// (FontRegistry lives inside m_uiRenderer), rather than leaving dangling pointers behind.
+		void Shutdown(ServiceContainer& services);
 		void RegisterPasses(ServiceContainer& services);
 
 		void RecreateSwapchainResources(ServiceContainer& services);

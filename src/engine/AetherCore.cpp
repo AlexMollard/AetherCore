@@ -191,7 +191,7 @@ namespace aether
 
 		m_services.Get<AsyncComputeContext>().Shutdown(*m_gpu);
 
-		m_rendering->Shutdown();
+		m_rendering->Shutdown(m_services);
 		if (m_uiOverlay)
 		{
 			m_uiOverlay->Shutdown(m_services);

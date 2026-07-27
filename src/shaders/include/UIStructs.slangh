@@ -12,7 +12,11 @@ struct DrawCommandData
     uint   type;
     int    layer;
     uint   textureSlot;  // bindless slot (TexturedRect only)
-    uint   flags;        // bit 0 = pixel-art (nearest) sampling
+    // bit 0 = pixel-art (nearest) sampling; bit 1 = exclude from the owning element's material
+    // (build-time only, stripped before upload, so it is never seen here); bit 2 = honour clipRect;
+    // bits 8..15 = shaderId, a per-frame index into the material table (0 = default ui_shapes
+    // fragment). Mirrors UiDrawCommand::flags in src/engine/ui/UiDrawCommand.hpp.
+    uint   flags;
 };
 
 struct DrawIndirectCommand

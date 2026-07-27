@@ -313,9 +313,13 @@ namespace aether
 		m_physicsDebug.Init(gpu, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
 	}
 
-	void RenderingSubsystem::Shutdown()
+	void RenderingSubsystem::Shutdown(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
+
+		// Registered non-owning in Init and it lives inside m_uiRenderer, which is torn down at
+		// the end of this function - so the container must not go on handing out a pointer to it.
+		services.Unregister<ui::FontRegistry>();
 
 		// were never initialized, so their Destroy/Shutdown must be skipped - several
 		if (m_profile == RuntimeProfile::Full)
