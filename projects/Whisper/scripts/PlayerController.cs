@@ -89,6 +89,15 @@ public sealed class PlayerController : EntityScript
             return;
         }
 
+        // The chat box owns the keyboard: bail out the same way a non-owner does, so
+        // the letters of a message never double as movement keys - untreated, typing
+        // "add" runs the character across the arena and jumps.
+        if (IsTypingInChat())
+        {
+            HoldStillForChat(deltaTime);
+            return;
+        }
+
         float move = 0.0f;
         if (Input.IsKeyDown(Key.A) || Input.IsKeyDown(Key.Left)) { move -= 1.0f; }
         if (Input.IsKeyDown(Key.D) || Input.IsKeyDown(Key.Right)) { move += 1.0f; }
@@ -167,6 +176,46 @@ public sealed class PlayerController : EntityScript
             _squash *= System.Math.Max(0.0f, 1.0f - 13.0f * deltaTime);
         }
         SpriteRenderer.SetPixelSize(Self, new Vector2(_baseSpriteSize.X * (1.0f + _squash), _baseSpriteSize.Y * (1.0f - _squash)));
+
+        if (Self.Position.Y < FallRespawnY)
+        {
+            Respawn();
+        }
+    }
+
+    // ── Chat ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Whether this player's own chat box currently has the keyboard.</summary>
+    /// <remarks>
+    /// Looked up per frame rather than cached in <see cref="OnAttach"/> for the same
+    /// reason <see cref="NetPlayerSync"/> does it: scripts on an entity attach one at a
+    /// time in list order, so a sibling is only guaranteed to be live from OnUpdate
+    /// onward. A player prefab without a <see cref="ChatBox"/> simply never types.
+    /// </remarks>
+    private bool IsTypingInChat() => GetScript<ChatBox>() is { IsTyping: true };
+
+    /// <summary>
+    /// Movement's stand-in while chat has the keyboard: kill horizontal speed, keep the
+    /// animation honest, and keep the fall-out-of-the-world guard alive.
+    /// </summary>
+    /// <remarks>
+    /// A bare early return would not be enough. Velocity persists in the physics body,
+    /// so a run in progress when the box opens would coast at full speed for the whole
+    /// message, and <see cref="AnimIndex"/> would stay stuck on the run clip while the
+    /// character stood still. Vertical speed is deliberately left alone so gravity and
+    /// an in-flight jump arc still resolve normally.
+    /// </remarks>
+    private void HoldStillForChat(float deltaTime)
+    {
+        Vector2 velocity = Physics2D.GetLinearVelocity(Self);
+        Physics2D.SetLinearVelocity(Self, new Vector2(0.0f, velocity.Y));
+
+        bool grounded = IsGrounded();
+        _wasGrounded = grounded;
+        _sinceGrounded = grounded ? 0.0f : _sinceGrounded + deltaTime;
+        // Any jump buffered before the box opened is spent, not held until it closes.
+        _sinceJumpPressed = 99.0f;
+        AnimIndex = grounded ? AnimIndexIdle : AnimIndexJump;
 
         if (Self.Position.Y < FallRespawnY)
         {

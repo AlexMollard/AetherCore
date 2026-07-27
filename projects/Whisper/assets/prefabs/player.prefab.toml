@@ -81,3 +81,10 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'NameTag'
+
+    # Chat lives on the player, not on the scene's Session entity: the host only
+    # accepts a server RPC aimed at an entity the sending connection owns. Listed
+    # after PlayerController so the controller's per-frame GetScript<ChatBox>()
+    # lookup is the only ordering this pair depends on.
+    [[entities.scripts]]
+    type = 'ChatBox'
