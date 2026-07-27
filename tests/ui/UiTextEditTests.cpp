@@ -355,3 +355,22 @@ TEST_CASE("SelectWordAt selects the word under an index")
 	ui::SelectWordAt(s, 0);
 	CHECK(ui::SelectedText(s) == "hello");
 }
+
+TEST_CASE("A synthetic key still produces a down-edge for a windowed Input")
+{
+	// Regression: SetSyntheticKey used to seed m_currKeys unconditionally. With a
+	// window, Update() begins with `m_prevKeys = m_currKeys`, so that seed made prev
+	// and curr both true and IsKeyPressed never fired for an injected key - silently
+	// breaking every headless playtest that waits on a key PRESS rather than a hold.
+	// Windowless callers still need the seed (they never call Update()), so the fix is
+	// to gate it on there being no window. This pins the windowless half; the windowed
+	// half is unobservable here because Update() dereferences the GLFW window.
+	Input input; // no Init(): windowless
+
+	input.SetSyntheticKey(static_cast<int>(Key::Space), true);
+	CHECK(input.IsKeyDown(Key::Space));
+
+	input.ClearSyntheticKeys();
+	input.SetSyntheticKey(static_cast<int>(Key::Space), false);
+	CHECK_FALSE(input.IsKeyDown(Key::Space));
+}

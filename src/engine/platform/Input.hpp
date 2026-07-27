@@ -225,15 +225,32 @@ namespace aether
 			if (key >= 0 && key < kMaxKeys)
 			{
 				m_syntheticKeys[key] = down;
-				// Seed the live state too: Update() re-derives this from GLFW every frame, so
-				// this only matters where Update() is never called - windowless unit tests.
-				m_currKeys[key] = m_currKeys[key] || down;
+				// Seed the live state ONLY when there is no window. A windowless unit test
+				// never calls Update(), which is what normally derives m_currKeys, so without
+				// this it would observe nothing.
+				//
+				// With a window this write is actively harmful and must not happen: Update()
+				// owns both arrays and begins with `m_prevKeys = m_currKeys`. Seeding
+				// m_currKeys here means the next Update() copies the already-pressed state
+				// into m_prevKeys, so curr and prev are both true and the down-edge is gone -
+				// IsKeyPressed never fires for injected keys, while IsKeyDown still works.
+				// That silently breaks every headless playtest that waits on a key press.
+				if (m_window == nullptr)
+				{
+					m_currKeys[key] = m_currKeys[key] || down;
+				}
 			}
 		}
 
 		void ClearSyntheticKeys()
 		{
 			m_syntheticKeys.fill(false);
+			// Symmetric with SetSyntheticKey: a windowless caller has no Update() to
+			// re-derive m_currKeys, so without this a cleared key would stay down forever.
+			if (m_window == nullptr)
+			{
+				m_currKeys.fill(false);
+			}
 		}
 
 		// Synthetic TEXT injection, the character-level counterpart to SetSyntheticKey: the
