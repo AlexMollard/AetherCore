@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Numerics;
 using AetherCore;
 
@@ -41,18 +40,6 @@ public sealed class PlayerController : EntityScript
     internal const int AnimIndexRun = 1;
     internal const int AnimIndexJump = 2;
 
-    // NetPlayerSync needs to read this entity's PlayerController, but the engine has
-    // no generic "get sibling script on this entity" API. Rather than add one at the
-    // engine layer for a single call site, PlayerController tracks its own live
-    // instances by entity id - confined to this game assembly, cleaned up in
-    // OnDetach below.
-    private static readonly Dictionary<uint, PlayerController> s_byEntity = new();
-
-    /// <summary>The PlayerController instance attached to <paramref name="entity"/>,
-    /// or null if none is live there.</summary>
-    internal static PlayerController? For(Entity entity)
-        => s_byEntity.TryGetValue(entity.Id, out PlayerController? controller) ? controller : null;
-
     /// <summary>
     /// The clip that movement/physics state currently calls for - one of the
     /// AnimIndex* constants above. Computed here every frame (this script already
@@ -77,16 +64,10 @@ public sealed class PlayerController : EntityScript
 
     public override void OnAttach()
     {
-        s_byEntity[Self.Id] = this;
         _spawn = Self.Position;
         _baseSpriteSize = SpriteRenderer.GetPixelSize(Self);
         Physics2D.EnableEvents(Self);
         Physics2D.SetGravityScale(Self, GravityScale);
-    }
-
-    public override void OnDetach()
-    {
-        s_byEntity.Remove(Self.Id);
     }
 
     public override void OnUpdate(float deltaTime)

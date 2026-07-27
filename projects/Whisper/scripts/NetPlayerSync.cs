@@ -70,7 +70,10 @@ public sealed class NetPlayerSync : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
-        if (Net.IsOwner(Self) && PlayerController.For(Self) is { } controller)
+        // Looked up per frame rather than cached in OnAttach: scripts on an entity
+        // attach one at a time in list order, so a sibling is only guaranteed to be
+        // live from OnUpdate onward (see Entity.GetScript).
+        if (Net.IsOwner(Self) && GetScript<PlayerController>() is { } controller)
         {
             AnimState = controller.AnimIndex;
         }
