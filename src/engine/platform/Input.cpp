@@ -232,6 +232,27 @@ namespace aether
 		return m_typedChars;
 	}
 
+	std::string Input::GetClipboardText() const
+	{
+		if (m_window != nullptr)
+		{
+			const char* text = glfwGetClipboardString(m_window);
+			return text != nullptr ? std::string{text} : std::string{};
+		}
+		return m_clipboardFallback;
+	}
+
+	void Input::SetClipboardText(std::string_view text)
+	{
+		const std::string owned{text};
+		if (m_window != nullptr)
+		{
+			glfwSetClipboardString(m_window, owned.c_str());
+			return;
+		}
+		m_clipboardFallback = owned;
+	}
+
 	void Input::SetMouseViewportTransform(glm::vec2 viewportMin, glm::vec2 viewportSize, glm::vec2 targetSize)
 	{
 		m_mouseViewportTransformActive = viewportSize.x > 0.0f && viewportSize.y > 0.0f && targetSize.x > 0.0f && targetSize.y > 0.0f;

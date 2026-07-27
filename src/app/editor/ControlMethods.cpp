@@ -1414,11 +1414,12 @@ namespace aether::editor
 		methods.push_back({"engine.send_input",
 		        "send_input",
 		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, or a single "
-		        "letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire.",
+		        "letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to inject typed characters (text fields) alongside key state.",
 		        true,
 		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"up", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"clear", json{{"type", "boolean"}}},
+		                {"text", StrProp()},
 		                {"mouse_down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"mouse_up", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"mouse_world", json{{"type", "array"}, {"items", json{{"type", "number"}}}}},
@@ -1434,6 +1435,7 @@ namespace aether::editor
 			        {
 				        input->ClearSyntheticKeys();
 				        input->ClearSyntheticMouse();
+				        input->ClearSyntheticChars();
 			        }
 			        json applied = json::array();
 			        json unknown = json::array();
@@ -1464,6 +1466,13 @@ namespace aether::editor
 			        };
 			        apply("down", true);
 			        apply("up", false);
+
+			        // Typed text goes through the same char queue a real keyboard fills, so a
+			        // headless test drives text fields exactly like a player: type, then Enter.
+			        if (params.contains("text") && params["text"].is_string())
+			        {
+				        input->SetSyntheticChars(params["text"].get<std::string>());
+			        }
 
 			        // Mouse: buttons by name, and an injected cursor. `mouse_world` is the useful one for
 			        // tests - aim at a world position and let the main camera do the projection, so a

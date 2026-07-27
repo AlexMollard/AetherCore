@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -189,6 +190,11 @@ namespace aether
 		// layout, dead keys, and IME - far more reliable than manual key->char mapping.
 		[[nodiscard]] const std::string& GetTypedChars() const;
 
+		// OS clipboard. With no window (unit tests) both fall back to an internal string, so
+		// cut/copy/paste logic is exercisable headless.
+		[[nodiscard]] std::string GetClipboardText() const;
+		void SetClipboardText(std::string_view text);
+
 		void SetMouseCaptured(bool captured)
 		{
 			m_mouseCaptured = captured;
@@ -225,6 +231,19 @@ namespace aether
 		void ClearSyntheticKeys()
 		{
 			m_syntheticKeys.fill(false);
+		}
+
+		// Synthetic TEXT injection, the character-level counterpart to SetSyntheticKey: the
+		// string is appended to the next frame's GetTypedChars(), so a headless test types
+		// through exactly the path a real keyboard does. Consumed and cleared each Update().
+		void SetSyntheticChars(std::string_view chars)
+		{
+			m_pendingChars.append(chars);
+		}
+
+		void ClearSyntheticChars()
+		{
+			m_pendingChars.clear();
 		}
 
 		// Synthetic MOUSE injection, same contract as keys: buttons OR into the real
@@ -301,6 +320,7 @@ namespace aether
 
 		std::string m_typedChars;
 		std::string m_pendingChars;
+		std::string m_clipboardFallback;
 
 		bool m_firstUpdate = true;
 		bool m_mouseCaptured = false;
