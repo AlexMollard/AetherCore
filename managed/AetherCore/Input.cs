@@ -1,4 +1,6 @@
+using System;
 using System.Numerics;
+using System.Text;
 
 namespace AetherCore;
 
@@ -49,5 +51,22 @@ public static class Input
         if (IsKeyDown(negative)) { v -= 1.0f; }
         if (IsKeyDown(positive)) { v += 1.0f; }
         return v;
+    }
+
+    // ── Clipboard ─────────────────────────────────────────────────────────────────
+
+    /// <summary>The OS clipboard's text contents.</summary>
+    public static unsafe string Clipboard
+    {
+        get
+        {
+            Span<byte> buffer = stackalloc byte[1024];
+            fixed (byte* ptr = buffer)
+            {
+                int written = Native.aether_input_get_clipboard(ptr, buffer.Length);
+                return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+            }
+        }
+        set => Native.aether_input_set_clipboard(value ?? string.Empty);
     }
 }

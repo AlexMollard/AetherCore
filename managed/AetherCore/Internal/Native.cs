@@ -261,6 +261,34 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_was_changed(uint id);
 
+    // ── Text box ─────────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_text_box(uint canvasId);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_get_text_box_text(uint id, byte* buf, int bufLen);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_ui_set_text_box_text(uint id, string text);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_ui_set_text_box_placeholder(uint id, string text);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_text_box_content_type(uint id, int contentType);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_was_submitted(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_was_cancelled(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_ui_is_editing(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_begin_edit(uint id);
+
     // ── Custom-shader effects ────────────────────────────────────────────────────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint aether_ui_create_effect(uint canvas, string shader);
@@ -378,6 +406,12 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_input_get_os_cursor_visible();
 
+    // ── Clipboard ────────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_get_clipboard(byte* buf, int bufLen);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_input_set_clipboard(string text);
 
     // ── Entity & scene (Module 01) ──────────────────────────────────────────────
     [LibraryImport(Lib)]

@@ -10,6 +10,9 @@ public enum UiHAlign { Left = 0, Center = 1, Right = 2 }
 /// <summary>Vertical text alignment.</summary>
 public enum UiVAlign { Top = 0, Middle = 1, Bottom = 2 }
 
+/// <summary>Characters a text box accepts. ANDed with its allowed-characters string.</summary>
+public enum UiContentType { Any = 0, Integer = 1, Decimal = 2, Alphanumeric = 3, Host = 4 }
+
 /// <summary>
 /// In-game UI (Canvas) control from scripts. UI is built as entities - a Canvas
 /// with Image / Text children - laid out with anchors, offsets and a pivot (the
@@ -167,6 +170,46 @@ public static class Ui
     /// <summary>True on the frame a slider or toggle on this entity was changed by the user
     /// (keyboard/drag/activation). Poll this to persist settings.</summary>
     public static bool WasChanged(Entity e) => Native.aether_ui_was_changed(e.Id) != 0;
+
+    // ── Text box ──────────────────────────────────────────────────────────────────
+    // A single-line editable field. Editing is modal: the player clicks it (or presses
+    // Enter while it is focused) to start, and Enter/Escape/Tab/clicking away ends it.
+    // Poll WasSubmitted to act on a committed value.
+
+    /// <summary>Create an editable text box under <paramref name="canvas"/>.</summary>
+    public static Entity CreateTextBox(Entity canvas = default) => new(Native.aether_ui_create_text_box(canvas.Id));
+
+    /// <summary>The text box's current string (empty if the entity has none).</summary>
+    public static unsafe string GetTextBoxText(Entity e)
+    {
+        Span<byte> buffer = stackalloc byte[512];
+        fixed (byte* ptr = buffer)
+        {
+            int written = Native.aether_ui_get_text_box_text(e.Id, ptr, buffer.Length);
+            return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+        }
+    }
+
+    /// <summary>Replace the text box's string; the caret moves to the end (ASCII only).</summary>
+    public static void SetTextBoxText(Entity e, string text) => Native.aether_ui_set_text_box_text(e.Id, text);
+
+    /// <summary>The greyed-out hint shown while the box is empty.</summary>
+    public static void SetPlaceholder(Entity e, string text) => Native.aether_ui_set_text_box_placeholder(e.Id, text);
+
+    /// <summary>Restrict which characters the box accepts.</summary>
+    public static void SetContentType(Entity e, UiContentType type) => Native.aether_ui_set_text_box_content_type(e.Id, (int)type);
+
+    /// <summary>True on the frame the player pressed Enter to commit the field.</summary>
+    public static bool WasSubmitted(Entity e) => Native.aether_ui_was_submitted(e.Id) != 0;
+
+    /// <summary>True on the frame the player pressed Escape, reverting to the value on entry.</summary>
+    public static bool WasCancelled(Entity e) => Native.aether_ui_was_cancelled(e.Id) != 0;
+
+    /// <summary>True while the box owns the keyboard.</summary>
+    public static bool IsEditing(Entity e) => Native.aether_ui_is_editing(e.Id) != 0;
+
+    /// <summary>Focus the box and start editing, as a click would.</summary>
+    public static void BeginEdit(Entity e) => Native.aether_ui_begin_edit(e.Id);
 
     // ── Custom-shader effects ─────────────────────────────────────────────────────
     // A UI element rendered by its own shader ("shaders://&lt;shader&gt;.spv"), drawn on top of the

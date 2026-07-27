@@ -1,5 +1,9 @@
 #include "scripting/interop/InteropCommon.hpp"
 
+#include <algorithm>
+#include <cstring>
+#include <string>
+
 #include "platform/Input.hpp"
 
 using namespace aether::app::scripting;
@@ -69,4 +73,22 @@ AE_SCRIPT_API Vec2 aether_input_scroll_delta()
 {
 	const glm::vec2 p = ActiveContext().input->GetScrollDelta();
 	return {p.x, p.y};
+}
+
+// ── Clipboard ─────────────────────────────────────────────────────────────
+AE_SCRIPT_API std::int32_t aether_input_get_clipboard(char* buf, std::int32_t bufLen)
+{
+	if (buf == nullptr || bufLen <= 0)
+	{
+		return 0;
+	}
+	const std::string text = ActiveContext().input->GetClipboardText();
+	const std::int32_t n = std::min<std::int32_t>(bufLen, static_cast<std::int32_t>(text.size()));
+	std::memcpy(buf, text.data(), static_cast<std::size_t>(n));
+	return n;
+}
+
+AE_SCRIPT_API void aether_input_set_clipboard(const char* text)
+{
+	ActiveContext().input->SetClipboardText(text != nullptr ? text : "");
 }

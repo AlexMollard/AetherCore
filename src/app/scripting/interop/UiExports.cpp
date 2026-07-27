@@ -12,6 +12,7 @@
 #include "ui/UiComponents.hpp"
 #include "ui/CursorService.hpp"
 #include "ui/UiEntities.hpp"
+#include "ui/UiTextEdit.hpp"
 #include "utils/ServiceContainer.hpp"
 
 // In-game UI control exported to C#. Text is read live each frame, and the layout
@@ -286,7 +287,86 @@ AE_SCRIPT_API void aether_ui_set_button_label(std::uint32_t id, const char* text
 	}
 }
 
-// True if a UISlider or UIToggle on this entity changed by user input this frame.
+// ── Text box ────────────────────────────────────────────────────────────────
+AE_SCRIPT_API std::uint32_t aether_ui_create_text_box(std::uint32_t canvasId)
+{
+	auto& world = ActiveWorld();
+	return aether::ui::CreateTextBoxEntity(world, ResolveCanvas(world, canvasId)).id;
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_get_text_box_text(std::uint32_t id, char* buf, std::int32_t bufLen)
+{
+	const auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id});
+	if (b == nullptr || buf == nullptr || bufLen <= 0)
+	{
+		return 0;
+	}
+	const std::int32_t n = std::min<std::int32_t>(bufLen, static_cast<std::int32_t>(b->text.size()));
+	std::memcpy(buf, b->text.data(), static_cast<std::size_t>(n));
+	return n;
+}
+
+AE_SCRIPT_API void aether_ui_set_text_box_text(std::uint32_t id, const char* text)
+{
+	if (auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id}))
+	{
+		b->text = text != nullptr ? text : "";
+		// A programmatic set puts the caret at the end and drops any selection, so the next
+		// keystroke appends instead of replacing text the player never chose.
+		b->caret = static_cast<int>(b->text.size());
+		b->selectionAnchor = b->caret;
+		b->scrollX = 0.f;
+	}
+}
+
+AE_SCRIPT_API void aether_ui_set_text_box_placeholder(std::uint32_t id, const char* text)
+{
+	if (auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id}))
+	{
+		b->placeholder = text != nullptr ? text : "";
+	}
+}
+
+AE_SCRIPT_API void aether_ui_set_text_box_content_type(std::uint32_t id, std::int32_t contentType)
+{
+	if (auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id}))
+	{
+		b->contentType = static_cast<aether::ui::TextContentType>(contentType);
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_was_submitted(std::uint32_t id)
+{
+	const auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id});
+	return (b != nullptr && b->submitted) ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_was_cancelled(std::uint32_t id)
+{
+	const auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id});
+	return (b != nullptr && b->cancelled) ? 1 : 0;
+}
+
+AE_SCRIPT_API std::int32_t aether_ui_is_editing(std::uint32_t id)
+{
+	const auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id});
+	return (b != nullptr && b->editing) ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_ui_begin_edit(std::uint32_t id)
+{
+	auto& world = ActiveWorld();
+	const aether::Entity e{id};
+	if (auto* sel = world.TryGet<aether::ui::UISelectable>(e))
+	{
+		// Route through activation so the system runs its normal entry path (snapshot, select
+		// all, capture) rather than duplicating it here.
+		sel->focused = true;
+		sel->activated = true;
+	}
+}
+
+// True if a UISlider, UIToggle or UITextBox on this entity changed by user input this frame.
 AE_SCRIPT_API std::int32_t aether_ui_was_changed(std::uint32_t id)
 {
 	auto& world = ActiveWorld();
@@ -296,6 +376,10 @@ AE_SCRIPT_API std::int32_t aether_ui_was_changed(std::uint32_t id)
 		return 1;
 	}
 	if (const auto* t = world.TryGet<aether::ui::UIToggle>(e); t != nullptr && t->changed)
+	{
+		return 1;
+	}
+	if (const auto* b = world.TryGet<aether::ui::UITextBox>(e); b != nullptr && b->changed)
 	{
 		return 1;
 	}
