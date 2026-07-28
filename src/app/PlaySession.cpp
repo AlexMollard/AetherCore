@@ -10,6 +10,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "debug/SceneSelection.hpp"
+#include "net/NetworkContext.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -175,6 +176,35 @@ namespace aether::app
 		if (auto* scriptSystem = context.TryGet<ScriptComponentSystem>())
 		{
 			scriptSystem->Invalidate(world);
+		}
+
+		// A NET SESSION IS RUNTIME STATE AND MUST NOT OUTLIVE PLAY, exactly like the
+		// script instances torn down above and the scene restored below. Left running,
+		// the next Play in this process is silently still a client: Net.IsClient and
+		// Net.IsConnected are both still true, so a game takes its client branch and
+		// spawns nothing, and an editor that has ever joined a host can never go back to
+		// single-player without a restart.
+		//
+		// Through Stop(), never by dropping the socket. Stop is what gives back the 2D
+		// bodies this peer took off local simulation (a player character left kinematic
+		// never falls again), destroys the entities the session spawned rather than
+		// leaving them to be duplicated by the next join, and tells the other peers the
+		// session ended on purpose. A bare Disconnect would leave every one of those
+		// behind.
+		//
+		// Placed after Invalidate so no live script instance is holding an entity Stop
+		// is about to destroy, and before the scene restore so the restore sees a world
+		// with no session leftovers in it. Generic: nothing here knows what game is
+		// playing, only that its session ends when play does.
+		if (auto* network = context.TryGet<aether::net::NetworkContext>())
+		{
+			network->Stop(world);
+			// And the verdict on the link that just ended goes with it. Stop deliberately
+			// keeps the reason - a game reads it after the session is already gone - but
+			// it describes a link in a world that no longer exists, and a game asking
+			// "why did my session end?" on the NEXT Play must not be answered by the
+			// last one.
+			network->SetDisconnectReason({});
 		}
 
 		if (playState->stopSnapshot)
