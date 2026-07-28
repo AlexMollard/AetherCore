@@ -251,7 +251,7 @@ public sealed class PlayerController : EntityScript
     /// at most four players.
     /// </para>
     /// </remarks>
-    private void ClaimName() => Net.ClaimPlayerName(Self, WhisperSession.LocalPlayerName);
+    private void ClaimName() => Net.ClaimPlayerName(Self, NetSession.LocalPlayerName);
 
     /// <summary>Snap back to the entity's starting position after falling out of
     /// the world. There are no checkpoints in this build - it is always the spawn point.</summary>

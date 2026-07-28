@@ -7,6 +7,14 @@ namespace AetherGame;
 /// Loads the arena once the transport reports success. This script is the only
 /// place that decides a port default, so the address field can stay optional.
 /// </summary>
+/// <remarks>
+/// Opening the session goes through <see cref="NetSession"/> rather than
+/// <see cref="Net"/> directly. Starting a session and recording what kind of session it
+/// is are one decision: a join that forgets its address has no way back after a dropped
+/// link, and a host that leaves a stale address behind will try to reconnect to somebody
+/// else's. Keeping the pair inside the SDK is what stops the arena and this screen
+/// drifting apart.
+/// </remarks>
 public sealed class ConnectScreen : EntityScript
 {
     /// <summary>The player's display name. No <c>UiTextBoxRef</c> component-ref
@@ -33,12 +41,12 @@ public sealed class ConnectScreen : EntityScript
     public override void OnAttach()
     {
         // Explain an involuntary return - the arena sends us back here when the host
-        // goes away, and an unexplained title screen looks like a crash. Consumed on
-        // read so a later voluntary visit is not still apologising for it.
-        if (WhisperSession.StatusMessage.Length > 0)
+        // goes away, and an unexplained title screen looks like a crash. Taken rather
+        // than read so a later voluntary visit is not still apologising for it.
+        string status = NetSession.TakeStatusMessage();
+        if (status.Length > 0)
         {
-            Ui.SetText(StatusText, WhisperSession.StatusMessage);
-            WhisperSession.StatusMessage = "";
+            Ui.SetText(StatusText, status);
         }
     }
 
@@ -66,11 +74,8 @@ public sealed class ConnectScreen : EntityScript
     private void StartHost()
     {
         RememberName();
-        if (Net.Host(DefaultPort, WhisperSession.MaxPlayers - 1))
+        if (NetSession.BeginHost(DefaultPort, WhisperSession.MaxPlayers - 1))
         {
-            // Hosting, so there is nowhere to reconnect TO if this session ends.
-            WhisperSession.JoinRequested = false;
-            WhisperSession.HostAddress = "";
             Scene.Load("Arena");
         }
         else
@@ -82,16 +87,9 @@ public sealed class ConnectScreen : EntityScript
     private void StartJoin()
     {
         RememberName();
-        (string ip, ushort port) = ParseAddress(Ui.GetTextBoxText(AddressField));
-        if (Net.Connect(ip, port))
+        (string ip, ushort port) = NetSession.ParseAddress(Ui.GetTextBoxText(AddressField), DefaultPort);
+        if (NetSession.BeginJoin(ip, port))
         {
-            // Remembered for two things the arena cannot work out for itself: that this
-            // player is here to JOIN (so a refusal arriving before the arena's first
-            // tick is not mistaken for a single-player session), and where to try
-            // coming back to if the link later drops without explanation.
-            WhisperSession.JoinRequested = true;
-            WhisperSession.HostAddress = ip;
-            WhisperSession.HostPort = port;
             Ui.SetText(StatusText, $"Connecting to {ip}:{port}...");
             Scene.Load("Arena");
         }
@@ -101,29 +99,7 @@ public sealed class ConnectScreen : EntityScript
         }
     }
 
-    private void RememberName()
-    {
-        string name = Ui.GetTextBoxText(NameField).Trim();
-        WhisperSession.LocalPlayerName = string.IsNullOrEmpty(name) ? "Player" : name;
-    }
-
-    /// <summary>Split "host" or "host:port"; an absent or unparseable port falls back
-    /// to the default rather than refusing to connect.</summary>
-    private (string, ushort) ParseAddress(string text)
-    {
-        string trimmed = text.Trim();
-        if (trimmed.Length == 0)
-        {
-            return ("127.0.0.1", DefaultPort);
-        }
-        int colon = trimmed.LastIndexOf(':');
-        if (colon <= 0 || colon == trimmed.Length - 1)
-        {
-            return (trimmed, DefaultPort);
-        }
-        string host = trimmed.Substring(0, colon);
-        return ushort.TryParse(trimmed.Substring(colon + 1), out ushort port)
-            ? (host, port)
-            : (host, DefaultPort);
-    }
+    // Assigning trims, and substitutes "Player" for a blank, so there is nothing to
+    // check here.
+    private void RememberName() => NetSession.LocalPlayerName = Ui.GetTextBoxText(NameField);
 }
