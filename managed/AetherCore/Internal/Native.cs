@@ -902,6 +902,28 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_get_player_name(uint entityId, byte* buffer, int capacity);
 
+    // Replicated round-trip time for one player, in ms, as measured by that player's
+    // own peer. 0 for the host's player and offline.
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_net_get_player_ping(uint entityId);
+
+    // This peer's own cost to reach the host, in ms. 0 on a host and offline.
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_net_round_trip_ms();
+
+    // The connection owning an entity; this peer's own connection for an unowned or
+    // unreplicated one.
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_net_owner_of(uint entityId);
+
+    // Every entity carrying a Net Player component. Two-call size query, like
+    // aether_net_connections: pass a null buffer for the count.
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_players(uint* buffer, int capacity);
+
     // Resolves `desired` against the names already taken by players ahead of this one
     // in the join order, writes the result onto the entity, and copies it back out.
     // Refused (returns 0, writes nothing) for an entity this peer does not own.

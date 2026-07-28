@@ -4,6 +4,8 @@
 #include <cstring>
 #include <string>
 
+#include <entt/entt.hpp>
+
 #include "net/NetComponents.hpp"
 #include "net/NetworkContext.hpp"
 #include "scene/Entity.hpp"
@@ -262,6 +264,63 @@ AE_SCRIPT_API std::int32_t aether_net_get_player_name(std::uint32_t entityId, ch
 {
 	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(aether::Entity{entityId});
 	return player != nullptr ? CopyOut(player->displayName, buffer, capacity) : 0;
+}
+
+AE_SCRIPT_API std::uint32_t aether_net_get_player_ping(std::uint32_t entityId)
+{
+	// Read straight off the component, not off the transport: on every peer but this
+	// player's owner there is no link to that player to measure, and the replicated
+	// value is the only answer that exists. On the owner it is the same number the
+	// transport reported a tick ago, so one accessor serves both and a game never has
+	// to ask which peer it is running on.
+	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(aether::Entity{entityId});
+	return player != nullptr ? player->pingMs : 0u;
+}
+
+AE_SCRIPT_API std::uint32_t aether_net_round_trip_ms()
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr ? context->LocalRoundTripMs() : 0u;
+}
+
+AE_SCRIPT_API std::uint32_t aether_net_owner_of(std::uint32_t entityId)
+{
+	const auto* identity = ActiveWorld().TryGet<aether::net::NetworkIdentity>(aether::Entity{entityId});
+	const aether::net::NetworkContext* context = Context();
+	const std::uint32_t local = context != nullptr ? context->LocalConnectionId() : 0u;
+	// An entity with no identity, or one that has not been given an owner yet (which
+	// is every entity in an offline game), belongs to whoever is asking. That is not a
+	// fallback so much as the truth: there is nobody else it could belong to.
+	if (identity == nullptr || identity->owner == aether::net::kInvalidConnection)
+	{
+		return local;
+	}
+	return identity->owner;
+}
+
+AE_SCRIPT_API std::int32_t aether_net_players(std::uint32_t* buffer, std::int32_t capacity)
+{
+	// NetPlayer is the framework's own "this entity is a person in the session" mark,
+	// so this is the roster with no game-side bookkeeping and no second copy of it. It
+	// is answered from the WORLD rather than from the session, which is what makes it
+	// give the same answer on a client - a client is told nothing about connections,
+	// but it is holding every replicated player it can see.
+	auto& world = ActiveWorld();
+	std::int32_t total = 0;
+	world.View<aether::net::NetPlayer>().each(
+	        [&](entt::entity ent, aether::net::NetPlayer&)
+	        {
+		        if (buffer != nullptr && total < capacity)
+		        {
+			        buffer[total] = aether::World::FromEntt(ent).id;
+		        }
+		        ++total;
+	        });
+	if (buffer == nullptr || capacity <= 0)
+	{
+		return total; // size query, matching aether_net_connections
+	}
+	return std::min(total, capacity);
 }
 
 AE_SCRIPT_API std::int32_t aether_net_last_error(char* buffer, std::int32_t capacity)

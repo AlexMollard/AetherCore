@@ -116,6 +116,32 @@ namespace aether::net
 			return m_transport.LastError();
 		}
 
+		// ── Link quality ─────────────────────────────────────────────────────
+		// Round-trip time in milliseconds over the link named by `connection`, taken
+		// from the transport's own acknowledgement timing - no probe packet exists and
+		// none is needed.
+		//
+		// A CLIENT has one link and passes kInvalidConnection for it, which is how the
+		// transport already spells "the host". A HOST names the connection it wants.
+		// Offline, and for the host's own connection, the answer is 0: there is no link,
+		// and 0 ms is the honest reading of "this peer, right here".
+		[[nodiscard]] std::uint32_t RoundTripMs(ConnectionId connection) const
+		{
+			if (!IsActive() || connection == LocalConnectionId())
+			{
+				return 0;
+			}
+			return m_transport.RoundTripMs(connection);
+		}
+
+		// What this peer would report about ITSELF: a client's cost to reach the host,
+		// and 0 on a host or offline. This is the value the owner stamps onto its own
+		// player, which is what gives every peer a per-player ping with no extra traffic.
+		[[nodiscard]] std::uint32_t LocalRoundTripMs() const
+		{
+			return IsClient() ? m_transport.RoundTripMs(kInvalidConnection) : 0u;
+		}
+
 		// ── Connection cap ───────────────────────────────────────────────────
 		// How many simultaneous client connections this host accepts. The host itself
 		// is not one of them, so a four-player game hosts with three.

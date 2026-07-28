@@ -170,6 +170,22 @@ namespace aether::net
 		// the receive system and the physics handover use.
 		[[nodiscard]] static std::vector<Entity> OwnedEntities(World& world, const NetworkContext& context);
 
+		// Write this peer's own link cost onto every NetPlayer it owns, so the value
+		// goes out with that entity's other replicated fields.
+		//
+		// HERE, rather than left to each project, because the only peer that can measure
+		// a link is one of its two ends, and the only entity it may write is one it owns
+		// - which together leave exactly one correct implementation. A game writing it
+		// anywhere else is writing a field the owner overwrites (the "some player names
+		// never showed" defect in a different disguise), and a game measuring it any
+		// other way is adding packets to answer a question the transport already
+		// answered for free.
+		//
+		// Called immediately before the send so the stamped value and the packet that
+		// carries it come from the same tick, and only on entities that already carry a
+		// NetPlayer: this must not decide that everything replicated is a player.
+		static void StampOwnedPing(World& world, const NetworkContext& context);
+
 		// `entities` minus the ones `owner` owns - the host's relay filter. A
 		// connection is authoritative for its own entities, so sending their state
 		// back would be the host arguing with them, which is precisely the round trip

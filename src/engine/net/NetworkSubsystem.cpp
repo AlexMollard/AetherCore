@@ -181,6 +181,20 @@ namespace aether::net
 		return nullptr;
 	}
 
+	std::uint32_t NetworkSubsystem::RoundTripMs(ConnectionId peer) const
+	{
+		if (m_host == nullptr)
+		{
+			return 0;
+		}
+		const ENetPeer* target = m_role == NetRole::Client ? m_serverPeer : PeerFor(peer);
+		if (target == nullptr || target->state != ENET_PEER_STATE_CONNECTED)
+		{
+			return 0;
+		}
+		return static_cast<std::uint32_t>(target->roundTripTime);
+	}
+
 	void NetworkSubsystem::Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes)
 	{
 		if (m_host == nullptr || bytes.empty() || channel < 0 || channel >= kChannelCount)

@@ -660,6 +660,8 @@ namespace aether::net
 			return;
 		}
 
+		StampOwnedPing(world, context);
+
 		if (context.IsClient())
 		{
 			SendOwnedToHost(world, context);
@@ -742,6 +744,24 @@ namespace aether::net
 				}
 			}
 		}
+	}
+
+	void NetworkSendSystem::StampOwnedPing(World& world, const NetworkContext& context)
+	{
+		const auto ping = context.LocalRoundTripMs();
+		world.View<NetworkIdentity, NetPlayer>().each(
+		        [&](entt::entity, NetworkIdentity& identity, NetPlayer& player)
+		        {
+			        if (identity.netId == 0 || !context.OwnsIdentity(identity))
+			        {
+				        return;
+			        }
+			        // Written unconditionally rather than only on change: the value is one
+			        // word, and the snapshot layer's own change detection is what decides
+			        // whether it costs anything on the wire. A "has it moved" test here
+			        // would be a second, weaker copy of that.
+			        player.pingMs = ping;
+		        });
 	}
 
 	// A client's whole send path. No relevancy: the host is not a viewer with a

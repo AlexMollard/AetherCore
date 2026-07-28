@@ -37,12 +37,28 @@ namespace aether::net
 		float interpolationDelaySeconds = 0.1f;
 	};
 
-	// A connected player's display name. Framework-level rather than game-level:
-	// name tags, chat attribution and disconnect notices all read this one field
-	// instead of each tracking names separately.
+	// A connected player's display name and link quality. Framework-level rather than
+	// game-level: name tags, chat attribution and disconnect notices all read this one
+	// field instead of each tracking names separately.
+	//
+	// Both fields are REPLICATED and both are AUTHORED BY THE OWNER, which is the only
+	// arrangement that works under client authority - a peer writing either of these on
+	// somebody else's player is writing a value that player's owner overwrites on its
+	// next send. `displayName` learned that the hard way (see Net.SetPlayerName's
+	// refusal), and `pingMs` is the same shape of state: only the peer at one end of a
+	// link knows what that link costs, so only it may say.
 	struct NetPlayer
 	{
 		std::string displayName;
+
+		// Round-trip time to the HOST, in milliseconds, as measured by this player's
+		// own peer. 0 on the host's own player, which has no link to itself, and 0
+		// offline - both of which read correctly as "no latency to speak of".
+		//
+		// Stamped by NetworkSendSystem on the entities this peer owns, so a game gets a
+		// per-player ping on every peer with no code of its own and no second message
+		// on the wire. Replication carries it outward like any other owned field.
+		std::uint32_t pingMs = 0;
 	};
 
 	// Present on a replicated entity whose 2D body this peer has taken OFF local

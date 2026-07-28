@@ -82,6 +82,20 @@ namespace aether::net
 			return m_lastError;
 		}
 
+		// Round-trip time to `peer`, in milliseconds, or 0 when there is no such link.
+		//
+		// ENet already measures this: every reliable packet is acknowledged, and the
+		// peer keeps a smoothed round-trip estimate from those acknowledgements. Taking
+		// it is strictly better than a ping message of our own would be - it costs no
+		// packets at all, it is averaged over real traffic rather than over a probe that
+		// competes with it, and it cannot disagree with the transport's own idea of the
+		// link.
+		//
+		// On a CLIENT there is exactly one link and `peer` is ignored, matching how
+		// Send() addresses the host. On a HOST it names the connection to measure; the
+		// host's link to itself is not a link and reports 0.
+		[[nodiscard]] std::uint32_t RoundTripMs(ConnectionId peer) const;
+
 	private:
 		_ENetPeer* PeerFor(ConnectionId id) const;
 

@@ -310,6 +310,79 @@ public static class Net
         }
     }
 
+    /// <summary>
+    /// How long a round trip to the host costs this player, in milliseconds. 0 for the
+    /// host's own player, and 0 offline - both of which are the honest reading rather
+    /// than a missing value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Readable on EVERY peer for EVERY player. Only the machine at one end of a link
+    /// can measure it, so each peer stamps its own player and replication carries the
+    /// number outward with that player's other owned state - which is why this answers
+    /// for other people's players as well as your own, and why nothing has to be pumped.
+    /// </para>
+    /// <para>
+    /// The measurement is the transport's own: ENet acknowledges reliable traffic and
+    /// keeps a smoothed estimate from it, so this costs no packets and cannot disagree
+    /// with what the link is actually doing. It settles over the first second or so of a
+    /// session, and reads 0 until the first acknowledgement lands.
+    /// </para>
+    /// </remarks>
+    public static uint GetPlayerPing(Entity entity) => Native.aether_net_get_player_ping(entity.Id);
+
+    /// <summary>This peer's own round-trip time to the host in milliseconds; 0 on the
+    /// host and offline. <see cref="GetPlayerPing"/> is usually what a HUD wants - this
+    /// is the raw reading, before it has been stamped onto anything.</summary>
+    public static uint RoundTripMs => Native.aether_net_round_trip_ms();
+
+    /// <summary>
+    /// The connection that owns <paramref name="entity"/>. Reports this peer's own
+    /// connection for an entity that is not replicated or has no owner yet, which is
+    /// every entity in an offline game.
+    /// </summary>
+    /// <remarks>
+    /// Connection ids are stable for a connection's lifetime and never reused within a
+    /// session, so this is the right key for per-player bookkeeping. 0 is the host.
+    /// </remarks>
+    public static uint OwnerOf(Entity entity) => Native.aether_net_owner_of(entity.Id);
+
+    /// <summary>
+    /// Every player entity this peer is currently holding - the ones with a Net Player
+    /// component, whoever owns them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Answered from the WORLD rather than from the session, which is what makes it work
+    /// on a client: a client is told nothing about connections (see
+    /// <see cref="Connections"/>), but it is holding every replicated player it can see.
+    /// This is therefore the one roster query with the same meaning on every peer.
+    /// </para>
+    /// <para>
+    /// The order is the world's, not the join order, and it is not stable - sort by
+    /// <see cref="OwnerOf"/> if the list is going on screen.
+    /// </para>
+    /// </remarks>
+    public static unsafe Entity[] Players
+    {
+        get
+        {
+            int count = Native.aether_net_players(null, 0);
+            if (count <= 0)
+            {
+                return [];
+            }
+            Entity[] players = new Entity[count];
+            fixed (Entity* ptr = players)
+            {
+                // Entity is a single uint field, so its storage is layout-compatible
+                // with a uint buffer - the same assumption Tags.GetEntitiesWith makes.
+                int written = Native.aether_net_players((uint*)ptr, count);
+                return written == count ? players : players[..System.Math.Max(written, 0)];
+            }
+        }
+    }
+
     // ── RPCs ────────────────────────────────────────────────────────────────────
 
     /// <summary>

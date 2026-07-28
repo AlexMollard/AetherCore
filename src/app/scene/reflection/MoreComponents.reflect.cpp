@@ -378,5 +378,6 @@ AE_COMPONENT_END()
 
 AE_COMPONENT(NetPlayerComponent, "Net Player", "Networking", ICON_FA_USER)
 AE_FIELD_REP("display_name", displayName, String)
+AE_FIELD_REP("ping_ms", pingMs, UInt)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
