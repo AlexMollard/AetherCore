@@ -55,11 +55,22 @@ public sealed class ConnectScreen : EntityScript
         }
     }
 
+    /// <summary>Open a session and go straight to the arena.</summary>
+    /// <remarks>
+    /// The cap passed to <see cref="Net.Host"/> counts CONNECTIONS, and a host is not
+    /// one of its own, so a four-player game hosts with three. The framework refuses the
+    /// next joiner with a reason it can read and show, rather than dropping it - which
+    /// is why the number lives here, in the game, and the refusal lives in the
+    /// framework.
+    /// </remarks>
     private void StartHost()
     {
         RememberName();
-        if (Net.Host(DefaultPort))
+        if (Net.Host(DefaultPort, WhisperSession.MaxPlayers - 1))
         {
+            // Hosting, so there is nowhere to reconnect TO if this session ends.
+            WhisperSession.JoinRequested = false;
+            WhisperSession.HostAddress = "";
             Scene.Load("Arena");
         }
         else
@@ -74,6 +85,13 @@ public sealed class ConnectScreen : EntityScript
         (string ip, ushort port) = ParseAddress(Ui.GetTextBoxText(AddressField));
         if (Net.Connect(ip, port))
         {
+            // Remembered for two things the arena cannot work out for itself: that this
+            // player is here to JOIN (so a refusal arriving before the arena's first
+            // tick is not mistaken for a single-player session), and where to try
+            // coming back to if the link later drops without explanation.
+            WhisperSession.JoinRequested = true;
+            WhisperSession.HostAddress = ip;
+            WhisperSession.HostPort = port;
             Ui.SetText(StatusText, $"Connecting to {ip}:{port}...");
             Scene.Load("Arena");
         }

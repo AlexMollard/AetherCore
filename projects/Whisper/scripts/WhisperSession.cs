@@ -20,19 +20,26 @@ namespace AetherGame;
 /// <see cref="ChatBox.Announce"/>, the same multicast the chat itself rides.
 /// </para>
 /// <para>
-/// On a <b>client</b> this does almost nothing: the players arrive by replication,
-/// and the one job left is noticing that the host went away and returning to the
-/// title screen with something to show for it. A client's own name is reported by
-/// <see cref="PlayerController"/> rather than from here - see the note on
-/// <see cref="PlayerController.SubmitName"/> for why it cannot be sent from this
-/// entity.
+/// On a <b>client</b> this does almost nothing while things are going well: the
+/// players arrive by replication, and this peer's own name is written by
+/// <see cref="PlayerController"/> onto the player it owns, because the owner of an
+/// entity is authoritative for it. What is left is deciding what a link ENDING means.
+/// </para>
+/// <para>
+/// <b>Not every ending is the same, and treating them alike is what makes a session
+/// feel broken.</b> A host that quit, and a host this client was refused by, both
+/// arrive with a reason attached (<see cref="Net.DisconnectReason"/>): somebody
+/// decided, and there is nothing to retry. A link that simply stopped - a timeout, a
+/// dropped packet storm, a laptop lid - arrives with nothing to say, and that silence
+/// is the signal to try coming back. So this reconnects a bounded number of times on
+/// the second kind and never on the first, and a player who pressed Escape is not
+/// dragged back into a session they just left.
 /// </para>
 /// <para>
 /// There is no join/leave callback in the framework, so the host polls
 /// <see cref="Net.Connections"/> and diffs it. That is cheap (a handful of ids) and
 /// is the only signal available. The matching client-side signal is
-/// <see cref="Net.IsConnected"/> going false, which is what a dropped host looks
-/// like from the other end.
+/// <see cref="Net.IsConnected"/> going false.
 /// </para>
 /// <para>
 /// <b>There is no host migration.</b> When the host goes, the session goes: every
@@ -53,9 +60,53 @@ public sealed class WhisperSession : EntityScript
     /// involuntary return. Empty when the title screen was reached normally.</summary>
     public static string StatusMessage = "";
 
-    /// <summary>What <see cref="StatusMessage"/> is set to when the host goes away.
-    /// A constant because it is the one status a test can assert on verbatim.</summary>
+    /// <summary>Address of the host this player last asked to join, so a dropped link
+    /// knows where to try coming back to. Static for the same reason
+    /// <see cref="LocalPlayerName"/> is: the connect screen that collected it is
+    /// destroyed by the scene load into the arena.</summary>
+    public static string HostAddress = "";
+
+    /// <summary>Port half of <see cref="HostAddress"/>.</summary>
+    public static ushort HostPort;
+
+    /// <summary>
+    /// True from the moment the connect screen asks to join until the arena is left.
+    /// </summary>
+    /// <remarks>
+    /// It exists for one case that no engine state can express: a join REFUSED before
+    /// this script first ticks. The framework tears the session down as soon as the
+    /// refusal lands, so <see cref="Net.IsClient"/> is already false and the arena would
+    /// otherwise look exactly like a single-player editor session and spawn a solo
+    /// player into a server it was just thrown out of. Reset in <see cref="OnAttach"/>
+    /// whenever nothing is live and nothing has anything to say, because a static
+    /// survives the editor's Play/Stop cycle and a stale one would route a genuine
+    /// single-player session down the client branch.
+    /// </remarks>
+    public static bool JoinRequested;
+
+    /// <summary>What <see cref="StatusMessage"/> is set to when the host goes away
+    /// without a word and reconnecting has run out of attempts. A constant because it
+    /// is the one status a test can assert on verbatim.</summary>
     public const string HostDisconnectedMessage = "Host disconnected";
+
+    /// <summary>Players in one session, the host included. Whisper's number, not the
+    /// framework's: <see cref="Net.Host"/> caps CONNECTIONS, and the host is not one of
+    /// its own, so it hosts with one fewer than this.</summary>
+    public const int MaxPlayers = 4;
+
+    /// <summary>How many times a silent drop is retried before giving up. Bounded, and
+    /// small: three tries over roughly six seconds is long enough to ride out a hiccup
+    /// and short enough that a player staring at a dead arena is sent somewhere useful
+    /// rather than left hoping.</summary>
+    public const int ReconnectAttempts = 3;
+
+    /// <summary>Seconds between reconnect attempts.</summary>
+    public const float ReconnectDelaySeconds = 2.0f;
+
+    /// <summary>Seconds a single reconnect attempt is given before it counts as
+    /// failed. A connect that is never answered would otherwise hang the whole retry
+    /// sequence on the first attempt.</summary>
+    public const float ReconnectTimeoutSeconds = 5.0f;
 
     /// <summary>Prefab spawned for each player. A bare stem, not a path - that is
     /// what <see cref="Net.Spawn"/> takes, and the name travels on the wire.</summary>
@@ -101,6 +152,19 @@ public sealed class WhisperSession : EntityScript
     private bool _hostPlayerSpawned;
     private bool _wasInSession;
 
+    // Reconnect state. `_reconnecting` is the mode; the other three are one attempt's
+    // worth of bookkeeping.
+    private bool _reconnecting;
+    private bool _attemptLive;
+    private int _attemptsMade;
+    private float _attemptElapsed;
+    private float _untilNextAttempt;
+
+    // On-screen line for reconnect progress. Created only when there is something to
+    // say - an empty arena with a dead link is exactly when the player has no other
+    // source of information about what is happening.
+    private Entity _status;
+
     /// <inheritdoc/>
     public override void OnAttach()
     {
@@ -109,11 +173,29 @@ public sealed class WhisperSession : EntityScript
         {
             _slotOwners[i] = Unclaimed;
         }
+
+        // Nothing live and nothing to report: this arena was opened straight from the
+        // editor. See JoinRequested for why a stale static has to be cleared here.
+        if (!Net.IsClient && !Net.IsHost && !Net.IsConnected && Net.DisconnectReason.Length == 0)
+        {
+            JoinRequested = false;
+        }
+    }
+
+    /// <inheritdoc/>
+    public override void OnDetach()
+    {
+        HideStatus();
     }
 
     /// <inheritdoc/>
     public override void OnUpdate(float deltaTime)
     {
+        if (HandleLeaveRequest())
+        {
+            return;
+        }
+
         if (Net.IsHost)
         {
             UpdateHost();
@@ -123,14 +205,64 @@ public sealed class WhisperSession : EntityScript
         // `_wasInSession` keeps this on the client branch after the link dies: the
         // framework sets the role back to offline when the host goes away, so testing
         // IsClient alone would silently reroute the drop into the offline branch and
-        // the title screen would never be reached.
-        if (Net.IsClient || _wasInSession)
+        // the title screen would never be reached. `JoinRequested` covers the earlier
+        // case still - a join refused before this script ever saw a live session.
+        if (Net.IsClient || _wasInSession || _reconnecting || JoinRequested)
         {
-            UpdateClient();
+            UpdateClient(deltaTime);
             return;
         }
 
         UpdateOffline();
+    }
+
+    // ── Leaving ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Escape leaves the arena. Returns true when it did, so the caller stops
+    /// updating a session that is on its way out.</summary>
+    /// <remarks>
+    /// Suppressed while the chat box has the keyboard: the text box uses Escape to
+    /// cancel an edit, and a key that both cancels a message and quits the session
+    /// would make the chat unusable.
+    /// </remarks>
+    private bool HandleLeaveRequest()
+    {
+        if (ChatBox.LocalIsTyping || !Input.IsKeyPressed(Key.Escape))
+        {
+            return false;
+        }
+        Debug.Log("Whisper: leaving the arena");
+        LeaveArena("");
+        return true;
+    }
+
+    /// <summary>Tear the session down and go back to the title screen, showing
+    /// <paramref name="status"/> there if there is anything to explain.</summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Net.Disconnect"/> rather than just loading the scene, and the order
+    /// matters: it is what gives back every 2D body this peer took off local simulation,
+    /// destroys the entities this session spawned rather than leaving them for the next
+    /// join to duplicate, and - on the host - tells every client the session ended ON
+    /// PURPOSE, so nobody sits retrying a host that just quit. Safe when there is no
+    /// session at all, which is what makes Escape work in a solo editor session too.
+    /// </para>
+    /// <para>
+    /// This is a voluntary departure whichever branch reached it, so the reconnect
+    /// machinery is cleared out on the way: an attempt still in flight would otherwise
+    /// drag the player back into the session they just left.
+    /// </para>
+    /// </remarks>
+    private void LeaveArena(string status)
+    {
+        Net.Disconnect();
+        StatusMessage = status;
+        JoinRequested = false;
+        _wasInSession = false;
+        _reconnecting = false;
+        _attemptLive = false;
+        HideStatus();
+        Scene.Load("Title");
     }
 
     // ── Host ────────────────────────────────────────────────────────────────────
@@ -248,20 +380,20 @@ public sealed class WhisperSession : EntityScript
     /// <remarks>
     /// <para>
     /// The <b>name</b> is what gates this, not a timer. A player prefab is authored
-    /// with an empty <c>NetPlayer.displayName</c> and the host writes the real one only
-    /// when <see cref="PlayerController.SubmitName"/> arrives - an RPC the joiner can
-    /// only send once its player has spawned and it has been told it owns it, so a
-    /// connection is live and nameless for a handful of frames. Announcing the moment
-    /// the connection appears in <see cref="Net.Connections"/> therefore prints an
-    /// empty name; a fixed delay would only be a guess that a slow link breaks.
+    /// with an empty <c>NetPlayer.displayName</c>, and the real one is written by the
+    /// peer that OWNS that player and then replicated here - which cannot happen until
+    /// the joiner has been told it owns anything, so a connection is live and nameless
+    /// for a handful of frames. Announcing the moment the connection appears in
+    /// <see cref="Net.Connections"/> therefore prints an empty name; a fixed delay
+    /// would only be a guess that a slow link breaks.
     /// </para>
     /// <para>
     /// A non-empty name is the exact signal, with no ambiguity to work around:
-    /// <see cref="PlayerController.SubmitName"/> is the only thing that ever writes the
-    /// field, and it substitutes "Player" for a blank rather than storing one, so
-    /// "still empty" and "genuinely called Player" cannot be confused. A joiner whose
-    /// name never arrives at all is simply never announced, which is the right failure
-    /// - the alternative is introducing somebody by a placeholder.
+    /// <see cref="Net.ClaimPlayerName"/> is the only thing that ever writes the field,
+    /// and it substitutes "Player" for a blank rather than storing one, so "still
+    /// empty" and "genuinely called Player" cannot be confused. A joiner whose name
+    /// never arrives at all is simply never announced, which is the right failure - the
+    /// alternative is introducing somebody by a placeholder.
     /// </para>
     /// </remarks>
     private void AnnounceNamedJoins()
@@ -295,10 +427,9 @@ public sealed class WhisperSession : EntityScript
     /// <para>
     /// Every announcement rides the <b>host's own player</b>, and that carrier is
     /// chosen on three counts. It is host-owned, so it is nowhere near the ownership
-    /// gate that only lets a client drive what it owns (see
-    /// <see cref="PlayerController.SubmitName"/>) - a client-owned player would happen
-    /// to work for a host-originated multicast, but reaching for one out of habit is
-    /// exactly the mistake that gate punishes elsewhere. It carries the
+    /// gate that only lets a peer drive what it owns - a client-owned player would
+    /// happen to work for a host-originated multicast, but reaching for one out of
+    /// habit is exactly the mistake that gate punishes elsewhere. It carries the
     /// <see cref="ChatBox"/> script that declares the multicast. And it outlives every
     /// client in the session, which a <i>leave</i> announcement needs: the leaver's own
     /// player is already destroyed by the time there is anything to say about it.
@@ -352,43 +483,187 @@ public sealed class WhisperSession : EntityScript
 
     // ── Client ──────────────────────────────────────────────────────────────────
 
-    /// <summary>Watch for the host going away, and leave the arena when it does.</summary>
+    /// <summary>Watch the link, and decide what its ending means.</summary>
     /// <remarks>
     /// <para>
-    /// "Was in a session and is not now" is the whole signal. There is no disconnect
-    /// callback either, and the framework does not leave a half-live client behind to
-    /// interrogate: losing the link stops the session outright, which drops the role
-    /// back to offline and is why <c>_wasInSession</c> has to be latched rather than
-    /// <see cref="Net.IsClient"/> tested on its own.
+    /// "Was in a session and is not now" is the whole signal that something ended.
+    /// There is no disconnect callback, and the framework does not leave a half-live
+    /// client behind to interrogate: losing the link stops the session outright, which
+    /// drops the role back to offline and is why <c>_wasInSession</c> has to be latched
+    /// rather than <see cref="Net.IsClient"/> tested on its own.
     /// </para>
     /// <para>
-    /// That same teardown is what removes the replicated entities, so there is no
+    /// WHY it ended is a separate question, and <see cref="Net.DisconnectReason"/> is
+    /// the only thing that can answer it: the framework fills it in when the far end
+    /// ended the link deliberately and said so - a refusal, a host closing the session -
+    /// and leaves it empty for every accidental ending. Retrying a deliberate ending
+    /// gets the same answer and looks broken to the player who was just thrown out;
+    /// giving up on an accidental one throws away a session over one bad second.
+    /// </para>
+    /// <para>
+    /// The framework's teardown is what removes the replicated entities, so there is no
     /// per-entity cleanup here to write: every player the session spawned - this
     /// client's own included - is destroyed, and their name tags and chat UI go with
     /// them through <see cref="NameTag.OnDetach"/> and <see cref="ChatBox.OnDetach"/>.
-    /// What is left is an arena with nobody in it, and the only job is to not sit in
-    /// it. No host migration: see the class remarks.
+    /// No host migration: see the class remarks.
     /// </para>
     /// </remarks>
-    private void UpdateClient()
+    private void UpdateClient(float deltaTime)
     {
         if (Net.IsClient && Net.IsConnected)
         {
             _wasInSession = true;
+            if (_reconnecting)
+            {
+                Debug.Log("Whisper: reconnected");
+                _reconnecting = false;
+                _attemptLive = false;
+                HideStatus();
+            }
+            return;
+        }
+
+        if (_reconnecting)
+        {
+            TickReconnect(deltaTime);
+            return;
+        }
+
+        string reason = Net.DisconnectReason;
+        if (reason.Length > 0)
+        {
+            // Somebody decided. This covers both a host that quit and a join this
+            // client was refused outright - including one refused before the session
+            // was ever live, which is why this test comes before the _wasInSession one.
+            Debug.LogWarning($"Whisper: session ended - {reason}");
+            LeaveArena(reason);
             return;
         }
 
         if (!_wasInSession)
         {
-            // Either still connecting, or this arena is being played offline from the
-            // editor - neither is a dropped host.
+            // Still connecting for the first time. Nothing has ended, so there is
+            // nothing to react to yet.
             return;
         }
 
+        // Ended with nothing to say: an accident, so try to come back.
         _wasInSession = false;
-        StatusMessage = HostDisconnectedMessage;
-        Debug.LogWarning("Whisper: host disconnected, returning to the title screen");
-        Scene.Load("Title");
+        BeginReconnect();
+    }
+
+    // ── Reconnecting ────────────────────────────────────────────────────────────
+
+    /// <summary>Start the bounded retry sequence after a silent drop.</summary>
+    /// <remarks>
+    /// Refuses, and goes straight back to the title screen, when there is no address to
+    /// retry - a player who reached the arena by hosting has nowhere to reconnect TO,
+    /// and pretending otherwise would just spend six seconds failing.
+    /// </remarks>
+    private void BeginReconnect()
+    {
+        if (HostAddress.Length == 0)
+        {
+            Debug.LogWarning("Whisper: link lost and no host address to return to");
+            LeaveArena(HostDisconnectedMessage);
+            return;
+        }
+        Debug.LogWarning("Whisper: link lost without a reason, attempting to reconnect");
+        _reconnecting = true;
+        _attemptLive = false;
+        _attemptsMade = 0;
+        _attemptElapsed = 0.0f;
+        // A short wait before the FIRST attempt too: whatever broke the link is rarely
+        // fixed by the same millisecond, and an immediate retry mostly just burns one
+        // of three attempts.
+        _untilNextAttempt = ReconnectDelaySeconds;
+        ShowStatus("Connection lost. Reconnecting...");
+    }
+
+    /// <summary>One frame of the retry sequence: wait, attempt, judge, repeat.</summary>
+    private void TickReconnect(float deltaTime)
+    {
+        if (_attemptLive)
+        {
+            string reason = Net.DisconnectReason;
+            if (reason.Length > 0)
+            {
+                // The host is back and does not want us - full, or shutting down. That
+                // is an answer, not a failure to retry.
+                LeaveArena(reason);
+                return;
+            }
+            _attemptElapsed += deltaTime;
+            if (Net.IsClient && _attemptElapsed < ReconnectTimeoutSeconds)
+            {
+                return; // still in flight
+            }
+            // Timed out, or the transport gave up on its own. Tidy up before the next
+            // one, or a half-open attempt races the one after it.
+            Net.Disconnect();
+            _attemptLive = false;
+            _untilNextAttempt = ReconnectDelaySeconds;
+            return;
+        }
+
+        if (_attemptsMade >= ReconnectAttempts)
+        {
+            Debug.LogWarning("Whisper: could not reconnect, returning to the title screen");
+            LeaveArena(HostDisconnectedMessage);
+            return;
+        }
+
+        _untilNextAttempt -= deltaTime;
+        if (_untilNextAttempt > 0.0f)
+        {
+            return;
+        }
+
+        _attemptsMade++;
+        _attemptElapsed = 0.0f;
+        ShowStatus($"Reconnecting... ({_attemptsMade}/{ReconnectAttempts})");
+        if (Net.Connect(HostAddress, HostPort))
+        {
+            _attemptLive = true;
+            return;
+        }
+        // Could not even open a socket - count it and wait like any other failure.
+        _untilNextAttempt = ReconnectDelaySeconds;
+    }
+
+    // ── Status line ─────────────────────────────────────────────────────────────
+
+    /// <summary>Put one line across the top of the screen, creating the element on
+    /// first use.</summary>
+    /// <remarks>
+    /// Built from script rather than authored into the arena for the same reason
+    /// <see cref="NameTag"/>'s label is: the scene has no canvas, and passing a
+    /// scene-placed element to a script that has to work in a prefab-free scene is more
+    /// wiring than the one line is worth. UI space has Y=0 at the TOP, and new elements
+    /// are centre-anchored, so the anchor is moved to the top edge explicitly.
+    /// </remarks>
+    private void ShowStatus(string text)
+    {
+        if (!_status.IsValid)
+        {
+            _status = Ui.CreateText();
+            Vector2 topCentre = new(0.5f, 0.0f);
+            Ui.SetAnchors(_status, topCentre, topCentre);
+            Ui.SetPivot(_status, new Vector2(0.5f, 0.0f));
+            Ui.SetRect(_status, 0.0f, 24.0f, 520.0f, 28.0f);
+            Ui.SetTextAlign(_status, UiHAlign.Center, UiVAlign.Middle);
+            Ui.SetTextColor(_status, new Vector4(1.0f, 0.86f, 0.45f, 1.0f));
+        }
+        Ui.SetText(_status, text);
+    }
+
+    private void HideStatus()
+    {
+        if (_status.IsValid)
+        {
+            _status.Destroy();
+            _status = default;
+        }
     }
 
     // ── Offline ─────────────────────────────────────────────────────────────────

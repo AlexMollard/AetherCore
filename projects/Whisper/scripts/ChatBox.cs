@@ -14,11 +14,10 @@ namespace AetherGame;
 /// <para>
 /// <b>Why this script lives on the player prefab.</b> The host only accepts a
 /// <see cref="NetRpcTarget.Server"/> call aimed at an entity the SENDING connection
-/// owns - the ownership gate documented at length on
-/// <see cref="PlayerController.SubmitName"/>. A chat submission is exactly that kind
-/// of call, so <see cref="SendChat"/> has to be declared on a script attached to the
-/// caller's own player. Putting it on the scene-placed, host-owned <c>Session</c>
-/// entity would compile, route, and then be silently dropped on arrival.
+/// OWNS. A chat submission is exactly that kind of call, so <see cref="SendChat"/> has
+/// to be declared on a script attached to the caller's own player. Putting it on the
+/// scene-placed, host-owned <c>Session</c> entity would compile, route, and then be
+/// silently dropped on arrival.
 /// </para>
 /// <para>
 /// That placement means every peer runs one instance of this script per player in the
@@ -87,6 +86,12 @@ public sealed class ChatBox : EntityScript
     private static readonly List<string> s_lines = new();
     private static int s_revision;
 
+    // Whether the LOCAL player's box currently owns the keyboard. Static for the same
+    // reason the transcript is: only one instance in the process builds any UI, and the
+    // scripts that need to know - the session director deciding whether Escape means
+    // "leave the arena" or "cancel this message" - have no route to that instance.
+    private static bool s_localTyping;
+
     private Entity _input;
     private Entity _log;
     private int _drawnRevision = -1;
@@ -98,6 +103,13 @@ public sealed class ChatBox : EntityScript
     /// movement key, and typing "add" walks the character across the arena.
     /// </summary>
     public bool IsTyping => _input.IsValid && Ui.IsEditing(_input);
+
+    /// <summary>
+    /// True while the local player is typing a message, readable without a handle to
+    /// the instance that owns the box. Any key the chat is using is a key gameplay must
+    /// leave alone - Escape most of all, since the text box uses it to cancel an edit.
+    /// </summary>
+    public static bool LocalIsTyping => s_localTyping;
 
     /// <inheritdoc/>
     public override void OnUpdate(float deltaTime)
@@ -117,6 +129,7 @@ public sealed class ChatBox : EntityScript
 
         PumpInput();
         RefreshLog();
+        s_localTyping = IsTyping;
     }
 
     /// <inheritdoc/>
@@ -134,6 +147,9 @@ public sealed class ChatBox : EntityScript
         {
             _log.Destroy();
         }
+        // The box is gone, so nothing is typing in it. Left true, a session that ended
+        // mid-message would leave the arena permanently unable to read Escape.
+        s_localTyping = false;
 
         // The local player is destroyed when the session ends (leaving the arena, or
         // the host dropping). Clearing here rather than on build means a fresh arena
@@ -296,10 +312,10 @@ public sealed class ChatBox : EntityScript
     /// </summary>
     /// <remarks>
     /// Declared here, on the player, because the host rejects a server RPC aimed at an
-    /// entity the sending connection does not own - see the remarks on the class and on
-    /// <see cref="PlayerController.SubmitName"/>. <see cref="EntityScript.Self"/> inside
-    /// this method is the SENDER's player entity on whichever peer is running it, which
-    /// is exactly the entity whose replicated name should be on the line.
+    /// entity the sending connection does not own - see the remarks on the class.
+    /// <see cref="EntityScript.Self"/> inside this method is the SENDER's player entity
+    /// on whichever peer is running it, which is exactly the entity whose replicated
+    /// name should be on the line.
     /// </remarks>
     /// <param name="message">The raw body, re-sanitised here: the sending client is the
     /// one peer whose sanitising the host cannot take on trust.</param>
@@ -311,8 +327,8 @@ public sealed class ChatBox : EntityScript
         {
             return;
         }
-        // Net.GetPlayerName reads the replicated NetPlayer.displayName the client
-        // reported through PlayerController.SubmitName, so attribution is the host's
+        // Net.GetPlayerName reads the replicated NetPlayer.displayName the sender's own
+        // machine authored and replication carried here, so attribution is the host's
         // copy of the name rather than anything the sender put in this call.
         Net.Call(Self, nameof(ReceiveChat), $"{Net.GetPlayerName(Self)}: {clean}");
     }
