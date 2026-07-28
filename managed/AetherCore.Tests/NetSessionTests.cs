@@ -73,11 +73,88 @@ public sealed class NetSessionTests : SdkTestBase
     }
 
     [Fact]
-    public void ParseAddress_PortIsReadFromTheLastColon()
+    public void ParseAddress_MultipleUnbracketedColonsAreTakenAsABareIPv6Literal()
     {
-        // LastIndexOf, so a host that itself contains a colon keeps everything before
-        // the final one.
-        Assert.Equal(("a:b", (ushort)80), NetSession.ParseAddress("a:b:80", 7777));
+        // Splitting an unbracketed multi-colon string on its LAST colon is exactly the
+        // bug that mangles IPv6 literals ("::1" -> host ":", port 1). The discriminator
+        // is colon count, not position: two or more unbracketed colons means there is no
+        // port to split off, whatever the text actually is.
+        Assert.Equal(("a:b:80", (ushort)7777), NetSession.ParseAddress("a:b:80", 7777));
+    }
+
+    // ── ParseAddress: bare IPv6 ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ParseAddress_BareIPv6LoopbackHasNoPortToSplitOff()
+    {
+        Assert.Equal(("::1", (ushort)7777), NetSession.ParseAddress("::1", 7777));
+    }
+
+    [Fact]
+    public void ParseAddress_BareIPv6LinkLocalHasNoPortToSplitOff()
+    {
+        Assert.Equal(("fe80::1", (ushort)7777), NetSession.ParseAddress("fe80::1", 7777));
+    }
+
+    [Fact]
+    public void ParseAddress_BareIPv6FullFormHasNoPortToSplitOff()
+    {
+        Assert.Equal(("2001:db8::8a2e:370:7334", (ushort)7777),
+            NetSession.ParseAddress("2001:db8::8a2e:370:7334", 7777));
+    }
+
+    // ── ParseAddress: bracketed IPv6 ────────────────────────────────────────────
+
+    [Fact]
+    public void ParseAddress_BracketedIPv6WithPortStripsTheBracketsAndSplitsThePort()
+    {
+        Assert.Equal(("::1", (ushort)7777), NetSession.ParseAddress("[::1]:7777", 9999));
+    }
+
+    [Fact]
+    public void ParseAddress_BracketedIPv6WithoutPortTakesTheDefault()
+    {
+        Assert.Equal(("::1", (ushort)7777), NetSession.ParseAddress("[::1]", 7777));
+    }
+
+    [Fact]
+    public void ParseAddress_BracketedIPv6FullFormWithPortStripsTheBrackets()
+    {
+        Assert.Equal(("2001:db8::8a2e:370:7334", (ushort)9000),
+            NetSession.ParseAddress("[2001:db8::8a2e:370:7334]:9000", 7777));
+    }
+
+    // ── ParseAddress: malformed ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ParseAddress_UnclosedBracketIsTakenWholeAsTheAddress()
+    {
+        // No closing bracket at all - this cannot be split, so it is treated like any
+        // other address this method cannot make sense of: kept whole.
+        Assert.Equal(("[::1", (ushort)7777), NetSession.ParseAddress("[::1", 7777));
+    }
+
+    [Fact]
+    public void ParseAddress_BracketedIPv6WithUnparseablePortFallsBackWithoutLosingTheHost()
+    {
+        // Same rule as the unbracketed form: a port typo does not cost the address.
+        Assert.Equal(("::1", (ushort)7777), NetSession.ParseAddress("[::1]:notaport", 7777));
+    }
+
+    [Fact]
+    public void ParseAddress_StrayClosingBracketWithNoOpenerIsOrdinaryHostText()
+    {
+        // Only a LEADING '[' engages the bracket-parsing path; this string never opens
+        // one, so it is read as an ordinary "host:port" whose host happens to be "]".
+        Assert.Equal(("]", (ushort)7777), NetSession.ParseAddress("]:7777", 9999));
+    }
+
+    // ── ParseAddress: hostnames unaffected ──────────────────────────────────────
+
+    [Fact]
+    public void ParseAddress_BareHostnameTakesTheDefaultPort()
+    {
+        Assert.Equal(("example.test", (ushort)7777), NetSession.ParseAddress("example.test", 7777));
     }
 
     // ── LocalPlayerName ─────────────────────────────────────────────────────────

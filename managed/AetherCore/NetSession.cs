@@ -131,14 +131,41 @@ public static class NetSession
     }
 
     /// <summary>
-    /// Split a typed "host" or "host:port" into its two halves, falling back to
+    /// Split a typed address into a host and a port, falling back to
     /// <paramref name="defaultPort"/> rather than refusing to connect.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// An empty string means the loopback address, so a player testing two processes on
     /// one machine can leave the field blank. A port that will not parse is treated as
     /// absent, on the grounds that a typo in the port is not a reason to reject a
     /// perfectly good address.
+    /// </para>
+    /// <para>
+    /// IPv6 literals use colons for the address itself, so "split on the last colon"
+    /// - correct for everything else - would carve one apart (<c>::1</c> becomes host
+    /// <c>:</c>, port <c>1</c>). The discriminator is colon COUNT, not position: a bare,
+    /// unbracketed literal (<c>::1</c>, <c>fe80::1</c>) always has more than one colon,
+    /// so more than one colon with no brackets means there is no port to split off, and
+    /// the text comes back whole with <paramref name="defaultPort"/>. A bracketed
+    /// literal (<c>[::1]:7777</c>) is unambiguous - it is split at the closing bracket
+    /// instead, with the brackets stripped from the returned host, and <c>[::1]</c> with
+    /// nothing after the bracket also takes <paramref name="defaultPort"/>.
+    /// </para>
+    /// <para>
+    /// A malformed bracketed form is not an error, on the same grounds as the port typo
+    /// above: a missing closing bracket (<c>[::1</c>) is kept whole as the host, and a
+    /// closing bracket followed by junk that is not a valid <c>:port</c> (<c>[::1]:x</c>)
+    /// keeps the bracketed host and falls back to <paramref name="defaultPort"/>. Text
+    /// that never opens a bracket in the first place (<c>]:7777</c>) does not engage this
+    /// path at all and is read as ordinary "host:port" whose host happens to contain
+    /// <c>]</c>.
+    /// </para>
+    /// <para>
+    /// A zone id (<c>fe80::1%eth0</c>) is out of scope: it is not stripped or otherwise
+    /// special-cased, so it rides along as part of the host on whichever path the literal
+    /// takes.
+    /// </para>
     /// </remarks>
     public static (string Address, ushort Port) ParseAddress(string text, ushort defaultPort)
     {
@@ -147,14 +174,52 @@ public static class NetSession
         {
             return ("127.0.0.1", defaultPort);
         }
-        int colon = trimmed.LastIndexOf(':');
-        if (colon <= 0 || colon == trimmed.Length - 1)
+
+        if (trimmed[0] == '[')
+        {
+            return ParseBracketedAddress(trimmed, defaultPort);
+        }
+
+        int firstColon = trimmed.IndexOf(':');
+        int lastColon = trimmed.LastIndexOf(':');
+        if (firstColon >= 0 && firstColon != lastColon)
+        {
+            // More than one colon with no brackets: a bare IPv6 literal, not a
+            // "host:port" pair - there is no port to split off.
+            return (trimmed, defaultPort);
+        }
+
+        if (lastColon <= 0 || lastColon == trimmed.Length - 1)
         {
             return (trimmed, defaultPort);
         }
-        string host = trimmed.Substring(0, colon);
-        return ushort.TryParse(trimmed.Substring(colon + 1), out ushort port)
+        string host = trimmed.Substring(0, lastColon);
+        return ushort.TryParse(trimmed.Substring(lastColon + 1), out ushort port)
             ? (host, port)
             : (host, defaultPort);
+    }
+
+    /// <summary>Split a "[host]" or "[host]:port" literal, called once <see
+    /// cref="ParseAddress"/> has seen the leading bracket.</summary>
+    private static (string Address, ushort Port) ParseBracketedAddress(string trimmed, ushort defaultPort)
+    {
+        int close = trimmed.IndexOf(']');
+        if (close < 0)
+        {
+            // No closing bracket - cannot be split, so it is kept whole, the same as any
+            // other address this method cannot make sense of.
+            return (trimmed, defaultPort);
+        }
+
+        string host = trimmed.Substring(1, close - 1);
+        string afterBracket = trimmed.Substring(close + 1);
+        if (afterBracket.Length >= 2 && afterBracket[0] == ':'
+            && ushort.TryParse(afterBracket.Substring(1), out ushort port))
+        {
+            return (host, port);
+        }
+        // Nothing after the bracket, or something that is not a valid ":port" - same
+        // rule as the unbracketed form: a bad or missing port does not cost the host.
+        return (host, defaultPort);
     }
 }
