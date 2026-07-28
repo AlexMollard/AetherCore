@@ -9,7 +9,6 @@
 #include <entt/entt.hpp>
 
 #include "net/NetComponents.hpp"
-#include "net/NetInput.hpp"
 #include "net/NetRelevancy.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
@@ -17,7 +16,6 @@
 #include "net/NetSnapshot.hpp"
 #include "net/NetSpawn.hpp"
 #include "net/NetworkContext.hpp"
-#include "physics2d/Physics2DSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
@@ -60,12 +58,33 @@ namespace aether::net
 		{
 			return !identity.scenePlaced && !identity.spawnPrefab.empty();
 		}
+
+		// How much of an inbound state packet this peer is willing to believe.
+		//
+		// On the HOST the sender is a client, which is authoritative for the entities
+		// it owns and for nothing else - so the gate is the whole of the security
+		// story for client authority, and it is applied per FIELD inside the apply
+		// rather than per packet, because one packet can name many entities.
+		//
+		// On a CLIENT the sender is the host. There is exactly one link and the host
+		// is the session's authority (it decides spawns, despawns and relevancy), so
+		// there is no second candidate to distinguish it from and nothing to gate
+		// against. Note this is not the host being trusted to move a client's own
+		// character: the host never sends an entity's state back to its owner (see
+		// NetworkSendSystem), and ResolveTransforms discards any correction to an
+		// owned entity regardless of who sent it.
+		[[nodiscard]] StateWriteGate InboundGate(const NetworkContext& context, ConnectionId peer)
+		{
+			return context.IsHost() ? StateWriteGate::OwnedBy(peer) : StateWriteGate::TrustAll();
+		}
 	} // namespace
 
 	// ── Receive ─────────────────────────────────────────────────────────────────
 
 	void NetworkReceiveSystem::Update(World& world, float dt)
 	{
+		(void) dt; // interpolation is a jitter buffer over wall-clock arrival times
+
 		NetworkContext& context = m_context;
 		if (!context.IsActive())
 		{
@@ -81,12 +100,11 @@ namespace aether::net
 		context.Transport().Poll();
 		PruneDeadBindings(world);
 
-		// Only a client renders someone else's simulation, so only a client has a
-		// rendered pose to preserve across the apply.
-		if (context.IsClient())
-		{
-			CaptureRenderedTransforms(world);
-		}
+		// BOTH ROLES render someone else's simulation now: a client renders every
+		// other player, and the host renders every client's. So both need the
+		// pre-apply pose recorded, and both need the apply resolved into
+		// interpolation afterwards. Under host authority only a client did.
+		CaptureRenderedTransforms(world);
 
 		// Copied, not iterated in place: a client losing its link tears the session
 		// down inside the handler, and Disconnect() clears the transport's event
@@ -109,17 +127,15 @@ namespace aether::net
 			}
 		}
 
-		if (context.IsClient())
-		{
-			// After the inbound events, because a Welcome or a Spawn handled above is
-			// what establishes authority in the first place, and the entity a Spawn just
-			// created must be handed over on the frame it appears - Physics2DSystem runs
-			// later in this same frame and would otherwise integrate it once before
-			// anything noticed. Before ResolveTransforms only for readability; the two
-			// are independent.
-			context.SyncSimulationAuthority(world);
-			ResolveTransforms(world, dt);
-		}
+		// After the inbound events, because a Welcome or a Spawn handled above is what
+		// establishes authority in the first place, and the entity a Spawn just created
+		// must be handed over on the frame it appears - Physics2DSystem runs later in
+		// this same frame and would otherwise integrate it once before anything
+		// noticed. Before ResolveTransforms only for readability; the two are
+		// independent. Both are role-agnostic now: the host defers to a client's
+		// ownership exactly as a client defers to the host's.
+		context.SyncSimulationAuthority(world);
+		ResolveTransforms(world);
 	}
 
 	void NetworkReceiveSystem::PruneDeadBindings(World& world)
@@ -264,22 +280,23 @@ namespace aether::net
 		// rather than throwing.
 		switch (kind)
 		{
+		// State travels in both directions under client authority, so neither of the
+		// next two can be gated by role the way the rest of this switch is. What
+		// replaces the role gate is the OWNERSHIP gate, and it is strictly stronger:
+		// the host accepts a client's state for the entities that client owns and
+		// discards every other field in the same packet, whatever net ids the sender
+		// chose to name. A client, whose only peer is the host, trusts what arrives -
+		// the host is the session's authority and there is no second candidate for
+		// where a snapshot on that link came from.
 		case NetMessage::Snapshot:
-			if (context.IsHost())
-			{
-				return; // only the host is authoritative; a client cannot rewrite its world
-			}
-			ApplySnapshot(world, context.Schema(), context.Catalog(), context.Session(), payload);
+			ApplySnapshot(world, context.Schema(), context.Catalog(), context.Session(), payload,
+			        InboundGate(context, peer));
 			return;
 
 		case NetMessage::ScriptFields:
-			if (context.IsHost())
-			{
-				return;
-			}
 			if (const ScriptFieldBridge* bridge = context.FieldBridge())
 			{
-				ApplyScriptFieldPacket(world, context.Session(), *bridge, payload);
+				ApplyScriptFieldPacket(world, context.Session(), *bridge, payload, InboundGate(context, peer));
 			}
 			return;
 
@@ -351,31 +368,6 @@ namespace aether::net
 			return;
 		}
 
-		case NetMessage::Input:
-		{
-			// One direction only, unlike Rpc: input travels client-to-host and nothing
-			// else, so the role gate belongs here and there is no target byte for a
-			// sender to choose. A client receiving one is a peer trying to drive this
-			// machine's simulation, which nothing is ever allowed to do.
-			if (!context.IsHost())
-			{
-				return;
-			}
-			ByteReader reader{payload};
-			const std::optional<InputMessage> msg = DecodeInput(reader);
-			if (!msg.has_value())
-			{
-				return;
-			}
-			if (const RpcBridge* bridge = context.Rpcs())
-			{
-				// The ownership gate (a client may drive only what it owns) and the
-				// staleness gate both live in ApplyInput.
-				ApplyInput(world, context.Session(), *bridge, *msg, peer, context.InputGate());
-			}
-			return;
-		}
-
 		case NetMessage::Welcome:
 		{
 			if (!context.IsClient())
@@ -418,8 +410,11 @@ namespace aether::net
 	void NetworkReceiveSystem::CaptureRenderedTransforms(World& world)
 	{
 		m_renderedBefore.clear();
-		world.View<NetworkIdentity, NetworkTransform, TransformComponent>().each(
-		        [&](entt::entity, NetworkIdentity& identity, NetworkTransform&, TransformComponent& transform)
+		// Every replicated entity with a transform, NetworkTransform or not - see the
+		// note on ResolveTransforms' view. An entity missing from this map is skipped
+		// there, so narrowing this narrows the zero-correction guarantee with it.
+		world.View<NetworkIdentity, TransformComponent>().each(
+		        [&](entt::entity, NetworkIdentity& identity, TransformComponent& transform)
 		        {
 			        if (identity.netId == 0)
 			        {
@@ -432,20 +427,19 @@ namespace aether::net
 		        });
 	}
 
-	void NetworkReceiveSystem::ResolveTransforms(World& world, float dt)
+	void NetworkReceiveSystem::ResolveTransforms(World& world)
 	{
 		NetworkContext& context = m_context;
-		const ConnectionId local = context.Session().LocalConnection();
 		const float now = context.Now();
 
-		// Entities whose predicted pose this tick actually moved. Collected rather
-		// than pushed into physics inline: the push is what makes the correction
-		// survive the frame at all (see the note below), and it needs one lookup of
-		// the physics system rather than one per entity.
-		std::vector<Entity> corrected;
-
-		world.View<NetworkIdentity, NetworkTransform, TransformComponent>().each(
-		        [&](entt::entity ent, NetworkIdentity& identity, NetworkTransform& tuning, TransformComponent& transform)
+		// NetworkTransform is looked up per entity rather than joined into the view,
+		// because it is an OPTIONAL smoothing opt-in and the zero-correction rule
+		// below is not optional. Joined, an entity without one would never reach this
+		// system at all and an inbound packet naming the owner's own character would
+		// land on its transform unopposed - the guarantee would quietly depend on a
+		// component the project happened to author.
+		world.View<NetworkIdentity, TransformComponent>().each(
+		        [&](entt::entity ent, NetworkIdentity& identity, TransformComponent& transform)
 		        {
 			        if (identity.netId == 0)
 			        {
@@ -457,6 +451,37 @@ namespace aether::net
 				        return; // spawned by this frame's own packets; nothing to compare against yet
 			        }
 			        const Pose& rendered = before->second;
+
+			        // ZERO CORRECTION ON THE OWNED ENTITY. This peer's own simulation is
+			        // the truth for what it owns, so the pre-apply matrix is restored
+			        // bit-exact and nothing else happens: no ease, no snap, no prediction
+			        // machinery, no re-seating of the physics body.
+			        //
+			        // The restore is not redundant even though the send side never echoes an
+			        // entity's state back to its owner. "The owner receives no correction"
+			        // has to be true of what this machine DOES, not of what a well-behaved
+			        // peer happens to send - a host running an older build, or one being
+			        // hostile, must not be able to tug the local character by a millimetre.
+			        //
+			        // Restoring the MATRIX rather than recomposing from the decomposed
+			        // channels matters: a decompose/recompose round trip rebuilds rotation
+			        // and scale from lossy trig and re-injects float error into channels
+			        // this branch never meant to touch (see the "position" field setter's
+			        // note in CoreComponents.reflect.cpp).
+			        if (context.OwnsIdentity(identity))
+			        {
+				        transform.localToWorld = rendered.matrix;
+				        return;
+			        }
+
+			        const auto* tuning = world.TryGet<NetworkTransform>(World::FromEntt(ent));
+			        if (tuning == nullptr)
+			        {
+				        // No smoothing asked for: the received value stands exactly as
+				        // ApplySnapshot wrote it, which is the documented behaviour for a
+				        // replicated entity with no NetworkTransform (it visibly snaps).
+				        return;
+			        }
 
 			        Pose applied;
 			        DecomposeTRS(transform.localToWorld, applied.position, applied.euler, applied.scale);
@@ -485,32 +510,6 @@ namespace aether::net
 				        changed = true;
 			        }
 
-			        // Before the host's Welcome arrives this client has no id of its own,
-			        // and kInvalidConnection would match every host-owned entity - so
-			        // nothing counts as locally predicted until the session is real.
-			        if (local != kInvalidConnection && identity.owner == local)
-			        {
-				        // The locally predicted entity. Scripts drove it to `rendered` this
-				        // frame; ease it toward the host's answer instead of snapping, and
-				        // leave the rotation alone - yanking the local player's facing to a
-				        // stale authoritative value is worse than a small positional error.
-				        // Only position changes here, so restore the pre-apply matrix
-				        // bit-exact and touch nothing but its translation column: a
-				        // decompose/recompose round trip would rebuild rotation and scale
-				        // from lossy trig and re-inject float error into channels this
-				        // branch never meant to touch (see the "position" field setter's
-				        // note in CoreComponents.reflect.cpp).
-				        const glm::vec3 eased = EaseToward(rendered.position, state.authoritativePosition,
-				                tuning.correctionRate, dt, tuning.snapDistance);
-				        transform.localToWorld = rendered.matrix;
-				        transform.localToWorld[3] = glm::vec4(eased, 1.f);
-				        if (Differs(eased, rendered.position))
-				        {
-					        corrected.push_back(World::FromEntt(ent));
-				        }
-				        return;
-			        }
-
 			        if (changed)
 			        {
 				        state.buffer.Push(TransformSample{
@@ -521,8 +520,10 @@ namespace aether::net
 			        }
 
 			        // Render the remote entity in the past, where there is a sample on both
-			        // sides of the render time to interpolate between.
-			        const float delay = std::max(0.f, tuning.interpolationDelaySeconds);
+			        // sides of the render time to interpolate between. This is what makes
+			        // OTHER players look smooth between snapshots, and it is untouched by the
+			        // move to client authority - only where the samples originate changed.
+			        const float delay = std::max(0.f, tuning->interpolationDelaySeconds);
 			        const std::optional<TransformSample> sample = state.buffer.Sample(now - delay);
 			        if (!sample.has_value())
 			        {
@@ -533,63 +534,38 @@ namespace aether::net
 			        }
 			        transform.localToWorld = ComposeTransform(sample->position, sample->rotation, applied.scale);
 		        });
-
-		PushCorrectionsToPhysics(world, corrected);
-	}
-
-	// Why this exists at all, and why NOTHING above it was enough on its own.
-	//
-	// A locally-owned 2D body deliberately stays DYNAMIC on a client - it is the one
-	// entity this peer predicts, so SyncSimulationAuthority leaves it on local
-	// simulation (see the note there). Dynamic is also the exact body type
-	// Physics2DSystem::SyncTransforms writes the transform back FOR, from the Box2D
-	// pose, later in the same frame. So the ease/snap computed above was being
-	// recomputed correctly every single tick and then overwritten before anything
-	// could render it: the owner branch ran, the correction was real, and the frame
-	// ended with the body exactly where prediction had put it. That is why an error
-	// of fourteen units survived thirty seconds against a snapDistance of four.
-	//
-	// TeleportToTransform is the engine's existing answer to "something outside
-	// physics moved this transform" - it sets the Box2D pose AND the interpolation
-	// state, which is what stops the write-back from undoing it. Its own header
-	// comment says as much.
-	//
-	// Only entities whose correction actually MOVED them are pushed: a prediction
-	// that already agrees with the host must not have its body woken and re-seated
-	// every frame just to arrive where it already was.
-	void NetworkReceiveSystem::PushCorrectionsToPhysics(World& world, const std::vector<Entity>& corrected)
-	{
-		if (corrected.empty())
-		{
-			return;
-		}
-		// A world with no 2D physics registered (a 3D scene, a headless test) is not
-		// an error: there is no body fighting the transform, so writing it was already
-		// the whole of the correction.
-		auto* physics = static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem"));
-		if (physics == nullptr)
-		{
-			return;
-		}
-		for (const Entity entity: corrected)
-		{
-			if (world.Has<RigidBody2DComponent>(entity))
-			{
-				physics->TeleportToTransform(world, entity);
-			}
-		}
 	}
 
 	// ── Send ────────────────────────────────────────────────────────────────────
 
+	// EVERY PEER REPLICATES WHAT IT OWNS. This used to return early off the host -
+	// state flowed one way and a client spoke only through RPCs - and that is the line
+	// the move to client authority deletes. What replaces it is a per-entity ownership
+	// filter on both sides of the link:
+	//
+	//   a client sends the entities it owns, to the host, and nothing else;
+	//   the host sends each connection everything relevant to it EXCEPT what that
+	//   connection owns, which is both the relay of other clients' state and the
+	//   guarantee that nobody is ever told where their own character is.
+	//
+	// The second half is what makes "zero correction on the owned entity" true on the
+	// wire rather than only in the receiver.
 	void NetworkSendSystem::Update(World& world, float dt)
 	{
 		(void) dt; // paced off the wall clock, not the (pausable, scalable) frame delta
 
 		NetworkContext& context = m_context;
-		if (!context.IsHost())
+		if (!context.IsConnected())
 		{
-			return; // only the host replicates state; a client speaks through RPCs
+			// Offline, or a client whose Welcome has not landed: it has no connection
+			// id yet, so it does not know what it owns and must not guess.
+			return;
+		}
+
+		if (context.IsClient())
+		{
+			SendOwnedToHost(world, context);
+			return;
 		}
 
 		const float now = context.Now();
@@ -614,10 +590,16 @@ namespace aether::net
 			        context.Relevancy());
 			SnapshotCache& cache = context.CacheFor(connection);
 
+			// Relevancy membership is computed over the UNFILTERED set, and must be: a
+			// connection still needs the Spawn for its own character, and would never
+			// be admitted at all if its own entity were filtered out here. Only the
+			// STATE is filtered.
 			const bool admitted = UpdateRelevancyMembership(world, context, connection, relevant, cache);
 
+			const std::vector<Entity> replicated = ExceptOwnedBy(world, relevant, connection);
+
 			const std::vector<std::byte> snapshot = BuildSnapshot(world, context.Schema(), context.Catalog(),
-			        context.Session(), cache, relevant);
+			        context.Session(), cache, replicated);
 			if (!snapshot.empty())
 			{
 				// Normally unreliable: a dropped snapshot is superseded by the next
@@ -638,7 +620,7 @@ namespace aether::net
 			if (const ScriptFieldBridge* bridge = context.FieldBridge())
 			{
 				const std::vector<std::byte> fields = BuildScriptFieldPacket(world, context.Session(), cache,
-				        *bridge, relevant);
+				        *bridge, replicated);
 				if (!fields.empty())
 				{
 					// Reliable: script fields are per-field change-detected, so a lost
@@ -648,6 +630,87 @@ namespace aether::net
 				}
 			}
 		}
+	}
+
+	// A client's whole send path. No relevancy: the host is not a viewer with a
+	// radius, it is the relay every other peer's copy of these entities comes from,
+	// so an owned entity is always relevant to it. No per-connection loop either -
+	// a client has exactly one link, addressed as kInvalidConnection, which is how
+	// the transport already spells "the host".
+	void NetworkSendSystem::SendOwnedToHost(World& world, NetworkContext& context)
+	{
+		const float now = context.Now();
+		const float rate = std::max(1.f, context.SendRateHz());
+
+		float& nextSend = m_nextSendTimeByConnection[kInvalidConnection];
+		if (now < nextSend)
+		{
+			return;
+		}
+		nextSend = now + 1.f / rate;
+
+		const std::vector<Entity> owned = OwnedEntities(world, context);
+		if (owned.empty())
+		{
+			return;
+		}
+		SnapshotCache& cache = context.CacheFor(kInvalidConnection);
+
+		const std::vector<std::byte> snapshot = BuildSnapshot(world, context.Schema(), context.Catalog(),
+		        context.Session(), cache, owned);
+		if (!snapshot.empty())
+		{
+			// Unreliable for the same reason the host's diffs are: a dropped upload is
+			// superseded by the next one 50 ms later, and a retransmitted position is
+			// stale by the time it lands. There is no admitted/resync case on this side
+			// - a client never spawns anything, so nothing is ever forgotten and
+			// re-sent in full.
+			context.Transport().Send(kInvalidConnection, kChannelSnapshot, false,
+			        NetworkContext::Frame(NetMessage::Snapshot, snapshot));
+		}
+
+		if (const ScriptFieldBridge* bridge = context.FieldBridge())
+		{
+			const std::vector<std::byte> fields = BuildScriptFieldPacket(world, context.Session(), cache, *bridge,
+			        owned);
+			if (!fields.empty())
+			{
+				context.Transport().Send(kInvalidConnection, kChannelReliable, true,
+				        NetworkContext::Frame(NetMessage::ScriptFields, fields));
+			}
+		}
+	}
+
+	std::vector<Entity> NetworkSendSystem::OwnedEntities(World& world, const NetworkContext& context)
+	{
+		std::vector<Entity> owned;
+		world.View<NetworkIdentity>().each(
+		        [&](entt::entity ent, NetworkIdentity& identity)
+		        {
+			        if (identity.netId == 0 || !context.OwnsIdentity(identity))
+			        {
+				        return;
+			        }
+			        owned.push_back(World::FromEntt(ent));
+		        });
+		return owned;
+	}
+
+	std::vector<Entity> NetworkSendSystem::ExceptOwnedBy(World& world, const std::vector<Entity>& entities,
+	        ConnectionId owner)
+	{
+		std::vector<Entity> kept;
+		kept.reserve(entities.size());
+		for (const Entity entity: entities)
+		{
+			const auto* identity = world.TryGet<NetworkIdentity>(entity);
+			if (identity != nullptr && identity->owner == owner)
+			{
+				continue;
+			}
+			kept.push_back(entity);
+		}
+		return kept;
 	}
 
 	bool NetworkSendSystem::UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,

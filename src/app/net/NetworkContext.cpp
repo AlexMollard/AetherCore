@@ -182,11 +182,6 @@ namespace aether::net
 		m_transport.Disconnect();
 		m_session.Clear();
 		m_caches.clear();
-		// Net ids are re-derived from scratch by the next session, so a surviving
-		// sequence high-water mark would reject every input for that id until the new
-		// session's counter climbed past it - a player who could not move, silently.
-		m_inputPacer.Clear();
-		m_inputGate.Clear();
 	}
 
 	void NetworkContext::ForgetNetId(std::uint32_t netId)
@@ -195,8 +190,6 @@ namespace aether::net
 		{
 			cache.Forget(netId);
 		}
-		m_inputPacer.Forget(netId);
-		m_inputGate.Forget(netId);
 	}
 
 	std::vector<std::byte> NetworkContext::Frame(NetMessage kind, std::span<const std::byte> payload)
@@ -338,12 +331,10 @@ namespace aether::net
 		ApplyDespawn(world, netId);
 	}
 
+	// Deliberately IsOwner verbatim, not "the host decides everything" - see the note
+	// on the declaration. Under client authority the two questions have one answer.
 	bool NetworkContext::HasAuthority(World& world, Entity entity) const
 	{
-		if (!IsClient())
-		{
-			return true; // host, or offline: local state is the only state
-		}
 		return IsOwner(world, entity);
 	}
 
@@ -369,30 +360,45 @@ namespace aether::net
 			// on a client an unreplicated entity is local-only, so it is mine too.
 			return true;
 		}
+		return OwnsIdentity(*identity);
+	}
+
+	bool NetworkContext::OwnsIdentity(const NetworkIdentity& identity) const
+	{
+		if (m_session.Role() == NetRole::Offline)
+		{
+			// No session: this process is the whole world, so it owns every entity in
+			// it whatever a NetworkIdentity happens to say. The owner id is not
+			// cleared when a session ends (only the net id is), so without this an
+			// entity left over from a session - or one authored with an owner - would
+			// read as somebody else's in single-player and stop being simulated. The
+			// documented contract is "offline, both report true"; this is what makes
+			// that unconditional rather than true-by-coincidence.
+			return true;
+		}
 		// A client has no connection id of its own until the host's Welcome
 		// arrives, and LocalConnection() reads kInvalidConnection until then - the
 		// same value every host-owned entity's owner defaults to. Left unguarded,
 		// a client briefly "owns" the entire world between Connect() and Welcome.
 		// A host's own LocalConnection is kInvalidConnection permanently (that is
 		// how it owns its own entities), so the guard only applies to a client.
-		// See the identical guard on the transform-resolution path in
-		// NetworkSystems.cpp.
 		if (IsClient() && m_session.LocalConnection() == kInvalidConnection)
 		{
 			return false;
 		}
-		return identity->owner == m_session.LocalConnection();
+		return identity.owner == m_session.LocalConnection();
 	}
 
 	void NetworkContext::SyncSimulationAuthority(World& world)
 	{
-		// A host is authoritative over its whole world and an offline game has no
-		// other authority to defer to, so neither ever hands a body over. Nothing
-		// happens before the Welcome either: until LocalConnection is real, IsOwner
-		// answers false for everything (see its guard), and acting on that would hand
-		// over this client's OWN character for the length of the handshake and then
-		// rebuild its body a second time to give it back.
-		if (!IsClient() || !IsConnected())
+		// An offline game has no other authority to defer to, so it never hands a body
+		// over. Nothing happens on a client before the Welcome either: until
+		// LocalConnection is real, OwnsIdentity answers false for everything (see its
+		// guard), and acting on that would hand over this client's OWN character for
+		// the length of the handshake and then rebuild its body a second time to give
+		// it back. IsConnected() is true for a host the moment it is listening and for
+		// a client only once welcomed, which is exactly that rule.
+		if (!IsConnected())
 		{
 			return;
 		}
@@ -411,10 +417,11 @@ namespace aether::net
 			        }
 			        const Entity entity = World::FromEntt(ent);
 			        const bool handedOver = world.Has<NetSimulationOverride>(entity);
-			        if (IsOwner(world, entity))
+			        if (OwnsIdentity(identity))
 			        {
-				        // Locally predicted: scripts drive it here and the receive system
-				        // eases it toward the host's answer, so it must keep simulating.
+				        // Ours to simulate, and the ONLY entity on this machine that is:
+				        // scripts drive it, physics integrates it, and the result is what
+				        // this peer puts on the wire.
 				        if (handedOver)
 				        {
 					        reclaim.push_back(entity);

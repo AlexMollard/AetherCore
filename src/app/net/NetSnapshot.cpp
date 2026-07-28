@@ -42,6 +42,16 @@ namespace aether::net
 
 	} // namespace
 
+	bool StateWriteGate::Allows(World& world, Entity entity) const
+	{
+		if (!enforceOwnership)
+		{
+			return true;
+		}
+		const auto* identity = world.TryGet<NetworkIdentity>(entity);
+		return identity != nullptr && identity->owner == sender;
+	}
+
 	bool SnapshotCache::Changed(const FieldKey& key, const reflect::FieldValue& value)
 	{
 		const auto it = m_last.find(key);
@@ -68,12 +78,12 @@ namespace aether::net
 
 	std::vector<std::byte> BuildSnapshot(World& world, const ReplicationSchema& schema,
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, SnapshotCache& cache,
-	        const std::vector<Entity>& relevant)
+	        const std::vector<Entity>& replicated)
 	{
 		ByteWriter body;
 		std::uint16_t count = 0;
 
-		for (const Entity entity: relevant)
+		for (const Entity entity: replicated)
 		{
 			const std::uint32_t netId = session.NetIdFor(entity);
 			if (netId == 0)
@@ -114,7 +124,8 @@ namespace aether::net
 	}
 
 	void ApplySnapshot(World& world, const ReplicationSchema& schema,
-	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet)
+	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet,
+	        const StateWriteGate& gate)
 	{
 		ByteReader r{packet};
 		const std::uint16_t count = r.U16();
@@ -155,6 +166,13 @@ namespace aether::net
 
 			const Entity entity = session.EntityFor(netId);
 			if (!entity.IsValid())
+			{
+				continue;
+			}
+			// The ownership gate. On the host this is the only thing standing between
+			// a client and driving somebody else's character: a client is authoritative
+			// for what it owns and for nothing else, however many net ids it names.
+			if (!gate.Allows(world, entity))
 			{
 				continue;
 			}

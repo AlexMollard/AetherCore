@@ -82,9 +82,9 @@ namespace aether::net
 	[[nodiscard]] reflect::FieldValue ToFieldValue(const ScriptPropertyValue& value, reflect::FieldType type);
 	[[nodiscard]] ScriptPropertyValue ToScriptValue(const reflect::FieldValue& value, ScriptPropertyValue::Type type);
 
-	// Host: reads every replicated script field on every relevant entity and packs
-	// the changed ones. Returns empty when nothing changed - callers must not send an
-	// empty packet. Layout mirrors the component snapshot:
+	// Sender: reads every replicated script field on every entity this peer
+	// replicates and packs the changed ones. Returns empty when nothing changed -
+	// callers must not send an empty packet. Layout mirrors the component snapshot:
 	//
 	//   u16 count, then per field: u32 netId, u32 scriptTypeHash, u16 propertyIndex,
 	//   u8 fieldType, <value>
@@ -95,11 +95,17 @@ namespace aether::net
 	// the tag a receiver that cannot resolve the target would not know how many bytes
 	// to consume and would desync the rest of the packet.
 	[[nodiscard]] std::vector<std::byte> BuildScriptFieldPacket(World& world, NetSession& session, SnapshotCache& cache,
-	        const ScriptFieldBridge& bridge, const std::vector<Entity>& relevant);
+	        const ScriptFieldBridge& bridge, const std::vector<Entity>& replicated);
 
-	// Client. Ignores unknown net ids, entities with no matching script, properties
-	// that are not replicated, and stale indices whose type no longer matches - a
-	// peer can send anything, and a script assembly can reload out from under it.
+	// Receiver. Ignores unknown net ids, entities `gate` refuses, entities with no
+	// matching script, properties that are not replicated, and stale indices whose
+	// type no longer matches - a peer can send anything, and a script assembly can
+	// reload out from under it.
+	//
+	// The gate is the SAME one the component snapshot uses, and it must be: a
+	// replicated script field is state exactly as much as a transform is, so a
+	// client that could not move another player's body but could rewrite that
+	// player's replicated script fields would be no better gated at all.
 	void ApplyScriptFieldPacket(World& world, NetSession& session, const ScriptFieldBridge& bridge,
-	        std::span<const std::byte> packet);
+	        std::span<const std::byte> packet, const StateWriteGate& gate);
 } // namespace aether::net

@@ -11,7 +11,7 @@
 
 #include <glm/glm.hpp>
 
-#include "net/NetInput.hpp"
+#include "net/NetComponents.hpp"
 #include "net/NetRelevancy.hpp"
 #include "net/NetSession.hpp"
 #include "net/NetSnapshot.hpp"
@@ -125,9 +125,11 @@ namespace aether::net
 			return m_relevancy;
 		}
 
-		// Snapshots per connection per second. State replication is rate-limited
-		// rather than frame-locked: at 144 fps a frame-locked host would spend most
-		// of its upstream retransmitting sub-millimetre motion no client can show.
+		// Snapshots per link per second. State replication is rate-limited rather
+		// than frame-locked: at 144 fps a frame-locked peer would spend most of its
+		// upstream retransmitting sub-millimetre motion no receiver can show. Both
+		// directions use it - the host's per-connection cadence and a client's upload
+		// of what it owns.
 		[[nodiscard]] float SendRateHz() const
 		{
 			return m_sendRateHz;
@@ -138,41 +140,13 @@ namespace aether::net
 			m_sendRateHz = hz;
 		}
 
-		// ── Client input ─────────────────────────────────────────────────────
-		// How often an UNCHANGED input payload is repeated on the wire, per owned
-		// entity. A changed payload is always sent immediately regardless (see
-		// InputSendPacer), so this bounds the cost of an idle player and the window
-		// in which a lost "stopped moving" packet leaves the host running - it is not
-		// the rate at which input is sampled.
-		[[nodiscard]] float InputSendRateHz() const
-		{
-			return m_inputSendRateHz;
-		}
-
-		void SetInputSendRateHz(float hz)
-		{
-			m_inputSendRateHz = hz;
-		}
-
-		// Send-side pacing (this peer's owned entities) and receive-side staleness
-		// rejection (the host's view of every client's stream). Both live here rather
-		// than in a system because the send half is driven from the Net.SendInput
-		// export, which cannot reach a System's members - the same reason the session
-		// and the transport live here.
-		[[nodiscard]] InputSendPacer& InputPacer()
-		{
-			return m_inputPacer;
-		}
-
-		[[nodiscard]] InputSequenceGate& InputGate()
-		{
-			return m_inputGate;
-		}
-
 		// One change-detection cache PER CONNECTION. A single shared cache would
 		// record a field as sent the moment any one connection received it, so a
 		// connection that only just became relevant to that entity would never be
 		// told the field's current value.
+		//
+		// A client has exactly one link, and addresses it as kInvalidConnection -
+		// which is how the transport already spells "the host" everywhere else.
 		[[nodiscard]] SnapshotCache& CacheFor(ConnectionId connection)
 		{
 			return m_caches[connection];
@@ -259,11 +233,32 @@ namespace aether::net
 		// cutover across every deployed client.
 		void ApplyRelevancyLeave(World& world, std::uint32_t netId);
 
-		// Authority: the host decides everything; a client decides only what it
-		// owns. Offline every entity is local, so both are true and single-player
-		// code written against them just works.
+		// ── Authority ────────────────────────────────────────────────────────
+		// THE OWNER OF AN ENTITY IS AUTHORITATIVE FOR IT. That is the whole model:
+		// the owning peer simulates its own entity and replicates the result, the
+		// host relays it to everyone else, and no peer ever simulates - or corrects -
+		// something it does not own.
+		//
+		// HasAuthority and IsOwner therefore give the same answer, and they are both
+		// kept because they read as different questions at a call site: "may I decide
+		// this entity's state this frame" (a simulation gate) and "is this entity
+		// mine" (an input gate). They used to differ - the host was authoritative for
+		// the whole world - and a game written against HasAuthority under that model
+		// would silently start simulating other people's characters if this now
+		// answered the old way.
+		//
+		// Offline every entity is local, so both are true and single-player code
+		// written against either just works.
 		[[nodiscard]] bool HasAuthority(World& world, Entity entity) const;
 		[[nodiscard]] bool IsOwner(World& world, Entity entity) const;
+
+		// The same rule against an identity the caller already holds. Exists because
+		// the replication systems walk a view of NetworkIdentity and would otherwise
+		// pay a registry lookup per entity per frame to ask a question they have the
+		// answer to in hand - and because ONE definition of "mine" shared by the send
+		// filter, the receive resolution and the physics handover is the only way
+		// those three can never disagree.
+		[[nodiscard]] bool OwnsIdentity(const NetworkIdentity& identity) const;
 
 		// ── Simulation authority ─────────────────────────────────────────────
 		// Aligns every replicated entity's 2D body with who is allowed to simulate
@@ -282,8 +277,16 @@ namespace aether::net
 		// body this peer does not own becomes Kinematic, and goes back to what it was
 		// authored as the moment this peer does own it.
 		//
-		// Host and offline are untouched: both are authoritative over everything, so
-		// every body stays exactly as authored. Only a client changes anything.
+		// THE HOST HANDS OVER TOO, and that is the change client authority makes here.
+		// Under host authority the host simulated the whole world, so it kept every
+		// body Dynamic; now a client owns its own character, and a host that went on
+		// integrating that body would fight the transforms arriving from its owner
+		// every single frame. Whichever wrote last would win, and the two peers would
+		// disagree for as long as they were in contact - which is exactly the shape of
+		// the "a host-side push shoves a client's body on the host only" bug.
+		//
+		// Offline is untouched: nothing is owned by anybody else, so every body stays
+		// exactly as authored.
 		//
 		// Called once per frame from the receive system rather than from each of the
 		// events that can change authority (Spawn, Welcome, ownership release on a
@@ -303,10 +306,7 @@ namespace aether::net
 		ReplicationSchema m_schema;
 		RelevancySettings m_relevancy;
 		float m_sendRateHz = 20.f;
-		float m_inputSendRateHz = 30.f;
 		std::unordered_map<ConnectionId, SnapshotCache> m_caches;
-		InputSendPacer m_inputPacer;
-		InputSequenceGate m_inputGate;
 
 		std::chrono::steady_clock::time_point m_epoch = std::chrono::steady_clock::now();
 

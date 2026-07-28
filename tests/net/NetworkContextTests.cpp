@@ -267,9 +267,12 @@ TEST_CASE("A host owns its own entities even though its connection id is invalid
 
 	CHECK(context.IsOwner(world, hostOwned));
 	CHECK_FALSE(context.IsOwner(world, clientOwned));
-	// The host is authoritative over everything, owned or not.
+	// Authority follows ownership, on the host as much as anywhere: under client
+	// authority the host is NOT authoritative for a character a client owns, and a
+	// host that answered true here would go on simulating it against the transforms
+	// its owner is sending.
 	CHECK(context.HasAuthority(world, hostOwned));
-	CHECK(context.HasAuthority(world, clientOwned));
+	CHECK_FALSE(context.HasAuthority(world, clientOwned));
 
 	context.Stop(world);
 }
@@ -503,10 +506,11 @@ TEST_CASE("Hosting after a client session leaves nothing kinematic")
 	CHECK(world.TryGet<RigidBody2DComponent>(entity)->bodyType == Body2DType::Dynamic);
 	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride>(entity));
 
-	// A host reconciling changes nothing, whoever owns what.
-	world.TryGet<aether::net::NetworkIdentity>(entity)->owner = 9;
+	// A host reconciling its OWN entity changes nothing - it owns everything whose
+	// owner is kInvalidConnection, which is what StartHost restored this one to.
 	context.SyncSimulationAuthority(world);
 	CHECK(world.TryGet<RigidBody2DComponent>(entity)->bodyType == Body2DType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride>(entity));
 
 	context.Stop(world);
 }

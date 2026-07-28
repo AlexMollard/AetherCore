@@ -170,7 +170,7 @@ TEST_CASE("A replicated script field reaches the client instance")
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 2);
 	REQUIRE(applied != nullptr);
@@ -272,7 +272,7 @@ TEST_CASE("A script field for an unknown net id does not desync the cursor for t
 	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
 	net::WriteFieldValue(w, reflect::MakeValue(42));
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take());
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 2);
 	REQUIRE(applied != nullptr);
@@ -299,7 +299,7 @@ TEST_CASE("A script field for a type the entity does not carry does not desync t
 	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
 	net::WriteFieldValue(w, reflect::MakeValue(64));
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take());
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 2);
 	REQUIRE(applied != nullptr);
@@ -325,7 +325,7 @@ TEST_CASE("A script field the receiver does not consider replicated is rejected,
 	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
 	net::WriteFieldValue(w, reflect::MakeValue(9));
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take());
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::TrustAll());
 
 	CHECK(tw.clientBridge.Peek(tw.clientEntity.id, 0, 5) == nullptr);
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 2);
@@ -348,7 +348,7 @@ TEST_CASE("A stale index whose type no longer matches is dropped rather than wri
 	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
 	net::WriteFieldValue(w, reflect::MakeValue(123));
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take());
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::TrustAll());
 
 	CHECK(tw.clientBridge.Peek(tw.clientEntity.id, 0, 2) == nullptr);
 }
@@ -366,7 +366,7 @@ TEST_CASE("A script-field packet with an unusable type tag is abandoned, not gue
 	w.U8(200); // not a FieldType at all, so the value length is unknowable
 	w.U32(123);
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take());
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::TrustAll());
 
 	CHECK(tw.clientBridge.Peek(tw.clientEntity.id, 0, 2) == nullptr);
 }
@@ -384,7 +384,7 @@ TEST_CASE("A truncated script-field packet applies nothing")
 	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
 	// value missing
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take());
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::TrustAll());
 
 	CHECK(tw.clientBridge.Peek(tw.clientEntity.id, 0, 2) == nullptr);
 }
@@ -405,7 +405,7 @@ TEST_CASE("A string script field round-trips")
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 1);
 	REQUIRE(applied != nullptr);
@@ -424,7 +424,7 @@ TEST_CASE("A float script field round-trips")
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 3);
 	REQUIRE(applied != nullptr);
@@ -444,7 +444,7 @@ TEST_CASE("A bool script field round-trips")
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 4);
 	REQUIRE(applied != nullptr);
@@ -464,7 +464,7 @@ TEST_CASE("A Vector3 script field round-trips")
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 5);
 	REQUIRE(applied != nullptr);
@@ -486,7 +486,7 @@ TEST_CASE("An enum script field round-trips within 32 bits")
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 6);
 	REQUIRE(applied != nullptr);
@@ -514,7 +514,7 @@ TEST_CASE("An enum value that does not fit in 32 bits is truncated - documented,
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet);
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, packet, net::StateWriteGate::TrustAll());
 
 	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 6);
 	REQUIRE(applied != nullptr);

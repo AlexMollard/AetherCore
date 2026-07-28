@@ -137,12 +137,12 @@ namespace aether::net
 	}
 
 	std::vector<std::byte> BuildScriptFieldPacket(World& world, NetSession& session, SnapshotCache& cache,
-	        const ScriptFieldBridge& bridge, const std::vector<Entity>& relevant)
+	        const ScriptFieldBridge& bridge, const std::vector<Entity>& replicated)
 	{
 		ByteWriter body;
 		std::uint16_t count = 0;
 
-		for (const Entity entity: relevant)
+		for (const Entity entity: replicated)
 		{
 			const std::uint32_t netId = session.NetIdFor(entity);
 			if (netId == 0)
@@ -215,7 +215,7 @@ namespace aether::net
 	}
 
 	void ApplyScriptFieldPacket(World& world, NetSession& session, const ScriptFieldBridge& bridge,
-	        std::span<const std::byte> packet)
+	        std::span<const std::byte> packet, const StateWriteGate& gate)
 	{
 		ByteReader r{packet};
 		const std::uint16_t count = r.U16();
@@ -247,6 +247,13 @@ namespace aether::net
 
 			const Entity entity = session.EntityFor(netId);
 			if (!entity.IsValid())
+			{
+				continue;
+			}
+			// The same ownership gate the component snapshot runs - see its note in
+			// NetSnapshot.hpp. A client owns its player's AnimState; it owns nobody
+			// else's.
+			if (!gate.Allows(world, entity))
 			{
 				continue;
 			}

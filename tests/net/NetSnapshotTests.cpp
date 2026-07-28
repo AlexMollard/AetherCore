@@ -95,7 +95,7 @@ TEST_CASE("A changed replicated field reaches the client world")
 	        tw.host, tw.schema, reflect::ComponentTypes(), tw.hostSession, cache, {tw.hostEntity});
 	REQUIRE_FALSE(packet.empty());
 
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);
@@ -149,7 +149,7 @@ TEST_CASE("A snapshot naming an unknown net id is ignored, not applied blindly")
 	const std::vector<std::byte> hostile = w.Take();
 
 	// Must not crash, and must leave the client world untouched.
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, hostile);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, hostile, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);
@@ -168,7 +168,7 @@ TEST_CASE("A truncated snapshot is rejected without applying a partial field")
 	// field index and value missing
 	const std::vector<std::byte> truncated = w.Take();
 
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, truncated);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, truncated, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);
@@ -196,7 +196,7 @@ TEST_CASE("A field skipped for an unknown net id does not desync the cursor for 
 	net::WriteFieldValue(w, reflect::MakeValue(glm::vec3{11.f, 22.f, 33.f}));
 	const std::vector<std::byte> packet = w.Take();
 
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);
@@ -232,7 +232,7 @@ TEST_CASE("A field skipped because the entity lacks the component does not desyn
 	net::WriteFieldValue(w, reflect::MakeValue(glm::vec3{44.f, 55.f, 66.f}));
 	const std::vector<std::byte> packet = w.Take();
 
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);
@@ -259,7 +259,7 @@ TEST_CASE("A snapshot naming a non-replicated field is rejected, not applied")
 	net::WriteFieldValue(w, reflect::MakeValue(glm::vec3{2.f, 2.f, 2.f}));
 	const std::vector<std::byte> packet = w.Take();
 
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);
@@ -293,7 +293,7 @@ TEST_CASE("A field skipped for not being replicated does not desync the cursor f
 	net::WriteFieldValue(w, reflect::MakeValue(glm::vec3{77.f, 88.f, 99.f}));
 	const std::vector<std::byte> packet = w.Take();
 
-	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet);
+	net::ApplySnapshot(tw.client, tw.schema, reflect::ComponentTypes(), tw.clientSession, packet, net::StateWriteGate::TrustAll());
 
 	const auto* t = tw.client.TryGet<TransformComponent>(tw.clientEntity);
 	REQUIRE(t != nullptr);

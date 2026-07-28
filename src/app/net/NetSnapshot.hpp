@@ -63,15 +63,60 @@ namespace aether::net
 		std::unordered_map<FieldKey, reflect::FieldValue> m_last;
 	};
 
-	// Host side. Returns an empty vector when nothing changed - callers must not
-	// send an empty packet.
+	// ── The ownership gate ──────────────────────────────────────────────────────
+	//
+	// WHO IS ALLOWED TO WRITE WHAT, on the receiving end of a state packet. This is
+	// the security boundary of the whole client-authoritative design, and it is a
+	// PARAMETER of the apply rather than a check at the call site precisely because a
+	// call site can forget one.
+	//
+	// State no longer travels in a single trusted direction. The peer that owns an
+	// entity replicates it and the host relays, so one decoder now serves two very
+	// different streams:
+	//   - the host's snapshot, applied by a client. The host is authoritative for the
+	//     session, so this is trusted wholesale (TrustAll).
+	//   - a client's snapshot, applied by the host. A client is authoritative for
+	//     exactly the entities it owns and for nothing else, so every field is checked
+	//     against the sending connection (OwnedBy). Without this check any client
+	//     could drive any other player's character by writing one net id.
+	//
+	// Deliberately NOT expressible as "an owner id, or none": kInvalidConnection is a
+	// real owner value - it is how the host owns its own entities - so "no gate" needs
+	// a flag of its own rather than a sentinel that also means "the host owns it".
+	struct StateWriteGate
+	{
+		bool enforceOwnership = false;
+		ConnectionId sender = kInvalidConnection;
+
+		// The host's own state, landing on a client.
+		[[nodiscard]] static StateWriteGate TrustAll()
+		{
+			return {};
+		}
+
+		// A client's state, landing on the host: only entities `sender` owns.
+		[[nodiscard]] static StateWriteGate OwnedBy(ConnectionId sender)
+		{
+			return StateWriteGate{.enforceOwnership = true, .sender = sender};
+		}
+
+		// An entity with no NetworkIdentity is not a replicated entity at all, so a
+		// gated sender addresses nothing by naming it and is refused.
+		[[nodiscard]] bool Allows(World& world, Entity entity) const;
+	};
+
+	// Sender side. Returns an empty vector when nothing changed - callers must not
+	// send an empty packet. `replicated` is whatever THIS peer is authoritative for
+	// on this link; the two send paths (a host relaying to a connection, a client
+	// uploading what it owns) differ only in that list.
 	[[nodiscard]] std::vector<std::byte> BuildSnapshot(World& world, const ReplicationSchema& schema,
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, SnapshotCache& cache,
-	        const std::vector<Entity>& relevant);
+	        const std::vector<Entity>& replicated);
 
-	// Client side. Ignores unknown net ids, out-of-range indices, fields not present in
-	// the replication schema, entities missing the component, and truncated packets - a
-	// peer can send anything.
+	// Receive side. Ignores unknown net ids, out-of-range indices, fields not present in
+	// the replication schema, entities missing the component, entities `gate` refuses,
+	// and truncated packets - a peer can send anything.
 	void ApplySnapshot(World& world, const ReplicationSchema& schema,
-	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet);
+	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet,
+	        const StateWriteGate& gate);
 } // namespace aether::net

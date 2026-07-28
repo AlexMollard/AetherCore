@@ -61,20 +61,15 @@ namespace aether::net
 		// ApplySnapshot, which is right for the authoritative value and wrong for
 		// what should be rendered. These two bracket the apply: the first records
 		// where every replicated entity was, the second turns the difference into an
-		// interpolation sample (remote entities) or an eased correction (the owned,
-		// locally predicted one) and writes the result back.
+		// interpolation sample (entities owned by somebody else) or discards it
+		// outright (an entity owned HERE, which receives no correction at all) and
+		// writes the result back.
 		void CaptureRenderedTransforms(World& world);
-		void ResolveTransforms(World& world, float dt);
-
-		// Re-seats the Box2D body of every owned entity whose correction moved it.
-		// Without this the eased/snapped pose is overwritten by
-		// Physics2DSystem::SyncTransforms later in the same frame and reconciliation
-		// has no observable effect at all - see the long note on the definition.
-		static void PushCorrectionsToPhysics(World& world, const std::vector<Entity>& corrected);
+		void ResolveTransforms(World& world);
 
 		NetworkContext& m_context;
 
-		// Last authoritative pose per net id, kept apart from the rendered transform:
+		// Last received pose per net id, kept apart from the rendered transform:
 		// a snapshot carries only the fields that changed, so reading "the transform"
 		// after an apply that touched position but not rotation would sample the
 		// interpolated rotation we ourselves wrote last frame.
@@ -87,9 +82,9 @@ namespace aether::net
 
 		struct Pose
 		{
-			// The exact pre-apply matrix, kept alongside the decomposed channels so the
-			// owned-entity correction can restore rotation/scale bit-exact instead of
-			// rebuilding them from a lossy decompose/recompose round trip.
+			// The exact pre-apply matrix, kept alongside the decomposed channels so an
+			// owned entity can be restored bit-exact instead of rebuilt from a lossy
+			// decompose/recompose round trip.
 			glm::mat4 matrix{1.f};
 			glm::vec3 position{0.f};
 			glm::vec3 euler{0.f};
@@ -101,12 +96,18 @@ namespace aether::net
 		std::unordered_map<std::uint32_t, Pose> m_renderedBefore;
 	};
 
-	// Broadcasts post-simulation state to every connection.
+	// Uploads this peer's post-simulation state for the entities it OWNS.
 	//
-	// Registered LAST, after scripts and particles, so a client receives the world
-	// as it ended the frame rather than half-updated: a snapshot built mid-frame
-	// would carry positions physics is about to overwrite and script fields the
-	// script has not set yet.
+	// On a host that means every connection is sent what is relevant to it minus
+	// whatever that connection owns; on a client it means one upload of its own
+	// entities to the host, which relays them onward. Both halves run here rather
+	// than in two systems because they are the same three steps (pace, choose the
+	// entity set, build and send) differing only in the set.
+	//
+	// Registered LAST, after scripts and particles, so a receiver gets the world as
+	// it ended the frame rather than half-updated: a snapshot built mid-frame would
+	// carry positions physics is about to overwrite and script fields the script has
+	// not set yet.
 	class NetworkSendSystem final : public System
 	{
 	public:
@@ -157,6 +158,24 @@ namespace aether::net
 		// decides the channel it goes out on.
 		[[nodiscard]] bool UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
 		        const std::vector<Entity>& relevant, SnapshotCache& cache);
+
+		// A client's entire send path: what it owns, once, to the host. Separate from
+		// Update's host loop rather than folded into it because the two share no
+		// relevancy, no per-connection iteration and no spawn/leave bookkeeping - a
+		// client never admits anything to anybody.
+		void SendOwnedToHost(World& world, NetworkContext& context);
+
+		// Every bound entity this peer owns. The single source of "what do I
+		// replicate" on a client, and deliberately the same OwnsIdentity predicate
+		// the receive system and the physics handover use.
+		[[nodiscard]] static std::vector<Entity> OwnedEntities(World& world, const NetworkContext& context);
+
+		// `entities` minus the ones `owner` owns - the host's relay filter. A
+		// connection is authoritative for its own entities, so sending their state
+		// back would be the host arguing with them, which is precisely the round trip
+		// client authority exists to delete.
+		[[nodiscard]] static std::vector<Entity> ExceptOwnedBy(World& world, const std::vector<Entity>& entities,
+		        ConnectionId owner);
 
 		// Drops tracking for a connection no longer in the session. Both maps below
 		// are keyed by ConnectionId and outlive any one connection, so a long run of

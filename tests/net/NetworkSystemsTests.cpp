@@ -156,10 +156,12 @@ namespace
 	// Gives `endpoint` a scripted entity on `netId` and the fake bridge that will be
 	// asked to write it. The bridge is owned by the context, so the raw pointer stays
 	// valid for the life of the endpoint.
-	FakeFieldBridge* AttachScriptTarget(Endpoint& endpoint, std::uint32_t netId)
+	FakeFieldBridge* AttachScriptTarget(Endpoint& endpoint, std::uint32_t netId,
+	        aether::net::ConnectionId owner = aether::net::kInvalidConnection)
 	{
 		const Entity entity = endpoint.world.Create();
-		endpoint.world.Emplace<aether::net::NetworkIdentity>(entity, aether::net::NetworkIdentity{.netId = netId});
+		endpoint.world.Emplace<aether::net::NetworkIdentity>(entity,
+		        aether::net::NetworkIdentity{.netId = netId, .owner = owner});
 		endpoint.world.Emplace<ScriptComponent>(entity).scripts.push_back(ScriptEntry{.path = "Health"});
 		endpoint.context.Session().Bind(netId, entity);
 
@@ -172,20 +174,33 @@ namespace
 	}
 } // namespace
 
-// ── Role gating ─────────────────────────────────────────────────────────────────
+// ── Inbound gating: role for the one-way kinds, OWNERSHIP for state ─────────────
 
-TEST_CASE("A client-sent Snapshot is dropped on the host")
+TEST_CASE("An inbound Snapshot writes only the entities the sender owns")
 {
-	// Only the host is authoritative. If this gate goes, any connected client can
-	// rewrite every replicated field on the host - position, health, anything in the
-	// schema - by sending one unsolicited packet on an unreliable channel.
+	// THE security boundary of client authority. State replication is two-way now -
+	// a client uploads what it owns and the host relays it - so the old "a client
+	// never sends state" role gate is gone, and this ownership gate is the ONLY thing
+	// left between a connected client and every replicated field in the host's world.
+	// Lose it and any peer can teleport any other player, or rewrite any replicated
+	// component on any entity in the schema, with one unsolicited packet.
+	//
+	// Three senders, one packet, so "refused" is measured against a live control
+	// rather than asserted on its own:
+	//   - a client naming an entity ANOTHER client owns   refused
+	//   - a client naming a HOST-owned entity             refused
+	//   - the actual owner naming its own entity          applied
+	constexpr aether::net::ConnectionId kOther = 7;
 	const std::vector<std::byte> body = SnapshotMoving(1, {1.f, 2.f, 3.f});
 	const std::vector<std::byte> packet = aether::net::NetworkContext::Frame(aether::net::NetMessage::Snapshot, body);
 
+	// A client claiming an entity that belongs to a different client. This is the
+	// case a role gate could never have caught, because the sender IS a legitimate
+	// client sending a legitimate kind on the right channel.
 	{
 		Endpoint host;
 		host.BecomeHost();
-		const Entity entity = host.Replicate(1, {9.f, 9.f, 9.f});
+		const Entity entity = host.Replicate(1, {9.f, 9.f, 9.f}, kOther);
 
 		host.receive.OnData(host.world, kPeer, packet);
 
@@ -195,20 +210,68 @@ TEST_CASE("A client-sent Snapshot is dropped on the host")
 		CHECK(after.z == doctest::Approx(9.f));
 	}
 
-	// Positive control: the very same bytes DO apply on a client, so the case above
-	// proves a role gate and not a malformed packet.
+	// A client claiming a host-owned entity - the level geometry, the game-state
+	// entity, anything the session itself decides.
 	{
-		Endpoint client;
-		client.BecomeClient();
-		const Entity entity = client.Replicate(1, {9.f, 9.f, 9.f});
+		Endpoint host;
+		host.BecomeHost();
+		const Entity entity = host.Replicate(1, {9.f, 9.f, 9.f}, aether::net::kInvalidConnection);
 
-		client.receive.OnData(client.world, kPeer, packet);
+		host.receive.OnData(host.world, kPeer, packet);
 
-		const glm::vec3 after = client.PositionOf(entity);
+		CHECK(host.PositionOf(entity).x == doctest::Approx(9.f));
+	}
+
+	// The owner sending the SAME bytes, which must land - otherwise the two cases
+	// above prove only that the packet was malformed all along, and a client's own
+	// character would never move on the host either.
+	{
+		Endpoint host;
+		host.BecomeHost();
+		const Entity entity = host.Replicate(1, {9.f, 9.f, 9.f}, kPeer);
+
+		host.receive.OnData(host.world, kPeer, packet);
+
+		const glm::vec3 after = host.PositionOf(entity);
 		CHECK(after.x == doctest::Approx(1.f));
 		CHECK(after.y == doctest::Approx(2.f));
 		CHECK(after.z == doctest::Approx(3.f));
 	}
+
+	// A client applying the host's snapshot is ungated: there is one link and the
+	// host is the session's authority, so there is no second candidate to tell it
+	// apart from. The owner of the entity here is nobody this client knows.
+	{
+		Endpoint client;
+		client.BecomeClient();
+		const Entity entity = client.Replicate(1, {9.f, 9.f, 9.f}, kOther);
+
+		client.receive.OnData(client.world, kPeer, packet);
+
+		CHECK(client.PositionOf(entity).x == doctest::Approx(1.f));
+	}
+}
+
+TEST_CASE("An inbound Snapshot naming an unreplicated entity is refused on the host")
+{
+	// The gate resolves ownership through NetworkIdentity, so an entity bound to a
+	// net id but carrying no identity at all has no owner to match and must be
+	// refused rather than written by default. Nothing in the framework produces one,
+	// which is exactly why it needs pinning: "no identity" must never read as
+	// "unclaimed, therefore yours".
+	const std::vector<std::byte> packet = aether::net::NetworkContext::Frame(aether::net::NetMessage::Snapshot,
+	        SnapshotMoving(1, {1.f, 2.f, 3.f}));
+
+	Endpoint host;
+	host.BecomeHost();
+	const Entity entity = host.world.Create();
+	host.world.Emplace<TransformComponent>(entity).localToWorld
+	        = ComposeTransform({9.f, 9.f, 9.f}, {0.f, 0.f, 0.f}, {1.f, 1.f, 1.f});
+	host.context.Session().Bind(1, entity);
+
+	host.receive.OnData(host.world, kPeer, packet);
+
+	CHECK(host.PositionOf(entity).x == doctest::Approx(9.f));
 }
 
 TEST_CASE("A Welcome is ignored on the host")
@@ -335,12 +398,16 @@ TEST_CASE("A Relevancy leave message inbound on the host is dropped")
 	}
 }
 
-TEST_CASE("A ScriptFields packet inbound on the host is dropped")
+TEST_CASE("An inbound ScriptFields packet writes only the entities the sender owns")
 {
-	// Script fields are arbitrary gameplay state - the packet writes straight into a
-	// script's [Replicated] properties. On the host this must never come from a peer.
-	// The bridge write counter is the assertion: a dropped packet is one the bridge
+	// The same ownership gate as the component snapshot, and it has to be: a
+	// [Replicated] script property is gameplay state exactly as much as a transform
+	// is. A client that could not move another player's body but could rewrite that
+	// player's replicated script fields would not be gated at all.
+	//
+	// The bridge write counter is the assertion: a refused field is one the bridge
 	// was never asked to apply.
+	constexpr aether::net::ConnectionId kOther = 7;
 	const ScriptFieldExchange exchange(1);
 	const std::vector<std::byte> packet = aether::net::NetworkContext::Frame(aether::net::NetMessage::ScriptFields,
 	        exchange.body);
@@ -348,7 +415,7 @@ TEST_CASE("A ScriptFields packet inbound on the host is dropped")
 	{
 		Endpoint host;
 		host.BecomeHost();
-		FakeFieldBridge* bridge = AttachScriptTarget(host, 1);
+		FakeFieldBridge* bridge = AttachScriptTarget(host, 1, kOther);
 
 		host.receive.OnData(host.world, kPeer, packet);
 
@@ -356,9 +423,34 @@ TEST_CASE("A ScriptFields packet inbound on the host is dropped")
 	}
 
 	{
+		Endpoint host;
+		host.BecomeHost();
+		FakeFieldBridge* bridge = AttachScriptTarget(host, 1, aether::net::kInvalidConnection);
+
+		host.receive.OnData(host.world, kPeer, packet);
+
+		CHECK(bridge->Writes() == 0);
+	}
+
+	// The owner's own submission, which must land - this is how a client's animation
+	// and facing reach everybody else.
+	{
+		Endpoint host;
+		host.BecomeHost();
+		FakeFieldBridge* bridge = AttachScriptTarget(host, 1, kPeer);
+
+		host.receive.OnData(host.world, kPeer, packet);
+
+		CHECK(bridge->Writes() == 1);
+		const ScriptPropertyValue* value = bridge->Peek(host.context.Session().EntityFor(1).id, 0, 0);
+		REQUIRE(value != nullptr);
+		CHECK(value->i64 == 77);
+	}
+
+	{
 		Endpoint client;
 		client.BecomeClient();
-		FakeFieldBridge* bridge = AttachScriptTarget(client, 1);
+		FakeFieldBridge* bridge = AttachScriptTarget(client, 1, kOther);
 
 		client.receive.OnData(client.world, kPeer, packet);
 
@@ -936,11 +1028,13 @@ TEST_CASE("A client keeps simulating the entity it owns, which is locally predic
 	CHECK(BodyTypeOf(client.world, remote) == Body2DType::Kinematic);
 }
 
-TEST_CASE("A host never takes a body off local simulation")
+TEST_CASE("A host stops simulating a body a client owns, and keeps simulating its own")
 {
-	// The host IS the simulation. Every body stays dynamic there, including the ones
-	// a connected client owns - the host is authoritative over those too, and its
-	// integration of them is what it replicates back out.
+	// The reverse of what host authority did, and the whole point of the switch: the
+	// owner of an entity simulates it, so the host must take a client-owned body off
+	// local simulation exactly as a client does with the host's. Left Dynamic, the
+	// host's Box2D integration would fight the transforms arriving from that body's
+	// owner every frame, and whichever wrote last would win.
 	Endpoint host;
 	host.BecomeHost();
 
@@ -949,15 +1043,17 @@ TEST_CASE("A host never takes a body off local simulation")
 
 	host.receive.Update(host.world, 1.f / 60.f);
 	// Driven a second time straight into the reconcile, bypassing the receive
-	// system's own IsClient gate: without this the case only proves that the CALL is
-	// client-only, and a host gate lost from SyncSimulationAuthority itself - the one
-	// that has to hold for every other caller - would go unnoticed.
+	// system's own call: without this the case only proves what the CALL does, and a
+	// rule lost from SyncSimulationAuthority itself - the one that has to hold for
+	// every other caller - would go unnoticed.
 	host.context.SyncSimulationAuthority(host.world);
 
+	CHECK(BodyTypeOf(host.world, clientOwned) == Body2DType::Kinematic);
+	CHECK(host.world.Has<aether::net::NetSimulationOverride>(clientOwned));
+	// The negative control: the host's OWN body is untouched, so "handed over" is a
+	// decision about ownership and not a blanket handover of everything replicated.
 	CHECK(BodyTypeOf(host.world, hostOwned) == Body2DType::Dynamic);
-	CHECK(BodyTypeOf(host.world, clientOwned) == Body2DType::Dynamic);
 	CHECK_FALSE(host.world.Has<aether::net::NetSimulationOverride>(hostOwned));
-	CHECK_FALSE(host.world.Has<aether::net::NetSimulationOverride>(clientOwned));
 }
 
 TEST_CASE("Nothing is handed over before the host's Welcome arrives")

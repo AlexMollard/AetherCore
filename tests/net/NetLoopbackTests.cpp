@@ -387,7 +387,7 @@ TEST_CASE("Replication composes end to end over a loopback connection")
 		        if (!appliedMove
 		                && FindMessage(client.Events(), net::kChannelSnapshot, net::NetMessage::Snapshot, payload))
 		        {
-			        net::ApplySnapshot(clientWorld, schema, catalog, clientSession, payload);
+			        net::ApplySnapshot(clientWorld, schema, catalog, clientSession, payload, net::StateWriteGate::TrustAll());
 			        appliedMove = true;
 		        }
 		        return appliedMove;
