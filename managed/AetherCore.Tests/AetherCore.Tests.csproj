@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unit tests for the AetherCore C# SDK. They run in a plain .NET process with no
+    engine behind them: the SDK classes that carry real logic reach the engine through
+    IEngineBackend (see managed/AetherCore/Internal/EngineBackend.cs), and these tests
+    hand them a recording double instead. Nothing here loads CoreCLR into the engine,
+    starts a session, or touches a native library.
+
+    CMake runs this through CTest alongside EngineTests (tests/CMakeLists.txt), gated on
+    AETHER_HAS_DOTNET so a machine without the .NET SDK skips it and still builds. The
+    checked-in .slnx lists it as a convenience; nothing in the build depends on that.
+
+    Shared C# settings (TargetFramework, nullable, artifacts path) come from the repo
+    Directory.Build.props, so this project stays in step with the SDK it tests.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherCore.Tests</AssemblyName>
+    <RootNamespace>AetherCore.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- The SDK builds with unsafe blocks and no implicit usings; the tests need
+         neither, and turning them off here keeps the test sources honest. -->
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AetherCore/AetherCore.csproj" />
+  </ItemGroup>
+
+</Project>

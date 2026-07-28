@@ -83,3 +83,28 @@ if(MSVC)
 endif()
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
 add_test(NAME EngineTests COMMAND EngineTests)
+
+# ── Managed (C#) SDK tests ──────────────────────────────────────────────────
+# The xUnit suite over managed/AetherCore (the C# SDK). Registered as a CTest test so
+# one `ctest` run covers both suites; `dotnet test` restores and builds the project
+# itself, so nothing is added to the default build and a developer who never runs the
+# tests pays nothing for them.
+#
+# Gated on AETHER_HAS_DOTNET exactly like every other managed step: with no .NET SDK on
+# the machine the test is simply not registered, and the C++ build is untouched. The
+# .csproj is invoked directly, never the checked-in .slnx, so the build stays
+# generator-agnostic (see the managed assemblies block in src/app/CMakeLists.txt).
+#
+# ArtifactsPath is its own directory rather than the engine's managed/ one: the test run
+# must never be able to overwrite the assemblies the editor and the runtime load.
+if(AETHER_HAS_DOTNET)
+    add_test(NAME ManagedTests
+        COMMAND "${CMAKE_COMMAND}" -E env --unset=LIB
+                "${AETHER_DOTNET_EXE}" test
+                "${CMAKE_SOURCE_DIR}/managed/AetherCore.Tests/AetherCore.Tests.csproj"
+                -c $<IF:$<CONFIG:Debug>,Debug,Release> --nologo
+                -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed-tests)
+    set_tests_properties(ManagedTests PROPERTIES TIMEOUT 900)
+else()
+    message(STATUS "AetherCore: .NET SDK not found - managed SDK tests skipped")
+endif()

@@ -6,6 +6,7 @@
   </Configurations>
   <Folder Name="/managed/">
     <Project Path="AetherCore.Interop/AetherCore.Interop.csproj" />
+    <Project Path="AetherCore.Tests/AetherCore.Tests.csproj" />
     <Project Path="AetherCore/AetherCore.csproj" />
   </Folder>
 </Solution>
