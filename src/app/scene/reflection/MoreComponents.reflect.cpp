@@ -373,8 +373,6 @@ AE_COMPONENT_END()
 
 AE_COMPONENT(NetworkTransformComponent, "Network Transform", "Networking", ICON_FA_ARROWS_LEFT_RIGHT)
 AE_FIELD_N("interpolation_delay", interpolationDelaySeconds, Float)
-AE_FIELD_N("correction_rate", correctionRate, Float)
-AE_FIELD_N("snap_distance", snapDistance, Float)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 

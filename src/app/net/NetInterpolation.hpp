@@ -42,9 +42,4 @@ namespace aether::net
 		static constexpr std::size_t kMaxSamples = 64;
 		std::vector<TransformSample> m_samples;
 	};
-
-	// Frame-rate independent ease toward an authoritative position. Past
-	// `snapDistance` it cuts instead: gliding a player across a large error looks
-	// far worse than a single jump, and usually means they were teleported anyway.
-	[[nodiscard]] glm::vec3 EaseToward(glm::vec3 current, glm::vec3 target, float rate, float dt, float snapDistance);
 } // namespace aether::net

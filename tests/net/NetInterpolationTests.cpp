@@ -75,13 +75,3 @@ TEST_CASE("The buffer discards samples far older than the render window")
 	REQUIRE(oldest.has_value());
 	CHECK(oldest->position.x > 100.f);
 }
-
-TEST_CASE("EaseToward converges, and snaps past the snap distance")
-{
-	const glm::vec3 eased = net::EaseToward({0.f, 0.f, 0.f}, {1.f, 0.f, 0.f}, 10.f, 1.f / 60.f, 4.f);
-	CHECK(eased.x > 0.f);
-	CHECK(eased.x < 1.f); // moved toward, not all the way
-
-	const glm::vec3 snapped = net::EaseToward({0.f, 0.f, 0.f}, {100.f, 0.f, 0.f}, 10.f, 1.f / 60.f, 4.f);
-	CHECK(snapped.x == doctest::Approx(100.f)); // beyond snap distance: cut, don't glide
-}

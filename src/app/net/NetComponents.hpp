@@ -21,16 +21,20 @@ namespace aether::net
 		bool scenePlaced = false;
 	};
 
-	// Smoothing for a replicated entity's transform. On remote entities the buffer
-	// is rendered `interpolationDelaySeconds` in the past so motion is smooth
-	// between packets; on the locally-owned (predicted) entity the authoritative
-	// position is eased in at `correctionRate` instead of snapping - unless the
-	// error exceeds `snapDistance`, where easing would look worse than a cut.
+	// Smoothing for a replicated entity's transform, and it applies to REMOTE
+	// entities only: their buffer is rendered `interpolationDelaySeconds` in the
+	// past, so there is a sample on both sides of the render time to interpolate
+	// between and motion is smooth between packets.
+	//
+	// There is deliberately nothing here for the locally-owned entity. The owner of
+	// an entity is authoritative for it, so its own simulation IS the truth and
+	// receives no correction of any kind - see NetworkReceiveSystem::ResolveTransforms.
+	// The correction-rate and snap-distance knobs that used to live here belonged to
+	// the host-authoritative model and were removed with it: a tuning field nothing
+	// reads is worse than none.
 	struct NetworkTransform
 	{
 		float interpolationDelaySeconds = 0.1f;
-		float correctionRate = 12.f;
-		float snapDistance = 4.f;
 	};
 
 	// A connected player's display name. Framework-level rather than game-level:

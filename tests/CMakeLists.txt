@@ -40,10 +40,6 @@ add_executable(EngineTests
     # NetRpc only, NOT CSharpRpcBridge.cpp/NetRpcExports.cpp: encode/decode is pure
     # and links without the CoreCLR host; the dispatch bridge does not.
     "${CMAKE_SOURCE_DIR}/src/app/net/NetRpc.cpp"
-    # NetInput sits on top of NetRpc's dispatch and is equally CLR-free: the pacer,
-    # the sequence gate and the ownership gate are all pure, so the whole
-    # client->host input path is testable headless.
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetInput.cpp"
     # The integration layer. Both TUs became linkable here once NetworkContext stopped
     # constructing the CLR-backed script bridges itself and started taking them from
     # its wiring site (Application.cpp) - see NetworkContext::SetFieldBridge. This is

@@ -34,9 +34,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.network_identity]
 
     [entities.network_transform]
-    correction_rate = 12.0
     interpolation_delay = 0.10000000000000001
-    snap_distance = 4.0
 
     [entities.rigid_body_2d]
     allow_sleeping = true

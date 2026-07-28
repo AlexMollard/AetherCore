@@ -8,18 +8,20 @@
 #include <utility>
 #include <vector>
 
-#include "net/NetInput.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetSpawn.hpp"
 
 using namespace aether;
 
 // Every packet leads with one NetMessage byte, but WHO writes it differs per kind:
-// Spawn/Despawn/Rpc/Welcome are self-framing (their encoder writes it), while
-// Snapshot/ScriptFields carry a bare body the sender wraps with FrameMessage. A new
-// kind that matches neither convention produces a packet the receive system
+// Spawn/Despawn/Rpc/Welcome/Relevancy are self-framing (their encoder writes it),
+// while Snapshot/ScriptFields carry a bare body the sender wraps with FrameMessage. A
+// new kind that matches neither convention produces a packet the receive system
 // misparses with no error anywhere, so both halves are pinned here - table-driven so
-// a kind 7 added without a row is visible as an omission rather than as silence.
+// a kind added, or REMOVED, without a matching row is visible as an omission rather
+// than as silence. Retiring NetMessage::Input broke every one of the static_asserts
+// below until the tables were brought back in step, which is the promise working in
+// the direction nobody usually tests.
 namespace
 {
 	// Mirrors NetworkReceiveSystem::OnData: read data[0] as the kind, hand
@@ -55,14 +57,14 @@ namespace
 	//   - a kind in kAllKinds classified in neither table, or in both
 	//   - a kind listed twice, or the enum renumbered off contiguous-from-1
 	//   - a self-framing kind with no actual round-trip row in the test below
-	constexpr std::array<net::NetMessage, 8> kAllKinds{
+	constexpr std::array<net::NetMessage, 7> kAllKinds{
 	        net::NetMessage::Snapshot, net::NetMessage::Spawn, net::NetMessage::Despawn,
 	        net::NetMessage::Rpc, net::NetMessage::Welcome, net::NetMessage::ScriptFields,
-	        net::NetMessage::Relevancy, net::NetMessage::Input,
+	        net::NetMessage::Relevancy,
 	};
-	constexpr std::array<net::NetMessage, 6> kSelfFraming{
+	constexpr std::array<net::NetMessage, 5> kSelfFraming{
 	        net::NetMessage::Spawn, net::NetMessage::Despawn, net::NetMessage::Rpc, net::NetMessage::Welcome,
-	        net::NetMessage::Relevancy, net::NetMessage::Input,
+	        net::NetMessage::Relevancy,
 	};
 	constexpr std::array<net::NetMessage, 2> kWrapped{net::NetMessage::Snapshot, net::NetMessage::ScriptFields};
 
@@ -121,13 +123,12 @@ TEST_CASE("Self-framing encoders lead with their own NetMessage byte")
 	// One row per kind in kSelfFraming, and the static_assert below is what keeps it
 	// that way: Relevancy was a self-framing kind with no row here at all, so its
 	// encoder's leading byte was never checked by anything.
-	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 6> selfFraming{{
+	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 5> selfFraming{{
 	        {net::NetMessage::Spawn, net::EncodeSpawn(1, 2, "player", {0.f, 0.f, 0.f})},
 	        {net::NetMessage::Despawn, net::EncodeDespawn(1)},
 	        {net::NetMessage::Rpc, net::EncodeRpc(1, 0xABCDu, 0, net::NetRpcTarget::Server, {})},
 	        {net::NetMessage::Welcome, EncodeWelcome(3)},
 	        {net::NetMessage::Relevancy, net::EncodeRelevancyLeave(1)},
-	        {net::NetMessage::Input, net::EncodeInput(1, 0xABCDu, 0, 1, {})},
 	}};
 	static_assert(selfFraming.size() == kSelfFraming.size(),
 	        "Every self-framing kind needs a round-trip row here, not just a classification.");
@@ -181,6 +182,5 @@ TEST_CASE("Every NetMessage kind is covered by one of the two framing convention
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Welcome) == 5);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::ScriptFields) == 6);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Relevancy) == 7);
-	CHECK(static_cast<std::uint8_t>(net::NetMessage::Input) == 8);
-	CHECK(net::kNetMessageMax == 8);
+	CHECK(net::kNetMessageMax == 7);
 }

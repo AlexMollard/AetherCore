@@ -18,17 +18,20 @@ namespace AetherCore;
 /// multiplayer runs unchanged in single-player.
 /// </para>
 /// <para>
-/// State replication is automatic once a session is live: the host sends changed
-/// <c>[Replicated]</c> script properties and replicated component fields to every
-/// client each tick, and clients apply them. Nothing here has to be pumped.
+/// State replication is automatic once a session is live, and it is
+/// CLIENT-AUTHORITATIVE: the peer that owns an entity simulates it and sends its
+/// changed <c>[Replicated]</c> script properties and replicated component fields
+/// each tick, and the host relays them to everyone else. Nothing here has to be
+/// pumped. Your own character therefore responds to your own input with no round
+/// trip and no correction of any kind - what you simulate IS what the others see.
 /// </para>
 /// <para>
-/// Transform smoothing is an opt-in on top of that: an entity needs a
-/// <c>NetworkTransform</c> component, alongside its <c>NetworkIdentity</c>, before a
-/// client eases the owned entity's position or interpolates a remote one. An entity
-/// with a <c>NetworkIdentity</c> but no <c>NetworkTransform</c> still replicates, but
-/// each received snapshot is applied straight to its transform with no smoothing, so
-/// it visibly snaps.
+/// Transform smoothing is an opt-in on top of that, and it applies to OTHER
+/// people's entities only: one with a <c>NetworkTransform</c> component alongside
+/// its <c>NetworkIdentity</c> is rendered slightly in the past so motion between
+/// snapshots is smooth, while one without has each received snapshot applied
+/// straight to its transform, so it visibly snaps. Neither ever touches an entity
+/// this peer owns.
 /// </para>
 /// <para>
 /// RPC argument marshalling is deliberately minimal: a call carries either no
@@ -139,27 +142,24 @@ public static class Net
     /// the same call works in a single-player build.</summary>
     public static void Despawn(Entity entity) => Native.aether_net_despawn(entity.Id);
 
-    /// <summary>Whether this process decides <paramref name="entity"/>'s state: true on
-    /// the host for everything, true on a client only for what it owns, true offline.
-    /// Guard state-changing logic with this rather than with <see cref="IsHost"/>.</summary>
+    /// <summary>
+    /// Whether this process decides <paramref name="entity"/>'s state this frame:
+    /// true for what this peer OWNS, and true offline. Guard simulation with this
+    /// rather than with <see cref="IsHost"/>.
+    /// </summary>
+    /// <remarks>
+    /// The framework is client-authoritative: the owner of an entity simulates it and
+    /// replicates the result, and the host relays. So this gives the same answer as
+    /// <see cref="IsOwner"/> - not because one is redundant, but because they are two
+    /// different questions ("may I move this" and "is this mine") that this model
+    /// answers the same way. Note the host is NOT authoritative for a client's
+    /// character any more; it was under the previous model.
+    /// </remarks>
     public static bool HasAuthority(Entity entity) => Native.aether_net_has_authority(entity.Id) != 0;
 
     /// <summary>Whether this peer's connection owns <paramref name="entity"/> - the
     /// test for "is this my player". True offline.</summary>
     public static bool IsOwner(Entity entity) => Native.aether_net_is_owner(entity.Id) != 0;
-
-    /// <summary>
-    /// Writes <paramref name="correctionRate"/> and <paramref name="snapDistance"/>
-    /// into <paramref name="entity"/>'s <c>NetworkTransform</c> component (see the
-    /// remarks on <see cref="Net"/> for what that component does). A no-op if the
-    /// entity has no <c>NetworkTransform</c> - there is nothing to tune.
-    /// </summary>
-    /// <param name="correctionRate">How fast the locally-owned entity's predicted
-    /// position eases toward the host's authoritative one.</param>
-    /// <param name="snapDistance">Position error beyond which correction snaps
-    /// instead of easing.</param>
-    public static void SetTransformTuning(Entity entity, float correctionRate, float snapDistance)
-        => Native.aether_net_set_transform_tuning(entity.Id, correctionRate, snapDistance);
 
     // ── Players ─────────────────────────────────────────────────────────────────
 
@@ -239,74 +239,6 @@ public static class Net
     /// </exception>
     public static void CallServer(Entity entity, string methodName, params object[] args)
         => Dispatch(entity, methodName, args, expectedTarget: (int)NetRpcTarget.Server, nameof(CallServer));
-
-    // ── Input ───────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Submits one frame of input for an entity this peer OWNS, to be applied
-    /// wherever the simulation is authoritative. The named method - an ordinary
-    /// <c>[NetRpc(NetRpcTarget.Server)]</c> handler on a script attached to
-    /// <paramref name="entity"/> - runs locally straight away, and on a client the
-    /// payload is also sent to the host so it runs there too.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// This is the client-to-host half of a host-authoritative session, and the
-    /// reason a client's character moves on everybody else's screen: state
-    /// replication only ever flows host-to-client, so without this the host has no
-    /// input for a client's player and simulates it as an unattended body.
-    /// </para>
-    /// <para>
-    /// The local invoke is not a convenience - it IS the client-side prediction. The
-    /// owner acts on its own input immediately, the host applies the same payload
-    /// through the same handler a round trip later, and the framework eases the
-    /// owner's predicted position toward the host's answer (see the
-    /// <c>NetworkTransform</c> remarks on <see cref="Net"/>). Both peers therefore
-    /// run one implementation of the movement, not two.
-    /// </para>
-    /// <para>
-    /// WHAT IS IN THE PAYLOAD IS ENTIRELY YOURS. The framework moves the bytes and
-    /// never looks inside: it has no idea what "jump" means. Call this every frame
-    /// with the current input state - transmission is paced and deduplicated for you,
-    /// so an unchanged payload does not flood the wire, while a payload that changed
-    /// (the one frame a button went down) is sent at once.
-    /// </para>
-    /// <para>
-    /// Delivery is unreliable and sequenced on its own channel: input that arrives
-    /// late is worthless, and the host applies only strictly-newer submissions, so a
-    /// reordered packet is dropped rather than rewinding the character.
-    /// </para>
-    /// </remarks>
-    /// <returns>
-    /// False, having done nothing, when no attached script declares that handler,
-    /// when the handler declares a direction other than
-    /// <see cref="NetRpcTarget.Server"/>, or when a client submits input for an
-    /// entity it does not own. True when the input was applied locally, sent, or
-    /// both - as with <see cref="Call"/>, never that it arrived.
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// More than one argument was passed, or a single argument was passed that is
-    /// not a <see cref="string"/> - see the marshalling note on <see cref="Net"/>.
-    /// </exception>
-    public static unsafe bool SendInput(Entity entity, string methodName, params object[] args)
-    {
-        if (args.Length > 1 || (args.Length == 1 && args[0] is not string))
-        {
-            throw new ArgumentException(
-                $"Net.{nameof(SendInput)} supports at most one string argument today.", nameof(args));
-        }
-
-        if (args.Length == 0)
-        {
-            return Native.aether_net_send_input(entity.Id, methodName, null, 0) != 0;
-        }
-
-        byte[] blob = Encoding.UTF8.GetBytes((string)args[0]);
-        fixed (byte* ptr = blob)
-        {
-            return Native.aether_net_send_input(entity.Id, methodName, ptr, blob.Length) != 0;
-        }
-    }
 
     // The one marshalling site. `expectedTarget` is -1 for "whatever the method
     // declares" and a NetRpcTarget value for the explicit spellings, which the native

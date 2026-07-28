@@ -180,20 +180,6 @@ AE_SCRIPT_API std::int32_t aether_net_is_owner(std::uint32_t entityId)
 	return context->IsOwner(ActiveWorld(), aether::Entity{entityId}) ? 1 : 0;
 }
 
-AE_SCRIPT_API void aether_net_set_transform_tuning(std::uint32_t entityId, float correctionRate, float snapDistance)
-{
-	// The prefab authors the NetworkTransform component, so a missing one just
-	// means this entity opted out of smoothing entirely - a safe no-op rather
-	// than a project-layer error.
-	auto* transform = ActiveWorld().TryGet<aether::net::NetworkTransform>(aether::Entity{entityId});
-	if (transform == nullptr)
-	{
-		return;
-	}
-	transform->correctionRate = correctionRate;
-	transform->snapDistance = snapDistance;
-}
-
 AE_SCRIPT_API void aether_net_set_player_name(std::uint32_t entityId, const char* nameUtf8)
 {
 	// Deliberately independent of any session: NetPlayer is a plain component, so a

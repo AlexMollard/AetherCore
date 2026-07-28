@@ -26,13 +26,18 @@ namespace aether::net
 	// WHO WRITES THE KIND BYTE is not uniform, and it is load-bearing - adding a
 	// kind without matching one of these two conventions produces a packet the
 	// receiver misparses with no error:
-	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy,
-	//     Input.
+	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy.
 	//     Their encoders lead with w.U8(kind), so the sender passes the result
 	//     straight to Send/Broadcast.
 	//   WRAPPED (the sender writes it): Snapshot, ScriptFields. BuildSnapshot and
 	//     BuildScriptFieldPacket emit a bare body, which the sender must pass through
 	//     FrameMessage below.
+	//
+	// Snapshot and ScriptFields travel in BOTH directions: this framework is
+	// client-authoritative, so the peer that OWNS an entity replicates it and the
+	// host relays. Which direction a kind is legal in is therefore no longer a
+	// property of the kind alone - see the ownership gate in NetSnapshot.hpp, which
+	// is what makes the inbound half safe on the host.
 	enum class NetMessage : std::uint8_t
 	{
 		Snapshot = 1,
@@ -42,7 +47,6 @@ namespace aether::net
 		Welcome = 5,
 		ScriptFields = 6,
 		Relevancy = 7,
-		Input = 8,
 	};
 
 	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
@@ -55,9 +59,10 @@ namespace aether::net
 	// against a hand-written array that claim was FALSE - kind 7 was added and the
 	// array stayed at 6, so Relevancy's framing went untested exactly as the comment
 	// promised it could not. Anchored to the enum, adding kind 8 without a row breaks
-	// the BUILD, which is the only version of that promise worth making. Keep this on
-	// the last enumerator.
-	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Input);
+	// the BUILD, which is the only version of that promise worth making - and so does
+	// REMOVING one, which is how the retired Input kind was caught. Keep this on the
+	// last enumerator.
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Relevancy);
 
 	// Prefixes `payload` with its NetMessage byte - the WRAPPED half of the
 	// convention above. NetworkContext::Frame is a thin forwarder to this, so both

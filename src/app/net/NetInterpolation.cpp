@@ -1,7 +1,6 @@
 #include "net/NetInterpolation.hpp"
 
 #include <algorithm>
-#include <cmath>
 
 namespace aether::net
 {
@@ -54,17 +53,5 @@ namespace aether::net
 	void InterpolationBuffer::Clear()
 	{
 		m_samples.clear();
-	}
-
-	glm::vec3 EaseToward(glm::vec3 current, glm::vec3 target, float rate, float dt, float snapDistance)
-	{
-		const glm::vec3 delta = target - current;
-		if (glm::dot(delta, delta) >= snapDistance * snapDistance)
-		{
-			return target;
-		}
-		// Exponential decay, so the result does not depend on frame rate.
-		const float t = 1.f - std::exp(-std::max(rate, 0.f) * std::max(dt, 0.f));
-		return current + delta * t;
 	}
 } // namespace aether::net
