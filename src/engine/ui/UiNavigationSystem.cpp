@@ -81,6 +81,25 @@ namespace aether::ui
 			}
 			return a.x < b.x;
 		}
+
+		// The element the keyboard enters a screen on: first in reading order, so it is
+		// also the first element Tab would reach.
+		Entity FirstInReadingOrder(const std::vector<Candidate>& cands)
+		{
+			const Candidate* best = nullptr;
+			for (const Candidate& c: cands)
+			{
+				if (!c.interactable)
+				{
+					continue;
+				}
+				if (best == nullptr || BeforeInReadingOrder(c.rect, best->rect))
+				{
+					best = &c;
+				}
+			}
+			return best != nullptr ? best->entity : Entity{};
+		}
 	} // namespace
 
 	void UiNavigationSystem::Update(World& world, Input& input)
@@ -108,12 +127,21 @@ namespace aether::ui
 		}
 
 		Entity focused = prevFocused;
-		// Drop focus that has become unusable: the previously-focused element may have been removed,
-		// or a script may have turned it non-interactable this frame (e.g. a Level Select node that
-		// locked once the active save slot resolved - the nodes default to interactable in the scene,
-		// so the nav system can briefly focus one before the script disables it). Without this, focus
-		// sticks on a disabled element: keyboard Enter then targets something that can't be activated
-		// and the real interactable node can never be reached.
+		// Focus always names a usable element, or nothing at all. The nav system never
+		// INVENTS one, and that second half is load-bearing:
+		//
+		//  - Focus that has become unusable is dropped. The element may have been removed,
+		//    or a script may have turned it non-interactable this frame (e.g. a Level
+		//    Select node that locked once the active save slot resolved - the nodes
+		//    default to interactable in the scene, so the nav system can briefly focus one
+		//    before the script disables it). Left stuck there, keyboard Enter targets
+		//    something that can't be activated and the reachable elements never can be.
+		//  - Nothing focused STAYS nothing focused. Defaulting to the first interactable
+		//    would arm Enter/Space against an element the player has never touched, which
+		//    silently takes those keys away from the GAME for as long as any canvas exists:
+		//    a HUD chat box turns the jump button into "open the chat", and every key after
+		//    it into typing. Focus is established deliberately - by the mouse, by Tab or a
+		//    direction key below, or by a screen calling Ui.SetFocus - never by default.
 		bool focusedUsable = false;
 		for (const Candidate& c: cands)
 		{
@@ -126,14 +154,6 @@ namespace aether::ui
 		if (!focusedUsable)
 		{
 			focused = Entity{};
-			for (const Candidate& c: cands)
-			{
-				if (c.interactable)
-				{
-					focused = c.entity;
-					break;
-				}
-			}
 		}
 
 		// Mouse hover focuses on movement; a hovered element is the click target.
@@ -165,7 +185,7 @@ namespace aether::ui
 		}
 
 		// Keyboard: spatial move to the nearest selectable in the pressed direction.
-		if (focused.IsValid() && !captured)
+		if (!captured)
 		{
 			glm::vec4 focusedRect{};
 			for (const Candidate& c: cands)
@@ -178,7 +198,7 @@ namespace aether::ui
 			}
 			// A focused horizontal slider captures Left/Right for value adjustment
 			// (UiWidgetSystem handles them); vertical nav still works.
-			const bool focusedIsSlider = world.TryGet<UISlider>(focused) != nullptr;
+			const bool focusedIsSlider = focused.IsValid() && world.TryGet<UISlider>(focused) != nullptr;
 			glm::vec2 dir{0.0f, 0.0f};
 			if (input.IsKeyPressed(Key::Down))
 			{
@@ -198,8 +218,15 @@ namespace aether::ui
 			}
 			if (dir.x != 0.0f || dir.y != 0.0f)
 			{
-				const Entity target = NearestInDirection(cands, focused, focusedRect, dir);
-				if (target.IsValid())
+				if (!focused.IsValid())
+				{
+					// A direction key with nothing focused is how the keyboard ENTERS a
+					// screen: it lights the first element up rather than moving from one.
+					// Seeding here instead of by default is what leaves Enter/Space with
+					// the game until the player actually reaches for the UI.
+					focused = FirstInReadingOrder(cands);
+				}
+				else if (const Entity target = NearestInDirection(cands, focused, focusedRect, dir); target.IsValid())
 				{
 					focused = target;
 				}
@@ -222,22 +249,30 @@ namespace aether::ui
 			        [](const Candidate& a, const Candidate& b) { return BeforeInReadingOrder(a.rect, b.rect); });
 			if (!ordered.empty())
 			{
-				// `focused` is always one of these by now: the focusedUsable fallback above
-				// already resolved it to an interactable candidate, and `ordered` holds exactly
-				// the interactable candidates. So the search always hits, and a "nothing focused"
-				// branch here would be unreachable.
-				std::size_t index = 0;
-				for (std::size_t i = 0; i < ordered.size(); ++i)
+				if (!focused.IsValid())
 				{
-					if (ordered[i].entity == focused)
-					{
-						index = i;
-						break;
-					}
+					// Same "the keyboard enters the screen" rule as the direction keys: the
+					// first Tab lands on an end of the order rather than stepping off an
+					// element nobody chose.
+					focused = backwards ? ordered.back().entity : ordered.front().entity;
 				}
-				const std::size_t count = ordered.size();
-				index = backwards ? (index + count - 1) % count : (index + 1) % count;
-				focused = ordered[index].entity;
+				else
+				{
+					// `focused` is one of these: it survived the usability check above, and
+					// `ordered` holds exactly the interactable candidates.
+					std::size_t index = 0;
+					for (std::size_t i = 0; i < ordered.size(); ++i)
+					{
+						if (ordered[i].entity == focused)
+						{
+							index = i;
+							break;
+						}
+					}
+					const std::size_t count = ordered.size();
+					index = backwards ? (index + count - 1) % count : (index + 1) % count;
+					focused = ordered[index].entity;
+				}
 			}
 		}
 

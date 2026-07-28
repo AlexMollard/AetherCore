@@ -214,6 +214,13 @@ AE_SCRIPT_API void aether_ui_set_focus(std::uint32_t id)
 	world.View<aether::ui::UISelectable>().each([&](entt::entity ent, aether::ui::UISelectable& s) { s.focused = (aether::World::FromEntt(ent) == target); });
 }
 
+// Focus is exclusive, and "nobody" is one of its legal values: UiNavigationSystem never
+// picks an element on its own, so this survives instead of being re-stamped next frame.
+AE_SCRIPT_API void aether_ui_clear_focus()
+{
+	ActiveWorld().View<aether::ui::UISelectable>().each([](entt::entity, aether::ui::UISelectable& s) { s.focused = false; });
+}
+
 AE_SCRIPT_API void aether_ui_set_interactable(std::uint32_t id, std::int32_t value)
 {
 	auto* s = ActiveWorld().TryGet<aether::ui::UISelectable>(aether::Entity{id});

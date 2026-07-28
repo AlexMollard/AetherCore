@@ -121,6 +121,101 @@ TEST_CASE("With no UIKeyboardCapture anywhere, arrows and Enter navigate normall
 	CHECK(Sel(w, bottom).activated);
 }
 
+TEST_CASE("Nothing is focused until the player reaches for the UI, so Space stays the game's")
+{
+	World w;
+	Input input;
+
+	// A gameplay HUD: a canvas exists, but the player has not touched it. The nav system
+	// used to focus the first interactable element here, which armed Enter/Space against
+	// it - a chat box on a platformer's HUD turned the jump key into "start typing".
+	const Entity first = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity second = MakeSelectable(w, {0, 100, 100, 20});
+
+	input.SetSyntheticKey(static_cast<int>(Key::Space), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK_FALSE(Sel(w, first).focused);
+	CHECK_FALSE(Sel(w, second).focused);
+	CHECK_FALSE(Sel(w, first).activated);
+	CHECK_FALSE(Sel(w, second).activated);
+}
+
+TEST_CASE("A direction key with nothing focused enters the screen instead of moving")
+{
+	World w;
+	Input input;
+
+	// Laid out so "first in reading order" and "nearest downwards from the origin"
+	// disagree: topRight leads the reading order (top row), but a spatial search run
+	// from an empty focus would land on lowerLeft instead. Seeding has to be a
+	// deliberate branch, not a spatial move that happens to start at (0,0).
+	const Entity topRight = MakeSelectable(w, {400, 0, 100, 20});
+	const Entity lowerLeft = MakeSelectable(w, {0, 100, 100, 20});
+
+	input.SetSyntheticKey(static_cast<int>(Key::Down), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	// The press establishes focus rather than stepping off a focus nobody chose.
+	CHECK(Sel(w, topRight).focused);
+	CHECK_FALSE(Sel(w, lowerLeft).focused);
+	CHECK_FALSE(Sel(w, topRight).activated);
+}
+
+TEST_CASE("Tab with nothing focused lands on the first element in reading order")
+{
+	World w;
+	Input input;
+
+	// Created bottom-first so creation order and reading order disagree.
+	const Entity below = MakeSelectable(w, {0, 100, 100, 20});
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+
+	input.SetSyntheticKey(static_cast<int>(Key::Tab), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, top).focused);
+	CHECK_FALSE(Sel(w, below).focused);
+}
+
+TEST_CASE("Shift+Tab with nothing focused lands on the last element in reading order")
+{
+	World w;
+	Input input;
+
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity below = MakeSelectable(w, {0, 100, 100, 20});
+
+	input.SetSyntheticKey(static_cast<int>(Key::Tab), true);
+	input.SetSyntheticKey(static_cast<int>(Key::LeftShift), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, below).focused);
+	CHECK_FALSE(Sel(w, top).focused);
+}
+
+TEST_CASE("Focus that stops being interactable is dropped, not left stuck")
+{
+	World w;
+	Input input;
+
+	const Entity locked = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity open = MakeSelectable(w, {0, 100, 100, 20});
+
+	Sel(w, locked).focused = true;
+	Sel(w, locked).interactable = false; // a script locked it this frame
+
+	input.SetSyntheticKey(static_cast<int>(Key::Enter), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	// Neither still focused on something that cannot be activated, nor silently
+	// re-pointed at an element the player never chose.
+	CHECK_FALSE(Sel(w, locked).focused);
+	CHECK_FALSE(Sel(w, locked).activated);
+	CHECK_FALSE(Sel(w, open).focused);
+	CHECK_FALSE(Sel(w, open).activated);
+}
+
 TEST_CASE("Tab orders by row before column, not by creation order")
 {
 	World w;

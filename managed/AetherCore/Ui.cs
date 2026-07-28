@@ -127,6 +127,18 @@ public static class Ui
     /// <summary>Make this selectable the focused one.</summary>
     public static void SetFocus(Entity e) => Native.aether_ui_set_focus(e.Id);
 
+    /// <summary>
+    /// Leave nothing focused, handing Enter/Space back to the game.
+    /// </summary>
+    /// <remarks>
+    /// The engine never focuses an element on its own, so this is a real resting state
+    /// rather than a value the next frame overwrites. Call it when an in-game panel that
+    /// took the keyboard - a chat box, a console - is done with it: a selectable that
+    /// keeps focus is still activated by Enter <em>and Space</em>, which is how a HUD
+    /// text field quietly turns the jump button into "start typing".
+    /// </remarks>
+    public static void ClearFocus() => Native.aether_ui_clear_focus();
+
     /// <summary>Enable/disable navigation to this selectable (locked items set false).</summary>
     public static void SetInteractable(Entity e, bool interactable) => Native.aether_ui_set_interactable(e.Id, interactable ? 1 : 0);
 

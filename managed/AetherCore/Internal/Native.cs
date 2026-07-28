@@ -231,6 +231,9 @@ internal static unsafe partial class Native
     internal static partial void aether_ui_set_focus(uint id);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_ui_clear_focus();
+
+    [LibraryImport(Lib)]
     internal static partial void aether_ui_set_interactable(uint id, int value);
 
     // ── Widgets ──────────────────────────────────────────────────────────────────
