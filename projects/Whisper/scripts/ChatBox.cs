@@ -90,6 +90,7 @@ public sealed class ChatBox : EntityScript
     private Entity _input;
     private Entity _log;
     private int _drawnRevision = -1;
+    private bool _wasEditing;
 
     /// <summary>
     /// True while this player's chat box owns the keyboard. <see cref="PlayerController"/>
@@ -202,11 +203,19 @@ public sealed class ChatBox : EntityScript
 
     /// <summary>Enter opens the box; Enter again sends what is in it.</summary>
     /// <remarks>
+    /// <para>
     /// The submit test comes first and the open test is its <c>else</c> branch on
     /// purpose. Committing a field ends editing in the same frame it reports
     /// <see cref="Ui.WasSubmitted"/>, so an independent "not editing and Enter is down"
     /// test would see the very keypress that just sent the message and reopen the box
     /// with it.
+    /// </para>
+    /// <para>
+    /// Closing the box also gives the keyboard back. A focused selectable is activated by
+    /// Space as much as by Enter, so a box that stayed focused after sending would make
+    /// the next jump open the chat instead - and every key after that would be typing.
+    /// The chat owns the keyboard only between Enter and Enter.
+    /// </para>
     /// </remarks>
     private void PumpInput()
     {
@@ -218,6 +227,15 @@ public sealed class ChatBox : EntityScript
         {
             Ui.BeginEdit(_input);
         }
+
+        bool editing = Ui.IsEditing(_input);
+        // Guarded on the box still holding focus, so a click that moved focus somewhere
+        // else on the way out is not undone.
+        if (_wasEditing && !editing && Ui.IsFocused(_input))
+        {
+            Ui.ClearFocus();
+        }
+        _wasEditing = editing;
     }
 
     /// <summary>Send whatever was committed, then empty the box either way.</summary>
