@@ -286,16 +286,19 @@ AE_SCRIPT_API std::uint32_t aether_net_round_trip_ms()
 AE_SCRIPT_API std::uint32_t aether_net_owner_of(std::uint32_t entityId)
 {
 	const auto* identity = ActiveWorld().TryGet<aether::net::NetworkIdentity>(aether::Entity{entityId});
-	const aether::net::NetworkContext* context = Context();
-	const std::uint32_t local = context != nullptr ? context->LocalConnectionId() : 0u;
-	// An entity with no identity, or one that has not been given an owner yet (which
-	// is every entity in an offline game), belongs to whoever is asking. That is not a
-	// fallback so much as the truth: there is nobody else it could belong to.
-	if (identity == nullptr || identity->owner == aether::net::kInvalidConnection)
+	if (identity != nullptr)
 	{
-		return local;
+		// Verbatim, INCLUDING kInvalidConnection - which is 0, which is also the host's
+		// connection id, which is exactly what a host-owned entity's owner field holds.
+		// Substituting "whoever is asking" for it here made every host-owned player read
+		// as belonging to the client looking at it, so a roster keyed on this put the
+		// host in the wrong place and stopped labelling it as the host at all.
+		return identity->owner;
 	}
-	return identity->owner;
+	// Not replicated: a menu carrier, a HUD element, anything local. There is nobody else
+	// it could belong to, and offline that is the answer for everything.
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr ? context->LocalConnectionId() : 0u;
 }
 
 AE_SCRIPT_API std::int32_t aether_net_players(std::uint32_t* buffer, std::int32_t capacity)
