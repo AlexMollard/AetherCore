@@ -1,3 +1,4 @@
+using System.Numerics;
 using AetherCore;
 
 namespace AetherGame;
@@ -5,9 +6,9 @@ namespace AetherGame;
 /// <summary>
 /// Networking glue for the Whisper player prefab: replicates the presentation
 /// decisions <see cref="PlayerController"/> makes - which animation clip is
-/// playing and which way the character faces - so remote copies of a player
-/// animate and face correctly instead of sliding around in whatever pose they
-/// spawned in.
+/// playing, which way the character faces, and what colour it is - so remote
+/// copies of a player animate, face and read correctly instead of sliding around
+/// in whatever pose they spawned in.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -47,6 +48,33 @@ public sealed class NetPlayerSync : EntityScript
     /// </summary>
     [Replicated] public bool FacingLeft;
 
+    /// <summary>
+    /// Which <see cref="PlayerPalette"/> entry this player wears - its character tint,
+    /// its name tag, and its roster row all read this one number.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Replicated, and authored by the owner, through the same mechanism as
+    /// <see cref="AnimState"/> and <see cref="FacingLeft"/> rather than a third one. It
+    /// could be DERIVED on each peer instead - the owning connection id is replicated on
+    /// the entity, so every peer could compute the same index from it without a byte
+    /// crossing the wire - and that is exactly the shortcut worth not taking: the moment
+    /// a player is allowed to CHOOSE a colour, a derived value has nowhere to put the
+    /// choice, and the change is a new replication path rather than a different value in
+    /// this field. Which player wears which colour is a decision, and decisions belong to
+    /// the peer that owns the thing being decided.
+    /// </para>
+    /// <para>
+    /// Seeded from the owning connection so a session that nobody customises still comes
+    /// up with everyone in a different colour.
+    /// </para>
+    /// </remarks>
+    [Replicated] public int ColorIndex;
+
+    /// <summary>This player's colour, for anything drawing alongside it - the name tag,
+    /// the roster. One lookup, so a tag can never disagree with the character under it.</summary>
+    public Vector4 Color => PlayerPalette.At(ColorIndex);
+
     // Guard SpriteAnimator.SetAnimation the same way PlayerController's old
     // per-instance `_anim` field did: re-issuing the same clip every frame
     // restarts it from frame 0, which reads as a stutter. FacingLeft is guarded
@@ -54,6 +82,7 @@ public sealed class NetPlayerSync : EntityScript
     private int _appliedAnim = -1;
     private bool _appliedFacing;
     private bool _facingApplied;
+    private int _appliedColor = -1;
 
     public override void OnAttach()
     {
@@ -61,6 +90,7 @@ public sealed class NetPlayerSync : EntityScript
         // immediately rather than waiting a frame for OnUpdate.
         ApplyAnim(AnimState);
         ApplyFacing(FacingLeft);
+        ApplyColor(ColorIndex);
     }
 
     public override void OnUpdate(float deltaTime)
@@ -77,9 +107,15 @@ public sealed class NetPlayerSync : EntityScript
         {
             AnimState = controller.AnimIndex;
             FacingLeft = controller.FacingLeft;
+            // Written every frame rather than once in OnAttach: on a client the owner is
+            // not knowable at attach time (Net.IsOwner answers false for everything until
+            // the host's Welcome lands), and the connection id this derives from arrives
+            // with it. Re-deriving costs a field write and settles as soon as it can.
+            ColorIndex = (int) (Net.OwnerOf(Self) % (uint) PlayerPalette.Count);
         }
         ApplyAnim(AnimState);
         ApplyFacing(FacingLeft);
+        ApplyColor(ColorIndex);
     }
 
     private void ApplyAnim(int index)
@@ -107,6 +143,19 @@ public sealed class NetPlayerSync : EntityScript
         // Negative transform scale is clamped away by the 2D physics transform sync,
         // so the sprite flag is the route.
         SpriteRenderer.SetFlipX(Self, left);
+    }
+
+    /// <summary>Tint the sprite. Latched on the index rather than the colour so the
+    /// per-frame path is an integer compare, and so the first apply happens even for the
+    /// default index 0.</summary>
+    private void ApplyColor(int index)
+    {
+        if (index == _appliedColor)
+        {
+            return;
+        }
+        _appliedColor = index;
+        SpriteRenderer.SetTint(Self, PlayerPalette.At(index));
     }
 
     private static string ClipFor(int index) => index switch
