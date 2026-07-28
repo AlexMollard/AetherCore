@@ -31,12 +31,14 @@ public readonly struct NetSessionPlayer
     /// <summary>The display name they were introduced under.</summary>
     public string Name { get; }
 
+    private static IEngineBackend Api => EngineBackend.Api;
+
     /// <summary>Round-trip time to the host in milliseconds, read live off the entity.
     /// 0 for the host's own player, offline, and for a departed one.</summary>
     /// <remarks>A property rather than a captured field because it changes every tick and
     /// a roster entry does not: a snapshotted ping would be a stale number on screen
     /// pretending to be a live one.</remarks>
-    public uint PingMs => Entity.IsValid ? Net.GetPlayerPing(Entity) : 0u;
+    public uint PingMs => Entity.IsValid ? Api.NetGetPlayerPing(Entity) : 0u;
 
     /// <summary>Whether this is the session host - the peer everybody else's latency is
     /// measured against, and the one with none of its own.</summary>
@@ -168,6 +170,11 @@ public abstract class NetSessionDirector : EntityScript
     // Which connection is standing on each spawn point, so two players never land on top
     // of each other. Unclaimed rather than 0, because 0 is the HOST's connection id - it
     // is a real occupant, not an empty slot.
+    // How this reaches the engine. See IEngineBackend: the shipped value is always the
+    // direct-P/Invoke backend, and it is a seam only so the state machine below can be
+    // ticked without one.
+    private static IEngineBackend Api => EngineBackend.Api;
+
     private const uint Unclaimed = uint.MaxValue;
     private uint[] _slotOwners = [];
 
@@ -251,7 +258,7 @@ public abstract class NetSessionDirector : EntityScript
     /// </remarks>
     public override void OnAttach()
     {
-        Net.ReplicationReady = true;
+        Api.NetSetReplicationReady(true);
 
         _slotOwners = new uint[System.Math.Max(SpawnPointCount, 1)];
         for (int i = 0; i < _slotOwners.Length; i++)
@@ -263,7 +270,7 @@ public abstract class NetSessionDirector : EntityScript
         // editor. See NetSession.JoinRequested for why a stale static has to be cleared
         // here - it survives the editor's Play/Stop cycle, and a stale one would route a
         // genuine single-player session down the client branch.
-        if (!Net.IsClient && !Net.IsHost && !Net.IsConnected && Net.DisconnectReason.Length == 0)
+        if (!Api.NetIsClient && !Api.NetIsHost && !Api.NetIsConnected && Api.NetDisconnectReason.Length == 0)
         {
             NetSession.JoinRequested = false;
         }
@@ -286,7 +293,7 @@ public abstract class NetSessionDirector : EntityScript
             return;
         }
 
-        if (Net.IsHost)
+        if (Api.NetIsHost)
         {
             UpdateHost();
             return;
@@ -297,7 +304,7 @@ public abstract class NetSessionDirector : EntityScript
         // IsClient alone would silently reroute the drop into the offline branch and the
         // menu would never be reached. NetSession.JoinRequested covers the earlier case
         // still - a join refused before this script ever saw a live session.
-        if (Net.IsClient || _wasInSession || _reconnecting || NetSession.JoinRequested)
+        if (Api.NetIsClient || _wasInSession || _reconnecting || NetSession.JoinRequested)
         {
             UpdateClient(deltaTime);
             return;
@@ -326,7 +333,7 @@ public abstract class NetSessionDirector : EntityScript
     /// at any moment.
     /// </para>
     /// </remarks>
-    protected virtual bool WantsToLeave() => Input.IsKeyPressed(Key.Escape);
+    protected virtual bool WantsToLeave() => Api.InputIsKeyPressed(Key.Escape);
 
     /// <summary>
     /// Host only: somebody joined, and their display name has arrived. Return false to be
@@ -385,7 +392,7 @@ public abstract class NetSessionDirector : EntityScript
     /// </remarks>
     public void Leave(string status)
     {
-        Net.Disconnect();
+        Api.NetDisconnect();
         NetSession.StatusMessage = status;
         NetSession.JoinRequested = false;
         _wasInSession = false;
@@ -398,7 +405,7 @@ public abstract class NetSessionDirector : EntityScript
         HideStatus();
         if (ReturnScene.Length > 0)
         {
-            Scene.Load(ReturnScene);
+            Api.SceneLoad(ReturnScene);
         }
     }
 
@@ -412,16 +419,16 @@ public abstract class NetSessionDirector : EntityScript
             // one Net.LocalConnectionId reports here. Its name needs no round trip: it is
             // already on this machine, and the display name is replicated, so writing it
             // locally is what every client ends up reading.
-            Entity player = SpawnPlayerFor(Net.LocalConnectionId);
+            Entity player = SpawnPlayerFor(Api.NetLocalConnectionId);
             if (player.IsValid)
             {
-                Net.SetPlayerName(player, NetSession.LocalPlayerName);
+                Api.NetSetPlayerName(player, NetSession.LocalPlayerName);
                 LocalPlayer = player;
             }
             _localPlayerSpawned = true;
         }
 
-        uint[] live = Net.Connections;
+        uint[] live = Api.NetConnections;
         foreach (uint connection in live)
         {
             if (!_slotByConnection.ContainsKey(connection))
@@ -440,7 +447,7 @@ public abstract class NetSessionDirector : EntityScript
     private Entity SpawnPlayerFor(uint connection)
     {
         int slot = ClaimSlot(connection);
-        Entity player = Net.Spawn(PlayerPrefab, SpawnPosition(slot, SharersOf(slot, connection)), connection);
+        Entity player = Api.NetSpawn(PlayerPrefab, SpawnPosition(slot, SharersOf(slot, connection)), connection);
         if (!player.IsValid)
         {
             // Nothing was created, so the slot must not stay claimed or it is lost for the
@@ -472,7 +479,7 @@ public abstract class NetSessionDirector : EntityScript
         foreach (uint connection in _slotByConnection.Keys)
         {
             // The host's own entry is not in Net.Connections and must never be swept.
-            if (connection == Net.LocalConnectionId || System.Array.IndexOf(live, connection) >= 0)
+            if (connection == Api.NetLocalConnectionId || System.Array.IndexOf(live, connection) >= 0)
             {
                 continue;
             }
@@ -519,14 +526,14 @@ public abstract class NetSessionDirector : EntityScript
     private void SyncRoster()
     {
         _players.Clear();
-        foreach (Entity player in Net.Players)
+        foreach (Entity player in Api.NetPlayers)
         {
-            string name = Net.GetPlayerName(player);
+            string name = Api.NetGetPlayerName(player);
             if (name.Length == 0)
             {
                 continue;
             }
-            _players.Add(new NetSessionPlayer(Net.OwnerOf(player), player, name));
+            _players.Add(new NetSessionPlayer(Api.NetOwnerOf(player), player, name));
         }
         _players.Sort(static (a, b) => a.Connection != b.Connection
             ? a.Connection.CompareTo(b.Connection)
@@ -637,10 +644,10 @@ public abstract class NetSessionDirector : EntityScript
     {
         Vector3 spread = new(sharers * SpawnSpread, 0.0f, 0.0f);
         string markerName = $"{SpawnPointPrefix}{index}";
-        Entity marker = Scene.Find(markerName);
+        Entity marker = Api.SceneFind(markerName);
         if (marker.IsValid)
         {
-            return marker.Position + spread;
+            return Api.EntityPosition(marker) + spread;
         }
         Log.Warn($"Net session: scene has no '{markerName}' entity; spawning at the origin");
         return spread;
@@ -680,7 +687,7 @@ public abstract class NetSessionDirector : EntityScript
     /// </remarks>
     private void UpdateClient(float deltaTime)
     {
-        if (Net.IsClient && Net.IsConnected)
+        if (Api.NetIsClient && Api.NetIsConnected)
         {
             if (_reconnecting)
             {
@@ -709,7 +716,7 @@ public abstract class NetSessionDirector : EntityScript
             return;
         }
 
-        string reason = Net.DisconnectReason;
+        string reason = Api.NetDisconnectReason;
         if (reason.Length > 0)
         {
             // Somebody decided. This covers both a host that quit and a join this client
@@ -757,7 +764,7 @@ public abstract class NetSessionDirector : EntityScript
     {
         _connectElapsed += deltaTime;
 
-        if (!Net.IsClient)
+        if (!Api.NetIsClient)
         {
             Log.Warn("Net session: the connection was never established");
             Leave(UnreachableMessage);
@@ -810,7 +817,7 @@ public abstract class NetSessionDirector : EntityScript
     {
         if (_attemptLive)
         {
-            string reason = Net.DisconnectReason;
+            string reason = Api.NetDisconnectReason;
             if (reason.Length > 0)
             {
                 // The host is back and does not want us - full, or shutting down. That is
@@ -819,13 +826,13 @@ public abstract class NetSessionDirector : EntityScript
                 return;
             }
             _attemptElapsed += deltaTime;
-            if (Net.IsClient && _attemptElapsed < ReconnectTimeoutSeconds)
+            if (Api.NetIsClient && _attemptElapsed < ReconnectTimeoutSeconds)
             {
                 return; // still in flight
             }
             // Timed out, or the transport gave up on its own. Tidy up before the next one,
             // or a half-open attempt races the one after it.
-            Net.Disconnect();
+            Api.NetDisconnect();
             _attemptLive = false;
             _untilNextAttempt = ReconnectDelaySeconds;
             return;
@@ -847,7 +854,7 @@ public abstract class NetSessionDirector : EntityScript
         _attemptsMade++;
         _attemptElapsed = 0.0f;
         ShowStatus($"Reconnecting... ({_attemptsMade}/{ReconnectAttempts})");
-        if (Net.Connect(NetSession.HostAddress, NetSession.HostPort))
+        if (Api.NetConnect(NetSession.HostAddress, NetSession.HostPort))
         {
             _attemptLive = true;
             return;
@@ -870,15 +877,15 @@ public abstract class NetSessionDirector : EntityScript
     {
         if (!_status.IsValid)
         {
-            _status = Ui.CreateText();
+            _status = Api.UiCreateText(default);
             Vector2 topCentre = new(0.5f, 0.0f);
-            Ui.SetAnchors(_status, topCentre, topCentre);
-            Ui.SetPivot(_status, new Vector2(0.5f, 0.0f));
-            Ui.SetRect(_status, 0.0f, 24.0f, 520.0f, 28.0f);
-            Ui.SetTextAlign(_status, UiHAlign.Center, UiVAlign.Middle);
-            Ui.SetTextColor(_status, new Vector4(1.0f, 0.86f, 0.45f, 1.0f));
+            Api.UiSetAnchors(_status, topCentre, topCentre);
+            Api.UiSetPivot(_status, new Vector2(0.5f, 0.0f));
+            Api.UiSetRect(_status, 0.0f, 24.0f, 520.0f, 28.0f);
+            Api.UiSetTextAlign(_status, UiHAlign.Center, UiVAlign.Middle);
+            Api.UiSetTextColor(_status, new Vector4(1.0f, 0.86f, 0.45f, 1.0f));
         }
-        Ui.SetText(_status, text);
+        Api.UiSetText(_status, text);
     }
 
     private void HideStatus()
@@ -886,7 +893,7 @@ public abstract class NetSessionDirector : EntityScript
         _noticeLeft = 0.0f;
         if (_status.IsValid)
         {
-            _status.Destroy();
+            Api.EntityDestroy(_status);
             _status = default;
         }
     }
@@ -925,13 +932,14 @@ public abstract class NetSessionDirector : EntityScript
             return;
         }
         _localPlayerSpawned = true;
-        int slot = ClaimSlot(Net.LocalConnectionId);
-        Entity player = Scene.Instantiate(PlayerPrefab, SpawnPosition(slot, SharersOf(slot, Net.LocalConnectionId)));
+        uint local = Api.NetLocalConnectionId;
+        int slot = ClaimSlot(local);
+        Entity player = Api.SceneInstantiate(PlayerPrefab, SpawnPosition(slot, SharersOf(slot, local)));
         if (!player.IsValid)
         {
             return;
         }
-        Net.SetPlayerName(player, NetSession.LocalPlayerName);
+        Api.NetSetPlayerName(player, NetSession.LocalPlayerName);
         LocalPlayer = player;
         // Nothing is added to the roster here: SyncRoster picks this player up on the next
         // frame like any other. And nothing is ANNOUNCED - DiffRoster is host-only, because

@@ -25,6 +25,11 @@ namespace AetherCore;
 /// </remarks>
 public static class NetSession
 {
+    // How this reaches the engine. See IEngineBackend: the shipped value is always the
+    // direct-P/Invoke backend, and it is a seam only so the transitions below can be
+    // exercised without one.
+    private static IEngineBackend Api => EngineBackend.Api;
+
     private static string s_localPlayerName = DefaultPlayerName;
 
     /// <summary>What a blank name becomes.</summary>
@@ -97,7 +102,7 @@ public static class NetSession
     /// <returns>False if the port could not be opened; see <see cref="Net.LastError"/>.</returns>
     public static bool BeginHost(int port, int maxConnections)
     {
-        if (!Net.Host(port, maxConnections))
+        if (!Api.NetHost(port, maxConnections))
         {
             return false;
         }
@@ -115,7 +120,7 @@ public static class NetSession
     /// opened. A true return means the attempt STARTED - see <see cref="Net.Connect"/>.</returns>
     public static bool BeginJoin(string address, ushort port)
     {
-        if (!Net.Connect(address, port))
+        if (!Api.NetConnect(address, port))
         {
             return false;
         }

@@ -8,3 +8,8 @@ using System.Runtime.CompilerServices;
 // The ABI/host-boot assembly is the engine's own internal partner: it populates
 // HostBridge, binds EntityScript.Bind, and uses the Utf8 marshalling helpers.
 [assembly: InternalsVisibleTo("AetherCore.Interop")]
+
+// The SDK's unit tests. They swap EngineBackend.Api for a recording double so the
+// session state machine, the label projection and the script-instance table can be
+// exercised without a running engine, and they read ScriptInstances directly.
+[assembly: InternalsVisibleTo("AetherCore.Tests")]

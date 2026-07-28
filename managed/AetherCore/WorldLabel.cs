@@ -37,6 +37,11 @@ namespace AetherCore;
 /// </remarks>
 public sealed class WorldLabel
 {
+    // How this reaches the engine. See IEngineBackend: the shipped value is always the
+    // direct-P/Invoke backend, and it is a seam only so the projection and cull below
+    // can be exercised without one.
+    private static IEngineBackend Api => EngineBackend.Api;
+
     // The exact sentinel Camera.WorldToScreen returns for a point behind the camera.
     private static readonly Vector2 BehindCameraSentinel = new(-1.0f, -1.0f);
 
@@ -83,14 +88,14 @@ public sealed class WorldLabel
         Vector4 backing = outlineColor ?? new Vector4(0.0f, 0.0f, 0.0f, 0.85f);
         for (int i = 0; i < _outline.Length; i++)
         {
-            _outline[i] = Ui.CreateText(canvas);
+            _outline[i] = Api.UiCreateText(canvas);
             StyleAsLabel(_outline[i], width, height);
-            Ui.SetTextColor(_outline[i], backing);
+            Api.UiSetTextColor(_outline[i], backing);
         }
 
-        _element = Ui.CreateText(canvas);
+        _element = Api.UiCreateText(canvas);
         StyleAsLabel(_element, width, height);
-        Ui.SetTextColor(_element, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+        Api.UiSetTextColor(_element, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
     }
 
     /// <summary>The underlying UI text entity, for styling it further (font size,
@@ -107,20 +112,20 @@ public sealed class WorldLabel
     {
         if (_element.IsValid)
         {
-            Ui.SetTextColor(_element, color);
+            Api.UiSetTextColor(_element, color);
         }
     }
 
     /// <summary>Set the font on the text and every outline copy together.</summary>
     public void SetFont(string fontName)
     {
-        ForEachElement(e => Ui.SetFont(e, fontName));
+        ForEachElement(e => Api.UiSetFont(e, fontName));
     }
 
     /// <summary>Set the glyph size on the text and every outline copy together.</summary>
     public void SetFontSize(float pixelSize)
     {
-        ForEachElement(e => Ui.SetFontSize(e, pixelSize));
+        ForEachElement(e => Api.UiSetFontSize(e, pixelSize));
     }
 
     /// <summary>Show <paramref name="text"/> at <paramref name="worldPosition"/>, hiding
@@ -132,26 +137,26 @@ public sealed class WorldLabel
             return;
         }
 
-        Vector2 screenPos = Camera.WorldToScreen(worldPosition);
+        Vector2 screenPos = Api.CameraWorldToScreen(worldPosition);
         bool behindCamera = screenPos == BehindCameraSentinel;
 
-        Ui.SetText(_element, text);
-        _element.SetActive(!behindCamera);
+        Api.UiSetText(_element, text);
+        Api.EntitySetActive(_element, !behindCamera);
         if (!behindCamera)
         {
-            Ui.SetRect(_element, screenPos.X, screenPos.Y, _width, _height);
+            Api.UiSetRect(_element, screenPos.X, screenPos.Y, _width, _height);
         }
 
         for (int i = 0; i < _outline.Length; i++)
         {
-            Ui.SetText(_outline[i], text);
-            _outline[i].SetActive(!behindCamera);
+            Api.UiSetText(_outline[i], text);
+            Api.EntitySetActive(_outline[i], !behindCamera);
             if (behindCamera)
             {
                 continue;
             }
             Vector2 offset = OutlineOffsets[i] * _outlineWidth;
-            Ui.SetRect(_outline[i], screenPos.X + offset.X, screenPos.Y + offset.Y, _width, _height);
+            Api.UiSetRect(_outline[i], screenPos.X + offset.X, screenPos.Y + offset.Y, _width, _height);
         }
     }
 
@@ -162,13 +167,13 @@ public sealed class WorldLabel
         {
             if (_outline[i].IsValid)
             {
-                _outline[i].Destroy();
+                Api.EntityDestroy(_outline[i]);
             }
             _outline[i] = default;
         }
         if (_element.IsValid)
         {
-            _element.Destroy();
+            Api.EntityDestroy(_element);
         }
         _element = default;
     }
@@ -178,10 +183,10 @@ public sealed class WorldLabel
     // an offset corner.
     private static void StyleAsLabel(Entity element, float width, float height)
     {
-        Ui.SetTextAlign(element, UiHAlign.Center, UiVAlign.Middle);
-        Ui.SetAnchors(element, Vector2.Zero, Vector2.Zero);
-        Ui.SetPivot(element, new Vector2(0.5f, 0.5f));
-        Ui.SetRect(element, 0.0f, 0.0f, width, height);
+        Api.UiSetTextAlign(element, UiHAlign.Center, UiVAlign.Middle);
+        Api.UiSetAnchors(element, Vector2.Zero, Vector2.Zero);
+        Api.UiSetPivot(element, new Vector2(0.5f, 0.5f));
+        Api.UiSetRect(element, 0.0f, 0.0f, width, height);
     }
 
     private void ForEachElement(System.Action<Entity> apply)

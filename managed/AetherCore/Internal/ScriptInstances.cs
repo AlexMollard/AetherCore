@@ -73,6 +73,17 @@ internal static class ScriptInstances
         return null;
     }
 
+    /// <summary>How many entities the table is currently holding a bucket for.</summary>
+    /// <remarks>
+    /// Not used by the SDK. It exists because the empty-bucket cleanup in
+    /// <see cref="Unregister"/> has no other observable effect - an emptied bucket that
+    /// is left behind still resolves every <see cref="Find{T}"/> to null, so the only
+    /// difference between doing the cleanup and skipping it is a table that grows
+    /// without bound as entities come and go. That is exactly the kind of contract that
+    /// rots unnoticed, so it is made visible here rather than left untestable.
+    /// </remarks>
+    internal static int TrackedEntityCount => s_byEntity.Count;
+
     /// <summary>Forget every instance. Called when the script assembly is torn
     /// down: the table holds strong references into the collectible load context,
     /// so it must be empty before that context can unload.</summary>
