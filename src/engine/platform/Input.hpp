@@ -152,6 +152,29 @@ namespace aether
 
 		[[nodiscard]] bool IsKeyReleased(Key key) const;
 
+		// ── Key consumption ──────────────────────────────────────────────────
+		// "This key has already been dealt with; nobody downstream gets it."
+		//
+		// A frame's keyboard is read by several independent consumers in a fixed order
+		// - the UI pass, then scripts, then the editor's own shortcuts - and there is
+		// no other way for the first of them to say that a key MEANT something. Without
+		// it, Escape closing a text field is also Escape leaving the level, and both
+		// happen: neither reader can see the other, and the only workarounds available
+		// to a game are flags written by one script and read by another, which makes the
+		// answer depend on script order and therefore on nothing the game controls.
+		//
+		// The rule is deliberately positional rather than a priority table: whoever
+		// handles a key FIRST owns it, and everything after that frame's consume sees
+		// the key as not pressed and not held. Consumers that ran EARLIER are
+		// unaffected - a consume is not retroactive - so this can only ever remove an
+		// ambiguity, never introduce one.
+		//
+		// Cleared at the top of every Update(), so a consumption lasts exactly one
+		// frame and nothing has to remember to give a key back.
+		void ConsumeKey(Key key);
+
+		[[nodiscard]] bool IsKeyConsumed(Key key) const;
+
 		[[nodiscard]] bool IsMouseButtonDown(MouseButton btn) const;
 		[[nodiscard]] bool IsMouseButtonPressed(MouseButton btn) const;
 		[[nodiscard]] bool IsMouseButtonReleased(MouseButton btn) const;
@@ -337,6 +360,7 @@ namespace aether
 
 		std::array<bool, kMaxKeys> m_currKeys{};
 		std::array<bool, kMaxKeys> m_prevKeys{};
+		std::array<bool, kMaxKeys> m_consumedKeys{};
 		std::array<bool, kMaxKeys> m_syntheticKeys{};
 		std::array<bool, kMaxMouseButtons> m_syntheticMouseButtons{};
 		glm::vec2 m_syntheticMousePos{0.0f};

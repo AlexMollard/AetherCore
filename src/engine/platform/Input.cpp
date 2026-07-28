@@ -86,6 +86,10 @@ namespace aether
 		TickInputSequence();
 		m_prevKeys = m_currKeys;
 		m_prevMouseButtons = m_currMouseButtons;
+		// A consumption is a statement about ONE frame's keyboard, so it is dropped
+		// here rather than by whoever made it. Nothing has to remember to give a key
+		// back, and a consumer that dies mid-frame cannot leave a key muted forever.
+		m_consumedKeys.fill(false);
 
 		for (int i = 0; i < kMaxKeys; ++i)
 		{
@@ -119,6 +123,21 @@ namespace aether
 		m_pendingChars.clear();
 	}
 
+	void Input::ConsumeKey(Key key)
+	{
+		const int k = static_cast<int>(key);
+		if (k >= 0 && k < kMaxKeys)
+		{
+			m_consumedKeys[k] = true;
+		}
+	}
+
+	bool Input::IsKeyConsumed(Key key) const
+	{
+		const int k = static_cast<int>(key);
+		return k >= 0 && k < kMaxKeys && m_consumedKeys[k];
+	}
+
 	bool Input::IsKeyDown(Key key) const
 	{
 		const int k = static_cast<int>(key);
@@ -126,7 +145,7 @@ namespace aether
 		{
 			return false;
 		}
-		return m_currKeys[k];
+		return m_currKeys[k] && !m_consumedKeys[k];
 	}
 
 	bool Input::IsKeyPressed(Key key) const
@@ -136,9 +155,13 @@ namespace aether
 		{
 			return false;
 		}
-		return m_currKeys[k] && !m_prevKeys[k];
+		return m_currKeys[k] && !m_prevKeys[k] && !m_consumedKeys[k];
 	}
 
+	// Deliberately NOT gated on consumption. A consumer takes the key's MEANING for
+	// this frame - "Escape closed the field" - and a release is the end of a press
+	// somebody may have been tracking since before the consume existed. Muting it
+	// would strand a held-key state machine in the down state with no edge to close it.
 	bool Input::IsKeyReleased(Key key) const
 	{
 		const int k = static_cast<int>(key);

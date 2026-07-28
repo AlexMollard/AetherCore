@@ -387,6 +387,111 @@ TEST_CASE("Entering via pendingEdit selects all and snapshots committedText")
 	CHECK(Box(w, e).caret == static_cast<int>(Box(w, e).text.size()));
 }
 
+// ── Key consumption ─────────────────────────────────────────────────────────────
+// An editing field is the frame's first reader of the keyboard, and the key it acts
+// on has to stop there. Without this, the Escape that cancels a chat message is also
+// read by the script that leaves the level, and one keypress does both.
+
+TEST_CASE("Escape that cancels an edit is consumed, so nothing downstream sees it")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "abc";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).editing);
+
+	Sel(w, e).activated = false;
+	Box(w, e).text = "abcXYZ";
+
+	Input input;
+	input.SetSyntheticKey(static_cast<int>(Key::Escape), true);
+	REQUIRE(input.IsKeyPressed(Key::Escape)); // the edge really is there before the system runs
+	Tick(w, input, 0.016f);
+
+	REQUIRE(Box(w, e).cancelled);
+	CHECK(input.IsKeyConsumed(Key::Escape));
+	// A script reading the keyboard after the UI pass - which is every script - must
+	// see nothing, whichever accessor it uses.
+	CHECK_FALSE(input.IsKeyPressed(Key::Escape));
+	CHECK_FALSE(input.IsKeyDown(Key::Escape));
+}
+
+TEST_CASE("Escape reaching a box that is NOT editing is left alone")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Sel(w, e).focused = true; // focused, but never activated, so not editing
+
+	Input input;
+	input.SetSyntheticKey(static_cast<int>(Key::Escape), true);
+	Tick(w, input, 0.f);
+
+	REQUIRE_FALSE(Box(w, e).editing);
+	// The whole point of the rule: a key nobody handled belongs to whoever asks next.
+	// Consuming here would make an idle chat box swallow the pause menu's Escape.
+	CHECK_FALSE(input.IsKeyConsumed(Key::Escape));
+	CHECK(input.IsKeyPressed(Key::Escape));
+}
+
+TEST_CASE("Enter that submits an edit is consumed")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "hi";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).editing);
+
+	Sel(w, e).activated = false;
+
+	Input input;
+	input.SetSyntheticKey(static_cast<int>(Key::Enter), true);
+	Tick(w, input, 0.016f);
+
+	REQUIRE(Box(w, e).submitted);
+	CHECK(input.IsKeyConsumed(Key::Enter));
+	CHECK_FALSE(input.IsKeyPressed(Key::Enter));
+	// The keypad twin goes with it: a box does not know which one committed it, and a
+	// game that reads only one of the two would see the other leak through.
+	CHECK(input.IsKeyConsumed(Key::KpEnter));
+}
+
+TEST_CASE("The NEXT frame's Escape reaches the game after a cancel consumed one")
+{
+	World w;
+
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "abc";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	REQUIRE(Box(w, e).editing);
+
+	Sel(w, e).activated = false;
+
+	Input cancelFrame;
+	cancelFrame.SetSyntheticKey(static_cast<int>(Key::Escape), true);
+	Tick(w, cancelFrame, 0.016f);
+	REQUIRE(Box(w, e).cancelled);
+	REQUIRE_FALSE(Box(w, e).editing);
+
+	// A second press, one frame later. The box is no longer editing, so it has no claim
+	// on this one - a consumption that outlived its frame would make the chat box mute
+	// Escape for the rest of the session.
+	Input pauseFrame;
+	pauseFrame.SetSyntheticKey(static_cast<int>(Key::Escape), true);
+	Tick(w, pauseFrame, 0.032f);
+
+	CHECK_FALSE(pauseFrame.IsKeyConsumed(Key::Escape));
+	CHECK(pauseFrame.IsKeyPressed(Key::Escape));
+}
+
 TEST_CASE("Copy and cut leave a password field's plaintext off the clipboard")
 {
 	World w;

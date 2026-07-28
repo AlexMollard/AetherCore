@@ -281,6 +281,15 @@ namespace aether::ui
 			        // edge is still pressed here, so an unguarded commit would take and release the
 			        // keyboard inside one frame and pulse `submitted` on a field nobody ever edited -
 			        // leaving a keyboard-only user with no way into a text box at all.
+			        //
+			        // EACH BRANCH CONSUMES THE KEY IT ACTED ON. An editing field is the frame's
+			        // first reader of the keyboard - this system runs before any script - and
+			        // without the consume the same Escape that cancels a message also reaches
+			        // whatever else is listening for it, so one keypress both discards the draft
+			        // and quits the level. That was a real defect in Whisper's chat box, and the
+			        // flag-shaped workarounds for it (one script publishing "I am typing" for
+			        // another to read) can only be right when the two happen to update in the
+			        // right order, which nothing guarantees.
 			        bool leaveEditing = false;
 			        if (justActivated)
 			        {
@@ -290,6 +299,8 @@ namespace aether::ui
 			        {
 				        box.submitted = true;
 				        leaveEditing = true;
+				        input.ConsumeKey(Key::Enter);
+				        input.ConsumeKey(Key::KpEnter);
 			        }
 			        else if (input.IsKeyPressed(Key::Escape))
 			        {
@@ -305,6 +316,7 @@ namespace aether::ui
 				        }
 				        box.cancelled = true;
 				        leaveEditing = true;
+				        input.ConsumeKey(Key::Escape);
 			        }
 			        else if (input.IsKeyPressed(Key::Tab))
 			        {
@@ -312,6 +324,7 @@ namespace aether::ui
 				        // focus back onto it: any other layout moves focus, and the focus-loss branch above
 				        // has already ended editing before the code gets here.
 				        leaveEditing = true;
+				        input.ConsumeKey(Key::Tab);
 			        }
 
 			        if (font != nullptr)
