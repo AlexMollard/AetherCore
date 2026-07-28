@@ -813,18 +813,28 @@ public abstract class NetSessionDirector : EntityScript
     }
 
     /// <summary>One frame of the retry sequence: wait, attempt, judge, repeat.</summary>
+    /// <remarks>
+    /// The reason check comes first and covers both states below it, mid-attempt and
+    /// waiting between attempts alike. The host can answer "no" at any point in the
+    /// sequence - not only while a socket is open - and a reason that arrives during the
+    /// wait is exactly as final as one that arrives mid-attempt; checking it only inside
+    /// <c>_attemptLive</c> would keep this peer counting down to a retry the host has
+    /// already refused.
+    /// </remarks>
     private void TickReconnect(float deltaTime)
     {
+        string reason = Api.NetDisconnectReason;
+        if (reason.Length > 0)
+        {
+            // The host is back and does not want us - full, or shutting down. That is an
+            // answer, not a failure to retry, whether it arrives mid-attempt or during
+            // the delay before the next one.
+            Leave(reason);
+            return;
+        }
+
         if (_attemptLive)
         {
-            string reason = Api.NetDisconnectReason;
-            if (reason.Length > 0)
-            {
-                // The host is back and does not want us - full, or shutting down. That is
-                // an answer, not a failure to retry.
-                Leave(reason);
-                return;
-            }
             _attemptElapsed += deltaTime;
             if (Api.NetIsClient && _attemptElapsed < ReconnectTimeoutSeconds)
             {

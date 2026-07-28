@@ -810,6 +810,35 @@ public sealed class NetSessionDirectorTests : SdkTestBase
         Assert.Equal(attemptsBeforeTheRefusal, Engine.ConnectAttempts.Count);
     }
 
+    [Fact]
+    public void AReasonArrivingBetweenAttemptsEndsTheRetrySequenceRatherThanBeingIgnored()
+    {
+        // A reason does not only arrive while an attempt is in flight - the host can
+        // reject this peer before it ever opens another socket, while this peer is just
+        // sitting in the delay counting down to the NEXT attempt. That answer must not
+        // be missed for the accident of nothing being actively connecting when it shows
+        // up. Every connect attempt is made to fail outright (never even reaches
+        // "in flight") so the sequence spends its time in the waiting state, not the
+        // attempting one.
+        Engine.ConnectSucceeds = false;
+        RecordingDirector director = InSession(hostAddress: "10.0.0.1");
+        director.ReconnectAttempts = 3;
+        director.ReconnectDelaySeconds = 2.0f;
+        DropTheLink();
+        Tick(director);
+        TickUntilAttemptGoesOut(director, 40, 0.1f); // burn attempt #1
+        int attemptsBeforeTheRefusal = Engine.ConnectAttempts.Count;
+        Assert.True(director.IsReconnecting); // waiting for attempt #2, none in flight
+
+        Engine.DisconnectReason = "Server is full";
+        Tick(director, 5, 0.1f); // well short of the delay to the next attempt
+
+        Assert.Equal("Server is full", NetSession.StatusMessage);
+        Assert.Equal(new[] { "Title" }, Engine.ScenesLoaded);
+        Assert.False(director.IsReconnecting);
+        Assert.Equal(attemptsBeforeTheRefusal, Engine.ConnectAttempts.Count);
+    }
+
     // ── Leaving ─────────────────────────────────────────────────────────────────
 
     [Fact]
