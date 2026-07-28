@@ -1,5 +1,9 @@
 #include "net/NetworkContext.hpp"
 
+#include <algorithm>
+#include <unordered_set>
+#include <utility>
+
 #include <entt/entt.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -19,9 +23,16 @@ namespace aether::net
 {
 	namespace
 	{
-		// Default peer budget for a listen server. Deliberately a local default and
+		// Default player cap for a listen server. Deliberately a local default and
 		// not a tunable: a project that needs a different one passes it to StartHost.
-		constexpr int kDefaultMaxPeers = 32;
+		constexpr int kDefaultMaxConnections = 32;
+
+		// Spare ENet peer slots ABOVE the player cap. A joiner has to be accepted at
+		// the socket layer before anything can be said to it, so a host sized exactly
+		// to its cap would have the socket layer silently refuse the (cap+1)th peer
+		// and there would be no link left to send a reason down. The slack is what
+		// turns "dropped" into "refused, and here is why".
+		constexpr int kRefusalSlack = 4;
 
 		// A body's type is baked into its b2BodyDef at creation and nothing re-reads
 		// it afterwards, so changing RigidBody2DComponent::bodyType only takes effect
@@ -106,10 +117,12 @@ namespace aether::net
 		return m_rpcBridge.get();
 	}
 
-	bool NetworkContext::StartHost(World& world, std::uint16_t port, int maxPeers)
+	bool NetworkContext::StartHost(World& world, std::uint16_t port, int maxConnections)
 	{
 		Stop(world);
-		if (!m_transport.Host(port, maxPeers > 0 ? maxPeers : kDefaultMaxPeers))
+		m_disconnectReason.clear();
+		m_maxConnections = maxConnections > 0 ? maxConnections : kDefaultMaxConnections;
+		if (!m_transport.Host(port, m_maxConnections + kRefusalSlack))
 		{
 			AE_WARN(LogCategory::App, "Net: host failed - {}", m_transport.LastError());
 			return false;
@@ -126,6 +139,11 @@ namespace aether::net
 	bool NetworkContext::StartClient(World& world, std::string_view host, std::uint16_t port)
 	{
 		Stop(world);
+		// Cleared HERE and nowhere else. Stop() is what runs when a link dies, so a
+		// reason cleared there would be gone before the game could read it; clearing it
+		// as a new attempt begins is what stops the previous session's reason being
+		// mistaken for this one's.
+		m_disconnectReason.clear();
 		if (!m_transport.Connect(host, port))
 		{
 			AE_WARN(LogCategory::App, "Net: connect failed - {}", m_transport.LastError());
@@ -140,7 +158,23 @@ namespace aether::net
 
 	void NetworkContext::Stop(World& world)
 	{
-		// Before anything else: a body this client took off local simulation belongs
+		// FIRST, while the socket is still up: tell everybody this was deliberate.
+		// Without it a client cannot tell a host that quit from a host that crashed or
+		// a network that dropped, and those want opposite reactions - accept it and go
+		// back to the menu, versus try to come back. Flushed explicitly because the
+		// transport is destroyed a few lines below and there is no later service call
+		// to push the queue out.
+		//
+		// Host-only, and only when somebody is listening: a client leaving says nothing
+		// (its ENet disconnect is the whole message), and a host with no connections has
+		// nobody to tell.
+		if (IsHost() && !m_session.Connections().empty())
+		{
+			m_transport.Broadcast(kChannelReliable, true, EncodeDisconnect(kReasonHostClosed));
+			m_transport.Flush();
+		}
+
+		// A body this client took off local simulation belongs
 		// to the local simulation again the moment there is no session driving it.
 		// Scene-placed entities survive Stop, so one left kinematic here is a player
 		// character that never falls again in single-player. Stop also runs at the TOP
@@ -182,6 +216,21 @@ namespace aether::net
 		m_transport.Disconnect();
 		m_session.Clear();
 		m_caches.clear();
+	}
+
+	void NetworkContext::RefuseConnection(ConnectionId peer, std::string_view reason)
+	{
+		if (!IsHost() || peer == kInvalidConnection)
+		{
+			return;
+		}
+		// Reliable, then a DEFERRED drop: enet_peer_disconnect_later sends everything
+		// already queued for that peer before it tears the link down, which is the only
+		// ordering in which the joiner ever sees why. Dropping it immediately would
+		// deliver a bare disconnect and the client could not tell a full server from a
+		// crashed one.
+		m_transport.Send(peer, kChannelReliable, true, EncodeDisconnect(reason));
+		m_transport.DisconnectPeer(peer);
 	}
 
 	void NetworkContext::ForgetNetId(std::uint32_t netId)
@@ -387,6 +436,85 @@ namespace aether::net
 			return false;
 		}
 		return identity.owner == m_session.LocalConnection();
+	}
+
+	std::string NetworkContext::ResolveDisplayName(World& world, Entity self, std::string_view desired) const
+	{
+		std::string wanted = SanitizeReason(desired);
+		// Trim, so " " and "" cannot become two different "blank" names.
+		const auto notSpace = [](unsigned char c) { return c != ' '; };
+		wanted.erase(wanted.begin(), std::find_if(wanted.begin(), wanted.end(), notSpace));
+		wanted.erase(std::find_if(wanted.rbegin(), wanted.rend(), notSpace).base(), wanted.end());
+		if (wanted.empty())
+		{
+			wanted = "Player";
+		}
+
+		// Where `self` sits in the join order. The host is connection 0, so it is always
+		// first and never renamed; the entity id breaks ties between two players one
+		// connection happens to own, which keeps the order total.
+		const auto* selfIdentity = world.TryGet<NetworkIdentity>(self);
+		const ConnectionId selfOwner = selfIdentity != nullptr ? selfIdentity->owner : m_session.LocalConnection();
+		const std::pair<ConnectionId, std::uint32_t> selfRank{selfOwner, self.id};
+
+		std::unordered_set<std::string> taken;
+		world.View<NetPlayer>().each(
+		        [&](entt::entity ent, NetPlayer& player)
+		        {
+			        const Entity entity = World::FromEntt(ent);
+			        if (entity.id == self.id || player.displayName.empty())
+			        {
+				        return;
+			        }
+			        const auto* identity = world.TryGet<NetworkIdentity>(entity);
+			        const ConnectionId owner = identity != nullptr ? identity->owner : kInvalidConnection;
+			        // ONLY players ahead of us in the order. A player behind us will step
+			        // aside itself, and treating it as an obstacle here is exactly how two
+			        // peers picking the same name at the same moment would both move and
+			        // collide again on the next frame.
+			        if (std::pair<ConnectionId, std::uint32_t>{owner, entity.id} < selfRank)
+			        {
+				        taken.insert(player.displayName);
+			        }
+		        });
+
+		if (!taken.contains(wanted))
+		{
+			return wanted;
+		}
+		// " (2)", " (3)", ... Bounded by the number of obstacles plus two, so it always
+		// terminates on a free name however contrived the set is.
+		for (std::size_t suffix = 2; suffix <= taken.size() + 2; ++suffix)
+		{
+			std::string candidate = wanted + " (" + std::to_string(suffix) + ")";
+			if (!taken.contains(candidate))
+			{
+				return candidate;
+			}
+		}
+		return wanted;
+	}
+
+	std::string NetworkContext::ClaimPlayerName(World& world, Entity self, std::string_view desired)
+	{
+		// THE OWNER AUTHORS ITS OWN NAME. A display name is replicated state, so the
+		// same rule that governs a transform governs it: a peer writing it on somebody
+		// else's entity is writing a value that entity's owner will overwrite on its
+		// next send, and whether the write survives is a race.
+		if (!IsOwner(world, self))
+		{
+			return {};
+		}
+		std::string resolved = ResolveDisplayName(world, self, desired);
+		if (auto* player = world.TryGet<NetPlayer>(self))
+		{
+			player->displayName = resolved;
+		}
+		else
+		{
+			world.Emplace<NetPlayer>(self, NetPlayer{.displayName = resolved});
+		}
+		return resolved;
 	}
 
 	void NetworkContext::SyncSimulationAuthority(World& world)

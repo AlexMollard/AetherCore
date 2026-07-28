@@ -47,6 +47,7 @@ namespace aether::net
 		Welcome = 5,
 		ScriptFields = 6,
 		Relevancy = 7,
+		Disconnect = 8,
 	};
 
 	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
@@ -62,7 +63,12 @@ namespace aether::net
 	// the BUILD, which is the only version of that promise worth making - and so does
 	// REMOVING one, which is how the retired Input kind was caught. Keep this on the
 	// last enumerator.
-	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Relevancy);
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Disconnect);
+
+	// The longest reason string a peer is allowed to put on the wire, and the longest
+	// one this peer will keep. A reason is rendered by the game, so an unbounded
+	// string from a remote peer is both a memory question and a layout one.
+	inline constexpr std::size_t kMaxDisconnectReasonLength = 128;
 
 	// Prefixes `payload` with its NetMessage byte - the WRAPPED half of the
 	// convention above. NetworkContext::Frame is a thin forwarder to this, so both
@@ -103,6 +109,26 @@ namespace aether::net
 	// would make them permanently indistinguishable on the wire.
 	[[nodiscard]] std::vector<std::byte> EncodeRelevancyLeave(std::uint32_t netId);
 	[[nodiscard]] std::optional<std::uint32_t> DecodeRelevancyLeave(ByteReader& r);
+
+	// "This link is ending, and here is why." The DELIBERATE end of a link, which is
+	// the whole reason it exists: an ENet disconnect on its own cannot tell a refusal
+	// or a host quitting apart from a cable being pulled, and those want opposite
+	// reactions from the game (say so and stop, versus try to come back). A link that
+	// dies without one of these is by definition unexpected.
+	//
+	// Sent by the host in two situations - refusing a connection over the player cap,
+	// and closing a session down - and never by a client: a client leaving simply
+	// disconnects, and a client cannot end the host's session.
+	//
+	// The reason is REMOTE INPUT and is sanitised on arrival (see SanitizeReason): it
+	// reaches a font and a UI rect, so a peer must not be able to send control
+	// characters or an unbounded string through it.
+	[[nodiscard]] std::vector<std::byte> EncodeDisconnect(std::string_view reason);
+	[[nodiscard]] std::optional<std::string> DecodeDisconnect(ByteReader& r);
+
+	// Printable ASCII only, collapsed to at most kMaxDisconnectReasonLength characters.
+	// Applied to whatever a peer sent before anything stores or shows it.
+	[[nodiscard]] std::string SanitizeReason(std::string_view raw);
 
 	// Gives every scene-placed NetworkIdentity a deterministic id. Iterates in
 	// order of SceneNodeComponent::id - the stable, persisted scene-node id that

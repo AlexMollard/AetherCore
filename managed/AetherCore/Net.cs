@@ -44,11 +44,19 @@ public static class Net
 {
     // ── Session ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Start listening on <paramref name="port"/> as the authoritative host.
+    /// <summary>Start listening on <paramref name="port"/> as the session host.
     /// Scene-placed networked entities are given their network ids immediately.
     /// Returns false if the port is unavailable - see <see cref="LastError"/>.</summary>
-    public static bool Host(int port, int maxPeers = 32)
-        => Native.aether_net_host((ushort)port, maxPeers) != 0;
+    /// <param name="port">UDP port to listen on.</param>
+    /// <param name="maxConnections">
+    /// How many simultaneous CLIENT connections to accept. The host is not one of them,
+    /// so a four-player game hosts with three. A joiner past the cap is refused with a
+    /// reason it can read from <see cref="DisconnectReason"/> and show the player, not
+    /// dropped silently - which is the only version of a player cap a game can present
+    /// honestly.
+    /// </param>
+    public static bool Host(int port, int maxConnections = 32)
+        => Native.aether_net_host((ushort)port, maxConnections) != 0;
 
     /// <summary>Begin connecting to a host. Returns false only if the address could
     /// not be resolved or a socket could not be opened; a successful return means the
@@ -116,6 +124,40 @@ public static class Net
     /// 0 on a client and offline - see <see cref="Connections"/>.</summary>
     public static unsafe int ConnectionCount => Native.aether_net_connections(null, 0);
 
+    /// <summary>
+    /// Why the last link ended, when the far end ended it DELIBERATELY and said why -
+    /// a refusal ("Server is full"), or a host closing the session. Empty for every
+    /// other kind of ending.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The empty case is as informative as the non-empty one, and the pair is what a
+    /// reconnect policy is built on: a link that dropped with no reason was an
+    /// ACCIDENT - a timeout, a pulled cable, a crashed host - and is worth retrying,
+    /// while one that ended with a reason was a decision and retrying it would only
+    /// get the same answer. A game that retries both looks broken to the player it
+    /// just threw out.
+    /// </para>
+    /// <para>
+    /// Survives the session it describes, deliberately: the session is already gone by
+    /// the time a script notices. It is cleared when the next <see cref="Host"/> or
+    /// <see cref="Connect"/> begins, so the previous session's reason cannot be
+    /// mistaken for this one's.
+    /// </para>
+    /// </remarks>
+    public static unsafe string DisconnectReason
+    {
+        get
+        {
+            Span<byte> buffer = stackalloc byte[256];
+            fixed (byte* ptr = buffer)
+            {
+                int written = Native.aether_net_disconnect_reason(ptr, buffer.Length);
+                return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+            }
+        }
+    }
+
     /// <summary>The last transport error, or an empty string if there was none.</summary>
     public static unsafe string LastError
     {
@@ -163,11 +205,57 @@ public static class Net
 
     // ── Players ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Set a player entity's display name, adding the Net Player component if
-    /// it has none. Independent of any session, so a name chosen on the menu survives
-    /// into the session that later replicates it.</summary>
+    /// <summary>
+    /// Set a player entity's display name, adding the Net Player component if it has
+    /// none. Independent of any session, so a name chosen on the menu survives into the
+    /// session that later replicates it.
+    /// </summary>
+    /// <remarks>
+    /// REFUSED, with a warning and no write, on an entity this peer does not own. A
+    /// display name is replicated state and the owner of an entity is authoritative for
+    /// its state, so a name written here by anybody else is overwritten by the owner's
+    /// next send - whether it survives at all is a race, and the visible symptom is
+    /// "some players' names do not show". The owner sets its own name; replication
+    /// carries it everywhere else. Offline, and for the host's own player, this peer IS
+    /// the owner and the call behaves exactly as it reads.
+    /// </remarks>
     public static void SetPlayerName(Entity entity, string name)
         => Native.aether_net_set_player_name(entity.Id, name);
+
+    /// <summary>
+    /// Adopt <paramref name="desired"/> as this player's display name, stepping around
+    /// a name an earlier player already has: "Alice" becomes "Alice (2)" when somebody
+    /// ahead of us is already Alice. Returns the name actually adopted, or an empty
+    /// string if the call was refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the OWNER of <paramref name="entity"/> may claim its name - see
+    /// <see cref="SetPlayerName"/> for why - and offline that is always this peer, so
+    /// single-player code needs no role test.
+    /// </para>
+    /// <para>
+    /// Safe, and intended, to call every frame. Players are ordered by connection (the
+    /// host first), a player only ever steps around players AHEAD of it, and the
+    /// resolution runs from the desired name rather than from the current one: two
+    /// peers picking the same name in the same frame therefore settle - the later one
+    /// moves - instead of both moving and colliding again. There is no round trip and
+    /// no peer writing another peer's field.
+    /// </para>
+    /// <para>
+    /// A blank or unprintable name becomes "Player"; names are ASCII-only, matching the
+    /// font pipeline.
+    /// </para>
+    /// </remarks>
+    public static unsafe string ClaimPlayerName(Entity entity, string desired)
+    {
+        Span<byte> buffer = stackalloc byte[256];
+        fixed (byte* ptr = buffer)
+        {
+            int written = Native.aether_net_claim_player_name(entity.Id, desired, ptr, buffer.Length);
+            return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+        }
+    }
 
     /// <summary>A player entity's display name, or an empty string if it has no Net
     /// Player component.</summary>

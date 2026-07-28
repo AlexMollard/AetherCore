@@ -836,8 +836,11 @@ internal static unsafe partial class Native
     // Every one of these is safe with no session and no NetworkContext registered:
     // they report 0/false rather than failing, so a title screen can ask before
     // anything has connected.
+    // `maxConnections` caps simultaneous CLIENT connections (the host is not one of
+    // them). A joiner past the cap is refused with a reason it can read back through
+    // aether_net_disconnect_reason, not dropped silently.
     [LibraryImport(Lib)]
-    internal static partial int aether_net_host(ushort port, int maxPeers);
+    internal static partial int aether_net_host(ushort port, int maxConnections);
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_net_connect(string host, ushort port);
@@ -886,6 +889,18 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_get_player_name(uint entityId, byte* buffer, int capacity);
+
+    // Resolves `desired` against the names already taken by players ahead of this one
+    // in the join order, writes the result onto the entity, and copies it back out.
+    // Refused (returns 0, writes nothing) for an entity this peer does not own.
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial int aether_net_claim_player_name(uint entityId, string desired, byte* buffer,
+        int capacity);
+
+    // Why the last link ended, when the far end ended it deliberately and said so
+    // (a refusal, or a host closing the session). Empty for an accidental drop.
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_disconnect_reason(byte* buffer, int capacity);
 
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_last_error(byte* buffer, int capacity);

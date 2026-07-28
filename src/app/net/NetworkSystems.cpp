@@ -170,6 +170,19 @@ namespace aether::net
 			return;
 		}
 
+		// The player cap, enforced before the joiner becomes part of the session at
+		// all. It has to be here rather than in the ENet peer budget: the socket layer
+		// refuses a peer over its budget by ignoring it, and a joiner that is ignored
+		// cannot be told anything. Accepting the link and then closing it with a reason
+		// is the difference between "the game would not start" and "the server is full".
+		if (context.IsFull())
+		{
+			AE_INFO(LogCategory::App, "Net: refused connection {} - {} ({} already connected)", peer,
+			        kReasonServerFull, context.Session().Connections().size());
+			context.RefuseConnection(peer, kReasonServerFull);
+			return;
+		}
+
 		context.Session().AddConnection(peer);
 		const std::vector<std::byte> welcome = NetworkContext::EncodeWelcome(peer);
 		context.Transport().Send(peer, kChannelReliable, true, welcome);
@@ -365,6 +378,36 @@ namespace aether::net
 			{
 				ApplyRpc(world, context.Session(), *bridge, *msg, peer, context.IsHost());
 			}
+			return;
+		}
+
+		case NetMessage::Disconnect:
+		{
+			// Client-only. A client cannot end the host's session, and a host that
+			// honoured this would be handing every peer a kill switch.
+			if (context.IsHost())
+			{
+				return;
+			}
+			ByteReader reader{payload};
+			const std::optional<std::string> reason = DecodeDisconnect(reader);
+			if (!reason.has_value())
+			{
+				return;
+			}
+			// Recorded BEFORE the teardown, and Stop() deliberately leaves it alone -
+			// this is the one fact distinguishing "the host threw me out / went away on
+			// purpose" from "the link died", and the game reads it after the session is
+			// already gone.
+			context.SetDisconnectReason(*reason);
+			AE_INFO(LogCategory::App, "Net: session ended by the host - {}",
+			        reason->empty() ? "no reason given" : reason->c_str());
+			// Torn down here rather than waiting for the ENet disconnect that follows:
+			// the reason has arrived, so there is nothing left this link can tell us,
+			// and a refused joiner should not spend the disconnect timeout looking
+			// connected.
+			context.Stop(world);
+			m_remote.clear();
 			return;
 		}
 

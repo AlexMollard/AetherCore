@@ -9,6 +9,7 @@
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
+#include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
 using namespace aether::app::scripting;
@@ -54,14 +55,14 @@ namespace
 	}
 } // namespace
 
-AE_SCRIPT_API std::int32_t aether_net_host(std::uint16_t port, std::int32_t maxPeers)
+AE_SCRIPT_API std::int32_t aether_net_host(std::uint16_t port, std::int32_t maxConnections)
 {
 	aether::net::NetworkContext* context = Context();
 	if (context == nullptr)
 	{
 		return 0;
 	}
-	return context->StartHost(ActiveWorld(), port, maxPeers) ? 1 : 0;
+	return context->StartHost(ActiveWorld(), port, maxConnections) ? 1 : 0;
 }
 
 AE_SCRIPT_API std::int32_t aether_net_connect(const char* hostUtf8, std::uint16_t port)
@@ -190,12 +191,53 @@ AE_SCRIPT_API void aether_net_set_player_name(std::uint32_t entityId, const char
 		return;
 	}
 	auto& world = ActiveWorld();
+	// A display name is REPLICATED STATE, and the owner of an entity is authoritative
+	// for its state. A peer writing this on somebody else's player is writing a value
+	// that player's owner overwrites on its next send, so whether the write survives is
+	// a race - which is exactly how "some players' names do not show" happened. Refused
+	// here, in the framework, so no project can reintroduce it by accident.
+	//
+	// Nothing legitimate is lost: an entity with no NetworkIdentity (a menu carrier),
+	// the host's own player, and every entity in an offline game all report owned.
+	const aether::net::NetworkContext* context = Context();
+	if (context != nullptr && !context->IsOwner(world, entity))
+	{
+		AE_WARN(aether::LogCategory::App,
+		        "Net.SetPlayerName: refused on entity {} - this peer does not own it. The owner sets its own name.",
+		        entityId);
+		return;
+	}
 	if (auto* player = world.TryGet<aether::net::NetPlayer>(entity))
 	{
 		player->displayName = nameUtf8;
 		return;
 	}
 	world.Emplace<aether::net::NetPlayer>(entity, aether::net::NetPlayer{.displayName = nameUtf8});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_claim_player_name(std::uint32_t entityId, const char* desiredUtf8, char* buffer,
+        std::int32_t capacity)
+{
+	const aether::Entity entity{entityId};
+	if (!entity.IsValid() || desiredUtf8 == nullptr)
+	{
+		return 0;
+	}
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		// No networking in this build: there is nobody to collide with, so claiming a
+		// name is setting it. Offline parity is a hard rule for every Net.* export.
+		aether_net_set_player_name(entityId, desiredUtf8);
+		return CopyOut(desiredUtf8, buffer, capacity);
+	}
+	return CopyOut(context->ClaimPlayerName(ActiveWorld(), entity, desiredUtf8), buffer, capacity);
+}
+
+AE_SCRIPT_API std::int32_t aether_net_disconnect_reason(char* buffer, std::int32_t capacity)
+{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr ? CopyOut(context->DisconnectReason(), buffer, capacity) : 0;
 }
 
 AE_SCRIPT_API std::int32_t aether_net_get_player_name(std::uint32_t entityId, char* buffer, std::int32_t capacity)

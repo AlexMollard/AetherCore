@@ -90,6 +90,45 @@ namespace aether::net
 		return netId;
 	}
 
+	std::vector<std::byte> EncodeDisconnect(std::string_view reason)
+	{
+		ByteWriter w;
+		w.U8(static_cast<std::uint8_t>(NetMessage::Disconnect));
+		w.Str(SanitizeReason(reason));
+		return w.Take();
+	}
+
+	std::optional<std::string> DecodeDisconnect(ByteReader& r)
+	{
+		std::string reason = r.Str();
+		if (!r.Ok())
+		{
+			return std::nullopt;
+		}
+		// Sanitised HERE rather than at the call site, so there is no route by which an
+		// unsanitised reason reaches a caller: every decode is a decode of remote bytes.
+		return SanitizeReason(reason);
+	}
+
+	std::string SanitizeReason(std::string_view raw)
+	{
+		std::string clean;
+		clean.reserve(std::min(raw.size(), kMaxDisconnectReasonLength));
+		for (const char c: raw)
+		{
+			if (c < ' ' || c > '~')
+			{
+				continue; // ASCII-only: the font pipeline bakes no other glyphs
+			}
+			clean.push_back(c);
+			if (clean.size() >= kMaxDisconnectReasonLength)
+			{
+				break;
+			}
+		}
+		return clean;
+	}
+
 	void AssignScenePlacedNetIds(World& world, NetSession& session)
 	{
 		// SceneNodeComponent::id is the persisted, stable scene-node id - identical on

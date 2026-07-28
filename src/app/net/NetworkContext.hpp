@@ -32,6 +32,12 @@ namespace aether::net
 	class RpcBridge;
 	class ScriptFieldBridge;
 
+	// The two reasons the framework itself ends a link for. A game is free to send its
+	// own wording through RefuseConnection; these exist so the common cases read the
+	// same in every project and a test can assert on them verbatim.
+	inline constexpr std::string_view kReasonServerFull = "Server is full";
+	inline constexpr std::string_view kReasonHostClosed = "Host closed the session";
+
 	// The one live networking object in a running app: the transport, the session,
 	// the replication schema they share, and the tuning both network systems read.
 	//
@@ -61,7 +67,14 @@ namespace aether::net
 		// All three take the world: the host's scene-placed entities get their
 		// deterministic net ids the moment the session starts (before a single packet
 		// moves), and Stop destroys the entities the session spawned.
-		bool StartHost(World& world, std::uint16_t port, int maxPeers);
+		//
+		// `maxConnections` is a CAP ON PLAYERS, not just an ENet peer budget: the
+		// (maxConnections + 1)th joiner is refused with a reason it can show rather
+		// than being dropped by the socket layer with nothing to say. The ENet host is
+		// deliberately created with room to spare (see kRefusalSlack) precisely so a
+		// refused joiner can be accepted long enough to be told why. A non-positive
+		// value means the framework default.
+		bool StartHost(World& world, std::uint16_t port, int maxConnections);
 		bool StartClient(World& world, std::string_view host, std::uint16_t port);
 
 		// Tears the session down AND destroys every replicated entity this session
@@ -100,6 +113,49 @@ namespace aether::net
 		[[nodiscard]] std::string LastError() const
 		{
 			return m_transport.LastError();
+		}
+
+		// ── Connection cap ───────────────────────────────────────────────────
+		// How many simultaneous client connections this host accepts. The host itself
+		// is not one of them, so a four-player game hosts with three.
+		//
+		// The cap lives here rather than in the game because every project needs one
+		// and every project would otherwise reinvent the refusal handshake. WHAT the
+		// number is, and how a refusal is worded to the player, stay the project's.
+		[[nodiscard]] int MaxConnections() const
+		{
+			return m_maxConnections;
+		}
+
+		// True when one more connection would exceed the cap. Asked before a joiner is
+		// admitted, so it counts the connections already in the session.
+		[[nodiscard]] bool IsFull() const
+		{
+			return static_cast<int>(m_session.Connections().size()) >= m_maxConnections;
+		}
+
+		// Host-only: tell `peer` why it is not welcome, then drop it once that has
+		// actually been sent. Never adds it to the session.
+		void RefuseConnection(ConnectionId peer, std::string_view reason);
+
+		// ── Why the last link ended ──────────────────────────────────────────
+		// Non-empty only when the far end ended the link DELIBERATELY and said why: a
+		// refusal, or a host closing the session. A link that dropped for any other
+		// reason - a timeout, a pulled cable, a crashed host - leaves this empty, and
+		// that difference is the whole point: it is what lets a game reconnect after an
+		// accident without reconnecting into a session that just threw it out.
+		//
+		// Survives Stop() on purpose. Stop is what runs when the link dies, so a reason
+		// cleared there would never be readable by the game. It is cleared when a NEW
+		// session is started instead.
+		[[nodiscard]] const std::string& DisconnectReason() const
+		{
+			return m_disconnectReason;
+		}
+
+		void SetDisconnectReason(std::string reason)
+		{
+			m_disconnectReason = std::move(reason);
 		}
 
 		// ── Shared state ─────────────────────────────────────────────────────
@@ -252,6 +308,28 @@ namespace aether::net
 		[[nodiscard]] bool HasAuthority(World& world, Entity entity) const;
 		[[nodiscard]] bool IsOwner(World& world, Entity entity) const;
 
+		// ── Player names ─────────────────────────────────────────────────────
+		// The name a player would end up with if it claimed `desired` right now:
+		// `desired` itself when nothing else is using it, otherwise "desired (2)",
+		// "desired (3)" and so on.
+		//
+		// ONLY EARLIER PLAYERS ARE OBSTACLES, and that asymmetry is what makes this
+		// converge. Players are ordered by (owner connection id, entity id), the host
+		// being connection 0 and therefore always first; a player yields to anybody
+		// ahead of it in that order and ignores everybody behind. Two peers picking the
+		// same name in the same frame therefore cannot both step aside - the later one
+		// does - so re-running this every frame settles instead of oscillating, with no
+		// round trip and no peer writing another peer's field.
+		//
+		// `desired` is sanitised the same way a disconnect reason is: it reaches a font.
+		[[nodiscard]] std::string ResolveDisplayName(World& world, Entity self, std::string_view desired) const;
+
+		// Resolve `desired` and write it onto `self`'s NetPlayer, adding the component
+		// if it has none. Refused (returns empty, writes nothing) for an entity this
+		// peer does not own: the owner of an entity is authoritative for it, and a
+		// display name is state like any other.
+		std::string ClaimPlayerName(World& world, Entity self, std::string_view desired);
+
 		// The same rule against an identity the caller already holds. Exists because
 		// the replication systems walk a view of NetworkIdentity and would otherwise
 		// pay a registry lookup per entity per frame to ask a question they have the
@@ -305,6 +383,8 @@ namespace aether::net
 		NetSession m_session;
 		ReplicationSchema m_schema;
 		RelevancySettings m_relevancy;
+		int m_maxConnections = 0;
+		std::string m_disconnectReason;
 		float m_sendRateHz = 20.f;
 		std::unordered_map<ConnectionId, SnapshotCache> m_caches;
 

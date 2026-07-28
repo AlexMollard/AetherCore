@@ -4,7 +4,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -57,14 +59,14 @@ namespace
 	//   - a kind in kAllKinds classified in neither table, or in both
 	//   - a kind listed twice, or the enum renumbered off contiguous-from-1
 	//   - a self-framing kind with no actual round-trip row in the test below
-	constexpr std::array<net::NetMessage, 7> kAllKinds{
+	constexpr std::array<net::NetMessage, 8> kAllKinds{
 	        net::NetMessage::Snapshot, net::NetMessage::Spawn, net::NetMessage::Despawn,
 	        net::NetMessage::Rpc, net::NetMessage::Welcome, net::NetMessage::ScriptFields,
-	        net::NetMessage::Relevancy,
+	        net::NetMessage::Relevancy, net::NetMessage::Disconnect,
 	};
-	constexpr std::array<net::NetMessage, 5> kSelfFraming{
+	constexpr std::array<net::NetMessage, 6> kSelfFraming{
 	        net::NetMessage::Spawn, net::NetMessage::Despawn, net::NetMessage::Rpc, net::NetMessage::Welcome,
-	        net::NetMessage::Relevancy,
+	        net::NetMessage::Relevancy, net::NetMessage::Disconnect,
 	};
 	constexpr std::array<net::NetMessage, 2> kWrapped{net::NetMessage::Snapshot, net::NetMessage::ScriptFields};
 
@@ -123,12 +125,13 @@ TEST_CASE("Self-framing encoders lead with their own NetMessage byte")
 	// One row per kind in kSelfFraming, and the static_assert below is what keeps it
 	// that way: Relevancy was a self-framing kind with no row here at all, so its
 	// encoder's leading byte was never checked by anything.
-	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 5> selfFraming{{
+	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 6> selfFraming{{
 	        {net::NetMessage::Spawn, net::EncodeSpawn(1, 2, "player", {0.f, 0.f, 0.f})},
 	        {net::NetMessage::Despawn, net::EncodeDespawn(1)},
 	        {net::NetMessage::Rpc, net::EncodeRpc(1, 0xABCDu, 0, net::NetRpcTarget::Server, {})},
 	        {net::NetMessage::Welcome, EncodeWelcome(3)},
 	        {net::NetMessage::Relevancy, net::EncodeRelevancyLeave(1)},
+	        {net::NetMessage::Disconnect, net::EncodeDisconnect("Server is full")},
 	}};
 	static_assert(selfFraming.size() == kSelfFraming.size(),
 	        "Every self-framing kind needs a round-trip row here, not just a classification.");
@@ -182,5 +185,52 @@ TEST_CASE("Every NetMessage kind is covered by one of the two framing convention
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Welcome) == 5);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::ScriptFields) == 6);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Relevancy) == 7);
-	CHECK(net::kNetMessageMax == 7);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::Disconnect) == 8);
+	CHECK(net::kNetMessageMax == 8);
+}
+
+TEST_CASE("A disconnect reason round-trips, and a hostile one is cut down to size")
+{
+	// The reason reaches a font and a UI rect on the far end, so what a peer SENT and
+	// what a peer is allowed to make this process hold are deliberately not the same
+	// thing. Both directions are sanitised: the encoder cannot put control characters
+	// on the wire, and the decoder does not trust that the encoder was ours.
+	SUBCASE("an ordinary reason survives verbatim")
+	{
+		const std::vector<std::byte> packet = net::EncodeDisconnect("Server is full");
+		net::ByteReader reader{std::span<const std::byte>(packet).subspan(1)};
+		const std::optional<std::string> reason = net::DecodeDisconnect(reader);
+		REQUIRE(reason.has_value());
+		CHECK(*reason == "Server is full");
+	}
+
+	SUBCASE("control characters are dropped rather than rendered")
+	{
+		CHECK(net::SanitizeReason("full\n\tnow") == "fullnow");
+		CHECK(net::SanitizeReason(std::string("nul\0byte", 8)) == "nulbyte");
+	}
+
+	SUBCASE("an unbounded reason is clipped to the documented maximum")
+	{
+		const std::string huge(4096, 'x');
+		CHECK(net::SanitizeReason(huge).size() == net::kMaxDisconnectReasonLength);
+
+		// And it is clipped by the DECODER too, so a peer that never used our encoder
+		// cannot hand this process an unbounded string.
+		net::ByteWriter w;
+		w.U8(static_cast<std::uint8_t>(net::NetMessage::Disconnect));
+		w.Str(huge);
+		const std::vector<std::byte> hostile = w.Take();
+		net::ByteReader reader{std::span<const std::byte>(hostile).subspan(1)};
+		const std::optional<std::string> reason = net::DecodeDisconnect(reader);
+		REQUIRE(reason.has_value());
+		CHECK(reason->size() == net::kMaxDisconnectReasonLength);
+	}
+
+	SUBCASE("a truncated packet decodes to nothing rather than to garbage")
+	{
+		const std::vector<std::byte> empty;
+		net::ByteReader reader{empty};
+		CHECK_FALSE(net::DecodeDisconnect(reader).has_value());
+	}
 }

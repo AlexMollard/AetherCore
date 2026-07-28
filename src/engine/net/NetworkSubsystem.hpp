@@ -32,6 +32,18 @@ namespace aether::net
 		bool Connect(std::string_view host, std::uint16_t port);
 		void Disconnect();
 
+		// Drops ONE peer (host only), after everything already queued for it has been
+		// sent. `enet_peer_disconnect_later` rather than `_now` is the whole point: the
+		// caller's last word to that peer - the reason it is being dropped - is a
+		// reliable packet sitting in the outgoing queue, and `_now` would tear the link
+		// down on top of it.
+		void DisconnectPeer(ConnectionId peer);
+
+		// Pushes everything queued onto the wire immediately instead of waiting for the
+		// next Poll. Needed exactly once: a peer that is about to destroy its host has
+		// no next Poll, so a goodbye broadcast would never leave the process.
+		void Flush();
+
 		void Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes);
 		void Broadcast(int channel, bool reliable, std::span<const std::byte> bytes);
 

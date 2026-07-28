@@ -116,6 +116,21 @@ namespace aether::net
 				enet_peer_disconnect_now(m_serverPeer, 0);
 				m_serverPeer = nullptr;
 			}
+			// A HOST DELIBERATELY DOES NOT DISCONNECT ITS PEERS HERE, and that is not an
+			// omission. ENet's disconnect handler begins with enet_peer_reset_queues,
+			// which throws away every packet the receiver has taken off the wire but not
+			// yet dispatched - so a disconnect sent microseconds behind a message (which
+			// is what "broadcast a goodbye, then shut down" means) arrives in the same
+			// service call at the far end and destroys the goodbye before the
+			// application ever sees it. The message a host quits with matters more than
+			// the handshake: a client that receives it tears its own session down at
+			// once, which is prompter than being disconnected. One that misses it falls
+			// back to the transport timeout, which is exactly what a crashed host looks
+			// like - and is what it should be treated as.
+			//
+			// A host dropping ONE peer is a different case and does disconnect it: see
+			// DisconnectPeer, which can defer the drop because the host stays alive to
+			// finish sending first.
 			enet_host_destroy(m_host);
 			m_host = nullptr;
 		}
@@ -127,6 +142,26 @@ namespace aether::net
 		m_role = NetRole::Offline;
 		m_localId = kInvalidConnection;
 		m_events.clear();
+	}
+
+	void NetworkSubsystem::DisconnectPeer(ConnectionId peer)
+	{
+		if (m_host == nullptr || m_role != NetRole::Host)
+		{
+			return;
+		}
+		if (ENetPeer* target = PeerFor(peer))
+		{
+			enet_peer_disconnect_later(target, 0);
+		}
+	}
+
+	void NetworkSubsystem::Flush()
+	{
+		if (m_host != nullptr)
+		{
+			enet_host_flush(m_host);
+		}
 	}
 
 	_ENetPeer* NetworkSubsystem::PeerFor(ConnectionId id) const
