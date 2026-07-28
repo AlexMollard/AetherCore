@@ -150,6 +150,17 @@ namespace aether::editor
 			{
 				return 269;
 			}
+			// Paging. A game is free to put anything on these - a chat scrollback, a log,
+			// an inventory page - and without them here that feature is unreachable from a
+			// headless test however the game is driven.
+			if (name == "pageup" || name == "pgup")
+			{
+				return 266;
+			}
+			if (name == "pagedown" || name == "pgdn")
+			{
+				return 267;
+			}
 			return -1;
 		}
 
@@ -1433,7 +1444,7 @@ namespace aether::editor
 		methods.push_back({"engine.send_input",
 		        "send_input",
 		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, "
-		        "backspace, delete, home, end, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
+		        "backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
 		        true,
 		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"up", json{{"type", "array"}, {"items", StrProp()}}},
