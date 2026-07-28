@@ -30,6 +30,17 @@ public readonly struct NetSessionPlayer
 
     /// <summary>The display name they were introduced under.</summary>
     public string Name { get; }
+
+    /// <summary>Round-trip time to the host in milliseconds, read live off the entity.
+    /// 0 for the host's own player, offline, and for a departed one.</summary>
+    /// <remarks>A property rather than a captured field because it changes every tick and
+    /// a roster entry does not: a snapshotted ping would be a stale number on screen
+    /// pretending to be a live one.</remarks>
+    public uint PingMs => Entity.IsValid ? Net.GetPlayerPing(Entity) : 0u;
+
+    /// <summary>Whether this is the session host - the peer everybody else's latency is
+    /// measured against, and the one with none of its own.</summary>
+    public bool IsHost => Connection == 0u;
 }
 
 /// <summary>
@@ -131,6 +142,11 @@ public abstract class NetSessionDirector : EntityScript
     /// share, which is better than refusing to spawn them.</summary>
     public int SpawnPointCount = 4;
 
+    /// <summary>World units each extra player sharing a marker is offset along X. Wide
+    /// enough to clear a character, or two bodies spawn inside each other and the physics
+    /// solver decides where they end up.</summary>
+    public float SpawnSpread = 1.25f;
+
     /// <summary>Scene loaded when the session ends, i.e. the menu. Empty means "stay
     /// where we are", which is what a game with a single persistent scene wants.</summary>
     public string ReturnScene = string.Empty;
@@ -159,19 +175,14 @@ public abstract class NetSessionDirector : EntityScript
     // connection to the spawn point it was given, so a departure frees the right slot.
     private readonly Dictionary<uint, int> _slotByConnection = new();
 
-    // The entity spawned for each known connection, so a pending join can poll that
-    // player's replicated display name without going looking for it by name.
-    private readonly Dictionary<uint, Entity> _playerByConnection = new();
-
-    // Connections whose player exists but whose display name has not arrived yet, in
-    // arrival order so several landing on one frame are still introduced in the order the
-    // people actually turned up. See RegisterNamedArrivals for why the name gates it.
-    private readonly List<uint> _awaitingName = new();
-
-    // Everyone currently in the session, in the order they were introduced. Doubling as
-    // the "has been introduced" set is deliberate: only somebody the game was told about
-    // can be said to have left.
+    // Everyone currently in the session, rebuilt from the world every frame by
+    // SyncRoster. Not accumulated, and deliberately not: see the remarks there.
     private readonly List<NetSessionPlayer> _players = new();
+
+    // Host only: who the game has already been TOLD about, and under what name. A
+    // departure is reported from this rather than from the roster, because by the time
+    // anybody notices a player has gone their entity - and the name on it - is destroyed.
+    private readonly Dictionary<uint, NetSessionPlayer> _introduced = new();
 
     // Arrivals and departures waiting for a game that can take them, oldest first. See
     // FlushNotices.
@@ -210,9 +221,19 @@ public abstract class NetSessionDirector : EntityScript
     /// </remarks>
     public Entity LocalPlayer { get; private set; }
 
-    /// <summary>Everyone in the session, host first, in the order they were introduced.
-    /// Empty on a client - see <see cref="Net.Connections"/> for why a client is told
-    /// nothing about its peers.</summary>
+    /// <summary>
+    /// Everyone in the session, host first and then in join order. The same list on every
+    /// peer, so a HUD built on it reads the same whether this process is hosting or not.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilt each frame from the players this peer is actually holding, rather than
+    /// accumulated from arrivals. That is what lets a CLIENT have a roster at all: a
+    /// client is told nothing about connections (see <see cref="Net.Connections"/>) but
+    /// it is holding every replicated player it can see, so the world is the only source
+    /// with the same answer on both roles. It also means there is exactly one roster
+    /// rather than one per peer kind, and no way for it to drift out of step with what is
+    /// on screen.
+    /// </remarks>
     public IReadOnlyList<NetSessionPlayer> Players => _players;
 
     /// <summary>True while the bounded reconnect sequence is running.</summary>
@@ -254,6 +275,10 @@ public abstract class NetSessionDirector : EntityScript
     /// <inheritdoc/>
     public override void OnUpdate(float deltaTime)
     {
+        // Before anything else, so every branch below - and every override of the hooks -
+        // sees this frame's roster rather than last frame's.
+        SyncRoster();
+
         if (WantsToLeave())
         {
             Log.Info("Net session: leaving");
@@ -287,10 +312,19 @@ public abstract class NetSessionDirector : EntityScript
     /// Whether the player is asking to leave the session this frame. Escape by default.
     /// </summary>
     /// <remarks>
-    /// Override to suppress it while something else owns the keyboard - a chat box uses
-    /// Escape to cancel an edit, and a key that both cancels a message and quits the
-    /// session makes the chat unusable. The usual shape is
-    /// <c>=&gt; !MyChat.IsTyping &amp;&amp; base.WantsToLeave();</c>.
+    /// <para>
+    /// A UI element that HANDLED Escape this frame - a text box cancelling an edit - has
+    /// already consumed it by the time any script runs, so this reads false on that frame
+    /// with nothing to arrange. A game does not need to publish "somebody is typing" for
+    /// this to check, and should not: a flag written by one script and read by another is
+    /// only right when the two happen to update in the right order.
+    /// </para>
+    /// <para>
+    /// Override it to put something in FRONT of leaving - a pause menu that Escape opens,
+    /// with the actual departure behind a Disconnect item. A game that does should return
+    /// false here and call <see cref="Leave"/> itself, so exactly one thing owns the key
+    /// at any moment.
+    /// </para>
     /// </remarks>
     protected virtual bool WantsToLeave() => Input.IsKeyPressed(Key.Escape);
 
@@ -357,6 +391,10 @@ public abstract class NetSessionDirector : EntityScript
         _wasInSession = false;
         _reconnecting = false;
         _attemptLive = false;
+        // Nobody has been introduced to a session that no longer exists. Left behind, a
+        // rejoin would report only the players who were not in the previous one.
+        _introduced.Clear();
+        _players.Clear();
         HideStatus();
         if (ReturnScene.Length > 0)
         {
@@ -392,13 +430,8 @@ public abstract class NetSessionDirector : EntityScript
             }
         }
 
-        // Departures are swept BEFORE arrivals are registered, and the order is load
-        // bearing. A connection that has already gone had its player entity destroyed by
-        // the framework before this ran, and RegisterNamedArrivals reads a display name
-        // straight off those entities - clearing the dead ones out first is what stops it
-        // reading through a handle to something that is not there.
         ReleaseDepartedSlots(live);
-        RegisterNamedArrivals();
+        DiffRoster();
         FlushNotices();
     }
 
@@ -407,7 +440,7 @@ public abstract class NetSessionDirector : EntityScript
     private Entity SpawnPlayerFor(uint connection)
     {
         int slot = ClaimSlot(connection);
-        Entity player = Net.Spawn(PlayerPrefab, SpawnPosition(slot), connection);
+        Entity player = Net.Spawn(PlayerPrefab, SpawnPosition(slot, SharersOf(slot, connection)), connection);
         if (!player.IsValid)
         {
             // Nothing was created, so the slot must not stay claimed or it is lost for the
@@ -417,14 +450,17 @@ public abstract class NetSessionDirector : EntityScript
             Log.Error($"Net session: could not spawn prefab '{PlayerPrefab}' for connection {connection}");
             return player;
         }
-        _playerByConnection[connection] = player;
-        _awaitingName.Add(connection);
         Log.Info($"Net session: spawned player for connection {connection} at spawn {slot}");
         return player;
     }
 
-    /// <summary>Forget connections that have gone: reclaim the spawn point for the next
-    /// joiner, drop the per-connection bookkeeping, and queue the departure.</summary>
+    /// <summary>Reclaim the spawn point of any connection that has gone, so the next
+    /// joiner does not land on top of somebody.</summary>
+    /// <remarks>
+    /// Slots only. Who is IN the session is answered by <see cref="SyncRoster"/> from the
+    /// world, and a departed connection's player is destroyed by the framework before this
+    /// runs, so it has already fallen out of the roster by the time anything here notices.
+    /// </remarks>
     private void ReleaseDepartedSlots(uint[] live)
     {
         if (_slotByConnection.Count == 0)
@@ -453,48 +489,89 @@ public abstract class NetSessionDirector : EntityScript
             {
                 _slotOwners[slot] = Unclaimed;
             }
-            _playerByConnection.Remove(connection);
-            _awaitingName.Remove(connection);
-            int index = IndexOfPlayer(connection);
-            if (index >= 0)
-            {
-                // The entity is already destroyed, so the roster entry is reported with an
-                // invalid one - the name it carries is the whole point of having kept it.
-                NetSessionPlayer player = _players[index];
-                _players.RemoveAt(index);
-                _pendingNotices.Add((false, new NetSessionPlayer(connection, default, player.Name)));
-            }
-            // No else: a connection that dropped before its name ever reached us was never
-            // introduced, and there is nothing honest to say about it.
             Log.Info($"Net session: connection {connection} left");
         }
     }
 
-    /// <summary>Admit every pending arrival whose display name has landed to the roster,
-    /// and give up on any whose player went away first.</summary>
-    private void RegisterNamedArrivals()
+    // ── Roster ──────────────────────────────────────────────────────────────────
+
+    /// <summary>Rebuild <see cref="Players"/> from the players this peer is holding.</summary>
+    /// <remarks>
+    /// <para>
+    /// Derived, not accumulated. Every peer holds the session's players as entities - that
+    /// is what replication is - so the world answers "who is here" identically on the host
+    /// and on a client, while the connection list only answers it on the host. One
+    /// derivation is also one thing to be right: a roster built by adding on arrival and
+    /// removing on departure has two more places to leak an entry from.
+    /// </para>
+    /// <para>
+    /// A player with no name yet is SKIPPED rather than listed blank. A player prefab is
+    /// authored nameless and the real name is written by that player's owner and
+    /// replicated here, so a freshly spawned player is nameless for a handful of frames;
+    /// listing it would put an empty row in the HUD and introduce somebody as nobody.
+    /// </para>
+    /// <para>
+    /// Ordered by connection, and by entity behind that, so the host is always first and
+    /// the order is the join order - <see cref="Net.Players"/> is in world order, which is
+    /// not stable and would shuffle the HUD between frames.
+    /// </para>
+    /// </remarks>
+    private void SyncRoster()
     {
-        // Forward, with a manual index, so removing an entry does not reorder the ones
-        // behind it - a reverse sweep would report a frame's arrivals backwards.
-        int i = 0;
-        while (i < _awaitingName.Count)
+        _players.Clear();
+        foreach (Entity player in Net.Players)
         {
-            uint connection = _awaitingName[i];
-            if (!_playerByConnection.TryGetValue(connection, out Entity player))
-            {
-                _awaitingName.RemoveAt(i);
-                continue;
-            }
             string name = Net.GetPlayerName(player);
             if (name.Length == 0)
             {
-                i++;
                 continue;
             }
-            _awaitingName.RemoveAt(i);
-            NetSessionPlayer entry = new(connection, player, name);
-            _players.Add(entry);
-            _pendingNotices.Add((true, entry));
+            _players.Add(new NetSessionPlayer(Net.OwnerOf(player), player, name));
+        }
+        _players.Sort(static (a, b) => a.Connection != b.Connection
+            ? a.Connection.CompareTo(b.Connection)
+            : a.Entity.Id.CompareTo(b.Entity.Id));
+    }
+
+    /// <summary>Host only: turn the difference between the roster and what the game has
+    /// already been told into arrival and departure notices.</summary>
+    /// <remarks>
+    /// The NAME is what gates an arrival, because <see cref="SyncRoster"/> will not list a
+    /// player without one - a fixed delay instead would only be a guess that a slow link
+    /// breaks. A joiner whose name never arrives at all is never reported, which is the
+    /// right failure: the alternative is introducing somebody by a placeholder.
+    /// </remarks>
+    private void DiffRoster()
+    {
+        foreach (NetSessionPlayer player in _players)
+        {
+            if (!_introduced.ContainsKey(player.Connection))
+            {
+                _introduced[player.Connection] = player;
+                _pendingNotices.Add((true, player));
+            }
+        }
+
+        List<uint>? gone = null;
+        foreach (uint connection in _introduced.Keys)
+        {
+            if (IndexOfPlayer(connection) < 0)
+            {
+                gone ??= new List<uint>();
+                gone.Add(connection);
+            }
+        }
+        if (gone == null)
+        {
+            return;
+        }
+        foreach (uint connection in gone)
+        {
+            NetSessionPlayer player = _introduced[connection];
+            _introduced.Remove(connection);
+            // The entity is already destroyed, so the departure is reported with an
+            // invalid one - the name it carries is the whole point of having kept it.
+            _pendingNotices.Add((false, new NetSessionPlayer(connection, default, player.Name)));
         }
     }
 
@@ -546,16 +623,42 @@ public abstract class NetSessionDirector : EntityScript
 
     /// <summary>Where the marker for <paramref name="index"/> stands, or the origin if
     /// the scene is missing it.</summary>
-    private Vector3 SpawnPosition(int index)
+    /// <remarks>
+    /// The <paramref name="sharers"/> offset is what stops players stacking. A scene
+    /// provides a fixed number of markers and a session can exceed it - deliberately, since
+    /// refusing to spawn the fifth player is worse than crowding the fourth marker - and
+    /// two characters created at the identical position are two bodies at the same point,
+    /// which physics resolves by shoving one of them somewhere unpredictable. Spreading
+    /// them along X by a body width or so makes the overflow land beside the marker instead
+    /// of inside whoever is already there. The first claimant of a marker gets it exactly,
+    /// so the common case is unaffected.
+    /// </remarks>
+    private Vector3 SpawnPosition(int index, int sharers = 0)
     {
+        Vector3 spread = new(sharers * SpawnSpread, 0.0f, 0.0f);
         string markerName = $"{SpawnPointPrefix}{index}";
         Entity marker = Scene.Find(markerName);
         if (marker.IsValid)
         {
-            return marker.Position;
+            return marker.Position + spread;
         }
         Log.Warn($"Net session: scene has no '{markerName}' entity; spawning at the origin");
-        return Vector3.Zero;
+        return spread;
+    }
+
+    /// <summary>How many players have already been given <paramref name="slot"/>, not
+    /// counting the one asking. 0 whenever there are markers to go round.</summary>
+    private int SharersOf(int slot, uint connection)
+    {
+        int sharers = 0;
+        foreach (KeyValuePair<uint, int> entry in _slotByConnection)
+        {
+            if (entry.Value == slot && entry.Key != connection)
+            {
+                sharers++;
+            }
+        }
+        return sharers;
     }
 
     // ── Client ──────────────────────────────────────────────────────────────────
@@ -822,15 +925,17 @@ public abstract class NetSessionDirector : EntityScript
             return;
         }
         _localPlayerSpawned = true;
-        Entity player = Scene.Instantiate(PlayerPrefab, SpawnPosition(ClaimSlot(Net.LocalConnectionId)));
+        int slot = ClaimSlot(Net.LocalConnectionId);
+        Entity player = Scene.Instantiate(PlayerPrefab, SpawnPosition(slot, SharersOf(slot, Net.LocalConnectionId)));
         if (!player.IsValid)
         {
             return;
         }
         Net.SetPlayerName(player, NetSession.LocalPlayerName);
         LocalPlayer = player;
-        // On the roster, but never announced: there is nobody to announce it to, and a
-        // solo game telling itself that it joined reads as a bug.
-        _players.Add(new NetSessionPlayer(Net.LocalConnectionId, player, Net.GetPlayerName(player)));
+        // Nothing is added to the roster here: SyncRoster picks this player up on the next
+        // frame like any other. And nothing is ANNOUNCED - DiffRoster is host-only, because
+        // there is nobody to announce a solo game to and a game telling itself that it
+        // joined reads as a bug.
     }
 }
