@@ -45,6 +45,9 @@ namespace
 		AssetObjectId solidTileId{};
 		std::uint16_t solidIndex = 0;
 
+		AssetObjectId platformTileId{};
+		std::uint16_t platformIndex = 0;
+
 		TileCollisionFixture()
 		{
 			world.SetSceneKind(SceneKind::Scene2D);
@@ -58,6 +61,11 @@ namespace
 			tileSet.name = "Solid";
 			tileSet.AddTile("atlas.toml", AssetObjectId{1}, "Block").collision = TileCollisionKind::Full;
 			solidTileId = tileSet.tiles[0].id;
+			// A jump-through platform: the same whole-cell solid, but only from above.
+			TileDefinition& platform = tileSet.AddTile("atlas.toml", AssetObjectId{2}, "Platform");
+			platform.collision = TileCollisionKind::Full;
+			platform.oneWay = TileOneWay::Up;
+			platformTileId = platform.id;
 			const auto setPath = (TempDir() / "solid.tileset.toml").generic_string();
 			REQUIRE(tiles.SaveTileSet(setPath, tileSet).has_value());
 
@@ -65,6 +73,7 @@ namespace
 			map.tileSetPath = setPath;
 			map.cellSize = 1.0f;
 			solidIndex = map.PaletteIndexFor(solidTileId);
+			platformIndex = map.PaletteIndexFor(platformTileId);
 			map.layers.emplace_back();
 			tileMapPath = (TempDir() / "solid.tilemap").generic_string();
 			REQUIRE(tiles.SaveTileMap(tileMapPath, map).has_value());
@@ -170,6 +179,71 @@ TEST_CASE("editing one chunk leaves other chunk bodies untouched")
 	fx.physics->FlushPendingOnly(fx.world);
 	CHECK_FALSE(fx.physics->CastRay({1.5f, 4.0f}, {0.0f, -1.0f}, 5.0f).hit);
 	CHECK(fx.physics->CastRay({70.5f, 4.0f}, {0.0f, -1.0f}, 5.0f).hit);
+}
+
+TEST_CASE("a one-way tile platform lets a body rise through it and lands it on top")
+{
+	// Regression for Whisper's arena, where every floating platform was painted
+	// with the same two-way solid tile as the floor. A two-way platform is a
+	// CEILING to anything under it: the jump fires, the head hits the underside
+	// 0.7 units up, and the whole arc is swallowed - wherever a platform
+	// overhangs, and only there. A one-way Up tile is solid from above only.
+	TileCollisionFixture fx;
+	TileMapAsset& map = fx.Map();
+	for (int x = -5; x <= 5; ++x)
+	{
+		map.SetCell(0, {x, 0}, tilecell::Make(fx.solidIndex));    // floor: y [0, 1]
+		map.SetCell(0, {x, 3}, tilecell::Make(fx.platformIndex)); // platform: y [3, 4]
+	}
+	fx.MakeTileMapEntity();
+	const Entity jumper = fx.MakeFallingBox({0.0f, 1.5f});
+	fx.StepSeconds(0.5f); // settle on the floor
+	REQUIRE(fx.HeightOf(jumper) == doctest::Approx(1.5f).epsilon(0.05));
+
+	fx.physics->SetLinearVelocity(fx.world.Get<RigidBody2DComponent>(jumper).body, {0.0f, 12.0f});
+	fx.StepSeconds(4.0f);
+
+	// Through the platform and resting on its top (y = 4 + half the unit box).
+	// A two-way platform caps the rise at 2.5 and drops it back to 1.5.
+	CHECK(fx.HeightOf(jumper) == doctest::Approx(4.5f).epsilon(0.05));
+}
+
+TEST_CASE("drop-through drops a body through the one-way platform it stands on")
+{
+	TileCollisionFixture fx;
+	TileMapAsset& map = fx.Map();
+	for (int x = -5; x <= 5; ++x)
+	{
+		map.SetCell(0, {x, 0}, tilecell::Make(fx.solidIndex));
+		map.SetCell(0, {x, 3}, tilecell::Make(fx.platformIndex));
+	}
+	fx.MakeTileMapEntity();
+	const Entity rider = fx.MakeFallingBox({0.0f, 4.5f});
+	fx.StepSeconds(0.5f);
+	REQUIRE(fx.HeightOf(rider) == doctest::Approx(4.5f).epsilon(0.05));
+
+	fx.physics->SetDropThrough(fx.world, rider, 0.5f);
+	fx.StepSeconds(2.0f);
+
+	CHECK(fx.HeightOf(rider) == doctest::Approx(1.5f).epsilon(0.05));
+}
+
+TEST_CASE("a ground ray still finds a one-way platform from above")
+{
+	// The player's grounded check is a short downward ray; a jump-through
+	// platform has to answer it or standing on one silently disables jumping.
+	TileCollisionFixture fx;
+	TileMapAsset& map = fx.Map();
+	for (int x = -5; x <= 5; ++x)
+	{
+		map.SetCell(0, {x, 3}, tilecell::Make(fx.platformIndex));
+	}
+	fx.MakeTileMapEntity();
+	fx.physics->FlushPendingOnly(fx.world);
+
+	const Physics2DSystem::RayHit2D above = fx.physics->CastRay({0.5f, 4.65f}, {0.0f, -1.0f}, 0.85f);
+	CHECK(above.hit);
+	CHECK(above.point.y == doctest::Approx(4.0f).epsilon(0.01));
 }
 
 TEST_CASE("a driven box crosses chunk seams without snagging")

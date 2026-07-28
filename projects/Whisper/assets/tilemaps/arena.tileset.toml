@@ -255,6 +255,7 @@
 37.frame_count = 0.00
 37.id = "0391ea7ad806cb3c"
 37.name = "Sprite_4_1"
+37.one_way = "up"
 37.property_count = 0.00
 37.sprite_id = "cbea9596a020529a"
 38.animation_fps = 8.00
