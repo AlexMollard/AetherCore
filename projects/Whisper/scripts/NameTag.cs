@@ -18,13 +18,13 @@ namespace AetherGame;
 /// </para>
 /// <para>
 /// <see cref="Net.GetPlayerName"/> is read every frame rather than cached in
-/// <see cref="OnAttach"/>. The name is a replicated field, but it is not set
-/// until <see cref="PlayerController.SubmitName"/> runs some time after the
-/// player entity spawns - for a remote player that RPC has to cross the wire
-/// first. Caching on attach would leave the tag permanently blank (or stuck
-/// on the "Player" fallback) for anyone who joined after this script last read
-/// it; re-reading every frame means the tag simply updates the moment the
-/// real name lands, same as any other replicated field.
+/// <see cref="OnAttach"/>. The name is a replicated field written by the peer
+/// that OWNS the player, so on every other peer it arrives some time after the
+/// entity does - and it can change again later, when a second player with the
+/// same name joins and this one steps around it. Caching on attach would leave
+/// the tag permanently blank for anyone who joined after this script last read
+/// it; re-reading every frame means the tag simply updates the moment the real
+/// name lands, same as any other replicated field.
 /// </para>
 /// </remarks>
 public sealed class NameTag : EntityScript
@@ -65,8 +65,8 @@ public sealed class NameTag : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
-        // See the remarks above: never cached, always re-read so a late
-        // SubmitName RPC (remote players) is picked up the frame it lands.
+        // See the remarks above: never cached, always re-read so a name that
+        // arrives late - or changes - is picked up the frame it lands.
         Ui.SetText(_label, Net.GetPlayerName(Self));
 
         Vector3 headPos = Self.Position + new Vector3(0.0f, VerticalOffset, 0.0f);

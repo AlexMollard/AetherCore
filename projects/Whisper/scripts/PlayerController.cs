@@ -71,7 +71,6 @@ public sealed class PlayerController : EntityScript
     private float _sinceGrounded = 99.0f;
     private float _sinceJumpPressed = 99.0f;
     private bool _jumpCutDone;
-    private bool _nameReported;
 
     // Squash & stretch is purely visual (drives the sprite quad size, never the
     // collider): stretch while airborne, squash impulse on landing, eased back.
@@ -100,7 +99,7 @@ public sealed class PlayerController : EntityScript
             return;
         }
 
-        ReportNameOnce();
+        ClaimName();
 
         // Frozen by a pause: scripts still tick at dt=0, so skip movement entirely.
         // The body keeps whatever velocity it had, which is correct - nothing else
@@ -224,44 +223,35 @@ public sealed class PlayerController : EntityScript
     // ── Networking ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Client -> host: adopt the name this player chose on the connect screen.
+    /// Write this player's chosen display name onto its own entity, and let
+    /// replication carry it outward like any other owned state.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This lives on the player rather than on <see cref="WhisperSession"/> because
-    /// the host only accepts a server RPC aimed at an entity the SENDING connection
-    /// owns. The session entity is scene-placed and host-owned, so a call on it would
-    /// be dropped by that ownership gate; the caller's own player is the one entity it
-    /// is entitled to drive.
+    /// THE OWNER AUTHORS ITS OWN NAME. This method only ever runs on the peer that
+    /// owns this player - <see cref="OnUpdate"/> has already returned for anybody
+    /// else - so the write lands on the one machine entitled to make it, and
+    /// <c>NetPlayer.displayName</c> reaches every other peer on the next snapshot with
+    /// no further code.
     /// </para>
     /// <para>
-    /// <c>NetPlayer.displayName</c> is a replicated field, so the host writing it here
-    /// is all that is needed - the value reaches every other client on the next
-    /// snapshot with no further code.
+    /// This used to be a <c>[NetRpc(NetRpcTarget.Server)] SubmitName</c> that asked the
+    /// HOST to write the field, which was correct under the old host-authoritative
+    /// model and is a bug under this one: the client then replicated its own copy of
+    /// the same entity - still carrying the empty authored name - straight back over
+    /// the host's write, and whether a name survived was a race. Some players' names
+    /// showed and some did not, per session, for that reason.
+    /// </para>
+    /// <para>
+    /// Called every frame rather than once, because <see cref="Net.ClaimPlayerName"/>
+    /// is not just a write: it steps around a name a player ahead of us already has
+    /// ("Alice" becomes "Alice (2)"), and the player it has to step around may not have
+    /// arrived yet when this player spawns. Re-resolving from the DESIRED name each
+    /// frame settles on the right answer as the session fills up, and costs a walk of
+    /// at most four players.
     /// </para>
     /// </remarks>
-    /// <param name="name">The chosen display name; blanks fall back to "Player".</param>
-    [NetRpc(NetRpcTarget.Server)]
-    public void SubmitName(string name)
-    {
-        string trimmed = (name ?? string.Empty).Trim();
-        Net.SetPlayerName(Self, trimmed.Length == 0 ? "Player" : trimmed);
-    }
-
-    /// <summary>Tell the host who we are, once, as soon as the call can be routed.
-    /// Retried every frame until it is: this entity needs a live net id before the
-    /// call has anything to address on the far end, and the id arrives with the
-    /// spawn that created it, which may not have landed on the first tick.</summary>
-    private void ReportNameOnce()
-    {
-        if (_nameReported || !Net.IsClient)
-        {
-            // The host sets its own player's name directly (WhisperSession), and
-            // offline there is nobody to tell.
-            return;
-        }
-        _nameReported = Net.Call(Self, nameof(SubmitName), WhisperSession.LocalPlayerName);
-    }
+    private void ClaimName() => Net.ClaimPlayerName(Self, WhisperSession.LocalPlayerName);
 
     /// <summary>Snap back to the entity's starting position after falling out of
     /// the world. There are no checkpoints in this build - it is always the spawn point.</summary>
