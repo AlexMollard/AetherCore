@@ -281,6 +281,13 @@ namespace aether::ui
 		if (!captured && (input.IsKeyPressed(Key::Enter) || input.IsKeyPressed(Key::Space)) && focused.IsValid())
 		{
 			toActivate = focused;
+			// The key pressed a button, and that is all it did. Without this, the Space
+			// that chose "Resume" is also read by the character controller a moment later
+			// and the player jumps as the menu closes; the Enter that chose a menu item is
+			// also read by a chat box as "open the chat". Consumed here, before any script
+			// runs, so no script has to know a menu exists.
+			input.ConsumeKey(Key::Enter);
+			input.ConsumeKey(Key::Space);
 		}
 		if (input.IsMouseButtonPressed(MouseButton::Left) && hovered.IsValid())
 		{

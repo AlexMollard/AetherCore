@@ -120,19 +120,46 @@ AE_SCRIPT_API void aether_ui_set_text_color(std::uint32_t id, Vec4 color)
 	}
 }
 
+// Typography reaches EVERY element that draws glyphs, not only UIText. A text box and a
+// button each carry their own font name and pixel size (they are separate components,
+// not a UIText plus a frame), so a script that styled a label and then styled the field
+// under it silently got half of what it asked for - and the two could not be kept in
+// step from script at all. Written to whichever of the three the entity actually has;
+// an entity carrying none is left alone, as every other Ui.* setter leaves it.
 AE_SCRIPT_API void aether_ui_set_font_size(std::uint32_t id, float pixelSize)
 {
-	if (auto* t = ActiveWorld().TryGet<aether::ui::UIText>(aether::Entity{id}))
+	auto& world = ActiveWorld();
+	const aether::Entity entity{id};
+	if (auto* t = world.TryGet<aether::ui::UIText>(entity))
 	{
 		t->pixelSize = pixelSize;
+	}
+	if (auto* b = world.TryGet<aether::ui::UITextBox>(entity))
+	{
+		b->pixelSize = pixelSize;
+	}
+	if (auto* button = world.TryGet<aether::ui::UIButton>(entity))
+	{
+		button->pixelSize = pixelSize;
 	}
 }
 
 AE_SCRIPT_API void aether_ui_set_font(std::uint32_t id, const char* name)
 {
-	if (auto* t = ActiveWorld().TryGet<aether::ui::UIText>(aether::Entity{id}))
+	auto& world = ActiveWorld();
+	const aether::Entity entity{id};
+	const std::string font = name != nullptr ? name : "";
+	if (auto* t = world.TryGet<aether::ui::UIText>(entity))
 	{
-		t->fontName = name != nullptr ? name : "";
+		t->fontName = font;
+	}
+	if (auto* b = world.TryGet<aether::ui::UITextBox>(entity))
+	{
+		b->fontName = font;
+	}
+	if (auto* button = world.TryGet<aether::ui::UIButton>(entity))
+	{
+		button->fontName = font;
 	}
 }
 
@@ -201,6 +228,28 @@ AE_SCRIPT_API std::int32_t aether_ui_was_activated(std::uint32_t id)
 {
 	const auto* s = ActiveWorld().TryGet<aether::ui::UISelectable>(aether::Entity{id});
 	return (s != nullptr && s->activated) ? 1 : 0;
+}
+
+// Which element holds the keyboard right now, or 0 for nobody.
+//
+// Answered from the UI's own committed state, which UiNavigationSystem writes BEFORE the
+// first script of the frame runs - so every script that asks gets the same answer in the
+// same frame, whatever order they happen to update in. That is the whole point of it
+// existing: a game whose character controller has to stand still while a menu or a chat
+// field is up would otherwise have one script publish a flag for another to read, and
+// which of the two ran first would decide whether the character walked.
+AE_SCRIPT_API std::uint32_t aether_ui_focused_entity()
+{
+	std::uint32_t focused = 0;
+	ActiveWorld().View<aether::ui::UISelectable>().each(
+	        [&](entt::entity ent, aether::ui::UISelectable& s)
+	        {
+		        if (s.focused)
+		        {
+			        focused = aether::World::FromEntt(ent).id;
+		        }
+	        });
+	return focused;
 }
 
 AE_SCRIPT_API void aether_ui_set_focus(std::uint32_t id)
@@ -339,6 +388,16 @@ AE_SCRIPT_API void aether_ui_set_text_box_content_type(std::uint32_t id, std::in
 	if (auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id}))
 	{
 		b->contentType = static_cast<aether::ui::TextContentType>(contentType);
+	}
+}
+
+AE_SCRIPT_API void aether_ui_set_text_box_max_length(std::uint32_t id, std::int32_t maxLength)
+{
+	if (auto* b = ActiveWorld().TryGet<aether::ui::UITextBox>(aether::Entity{id}))
+	{
+		// Negative is meaningless and 0 already means unlimited, so both collapse to
+		// unlimited rather than to a field that refuses every keystroke.
+		b->maxLength = maxLength > 0 ? maxLength : 0;
 	}
 }
 

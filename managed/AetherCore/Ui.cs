@@ -76,9 +76,13 @@ public static class Ui
     // ── Text style ────────────────────────────────────────────────────────────────
 
     public static void SetTextColor(Entity e, Vector4 color) => Native.aether_ui_set_text_color(e.Id, color);
+
+    /// <summary>Set the glyph size, in pixels, of whichever text-bearing element this is:
+    /// a text label, a text box, or a button's label.</summary>
     public static void SetFontSize(Entity e, float pixelSize) => Native.aether_ui_set_font_size(e.Id, pixelSize);
 
-    /// <summary>Set the text element's font by baked name (e.g. "IBMPlexMono-Italic", "PixelStorm").</summary>
+    /// <summary>Set the font by baked name (e.g. "IBMPlexMono-Italic", "PixelStorm"), on a
+    /// text label, a text box, or a button's label.</summary>
     public static void SetFont(Entity e, string fontName) => Native.aether_ui_set_font(e.Id, fontName);
 
     /// <summary>Toggle word-wrap to the element's rect width (default on). Off = single line, for
@@ -123,6 +127,29 @@ public static class Ui
 
     /// <summary>True on the frame this selectable is activated (Enter/Space while focused, or a click).</summary>
     public static bool WasActivated(Entity e) => Native.aether_ui_was_activated(e.Id) != 0;
+
+    /// <summary>The element currently holding the keyboard, or an invalid entity when
+    /// nothing does.</summary>
+    /// <remarks>
+    /// Committed by the engine's navigation pass BEFORE the frame's first script runs, so
+    /// every script that asks gets the same answer whatever order they update in. That is
+    /// what makes <see cref="HasFocus"/> safe to gate gameplay on where a flag written by
+    /// one script and read by another is not.
+    /// </remarks>
+    public static Entity FocusedElement => new(Native.aether_ui_focused_entity());
+
+    /// <summary>
+    /// True while the UI owns the keyboard - a menu item is highlighted, or a field is
+    /// being typed into.
+    /// </summary>
+    /// <remarks>
+    /// The gate a character controller wants: no focus means the player is playing, and
+    /// focus means the letters they are typing (or the arrows they are navigating a menu
+    /// with) belong to the interface and must not also be steering. The engine never
+    /// focuses anything on its own, so this is false for a screen the player has not
+    /// reached for - a HUD does not silently disable the game by existing.
+    /// </remarks>
+    public static bool HasFocus => Native.aether_ui_focused_entity() != 0;
 
     /// <summary>Make this selectable the focused one.</summary>
     public static void SetFocus(Entity e) => Native.aether_ui_set_focus(e.Id);
@@ -210,6 +237,11 @@ public static class Ui
 
     /// <summary>Restrict which characters the box accepts.</summary>
     public static void SetContentType(Entity e, UiContentType type) => Native.aether_ui_set_text_box_content_type(e.Id, (int)type);
+
+    /// <summary>Longest string the box will accept, in characters; 0 (or less) is unlimited.
+    /// Enforced at the keystroke, so an over-long value is refused as it is typed rather than
+    /// clipped later by whatever reads the field.</summary>
+    public static void SetMaxLength(Entity e, int maxLength) => Native.aether_ui_set_text_box_max_length(e.Id, maxLength);
 
     /// <summary>True on the frame the player pressed Enter to commit the field.</summary>
     public static bool WasSubmitted(Entity e) => Native.aether_ui_was_submitted(e.Id) != 0;

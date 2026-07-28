@@ -227,6 +227,12 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_was_activated(uint id);
 
+    // The element holding the keyboard, or 0. Committed before any script runs, so every
+    // script sees the same answer whatever order they update in.
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial uint aether_ui_focused_entity();
+
     [LibraryImport(Lib)]
     internal static partial void aether_ui_set_focus(uint id);
 
@@ -279,6 +285,9 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     internal static partial void aether_ui_set_text_box_content_type(uint id, int contentType);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_text_box_max_length(uint id, int maxLength);
 
     [LibraryImport(Lib)]
     internal static partial int aether_ui_was_submitted(uint id);

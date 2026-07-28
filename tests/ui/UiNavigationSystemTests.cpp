@@ -237,3 +237,37 @@ TEST_CASE("Tab orders by row before column, not by creation order")
 	ui::UiNavigationSystem::Update(w, input);
 	CHECK(Sel(w, below).focused); // then down to the next row
 }
+
+TEST_CASE("Activating an element consumes the key that did it")
+{
+	World w;
+	Input input;
+
+	const Entity button = MakeSelectable(w, {0, 0, 100, 20});
+	Sel(w, button).focused = true;
+
+	input.SetSyntheticKey(static_cast<int>(Key::Space), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	REQUIRE(Sel(w, button).activated);
+	// The Space that pressed a menu button must not also reach the character controller
+	// as a jump, and the Enter that chose a menu item must not also open a chat box.
+	CHECK(input.IsKeyConsumed(Key::Space));
+	CHECK(input.IsKeyConsumed(Key::Enter));
+	CHECK_FALSE(input.IsKeyPressed(Key::Space));
+}
+
+TEST_CASE("A key that activates nothing is left for the game")
+{
+	World w;
+	Input input;
+
+	// Focused nothing: the resting state of a screen the player has not reached for.
+	MakeSelectable(w, {0, 0, 100, 20});
+
+	input.SetSyntheticKey(static_cast<int>(Key::Space), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK_FALSE(input.IsKeyConsumed(Key::Space));
+	CHECK(input.IsKeyPressed(Key::Space)); // still the jump button
+}
