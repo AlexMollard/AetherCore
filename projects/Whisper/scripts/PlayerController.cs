@@ -50,19 +50,28 @@ public sealed class PlayerController : EntityScript
     /// </summary>
     public int AnimIndex { get; private set; }
 
+    /// <summary>
+    /// Which way the character is facing - true while it last moved left. Decided
+    /// here every frame, for exactly the reason <see cref="AnimIndex"/> is (this
+    /// script owns the movement state), and applied to the sprite nowhere here:
+    /// <see cref="NetPlayerSync"/> reads it, replicates it, and is the one place that
+    /// calls <see cref="SpriteRenderer.SetFlipX"/>, so the owner's own sprite and
+    /// every remote copy flip through the identical path.
+    /// </summary>
+    /// <remarks>
+    /// This method returns early for anything this peer does not own, so a facing
+    /// applied here would never run on a remote copy at all - which is exactly why
+    /// remote players used to moonwalk. Replicating the decision, rather than
+    /// re-deriving it from a position delta on each peer, is the same choice
+    /// <see cref="AnimIndex"/> makes and for the same reason: one decider, one apply.
+    /// </remarks>
+    public bool FacingLeft { get; private set; }
+
     private Vector3 _spawn;
     private float _sinceGrounded = 99.0f;
     private float _sinceJumpPressed = 99.0f;
     private bool _jumpCutDone;
     private bool _nameReported;
-
-    // The current input command, written ONLY by ApplyInput - never read from the
-    // keyboard by the simulation below. That indirection is the whole point: the
-    // owner fills these from its own keys, the host fills them from the packet the
-    // owner sent, and both then run the identical movement code.
-    private float _move;
-    private bool _jumpHeld;
-    private bool _holdingDown;
 
     // Squash & stretch is purely visual (drives the sprite quad size, never the
     // collider): stretch while airborne, squash impulse on landing, eased back.
@@ -81,33 +90,48 @@ public sealed class PlayerController : EntityScript
     public override void OnUpdate(float deltaTime)
     {
         // Every peer runs this script on every player entity, including other
-        // people's. WHO SIMULATES is authority, not ownership: the host simulates
-        // every player (from the input each owner submits), a client simulates only
-        // the one it owns (that is the prediction), and a client's copy of somebody
-        // else's player is driven purely by replication. Net.HasAuthority is true
-        // offline, so single-player is unaffected.
+        // people's, so this gate is what stops four machines simulating the same
+        // character four different ways. WHO SIMULATES IS WHO OWNS: the owner runs
+        // the movement below and the framework replicates the result, and every
+        // other peer's copy of this player is driven purely by replication.
+        // Net.HasAuthority is true offline, so single-player is unaffected.
         if (!Net.HasAuthority(Self))
         {
             return;
         }
 
-        // Only the owner has a keyboard to read. Net.SendInput applies the payload
-        // here immediately AND ships it to the host, so the two lines below are the
-        // entire client->host input path this game has to write.
-        if (Net.IsOwner(Self))
-        {
-            ReportNameOnce();
-            Net.SendInput(Self, nameof(ApplyInput), SampleInput());
-        }
+        ReportNameOnce();
 
-        // Frozen by a pause: scripts still tick at dt=0, so skip movement entirely
-        // (SampleInput above already reported neutral input to the host).
+        // Frozen by a pause: scripts still tick at dt=0, so skip movement entirely.
+        // The body keeps whatever velocity it had, which is correct - nothing else
+        // is deciding this character's state.
         if (Time.IsPaused)
         {
             return;
         }
 
-        float move = _move;
+        // Read straight off the keyboard. There is no input packet and no handler in
+        // between any more: this peer owns the character, simulates it here, and what
+        // it simulates IS what the other peers are shown.
+        float move = 0.0f;
+        bool jumpPressed = false;
+        bool jumpHeld = false;
+        bool holdingDown = false;
+        // The chat box owns the keyboard while it is open: without this check the
+        // letters of a message double as movement keys, and typing "add" runs the
+        // character across the arena and jumps.
+        if (!IsTypingInChat())
+        {
+            if (Input.IsKeyDown(Key.A) || Input.IsKeyDown(Key.Left)) { move -= 1.0f; }
+            if (Input.IsKeyDown(Key.D) || Input.IsKeyDown(Key.Right)) { move += 1.0f; }
+            jumpPressed = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up);
+            jumpHeld = Input.IsKeyDown(Key.Space) || Input.IsKeyDown(Key.W) || Input.IsKeyDown(Key.Up);
+            holdingDown = Input.IsKeyDown(Key.S) || Input.IsKeyDown(Key.Down);
+        }
+        if (jumpPressed)
+        {
+            _sinceJumpPressed = 0.0f;
+        }
 
         Vector2 velocity = Physics2D.GetLinearVelocity(Self);
         velocity.X = move * MoveSpeed;
@@ -120,9 +144,6 @@ public sealed class PlayerController : EntityScript
         }
         _wasGrounded = grounded;
         _sinceGrounded = grounded ? 0.0f : _sinceGrounded + deltaTime;
-        // The press itself arrives through ApplyInput, which zeroes this - the jump
-        // buffer IS the mechanism that lets one input packet outlive the frame it
-        // landed on, which is exactly what the host needs.
         _sinceJumpPressed += deltaTime;
 
         if (grounded)
@@ -131,7 +152,6 @@ public sealed class PlayerController : EntityScript
         }
         if (_sinceJumpPressed < JumpBuffer && _sinceGrounded < CoyoteTime)
         {
-            bool holdingDown = _holdingDown;
             if (holdingDown)
             {
                 // Down + jump drops through a one-way platform instead of hopping. The
@@ -152,7 +172,7 @@ public sealed class PlayerController : EntityScript
         }
         // Variable jump height: releasing early clips the ascent ONCE (a
         // per-frame multiplier would be framerate-dependent).
-        if (!_jumpCutDone && velocity.Y > 0.0f && !_jumpHeld)
+        if (!_jumpCutDone && velocity.Y > 0.0f && !jumpHeld)
         {
             velocity.Y *= JumpCutFactor;
             _jumpCutDone = true;
@@ -160,11 +180,12 @@ public sealed class PlayerController : EntityScript
 
         Physics2D.SetLinearVelocity(Self, velocity);
 
-        // Face the way we move via the sprite flag: negative transform scale
-        // is clamped away by the 2D physics transform sync.
+        // Facing is DECIDED here and APPLIED nowhere here - see FacingLeft. Calling
+        // SetFlipX in this branch is what left every remote copy moonwalking: this
+        // whole method is owner-only, so a remote copy never reached the call.
         if (move != 0.0f)
         {
-            SpriteRenderer.SetFlipX(Self, move < 0.0f);
+            FacingLeft = move < 0.0f;
         }
 
         AnimIndex = !grounded ? AnimIndexJump : move != 0.0f ? AnimIndexRun : AnimIndexIdle;
@@ -199,79 +220,6 @@ public sealed class PlayerController : EntityScript
     /// onward. A player prefab without a <see cref="ChatBox"/> simply never types.
     /// </remarks>
     private bool IsTypingInChat() => GetScript<ChatBox>() is { IsTyping: true };
-
-    // ── Input ───────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// This frame's keyboard state, encoded for the wire. Four characters: facing
-    /// (L/N/R), jump pressed, jump held, down held.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Neutral rather than nothing while paused or typing. Velocity persists in the
-    /// physics body, so a run in progress when the chat box opens would coast at full
-    /// speed for the whole message - on the host as much as here. Reporting "no keys"
-    /// is what stops it in both places; a suppressed submission would leave the host
-    /// running on the last packet it got.
-    /// </para>
-    /// <para>
-    /// The chat box owns the keyboard while it is open: without that check the letters
-    /// of a message double as movement keys, and typing "add" runs the character
-    /// across the arena and jumps.
-    /// </para>
-    /// </remarks>
-    private string SampleInput()
-    {
-        if (Time.IsPaused || IsTypingInChat())
-        {
-            return "N000";
-        }
-
-        float move = 0.0f;
-        if (Input.IsKeyDown(Key.A) || Input.IsKeyDown(Key.Left)) { move -= 1.0f; }
-        if (Input.IsKeyDown(Key.D) || Input.IsKeyDown(Key.Right)) { move += 1.0f; }
-
-        bool jumpPressed = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up);
-        bool jumpHeld = Input.IsKeyDown(Key.Space) || Input.IsKeyDown(Key.W) || Input.IsKeyDown(Key.Up);
-        bool down = Input.IsKeyDown(Key.S) || Input.IsKeyDown(Key.Down);
-
-        return string.Concat(
-            move < 0.0f ? "L" : move > 0.0f ? "R" : "N",
-            jumpPressed ? "1" : "0",
-            jumpHeld ? "1" : "0",
-            down ? "1" : "0");
-    }
-
-    /// <summary>
-    /// Owner -> host: this is what I am pressing. Runs on the owner immediately
-    /// (prediction) and on the host when the packet lands, through the identical
-    /// <see cref="Net.SendInput"/> call - so there is one movement implementation,
-    /// not a local one and a remote one.
-    /// </summary>
-    /// <remarks>
-    /// It only records the command; <see cref="OnUpdate"/> does the moving. That split
-    /// is what keeps the two peers in step: the coyote/jump-buffer timers advance once
-    /// per FRAME on whichever peer is simulating, while input arrives at whatever rate
-    /// the framework paces it to. Folding the state machine in here would make the
-    /// host's timers run at packet rate instead of frame rate.
-    /// </remarks>
-    [NetRpc(NetRpcTarget.Server)]
-    public void ApplyInput(string payload)
-    {
-        if (payload is not { Length: >= 4 })
-        {
-            return;
-        }
-        _move = payload[0] == 'L' ? -1.0f : payload[0] == 'R' ? 1.0f : 0.0f;
-        if (payload[1] == '1')
-        {
-            // The press is an EDGE, and one packet is all that carries it - so it goes
-            // into the jump buffer rather than a bool the next frame would clear.
-            _sinceJumpPressed = 0.0f;
-        }
-        _jumpHeld = payload[2] == '1';
-        _holdingDown = payload[3] == '1';
-    }
 
     // ── Networking ──────────────────────────────────────────────────────────────
 
