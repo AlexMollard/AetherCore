@@ -116,10 +116,18 @@ public sealed class PlayerController : EntityScript
         bool jumpPressed = false;
         bool jumpHeld = false;
         bool holdingDown = false;
-        // The chat box owns the keyboard while it is open: without this check the
-        // letters of a message double as movement keys, and typing "add" runs the
-        // character across the arena and jumps.
-        if (!IsTypingInChat())
+        // The UI owns the keyboard while anything in it is focused - a chat message being
+        // typed, a pause menu being read. Without this check the letters of a message
+        // double as movement keys, and typing "add" runs the character across the arena
+        // and jumps.
+        //
+        // Asked of the ENGINE rather than of a sibling script. Focus is committed by the
+        // UI pass before the first script of the frame runs, so every script gets the same
+        // answer whatever order they update in; a "somebody is typing" flag published by
+        // one script for another to read is only right when the two happen to tick in the
+        // right order, and getting that wrong is what used to make one Escape both cancel
+        // a message and quit the session.
+        if (!Ui.HasFocus)
         {
             if (Input.IsKeyDown(Key.A) || Input.IsKeyDown(Key.Left)) { move -= 1.0f; }
             if (Input.IsKeyDown(Key.D) || Input.IsKeyDown(Key.Right)) { move += 1.0f; }
@@ -208,17 +216,6 @@ public sealed class PlayerController : EntityScript
             Respawn();
         }
     }
-
-    // ── Chat ────────────────────────────────────────────────────────────────────
-
-    /// <summary>Whether this player's own chat box currently has the keyboard.</summary>
-    /// <remarks>
-    /// Looked up per frame rather than cached in <see cref="OnAttach"/> for the same
-    /// reason <see cref="NetPlayerSync"/> does it: scripts on an entity attach one at a
-    /// time in list order, so a sibling is only guaranteed to be live from OnUpdate
-    /// onward. A player prefab without a <see cref="ChatBox"/> simply never types.
-    /// </remarks>
-    private bool IsTypingInChat() => GetScript<ChatBox>() is { IsTyping: true };
 
     // ── Networking ──────────────────────────────────────────────────────────────
 

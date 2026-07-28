@@ -83,6 +83,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'WhisperSession'
 
+    # Listed AFTER the director so the roster it draws is this frame's, not last
+    # frame's - the director rebuilds it at the top of its own update.
+    [[entities.scripts]]
+    type = 'PlayerRoster'
+
+    [[entities.scripts]]
+    type = 'PauseMenu'
+
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn3'
@@ -90,3 +98,189 @@ node = 6110158631851107524
 parent = -1
 position = [ 16.0, 1.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
+
+# ── HUD ─────────────────────────────────────────────────────────────────────────
+# One canvas for the whole arena, authored rather than left to whichever script
+# happened to run first. Every script-built HUD element (the chat, the roster, the
+# name tags) attaches to the first canvas it finds, so this is the one they land on.
+#
+# constant_pixel deliberately, NOT scale_with_reference: the name tags are placed from
+# Camera.WorldToScreen, which reports real screen pixels, and a canvas that rescaled
+# them would slide every tag off its character on any window that is not exactly the
+# reference size.
+#
+# The pause menu hangs off it as a DISABLED subtree rather than being a canvas of its
+# own, for the same reason: a disabled canvas would take the rest of the HUD down with
+# it, since that is the canvas everything else attached to.
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'HudCanvas'
+node = 7200000000000000001
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_canvas]
+    reference = [ 1920.0, 1080.0 ]
+    scale_mode = 'constant_pixel'
+    sort_bias = 0
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+disabled = true
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PauseRoot'
+node = 7200000000000000002
+parent = 7
+parent_node = 7200000000000000001
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PauseBackdrop'
+node = 7200000000000000003
+parent = 8
+parent_node = 7200000000000000002
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_image]
+    color = [ 0.027, 0.031, 0.043, 0.82 ]
+    corner_radius = 0.0
+    pixel_art = false
+    texture = ''
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PauseTitle'
+node = 7200000000000000004
+parent = 8
+parent_node = 7200000000000000002
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.7, 0.3 ]
+    anchor_min = [ 0.3, 0.3 ]
+    offset_max = [ 0.0, 30.0 ]
+    offset_min = [ 0.0, -30.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.906, 0.925, 0.968, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 44.0
+    text = 'PAUSED'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PauseSubtitle'
+node = 7200000000000000005
+parent = 8
+parent_node = 7200000000000000002
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.7, 0.375 ]
+    anchor_min = [ 0.3, 0.375 ]
+    offset_max = [ 0.0, 16.0 ]
+    offset_min = [ 0.0, -16.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.478, 0.518, 0.596, 1.0 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 18.0
+    text = 'The session keeps running'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ResumeButton'
+node = 7200000000000000006
+parent = 8
+parent_node = 7200000000000000002
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.106, 0.118, 0.149, 1.0 ]
+    bg_color_focused = [ 0.545, 0.729, 0.949, 1.0 ]
+    corner_radius = 3.0
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    label = 'RESUME'
+    pixel_size = 24.0
+    text_color = [ 0.784, 0.816, 0.878, 1.0 ]
+    text_color_focused = [ 0.043, 0.047, 0.063, 1.0 ]
+    v_align = 'middle'
+
+    [entities.ui_rect]
+    anchor_max = [ 0.61, 0.48 ]
+    anchor_min = [ 0.39, 0.48 ]
+    offset_max = [ 0.0, 26.0 ]
+    offset_min = [ 0.0, -26.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = ''
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'DisconnectButton'
+node = 7200000000000000007
+parent = 8
+parent_node = 7200000000000000002
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.149, 0.086, 0.086, 1.0 ]
+    bg_color_focused = [ 1.0, 0.451, 0.396, 1.0 ]
+    corner_radius = 3.0
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    label = 'DISCONNECT'
+    pixel_size = 24.0
+    text_color = [ 0.878, 0.784, 0.784, 1.0 ]
+    text_color_focused = [ 0.043, 0.047, 0.063, 1.0 ]
+    v_align = 'middle'
+
+    [entities.ui_rect]
+    anchor_max = [ 0.61, 0.575 ]
+    anchor_min = [ 0.39, 0.575 ]
+    offset_max = [ 0.0, 26.0 ]
+    offset_min = [ 0.0, -26.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = ''
+    interactable = true

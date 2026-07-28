@@ -40,10 +40,20 @@ public sealed class WhisperSession : NetSessionDirector
         ReturnScene = "Title";
     }
 
-    /// <summary>Escape leaves the arena - unless the chat box has the keyboard, which
-    /// uses Escape to cancel an edit. A key that both cancels a message and quits the
-    /// session would make the chat unusable.</summary>
-    protected override bool WantsToLeave() => !ChatBox.LocalIsTyping && base.WantsToLeave();
+    /// <summary>
+    /// Nothing leaves the arena from here. <see cref="PauseMenu"/> owns Escape and calls
+    /// <see cref="NetSessionDirector.Leave"/> itself when the player picks Disconnect.
+    /// </summary>
+    /// <remarks>
+    /// The point is that exactly one thing reads Escape at a time. The base behaviour -
+    /// Escape leaves immediately - put a live session one keypress away from ending and
+    /// collided with the chat box, which uses Escape to cancel a message; both readers
+    /// fired on the same press. Returning false here, rather than qualifying the base
+    /// call with a "is somebody typing" test, is what makes that unambiguous: there is no
+    /// second reader left to disagree with, and the engine's UI pass has already consumed
+    /// the key on any frame a text box used it.
+    /// </remarks>
+    protected override bool WantsToLeave() => false;
 
     /// <inheritdoc/>
     /// <remarks>
