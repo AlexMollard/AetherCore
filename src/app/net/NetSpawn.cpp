@@ -90,6 +90,16 @@ namespace aether::net
 		return netId;
 	}
 
+	std::vector<std::byte> EncodeClientReady()
+	{
+		// Self-framing and empty: one kind byte is the whole message. There is no
+		// decoder to match, because there is nothing to decode - the receiver learns
+		// everything from the kind and the peer it arrived on.
+		ByteWriter w;
+		w.U8(static_cast<std::uint8_t>(NetMessage::ClientReady));
+		return w.Take();
+	}
+
 	std::vector<std::byte> EncodeDisconnect(std::string_view reason)
 	{
 		ByteWriter w;

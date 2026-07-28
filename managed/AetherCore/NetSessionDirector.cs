@@ -219,8 +219,19 @@ public abstract class NetSessionDirector : EntityScript
     public bool IsReconnecting => _reconnecting;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Attaching in the gameplay scene is what makes this peer ready to receive
+    /// replicated entities: a spawn is applied into whatever scene the peer is standing
+    /// in, so a client that joined from a menu must not be given the session's players
+    /// until it is standing here. Declaring it in the SDK rather than leaving it to each
+    /// project is deliberate - a game that forgets loses every player silently, which is
+    /// exactly the failure this exists to remove. Setting it when it is already true (the
+    /// default, and the case for a game that never waits on a menu) does nothing at all.
+    /// </remarks>
     public override void OnAttach()
     {
+        Net.ReplicationReady = true;
+
         _slotOwners = new uint[System.Math.Max(SpawnPointCount, 1)];
         for (int i = 0; i < _slotOwners.Length; i++)
         {
@@ -625,14 +636,11 @@ public abstract class NetSessionDirector : EntityScript
     /// quietly.</summary>
     /// <remarks>
     /// <para>
-    /// This runs in the GAMEPLAY scene, not the menu, and that is forced rather than
-    /// chosen: the host's join replay sends the Welcome and the Spawn for every entity
-    /// already in the session back-to-back on the same reliable channel, so they arrive in
-    /// one receive pass. A client that was still sitting on a menu "watching the
-    /// connection" would create every one of those entities into the MENU scene and then
-    /// destroy them all on the scene change, and the host - which tracks what it has
-    /// already sent - would never send them again. The client has to be standing in the
-    /// level before it is let in, so the level is where the waiting is shown.
+    /// This covers a game that enters the gameplay scene while the connection is still in
+    /// flight. Waiting on the MENU instead is equally supported - set
+    /// <see cref="Net.ReplicationReady"/> false before the join and load the level once
+    /// <see cref="Net.IsConnected"/> goes true - and in that flow this watchdog simply
+    /// never runs, because the session is already live on the first tick here.
     /// </para>
     /// <para>
     /// Two ways to lose: the transport gives up on its own, which drops the role back to

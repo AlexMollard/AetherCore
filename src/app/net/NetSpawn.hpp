@@ -48,6 +48,7 @@ namespace aether::net
 		ScriptFields = 6,
 		Relevancy = 7,
 		Disconnect = 8,
+		ClientReady = 9,
 	};
 
 	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
@@ -63,7 +64,7 @@ namespace aether::net
 	// the BUILD, which is the only version of that promise worth making - and so does
 	// REMOVING one, which is how the retired Input kind was caught. Keep this on the
 	// last enumerator.
-	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Disconnect);
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::ClientReady);
 
 	// The longest reason string a peer is allowed to put on the wire, and the longest
 	// one this peer will keep. A reason is rendered by the game, so an unbounded
@@ -125,6 +126,27 @@ namespace aether::net
 	// characters or an unbounded string through it.
 	[[nodiscard]] std::vector<std::byte> EncodeDisconnect(std::string_view reason);
 	[[nodiscard]] std::optional<std::string> DecodeDisconnect(ByteReader& r);
+
+	// "I am standing in the scene this session's entities belong to, and I am holding
+	// nothing from the one I was standing in before - send me the world."
+	//
+	// Client to host, and the framework's answer to a join that completes while the
+	// player is still on a menu. Until it arrives the host has no way to know that the
+	// peer it is replicating to is throwing every Spawn away, because a client only
+	// applies a spawn into the scene it happens to be in; the entities are built into
+	// the menu and destroyed with it on the scene change, and the host - which
+	// remembers what it has already sent per connection - never offers them again.
+	//
+	// Sent only by a client whose game DECLARED that it was not ready (see
+	// NetworkContext::SetReplicationReady). A client that never says otherwise is ready
+	// from the moment it connects, sends none of these, and is replicated to exactly as
+	// it always was - the join replay in OnConnected is untouched.
+	//
+	// Carries no payload: the fact IS the message, and "which scene" is deliberately
+	// not on the wire. The framework has no notion of scene identity and inventing one
+	// would put every project's scene naming into the protocol; the peer that knows is
+	// the one standing in it.
+	[[nodiscard]] std::vector<std::byte> EncodeClientReady();
 
 	// Printable ASCII only, collapsed to at most kMaxDisconnectReasonLength characters.
 	// Applied to whatever a peer sent before anything stores or shows it.

@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -208,15 +209,76 @@ namespace aether::net
 			return m_caches[connection];
 		}
 
+		// Everything this context holds FOR one connection, dropped together when that
+		// connection goes. Keeping the two erases in one place is what stops a
+		// disconnect leaving a resync request behind for an id the transport is free to
+		// hand to the next joiner after a Stop/StartHost cycle.
 		void DropCacheFor(ConnectionId connection)
 		{
 			m_caches.erase(connection);
+			m_resyncRequests.erase(connection);
 		}
 
 		// Net ids are never reused, so a stale entry is only wasted memory - but a
 		// long session that spawns and despawns constantly would grow every cache
 		// without bound, so a despawn drops the entity from all of them.
 		void ForgetNetId(std::uint32_t netId);
+
+		// ── Is this peer standing in the session's scene? ────────────────────────
+		// TRUE BY DEFAULT, and a game that never touches it behaves exactly as it
+		// always has: the join replay lands on connect, nothing extra crosses the wire,
+		// and no message is added to the handshake.
+		//
+		// It exists because a client applies a Spawn into whatever scene it happens to
+		// be in, and a well-built game shows "connecting..." on its MENU. The host
+		// answers a join with a Welcome and a Spawn for every relevant entity in one
+		// burst, so a client still on the menu builds every player into the menu scene
+		// and destroys them all a frame later on the scene change - permanently, because
+		// the host remembers per connection what it has already sent and never offers
+		// them again. The client ends up in the gameplay scene alone while the host
+		// believes it spawned everybody.
+		//
+		// WHO DECIDES is the game, and deliberately so. The framework has no notion of
+		// scene identity - it does not know how a project loads scenes, which is the
+		// same reason a scene-placed entity has no spawn prefab - so the peer that knows
+		// whether it is standing in the right world is the only one that can say. The
+		// alternative, putting scene names on the wire, would make every project's scene
+		// naming part of the protocol to answer a question one bool answers.
+		//
+		// Declaring FALSE (before connecting, on the menu) makes this client ignore
+		// every inbound Spawn and every inbound state packet: none of it describes
+		// anything this peer is holding. Declaring TRUE again is the arrival: whatever
+		// the session left in this world is discarded, the scene-placed ids are
+		// re-derived against the scene this peer is in NOW, and the host is asked - once,
+		// with NetMessage::ClientReady - to send the world again from scratch.
+		//
+		// NOT reset by Stop(), and that is not an oversight: it is a statement about how
+		// this game joins, not state belonging to one session, and StartClient() runs
+		// Stop() internally - so a flag cleared there would be cleared out from under the
+		// menu that set it a line earlier.
+		void SetReplicationReady(World& world, bool ready);
+
+		[[nodiscard]] bool IsReplicationReady() const
+		{
+			return m_replicationReady;
+		}
+
+		// Host side of the same handshake. A connection that has just said it is in the
+		// session's scene is holding NOTHING, whatever this host previously sent it, so
+		// the next send tick for it must be a full state send rather than a diff.
+		//
+		// Expressed as a request consumed by NetworkSendSystem rather than as a replay
+		// issued here, because the send system already knows how to admit an entity to a
+		// connection that has none of them: forget what that connection was believed to
+		// hold and its relevancy transition does the whole job - a Spawn each for the
+		// entities a client can rebuild, and one RELIABLE full snapshot behind them. A
+		// second replay path would be a second thing to keep in step with relevancy,
+		// with ClientCanRecreate, and with the reliable-resync rule.
+		void RequestResync(ConnectionId connection);
+
+		// True at most once per request. Consumed on the tick that acts on it, so a
+		// request made while the connection is between paced sends is not lost.
+		[[nodiscard]] bool ConsumeResyncRequest(ConnectionId connection);
 
 		[[nodiscard]] ServiceContainer& Services() const
 		{
@@ -386,7 +448,15 @@ namespace aether::net
 		int m_maxConnections = 0;
 		std::string m_disconnectReason;
 		float m_sendRateHz = 20.f;
+		bool m_replicationReady = true;
 		std::unordered_map<ConnectionId, SnapshotCache> m_caches;
+
+		// Connections that have asked for the world again. Bounded by the connection
+		// count (it is a set of live connection ids), emptied by Stop, and dropped per
+		// connection by DropCacheFor - there is no queue of withheld entities anywhere,
+		// on either peer, precisely so there is nothing that can grow or be applied to
+		// the wrong world later.
+		std::unordered_set<ConnectionId> m_resyncRequests;
 
 		std::chrono::steady_clock::time_point m_epoch = std::chrono::steady_clock::now();
 

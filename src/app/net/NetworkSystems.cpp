@@ -77,6 +77,20 @@ namespace aether::net
 		{
 			return context.IsHost() ? StateWriteGate::OwnedBy(peer) : StateWriteGate::TrustAll();
 		}
+
+		// Whether this peer is a client whose game has said it is NOT standing in the
+		// scene the session's entities belong to - see NetworkContext::SetReplicationReady.
+		//
+		// Everything describing the WORLD is refused while this holds, and refusing is
+		// the whole fix: a Spawn applied here builds the entity into the menu the player
+		// is looking at, and the scene change destroys it a frame later with nothing on
+		// either peer aware that it has gone. Nothing is buffered instead, deliberately -
+		// a queue would be state that can grow, go stale, or be applied to the wrong
+		// world. The client asks for all of it again when it arrives.
+		[[nodiscard]] bool HoldingReplication(const NetworkContext& context)
+		{
+			return context.IsClient() && !context.IsReplicationReady();
+		}
 	} // namespace
 
 	// ── Receive ─────────────────────────────────────────────────────────────────
@@ -302,11 +316,22 @@ namespace aether::net
 		// the host is the session's authority and there is no second candidate for
 		// where a snapshot on that link came from.
 		case NetMessage::Snapshot:
+			if (HoldingReplication(context))
+			{
+				// Nothing this peer is holding belongs to the session, so a net id in
+				// this packet either resolves to nothing or - worse - to a menu entity
+				// that happens to have been given the same derived id.
+				return;
+			}
 			ApplySnapshot(world, context.Schema(), context.Catalog(), context.Session(), payload,
 			        InboundGate(context, peer));
 			return;
 
 		case NetMessage::ScriptFields:
+			if (HoldingReplication(context))
+			{
+				return; // same reason as Snapshot above
+			}
 			if (const ScriptFieldBridge* bridge = context.FieldBridge())
 			{
 				ApplyScriptFieldPacket(world, context.Session(), *bridge, payload, InboundGate(context, peer));
@@ -317,6 +342,15 @@ namespace aether::net
 		{
 			if (context.IsHost())
 			{
+				return;
+			}
+			if (HoldingReplication(context))
+			{
+				// THE DEFECT THIS GUARD EXISTS FOR. Applied here, the entity is built
+				// into whatever scene the player is looking at - a menu, during
+				// "connecting..." - and destroyed with it. The host is asked for every
+				// one of these again the moment this peer says it has arrived.
+				AE_VERBOSE(LogCategory::App, "Net: ignoring a spawn - this peer is not in the session's scene yet");
 				return;
 			}
 			ByteReader reader{payload};
@@ -408,6 +442,27 @@ namespace aether::net
 			// connected.
 			context.Stop(world);
 			m_remote.clear();
+			return;
+		}
+
+		case NetMessage::ClientReady:
+		{
+			// Host-only: a client cannot tell another client anything, and a client
+			// that honoured this would be resyncing a host that never asked.
+			if (!context.IsHost())
+			{
+				return;
+			}
+			const std::vector<ConnectionId>& live = context.Session().Connections();
+			if (std::find(live.begin(), live.end(), peer) == live.end())
+			{
+				// Not (or no longer) part of this session - a refused joiner still
+				// holds a link long enough to be told why, and it must not be able to
+				// queue work against a connection the session does not have.
+				return;
+			}
+			context.RequestResync(peer);
+			AE_INFO(LogCategory::App, "Net: connection {} is in the session's scene - resending the world", peer);
 			return;
 		}
 
@@ -632,6 +687,20 @@ namespace aether::net
 			const std::vector<Entity> relevant = RelevantWithTransformless(world, connection, viewerPos,
 			        context.Relevancy());
 			SnapshotCache& cache = context.CacheFor(connection);
+
+			// This connection has just told us it is standing in the session's scene and
+			// holding nothing from the one it was in before (NetMessage::ClientReady).
+			// Forget BOTH halves of what it was believed to have, and the machinery below
+			// does the rest with no second replay path: every relevant entity reads as
+			// newly admitted, so the ones a client can rebuild get a Spawn and the whole
+			// state goes out behind them as one RELIABLE full snapshot instead of a diff
+			// against values that connection threw away. Consumed here rather than on
+			// arrival so a request that lands between two paced sends is still acted on.
+			if (context.ConsumeResyncRequest(connection))
+			{
+				m_relevantNetIds[connection].clear();
+				cache.Clear();
+			}
 
 			// Relevancy membership is computed over the UNFILTERED set, and must be: a
 			// connection still needs the Spawn for its own character, and would never

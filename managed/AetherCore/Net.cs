@@ -82,6 +82,47 @@ public static class Net
     public static uint LocalConnectionId => Native.aether_net_local_connection_id();
 
     /// <summary>
+    /// Whether this peer is standing in the scene the session's replicated entities
+    /// belong to. True by default, so a game that never touches it behaves exactly as it
+    /// always has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Set it FALSE before starting a join that is going to be waited out somewhere else
+    /// - a title screen showing "Connecting..." - and TRUE once the gameplay scene is
+    /// loaded. <see cref="NetSessionDirector"/> already sets it true when it attaches, so
+    /// a game built on that only has to say when it is NOT ready.
+    /// </para>
+    /// <para>
+    /// <b>Why it exists.</b> A replicated entity is created into whatever scene this peer
+    /// happens to be in. The host answers a join with a welcome and a spawn for every
+    /// entity already in the session, in one burst, so a client still sitting on its menu
+    /// builds every other player into the MENU and destroys them a frame later on the
+    /// scene change - permanently, because the host remembers per connection what it has
+    /// already sent. The client arrives in an empty level while the host believes it
+    /// spawned everybody, and nothing is logged on either side.
+    /// </para>
+    /// <para>
+    /// While it is false this peer ignores every inbound spawn and every inbound state
+    /// packet - none of it describes anything it is holding - and NOTHING IS QUEUED.
+    /// Setting it true again discards whatever the session left in the world being left
+    /// behind and asks the host for the world from scratch, so a player who gives up and
+    /// goes back to the menu leaves nothing behind to be applied later.
+    /// </para>
+    /// <para>
+    /// It is a statement about how this game joins rather than session state, so
+    /// <see cref="Disconnect"/> does not reset it - and <see cref="Connect"/> ends any
+    /// previous session internally, so a flag cleared by that would be cleared out from
+    /// under the menu that set it a line earlier.
+    /// </para>
+    /// </remarks>
+    public static bool ReplicationReady
+    {
+        get => Native.aether_net_is_replication_ready() != 0;
+        set => Native.aether_net_set_replication_ready(value ? 1 : 0);
+    }
+
+    /// <summary>
     /// Host only: the connection ids currently joined, newest last. Empty on a client
     /// and offline - a client is told nothing about its peers, and an unnetworked
     /// build has none.

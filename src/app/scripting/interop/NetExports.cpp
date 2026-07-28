@@ -95,6 +95,24 @@ AE_SCRIPT_API std::int32_t aether_net_is_client()
 	return context != nullptr && context->IsClient() ? 1 : 0;
 }
 
+AE_SCRIPT_API void aether_net_set_replication_ready(std::int32_t ready)
+{
+	// Offline, this is simply nothing: there is no session to hold anything back from,
+	// and a menu that declares itself not-ready before a connect it never makes must not
+	// be left in a state a later single-player session can see.
+	if (aether::net::NetworkContext* context = Context())
+	{
+		context->SetReplicationReady(ActiveWorld(), ready != 0);
+	}
+}
+
+AE_SCRIPT_API std::int32_t aether_net_is_replication_ready()
+{
+	const aether::net::NetworkContext* context = Context();
+	// No networking in this build: this peer is standing in the only world there is.
+	return context == nullptr || context->IsReplicationReady() ? 1 : 0;
+}
+
 AE_SCRIPT_API std::int32_t aether_net_is_connected()
 {
 	const aether::net::NetworkContext* context = Context();

@@ -52,6 +52,42 @@ namespace aether::net
 			}
 		}
 
+		// Destroys everything ApplySpawn/SpawnPrefab instantiated for the session in this
+		// world, and nothing else.
+		//
+		// Scene-placed entities stay - they came from the scene file and the next session
+		// re-derives their ids from it - but a prefab-spawned one has no source but the
+		// session that created it. Left behind, ResetForNewSession zeroes its netId,
+		// AssignScenePlacedNetIds skips it (no node id), and the next join's replay
+		// instantiates a second copy: every join/leave cycle would double the
+		// prefab-spawned population.
+		//
+		// BOTH halves of the predicate are load-bearing. `scenePlaced` is only set by
+		// AssignScenePlacedNetIds, so before the first session every scene-placed entity
+		// still reads false - and Stop() also runs at the TOP of StartHost / StartClient.
+		// Testing `scenePlaced` alone would therefore delete the entire replicated scene
+		// the moment hosting began. A live net id is what marks an entity as belonging to
+		// the session now ending.
+		//
+		// Collect first, destroy second: DestroyHierarchy mutates the registry the view
+		// is iterating.
+		void DestroySessionSpawned(World& world)
+		{
+			std::vector<Entity> spawned;
+			world.View<NetworkIdentity>().each(
+			        [&](entt::entity ent, NetworkIdentity& identity)
+			        {
+				        if (identity.netId != 0 && !identity.scenePlaced)
+				        {
+					        spawned.push_back(World::FromEntt(ent));
+				        }
+			        });
+			for (const Entity entity: spawned)
+			{
+				ecs::DestroyHierarchy(world, entity);
+			}
+		}
+
 		// Puts a handed-over body back on local simulation, at whatever type it was
 		// authored as. Both routes back - this client gaining ownership, and the
 		// session ending - go through here so the two can never disagree about what
@@ -182,40 +218,67 @@ namespace aether::net
 		// handovers when the same process goes on to host.
 		RestoreSimulationAuthority(world);
 
-		// Everything ApplySpawn/SpawnPrefab instantiated for this session goes with it.
-		// Scene-placed entities stay - they came from the scene file and the next
-		// session re-derives their ids from it - but a prefab-spawned one has no source
-		// but the session that created it. Left behind, ResetForNewSession zeroes its
-		// netId, AssignScenePlacedNetIds skips it (no node id), and the next join's
-		// replay instantiates a second copy: every join/leave cycle doubles the
-		// prefab-spawned population. `scenePlaced` exists precisely to tell them apart.
-		//
-		// BOTH halves of the predicate are load-bearing. `scenePlaced` is only set by
-		// AssignScenePlacedNetIds, so before the first session every scene-placed
-		// entity still reads false - and Stop also runs at the TOP of StartHost /
-		// StartClient. Testing `scenePlaced` alone would therefore delete the entire
-		// replicated scene the moment hosting began. A live net id is what marks an
-		// entity as belonging to the session now ending.
-		//
-		// Collect first, destroy second: DestroyHierarchy mutates the registry the view
-		// is iterating.
-		std::vector<Entity> spawned;
-		world.View<NetworkIdentity>().each(
-		        [&](entt::entity ent, NetworkIdentity& identity)
-		        {
-			        if (identity.netId != 0 && !identity.scenePlaced)
-			        {
-				        spawned.push_back(World::FromEntt(ent));
-			        }
-		        });
-		for (const Entity entity: spawned)
-		{
-			ecs::DestroyHierarchy(world, entity);
-		}
+		// Everything ApplySpawn/SpawnPrefab instantiated for this session goes with it -
+		// see the note on DestroySessionSpawned for why `scenePlaced` decides.
+		DestroySessionSpawned(world);
 
 		m_transport.Disconnect();
 		m_session.Clear();
 		m_caches.clear();
+		m_resyncRequests.clear();
+	}
+
+	void NetworkContext::SetReplicationReady(World& world, bool ready)
+	{
+		if (m_replicationReady == ready)
+		{
+			return; // no transition, so nothing to announce and nothing to rebuild
+		}
+		m_replicationReady = ready;
+		if (!ready)
+		{
+			// From here until it says otherwise this peer ignores spawns and state - see
+			// the guard in NetworkReceiveSystem::OnData. Nothing is queued: a message
+			// this client refuses is one the host will send again when asked.
+			AE_INFO(LogCategory::App, "Net: holding replication - this peer is not in the session's scene");
+			return;
+		}
+		if (!IsClient() || !IsConnected())
+		{
+			// Offline, hosting, or not welcomed yet. The flag is read on arrival
+			// instead, so a client that becomes ready before its Welcome lands is
+			// simply ready when the replay reaches it.
+			return;
+		}
+		// ARRIVAL. Whatever the session left in this world belongs to the scene this
+		// peer has left, so it goes; the scene-placed ids are re-derived against the
+		// scene it is in NOW (the derivation ran when the Welcome landed, which was in
+		// whatever scene the join was started from); and the host is told to send the
+		// world again, because it has been replicating to a peer that was discarding it.
+		DestroySessionSpawned(world);
+		ResetForNewSession(world);
+		m_session.ResetBindings();
+		AssignScenePlacedNetIds(world, m_session);
+		m_transport.Send(kInvalidConnection, kChannelReliable, true, EncodeClientReady());
+		AE_INFO(LogCategory::App, "Net: ready for replication - asked the host for the world");
+	}
+
+	void NetworkContext::RequestResync(ConnectionId connection)
+	{
+		// The ROLE gate is not repeated here: it lives with every other one, at the top of
+		// the matching case in NetworkReceiveSystem::OnData, which is this function's only
+		// caller. Two copies of "only the host answers this" is two places for it to be
+		// true, which is one more than a test can distinguish.
+		if (connection == kInvalidConnection)
+		{
+			return; // never a client's id - it is how the transport spells "the host"
+		}
+		m_resyncRequests.insert(connection);
+	}
+
+	bool NetworkContext::ConsumeResyncRequest(ConnectionId connection)
+	{
+		return m_resyncRequests.erase(connection) != 0;
 	}
 
 	void NetworkContext::RefuseConnection(ConnectionId peer, std::string_view reason)

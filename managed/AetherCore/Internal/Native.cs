@@ -860,6 +860,18 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial int aether_net_is_connected();
 
+    // "This peer is (not) standing in the scene the session's entities belong to."
+    // Setting it true is an arrival: it discards whatever the session left in the world
+    // this peer has left, re-derives the scene-placed net ids against the scene it is in
+    // now, and asks the host to send the world again. Not SuppressGCTransition - the
+    // setter touches the world and the transport.
+    [LibraryImport(Lib)]
+    internal static partial void aether_net_set_replication_ready(int ready);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_is_replication_ready();
+
     [LibraryImport(Lib)]
     [SuppressGCTransition]
     internal static partial uint aether_net_local_connection_id();

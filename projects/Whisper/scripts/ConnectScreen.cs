@@ -18,17 +18,14 @@ namespace AetherGame;
 /// inside the SDK is what stops the arena and this screen drifting apart.
 /// </para>
 /// <para>
-/// <b>Why this screen does not sit and watch the connection.</b> It would be the obvious
-/// place for a "Connecting..." spinner, and it is the wrong one. The host answers a join by
-/// sending the welcome and a Spawn for every entity already in the session back-to-back on
-/// one reliable channel, so they all land in a single receive pass. A client still standing
-/// on this screen would build every one of those players into the TITLE scene and destroy
-/// them again on the scene change - and the host, which tracks what it has already sent,
-/// never sends them a second time. So the arena is entered as soon as the attempt STARTS,
-/// and <see cref="NetSessionDirector"/> shows the progress, the outcome and the reason from
-/// inside the level. This screen owns the half of the story that happens before any of that
-/// - a name, an address, and a socket that would not open - and shows whatever the session
-/// sent back on the way out.
+/// <b>This screen waits out the connection itself</b>, which is where a player expects to
+/// see it. A join is started with <see cref="Net.ReplicationReady"/> set false - this peer
+/// is standing on a menu, not in the arena, and a replicated entity is created into
+/// whichever scene it happens to be in - so the host's join burst is refused rather than
+/// built into the title screen and destroyed a frame later. The arena is entered only once
+/// the session is genuinely live, and <see cref="NetSessionDirector"/> declares this peer
+/// ready as it attaches there, which is what makes the host resend the world. Hosting has
+/// no wait at all: a listening socket is live the moment it opens.
 /// </para>
 /// <para>
 /// <b>Layout</b> (the numbers live in <c>Title.scene.toml</c>, the reasoning has to live
@@ -74,6 +71,11 @@ public sealed class ConnectScreen : EntityScript
     /// <summary>Port used when hosting, and when the address field omits one.</summary>
     public ushort DefaultPort = 7777;
 
+    /// <summary>How long a join is given to be answered before this screen gives up on it.
+    /// A mistyped address is answered by nobody at all, so something has to be counting or
+    /// the player waits on a spinner for as long as they are willing to.</summary>
+    public float JoinTimeoutSeconds = 8.0f;
+
     // The recent-server rows, found by name rather than wired one by one: they are an
     // indexed set of identical elements, and four more entity properties on the scene entity
     // would say nothing the names do not.
@@ -83,6 +85,12 @@ public sealed class ConnectScreen : EntityScript
     private bool _nameWasEditing;
     private bool _focusSeeded;
     private bool _leaving;
+
+    // The join in flight, and how long it has been in flight for. `_joinTarget` doubles as
+    // "a join is being waited on", so there is one thing to test rather than two that can
+    // disagree.
+    private string _joinTarget = string.Empty;
+    private float _joinElapsed;
 
     /// <inheritdoc/>
     public override void OnAttach()
@@ -121,6 +129,12 @@ public sealed class ConnectScreen : EntityScript
         if (_leaving)
         {
             return; // the scene change is already requested; ignore anything else pressed
+        }
+
+        if (_joinTarget.Length > 0)
+        {
+            TickJoin(deltaTime);
+            return; // one attempt at a time: the screen is a progress report until it ends
         }
 
         SeedFocus();
@@ -181,26 +195,98 @@ public sealed class ConnectScreen : EntityScript
         Enter($"Hosting on port {DefaultPort}...");
     }
 
-    /// <summary>Begin connecting, and go straight to the arena to be let in there.</summary>
+    /// <summary>Begin connecting, and wait for the answer here.</summary>
+    /// <remarks>
+    /// <see cref="Net.ReplicationReady"/> goes false FIRST, before the connect and before
+    /// anything can arrive: this peer is standing on a menu, and a replicated entity is
+    /// built into whichever scene the peer is in when its spawn lands. Told to hold, the
+    /// client refuses the host's join burst instead of building the whole session's cast
+    /// into the title screen and destroying it on the scene change.
+    /// </remarks>
     private void StartJoin(string typed)
     {
         CommitName();
         (string ip, ushort port) = NetSession.ParseAddress(typed, DefaultPort);
         string target = $"{ip}:{port}";
+        Net.ReplicationReady = false;
         if (!NetSession.BeginJoin(ip, port))
         {
             // The socket would not open, or the address would not resolve. Nothing was
             // started, so there is nothing to tear down - just say so and stay put.
+            Net.ReplicationReady = true;
             Fail($"Could not reach {target} - {Describe(Net.LastError)}");
             return;
         }
 
-        // Recorded on the ATTEMPT, not on success, because this screen is gone before the
-        // connection is answered. The list is a short MRU, so a mistyped address is pushed
-        // off the end by the next few real ones rather than needing to be managed.
+        // Recorded on the ATTEMPT, not on success, so an address that turns out to be
+        // wrong is still in the list to be corrected. The list is a short MRU, so a
+        // mistyped one is pushed off the end by the next few real ones.
         WhisperPrefs.Remember(target);
         WhisperPrefs.Save();
-        Enter($"Connecting to {target}...");
+        _joinTarget = target;
+        _joinElapsed = 0.0f;
+        Ui.ClearFocus(); // the screen is a progress report now; nothing here is pressable
+        SetStatus($"Connecting to {target}...", Accent);
+    }
+
+    /// <summary>Watch the attempt started by <see cref="StartJoin"/>, and enter the arena
+    /// only once the session is genuinely live.</summary>
+    /// <remarks>
+    /// Three ways it can end. It is ANSWERED - <see cref="Net.IsConnected"/> goes true once
+    /// the host has assigned this peer a connection id - and the arena is entered, where
+    /// <see cref="NetSessionDirector"/> declares this peer ready and the host resends the
+    /// world into the scene it is now actually standing in. It is REFUSED, which arrives
+    /// with a reason to show (a full server, or a host shutting down). Or nobody answers at
+    /// all: the transport gives up on its own after a few seconds, which drops the role
+    /// back to offline, and <see cref="JoinTimeoutSeconds"/> catches the rest.
+    /// </remarks>
+    private void TickJoin(float deltaTime)
+    {
+        _joinElapsed += deltaTime;
+
+        string reason = Net.DisconnectReason;
+        if (reason.Length > 0)
+        {
+            AbandonJoin($"{_joinTarget} refused the connection - {reason}");
+            return;
+        }
+
+        if (Net.IsConnected)
+        {
+            Enter($"Connected to {_joinTarget}.");
+            return;
+        }
+
+        if (!Net.IsClient)
+        {
+            AbandonJoin($"Could not reach {_joinTarget} - nothing is listening there");
+            return;
+        }
+
+        if (_joinElapsed >= JoinTimeoutSeconds)
+        {
+            AbandonJoin($"No answer from {_joinTarget} after {JoinTimeoutSeconds:0} seconds");
+            return;
+        }
+
+        SetStatus($"Connecting to {_joinTarget}... {_joinElapsed:0.0}s", Accent);
+    }
+
+    /// <summary>Give up on the attempt in flight and hand the screen back to the player.</summary>
+    /// <remarks>
+    /// <see cref="Net.Disconnect"/> even when the link is already gone: it is what clears a
+    /// half-open attempt out of the way of the next one, and it is safe with no session.
+    /// Readiness goes back to its default with it - the hold belonged to this attempt.
+    /// </remarks>
+    private void AbandonJoin(string message)
+    {
+        Net.Disconnect();
+        Net.ReplicationReady = true;
+        NetSession.JoinRequested = false;
+        _joinTarget = string.Empty;
+        _joinElapsed = 0.0f;
+        _focusSeeded = false; // the screen is interactive again, so give it the keyboard back
+        Fail(message);
     }
 
     /// <summary>Leave for the arena, saying what was started on the way out.</summary>

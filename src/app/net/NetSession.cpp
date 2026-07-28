@@ -31,6 +31,13 @@ namespace aether::net
 		return it == m_netIdByEntity.end() ? 0u : it->second;
 	}
 
+	void NetSession::ResetBindings()
+	{
+		m_nextNetId = 1;
+		m_byNetId.clear();
+		m_netIdByEntity.clear();
+	}
+
 	void NetSession::AddConnection(ConnectionId id)
 	{
 		if (std::find(m_connections.begin(), m_connections.end(), id) == m_connections.end())

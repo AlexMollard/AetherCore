@@ -50,6 +50,17 @@ namespace aether::net
 		void Bind(std::uint32_t netId, Entity entity);
 		void Unbind(std::uint32_t netId);
 
+		// Forget every binding and start allocating ids from 1 again, WITHOUT ending the
+		// session: the role, the local connection id and the connection list all survive.
+		//
+		// Exists for one caller - a client that has changed scene since it was welcomed
+		// (see NetworkContext::SetReplicationReady). The scene-placed derivation is
+		// deterministic only because both ends walk the scene's node ids from the same
+		// starting counter, so re-deriving in a new scene against a counter the previous
+		// scene already advanced would number the same entity differently on the two
+		// peers - silently, and with no packet involved to disagree about.
+		void ResetBindings();
+
 		[[nodiscard]] Entity EntityFor(std::uint32_t netId) const;
 		[[nodiscard]] std::uint32_t NetIdFor(Entity entity) const;
 
