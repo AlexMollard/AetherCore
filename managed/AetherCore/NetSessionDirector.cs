@@ -121,7 +121,7 @@ public abstract class NetSessionDirector : EntityScript
     /// answered a moment ago; a first connection is the only attempt there will be, against
     /// an address the player typed and may well have got wrong. Without this the level sits
     /// there indefinitely - the transport eventually drops the peer, but nothing was
-    /// watching for that either, so a mistyped port produced an empty arena and no
+    /// watching for that either, so a mistyped port produced an empty level and no
     /// explanation.
     /// </remarks>
     public float ConnectTimeoutSeconds = 8.0f;
