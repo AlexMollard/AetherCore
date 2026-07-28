@@ -92,6 +92,33 @@ public abstract class NetSessionDirector : EntityScript
     /// away without a word and reconnecting has run out of attempts.</summary>
     public const string HostDisconnectedMessage = "Host disconnected";
 
+    /// <summary>Sent back to the menu when the transport gave up on the FIRST connection
+    /// before it was ever established.</summary>
+    public const string UnreachableMessage = "Could not reach the host - nothing is listening there";
+
+    /// <summary>Sent back to the menu when the first connection was neither accepted nor
+    /// refused within <see cref="ConnectTimeoutSeconds"/>.</summary>
+    public const string ConnectTimedOutMessage = "Timed out waiting for the host";
+
+    /// <summary>
+    /// How long a FIRST connection is given before this gives up on it and goes back to the
+    /// menu.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ReconnectTimeoutSeconds"/>, and longer, because the two are
+    /// different questions. A reconnect is one of several bounded attempts at a host that
+    /// answered a moment ago; a first connection is the only attempt there will be, against
+    /// an address the player typed and may well have got wrong. Without this the level sits
+    /// there indefinitely - the transport eventually drops the peer, but nothing was
+    /// watching for that either, so a mistyped port produced an empty arena and no
+    /// explanation.
+    /// </remarks>
+    public float ConnectTimeoutSeconds = 8.0f;
+
+    /// <summary>How long "Connected." and "Reconnected." stay on screen. Long enough to
+    /// read, short enough not to become part of the HUD.</summary>
+    public float NoticeSeconds = 1.5f;
+
     /// <summary>Prefab spawned for each player. A bare stem, not a path - that is what
     /// <see cref="Net.Spawn"/> takes, and the name travels on the wire.</summary>
     public string PlayerPrefab = "player";
@@ -152,6 +179,11 @@ public abstract class NetSessionDirector : EntityScript
 
     private bool _localPlayerSpawned;
     private bool _wasInSession;
+
+    // First-connection watchdog: how long this client has been waiting to be let in, and
+    // how much longer a one-off notice ("Connected.") stays up.
+    private float _connectElapsed;
+    private float _noticeLeft;
 
     // Reconnect state. `_reconnecting` is the mode; the rest is one attempt's worth of
     // bookkeeping.
@@ -536,14 +568,24 @@ public abstract class NetSessionDirector : EntityScript
     {
         if (Net.IsClient && Net.IsConnected)
         {
-            _wasInSession = true;
             if (_reconnecting)
             {
                 Log.Info("Net session: reconnected");
                 _reconnecting = false;
                 _attemptLive = false;
-                HideStatus();
+                ShowNotice("Reconnected.");
             }
+            else if (!_wasInSession)
+            {
+                // Say so once. A level that simply appears is indistinguishable from one
+                // that came up offline, and this is a client, so it starts empty until the
+                // host's players replicate in - which is exactly the moment a player is
+                // most likely to conclude that nothing worked.
+                Log.Info("Net session: connected");
+                ShowNotice("Connected.");
+            }
+            _wasInSession = true;
+            TickNotice(deltaTime);
             return;
         }
 
@@ -566,14 +608,62 @@ public abstract class NetSessionDirector : EntityScript
 
         if (!_wasInSession)
         {
-            // Still connecting for the first time. Nothing has ended, so there is nothing
-            // to react to yet.
+            // Still connecting for the FIRST time. Nothing has ended, but something has to
+            // be watching, or a connection that is never answered waits here forever.
+            TickInitialConnect(deltaTime);
             return;
         }
 
         // Ended with nothing to say: an accident, so try to come back.
         _wasInSession = false;
         BeginReconnect();
+    }
+
+    // ── First connection ────────────────────────────────────────────────────────
+
+    /// <summary>Wait for the host to let this client in, and give up out loud rather than
+    /// quietly.</summary>
+    /// <remarks>
+    /// <para>
+    /// This runs in the GAMEPLAY scene, not the menu, and that is forced rather than
+    /// chosen: the host's join replay sends the Welcome and the Spawn for every entity
+    /// already in the session back-to-back on the same reliable channel, so they arrive in
+    /// one receive pass. A client that was still sitting on a menu "watching the
+    /// connection" would create every one of those entities into the MENU scene and then
+    /// destroy them all on the scene change, and the host - which tracks what it has
+    /// already sent - would never send them again. The client has to be standing in the
+    /// level before it is let in, so the level is where the waiting is shown.
+    /// </para>
+    /// <para>
+    /// Two ways to lose: the transport gives up on its own, which drops the role back to
+    /// offline and is the only signal an unreachable address produces (there is nobody out
+    /// there to send a reason); or nothing happens at all for
+    /// <see cref="ConnectTimeoutSeconds"/>. A REFUSAL is not handled here - it arrives with
+    /// a reason and is caught by the caller before this runs.
+    /// </para>
+    /// </remarks>
+    private void TickInitialConnect(float deltaTime)
+    {
+        _connectElapsed += deltaTime;
+
+        if (!Net.IsClient)
+        {
+            Log.Warn("Net session: the connection was never established");
+            Leave(UnreachableMessage);
+            return;
+        }
+
+        if (_connectElapsed >= ConnectTimeoutSeconds)
+        {
+            Log.Warn($"Net session: no answer after {ConnectTimeoutSeconds:0} seconds, returning to the menu");
+            Leave(ConnectTimedOutMessage);
+            return;
+        }
+
+        string where = NetSession.HostAddress.Length > 0
+            ? $"{NetSession.HostAddress}:{NetSession.HostPort}"
+            : "the host";
+        ShowStatus($"Connecting to {where}... {_connectElapsed:0.0}s");
     }
 
     // ── Reconnecting ────────────────────────────────────────────────────────────
@@ -682,10 +772,32 @@ public abstract class NetSessionDirector : EntityScript
 
     private void HideStatus()
     {
+        _noticeLeft = 0.0f;
         if (_status.IsValid)
         {
             _status.Destroy();
             _status = default;
+        }
+    }
+
+    /// <summary>Put a line up that takes itself down again. For things that are worth
+    /// saying once - "Connected." - rather than a condition that persists.</summary>
+    private void ShowNotice(string text)
+    {
+        ShowStatus(text);
+        _noticeLeft = NoticeSeconds;
+    }
+
+    private void TickNotice(float deltaTime)
+    {
+        if (_noticeLeft <= 0.0f)
+        {
+            return;
+        }
+        _noticeLeft -= deltaTime;
+        if (_noticeLeft <= 0.0f)
+        {
+            HideStatus();
         }
     }
 
