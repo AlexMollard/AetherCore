@@ -11,10 +11,14 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <vector>
 
+#include "io/FileSystem.hpp"
+#include "io/FileUtil.hpp"
 #include "net/NetComponents.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
@@ -416,6 +420,112 @@ TEST_CASE("SpawnPrefab refuses to spawn from a client")
 	const Entity spawned = context.SpawnPrefab(world, "anything", glm::vec3(0.f), 1);
 	CHECK_FALSE(spawned.IsValid());
 	CHECK(CountIdentities(world) == 0);
+
+	context.Stop(world);
+}
+
+TEST_CASE("SpawnPrefab builds the prefab locally with no session, and still refuses a client")
+{
+	// Offline parity, which the whole Net API is written to: a game that spawns
+	// through the framework must behave the same in single-player, where Despawn
+	// already destroyed locally while Spawn silently did nothing.
+	//
+	// A REAL prefab is mounted rather than a made-up name, because "returned an
+	// invalid entity" is what a missing prefab looks like too - without the file
+	// this case would pass against a SpawnPrefab that still refused offline.
+	namespace fs = std::filesystem;
+	if (aether::io::FileSystem::IsInitialized())
+	{
+		aether::io::FileSystem::Shutdown();
+	}
+	const fs::path root = fs::temp_directory_path() / "aethercore_net_offline_spawn_test";
+	std::error_code ec;
+	fs::remove_all(root, ec);
+
+	aether::app::scene::SceneDescription prefab;
+	aether::app::scene::EntityRecord record;
+	record.name = "Offline Spawned";
+	prefab.entities.push_back(record);
+	REQUIRE(aether::io::file_util::WriteText(root / "assets" / "prefabs" / "net_offline_probe.prefab.toml",
+	        aether::app::scene::WriteToml(prefab))
+	                .has_value());
+
+	aether::io::FileSystem::Initialize();
+	aether::io::FileSystem::Mount("project", root);
+
+	{
+		ServiceContainer services;
+		World world;
+		aether::net::NetworkContext context(services);
+		// No StartHost and no StartClient: role Offline, the single-player state.
+		const Entity spawned = context.SpawnPrefab(world, "net_offline_probe", glm::vec3(3.f, 4.f, 0.f), 0);
+		CHECK(spawned.IsValid());
+		CHECK(world.GetRegistry().valid(World::ToEntt(spawned)));
+		// Nothing was allocated and nothing was bound - there is no session to bind in.
+		CHECK(context.Session().NetIdFor(spawned) == 0);
+	}
+
+	{
+		ServiceContainer services;
+		World world;
+		aether::net::NetworkContext context(services);
+		REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+		// The same prefab, now readable, and a client must STILL be refused: only the
+		// host may allocate a net id, so a client-built copy would exist nowhere else.
+		const Entity spawned = context.SpawnPrefab(world, "net_offline_probe", glm::vec3(0.f), 1);
+		CHECK_FALSE(spawned.IsValid());
+		context.Stop(world);
+	}
+
+	aether::io::FileSystem::Shutdown();
+	fs::remove_all(root, ec);
+}
+
+TEST_CASE("ReleaseForDespawn announces and unbinds without destroying the entity")
+{
+	// The half Net.Despawn from a script needs immediately. The destruction is the
+	// half that has to wait for the end of the script update, because a script runs
+	// inside the runner's walk of ScriptComponent storage.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	MakeScenePlaced(world, 1);
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+	const Entity spawned = MakeSessionSpawned(world, context, 7);
+	const std::uint32_t netId = world.TryGet<aether::net::NetworkIdentity>(spawned)->netId;
+	REQUIRE(netId != 0);
+
+	CHECK(context.ReleaseForDespawn(world, spawned));
+
+	// Unbound at once: the id must stop resolving to an entity that is about to die.
+	CHECK_FALSE(context.Session().EntityFor(netId).IsValid());
+	CHECK(context.Session().NetIdFor(spawned) == 0);
+	// ...and still alive, which is the whole difference from Despawn.
+	CHECK(world.GetRegistry().valid(World::ToEntt(spawned)));
+
+	context.Stop(world);
+}
+
+TEST_CASE("ReleaseForDespawn refuses a client an entity it does not own, and leaves it bound")
+{
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(2);
+
+	const Entity hostOwned = world.Create();
+	world.Emplace<TransformComponent>(hostOwned);
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(hostOwned);
+	identity.netId = 12;
+	identity.owner = aether::net::kInvalidConnection;
+	context.Session().Bind(12, hostOwned);
+
+	CHECK_FALSE(context.ReleaseForDespawn(world, hostOwned));
+	CHECK(context.Session().EntityFor(12) == hostOwned);
+	CHECK(world.GetRegistry().valid(World::ToEntt(hostOwned)));
 
 	context.Stop(world);
 }

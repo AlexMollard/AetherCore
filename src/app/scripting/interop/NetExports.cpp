@@ -55,6 +55,33 @@ namespace
 		std::memcpy(buffer, value.data(), n);
 		return static_cast<std::int32_t>(n);
 	}
+
+	// Queue `entity` and everything under it for destruction at the end of the script
+	// update, children first, exactly the order ecs::DestroyHierarchy uses.
+	//
+	// WHY DEFERRED. Net.Despawn is called from a script, and a script runs inside the
+	// script runner's own walk of ScriptComponent storage - destroying an entity there
+	// frees the component the loop is holding a pointer into. That is precisely why
+	// Entity.Destroy defers (see aether_entity_destroy), and a second destruction path
+	// that does not defer would make the same hazard reachable through the only call a
+	// project has for removing a REPLICATED entity. The wire half is not deferred with
+	// it: see NetworkContext::ReleaseForDespawn.
+	void QueueHierarchyDestroy(aether::World& world, aether::Entity entity, std::vector<aether::Entity>& out)
+	{
+		if (const auto* hierarchy = world.TryGet<aether::HierarchyComponent>(entity))
+		{
+			// Copied: the recursion mutates the parent link of each child below.
+			const std::vector<aether::Entity> children = hierarchy->children;
+			for (const aether::Entity child: children)
+			{
+				QueueHierarchyDestroy(world, child, out);
+			}
+		}
+		// Now rather than at flush time, so the surviving parent's child list stops
+		// naming a doomed entity for the rest of this frame.
+		aether::ecs::DetachFromParent(world, entity);
+		out.push_back(entity);
+	}
 } // namespace
 
 AE_SCRIPT_API std::int32_t aether_net_host(std::uint16_t port, std::int32_t maxConnections)
@@ -165,20 +192,19 @@ AE_SCRIPT_API void aether_net_despawn(std::uint32_t entityId)
 {
 	aether::net::NetworkContext* context = Context();
 	const aether::Entity entity{entityId};
-	if (!entity.IsValid())
+	auto& world = ActiveWorld();
+	if (!entity.IsValid() || !world.GetRegistry().valid(aether::World::ToEntt(entity)))
 	{
 		return;
 	}
-	if (context == nullptr)
+	// No networking in this build: Net.Despawn still has to mean "this entity goes
+	// away", or a script written for both modes leaks entities in single-player. The
+	// whole subtree goes, not just the root - see QueueHierarchyDestroy.
+	if (context != nullptr && !context->ReleaseForDespawn(world, entity))
 	{
-		// Offline, Net.Despawn still has to mean "this entity goes away", or a script
-		// written for both modes leaks entities in single-player. A bare Destroy
-		// would only remove the root and strand every child - see the identical
-		// note on ecs::DestroyHierarchy in ControlMethods.cpp.
-		aether::ecs::DestroyHierarchy(ActiveWorld(), entity);
-		return;
+		return; // refused (a client naming an entity it does not own)
 	}
-	context->Despawn(ActiveWorld(), entity);
+	QueueHierarchyDestroy(world, entity, aether::app::scripting::ActiveContext().pendingDestroys);
 }
 
 AE_SCRIPT_API std::int32_t aether_net_has_authority(std::uint32_t entityId)

@@ -344,15 +344,36 @@ namespace aether::net
 		[[nodiscard]] static std::vector<std::byte> EncodeWelcome(ConnectionId assigned);
 
 		// ── Replicated entity lifecycle ──────────────────────────────────────
-		// Host-only. Instantiates `prefab`, gives it a net id owned by `owner`, and
-		// tells every connection to do the same. Returns an invalid entity when not
-		// hosting or when the prefab cannot be read.
+		// Instantiates `prefab`, gives it a net id owned by `owner`, and tells every
+		// connection to do the same. Returns an invalid entity when the prefab cannot
+		// be read, and on a CLIENT, which may not allocate a net id.
+		//
+		// OFFLINE IT INSTANTIATES LOCALLY, which is the same offline parity Despawn
+		// below has always had, and the rule the whole Net API is written to: a game
+		// written for multiplayer must run unchanged with no session. Without it the
+		// spawn half of a spawn/despawn pair silently did nothing in single-player
+		// while the despawn half kept working, so a project that spawns anything
+		// through the framework had a single-player mode with the spawns missing.
 		Entity SpawnPrefab(World& world, const std::string& prefab, glm::vec3 position, ConnectionId owner);
 
 		// Broadcasts the despawn (host only) and destroys the entity locally. A client
 		// is refused outright for an entity it does not own: destroying it locally
 		// while the host keeps replicating it desyncs this client permanently.
 		void Despawn(World& world, Entity entity);
+
+		// The half of Despawn that is NOT the destruction: run the refusal, broadcast
+		// the despawn if this peer is the host, and unbind the net id. Returns whether
+		// the caller should now destroy `entity`; false means the call was refused and
+		// nothing happened.
+		//
+		// Split out for one caller: Net.Despawn from a script. A script runs inside the
+		// script runner's own iteration over ScriptComponent storage, so destroying an
+		// entity there frees the storage that loop is walking - which is exactly why
+		// Entity.Destroy is deferred to the end of the script update. The wire half
+		// must NOT be deferred with it (the other peers should hear about this now, and
+		// the net id must stop resolving to an entity that is about to die), so the two
+		// halves are separable here rather than at the call site.
+		[[nodiscard]] bool ReleaseForDespawn(World& world, Entity entity);
 
 		// Clears every NetworkIdentity's net id. A session assigns scene-placed ids by
 		// walking identities whose id is still 0, so ids left over from a previous

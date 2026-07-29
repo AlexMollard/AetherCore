@@ -319,7 +319,11 @@ namespace aether::net
 
 	Entity NetworkContext::SpawnPrefab(World& world, const std::string& prefab, glm::vec3 position, ConnectionId owner)
 	{
-		if (!IsHost() || prefab.empty())
+		// A client may not allocate a net id, so it may not spawn. Offline there is no
+		// id to allocate and nobody to tell, and the entity is simply built here - see
+		// the offline-parity note on the declaration.
+		const bool offline = m_session.Role() == NetRole::Offline;
+		if ((!IsHost() && !offline) || prefab.empty())
 		{
 			return {};
 		}
@@ -338,6 +342,16 @@ namespace aether::net
 			return {};
 		}
 
+		if (offline)
+		{
+			// No identity is stamped and nothing is bound. The prefab's own
+			// NetworkIdentity (if it authored one) stays at net id 0, which is what
+			// every offline entity looks like, and OwnsIdentity reports this process
+			// as the owner of everything while the role is Offline - so HasAuthority
+			// and IsOwner both answer true for it, exactly as the API promises.
+			return root;
+		}
+
 		NetworkIdentity identity{};
 		identity.netId = m_session.AllocateNetId();
 		identity.owner = owner;
@@ -351,11 +365,11 @@ namespace aether::net
 		return root;
 	}
 
-	void NetworkContext::Despawn(World& world, Entity entity)
+	bool NetworkContext::ReleaseForDespawn(World& world, Entity entity)
 	{
 		if (!entity.IsValid())
 		{
-			return;
+			return false;
 		}
 		// A client destroying something it does not own desyncs only itself: the
 		// broadcast below is host-only, so the host keeps replicating a net id that now
@@ -364,7 +378,7 @@ namespace aether::net
 		// purely local entities are still destroyable through Net.Despawn.
 		if (IsClient() && !IsOwner(world, entity))
 		{
-			return;
+			return false;
 		}
 		const std::uint32_t netId = m_session.NetIdFor(entity);
 		if (IsHost() && netId != 0)
@@ -376,6 +390,15 @@ namespace aether::net
 		{
 			m_session.Unbind(netId);
 			ForgetNetId(netId);
+		}
+		return true;
+	}
+
+	void NetworkContext::Despawn(World& world, Entity entity)
+	{
+		if (!ReleaseForDespawn(world, entity))
+		{
+			return;
 		}
 		// A prefab instantiates as a hierarchy; destroying only the root would strand
 		// every child in the world with no owner and no way to reach them.
