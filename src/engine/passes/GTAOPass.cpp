@@ -35,44 +35,19 @@ namespace aether
 		m_bindlessManager = desc.bindlessManager;
 		m_renderGraph = desc.renderGraph;
 
-		const gpu::TextureDesc rawDesc{
-		        .format = gpu::Format::R8Unorm,
-		        .extent = m_aoExtent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
-		        .aspect = gpu::ImageAspect::Color,
-		        .debugName = "GTAO.Raw",
-		};
-		m_rawAoHandle = gpu::ResourceRegistry::CreateTexture(rawDesc);
-		if (!m_rawAoHandle.IsValid())
-		{
-			Throw(AetherError::Engine("GTAOPass: Raw AO CreateTexture failed"));
-		}
+		// Both targets are pure single-frame scratch - raw AO is written at $GTAO_Main and
+		// read once at $GTAO_Denoise - so the graph owns them and may hand their memory to
+		// whatever else is live outside that window.
+		m_rawAoImage = desc.renderGraph->CreateTransientColor(gpu::Format::R8Unorm, m_aoExtent, gpu::ImageUsage::Sampled);
+		m_denoisedAoImage = desc.renderGraph->CreateTransientColor(gpu::Format::R8Unorm, m_aoExtent, gpu::ImageUsage::Sampled);
 
-		const gpu::TextureDesc denoisedDesc{
-		        .format = gpu::Format::R8Unorm,
-		        .extent = m_aoExtent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
-		        .aspect = gpu::ImageAspect::Color,
-		        .debugName = "GTAO.Denoised",
-		};
-		m_denoisedAoHandle = gpu::ResourceRegistry::CreateTexture(denoisedDesc);
-		if (!m_denoisedAoHandle.IsValid())
-		{
-			Throw(AetherError::Engine("GTAOPass: Denoised AO CreateTexture failed"));
-		}
-
-		m_rawAoImage = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_rawAoHandle), gpu::ResourceRegistry::ResolveTexture(m_rawAoHandle).view);
-		m_denoisedAoImage = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_denoisedAoHandle), gpu::ResourceRegistry::ResolveTexture(m_denoisedAoHandle).view);
-
-		gpu::ResourceRegistry::EnsureBindlessSampled(m_rawAoHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
-		m_rawAoBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_rawAoHandle);
+		m_rawAoBindlessSlot = desc.renderGraph->EnsureBindlessSampled(m_rawAoImage);
 		if (m_rawAoBindlessSlot == kInvalidBindlessSlot)
 		{
 			Throw(AetherError::Engine("GTAOPass: raw AO bindless registration failed"));
 		}
 
-		gpu::ResourceRegistry::EnsureBindlessSampled(m_denoisedAoHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
-		m_denoisedAoBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_denoisedAoHandle);
+		m_denoisedAoBindlessSlot = desc.renderGraph->EnsureBindlessSampled(m_denoisedAoImage);
 		if (m_denoisedAoBindlessSlot == kInvalidBindlessSlot)
 		{
 			Throw(AetherError::Engine("GTAOPass: denoised AO bindless registration failed"));
@@ -105,16 +80,9 @@ namespace aether
 		m_denoisePipeline.Destroy();
 		m_mainPipeline.Destroy();
 
-		if (m_rawAoHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_rawAoHandle);
-			m_rawAoHandle = {};
-		}
-		if (m_denoisedAoHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_denoisedAoHandle);
-			m_denoisedAoHandle = {};
-		}
+		// The transient slots are not released here. RenderGraph::Clear() releases every slot
+		// and always runs before this does, so releasing again would hand back an index the
+		// graph has since given to somebody else. Dropping the handles is the whole job.
 		m_rawAoBindlessSlot = kInvalidBindlessSlot;
 		m_denoisedAoBindlessSlot = kInvalidBindlessSlot;
 		m_rawAoImage = RGImage{};

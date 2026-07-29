@@ -61,8 +61,7 @@ namespace aether
 		GraphicsPipeline m_mainPipeline;
 		GraphicsPipeline m_denoisePipeline;
 
-		gpu::TextureHandle m_rawAoHandle;
-		gpu::TextureHandle m_denoisedAoHandle;
+		// Graph-owned: the pass declares them, the graph decides where they live.
 		RGImage m_rawAoImage{};
 		RGImage m_denoisedAoImage{};
 		std::uint32_t m_rawAoBindlessSlot = 0xFFFFFFFFu;
