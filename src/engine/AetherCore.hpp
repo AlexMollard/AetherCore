@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 
+#include "Defines.hpp" // AE_VALIDATION_DEFAULT_ON (force-included, named here for clarity)
 #include "EngineClient.hpp"
 #include "ui/CursorService.hpp"
 #include "IEngineRuntime.hpp"
@@ -43,8 +44,10 @@ namespace aether
 			// GameRuntime must leave this false: Aftermath is a dev tool (dumps
 			bool enableGpuDiagnostics = false;
 			// Enable the Vulkan validation layer (dev builds only; compiled out of
-			// release). Disable it (--no-validation) for a stable high frame rate.
-			bool enableValidation = true;
+			// release). Defaults to on for Debug and off for RelWithDebInfo - see
+			// AE_VALIDATION_DEFAULT_ON in Defines.hpp for why. Either way --validation
+			// and --no-validation override it for a single run.
+			bool enableValidation = AE_VALIDATION_DEFAULT_ON != 0;
 
 			RuntimeProfile profile = RuntimeProfile::Full;
 		};

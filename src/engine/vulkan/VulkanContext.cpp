@@ -249,14 +249,37 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to initialize volk Vulkan loader."));
 		}
 
+		// Whether the layer is going to be loaded on THIS run. Compiled out entirely for a
+		// shipped build; otherwise it is whatever the config resolved to.
+		//
+		// Everything downstream must key off this rather than off VK_VALIDATION_CPU. The
+		// two used to be treated as the same thing, which was harmless while validation was
+		// on for every dev build and became wrong the moment --no-validation existed: see
+		// the Aftermath gate below, which used to refuse to start because the layer was
+		// *compiled in* even on runs where it was switched off.
+#if VK_VALIDATION_CPU
+		const bool validationActive = enableValidation;
+#else
+		constexpr bool validationActive = false;
+#endif
+
 		vkb::InstanceBuilder instanceBuilder;
 		instanceBuilder.set_app_name(appName);
 		instanceBuilder.require_api_version(1, 4, 0);
 #if VK_VALIDATION_CPU
-		// The validation layer is compiled in for dev builds, but it accumulates state
-		// (~2-3 KB/frame) and progressively slows the render thread over long sessions,
-		// so allow disabling it at startup (--no-validation) for a stable high frame rate.
-		if (enableValidation)
+		// "Is validation on?" is build-config dependent now - on for Debug, off for
+		// RelWithDebInfo - so the answer and its provenance go in the log unambiguously.
+		// A session that is mysteriously slow and one that is mysteriously uninstrumented
+		// look identical until you can read this line.
+		AE_INFO(LogCategory::Vulkan,
+		        "Vulkan validation layer: {} for this run ({} build defaults to {}; --validation and --no-validation override, --no-validation wins if both are passed).",
+		        validationActive ? "ENABLED" : "DISABLED",
+		        AE_CONFIG_NAME,
+		        AE_VALIDATION_DEFAULT_ON != 0 ? "enabled" : "disabled");
+
+		// The layer accumulates state (~2-3 KB/frame) and progressively slows the render
+		// thread over long sessions, which is why it is not the RelWithDebInfo default.
+		if (validationActive)
 		{
 			VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 			const VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
@@ -284,7 +307,7 @@ namespace aether
 		}
 		else
 		{
-			AE_INFO(LogCategory::Vulkan, "Vulkan validation layer disabled at startup (--no-validation) - stable frame rate, no validation diagnostics.");
+			AE_INFO(LogCategory::Vulkan, "Vulkan validation layer not loaded - stable frame rate, no validation diagnostics. NVIDIA Aftermath GPU crash dumps are available instead.");
 		}
 #endif
 
@@ -371,7 +394,7 @@ namespace aether
 
 		// gated on two independent conditions, both required:
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		const bool aftermathDeviceExtensionsEnabled = false;
+		bool aftermathDeviceExtensionsEnabled = false;
 		{
 			const std::uint32_t vendorId = physicalDeviceResult.value().properties.vendorID;
 			constexpr std::uint32_t kVendorIdNvidia = 0x10DE;
@@ -383,11 +406,17 @@ namespace aether
 			{
 				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled - physical device vendorID=0x{:04X} is not NVIDIA (0x10DE); no NVIDIA-only extension requested.", vendorId);
 			}
+			// Aftermath and the validation layer are mutually exclusive, so this turns on
+			// exactly when the layer stayed off. Note the RUNTIME flag: keying this off
+			// VK_VALIDATION_CPU meant a --no-validation run reported "disabled because the
+			// validation layer is active" while running with no validation layer at all,
+			// and shipped no crash dumps for the one configuration that most needed them.
+			else if (validationActive)
+			{
+				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled because the Vulkan validation layer is active this run (mutually incompatible; pass --no-validation to get GPU crash dumps instead).");
+			}
 			else
 			{
-#	if VK_VALIDATION_CPU
-				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: disabled because the Vulkan validation layer is active (mutually incompatible; enable one or the other).");
-#	else
 				const bool diagnosticsConfigPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
 				const bool checkpointsPresent = physicalDeviceResult.value().enable_extension_if_present(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 				if (diagnosticsConfigPresent && checkpointsPresent)
@@ -407,7 +436,6 @@ namespace aether
 					        diagnosticsConfigPresent,
 					        checkpointsPresent);
 				}
-#	endif
 			}
 		}
 #endif

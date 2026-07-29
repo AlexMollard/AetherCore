@@ -48,9 +48,10 @@ int main(int argc, char** argv)
 	// mount already read - so nothing has to thread through the engine config.
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
 	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
-	// --no-validation: skip the Vulkan validation layer for a stable, high frame rate
-	// (the layer accumulates state and slows the render thread over long sessions).
-	const bool noValidation = aether::app::HasFlagArg(argc, argv, "--no-validation");
+	// The Vulkan validation layer defaults to on for Debug and off for RelWithDebInfo.
+	// --validation turns it on, --no-validation turns it off, and --no-validation wins if
+	// both are passed - see ResolveValidationEnabled.
+	const bool enableValidation = aether::app::ResolveValidationEnabled(argc, argv, AE_VALIDATION_DEFAULT_ON != 0);
 	if (!project.empty())
 	{
 #ifdef _WIN32
@@ -92,7 +93,7 @@ int main(int argc, char** argv)
 		// VulkanContext.cpp. GameRuntime leaves this false, so a shipped game
 		// never enables it (and never needs GFSDK_Aftermath_Lib.x64.dll).
 		aether::AetherCore::Config engineConfig{}; // NOLINT(misc-const-correctness): mutated only in the editor build below.
-		engineConfig.enableValidation = !noValidation;
+		engineConfig.enableValidation = enableValidation;
 #ifdef AETHERCORE_EDITOR_APP
 		engineConfig.enableGpuDiagnostics = true;
 #endif
