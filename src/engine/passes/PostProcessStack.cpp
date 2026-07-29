@@ -24,41 +24,21 @@ namespace aether
 		AE_PROFILE_ZONE();
 		PostProcessStack stack;
 
-		const gpu::TextureDesc hdrDesc{
-		        .format = gpu::Format::R16G16B16A16Sfloat,
-		        .extent = desc.extent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled | gpu::ImageUsage::TransferSrc,
-		        .aspect = gpu::ImageAspect::Color,
-		        .debugName = "PostProcess.HdrColor",
-		};
-		stack.m_hdrColorHandle = gpu::ResourceRegistry::CreateTexture(hdrDesc);
-		if (!stack.m_hdrColorHandle.IsValid())
-		{
-			Throw(AetherError::Engine("PostProcessStack: HdrColor CreateTexture failed"));
-		}
-		stack.m_hdrColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_hdrColorHandle), gpu::ResourceRegistry::ResolveTexture(stack.m_hdrColorHandle).view);
-		gpu::ResourceRegistry::EnsureBindlessSampled(stack.m_hdrColorHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
-		stack.m_hdrBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(stack.m_hdrColorHandle);
+		// HdrColor and LdrColor are single-frame: the forward pass writes HDR and $PostProcess
+		// reads it, $PostProcess writes LDR and $FXAA reads it. Nothing outside the graph ever
+		// looks at either, so the graph owns their memory. FinalColor below is the exception -
+		// it carries an ImGui texture id and cannot move.
+		constexpr gpu::ImageUsage kSampledSrc = gpu::ImageUsage::Sampled | gpu::ImageUsage::TransferSrc;
+
+		stack.m_hdrColor = desc.renderGraph->CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, desc.extent, kSampledSrc);
+		stack.m_hdrBindlessSlot = desc.renderGraph->EnsureBindlessSampled(stack.m_hdrColor);
 		if (stack.m_hdrBindlessSlot == 0xFFFFFFFFu)
 		{
 			Throw(AetherError::Engine("PostProcessStack: HdrColor bindless registration failed"));
 		}
 
-		const gpu::TextureDesc ldrDesc{
-		        .format = gpu::Format::R8G8B8A8Unorm,
-		        .extent = desc.extent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled | gpu::ImageUsage::TransferSrc,
-		        .aspect = gpu::ImageAspect::Color,
-		        .debugName = "PostProcess.LdrColor",
-		};
-		stack.m_ldrColorHandle = gpu::ResourceRegistry::CreateTexture(ldrDesc);
-		if (!stack.m_ldrColorHandle.IsValid())
-		{
-			Throw(AetherError::Engine("PostProcessStack: LdrColor CreateTexture failed"));
-		}
-		stack.m_ldrColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_ldrColorHandle), gpu::ResourceRegistry::ResolveTexture(stack.m_ldrColorHandle).view);
-		gpu::ResourceRegistry::EnsureBindlessSampled(stack.m_ldrColorHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
-		stack.m_ldrBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(stack.m_ldrColorHandle);
+		stack.m_ldrColor = desc.renderGraph->CreateTransientColor(gpu::Format::R8G8B8A8Unorm, desc.extent, kSampledSrc);
+		stack.m_ldrBindlessSlot = desc.renderGraph->EnsureBindlessSampled(stack.m_ldrColor);
 		if (stack.m_ldrBindlessSlot == 0xFFFFFFFFu)
 		{
 			Throw(AetherError::Engine("PostProcessStack: LdrColor bindless registration failed"));
@@ -158,11 +138,8 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
-		if (m_ldrColorHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_ldrColorHandle);
-		}
-		m_ldrColorHandle = {};
+		// The HDR and LDR slots are the graph's to release: RenderGraph::Clear() drops every
+		// slot right after this returns, and Shutdown() does the same on the teardown path.
 		m_ldrColor = RGImage{};
 		m_ldrBindlessSlot = 0xFFFFFFFFu;
 		if (m_finalColorHandle.IsValid())
@@ -172,11 +149,6 @@ namespace aether
 		m_finalColorHandle = {};
 		m_finalColor = RGImage{};
 		m_finalColorView = nullptr;
-		if (m_hdrColorHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_hdrColorHandle);
-		}
-		m_hdrColorHandle = {};
 		m_hdrColor = RGImage{};
 		m_hdrBindlessSlot = 0xFFFFFFFFu;
 		for (auto& buf: m_backgroundBuffer)

@@ -227,15 +227,17 @@ namespace aether
 		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot);
 
 	private:
-		gpu::TextureHandle m_hdrColorHandle;
+		// Graph-owned. The bindless slots are reserved against the graph, so they stay valid
+		// while the images behind them move between frames and graph rebuilds.
 		RGImage m_hdrColor{};
 		std::uint32_t m_hdrBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_tonemapPipeline;
 
-		gpu::TextureHandle m_ldrColorHandle;
 		RGImage m_ldrColor{};
 		std::uint32_t m_ldrBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_fxaaPipeline;
+		// Persistent, unlike the two above: ViewportPanel registers this view as an ImGui
+		// texture id, and an ImGui descriptor is created against one specific image.
 		gpu::TextureHandle m_finalColorHandle;
 		RGImage m_finalColor{};
 		gpu::ImageView m_finalColorView = nullptr;
