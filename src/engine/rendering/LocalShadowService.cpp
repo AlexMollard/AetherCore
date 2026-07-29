@@ -168,28 +168,6 @@ namespace aether
 		}
 
 		{
-			constexpr gpu::DeviceSize kBlurBufSize = static_cast<gpu::DeviceSize>(ShadowAtlasManager::kAtlasWidth) * ShadowAtlasManager::kAtlasHeight * sizeof(float) * 2u;
-			constexpr gpu::BufferUsage kBlurBufUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferSrc | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
-			m_blurBuffer = gpu::ResourceRegistry::CreateBuffer({
-			        .size = kBlurBufSize,
-			        .usage = kBlurBufUsage,
-			        .debugName = "ShadowBlurBuffer",
-			});
-			AE_ASSERT_ALWAYS(m_blurBuffer.IsValid(), "LocalShadowService: CreateBuffer(blur) failed");
-			m_blurBufferAddr = gpu::GetBufferAddress(m_blurBuffer);
-			AE_ASSERT_ALWAYS(m_blurBufferAddr != 0, "LocalShadowService: blur buffer address is 0");
-
-			m_blurScratchBuffer = gpu::ResourceRegistry::CreateBuffer({
-			        .size = kBlurBufSize,
-			        .usage = kBlurBufUsage,
-			        .debugName = "ShadowBlurScratchBuffer",
-			});
-			AE_ASSERT_ALWAYS(m_blurScratchBuffer.IsValid(), "LocalShadowService: CreateBuffer(blur scratch) failed");
-			m_blurScratchBufferAddr = gpu::GetBufferAddress(m_blurScratchBuffer);
-			AE_ASSERT_ALWAYS(m_blurScratchBufferAddr != 0, "LocalShadowService: blur scratch buffer address is 0");
-		}
-
-		{
 			m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://vsm_blur.spv",
@@ -202,22 +180,7 @@ namespace aether
 			}
 		}
 
-		{
-			const gpu::TextureDesc desc{
-			        .format = depthFormat,
-			        .extent = {ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
-			        .usage = gpu::ImageUsage::DepthStencilAttachment,
-			        .aspect = gpu::ImageAspect::Depth,
-			        .debugName = "LocalShadow.AtlasDepth",
-			};
-			m_atlasDepthHandle = gpu::ResourceRegistry::CreateTexture(desc);
-			AE_ASSERT_ALWAYS(m_atlasDepthHandle.IsValid(), "LocalShadowService: CreateTexture(atlas depth) failed");
-			m_atlasDepthImageVk = gpu::ResourceRegistry::ResolveTextureImage(m_atlasDepthHandle);
-			m_atlasDepthView = gpu::ResourceRegistry::ResolveTexture(m_atlasDepthHandle).view;
-		}
-
-		{
-		}
+		m_atlasDepthFormat = depthFormat;
 	}
 
 	void LocalShadowService::Shutdown()
@@ -247,32 +210,11 @@ namespace aether
 		}
 		m_atlasManager.Shutdown();
 
-		if (m_blurBuffer.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_blurBuffer);
-			m_blurBuffer = {};
-		}
-		if (m_blurScratchBuffer.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_blurScratchBuffer);
-			m_blurScratchBuffer = {};
-		}
-		m_blurBufferAddr = 0;
-		m_blurScratchBufferAddr = 0;
-
 		if (m_blurPipelineHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_blurPipelineHandle);
 			m_blurPipelineHandle = {};
 		}
-
-		if (m_atlasDepthHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_atlasDepthHandle);
-			m_atlasDepthHandle = {};
-		}
-		m_atlasDepthImageVk = nullptr;
-		m_atlasDepthView = nullptr;
 	}
 
 	void LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
@@ -488,10 +430,12 @@ namespace aether
 	{
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
 
-		m_blurBufferRG = graph.RegisterBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer));
-		m_blurScratchBufferRG = graph.RegisterBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurScratchBuffer));
+		constexpr gpu::DeviceSize kBlurBufSize = static_cast<gpu::DeviceSize>(ShadowAtlasManager::kAtlasWidth) * ShadowAtlasManager::kAtlasHeight * sizeof(float) * 2u;
+		constexpr gpu::BufferUsage kBlurBufUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferSrc | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
+		m_blurBufferRG = graph.CreateTransientBuffer(kBlurBufSize, kBlurBufUsage);
+		m_blurScratchBufferRG = graph.CreateTransientBuffer(kBlurBufSize, kBlurBufUsage);
 
-		m_atlasDepthImage = graph.RegisterImage(m_atlasDepthImageVk, m_atlasDepthView, gpu::ImageAspect::Depth);
+		m_atlasDepthImage = graph.CreateTransientDepth(m_atlasDepthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight});
 		(void) graph.GetBlackboard().DeclareGraphProduct<LocalShadowProduct>(std::string{kFrameProductLocalShadows},
 		        LocalShadowProduct{
 		                .atlasImage = m_atlasImage,
@@ -575,7 +519,7 @@ namespace aether
 			                }
 
 			                auto* const atlasImage = m_atlasManager.GetAtlasImage();
-			                auto* const blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
+			                auto* const blurVkBuf = ctx.graph.ResolveBuffer(m_blurBufferRG);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.CopyImageToBuffer(atlasImage, blurVkBuf, gpu::ImageLayout::TransferSrc, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
@@ -594,6 +538,11 @@ namespace aether
 			                {
 				                return;
 			                }
+
+			                // Pooled buffers move whenever the graph is rebuilt, so the
+			                // addresses are read now rather than cached at construction.
+			                const gpu::DeviceAddress srcAddr = ctx.graph.GetBufferAddress(m_blurBufferRG);
+			                const gpu::DeviceAddress dstAddr = ctx.graph.GetBufferAddress(m_blurScratchBufferRG);
 
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
@@ -615,8 +564,8 @@ namespace aether
 				                        .blurWidth = pls.region.width,
 				                        .blurHeight = pls.region.height,
 				                        ._pad2 = 0.0f,
-				                        .srcAddr = m_blurBufferAddr,
-				                        .dstAddr = m_blurScratchBufferAddr,
+				                        .srcAddr = srcAddr,
+				                        .dstAddr = dstAddr,
 				                };
 				                cmd.PushDataRaw(0, std::as_bytes(std::span{&hPc, 1}));
 				                cmd.Dispatch((pls.region.width + 15u) / 16u, (pls.region.height + 15u) / 16u, 1u);
@@ -636,6 +585,9 @@ namespace aether
 			                {
 				                return;
 			                }
+
+			                const gpu::DeviceAddress srcAddr = ctx.graph.GetBufferAddress(m_blurScratchBufferRG);
+			                const gpu::DeviceAddress dstAddr = ctx.graph.GetBufferAddress(m_blurBufferRG);
 
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
@@ -657,8 +609,8 @@ namespace aether
 				                        .blurWidth = pls.region.width,
 				                        .blurHeight = pls.region.height,
 				                        ._pad2 = 0.0f,
-				                        .srcAddr = m_blurScratchBufferAddr,
-				                        .dstAddr = m_blurBufferAddr,
+				                        .srcAddr = srcAddr,
+				                        .dstAddr = dstAddr,
 				                };
 				                cmd.PushDataRaw(0, std::as_bytes(std::span{&vPc, 1}));
 				                cmd.Dispatch((pls.region.width + 15u) / 16u, (pls.region.height + 15u) / 16u, 1u);
@@ -679,7 +631,7 @@ namespace aether
 			                }
 
 			                auto* const atlasImage = m_atlasManager.GetAtlasImage();
-			                auto* const blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
+			                auto* const blurVkBuf = ctx.graph.ResolveBuffer(m_blurBufferRG);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.CopyBufferToImage(blurVkBuf, atlasImage, gpu::ImageLayout::TransferDst, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));

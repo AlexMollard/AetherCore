@@ -114,10 +114,10 @@ namespace aether
 		GraphicsPipeline m_shadowPipeline;
 		PreparedDrawList m_shadowDrawList{};
 		RGImage m_atlasImage{};
+		// Cleared and discarded inside $LocalShadowAtlasRender and never read anywhere else,
+		// so the graph owns it and may lend its 64 MB to another pass.
 		RGImage m_atlasDepthImage{};
-		gpu::TextureHandle m_atlasDepthHandle{};
-		gpu::Image m_atlasDepthImageVk{};
-		gpu::ImageView m_atlasDepthView{};
+		gpu::Format m_atlasDepthFormat = gpu::Format::Undefined;
 		std::uint32_t m_atlasBindlessSlot = 0xFFFFFFFFu;
 
 		std::vector<PerLightShadow> m_perLightShadows;
@@ -136,10 +136,8 @@ namespace aether
 		std::vector<glm::vec2> m_lightShadowIndices;
 
 		gpu::PipelineHandle m_blurPipelineHandle;
-		gpu::BufferHandle m_blurBuffer;
-		gpu::BufferHandle m_blurScratchBuffer;
-		gpu::DeviceAddress m_blurBufferAddr = 0;
-		gpu::DeviceAddress m_blurScratchBufferAddr = 0;
+		// Scratch for the VSM separable blur: filled from the atlas, ping-ponged, copied
+		// back, all inside one frame. Graph-owned, so the addresses are fetched per frame.
 		RGBuffer m_blurBufferRG{};
 		RGBuffer m_blurScratchBufferRG{};
 	};

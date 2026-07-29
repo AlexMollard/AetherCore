@@ -659,6 +659,7 @@ namespace aether
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 		entry.fromHeap = false;
 		entry.aliased = false;
+		entry.live = false;
 		entry.heapOffset = VK_WHOLE_SIZE;
 		entry.memReqSize = 0;
 		entry.memReqAlignment = 0;
@@ -1098,13 +1099,10 @@ namespace aether
 		std::uint32_t memoryTypeBits = std::numeric_limits<std::uint32_t>::max();
 		for (std::uint32_t i = 0; i < m_transientImages.size(); ++i)
 		{
-			const auto& entry = m_transientImages[i];
-			if (entry.memReqSize == 0)
-			{
-				continue;
-			}
+			auto& entry = m_transientImages[i];
 			const TransientLifetime lifetime = lifetimeFor(imageLifetimes, i);
-			if (!lifetime.live)
+			entry.live = lifetime.live;
+			if (entry.memReqSize == 0 || !lifetime.live)
 			{
 				continue;
 			}
@@ -1128,13 +1126,10 @@ namespace aether
 		}
 		for (std::uint32_t i = 0; i < m_transientBuffers.size(); ++i)
 		{
-			const auto& entry = m_transientBuffers[i];
-			if (entry.memReqSize == 0)
-			{
-				continue;
-			}
+			auto& entry = m_transientBuffers[i];
 			const TransientLifetime lifetime = lifetimeFor(bufferLifetimes, i);
-			if (!lifetime.live)
+			entry.live = lifetime.live;
+			if (entry.memReqSize == 0 || !lifetime.live)
 			{
 				continue;
 			}
@@ -1209,6 +1204,19 @@ namespace aether
 		        plan.bucketCount,
 		        static_cast<double>(plan.totalSize) / (1024.0 * 1024.0),
 		        static_cast<double>(plan.standaloneSize) / (1024.0 * 1024.0));
+	}
+
+	void RenderGraphStorage::ReleaseAllTransients()
+	{
+		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
+		{
+			ReleaseTransient(idx);
+		}
+		for (std::uint32_t idx = 0; idx < m_transientBuffers.size(); ++idx)
+		{
+			ReleaseTransientBuffer(idx);
+		}
+		ReleaseTransientHeap();
 	}
 
 	void RenderGraphStorage::ReleaseTransientHeap()
@@ -1387,7 +1395,7 @@ namespace aether
 		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
 		{
 			auto& entry = m_transientImages[idx];
-			if (entry.image.IsValid())
+			if (entry.image.IsValid() || !entry.live)
 			{
 				continue;
 			}
@@ -1510,7 +1518,7 @@ namespace aether
 		for (std::uint32_t idx = 0; idx < m_transientBuffers.size(); ++idx)
 		{
 			auto& entry = m_transientBuffers[idx];
-			if (entry.buffer.IsValid())
+			if (entry.buffer.IsValid() || !entry.live)
 			{
 				continue;
 			}

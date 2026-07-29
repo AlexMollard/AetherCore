@@ -162,17 +162,12 @@ namespace aether
 	void RenderGraph::Clear()
 	{
 		const std::scoped_lock lock(m_debugStateMutex);
-		for (auto& [id, state]: m_lastImageStates)
-		{
-			if (IsTransientId(id))
-			{
-				const uint32_t idx = TransientIndex(id);
-				if (idx < m_storage->GetTransientCount())
-				{
-					m_storage->ReleaseTransient(idx);
-				}
-			}
-		}
+		// Every transient slot goes, not just the ones that happen to appear in last frame's
+		// state map. Services re-declare their transients from scratch after a reset, so a
+		// slot left behind here is a full-size image or buffer nothing will ever use again.
+		m_storage->ReleaseAllTransients();
+		m_transientImageLifetimes.clear();
+		m_transientBufferLifetimes.clear();
 		m_storage->ClearExternalImages();
 		m_externalImages.clear();
 		m_storage->ClearExternalBuffers();
@@ -1156,6 +1151,17 @@ namespace aether
 					}
 				}
 
+				// Buffer reads count too. Graph-owned buffers are not automatically live the
+				// way external ones are, so a producer that only feeds a buffer would look
+				// dead and take the rest of its chain with it.
+				for (const BufferAccessRef& r: pass.bufferAccesses)
+				{
+					if (r.type != BufferAccessType::StorageWrite && r.type != BufferAccessType::TransferWrite)
+					{
+						recordRead(r.buffer.id);
+					}
+				}
+
 				for (const FrameProductRef& product: pass.consumedFrameProducts)
 				{
 					(void) (recordFrameProductReads.template operator()<FrameTextureProduct>(product) || recordFrameProductReads.template operator()<FrameTextureArrayProduct>(product)
@@ -1218,6 +1224,9 @@ namespace aether
 				// Side-effect targets are never dead
 				auto isSideEffect = [&](uint32_t resId) -> bool
 				{
+					// Anything the graph does not own may be read by code it cannot see, so a
+					// write to it is never dead. Transients - images and buffers alike - are
+					// owned by the graph and stand or fall on whether a later pass reads them.
 					return resId == kSwapchainColorId || resId == kSwapchainDepthId || (resId >= kFirstExternalId && resId < kFirstTransientId);
 				};
 
@@ -2191,7 +2200,7 @@ namespace aether
 			{
 				if (pass.debugDisabledExecute)
 				{
-					PassContext ctx{.recorder = recorder, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
+					PassContext ctx{.recorder = recorder, .graph = *this, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 					pass.debugDisabledExecute(ctx);
 				}
 				const std::scoped_lock lock(m_debugStateMutex);
@@ -2201,7 +2210,7 @@ namespace aether
 			{
 				AE_GPU_ZONE_SCOPED(cmd, pass.name);
 				const auto t0 = std::chrono::high_resolution_clock::now();
-				PassContext ctx{.recorder = recorder, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
+				PassContext ctx{.recorder = recorder, .graph = *this, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
 				const std::scoped_lock lock(m_debugStateMutex);

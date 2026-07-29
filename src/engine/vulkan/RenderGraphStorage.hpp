@@ -195,6 +195,7 @@ namespace aether
 		[[nodiscard]] bool IsTransientBufferAliased(std::uint32_t idx) const;
 
 		void ReleaseTransient(uint32_t idx);
+		void ReleaseAllTransients();
 
 		// -- Image layout oracle (debug) ------------------------------------
 #ifndef NDEBUG
@@ -283,6 +284,9 @@ namespace aether
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::Extent2D extent;
 			bool bindlessRequested = false;
+			// Some compiled pass touches the slot. A slot nothing touches is not worth the
+			// VRAM, so it is left unmaterialised until the graph starts using it again.
+			bool live = false;
 			bool fromHeap = false;
 			// Shares its heap range with at least one other resource, so its contents do not
 			// survive the frame and its first use has to discard.
@@ -301,6 +305,7 @@ namespace aether
 		{
 			VkDeviceSize size = 0;
 			VkBufferUsageFlags2 usage = 0;
+			bool live = false;
 			bool fromHeap = false;
 			bool aliased = false;
 			gpu::BufferHandle buffer;

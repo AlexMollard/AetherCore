@@ -375,9 +375,14 @@ namespace aether
 		std::uint64_t frameConstantsAddr = 0;
 	};
 
+	class RenderGraph;
+
 	struct PassContext
 	{
 		gpu::CommandList& recorder;
+		// The graph the pass belongs to. Pooled transients must be resolved through it every
+		// frame - their handles and device addresses are not stable across a graph rebuild.
+		const RenderGraph& graph;
 		const FrameResourceContext& frame;
 		gpu::Extent2D extent;
 		std::uint64_t frameConstantsAddr = 0;
