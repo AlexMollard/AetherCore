@@ -315,7 +315,6 @@ namespace aether
 		GraphicsPipeline m_skyboxPipeline;
 		GTAOPass m_gtaoPass;
 		PostProcessStack m_postProcessStack;
-		gpu::TextureHandle m_sceneDepthHandle;
 		RGImage m_sceneDepth;
 		BindlessManager* m_bindlessManager = nullptr;
 		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;

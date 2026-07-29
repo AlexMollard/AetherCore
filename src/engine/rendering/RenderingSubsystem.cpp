@@ -114,11 +114,8 @@ namespace aether
 
 	void RenderingSubsystem::DestroySceneViewportDepth()
 	{
-		if (m_sceneDepthHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_sceneDepthHandle);
-			m_sceneDepthHandle = {};
-		}
+		// The slot belongs to the graph: RenderGraph::Clear() releases it on the rebuild path
+		// and Shutdown() on the teardown path, both of which run after this.
 		m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		m_sceneDepth = {};
 	}
@@ -284,24 +281,11 @@ namespace aether
 	{
 		(void) device;
 		const gpu::Extent2D extent = m_postProcessStack.GetExtent();
-		m_sceneDepthHandle = gpu::ResourceRegistry::CreateTexture({
-		        .format = depthFormat,
-		        .extent = extent,
-		        .usage = gpu::ImageUsage::DepthStencilAttachment | gpu::ImageUsage::Sampled,
-		        .aspect = gpu::ImageAspect::Depth,
-		        .debugName = "Scene.Depth",
-		});
-		if (!m_sceneDepthHandle.IsValid())
-		{
-			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth CreateTexture failed"));
-		}
-
-		const auto depthTexture = gpu::ResourceRegistry::ResolveTexture(m_sceneDepthHandle);
-		m_sceneDepth = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_sceneDepthHandle), depthTexture.view, gpu::ImageAspect::Depth);
-
 		(void) bindless;
-		gpu::ResourceRegistry::EnsureBindlessSampled(m_sceneDepthHandle, gpu::ImageAspect::Depth, gpu::ImageLayout::ShaderReadOnly);
-		m_sceneDepthBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_sceneDepthHandle);
+		// Written by $ScenePreDepth, read for the last time by $EngineForward. Nothing outside
+		// the graph reads it, so the graph decides where it lives.
+		m_sceneDepth = graph.CreateTransientDepth(depthFormat, extent, gpu::ImageUsage::Sampled);
+		m_sceneDepthBindlessSlot = graph.EnsureBindlessSampled(m_sceneDepth);
 		if (m_sceneDepthBindlessSlot == 0xFFFFFFFFu)
 		{
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth bindless registration failed"));
