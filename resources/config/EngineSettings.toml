@@ -12,7 +12,7 @@ width = 2560
 height = 1440
 
 [graphics]
-vsync = false
+vsync = true
 fxaa = false
 asyncCompute = true
 
