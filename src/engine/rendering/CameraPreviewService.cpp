@@ -32,27 +32,9 @@ namespace aether
 		m_queue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 8192u, .debugName = "CameraPreview"});
 		m_constants.Initialize();
 
-		m_colorHandle = gpu::ResourceRegistry::CreateTexture({
-		        .format = colorFormat,
-		        .extent = {kWidth, kHeight},
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
-		        .aspect = gpu::ImageAspect::Color,
-		        .debugName = "CameraPreview.Color",
-		});
-		m_depthHandle = gpu::ResourceRegistry::CreateTexture({
-		        .format = depthFormat,
-		        .extent = {kWidth, kHeight},
-		        .usage = gpu::ImageUsage::DepthStencilAttachment,
-		        .aspect = gpu::ImageAspect::Depth,
-		        .debugName = "CameraPreview.Depth",
-		});
-		if (m_colorHandle.IsValid())
-		{
-			m_colorView = gpu::ResourceRegistry::ResolveTexture(m_colorHandle).view;
-			gpu::ResourceRegistry::EnsureBindlessSampled(m_colorHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
-			m_colorBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_colorHandle);
-		}
-
+		// The HDR colour and the depth are graph transients, declared in RegisterImages on
+		// every graph build. Only the LDR image is created here, because ViewportPanel hands
+		// its view to ImGui as a texture id and that descriptor names one specific image.
 		m_colorLdrHandle = gpu::ResourceRegistry::CreateTexture({
 		        .format = gpu::Format::R8G8B8A8Unorm,
 		        .extent = {kWidth, kHeight},
@@ -65,7 +47,7 @@ namespace aether
 			m_colorLdrView = gpu::ResourceRegistry::ResolveTexture(m_colorLdrHandle).view;
 		}
 
-		m_initialized = m_colorHandle.IsValid() && m_depthHandle.IsValid() && m_colorLdrHandle.IsValid();
+		m_initialized = m_colorLdrHandle.IsValid();
 	}
 
 	void CameraPreviewService::Shutdown()
@@ -73,14 +55,6 @@ namespace aether
 		m_queue.DiscardAllPending();
 		m_queue.Shutdown();
 		m_constants.Shutdown();
-		if (m_colorHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_colorHandle);
-		}
-		if (m_depthHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_depthHandle);
-		}
 		if (m_colorLdrHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_colorLdrHandle);
@@ -91,10 +65,7 @@ namespace aether
 		}
 		m_lighting = nullptr;
 		m_lightView = kInvalidLightView;
-		m_colorHandle = {};
-		m_depthHandle = {};
 		m_colorLdrHandle = {};
-		m_colorView = nullptr;
 		m_colorLdrView = nullptr;
 		m_colorBindlessSlot = 0xFFFFFFFFu;
 		m_initialized = false;
@@ -166,10 +137,10 @@ namespace aether
 		{
 			return;
 		}
-		m_color = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_colorHandle), m_colorView, gpu::ImageAspect::Color);
+		m_color = graph.CreateTransientColor(m_colorFormat, gpu::Extent2D{kWidth, kHeight}, gpu::ImageUsage::Sampled);
+		m_colorBindlessSlot = graph.EnsureBindlessSampled(m_color);
+		m_depth = graph.CreateTransientDepth(m_depthFormat, gpu::Extent2D{kWidth, kHeight});
 		m_colorLdr = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_colorLdrHandle), m_colorLdrView, gpu::ImageAspect::Color);
-		const auto depthTex = gpu::ResourceRegistry::ResolveTexture(m_depthHandle);
-		m_depth = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_depthHandle), depthTex.view, gpu::ImageAspect::Depth);
 	}
 
 	void CameraPreviewService::RegisterComputePasses(RenderGraph& graph, CullPass& cullPass)

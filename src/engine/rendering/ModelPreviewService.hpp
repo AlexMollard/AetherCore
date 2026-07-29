@@ -84,10 +84,8 @@ namespace aether
 		FrameConstantsBuffer m_constants;
 		PreparedDrawList m_draws{};
 
-		gpu::TextureHandle m_colorHandle{};
-		gpu::TextureHandle m_depthHandle{};
+		// Only the LDR image is service-owned: its view is an ImGui texture id.
 		gpu::TextureHandle m_colorLdrHandle{};
-		gpu::ImageView m_colorView = nullptr;
 		gpu::ImageView m_colorLdrView = nullptr;
 		RGImage m_color{};
 		RGImage m_colorLdr{};

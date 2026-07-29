@@ -85,9 +85,7 @@ namespace aether
 		FrameConstantsBuffer m_constants;
 		PreparedDrawList m_draws{};
 
-		gpu::TextureHandle m_colorHandle{};
-		gpu::TextureHandle m_depthHandle{};
-		gpu::ImageView m_colorView = nullptr;
+		// Only the LDR image is service-owned: its view is an ImGui texture id.
 		RGImage m_color{};
 		RGImage m_depth{};
 		std::uint32_t m_colorBindlessSlot = 0xFFFFFFFFu;
