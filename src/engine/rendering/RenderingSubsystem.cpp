@@ -233,7 +233,7 @@ namespace aether
 
 		if (m_lazyGates.LocalShadowTargets())
 		{
-			m_localShadowService.CreateShadowTargets(bindless);
+			m_localShadowService.CreateShadowTargets();
 		}
 		else
 		{

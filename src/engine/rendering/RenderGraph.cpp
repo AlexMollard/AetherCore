@@ -509,6 +509,23 @@ namespace aether
 		return gpu::GetBufferAddress(handle);
 	}
 
+	gpu::Image RenderGraph::ResolveImage(const RGImage image) const
+	{
+		if (IsTransientId(image.id))
+		{
+			return m_storage->ResolveTransientImage(TransientIndex(image.id));
+		}
+		if (image.id == kSwapchainColorId)
+		{
+			return m_lastFrameContext.target.colorImage;
+		}
+		if (image.id == kSwapchainDepthId)
+		{
+			return m_lastFrameContext.target.depthImage;
+		}
+		return m_storage->GetExternalImage(ExternalIndex(image.id));
+	}
+
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
 	{
 		const uint32_t idx = m_storage->AddTransientSlot(desc.format, desc.usage, desc.aspect, desc.extent);

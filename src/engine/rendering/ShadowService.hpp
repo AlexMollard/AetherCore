@@ -109,9 +109,7 @@ namespace aether
 		GraphicsPipeline m_shadowPipeline;
 		PreparedDrawList m_shadowDrawList{};
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
-		std::array<gpu::TextureHandle, kShadowCascadeCount> m_shadowDepthHandle{};
-		std::array<gpu::Image, kShadowCascadeCount> m_shadowDepthImage{};
-		std::array<gpu::ImageView, kShadowCascadeCount> m_shadowDepthView{};
+
 		BindlessManager* m_bindless = nullptr;
 		bool m_directionalShadowEnabled = true;
 		std::array<bool, kMaxFramesInFlight> m_directionalShadowFrameEnabled{true, true, true};

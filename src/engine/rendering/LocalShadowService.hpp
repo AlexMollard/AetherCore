@@ -58,7 +58,7 @@ namespace aether
 		// light with geometry in front of it can use any of it, so the atlas is created on
 		// demand. Resolution and entry budget are unchanged; only the moment of allocation
 		// moved. Both calls must run with the GPU quiesced.
-		void CreateShadowTargets(BindlessManager& bindless);
+		void CreateShadowTargets();
 		void DestroyShadowTargets();
 
 		[[nodiscard]] bool HasShadowTargets() const

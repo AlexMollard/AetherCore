@@ -69,46 +69,13 @@ namespace aether
 	void ShadowService::CreateShadowTargets()
 	{
 		AE_PROFILE_ZONE();
-		if (m_shadowTargetsReady)
-		{
-			return;
-		}
 		if (m_shadowDepthFormat == gpu::Format::Undefined)
 		{
 			Throw(AetherError::Engine("ShadowService: CreateShadowTargets before Initialize"));
 		}
-
-		static constexpr const char* kShadowDepthNames[kShadowCascadeCount] = {
-		        "ShadowService.Depth_C0",
-		        "ShadowService.Depth_C1",
-		        "ShadowService.Depth_C2",
-		};
-
-		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
-		{
-			const gpu::TextureDesc desc{
-			        .format = m_shadowDepthFormat,
-			        .extent = {m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height},
-			        .usage = gpu::ImageUsage::DepthStencilAttachment | gpu::ImageUsage::Sampled,
-			        .aspect = gpu::ImageAspect::Depth,
-			        .debugName = kShadowDepthNames[cascade],
-			};
-			m_shadowDepthHandle[cascade] = gpu::ResourceRegistry::CreateTexture(desc);
-			if (!m_shadowDepthHandle[cascade].IsValid())
-			{
-				Throw(AetherError::Engine("ShadowService: CreateTexture failed for cascade " + std::to_string(cascade)));
-			}
-			m_shadowDepthImage[cascade] = gpu::ResourceRegistry::ResolveTextureImage(m_shadowDepthHandle[cascade]);
-			m_shadowDepthView[cascade] = gpu::ResourceRegistry::ResolveTexture(m_shadowDepthHandle[cascade]).view;
-
-			gpu::ResourceRegistry::EnsureBindlessSampled(m_shadowDepthHandle[cascade], gpu::ImageAspect::Depth, gpu::ImageLayout::ShaderReadOnly);
-			m_shadowMapSlots[cascade] = gpu::ResourceRegistry::GetBindlessSampledSlot(m_shadowDepthHandle[cascade]);
-			if (m_shadowMapSlots[cascade] == 0xFFFFFFFFu)
-			{
-				Throw(AetherError::Engine("ShadowService: bindless registration failed for cascade " + std::to_string(cascade)));
-			}
-		}
-
+		// No GPU work: the cascades are graph transients now, declared in SetupPassResources
+		// on every graph build. This only records that the graph about to be built should
+		// have shadow passes in it at all.
 		m_shadowTargetsReady = true;
 	}
 
@@ -117,13 +84,6 @@ namespace aether
 		AE_PROFILE_ZONE();
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			if (m_shadowDepthHandle[cascade].IsValid())
-			{
-				gpu::ResourceRegistry::Destroy(m_shadowDepthHandle[cascade]);
-			}
-			m_shadowDepthHandle[cascade] = {};
-			m_shadowDepthImage[cascade] = nullptr;
-			m_shadowDepthView[cascade] = nullptr;
 			m_shadowMapSlots[cascade] = 0xFFFFFFFFu;
 			m_shadowDepth[cascade] = {};
 		}
@@ -213,9 +173,17 @@ namespace aether
 
 	void ShadowService::SetupPassResources(RenderGraph& graph)
 	{
+		// One cascade is written by its own $DirectionalShadow_Cn pass and read for the last
+		// time by $EngineForward, all inside one frame. The bindless slots are reserved
+		// against the graph so the lighting shaders can keep the numbers.
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			m_shadowDepth[cascade] = graph.RegisterImage(m_shadowDepthImage[cascade], m_shadowDepthView[cascade], gpu::ImageAspect::Depth);
+			m_shadowDepth[cascade] = graph.CreateTransientDepth(m_shadowDepthFormat, m_shadowMapExtents[cascade], gpu::ImageUsage::Sampled);
+			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade]);
+			if (m_shadowMapSlots[cascade] == 0xFFFFFFFFu)
+			{
+				Throw(AetherError::Engine("ShadowService: bindless registration failed for cascade " + std::to_string(cascade)));
+			}
 		}
 		(void) graph.GetBlackboard().DeclareGraphProduct<FrameTextureArrayProduct>(std::string{kFrameProductDirectionalShadows},
 		        FrameTextureArrayProduct{

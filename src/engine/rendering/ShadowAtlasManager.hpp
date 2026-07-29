@@ -12,7 +12,8 @@ namespace aether
 {
 	class BindlessManager;
 
-	// Manages a 4K x 4K R32G32_SFLOAT VSM shadow atlas with shelf-packing.
+	// Shelf-packs a 4K x 4K R32G32_SFLOAT VSM shadow atlas. The image itself belongs to the
+	// render graph; this is only the layout.
 	//
 	// The extent is not arbitrary: LocalShadowService renders a hard-capped number
 	// of fixed-resolution shadow entries per frame, so the packer can never need
@@ -41,9 +42,6 @@ namespace aether
 			}
 		};
 
-		void Initialize(BindlessManager& bindless);
-		void Shutdown();
-
 		// Reset all shelves for a new frame. Must be called once per frame
 		void Reset();
 
@@ -54,21 +52,6 @@ namespace aether
 			return m_usedBounds;
 		}
 
-		[[nodiscard]] gpu::Image GetAtlasImage() const
-		{
-			return m_atlasImage;
-		}
-
-		[[nodiscard]] gpu::ImageView GetAtlasView() const
-		{
-			return m_atlasView;
-		}
-
-		[[nodiscard]] std::uint32_t GetBindlessSlot() const
-		{
-			return m_bindlessSlot;
-		}
-
 	private:
 		struct Shelf
 		{
@@ -77,11 +60,6 @@ namespace aether
 			std::uint32_t cursorX = 0;
 		};
 
-		gpu::TextureHandle m_atlasHandle{};
-		gpu::Image m_atlasImage = nullptr;
-		gpu::ImageView m_atlasView = nullptr;
-		std::uint32_t m_bindlessSlot = 0xFFFFFFFFu;
-		BindlessManager* m_bindless = nullptr;
 		std::vector<Shelf> m_shelves;
 		Region m_usedBounds{};
 	};

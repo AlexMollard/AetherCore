@@ -181,22 +181,18 @@ namespace aether
 		m_atlasDepthFormat = depthFormat;
 	}
 
-	void LocalShadowService::CreateShadowTargets(BindlessManager& bindless)
+	void LocalShadowService::CreateShadowTargets()
 	{
 		AE_PROFILE_ZONE();
-		if (m_atlasReady)
-		{
-			return;
-		}
-		m_atlasManager.Initialize(bindless);
-		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
+		// No GPU work: the atlas is a graph transient, declared in SetupPassResources on every
+		// graph build. The packer state lives on past a rebuild; only the image moves.
 		m_atlasReady = true;
 	}
 
 	void LocalShadowService::DestroyShadowTargets()
 	{
 		AE_PROFILE_ZONE();
-		m_atlasManager.Shutdown();
+		m_atlasManager.Reset();
 		m_atlasBindlessSlot = 0xFFFFFFFFu;
 		m_atlasImage = {};
 		m_atlasDepthImage = {};
@@ -476,7 +472,16 @@ namespace aether
 
 	void LocalShadowService::SetupPassResources(RenderGraph& graph)
 	{
-		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
+		// Written by $LocalShadowAtlasRender, blurred through the buffer chain and read for the
+		// last time by $EngineForward - 128 MiB that never outlives the frame.
+		m_atlasImage = graph.CreateTransientColor(ShadowAtlasManager::kAtlasFormat,
+		        gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
+		        gpu::ImageUsage::TransferSrc | gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage);
+		m_atlasBindlessSlot = graph.EnsureBindlessSampled(m_atlasImage);
+		if (m_atlasBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("LocalShadowService: shadow atlas bindless registration failed"));
+		}
 
 		constexpr gpu::DeviceSize kBlurBufSize = static_cast<gpu::DeviceSize>(ShadowAtlasManager::kAtlasWidth) * ShadowAtlasManager::kAtlasHeight * sizeof(float) * 2u;
 		constexpr gpu::BufferUsage kBlurBufUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferSrc | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
@@ -566,7 +571,7 @@ namespace aether
 				                return;
 			                }
 
-			                auto* const atlasImage = m_atlasManager.GetAtlasImage();
+			                auto* const atlasImage = ctx.graph.ResolveImage(m_atlasImage);
 			                auto* const blurVkBuf = ctx.graph.ResolveBuffer(m_blurBufferRG);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
@@ -678,7 +683,7 @@ namespace aether
 				                return;
 			                }
 
-			                auto* const atlasImage = m_atlasManager.GetAtlasImage();
+			                auto* const atlasImage = ctx.graph.ResolveImage(m_atlasImage);
 			                auto* const blurVkBuf = ctx.graph.ResolveBuffer(m_blurBufferRG);
 
 			                gpu::CommandList cmd = ctx.recorder.View();

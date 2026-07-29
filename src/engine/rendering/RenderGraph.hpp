@@ -299,6 +299,12 @@ namespace aether
 
 		[[nodiscard]] RGImage CreateTransientImage(const TransientImageDesc& desc);
 
+		// The image currently backing a resource, for the passes that name it directly rather
+		// than through an attachment - transfers, mostly. Same rule as ResolveBuffer: a pooled
+		// transient's image changes whenever the graph is rebuilt, so resolve inside Execute
+		// and never cache the result.
+		[[nodiscard]] gpu::Image ResolveImage(RGImage image) const;
+
 		[[nodiscard]] RGImage CreateTransientColor(gpu::Format format, gpu::Extent2D extent = {}, gpu::ImageUsage extraUsage = gpu::ImageUsage::None);
 		[[nodiscard]] RGImage CreateTransientDepth(gpu::Format format, gpu::Extent2D extent = {}, gpu::ImageUsage extraUsage = gpu::ImageUsage::None);
 
