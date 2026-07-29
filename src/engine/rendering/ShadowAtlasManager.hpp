@@ -12,12 +12,20 @@ namespace aether
 {
 	class BindlessManager;
 
-	// Manages an 8K x 8K R32G32_SFLOAT VSM shadow atlas with shelf-packing
+	// Manages a 4K x 4K R32G32_SFLOAT VSM shadow atlas with shelf-packing.
+	//
+	// The extent is not arbitrary: LocalShadowService renders a hard-capped number
+	// of fixed-resolution shadow entries per frame, so the packer can never need
+	// more room than this. LocalShadowService static_asserts that bound against
+	// these constants - raise the entry cap or the per-entry resolution there and
+	// the assert tells you the atlas has to grow with it. Every byte here is paid
+	// four times over (atlas + depth + two full-size VSM blur scratch buffers), so
+	// do not round it up "just in case".
 	class ShadowAtlasManager
 	{
 	public:
-		static constexpr std::uint32_t kAtlasWidth = 8192u;
-		static constexpr std::uint32_t kAtlasHeight = 8192u;
+		static constexpr std::uint32_t kAtlasWidth = 4096u;
+		static constexpr std::uint32_t kAtlasHeight = 4096u;
 		static constexpr gpu::Format kAtlasFormat = gpu::Format::R32G32Sfloat;
 
 		struct Region

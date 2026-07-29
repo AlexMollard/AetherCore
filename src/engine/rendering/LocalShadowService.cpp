@@ -38,6 +38,30 @@ namespace
 	constexpr float kPointLightFovDeg = 90.0f;
 	constexpr float kSpotShadowFovPaddingRad = glm::radians(4.0f);
 
+	// Fixed resolution for all spot shadows - avoids atlas layout shifts when
+	// the light set changes between frames.
+	constexpr std::uint32_t kSpotShadowRes = 512u;
+	constexpr std::uint32_t kLargestShadowRes = std::max(kSpotShadowRes, kPointShadowFaceRes);
+
+	// Worst-case height the shelf packer can consume, so the atlas is sized to the
+	// entries that can actually land in it rather than to a round number.
+	//
+	// A shelf is only opened when no existing shelf of at least that height still
+	// has room, so every shelf but the last of each height class is filled past
+	// (atlasWidth - kLargestShadowRes). With two height classes in play (spot and
+	// point-face) that leaves at most two partly-filled shelves.
+	consteval std::uint32_t WorstCaseAtlasHeight()
+	{
+		constexpr std::uint32_t kTotalEntryWidth = kMaxRenderedLocalShadowEntries * kLargestShadowRes;
+		constexpr std::uint32_t kFilledShelfWidth = aether::ShadowAtlasManager::kAtlasWidth - kLargestShadowRes;
+		constexpr std::uint32_t kShelfCount = (kTotalEntryWidth / kFilledShelfWidth) + 2u;
+		return kShelfCount * kLargestShadowRes;
+	}
+
+	static_assert(aether::ShadowAtlasManager::kAtlasWidth >= kLargestShadowRes, "Shadow atlas is narrower than a single shadow entry.");
+	static_assert(WorstCaseAtlasHeight() <= aether::ShadowAtlasManager::kAtlasHeight,
+	        "Shadow atlas is too small for kMaxRenderedLocalShadowEntries entries at this resolution - grow ShadowAtlasManager::kAtlasHeight (it costs 4x its own size in VSM blur scratch) or lower the entry cap.");
+
 	struct PointShadowFace
 	{
 		glm::vec3 direction;
@@ -345,9 +369,6 @@ namespace aether
 
 		std::uint32_t shadowDataIdx = 0;
 
-		// Fixed resolution for all shadows - avoids atlas layout shifts when
-		constexpr std::uint32_t kShadowRes = 512u;
-
 		for (std::uint32_t i = 0; i < budget; ++i)
 		{
 			const ShadowCandidate& c = candidates[i];
@@ -397,7 +418,7 @@ namespace aether
 					break;
 				}
 
-				const ShadowAtlasManager::Region r = m_atlasManager.Allocate(kShadowRes, kShadowRes);
+				const ShadowAtlasManager::Region r = m_atlasManager.Allocate(kSpotShadowRes, kSpotShadowRes);
 				if (!r.IsValid())
 				{
 					break;
