@@ -148,6 +148,17 @@ namespace aether
 		}
 	}
 
+	void RenderTargetService::ForEachRenderQueue(const std::function<void(RenderQueue&)>& fn)
+	{
+		for (auto& [_, rt]: m_targets)
+		{
+			if (rt.renderQueue)
+			{
+				fn(*rt.renderQueue);
+			}
+		}
+	}
+
 	Expected<std::uint32_t> RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const gpu::Extent2D extent)
 	{
 		AE_PROFILE_ZONE();

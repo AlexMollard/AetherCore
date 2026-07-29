@@ -171,6 +171,26 @@ namespace aether
 		++m_texturePreviewGeneration;
 	}
 
+	void RenderingSubsystem::ForEachRenderQueue(const std::function<void(RenderQueue&)>& fn)
+	{
+		fn(m_renderQueue);
+		fn(m_shadowService.GetShadowQueue());
+		fn(m_localShadowService.GetShadowQueue());
+		fn(m_cameraPreview.GetRenderQueue());
+		fn(m_modelPreview.GetRenderQueue());
+		m_renderTargetService.ForEachRenderQueue(fn);
+	}
+
+	bool RenderingSubsystem::HasSkinnedDrawsQueued(const std::uint32_t drawSlot)
+	{
+		bool any = false;
+		ForEachRenderQueue([&any, drawSlot](RenderQueue& queue)
+		        {
+			        any = queue.HasAnimatedDraws(drawSlot) || any;
+		        });
+		return any;
+	}
+
 	void RenderingSubsystem::PublishContentSignals(const RenderContentSignals& signals)
 	{
 		if (m_profile != RuntimeProfile::Full)
@@ -248,6 +268,16 @@ namespace aether
 			DestroyTexturePreviewImage();
 		}
 		RegisterTexturePreviewImage();
+
+		// Only the release direction is driven from here. Each queue creates its own skin
+		// palette and pose pools the instant it is handed a skinned draw, on the render
+		// thread, which is a frame earlier than this path could manage - and a frame drawn
+		// with those pools missing is a broken pose, not a dropped frame. Growing must not
+		// wait on a quiesced rebuild; shrinking must.
+		if (!m_lazyGates.SkinningBuffers())
+		{
+			ForEachRenderQueue([](RenderQueue& queue) { queue.ReleaseAnimationBuffers(); });
+		}
 	}
 
 	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless)

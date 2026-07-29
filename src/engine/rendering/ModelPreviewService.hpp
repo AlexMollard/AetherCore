@@ -71,6 +71,11 @@ namespace aether
 			m_queue.DiscardPending(slot);
 		}
 
+		[[nodiscard]] RenderQueue& GetRenderQueue()
+		{
+			return m_queue;
+		}
+
 	private:
 		void RegisterImages(RenderGraph& graph);
 		void DestroyModelEntities(AssetManager& assets);

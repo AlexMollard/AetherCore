@@ -75,6 +75,11 @@ namespace aether
 			m_queue.DiscardPending(slot);
 		}
 
+		[[nodiscard]] RenderQueue& GetRenderQueue()
+		{
+			return m_queue;
+		}
+
 	private:
 		RenderQueue m_queue;
 		FrameConstantsBuffer m_constants;

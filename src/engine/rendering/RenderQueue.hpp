@@ -188,6 +188,28 @@ namespace aether
 
 		[[nodiscard]] bool IsEmpty(std::uint32_t slot) const;
 
+		// Whether anything submitted into this slot carried an animation database, i.e.
+		// whether PrepareAndDispatch is going to need the skinning pools for it. Read on
+		// the game thread from the slot it has just finished filling, alongside IsEmpty.
+		[[nodiscard]] bool HasAnimatedDraws(std::uint32_t slot) const
+		{
+			return m_slotHasAnimatedDraws[slot % kFramesInFlight];
+		}
+
+		[[nodiscard]] bool AreAnimationBuffersAllocated() const
+		{
+			return m_animationBuffersReady;
+		}
+
+		// Drops the skinning pools. Over a hundred megabytes per queue, so a session that
+		// has walked away from its skinned content should not keep paying for it.
+		//
+		// The buffers are live for as long as any frame referencing them is in flight, so
+		// this must only be called with the GPU idle and the render thread parked - it
+		// rides the same quiesced rebuild path as the shadow and AO targets. The next
+		// skinned draw re-creates them through EnsureAnimationBuffers.
+		void ReleaseAnimationBuffers();
+
 	private:
 		// Allocates the skinning buffers the first time this queue sees an animated
 		// draw. Called from PrepareAndDispatch on the render thread.
@@ -198,6 +220,10 @@ namespace aether
 		std::array<std::mutex, kFramesInFlight> m_slotMutexes;
 		std::array<std::condition_variable, kFramesInFlight> m_slotCv;
 		std::array<bool, kFramesInFlight> m_slotConsumed{};
+		// Set by Submit when a draw carries an animation database, cleared with the slot.
+		// Guarded by m_slotMutexes[slot] on the write side, like the command vector it
+		// summarises.
+		std::array<bool, kFramesInFlight> m_slotHasAnimatedDraws{};
 		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
 
 		struct MappedPerFrame

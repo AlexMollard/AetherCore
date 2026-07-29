@@ -43,6 +43,11 @@ namespace aether
 		void DiscardPendingQueues(std::uint32_t slot);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
+		// Every live render-to-texture queue. The set is dynamic - a target is created and
+		// destroyed with the camera that asked for it - so this is a visitor rather than a
+		// fixed list of accessors.
+		void ForEachRenderQueue(const std::function<void(RenderQueue&)>& fn);
+
 		[[nodiscard]] Expected<std::uint32_t> CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, gpu::Extent2D extent);
 		void DestroyCameraRenderTarget(std::uint32_t id);
 		[[nodiscard]] RGImage GetRenderTargetColorImage(std::uint32_t id) const;

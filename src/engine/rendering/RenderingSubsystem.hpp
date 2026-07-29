@@ -96,6 +96,11 @@ namespace aether
 			return m_lazyGates;
 		}
 
+		// True when any render queue was handed a skinned draw for this slot. Called on the
+		// game thread after every queue for the frame has been filled, and fed to the
+		// skinning gate as the content signal.
+		[[nodiscard]] bool HasSkinnedDrawsQueued(std::uint32_t drawSlot);
+
 		void DiscardPendingFrameQueues(std::uint32_t slot);
 
 		[[nodiscard]] SceneViewportSettings GetSceneViewportSettings() const;
@@ -278,6 +283,9 @@ namespace aether
 		// Runs on the main thread with the render thread parked and the GPU quiesced,
 		// immediately before the render graph is rebuilt around what now exists.
 		void ApplyLazyTargetState(ServiceContainer& services);
+
+		// Visits every RenderQueue this subsystem owns, directly or through a service.
+		void ForEachRenderQueue(const std::function<void(RenderQueue&)>& fn);
 
 		struct PerFrameResourceTable
 		{

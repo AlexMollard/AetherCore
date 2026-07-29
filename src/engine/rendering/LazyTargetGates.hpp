@@ -25,6 +25,11 @@ namespace aether
 		bool localShadowLights = false;
 		// A GPU texture preview is being displayed by a host tool right now.
 		bool texturePreview = false;
+		// At least one render queue was handed a draw carrying an animation database,
+		// i.e. a skinned mesh. Measured across every queue - main, shadow, local shadow,
+		// the two previews and the render-to-texture queues - because each of them
+		// reserves its own skin palette and pose pools off the back of one such draw.
+		bool skinnedDraws = false;
 	};
 
 	// Decides which lazily-allocated render target groups this session should be holding.
@@ -73,6 +78,18 @@ namespace aether
 			return m_texturePreview.enabled;
 		}
 
+		// False means every render queue should drop its skin palette, sampled pose and
+		// node transform pools - 402 MB across the queues on a 3D project.
+		//
+		// True is not an instruction to allocate: a queue creates its own buffers the
+		// moment it is handed a skinned draw, one frame before this gate could have
+		// reacted, because a missing palette mid-draw is a correctness bug rather than a
+		// dropped frame. This gate only ever authorises the release.
+		[[nodiscard]] bool SkinningBuffers() const
+		{
+			return m_skinning.enabled;
+		}
+
 	private:
 		struct Gate
 		{
@@ -91,5 +108,6 @@ namespace aether
 		Gate m_localShadow;
 		Gate m_gtao;
 		Gate m_texturePreview;
+		Gate m_skinning;
 	};
 } // namespace aether

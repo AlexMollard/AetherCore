@@ -225,6 +225,54 @@ namespace aether
 		        m_nodeGlobalTransforms[0].address);
 	}
 
+	// The mirror of EnsureAnimationBuffers. Everything it touches is put back exactly as
+	// this queue was before its first skinned draw: null handles, null mapped pointers,
+	// zero device addresses. PrepareAndDispatch already treats that state as "no GPU
+	// skinning this frame" - it is the state every queue starts life in - so releasing
+	// cannot make a frame render wrong, only make the next skinned frame re-create.
+	//
+	// Capacity (m_maxAnimationDraws and friends) is deliberately left alone: it is the
+	// queue's configuration, not its allocation, and EnsureAnimationBuffers reads it.
+	void RenderQueue::ReleaseAnimationBuffers()
+	{
+		AE_PROFILE_ZONE();
+		if (!m_animationBuffersReady)
+		{
+			return;
+		}
+
+		auto DestroyAll = [](auto& arr)
+		{
+			for (auto& e: arr)
+			{
+				if (e.handle.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(e.handle);
+				}
+				e = {};
+			}
+		};
+		DestroyAll(m_skinCopyJobs);
+		DestroyAll(m_animationSampleJobs);
+		DestroyAll(m_sampledPoses);
+		DestroyAll(m_nodeGlobalTransforms);
+		DestroyAll(m_skinPalette);
+
+		m_skinCopyJobsMapped = nullptr;
+		m_animationSampleJobsMapped = nullptr;
+		// The addresses these frames were prepared against are gone; a stale one handed to
+		// a shader would be a dangling device pointer.
+		for (PreparedFrame& prepared: m_preparedFrames)
+		{
+			prepared.skinPaletteAddr = 0;
+			prepared.nodeGlobalTransformsAddr = 0;
+		}
+		m_animationSlotCleared.fill(false);
+		m_animationBuffersReady = false;
+
+		AE_INFO(LogCategory::Render, "RenderQueue({}): animation buffers released after sustained absence of skinned draws.", m_debugName);
+	}
+
 	void RenderQueue::Shutdown()
 	{
 		m_sharedPipelines = nullptr;
@@ -268,12 +316,20 @@ namespace aether
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
 		m_animationBuffersReady = false;
+		m_slotHasAnimatedDraws = {};
 	}
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
 		const std::lock_guard lock(m_slotMutexes[m_writeSlot]);
 		m_commandSlots[m_writeSlot].push_back(cmd);
+		// Exactly the condition EnsureAnimationBuffers tests on the render thread, recorded
+		// here so the game thread can answer "does this frame need the skinning pools?"
+		// without walking the command list a second time.
+		if (cmd.animDb != nullptr)
+		{
+			m_slotHasAnimatedDraws[m_writeSlot] = true;
+		}
 	}
 
 	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::PipelineView computePipeline, std::uint32_t frameIndex)
@@ -1033,6 +1089,7 @@ namespace aether
 		}
 		m_slotConsumed[idx] = false;
 		m_commandSlots[idx].clear();
+		m_slotHasAnimatedDraws[idx] = false;
 	}
 
 	void RenderQueue::DiscardPending(std::uint32_t slot)
@@ -1041,6 +1098,7 @@ namespace aether
 		{
 			const std::lock_guard lock(m_slotMutexes[idx]);
 			m_commandSlots[idx].clear();
+			m_slotHasAnimatedDraws[idx] = false;
 			m_slotConsumed[idx] = true;
 		}
 		m_slotCv[idx].notify_one();

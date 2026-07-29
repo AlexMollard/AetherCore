@@ -50,6 +50,11 @@ namespace aether
 		pending = Update(m_localShadow, signals.localShadowLights && signals.shadowCasterDraws) || pending;
 		pending = Update(m_gtao, signals.sceneDraws) || pending;
 		pending = Update(m_texturePreview, signals.texturePreview) || pending;
+		// Skinning pools follow the skinned draws alone. A scene can be full of skeletons
+		// and animators and still submit nothing skinned - the meshes may be culled, the
+		// entities disabled, the whole world unloaded - and it is the submitted draw that
+		// the pools are sized against.
+		pending = Update(m_skinning, signals.skinnedDraws) || pending;
 		return pending;
 	}
 
@@ -59,6 +64,7 @@ namespace aether
 		changed = CommitOne(m_localShadow) || changed;
 		changed = CommitOne(m_gtao) || changed;
 		changed = CommitOne(m_texturePreview) || changed;
+		changed = CommitOne(m_skinning) || changed;
 		return changed;
 	}
 } // namespace aether

@@ -785,6 +785,9 @@ namespace aether
 		        .directionalLight = directionalShadowEnabled,
 		        .localShadowLights = anyCastsShadow(packet.pointLights) || anyCastsShadow(packet.spotLights),
 		        .texturePreview = m_rendering->IsTexturePreviewRequested(),
+		        // Asked after every queue for this slot has been filled - the main flush, the
+		        // two shadow services, both previews and the render-to-texture targets above.
+		        .skinnedDraws = m_rendering->HasSkinnedDrawsQueued(drawSlot),
 		});
 
 		return packet;

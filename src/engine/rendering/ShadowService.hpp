@@ -52,6 +52,11 @@ namespace aether
 		[[nodiscard]] bool PrepareQueues(std::uint32_t drawSlot, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
+		[[nodiscard]] RenderQueue& GetShadowQueue()
+		{
+			return m_shadowRenderQueue;
+		}
+
 		void SetDirectionalShadowEnabled(bool enabled)
 		{
 			m_directionalShadowEnabled = enabled;
