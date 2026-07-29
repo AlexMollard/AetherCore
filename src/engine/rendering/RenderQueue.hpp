@@ -189,6 +189,10 @@ namespace aether
 		[[nodiscard]] bool IsEmpty(std::uint32_t slot) const;
 
 	private:
+		// Allocates the skinning buffers the first time this queue sees an animated
+		// draw. Called from PrepareAndDispatch on the render thread.
+		void EnsureAnimationBuffers();
+
 		// Each slot is protected by m_slotMutexes[slot]. The game thread
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::array<std::mutex, kFramesInFlight> m_slotMutexes;
@@ -232,6 +236,7 @@ namespace aether
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
+		bool m_animationBuffersReady = false;
 		std::string m_debugName = "RenderQueue";
 
 		struct BatchRenderInfo

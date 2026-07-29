@@ -93,95 +93,6 @@ namespace aether
 			m_batchDesc[i].address = view.deviceAddress;
 		}
 
-		if (m_maxAnimationDraws > 0u)
-		{
-			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-			{
-				const gpu::MappedBufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob),
-				        .usage = kSsboFlags,
-				        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-				        .debugName = "RenderQueue.SkinCopyJobs",
-				};
-				m_skinCopyJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-				if (!m_skinCopyJobs[i].handle.IsValid())
-				{
-					Throw(AetherError::Engine("RenderQueue: SkinCopyJobs CreateMappedBuffer failed"));
-				}
-				const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_skinCopyJobs[i].handle);
-				m_skinCopyJobs[i].mapped = view.mappedPtr;
-				m_skinCopyJobs[i].address = view.deviceAddress;
-			}
-
-			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-			{
-				const gpu::MappedBufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob),
-				        .usage = kSsboFlags,
-				        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-				        .debugName = "RenderQueue.AnimSampleJobs",
-				};
-				m_animationSampleJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-				if (!m_animationSampleJobs[i].handle.IsValid())
-				{
-					Throw(AetherError::Engine("RenderQueue: AnimSampleJobs CreateMappedBuffer failed"));
-				}
-				const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_animationSampleJobs[i].handle);
-				m_animationSampleJobs[i].mapped = view.mappedPtr;
-				m_animationSampleJobs[i].address = view.deviceAddress;
-			}
-
-			constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
-
-			{
-				for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-				{
-					const gpu::BufferDesc desc{
-					        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
-					        .usage = kAnimationSsboFlags,
-					        .debugName = "RenderQueue.SkinPalette",
-					};
-					m_skinPalette[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-					if (!m_skinPalette[i].handle.IsValid())
-					{
-						Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
-					}
-					m_skinPalette[i].address = gpu::ResourceRegistry::ResolveBuffer(m_skinPalette[i].handle).deviceAddress;
-				}
-			}
-
-			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-			{
-				const gpu::BufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose),
-				        .usage = kAnimationSsboFlags,
-				        .debugName = "RenderQueue.SampledPoses",
-				};
-				m_sampledPoses[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-				if (!m_sampledPoses[i].handle.IsValid())
-				{
-					Throw(AetherError::Engine("RenderQueue: SampledPoses CreateBuffer failed"));
-				}
-				m_sampledPoses[i].address = gpu::ResourceRegistry::ResolveBuffer(m_sampledPoses[i].handle).deviceAddress;
-			}
-
-			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-			{
-				const gpu::BufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4),
-				        .usage = kAnimationSsboFlags,
-				        .debugName = "RenderQueue.NodeGlobalTransforms",
-				};
-				m_nodeGlobalTransforms[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-				if (!m_nodeGlobalTransforms[i].handle.IsValid())
-				{
-					Throw(AetherError::Engine("RenderQueue: NodeGlobalTransforms CreateBuffer failed"));
-				}
-				m_nodeGlobalTransforms[i].address = gpu::ResourceRegistry::ResolveBuffer(m_nodeGlobalTransforms[i].handle).deviceAddress;
-			}
-
-			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette[0]=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}", m_skinPalette[0].address, m_sampledPoses[0].address, m_nodeGlobalTransforms[0].address);
-		}
 
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
@@ -201,8 +112,117 @@ namespace aether
 		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceData[0].mapped);
 		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInput[0].mapped);
 		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[0].mapped);
-		m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobs[0].mapped);
-		m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobs[0].mapped);
+	}
+
+	// The skinning buffers are sized for the queue's worst case (maxAnimationDraws
+	// skeletons of 128 joints, triple-buffered) and that reservation costs over a
+	// hundred megabytes per queue. A scene with no skinned meshes - every 2D scene,
+	// and most 3D ones - would never touch a byte of it, so the buffers are created
+	// the first time this queue is actually handed an animated draw and kept from
+	// then on. Capacity is unchanged; only the moment of allocation moved.
+	void RenderQueue::EnsureAnimationBuffers()
+	{
+		AE_PROFILE_ZONE();
+		if (m_animationBuffersReady || m_maxAnimationDraws == 0u)
+		{
+			return;
+		}
+
+		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
+		constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
+
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob),
+			        .usage = kSsboFlags,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "RenderQueue.SkinCopyJobs",
+			};
+			m_skinCopyJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_skinCopyJobs[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: SkinCopyJobs CreateMappedBuffer failed"));
+			}
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_skinCopyJobs[i].handle);
+			m_skinCopyJobs[i].mapped = view.mappedPtr;
+			m_skinCopyJobs[i].address = view.deviceAddress;
+		}
+
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob),
+			        .usage = kSsboFlags,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "RenderQueue.AnimSampleJobs",
+			};
+			m_animationSampleJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_animationSampleJobs[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: AnimSampleJobs CreateMappedBuffer failed"));
+			}
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_animationSampleJobs[i].handle);
+			m_animationSampleJobs[i].mapped = view.mappedPtr;
+			m_animationSampleJobs[i].address = view.deviceAddress;
+		}
+
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::BufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
+			        .usage = kAnimationSsboFlags,
+			        .debugName = "RenderQueue.SkinPalette",
+			};
+			m_skinPalette[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+			if (!m_skinPalette[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
+			}
+			m_skinPalette[i].address = gpu::ResourceRegistry::ResolveBuffer(m_skinPalette[i].handle).deviceAddress;
+		}
+
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::BufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose),
+			        .usage = kAnimationSsboFlags,
+			        .debugName = "RenderQueue.SampledPoses",
+			};
+			m_sampledPoses[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+			if (!m_sampledPoses[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: SampledPoses CreateBuffer failed"));
+			}
+			m_sampledPoses[i].address = gpu::ResourceRegistry::ResolveBuffer(m_sampledPoses[i].handle).deviceAddress;
+		}
+
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::BufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4),
+			        .usage = kAnimationSsboFlags,
+			        .debugName = "RenderQueue.NodeGlobalTransforms",
+			};
+			m_nodeGlobalTransforms[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+			if (!m_nodeGlobalTransforms[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: NodeGlobalTransforms CreateBuffer failed"));
+			}
+			m_nodeGlobalTransforms[i].address = gpu::ResourceRegistry::ResolveBuffer(m_nodeGlobalTransforms[i].handle).deviceAddress;
+		}
+
+		// Freshly created buffers hold garbage, so every slot needs its zero-fill
+		// again before the animation compute passes read from it.
+		m_animationSlotCleared.fill(false);
+		m_animationBuffersReady = true;
+
+		AE_INFO(LogCategory::Render,
+		        "RenderQueue({}): animation buffers created on first skinned draw: skinPalette[0]=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}",
+		        m_debugName,
+		        m_skinPalette[0].address,
+		        m_sampledPoses[0].address,
+		        m_nodeGlobalTransforms[0].address);
 	}
 
 	void RenderQueue::Shutdown()
@@ -247,6 +267,7 @@ namespace aether
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
+		m_animationBuffersReady = false;
 	}
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
@@ -277,6 +298,11 @@ namespace aether
 
 		prepared.frameAddr = frameAddr;
 		m_animationSampleJobCount = 0;
+
+		if (!m_animationBuffersReady && std::ranges::any_of(commands, [](const DrawCommand& dc) { return dc.animDb != nullptr; }))
+		{
+			EnsureAnimationBuffers();
+		}
 
 		const std::uint32_t animJobBase = 0;
 
