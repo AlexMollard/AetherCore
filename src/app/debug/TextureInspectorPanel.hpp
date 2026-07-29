@@ -49,5 +49,6 @@ namespace aether::editor
 		bool m_previewTonemap = false;
 		bool m_useGpuPreview = false;
 		std::uint64_t m_previewTextureId = 0;
+		std::uint32_t m_previewGeneration = 0;
 	};
 } // namespace aether::editor

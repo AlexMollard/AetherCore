@@ -216,9 +216,23 @@ namespace aether
 		// (enabled=false / slot 0xFFFFFFFF disables). Read on the render thread each
 		void SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled);
 
+		// True while a host tool is asking for the GPU texture preview. The 16 MB preview
+		// target is allocated against this, not held for the life of the editor.
+		[[nodiscard]] bool IsTexturePreviewRequested() const
+		{
+			return m_previewEnabled;
+		}
+
 		[[nodiscard]] gpu::ImageView GetTexturePreviewView() const
 		{
 			return m_texturePreviewView;
+		}
+
+		// Bumped every time the preview image is created or destroyed. A UI holding a
+		// backend texture handle for the view must drop it when this changes.
+		[[nodiscard]] std::uint32_t GetTexturePreviewGeneration() const
+		{
+			return m_texturePreviewGeneration;
 		}
 
 		[[nodiscard]] PhysicsDebugRenderer& GetPhysicsDebugRenderer()
@@ -256,6 +270,9 @@ namespace aether
 
 		// lifetime of the subsystem, but RenderGraph::Clear() (on every scene-viewport
 		void RegisterTexturePreviewImage();
+
+		void CreateTexturePreviewImage();
+		void DestroyTexturePreviewImage();
 
 		// Creates or releases every lazily-allocated target to match the committed gates.
 		// Runs on the main thread with the render thread parked and the GPU quiesced,
@@ -307,6 +324,7 @@ namespace aether
 		std::uint32_t m_previewFlags = 0;
 		std::uint32_t m_previewTonemap = 0;
 		bool m_previewEnabled = false;
+		std::uint32_t m_texturePreviewGeneration = 0;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
 		ui::UiRenderer m_uiRenderer;

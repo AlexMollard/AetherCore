@@ -49,6 +49,7 @@ namespace aether
 		bool pending = Update(m_directionalShadow, signals.directionalLight && signals.shadowCasterDraws);
 		pending = Update(m_localShadow, signals.localShadowLights && signals.shadowCasterDraws) || pending;
 		pending = Update(m_gtao, signals.sceneDraws) || pending;
+		pending = Update(m_texturePreview, signals.texturePreview) || pending;
 		return pending;
 	}
 
@@ -57,6 +58,7 @@ namespace aether
 		bool changed = CommitOne(m_directionalShadow);
 		changed = CommitOne(m_localShadow) || changed;
 		changed = CommitOne(m_gtao) || changed;
+		changed = CommitOne(m_texturePreview) || changed;
 		return changed;
 	}
 } // namespace aether

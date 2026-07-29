@@ -784,6 +784,7 @@ namespace aether
 		        .shadowCasterDraws = directionalShadowCasters || localShadowCasters,
 		        .directionalLight = directionalShadowEnabled,
 		        .localShadowLights = anyCastsShadow(packet.pointLights) || anyCastsShadow(packet.spotLights),
+		        .texturePreview = m_rendering->IsTexturePreviewRequested(),
 		});
 
 		return packet;

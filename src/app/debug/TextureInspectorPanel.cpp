@@ -279,7 +279,23 @@ namespace aether::editor
 			ImVec2 uvMax(1.0f, 1.0f);
 			if (shaderPreview)
 			{
-				if (m_previewTextureId == 0)
+				// The preview image is allocated on demand and released when nothing has
+				// asked for it in a while, so a cached backend handle only stays valid
+				// while the generation does.
+				const std::uint32_t previewGeneration = rendering->GetTexturePreviewGeneration();
+				if (previewGeneration != m_previewGeneration)
+				{
+					if (m_previewTextureId != 0)
+					{
+						if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
+						{
+							imgui->UnregisterTexture(static_cast<ImTextureID>(m_previewTextureId));
+						}
+						m_previewTextureId = 0;
+					}
+					m_previewGeneration = previewGeneration;
+				}
+				if (m_previewTextureId == 0 && rendering->GetTexturePreviewView() != nullptr)
 				{
 					if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 					{

@@ -133,6 +133,44 @@ namespace aether
 		m_texturePreview = m_renderGraph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_texturePreviewHandle), m_texturePreviewView, gpu::ImageAspect::Color);
 	}
 
+	// 16 MB that only the texture inspector's GPU preview can read, and only while it
+	// is on screen. Created when the inspector asks for a preview, released when it has
+	// stopped asking for long enough.
+	void RenderingSubsystem::CreateTexturePreviewImage()
+	{
+		if (m_texturePreviewHandle.IsValid())
+		{
+			return;
+		}
+		const gpu::TextureDesc previewDesc{
+		        .format = gpu::Format::R8G8B8A8Unorm,
+		        .extent = {kTexturePreviewSize, kTexturePreviewSize},
+		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
+		        .aspect = gpu::ImageAspect::Color,
+		        .debugName = "Debug.TexturePreview",
+		};
+		m_texturePreviewHandle = gpu::ResourceRegistry::CreateTexture(previewDesc);
+		if (!m_texturePreviewHandle.IsValid())
+		{
+			return;
+		}
+		m_texturePreviewView = gpu::ResourceRegistry::ResolveTexture(m_texturePreviewHandle).view;
+		++m_texturePreviewGeneration;
+	}
+
+	void RenderingSubsystem::DestroyTexturePreviewImage()
+	{
+		if (!m_texturePreviewHandle.IsValid())
+		{
+			return;
+		}
+		gpu::ResourceRegistry::Destroy(m_texturePreviewHandle);
+		m_texturePreviewHandle = {};
+		m_texturePreviewView = nullptr;
+		m_texturePreview = {};
+		++m_texturePreviewGeneration;
+	}
+
 	void RenderingSubsystem::PublishContentSignals(const RenderContentSignals& signals)
 	{
 		if (m_profile != RuntimeProfile::Full)
@@ -200,6 +238,16 @@ namespace aether
 				});
 			}
 		}
+
+		if (m_lazyGates.TexturePreviewTarget())
+		{
+			CreateTexturePreviewImage();
+		}
+		else
+		{
+			DestroyTexturePreviewImage();
+		}
+		RegisterTexturePreviewImage();
 	}
 
 	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless)
@@ -308,20 +356,6 @@ namespace aether
 		m_renderer.Initialize(&m_postProcessStack);
 
 		{
-			const gpu::TextureDesc previewDesc{
-			        .format = gpu::Format::R8G8B8A8Unorm,
-			        .extent = {kTexturePreviewSize, kTexturePreviewSize},
-			        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
-			        .aspect = gpu::ImageAspect::Color,
-			        .debugName = "Debug.TexturePreview",
-			};
-			m_texturePreviewHandle = gpu::ResourceRegistry::CreateTexture(previewDesc);
-			if (m_texturePreviewHandle.IsValid())
-			{
-				const auto& previewTexture = gpu::ResourceRegistry::ResolveTexture(m_texturePreviewHandle);
-				m_texturePreviewView = previewTexture.view;
-				RegisterTexturePreviewImage();
-			}
 			AE_EXPECT_OR_THROW(texturePreviewPipeline,
 			        GraphicsPipeline::Create(vk.GetDevice().device,
 			                {
@@ -482,7 +516,6 @@ namespace aether
 		        .renderGraph = &m_renderGraph,
 		});
 		CreateSceneViewportDepth(gpu.GetDevice(), swapchain.GetDepthFormat(), m_renderGraph, bindless);
-		RegisterTexturePreviewImage();
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);

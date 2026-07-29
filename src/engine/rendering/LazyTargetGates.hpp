@@ -23,6 +23,8 @@ namespace aether
 		bool directionalLight = false;
 		// At least one extracted point or spot light has its shadow flag set.
 		bool localShadowLights = false;
+		// A GPU texture preview is being displayed by a host tool right now.
+		bool texturePreview = false;
 	};
 
 	// Decides which lazily-allocated render target groups this session should be holding.
@@ -66,6 +68,11 @@ namespace aether
 			return m_gtao.enabled;
 		}
 
+		[[nodiscard]] bool TexturePreviewTarget() const
+		{
+			return m_texturePreview.enabled;
+		}
+
 	private:
 		struct Gate
 		{
@@ -83,5 +90,6 @@ namespace aether
 		Gate m_directionalShadow;
 		Gate m_localShadow;
 		Gate m_gtao;
+		Gate m_texturePreview;
 	};
 } // namespace aether

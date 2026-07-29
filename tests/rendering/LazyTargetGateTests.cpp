@@ -2,7 +2,7 @@
 // actually drew.
 //
 // The gates in here arm and disarm ~480 MB of shadow atlas, cascade depth, VSM blur
-// scratch and AO memory. Two failure modes matter, and they are not symmetric:
+// scratch, AO and preview memory. Two failure modes matter, and they are not symmetric:
 //
 //   * Refusing to allocate when the content IS there produces a scene that silently
 //     renders without shadows. That is the bug the "gate on content, never on
@@ -34,6 +34,7 @@ namespace
 		        .shadowCasterDraws = false,
 		        .directionalLight = true,
 		        .localShadowLights = true,
+		        .texturePreview = false,
 		};
 	}
 
@@ -45,6 +46,7 @@ namespace
 		        .shadowCasterDraws = true,
 		        .directionalLight = true,
 		        .localShadowLights = true,
+		        .texturePreview = false,
 		};
 	}
 
@@ -68,6 +70,7 @@ TEST_CASE("Lazy targets start released")
 	CHECK_FALSE(gates.DirectionalShadowTargets());
 	CHECK_FALSE(gates.LocalShadowTargets());
 	CHECK_FALSE(gates.GtaoTargets());
+	CHECK_FALSE(gates.TexturePreviewTarget());
 }
 
 TEST_CASE("A scene with no shadow casters allocates no shadow targets")
@@ -173,6 +176,7 @@ TEST_CASE("Shadow-casting lights alone do not allocate the atlas")
 	                .shadowCasterDraws = false,
 	                .directionalLight = false,
 	                .localShadowLights = true,
+	                .texturePreview = false,
 	        },
 	        10);
 
@@ -189,6 +193,7 @@ TEST_CASE("Shadow-casting geometry alone does not allocate the atlas")
 	                .shadowCasterDraws = true,
 	                .directionalLight = false,
 	                .localShadowLights = false,
+	                .texturePreview = false,
 	        },
 	        10);
 
@@ -209,6 +214,7 @@ TEST_CASE("Directional and local shadow targets are gated independently")
 	                .shadowCasterDraws = true,
 	                .directionalLight = true,
 	                .localShadowLights = false,
+	                .texturePreview = false,
 	        },
 	        10);
 
@@ -225,11 +231,28 @@ TEST_CASE("A sunless scene with casters allocates no cascades")
 	                .shadowCasterDraws = true,
 	                .directionalLight = false,
 	                .localShadowLights = true,
+	                .texturePreview = false,
 	        },
 	        10);
 
 	CHECK_FALSE(gates.DirectionalShadowTargets());
 	CHECK(gates.LocalShadowTargets());
+}
+
+TEST_CASE("The texture preview target follows the preview request")
+{
+	LazyTargetGates gates;
+	Run(gates, Scene2D(), 5);
+	CHECK_FALSE(gates.TexturePreviewTarget());
+
+	RenderContentSignals previewing = Scene2D();
+	previewing.texturePreview = true;
+	CHECK(gates.Publish(previewing));
+	CHECK(gates.Commit());
+	CHECK(gates.TexturePreviewTarget());
+
+	Run(gates, Scene2D(), LazyTargetGates::kReleaseFrames + 2);
+	CHECK_FALSE(gates.TexturePreviewTarget());
 }
 
 TEST_CASE("Commit reports whether anything moved")
