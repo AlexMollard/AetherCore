@@ -77,6 +77,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'NetPlayerSync'
 
+    # Listed after PlayerController, whose SpawnPoint it reads and whose movement it
+    # stops while this player is dead. On the player rather than on the scene for the
+    # same reason ChatBox is: the host only accepts a server RPC aimed at an entity
+    # the sending connection owns, and a fire request is exactly that.
+    [[entities.scripts]]
+    type = 'PlayerCombat'
+
     [[entities.scripts]]
     type = 'NameTag'
 

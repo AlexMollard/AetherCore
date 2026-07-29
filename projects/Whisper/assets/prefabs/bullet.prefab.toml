@@ -1,0 +1,53 @@
+# Whisper's one and only projectile.
+#
+# `network_identity` is deliberately an empty table, exactly as the player prefab's
+# is: netId/owner/spawnPrefab are runtime state the host assigns at Net.Spawn, and
+# the table's PRESENCE is the "this entity is replicated" mark.
+#
+# THERE IS NO COLLIDER AND NO RIGID BODY, and that is a decision rather than an
+# omission. The owner sweeps the step it is about to take with Physics2D.Raycast,
+# which finds the arena's tiles and the other players' bodies in one query and
+# cannot tunnel through either, and tests an overlap first for the one thing a cast
+# cannot report - a body its origin is already inside. A body of its own would buy
+# nothing and cost two things: raycasts would have the projectile's own shape to trip
+# over at the muzzle (this codebase has prior art on self-hitting casts), and a solid
+# one would shove the character that fired it.
+[[entities]]
+name = 'Bullet'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.network_identity]
+
+    # Shorter than the player's 0.10: a bullet crosses the arena in under a second,
+    # so every 10 ms of render delay is a visible length of travel behind where the
+    # shooter believes it is.
+    [entities.network_transform]
+    interpolation_delay = 0.040000000000000001
+
+    [entities.sprite]
+    blend_mode = 'additive'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 1
+    # Centred, because the transform IS the projectile: the sweep in Projectile.cs
+    # casts from Self.Position, so a corner pivot would draw the shot half a body
+    # off the line it actually travels.
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = true
+    # Stated rather than left at [0, 0]: an atlas-backed sprite gets its size from
+    # the atlas region, and this one has no atlas. 8 px at 20 per unit is 0.4 units
+    # across, which is Projectile.Radius twice over.
+    pixel_size = [ 8.0, 8.0 ]
+    pixel_snap = false
+    pixels_per_unit = 20.0
+    sorting_layer = 1
+    texture = 'project://assets/textures/fx/bullet.png'
+    tint = [ 1.0, 1.0, 1.0, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'Projectile'
