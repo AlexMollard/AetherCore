@@ -1695,6 +1695,8 @@ namespace aether::editor
 			                {"transientCacheMissTotal", s.transientCacheMiss},
 			                {"pendingDestructions", s.pendingDestructions},
 			                {"cacheSize", s.cacheSize},
+			                {"pooledImageCount", s.pooledImageCount},
+			                {"pooledBufferCount", s.pooledBufferCount},
 			                {"aliasedImageCount", s.aliasedImageCount},
 			                {"aliasedBufferCount", s.aliasedBufferCount},
 			                {"heapCapacityBytes", s.heapCapacity},

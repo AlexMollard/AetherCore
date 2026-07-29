@@ -91,17 +91,14 @@ namespace aether
 		m_freeTransientSlots.clear();
 		m_freeExternalSlots.clear();
 
-		if (m_virtualBlock != VK_NULL_HANDLE)
-		{
-			vmaDestroyVirtualBlock(m_virtualBlock);
-			m_virtualBlock = VK_NULL_HANDLE;
-		}
 		if (m_transientHeapAllocation != VK_NULL_HANDLE)
 		{
 			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
 			m_transientHeapAllocation = VK_NULL_HANDLE;
 		}
 		m_transientHeapCapacity = 0;
+		m_heapPlanSignature = 0;
+		m_heapPlanStandaloneSize = 0;
 
 		for (VkEvent event: m_events)
 		{
@@ -629,14 +626,15 @@ namespace aether
 
 		if (entry.fromHeap)
 		{
+			// Heap residents never go to the cache: their memory belongs to the heap plan,
+			// which is torn down and rebuilt whenever the graph changes shape.
 			if (entry.image.IsValid())
 			{
+#ifndef NDEBUG
+				EraseTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image));
+#endif
 				gpu::ResourceRegistry::Destroy(entry.image);
-			}
-			if (entry.m_virtualAlloc)
-			{
-				vmaVirtualFree(m_virtualBlock, entry.m_virtualAlloc);
-				entry.m_virtualAlloc = nullptr;
+				entry.image = {};
 			}
 		}
 		else if (entry.bindlessRequested)
@@ -660,6 +658,11 @@ namespace aether
 		entry.bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 		entry.fromHeap = false;
+		entry.aliased = false;
+		entry.heapOffset = VK_WHOLE_SIZE;
+		entry.memReqSize = 0;
+		entry.memReqAlignment = 0;
+		entry.memReqTypeBits = 0;
 		entry.format = gpu::Format::Undefined;
 		entry.usage = gpu::ImageUsage::None;
 		entry.aspect = gpu::ImageAspect::Color;
@@ -954,58 +957,41 @@ namespace aether
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
 
-	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment)
+	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment, std::uint32_t memoryTypeBits)
 	{
-		if (m_virtualBlock != VK_NULL_HANDLE)
-		{
-			vmaDestroyVirtualBlock(m_virtualBlock);
-			m_virtualBlock = VK_NULL_HANDLE;
-		}
-		if (m_transientHeapAllocation != VK_NULL_HANDLE)
-		{
-			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
-			m_transientHeapAllocation = VK_NULL_HANDLE;
-		}
-		m_transientHeapCapacity = 0;
-		m_transientHeapAlignment = kTransientHeapAlignment;
-
-		if (requiredSize == 0)
+		if (requiredSize == 0 || memoryTypeBits == 0)
 		{
 			return;
 		}
 
 		const VkMemoryRequirements memReqs{
 		        .size = requiredSize,
-		        .alignment = alignment,
-		        .memoryTypeBits = std::numeric_limits<std::uint32_t>::max(),
+		        .alignment = std::max<VkDeviceSize>(alignment, 1),
+		        .memoryTypeBits = memoryTypeBits,
 		};
+		// UNKNOWN, not AUTO: AUTO infers the memory type from the buffer or image being
+		// created, and there is no buffer or image here - just a raw range. Asking for AUTO
+		// fails every call, which is why the heap never existed and nothing was ever pooled.
 		const VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_AUTO,
+		        .usage = VMA_MEMORY_USAGE_UNKNOWN,
 		        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		};
 		if (vmaAllocateMemory(m_allocator, &memReqs, &allocInfo, &m_transientHeapAllocation, nullptr) != VK_SUCCESS)
 		{
-			AE_ERROR(LogCategory::Vulkan, "RenderGraph: failed to allocate {} byte transient heap for VRAM aliasing.", requiredSize);
+			if (!m_reportedHeapAllocFailure)
+			{
+				m_reportedHeapAllocFailure = true;
+				AE_ERROR(LogCategory::Vulkan, "RenderGraph: failed to allocate {} byte transient heap; transients fall back to private allocations.", requiredSize);
+			}
 			m_transientHeapAllocation = VK_NULL_HANDLE;
 			return;
 		}
+		m_reportedHeapAllocFailure = false;
 		m_transientHeapCapacity = requiredSize;
-		m_transientHeapAlignment = alignment;
-
-		const VmaVirtualBlockCreateInfo blockInfo{
-		        .size = requiredSize,
-		};
-		if (vmaCreateVirtualBlock(&blockInfo, &m_virtualBlock) != VK_SUCCESS)
-		{
-			AE_ERROR(LogCategory::Vulkan, "RenderGraph: failed to create VmaVirtualBlock.");
-			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
-			m_transientHeapAllocation = VK_NULL_HANDLE;
-			m_transientHeapCapacity = 0;
-			m_transientHeapAlignment = kTransientHeapAlignment;
-		}
+		m_transientHeapAlignment = std::max<VkDeviceSize>(alignment, 1);
 	}
 
-	void RenderGraphStorage::PrepareTransientAllocations(const FrameTarget& target)
+	void RenderGraphStorage::PrepareTransientAllocations(const FrameTarget& target, std::span<const TransientLifetime> imageLifetimes, std::span<const TransientLifetime> bufferLifetimes)
 	{
 		AE_PROFILE_ZONE();
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
@@ -1013,38 +999,9 @@ namespace aether
 			return;
 		}
 
-		// Only entries that still have to be materialised are re-planned. Wiping the heap
-		// bookkeeping of a live entry orphaned its virtual allocation, left the image
-		// sitting on a range the block no longer knew about, and made every "is this
-		// aliased?" answer come back false from the second frame onwards.
-		for (auto& entry: m_transientImages)
-		{
-			if (entry.image.IsValid())
-			{
-				continue;
-			}
-			entry.fromHeap = false;
-			entry.m_virtualAlloc = nullptr;
-			entry.heapOffset = VK_WHOLE_SIZE;
-			entry.memReqSize = 0;
-			entry.memReqAlignment = 0;
-		}
-		for (auto& entry: m_transientBuffers)
-		{
-			if (entry.buffer.IsValid())
-			{
-				continue;
-			}
-			entry.fromHeap = false;
-			entry.m_virtualAlloc = nullptr;
-			entry.heapOffset = VK_WHOLE_SIZE;
-			entry.memReqSize = 0;
-			entry.memReqAlignment = 0;
-		}
-
 		// Memory requirements are queried for every slot, not only the ones about to be
-		// created: they are what the byte-level stats are computed from, and a slot that
-		// was materialised eagerly (bindless) would otherwise report as costing nothing.
+		// created: they are what the heap plan and the byte-level stats are computed from,
+		// and a slot that was materialised eagerly would otherwise report as costing nothing.
 		for (auto& entry: m_transientImages)
 		{
 			if (entry.memReqSize != 0)
@@ -1086,6 +1043,7 @@ namespace aether
 			vkGetDeviceImageMemoryRequirements(m_device, &query, &reqs2);
 			entry.memReqSize = reqs2.memoryRequirements.size;
 			entry.memReqAlignment = reqs2.memoryRequirements.alignment;
+			entry.memReqTypeBits = reqs2.memoryRequirements.memoryTypeBits;
 		}
 
 		for (auto& entry: m_transientBuffers)
@@ -1118,112 +1076,212 @@ namespace aether
 			vkGetDeviceBufferMemoryRequirements(m_device, &query, &reqs2);
 			entry.memReqSize = reqs2.memoryRequirements.size;
 			entry.memReqAlignment = reqs2.memoryRequirements.alignment;
+			entry.memReqTypeBits = reqs2.memoryRequirements.memoryTypeBits;
 		}
 
-		// Calculate total size needed. Process entries in alignment-descending
-		auto collectCandidates = [](std::vector<std::uint32_t>& indices, const auto& entries, auto&& isValid, auto&& isAllocatable)
+		// Build the heap plan over every slot the graph can back, images first so the
+		// request order - and therefore the plan - only changes when the graph does.
+		auto& requests = m_scratchHeapRequests;
+		auto& sources = m_scratchHeapSources;
+		requests.clear();
+		sources.clear();
+
+		auto lifetimeFor = [](std::span<const TransientLifetime> lifetimes, std::uint32_t idx) -> TransientLifetime
 		{
-			indices.clear();
-			indices.reserve(entries.size());
-			for (std::uint32_t i = 0; i < entries.size(); ++i)
+			if (idx < lifetimes.size())
 			{
-				if (!isValid(entries[i]) && isAllocatable(entries[i]))
-				{
-					indices.push_back(i);
-				}
+				return lifetimes[idx];
 			}
+			return TransientLifetime{};
 		};
 
-		auto& imageIndices = m_scratchTransientImageIndices;
-		auto& bufferIndices = m_scratchTransientBufferIndices;
-		collectCandidates(imageIndices, m_transientImages, [](const TransientImageEntry& e) { return e.image.IsValid(); }, [](const TransientImageEntry& e) { return e.memReqSize > 0; });
-		collectCandidates(bufferIndices, m_transientBuffers, [](const TransientBufferEntry& e) { return e.buffer.IsValid(); }, [](const TransientBufferEntry& e) { return e.memReqSize > 0; });
-
-		auto byAlignmentDescImages = [&](std::uint32_t a, std::uint32_t b)
+		std::uint32_t memoryTypeBits = std::numeric_limits<std::uint32_t>::max();
+		for (std::uint32_t i = 0; i < m_transientImages.size(); ++i)
 		{
-			return m_transientImages[a].memReqAlignment > m_transientImages[b].memReqAlignment;
-		};
-		auto byAlignmentDescBuffers = [&](std::uint32_t a, std::uint32_t b)
-		{
-			return m_transientBuffers[a].memReqAlignment > m_transientBuffers[b].memReqAlignment;
-		};
-		std::ranges::sort(imageIndices, byAlignmentDescImages);
-		std::ranges::sort(bufferIndices, byAlignmentDescBuffers);
-
-		VkDeviceSize totalSize = 0;
-		VkDeviceSize maxAlignment = kTransientHeapAlignment;
-		auto accumulate = [](VkDeviceSize current, VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
-		{
-			if (size == 0)
+			const auto& entry = m_transientImages[i];
+			if (entry.memReqSize == 0)
 			{
-				return current;
+				continue;
 			}
-			const VkDeviceSize aligned = AlignUp(current, alignment);
-			return aligned + size;
-		};
-
-		for (const auto idx: imageIndices)
-		{
-			const auto& entry = m_transientImages[idx];
-			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
-			maxAlignment = std::max(maxAlignment, entry.memReqAlignment);
+			const TransientLifetime lifetime = lifetimeFor(imageLifetimes, i);
+			if (!lifetime.live)
+			{
+				continue;
+			}
+			// A bindless slot is handed out when the graph is built and callers push it into
+			// shaders from then on. Pooling the image would destroy and re-create it, and the
+			// new image gets a new slot, so bindless transients stay on private allocations
+			// until slots can be reserved ahead of the image that fills them.
+			if (entry.bindlessRequested)
+			{
+				continue;
+			}
+			requests.push_back(TransientHeapRequest{
+			        .size = entry.memReqSize,
+			        .alignment = entry.memReqAlignment,
+			        .firstPass = lifetime.firstPass,
+			        .lastPass = lifetime.lastPass,
+			        .aliasable = lifetime.discardsOnFirstUse,
+			});
+			sources.push_back(HeapRequestSource{.index = i, .isBuffer = false});
+			memoryTypeBits &= entry.memReqTypeBits;
 		}
-		for (const auto idx: bufferIndices)
+		for (std::uint32_t i = 0; i < m_transientBuffers.size(); ++i)
 		{
-			const auto& entry = m_transientBuffers[idx];
-			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
-			maxAlignment = std::max(maxAlignment, entry.memReqAlignment);
+			const auto& entry = m_transientBuffers[i];
+			if (entry.memReqSize == 0)
+			{
+				continue;
+			}
+			const TransientLifetime lifetime = lifetimeFor(bufferLifetimes, i);
+			if (!lifetime.live)
+			{
+				continue;
+			}
+			requests.push_back(TransientHeapRequest{
+			        .size = entry.memReqSize,
+			        .alignment = entry.memReqAlignment,
+			        .firstPass = lifetime.firstPass,
+			        .lastPass = lifetime.lastPass,
+			        .aliasable = lifetime.discardsOnFirstUse,
+			});
+			sources.push_back(HeapRequestSource{.index = i, .isBuffer = true});
+			memoryTypeBits &= entry.memReqTypeBits;
 		}
 
-		// Re-sizing the heap frees the underlying device memory, so every offset handed out
-		// of it dies with it. It may only happen while nothing is resident - otherwise the
-		// live images would keep rendering into memory that no longer belongs to them.
-		const bool hasResidents = std::ranges::any_of(m_transientImages, [](const TransientImageEntry& e) { return e.fromHeap && e.image.IsValid(); })
-		        || std::ranges::any_of(m_transientBuffers, [](const TransientBufferEntry& e) { return e.fromHeap && e.buffer.IsValid(); });
-
-		if (!hasResidents && (totalSize > m_transientHeapCapacity || maxAlignment > m_transientHeapAlignment))
+		// Images and buffers only share a heap when the driver lets one allocation serve
+		// both. When it does not, fall back to a private allocation each rather than guess.
+		if (requests.empty() || memoryTypeBits == 0)
 		{
-			AllocateTransientHeap(totalSize * 3 / 2, maxAlignment);
+			if (memoryTypeBits == 0 && !m_reportedMemoryTypeConflict)
+			{
+				m_reportedMemoryTypeConflict = true;
+				AE_WARN(LogCategory::Vulkan, "RenderGraph: transient images and buffers share no memory type; the transient heap is disabled and each resource gets its own allocation.");
+			}
+			ReleaseTransientHeap();
+			return;
 		}
 
-		if (m_virtualBlock == VK_NULL_HANDLE)
+		const TransientHeapPlan plan = PlanTransientHeap(requests);
+
+		// The plan hands live GPU resources their byte offsets, so it may only be applied
+		// when it actually differs - and applying it means tearing the residents down.
+		const std::uint64_t signature = HashHeapPlan(requests, plan);
+		if (signature == m_heapPlanSignature && m_transientHeapAllocation != VK_NULL_HANDLE)
 		{
 			return;
 		}
 
-		// Process in the same alignment-descending order as the size
-		for (const auto idx: imageIndices)
+		ReleaseTransientHeap();
+		AllocateTransientHeap(plan.totalSize, plan.maxAlignment, memoryTypeBits);
+		if (m_transientHeapAllocation == VK_NULL_HANDLE)
 		{
-			auto& entry = m_transientImages[idx];
-			const VmaVirtualAllocationCreateInfo allocInfo{
-			        .size = entry.memReqSize,
-			        .alignment = entry.memReqAlignment,
-			};
-			VkDeviceSize offset = VK_WHOLE_SIZE;
-			if (vmaVirtualAllocate(m_virtualBlock, &allocInfo, &entry.m_virtualAlloc, &offset) == VK_SUCCESS)
+			m_heapPlanSignature = 0;
+			return;
+		}
+		m_heapPlanSignature = signature;
+
+		for (std::size_t r = 0; r < sources.size(); ++r)
+		{
+			const HeapRequestSource src = sources[r];
+			const TransientHeapPlacement& placement = plan.placements[r];
+			if (src.isBuffer)
 			{
+				auto& entry = m_transientBuffers[src.index];
 				entry.fromHeap = true;
-				entry.heapOffset = offset;
+				entry.heapOffset = placement.offset;
+				entry.aliased = placement.aliased;
+			}
+			else
+			{
+				auto& entry = m_transientImages[src.index];
+				entry.fromHeap = true;
+				entry.heapOffset = placement.offset;
+				entry.aliased = placement.aliased;
 			}
 		}
 
-		for (const auto idx: bufferIndices)
-		{
-			auto& entry = m_transientBuffers[idx];
-			const VmaVirtualAllocationCreateInfo allocInfo{
-			        .size = entry.memReqSize,
-			        .alignment = entry.memReqAlignment,
-			};
-			VkDeviceSize offset = VK_WHOLE_SIZE;
-			if (vmaVirtualAllocate(m_virtualBlock, &allocInfo, &entry.m_virtualAlloc, &offset) == VK_SUCCESS)
-			{
-				entry.fromHeap = true;
-				entry.heapOffset = offset;
-			}
-		}
+		m_heapPlanStandaloneSize = plan.standaloneSize;
 
+		AE_INFO(LogCategory::Vulkan,
+		        "RenderGraph transient heap: {} resources into {} pooled range(s), {:.1f} MB instead of {:.1f} MB.",
+		        requests.size(),
+		        plan.bucketCount,
+		        static_cast<double>(plan.totalSize) / (1024.0 * 1024.0),
+		        static_cast<double>(plan.standaloneSize) / (1024.0 * 1024.0));
 	}
 
+	void RenderGraphStorage::ReleaseTransientHeap()
+	{
+		// Everything living in the heap has to go before the heap does: the images and
+		// buffers do not own their memory, they only point at a range of it.
+		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
+		{
+			auto& entry = m_transientImages[idx];
+			if (!entry.fromHeap)
+			{
+				continue;
+			}
+			if (entry.image.IsValid())
+			{
+#ifndef NDEBUG
+				EraseTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image));
+#endif
+				gpu::ResourceRegistry::Destroy(entry.image);
+				entry.image = {};
+			}
+			entry.fromHeap = false;
+			entry.aliased = false;
+			entry.heapOffset = VK_WHOLE_SIZE;
+		}
+		for (auto& entry: m_transientBuffers)
+		{
+			if (!entry.fromHeap)
+			{
+				continue;
+			}
+			if (entry.buffer.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(entry.buffer);
+				entry.buffer = {};
+			}
+			entry.fromHeap = false;
+			entry.aliased = false;
+			entry.heapOffset = VK_WHOLE_SIZE;
+		}
+
+		if (m_transientHeapAllocation != VK_NULL_HANDLE)
+		{
+			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
+			m_transientHeapAllocation = VK_NULL_HANDLE;
+		}
+		m_transientHeapCapacity = 0;
+		m_transientHeapAlignment = kTransientHeapAlignment;
+		m_heapPlanSignature = 0;
+		m_heapPlanStandaloneSize = 0;
+	}
+
+	std::uint64_t RenderGraphStorage::HashHeapPlan(std::span<const TransientHeapRequest> requests, const TransientHeapPlan& plan)
+	{
+		std::uint64_t h = 0xcbf29ce484222325ull;
+		auto mix = [&h](std::uint64_t v)
+		{
+			h ^= v + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+		};
+		for (const TransientHeapRequest& req: requests)
+		{
+			mix(req.size);
+			mix(req.alignment);
+			mix(req.firstPass);
+			mix(req.lastPass);
+			mix(req.aliasable ? 1u : 0u);
+		}
+		mix(plan.totalSize);
+		mix(plan.maxAlignment);
+		mix(plan.bucketCount);
+		// A zero hash is the "no plan" sentinel, so never hand one back.
+		return h == 0 ? 1u : h;
+	}
 	void RenderGraphStorage::RefreshTransientStats()
 	{
 		AE_PROFILE_ZONE();
@@ -1231,6 +1289,8 @@ namespace aether
 
 		stats.transientImageCount = 0;
 		stats.transientBufferCount = 0;
+		stats.pooledImageCount = 0;
+		stats.pooledBufferCount = 0;
 		stats.aliasedImageCount = 0;
 		stats.aliasedBufferCount = 0;
 		stats.transientLogicalBytes = 0;
@@ -1246,7 +1306,11 @@ namespace aether
 			stats.transientLogicalBytes += entry.memReqSize;
 			if (entry.fromHeap)
 			{
-				stats.aliasedImageCount++;
+				stats.pooledImageCount++;
+				if (entry.aliased)
+				{
+					stats.aliasedImageCount++;
+				}
 			}
 			else
 			{
@@ -1263,7 +1327,11 @@ namespace aether
 			stats.transientLogicalBytes += entry.memReqSize;
 			if (entry.fromHeap)
 			{
-				stats.aliasedBufferCount++;
+				stats.pooledBufferCount++;
+				if (entry.aliased)
+				{
+					stats.aliasedBufferCount++;
+				}
 			}
 			else
 			{
@@ -1272,15 +1340,10 @@ namespace aether
 		}
 
 		stats.heapCapacity = m_transientHeapCapacity;
-		stats.heapUsed = 0;
-		if (m_virtualBlock != VK_NULL_HANDLE)
-		{
-			VmaStatistics blockStats{};
-			vmaGetVirtualBlockStatistics(m_virtualBlock, &blockStats);
-			stats.heapUsed = blockStats.allocationBytes;
-		}
-		// Everything the heap backs costs the heap's capacity, however many resources
-		// share it - that is the whole point of the pool.
+		// Every byte of the heap belongs to some pooled range, so used == capacity by
+		// construction; what the plan saved shows up as the gap between the logical and
+		// physical byte totals below.
+		stats.heapUsed = m_transientHeapCapacity;
 		stats.transientPhysicalBytes += m_transientHeapCapacity;
 
 		stats.cacheSize = 0;
@@ -1293,12 +1356,23 @@ namespace aether
 		stats.pendingDestructions = gpu::ResourceRegistry::GetPendingDestructionCount();
 
 		AE_VERBOSE(LogCategory::Vulkan,
-		        "Transient heap: {:.1f} MB capacity, {:.1f} MB used, {} heap images, {} heap buffers, {} cache images",
-		        static_cast<double>(stats.heapCapacity) / (1024.0 * 1024.0),
-		        static_cast<double>(stats.heapUsed) / (1024.0 * 1024.0),
-		        stats.aliasedImageCount,
-		        stats.aliasedBufferCount,
+		        "Transient heap: {:.1f} MB for {:.1f} MB of resources, {} pooled images, {} pooled buffers, {} sharing memory, {} cache images",
+		        static_cast<double>(stats.transientPhysicalBytes) / (1024.0 * 1024.0),
+		        static_cast<double>(stats.transientLogicalBytes) / (1024.0 * 1024.0),
+		        stats.pooledImageCount,
+		        stats.pooledBufferCount,
+		        stats.aliasedImageCount + stats.aliasedBufferCount,
 		        stats.cacheSize);
+	}
+
+	bool RenderGraphStorage::IsTransientImageAliased(std::uint32_t idx) const
+	{
+		return idx < m_transientImages.size() && m_transientImages[idx].aliased;
+	}
+
+	bool RenderGraphStorage::IsTransientBufferAliased(std::uint32_t idx) const
+	{
+		return idx < m_transientBuffers.size() && m_transientBuffers[idx].aliased;
 	}
 
 	void RenderGraphStorage::EnsureTransientImages(const FrameTarget& target)
@@ -1330,8 +1404,11 @@ namespace aether
 				continue;
 			}
 
+			// A slot the heap plan placed must be created on its own range; a recycled
+			// image would carry its own private allocation and silently leave the pool.
+			const bool fromHeap = entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE;
 			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
-			const gpu::TextureHandle cached = TryPullFromCache(key);
+			const gpu::TextureHandle cached = fromHeap ? gpu::TextureHandle{} : TryPullFromCache(key);
 			if (cached.IsValid())
 			{
 				entry.image = cached;
@@ -1343,9 +1420,9 @@ namespace aether
 				continue;
 			}
 
-			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
+			if (fromHeap)
 			{
-				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
+				const std::string entryName = std::format("RenderGraph.Transient.{}[{}]", entry.aliased ? "Aliased" : "Pooled", idx);
 				entry.image = gpu::ResourceRegistry::CreateAliasedTexture(
 				        gpu::TextureDesc{
 				                .format = entry.format,
@@ -1444,7 +1521,7 @@ namespace aether
 
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
-				const std::string entryName = std::format("RenderGraph.Transient.Buffer.Aliased[{}]", idx);
+				const std::string entryName = std::format("RenderGraph.Transient.Buffer.{}[{}]", entry.aliased ? "Aliased" : "Pooled", idx);
 				entry.buffer = gpu::ResourceRegistry::CreateAliasedBuffer(
 				        static_cast<gpu::DeviceSize>(entry.size), static_cast<gpu::BufferUsage>(entry.usage), static_cast<void*>(m_transientHeapAllocation), static_cast<gpu::DeviceSize>(entry.heapOffset), entryName.c_str());
 				if (!entry.buffer.IsValid())
@@ -1452,6 +1529,7 @@ namespace aether
 					continue;
 				}
 				m_lastFrameStats.transientAllocated++;
+				m_lastFrameStats.transientCacheMiss++;
 				continue;
 			}
 
@@ -1466,6 +1544,7 @@ namespace aether
 				continue;
 			}
 			m_lastFrameStats.transientAllocated++;
+			m_lastFrameStats.transientCacheMiss++;
 		}
 	}
 
@@ -1481,6 +1560,11 @@ namespace aether
 	gpu::Buffer RenderGraphStorage::ResolveTransientBuffer(uint32_t idx) const
 	{
 		return ResolveTransientBufferVk(idx);
+	}
+
+	gpu::BufferHandle RenderGraphStorage::ResolveTransientBufferHandle(uint32_t idx) const
+	{
+		return idx < m_transientBuffers.size() ? m_transientBuffers[idx].buffer : gpu::BufferHandle{};
 	}
 
 	bool RenderGraphStorage::IsTransientBufferSlotValid(uint32_t idx) const
@@ -1501,11 +1585,6 @@ namespace aether
 
 		auto& entry = m_transientBuffers[idx];
 
-		if (entry.fromHeap && entry.m_virtualAlloc)
-		{
-			vmaVirtualFree(m_virtualBlock, entry.m_virtualAlloc);
-			entry.m_virtualAlloc = nullptr;
-		}
 		if (entry.buffer.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(entry.buffer);

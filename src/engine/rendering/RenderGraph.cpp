@@ -7,6 +7,7 @@
 #include <numeric>
 #include <queue>
 
+#include "gpu/Bda.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
@@ -473,6 +474,46 @@ namespace aether
 		m_lastBufferStates.erase(buffer.id);
 	}
 
+	RGBuffer RenderGraph::CreateTransientBuffer(gpu::DeviceSize size, gpu::BufferUsage usage)
+	{
+		const uint32_t idx = m_storage->AddTransientBufferSlot(static_cast<VkDeviceSize>(size), static_cast<VkBufferUsageFlags2>(usage));
+		m_compileDirty = true;
+		return RGBuffer{kFirstTransientBufferId + idx};
+	}
+
+	void RenderGraph::ReleaseBuffer(RGBuffer buffer)
+	{
+		if (!IsTransientBufferId(buffer.id))
+		{
+			return;
+		}
+		m_storage->ReleaseTransientBuffer(TransientBufferIndex(buffer.id));
+		m_lastBufferStates.erase(buffer.id);
+		m_compileDirty = true;
+	}
+
+	gpu::Buffer RenderGraph::ResolveBuffer(RGBuffer buffer) const
+	{
+		if (IsTransientBufferId(buffer.id))
+		{
+			return m_storage->ResolveTransientBuffer(TransientBufferIndex(buffer.id));
+		}
+		const uint32_t idx = ExternalBufferIndex(buffer.id);
+		return idx < m_externalBuffers.size() ? m_externalBuffers[idx] : nullptr;
+	}
+
+	// A pooled buffer is re-created whenever the heap plan changes, so its device address is
+	// only valid for the frame it is read in. Callers must fetch it inside Execute.
+	gpu::DeviceAddress RenderGraph::GetBufferAddress(RGBuffer buffer) const
+	{
+		if (!IsTransientBufferId(buffer.id))
+		{
+			return 0;
+		}
+		const gpu::BufferHandle handle = m_storage->ResolveTransientBufferHandle(TransientBufferIndex(buffer.id));
+		return gpu::GetBufferAddress(handle);
+	}
+
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
 	{
 		const uint32_t idx = m_storage->AddTransientSlot(desc.format, desc.usage, desc.aspect, desc.extent);
@@ -541,6 +582,119 @@ namespace aether
 		{
 			m_externalImages[idx] = {};
 			m_storage->ReleaseExternal(idx);
+		}
+	}
+
+	bool RenderGraph::IsPoolableTransient(const uint32_t resourceId) const
+	{
+		if (IsTransientBufferId(resourceId))
+		{
+			const uint32_t idx = TransientBufferIndex(resourceId);
+			return idx < m_transientBufferLifetimes.size() && m_transientBufferLifetimes[idx].live && m_transientBufferLifetimes[idx].discardsOnFirstUse;
+		}
+		if (IsTransientId(resourceId))
+		{
+			const uint32_t idx = TransientIndex(resourceId);
+			return idx < m_transientImageLifetimes.size() && m_transientImageLifetimes[idx].live && m_transientImageLifetimes[idx].discardsOnFirstUse;
+		}
+		return false;
+	}
+
+	// A poolable transient may be sitting on memory another resource used earlier in the
+	// same frame, so the barrier that re-initialises it has to wait for whatever that was.
+	// The plan is not known when barriers are compiled, and one conservative wait per
+	// poolable resource per frame is cheaper than threading the plan back into Compile().
+	std::uint64_t RenderGraph::FirstUseSrcStage(const uint32_t resourceId) const
+	{
+		if (IsPoolableTransient(resourceId))
+		{
+			return static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+		}
+		return static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+	}
+
+	std::uint64_t RenderGraph::FirstUseSrcAccess(const uint32_t resourceId) const
+	{
+		if (IsPoolableTransient(resourceId))
+		{
+			return static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT);
+		}
+		return 0;
+	}
+
+	void RenderGraph::ComputeTransientLifetimes(const std::vector<std::size_t>& sortedIndices, const std::vector<bool>& culled)
+	{
+		m_transientImageLifetimes.assign(m_storage->GetTransientCount(), TransientLifetime{});
+		m_transientBufferLifetimes.assign(m_storage->GetTransientBufferCount(), TransientLifetime{});
+
+		auto slotFor = [this](const uint32_t resourceId) -> TransientLifetime*
+		{
+			if (IsTransientBufferId(resourceId))
+			{
+				const uint32_t idx = TransientBufferIndex(resourceId);
+				return idx < m_transientBufferLifetimes.size() ? &m_transientBufferLifetimes[idx] : nullptr;
+			}
+			if (IsTransientId(resourceId))
+			{
+				const uint32_t idx = TransientIndex(resourceId);
+				return idx < m_transientImageLifetimes.size() ? &m_transientImageLifetimes[idx] : nullptr;
+			}
+			return nullptr;
+		};
+
+		// `discards` says the access does not read what was in the resource beforehand. A
+		// transient whose first access discards may share memory with a resource whose
+		// lifetime has already ended; one whose first access reads may not, because what it
+		// would read is last frame's contents and those no longer belong to it.
+		//
+		// This is the same contract a transient has always had: its contents are undefined
+		// until something writes them. Pooling only makes reading un-written regions fail
+		// every frame instead of once.
+		std::uint32_t compiledIndex = 0;
+		auto touch = [&](const uint32_t resourceId, const bool discards)
+		{
+			TransientLifetime* slot = slotFor(resourceId);
+			if (slot == nullptr)
+			{
+				return;
+			}
+			if (!slot->live)
+			{
+				slot->live = true;
+				slot->firstPass = compiledIndex;
+				slot->discardsOnFirstUse = discards;
+			}
+			slot->lastPass = compiledIndex;
+		};
+
+		for (const std::size_t idx: sortedIndices)
+		{
+			if (culled[idx])
+			{
+				continue;
+			}
+			const PassRecord& pass = m_passes[idx];
+
+			for (const AttachmentRef& a: pass.colorWrites)
+			{
+				touch(a.image.id, a.loadOp != gpu::LoadOp::Load);
+			}
+			if (pass.depthWrite.has_value())
+			{
+				touch(pass.depthWrite->image.id, pass.depthWrite->loadOp != gpu::LoadOp::Load);
+			}
+			for (const ImageAccessRef& r: pass.imageAccesses)
+			{
+				const bool discards = r.type == ImageAccessType::StorageWrite || r.type == ImageAccessType::TransferWrite;
+				touch(r.image.id, discards);
+			}
+			for (const BufferAccessRef& r: pass.bufferAccesses)
+			{
+				const bool discards = r.type == BufferAccessType::StorageWrite || r.type == BufferAccessType::TransferWrite;
+				touch(r.buffer.id, discards);
+			}
+
+			++compiledIndex;
 		}
 	}
 
@@ -1148,6 +1302,8 @@ namespace aether
 			}
 		}
 
+		ComputeTransientLifetimes(sortedIndices, passCulledByPassIdx);
+
 		std::unordered_map<uint32_t, ResourceState> states;
 		for (const auto& [id, s]: m_lastImageStates)
 		{
@@ -1155,6 +1311,13 @@ namespace aether
 			{
 				const uint32_t idx = TransientIndex(id);
 				if (!m_storage->IsTransientSlotValid(idx))
+				{
+					continue;
+				}
+				// A poolable transient owns nothing between frames - the bytes may belong to
+				// another resource by the time the frame comes round again - so it must not
+				// inherit last frame's layout. Its first use re-initialises it from scratch.
+				if (IsPoolableTransient(id))
 				{
 					continue;
 				}
@@ -1177,6 +1340,10 @@ namespace aether
 		std::unordered_map<uint32_t, BufferState> bufferStates;
 		for (const auto& [id, s]: m_lastBufferStates)
 		{
+			if (IsPoolableTransient(id))
+			{
+				continue;
+			}
 			bufferStates[id] = s;
 		}
 
@@ -1251,8 +1418,8 @@ namespace aether
 					        .resourceId = resId,
 					        .oldLayout = gpu::ImageLayout::Undefined,
 					        .newLayout = kTarget,
-					        .srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT),
-					        .srcAccess = 0,
+					        .srcStage = FirstUseSrcStage(resId),
+					        .srcAccess = FirstUseSrcAccess(resId),
 					        .dstStage = kDstStage,
 					        .dstAccess = kDstWrite,
 					        .aspect = gpu::ImageAspect::Color,
@@ -1304,8 +1471,8 @@ namespace aether
 					        .resourceId = resId,
 					        .oldLayout = gpu::ImageLayout::Undefined,
 					        .newLayout = kTarget,
-					        .srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT),
-					        .srcAccess = 0,
+					        .srcStage = FirstUseSrcStage(resId),
+					        .srcAccess = FirstUseSrcAccess(resId),
 					        .dstStage = kDepthStages,
 					        .dstAccess = kDepthWrite,
 					        .aspect = gpu::ImageAspect::Depth,
@@ -1393,8 +1560,8 @@ namespace aether
 				else
 				{
 					oldLayout = gpu::ImageLayout::Undefined;
-					srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
-					srcAccess = 0;
+					srcStage = FirstUseSrcStage(resId);
+					srcAccess = FirstUseSrcAccess(resId);
 				}
 
 				gpu::ImageAspect aspect = gpu::ImageAspect::Color;
@@ -1516,8 +1683,8 @@ namespace aether
 				}
 				else
 				{
-					srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
-					srcAccess = 0;
+					srcStage = FirstUseSrcStage(resId);
+					srcAccess = FirstUseSrcAccess(resId);
 				}
 
 				cp.bufferBarriers.push_back({
@@ -1762,7 +1929,7 @@ namespace aether
 		const FrameTarget& target = frame.target;
 		const std::uint32_t frameIndex = frame.frameSlot;
 
-		m_storage->PrepareTransientAllocations(target);
+		m_storage->PrepareTransientAllocations(target, m_transientImageLifetimes, m_transientBufferLifetimes);
 
 		m_storage->EnsureTransientImages(target);
 		m_storage->EnsureTransientBuffers();
@@ -1793,6 +1960,10 @@ namespace aether
 
 		auto resolveBuffer = [&](uint32_t resourceId) -> gpu::Buffer
 		{
+			if (IsTransientBufferId(resourceId))
+			{
+				return m_storage->ResolveTransientBuffer(TransientBufferIndex(resourceId));
+			}
 			const uint32_t extIdx = ExternalBufferIndex(resourceId);
 			return m_storage->GetExternalBuffer(extIdx);
 		};

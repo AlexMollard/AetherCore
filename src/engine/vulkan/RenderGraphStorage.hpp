@@ -8,8 +8,11 @@
 #include <vector>
 #include <vk_mem_alloc.h>
 
+#include <span>
+
 #include "gpu/ResourceRegistry.hpp"
 #include "gpu/Semaphore.hpp"
+#include "rendering/TransientHeapPacker.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/volk.hpp"
 #include "gpu/GpuEnums.hpp"
@@ -34,6 +37,10 @@ namespace aether
 		std::uint32_t transientBufferCount = 0;
 		std::uint32_t pendingDestructions = 0;
 		std::size_t cacheSize = 0;
+		// Backed by the shared heap.
+		std::size_t pooledImageCount = 0;
+		std::size_t pooledBufferCount = 0;
+		// Of those, the ones whose heap range is shared with another resource.
 		std::size_t aliasedImageCount = 0;
 		std::size_t aliasedBufferCount = 0;
 		VkDeviceSize heapCapacity = 0;
@@ -165,6 +172,7 @@ namespace aether
 		void EnsureTransientBuffers();
 
 		[[nodiscard]] gpu::Buffer ResolveTransientBuffer(uint32_t idx) const;
+		[[nodiscard]] gpu::BufferHandle ResolveTransientBufferHandle(uint32_t idx) const;
 		[[nodiscard]] VkBuffer ResolveTransientBufferVk(uint32_t idx) const;
 		[[nodiscard]] bool IsTransientBufferSlotValid(uint32_t idx) const;
 
@@ -175,11 +183,16 @@ namespace aether
 
 		void ReleaseTransientBuffer(uint32_t idx);
 
-		void PrepareTransientAllocations(const FrameTarget& target);
+		// Lays every transient the graph can back out of one pooled allocation, overlapping
+		// the ones whose lifetimes do not. The lifetime spans are indexed by transient slot.
+		void PrepareTransientAllocations(const FrameTarget& target, std::span<const TransientLifetime> imageLifetimes, std::span<const TransientLifetime> bufferLifetimes);
 
 		// Recomputes every level-class FrameStats field from live state. Must run after the
 		// transients for the frame have been materialised.
 		void RefreshTransientStats();
+
+		[[nodiscard]] bool IsTransientImageAliased(std::uint32_t idx) const;
+		[[nodiscard]] bool IsTransientBufferAliased(std::uint32_t idx) const;
 
 		void ReleaseTransient(uint32_t idx);
 
@@ -257,7 +270,11 @@ namespace aether
 			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 		};
 
-		using VirtualAllocationHandle = VmaVirtualAllocation;
+		struct HeapRequestSource
+		{
+			std::uint32_t index = 0;
+			bool isBuffer = false;
+		};
 
 		struct TransientImageEntry
 		{
@@ -267,14 +284,17 @@ namespace aether
 			gpu::Extent2D extent;
 			bool bindlessRequested = false;
 			bool fromHeap = false;
+			// Shares its heap range with at least one other resource, so its contents do not
+			// survive the frame and its first use has to discard.
+			bool aliased = false;
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			gpu::TextureHandle image;
 			gpu::Extent2D allocatedExtent;
 			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu;
 			VkDeviceSize memReqSize = 0;
 			VkDeviceSize memReqAlignment = 0;
+			std::uint32_t memReqTypeBits = 0;
 			VkDeviceSize heapOffset = VK_WHOLE_SIZE;
-			VirtualAllocationHandle m_virtualAlloc = nullptr;
 		};
 
 		struct TransientBufferEntry
@@ -282,11 +302,12 @@ namespace aether
 			VkDeviceSize size = 0;
 			VkBufferUsageFlags2 usage = 0;
 			bool fromHeap = false;
+			bool aliased = false;
 			gpu::BufferHandle buffer;
 			VkDeviceSize memReqSize = 0;
 			VkDeviceSize memReqAlignment = 0;
+			std::uint32_t memReqTypeBits = 0;
 			VkDeviceSize heapOffset = VK_WHOLE_SIZE;
-			VirtualAllocationHandle m_virtualAlloc = nullptr;
 		};
 
 		struct ImageCacheKey
@@ -336,7 +357,9 @@ namespace aether
 			return (value + alignment - 1) & ~(alignment - 1);
 		}
 
-		void AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment);
+		void AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment, std::uint32_t memoryTypeBits);
+		void ReleaseTransientHeap();
+		[[nodiscard]] static std::uint64_t HashHeapPlan(std::span<const TransientHeapRequest> requests, const TransientHeapPlan& plan);
 
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
@@ -358,16 +381,21 @@ namespace aether
 		std::vector<gpu::ImageMemoryBarrier> m_scratchBarriers;
 		std::vector<gpu::ImageMemoryBarrier> m_scratchSignalBarriers;
 		std::vector<gpu::BufferMemoryBarrier> m_scratchBufferBarriers;
-		std::vector<std::uint32_t> m_scratchTransientImageIndices;
-		std::vector<std::uint32_t> m_scratchTransientBufferIndices;
+		std::vector<TransientHeapRequest> m_scratchHeapRequests;
+		std::vector<HeapRequestSource> m_scratchHeapSources;
 
 		std::vector<VkEvent> m_events;
 		std::vector<std::uint32_t> m_freeEventSlots;
 
 		VmaAllocation m_transientHeapAllocation = VK_NULL_HANDLE;
-		VmaVirtualBlock m_virtualBlock = VK_NULL_HANDLE;
 		VkDeviceSize m_transientHeapCapacity = 0;
 		VkDeviceSize m_transientHeapAlignment = kTransientHeapAlignment;
+		// Identifies the plan the live residents were laid out by. A plan is only re-applied
+		// when the graph changes shape, because applying one destroys every resident.
+		std::uint64_t m_heapPlanSignature = 0;
+		std::uint64_t m_heapPlanStandaloneSize = 0;
+		bool m_reportedMemoryTypeConflict = false;
+		bool m_reportedHeapAllocFailure = false;
 
 		FrameStats m_lastFrameStats;
 

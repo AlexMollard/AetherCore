@@ -19,6 +19,7 @@
 #include "gpu/Semaphore.hpp"
 #include "rendering/FrameBlackboard.hpp"
 #include "rendering/RenderGraphTypes.hpp"
+#include "rendering/TransientHeapPacker.hpp"
 
 namespace aether
 {
@@ -285,6 +286,15 @@ namespace aether
 
 		[[nodiscard]] RGBuffer RegisterBuffer(gpu::Buffer buffer);
 
+		// Graph-owned scratch storage. The graph decides where it lives and may hand the
+		// same memory to another transient whose lifetime does not overlap, so the buffer
+		// and its device address are only valid inside a pass Execute callback and only for
+		// the frame that reads them - never cache either across frames.
+		[[nodiscard]] RGBuffer CreateTransientBuffer(gpu::DeviceSize size, gpu::BufferUsage usage);
+		void ReleaseBuffer(RGBuffer buffer);
+		[[nodiscard]] gpu::Buffer ResolveBuffer(RGBuffer buffer) const;
+		[[nodiscard]] gpu::DeviceAddress GetBufferAddress(RGBuffer buffer) const;
+
 		void UpdateExternalBuffer(RGBuffer buffer, gpu::Buffer newBuffer);
 
 		[[nodiscard]] RGImage CreateTransientImage(const TransientImageDesc& desc);
@@ -411,6 +421,7 @@ namespace aether
 		static constexpr uint32_t kFirstExternalId = 2u;
 		static constexpr uint32_t kFirstExternalBufferId = 0x20000000u;
 		static constexpr uint32_t kFirstTransientId = 0x40000000u;
+		static constexpr uint32_t kFirstTransientBufferId = 0x60000000u;
 
 		struct AttachmentRef
 		{
@@ -580,7 +591,12 @@ namespace aether
 
 		[[nodiscard]] static bool IsTransientId(uint32_t resourceId)
 		{
-			return resourceId >= kFirstTransientId;
+			return resourceId >= kFirstTransientId && resourceId < kFirstTransientBufferId;
+		}
+
+		[[nodiscard]] static bool IsTransientBufferId(uint32_t resourceId)
+		{
+			return resourceId >= kFirstTransientBufferId;
 		}
 
 		[[nodiscard]] static uint32_t ExternalIndex(uint32_t resourceId)
@@ -598,6 +614,19 @@ namespace aether
 			return resourceId - kFirstTransientId;
 		}
 
+		[[nodiscard]] static uint32_t TransientBufferIndex(uint32_t resourceId)
+		{
+			return resourceId - kFirstTransientBufferId;
+		}
+
+		void ComputeTransientLifetimes(const std::vector<std::size_t>& sortedIndices, const std::vector<bool>& culled);
+
+		// True when the resource's memory may be shared with another transient, which is
+		// what makes its cross-frame contents meaningless and its first use a full discard.
+		[[nodiscard]] bool IsPoolableTransient(uint32_t resourceId) const;
+		[[nodiscard]] std::uint64_t FirstUseSrcStage(uint32_t resourceId) const;
+		[[nodiscard]] std::uint64_t FirstUseSrcAccess(uint32_t resourceId) const;
+
 		std::unique_ptr<RenderGraphStorage> m_storage;
 		mutable std::mutex m_debugStateMutex;
 
@@ -613,6 +642,9 @@ namespace aether
 		FrameResourceContext m_lastFrameContext{};
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		std::unordered_map<uint32_t, BufferState> m_lastBufferStates;
+		// Indexed by transient slot. Recomputed by Compile(), consumed by the heap plan.
+		std::vector<TransientLifetime> m_transientImageLifetimes;
+		std::vector<TransientLifetime> m_transientBufferLifetimes;
 		std::uint32_t m_frameIndex = 0;
 		bool m_compileDirty = true;
 		bool m_asyncComputeEnabled = false;
