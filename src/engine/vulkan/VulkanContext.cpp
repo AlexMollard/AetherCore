@@ -24,6 +24,7 @@
 #include <GLFW/glfw3.h>
 
 #include "utils/AetherExceptions.hpp"
+#include "vulkan/DeviceFaultQuery.hpp"
 #include "vulkan/TransferManager.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "gpu/CommandList.hpp"
@@ -969,76 +970,11 @@ namespace aether
 	void VulkanContext::QueryDeviceFaultInfo() const
 	{
 		AE_PROFILE_ZONE();
-		VkDeviceFaultCountsEXT counts{
-		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT,
-		};
-		VkResult result = vkGetDeviceFaultInfoEXT(m_device->device, &counts, nullptr);
-		if (result != VK_SUCCESS)
-		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultInfoEXT (counts) failed: VkResult={}.", static_cast<int>(result));
-			return;
-		}
-		if (counts.addressInfoCount == 0 && counts.vendorInfoCount == 0)
-		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultInfoEXT: no fault records available.");
-			return;
-		}
-
-		std::vector<VkDeviceFaultAddressInfoEXT> addrInfos(counts.addressInfoCount);
-		std::vector<VkDeviceFaultVendorInfoEXT> vendorInfos(counts.vendorInfoCount);
-		VkDeviceFaultInfoEXT info{
-		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
-		        .pAddressInfos = addrInfos.data(),
-		        .pVendorInfos = vendorInfos.data(),
-		        .pVendorBinaryData = nullptr,
-		};
-		result = vkGetDeviceFaultInfoEXT(m_device->device, &counts, &info);
-		if (result != VK_SUCCESS)
-		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultInfoEXT (info) failed: VkResult={}.", static_cast<int>(result));
-			return;
-		}
-
-		AE_ERROR(LogCategory::Vulkan, "=================== VK_EXT_device_fault report ===================");
-		AE_ERROR(LogCategory::Vulkan, "  description: {}", info.description);
-
-		for (uint32_t i = 0; i < counts.addressInfoCount; ++i)
-		{
-			const auto& ai = addrInfos[i];
-			const char* typeStr = [&]() -> const char*
-			{
-				switch (ai.addressType)
-				{
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:
-						return "ReadInvalid";
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:
-						return "WriteInvalid";
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:
-						return "ExecuteInvalid";
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:
-						return "InstrPtrUnknown";
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:
-						return "InstrPtrInvalid";
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
-						return "InstrPtrFault";
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:
-						return "None";
-					// Enum sentinel (0x7FFFFFFF), never a real address type. Listed
-					case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
-					default:
-						return "Unknown";
-				}
-			}();
-			AE_ERROR(LogCategory::Vulkan, "  addressInfo[{}]: type={} reportedAddress=0x{:016X} precision={}", i, typeStr, ai.reportedAddress, ai.addressPrecision);
-		}
-
-		for (uint32_t i = 0; i < counts.vendorInfoCount; ++i)
-		{
-			const auto& vi = vendorInfos[i];
-			AE_ERROR(LogCategory::Vulkan, "  vendorInfo[{}]: faultCode=0x{:016X} faultData=0x{:016X} description='{}'", i, vi.vendorFaultCode, vi.vendorFaultData, vi.description);
-		}
-
-		AE_ERROR(LogCategory::Vulkan, "=================== end device fault report ===================");
+		// One implementation of the query lives in DeviceFaultQuery; this is the fallback
+		// path used when no DiagnosticEngine has registered a fault callback, so it just
+		// dumps the record. Both the device handle and the entry point are checked there.
+		const VkDevice device = m_device.has_value() ? m_device->device : VK_NULL_HANDLE;
+		vulkan::LogDeviceFaultReport(vulkan::QueryDeviceFault(vkGetDeviceFaultInfoEXT, device));
 	}
 
 	VkQueue VulkanContext::GetComputeQueue() const

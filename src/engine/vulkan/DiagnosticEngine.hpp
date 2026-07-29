@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "vulkan/volk.hpp"
+#include "vulkan/DeviceFaultQuery.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
 
 namespace aether
@@ -82,18 +83,6 @@ namespace aether
 			std::vector<std::string> nextSteps;
 		};
 
-		struct DeviceFaultReport
-		{
-			std::string description;
-			bool hasMemoryFault = false;
-			bool hasInstructionFault = false;
-			bool hasVendorInfo = false;
-			std::uint64_t vendorFaultCode = 0;
-			std::uint64_t vendorFaultData = 0;
-			VkDeviceFaultAddressInfoEXT faultAddressInfo{};
-			VkDeviceFaultAddressInfoEXT instructionAddressInfo{};
-		};
-
 		struct PassWorkload
 		{
 			std::string name;
@@ -118,9 +107,8 @@ namespace aether
 		void TryInitAmdBufferMarker();
 		void TryInitNvCheckpoints();
 		std::vector<ResolvedBreadcrumb> CollectBreadcrumbs();
-		std::vector<DeviceFaultReport> QueryFaultReports();
 		std::string GetLabel(std::uint32_t markerValue) const;
-		FaultAnalysis AnalyzeFaults(const std::vector<DeviceFaultReport>& faults, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const;
+		FaultAnalysis AnalyzeFault(const std::optional<vulkan::DeviceFaultReport>& fault, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const;
 		ActivitySummary BuildActivitySummary() const;
 		static std::string WorkloadText(const PassWorkload& pass);
 		static PassWorkload* FindOrAddPass(std::vector<PassWorkload>& passes, std::string_view name);

@@ -77,31 +77,6 @@ namespace aether
 			return std::format("{} bytes ({:.2f}%)", offset, percent);
 		}
 
-		std::string AddressTypeText(VkDeviceFaultAddressTypeEXT type)
-		{
-			switch (type)
-			{
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:
-					return "Not reported";
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:
-					return "Read invalid";
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:
-					return "Write invalid";
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:
-					return "Execute invalid";
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:
-					return "Instruction pointer unknown";
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:
-					return "Instruction pointer invalid";
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
-					return "Instruction pointer fault";
-				// Enum sentinel (0x7FFFFFFF), never a real address type. Listed
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
-				default:
-					return std::format("Unknown({})", static_cast<int>(type));
-			}
-		}
-
 		bool ParseUInt64Suffix(std::string_view text, std::string_view prefix, std::uint64_t& value)
 		{
 			if (!text.starts_with(prefix))
@@ -332,16 +307,16 @@ namespace aether
 			return;
 		}
 
-		if (!m_initialized || m_vkGetDeviceFaultInfoEXT == nullptr)
+		if (!m_initialized || m_vkGetDeviceFaultInfoEXT == nullptr || m_device == VK_NULL_HANDLE)
 		{
-			AE_WARN(LogCategory::Vulkan, "DiagnosticEngine::CaptureFaults: not available (device_fault extension missing or engine not initialized).");
+			AE_WARN(LogCategory::Vulkan, "DiagnosticEngine::CaptureFaults: not available (device_fault extension missing, device gone, or engine not initialized).");
 			m_captureInProgress.store(false, std::memory_order_release);
 			return;
 		}
 
 		const auto breadcrumbs = CollectBreadcrumbs();
-		const auto faults = QueryFaultReports();
-		const FaultAnalysis analysis = AnalyzeFaults(faults, breadcrumbs);
+		const vulkan::DeviceFaultQueryResult faultQuery = vulkan::QueryDeviceFault(m_vkGetDeviceFaultInfoEXT, m_device);
+		const FaultAnalysis analysis = AnalyzeFault(faultQuery.report, breadcrumbs);
 		const ActivitySummary activity = BuildActivitySummary();
 
 		AE_DIAG_COLOR(LogPlainColor::BoldCyan, "============================================================");
@@ -383,13 +358,14 @@ namespace aether
 
 		AE_DIAG("");
 		AE_DIAG_COLOR(LogPlainColor::BoldRed, "FAULT INFORMATION");
-		if (faults.empty())
+		if (!faultQuery.report.has_value())
 		{
 			AE_DIAG_COLOR(LogPlainColor::BoldYellow, "[WARN] No hardware fault records preserved by driver.");
+			AE_DIAG("Driver query: {}", faultQuery.status);
 		}
 		else
 		{
-			const auto& f = faults.front();
+			const vulkan::DeviceFaultReport& f = *faultQuery.report;
 			AE_DIAG("Type: {}", DecodeFaultSummary(f));
 			if (!f.description.empty())
 			{
@@ -398,7 +374,7 @@ namespace aether
 			if (f.faultAddressInfo.addressType != VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT && f.faultAddressInfo.reportedAddress != 0)
 			{
 				AE_DIAG("Fault address: {}", FormatHex(f.faultAddressInfo.reportedAddress));
-				AE_DIAG("Fault address type: {}", AddressTypeText(f.faultAddressInfo.addressType));
+				AE_DIAG("Fault address type: {}", vulkan::DeviceFaultAddressTypeText(f.faultAddressInfo.addressType));
 				const auto resolved = m_memoryTracker.Resolve(f.faultAddressInfo.reportedAddress);
 				if (resolved.has_value())
 				{
@@ -417,21 +393,39 @@ namespace aether
 			if (f.instructionAddressInfo.addressType != VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT && f.instructionAddressInfo.reportedAddress != 0)
 			{
 				AE_DIAG("Instruction pointer: {}", FormatHex(f.instructionAddressInfo.reportedAddress));
-				AE_DIAG("Instruction pointer type: {}", AddressTypeText(f.instructionAddressInfo.addressType));
+				AE_DIAG("Instruction pointer type: {}", vulkan::DeviceFaultAddressTypeText(f.instructionAddressInfo.addressType));
 				AE_DIAG_COLOR(LogPlainColor::BoldMagenta, "Plain meaning: GPU was executing shader code at this address; it is not a buffer/image allocation.");
 			}
 			else
 			{
 				AE_DIAG("Instruction pointer: not reported");
 			}
+
+			// Every record the driver preserved, not just the first of each kind.
+			if (f.addressInfos.size() > 1)
+			{
+				for (std::size_t i = 0; i < f.addressInfos.size(); ++i)
+				{
+					const VkDeviceFaultAddressInfoEXT& addressInfo = f.addressInfos[i];
+					AE_DIAG("Address record [{}]: type={} address={} precision=0x{:X}", i, vulkan::DeviceFaultAddressTypeText(addressInfo.addressType), FormatHex(addressInfo.reportedAddress), addressInfo.addressPrecision);
+				}
+			}
+
+			for (const std::string& note: f.notes)
+			{
+				AE_DIAG_COLOR(LogPlainColor::BoldYellow, "[WARN] Driver note: {}", note);
+			}
 		}
 
-		if (!faults.empty() && faults.front().hasVendorInfo)
+		if (faultQuery.report.has_value() && faultQuery.report->hasVendorInfo)
 		{
-			const auto& vendor = faults.front();
 			AE_DIAG("");
 			AE_DIAG_COLOR(LogPlainColor::BoldMagenta, "VENDOR INFORMATION");
-			AE_DIAG("Code: 0x{:X} | Data: 0x{:X} | {}", vendor.vendorFaultCode, vendor.vendorFaultData, vendor.description);
+			const auto& vendorInfos = faultQuery.report->vendorInfos;
+			for (std::size_t i = 0; i < vendorInfos.size(); ++i)
+			{
+				AE_DIAG("[{}] Code: 0x{:X} | Data: 0x{:X} | {}", i, vendorInfos[i].vendorFaultCode, vendorInfos[i].vendorFaultData, vendorInfos[i].description.empty() ? "(no description)" : vendorInfos[i].description);
+			}
 		}
 
 		AE_DIAG("");
@@ -751,82 +745,6 @@ namespace aether
 		return out;
 	}
 
-	std::vector<DiagnosticEngine::DeviceFaultReport> DiagnosticEngine::QueryFaultReports()
-	{
-		std::vector<DeviceFaultReport> faults;
-		if (m_vkGetDeviceFaultInfoEXT == nullptr)
-		{
-			return faults;
-		}
-
-		VkDeviceFaultCountsEXT counts{
-		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT,
-		};
-		VkResult result = m_vkGetDeviceFaultInfoEXT(m_device, &counts, nullptr);
-		if (result != VK_SUCCESS || (counts.addressInfoCount == 0 && counts.vendorInfoCount == 0))
-		{
-			return faults;
-		}
-
-		std::vector<VkDeviceFaultAddressInfoEXT> addressInfos(counts.addressInfoCount);
-		std::vector<VkDeviceFaultVendorInfoEXT> vendorInfos(counts.vendorInfoCount);
-		VkDeviceFaultInfoEXT info{
-		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
-		        .pAddressInfos = addressInfos.data(),
-		        .pVendorInfos = vendorInfos.data(),
-		        .pVendorBinaryData = nullptr,
-		};
-
-		result = m_vkGetDeviceFaultInfoEXT(m_device, &counts, &info);
-		if (result != VK_SUCCESS)
-		{
-			return faults;
-		}
-
-		DeviceFaultReport report;
-		report.description = info.description;
-
-		for (const auto& addressInfo: addressInfos)
-		{
-			if (addressInfo.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT)
-			{
-				continue;
-			}
-
-			if (addressInfo.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT || addressInfo.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT
-			        || addressInfo.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT)
-			{
-				report.hasInstructionFault = true;
-				if (report.instructionAddressInfo.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT)
-				{
-					report.instructionAddressInfo = addressInfo;
-				}
-			}
-			else
-			{
-				report.hasMemoryFault = true;
-				if (report.faultAddressInfo.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT)
-				{
-					report.faultAddressInfo = addressInfo;
-				}
-			}
-		}
-
-		if (!vendorInfos.empty())
-		{
-			report.hasVendorInfo = true;
-			report.vendorFaultCode = vendorInfos.front().vendorFaultCode;
-			report.vendorFaultData = vendorInfos.front().vendorFaultData;
-			if (report.description.empty())
-			{
-				report.description = vendorInfos.front().description;
-			}
-		}
-
-		faults.push_back(std::move(report));
-		return faults;
-	}
-
 	std::string DiagnosticEngine::GetLabel(std::uint32_t markerValue) const
 	{
 		const std::lock_guard lock(m_labelMutex);
@@ -838,10 +756,10 @@ namespace aether
 		return it->second;
 	}
 
-	DiagnosticEngine::FaultAnalysis DiagnosticEngine::AnalyzeFaults(const std::vector<DeviceFaultReport>& faults, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const
+	DiagnosticEngine::FaultAnalysis DiagnosticEngine::AnalyzeFault(const std::optional<vulkan::DeviceFaultReport>& fault, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const
 	{
 		FaultAnalysis analysis;
-		if (faults.empty())
+		if (!fault.has_value())
 		{
 			analysis.likelyCause = "Device lost without preserved hardware fault records";
 			analysis.confidence = "MEDIUM";
@@ -849,7 +767,7 @@ namespace aether
 			return analysis;
 		}
 
-		const auto& f = faults.front();
+		const vulkan::DeviceFaultReport& f = *fault;
 		analysis.location = breadcrumbs.empty() ? "Unknown GPU work" : breadcrumbs.front().label;
 		if (analysis.location.empty())
 		{
