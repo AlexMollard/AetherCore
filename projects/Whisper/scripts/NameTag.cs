@@ -58,7 +58,13 @@ public sealed class NameTag : EntityScript
         {
             return;
         }
-        _label.Track(Self.Position + new Vector3(0.0f, VerticalOffset, 0.0f), Net.GetPlayerName(Self));
+        // A dead player is invisible and parked on its spawn marker until it comes
+        // back, so its tag goes with it - a name floating over nothing is worse than
+        // no name. Derived from the same replicated health every peer already has, so
+        // the tag and the character agree without either being told.
+        bool down = GetScript<PlayerCombat>() is { IsAlive: false };
+        _label.Track(Self.Position + new Vector3(0.0f, VerticalOffset, 0.0f),
+            down ? string.Empty : Net.GetPlayerName(Self));
 
         // Looked up per frame for the same reason the name is: on a client the colour
         // arrives by replication after the entity does. Latched on the index so the

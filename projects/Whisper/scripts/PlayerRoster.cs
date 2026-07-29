@@ -42,8 +42,9 @@ public sealed class PlayerRoster : EntityScript
     /// <summary>Gap from the screen's top and right edges, in pixels.</summary>
     public float Margin = 16.0f;
 
-    /// <summary>Row width, in pixels.</summary>
-    public float Width = 260.0f;
+    /// <summary>Row width, in pixels. Wide enough for the longest row the columns
+    /// below can produce, at the monospaced font this HUD uses.</summary>
+    public float Width = 330.0f;
 
     /// <summary>Vertical space per row, in pixels.</summary>
     public float LineHeight = 22.0f;
@@ -56,7 +57,7 @@ public sealed class PlayerRoster : EntityScript
 
     /// <summary>Longest name shown before it is clipped. The font is monospaced, so a
     /// fixed column is what lets the ping line up without a second element per row.</summary>
-    public int NameColumn = 14;
+    public int NameColumn = 12;
 
     private static readonly Vector4 HeaderColor = new(0.478f, 0.518f, 0.596f, 1.0f);
 
@@ -105,7 +106,12 @@ public sealed class PlayerRoster : EntityScript
         }
 
         IReadOnlyList<NetSessionPlayer> players = session.Players;
-        Ui.SetText(_header, $"PLAYERS {players.Count}/{WhisperSession.MaxPlayers}");
+        // The occupancy keeps the header's own column rather than getting a row of its
+        // own: "how full is this session" is the one fact about the roster that is not
+        // about any single player, and it reads where the names begin. The three column
+        // captions sit over the three columns the rows below actually print.
+        string occupancy = $"PLAYERS {players.Count}/{WhisperSession.MaxPlayers}";
+        Ui.SetText(_header, $"{Fit(occupancy)} {"HP",3} {"K/D",5} {"PING",5}");
 
         for (int i = 0; i < _rows.Length; i++)
         {
@@ -116,10 +122,25 @@ public sealed class PlayerRoster : EntityScript
                 continue;
             }
             NetSessionPlayer player = players[i];
-            Ui.SetText(_rows[i], $"{Fit(player.Name)} {Latency(player)}");
+            Ui.SetText(_rows[i], $"{Fit(player.Name)} {Health(player)} {Score(player)} {Latency(player)}");
             Ui.SetTextColor(_rows[i], ColorOf(player));
         }
     }
+
+    /// <summary>That player's replicated health, or blank while its combat script has
+    /// not been created yet - a frame or two after a join.</summary>
+    /// <remarks>
+    /// Read straight off <see cref="PlayerCombat.Health"/> on the entity, which on
+    /// every peer but that player's owner is the value replication delivered. This row
+    /// is therefore a readout of the replicated field itself, not of anything derived
+    /// from what the character looks like.
+    /// </remarks>
+    private static string Health(NetSessionPlayer player)
+        => player.Entity.GetScript<PlayerCombat>() is { } combat ? $"{combat.Health,3}" : "   ";
+
+    /// <summary>Kills and deaths, in the same column on every row.</summary>
+    private static string Score(NetSessionPlayer player)
+        => player.Entity.GetScript<PlayerCombat>() is { } combat ? $"{combat.Kills,2}/{combat.Deaths,-2}" : "     ";
 
     /// <summary>That player's own colour, straight off the character it belongs to.
     /// Falls back to the palette entry for its connection only while the character's
@@ -141,10 +162,10 @@ public sealed class PlayerRoster : EntityScript
     {
         if (player.IsHost)
         {
-            return "HOST";
+            return " HOST";
         }
         uint ping = player.PingMs;
-        return ping == 0 ? "  --" : $"{ping,3}ms";
+        return ping == 0 ? "   --" : $"{ping,3}ms";
     }
 
     /// <summary>Pad or clip a name to the fixed column the ping lines up after.</summary>
