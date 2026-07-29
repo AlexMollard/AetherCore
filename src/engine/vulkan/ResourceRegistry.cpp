@@ -568,16 +568,22 @@ namespace aether
 
 		VkMemoryRequirements memReq;
 		vkGetBufferMemoryRequirements(m_device, buffer, &memReq);
-		AE_ASSERT((memoryOffset % memReq.alignment) == 0, "CreateAliasedBuffer: memoryOffset is not aligned to VkMemoryRequirements::alignment.");
 
 		VmaAllocationInfo existingAllocInfo;
 		vmaGetAllocationInfo(m_allocator, existingAllocation, &existingAllocInfo);
+
+		// memoryOffset is relative to the caller's allocation, and the allocation is itself at
+		// an offset inside its VkDeviceMemory unless it happened to get a dedicated block.
+		// Binding at the relative offset lands on whatever else VMA put at the front of that
+		// block, so the absolute offset is the only correct one.
+		const VkDeviceSize absoluteOffset = existingAllocInfo.offset + memoryOffset;
+		AE_ASSERT((absoluteOffset % memReq.alignment) == 0, "CreateAliasedBuffer: the bind offset is not aligned to VkMemoryRequirements::alignment.");
 
 		const VkBindBufferMemoryInfo bindInfo{
 		        .sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO,
 		        .buffer = buffer,
 		        .memory = existingAllocInfo.deviceMemory,
-		        .memoryOffset = memoryOffset,
+		        .memoryOffset = absoluteOffset,
 		};
 		result = vkBindBufferMemory2(m_device, 1, &bindInfo);
 		if (result != VK_SUCCESS)
@@ -640,16 +646,22 @@ namespace aether
 
 		VkMemoryRequirements memReq;
 		vkGetImageMemoryRequirements(m_device, image, &memReq);
-		AE_ASSERT((memoryOffset % memReq.alignment) == 0, "CreateAliasedTexture: memoryOffset is not aligned to VkMemoryRequirements::alignment.");
 
 		VmaAllocationInfo existingAllocInfo;
 		vmaGetAllocationInfo(m_allocator, existingAllocation, &existingAllocInfo);
+
+		// See CreateAliasedBuffer: memoryOffset is relative to the caller's allocation, which
+		// only starts at zero inside its VkDeviceMemory when VMA happened to give it a
+		// dedicated block. A big enough allocation always gets one, which is why this only
+		// showed up once the transient heap got small enough to be suballocated.
+		const VkDeviceSize absoluteOffset = existingAllocInfo.offset + memoryOffset;
+		AE_ASSERT((absoluteOffset % memReq.alignment) == 0, "CreateAliasedTexture: the bind offset is not aligned to VkMemoryRequirements::alignment.");
 
 		const VkBindImageMemoryInfo bindInfo{
 		        .sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
 		        .image = image,
 		        .memory = existingAllocInfo.deviceMemory,
-		        .memoryOffset = memoryOffset,
+		        .memoryOffset = absoluteOffset,
 		};
 		result = vkBindImageMemory2(m_device, 1, &bindInfo);
 		if (result != VK_SUCCESS)
