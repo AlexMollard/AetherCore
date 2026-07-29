@@ -211,6 +211,14 @@ namespace aether::gpu
 		[[nodiscard]] static bool HasBindlessSampled(TextureHandle handle);
 		[[nodiscard]] static std::uint32_t GetBindlessSampledSlot(TextureHandle handle);
 
+		// A descriptor slot with no image behind it yet, so a caller can hand the number out
+		// before the image exists and keep handing out the same number after the image has
+		// been destroyed and re-created. Returns 0xFFFFFFFF on failure. The caller owns the
+		// slot: destroying a texture bound to it does not free it.
+		[[nodiscard]] static std::uint32_t ReserveBindlessSampledSlot();
+		static void ReleaseBindlessSampledSlot(std::uint32_t slot);
+		static bool BindSampledToSlot(TextureHandle handle, std::uint32_t slot, ImageAspect aspectMask = ImageAspect::Color, ImageLayout descriptorLayout = ImageLayout::ShaderReadOnly);
+
 		[[nodiscard]] static Format GetTextureFormat(TextureHandle handle);
 		[[nodiscard]] static Extent2D GetTextureExtent(TextureHandle handle);
 		[[nodiscard]] static std::uint32_t GetTextureMipLevels(TextureHandle handle);

@@ -7,6 +7,9 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <ostream>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "rendering/TransientHeapPacker.hpp"
@@ -249,4 +252,164 @@ TEST_CASE("PlanTransientHeap handles the empty and zero-size cases")
 	const TransientHeapPlan plan = PlanTransientHeap(requests);
 	CHECK(plan.totalSize == kMiB);
 	CHECK(plan.bucketCount == 1);
+}
+
+// ---------------------------------------------------------------------------------
+// Heap eligibility: which slots are even offered to the planner.
+//
+// A slot the planner never sees is a slot the overlap rule never applies to, so the two
+// legitimate skip reasons are pinned individually. The reason that used to be here and is
+// gone - "this slot holds a bindless descriptor" - is pinned by its absence: the predicate
+// has no bindless input, so re-introducing the exemption cannot be done quietly.
+// ---------------------------------------------------------------------------------
+
+TEST_CASE("ClaimsHeapSpace lets a live sized slot into the plan")
+{
+	const TransientLifetime live{.firstPass = 3, .lastPass = 9, .live = true, .discardsOnFirstUse = true};
+	CHECK(ClaimsHeapSpace(31457280, live));
+
+	// A read-first slot still claims space - it just will not be laid on top of anybody.
+	const TransientLifetime readFirst{.firstPass = 3, .lastPass = 9, .live = true, .discardsOnFirstUse = false};
+	CHECK(ClaimsHeapSpace(31457280, readFirst));
+}
+
+TEST_CASE("ClaimsHeapSpace keeps a slot no compiled pass touches out of the plan")
+{
+	const TransientLifetime dead{.firstPass = 0, .lastPass = 0, .live = false, .discardsOnFirstUse = true};
+	CHECK_FALSE(ClaimsHeapSpace(31457280, dead));
+}
+
+TEST_CASE("ClaimsHeapSpace keeps a slot with no memory requirement out of the plan")
+{
+	const TransientLifetime live{.firstPass = 3, .lastPass = 9, .live = true, .discardsOnFirstUse = true};
+	CHECK_FALSE(ClaimsHeapSpace(0, live));
+}
+
+// ---------------------------------------------------------------------------------
+// The migrated editor graph, at its real sizes and compiled-pass intervals.
+//
+// These are the resources that moved from service ownership to the graph. Every one of
+// them holds a bindless descriptor slot, which is precisely what used to keep them off the
+// heap, so this is the case that has never been planned before. The shadow cascades,
+// Scene.Depth and HdrColor are all live across the shadow block at once; overlapping any
+// pair of them corrupts a shadow lookup or the depth prepass, and the artefact shows up
+// nowhere near this file.
+// ---------------------------------------------------------------------------------
+
+namespace
+{
+	struct NamedRequest
+	{
+		const char* name;
+		TransientHeapRequest request;
+	};
+
+	// Compiled-pass intervals measured from the 44-pass editor graph.
+	const std::vector<NamedRequest> kMigratedGraph{
+	        {"ShadowService.Depth_C0", {.size = 64 * kMiB, .alignment = 65536, .firstPass = 6, .lastPass = 17, .aliasable = true}},
+	        {"ShadowService.Depth_C1", {.size = 16 * kMiB, .alignment = 65536, .firstPass = 7, .lastPass = 17, .aliasable = true}},
+	        {"ShadowService.Depth_C2", {.size = 16 * kMiB, .alignment = 65536, .firstPass = 8, .lastPass = 17, .aliasable = true}},
+	        {"LocalShadow.AtlasDepth", {.size = 64 * kMiB, .alignment = 65536, .firstPass = 10, .lastPass = 10, .aliasable = true}},
+	        {"Scene.Depth", {.size = 15 * kMiB, .alignment = 65536, .firstPass = 4, .lastPass = 17, .aliasable = true}},
+	        {"PostProcess.HdrColor", {.size = 30 * kMiB, .alignment = 65536, .firstPass = 5, .lastPass = 37, .aliasable = true}},
+	        {"PostProcess.LdrColor", {.size = 15 * kMiB, .alignment = 65536, .firstPass = 34, .lastPass = 35, .aliasable = true}},
+	        {"GTAO.Raw", {.size = 1 * kMiB, .alignment = 65536, .firstPass = 15, .lastPass = 16, .aliasable = true}},
+	        {"GTAO.Denoised", {.size = 1 * kMiB, .alignment = 65536, .firstPass = 16, .lastPass = 17, .aliasable = true}},
+	};
+
+	[[nodiscard]] std::vector<TransientHeapRequest> RequestsOf(const std::vector<NamedRequest>& named)
+	{
+		std::vector<TransientHeapRequest> out;
+		out.reserve(named.size());
+		for (const NamedRequest& n: named)
+		{
+			out.push_back(n.request);
+		}
+		return out;
+	}
+
+	[[nodiscard]] std::size_t IndexOf(const std::vector<NamedRequest>& named, std::string_view name)
+	{
+		for (std::size_t i = 0; i < named.size(); ++i)
+		{
+			if (name == named[i].name)
+			{
+				return i;
+			}
+		}
+		FAIL("no such request: " << name);
+		return 0;
+	}
+} // namespace
+
+TEST_CASE("PlanTransientHeap never overlaps two migrated bindless targets that are live together")
+{
+	// The correctness case, and the one this whole migration turns on. Being bindless buys
+	// no exemption: if two of these share bytes while both are live, a shadow lookup or the
+	// tonemap input reads somebody else's pixels.
+	const std::vector<TransientHeapRequest> requests = RequestsOf(kMigratedGraph);
+	const TransientHeapPlan plan = PlanTransientHeap(requests);
+
+	REQUIRE(plan.placements.size() == requests.size());
+
+	for (std::size_t a = 0; a < requests.size(); ++a)
+	{
+		for (std::size_t b = a + 1; b < requests.size(); ++b)
+		{
+			const bool livesTogether = requests[a].firstPass <= requests[b].lastPass && requests[b].firstPass <= requests[a].lastPass;
+			if (livesTogether)
+			{
+				INFO("overlapping pair: " << std::string{kMigratedGraph[a].name} << " and " << std::string{kMigratedGraph[b].name});
+				CHECK_FALSE(RangesOverlap(plan.placements[a], requests[a].size, plan.placements[b], requests[b].size));
+			}
+		}
+	}
+}
+
+TEST_CASE("PlanTransientHeap gives the shadow block and the scene depth distinct ranges")
+{
+	// Spelled out rather than derived, because the pairwise sweep above would stay green if
+	// the intervals themselves drifted. Cascade 0 (p6-17), Scene.Depth (p4-17) and HdrColor
+	// (p5-37) are live simultaneously across the whole shadow and GTAO block.
+	const std::vector<TransientHeapRequest> requests = RequestsOf(kMigratedGraph);
+	const TransientHeapPlan plan = PlanTransientHeap(requests);
+
+	const std::size_t c0 = IndexOf(kMigratedGraph, "ShadowService.Depth_C0");
+	const std::size_t depth = IndexOf(kMigratedGraph, "Scene.Depth");
+	const std::size_t hdr = IndexOf(kMigratedGraph, "PostProcess.HdrColor");
+	const std::size_t atlasDepth = IndexOf(kMigratedGraph, "LocalShadow.AtlasDepth");
+
+	CHECK_FALSE(RangesOverlap(plan.placements[c0], 64 * kMiB, plan.placements[depth], 15 * kMiB));
+	CHECK_FALSE(RangesOverlap(plan.placements[c0], 64 * kMiB, plan.placements[hdr], 30 * kMiB));
+	CHECK_FALSE(RangesOverlap(plan.placements[depth], 15 * kMiB, plan.placements[hdr], 30 * kMiB));
+	// The local shadow atlas depth is only live at pass 10, inside cascade 0's span.
+	CHECK_FALSE(RangesOverlap(plan.placements[atlasDepth], 64 * kMiB, plan.placements[c0], 64 * kMiB));
+}
+
+TEST_CASE("PlanTransientHeap lays the tonemap output on a finished shadow cascade")
+{
+	// The pooling case, and the reason the migration is worth doing at all. LdrColor
+	// (p34-35) starts seventeen passes after cascade 0 (p6-17) is finished with, so the
+	// 64 MiB range serves both. Before the migration LdrColor held a private 15 MiB
+	// allocation for the life of the process because it was bindless.
+	const std::vector<TransientHeapRequest> requests = RequestsOf(kMigratedGraph);
+	const TransientHeapPlan plan = PlanTransientHeap(requests);
+
+	const std::size_t ldr = IndexOf(kMigratedGraph, "PostProcess.LdrColor");
+	const std::size_t c0 = IndexOf(kMigratedGraph, "ShadowService.Depth_C0");
+	const std::size_t gtaoRaw = IndexOf(kMigratedGraph, "GTAO.Raw");
+	const std::size_t atlasDepth = IndexOf(kMigratedGraph, "LocalShadow.AtlasDepth");
+
+	CHECK(plan.placements[ldr].bucket == plan.placements[c0].bucket);
+	CHECK(plan.placements[ldr].aliased);
+	CHECK(plan.placements[c0].aliased);
+
+	// GTAO's raw target (p15-16) lands on the local shadow atlas depth (p10 only).
+	CHECK(plan.placements[gtaoRaw].bucket == plan.placements[atlasDepth].bucket);
+
+	// Literal, not derived from the plan: nine resources costing 222 MiB standalone fit in
+	// 206 MiB once the disjoint ones share.
+	CHECK(plan.standaloneSize == 232783872);
+	CHECK(plan.totalSize == 216006656);
+	CHECK(plan.bucketCount == 7);
 }

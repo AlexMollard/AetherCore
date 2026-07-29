@@ -71,6 +71,12 @@ namespace aether
 			{
 				gpu::ResourceRegistry::Destroy(entry.image);
 			}
+			if (entry.reservedBindlessSlot != 0xFFFFFFFFu)
+			{
+				gpu::ResourceRegistry::ReleaseBindlessSampledSlot(entry.reservedBindlessSlot);
+				entry.reservedBindlessSlot = 0xFFFFFFFFu;
+			}
+			entry.boundBindlessImage = {};
 			entry.aliasedEntryIndex = 0xFFFFFFFFu;
 			entry.allocatedExtent = {};
 		}
@@ -567,37 +573,42 @@ namespace aether
 		entry.bindlessLayout = descriptorLayout;
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 
-		if (!entry.image.IsValid())
+		// The slot is reserved against nothing. That is the whole point: the graph hands the
+		// number out when it is built, then re-points it at whichever image ends up backing
+		// the slot this frame - which for a pooled transient is a different image every time
+		// the heap plan changes. Creating the image here instead would force the resource off
+		// the heap for the life of the process.
+		if (entry.reservedBindlessSlot == 0xFFFFFFFFu)
 		{
-			if (entry.format == gpu::Format::Undefined || static_cast<std::uint32_t>(entry.usage) == 0 || entry.extent.width == 0 || entry.extent.height == 0)
+			entry.reservedBindlessSlot = gpu::ResourceRegistry::ReserveBindlessSampledSlot();
+			if (entry.reservedBindlessSlot == 0xFFFFFFFFu)
 			{
 				return 0xFFFFFFFFu;
 			}
-
-			const std::string bsName = std::format("RenderGraph.Transient.Bindless[{}]", transientIdx);
-			entry.image = gpu::ResourceRegistry::CreateTexture(gpu::TextureDesc{
-			        .format = entry.format,
-			        .extent = entry.extent,
-			        .usage = entry.usage,
-			        .aspect = entry.aspect,
-			        .mipLevels = 1,
-			        .arrayLayers = 1,
-			        .debugName = bsName.c_str(),
-			});
-			if (!entry.image.IsValid())
-			{
-				return 0xFFFFFFFFu;
-			}
-			entry.allocatedExtent = entry.extent;
-			// A slot requested at graph-construction time cannot come out of the transient
-			// heap: the heap plan does not exist yet. It is still a transient allocation and
-			// has to be counted as one, or the totals lie about where the memory went.
-			m_lastFrameStats.transientAllocated++;
-			m_lastFrameStats.transientCacheMiss++;
+			entry.boundBindlessImage = {};
 		}
 
-		gpu::ResourceRegistry::EnsureBindlessSampled(entry.image, entry.aspect, gpu::FromVk(descriptorLayout));
-		return gpu::ResourceRegistry::GetBindlessSampledSlot(entry.image);
+		// An image already materialised for this slot (a graph rebuild that kept the slot)
+		// still has to be pointed at, or the descriptor stays empty until the image changes.
+		BindReservedSlot(entry);
+		return entry.reservedBindlessSlot;
+	}
+
+	void RenderGraphStorage::BindReservedSlot(TransientImageEntry& entry)
+	{
+		if (entry.reservedBindlessSlot == 0xFFFFFFFFu || !entry.image.IsValid())
+		{
+			return;
+		}
+		if (entry.boundBindlessImage == entry.image)
+		{
+			return;
+		}
+		if (!gpu::ResourceRegistry::BindSampledToSlot(entry.image, entry.reservedBindlessSlot, entry.aspect, gpu::FromVk(entry.bindlessLayout)))
+		{
+			return;
+		}
+		entry.boundBindlessImage = entry.image;
 	}
 
 	std::uint32_t RenderGraphStorage::GetBindlessSampledSlot(uint32_t transientIdx) const
@@ -607,12 +618,7 @@ namespace aether
 			return 0xFFFFFFFFu;
 		}
 
-		const auto& entry = m_transientImages[transientIdx];
-		if (!gpu::ResourceRegistry::HasBindlessSampled(entry.image))
-		{
-			return 0xFFFFFFFFu;
-		}
-		return gpu::ResourceRegistry::GetBindlessSampledSlot(entry.image);
+		return m_transientImages[transientIdx].reservedBindlessSlot;
 	}
 
 	void RenderGraphStorage::ReleaseTransient(uint32_t idx)
@@ -637,23 +643,23 @@ namespace aether
 				entry.image = {};
 			}
 		}
-		else if (entry.bindlessRequested)
-		{
-#ifndef NDEBUG
-			if (entry.image.IsValid())
-			{
-				EraseTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image));
-			}
-#endif
-			if (entry.image.IsValid())
-			{
-				gpu::ResourceRegistry::Destroy(entry.image);
-			}
-		}
 		else
 		{
+			// A bindless entry is cached like any other now that the slot is not tied to the
+			// image: whoever pulls this image out of the cache next re-points its own slot
+			// at it.
 			MoveToCache(entry);
 		}
+		entry.image = {};
+
+		// The slot outlives every image that ever backed it, so it is released here and
+		// nowhere else - the textures pointed at it never owned it.
+		if (entry.reservedBindlessSlot != 0xFFFFFFFFu)
+		{
+			gpu::ResourceRegistry::ReleaseBindlessSampledSlot(entry.reservedBindlessSlot);
+			entry.reservedBindlessSlot = 0xFFFFFFFFu;
+		}
+		entry.boundBindlessImage = {};
 		entry.bindlessRequested = false;
 		entry.bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
@@ -1102,15 +1108,7 @@ namespace aether
 			auto& entry = m_transientImages[i];
 			const TransientLifetime lifetime = lifetimeFor(imageLifetimes, i);
 			entry.live = lifetime.live;
-			if (entry.memReqSize == 0 || !lifetime.live)
-			{
-				continue;
-			}
-			// A bindless slot is handed out when the graph is built and callers push it into
-			// shaders from then on. Pooling the image would destroy and re-create it, and the
-			// new image gets a new slot, so bindless transients stay on private allocations
-			// until slots can be reserved ahead of the image that fills them.
-			if (entry.bindlessRequested)
+			if (!ClaimsHeapSpace(entry.memReqSize, lifetime))
 			{
 				continue;
 			}
@@ -1129,7 +1127,7 @@ namespace aether
 			auto& entry = m_transientBuffers[i];
 			const TransientLifetime lifetime = lifetimeFor(bufferLifetimes, i);
 			entry.live = lifetime.live;
-			if (entry.memReqSize == 0 || !lifetime.live)
+			if (!ClaimsHeapSpace(entry.memReqSize, lifetime))
 			{
 				continue;
 			}
@@ -1237,6 +1235,9 @@ namespace aether
 #endif
 				gpu::ResourceRegistry::Destroy(entry.image);
 				entry.image = {};
+				// The slot survives the image. Clearing this is what makes the next
+				// materialisation re-point it instead of assuming it is still current.
+				entry.boundBindlessImage = {};
 			}
 			entry.fromHeap = false;
 			entry.aliased = false;
@@ -1422,6 +1423,7 @@ namespace aether
 				entry.image = cached;
 				entry.allocatedExtent = entry.extent;
 				m_lastFrameStats.transientCacheHit++;
+				BindReservedSlot(entry);
 #ifndef NDEBUG
 				SetTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image), gpu::ImageLayout::Undefined);
 #endif
@@ -1450,6 +1452,7 @@ namespace aether
 				entry.allocatedExtent = entry.extent;
 				m_lastFrameStats.transientAllocated++;
 				m_lastFrameStats.transientCacheMiss++;
+				BindReservedSlot(entry);
 #ifndef NDEBUG
 				SetTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image), gpu::ImageLayout::Undefined);
 #endif
@@ -1473,6 +1476,7 @@ namespace aether
 			entry.allocatedExtent = entry.extent;
 			m_lastFrameStats.transientAllocated++;
 			m_lastFrameStats.transientCacheMiss++;
+			BindReservedSlot(entry);
 #ifndef NDEBUG
 			SetTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image), gpu::ImageLayout::Undefined);
 #endif

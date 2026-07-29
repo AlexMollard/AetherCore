@@ -56,6 +56,10 @@ namespace aether
 			static constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
 			std::uint32_t bindlessSampledSlot = kInvalidBindlessSlot;
 			bool hasBindlessSampled = false;
+			// False when the slot was reserved by somebody else and only pointed at this
+			// texture, which is what lets a pooled render-graph transient keep one slot
+			// across every image that backs it. Destroying the texture must not free it.
+			bool ownsBindlessSlot = false;
 		};
 
 		struct BufferEntry
@@ -175,6 +179,16 @@ namespace aether
 		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle, gpu::ImageAspect aspectMask = gpu::ImageAspect::Color, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 		[[nodiscard]] bool HasBindlessSampled(gpu::TextureHandle handle) const;
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(gpu::TextureHandle handle) const;
+
+		// A descriptor slot with no image behind it yet. The caller owns it and must hand it
+		// back through ReleaseBindlessSampledSlot; destroying whatever texture happens to be
+		// pointed at it does not free it.
+		[[nodiscard]] Expected<std::uint32_t> ReserveBindlessSampledSlot();
+		void ReleaseBindlessSampledSlot(std::uint32_t slot);
+
+		// Re-points a caller-owned slot at a texture. The slot number is unchanged, so anything
+		// that cached it keeps working while the image underneath is free to move.
+		Expected<void> BindSampledToSlot(gpu::TextureHandle handle, std::uint32_t slot, gpu::ImageAspect aspectMask, gpu::ImageLayout descriptorLayout);
 
 		[[nodiscard]] gpu::Format GetTextureFormat(gpu::TextureHandle handle) const;
 		[[nodiscard]] gpu::Extent2D GetTextureExtent(gpu::TextureHandle handle) const;

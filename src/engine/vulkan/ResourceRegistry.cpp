@@ -154,7 +154,7 @@ namespace aether
 #else
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
-				if (slot.entry->hasBindlessSampled && m_bindlessManager)
+				if (slot.entry->hasBindlessSampled && slot.entry->ownsBindlessSlot && m_bindlessManager)
 				{
 					m_bindlessManager->FreeSampledImageSlot(slot.entry->bindlessSampledSlot);
 				}
@@ -776,6 +776,93 @@ namespace aether
 		}
 		entry->bindlessSampledSlot = *slotResult;
 		entry->hasBindlessSampled = true;
+		entry->ownsBindlessSlot = true;
+		return {};
+	}
+
+	Expected<std::uint32_t> ResourceRegistry::ReserveBindlessSampledSlot()
+	{
+		AE_ASSERT(m_bindlessManager != nullptr, "ReserveBindlessSampledSlot: SetBindlessManager was never called.");
+		if (m_bindlessManager == nullptr)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "ReserveBindlessSampledSlot: no bindless manager"));
+		}
+		return m_bindlessManager->AllocateSampledImageSlot();
+	}
+
+	void ResourceRegistry::ReleaseBindlessSampledSlot(const std::uint32_t slot)
+	{
+		if (m_bindlessManager == nullptr || slot == TextureEntry::kInvalidBindlessSlot)
+		{
+			return;
+		}
+		// Deferred: the descriptor may still be referenced by frames in flight.
+		m_bindlessManager->FreeSampledImageSlotDeferred(slot);
+	}
+
+	Expected<void> ResourceRegistry::BindSampledToSlot(gpu::TextureHandle handle, const std::uint32_t slot, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout)
+	{
+		AE_ASSERT(m_bindlessManager != nullptr, "BindSampledToSlot: SetBindlessManager was never called.");
+		if (m_bindlessManager == nullptr || slot == TextureEntry::kInvalidBindlessSlot)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "BindSampledToSlot: no bindless manager or invalid slot"));
+		}
+
+		TextureEntry* entry = ResolveMutable(handle);
+		if (!entry)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "BindSampledToSlot: invalid handle"));
+		}
+		if (entry->image == VK_NULL_HANDLE)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "BindSampledToSlot: no image backing handle"));
+		}
+
+		const bool makeView = (entry->view == VK_NULL_HANDLE);
+		VkImageView view = entry->view;
+		if (makeView)
+		{
+			const VkImageViewCreateInfo viewCreateInfo{
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			        .image = entry->image,
+			        .viewType = entry->arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+			        .format = entry->format,
+			        .subresourceRange =
+			                {
+			                        .aspectMask = gpu::ToVk(aspectMask),
+			                        .baseMipLevel = 0,
+			                        .levelCount = entry->mipLevels,
+			                        .baseArrayLayer = 0,
+			                        .layerCount = entry->arrayLayers,
+			                },
+			};
+			const VkResult viewResult = vkCreateImageView(entry->device, &viewCreateInfo, nullptr, &view);
+			if (viewResult != VK_SUCCESS)
+			{
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(viewResult), "BindSampledToSlot: failed to create image view"));
+			}
+			entry->viewCreateInfo = viewCreateInfo;
+		}
+
+		Expected<void> writeResult = m_bindlessManager->WriteSampledImage(slot, &entry->viewCreateInfo, descriptorLayout);
+		if (!writeResult)
+		{
+			if (makeView)
+			{
+				vkDestroyImageView(entry->device, view, nullptr);
+			}
+			AE_UNEXPECTED(writeResult.error());
+		}
+
+		entry->view = view;
+		if (makeView)
+		{
+			entry->ownsView = true;
+		}
+		entry->bindlessSampledSlot = slot;
+		entry->hasBindlessSampled = true;
+		// The slot belongs to the caller: destroying this texture must leave it alive.
+		entry->ownsBindlessSlot = false;
 		return {};
 	}
 
@@ -1103,7 +1190,7 @@ namespace aether
 		        .fn =
 		                [this, entry]()
 		        {
-			        if (entry.hasBindlessSampled && m_bindlessManager)
+			        if (entry.hasBindlessSampled && entry.ownsBindlessSlot && m_bindlessManager)
 			        {
 				        m_bindlessManager->FreeSampledImageSlotDeferred(entry.bindlessSampledSlot);
 			        }
@@ -1619,6 +1706,33 @@ namespace aether::gpu
 	std::uint32_t ResourceRegistry::GetBindlessSampledSlot(TextureHandle handle)
 	{
 		return s_reg->GetBindlessSampledSlot(handle);
+	}
+
+	std::uint32_t ResourceRegistry::ReserveBindlessSampledSlot()
+	{
+		auto result = s_reg->ReserveBindlessSampledSlot();
+		if (!result)
+		{
+			AE_WARN(LogCategory::Vulkan, "ResourceRegistry::ReserveBindlessSampledSlot failed: {}", result.error());
+			return 0xFFFFFFFFu;
+		}
+		return *result;
+	}
+
+	void ResourceRegistry::ReleaseBindlessSampledSlot(std::uint32_t slot)
+	{
+		s_reg->ReleaseBindlessSampledSlot(slot);
+	}
+
+	bool ResourceRegistry::BindSampledToSlot(TextureHandle handle, std::uint32_t slot, ImageAspect aspectMask, ImageLayout descriptorLayout)
+	{
+		auto result = s_reg->BindSampledToSlot(handle, slot, aspectMask, descriptorLayout);
+		if (!result)
+		{
+			AE_WARN(LogCategory::Vulkan, "ResourceRegistry::BindSampledToSlot failed: {}", result.error());
+			return false;
+		}
+		return true;
 	}
 
 	Format ResourceRegistry::GetTextureFormat(TextureHandle handle)

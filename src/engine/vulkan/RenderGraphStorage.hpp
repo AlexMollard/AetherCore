@@ -292,6 +292,13 @@ namespace aether
 			// survive the frame and its first use has to discard.
 			bool aliased = false;
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			// Reserved when the slot is first asked for and held for as long as the graph
+			// keeps the slot, so callers may cache the number. Every image that comes to back
+			// this slot - pooled, aliased, recycled from the cache - is written into it.
+			std::uint32_t reservedBindlessSlot = 0xFFFFFFFFu;
+			// The image currently pointed at by reservedBindlessSlot. Re-binding is skipped
+			// while this still matches, so a steady-state frame writes no descriptors.
+			gpu::TextureHandle boundBindlessImage;
 			gpu::TextureHandle image;
 			gpu::Extent2D allocatedExtent;
 			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu;
@@ -314,6 +321,11 @@ namespace aether
 			std::uint32_t memReqTypeBits = 0;
 			VkDeviceSize heapOffset = VK_WHOLE_SIZE;
 		};
+
+		// Points the entry's reserved bindless slot at whatever image currently backs it.
+		// A no-op when the slot already names that image, so a steady-state frame writes
+		// no descriptors at all.
+		static void BindReservedSlot(TransientImageEntry& entry);
 
 		struct ImageCacheKey
 		{

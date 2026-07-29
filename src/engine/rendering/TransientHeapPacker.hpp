@@ -35,6 +35,21 @@ namespace aether
 		bool discardsOnFirstUse = false;
 	};
 
+	// Whether a transient slot contributes a request to the heap plan this frame.
+	//
+	// There are exactly two reasons to skip a slot: it has no memory requirement yet, and
+	// no compiled pass touches it. Holding a bindless descriptor slot is deliberately NOT
+	// one of them - the slot is reserved against the graph rather than against the image,
+	// so it outlives the image being destroyed and re-created on a pooled range. Skipping
+	// bindless resources here is what pinned ten full-resolution targets to permanent
+	// private allocations, and a resource exempted from the plan is also exempted from the
+	// overlap rule that keeps aliasing sound, so the rule is stated once here rather than
+	// open-coded per resource kind.
+	[[nodiscard]] constexpr bool ClaimsHeapSpace(const std::uint64_t memReqSize, const TransientLifetime& lifetime) noexcept
+	{
+		return memReqSize != 0 && lifetime.live;
+	}
+
 	struct TransientHeapPlacement
 	{
 		std::uint64_t offset = 0;
