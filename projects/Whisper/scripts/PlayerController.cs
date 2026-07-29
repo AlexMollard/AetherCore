@@ -67,7 +67,14 @@ public sealed class PlayerController : EntityScript
     /// </remarks>
     public bool FacingLeft { get; private set; }
 
-    private Vector3 _spawn;
+    /// <summary>Where this player belongs - the spawn marker it was created at.</summary>
+    /// <remarks>
+    /// Read by <see cref="PlayerCombat"/> so a death and a fall out of the world put
+    /// the character back in the same place. One capture, one answer: a second script
+    /// noting its own idea of "home" is a second thing that can end up somewhere else.
+    /// </remarks>
+    public Vector3 SpawnPoint { get; private set; }
+
     private float _sinceGrounded = 99.0f;
     private float _sinceJumpPressed = 99.0f;
     private bool _jumpCutDone;
@@ -80,7 +87,7 @@ public sealed class PlayerController : EntityScript
 
     public override void OnAttach()
     {
-        _spawn = Self.Position;
+        SpawnPoint = Self.Position;
         _baseSpriteSize = SpriteRenderer.GetPixelSize(Self);
         Physics2D.EnableEvents(Self);
         Physics2D.SetGravityScale(Self, GravityScale);
@@ -106,6 +113,17 @@ public sealed class PlayerController : EntityScript
         // is deciding this character's state.
         if (Time.IsPaused)
         {
+            return;
+        }
+
+        // Dead players do not run, jump or drop through platforms. Returning here is
+        // the whole of it: PlayerCombat is what holds the corpse at its spawn point and
+        // what brings it back, so there is one place that knows what being dead means
+        // and this one only has to stop. The animation is pinned to idle so a body that
+        // died mid-stride is not left running on the spot on every other peer's screen.
+        if (GetScript<PlayerCombat>() is { IsAlive: false })
+        {
+            AnimIndex = AnimIndexIdle;
             return;
         }
 
@@ -254,7 +272,7 @@ public sealed class PlayerController : EntityScript
     /// the world. There are no checkpoints in this build - it is always the spawn point.</summary>
     private void Respawn()
     {
-        Self.Position = _spawn;
+        Self.Position = SpawnPoint;
         Physics2D.SetLinearVelocity(Self, Vector2.Zero);
     }
 
