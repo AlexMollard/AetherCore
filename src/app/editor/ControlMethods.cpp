@@ -1688,15 +1688,19 @@ namespace aether::editor
 			        const FrameStats& s = rendering->GetRenderGraph().GetFrameStats();
 			        return json{{"passCount", s.passCount},
 			                {"barrierCount", s.barrierCount},
-			                {"transientAllocated", s.transientAllocated},
-			                {"transientCacheHit", s.transientCacheHit},
-			                {"transientCacheMiss", s.transientCacheMiss},
+			                {"transientImageCount", s.transientImageCount},
+			                {"transientBufferCount", s.transientBufferCount},
+			                {"transientAllocatedTotal", s.transientAllocated},
+			                {"transientCacheHitTotal", s.transientCacheHit},
+			                {"transientCacheMissTotal", s.transientCacheMiss},
 			                {"pendingDestructions", s.pendingDestructions},
 			                {"cacheSize", s.cacheSize},
 			                {"aliasedImageCount", s.aliasedImageCount},
 			                {"aliasedBufferCount", s.aliasedBufferCount},
 			                {"heapCapacityBytes", s.heapCapacity},
 			                {"heapUsedBytes", s.heapUsed},
+			                {"transientLogicalBytes", s.transientLogicalBytes},
+			                {"transientPhysicalBytes", s.transientPhysicalBytes},
 			                {"frame", ctx.frameIndex},
 			                {"fps", ctx.fps}};
 		        }});

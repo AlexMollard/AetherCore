@@ -300,7 +300,10 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_currentFrame = frameIndex % kMaxFramesInFlight;
-		m_lastFrameStats = FrameStats{};
+		// Only the per-frame class is cleared here. Levels are refreshed by
+		// RefreshTransientStats() and the cumulative counters must survive the frame.
+		m_lastFrameStats.passCount = 0;
+		m_lastFrameStats.barrierCount = 0;
 	}
 
 	uint32_t RenderGraphStorage::RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect)
@@ -589,6 +592,11 @@ namespace aether
 				return 0xFFFFFFFFu;
 			}
 			entry.allocatedExtent = entry.extent;
+			// A slot requested at graph-construction time cannot come out of the transient
+			// heap: the heap plan does not exist yet. It is still a transient allocation and
+			// has to be counted as one, or the totals lie about where the memory went.
+			m_lastFrameStats.transientAllocated++;
+			m_lastFrameStats.transientCacheMiss++;
 		}
 
 		gpu::ResourceRegistry::EnsureBindlessSampled(entry.image, entry.aspect, gpu::FromVk(descriptorLayout));
@@ -1005,8 +1013,16 @@ namespace aether
 			return;
 		}
 
+		// Only entries that still have to be materialised are re-planned. Wiping the heap
+		// bookkeeping of a live entry orphaned its virtual allocation, left the image
+		// sitting on a range the block no longer knew about, and made every "is this
+		// aliased?" answer come back false from the second frame onwards.
 		for (auto& entry: m_transientImages)
 		{
+			if (entry.image.IsValid())
+			{
+				continue;
+			}
 			entry.fromHeap = false;
 			entry.m_virtualAlloc = nullptr;
 			entry.heapOffset = VK_WHOLE_SIZE;
@@ -1015,6 +1031,10 @@ namespace aether
 		}
 		for (auto& entry: m_transientBuffers)
 		{
+			if (entry.buffer.IsValid())
+			{
+				continue;
+			}
 			entry.fromHeap = false;
 			entry.m_virtualAlloc = nullptr;
 			entry.heapOffset = VK_WHOLE_SIZE;
@@ -1022,9 +1042,12 @@ namespace aether
 			entry.memReqAlignment = 0;
 		}
 
+		// Memory requirements are queried for every slot, not only the ones about to be
+		// created: they are what the byte-level stats are computed from, and a slot that
+		// was materialised eagerly (bindless) would otherwise report as costing nothing.
 		for (auto& entry: m_transientImages)
 		{
-			if (entry.image.IsValid())
+			if (entry.memReqSize != 0)
 			{
 				continue;
 			}
@@ -1067,7 +1090,7 @@ namespace aether
 
 		for (auto& entry: m_transientBuffers)
 		{
-			if (entry.buffer.IsValid())
+			if (entry.memReqSize != 0)
 			{
 				continue;
 			}
@@ -1152,13 +1175,15 @@ namespace aether
 			maxAlignment = std::max(maxAlignment, entry.memReqAlignment);
 		}
 
-		if (totalSize > m_transientHeapCapacity || maxAlignment > m_transientHeapAlignment)
+		// Re-sizing the heap frees the underlying device memory, so every offset handed out
+		// of it dies with it. It may only happen while nothing is resident - otherwise the
+		// live images would keep rendering into memory that no longer belongs to them.
+		const bool hasResidents = std::ranges::any_of(m_transientImages, [](const TransientImageEntry& e) { return e.fromHeap && e.image.IsValid(); })
+		        || std::ranges::any_of(m_transientBuffers, [](const TransientBufferEntry& e) { return e.fromHeap && e.buffer.IsValid(); });
+
+		if (!hasResidents && (totalSize > m_transientHeapCapacity || maxAlignment > m_transientHeapAlignment))
 		{
 			AllocateTransientHeap(totalSize * 3 / 2, maxAlignment);
-		}
-		else if (m_virtualBlock != VK_NULL_HANDLE)
-		{
-			vmaClearVirtualBlock(m_virtualBlock);
 		}
 
 		if (m_virtualBlock == VK_NULL_HANDLE)
@@ -1197,34 +1222,83 @@ namespace aether
 			}
 		}
 
-		VmaStatistics blockStats{};
-		vmaGetVirtualBlockStatistics(m_virtualBlock, &blockStats);
-		m_lastFrameStats.heapCapacity = m_transientHeapCapacity;
-		m_lastFrameStats.heapUsed = blockStats.allocationBytes;
-		m_lastFrameStats.aliasedImageCount = 0;
-		m_lastFrameStats.aliasedBufferCount = 0;
-		for (auto& entry: m_transientImages)
+	}
+
+	void RenderGraphStorage::RefreshTransientStats()
+	{
+		AE_PROFILE_ZONE();
+		FrameStats& stats = m_lastFrameStats;
+
+		stats.transientImageCount = 0;
+		stats.transientBufferCount = 0;
+		stats.aliasedImageCount = 0;
+		stats.aliasedBufferCount = 0;
+		stats.transientLogicalBytes = 0;
+		stats.transientPhysicalBytes = 0;
+
+		for (const auto& entry: m_transientImages)
 		{
+			if (!entry.image.IsValid())
+			{
+				continue;
+			}
+			stats.transientImageCount++;
+			stats.transientLogicalBytes += entry.memReqSize;
 			if (entry.fromHeap)
 			{
-				m_lastFrameStats.aliasedImageCount++;
+				stats.aliasedImageCount++;
+			}
+			else
+			{
+				stats.transientPhysicalBytes += entry.memReqSize;
 			}
 		}
-		for (auto& entry: m_transientBuffers)
+		for (const auto& entry: m_transientBuffers)
 		{
+			if (!entry.buffer.IsValid())
+			{
+				continue;
+			}
+			stats.transientBufferCount++;
+			stats.transientLogicalBytes += entry.memReqSize;
 			if (entry.fromHeap)
 			{
-				m_lastFrameStats.aliasedBufferCount++;
+				stats.aliasedBufferCount++;
+			}
+			else
+			{
+				stats.transientPhysicalBytes += entry.memReqSize;
 			}
 		}
 
+		stats.heapCapacity = m_transientHeapCapacity;
+		stats.heapUsed = 0;
+		if (m_virtualBlock != VK_NULL_HANDLE)
+		{
+			VmaStatistics blockStats{};
+			vmaGetVirtualBlockStatistics(m_virtualBlock, &blockStats);
+			stats.heapUsed = blockStats.allocationBytes;
+		}
+		// Everything the heap backs costs the heap's capacity, however many resources
+		// share it - that is the whole point of the pool.
+		stats.transientPhysicalBytes += m_transientHeapCapacity;
+
+		stats.cacheSize = 0;
+		for (const auto& [key, entries]: m_imageCache)
+		{
+			(void) key;
+			stats.cacheSize += entries.size();
+		}
+
+		stats.pendingDestructions = gpu::ResourceRegistry::GetPendingDestructionCount();
+
 		AE_VERBOSE(LogCategory::Vulkan,
-		        "Transient heap: {:.1f} MB total, {:.1f} MB used, {} aliased images, {} aliased buffers, {} cache images",
-		        static_cast<double>(m_lastFrameStats.heapCapacity) / (1024.0 * 1024.0),
-		        static_cast<double>(m_lastFrameStats.heapUsed) / (1024.0 * 1024.0),
-		        m_lastFrameStats.aliasedImageCount,
-		        m_lastFrameStats.aliasedBufferCount,
-		        m_lastFrameStats.cacheSize);
+		        "Transient heap: {:.1f} MB capacity, {:.1f} MB used, {} heap images, {} heap buffers, {} cache images",
+		        static_cast<double>(stats.heapCapacity) / (1024.0 * 1024.0),
+		        static_cast<double>(stats.heapUsed) / (1024.0 * 1024.0),
+		        stats.aliasedImageCount,
+		        stats.aliasedBufferCount,
+		        stats.cacheSize);
 	}
 
 	void RenderGraphStorage::EnsureTransientImages(const FrameTarget& target)
@@ -1320,12 +1394,6 @@ namespace aether
 		}
 
 		EvictStaleCacheEntries();
-
-		m_lastFrameStats.cacheSize = 0;
-		for (const auto& [key, entries]: m_imageCache)
-		{
-			m_lastFrameStats.cacheSize += entries.size();
-		}
 	}
 
 	uint32_t RenderGraphStorage::AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags2 usage)

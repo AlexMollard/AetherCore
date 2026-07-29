@@ -1302,6 +1302,16 @@ namespace aether
 		return &*slot.entry;
 	}
 
+	std::uint32_t ResourceRegistry::GetPendingDestructionCount() const
+	{
+		std::size_t total = 0;
+		for (const auto& ring: m_pendingDestructions)
+		{
+			total += ring.size();
+		}
+		return static_cast<std::uint32_t>(total);
+	}
+
 	void ResourceRegistry::AdvanceFrame()
 	{
 		AE_PROFILE_ZONE();
@@ -1649,6 +1659,11 @@ namespace aether::gpu
 	GpuMemoryReport ResourceRegistry::QueryMemoryReport()
 	{
 		return s_reg->QueryMemoryReport();
+	}
+
+	std::uint32_t ResourceRegistry::GetPendingDestructionCount()
+	{
+		return s_reg->GetPendingDestructionCount();
 	}
 
 	DeviceSize ResourceRegistry::GetBufferSize(BufferHandle handle)

@@ -184,6 +184,8 @@ namespace aether
 		[[nodiscard]] std::vector<gpu::DebugTextureInfo> ListDebugTextures() const;
 		[[nodiscard]] std::vector<gpu::DebugBufferInfo> ListDebugBuffers() const;
 		[[nodiscard]] gpu::GpuMemoryReport QueryMemoryReport() const;
+		// Resources destroyed but still held for the frames-in-flight ring.
+		[[nodiscard]] std::uint32_t GetPendingDestructionCount() const;
 
 		[[nodiscard]] gpu::DeviceSize GetBufferSize(gpu::BufferHandle handle) const;
 		[[nodiscard]] gpu::BufferUsage GetBufferUsage(gpu::BufferHandle handle) const;

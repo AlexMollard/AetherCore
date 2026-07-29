@@ -1766,6 +1766,7 @@ namespace aether
 
 		m_storage->EnsureTransientImages(target);
 		m_storage->EnsureTransientBuffers();
+		m_storage->RefreshTransientStats();
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 

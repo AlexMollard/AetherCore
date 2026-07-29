@@ -219,6 +219,7 @@ namespace aether::gpu
 		[[nodiscard]] static std::vector<DebugTextureInfo> ListDebugTextures();
 		[[nodiscard]] static std::vector<DebugBufferInfo> ListDebugBuffers();
 		[[nodiscard]] static GpuMemoryReport QueryMemoryReport();
+		[[nodiscard]] static std::uint32_t GetPendingDestructionCount();
 
 		[[nodiscard]] static DeviceSize GetBufferSize(BufferHandle handle);
 		[[nodiscard]] static BufferUsage GetBufferUsage(BufferHandle handle);

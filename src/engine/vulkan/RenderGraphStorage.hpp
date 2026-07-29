@@ -20,19 +20,35 @@ namespace aether
 	class VulkanContext;
 	struct FrameTarget;
 
+	// Every field falls into one of three classes, and the class decides when it is
+	// written. Mixing them is what made these counters unreadable: a per-frame counter
+	// that is only touched on the rare frame that allocates reads zero forever.
 	struct FrameStats
 	{
+		// -- Per frame: cleared by BeginFrame, rewritten while the frame is built.
 		std::uint32_t passCount = 0;
 		std::uint32_t barrierCount = 0;
-		std::uint32_t transientAllocated = 0;
-		std::uint32_t transientCacheHit = 0;
-		std::uint32_t transientCacheMiss = 0;
+
+		// -- Levels: recomputed from live state every frame, so a poll is always current.
+		std::uint32_t transientImageCount = 0;
+		std::uint32_t transientBufferCount = 0;
 		std::uint32_t pendingDestructions = 0;
 		std::size_t cacheSize = 0;
 		std::size_t aliasedImageCount = 0;
 		std::size_t aliasedBufferCount = 0;
 		VkDeviceSize heapCapacity = 0;
 		VkDeviceSize heapUsed = 0;
+		// What the transients would cost with a dedicated allocation each, versus what
+		// they actually cost once the heap plan overlaps disjoint lifetimes.
+		VkDeviceSize transientLogicalBytes = 0;
+		VkDeviceSize transientPhysicalBytes = 0;
+
+		// -- Cumulative since Initialize(): allocation is an event, not a level. These
+		// only move when the graph is rebuilt or a target resizes, which is exactly the
+		// signal worth watching, and a per-frame reading of it is always zero.
+		std::uint64_t transientAllocated = 0;
+		std::uint64_t transientCacheHit = 0;
+		std::uint64_t transientCacheMiss = 0;
 	};
 
 	struct RenderGraphStorage
@@ -160,6 +176,10 @@ namespace aether
 		void ReleaseTransientBuffer(uint32_t idx);
 
 		void PrepareTransientAllocations(const FrameTarget& target);
+
+		// Recomputes every level-class FrameStats field from live state. Must run after the
+		// transients for the frame have been materialised.
+		void RefreshTransientStats();
 
 		void ReleaseTransient(uint32_t idx);
 

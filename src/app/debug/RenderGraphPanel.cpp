@@ -284,8 +284,12 @@ namespace aether::editor
 			DrawMetricRowFormat("Hottest", MsColor(hottestMs), "{} ({:.3f} ms)", hottestName, hottestMs);
 			DrawMetricRowFormat("Barriers", "{}", frameStats.barrierCount);
 			DrawMetricRowFormat("Transient heap", "{:.1f}/{:.1f} MB", static_cast<double>(frameStats.heapUsed) / (1024.0 * 1024.0), static_cast<double>(frameStats.heapCapacity) / (1024.0 * 1024.0));
-			DrawMetricRowFormat("Aliased", "{} images, {} buffers", frameStats.aliasedImageCount, frameStats.aliasedBufferCount);
-			DrawMetricRowFormat("Cache",
+			DrawMetricRowFormat("Pooled", "{} images, {} buffers", frameStats.aliasedImageCount, frameStats.aliasedBufferCount);
+			DrawMetricRowFormat("Transient VRAM",
+			        "{:.1f} MB for {:.1f} MB of resources",
+			        static_cast<double>(frameStats.transientPhysicalBytes) / (1024.0 * 1024.0),
+			        static_cast<double>(frameStats.transientLogicalBytes) / (1024.0 * 1024.0));
+			DrawMetricRowFormat("Cache (total)",
 			        frameStats.transientCacheMiss == 0 ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a},
 			        "{} hit, {} miss, {} kept",
 			        frameStats.transientCacheHit,
