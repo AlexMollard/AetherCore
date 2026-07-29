@@ -780,6 +780,7 @@ namespace aether
 
 		const auto anyCastsShadow = [](const auto& lights) { return std::ranges::any_of(lights, [](const auto& light) { return light.castsShadow; }); };
 		m_rendering->PublishContentSignals(RenderContentSignals{
+		        .sceneDraws = packet.hasSceneDraws,
 		        .shadowCasterDraws = directionalShadowCasters || localShadowCasters,
 		        .directionalLight = directionalShadowEnabled,
 		        .localShadowLights = anyCastsShadow(packet.pointLights) || anyCastsShadow(packet.spotLights),

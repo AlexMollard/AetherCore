@@ -163,6 +163,8 @@ namespace aether
 			return;
 		}
 
+		auto& gpu = services.Get<GpuDevice>();
+		auto& swapchain = services.Get<Swapchain>();
 		auto& bindless = services.Get<BindlessManager>();
 
 		if (m_lazyGates.DirectionalShadowTargets())
@@ -181,6 +183,22 @@ namespace aether
 		else
 		{
 			m_localShadowService.DestroyShadowTargets();
+		}
+
+		// GTAO's targets are sized from the scene viewport, so they are rebuilt rather
+		// than kept across a graph reset even when the gate has not moved.
+		m_gtaoPass.Destroy();
+		if constexpr (kEnableForwardGtao)
+		{
+			if (m_lazyGates.GtaoTargets())
+			{
+				m_gtaoPass.Create({
+				        .device = gpu.GetDevice(),
+				        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
+				        .bindlessManager = &bindless,
+				        .renderGraph = &m_renderGraph,
+				});
+			}
 		}
 	}
 
@@ -286,13 +304,6 @@ namespace aether
 		        .renderGraph = &m_renderGraph,
 		});
 		CreateSceneViewportDepth(vk.GetDevice().device, swapchain.GetDepthFormat(), m_renderGraph, bindless);
-
-		m_gtaoPass.Create({
-		        .device = vk.GetDevice().device,
-		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
-		        .bindlessManager = &bindless,
-		        .renderGraph = &m_renderGraph,
-		});
 
 		m_renderer.Initialize(&m_postProcessStack);
 
@@ -461,7 +472,6 @@ namespace aether
 		m_localShadowService.ClearAllQueues();
 		m_renderTargetService.ClearAllQueues();
 		DestroySceneViewportDepth();
-		m_gtaoPass.Destroy();
 		m_postProcessStack.Destroy();
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
@@ -472,12 +482,6 @@ namespace aether
 		        .renderGraph = &m_renderGraph,
 		});
 		CreateSceneViewportDepth(gpu.GetDevice(), swapchain.GetDepthFormat(), m_renderGraph, bindless);
-		m_gtaoPass.Create({
-		        .device = gpu.GetDevice(),
-		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
-		        .bindlessManager = &bindless,
-		        .renderGraph = &m_renderGraph,
-		});
 		RegisterTexturePreviewImage();
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
@@ -724,10 +728,10 @@ namespace aether
 		}
 		if constexpr (kEnableForwardGtao)
 		{
-			// AO is a 3D-lighting effect; the pass is registered statically but skips its
-			// full-screen compute per-frame when the scene submitted no 3D draws - the
-			// forward pass that samples AO already no-ops there, so the stale product is
-			// never read.
+			// The AO targets only exist while the scene is submitting 3D draws, and
+			// RegisterPasses is a no-op without them. Inside the release grace window the
+			// targets outlive the content for a while, so the compute still self-skips on
+			// the packet-carried draw count.
 			m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, [this] { return HasFrameSceneDraws(); });
 		}
 
@@ -765,7 +769,10 @@ namespace aether
 			}
 			if constexpr (kEnableForwardGtao)
 			{
-				pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
+				if (m_gtaoPass.GetAoImage().IsValid())
+				{
+					pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
+				}
 			}
 
 			if (auto* lighting = frame.lighting)

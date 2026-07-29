@@ -2,7 +2,7 @@
 // actually drew.
 //
 // The gates in here arm and disarm ~480 MB of shadow atlas, cascade depth, VSM blur
-// scratch memory. Two failure modes matter, and they are not symmetric:
+// scratch and AO memory. Two failure modes matter, and they are not symmetric:
 //
 //   * Refusing to allocate when the content IS there produces a scene that silently
 //     renders without shadows. That is the bug the "gate on content, never on
@@ -30,6 +30,7 @@ namespace
 	[[nodiscard]] RenderContentSignals Scene2D()
 	{
 		return RenderContentSignals{
+		        .sceneDraws = false,
 		        .shadowCasterDraws = false,
 		        .directionalLight = true,
 		        .localShadowLights = true,
@@ -40,6 +41,7 @@ namespace
 	[[nodiscard]] RenderContentSignals Scene3D()
 	{
 		return RenderContentSignals{
+		        .sceneDraws = true,
 		        .shadowCasterDraws = true,
 		        .directionalLight = true,
 		        .localShadowLights = true,
@@ -65,6 +67,7 @@ TEST_CASE("Lazy targets start released")
 	const LazyTargetGates gates;
 	CHECK_FALSE(gates.DirectionalShadowTargets());
 	CHECK_FALSE(gates.LocalShadowTargets());
+	CHECK_FALSE(gates.GtaoTargets());
 }
 
 TEST_CASE("A scene with no shadow casters allocates no shadow targets")
@@ -74,6 +77,7 @@ TEST_CASE("A scene with no shadow casters allocates no shadow targets")
 
 	CHECK_FALSE(gates.DirectionalShadowTargets());
 	CHECK_FALSE(gates.LocalShadowTargets());
+	CHECK_FALSE(gates.GtaoTargets());
 }
 
 TEST_CASE("A scene with shadow casters allocates shadow targets")
@@ -83,6 +87,7 @@ TEST_CASE("A scene with shadow casters allocates shadow targets")
 
 	CHECK(gates.DirectionalShadowTargets());
 	CHECK(gates.LocalShadowTargets());
+	CHECK(gates.GtaoTargets());
 }
 
 TEST_CASE("Shadow content arriving allocates on the very next commit")
@@ -99,6 +104,7 @@ TEST_CASE("Shadow content arriving allocates on the very next commit")
 	CHECK(gates.Commit());
 	CHECK(gates.DirectionalShadowTargets());
 	CHECK(gates.LocalShadowTargets());
+	CHECK(gates.GtaoTargets());
 }
 
 TEST_CASE("The 2D to 3D to 2D round trip allocates and then releases")
@@ -111,10 +117,12 @@ TEST_CASE("The 2D to 3D to 2D round trip allocates and then releases")
 	Run(gates, Scene3D(), 5);
 	CHECK(gates.DirectionalShadowTargets());
 	CHECK(gates.LocalShadowTargets());
+	CHECK(gates.GtaoTargets());
 
 	Run(gates, Scene2D(), LazyTargetGates::kReleaseFrames + 2);
 	CHECK_FALSE(gates.DirectionalShadowTargets());
 	CHECK_FALSE(gates.LocalShadowTargets());
+	CHECK_FALSE(gates.GtaoTargets());
 }
 
 TEST_CASE("Targets are held through a brief content gap instead of thrashing")
@@ -138,6 +146,7 @@ TEST_CASE("Targets are held through a brief content gap instead of thrashing")
 	Run(gates, Scene2D(), kSceneLoadGapFrames);
 	CHECK(gates.DirectionalShadowTargets());
 	CHECK(gates.LocalShadowTargets());
+	CHECK(gates.GtaoTargets());
 
 	Run(gates, Scene3D(), 1);
 	REQUIRE(gates.LocalShadowTargets());
@@ -160,6 +169,7 @@ TEST_CASE("Shadow-casting lights alone do not allocate the atlas")
 	LazyTargetGates gates;
 	Run(gates,
 	        RenderContentSignals{
+	                .sceneDraws = false,
 	                .shadowCasterDraws = false,
 	                .directionalLight = false,
 	                .localShadowLights = true,
@@ -175,6 +185,7 @@ TEST_CASE("Shadow-casting geometry alone does not allocate the atlas")
 	LazyTargetGates gates;
 	Run(gates,
 	        RenderContentSignals{
+	                .sceneDraws = true,
 	                .shadowCasterDraws = true,
 	                .directionalLight = false,
 	                .localShadowLights = false,
@@ -183,6 +194,8 @@ TEST_CASE("Shadow-casting geometry alone does not allocate the atlas")
 
 	CHECK_FALSE(gates.LocalShadowTargets());
 	CHECK_FALSE(gates.DirectionalShadowTargets());
+	// The AO targets follow the scene draws, which are there.
+	CHECK(gates.GtaoTargets());
 }
 
 TEST_CASE("Directional and local shadow targets are gated independently")
@@ -192,6 +205,7 @@ TEST_CASE("Directional and local shadow targets are gated independently")
 	LazyTargetGates gates;
 	Run(gates,
 	        RenderContentSignals{
+	                .sceneDraws = true,
 	                .shadowCasterDraws = true,
 	                .directionalLight = true,
 	                .localShadowLights = false,
@@ -207,6 +221,7 @@ TEST_CASE("A sunless scene with casters allocates no cascades")
 	LazyTargetGates gates;
 	Run(gates,
 	        RenderContentSignals{
+	                .sceneDraws = true,
 	                .shadowCasterDraws = true,
 	                .directionalLight = false,
 	                .localShadowLights = true,
@@ -244,4 +259,5 @@ TEST_CASE("A commit with no pending request leaves the gates alone")
 	CHECK_FALSE(gates.Commit());
 	CHECK(gates.DirectionalShadowTargets());
 	CHECK(gates.LocalShadowTargets());
+	CHECK(gates.GtaoTargets());
 }

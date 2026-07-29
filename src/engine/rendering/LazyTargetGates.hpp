@@ -15,6 +15,8 @@ namespace aether
 	// it. Gate on a flag and you get a scene that silently renders without shadows.
 	struct RenderContentSignals
 	{
+		// The main render queue received at least one 3D mesh draw.
+		bool sceneDraws = false;
 		// The shadow render queues received at least one shadow-casting mesh draw.
 		bool shadowCasterDraws = false;
 		// A directional light with non-zero intensity is lighting the scene.
@@ -59,6 +61,11 @@ namespace aether
 			return m_localShadow.enabled;
 		}
 
+		[[nodiscard]] bool GtaoTargets() const
+		{
+			return m_gtao.enabled;
+		}
+
 	private:
 		struct Gate
 		{
@@ -75,5 +82,6 @@ namespace aether
 
 		Gate m_directionalShadow;
 		Gate m_localShadow;
+		Gate m_gtao;
 	};
 } // namespace aether

@@ -45,8 +45,10 @@ namespace aether
 		// scene with nothing but sprites in it has nothing to put in a shadow map. The
 		// local atlas needs a light that was authored to cast AND geometry in front of it,
 		// which is why a 2D scene full of shadow-flagged point lights allocates nothing.
+		// GTAO is a screen-space effect over 3D geometry, so it needs draws.
 		bool pending = Update(m_directionalShadow, signals.directionalLight && signals.shadowCasterDraws);
 		pending = Update(m_localShadow, signals.localShadowLights && signals.shadowCasterDraws) || pending;
+		pending = Update(m_gtao, signals.sceneDraws) || pending;
 		return pending;
 	}
 
@@ -54,6 +56,7 @@ namespace aether
 	{
 		bool changed = CommitOne(m_directionalShadow);
 		changed = CommitOne(m_localShadow) || changed;
+		changed = CommitOne(m_gtao) || changed;
 		return changed;
 	}
 } // namespace aether
