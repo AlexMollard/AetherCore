@@ -55,18 +55,39 @@ namespace aether
 			shadowConstants.Initialize();
 		}
 
+		const gpu::Format depthFormat = swapchain.GetDepthFormat();
+		m_shadowDepthFormat = depthFormat;
+
+		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount, .debugName = "DirectionalShadow"});
+		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
+		m_shadowRenderQueue.SetDebugDisableAnimation(false);
+		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu);
+
+		RecreatePipeline(context.GetDevice().device, depthFormat);
+	}
+
+	void ShadowService::CreateShadowTargets()
+	{
+		AE_PROFILE_ZONE();
+		if (m_shadowTargetsReady)
+		{
+			return;
+		}
+		if (m_shadowDepthFormat == gpu::Format::Undefined)
+		{
+			Throw(AetherError::Engine("ShadowService: CreateShadowTargets before Initialize"));
+		}
+
 		static constexpr const char* kShadowDepthNames[kShadowCascadeCount] = {
 		        "ShadowService.Depth_C0",
 		        "ShadowService.Depth_C1",
 		        "ShadowService.Depth_C2",
 		};
 
-		const gpu::Format depthFormat = swapchain.GetDepthFormat();
-		m_shadowDepthFormat = depthFormat;
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			const gpu::TextureDesc desc{
-			        .format = depthFormat,
+			        .format = m_shadowDepthFormat,
 			        .extent = {m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height},
 			        .usage = gpu::ImageUsage::DepthStencilAttachment | gpu::ImageUsage::Sampled,
 			        .aspect = gpu::ImageAspect::Depth,
@@ -88,12 +109,25 @@ namespace aether
 			}
 		}
 
-		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount, .debugName = "DirectionalShadow"});
-		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
-		m_shadowRenderQueue.SetDebugDisableAnimation(false);
-		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu);
+		m_shadowTargetsReady = true;
+	}
 
-		RecreatePipeline(context.GetDevice().device, depthFormat);
+	void ShadowService::DestroyShadowTargets()
+	{
+		AE_PROFILE_ZONE();
+		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
+		{
+			if (m_shadowDepthHandle[cascade].IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(m_shadowDepthHandle[cascade]);
+			}
+			m_shadowDepthHandle[cascade] = {};
+			m_shadowDepthImage[cascade] = nullptr;
+			m_shadowDepthView[cascade] = nullptr;
+			m_shadowMapSlots[cascade] = 0xFFFFFFFFu;
+			m_shadowDepth[cascade] = {};
+		}
+		m_shadowTargetsReady = false;
 	}
 
 	void ShadowService::Shutdown()
@@ -106,17 +140,7 @@ namespace aether
 		}
 		m_shadowPipeline.Destroy();
 
-		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
-		{
-			if (m_shadowDepthHandle[cascade].IsValid())
-			{
-				gpu::ResourceRegistry::Destroy(m_shadowDepthHandle[cascade]);
-			}
-			m_shadowDepthHandle[cascade] = {};
-			m_shadowDepthImage[cascade] = nullptr;
-			m_shadowDepthView[cascade] = nullptr;
-			m_shadowMapSlots[cascade] = 0xFFFFFFFFu;
-		}
+		DestroyShadowTargets();
 		m_bindless = nullptr;
 		m_shadowDepthFormat = gpu::Format::Undefined;
 	}
@@ -124,6 +148,14 @@ namespace aether
 	void ShadowService::RecreatePipeline(gpu::Device device, gpu::Format depthFormat)
 	{
 		AE_PROFILE_ZONE();
+		if (depthFormat != m_shadowDepthFormat)
+		{
+			// Existing cascade images carry the old format and can no longer be attached
+			// alongside this pipeline. Drop them; the lazy-target pass recreates them in
+			// the new format before the graph is rebuilt.
+			DestroyShadowTargets();
+			m_shadowDepthFormat = depthFormat;
+		}
 		m_shadowPipeline.Destroy();
 		AE_EXPECT_OR_THROW(shadowPipeline,
 		        GraphicsPipeline::Create(device,
@@ -146,16 +178,25 @@ namespace aether
 		m_shadowRenderQueue.Clear(drawSlot);
 	}
 
-	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
+	bool ShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
 		if (!m_directionalShadowEnabled)
 		{
 			m_shadowRenderQueue.DiscardPending(drawSlot);
-			return;
+			return false;
 		}
 		WorldRenderer::Flush(world, m_shadowRenderQueue, /*shadowPass*/ true);
+		const bool hasShadowCasters = !m_shadowRenderQueue.IsEmpty(drawSlot);
+		if (!m_shadowTargetsReady)
+		{
+			// No cascade targets means no $CullDraws_Shadow pass to consume the slot, so
+			// the commands are dropped here rather than left for a consumer that is not
+			// in this frame's graph. The count above is still the honest content signal.
+			m_shadowRenderQueue.DiscardPending(drawSlot);
+		}
+		return hasShadowCasters;
 	}
 
 	void ShadowService::SetAnimationDatabase(const AnimationDatabase* animationDb)
@@ -247,7 +288,9 @@ namespace aether
 		}
 		lightDir = glm::normalize(lightDir);
 
-		const bool directionalShadowFrameEnabled = packet.directionalShadowEnabled;
+		// Without cascade targets there is nothing to sample, so the frame constants say
+		// so and the shader's shadow term collapses to fully lit.
+		const bool directionalShadowFrameEnabled = packet.directionalShadowEnabled && m_shadowTargetsReady;
 		m_directionalShadowFrameEnabled[frameIdx % kMaxFramesInFlight] = directionalShadowFrameEnabled;
 
 		if (!directionalShadowFrameEnabled)

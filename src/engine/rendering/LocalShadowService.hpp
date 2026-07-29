@@ -53,7 +53,22 @@ namespace aether
 		void Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown();
 
-		void PrepareQueues(std::uint32_t drawSlot, World& world);
+		// The atlas is 128 MB and drags a 64 MB depth target plus 256 MB of blur scratch
+		// through the graph's transient heap behind it. Nothing but a shadow-casting local
+		// light with geometry in front of it can use any of it, so the atlas is created on
+		// demand. Resolution and entry budget are unchanged; only the moment of allocation
+		// moved. Both calls must run with the GPU quiesced.
+		void CreateShadowTargets(BindlessManager& bindless);
+		void DestroyShadowTargets();
+
+		[[nodiscard]] bool HasShadowTargets() const
+		{
+			return m_atlasReady;
+		}
+
+		// Returns true when this frame submitted at least one shadow-casting draw - the
+		// geometry half of the gate the atlas is allocated on.
+		[[nodiscard]] bool PrepareQueues(std::uint32_t drawSlot, World& world);
 
 		[[nodiscard]] ShadowAtlasManager& GetAtlasManager()
 		{
@@ -119,6 +134,7 @@ namespace aether
 		RGImage m_atlasDepthImage{};
 		gpu::Format m_atlasDepthFormat = gpu::Format::Undefined;
 		std::uint32_t m_atlasBindlessSlot = 0xFFFFFFFFu;
+		bool m_atlasReady = false;
 
 		std::vector<PerLightShadow> m_perLightShadows;
 

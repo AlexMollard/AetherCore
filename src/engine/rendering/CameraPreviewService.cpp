@@ -239,8 +239,17 @@ namespace aether
 		        .depthLoadOp = gpu::LoadOp::Clear,
 		        .consumes = std::move(consumes),
 		});
-		pass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
-		pass.ConsumeTextureProduct<LocalShadowProduct>(kFrameProductLocalShadows, FrameResourceId::LocalShadowAtlas);
+		// The shadow services only publish their products when their targets exist, and a
+		// scene with nothing to shadow has none. Consuming an undeclared product would
+		// leave the pass with a logical dependency no producer can satisfy.
+		if (graph.GetBlackboard().TryGet<FrameTextureArrayProduct>(kFrameProductDirectionalShadows) != nullptr)
+		{
+			pass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
+		}
+		if (graph.GetBlackboard().TryGet<LocalShadowProduct>(kFrameProductLocalShadows) != nullptr)
+		{
+			pass.ConsumeTextureProduct<LocalShadowProduct>(kFrameProductLocalShadows, FrameResourceId::LocalShadowAtlas);
+		}
 		if (lighting != nullptr)
 		{
 			pass.ReadBuffer(lighting->GetLightsBufferHandle());

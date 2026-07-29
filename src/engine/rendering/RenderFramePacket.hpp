@@ -124,6 +124,12 @@ namespace aether
 		bool hasCameraData = false;
 		SceneFeatureFlags sceneFeatures = DefaultSceneFeatures(SceneKind::Scene3D);
 
+		// True when the main render queue received at least one 3D mesh draw this frame.
+		// Render-side "is there anything 3D here" decisions key off this, never off
+		// sceneFeatures: every scene carries every feature flag, so a flag can never tell
+		// you what a scene actually contains.
+		bool hasSceneDraws = false;
+
 		glm::vec4 sunDirectionIntensity{0.0f, -1.0f, 0.0f, 1.0f};
 		glm::vec4 ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
 

@@ -17,6 +17,7 @@
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/GraphicsPipeline.hpp"
+#include "rendering/LazyTargetGates.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
@@ -76,6 +77,25 @@ namespace aether
 			return m_sceneViewportRebuildPending.load(std::memory_order_acquire);
 		}
 
+		// Feeds this frame's measured content into the lazy-target gates. Called from the
+		// game thread once the render queues and light lists for the frame are complete.
+		void PublishContentSignals(const RenderContentSignals& signals);
+
+		// Non-consuming peek: true when a gate wants targets created or released.
+		[[nodiscard]] bool IsLazyTargetRebuildPending() const
+		{
+			return m_lazyTargetRebuildPending.load(std::memory_order_acquire);
+		}
+
+		// Consumes the pending request and commits the gates. Returns true when the
+		// committed state changed and the render graph therefore has to be rebuilt.
+		bool CommitPendingLazyTargets();
+
+		[[nodiscard]] const LazyTargetGates& GetLazyTargetGates() const
+		{
+			return m_lazyGates;
+		}
+
 		void DiscardPendingFrameQueues(std::uint32_t slot);
 
 		[[nodiscard]] SceneViewportSettings GetSceneViewportSettings() const;
@@ -116,6 +136,18 @@ namespace aether
 		void SetSceneFeatures(SceneFeatureFlags features)
 		{
 			m_sceneFeatures.store(static_cast<std::uint32_t>(features), std::memory_order_relaxed);
+		}
+
+		// Packet-carried "this frame submitted 3D geometry". Render-thread passes gate on
+		// this rather than on a scene feature flag.
+		void SetFrameSceneDraws(bool hasSceneDraws)
+		{
+			m_frameSceneDraws.store(hasSceneDraws, std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] bool HasFrameSceneDraws() const
+		{
+			return m_frameSceneDraws.load(std::memory_order_relaxed);
 		}
 
 		void SetBackgroundParams(std::uint32_t mode, float angleRadians, std::uint32_t stopCount, const std::array<glm::vec4, PostProcessStack::kMaxBackgroundStops>& stops)
@@ -225,6 +257,11 @@ namespace aether
 		// lifetime of the subsystem, but RenderGraph::Clear() (on every scene-viewport
 		void RegisterTexturePreviewImage();
 
+		// Creates or releases every lazily-allocated target to match the committed gates.
+		// Runs on the main thread with the render thread parked and the GPU quiesced,
+		// immediately before the render graph is rebuilt around what now exists.
+		void ApplyLazyTargetState(ServiceContainer& services);
+
 		struct PerFrameResourceTable
 		{
 			gpu::BufferHandle handle{};
@@ -275,7 +312,10 @@ namespace aether
 		ui::UiRenderer m_uiRenderer;
 		std::atomic_bool m_forwardPassEnabled = true;
 		std::atomic_uint32_t m_sceneFeatures{static_cast<std::uint32_t>(DefaultSceneFeatures(SceneKind::Scene3D))};
+		std::atomic_bool m_frameSceneDraws = false;
 		std::atomic_bool m_sceneViewportRebuildPending = false;
+		std::atomic_bool m_lazyTargetRebuildPending = false;
+		LazyTargetGates m_lazyGates;
 		mutable std::mutex m_sceneViewportMutex;
 		bool m_sceneViewportEnabled = false;
 		bool m_requestedSceneViewportEnabled = false;

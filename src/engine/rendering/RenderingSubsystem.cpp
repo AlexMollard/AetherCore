@@ -133,6 +133,57 @@ namespace aether
 		m_texturePreview = m_renderGraph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_texturePreviewHandle), m_texturePreviewView, gpu::ImageAspect::Color);
 	}
 
+	void RenderingSubsystem::PublishContentSignals(const RenderContentSignals& signals)
+	{
+		if (m_profile != RuntimeProfile::Full)
+		{
+			return;
+		}
+
+		if (m_lazyGates.Publish(signals))
+		{
+			m_lazyTargetRebuildPending.store(true, std::memory_order_release);
+		}
+	}
+
+	bool RenderingSubsystem::CommitPendingLazyTargets()
+	{
+		if (!m_lazyTargetRebuildPending.exchange(false, std::memory_order_acq_rel))
+		{
+			return false;
+		}
+		return m_lazyGates.Commit();
+	}
+
+	void RenderingSubsystem::ApplyLazyTargetState(ServiceContainer& services)
+	{
+		AE_PROFILE_ZONE();
+		if (m_profile != RuntimeProfile::Full)
+		{
+			return;
+		}
+
+		auto& bindless = services.Get<BindlessManager>();
+
+		if (m_lazyGates.DirectionalShadowTargets())
+		{
+			m_shadowService.CreateShadowTargets();
+		}
+		else
+		{
+			m_shadowService.DestroyShadowTargets();
+		}
+
+		if (m_lazyGates.LocalShadowTargets())
+		{
+			m_localShadowService.CreateShadowTargets(bindless);
+		}
+		else
+		{
+			m_localShadowService.DestroyShadowTargets();
+		}
+	}
+
 	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless)
 	{
 		(void) device;
@@ -524,6 +575,11 @@ namespace aether
 			return;
 		}
 
+		// Every lazily-allocated target is created or released before a single pass is
+		// declared, so the graph is always built around what actually exists rather than
+		// around what a later frame might want.
+		ApplyLazyTargetState(services);
+
 		auto& lightingManager = services.Get<LightingManager>();
 		auto& bindless = services.Get<BindlessManager>();
 		auto& swapchain = services.Get<Swapchain>();
@@ -543,11 +599,22 @@ namespace aether
 		        .featureFlags = {.forwardEnabled = IsForwardPassEnabled()},
 		};
 
-		m_shadowService.SetupPassResources(m_renderGraph);
-		m_localShadowService.SetupPassResources(m_renderGraph);
+		// A shadow service with no targets declares nothing: no product, no passes, no
+		// transient blur scratch. Its frame constants report "no shadows" for as long as
+		// that holds, so the forward shader reads a fully-lit visibility term.
+		const bool directionalShadows = m_shadowService.HasShadowTargets();
+		const bool localShadows = m_localShadowService.HasShadowTargets();
 
-		m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
-		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
+		if (directionalShadows)
+		{
+			m_shadowService.SetupPassResources(m_renderGraph);
+			m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
+		}
+		if (localShadows)
+		{
+			m_localShadowService.SetupPassResources(m_renderGraph);
+			m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
+		}
 		(void) m_renderGraph.CreatePreparedDrawList("MainSceneDraws");
 		auto& blackboard = m_renderGraph.GetBlackboard();
 		const PreparedDrawList mainSceneDraws = blackboard.Require<PreparedDrawList>("MainSceneDraws");
@@ -614,7 +681,7 @@ namespace aether
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
-				                if (!IsForwardPassEnabled() || !IsSceneFeatureEnabled(SceneFeatureFlags::Meshes3D))
+				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws())
 				                {
 					                return;
 				                }
@@ -647,14 +714,21 @@ namespace aether
 				                cmd.Draw(3);
 			                });
 		}
-		m_shadowService.RegisterGraphicsPasses(m_renderGraph);
-		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
+		if (directionalShadows)
+		{
+			m_shadowService.RegisterGraphicsPasses(m_renderGraph);
+		}
+		if (localShadows)
+		{
+			m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
+		}
 		if constexpr (kEnableForwardGtao)
 		{
 			// AO is a 3D-lighting effect; the pass is registered statically but skips its
-			// full-screen compute per-frame for 2D scenes (no Meshes3D) - the forward pass
-			// that samples AO already no-ops there, so the stale product is never read.
-			m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, [this] { return IsSceneFeatureEnabled(SceneFeatureFlags::Meshes3D); });
+			// full-screen compute per-frame when the scene submitted no 3D draws - the
+			// forward pass that samples AO already no-ops there, so the stale product is
+			// never read.
+			m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, [this] { return HasFrameSceneDraws(); });
 		}
 
 		{
@@ -681,8 +755,14 @@ namespace aether
 			        .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
 			});
 
-			pass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
-			pass.ConsumeTextureProduct<LocalShadowProduct>(kFrameProductLocalShadows, FrameResourceId::LocalShadowAtlas);
+			if (directionalShadows)
+			{
+				pass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
+			}
+			if (localShadows)
+			{
+				pass.ConsumeTextureProduct<LocalShadowProduct>(kFrameProductLocalShadows, FrameResourceId::LocalShadowAtlas);
+			}
 			if constexpr (kEnableForwardGtao)
 			{
 				pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
@@ -698,7 +778,7 @@ namespace aether
 			pass.Execute(
 			        [this, &m_renderQueue = m_renderQueue, bindless = frame.bindless, lighting = frame.lighting](PassContext& ctx)
 			        {
-				        if (!IsForwardPassEnabled() || !IsSceneFeatureEnabled(SceneFeatureFlags::Meshes3D))
+				        if (!IsForwardPassEnabled() || !HasFrameSceneDraws())
 				        {
 					        return;
 				        }

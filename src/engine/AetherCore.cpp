@@ -466,7 +466,11 @@ namespace aether
 		const bool framebufferResized = m_services.Get<PlatformSubsystem>().GetWindow().PeekFramebufferResized();
 		const bool swapchainOutOfDate = m_gpu->SwapchainNeedsRecreation();
 		const bool viewportPending = m_rendering != nullptr && m_rendering->IsSceneViewportRebuildPending();
-		return framebufferResized || swapchainOutOfDate || viewportPending;
+		// A lazily-allocated target wants creating or releasing. The rebuild rides the
+		// same quiesced path as a viewport change: render thread parked, GPU idle, graph
+		// rebuilt around what exists afterwards.
+		const bool lazyTargetsPending = m_rendering != nullptr && m_rendering->IsLazyTargetRebuildPending();
+		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending;
 	}
 
 	void AetherCore::RecreateSwapchainAndResources()
@@ -475,12 +479,13 @@ namespace aether
 		const bool swapchainDirty = framebufferResized || m_gpu->SwapchainNeedsRecreation();
 
 		const bool viewportCommitted = m_rendering != nullptr && m_rendering->CommitPendingSceneViewportSettings();
+		const bool lazyTargetsCommitted = m_rendering != nullptr && m_rendering->CommitPendingLazyTargets();
 
 		if (swapchainDirty)
 		{
 			RecreateSwapchain();
 		}
-		else if (viewportCommitted && m_rendering != nullptr)
+		else if ((viewportCommitted || lazyTargetsCommitted) && m_rendering != nullptr)
 		{
 			m_rendering->RecreateSwapchainResources(m_services);
 		}
@@ -627,8 +632,11 @@ namespace aether
 		const glm::vec4 sunDirIntensity = renderer.GetDirectionalLightVector();
 		const bool directionalShadowEnabled = sunDirIntensity.w > 0.001f;
 		shadowService.SetDirectionalShadowEnabled(directionalShadowEnabled);
-		shadowService.PrepareQueues(drawSlot, world);
-		localShadowService.PrepareQueues(drawSlot, world);
+		// What the world actually submitted this frame, measured after the flush. This is
+		// what the shadow, AO and preview targets are allocated against - never a scene
+		// feature flag, which every scene carries whether or not it has the content.
+		const bool directionalShadowCasters = shadowService.PrepareQueues(drawSlot, world);
+		const bool localShadowCasters = localShadowService.PrepareQueues(drawSlot, world);
 		m_rendering->GetCameraPreview().PrepareQueue(drawSlot, world);
 		m_rendering->GetModelPreview().PrepareQueue(drawSlot);
 
@@ -768,6 +776,15 @@ namespace aether
 			ExtractPhysics2DDebugLines(world, packet.debugVertices);
 		}
 
+		packet.hasSceneDraws = !renderQueue.IsEmpty(drawSlot);
+
+		const auto anyCastsShadow = [](const auto& lights) { return std::ranges::any_of(lights, [](const auto& light) { return light.castsShadow; }); };
+		m_rendering->PublishContentSignals(RenderContentSignals{
+		        .shadowCasterDraws = directionalShadowCasters || localShadowCasters,
+		        .directionalLight = directionalShadowEnabled,
+		        .localShadowLights = anyCastsShadow(packet.pointLights) || anyCastsShadow(packet.spotLights),
+		});
+
 		return packet;
 	}
 
@@ -782,6 +799,7 @@ namespace aether
 		if (m_rendering)
 		{
 			m_rendering->SetSceneFeatures(packet.sceneFeatures);
+			m_rendering->SetFrameSceneDraws(packet.hasSceneDraws);
 			m_rendering->SetBackgroundParams(packet.backgroundMode, packet.backgroundAngleRadians, packet.backgroundStopCount, packet.backgroundStops);
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
 			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);

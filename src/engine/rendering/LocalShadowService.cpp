@@ -109,9 +109,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		auto* device = static_cast<gpu::Device>(context.GetDevice().device);
-
-		m_atlasManager.Initialize(bindless);
-		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
+		(void) bindless;
 
 		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u, .debugName = "LocalShadow"});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
@@ -183,6 +181,31 @@ namespace aether
 		m_atlasDepthFormat = depthFormat;
 	}
 
+	void LocalShadowService::CreateShadowTargets(BindlessManager& bindless)
+	{
+		AE_PROFILE_ZONE();
+		if (m_atlasReady)
+		{
+			return;
+		}
+		m_atlasManager.Initialize(bindless);
+		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
+		m_atlasReady = true;
+	}
+
+	void LocalShadowService::DestroyShadowTargets()
+	{
+		AE_PROFILE_ZONE();
+		m_atlasManager.Shutdown();
+		m_atlasBindlessSlot = 0xFFFFFFFFu;
+		m_atlasImage = {};
+		m_atlasDepthImage = {};
+		m_blurBufferRG = {};
+		m_blurScratchBufferRG = {};
+		m_perLightShadows.clear();
+		m_atlasReady = false;
+	}
+
 	void LocalShadowService::Shutdown()
 	{
 		AE_PROFILE_ZONE();
@@ -208,7 +231,7 @@ namespace aether
 			buf.mapped = nullptr;
 			buf.address = 0;
 		}
-		m_atlasManager.Shutdown();
+		DestroyShadowTargets();
 
 		if (m_blurPipelineHandle.IsValid())
 		{
@@ -217,18 +240,43 @@ namespace aether
 		}
 	}
 
-	void LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
+	bool LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
+		if (!m_atlasReady)
+		{
+			// No atlas means no $CullLocalShadowDraws pass to consume the slot. Discard
+			// first so Clear() below never waits on a consumer this frame's graph does
+			// not contain, then still report what the world would have submitted.
+			m_shadowRenderQueue.DiscardPending(drawSlot);
+		}
 		m_shadowRenderQueue.Clear(drawSlot);
 		WorldRenderer::Flush(world, m_shadowRenderQueue, /*shadowPass*/ true);
+		const bool hasShadowCasters = !m_shadowRenderQueue.IsEmpty(drawSlot);
+		if (!m_atlasReady)
+		{
+			m_shadowRenderQueue.DiscardPending(drawSlot);
+		}
+		return hasShadowCasters;
 	}
 
 	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)
 	{
 		AE_PROFILE_ZONE();
 		(void) packet;
+
+		if (!m_atlasReady)
+		{
+			// Every light reports "no shadow index" and the shader's local shadow term
+			// collapses to fully lit, which is what a scene with nothing to shadow wants.
+			m_perLightShadows.clear();
+			m_lightShadowIndices.assign(packet.pointLights.size() + packet.spotLights.size(), glm::vec2(-1.0f, 1.0f));
+			fc.shadowLightCount = 0;
+			fc.shadowLightDataAddr = 0;
+			(void) cameraManager;
+			return;
+		}
 
 		m_atlasManager.Reset();
 		m_perLightShadows.clear();

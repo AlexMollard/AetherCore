@@ -32,9 +32,24 @@ namespace aether
 
 		void RecreatePipeline(gpu::Device device, gpu::Format depthFormat);
 
+		// The three cascade depth maps cost 96 MB and only a scene that actually draws
+		// shadow-casting geometry under a sun can use a texel of them, so they are
+		// created on demand rather than at startup. Resolution is unchanged; only the
+		// moment of allocation moved. Both calls must run with the GPU quiesced.
+		void CreateShadowTargets();
+		void DestroyShadowTargets();
+
+		[[nodiscard]] bool HasShadowTargets() const
+		{
+			return m_shadowTargetsReady;
+		}
+
 		void PrepareWriteSlot(std::uint32_t drawSlot);
 
-		void PrepareQueues(std::uint32_t drawSlot, World& world);
+		// Returns true when this frame submitted at least one shadow-casting draw. That
+		// is the signal the cascade targets are gated on - the geometry that would land
+		// in them, not any scene flag.
+		[[nodiscard]] bool PrepareQueues(std::uint32_t drawSlot, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
 		void SetDirectionalShadowEnabled(bool enabled)
@@ -102,5 +117,6 @@ namespace aether
 		};
 		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
 		gpu::Format m_shadowDepthFormat = gpu::Format::Undefined;
+		bool m_shadowTargetsReady = false;
 	};
 } // namespace aether
