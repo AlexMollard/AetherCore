@@ -283,6 +283,10 @@ namespace aether
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::Extent2D extent;
+			// The slot has been handed to a caller and not given back. Releasing a slot that
+			// is already free would push its index onto the free list twice and let two
+			// unrelated resources be handed the same slot, so release checks this first.
+			bool allocated = false;
 			bool bindlessRequested = false;
 			// Some compiled pass touches the slot. A slot nothing touches is not worth the
 			// VRAM, so it is left unmaterialised until the graph starts using it again.
@@ -312,6 +316,8 @@ namespace aether
 		{
 			VkDeviceSize size = 0;
 			VkBufferUsageFlags2 usage = 0;
+			// See TransientImageEntry::allocated.
+			bool allocated = false;
 			bool live = false;
 			bool fromHeap = false;
 			bool aliased = false;

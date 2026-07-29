@@ -454,6 +454,7 @@ namespace aether
 			m_freeTransientSlots.pop_back();
 			auto& entry = m_transientImages[idx];
 			entry = {};
+			entry.allocated = true;
 			entry.format = format;
 			entry.usage = usage;
 			entry.aspect = aspect;
@@ -462,6 +463,7 @@ namespace aether
 		}
 
 		TransientImageEntry entry{};
+		entry.allocated = true;
 		entry.format = format;
 		entry.usage = usage;
 		entry.aspect = aspect;
@@ -629,6 +631,13 @@ namespace aether
 		}
 
 		auto& entry = m_transientImages[idx];
+		if (!entry.allocated)
+		{
+			// Already free. Releasing again would push the index onto the free list a second
+			// time and hand the same slot to two different resources.
+			return;
+		}
+		entry.allocated = false;
 
 		if (entry.fromHeap)
 		{
@@ -1498,12 +1507,14 @@ namespace aether
 			m_freeTransientBufferSlots.pop_back();
 			auto& entry = m_transientBuffers[idx];
 			entry = {};
+			entry.allocated = true;
 			entry.size = size;
 			entry.usage = usage;
 			return idx;
 		}
 
 		TransientBufferEntry entry{};
+		entry.allocated = true;
 		entry.size = size;
 		entry.usage = usage;
 		m_transientBuffers.push_back(entry);
@@ -1596,6 +1607,11 @@ namespace aether
 		}
 
 		auto& entry = m_transientBuffers[idx];
+		if (!entry.allocated)
+		{
+			// See ReleaseTransient: a second release would duplicate the free-list entry.
+			return;
+		}
 
 		if (entry.buffer.IsValid())
 		{
