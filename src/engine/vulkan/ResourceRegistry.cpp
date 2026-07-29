@@ -23,6 +23,17 @@ namespace aether
 		inline constexpr std::uint32_t kGenerationInvalid = 0u;
 		inline constexpr std::uint32_t kGenerationWrap = 65536u;
 
+		[[nodiscard]] gpu::DeviceSize AllocationBytes(VmaAllocator allocator, VmaAllocation allocation) noexcept
+		{
+			if (allocator == VK_NULL_HANDLE || allocation == VK_NULL_HANDLE)
+			{
+				return 0;
+			}
+			VmaAllocationInfo info{};
+			vmaGetAllocationInfo(allocator, allocation, &info);
+			return static_cast<gpu::DeviceSize>(info.size);
+		}
+
 #ifndef NDEBUG
 		template<typename Slot>
 		static std::string FormatAllocFrames(const Slot& slot) noexcept
@@ -834,10 +845,77 @@ namespace aether
 			        .arrayLayers = entry.arrayLayers,
 			        .hasBindlessSampled = entry.hasBindlessSampled,
 			        .bindlessSampledSlot = entry.bindlessSampledSlot,
+			        .allocationBytes = AllocationBytes(entry.allocator, entry.ownsAllocation ? entry.allocation : VK_NULL_HANDLE),
+			        .ownsAllocation = entry.ownsAllocation,
 			        .debugName = slot.debugName,
 			});
 		}
 		return result;
+	}
+
+	std::vector<gpu::DebugBufferInfo> ResourceRegistry::ListDebugBuffers() const
+	{
+		std::vector<gpu::DebugBufferInfo> result;
+		result.reserve(m_liveBufferCount);
+		for (std::uint32_t i = 0; i < m_buffers.size(); ++i)
+		{
+			const BufferSlot& slot = m_buffers[i];
+			if (!slot.entry.has_value())
+			{
+				continue;
+			}
+
+			const BufferEntry& entry = *slot.entry;
+			result.push_back(gpu::DebugBufferInfo{
+			        .handle = gpu::BufferHandle::Make(i, slot.generation),
+			        .size = static_cast<gpu::DeviceSize>(entry.size),
+			        .usage = static_cast<gpu::BufferUsage>(entry.usage),
+			        .allocationBytes = AllocationBytes(entry.allocator, entry.ownsAllocation ? entry.allocation : VK_NULL_HANDLE),
+			        .ownsAllocation = entry.ownsAllocation,
+			        .hostMapped = entry.mappedPtr != nullptr,
+			        .debugName = slot.debugName,
+			});
+		}
+		return result;
+	}
+
+	gpu::GpuMemoryReport ResourceRegistry::QueryMemoryReport() const
+	{
+		gpu::GpuMemoryReport report;
+		if (m_allocator == VK_NULL_HANDLE)
+		{
+			return report;
+		}
+
+		VmaTotalStatistics totals{};
+		vmaCalculateStatistics(m_allocator, &totals);
+		report.blockBytes = totals.total.statistics.blockBytes;
+		report.allocationBytes = totals.total.statistics.allocationBytes;
+		report.blockCount = totals.total.statistics.blockCount;
+		report.allocationCount = totals.total.statistics.allocationCount;
+
+		std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+		vmaGetHeapBudgets(m_allocator, budgets.data());
+
+		const VkPhysicalDeviceMemoryProperties* memProps = nullptr;
+		vmaGetMemoryProperties(m_allocator, &memProps);
+		const std::uint32_t heapCount = (memProps != nullptr) ? memProps->memoryHeapCount : 0u;
+		report.heaps.reserve(heapCount);
+		for (std::uint32_t heap = 0; heap < heapCount; ++heap)
+		{
+			report.heaps.push_back(gpu::MemoryHeapReport{
+			        .heapIndex = heap,
+			        .deviceLocal = (memProps->memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u,
+			        .heapSize = static_cast<gpu::DeviceSize>(memProps->memoryHeaps[heap].size),
+			        .blockBytes = static_cast<gpu::DeviceSize>(totals.memoryHeap[heap].statistics.blockBytes),
+			        .allocationBytes = static_cast<gpu::DeviceSize>(totals.memoryHeap[heap].statistics.allocationBytes),
+			        .blockCount = totals.memoryHeap[heap].statistics.blockCount,
+			        .allocationCount = totals.memoryHeap[heap].statistics.allocationCount,
+			        .processUsage = static_cast<gpu::DeviceSize>(budgets[heap].usage),
+			        .processBudget = static_cast<gpu::DeviceSize>(budgets[heap].budget),
+			});
+		}
+		return report;
 	}
 
 	gpu::DeviceSize ResourceRegistry::GetBufferSize(gpu::BufferHandle handle) const
@@ -1561,6 +1639,16 @@ namespace aether::gpu
 	std::vector<DebugTextureInfo> ResourceRegistry::ListDebugTextures()
 	{
 		return s_reg->ListDebugTextures();
+	}
+
+	std::vector<DebugBufferInfo> ResourceRegistry::ListDebugBuffers()
+	{
+		return s_reg->ListDebugBuffers();
+	}
+
+	GpuMemoryReport ResourceRegistry::QueryMemoryReport()
+	{
+		return s_reg->QueryMemoryReport();
 	}
 
 	DeviceSize ResourceRegistry::GetBufferSize(BufferHandle handle)

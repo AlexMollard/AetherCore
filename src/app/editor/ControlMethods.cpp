@@ -1786,6 +1786,84 @@ namespace aether::editor
 			        return json{{"textures", arr}};
 		        }});
 
+		methods.push_back({"render.memory",
+		        "render_memory",
+		        "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes.",
+		        false,
+		        Obj({{"limit", IntProp()}}),
+		        [](const json& p, MethodContext&) -> json
+		        {
+			        const auto limit = static_cast<std::size_t>(p.value("limit", 24));
+
+			        const gpu::GpuMemoryReport report = gpu::ResourceRegistry::QueryMemoryReport();
+			        json heaps = json::array();
+			        for (const gpu::MemoryHeapReport& heap: report.heaps)
+			        {
+				        heaps.push_back(json{{"heapIndex", heap.heapIndex},
+				                {"deviceLocal", heap.deviceLocal},
+				                {"heapSizeBytes", heap.heapSize},
+				                {"allocatorBlockBytes", heap.blockBytes},
+				                {"allocatorUsedBytes", heap.allocationBytes},
+				                {"blockCount", heap.blockCount},
+				                {"allocationCount", heap.allocationCount},
+				                {"processUsageBytes", heap.processUsage},
+				                {"processBudgetBytes", heap.processBudget}});
+			        }
+
+			        auto textures = gpu::ResourceRegistry::ListDebugTextures();
+			        std::ranges::sort(textures, std::ranges::greater{}, &gpu::DebugTextureInfo::allocationBytes);
+			        gpu::DeviceSize textureBytes = 0;
+			        gpu::DeviceSize aliasedTextureCount = 0;
+			        json textureRows = json::array();
+			        for (const gpu::DebugTextureInfo& t: textures)
+			        {
+				        textureBytes += t.allocationBytes;
+				        aliasedTextureCount += t.ownsAllocation ? 0u : 1u;
+				        if (textureRows.size() >= limit)
+				        {
+					        continue;
+				        }
+				        textureRows.push_back(json{{"name", LogicalTexName(t.debugName)},
+				                {"bytes", t.allocationBytes},
+				                {"width", t.extent.width},
+				                {"height", t.extent.height},
+				                {"format", static_cast<int>(t.format)},
+				                {"mipLevels", t.mipLevels},
+				                {"arrayLayers", t.arrayLayers},
+				                {"aliased", !t.ownsAllocation}});
+			        }
+
+			        auto buffers = gpu::ResourceRegistry::ListDebugBuffers();
+			        std::ranges::sort(buffers, std::ranges::greater{}, &gpu::DebugBufferInfo::allocationBytes);
+			        gpu::DeviceSize bufferBytes = 0;
+			        gpu::DeviceSize mappedBufferBytes = 0;
+			        json bufferRows = json::array();
+			        for (const gpu::DebugBufferInfo& b: buffers)
+			        {
+				        bufferBytes += b.allocationBytes;
+				        mappedBufferBytes += b.hostMapped ? b.allocationBytes : 0;
+				        if (bufferRows.size() >= limit)
+				        {
+					        continue;
+				        }
+				        bufferRows.push_back(json{{"name", LogicalTexName(b.debugName)}, {"bytes", b.allocationBytes}, {"sizeBytes", b.size}, {"hostMapped", b.hostMapped}, {"aliased", !b.ownsAllocation}});
+			        }
+
+			        return json{{"allocatorBlockBytes", report.blockBytes},
+			                {"allocatorUsedBytes", report.allocationBytes},
+			                {"allocatorBlockCount", report.blockCount},
+			                {"allocatorAllocationCount", report.allocationCount},
+			                {"heaps", heaps},
+			                {"textureCount", textures.size()},
+			                {"textureBytes", textureBytes},
+			                {"aliasedTextureCount", aliasedTextureCount},
+			                {"bufferCount", buffers.size()},
+			                {"bufferBytes", bufferBytes},
+			                {"mappedBufferBytes", mappedBufferBytes},
+			                {"textures", textureRows},
+			                {"buffers", bufferRows}};
+		        }});
+
 		methods.push_back({"render.capture_texture",
 		        "capture_texture",
 		        "Capture a registered texture / render target (name from list_textures) to a .png and return its path - use it to SEE any GPU texture, not just the viewport. Handles 8-bit color, depth (normalized grayscale) and HDR (tonemapped) "

@@ -104,7 +104,49 @@ namespace aether::gpu
 		std::uint32_t arrayLayers = 0;
 		bool hasBindlessSampled = false;
 		std::uint32_t bindlessSampledSlot = 0xFFFFFFFFu;
+		// Device memory the allocator reserved for this image. Zero for images that
+		// alias somebody else's allocation (render-graph transients on the heap).
+		DeviceSize allocationBytes = 0;
+		bool ownsAllocation = false;
 		std::string debugName;
+	};
+
+	struct DebugBufferInfo
+	{
+		BufferHandle handle;
+		DeviceSize size = 0;
+		BufferUsage usage = BufferUsage::None;
+		DeviceSize allocationBytes = 0;
+		bool ownsAllocation = false;
+		bool hostMapped = false;
+		std::string debugName;
+	};
+
+	// Device-memory accounting for one VkMemoryHeap as the driver reports it.
+	struct MemoryHeapReport
+	{
+		std::uint32_t heapIndex = 0;
+		bool deviceLocal = false;
+		DeviceSize heapSize = 0;
+		// Bytes of VkDeviceMemory the allocator currently holds for this heap.
+		DeviceSize blockBytes = 0;
+		// Bytes actually handed out of those blocks.
+		DeviceSize allocationBytes = 0;
+		std::uint32_t blockCount = 0;
+		std::uint32_t allocationCount = 0;
+		// VK_EXT_memory_budget: the whole process's usage, including memory this
+		// allocator never saw (swapchain images, driver-internal, layers).
+		DeviceSize processUsage = 0;
+		DeviceSize processBudget = 0;
+	};
+
+	struct GpuMemoryReport
+	{
+		DeviceSize blockBytes = 0;
+		DeviceSize allocationBytes = 0;
+		std::uint32_t blockCount = 0;
+		std::uint32_t allocationCount = 0;
+		std::vector<MemoryHeapReport> heaps;
 	};
 
 	class ResourceRegistry
@@ -175,6 +217,8 @@ namespace aether::gpu
 		[[nodiscard]] static std::uint32_t GetTextureArrayLayers(TextureHandle handle);
 		[[nodiscard]] static ImageUsage GetTextureUsage(TextureHandle handle);
 		[[nodiscard]] static std::vector<DebugTextureInfo> ListDebugTextures();
+		[[nodiscard]] static std::vector<DebugBufferInfo> ListDebugBuffers();
+		[[nodiscard]] static GpuMemoryReport QueryMemoryReport();
 
 		[[nodiscard]] static DeviceSize GetBufferSize(BufferHandle handle);
 		[[nodiscard]] static BufferUsage GetBufferUsage(BufferHandle handle);
