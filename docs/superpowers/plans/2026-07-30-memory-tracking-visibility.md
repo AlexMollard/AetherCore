@@ -10,7 +10,14 @@
 
 **Source spec:** `docs/superpowers/specs/2026-07-30-memory-allocator-design.md`
 
-This plan covers **Plan 1 of 3**. Plan 2 is the allocator framework (`IAllocator`, heap/linear/frame/stack/pool, `TrackedAllocator`, containers). Plan 3 is debug hardening (guard pages, fill patterns, budgets, crash enrichment, Tracy pools). Neither is in scope here.
+This plan covers **Plan 1 of 3**. Plan 2 is the allocator framework (`IAllocator`, heap/linear/frame/stack/pool, `TrackedAllocator`, containers) — which is also where the spec's attribution Layer 2, tagged containers, lands. Plan 3 is debug hardening (guard pages, fill patterns, per-tag budgets, `CrashHandler::SetContext` enrichment, Tracy named pools and per-tag plots). Neither is in scope here.
+
+### Two deliberate deviations from the spec
+
+Both are recorded here so a reviewer does not read them as oversights.
+
+1. **The ledger does not use a dedicated raw `mi_heap_t`.** The spec calls for one so the ledger's own storage cannot recurse into tracking. The thread-local reentry guard from Task 5 already guarantees that more cheaply and more generally, so the ledger uses ordinary `std::unordered_map`. The `TagTable` *does* use a raw heap, because it is constructed from inside the first tracked allocation, before any guard is on the stack. Consequence: `GlobalLedger()` and `GlobalCallstacks()` must never be called outside a `TrackerReentryGuard` on the allocation path.
+2. **There is no `memory.report` console command.** The spec lists one, but `ConsolePanel` is a log viewer with no command registration mechanism — building a command console is a separate feature, not a line item here. The intent (produce a report on demand) is met by a button in the Memory panel and by `memory_stats` over MCP. Task 13 Step 2 covers the button; the console command is dropped rather than deferred, and the spec's "Log and console" surface should be amended to say so.
 
 ## Global Constraints
 
@@ -4471,4 +4478,705 @@ git commit -m "Add memory inspection MCP tools
 
 ---
 
-Remaining tasks, to be written next: the editor panel (Task 13) and the benchmark verifying the acceptance criteria (Task 14).
+## Task 13: Editor memory panel
+
+**Files:**
+- Create: `src/app/debug/MemoryPanel.hpp`, `src/app/debug/MemoryPanel.cpp`
+- Modify: `src/app/layers/DebugLayer.cpp`
+
+**Interfaces:**
+- Consumes: `DebugPanel`, `app::LayerContext`, `MemoryService`, `MemorySnapshot`, `SnapshotDiff`, `TrackingLevel`.
+- Produces: `class aether::editor::MemoryPanel final : public DebugPanel`.
+
+Read `src/app/debug/PerformancePanel.hpp` and `src/app/debug/PerformancePanel.cpp` first — the ring-buffer history and the `DrawMetricRow` helper are both directly reusable, and the panel must match that file's structure rather than inventing its own.
+
+- [ ] **Step 1: Implement MemoryPanel.hpp**
+
+Create `src/app/debug/MemoryPanel.hpp`:
+
+```cpp
+#pragma once
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+#include "debug/DebugPanel.hpp"
+#include "memory/MemorySnapshot.hpp"
+#include "memory/MemoryTag.hpp"
+
+namespace aether::editor
+{
+	class MemoryPanel final : public DebugPanel
+	{
+	public:
+		static constexpr std::size_t kHistoryLength = 180;
+
+		std::string_view GetName() const override
+		{
+			return "Memory";
+		}
+
+		// Off by default: this is a diagnostic tool, not part of the everyday layout.
+		bool DefaultVisible() const override
+		{
+			return false;
+		}
+
+		void OnUpdate(app::LayerContext& context) override;
+		void OnImGui(app::LayerContext& context) override;
+
+	private:
+		void DrawTagTable(app::LayerContext& context);
+		void DrawManagedSection() const;
+		void DrawSnapshotControls(app::LayerContext& context);
+		void DrawCallstacks() const;
+		void PushHistorySample(std::uint64_t totalBytes);
+
+		std::array<float, kHistoryLength> m_totalMbHistory{};
+		std::size_t m_historyHead = 0;
+		std::size_t m_historyCount = 0;
+
+		memory::MemorySnapshot m_latest;
+		memory::MemTag m_selectedTag = memory::MemTag::Unknown;
+
+		// Snapshot naming and the last diff produced, kept so the result stays on screen
+		// after the button click that made it.
+		std::array<char, 64> m_snapshotName{};
+		std::string m_diffFrom;
+		std::string m_diffTo;
+		memory::SnapshotDiff m_lastDiff;
+		bool m_hasDiff = false;
+		std::string m_statusMessage;
+	};
+} // namespace aether::editor
+```
+
+- [ ] **Step 2: Implement MemoryPanel.cpp**
+
+Create `src/app/debug/MemoryPanel.cpp`:
+
+```cpp
+#include "debug/MemoryPanel.hpp"
+
+#include <algorithm>
+#include <cstdio>
+
+#include <imgui.h>
+
+#include "layers/LayerContext.hpp"
+#include "memory/MemoryService.hpp"
+#include "memory/TrackingLevel.hpp"
+#include "utils/Logger.hpp"
+#include "utils/ServiceContainer.hpp"
+
+namespace aether::editor
+{
+	namespace
+	{
+		std::string FormatBytes(std::uint64_t bytes)
+		{
+			constexpr double kKib = 1024.0;
+			constexpr double kMib = 1024.0 * 1024.0;
+			constexpr double kGib = 1024.0 * 1024.0 * 1024.0;
+
+			char buffer[32]{};
+			const auto value = static_cast<double>(bytes);
+			if (value >= kGib)
+			{
+				std::snprintf(buffer, sizeof(buffer), "%.2f GiB", value / kGib);
+			}
+			else if (value >= kMib)
+			{
+				std::snprintf(buffer, sizeof(buffer), "%.2f MiB", value / kMib);
+			}
+			else if (value >= kKib)
+			{
+				std::snprintf(buffer, sizeof(buffer), "%.1f KiB", value / kKib);
+			}
+			else
+			{
+				std::snprintf(buffer, sizeof(buffer), "%llu B", static_cast<unsigned long long>(bytes));
+			}
+			return buffer;
+		}
+
+		std::string FormatDelta(std::int64_t bytes)
+		{
+			const std::string magnitude = FormatBytes(static_cast<std::uint64_t>(bytes < 0 ? -bytes : bytes));
+			return (bytes < 0 ? "-" : "+") + magnitude;
+		}
+	} // namespace
+
+	void MemoryPanel::PushHistorySample(std::uint64_t totalBytes)
+	{
+		constexpr double kMib = 1024.0 * 1024.0;
+		m_totalMbHistory[m_historyHead] = static_cast<float>(static_cast<double>(totalBytes) / kMib);
+		m_historyHead = (m_historyHead + 1) % kHistoryLength;
+		m_historyCount = std::min(m_historyCount + 1, kHistoryLength);
+	}
+
+	void MemoryPanel::OnUpdate(app::LayerContext& context)
+	{
+		if (!IsVisible())
+		{
+			// Capture pulls managed GC figures across interop; skip it entirely when the
+			// panel is closed so a hidden panel costs nothing.
+			return;
+		}
+
+		auto* service = context.services.TryGet<memory::MemoryService>();
+		if (service == nullptr)
+		{
+			return;
+		}
+
+		m_latest = service->Capture("");
+
+		std::uint64_t total = 0;
+		for (const auto& totals : m_latest.tags)
+		{
+			total += totals.currentBytes;
+		}
+		PushHistorySample(total);
+	}
+
+	void MemoryPanel::DrawTagTable(app::LayerContext& /*context*/)
+	{
+		constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+		if (!ImGui::BeginTable("##memoryTags", 5, kFlags, ImVec2(0.0f, 260.0f)))
+		{
+			return;
+		}
+
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableSetupColumn("Tag");
+		ImGui::TableSetupColumn("Current");
+		ImGui::TableSetupColumn("Peak");
+		ImGui::TableSetupColumn("Live");
+		ImGui::TableSetupColumn("Allocs");
+		ImGui::TableHeadersRow();
+
+		for (std::size_t i = 0; i < memory::kMemTagCount; ++i)
+		{
+			const memory::TagTotals& totals = m_latest.tags[i];
+			if (totals.totalAllocations == 0)
+			{
+				continue;
+			}
+			const auto tag = static_cast<memory::MemTag>(i);
+
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			if (ImGui::Selectable(memory::ToString(tag), m_selectedTag == tag, ImGuiSelectableFlags_SpanAllColumns))
+			{
+				m_selectedTag = tag;
+			}
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextUnformatted(FormatBytes(totals.currentBytes).c_str());
+			ImGui::TableSetColumnIndex(2);
+			ImGui::TextUnformatted(FormatBytes(totals.peakBytes).c_str());
+			ImGui::TableSetColumnIndex(3);
+			ImGui::Text("%llu", static_cast<unsigned long long>(totals.LiveCount()));
+			ImGui::TableSetColumnIndex(4);
+			ImGui::Text("%llu", static_cast<unsigned long long>(totals.totalAllocations));
+		}
+
+		ImGui::EndTable();
+	}
+
+	void MemoryPanel::DrawManagedSection() const
+	{
+		if (!ImGui::CollapsingHeader("Managed heap (C#)", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		if (!m_latest.managed.available)
+		{
+			ImGui::TextUnformatted("No managed runtime attached.");
+			return;
+		}
+
+		if (!ImGui::BeginTable("##managedHeap", 2, ImGuiTableFlags_SizingStretchProp))
+		{
+			return;
+		}
+		const memory::ManagedHeapStats& managed = m_latest.managed;
+		DrawMetricRow("Heap size", FormatBytes(managed.heapBytes).c_str());
+		DrawMetricRow("Committed", FormatBytes(managed.committedBytes).c_str());
+		DrawMetricRow("Allocated (lifetime)", FormatBytes(managed.totalAllocatedBytes).c_str());
+		DrawMetricRow("Large object heap", FormatBytes(managed.largeObjectBytes).c_str());
+		DrawMetricRow("Pinned object heap", FormatBytes(managed.pinnedObjectBytes).c_str());
+
+		char collections[64]{};
+		std::snprintf(collections, sizeof(collections), "%u / %u / %u", managed.gen0Collections, managed.gen1Collections, managed.gen2Collections);
+		DrawMetricRow("Collections gen0/1/2", collections);
+		ImGui::EndTable();
+	}
+
+	void MemoryPanel::DrawSnapshotControls(app::LayerContext& context)
+	{
+		if (!ImGui::CollapsingHeader("Snapshots", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		auto* service = context.services.TryGet<memory::MemoryService>();
+		if (service == nullptr)
+		{
+			return;
+		}
+
+		// Stands in for the report command the spec asked for: ConsolePanel has no command
+		// mechanism, so on-demand reporting lives here and in memory_stats over MCP.
+		if (ImGui::Button("Write report now"))
+		{
+			const std::string report = service->BuildLeakReport();
+			AE_INFO(LogCategory::App, "{}", report);
+			m_statusMessage = "Report written to the log.";
+		}
+
+		ImGui::SetNextItemWidth(160.0f);
+		ImGui::InputText("Name", m_snapshotName.data(), m_snapshotName.size());
+		ImGui::SameLine();
+		if (ImGui::Button("Take"))
+		{
+			const std::string name(m_snapshotName.data());
+			if (name.empty())
+			{
+				m_statusMessage = "Snapshot needs a name.";
+			}
+			else
+			{
+				service->Store(service->Capture(name));
+				m_statusMessage = "Stored snapshot '" + name + "'.";
+			}
+		}
+
+		const std::vector<std::string> stored = service->StoredNames();
+		const auto drawPicker = [&stored](const char* label, std::string& selection) {
+			if (!ImGui::BeginCombo(label, selection.empty() ? "<none>" : selection.c_str()))
+			{
+				return;
+			}
+			for (const std::string& name : stored)
+			{
+				if (ImGui::Selectable(name.c_str(), name == selection))
+				{
+					selection = name;
+				}
+			}
+			ImGui::EndCombo();
+		};
+
+		ImGui::SetNextItemWidth(160.0f);
+		drawPicker("From", m_diffFrom);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(160.0f);
+		drawPicker("To", m_diffTo);
+		ImGui::SameLine();
+		if (ImGui::Button("Diff"))
+		{
+			if (const auto diff = service->Diff(m_diffFrom, m_diffTo))
+			{
+				m_lastDiff = *diff;
+				m_hasDiff = true;
+				m_statusMessage.clear();
+			}
+			else
+			{
+				m_hasDiff = false;
+				m_statusMessage = "Pick two stored snapshots.";
+			}
+		}
+
+		if (!m_statusMessage.empty())
+		{
+			ImGui::TextUnformatted(m_statusMessage.c_str());
+		}
+
+		if (!m_hasDiff)
+		{
+			return;
+		}
+
+		ImGui::Text("Total change: %s", FormatDelta(m_lastDiff.totalBytes).c_str());
+		if (ImGui::BeginTable("##memoryDiff", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+		{
+			ImGui::TableSetupColumn("Tag");
+			ImGui::TableSetupColumn("Bytes");
+			ImGui::TableSetupColumn("Allocations");
+			ImGui::TableHeadersRow();
+			for (const memory::TagDelta& delta : m_lastDiff.tags)
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextUnformatted(memory::ToString(delta.tag));
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(FormatDelta(delta.currentBytes).c_str());
+				ImGui::TableSetColumnIndex(2);
+				ImGui::Text("%+lld", static_cast<long long>(delta.liveCount));
+			}
+			ImGui::EndTable();
+		}
+	}
+
+	void MemoryPanel::DrawCallstacks() const
+	{
+		if (!m_hasDiff || m_lastDiff.callstacks.empty())
+		{
+			return;
+		}
+		if (!ImGui::CollapsingHeader("Allocation sites still holding memory"))
+		{
+			return;
+		}
+		for (const memory::CallstackDelta& site : m_lastDiff.callstacks)
+		{
+			char header[96]{};
+			std::snprintf(header, sizeof(header), "%s in %lld allocations", FormatBytes(static_cast<std::uint64_t>(site.bytes)).c_str(), static_cast<long long>(site.count));
+			if (ImGui::TreeNode(header))
+			{
+				ImGui::TextUnformatted(site.resolved.c_str());
+				ImGui::TreePop();
+			}
+		}
+	}
+
+	void MemoryPanel::OnImGui(app::LayerContext& context)
+	{
+		if (!IsVisible())
+		{
+			return;
+		}
+
+		if (!ImGui::Begin("Memory", VisiblePtr()))
+		{
+			ImGui::End();
+			return;
+		}
+
+		ImGui::Text("Tracking: %s (max %s)", memory::ToString(memory::CurrentLevel()), memory::ToString(memory::kMaxTrackingLevel));
+		if (!memory::LevelAtLeast(memory::TrackingLevel::Ledger))
+		{
+			ImGui::TextUnformatted("Raise memory.trackingLevel to Ledger for per-allocation sites.");
+		}
+
+		if (m_historyCount > 0)
+		{
+			// Plot in insertion order, oldest first, so the line reads left to right.
+			std::array<float, kHistoryLength> ordered{};
+			for (std::size_t i = 0; i < m_historyCount; ++i)
+			{
+				const std::size_t index = (m_historyHead + kHistoryLength - m_historyCount + i) % kHistoryLength;
+				ordered[i] = m_totalMbHistory[index];
+			}
+			ImGui::PlotLines("Total MiB", ordered.data(), static_cast<int>(m_historyCount), 0, nullptr, 0.0f, FLT_MAX, ImVec2(0.0f, 60.0f));
+		}
+
+		DrawTagTable(context);
+		DrawManagedSection();
+		DrawSnapshotControls(context);
+		DrawCallstacks();
+
+		ImGui::End();
+	}
+} // namespace aether::editor
+```
+
+Add `#include <cfloat>` for `FLT_MAX`. If `app::LayerContext` does not expose `services` under that name, check `src/app/layers/LayerContext.hpp` and use whatever accessor `PerformancePanel` uses.
+
+- [ ] **Step 3: Register the panel**
+
+In `src/app/layers/DebugLayer.cpp`, add the include next to the other panel includes (near line 37):
+
+```cpp
+#include "debug/MemoryPanel.hpp"
+```
+
+and register it next to `PerformancePanel` (near line 486):
+
+```cpp
+		m_panels.push_back(std::make_unique<MemoryPanel>());
+```
+
+- [ ] **Step 4: Build and verify in the editor**
+
+```bash
+cmake --preset vs2022-msvc && cmake --build build-vs2022-msvc --config RelWithDebInfo --target AetherCoreEditor
+```
+
+From the build-tree root, launch the editor, open the panel from the menu, and confirm:
+- the tag table lists populated tags with plausible byte figures
+- the total-MiB plot moves as scenes load
+- the managed section reports `available` once a project with scripts is open
+- taking two snapshots and diffing them produces a table
+- "Write report now" emits the per-tag report into the console log
+- closing the panel stops the per-frame capture — verify by watching fps with the panel open versus closed
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/app/debug/MemoryPanel.hpp src/app/debug/MemoryPanel.cpp src/app/layers/DebugLayer.cpp
+git commit -m "Add the editor memory panel
+
+- Show per-tag current, peak, live and lifetime allocation figures with a total history plot
+- Show the managed GC heap alongside the native tags
+- Add snapshot capture and diffing with expandable allocation sites
+- Skip the per-frame capture entirely while the panel is closed"
+```
+
+---
+
+## Task 14: Benchmark and verify the acceptance criteria
+
+The spec's performance claims are unverified until this runs. This task either confirms them or produces the numbers that force a design change.
+
+**Files:**
+- Create: `tests/memory/AllocatorBenchmarkTests.cpp`
+- Modify: `docs/superpowers/specs/2026-07-30-memory-allocator-design.md` (record measured results)
+
+**Interfaces:**
+- Consumes: `TrackingLevel`, `SetTrackingLevel`, the override from Task 1.
+- Produces: no new interfaces; a benchmark and recorded numbers.
+
+- [ ] **Step 1: Write the benchmark**
+
+Create `tests/memory/AllocatorBenchmarkTests.cpp`. It is decorated with `doctest::skip()` so it never slows the ordinary test run, and is invoked explicitly with `--no-skip`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <random>
+#include <thread>
+#include <vector>
+
+#include "memory/MemoryBackend.hpp"
+#include "memory/MemoryScope.hpp"
+#include "memory/TrackingLevel.hpp"
+
+using namespace aether;
+using Clock = std::chrono::steady_clock;
+
+namespace
+{
+	constexpr int kIterations = 200000;
+	constexpr int kLiveWindow = 512;
+
+	// A mixed size distribution, because a single fixed size flatters any allocator with
+	// a size-class fast path and tells you nothing about real engine behaviour.
+	std::vector<std::size_t> BuildSizes(unsigned seed)
+	{
+		std::mt19937 rng(seed);
+		std::discrete_distribution bucket({60, 25, 10, 5});
+		std::uniform_int_distribution<std::size_t> small(8, 64);
+		std::uniform_int_distribution<std::size_t> medium(65, 512);
+		std::uniform_int_distribution<std::size_t> large(513, 4096);
+		std::uniform_int_distribution<std::size_t> huge(4097, 65536);
+
+		std::vector<std::size_t> sizes;
+		sizes.reserve(kIterations);
+		for (int i = 0; i < kIterations; ++i) {
+			switch (bucket(rng)) {
+				case 0: sizes.push_back(small(rng)); break;
+				case 1: sizes.push_back(medium(rng)); break;
+				case 2: sizes.push_back(large(rng)); break;
+				default: sizes.push_back(huge(rng)); break;
+			}
+		}
+		return sizes;
+	}
+
+	// Churns a rolling window of live blocks rather than allocating everything then
+	// freeing everything, which is the pattern a real frame produces.
+	double RunChurn(const std::vector<std::size_t>& sizes)
+	{
+		std::vector<void*> live(kLiveWindow, nullptr);
+		const auto start = Clock::now();
+		for (int i = 0; i < kIterations; ++i) {
+			const int slot = i % kLiveWindow;
+			::operator delete(live[slot]);
+			live[slot] = ::operator new(sizes[static_cast<std::size_t>(i)]);
+			// Touch the block so the allocator cannot be optimised away and the page is
+			// genuinely committed.
+			*static_cast<volatile char*>(live[slot]) = 1;
+		}
+		const double elapsedMs = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+		for (void* block : live) {
+			::operator delete(block);
+		}
+		return elapsedMs;
+	}
+
+	double RunMallocChurn(const std::vector<std::size_t>& sizes)
+	{
+		std::vector<void*> live(kLiveWindow, nullptr);
+		const auto start = Clock::now();
+		for (int i = 0; i < kIterations; ++i) {
+			const int slot = i % kLiveWindow;
+			std::free(live[slot]);
+			live[slot] = std::malloc(sizes[static_cast<std::size_t>(i)]);
+			*static_cast<volatile char*>(live[slot]) = 1;
+		}
+		const double elapsedMs = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+		for (void* block : live) {
+			std::free(block);
+		}
+		return elapsedMs;
+	}
+
+	double RunMultiThreaded(int threadCount, memory::TrackingLevel level)
+	{
+		memory::SetTrackingLevel(level);
+		std::vector<std::thread> workers;
+		workers.reserve(static_cast<std::size_t>(threadCount));
+
+		const auto start = Clock::now();
+		for (int t = 0; t < threadCount; ++t) {
+			workers.emplace_back([t] {
+				AE_MEM_SCOPE(static_cast<memory::MemTag>(1 + (t % 8)));
+				RunChurn(BuildSizes(static_cast<unsigned>(1000 + t)));
+			});
+		}
+		for (auto& worker : workers) {
+			worker.join();
+		}
+		return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+	}
+} // namespace
+
+TEST_CASE("Allocator benchmark" * doctest::skip()) {
+	const memory::TrackingLevel restore = memory::CurrentLevel();
+	const std::vector<std::size_t> sizes = BuildSizes(7);
+
+	// Warm both allocators so neither pays first-touch page-commit costs in the measured run.
+	memory::SetTrackingLevel(memory::TrackingLevel::Disabled);
+	RunChurn(sizes);
+	RunMallocChurn(sizes);
+
+	memory::SetTrackingLevel(memory::TrackingLevel::Disabled);
+	const double disabledMs = RunChurn(sizes);
+	const double mallocMs = RunMallocChurn(sizes);
+
+	memory::SetTrackingLevel(memory::TrackingLevel::Counters);
+	const double countersMs = RunChurn(sizes);
+
+	double ledgerMs = 0.0;
+	double callstacksMs = 0.0;
+	if (memory::kMaxTrackingLevel >= memory::TrackingLevel::Ledger) {
+		memory::SetTrackingLevel(memory::TrackingLevel::Ledger);
+		ledgerMs = RunChurn(sizes);
+	}
+	if (memory::kMaxTrackingLevel >= memory::TrackingLevel::Callstacks) {
+		memory::SetTrackingLevel(memory::TrackingLevel::Callstacks);
+		callstacksMs = RunChurn(sizes);
+	}
+
+	const unsigned hardwareThreads = std::max(2u, std::thread::hardware_concurrency());
+	const int threadCount = static_cast<int>(std::min(8u, hardwareThreads));
+	const double mtDisabledMs = RunMultiThreaded(threadCount, memory::TrackingLevel::Disabled);
+	const double mtCountersMs = RunMultiThreaded(threadCount, memory::TrackingLevel::Counters);
+
+	memory::SetTrackingLevel(restore);
+
+	const double countersOverheadPct = (countersMs - disabledMs) / disabledMs * 100.0;
+	const double mtCountersOverheadPct = (mtCountersMs - mtDisabledMs) / mtDisabledMs * 100.0;
+
+	std::printf("\n=== Allocator benchmark (%d iterations, %d live blocks) ===\n", kIterations, kLiveWindow);
+	std::printf("single-threaded:\n");
+	std::printf("  std::malloc            %8.2f ms\n", mallocMs);
+	std::printf("  mimalloc, Disabled     %8.2f ms  (%.2fx malloc)\n", disabledMs, mallocMs / disabledMs);
+	std::printf("  mimalloc, Counters     %8.2f ms  (%+.1f%% vs Disabled)\n", countersMs, countersOverheadPct);
+	if (ledgerMs > 0.0) {
+		std::printf("  mimalloc, Ledger       %8.2f ms  (%+.1f%% vs Disabled)\n", ledgerMs, (ledgerMs - disabledMs) / disabledMs * 100.0);
+	}
+	if (callstacksMs > 0.0) {
+		std::printf("  mimalloc, Callstacks   %8.2f ms  (%+.1f%% vs Disabled)\n", callstacksMs, (callstacksMs - disabledMs) / disabledMs * 100.0);
+	}
+	std::printf("%d threads:\n", threadCount);
+	std::printf("  mimalloc, Disabled     %8.2f ms\n", mtDisabledMs);
+	std::printf("  mimalloc, Counters     %8.2f ms  (%+.1f%% vs Disabled)\n", mtCountersMs, mtCountersOverheadPct);
+	std::printf("=========================================================\n\n");
+
+	// The two acceptance criteria from the spec.
+	CHECK_MESSAGE(disabledMs < mallocMs, "mimalloc must beat std::malloc on this churn pattern");
+	CHECK_MESSAGE(countersOverheadPct <= 5.0, "Counters-tier overhead must stay within the 5% budget");
+	CHECK_MESSAGE(mtCountersOverheadPct <= 5.0, "Counters-tier overhead must stay within budget under thread contention too");
+}
+```
+
+Add `#include <algorithm>` for `std::min` and `std::max`.
+
+- [ ] **Step 2: Run the benchmark in a release-quality configuration**
+
+A Debug build measures the optimiser, not the allocator:
+
+```bash
+cmake --build build-vs2022-msvc --config RelWithDebInfo --target EngineTests
+```
+
+From the build-tree root:
+
+```bash
+./build-vs2022-msvc/RelWithDebInfo/EngineTests.exe --test-case="Allocator benchmark" --no-skip -s
+```
+
+Expected: the printed table, and all three `CHECK_MESSAGE` assertions passing.
+
+- [ ] **Step 3: Handle a failing criterion honestly**
+
+If `mimalloc must beat std::malloc` fails, re-run twice more to rule out noise, then record the numbers and report them — do not weaken the assertion. mimalloc losing on this pattern is a genuine finding that undermines the backend choice.
+
+If the 5% counters budget fails, the tag table is the prime suspect, since it is the only per-allocation lock. Record the measured overhead, then reduce `TagTable::kSlotsPerShard` contention by raising `kShardCount` to 256 and re-measure. If it still fails, record the number and flag it — a real overhead figure that breaks the budget is the signal to revisit whether per-pointer tag storage belongs in the `Counters` tier at all, and that is a design decision, not something to paper over here.
+
+- [ ] **Step 4: Verify no editor regression**
+
+With the editor built in RelWithDebInfo and run with `--no-validation`, load a scene and capture a baseline:
+
+```bash
+aether-ctl render_benchmark
+```
+
+Then set `memory.trackingLevel = "Disabled"` in the user settings file, restart, and capture the same measurement. Record both. Finally:
+
+```bash
+aether-ctl run_gauntlet
+```
+
+Expected: the gauntlet passes, and the fps difference between `Counters` and `Disabled` is within a few percent.
+
+- [ ] **Step 5: Record the measured results in the spec**
+
+In `docs/superpowers/specs/2026-07-30-memory-allocator-design.md`, replace the "Acceptance criteria" section's forward-looking wording with the measured outcome — the actual millisecond figures, the malloc ratio, the overhead percentages for each tier, the editor fps before and after, and the machine and configuration they came from. The spec currently says these must be shown rather than assumed; this step is where it stops being a promise.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add tests/memory/AllocatorBenchmarkTests.cpp docs/superpowers/specs/2026-07-30-memory-allocator-design.md
+git commit -m "Benchmark the allocator and record the measured acceptance criteria
+
+- Add a mixed-size rolling-window churn benchmark across every tracking tier
+- Compare mimalloc against std::malloc single-threaded and under thread contention
+- Assert the 5% counters-tier overhead budget rather than assuming it
+- Record the measured figures in the design spec"
+```
+
+---
+
+## Definition of Done
+
+Plan 1 is complete when all of the following are true:
+
+- `memory_stats` returns populated per-tag native figures and a managed GC block with a project loaded.
+- `memory_snapshot` / `memory_diff` produce a usable diff, and at the `Ledger` tier the diff names allocation sites.
+- The editor Memory panel shows the tag table, history plot, managed section and snapshot diffing, and costs nothing while closed.
+- A `memory-report.txt` appears in the crash directory on clean shutdown, with a live-allocations section at the `Ledger` tier.
+- A deliberately leaked allocation is reported with the correct tag and callstack; a deliberate double free is counted.
+- `EngineTests` passes in full, and the benchmark's three acceptance assertions pass with their figures recorded in the spec.
+- `run_gauntlet` passes and the editor shows no material fps regression.
