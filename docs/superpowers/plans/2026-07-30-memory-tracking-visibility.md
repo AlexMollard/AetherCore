@@ -3709,4 +3709,766 @@ git commit -m "Add the memory service with snapshots, diffs and leak reporting
 
 ---
 
-Remaining tasks, to be written next: the shutdown leak report and settings wiring (Task 10), managed GC statistics across the ABI (Task 11), the three MCP tools (Task 12), the editor panel (Task 13), and the benchmark verifying the acceptance criteria (Task 14).
+## Task 10: Settings and the shutdown report
+
+**Files:**
+- Modify: `src/engine/utils/EngineSettings.hpp`, `src/engine/utils/EngineSettings.cpp`
+- Modify: `src/engine/AetherCore.cpp`
+- Test: `tests/memory/MemorySettingsTests.cpp`
+
+**Interfaces:**
+- Consumes: `TrackingLevel`, `ParseTrackingLevel`, `MemoryService`.
+- Produces: a `MemorySettings` block on `EngineSettings` with `std::string trackingLevel = "Counters";` and `bool reportLeaksOnShutdown = true;`, plus `void ApplyMemorySettings(const EngineSettings&) noexcept`.
+
+Before starting, read `src/engine/utils/EngineSettings.hpp` and `tests/utils/EngineSettingsTests.cpp` to see how an existing block is declared and reflected — the reflection walk is what makes a new field two lines rather than a serializer edit.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/memory/MemorySettingsTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <string>
+
+#include "memory/TrackingLevel.hpp"
+#include "utils/EngineSettings.hpp"
+
+using namespace aether;
+
+namespace
+{
+	struct LevelGuard
+	{
+		memory::TrackingLevel previous = memory::CurrentLevel();
+		~LevelGuard() { memory::SetTrackingLevel(previous); }
+	};
+} // namespace
+
+TEST_CASE("Memory settings default to counters with leak reporting on") {
+	const EngineSettings settings;
+	CHECK(settings.memory.trackingLevel == "Counters");
+	CHECK(settings.memory.reportLeaksOnShutdown);
+}
+
+TEST_CASE("A memory block in a config document overlays the defaults") {
+	EngineSettings settings;
+	EngineSettingsIO::Apply("[memory]\ntrackingLevel = \"Ledger\"\nreportLeaksOnShutdown = false\n", settings);
+	CHECK(settings.memory.trackingLevel == "Ledger");
+	CHECK_FALSE(settings.memory.reportLeaksOnShutdown);
+}
+
+TEST_CASE("Applying settings moves the live tracking level") {
+	LevelGuard guard;
+	EngineSettings settings;
+	settings.memory.trackingLevel = "Disabled";
+	memory::ApplyMemorySettings(settings);
+	CHECK(memory::CurrentLevel() == memory::TrackingLevel::Disabled);
+
+	settings.memory.trackingLevel = "Counters";
+	memory::ApplyMemorySettings(settings);
+	CHECK(memory::CurrentLevel() == memory::TrackingLevel::Counters);
+}
+
+TEST_CASE("An unparseable level leaves the current level alone") {
+	LevelGuard guard;
+	memory::SetTrackingLevel(memory::TrackingLevel::Counters);
+
+	EngineSettings settings;
+	settings.memory.trackingLevel = "verbose-please";
+	memory::ApplyMemorySettings(settings);
+	CHECK(memory::CurrentLevel() == memory::TrackingLevel::Counters);
+}
+
+TEST_CASE("A level above the compile-time ceiling clamps rather than being refused") {
+	LevelGuard guard;
+	EngineSettings settings;
+	settings.memory.trackingLevel = "Callstacks";
+	memory::ApplyMemorySettings(settings);
+	CHECK(memory::CurrentLevel() == memory::kMaxTrackingLevel);
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `EngineSettings` has no `memory` member and `ApplyMemorySettings` does not exist.
+
+- [ ] **Step 3: Add the settings block**
+
+In `src/engine/utils/EngineSettings.hpp`, alongside the other setting blocks, add:
+
+```cpp
+	struct MemorySettings
+	{
+		// One of Disabled, Counters, Ledger, Callstacks. Requests above what the build
+		// compiled in are clamped, not refused - see memory/TrackingLevel.hpp.
+		std::string trackingLevel = "Counters";
+		bool reportLeaksOnShutdown = true;
+	};
+```
+
+and add the member to `EngineSettings` next to the existing blocks:
+
+```cpp
+		MemorySettings memory;
+```
+
+Then register the two fields in the reflection walk. Find `ForEachSettingField` in `EngineSettings.hpp` or `EngineSettings.cpp` and add entries matching the surrounding style exactly, using `"memory"` as the section name and `trackingLevel` / `reportLeaksOnShutdown` as the keys.
+
+- [ ] **Step 4: Implement ApplyMemorySettings**
+
+Add to `src/engine/memory/TrackingLevel.hpp`:
+
+```cpp
+} // namespace aether::memory
+
+namespace aether
+{
+	struct EngineSettings;
+}
+
+namespace aether::memory
+{
+	// Moves the live tracking level to whatever the settings ask for. An unparseable
+	// value leaves the current level untouched rather than silently disabling tracking.
+	void ApplyMemorySettings(const EngineSettings& settings) noexcept;
+} // namespace aether::memory
+```
+
+Add to `src/engine/memory/TrackingLevel.cpp`:
+
+```cpp
+#include "utils/EngineSettings.hpp"
+#include "utils/Logger.hpp"
+
+namespace aether::memory
+{
+	void ApplyMemorySettings(const EngineSettings& settings) noexcept
+	{
+		const auto parsed = ParseTrackingLevel(settings.memory.trackingLevel);
+		if (!parsed.has_value())
+		{
+			AE_WARN(LogCategory::Engine, "memory.trackingLevel '{}' is not a level; leaving tracking at {}", settings.memory.trackingLevel, ToString(CurrentLevel()));
+			return;
+		}
+
+		SetTrackingLevel(*parsed);
+		if (*parsed > kMaxTrackingLevel)
+		{
+			AE_WARN(LogCategory::Engine, "memory.trackingLevel '{}' is not compiled into this build; clamped to {}", settings.memory.trackingLevel, ToString(CurrentLevel()));
+		}
+	}
+} // namespace aether::memory
+```
+
+- [ ] **Step 5: Apply the settings and begin a ledger epoch**
+
+In `src/engine/AetherCore.cpp`, after settings are loaded, add:
+
+```cpp
+	aether::memory::ApplyMemorySettings(m_settings);
+	if (aether::memory::LevelAtLeast(aether::memory::TrackingLevel::Ledger))
+	{
+		// Everything allocated during startup predates the ledger. Beginning an epoch
+		// here means those blocks are treated as untracked on free rather than reported
+		// as invalid frees.
+		aether::memory::GlobalLedger().BeginEpoch();
+	}
+```
+
+with `#include "memory/AllocationLedger.hpp"`. Match the existing settings member's name.
+
+- [ ] **Step 6: Write the shutdown report**
+
+In `src/engine/AetherCore.cpp`, in the engine shutdown path — before the `ServiceContainer` is cleared and before graphics teardown, since this only touches CPU state — add:
+
+```cpp
+	if (m_settings.memory.reportLeaksOnShutdown)
+	{
+		if (auto* memoryService = m_services.TryGet<aether::memory::MemoryService>())
+		{
+			const std::string report = memoryService->BuildLeakReport();
+			AE_INFO(LogCategory::Engine, "{}", report);
+
+			// Written next to the crash bundles so it is findable in the same place a
+			// user already looks after something goes wrong.
+			const std::filesystem::path reportPath = CrashHandler::GetCrashDirectory() / "memory-report.txt";
+			std::error_code ec;
+			std::filesystem::create_directories(reportPath.parent_path(), ec);
+			if (std::ofstream out(reportPath); out)
+			{
+				out << report;
+				AE_INFO(LogCategory::Engine, "Memory report written to {}", reportPath.string());
+			}
+		}
+	}
+```
+
+`CrashHandler::GetCrashDirectory()` may not exist under that exact name — search `src/engine` for where the crash directory path is built and reuse that function. If it is private to the crash handler, add a public accessor rather than duplicating the path construction.
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*Memory settings*,*memory block*,*tracking level*,*unparseable*,*ceiling clamps*" -s
+```
+
+Expected: all cases PASS.
+
+- [ ] **Step 8: Verify the report is actually produced**
+
+Build and run the editor, load a scene, then close it cleanly. Confirm `memory-report.txt` appears in the crash directory and that its per-tag table is populated. Then set `memory.trackingLevel = "Ledger"` in the user settings file, repeat, and confirm the report gains a live-allocations section.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/engine/utils/EngineSettings.hpp src/engine/utils/EngineSettings.cpp src/engine/memory/TrackingLevel.hpp src/engine/memory/TrackingLevel.cpp src/engine/AetherCore.cpp tests/memory/MemorySettingsTests.cpp
+git commit -m "Drive the tracking level from settings and report on shutdown
+
+- Add a memory settings block with the tracking level and leak-report toggle
+- Warn and keep the current level when a configured level is unparseable
+- Begin a ledger epoch after startup so startup allocations are not mistaken for bugs
+- Write the shutdown memory report next to the crash bundles"
+```
+
+---
+
+## Task 11: Managed GC statistics across the ABI
+
+The ABI struct is size-checked on the managed side, so the native struct, the C# mirror and the `Bootstrap` assignment must land in **one commit** or scripting stops booting entirely.
+
+**Files:**
+- Modify: `src/engine/scripting/ManagedInterop.hpp`
+- Create: `managed/AetherCore.Interop/ManagedMemory.cs`
+- Modify: `managed/AetherCore.Interop/Abi.cs`
+- Modify: `managed/AetherCore.Interop/Bootstrap.cs`
+- Modify: the scripting host that owns the `ManagedScriptApi` instance
+- Test: `tests/memory/ManagedHeapStatsTests.cpp`
+
+**Interfaces:**
+- Consumes: `ManagedHeapStats`, `MemoryService::SetManagedStatsProvider`.
+- Produces: `struct aether::scripting::ManagedMemoryStatsAbi` and `void (*GetManagedMemoryStats)(ManagedMemoryStatsAbi*)` appended to `ManagedScriptApi`.
+
+- [ ] **Step 1: Read the existing ABI mirror**
+
+Read `managed/AetherCore.Interop/Abi.cs` in full and note how `ManagedScriptApi` is mirrored — field order and types must match the native struct exactly, and `Bootstrap.cs:31` compares `sizeof` on both sides.
+
+- [ ] **Step 2: Write the failing test**
+
+Create `tests/memory/ManagedHeapStatsTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include "memory/MemoryService.hpp"
+#include "scripting/ManagedInterop.hpp"
+
+using namespace aether;
+
+TEST_CASE("The managed stats ABI struct is plain data laid out for interop") {
+	using Abi = scripting::ManagedMemoryStatsAbi;
+	CHECK(std::is_standard_layout_v<Abi>);
+	CHECK(std::is_trivially_copyable_v<Abi>);
+	// Eight 64-bit fields then four 32-bit fields; any padding surprise here means the
+	// C# mirror will disagree and Bootstrap will refuse to initialise.
+	CHECK(sizeof(Abi) == 8 * 5 + 4 * 4);
+}
+
+TEST_CASE("An ABI struct converts into the service's stats type") {
+	scripting::ManagedMemoryStatsAbi abi{};
+	abi.heapBytes = 1024;
+	abi.committedBytes = 2048;
+	abi.totalAllocatedBytes = 4096;
+	abi.largeObjectBytes = 512;
+	abi.pinnedObjectBytes = 64;
+	abi.gen0Collections = 5;
+	abi.gen1Collections = 3;
+	abi.gen2Collections = 1;
+	abi.available = 1;
+
+	const memory::ManagedHeapStats stats = memory::FromAbi(abi);
+	CHECK(stats.available);
+	CHECK(stats.heapBytes == 1024);
+	CHECK(stats.committedBytes == 2048);
+	CHECK(stats.totalAllocatedBytes == 4096);
+	CHECK(stats.largeObjectBytes == 512);
+	CHECK(stats.pinnedObjectBytes == 64);
+	CHECK(stats.gen0Collections == 5);
+	CHECK(stats.gen1Collections == 3);
+	CHECK(stats.gen2Collections == 1);
+}
+
+TEST_CASE("An ABI struct with available zero converts to unavailable") {
+	scripting::ManagedMemoryStatsAbi abi{};
+	abi.heapBytes = 999;
+	abi.available = 0;
+	CHECK_FALSE(memory::FromAbi(abi).available);
+}
+```
+
+- [ ] **Step 3: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `ManagedMemoryStatsAbi` and `memory::FromAbi` do not exist.
+
+- [ ] **Step 4: Extend the native ABI**
+
+In `src/engine/scripting/ManagedInterop.hpp`, add above `ManagedScriptApi`:
+
+```cpp
+	// GC figures pulled from the managed side. Plain data with explicit widths: this
+	// crosses the interop boundary and is size-checked against its C# mirror, so no
+	// bools, no enums and no reordering.
+	struct ManagedMemoryStatsAbi
+	{
+		std::uint64_t heapBytes = 0;
+		std::uint64_t committedBytes = 0;
+		std::uint64_t totalAllocatedBytes = 0;
+		std::uint64_t largeObjectBytes = 0;
+		std::uint64_t pinnedObjectBytes = 0;
+		std::uint32_t gen0Collections = 0;
+		std::uint32_t gen1Collections = 0;
+		std::uint32_t gen2Collections = 0;
+		std::int32_t available = 0;
+	};
+```
+
+Append to the **end** of `ManagedScriptApi` — appending rather than inserting keeps the diff to the mirror minimal, though the size check means both sides still change together:
+
+```cpp
+		// Managed heap statistics, pulled on demand rather than pushed per frame so
+		// nothing is paid when no panel or MCP client is looking.
+		void (*GetManagedMemoryStats)(ManagedMemoryStatsAbi* outStats) = nullptr;
+```
+
+- [ ] **Step 5: Add the conversion**
+
+Add to `src/engine/memory/MemoryService.hpp`:
+
+```cpp
+namespace aether::scripting
+{
+	struct ManagedMemoryStatsAbi;
+}
+
+namespace aether::memory
+{
+	[[nodiscard]] ManagedHeapStats FromAbi(const scripting::ManagedMemoryStatsAbi& abi) noexcept;
+} // namespace aether::memory
+```
+
+Add to `src/engine/memory/MemoryService.cpp`, with `#include "scripting/ManagedInterop.hpp"`:
+
+```cpp
+	ManagedHeapStats FromAbi(const scripting::ManagedMemoryStatsAbi& abi) noexcept
+	{
+		ManagedHeapStats stats;
+		stats.heapBytes = abi.heapBytes;
+		stats.committedBytes = abi.committedBytes;
+		stats.totalAllocatedBytes = abi.totalAllocatedBytes;
+		stats.largeObjectBytes = abi.largeObjectBytes;
+		stats.pinnedObjectBytes = abi.pinnedObjectBytes;
+		stats.gen0Collections = abi.gen0Collections;
+		stats.gen1Collections = abi.gen1Collections;
+		stats.gen2Collections = abi.gen2Collections;
+		stats.available = abi.available != 0;
+		return stats;
+	}
+```
+
+- [ ] **Step 6: Implement the managed reader**
+
+Create `managed/AetherCore.Interop/ManagedMemory.cs`:
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+namespace AetherCore.Interop;
+
+// Mirror of aether::scripting::ManagedMemoryStatsAbi. Field order, widths and layout must
+// match the native struct exactly: Bootstrap compares sizeof on both sides and refuses to
+// initialise on a mismatch, which takes down all scripting rather than just this feature.
+[StructLayout(LayoutKind.Sequential)]
+internal struct ManagedMemoryStatsAbi
+{
+    public ulong HeapBytes;
+    public ulong CommittedBytes;
+    public ulong TotalAllocatedBytes;
+    public ulong LargeObjectBytes;
+    public ulong PinnedObjectBytes;
+    public uint Gen0Collections;
+    public uint Gen1Collections;
+    public uint Gen2Collections;
+    public int Available;
+}
+
+internal static unsafe class ManagedMemory
+{
+    // Called from native on demand, never per frame. GetGCMemoryInfo is cheap - it reads
+    // counters the GC already maintains rather than walking the heap.
+    [UnmanagedCallersOnly]
+    internal static void GetManagedMemoryStats(ManagedMemoryStatsAbi* outStats)
+    {
+        if (outStats == null)
+        {
+            return;
+        }
+
+        try
+        {
+            GCMemoryInfo info = GC.GetGCMemoryInfo();
+
+            ulong largeObjectBytes = 0;
+            ulong pinnedObjectBytes = 0;
+            ReadOnlySpan<GCGenerationInfo> generations = info.GenerationInfo;
+            // Generations are indexed gen0, gen1, gen2, LOH, POH. Older runtimes may
+            // report fewer, so both are bounds-checked rather than assumed present.
+            if (generations.Length > 3)
+            {
+                largeObjectBytes = (ulong)generations[3].SizeAfterBytes;
+            }
+            if (generations.Length > 4)
+            {
+                pinnedObjectBytes = (ulong)generations[4].SizeAfterBytes;
+            }
+
+            outStats->HeapBytes = (ulong)info.HeapSizeBytes;
+            outStats->CommittedBytes = (ulong)info.TotalCommittedBytes;
+            outStats->TotalAllocatedBytes = (ulong)GC.GetTotalAllocatedBytes(precise: false);
+            outStats->LargeObjectBytes = largeObjectBytes;
+            outStats->PinnedObjectBytes = pinnedObjectBytes;
+            outStats->Gen0Collections = (uint)GC.CollectionCount(0);
+            outStats->Gen1Collections = (uint)GC.CollectionCount(1);
+            outStats->Gen2Collections = (uint)GC.CollectionCount(2);
+            outStats->Available = 1;
+        }
+        catch
+        {
+            // Never let an exception cross back into native. Reporting unavailable is
+            // always better than tearing down the host.
+            *outStats = default;
+        }
+    }
+}
+```
+
+- [ ] **Step 7: Mirror the ABI and fill the pointer**
+
+In `managed/AetherCore.Interop/Abi.cs`, append the matching field to the `ManagedScriptApi` mirror, in the same position as the native struct (last), following the existing field style:
+
+```csharp
+    public delegate* unmanaged<ManagedMemoryStatsAbi*, void> GetManagedMemoryStats;
+```
+
+In `managed/AetherCore.Interop/Bootstrap.cs`, next to the existing assignments (near line 77), add:
+
+```csharp
+        outApi->GetManagedMemoryStats = &ManagedMemory.GetManagedMemoryStats;
+```
+
+- [ ] **Step 8: Install the provider on the native side**
+
+Find where `ManagedScriptApi` is received after `ManagedBootstrapFn` succeeds — search `src/engine/scripting` and `src/app/scripting` for the call site that stores the API struct. Immediately after a successful bootstrap, add:
+
+```cpp
+	if (auto* memoryService = services.TryGet<memory::MemoryService>(); memoryService != nullptr && m_api.GetManagedMemoryStats != nullptr)
+	{
+		memoryService->SetManagedStatsProvider([this]() -> memory::ManagedHeapStats {
+			scripting::ManagedMemoryStatsAbi abi{};
+			m_api.GetManagedMemoryStats(&abi);
+			return memory::FromAbi(abi);
+		});
+	}
+```
+
+And where scripts are unloaded, clear it so a stale function pointer is never called:
+
+```cpp
+	if (auto* memoryService = services.TryGet<memory::MemoryService>())
+	{
+		memoryService->SetManagedStatsProvider({});
+	}
+```
+
+Adjust `services` and `m_api` to the names in that file. Clearing on unload is essential — calling into a torn-down `AssemblyLoadContext` is a hard crash, and `MemoryService::Managed()` only catches C++ exceptions.
+
+- [ ] **Step 9: Run the tests and verify the boot**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*managed stats ABI*,*ABI struct*" -s
+```
+
+Expected: PASS. If the `sizeof` case fails, the native struct has unexpected padding — fix the field order rather than loosening the assertion, because the C# mirror will have the same problem.
+
+Then build and run the editor, open a project with scripts, and confirm from the log that scripting still initializes. **An ABI size mismatch shows up as scripts failing to load entirely**, not as a memory feature quietly missing.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/engine/scripting/ManagedInterop.hpp src/engine/memory/MemoryService.hpp src/engine/memory/MemoryService.cpp managed/AetherCore.Interop/ManagedMemory.cs managed/AetherCore.Interop/Abi.cs managed/AetherCore.Interop/Bootstrap.cs tests/memory/ManagedHeapStatsTests.cpp
+git commit -m "Surface managed GC statistics through the scripting ABI
+
+- Add a plain-data managed heap stats struct and pull it on demand rather than per frame
+- Mirror the struct and the function pointer on the managed side in lockstep with the size check
+- Bound-check the LOH and POH generation entries rather than assuming they exist
+- Clear the provider on script unload so a stale function pointer is never called"
+```
+
+---
+
+## Task 12: MCP tools
+
+**Files:**
+- Create: `src/app/editor/ControlMethodsMemory.cpp`
+- Modify: `src/app/editor/ControlMethods.hpp`
+- Modify: `src/app/editor/ControlMethods.cpp:2273`
+
+**Interfaces:**
+- Consumes: `MemoryService`, `MemorySnapshot`, `SnapshotDiff`, `MethodContext`, `ControlMethod`, `Obj`/`StrProp` from `editor/ControlSchema.hpp`.
+- Produces: `void aether::editor::AppendMemoryMethods(std::vector<ControlMethod>& methods);`
+
+These tools are the agent-facing surface, so their descriptions matter as much as their behaviour — an agent picks a tool from its description alone.
+
+- [ ] **Step 1: Declare the append function**
+
+In `src/app/editor/ControlMethods.hpp`, after the `AppendPixelArtMethods` declaration, add:
+
+```cpp
+	// Memory inspection group (per-tag totals, named snapshots, snapshot diffing) -
+	// defined in ControlMethodsMemory.cpp. Reads the engine's MemoryService.
+	void AppendMemoryMethods(std::vector<ControlMethod>& methods);
+```
+
+- [ ] **Step 2: Implement the tools**
+
+Create `src/app/editor/ControlMethodsMemory.cpp`:
+
+```cpp
+#include "editor/ControlMethods.hpp"
+#include "editor/ControlSchema.hpp"
+
+#include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+#include "memory/MemoryService.hpp"
+#include "memory/MemoryStats.hpp"
+#include "memory/MemoryTag.hpp"
+#include "memory/TrackingLevel.hpp"
+#include "utils/ServiceContainer.hpp"
+
+namespace aether::editor
+{
+	using nlohmann::json;
+
+	namespace
+	{
+		json TagsToJson(const memory::MemorySnapshot& snapshot)
+		{
+			json tags = json::array();
+			for (std::size_t i = 0; i < memory::kMemTagCount; ++i)
+			{
+				const memory::TagTotals& totals = snapshot.tags[i];
+				if (totals.totalAllocations == 0)
+				{
+					continue; // Untouched tags are noise in an agent's context window.
+				}
+				tags.push_back(json{{"tag", memory::ToString(static_cast<memory::MemTag>(i))},
+				        {"currentBytes", totals.currentBytes},
+				        {"peakBytes", totals.peakBytes},
+				        {"liveCount", totals.LiveCount()},
+				        {"totalAllocations", totals.totalAllocations},
+				        {"totalFrees", totals.totalFrees}});
+			}
+			return tags;
+		}
+
+		json ManagedToJson(const memory::ManagedHeapStats& managed)
+		{
+			if (!managed.available)
+			{
+				return json{{"available", false}};
+			}
+			return json{{"available", true},
+			        {"heapBytes", managed.heapBytes},
+			        {"committedBytes", managed.committedBytes},
+			        {"totalAllocatedBytes", managed.totalAllocatedBytes},
+			        {"largeObjectBytes", managed.largeObjectBytes},
+			        {"pinnedObjectBytes", managed.pinnedObjectBytes},
+			        {"gen0Collections", managed.gen0Collections},
+			        {"gen1Collections", managed.gen1Collections},
+			        {"gen2Collections", managed.gen2Collections}};
+		}
+
+		memory::MemoryService* Service(MethodContext& ctx)
+		{
+			return ctx.services.TryGet<memory::MemoryService>();
+		}
+	} // namespace
+
+	void AppendMemoryMethods(std::vector<ControlMethod>& methods)
+	{
+		methods.push_back({"memory.stats",
+		        "memory_stats",
+		        "CPU memory by subsystem: current and peak bytes, live allocation count and lifetime allocation/free counts for every tag that has allocated, plus the C# GC heap (size, committed, gen0/1/2 collection counts, LOH, POH). Use this to answer 'what is using memory'. Tags with no activity are omitted.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* service = Service(ctx);
+			        if (service == nullptr)
+			        {
+				        return json{{"error", "no memory service"}};
+			        }
+			        const memory::MemorySnapshot snapshot = service->Capture("");
+			        return json{{"trackingLevel", memory::ToString(memory::CurrentLevel())},
+			                {"maxTrackingLevel", memory::ToString(memory::kMaxTrackingLevel)},
+			                {"tags", TagsToJson(snapshot)},
+			                {"managed", ManagedToJson(snapshot.managed)},
+			                {"ledgerLiveCount", snapshot.ledgerLiveCount},
+			                {"frame", ctx.frameIndex}};
+		        }});
+
+		methods.push_back({"memory.snapshot",
+		        "memory_snapshot",
+		        "Record the current per-tag memory totals under a name, for later comparison with memory_diff. The leak-hunting loop is: snapshot 'before', do the suspect thing several times (load a scene, enter and leave Play), snapshot 'after', then memory_diff them. Re-using a name overwrites it.",
+		        true,
+		        Obj({{"name", StrProp()}}, {"name"}),
+		        [](const json& params, MethodContext& ctx) -> json
+		        {
+			        auto* service = Service(ctx);
+			        if (service == nullptr)
+			        {
+				        return json{{"error", "no memory service"}};
+			        }
+			        const auto name = params.value("name", std::string{});
+			        if (name.empty())
+			        {
+				        return json{{"error", "name must not be empty"}};
+			        }
+			        memory::MemorySnapshot snapshot = service->Capture(name);
+			        const std::uint64_t totalBytes = [&snapshot] {
+				        std::uint64_t bytes = 0;
+				        for (const auto& totals : snapshot.tags)
+				        {
+					        bytes += totals.currentBytes;
+				        }
+				        return bytes;
+			        }();
+			        service->Store(std::move(snapshot));
+			        return json{{"name", name}, {"totalCurrentBytes", totalBytes}, {"stored", service->StoredNames()}, {"frame", ctx.frameIndex}};
+		        }});
+
+		methods.push_back({"memory.diff",
+		        "memory_diff",
+		        "Compare two named snapshots and report what grew. Returns per-tag byte and live-count deltas ordered worst-first, a total, and - when memory.trackingLevel is Ledger or higher - the symbolised allocation callstacks still holding memory, so a leak can be traced to a source line. Positive deltas are growth.",
+		        false,
+		        Obj({{"from", StrProp()}, {"to", StrProp()}}, {"from", "to"}),
+		        [](const json& params, MethodContext& ctx) -> json
+		        {
+			        auto* service = Service(ctx);
+			        if (service == nullptr)
+			        {
+				        return json{{"error", "no memory service"}};
+			        }
+			        const auto from = params.value("from", std::string{});
+			        const auto to = params.value("to", std::string{});
+			        const auto diff = service->Diff(from, to);
+			        if (!diff.has_value())
+			        {
+				        return json{{"error", "unknown snapshot name"}, {"stored", service->StoredNames()}};
+			        }
+
+			        json tags = json::array();
+			        for (const memory::TagDelta& delta : diff->tags)
+			        {
+				        tags.push_back(json{{"tag", memory::ToString(delta.tag)}, {"deltaBytes", delta.currentBytes}, {"deltaLiveCount", delta.liveCount}});
+			        }
+
+			        json sites = json::array();
+			        for (const memory::CallstackDelta& site : diff->callstacks)
+			        {
+				        sites.push_back(json{{"bytes", site.bytes}, {"allocations", site.count}, {"callstack", site.resolved}});
+			        }
+
+			        return json{{"from", diff->fromName},
+			                {"to", diff->toName},
+			                {"totalDeltaBytes", diff->totalBytes},
+			                {"tags", tags},
+			                {"callstacks", sites},
+			                {"callstacksAvailable", memory::LevelAtLeast(memory::TrackingLevel::Ledger)},
+			                {"frame", ctx.frameIndex}};
+		        }});
+	}
+} // namespace aether::editor
+```
+
+`memory_snapshot` is marked as mutating because it changes stored editor state, even though it does not touch the scene.
+
+- [ ] **Step 3: Register the group**
+
+In `src/app/editor/ControlMethods.cpp`, after line 2272 (`AppendPixelArtMethods(methods);`), add:
+
+```cpp
+		AppendMemoryMethods(methods);
+```
+
+- [ ] **Step 4: Reconfigure and build**
+
+A brand-new `src/app/*.cpp` needs a reconfigure before the Editor target sees it:
+
+```bash
+cmake --preset vs2022-msvc && cmake --build build-vs2022-msvc --config RelWithDebInfo --target AetherCoreEditor
+```
+
+- [ ] **Step 5: Verify the tools over MCP**
+
+Restart the MCP server so the new tool schemas are picked up — a stale schema cache is the usual reason a new tool appears missing. Then, with the editor running and a project open:
+
+```bash
+aether-ctl memory_stats
+```
+
+Expected: a per-tag table with nonzero `Engine` and `Rendering` entries, and a `managed` block that reports `available: true` once a project with scripts is loaded.
+
+Then exercise the leak-hunting loop:
+
+```bash
+aether-ctl memory_snapshot --name before
+```
+
+Load a scene several times through the editor, then:
+
+```bash
+aether-ctl memory_snapshot --name after
+```
+
+```bash
+aether-ctl memory_diff --from before --to after
+```
+
+Expected: a diff whose tag deltas are near zero for a scene that loads and unloads cleanly. A large positive `Scene` or `Assets` delta after repeated identical loads is a real finding — record it, because it is exactly what this subsystem was built to surface, but do not chase it as part of this task.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/app/editor/ControlMethodsMemory.cpp src/app/editor/ControlMethods.hpp src/app/editor/ControlMethods.cpp
+git commit -m "Add memory inspection MCP tools
+
+- Add memory_stats for per-tag native totals plus the managed GC block
+- Add memory_snapshot and memory_diff so a leak can be found by comparing two points in time
+- Report symbolised allocation callstacks in a diff when the ledger tier is active
+- Omit untouched tags to keep responses small"
+```
+
+---
+
+Remaining tasks, to be written next: the editor panel (Task 13) and the benchmark verifying the acceptance criteria (Task 14).
