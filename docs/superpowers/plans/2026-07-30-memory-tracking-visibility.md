@@ -770,7 +770,11 @@ git commit -m "Add memory tags and the thread-local tag scope
 - Consumes: `MemTag`, `kMemTagCount` from Task 2.
 - Produces: `struct TagTotals { std::uint64_t currentBytes, peakBytes, totalAllocations, totalFrees; std::uint64_t LiveCount() const noexcept; }`; `class MemoryStats` with `RecordAllocation(MemTag, std::size_t)`, `RecordFree(MemTag, std::size_t)`, `Get(MemTag) const -> TagTotals`, `Total() const -> TagTotals`, `ResetPeaks()`; and `MemoryStats& GlobalStats() noexcept`.
 
-Note a deliberate deviation from the spec's "two atomics" phrasing: the block is three relaxed atomic operations on allocation (bytes, count, and a peak compare-exchange that almost always no-ops) and two on free. `liveCount` is *derived* as `totalAllocations - totalFrees` rather than stored, which removes one. The binding constraint is the ≤5% budget verified in Task 14, not the operation count.
+Note a deliberate deviation from the spec's "two atomics" phrasing. The allocation path performs four relaxed atomic operations — current bytes, lifetime bytes, allocation count, and a peak compare-exchange that almost always no-ops on its first comparison — and two on free. `liveCount` is *derived* as `totalAllocations - totalFrees` rather than stored, which removes one.
+
+All four live in a single cache line that the allocating thread already owns, so the marginal cost of each is one lock-prefixed instruction rather than a cache miss. `lifetimeBytes` is what makes allocation-rate and per-frame churn display possible at all: `currentBytes` rises and falls, so a subsystem that allocates and frees a megabyte every frame is indistinguishable from one that allocates nothing. That pattern is precisely what a memory profiler exists to catch.
+
+The binding constraint is the ≤5% budget verified in Task 14, not the operation count. If that budget fails, this counter is the first thing to reconsider — see Task 14 Step 3.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -814,6 +818,32 @@ TEST_CASE("Allocation and free move current bytes and derive the live count") {
 	CHECK(mesh.currentBytes == 40);
 	CHECK(mesh.totalFrees == 1);
 	CHECK(mesh.LiveCount() == 1);
+}
+
+TEST_CASE("Lifetime bytes only ever rise, so a rate can be differenced from them") {
+	MemoryStats stats;
+	stats.RecordAllocation(MemTag::Particles, 300);
+	CHECK(stats.Get(MemTag::Particles).lifetimeBytes == 300);
+
+	// A free must not reduce it - that is the whole difference from currentBytes.
+	stats.RecordFree(MemTag::Particles, 300);
+	CHECK(stats.Get(MemTag::Particles).lifetimeBytes == 300);
+	CHECK(stats.Get(MemTag::Particles).currentBytes == 0);
+
+	stats.RecordAllocation(MemTag::Particles, 50);
+	CHECK(stats.Get(MemTag::Particles).lifetimeBytes == 350);
+}
+
+TEST_CASE("Churn shows up in lifetime bytes even when current bytes never move") {
+	// The allocate-then-free-every-frame pattern the rate display exists to catch.
+	MemoryStats stats;
+	for (int frame = 0; frame < 100; ++frame) {
+		stats.RecordAllocation(MemTag::Temp, 1024);
+		stats.RecordFree(MemTag::Temp, 1024);
+	}
+	const TagTotals totals = stats.Get(MemTag::Temp);
+	CHECK(totals.currentBytes == 0);
+	CHECK(totals.lifetimeBytes == 100 * 1024);
 }
 
 TEST_CASE("Peak records the high-water mark, not the current value") {
@@ -929,6 +959,10 @@ namespace aether::memory
 	{
 		std::uint64_t currentBytes = 0;
 		std::uint64_t peakBytes = 0;
+		// Monotonic sum of every allocation ever made under this tag. currentBytes rises
+		// and falls, so it cannot answer "how much did this subsystem churn"; this can.
+		// Differencing it between two samples is what produces an allocation rate.
+		std::uint64_t lifetimeBytes = 0;
 		std::uint64_t totalAllocations = 0;
 		std::uint64_t totalFrees = 0;
 
@@ -961,6 +995,7 @@ namespace aether::memory
 		{
 			std::atomic<std::uint64_t> currentBytes{0};
 			std::atomic<std::uint64_t> peakBytes{0};
+			std::atomic<std::uint64_t> lifetimeBytes{0};
 			std::atomic<std::uint64_t> totalAllocations{0};
 			std::atomic<std::uint64_t> totalFrees{0};
 		};
@@ -1002,6 +1037,7 @@ namespace aether::memory
 	{
 		Counters& counters = m_counters[static_cast<std::size_t>(tag)];
 		const std::uint64_t updated = counters.currentBytes.fetch_add(size, std::memory_order_relaxed) + size;
+		counters.lifetimeBytes.fetch_add(size, std::memory_order_relaxed);
 		counters.totalAllocations.fetch_add(1, std::memory_order_relaxed);
 
 		// Monotonic maximum. Relaxed ordering is sufficient - the peak is a diagnostic
@@ -1025,6 +1061,7 @@ namespace aether::memory
 		const Counters& counters = m_counters[static_cast<std::size_t>(tag)];
 		return TagTotals{counters.currentBytes.load(std::memory_order_relaxed),
 		        counters.peakBytes.load(std::memory_order_relaxed),
+		        counters.lifetimeBytes.load(std::memory_order_relaxed),
 		        counters.totalAllocations.load(std::memory_order_relaxed),
 		        counters.totalFrees.load(std::memory_order_relaxed)};
 	}
@@ -1037,6 +1074,7 @@ namespace aether::memory
 			const TagTotals tag = Get(static_cast<MemTag>(i));
 			total.currentBytes += tag.currentBytes;
 			total.peakBytes += tag.peakBytes;
+			total.lifetimeBytes += tag.lifetimeBytes;
 			total.totalAllocations += tag.totalAllocations;
 			total.totalFrees += tag.totalFrees;
 		}
@@ -1070,9 +1108,10 @@ git add src/engine/memory/MemoryStats.hpp src/engine/memory/MemoryStats.cpp test
 git commit -m "Add lock-free per-tag memory counters
 
 - Isolate each tag's counters on their own cache line to avoid false sharing
+- Track monotonic lifetime bytes so allocation rate and churn can be differenced
 - Derive the live count from allocation and free totals to save an atomic
 - Constant-initialise the global block so operator new can use it during static init
-- Cover peak tracking, tag independence and concurrent recording"
+- Cover peak tracking, churn, tag independence and concurrent recording"
 ```
 
 ---
@@ -4291,6 +4330,7 @@ namespace aether::editor
 				tags.push_back(json{{"tag", memory::ToString(static_cast<memory::MemTag>(i))},
 				        {"currentBytes", totals.currentBytes},
 				        {"peakBytes", totals.peakBytes},
+				        {"lifetimeBytes", totals.lifetimeBytes},
 				        {"liveCount", totals.LiveCount()},
 				        {"totalAllocations", totals.totalAllocations},
 				        {"totalFrees", totals.totalFrees}});
@@ -4325,7 +4365,7 @@ namespace aether::editor
 	{
 		methods.push_back({"memory.stats",
 		        "memory_stats",
-		        "CPU memory by subsystem: current and peak bytes, live allocation count and lifetime allocation/free counts for every tag that has allocated, plus the C# GC heap (size, committed, gen0/1/2 collection counts, LOH, POH). Use this to answer 'what is using memory'. Tags with no activity are omitted.",
+		        "CPU memory by subsystem: current and peak bytes, live allocation count, and lifetime allocated bytes and allocation/free counts for every tag that has allocated, plus the C# GC heap (size, committed, gen0/1/2 collection counts, LOH, POH). Use this to answer 'what is using memory'. lifetimeBytes only ever rises, so calling this twice and differencing it measures allocation churn - a tag whose currentBytes is flat but whose lifetimeBytes climbs fast is allocating and freeing every frame. Tags with no activity are omitted.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -4529,15 +4569,38 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
+		// Per-tag churn, differenced between two samples. Rates are smoothed over a
+		// window because a single frame's figure is far too noisy to read.
+		struct TagRate
+		{
+			double bytesPerSecond = 0.0;
+			double allocationsPerSecond = 0.0;
+			std::uint64_t bytesLastFrame = 0;
+			std::uint64_t allocationsLastFrame = 0;
+		};
+
 		void DrawTagTable(app::LayerContext& context);
+		void DrawSelectedTagGraph() const;
 		void DrawManagedSection() const;
 		void DrawSnapshotControls(app::LayerContext& context);
 		void DrawCallstacks() const;
-		void PushHistorySample(std::uint64_t totalBytes);
+		void PushHistorySample(const memory::MemorySnapshot& snapshot, std::uint64_t totalBytes);
+		void UpdateRates(const memory::MemorySnapshot& snapshot, double deltaSeconds);
 
 		std::array<float, kHistoryLength> m_totalMbHistory{};
+		// One current-bytes ring per tag, so the selected tag can be graphed on its own
+		// rather than being lost inside the total. 25 tags x 180 floats is ~18 KiB.
+		std::array<std::array<float, kHistoryLength>, memory::kMemTagCount> m_tagMbHistory{};
+		// Bytes allocated per second per tag, for the churn plot.
+		std::array<std::array<float, kHistoryLength>, memory::kMemTagCount> m_tagChurnHistory{};
 		std::size_t m_historyHead = 0;
 		std::size_t m_historyCount = 0;
+
+		std::array<TagRate, memory::kMemTagCount> m_rates{};
+		memory::MemorySnapshot m_previous;
+		bool m_hasPrevious = false;
+		double m_rateAccumulator = 0.0;
+		bool m_showChurn = false;
 
 		memory::MemorySnapshot m_latest;
 		memory::MemTag m_selectedTag = memory::MemTag::Unknown;
@@ -4566,7 +4629,7 @@ Create `src/app/debug/MemoryPanel.cpp`:
 
 #include <imgui.h>
 
-#include "layers/LayerContext.hpp"
+#include "layers/AppLayer.hpp"
 #include "memory/MemoryService.hpp"
 #include "memory/TrackingLevel.hpp"
 #include "utils/Logger.hpp"
@@ -4610,12 +4673,53 @@ namespace aether::editor
 		}
 	} // namespace
 
-	void MemoryPanel::PushHistorySample(std::uint64_t totalBytes)
+	void MemoryPanel::PushHistorySample(const memory::MemorySnapshot& snapshot, std::uint64_t totalBytes)
 	{
 		constexpr double kMib = 1024.0 * 1024.0;
 		m_totalMbHistory[m_historyHead] = static_cast<float>(static_cast<double>(totalBytes) / kMib);
+		for (std::size_t i = 0; i < memory::kMemTagCount; ++i)
+		{
+			m_tagMbHistory[i][m_historyHead] = static_cast<float>(static_cast<double>(snapshot.tags[i].currentBytes) / kMib);
+			m_tagChurnHistory[i][m_historyHead] = static_cast<float>(m_rates[i].bytesPerSecond / kMib);
+		}
 		m_historyHead = (m_historyHead + 1) % kHistoryLength;
 		m_historyCount = std::min(m_historyCount + 1, kHistoryLength);
+	}
+
+	void MemoryPanel::UpdateRates(const memory::MemorySnapshot& snapshot, double deltaSeconds)
+	{
+		if (!m_hasPrevious)
+		{
+			m_previous = snapshot;
+			m_hasPrevious = true;
+			return;
+		}
+
+		for (std::size_t i = 0; i < memory::kMemTagCount; ++i)
+		{
+			const memory::TagTotals& now = snapshot.tags[i];
+			const memory::TagTotals& before = m_previous.tags[i];
+
+			// Both counters are monotonic, so this subtraction cannot go negative unless
+			// something reset them - guard anyway rather than underflowing to a huge value.
+			const std::uint64_t bytes = now.lifetimeBytes >= before.lifetimeBytes ? now.lifetimeBytes - before.lifetimeBytes : 0;
+			const std::uint64_t allocations = now.totalAllocations >= before.totalAllocations ? now.totalAllocations - before.totalAllocations : 0;
+
+			m_rates[i].bytesLastFrame = bytes;
+			m_rates[i].allocationsLastFrame = allocations;
+			if (deltaSeconds > 0.0)
+			{
+				// Exponential smoothing: a raw per-sample rate flickers too hard to read,
+				// but a long average hides the spike you opened the panel to find.
+				constexpr double kSmoothing = 0.2;
+				const double instantBytes = static_cast<double>(bytes) / deltaSeconds;
+				const double instantAllocations = static_cast<double>(allocations) / deltaSeconds;
+				m_rates[i].bytesPerSecond += (instantBytes - m_rates[i].bytesPerSecond) * kSmoothing;
+				m_rates[i].allocationsPerSecond += (instantAllocations - m_rates[i].allocationsPerSecond) * kSmoothing;
+			}
+		}
+
+		m_previous = snapshot;
 	}
 
 	void MemoryPanel::OnUpdate(app::LayerContext& context)
@@ -4623,7 +4727,9 @@ namespace aether::editor
 		if (!IsVisible())
 		{
 			// Capture pulls managed GC figures across interop; skip it entirely when the
-			// panel is closed so a hidden panel costs nothing.
+			// panel is closed so a hidden panel costs nothing. Rates restart from the next
+			// sample after a reopen, which is why m_hasPrevious is cleared here.
+			m_hasPrevious = false;
 			return;
 		}
 
@@ -4635,18 +4741,29 @@ namespace aether::editor
 
 		m_latest = service->Capture("");
 
-		std::uint64_t total = 0;
-		for (const auto& totals : m_latest.tags)
+		// Sample on a fixed cadence rather than every frame: at 300 fps a per-frame delta
+		// is mostly quantisation noise, and the graph should read the same regardless of
+		// frame rate.
+		constexpr double kSampleInterval = 1.0 / 30.0;
+		m_rateAccumulator += context.deltaTimeSeconds;
+		if (m_rateAccumulator >= kSampleInterval)
 		{
-			total += totals.currentBytes;
+			UpdateRates(m_latest, m_rateAccumulator);
+
+			std::uint64_t total = 0;
+			for (const auto& totals : m_latest.tags)
+			{
+				total += totals.currentBytes;
+			}
+			PushHistorySample(m_latest, total);
+			m_rateAccumulator = 0.0;
 		}
-		PushHistorySample(total);
 	}
 
 	void MemoryPanel::DrawTagTable(app::LayerContext& /*context*/)
 	{
 		constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
-		if (!ImGui::BeginTable("##memoryTags", 5, kFlags, ImVec2(0.0f, 260.0f)))
+		if (!ImGui::BeginTable("##memoryTags", 7, kFlags, ImVec2(0.0f, 260.0f)))
 		{
 			return;
 		}
@@ -4656,7 +4773,9 @@ namespace aether::editor
 		ImGui::TableSetupColumn("Current");
 		ImGui::TableSetupColumn("Peak");
 		ImGui::TableSetupColumn("Live");
-		ImGui::TableSetupColumn("Allocs");
+		ImGui::TableSetupColumn("Alloc/s");
+		ImGui::TableSetupColumn("Bytes/s");
+		ImGui::TableSetupColumn("Bytes/frame");
 		ImGui::TableHeadersRow();
 
 		for (std::size_t i = 0; i < memory::kMemTagCount; ++i)
@@ -4667,6 +4786,7 @@ namespace aether::editor
 				continue;
 			}
 			const auto tag = static_cast<memory::MemTag>(i);
+			const TagRate& rate = m_rates[i];
 
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
@@ -4681,10 +4801,38 @@ namespace aether::editor
 			ImGui::TableSetColumnIndex(3);
 			ImGui::Text("%llu", static_cast<unsigned long long>(totals.LiveCount()));
 			ImGui::TableSetColumnIndex(4);
-			ImGui::Text("%llu", static_cast<unsigned long long>(totals.totalAllocations));
+			ImGui::Text("%.0f", rate.allocationsPerSecond);
+			ImGui::TableSetColumnIndex(5);
+			ImGui::TextUnformatted((FormatBytes(static_cast<std::uint64_t>(rate.bytesPerSecond)) + "/s").c_str());
+			ImGui::TableSetColumnIndex(6);
+			// Steady per-frame churn with flat current bytes is the signature of an
+			// allocation in a hot loop, which is the main thing this column is for.
+			ImGui::TextUnformatted(FormatBytes(rate.bytesLastFrame).c_str());
 		}
 
 		ImGui::EndTable();
+	}
+
+	void MemoryPanel::DrawSelectedTagGraph() const
+	{
+		if (m_historyCount == 0 || m_selectedTag == memory::MemTag::Unknown)
+		{
+			return;
+		}
+
+		const auto index = static_cast<std::size_t>(m_selectedTag);
+		const auto& source = m_showChurn ? m_tagChurnHistory[index] : m_tagMbHistory[index];
+
+		std::array<float, kHistoryLength> ordered{};
+		for (std::size_t i = 0; i < m_historyCount; ++i)
+		{
+			const std::size_t slot = (m_historyHead + kHistoryLength - m_historyCount + i) % kHistoryLength;
+			ordered[i] = source[slot];
+		}
+
+		char label[64]{};
+		std::snprintf(label, sizeof(label), "%s %s", memory::ToString(m_selectedTag), m_showChurn ? "MiB/s" : "MiB");
+		ImGui::PlotLines(label, ordered.data(), static_cast<int>(m_historyCount), 0, nullptr, 0.0f, FLT_MAX, ImVec2(0.0f, 60.0f));
 	}
 
 	void MemoryPanel::DrawManagedSection() const
@@ -4865,6 +5013,24 @@ namespace aether::editor
 			ImGui::TextUnformatted("Raise memory.trackingLevel to Ledger for per-allocation sites.");
 		}
 
+		// Whole-process churn, the headline number: how hard the engine is hitting the
+		// allocator right now, independent of how much it is holding.
+		double totalBytesPerSecond = 0.0;
+		double totalAllocationsPerSecond = 0.0;
+		std::uint64_t totalBytesLastFrame = 0;
+		for (const TagRate& rate : m_rates)
+		{
+			totalBytesPerSecond += rate.bytesPerSecond;
+			totalAllocationsPerSecond += rate.allocationsPerSecond;
+			totalBytesLastFrame += rate.bytesLastFrame;
+		}
+		ImGui::Text("Churn: %s/s over %.0f allocations/s  (%s per frame)",
+		        FormatBytes(static_cast<std::uint64_t>(totalBytesPerSecond)).c_str(),
+		        totalAllocationsPerSecond,
+		        FormatBytes(totalBytesLastFrame).c_str());
+
+		ImGui::Checkbox("Plot churn instead of size", &m_showChurn);
+
 		if (m_historyCount > 0)
 		{
 			// Plot in insertion order, oldest first, so the line reads left to right.
@@ -4878,6 +5044,7 @@ namespace aether::editor
 		}
 
 		DrawTagTable(context);
+		DrawSelectedTagGraph();
 		DrawManagedSection();
 		DrawSnapshotControls(context);
 		DrawCallstacks();
@@ -4887,7 +5054,7 @@ namespace aether::editor
 } // namespace aether::editor
 ```
 
-Add `#include <cfloat>` for `FLT_MAX`. If `app::LayerContext` does not expose `services` under that name, check `src/app/layers/LayerContext.hpp` and use whatever accessor `PerformancePanel` uses.
+Add `#include <cfloat>` for `FLT_MAX`. `LayerContext` is defined in `src/app/layers/AppLayer.hpp:9` — not in a `LayerContext.hpp`, which does not exist — and exposes `services`, `deltaTimeSeconds`, `elapsedTimeSeconds` and `frameIndex`.
 
 - [ ] **Step 3: Register the panel**
 
@@ -4912,6 +5079,9 @@ cmake --preset vs2022-msvc && cmake --build build-vs2022-msvc --config RelWithDe
 From the build-tree root, launch the editor, open the panel from the menu, and confirm:
 - the tag table lists populated tags with plausible byte figures
 - the total-MiB plot moves as scenes load
+- the churn header shows a nonzero bytes/s and allocations/s while the editor is running, and drops toward zero on an idle frame with nothing loading
+- selecting a tag graphs it on its own, and the "Plot churn instead of size" toggle switches that graph between MiB and MiB/s
+- entering Play mode raises `Scripting` churn — the clearest confirmation that per-frame rate is being measured rather than just held bytes
 - the managed section reports `available` once a project with scripts is open
 - taking two snapshots and diffing them produces a table
 - "Write report now" emits the per-tag report into the console log
@@ -4923,7 +5093,9 @@ From the build-tree root, launch the editor, open the panel from the menu, and c
 git add src/app/debug/MemoryPanel.hpp src/app/debug/MemoryPanel.cpp src/app/layers/DebugLayer.cpp
 git commit -m "Add the editor memory panel
 
-- Show per-tag current, peak, live and lifetime allocation figures with a total history plot
+- Show per-tag current, peak and live figures alongside allocation rate and per-frame churn
+- Sample rates on a fixed cadence and smooth them so the numbers are readable at any frame rate
+- Graph the selected tag on its own, switchable between held size and churn
 - Show the managed GC heap alongside the native tags
 - Add snapshot capture and diffing with expandable allocation sites
 - Skip the per-frame capture entirely while the panel is closed"
@@ -5133,7 +5305,12 @@ Expected: the printed table, and all three `CHECK_MESSAGE` assertions passing.
 
 If `mimalloc must beat std::malloc` fails, re-run twice more to rule out noise, then record the numbers and report them — do not weaken the assertion. mimalloc losing on this pattern is a genuine finding that undermines the backend choice.
 
-If the 5% counters budget fails, the tag table is the prime suspect, since it is the only per-allocation lock. Record the measured overhead, then reduce `TagTable::kSlotsPerShard` contention by raising `kShardCount` to 256 and re-measure. If it still fails, record the number and flag it — a real overhead figure that breaks the budget is the signal to revisit whether per-pointer tag storage belongs in the `Counters` tier at all, and that is a design decision, not something to paper over here.
+If the 5% counters budget fails, work through the two suspects in order:
+
+1. **The tag table**, the prime suspect, since it is the only per-allocation lock. Record the measured overhead, then raise `TagTable::kShardCount` to 256 to cut contention and re-measure.
+2. **The `lifetimeBytes` counter** added for the panel's churn display. It is a fourth atomic on the allocation path. Measure its specific cost by commenting out its `fetch_add` and re-running; if it accounts for most of the overage, the honest options are to accept a higher budget for the visibility it buys, or to gate that one counter behind `AE_DEV_TOOLING` so shipped builds do not pay for a display they will never render. Prefer gating over deletion — losing churn measurement would remove the panel's ability to catch per-frame allocation, which was the point of adding it.
+
+If it still fails after both, record the number and flag it. A real overhead figure that breaks the budget is the signal to revisit whether per-pointer tag storage belongs in the `Counters` tier at all — that is a design decision, not something to paper over here.
 
 - [ ] **Step 4: Verify no editor regression**
 
@@ -5175,7 +5352,8 @@ Plan 1 is complete when all of the following are true:
 
 - `memory_stats` returns populated per-tag native figures and a managed GC block with a project loaded.
 - `memory_snapshot` / `memory_diff` produce a usable diff, and at the `Ledger` tier the diff names allocation sites.
-- The editor Memory panel shows the tag table, history plot, managed section and snapshot diffing, and costs nothing while closed.
+- The editor Memory panel shows the tag table, allocation rate and per-frame churn, per-tag graphs, history plot, managed section and snapshot diffing, and costs nothing while closed.
+- Entering Play mode visibly raises `Scripting` churn in the panel, confirming rate measurement works and not just held-byte reporting.
 - A `memory-report.txt` appears in the crash directory on clean shutdown, with a live-allocations section at the `Ledger` tier.
 - A deliberately leaked allocation is reported with the correct tag and callstack; a deliberate double free is counted.
 - `EngineTests` passes in full, and the benchmark's three acceptance assertions pass with their figures recorded in the spec.
