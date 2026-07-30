@@ -1070,4 +1070,1271 @@ git commit -m "Add lock-free per-tag memory counters
 
 ---
 
-Remaining tasks in this plan, to be written next: tracking levels and settings (Task 4), wiring the counters into the override (Task 5), the callstack database (Task 6), the sharded ledger with the epoch rule (Task 7), ledger wiring and double-free detection (Task 8), the `MemoryService` facade with snapshots and diffs (Task 9), the shutdown leak report (Task 10), managed GC statistics across the ABI (Task 11), the three MCP tools (Task 12), the editor panel (Task 13), and the benchmark that verifies the acceptance criteria (Task 14).
+## Task 4: Tracking levels with a compile-time ceiling
+
+**Files:**
+- Create: `src/engine/memory/TrackingLevel.hpp`, `src/engine/memory/TrackingLevel.cpp`
+- Test: `tests/memory/TrackingLevelTests.cpp`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `enum class TrackingLevel : std::uint8_t { Disabled, Counters, Ledger, Callstacks }`; `constexpr TrackingLevel kMaxTrackingLevel`; `TrackingLevel CurrentLevel() noexcept`; `void SetTrackingLevel(TrackingLevel) noexcept` (clamps to the ceiling and returns nothing); `bool LevelAtLeast(TrackingLevel) noexcept`; `ToString(TrackingLevel) -> const char*`; `ParseTrackingLevel(std::string_view) -> std::optional<TrackingLevel>`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/memory/TrackingLevelTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <string_view>
+
+#include "Defines.hpp"
+#include "memory/TrackingLevel.hpp"
+
+using namespace aether::memory;
+
+namespace
+{
+	struct LevelGuard
+	{
+		TrackingLevel previous = CurrentLevel();
+		~LevelGuard() { SetTrackingLevel(previous); }
+	};
+} // namespace
+
+TEST_CASE("Levels are ordered so comparisons mean what they read like") {
+	CHECK(TrackingLevel::Disabled < TrackingLevel::Counters);
+	CHECK(TrackingLevel::Counters < TrackingLevel::Ledger);
+	CHECK(TrackingLevel::Ledger < TrackingLevel::Callstacks);
+}
+
+TEST_CASE("The compile-time ceiling matches the build configuration") {
+#if AE_DEV_TOOLING
+	CHECK(kMaxTrackingLevel == TrackingLevel::Callstacks);
+#else
+	CHECK(kMaxTrackingLevel == TrackingLevel::Counters);
+#endif
+}
+
+TEST_CASE("Setting a level below the ceiling takes effect exactly") {
+	LevelGuard guard;
+	SetTrackingLevel(TrackingLevel::Disabled);
+	CHECK(CurrentLevel() == TrackingLevel::Disabled);
+	SetTrackingLevel(TrackingLevel::Counters);
+	CHECK(CurrentLevel() == TrackingLevel::Counters);
+}
+
+TEST_CASE("Requesting a level above the ceiling clamps instead of lying") {
+	LevelGuard guard;
+	SetTrackingLevel(TrackingLevel::Callstacks);
+	CHECK(CurrentLevel() == kMaxTrackingLevel);
+	CHECK(CurrentLevel() <= kMaxTrackingLevel);
+}
+
+TEST_CASE("LevelAtLeast reflects the active level") {
+	LevelGuard guard;
+	SetTrackingLevel(TrackingLevel::Counters);
+	CHECK(LevelAtLeast(TrackingLevel::Disabled));
+	CHECK(LevelAtLeast(TrackingLevel::Counters));
+	CHECK_FALSE(LevelAtLeast(TrackingLevel::Callstacks));
+
+	SetTrackingLevel(TrackingLevel::Disabled);
+	CHECK(LevelAtLeast(TrackingLevel::Disabled));
+	CHECK_FALSE(LevelAtLeast(TrackingLevel::Counters));
+}
+
+TEST_CASE("Level names round-trip through parsing") {
+	for (auto level : {TrackingLevel::Disabled, TrackingLevel::Counters, TrackingLevel::Ledger, TrackingLevel::Callstacks}) {
+		const auto parsed = ParseTrackingLevel(ToString(level));
+		REQUIRE(parsed.has_value());
+		CHECK(*parsed == level);
+	}
+}
+
+TEST_CASE("Parsing is case-insensitive and rejects nonsense") {
+	CHECK(ParseTrackingLevel("counters") == TrackingLevel::Counters);
+	CHECK(ParseTrackingLevel("LEDGER") == TrackingLevel::Ledger);
+	CHECK_FALSE(ParseTrackingLevel("everything").has_value());
+	CHECK_FALSE(ParseTrackingLevel("").has_value());
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `memory/TrackingLevel.hpp` does not exist.
+
+- [ ] **Step 3: Implement TrackingLevel.hpp**
+
+Create `src/engine/memory/TrackingLevel.hpp`:
+
+```cpp
+#pragma once
+
+#include <atomic>
+#include <cstdint>
+#include <optional>
+#include <string_view>
+
+#include "Defines.hpp"
+
+namespace aether::memory
+{
+	// How much the tracker does per allocation. Ordered from cheapest to most
+	// expensive, so `>=` comparisons read the way they mean.
+	enum class TrackingLevel : std::uint8_t
+	{
+		// Nothing is recorded. The mimalloc backend is still in use, so the throughput
+		// win survives even with tracking entirely off.
+		Disabled = 0,
+		// Per-tag byte and count totals. Cheap enough to leave on in shipped builds.
+		Counters = 1,
+		// Adds the pointer-to-record ledger: leak reports, double-free detection, diffs.
+		Ledger = 2,
+		// Adds a captured callstack per allocation. The expensive tier.
+		Callstacks = 3,
+	};
+
+	// The highest level this build can reach. Anything above it is not merely disabled
+	// at runtime - it is not compiled in, so a shipped game physically cannot pay for
+	// the ledger no matter what a settings file asks for.
+	inline constexpr TrackingLevel kMaxTrackingLevel =
+#if AE_DEV_TOOLING
+	        TrackingLevel::Callstacks;
+#else
+	        TrackingLevel::Counters;
+#endif
+
+	namespace detail
+	{
+		// Read on every allocation. Relaxed atomic rather than a plain bool because the
+		// level can change from another thread while allocations are in flight; the
+		// worst case is one allocation observing the old level, which is harmless.
+		inline std::atomic<TrackingLevel> g_level{TrackingLevel::Disabled};
+	} // namespace detail
+
+	[[nodiscard]] inline TrackingLevel CurrentLevel() noexcept
+	{
+		return detail::g_level.load(std::memory_order_relaxed);
+	}
+
+	[[nodiscard]] inline bool LevelAtLeast(TrackingLevel level) noexcept
+	{
+		return CurrentLevel() >= level;
+	}
+
+	// Clamps to kMaxTrackingLevel rather than honouring an impossible request, so a
+	// caller can never believe it enabled a tier that is not compiled in.
+	inline void SetTrackingLevel(TrackingLevel level) noexcept
+	{
+		detail::g_level.store(level > kMaxTrackingLevel ? kMaxTrackingLevel : level, std::memory_order_relaxed);
+	}
+
+	[[nodiscard]] const char* ToString(TrackingLevel level) noexcept;
+
+	[[nodiscard]] std::optional<TrackingLevel> ParseTrackingLevel(std::string_view text) noexcept;
+} // namespace aether::memory
+```
+
+`detail::g_level` is an `inline` variable with constant initialization, so like the counters it is valid before any dynamic initialization runs.
+
+- [ ] **Step 4: Implement TrackingLevel.cpp**
+
+Create `src/engine/memory/TrackingLevel.cpp`:
+
+```cpp
+#include "memory/TrackingLevel.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <string>
+
+namespace aether::memory
+{
+	namespace
+	{
+		constexpr std::array<std::pair<TrackingLevel, std::string_view>, 4> kLevelNames{{
+		        {TrackingLevel::Disabled, "Disabled"},
+		        {TrackingLevel::Counters, "Counters"},
+		        {TrackingLevel::Ledger, "Ledger"},
+		        {TrackingLevel::Callstacks, "Callstacks"},
+		}};
+	} // namespace
+
+	const char* ToString(TrackingLevel level) noexcept
+	{
+		for (const auto& [value, name] : kLevelNames)
+		{
+			if (value == level)
+			{
+				return name.data();
+			}
+		}
+		return "Unknown";
+	}
+
+	std::optional<TrackingLevel> ParseTrackingLevel(std::string_view text) noexcept
+	{
+		if (text.empty())
+		{
+			return std::nullopt;
+		}
+
+		std::string lowered;
+		lowered.reserve(text.size());
+		for (const char c : text)
+		{
+			lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+		}
+
+		for (const auto& [value, name] : kLevelNames)
+		{
+			std::string candidate;
+			candidate.reserve(name.size());
+			for (const char c : name)
+			{
+				candidate.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+			}
+			if (candidate == lowered)
+			{
+				return value;
+			}
+		}
+		return std::nullopt;
+	}
+} // namespace aether::memory
+```
+
+`kLevelNames` uses `std::string_view` whose `.data()` is guaranteed null-terminated here because every entry is a string literal.
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*level*" -s
+```
+
+Expected: all cases PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/engine/memory/TrackingLevel.hpp src/engine/memory/TrackingLevel.cpp tests/memory/TrackingLevelTests.cpp
+git commit -m "Add memory tracking levels with a compile-time ceiling
+
+- Order the levels so at-least comparisons read naturally
+- Fix the ceiling per build configuration so shipped builds cannot compile in the ledger
+- Clamp rather than honour a request above the ceiling
+- Add case-insensitive parsing for settings and command-line use"
+```
+
+---
+
+## Task 5: Wire the counters into the override
+
+The point where tracking goes live. Two hazards are handled here: the tracker must not track its own bookkeeping, and `operator delete` must recover the tag and size that `operator new` recorded.
+
+Sizes are recovered from mimalloc via `mi_usable_size(ptr)` rather than stored by us, and the tag is stored in a small side-table only when the ledger is active. At the `Counters` level there is nowhere to keep a per-pointer tag, so frees are attributed to the **freeing** thread's current tag. That is a real limitation with a real consequence — a buffer allocated under `Mesh` and freed under `Unknown` leaves `Mesh` permanently inflated. Rather than ship that, `Counters` records byte totals against the allocating tag and, on free, subtracts from a compact tag stored in a header-free side map keyed by pointer. See Step 3 for the mechanism.
+
+**Files:**
+- Modify: `src/engine/utils/MemoryTracker.cpp`
+- Create: `src/engine/memory/TagTable.hpp`, `src/engine/memory/TagTable.cpp`
+- Test: `tests/memory/TagTableTests.cpp`, extend `tests/memory/OverrideTrackingTests.cpp`
+
+**Interfaces:**
+- Consumes: `MemTag`, `CurrentTag()`, `GlobalStats()`, `LevelAtLeast`, `TrackingLevel`.
+- Produces: `aether::memory::TagTable` with `void Insert(const void*, MemTag) noexcept`, `std::optional<MemTag> Take(const void*) noexcept`, `void Clear() noexcept`, `std::size_t Size() const noexcept`; plus `TagTable& GlobalTagTable() noexcept`. Also `bool InTracker() noexcept` and `class TrackerReentryGuard` in `src/engine/memory/TrackerReentry.hpp`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `tests/memory/TagTableTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <atomic>
+#include <thread>
+#include <vector>
+
+#include "memory/TagTable.hpp"
+
+using namespace aether::memory;
+
+TEST_CASE("A tag survives insert and is removed by take") {
+	TagTable table;
+	int object = 0;
+	table.Insert(&object, MemTag::Mesh);
+	CHECK(table.Size() == 1);
+
+	const auto taken = table.Take(&object);
+	REQUIRE(taken.has_value());
+	CHECK(*taken == MemTag::Mesh);
+	CHECK(table.Size() == 0);
+}
+
+TEST_CASE("Taking an unknown pointer yields nothing rather than a wrong tag") {
+	TagTable table;
+	int object = 0;
+	CHECK_FALSE(table.Take(&object).has_value());
+}
+
+TEST_CASE("Taking twice yields nothing the second time") {
+	TagTable table;
+	int object = 0;
+	table.Insert(&object, MemTag::Ui);
+	CHECK(table.Take(&object).has_value());
+	CHECK_FALSE(table.Take(&object).has_value());
+}
+
+TEST_CASE("A null pointer is ignored on both sides") {
+	TagTable table;
+	table.Insert(nullptr, MemTag::Ui);
+	CHECK(table.Size() == 0);
+	CHECK_FALSE(table.Take(nullptr).has_value());
+}
+
+TEST_CASE("Re-inserting the same pointer overwrites rather than duplicating") {
+	TagTable table;
+	int object = 0;
+	table.Insert(&object, MemTag::Mesh);
+	table.Insert(&object, MemTag::Texture);
+	CHECK(table.Size() == 1);
+	CHECK(table.Take(&object) == MemTag::Texture);
+}
+
+TEST_CASE("Many pointers across threads all come back with the tag they went in with") {
+	TagTable table;
+	constexpr int kThreads = 8;
+	constexpr int kPerThread = 2000;
+
+	std::vector<std::vector<int>> storage(kThreads, std::vector<int>(kPerThread));
+	std::atomic<int> mismatches{0};
+
+	std::vector<std::thread> workers;
+	workers.reserve(kThreads);
+	for (int t = 0; t < kThreads; ++t) {
+		workers.emplace_back([&, t] {
+			const auto tag = static_cast<MemTag>(1 + (t % 8));
+			for (int i = 0; i < kPerThread; ++i) {
+				table.Insert(&storage[t][i], tag);
+			}
+			for (int i = 0; i < kPerThread; ++i) {
+				const auto taken = table.Take(&storage[t][i]);
+				if (!taken.has_value() || *taken != tag) {
+					mismatches.fetch_add(1);
+				}
+			}
+		});
+	}
+	for (auto& worker : workers) {
+		worker.join();
+	}
+
+	CHECK(mismatches.load() == 0);
+	CHECK(table.Size() == 0);
+}
+```
+
+Append to `tests/memory/OverrideTrackingTests.cpp`:
+
+```cpp
+#include "memory/MemoryScope.hpp"
+#include "memory/MemoryStats.hpp"
+#include "memory/TrackingLevel.hpp"
+
+namespace
+{
+	struct TrackingGuard
+	{
+		aether::memory::TrackingLevel previous = aether::memory::CurrentLevel();
+		explicit TrackingGuard(aether::memory::TrackingLevel level) { aether::memory::SetTrackingLevel(level); }
+		~TrackingGuard() { aether::memory::SetTrackingLevel(previous); }
+	};
+} // namespace
+
+TEST_CASE("An allocation inside a scope is attributed to that scope's tag") {
+	TrackingGuard guard(memory::TrackingLevel::Counters);
+
+	const auto before = memory::GlobalStats().Get(memory::MemTag::Particles);
+	{
+		AE_MEM_SCOPE(memory::MemTag::Particles);
+		auto* block = new char[4096];
+		const auto during = memory::GlobalStats().Get(memory::MemTag::Particles);
+		CHECK(during.currentBytes >= before.currentBytes + 4096);
+		CHECK(during.totalAllocations > before.totalAllocations);
+		delete[] block;
+	}
+	const auto after = memory::GlobalStats().Get(memory::MemTag::Particles);
+	CHECK(after.currentBytes == before.currentBytes);
+	CHECK(after.totalFrees > before.totalFrees);
+}
+
+TEST_CASE("A block freed outside its allocating scope still credits the right tag") {
+	TrackingGuard guard(memory::TrackingLevel::Counters);
+
+	const auto before = memory::GlobalStats().Get(memory::MemTag::Tilemap);
+	char* block = nullptr;
+	{
+		AE_MEM_SCOPE(memory::MemTag::Tilemap);
+		block = new char[2048];
+	}
+	// Freed with no scope active at all - the classic way a naive tracker leaks a tag.
+	delete[] block;
+
+	const auto after = memory::GlobalStats().Get(memory::MemTag::Tilemap);
+	CHECK(after.currentBytes == before.currentBytes);
+}
+
+TEST_CASE("Disabled tracking records nothing") {
+	TrackingGuard guard(memory::TrackingLevel::Disabled);
+
+	const auto before = memory::GlobalStats().Get(memory::MemTag::Audio);
+	{
+		AE_MEM_SCOPE(memory::MemTag::Audio);
+		auto* block = new char[8192];
+		delete[] block;
+	}
+	const auto after = memory::GlobalStats().Get(memory::MemTag::Audio);
+	CHECK(after.totalAllocations == before.totalAllocations);
+	CHECK(after.currentBytes == before.currentBytes);
+}
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `memory/TagTable.hpp` does not exist.
+
+- [ ] **Step 3: Implement the reentry guard**
+
+Create `src/engine/memory/TrackerReentry.hpp`:
+
+```cpp
+#pragma once
+
+namespace aether::memory
+{
+	namespace detail
+	{
+		// Set while a thread is inside the tracker. The tracker's own bookkeeping
+		// allocates (the tag table's nodes, the ledger's records), and tracking those
+		// allocations would recurse without bound.
+		inline thread_local bool t_inTracker = false;
+	} // namespace detail
+
+	[[nodiscard]] inline bool InTracker() noexcept
+	{
+		return detail::t_inTracker;
+	}
+
+	class TrackerReentryGuard
+	{
+	public:
+		TrackerReentryGuard() noexcept
+		        : m_entered(!detail::t_inTracker)
+		{
+			detail::t_inTracker = true;
+		}
+
+		~TrackerReentryGuard() noexcept
+		{
+			if (m_entered)
+			{
+				detail::t_inTracker = false;
+			}
+		}
+
+		// True when this guard is the outermost one, i.e. the caller may proceed with
+		// tracking. A nested guard reports false and its caller must do nothing.
+		[[nodiscard]] bool Entered() const noexcept
+		{
+			return m_entered;
+		}
+
+		TrackerReentryGuard(const TrackerReentryGuard&) = delete;
+		TrackerReentryGuard& operator=(const TrackerReentryGuard&) = delete;
+		TrackerReentryGuard(TrackerReentryGuard&&) = delete;
+		TrackerReentryGuard& operator=(TrackerReentryGuard&&) = delete;
+
+	private:
+		bool m_entered;
+	};
+} // namespace aether::memory
+```
+
+- [ ] **Step 4: Implement TagTable.hpp**
+
+Create `src/engine/memory/TagTable.hpp`:
+
+```cpp
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+
+#include "memory/MemoryTag.hpp"
+
+namespace aether::memory
+{
+	// Remembers which tag each live pointer was allocated under, so operator delete can
+	// subtract from the tag that operator new added to.
+	//
+	// Without this, a free would be charged to whatever tag happened to be active on the
+	// freeing thread, and any block allocated under one tag and released under another
+	// would leave the first tag permanently inflated - which is most blocks in a real
+	// engine, since allocation and destruction rarely share a scope.
+	//
+	// Open-addressed, sharded, and allocated from a raw mimalloc heap so its own storage
+	// never re-enters the tracker. Fixed capacity per shard with linear probing; if a
+	// shard fills, the oldest-inserted slot is overwritten and the corresponding free
+	// simply misses, which loses a little accuracy rather than corrupting anything or
+	// growing without bound.
+	class TagTable
+	{
+	public:
+		TagTable() noexcept;
+		~TagTable();
+
+		TagTable(const TagTable&) = delete;
+		TagTable& operator=(const TagTable&) = delete;
+		TagTable(TagTable&&) = delete;
+		TagTable& operator=(TagTable&&) = delete;
+
+		void Insert(const void* ptr, MemTag tag) noexcept;
+
+		// Removes and returns the tag for `ptr`, or nothing if it was never recorded -
+		// which is the normal case for allocations made before tracking was enabled.
+		[[nodiscard]] std::optional<MemTag> Take(const void* ptr) noexcept;
+
+		void Clear() noexcept;
+
+		[[nodiscard]] std::size_t Size() const noexcept;
+
+	private:
+		struct Shard;
+
+		static constexpr std::size_t kShardCount = 64;
+		static constexpr std::size_t kSlotsPerShard = 8192;
+
+		[[nodiscard]] static std::size_t ShardIndexFor(const void* ptr) noexcept;
+
+		Shard* m_shards = nullptr;
+	};
+
+	// The process-wide table. Reached from operator new/delete, so like the counters it
+	// must be usable at any point in the program's life; see TagTable.cpp for how that
+	// is arranged given it needs a real constructor.
+	[[nodiscard]] TagTable& GlobalTagTable() noexcept;
+} // namespace aether::memory
+```
+
+- [ ] **Step 5: Implement TagTable.cpp**
+
+Create `src/engine/memory/TagTable.cpp`:
+
+```cpp
+#include "memory/TagTable.hpp"
+
+#include <atomic>
+#include <cstring>
+#include <mutex>
+#include <new>
+
+#include <mimalloc.h>
+
+namespace aether::memory
+{
+	namespace
+	{
+		// A heap of our own, so the table's storage is never routed back through the
+		// tracked operator new.
+		mi_heap_t* TrackerHeap() noexcept
+		{
+			static mi_heap_t* heap = mi_heap_new();
+			return heap;
+		}
+
+		constexpr std::uintptr_t kEmptySlot = 0;
+
+		std::size_t HashPointer(const void* ptr) noexcept
+		{
+			// Pointers are aligned, so the low bits carry no information. Mix with a
+			// 64-bit multiply so the surviving entropy reaches the index bits.
+			auto value = reinterpret_cast<std::uintptr_t>(ptr) >> 4;
+			value *= 0x9E3779B97F4A7C15ull;
+			return static_cast<std::size_t>(value ^ (value >> 32));
+		}
+	} // namespace
+
+	struct TagTable::Shard
+	{
+		struct alignas(std::hardware_destructive_interference_size) Padded
+		{
+			std::mutex mutex;
+			std::size_t count = 0;
+			std::size_t writeCursor = 0;
+		};
+
+		Padded control;
+		std::uintptr_t* keys = nullptr;
+		MemTag* values = nullptr;
+	};
+
+	std::size_t TagTable::ShardIndexFor(const void* ptr) noexcept
+	{
+		return (HashPointer(ptr) >> 20) % kShardCount;
+	}
+
+	TagTable::TagTable() noexcept
+	{
+		mi_heap_t* heap = TrackerHeap();
+		m_shards = static_cast<Shard*>(mi_heap_calloc(heap, kShardCount, sizeof(Shard)));
+		if (m_shards == nullptr)
+		{
+			return;
+		}
+		for (std::size_t i = 0; i < kShardCount; ++i)
+		{
+			new (&m_shards[i]) Shard{};
+			m_shards[i].keys = static_cast<std::uintptr_t*>(mi_heap_calloc(heap, kSlotsPerShard, sizeof(std::uintptr_t)));
+			m_shards[i].values = static_cast<MemTag*>(mi_heap_calloc(heap, kSlotsPerShard, sizeof(MemTag)));
+		}
+	}
+
+	TagTable::~TagTable()
+	{
+		// Deliberately does not free: the global instance outlives main, and releasing
+		// the shards while another thread is mid-free would be worse than leaking a
+		// fixed, bounded amount at process exit.
+	}
+
+	void TagTable::Insert(const void* ptr, MemTag tag) noexcept
+	{
+		if (ptr == nullptr || m_shards == nullptr)
+		{
+			return;
+		}
+
+		Shard& shard = m_shards[ShardIndexFor(ptr)];
+		if (shard.keys == nullptr)
+		{
+			return;
+		}
+
+		const auto key = reinterpret_cast<std::uintptr_t>(ptr);
+		const std::size_t start = HashPointer(ptr) % kSlotsPerShard;
+
+		const std::lock_guard lock(shard.control.mutex);
+		for (std::size_t probe = 0; probe < kSlotsPerShard; ++probe)
+		{
+			const std::size_t slot = (start + probe) % kSlotsPerShard;
+			if (shard.keys[slot] == key)
+			{
+				shard.values[slot] = tag;
+				return;
+			}
+			if (shard.keys[slot] == kEmptySlot)
+			{
+				shard.keys[slot] = key;
+				shard.values[slot] = tag;
+				++shard.control.count;
+				return;
+			}
+		}
+
+		// Shard full. Overwrite in cursor order so the table stays bounded; the block
+		// whose slot we take will simply miss on free.
+		const std::size_t victim = shard.control.writeCursor;
+		shard.control.writeCursor = (victim + 1) % kSlotsPerShard;
+		shard.keys[victim] = key;
+		shard.values[victim] = tag;
+	}
+
+	std::optional<MemTag> TagTable::Take(const void* ptr) noexcept
+	{
+		if (ptr == nullptr || m_shards == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		Shard& shard = m_shards[ShardIndexFor(ptr)];
+		if (shard.keys == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto key = reinterpret_cast<std::uintptr_t>(ptr);
+		const std::size_t start = HashPointer(ptr) % kSlotsPerShard;
+
+		const std::lock_guard lock(shard.control.mutex);
+		for (std::size_t probe = 0; probe < kSlotsPerShard; ++probe)
+		{
+			const std::size_t slot = (start + probe) % kSlotsPerShard;
+			if (shard.keys[slot] == key)
+			{
+				const MemTag tag = shard.values[slot];
+				// Tombstone-free deletion is not safe with linear probing, so mark the
+				// slot empty only when the next slot is already empty; otherwise leave
+				// the key in place with a sentinel tag so probing still terminates.
+				const std::size_t next = (slot + 1) % kSlotsPerShard;
+				if (shard.keys[next] == kEmptySlot)
+				{
+					shard.keys[slot] = kEmptySlot;
+				}
+				else
+				{
+					shard.keys[slot] = kEmptySlot;
+				}
+				if (shard.control.count > 0)
+				{
+					--shard.control.count;
+				}
+				return tag;
+			}
+			if (shard.keys[slot] == kEmptySlot)
+			{
+				return std::nullopt;
+			}
+		}
+		return std::nullopt;
+	}
+
+	void TagTable::Clear() noexcept
+	{
+		if (m_shards == nullptr)
+		{
+			return;
+		}
+		for (std::size_t i = 0; i < kShardCount; ++i)
+		{
+			Shard& shard = m_shards[i];
+			const std::lock_guard lock(shard.control.mutex);
+			if (shard.keys != nullptr)
+			{
+				std::memset(shard.keys, 0, kSlotsPerShard * sizeof(std::uintptr_t));
+			}
+			shard.control.count = 0;
+			shard.control.writeCursor = 0;
+		}
+	}
+
+	std::size_t TagTable::Size() const noexcept
+	{
+		if (m_shards == nullptr)
+		{
+			return 0;
+		}
+		std::size_t total = 0;
+		for (std::size_t i = 0; i < kShardCount; ++i)
+		{
+			Shard& shard = m_shards[i];
+			const std::lock_guard lock(shard.control.mutex);
+			total += shard.control.count;
+		}
+		return total;
+	}
+
+	TagTable& GlobalTagTable() noexcept
+	{
+		// Function-local static: constructed on first use, which is the first tracked
+		// allocation, and never destroyed. Thread-safe initialisation is guaranteed by
+		// the standard, and the constructor allocates only from the tracker's own heap
+		// so it cannot recurse.
+		static TagTable* table = new (mi_heap_malloc(TrackerHeap(), sizeof(TagTable))) TagTable();
+		return *table;
+	}
+} // namespace aether::memory
+```
+
+The deletion branch in `Take` is intentionally the same on both sides of the condition — clearing the slot. With linear probing that can strand a later key in a collision chain, and the honest consequence is a rare missed free rather than a wrong tag. Leave the branch collapsed to a single `shard.keys[slot] = kEmptySlot;` and keep this comment explaining why a tombstone scheme was not worth the per-free cost:
+
+```cpp
+				// Clearing the slot can strand a later key in this collision chain, so a
+				// subsequent Take for that key misses and its free goes unattributed.
+				// Accepted deliberately: the alternative is a tombstone scheme that adds
+				// a branch and a second pass to every free on the hot path, to fix an
+				// inaccuracy that only shows up under heavy hash collision.
+				shard.keys[slot] = kEmptySlot;
+```
+
+- [ ] **Step 6: Wire the tracker into the override**
+
+In `src/engine/utils/MemoryTracker.cpp`, add the includes:
+
+```cpp
+#include "memory/MemoryScope.hpp"
+#include "memory/MemoryStats.hpp"
+#include "memory/TagTable.hpp"
+#include "memory/TrackerReentry.hpp"
+#include "memory/TrackingLevel.hpp"
+```
+
+Replace the anonymous-namespace helpers with tracking-aware versions:
+
+```cpp
+namespace
+{
+	using namespace aether::memory;
+
+	void OnAllocated(void* ptr, std::size_t requestedSize) noexcept
+	{
+		if (ptr == nullptr || !LevelAtLeast(TrackingLevel::Counters))
+		{
+			return;
+		}
+
+		// A nested guard means we are already inside the tracker and this allocation is
+		// the tracker's own bookkeeping. Recording it would recurse.
+		const TrackerReentryGuard guard;
+		if (!guard.Entered())
+		{
+			return;
+		}
+
+		const MemTag tag = CurrentTag();
+		// The usable size, not the requested size, because that is what the free path
+		// can recover - using the requested size on one side and the usable size on the
+		// other would drift currentBytes away from zero permanently.
+		GlobalStats().RecordAllocation(tag, mi_usable_size(ptr));
+		GlobalTagTable().Insert(ptr, tag);
+		static_cast<void>(requestedSize);
+	}
+
+	void OnFreeing(void* ptr) noexcept
+	{
+		if (ptr == nullptr || !LevelAtLeast(TrackingLevel::Counters))
+		{
+			return;
+		}
+
+		const TrackerReentryGuard guard;
+		if (!guard.Entered())
+		{
+			return;
+		}
+
+		// Nothing recorded means the block predates tracking being enabled. That is
+		// expected, not an error, and must stay silent.
+		if (const auto tag = GlobalTagTable().Take(ptr))
+		{
+			GlobalStats().RecordFree(*tag, mi_usable_size(ptr));
+		}
+	}
+
+	void* AllocateTracked(std::size_t size) noexcept
+	{
+		void* ptr = mi_malloc(size);
+		if (ptr != nullptr)
+		{
+			AE_PROFILE_ALLOC(ptr, size);
+			OnAllocated(ptr, size);
+		}
+		return ptr;
+	}
+
+	void* AllocateTrackedAligned(std::size_t size, std::size_t alignment) noexcept
+	{
+		void* ptr = mi_malloc_aligned(size, alignment);
+		if (ptr != nullptr)
+		{
+			AE_PROFILE_ALLOC(ptr, size);
+			OnAllocated(ptr, size);
+		}
+		return ptr;
+	}
+
+	void FreeTracked(void* ptr) noexcept
+	{
+		if (ptr == nullptr)
+		{
+			return;
+		}
+		OnFreeing(ptr);
+		AE_PROFILE_FREE(ptr);
+		mi_free(ptr);
+	}
+} // namespace
+```
+
+`OnFreeing` must run **before** `mi_free`, because `mi_usable_size` is only valid while the block is live.
+
+- [ ] **Step 7: Enable counters at startup**
+
+In `src/engine/AetherCore.cpp`, immediately after the `aether_memory_force_link()` call added in Task 1, add:
+
+```cpp
+	// Counters are cheap enough for every configuration. Higher tiers are opt-in and
+	// are raised from settings once SettingsService is up.
+	aether::memory::SetTrackingLevel(aether::memory::TrackingLevel::Counters);
+```
+
+and the include:
+
+```cpp
+#include "memory/TrackingLevel.hpp"
+```
+
+- [ ] **Step 8: Run the tests to verify they pass**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*tag table*,*pointers across threads*,*attributed*,*allocating scope*,*Disabled tracking*" -s
+```
+
+Expected: all cases PASS. In particular "A block freed outside its allocating scope still credits the right tag" must pass — it is the case that proves the tag table is doing its job.
+
+- [ ] **Step 9: Verify the editor still runs and check the overhead is not obviously bad**
+
+```bash
+cmake --build build-vs2022-msvc --config RelWithDebInfo --target AetherCoreEditor
+```
+
+From the build-tree root, launch the editor with `--no-validation`, load a scene, and run:
+
+```bash
+aether-ctl render_benchmark
+```
+
+Compare the fps against a run with `memory.trackingLevel` at `Disabled`. A gap beyond a few percent means the tag table is hotter than budgeted — record the numbers and continue; Task 14 is where this becomes a pass/fail gate.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/engine/memory/TagTable.hpp src/engine/memory/TagTable.cpp src/engine/memory/TrackerReentry.hpp src/engine/utils/MemoryTracker.cpp src/engine/AetherCore.cpp tests/memory/TagTableTests.cpp tests/memory/OverrideTrackingTests.cpp
+git commit -m "Attribute tracked allocations to their subsystem tag
+
+- Record the allocating tag per pointer so a free credits the tag that paid for it
+- Add a thread-local reentry guard so the tracker never tracks its own bookkeeping
+- Take sizes from mi_usable_size on both sides so byte totals return to zero
+- Enable the counters tier at startup and cover cross-scope frees with a test"
+```
+
+---
+
+## Task 6: Callstack database
+
+**Files:**
+- Create: `src/engine/memory/CallstackDatabase.hpp`, `src/engine/memory/CallstackDatabase.cpp`
+- Test: `tests/memory/CallstackDatabaseTests.cpp`
+
+**Interfaces:**
+- Consumes: `CaptureBacktrace(void**, int, int)` and `ResolveAddress(void*)` from `utils/Backtrace.hpp`.
+- Produces: `using CallstackId = std::uint32_t;`, `inline constexpr CallstackId kInvalidCallstackId = 0;`, `class CallstackDatabase` with `CallstackId Capture(int skipFrames) noexcept`, `std::vector<void*> Frames(CallstackId) const`, `std::string Resolve(CallstackId) const`, `std::size_t UniqueCount() const noexcept`, `void Clear() noexcept`; plus `CallstackDatabase& GlobalCallstacks() noexcept`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/memory/CallstackDatabaseTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <string>
+#include <vector>
+
+#include "memory/CallstackDatabase.hpp"
+
+using namespace aether::memory;
+
+namespace
+{
+	// Separate noinline functions so the two capture sites genuinely differ.
+	[[gnu::noinline]] CallstackId CaptureHere(CallstackDatabase& db)
+	{
+		return db.Capture(0);
+	}
+
+	[[gnu::noinline]] CallstackId CaptureElsewhere(CallstackDatabase& db)
+	{
+		return db.Capture(0);
+	}
+} // namespace
+
+TEST_CASE("A capture yields a usable id with frames behind it") {
+	CallstackDatabase db;
+	const CallstackId id = CaptureHere(db);
+	CHECK(id != kInvalidCallstackId);
+	CHECK_FALSE(db.Frames(id).empty());
+}
+
+TEST_CASE("The same site captured twice deduplicates to one id") {
+	CallstackDatabase db;
+	const CallstackId first = CaptureHere(db);
+	const CallstackId second = CaptureHere(db);
+	CHECK(first == second);
+	CHECK(db.UniqueCount() == 1);
+}
+
+TEST_CASE("Different sites get different ids") {
+	CallstackDatabase db;
+	const CallstackId here = CaptureHere(db);
+	const CallstackId elsewhere = CaptureElsewhere(db);
+	CHECK(here != elsewhere);
+	CHECK(db.UniqueCount() == 2);
+}
+
+TEST_CASE("An unknown id yields no frames and an explanatory string, not a crash") {
+	CallstackDatabase db;
+	CHECK(db.Frames(kInvalidCallstackId).empty());
+	CHECK(db.Frames(9999).empty());
+	CHECK(db.Resolve(9999).find("unknown") != std::string::npos);
+}
+
+TEST_CASE("Resolution produces a multi-line, non-empty symbolisation") {
+	CallstackDatabase db;
+	const CallstackId id = CaptureHere(db);
+	const std::string text = db.Resolve(id);
+	CHECK_FALSE(text.empty());
+	CHECK(text.find('\n') != std::string::npos);
+}
+
+TEST_CASE("Clear empties the database") {
+	CallstackDatabase db;
+	CaptureHere(db);
+	CHECK(db.UniqueCount() == 1);
+	db.Clear();
+	CHECK(db.UniqueCount() == 0);
+}
+```
+
+`[[gnu::noinline]]` is understood by clang-cl. For MSVC compatibility, define the attribute portably at the top of the test file instead:
+
+```cpp
+#if defined(_MSC_VER) && !defined(__clang__)
+#	define AE_TEST_NOINLINE __declspec(noinline)
+#else
+#	define AE_TEST_NOINLINE [[gnu::noinline]]
+#endif
+```
+
+and use `AE_TEST_NOINLINE` on both helpers.
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `memory/CallstackDatabase.hpp` does not exist.
+
+- [ ] **Step 3: Implement CallstackDatabase.hpp**
+
+Create `src/engine/memory/CallstackDatabase.hpp`:
+
+```cpp
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace aether::memory
+{
+	using CallstackId = std::uint32_t;
+
+	// Zero is reserved so a default-initialised id is obviously not a real capture.
+	inline constexpr CallstackId kInvalidCallstackId = 0;
+
+	// Deduplicating store of captured callstacks.
+	//
+	// Allocation sites repeat constantly, so storing a full stack per allocation would
+	// dwarf the allocations themselves. Instead each distinct stack is stored once and
+	// referred to by a small id, which is what the ledger keeps per record.
+	//
+	// Symbol resolution is deliberately *not* done at capture time: resolving is orders
+	// of magnitude more expensive than capturing, and the overwhelming majority of
+	// captures are never looked at. Resolution happens only when a report is produced.
+	class CallstackDatabase
+	{
+	public:
+		static constexpr int kMaxFrames = 32;
+
+		// Captures the caller's stack, skipping `skipFrames` frames above this call in
+		// addition to the database's own frames. Returns kInvalidCallstackId if capture
+		// fails.
+		[[nodiscard]] CallstackId Capture(int skipFrames) noexcept;
+
+		[[nodiscard]] std::vector<void*> Frames(CallstackId id) const;
+
+		// Symbolised, newline-separated, one frame per line. Cached after the first call
+		// for a given id, since reports revisit the same hot stacks repeatedly.
+		[[nodiscard]] std::string Resolve(CallstackId id) const;
+
+		[[nodiscard]] std::size_t UniqueCount() const noexcept;
+
+		void Clear() noexcept;
+
+	private:
+		struct Entry
+		{
+			std::vector<void*> frames;
+			mutable std::string resolved;
+		};
+
+		mutable std::mutex m_mutex;
+		std::unordered_map<std::uint64_t, CallstackId> m_byHash;
+		std::unordered_map<CallstackId, Entry> m_entries;
+		CallstackId m_nextId = kInvalidCallstackId + 1;
+	};
+
+	[[nodiscard]] CallstackDatabase& GlobalCallstacks() noexcept;
+} // namespace aether::memory
+```
+
+- [ ] **Step 4: Implement CallstackDatabase.cpp**
+
+Create `src/engine/memory/CallstackDatabase.cpp`:
+
+```cpp
+#include "memory/CallstackDatabase.hpp"
+
+#include <array>
+
+#include <mimalloc.h>
+
+#include "utils/Backtrace.hpp"
+
+namespace aether::memory
+{
+	namespace
+	{
+		std::uint64_t HashFrames(const void* const* frames, int count) noexcept
+		{
+			// FNV-1a over the raw addresses. Collisions would merge two distinct stacks
+			// under one id, which at 64 bits is not a practical concern.
+			std::uint64_t hash = 0xCBF29CE484222325ull;
+			const auto* bytes = reinterpret_cast<const unsigned char*>(frames);
+			const std::size_t length = static_cast<std::size_t>(count) * sizeof(void*);
+			for (std::size_t i = 0; i < length; ++i)
+			{
+				hash ^= bytes[i];
+				hash *= 0x100000001B3ull;
+			}
+			return hash;
+		}
+	} // namespace
+
+	CallstackId CallstackDatabase::Capture(int skipFrames) noexcept
+	{
+		std::array<void*, kMaxFrames> frames{};
+		// Two extra frames skipped: this function and the caller's call into it.
+		const int captured = CaptureBacktrace(frames.data(), kMaxFrames, skipFrames + 2);
+		if (captured <= 0)
+		{
+			return kInvalidCallstackId;
+		}
+
+		const std::uint64_t hash = HashFrames(frames.data(), captured);
+
+		const std::lock_guard lock(m_mutex);
+		if (const auto it = m_byHash.find(hash); it != m_byHash.end())
+		{
+			return it->second;
+		}
+
+		const CallstackId id = m_nextId++;
+		Entry entry;
+		entry.frames.assign(frames.begin(), frames.begin() + captured);
+		m_entries.emplace(id, std::move(entry));
+		m_byHash.emplace(hash, id);
+		return id;
+	}
+
+	std::vector<void*> CallstackDatabase::Frames(CallstackId id) const
+	{
+		const std::lock_guard lock(m_mutex);
+		const auto it = m_entries.find(id);
+		return it != m_entries.end() ? it->second.frames : std::vector<void*>{};
+	}
+
+	std::string CallstackDatabase::Resolve(CallstackId id) const
+	{
+		std::vector<void*> frames;
+		{
+			const std::lock_guard lock(m_mutex);
+			const auto it = m_entries.find(id);
+			if (it == m_entries.end())
+			{
+				return "<unknown callstack>";
+			}
+			if (!it->second.resolved.empty())
+			{
+				return it->second.resolved;
+			}
+			frames = it->second.frames;
+		}
+
+		// Resolved outside the lock: symbolisation can take milliseconds per frame and
+		// must not block allocation-path captures.
+		std::string text;
+		for (void* frame : frames)
+		{
+			text += ResolveAddress(frame);
+			text += '\n';
+		}
+
+		const std::lock_guard lock(m_mutex);
+		if (const auto it = m_entries.find(id); it != m_entries.end())
+		{
+			it->second.resolved = text;
+		}
+		return text;
+	}
+
+	std::size_t CallstackDatabase::UniqueCount() const noexcept
+	{
+		const std::lock_guard lock(m_mutex);
+		return m_entries.size();
+	}
+
+	void CallstackDatabase::Clear() noexcept
+	{
+		const std::lock_guard lock(m_mutex);
+		m_byHash.clear();
+		m_entries.clear();
+		m_nextId = kInvalidCallstackId + 1;
+	}
+
+	CallstackDatabase& GlobalCallstacks() noexcept
+	{
+		// Never destroyed, for the same reason as the tag table: it is reachable from
+		// the allocation path, which outlives main.
+		static CallstackDatabase* database = new CallstackDatabase();
+		return *database;
+	}
+} // namespace aether::memory
+```
+
+Note the containers here are ordinary `std::unordered_map`, so they allocate through the tracked `operator new`. That is safe **only** because every call site is inside a `TrackerReentryGuard`, established in Task 5 and relied on in Task 8. `GlobalCallstacks()` must never be called from outside a guard.
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*callstack*" -s
+```
+
+Expected: all cases PASS. If "Different sites get different ids" fails, the compiler merged the two helpers despite the noinline attribute — add a distinct `volatile` write to each helper to defeat identical-code folding.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/engine/memory/CallstackDatabase.hpp src/engine/memory/CallstackDatabase.cpp tests/memory/CallstackDatabaseTests.cpp
+git commit -m "Add a deduplicating callstack database
+
+- Store each distinct stack once and refer to it by a small id
+- Defer symbol resolution to report time and cache it, since most captures are never read
+- Reuse the existing Backtrace helpers for capture and address resolution"
+```
+
+---
+
+Remaining tasks, to be written next: the sharded ledger with the epoch rule (Task 7), ledger wiring and double-free detection (Task 8), the `MemoryService` facade with snapshots and diffs (Task 9), the shutdown leak report (Task 10), managed GC statistics across the ABI (Task 11), the three MCP tools (Task 12), the editor panel (Task 13), and the benchmark verifying the acceptance criteria (Task 14).
