@@ -23,6 +23,7 @@
 #include "io/PakBackend.hpp"
 #include "io/PlatformPaths.hpp"
 #include "io/Process.hpp"
+#include "project/ProjectStartupScene.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -337,7 +338,7 @@ namespace aether::editor
 		}
 
 		// nothing about the project being published. The editor never ships this
-		bool BakePublishedEngineSettings(const std::filesystem::path& publishedSettingsPath, const std::filesystem::path& projectFile, std::string& error)
+		bool BakePublishedEngineSettings(const std::filesystem::path& publishedSettingsPath, const app::EditorProjectContext& project, std::string& error)
 		{
 			if (auto dirResult = io::file_util::CreateDirectories(publishedSettingsPath.parent_path()); !dirResult)
 			{
@@ -346,7 +347,18 @@ namespace aether::editor
 			}
 
 			const std::string shippedPath = publishedSettingsPath.string();
-			aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, projectFile);
+			aether::LoadedEngineSettings loaded = aether::EngineSettingsIO::LoadLayered(shippedPath, project.projectFile);
+
+			// Never bake a scene the project does not actually have. `base` is the layer the
+			// runtime gets (shipped defaults + the project file, deliberately without this
+			// machine's user overrides), so this is the exact value that would ship. An unset
+			// or dangling name here is an empty world in a build with no editor to fall back
+			// on, so it fails the publish instead of being written out and warned about later.
+			if (!app::ValidateProjectStartupScene(project.scenesDir, loaded.base.app.startupScene, error))
+			{
+				error += " Set it in the Project panel (or the star in the Scenes list), which writes it to " + DisplayPath(project.projectFile) + ", then publish again.";
+				return false;
+			}
 
 			// A shipped game runtime has no editor and no Play button, so it must boot
 			loaded.base.app.autoplay = true;
@@ -357,7 +369,7 @@ namespace aether::editor
 				error = "Could not bake project startup settings into " + DisplayPath(publishedSettingsPath) + ": " + writeResult.error().message;
 				return false;
 			}
-			AE_INFO(LogCategory::App, "Baked published settings ({}) from project '{}'", DisplayPath(publishedSettingsPath), DisplayPath(projectFile));
+			AE_INFO(LogCategory::App, "Baked published settings ({}) from project '{}' (startup scene '{}')", DisplayPath(publishedSettingsPath), DisplayPath(project.projectFile), loaded.base.app.startupScene);
 			return true;
 		}
 
@@ -925,7 +937,7 @@ namespace aether::editor
 
 		// which never opens a project the way the editor does - still resolves
 		ReportProgress(progress, 0.63f, "Baking game settings");
-		if (!BakePublishedEngineSettings(publishDir / "data" / "config" / "EngineSettings.toml", project.projectFile, error))
+		if (!BakePublishedEngineSettings(publishDir / "data" / "config" / "EngineSettings.toml", project, error))
 		{
 			return {.succeeded = false, .message = "Could not bake published settings: " + error, .outputPath = publishDir};
 		}

@@ -77,6 +77,24 @@ namespace aether
 		f("cursor.pixelArt", settings.cursor.pixelArt);
 	}
 
+	// Keys that belong to the project, never to the machine. The startup scene is the one
+	// that matters: it decides what a published game boots, and the bake reads the project
+	// layer only. Letting it sit in the per-user file gives an editor that boots the right
+	// scene on the machine that set it and an empty world everywhere else - including in
+	// every published build. So the user layer neither writes these nor reads them back.
+	[[nodiscard]] inline bool IsProjectOnlySettingKey(std::string_view key) noexcept
+	{
+		return key == "app.startupScene";
+	}
+
+	// Which keys a document is allowed to contribute. UserOverridable drops the
+	// project-only keys above, so a stale machine-local file can never mask the project.
+	enum class SettingsScope
+	{
+		All,
+		UserOverridable,
+	};
+
 	struct LoadedEngineSettings
 	{
 		EngineSettings values;
@@ -94,7 +112,7 @@ namespace aether
 		// settings file (io::PlatformPaths::GetUserConfigDir()/userFile). Never
 		static void SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile = "UserSettings.toml");
 
-		static void Apply(std::string_view tomlText, EngineSettings& settings);
+		static void Apply(std::string_view tomlText, EngineSettings& settings, SettingsScope scope = SettingsScope::All);
 
 		// Clamps fields to valid ranges after a merge (e.g. window dimensions must
 		static void Sanitize(EngineSettings& settings);

@@ -32,6 +32,7 @@
 #include "editor/EditorProjectActions.hpp"
 #include "io/FileUtil.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "project/ProjectStartupScene.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "layers/AppLayer.hpp"
 #include "rendering/Renderer.hpp"
@@ -305,65 +306,25 @@ namespace aether::editor
 
 	void ProjectPanel::LoadProjectSettings(const app::EditorProjectContext& project)
 	{
-		m_startupScene.clear();
 		m_dirtySettings = false;
-
-		auto text = io::file_util::ReadText(SettingsPath(project));
-		if (!text)
-		{
-			return;
-		}
-
-		TomlConfig config;
-		try
-		{
-			config.Load(*text);
-		}
-		catch (...)
-		{
-			m_status = "Could not parse project settings.";
-			return;
-		}
-		m_startupScene = config.GetString("app.startupscene");
+		m_startupScene = app::ReadProjectStartupScene(SettingsPath(project));
 	}
 
 	void ProjectPanel::SaveProjectSettings(const app::EditorProjectContext& project)
 	{
-		TomlConfig config;
+		// A startup scene the project does not have boots an empty world, and a published
+		// game has no editor to notice - so refuse it here rather than let it reach a build.
+		if (std::string error; !m_startupScene.empty() && !app::ValidateProjectStartupScene(project.scenesDir, m_startupScene, error))
 		{
-			const std::filesystem::path settingsPath = SettingsPath(project);
-			auto text = io::file_util::ReadText(settingsPath);
-			if (!text && std::filesystem::exists(settingsPath))
-			{
-				// The file is there but we could not read it. Carrying on would write a
-				// config built from nothing but the keys set below, silently destroying
-				// the project's paths, graphics and project sections. Refuse instead.
-				m_status = "Could not read project settings; refusing to overwrite " + settingsPath.generic_string();
-				AE_ERROR(LogCategory::App, "{}", m_status);
-				return;
-			}
-			if (text)
-			{
-				try
-				{
-					config.Load(*text);
-				}
-				catch (...)
-				{
-					m_status = "Could not parse project settings.";
-					return;
-				}
-			}
+			m_status = error;
+			AE_ERROR(LogCategory::App, "{}", m_status);
+			return;
 		}
 
-		config.Set("app.startupScene", m_startupScene);
-
-		std::ostringstream buffer;
-		config.Save(buffer, "AetherCore project file.");
-
-		if (auto result = io::file_util::WriteText(SettingsPath(project), buffer.str()); !result)
+		if (std::string error; !app::WriteProjectStartupScene(SettingsPath(project), m_startupScene, error))
 		{
-			m_status = "Could not write project settings.";
+			m_status = error;
+			AE_ERROR(LogCategory::App, "{}", m_status);
 			return;
 		}
 		m_dirtySettings = false;

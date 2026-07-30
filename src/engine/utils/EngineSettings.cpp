@@ -76,14 +76,18 @@ namespace aether
 		}
 	} // namespace
 
-	void EngineSettingsIO::Apply(std::string_view tomlText, EngineSettings& settings)
+	void EngineSettingsIO::Apply(std::string_view tomlText, EngineSettings& settings, const SettingsScope scope)
 	{
 		text::ParseToml(tomlText,
-		        [&settings](const text::IniEntry& entry)
+		        [&settings, scope](const text::IniEntry& entry)
 		        {
 			        ForEachSettingField(settings,
-			                [&entry](std::string_view key, auto& field)
+			                [&entry, scope](std::string_view key, auto& field)
 			                {
+				                if (scope == SettingsScope::UserOverridable && IsProjectOnlySettingKey(key))
+				                {
+					                return;
+				                }
 				                if (text::ToLowerAscii(std::string(key)) == entry.fullKey)
 				                {
 					                AssignField(field, entry.value);
@@ -134,6 +138,7 @@ namespace aether
 			std::string_view section;
 			std::string_view name;
 			std::string value;
+			bool projectOnly;
 		};
 
 		std::vector<FieldLine> current;
@@ -142,7 +147,7 @@ namespace aether
 		        [&](std::string_view key, const auto& field)
 		        {
 			        const auto [section, name] = SplitSettingKey(key);
-			        current.push_back({section, name, FormatField(field)});
+			        current.push_back({section, name, FormatField(field), IsProjectOnlySettingKey(key)});
 		        });
 		ForEachSettingField(base, [&](std::string_view, const auto& field) { baseline.push_back(FormatField(field)); });
 
@@ -153,7 +158,9 @@ namespace aether
 		std::string currentSection;
 		for (std::size_t i = 0; i < current.size(); ++i)
 		{
-			if (current[i].value == baseline[i])
+			// Project-only keys are never a user preference, so they never enter the
+			// per-user file even when they differ from the base.
+			if (current[i].projectOnly || current[i].value == baseline[i])
 			{
 				continue;
 			}
@@ -240,7 +247,7 @@ namespace aether
 			const auto userPath = userDir / userFile;
 			if (auto text = io::file_util::ReadText(userPath))
 			{
-				Apply(*text, result.values);
+				Apply(*text, result.values, SettingsScope::UserOverridable);
 				AE_INFO(LogCategory::Engine, "User settings overrides loaded from {}", userPath.string());
 			}
 		}

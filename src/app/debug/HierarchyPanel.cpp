@@ -32,6 +32,7 @@
 #include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/UndoStack.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "project/ProjectStartupScene.hpp"
 #include "editor/ModelBake.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
@@ -1372,9 +1373,24 @@ namespace aether::editor
 				ImGui::PopStyleColor();
 				if (setStartup)
 				{
-					settingsService->Values().app.startupScene = entry.name;
-					settingsService->ApplyField("app.startupScene");
-					settingsService->Save();
+					// The startup scene belongs to the project, not to this machine - see
+					// app::WriteProjectStartupScene. Writing it to the per-user settings file
+					// would boot the right scene here and an empty world on a fresh clone or
+					// in any published build.
+					const auto* project = context.TryGet<app::EditorProjectContext>();
+					std::string error;
+					if (project == nullptr || !app::WriteProjectStartupScene(project->projectFile, entry.name, error))
+					{
+						AE_ERROR(LogCategory::App, "Could not set startup scene '{}': {}", entry.name, error.empty() ? "no project is open" : error);
+					}
+					else
+					{
+						// Mirror it into the live cascade's project layer so the star moves now
+						// instead of on the next project load.
+						settingsService->Values().app.startupScene = entry.name;
+						settingsService->Base().app.startupScene = entry.name;
+						settingsService->ApplyField("app.startupScene");
+					}
 				}
 				ImGui::SetItemTooltip("Make this the startup scene");
 			}

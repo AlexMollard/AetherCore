@@ -54,6 +54,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/project/ProjectPaths.cpp"
+    # The one store for the startup scene, shared by the editor panels and the publish
+    # bake - the rule that a build never boots a scene the project does not have.
+    "${CMAKE_SOURCE_DIR}/src/app/project/ProjectStartupScene.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
     # Editor undo/redo command logic under test. The typed component commands

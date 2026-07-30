@@ -103,8 +103,10 @@ TEST_CASE("SerializeOverrides round-trips: applying the delta onto base reproduc
     CHECK(rebuilt.window.width == current.window.width);
     CHECK(rebuilt.window.height == current.window.height);
     CHECK(rebuilt.app.targetFps == doctest::Approx(current.app.targetFps));
-    CHECK(rebuilt.app.startupScene == current.app.startupScene);
     CHECK(rebuilt.app.autoplay == current.app.autoplay);
+    // Every user-overridable field round-trips. The startup scene deliberately does not:
+    // it is project data and never enters the per-user layer.
+    CHECK(rebuilt.app.startupScene == base.app.startupScene);
 }
 
 TEST_CASE("SerializeOverrides with no changes writes no key lines") {
@@ -154,6 +156,40 @@ TEST_CASE("uiScale defaults to 1 and Sanitize clamps to [0.5, 3.0]") {
     s.graphics.uiScale = 0.1f;
     EngineSettingsIO::Sanitize(s);
     CHECK(s.graphics.uiScale == doctest::Approx(0.5f));
+}
+
+TEST_CASE("SerializeOverrides never writes the startup scene into the per-user file") {
+    EngineSettings base;
+    EngineSettings current = base;
+    current.app.startupScene = "Title";
+    current.graphics.fxaa = true;
+
+    const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
+
+    // The startup scene is project data: it belongs in ProjectSettings.toml so it reaches
+    // published builds and every machine. A per-user copy would boot the right scene on
+    // the machine that set it and an empty world everywhere else.
+    CHECK(toml.find("startupScene") == std::string::npos);
+    CHECK(toml.find("Title") == std::string::npos);
+    CHECK(toml.find("fxaa = true") != std::string::npos);
+}
+
+TEST_CASE("A user-layer document cannot set the startup scene") {
+    EngineSettings s;
+    s.app.startupScene = "Title";
+
+    EngineSettingsIO::Apply("[app]\nstartupScene = \"Stale\"\n[graphics]\nfxaa = true\n", s, SettingsScope::UserOverridable);
+
+    // A stale machine-local override must never mask what the project says.
+    CHECK(s.app.startupScene == "Title");
+    CHECK(s.graphics.fxaa == true);
+}
+
+TEST_CASE("Project and shipped layers still set the startup scene") {
+    EngineSettings s;
+    EngineSettingsIO::Apply("[app]\nstartupscene = \"Arena\"\n", s);
+
+    CHECK(s.app.startupScene == "Arena");
 }
 
 TEST_CASE("LoadLayered applies the project file as a layer and includes it in base") {
