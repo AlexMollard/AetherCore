@@ -2337,4 +2337,1376 @@ git commit -m "Add a deduplicating callstack database
 
 ---
 
-Remaining tasks, to be written next: the sharded ledger with the epoch rule (Task 7), ledger wiring and double-free detection (Task 8), the `MemoryService` facade with snapshots and diffs (Task 9), the shutdown leak report (Task 10), managed GC statistics across the ABI (Task 11), the three MCP tools (Task 12), the editor panel (Task 13), and the benchmark verifying the acceptance criteria (Task 14).
+## Task 7: The allocation ledger
+
+**Files:**
+- Create: `src/engine/memory/AllocationLedger.hpp`, `src/engine/memory/AllocationLedger.cpp`
+- Test: `tests/memory/AllocationLedgerTests.cpp`
+
+**Interfaces:**
+- Consumes: `MemTag`, `CallstackId`.
+- Produces: `struct AllocationRecord { const void* pointer; std::size_t size; MemTag tag; CallstackId callstack; std::uint64_t serial; std::uint64_t frameIndex; std::uint32_t epoch; }`; `enum class FreeOutcome { Recorded, Untracked, DoubleFree }`; `class AllocationLedger` with `void Record(const void*, std::size_t, MemTag, CallstackId, std::uint64_t frameIndex) noexcept`, `FreeOutcome Release(const void*) noexcept`, `std::optional<AllocationRecord> Find(const void*) const`, `std::vector<AllocationRecord> LiveAllocations() const`, `std::size_t LiveCount() const noexcept`, `std::uint32_t BeginEpoch() noexcept`, `std::uint32_t CurrentEpoch() const noexcept`, `void Clear() noexcept`; plus `AllocationLedger& GlobalLedger() noexcept`.
+
+The epoch rule is the subtle part. Turning the ledger on mid-run means live pointers were never recorded, so their eventual frees would look like invalid frees. `Release` distinguishes three outcomes: a pointer it knows (`Recorded`), a pointer it has never seen (`Untracked` — silent, expected), and a pointer it recorded and already released (`DoubleFree` — a real bug worth reporting). A pointer allocated before the current epoch can only ever be `Untracked`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/memory/AllocationLedgerTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <algorithm>
+#include <atomic>
+#include <thread>
+#include <vector>
+
+#include "memory/AllocationLedger.hpp"
+
+using namespace aether::memory;
+
+TEST_CASE("A recorded allocation is findable with everything it was recorded with") {
+	AllocationLedger ledger;
+	int object = 0;
+	ledger.Record(&object, 128, MemTag::Mesh, 42, 7);
+
+	const auto found = ledger.Find(&object);
+	REQUIRE(found.has_value());
+	CHECK(found->pointer == &object);
+	CHECK(found->size == 128);
+	CHECK(found->tag == MemTag::Mesh);
+	CHECK(found->callstack == 42);
+	CHECK(found->frameIndex == 7);
+	CHECK(ledger.LiveCount() == 1);
+}
+
+TEST_CASE("Releasing a recorded allocation reports Recorded and removes it") {
+	AllocationLedger ledger;
+	int object = 0;
+	ledger.Record(&object, 64, MemTag::Ui, 1, 0);
+
+	CHECK(ledger.Release(&object) == FreeOutcome::Recorded);
+	CHECK(ledger.LiveCount() == 0);
+	CHECK_FALSE(ledger.Find(&object).has_value());
+}
+
+TEST_CASE("Releasing a pointer the ledger never saw is Untracked, not an error") {
+	AllocationLedger ledger;
+	int object = 0;
+	CHECK(ledger.Release(&object) == FreeOutcome::Untracked);
+}
+
+TEST_CASE("Releasing the same recorded allocation twice reports a double free") {
+	AllocationLedger ledger;
+	int object = 0;
+	ledger.Record(&object, 64, MemTag::Ui, 1, 0);
+
+	CHECK(ledger.Release(&object) == FreeOutcome::Recorded);
+	CHECK(ledger.Release(&object) == FreeOutcome::DoubleFree);
+}
+
+TEST_CASE("A new epoch turns prior double-free knowledge into silence") {
+	// This is the mid-run-enable case: after an epoch bump the ledger must not accuse
+	// pointers it merely used to know about.
+	AllocationLedger ledger;
+	int object = 0;
+	ledger.Record(&object, 64, MemTag::Ui, 1, 0);
+	CHECK(ledger.Release(&object) == FreeOutcome::Recorded);
+
+	ledger.BeginEpoch();
+	CHECK(ledger.Release(&object) == FreeOutcome::Untracked);
+}
+
+TEST_CASE("Epoch numbers advance and are reported") {
+	AllocationLedger ledger;
+	const std::uint32_t first = ledger.CurrentEpoch();
+	const std::uint32_t second = ledger.BeginEpoch();
+	CHECK(second > first);
+	CHECK(ledger.CurrentEpoch() == second);
+}
+
+TEST_CASE("Records carry the epoch that was current when they were made") {
+	AllocationLedger ledger;
+	int early = 0;
+	ledger.Record(&early, 8, MemTag::Io, 0, 0);
+	const std::uint32_t firstEpoch = ledger.CurrentEpoch();
+
+	const std::uint32_t secondEpoch = ledger.BeginEpoch();
+	int late = 0;
+	ledger.Record(&late, 8, MemTag::Io, 0, 0);
+
+	CHECK(ledger.Find(&late)->epoch == secondEpoch);
+	// The early record is gone: BeginEpoch drops what it can no longer reason about.
+	CHECK_FALSE(ledger.Find(&early).has_value());
+	CHECK(firstEpoch != secondEpoch);
+}
+
+TEST_CASE("Serial numbers are unique and increasing") {
+	AllocationLedger ledger;
+	std::vector<int> storage(4);
+	for (std::size_t i = 0; i < storage.size(); ++i) {
+		ledger.Record(&storage[i], 4, MemTag::Temp, 0, 0);
+	}
+
+	auto live = ledger.LiveAllocations();
+	REQUIRE(live.size() == storage.size());
+	std::sort(live.begin(), live.end(), [](const AllocationRecord& a, const AllocationRecord& b) { return a.serial < b.serial; });
+	for (std::size_t i = 1; i < live.size(); ++i) {
+		CHECK(live[i].serial > live[i - 1].serial);
+	}
+}
+
+TEST_CASE("LiveAllocations returns exactly what has not been released") {
+	AllocationLedger ledger;
+	std::vector<int> storage(3);
+	ledger.Record(&storage[0], 1, MemTag::Mesh, 0, 0);
+	ledger.Record(&storage[1], 2, MemTag::Mesh, 0, 0);
+	ledger.Record(&storage[2], 4, MemTag::Ui, 0, 0);
+	ledger.Release(&storage[1]);
+
+	const auto live = ledger.LiveAllocations();
+	CHECK(live.size() == 2);
+	std::size_t totalBytes = 0;
+	for (const auto& record : live) {
+		totalBytes += record.size;
+	}
+	CHECK(totalBytes == 5);
+}
+
+TEST_CASE("Concurrent record and release leaves nothing live and never miscounts") {
+	AllocationLedger ledger;
+	constexpr int kThreads = 8;
+	constexpr int kPerThread = 4000;
+
+	std::vector<std::vector<int>> storage(kThreads, std::vector<int>(kPerThread));
+	std::atomic<int> unexpected{0};
+
+	std::vector<std::thread> workers;
+	workers.reserve(kThreads);
+	for (int t = 0; t < kThreads; ++t) {
+		workers.emplace_back([&, t] {
+			for (int i = 0; i < kPerThread; ++i) {
+				ledger.Record(&storage[t][i], 16, MemTag::Temp, 0, 0);
+			}
+			for (int i = 0; i < kPerThread; ++i) {
+				if (ledger.Release(&storage[t][i]) != FreeOutcome::Recorded) {
+					unexpected.fetch_add(1);
+				}
+			}
+		});
+	}
+	for (auto& worker : workers) {
+		worker.join();
+	}
+
+	CHECK(unexpected.load() == 0);
+	CHECK(ledger.LiveCount() == 0);
+}
+
+TEST_CASE("Sustained churn does not grow the ledger without bound") {
+	AllocationLedger ledger;
+	std::vector<int> storage(256);
+	for (int round = 0; round < 2000; ++round) {
+		for (std::size_t i = 0; i < storage.size(); ++i) {
+			ledger.Record(&storage[i], 32, MemTag::Temp, 0, static_cast<std::uint64_t>(round));
+		}
+		for (std::size_t i = 0; i < storage.size(); ++i) {
+			ledger.Release(&storage[i]);
+		}
+	}
+	CHECK(ledger.LiveCount() == 0);
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `memory/AllocationLedger.hpp` does not exist.
+
+- [ ] **Step 3: Implement AllocationLedger.hpp**
+
+Create `src/engine/memory/AllocationLedger.hpp`:
+
+```cpp
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <mutex>
+#include <optional>
+#include <unordered_map>
+#include <vector>
+
+#include "memory/CallstackDatabase.hpp"
+#include "memory/MemoryTag.hpp"
+
+namespace aether::memory
+{
+	struct AllocationRecord
+	{
+		const void* pointer = nullptr;
+		std::size_t size = 0;
+		MemTag tag = MemTag::Unknown;
+		CallstackId callstack = kInvalidCallstackId;
+		std::uint64_t serial = 0;
+		std::uint64_t frameIndex = 0;
+		std::uint32_t epoch = 0;
+	};
+
+	enum class FreeOutcome : std::uint8_t
+	{
+		// The ledger knew this pointer and has now removed it.
+		Recorded,
+		// The ledger has never seen this pointer. Normal and silent: it was allocated
+		// before tracking was enabled, or before the current epoch began.
+		Untracked,
+		// The ledger recorded this pointer and already saw it released. A real bug.
+		DoubleFree,
+	};
+
+	// Per-allocation records for the Ledger and Callstacks tiers.
+	//
+	// Sharded by pointer so concurrent allocation on many threads does not serialise on
+	// one lock. Recently released pointers are remembered in a small ring per shard so a
+	// second free can be distinguished from a free of something never tracked - the
+	// difference between reporting a genuine bug and crying wolf at every allocation that
+	// predates tracking.
+	class AllocationLedger
+	{
+	public:
+		AllocationLedger() = default;
+
+		AllocationLedger(const AllocationLedger&) = delete;
+		AllocationLedger& operator=(const AllocationLedger&) = delete;
+		AllocationLedger(AllocationLedger&&) = delete;
+		AllocationLedger& operator=(AllocationLedger&&) = delete;
+
+		void Record(const void* pointer, std::size_t size, MemTag tag, CallstackId callstack, std::uint64_t frameIndex) noexcept;
+
+		[[nodiscard]] FreeOutcome Release(const void* pointer) noexcept;
+
+		[[nodiscard]] std::optional<AllocationRecord> Find(const void* pointer) const;
+
+		[[nodiscard]] std::vector<AllocationRecord> LiveAllocations() const;
+
+		[[nodiscard]] std::size_t LiveCount() const noexcept;
+
+		// Starts a new epoch and forgets everything from previous ones. Call when the
+		// tracking level rises to Ledger mid-run: from here on, an unknown pointer means
+		// "allocated before we were watching", which must never be reported as a bug.
+		// Returns the new epoch number.
+		std::uint32_t BeginEpoch() noexcept;
+
+		[[nodiscard]] std::uint32_t CurrentEpoch() const noexcept;
+
+		void Clear() noexcept;
+
+	private:
+		static constexpr std::size_t kShardCount = 64;
+		static constexpr std::size_t kRecentlyFreedPerShard = 256;
+
+		struct Shard
+		{
+			mutable std::mutex mutex;
+			std::unordered_map<const void*, AllocationRecord> live;
+			std::array<const void*, kRecentlyFreedPerShard> recentlyFreed{};
+			std::size_t recentlyFreedCursor = 0;
+		};
+
+		[[nodiscard]] static std::size_t ShardIndexFor(const void* pointer) noexcept;
+		[[nodiscard]] Shard& ShardFor(const void* pointer) noexcept;
+		[[nodiscard]] const Shard& ShardFor(const void* pointer) const noexcept;
+
+		mutable std::array<Shard, kShardCount> m_shards;
+		std::atomic<std::uint64_t> m_nextSerial{1};
+		std::atomic<std::uint32_t> m_epoch{1};
+	};
+
+	[[nodiscard]] AllocationLedger& GlobalLedger() noexcept;
+} // namespace aether::memory
+```
+
+Add `#include <array>` and `#include <atomic>` to the include list.
+
+- [ ] **Step 4: Implement AllocationLedger.cpp**
+
+Create `src/engine/memory/AllocationLedger.cpp`:
+
+```cpp
+#include "memory/AllocationLedger.hpp"
+
+#include <algorithm>
+
+namespace aether::memory
+{
+	namespace
+	{
+		std::size_t HashPointer(const void* pointer) noexcept
+		{
+			auto value = reinterpret_cast<std::uintptr_t>(pointer) >> 4;
+			value *= 0x9E3779B97F4A7C15ull;
+			return static_cast<std::size_t>(value ^ (value >> 32));
+		}
+	} // namespace
+
+	std::size_t AllocationLedger::ShardIndexFor(const void* pointer) noexcept
+	{
+		return (HashPointer(pointer) >> 16) % kShardCount;
+	}
+
+	AllocationLedger::Shard& AllocationLedger::ShardFor(const void* pointer) noexcept
+	{
+		return m_shards[ShardIndexFor(pointer)];
+	}
+
+	const AllocationLedger::Shard& AllocationLedger::ShardFor(const void* pointer) const noexcept
+	{
+		return m_shards[ShardIndexFor(pointer)];
+	}
+
+	void AllocationLedger::Record(const void* pointer, std::size_t size, MemTag tag, CallstackId callstack, std::uint64_t frameIndex) noexcept
+	{
+		if (pointer == nullptr)
+		{
+			return;
+		}
+
+		AllocationRecord record;
+		record.pointer = pointer;
+		record.size = size;
+		record.tag = tag;
+		record.callstack = callstack;
+		record.serial = m_nextSerial.fetch_add(1, std::memory_order_relaxed);
+		record.frameIndex = frameIndex;
+		record.epoch = m_epoch.load(std::memory_order_relaxed);
+
+		Shard& shard = ShardFor(pointer);
+		const std::lock_guard lock(shard.mutex);
+		shard.live[pointer] = record;
+	}
+
+	FreeOutcome AllocationLedger::Release(const void* pointer) noexcept
+	{
+		if (pointer == nullptr)
+		{
+			return FreeOutcome::Untracked;
+		}
+
+		const std::uint32_t epoch = m_epoch.load(std::memory_order_relaxed);
+
+		Shard& shard = ShardFor(pointer);
+		const std::lock_guard lock(shard.mutex);
+
+		if (const auto it = shard.live.find(pointer); it != shard.live.end())
+		{
+			// A record from a previous epoch is not something we can reason about.
+			const bool currentEpoch = it->second.epoch == epoch;
+			shard.live.erase(it);
+			if (currentEpoch)
+			{
+				shard.recentlyFreed[shard.recentlyFreedCursor] = pointer;
+				shard.recentlyFreedCursor = (shard.recentlyFreedCursor + 1) % kRecentlyFreedPerShard;
+				return FreeOutcome::Recorded;
+			}
+			return FreeOutcome::Untracked;
+		}
+
+		const bool seenBefore = std::find(shard.recentlyFreed.begin(), shard.recentlyFreed.end(), pointer) != shard.recentlyFreed.end();
+		return seenBefore ? FreeOutcome::DoubleFree : FreeOutcome::Untracked;
+	}
+
+	std::optional<AllocationRecord> AllocationLedger::Find(const void* pointer) const
+	{
+		if (pointer == nullptr)
+		{
+			return std::nullopt;
+		}
+		const Shard& shard = ShardFor(pointer);
+		const std::lock_guard lock(shard.mutex);
+		const auto it = shard.live.find(pointer);
+		return it != shard.live.end() ? std::optional<AllocationRecord>{it->second} : std::nullopt;
+	}
+
+	std::vector<AllocationRecord> AllocationLedger::LiveAllocations() const
+	{
+		std::vector<AllocationRecord> all;
+		for (const Shard& shard : m_shards)
+		{
+			const std::lock_guard lock(shard.mutex);
+			all.reserve(all.size() + shard.live.size());
+			for (const auto& [pointer, record] : shard.live)
+			{
+				all.push_back(record);
+			}
+		}
+		return all;
+	}
+
+	std::size_t AllocationLedger::LiveCount() const noexcept
+	{
+		std::size_t total = 0;
+		for (const Shard& shard : m_shards)
+		{
+			const std::lock_guard lock(shard.mutex);
+			total += shard.live.size();
+		}
+		return total;
+	}
+
+	std::uint32_t AllocationLedger::BeginEpoch() noexcept
+	{
+		const std::uint32_t epoch = m_epoch.fetch_add(1, std::memory_order_relaxed) + 1;
+		for (Shard& shard : m_shards)
+		{
+			const std::lock_guard lock(shard.mutex);
+			shard.live.clear();
+			shard.recentlyFreed.fill(nullptr);
+			shard.recentlyFreedCursor = 0;
+		}
+		return epoch;
+	}
+
+	std::uint32_t AllocationLedger::CurrentEpoch() const noexcept
+	{
+		return m_epoch.load(std::memory_order_relaxed);
+	}
+
+	void AllocationLedger::Clear() noexcept
+	{
+		for (Shard& shard : m_shards)
+		{
+			const std::lock_guard lock(shard.mutex);
+			shard.live.clear();
+			shard.recentlyFreed.fill(nullptr);
+			shard.recentlyFreedCursor = 0;
+		}
+	}
+
+	AllocationLedger& GlobalLedger() noexcept
+	{
+		// Never destroyed: reachable from the allocation path, which outlives main.
+		static AllocationLedger* ledger = new AllocationLedger();
+		return *ledger;
+	}
+} // namespace aether::memory
+```
+
+`LiveAllocations` and `LiveCount` take shard locks one at a time rather than all at once, so a concurrent allocation can slip between shards and the result is a near-consistent rather than perfectly consistent view. That is deliberate: locking all 64 shards simultaneously to make a diagnostic read exact would stall every allocating thread in the process.
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*ledger*,*epoch*,*Serial*,*LiveAllocations*,*churn*" -s
+```
+
+Expected: all cases PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/engine/memory/AllocationLedger.hpp src/engine/memory/AllocationLedger.cpp tests/memory/AllocationLedgerTests.cpp
+git commit -m "Add the sharded allocation ledger
+
+- Shard by pointer so concurrent allocation does not serialise on one lock
+- Distinguish an untracked free from a genuine double free via a per-shard recently-freed ring
+- Add the epoch rule so enabling the ledger mid-run cannot accuse pre-existing pointers
+- Cover concurrent churn and assert the ledger stays bounded"
+```
+
+---
+
+## Task 8: Wire the ledger into the override
+
+**Files:**
+- Modify: `src/engine/utils/MemoryTracker.cpp`
+- Create: `src/engine/memory/FrameClock.hpp`
+- Test: extend `tests/memory/OverrideTrackingTests.cpp`
+
+**Interfaces:**
+- Consumes: everything from Tasks 5–7.
+- Produces: `void aether::memory::SetCurrentFrame(std::uint64_t) noexcept` and `std::uint64_t CurrentFrame() noexcept` in `FrameClock.hpp`; plus `std::uint64_t DoubleFreeCount() noexcept` in `MemoryBackend.hpp` for tests and reporting.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/memory/OverrideTrackingTests.cpp`:
+
+```cpp
+#include "memory/AllocationLedger.hpp"
+#include "memory/FrameClock.hpp"
+
+TEST_CASE("At the Ledger tier a live allocation appears in the ledger with its tag") {
+	if (memory::kMaxTrackingLevel < memory::TrackingLevel::Ledger) {
+		return; // Not compiled in for this configuration; nothing to assert.
+	}
+	TrackingGuard guard(memory::TrackingLevel::Ledger);
+	memory::GlobalLedger().BeginEpoch();
+	memory::SetCurrentFrame(1234);
+
+	char* block = nullptr;
+	{
+		AE_MEM_SCOPE(memory::MemTag::Assets);
+		block = new char[777];
+	}
+
+	const auto record = memory::GlobalLedger().Find(block);
+	REQUIRE(record.has_value());
+	CHECK(record->tag == memory::MemTag::Assets);
+	CHECK(record->size >= 777);
+	CHECK(record->frameIndex == 1234);
+
+	delete[] block;
+	CHECK_FALSE(memory::GlobalLedger().Find(block).has_value());
+}
+
+TEST_CASE("At the Callstacks tier a ledger record carries a resolvable callstack") {
+	if (memory::kMaxTrackingLevel < memory::TrackingLevel::Callstacks) {
+		return;
+	}
+	TrackingGuard guard(memory::TrackingLevel::Callstacks);
+	memory::GlobalLedger().BeginEpoch();
+
+	auto* block = new char[64];
+	const auto record = memory::GlobalLedger().Find(block);
+	REQUIRE(record.has_value());
+	CHECK(record->callstack != memory::kInvalidCallstackId);
+	CHECK_FALSE(memory::GlobalCallstacks().Resolve(record->callstack).empty());
+	delete[] block;
+}
+
+TEST_CASE("At the Ledger tier the tracker does not recurse on its own bookkeeping") {
+	if (memory::kMaxTrackingLevel < memory::TrackingLevel::Ledger) {
+		return;
+	}
+	TrackingGuard guard(memory::TrackingLevel::Ledger);
+	memory::GlobalLedger().BeginEpoch();
+
+	// The ledger's own unordered_map nodes allocate through operator new. If the reentry
+	// guard were missing this would recurse until the stack died, so simply completing
+	// is the assertion.
+	std::vector<char*> blocks;
+	blocks.reserve(2000);
+	for (int i = 0; i < 2000; ++i) {
+		blocks.push_back(new char[48]);
+	}
+	for (char* block : blocks) {
+		delete[] block;
+	}
+	CHECK(true);
+}
+
+TEST_CASE("Frees of pointers allocated before the epoch are silent") {
+	if (memory::kMaxTrackingLevel < memory::TrackingLevel::Ledger) {
+		return;
+	}
+	const std::uint64_t before = memory::DoubleFreeCount();
+
+	char* block = nullptr;
+	{
+		TrackingGuard off(memory::TrackingLevel::Disabled);
+		block = new char[256];
+	}
+	{
+		TrackingGuard on(memory::TrackingLevel::Ledger);
+		memory::GlobalLedger().BeginEpoch();
+		delete[] block; // Allocated while we were not watching.
+	}
+
+	CHECK(memory::DoubleFreeCount() == before);
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `memory/FrameClock.hpp` and `DoubleFreeCount` do not exist.
+
+- [ ] **Step 3: Implement FrameClock.hpp**
+
+Create `src/engine/memory/FrameClock.hpp`:
+
+```cpp
+#pragma once
+
+#include <atomic>
+#include <cstdint>
+
+namespace aether::memory
+{
+	namespace detail
+	{
+		// Stamped onto every ledger record so a leak report can say which frame an
+		// allocation came from. Written once per frame, read on every allocation.
+		inline std::atomic<std::uint64_t> g_currentFrame{0};
+	} // namespace detail
+
+	inline void SetCurrentFrame(std::uint64_t frameIndex) noexcept
+	{
+		detail::g_currentFrame.store(frameIndex, std::memory_order_relaxed);
+	}
+
+	[[nodiscard]] inline std::uint64_t CurrentFrame() noexcept
+	{
+		return detail::g_currentFrame.load(std::memory_order_relaxed);
+	}
+} // namespace aether::memory
+```
+
+- [ ] **Step 4: Extend the tracker hooks**
+
+In `src/engine/utils/MemoryTracker.cpp`, add the includes:
+
+```cpp
+#include "memory/AllocationLedger.hpp"
+#include "memory/CallstackDatabase.hpp"
+#include "memory/FrameClock.hpp"
+```
+
+Add a double-free counter and extend both hooks. Replace `OnAllocated` and `OnFreeing` with:
+
+```cpp
+	std::atomic<std::uint64_t> g_doubleFreeCount{0};
+
+	void OnAllocated(void* ptr, std::size_t /*requestedSize*/) noexcept
+	{
+		if (ptr == nullptr || !LevelAtLeast(TrackingLevel::Counters))
+		{
+			return;
+		}
+
+		const TrackerReentryGuard guard;
+		if (!guard.Entered())
+		{
+			return;
+		}
+
+		const MemTag tag = CurrentTag();
+		const std::size_t usable = mi_usable_size(ptr);
+		GlobalStats().RecordAllocation(tag, usable);
+		GlobalTagTable().Insert(ptr, tag);
+
+		if (!LevelAtLeast(TrackingLevel::Ledger))
+		{
+			return;
+		}
+
+		// Skip two frames so the recorded stack starts at the caller's `new`, not at the
+		// tracker's own plumbing.
+		const CallstackId callstack = LevelAtLeast(TrackingLevel::Callstacks) ? GlobalCallstacks().Capture(2) : kInvalidCallstackId;
+		GlobalLedger().Record(ptr, usable, tag, callstack, CurrentFrame());
+	}
+
+	void OnFreeing(void* ptr) noexcept
+	{
+		if (ptr == nullptr || !LevelAtLeast(TrackingLevel::Counters))
+		{
+			return;
+		}
+
+		const TrackerReentryGuard guard;
+		if (!guard.Entered())
+		{
+			return;
+		}
+
+		if (LevelAtLeast(TrackingLevel::Ledger))
+		{
+			switch (GlobalLedger().Release(ptr))
+			{
+				case FreeOutcome::DoubleFree:
+					g_doubleFreeCount.fetch_add(1, std::memory_order_relaxed);
+					break;
+				case FreeOutcome::Recorded:
+				case FreeOutcome::Untracked:
+					// Untracked is the normal case for anything allocated before the
+					// current epoch, and must stay silent.
+					break;
+			}
+		}
+
+		if (const auto tag = GlobalTagTable().Take(ptr))
+		{
+			GlobalStats().RecordFree(*tag, mi_usable_size(ptr));
+		}
+	}
+```
+
+The double-free path deliberately only increments a counter here rather than logging. Logging from inside `operator delete` risks re-entering the allocator through the formatter, and a corrupted heap is exactly when logging is least safe. Task 10 reports the count where it is safe to do so.
+
+Add to the `aether::memory` namespace block in the same file:
+
+```cpp
+	std::uint64_t DoubleFreeCount() noexcept
+	{
+		return g_doubleFreeCount.load(std::memory_order_relaxed);
+	}
+```
+
+`g_doubleFreeCount` must be declared above that definition; move it out of the anonymous namespace into `namespace aether::memory { namespace { ... } }` or declare it at file scope before both users.
+
+Declare it in `src/engine/memory/MemoryBackend.hpp`:
+
+```cpp
+	// Number of frees that hit a pointer the ledger had already seen released. Only ever
+	// nonzero at the Ledger tier or above.
+	[[nodiscard]] std::uint64_t DoubleFreeCount() noexcept;
+```
+
+with `#include <cstdint>` added.
+
+- [ ] **Step 5: Drive the frame clock**
+
+In `src/engine/AetherCore.cpp`, in the per-frame update where the frame index is already advanced, add:
+
+```cpp
+	aether::memory::SetCurrentFrame(m_frameIndex);
+```
+
+using whatever the existing frame counter member is named — search for the member the render statistics already report as `frame`. Add `#include "memory/FrameClock.hpp"`.
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*Ledger tier*,*Callstacks tier*,*recurse*,*before the epoch*" -s
+```
+
+Expected: all cases PASS. The recursion case is the important one — if it hangs or overflows the stack, the reentry guard is not covering every path.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/engine/memory/FrameClock.hpp src/engine/memory/MemoryBackend.hpp src/engine/utils/MemoryTracker.cpp src/engine/AetherCore.cpp tests/memory/OverrideTrackingTests.cpp
+git commit -m "Record per-allocation ledger entries from the tracker
+
+- Record pointer, size, tag, frame and optional callstack at the Ledger tier
+- Capture callstacks only at the Callstacks tier, skipping the tracker's own frames
+- Count double frees rather than logging from inside operator delete
+- Stamp allocations with the current frame index"
+```
+
+---
+
+## Task 9: MemoryService facade, snapshots and diffs
+
+**Files:**
+- Create: `src/engine/memory/MemorySnapshot.hpp`
+- Create: `src/engine/memory/MemoryService.hpp`, `src/engine/memory/MemoryService.cpp`
+- Modify: `src/engine/AetherCore.cpp`
+- Test: `tests/memory/MemorySnapshotTests.cpp`
+
+**Interfaces:**
+- Consumes: everything from Tasks 3–8.
+- Produces:
+  - `struct ManagedHeapStats { std::uint64_t heapBytes, committedBytes, totalAllocatedBytes, largeObjectBytes, pinnedObjectBytes; std::uint32_t gen0Collections, gen1Collections, gen2Collections; bool available; }`
+  - `struct MemorySnapshot { std::string name; std::uint64_t frameIndex; std::array<TagTotals, kMemTagCount> tags; ManagedHeapStats managed; std::size_t ledgerLiveCount; }`
+  - `struct TagDelta { MemTag tag; std::int64_t currentBytes; std::int64_t liveCount; }`
+  - `struct CallstackDelta { CallstackId callstack; std::int64_t bytes; std::int64_t count; std::string resolved; }`
+  - `struct SnapshotDiff { std::string fromName, toName; std::vector<TagDelta> tags; std::vector<CallstackDelta> callstacks; std::int64_t totalBytes; }`
+  - `class MemoryService` with `MemorySnapshot Capture(std::string name) const`, `bool Store(MemorySnapshot)`, `std::optional<MemorySnapshot> Stored(std::string_view) const`, `std::vector<std::string> StoredNames() const`, `std::optional<SnapshotDiff> Diff(std::string_view from, std::string_view to) const`, `std::string BuildLeakReport() const`, `void SetManagedStatsProvider(std::function<ManagedHeapStats()>)`, `ManagedHeapStats Managed() const`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/memory/MemorySnapshotTests.cpp`:
+
+```cpp
+#include <doctest/doctest.h>
+
+#include <algorithm>
+#include <string>
+
+#include "memory/MemoryService.hpp"
+
+using namespace aether::memory;
+
+namespace
+{
+	MemorySnapshot MakeSnapshot(std::string name, MemTag tag, std::uint64_t bytes, std::uint64_t allocations)
+	{
+		MemorySnapshot snapshot;
+		snapshot.name = std::move(name);
+		snapshot.tags[static_cast<std::size_t>(tag)].currentBytes = bytes;
+		snapshot.tags[static_cast<std::size_t>(tag)].totalAllocations = allocations;
+		return snapshot;
+	}
+} // namespace
+
+TEST_CASE("Storing and retrieving a snapshot round-trips by name") {
+	MemoryService service;
+	CHECK(service.Store(MakeSnapshot("base", MemTag::Mesh, 100, 1)));
+
+	const auto stored = service.Stored("base");
+	REQUIRE(stored.has_value());
+	CHECK(stored->name == "base");
+	CHECK(stored->tags[static_cast<std::size_t>(MemTag::Mesh)].currentBytes == 100);
+}
+
+TEST_CASE("Storing the same name twice replaces rather than duplicating") {
+	MemoryService service;
+	service.Store(MakeSnapshot("base", MemTag::Mesh, 100, 1));
+	service.Store(MakeSnapshot("base", MemTag::Mesh, 250, 2));
+
+	CHECK(service.StoredNames().size() == 1);
+	CHECK(service.Stored("base")->tags[static_cast<std::size_t>(MemTag::Mesh)].currentBytes == 250);
+}
+
+TEST_CASE("An unknown snapshot name yields nothing") {
+	MemoryService service;
+	CHECK_FALSE(service.Stored("missing").has_value());
+}
+
+TEST_CASE("A diff reports growth per tag and in total") {
+	MemoryService service;
+	service.Store(MakeSnapshot("before", MemTag::Texture, 1000, 10));
+	service.Store(MakeSnapshot("after", MemTag::Texture, 1600, 16));
+
+	const auto diff = service.Diff("before", "after");
+	REQUIRE(diff.has_value());
+	CHECK(diff->fromName == "before");
+	CHECK(diff->toName == "after");
+	CHECK(diff->totalBytes == 600);
+
+	REQUIRE(diff->tags.size() == 1);
+	CHECK(diff->tags[0].tag == MemTag::Texture);
+	CHECK(diff->tags[0].currentBytes == 600);
+	CHECK(diff->tags[0].liveCount == 6);
+}
+
+TEST_CASE("A diff reports shrinkage as a negative delta") {
+	MemoryService service;
+	service.Store(MakeSnapshot("before", MemTag::Audio, 800, 8));
+	service.Store(MakeSnapshot("after", MemTag::Audio, 300, 3));
+
+	const auto diff = service.Diff("before", "after");
+	REQUIRE(diff.has_value());
+	CHECK(diff->totalBytes == -500);
+	REQUIRE(diff->tags.size() == 1);
+	CHECK(diff->tags[0].currentBytes == -500);
+	CHECK(diff->tags[0].liveCount == -5);
+}
+
+TEST_CASE("Tags that did not change are omitted from the diff") {
+	MemoryService service;
+	MemorySnapshot before = MakeSnapshot("before", MemTag::Mesh, 100, 1);
+	before.tags[static_cast<std::size_t>(MemTag::Ui)].currentBytes = 50;
+	MemorySnapshot after = MakeSnapshot("after", MemTag::Mesh, 300, 3);
+	after.tags[static_cast<std::size_t>(MemTag::Ui)].currentBytes = 50;
+
+	service.Store(std::move(before));
+	service.Store(std::move(after));
+
+	const auto diff = service.Diff("before", "after");
+	REQUIRE(diff.has_value());
+	REQUIRE(diff->tags.size() == 1);
+	CHECK(diff->tags[0].tag == MemTag::Mesh);
+}
+
+TEST_CASE("Diff entries are ordered by descending byte growth") {
+	MemoryService service;
+	MemorySnapshot before;
+	before.name = "before";
+	MemorySnapshot after;
+	after.name = "after";
+	after.tags[static_cast<std::size_t>(MemTag::Mesh)].currentBytes = 10;
+	after.tags[static_cast<std::size_t>(MemTag::Texture)].currentBytes = 900;
+	after.tags[static_cast<std::size_t>(MemTag::Ui)].currentBytes = 40;
+
+	service.Store(std::move(before));
+	service.Store(std::move(after));
+
+	const auto diff = service.Diff("before", "after");
+	REQUIRE(diff.has_value());
+	REQUIRE(diff->tags.size() == 3);
+	CHECK(diff->tags[0].tag == MemTag::Texture);
+	CHECK(diff->tags[1].tag == MemTag::Ui);
+	CHECK(diff->tags[2].tag == MemTag::Mesh);
+}
+
+TEST_CASE("A diff against a missing snapshot yields nothing") {
+	MemoryService service;
+	service.Store(MakeSnapshot("only", MemTag::Mesh, 1, 1));
+	CHECK_FALSE(service.Diff("only", "absent").has_value());
+	CHECK_FALSE(service.Diff("absent", "only").has_value());
+}
+
+TEST_CASE("A live capture reflects the real counters and names itself") {
+	MemoryService service;
+	const auto snapshot = service.Capture("live");
+	CHECK(snapshot.name == "live");
+	// Something in this process has allocated by now.
+	std::uint64_t total = 0;
+	for (const auto& totals : snapshot.tags) {
+		total += totals.totalAllocations;
+	}
+	CHECK(total > 0);
+}
+
+TEST_CASE("Managed stats are unavailable until a provider is installed") {
+	MemoryService service;
+	CHECK_FALSE(service.Managed().available);
+
+	service.SetManagedStatsProvider([] {
+		ManagedHeapStats stats;
+		stats.available = true;
+		stats.heapBytes = 4096;
+		stats.gen0Collections = 3;
+		return stats;
+	});
+
+	const ManagedHeapStats managed = service.Managed();
+	CHECK(managed.available);
+	CHECK(managed.heapBytes == 4096);
+	CHECK(managed.gen0Collections == 3);
+}
+
+TEST_CASE("A provider that throws is reported as unavailable rather than propagating") {
+	MemoryService service;
+	service.SetManagedStatsProvider([]() -> ManagedHeapStats { throw std::runtime_error("managed side is down"); });
+	CHECK_FALSE(service.Managed().available);
+}
+
+TEST_CASE("A leak report is produced and mentions the double-free count") {
+	MemoryService service;
+	const std::string report = service.BuildLeakReport();
+	CHECK_FALSE(report.empty());
+	CHECK(report.find("double free") != std::string::npos);
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cmake --build build-ninja-clang --target EngineTests
+```
+
+Expected: compilation failure — `memory/MemoryService.hpp` does not exist.
+
+- [ ] **Step 3: Implement MemorySnapshot.hpp**
+
+Create `src/engine/memory/MemorySnapshot.hpp`:
+
+```cpp
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "memory/CallstackDatabase.hpp"
+#include "memory/MemoryStats.hpp"
+#include "memory/MemoryTag.hpp"
+
+namespace aether::memory
+{
+	// CoreCLR GC figures. The C# heap is invisible to a native allocator hook, and it is
+	// where gameplay leaks actually live, so it travels alongside the native tags rather
+	// than in a separate view.
+	struct ManagedHeapStats
+	{
+		std::uint64_t heapBytes = 0;
+		std::uint64_t committedBytes = 0;
+		std::uint64_t totalAllocatedBytes = 0;
+		std::uint64_t largeObjectBytes = 0;
+		std::uint64_t pinnedObjectBytes = 0;
+		std::uint32_t gen0Collections = 0;
+		std::uint32_t gen1Collections = 0;
+		std::uint32_t gen2Collections = 0;
+		// False when no managed runtime is attached, which is the normal state for a
+		// tools build with no project loaded.
+		bool available = false;
+	};
+
+	struct MemorySnapshot
+	{
+		std::string name;
+		std::uint64_t frameIndex = 0;
+		std::array<TagTotals, kMemTagCount> tags{};
+		ManagedHeapStats managed;
+		std::size_t ledgerLiveCount = 0;
+	};
+
+	struct TagDelta
+	{
+		MemTag tag = MemTag::Unknown;
+		std::int64_t currentBytes = 0;
+		std::int64_t liveCount = 0;
+	};
+
+	struct CallstackDelta
+	{
+		CallstackId callstack = kInvalidCallstackId;
+		std::int64_t bytes = 0;
+		std::int64_t count = 0;
+		std::string resolved;
+	};
+
+	struct SnapshotDiff
+	{
+		std::string fromName;
+		std::string toName;
+		// Only tags that actually moved, ordered by descending byte growth so the first
+		// entry is the prime suspect.
+		std::vector<TagDelta> tags;
+		std::vector<CallstackDelta> callstacks;
+		std::int64_t totalBytes = 0;
+	};
+} // namespace aether::memory
+```
+
+- [ ] **Step 4: Implement MemoryService.hpp**
+
+Create `src/engine/memory/MemoryService.hpp`:
+
+```cpp
+#pragma once
+
+#include <functional>
+#include <map>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "memory/MemorySnapshot.hpp"
+
+namespace aether::memory
+{
+	// The consumer-facing face of the memory subsystem: the editor panel, the MCP tools
+	// and the shutdown report all go through here rather than touching the counters,
+	// the ledger or the callstack database directly.
+	//
+	// Registered in ServiceContainer, unlike the tracking core it reads from - the core
+	// has to survive static initialisation and process teardown, this does not.
+	class MemoryService
+	{
+	public:
+		[[nodiscard]] MemorySnapshot Capture(std::string name) const;
+
+		// Returns false only if the name is empty.
+		bool Store(MemorySnapshot snapshot);
+
+		[[nodiscard]] std::optional<MemorySnapshot> Stored(std::string_view name) const;
+
+		[[nodiscard]] std::vector<std::string> StoredNames() const;
+
+		void Forget(std::string_view name);
+
+		// Nothing if either name is unknown.
+		[[nodiscard]] std::optional<SnapshotDiff> Diff(std::string_view from, std::string_view to) const;
+
+		// Human-readable, grouped by tag then callstack, sorted by bytes. Safe to call at
+		// shutdown.
+		[[nodiscard]] std::string BuildLeakReport() const;
+
+		// Installed by the scripting host once a managed runtime is up. Called on demand
+		// rather than every frame, so nothing is paid when nobody is looking.
+		void SetManagedStatsProvider(std::function<ManagedHeapStats()> provider);
+
+		[[nodiscard]] ManagedHeapStats Managed() const;
+
+	private:
+		mutable std::mutex m_mutex;
+		std::map<std::string, MemorySnapshot, std::less<>> m_snapshots;
+		std::function<ManagedHeapStats()> m_managedProvider;
+	};
+} // namespace aether::memory
+```
+
+- [ ] **Step 5: Implement MemoryService.cpp**
+
+Create `src/engine/memory/MemoryService.cpp`:
+
+```cpp
+#include "memory/MemoryService.hpp"
+
+#include <algorithm>
+#include <format>
+#include <unordered_map>
+
+#include "memory/AllocationLedger.hpp"
+#include "memory/FrameClock.hpp"
+#include "memory/MemoryBackend.hpp"
+#include "memory/TrackingLevel.hpp"
+
+namespace aether::memory
+{
+	MemorySnapshot MemoryService::Capture(std::string name) const
+	{
+		MemorySnapshot snapshot;
+		snapshot.name = std::move(name);
+		snapshot.frameIndex = CurrentFrame();
+		for (std::size_t i = 0; i < kMemTagCount; ++i)
+		{
+			snapshot.tags[i] = GlobalStats().Get(static_cast<MemTag>(i));
+		}
+		snapshot.managed = Managed();
+		snapshot.ledgerLiveCount = LevelAtLeast(TrackingLevel::Ledger) ? GlobalLedger().LiveCount() : 0;
+		return snapshot;
+	}
+
+	bool MemoryService::Store(MemorySnapshot snapshot)
+	{
+		if (snapshot.name.empty())
+		{
+			return false;
+		}
+		const std::lock_guard lock(m_mutex);
+		const std::string key = snapshot.name;
+		m_snapshots[key] = std::move(snapshot);
+		return true;
+	}
+
+	std::optional<MemorySnapshot> MemoryService::Stored(std::string_view name) const
+	{
+		const std::lock_guard lock(m_mutex);
+		const auto it = m_snapshots.find(name);
+		return it != m_snapshots.end() ? std::optional<MemorySnapshot>{it->second} : std::nullopt;
+	}
+
+	std::vector<std::string> MemoryService::StoredNames() const
+	{
+		const std::lock_guard lock(m_mutex);
+		std::vector<std::string> names;
+		names.reserve(m_snapshots.size());
+		for (const auto& [name, snapshot] : m_snapshots)
+		{
+			names.push_back(name);
+		}
+		return names;
+	}
+
+	void MemoryService::Forget(std::string_view name)
+	{
+		const std::lock_guard lock(m_mutex);
+		if (const auto it = m_snapshots.find(name); it != m_snapshots.end())
+		{
+			m_snapshots.erase(it);
+		}
+	}
+
+	std::optional<SnapshotDiff> MemoryService::Diff(std::string_view from, std::string_view to) const
+	{
+		const auto before = Stored(from);
+		const auto after = Stored(to);
+		if (!before.has_value() || !after.has_value())
+		{
+			return std::nullopt;
+		}
+
+		SnapshotDiff diff;
+		diff.fromName = before->name;
+		diff.toName = after->name;
+
+		for (std::size_t i = 0; i < kMemTagCount; ++i)
+		{
+			const auto bytesDelta = static_cast<std::int64_t>(after->tags[i].currentBytes) - static_cast<std::int64_t>(before->tags[i].currentBytes);
+			const auto countDelta = static_cast<std::int64_t>(after->tags[i].LiveCount()) - static_cast<std::int64_t>(before->tags[i].LiveCount());
+			if (bytesDelta == 0 && countDelta == 0)
+			{
+				continue;
+			}
+			diff.tags.push_back(TagDelta{static_cast<MemTag>(i), bytesDelta, countDelta});
+			diff.totalBytes += bytesDelta;
+		}
+
+		std::sort(diff.tags.begin(), diff.tags.end(), [](const TagDelta& a, const TagDelta& b) { return a.currentBytes > b.currentBytes; });
+
+		// Callstack-level attribution needs live records, which only exist at the Ledger
+		// tier. Below it the tag deltas are all we can honestly report.
+		if (LevelAtLeast(TrackingLevel::Ledger))
+		{
+			std::unordered_map<CallstackId, CallstackDelta> byCallstack;
+			for (const AllocationRecord& record : GlobalLedger().LiveAllocations())
+			{
+				if (record.frameIndex < before->frameIndex || record.callstack == kInvalidCallstackId)
+				{
+					continue;
+				}
+				CallstackDelta& entry = byCallstack[record.callstack];
+				entry.callstack = record.callstack;
+				entry.bytes += static_cast<std::int64_t>(record.size);
+				entry.count += 1;
+			}
+
+			diff.callstacks.reserve(byCallstack.size());
+			for (auto& [id, entry] : byCallstack)
+			{
+				diff.callstacks.push_back(std::move(entry));
+			}
+			std::sort(diff.callstacks.begin(), diff.callstacks.end(), [](const CallstackDelta& a, const CallstackDelta& b) { return a.bytes > b.bytes; });
+
+			// Symbolise only the worst offenders: resolution is expensive and nobody
+			// reads past the top of the list.
+			constexpr std::size_t kResolveLimit = 20;
+			const std::size_t resolveCount = std::min(kResolveLimit, diff.callstacks.size());
+			for (std::size_t i = 0; i < resolveCount; ++i)
+			{
+				diff.callstacks[i].resolved = GlobalCallstacks().Resolve(diff.callstacks[i].callstack);
+			}
+			if (diff.callstacks.size() > kResolveLimit)
+			{
+				diff.callstacks.resize(kResolveLimit);
+			}
+		}
+
+		return diff;
+	}
+
+	std::string MemoryService::BuildLeakReport() const
+	{
+		std::string report;
+		report += std::format("Memory report - tracking level {}\n", ToString(CurrentLevel()));
+		report += std::format("Detected double free count: {}\n\n", DoubleFreeCount());
+
+		report += "Per-tag totals (current / peak bytes, live allocations):\n";
+		for (std::size_t i = 0; i < kMemTagCount; ++i)
+		{
+			const TagTotals totals = GlobalStats().Get(static_cast<MemTag>(i));
+			if (totals.totalAllocations == 0)
+			{
+				continue;
+			}
+			report += std::format("  {:<14} {:>14} / {:>14}  {:>10}\n", ToString(static_cast<MemTag>(i)), totals.currentBytes, totals.peakBytes, totals.LiveCount());
+		}
+
+		if (!LevelAtLeast(TrackingLevel::Ledger))
+		{
+			report += "\nPer-allocation records unavailable: raise memory.trackingLevel to Ledger for leak sites.\n";
+			return report;
+		}
+
+		std::vector<AllocationRecord> live = GlobalLedger().LiveAllocations();
+		report += std::format("\nLive allocations still held: {}\n", live.size());
+		if (live.empty())
+		{
+			return report;
+		}
+
+		// Group by callstack, biggest first: one leaking site usually accounts for most
+		// of the bytes, and a flat list of thousands of records buries it.
+		std::unordered_map<CallstackId, CallstackDelta> grouped;
+		for (const AllocationRecord& record : live)
+		{
+			CallstackDelta& entry = grouped[record.callstack];
+			entry.callstack = record.callstack;
+			entry.bytes += static_cast<std::int64_t>(record.size);
+			entry.count += 1;
+		}
+
+		std::vector<CallstackDelta> sites;
+		sites.reserve(grouped.size());
+		for (auto& [id, entry] : grouped)
+		{
+			sites.push_back(std::move(entry));
+		}
+		std::sort(sites.begin(), sites.end(), [](const CallstackDelta& a, const CallstackDelta& b) { return a.bytes > b.bytes; });
+
+		constexpr std::size_t kMaxSites = 32;
+		const std::size_t shown = std::min(kMaxSites, sites.size());
+		for (std::size_t i = 0; i < shown; ++i)
+		{
+			report += std::format("\n  {} bytes in {} allocations\n", sites[i].bytes, sites[i].count);
+			if (sites[i].callstack == kInvalidCallstackId)
+			{
+				report += "    <no callstack: raise memory.trackingLevel to Callstacks>\n";
+				continue;
+			}
+			const std::string resolved = GlobalCallstacks().Resolve(sites[i].callstack);
+			std::size_t start = 0;
+			while (start < resolved.size())
+			{
+				const std::size_t end = resolved.find('\n', start);
+				const std::size_t stop = end == std::string::npos ? resolved.size() : end;
+				report += "    ";
+				report.append(resolved, start, stop - start);
+				report += '\n';
+				if (end == std::string::npos)
+				{
+					break;
+				}
+				start = end + 1;
+			}
+		}
+		if (sites.size() > shown)
+		{
+			report += std::format("\n  ... and {} further sites not shown\n", sites.size() - shown);
+		}
+		return report;
+	}
+
+	void MemoryService::SetManagedStatsProvider(std::function<ManagedHeapStats()> provider)
+	{
+		const std::lock_guard lock(m_mutex);
+		m_managedProvider = std::move(provider);
+	}
+
+	ManagedHeapStats MemoryService::Managed() const
+	{
+		std::function<ManagedHeapStats()> provider;
+		{
+			const std::lock_guard lock(m_mutex);
+			provider = m_managedProvider;
+		}
+		if (!provider)
+		{
+			return ManagedHeapStats{};
+		}
+		try
+		{
+			return provider();
+		}
+		catch (...)
+		{
+			// A managed runtime that is unloading, faulted, or mid-reload must degrade to
+			// "no data", never take the editor down with it.
+			return ManagedHeapStats{};
+		}
+	}
+} // namespace aether::memory
+```
+
+`Capture` calls `Managed()` which takes `m_mutex`, and `Diff` calls `Stored()` which also takes it — neither is called while already holding the lock, so there is no recursion. Keep it that way: `Store` and `Stored` must remain the only lock holders in their call chains.
+
+- [ ] **Step 6: Register the service**
+
+In `src/engine/AetherCore.cpp`, add the include and register during engine initialization, after the `ServiceContainer` exists:
+
+```cpp
+#include "memory/MemoryService.hpp"
+```
+
+```cpp
+	m_services.RegisterOwned(std::make_unique<aether::memory::MemoryService>());
+```
+
+Use whatever the existing `ServiceContainer` member is named — search for another `RegisterOwned` call in the same function and match it.
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+```bash
+cmake --preset ninja-clang && cmake --build build-ninja-clang --target EngineTests && ./build-ninja-clang/EngineTests --test-case="*snapshot*,*diff*,*Managed stats*,*leak report*,*provider that throws*" -s
+```
+
+Expected: all cases PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/engine/memory/MemorySnapshot.hpp src/engine/memory/MemoryService.hpp src/engine/memory/MemoryService.cpp src/engine/AetherCore.cpp tests/memory/MemorySnapshotTests.cpp
+git commit -m "Add the memory service with snapshots, diffs and leak reporting
+
+- Capture per-tag totals plus managed heap figures into a named snapshot
+- Diff two snapshots by tag and callstack, ordered so the prime suspect is first
+- Group the leak report by callstack and symbolise only the worst offenders
+- Degrade a faulted managed stats provider to no-data rather than propagating"
+```
+
+---
+
+Remaining tasks, to be written next: the shutdown leak report and settings wiring (Task 10), managed GC statistics across the ABI (Task 11), the three MCP tools (Task 12), the editor panel (Task 13), and the benchmark verifying the acceptance criteria (Task 14).
