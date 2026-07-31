@@ -36,6 +36,7 @@ using namespace std::string_view_literals;
 #include "debug/LightingPanel.hpp"
 #include "debug/PerformancePanel.hpp"
 #include "debug/PostProcessingPanel.hpp"
+#include "debug/BuildPanel.hpp"
 #include "debug/ProjectPanel.hpp"
 #include "debug/RenderGraphPanel.hpp"
 #include "debug/SettingsPanel.hpp"
@@ -469,6 +470,7 @@ namespace aether::editor
 		context.services.Register<UndoStack>(m_undoStack);
 		context.services.Register<TilePaintingState>(m_tilePainting);
 		context.services.Register<PixelArtDocument>(m_pixelArt);
+		m_panels.push_back(std::make_unique<BuildPanel>());
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
 		m_panels.push_back(std::make_unique<SpriteSlicerPanel>());
