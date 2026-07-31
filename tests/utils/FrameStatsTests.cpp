@@ -132,3 +132,22 @@ TEST_CASE("SmoothnessLabel names every value") {
     CHECK(SmoothnessLabel(Smoothness::Alternating) == "alternating");
     CHECK(SmoothnessLabel(Smoothness::Stuttering) == "stuttering");
 }
+
+// The published game reports over the whole ring (600 frames); the editor panel only ever
+// passes 240 and every other test here uses 120. A Debug GameRuntime tripped
+// "stack around the variable 'sorted' was corrupted" inside ComputeFrameStats, so pin the
+// full-ring size explicitly.
+TEST_CASE("Stats over a full timeline ring do not corrupt the stack") {
+    std::vector<float> ms;
+    ms.reserve(600);
+    for (std::size_t i = 0; i < 600; ++i)
+    {
+        ms.push_back(16.0f + static_cast<float>(i % 7));
+    }
+
+    const FrameStats stats = ComputeFrameStats(FramesFrom(ms));
+
+    CHECK(stats.sampleCount == 600);
+    CHECK(stats.minMs == doctest::Approx(16.0f));
+    CHECK(stats.maxMs == doctest::Approx(22.0f));
+}

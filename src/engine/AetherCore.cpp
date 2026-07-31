@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <span>
+#include <vector>
 #include <string>
 #include <unordered_map>
 
@@ -48,6 +50,7 @@
 #include "vulkan/Swapchain.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "utils/FrameStats.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether
@@ -308,6 +311,28 @@ namespace aether
 			}
 		}
 
+		// Periodic frame-timing report, for measuring a build that has no Performance panel
+		// - above all the shipped GameRuntime. Set AETHER_FRAME_REPORT to an interval in
+		// seconds. Measuring the editor instead means measuring its ImGui, its extra
+		// viewport presents, and Windows throttling it whenever it is not focused; none of
+		// that is in the game, and all of it moves the numbers.
+		double frameReportInterval = 0.0;
+		if (const std::string env = readEnvironmentVariable("AETHER_FRAME_REPORT"); !env.empty())
+		{
+			try
+			{
+				frameReportInterval = std::stod(env);
+			}
+			catch (const std::exception&)
+			{
+				AE_WARN(LogCategory::Engine, "Ignoring invalid AETHER_FRAME_REPORT value: {}", env);
+			}
+		}
+		auto lastFrameReport = std::chrono::steady_clock::now();
+		std::vector<FrameTiming> reportFrames(FrameTimeline::kCapacity);
+		std::vector<float> reportWall;
+		reportWall.reserve(FrameTimeline::kCapacity);
+
 		while (!ShouldClose())
 		{
 			AE_PROFILE_ZONE_N("Frame");
@@ -437,6 +462,57 @@ namespace aether
 				// Everything the game thread did that was not spent waiting.
 				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs);
 				m_frameTimeline.RecordGameFrame(timing);
+
+				if (frameReportInterval > 0.0 && std::chrono::duration<double>(frameEnd - lastFrameReport).count() >= frameReportInterval)
+				{
+					lastFrameReport = frameEnd;
+					const std::size_t count = m_frameTimeline.Snapshot(reportFrames);
+
+					// Aggregated here rather than through ComputeFrameStats. That function is
+					// shared with the editor's Performance panel, where it is exercised every
+					// frame without incident, but calling it from THIS loop trips an /RTCs
+					// stack-guard check in a Debug GameRuntime. Same Engine.lib, so the same
+					// machine code passes 600 frames in EngineTests and fails here, which
+					// points at this call site's environment rather than at the statistics.
+					// That is still open (see the frame-report note in docs), and a
+					// diagnostic must not be the thing that takes the process down.
+					reportWall.clear();
+					float gameWork = 0.0f;
+					float inFlight = 0.0f;
+					float present = 0.0f;
+					std::size_t clamped = 0;
+					for (std::size_t i = 0; i < count; ++i)
+					{
+						const FrameTiming& frame = reportFrames[i];
+						reportWall.push_back(frame.wallMs);
+						gameWork += frame.gameWorkMs;
+						inFlight += frame.inFlightWaitMs;
+						present += frame.presentWaitMs;
+						if (frame.wallMs > frame.simDtMs + 0.01f)
+						{
+							++clamped;
+						}
+					}
+					if (!reportWall.empty())
+					{
+						std::ranges::sort(reportWall);
+						const auto n = static_cast<float>(reportWall.size());
+						const auto at = [&](const double fraction)
+						{
+							const auto last = reportWall.size() - 1;
+							return reportWall[std::min(static_cast<std::size_t>(std::llround(static_cast<double>(last) * fraction)), last)];
+						};
+						float total = 0.0f;
+						for (const float value: reportWall)
+						{
+							total += value;
+						}
+						AE_INFO(LogCategory::Engine,
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} | clamped={}",
+						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
+						        gameWork / n, inFlight / n, present / n, clamped);
+					}
+				}
 			}
 
 			++m_producerFrameIndex;

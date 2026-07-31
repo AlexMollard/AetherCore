@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <span>
 #include <vector>
 
 #include "utils/FrameTimeline.hpp"
@@ -10,6 +11,28 @@ namespace aether
 {
 	namespace
 	{
+		// A non-finite sample breaks the strict weak ordering std::sort relies on, so filter
+		// before sorting rather than trusting the timeline's floats. This is a DIAGNOSTIC: it
+		// has to survive whatever it is handed rather than take the process down while
+		// someone is trying to measure a problem.
+		//
+		// This was NOT the cause of the "stack around the variable 'sorted' was corrupted"
+		// failure seen in a Debug GameRuntime - that reproduced with this filter in place and
+		// after a clean rebuild, and does not reproduce in EngineTests against the same
+		// Engine.lib. It remains open; the frame report no longer routes through here.
+		void CollectFinite(const std::span<const FrameTiming> frames, std::vector<float>& out)
+		{
+			out.clear();
+			out.reserve(frames.size());
+			for (const FrameTiming& frame: frames)
+			{
+				if (std::isfinite(frame.wallMs))
+				{
+					out.push_back(frame.wallMs);
+				}
+			}
+		}
+
 		float PercentileOfSorted(const std::vector<float>& sorted, const float fraction)
 		{
 			if (sorted.empty())
@@ -46,13 +69,13 @@ namespace aether
 		const std::span<const FrameTiming> window = frames.last(count);
 
 		std::vector<float> sorted;
-		sorted.reserve(count);
-		for (const FrameTiming& frame: window)
+		CollectFinite(window, sorted);
+		if (sorted.size() < 4)
 		{
-			sorted.push_back(frame.wallMs);
+			return Smoothness::Even;
 		}
 		std::ranges::sort(sorted);
-		const float median = sorted[count / 2];
+		const float median = sorted[sorted.size() / 2];
 		if (median <= 0.0f)
 		{
 			return Smoothness::Even;
@@ -77,7 +100,7 @@ namespace aether
 				++over15;
 			}
 		}
-		if (anyOver2 || static_cast<float>(over15) > static_cast<float>(count) * 0.01f)
+		if (anyOver2 || static_cast<float>(over15) > static_cast<float>(sorted.size()) * 0.01f)
 		{
 			return Smoothness::Stuttering;
 		}
@@ -101,17 +124,20 @@ namespace aether
 		}
 
 		std::vector<float> sorted;
-		sorted.reserve(frames.size());
-		float total = 0.0f;
-		for (const FrameTiming& frame: frames)
+		CollectFinite(frames, sorted);
+		if (sorted.empty())
 		{
-			sorted.push_back(frame.wallMs);
-			total += frame.wallMs;
+			return stats;
+		}
+		float total = 0.0f;
+		for (const float ms: sorted)
+		{
+			total += ms;
 		}
 		std::ranges::sort(sorted);
 
-		stats.sampleCount = frames.size();
-		stats.avgMs = total / static_cast<float>(frames.size());
+		stats.sampleCount = sorted.size();
+		stats.avgMs = total / static_cast<float>(sorted.size());
 		stats.minMs = sorted.front();
 		stats.maxMs = sorted.back();
 		stats.medianMs = sorted[sorted.size() / 2];
