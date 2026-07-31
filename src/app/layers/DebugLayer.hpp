@@ -87,6 +87,10 @@ namespace aether::editor
 		// Set by the Window > Reset Layout menu item; forces the default dock layout
 		bool m_resetLayout = false;
 
+		// Set when a layout is rebuilt, spent one frame later to select the Viewport tab in
+		// the centre dock node (see the note at the panel draw loop).
+		bool m_focusViewportAfterLayout = false;
+
 		char m_paletteQuery[128] = {};
 		int m_paletteSelected = 0;
 

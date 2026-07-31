@@ -1614,6 +1614,7 @@ namespace aether::editor
 		{
 			const WorkflowLayout layout = (m_pendingWorkflowLayout >= 0 && m_pendingWorkflowLayout < static_cast<int>(WorkflowLayout::Count)) ? static_cast<WorkflowLayout>(m_pendingWorkflowLayout) : WorkflowLayout::Default;
 			BuildWorkflowLayout(layout, dockspace_id, viewport->WorkSize);
+			m_focusViewportAfterLayout = true;
 		}
 		m_dockspaceBuilt = true;
 		m_resetLayout = false;
@@ -1634,6 +1635,18 @@ namespace aether::editor
 			{
 				panel->OnImGui(context);
 			}
+		}
+
+		// Every layout docks the Viewport to the centre node, and most dock tool panels
+		// there beside it. Docking does not decide which tab is SELECTED: without this the
+		// editor came up on whichever tool sorted first in the panel list - Default opened
+		// showing the sprite atlas editor with the game hidden one tab over. This has to
+		// run AFTER the panels have drawn, because at DockBuilderFinish time none of the
+		// windows in the node exist yet for the frame and the focus does not stick.
+		if (m_focusViewportAfterLayout)
+		{
+			ImGui::SetWindowFocus("Viewport");
+			m_focusViewportAfterLayout = false;
 		}
 
 		// Project-defined editor windows (IEditorWindow): pump their ImGui after the built-in panels.
