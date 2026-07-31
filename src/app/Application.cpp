@@ -95,6 +95,11 @@ namespace aether::app
 		{
 			aether::AetherCore::Config cfg = baseConfig;
 			cfg.presentMode = aether::DesiredPresentMode(settings);
+#ifndef AETHERCORE_WITH_IMGUI
+			// Games only. The editor stays a normal desktop window whatever the project asks
+			// for - a borderless editor covering the monitor would be unusable.
+			cfg.windowMode = aether::ParseWindowMode(settings.window.mode);
+#endif
 			if (cfg.profile == aether::RuntimeProfile::UiShell)
 			{
 				return cfg;

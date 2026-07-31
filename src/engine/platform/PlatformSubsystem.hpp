@@ -16,6 +16,7 @@ namespace aether
 			const char* appName = "AetherCore";
 			int width = 1280;
 			int height = 720;
+			Window::Mode mode = Window::Mode::Windowed;
 		};
 
 		void Init(const Config& config);

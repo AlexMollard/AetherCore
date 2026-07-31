@@ -5,6 +5,7 @@
 #include <system_error>
 
 #include "io/FileUtil.hpp"
+#include "AetherCore.hpp" // ParseWindowMode
 #include "utils/EngineSettings.hpp"
 
 using namespace aether;
@@ -258,4 +259,14 @@ TEST_CASE("Producer run-ahead is clamped to the resource slots that exist") {
     settings.graphics.framesInFlight = 99;
     EngineSettingsIO::Sanitize(settings);
     CHECK(settings.graphics.framesInFlight == 3);
+}
+
+// A typo must not hand someone an undecorated window covering their screen.
+TEST_CASE("An unrecognised window mode falls back to windowed") {
+    CHECK(ParseWindowMode("borderless") == Window::Mode::Borderless);
+    CHECK(ParseWindowMode("fullscreen") == Window::Mode::Fullscreen);
+    CHECK(ParseWindowMode("windowed") == Window::Mode::Windowed);
+    CHECK(ParseWindowMode("Borderless") == Window::Mode::Windowed); // case-sensitive by design
+    CHECK(ParseWindowMode("") == Window::Mode::Windowed);
+    CHECK(ParseWindowMode("bordrless") == Window::Mode::Windowed);
 }

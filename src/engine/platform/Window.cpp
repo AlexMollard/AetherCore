@@ -28,7 +28,7 @@ namespace aether
 #endif
 	}
 
-	Window::Window(const char* title, int width, int height)
+	Window::Window(const char* title, int width, int height, const Mode mode)
 	{
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
@@ -39,11 +39,50 @@ namespace aether
 		}
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+
+		// Borderless must match the monitor's CURRENT video mode exactly, down to the refresh
+		// rate hints. A borderless window even one pixel off the output, or on a different
+		// mode, silently drops back to composition and gives up the frame it was created to
+		// save. Falling back to windowed on a headless/monitor-less system is deliberate:
+		// failing to create a window at all would be worse than losing the latency.
+		GLFWmonitor* monitor = (mode == Mode::Windowed) ? nullptr : glfwGetPrimaryMonitor();
+		const GLFWvidmode* videoMode = (monitor != nullptr) ? glfwGetVideoMode(monitor) : nullptr;
+		if (videoMode != nullptr)
+		{
+			width = videoMode->width;
+			height = videoMode->height;
+			if (mode == Mode::Borderless)
+			{
+				glfwWindowHint(GLFW_RED_BITS, videoMode->redBits);
+				glfwWindowHint(GLFW_GREEN_BITS, videoMode->greenBits);
+				glfwWindowHint(GLFW_BLUE_BITS, videoMode->blueBits);
+				glfwWindowHint(GLFW_REFRESH_RATE, videoMode->refreshRate);
+				glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+				monitor = nullptr; // borderless is a window that covers the monitor, not an exclusive mode
+			}
+		}
+		else if (mode != Mode::Windowed)
+		{
+			AE_WARN(LogCategory::Window, "No monitor available; falling back to a windowed presentation.");
+			monitor = nullptr;
+		}
+
+		m_window = glfwCreateWindow(width, height, title, monitor, nullptr);
 		if (m_window == nullptr)
 		{
 			glfwTerminate();
 			throw WindowError("Failed to create GLFW window.");
+		}
+
+		if (mode == Mode::Borderless && videoMode != nullptr)
+		{
+			// Place it on the monitor we sized against, not at the desktop origin - on a
+			// multi-monitor desktop those are different points, and being off the output is
+			// exactly what disqualifies independent flip.
+			int monitorX = 0;
+			int monitorY = 0;
+			glfwGetMonitorPos(glfwGetPrimaryMonitor(), &monitorX, &monitorY);
+			glfwSetWindowPos(m_window, monitorX, monitorY);
 		}
 
 		glfwSetWindowUserPointer(m_window, this);

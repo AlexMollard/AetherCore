@@ -18,7 +18,18 @@ namespace aether
 		// Declare the process per-monitor DPI-aware. MUST be called before any GLFW
 		static void EnableHighDpiAwareness();
 
-		Window(const char* title, int width, int height);
+		// How the window presents. This is a LATENCY decision as much as a cosmetic one: a
+		// decorated desktop window can never qualify for DWM independent flip, because that
+		// requires the presented surface to cover the output exactly. Composition costs a
+		// frame - the whole reason games ship this as a setting rather than hard-coding it.
+		enum class Mode
+		{
+			Windowed,   // decorated, composited by the desktop
+			Borderless, // undecorated and exactly covering the monitor; eligible for independent flip
+			Fullscreen, // exclusive; bypasses the compositor outright
+		};
+
+		Window(const char* title, int width, int height, Mode mode = Mode::Windowed);
 		~Window();
 
 		Window(const Window&) = delete;

@@ -11,6 +11,7 @@
 #include "RuntimeProfile.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "platform/Window.hpp"
 #include "rendering/IUiOverlay.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/CustomPassRegistry.hpp"
@@ -39,6 +40,21 @@ namespace aether
 		return settings.graphics.lowLatencyPresent ? gpu::PresentMode::Mailbox : gpu::PresentMode::Fifo;
 	}
 
+	// Unknown text falls back to Windowed. A typo must not silently hand someone an
+	// undecorated window covering their screen with no obvious way back.
+	[[nodiscard]] inline Window::Mode ParseWindowMode(const std::string_view mode) noexcept
+	{
+		if (mode == "borderless")
+		{
+			return Window::Mode::Borderless;
+		}
+		if (mode == "fullscreen")
+		{
+			return Window::Mode::Fullscreen;
+		}
+		return Window::Mode::Windowed;
+	}
+
 	class GpuDevice;
 	class CameraSubsystem;
 	class RenderingSubsystem;
@@ -61,6 +77,10 @@ namespace aether
 			// AE_VALIDATION_DEFAULT_ON in Defines.hpp for why. Either way --validation
 			// and --no-validation override it for a single run.
 			bool enableValidation = AE_VALIDATION_DEFAULT_ON != 0;
+
+			// Left Windowed unless a host opts in. The editor must never go borderless just
+			// because a project asked its game to.
+			Window::Mode windowMode = Window::Mode::Windowed;
 
 			RuntimeProfile profile = RuntimeProfile::Full;
 		};

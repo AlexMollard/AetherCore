@@ -101,7 +101,7 @@ namespace aether
 		auto& sceneSub = m_services.Get<SceneSubsystem>();
 		auto& assetsSub = m_services.Get<AssetSubsystem>();
 
-		platform.Init({.appName = config.appName, .width = config.width, .height = config.height});
+		platform.Init({.appName = config.appName, .width = config.width, .height = config.height, .mode = config.windowMode});
 		m_services.Register<Window>(platform.GetWindow());
 		m_services.Register<Input>(platform.GetInput());
 

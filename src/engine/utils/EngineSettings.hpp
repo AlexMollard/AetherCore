@@ -18,6 +18,11 @@ namespace aether
 		{
 			int width = 2560;
 			int height = 1440;
+			// "windowed" | "borderless" | "fullscreen". Borderless is the one worth reaching
+			// for: it is the only mode besides exclusive fullscreen that can win DWM
+			// independent flip, and composition costs about a frame of latency. Unparsable
+			// values fall back to windowed rather than guessing.
+			std::string mode = "windowed";
 		} window;
 
 		struct Graphics
@@ -81,6 +86,7 @@ namespace aether
 	{
 		f("window.width", settings.window.width);
 		f("window.height", settings.window.height);
+		f("window.mode", settings.window.mode);
 		f("graphics.vsync", settings.graphics.vsync);
 		f("graphics.framesInFlight", settings.graphics.framesInFlight);
 		f("graphics.lowLatencyPresent", settings.graphics.lowLatencyPresent);
