@@ -19,6 +19,7 @@
 #include "rendering/ScreenshotService.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"
+#include "utils/FrameTimeline.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether
@@ -174,6 +175,9 @@ namespace aether
 		// Producer/game-thread frame loop state (distinct from the render-side
 		RenderThread m_renderThread;
 		FramePacer m_framePacer;
+		// Per-frame timings for the Performance panel. Always present, in every build
+		// config - the Tracy plots beside it compile out in Release.
+		FrameTimeline m_frameTimeline;
 		std::uint64_t m_producerFrameIndex = 0;
 		double m_gameElapsedSeconds = 0.0;
 		double m_realElapsedSeconds = 0.0; // wall-clock elapsed, ignores time scale (for pause-menu UI)

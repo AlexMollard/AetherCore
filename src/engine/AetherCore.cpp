@@ -68,6 +68,7 @@ namespace aether
 		const bool fullRuntime = m_profile == RuntimeProfile::Full;
 
 		m_services.Register<AetherCore>(*this);
+		m_services.Register<FrameTimeline>(m_frameTimeline);
 		m_services.RegisterOwned(std::make_unique<PlatformSubsystem>());
 		m_services.RegisterOwned(std::make_unique<SceneSubsystem>());
 		m_services.RegisterOwned(std::make_unique<AssetSubsystem>());
@@ -311,13 +312,21 @@ namespace aether
 		{
 			AE_PROFILE_ZONE_N("Frame");
 
+			const auto frameStart = std::chrono::steady_clock::now();
+
 			m_framePacer.Wait();
+			const auto afterPacer = std::chrono::steady_clock::now();
+
 			client.OnFrameBegin();
 			Logger::SetFrameNumber(m_producerFrameIndex);
 
+			// rawDt is CLAMPED so a hitch cannot explode physics. wallSeconds is the same
+			// interval unclamped, and is what the Performance panel reports - reporting the
+			// clamped value made every frame worse than 30 fps look identical.
 			constexpr double kMaxDeltaTime = 1.0 / 30.0;
 			const auto now = std::chrono::steady_clock::now();
-			const double rawDt = std::min(std::chrono::duration<double>(now - previousFrameTime).count(), kMaxDeltaTime);
+			const double wallSeconds = std::chrono::duration<double>(now - previousFrameTime).count();
+			const double rawDt = std::min(wallSeconds, kMaxDeltaTime);
 			previousFrameTime = now;
 
 			PumpEvents();
@@ -334,10 +343,12 @@ namespace aether
 				        });
 			}
 
+			const auto beforeInFlightWait = std::chrono::steady_clock::now();
 			if (m_producerFrameIndex >= Swapchain::kMaxFramesInFlight)
 			{
 				m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - Swapchain::kMaxFramesInFlight);
 			}
+			const auto afterInFlightWait = std::chrono::steady_clock::now();
 
 			Tick(static_cast<float>(rawDt));
 			const double gameDt = rawDt * client.GetTimeScale();
@@ -409,6 +420,23 @@ namespace aether
 				(void) m_screenshotService.Request(screenshotPath);
 				screenshotRequested = true;
 				AE_INFO(LogCategory::Engine, "Self-screenshot requested (frame {}) -> {}", m_producerFrameIndex, screenshotPath);
+			}
+
+			{
+				const auto frameEnd = std::chrono::steady_clock::now();
+				const auto ms = [](const auto a, const auto b)
+				{
+					return static_cast<float>(std::chrono::duration<double, std::milli>(b - a).count());
+				};
+				FrameTiming timing;
+				timing.frameIndex = m_producerFrameIndex;
+				timing.wallMs = static_cast<float>(wallSeconds * 1000.0);
+				timing.simDtMs = static_cast<float>(rawDt * 1000.0);
+				timing.pacerWaitMs = ms(frameStart, afterPacer);
+				timing.inFlightWaitMs = ms(beforeInFlightWait, afterInFlightWait);
+				// Everything the game thread did that was not spent waiting.
+				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs);
+				m_frameTimeline.RecordGameFrame(timing);
 			}
 
 			++m_producerFrameIndex;
@@ -798,7 +826,9 @@ namespace aether
 		AE_PROFILE_ZONE();
 		const auto execStart = std::chrono::steady_clock::now();
 		m_frameIndex = packet.frameIndex;
+		const auto acquireStart = std::chrono::steady_clock::now();
 		BeginFrame();
+		const auto acquireEnd = std::chrono::steady_clock::now();
 
 		// INVARIANT: the render thread reads ONLY `packet`, never the live ECS. All
 		if (m_rendering)
@@ -818,7 +848,9 @@ namespace aether
 			}
 		}
 
+		const auto presentStart = std::chrono::steady_clock::now();
 		EndFrame(packet);
+		const auto presentEnd = std::chrono::steady_clock::now();
 		if (m_rendering && m_profile == RuntimeProfile::Full)
 		{
 			m_rendering->GetRenderer2D().EndFrame();
@@ -832,6 +864,20 @@ namespace aether
 		}
 
 		AE_PROFILE_PLOT("Frame/RenderThreadExecNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - execStart).count()));
+
+		{
+			const auto ms = [](const auto a, const auto b)
+			{
+				return static_cast<float>(std::chrono::duration<double, std::milli>(b - a).count());
+			};
+			const auto execEnd = std::chrono::steady_clock::now();
+			// presentWait is both places the render thread can block on the swapchain:
+			// acquiring an image, and submitting/presenting it. With FIFO vsync this is
+			// where the refresh cadence actually enters the frame.
+			m_frameTimeline.RecordRenderFrame(packet.frameIndex,
+			        ms(execStart, execEnd),
+			        ms(acquireStart, acquireEnd) + ms(presentStart, presentEnd));
+		}
 	}
 
 	void AetherCore::DiscardPendingFrameQueues(const RenderFramePacket& packet)
