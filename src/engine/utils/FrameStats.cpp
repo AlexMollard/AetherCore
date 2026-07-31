@@ -58,10 +58,16 @@ namespace aether
 			return Smoothness::Even;
 		}
 
+		// Both tests require the excursion to be noticeable in absolute milliseconds too,
+		// or a very fast build trips them on deviations nobody can see.
 		std::size_t over15 = 0;
 		bool anyOver2 = false;
 		for (const float ms: sorted)
 		{
+			if (ms - median < kNoticeableMs)
+			{
+				continue;
+			}
 			if (ms > median * 2.0f)
 			{
 				anyOver2 = true;
@@ -82,7 +88,8 @@ namespace aether
 			totalDelta += std::abs(window[i].wallMs - window[i - 1].wallMs);
 		}
 		const float meanDelta = totalDelta / static_cast<float>(count - 1);
-		return meanDelta > median * 0.5f ? Smoothness::Alternating : Smoothness::Even;
+		const bool alternating = meanDelta > median * 0.5f && meanDelta > kNoticeableMs;
+		return alternating ? Smoothness::Alternating : Smoothness::Even;
 	}
 
 	FrameStats ComputeFrameStats(const std::span<const FrameTiming> frames)

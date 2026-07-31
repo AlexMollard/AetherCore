@@ -101,6 +101,24 @@ TEST_CASE("Isolated spikes classify as stuttering, and outrank alternating") {
     CHECK(ClassifySmoothness(FramesFrom(both)) == Smoothness::Stuttering);
 }
 
+// Measured on a Release editor running at 1494 fps: median 0.61 ms with one 3.29 ms
+// frame. Relatively that is a 5x spike; absolutely it is invisible. Reporting that as
+// stuttering is how a diagnostic loses its credibility for the cases that matter.
+TEST_CASE("A relatively large but absolutely tiny spike is not stuttering") {
+    std::vector<float> ms = Repeat(0.61f, 119);
+    ms.push_back(3.29f);
+
+    CHECK(ClassifySmoothness(FramesFrom(ms)) == Smoothness::Even);
+}
+
+// The same shape at 60 Hz IS worth reporting: the excursion clears the absolute floor.
+TEST_CASE("The same relative spike at 60 fps is still stuttering") {
+    std::vector<float> ms = Repeat(16.0f, 119);
+    ms.push_back(64.0f);
+
+    CHECK(ClassifySmoothness(FramesFrom(ms)) == Smoothness::Stuttering);
+}
+
 TEST_CASE("Empty input is reported as no samples rather than dividing by zero") {
     const FrameStats stats = ComputeFrameStats({});
 
