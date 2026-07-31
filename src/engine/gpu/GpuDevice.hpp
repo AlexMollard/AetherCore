@@ -31,7 +31,7 @@ namespace aether
 		struct Config
 		{
 			const char* appName = "AetherCore";
-			bool enableVsync = true;
+			gpu::PresentMode presentMode = gpu::PresentMode::Fifo;
 			bool enableGpuDiagnostics = false;
 			bool enableValidation = true;
 		};
@@ -60,7 +60,7 @@ namespace aether
 		[[nodiscard]] bool IsSwapchainFrameValid() const;
 
 		void BeginSwapchainFrame();
-		void RecreateSwapchain(class Window& window, bool enableVsync);
+		void RecreateSwapchain(class Window& window, gpu::PresentMode presentMode);
 		// implementation (`vulkan/Swapchain.cpp`); this TU never sees a
 		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr, std::uint64_t asyncComputeTimelineValue = 0);
 

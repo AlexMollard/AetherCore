@@ -36,7 +36,7 @@ namespace aether
 		g_activeDiagnosticEngine = &m_diagnosticEngine;
 		m_vulkanContext->SetFaultCallback(&DiagnosticFaultThunk);
 		aether::VulkanContext::SetGlobalAddressBindingTracker(&m_diagnosticEngine.GetMemoryTracker());
-		m_swapchain.Initialize(*m_vulkanContext, window, config.enableVsync);
+		m_swapchain.Initialize(*m_vulkanContext, window, config.presentMode);
 		AE_TRY_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourceRegistry.SetBindlessManager(&m_bindlessManager);
 

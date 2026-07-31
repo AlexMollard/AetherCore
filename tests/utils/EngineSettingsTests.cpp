@@ -209,3 +209,53 @@ TEST_CASE("LoadLayered applies the project file as a layer and includes it in ba
     std::error_code ec;
     std::filesystem::remove(projectPath, ec);
 }
+
+// MAILBOX does not block the producer, so an uncapped loop renders as fast as the hardware
+// allows - measured at 3700 fps on a 2D game presenting 60. Flipping one setting must not
+// put a user there, so Sanitize supplies a cap.
+TEST_CASE("Requesting the low-latency present mode without a frame cap gets one") {
+    EngineSettings settings;
+    settings.graphics.vsync = true;
+    settings.graphics.lowLatencyPresent = true;
+    settings.app.targetFps = 0.0f;
+
+    EngineSettingsIO::Sanitize(settings);
+
+    CHECK(settings.app.targetFps == doctest::Approx(kUncappedMailboxFallbackFps));
+}
+
+TEST_CASE("An explicit frame cap survives the low-latency present mode") {
+    EngineSettings settings;
+    settings.graphics.vsync = true;
+    settings.graphics.lowLatencyPresent = true;
+    settings.app.targetFps = 240.0f;
+
+    EngineSettingsIO::Sanitize(settings);
+
+    CHECK(settings.app.targetFps == doctest::Approx(240.0f));
+}
+
+// FIFO already blocks on the vsync, so an uncapped loop there is self-limiting and must be
+// left alone - a cap would be a behaviour change for every existing project.
+TEST_CASE("The default present mode is left uncapped") {
+    EngineSettings settings;
+    settings.graphics.vsync = true;
+    settings.graphics.lowLatencyPresent = false;
+    settings.app.targetFps = 0.0f;
+
+    EngineSettingsIO::Sanitize(settings);
+
+    CHECK(settings.app.targetFps == doctest::Approx(0.0f));
+}
+
+TEST_CASE("Producer run-ahead is clamped to the resource slots that exist") {
+    EngineSettings settings;
+
+    settings.graphics.framesInFlight = 0;
+    EngineSettingsIO::Sanitize(settings);
+    CHECK(settings.graphics.framesInFlight == 1);
+
+    settings.graphics.framesInFlight = 99;
+    EngineSettingsIO::Sanitize(settings);
+    CHECK(settings.graphics.framesInFlight == 3);
+}

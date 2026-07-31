@@ -7,6 +7,11 @@
 
 namespace aether
 {
+	// Applied when MAILBOX is requested with no frame cap, which would otherwise run the loop
+	// flat out. Deliberately above 60 so the extra headroom still buys latency, and low
+	// enough that it is not a thermal event.
+	inline constexpr float kUncappedMailboxFallbackFps = 120.0f;
+
 	struct EngineSettings
 	{
 		struct Window
@@ -26,6 +31,13 @@ namespace aether
 			// is lowest-latency but leaves the GPU idle while the CPU works. Clamped to
 			// [1, Swapchain::kMaxFramesInFlight].
 			int framesInFlight = 2;
+			// With vsync on, prefer MAILBOX over FIFO. Both are tear-free; FIFO makes each
+			// present queue behind the last, while MAILBOX replaces the pending image, so a
+			// frame reaches the screen without waiting its turn. Costs GPU work on frames
+			// that get replaced, and does nothing when vsync is off (that is already
+			// IMMEDIATE). Falls back to FIFO wherever the driver lacks MAILBOX.
+			bool lowLatencyPresent = false;
+
 			bool fxaa = false;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
@@ -71,6 +83,7 @@ namespace aether
 		f("window.height", settings.window.height);
 		f("graphics.vsync", settings.graphics.vsync);
 		f("graphics.framesInFlight", settings.graphics.framesInFlight);
+		f("graphics.lowLatencyPresent", settings.graphics.lowLatencyPresent);
 		f("graphics.fxaa", settings.graphics.fxaa);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);

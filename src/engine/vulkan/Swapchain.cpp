@@ -41,7 +41,7 @@ namespace aether
 		}
 	} // namespace
 
-	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window, const bool enableVsync)
+	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window, const gpu::PresentMode presentMode)
 	{
 		int w = 0;
 		int h = 0;
@@ -58,10 +58,26 @@ namespace aether
 			        .build();
 		};
 
-		auto result = buildSwapchain(enableVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR);
-		if (!result && !enableVsync)
+		// FIFO is the only mode Vulkan guarantees exists, so it is the fallback for both of
+		// the others rather than a failure.
+		const auto [desired, name] = [presentMode]() -> std::pair<VkPresentModeKHR, const char*>
 		{
-			AE_WARN(LogCategory::Engine, "Swapchain IMMEDIATE present mode unavailable; falling back to FIFO (VSync on).");
+			switch (presentMode)
+			{
+				case gpu::PresentMode::Mailbox:
+					return {VK_PRESENT_MODE_MAILBOX_KHR, "MAILBOX"};
+				case gpu::PresentMode::Immediate:
+					return {VK_PRESENT_MODE_IMMEDIATE_KHR, "IMMEDIATE"};
+				case gpu::PresentMode::Fifo:
+					break;
+			}
+			return {VK_PRESENT_MODE_FIFO_KHR, "FIFO"};
+		}();
+
+		auto result = buildSwapchain(desired);
+		if (!result && desired != VK_PRESENT_MODE_FIFO_KHR)
+		{
+			AE_WARN(LogCategory::Engine, "Swapchain {} present mode unavailable; falling back to FIFO.", name);
 			result = buildSwapchain(VK_PRESENT_MODE_FIFO_KHR);
 		}
 
@@ -71,6 +87,19 @@ namespace aether
 		}
 
 		m_swapchain = result.value();
+
+		// vk-bootstrap silently substitutes FIFO when the desired mode is unsupported, so
+		// report what the driver actually gave us. Measuring latency against a mode you only
+		// think you asked for is how a present-mode change gets wrongly written off.
+		if (m_swapchain.present_mode != desired)
+		{
+			AE_WARN(LogCategory::Engine, "Swapchain {} present mode unsupported; driver selected mode {}.", name, static_cast<int>(m_swapchain.present_mode));
+		}
+		else
+		{
+			AE_INFO(LogCategory::Engine, "Swapchain present mode: {}", name);
+		}
+
 		m_images = m_swapchain.get_images().value();
 		m_imageViews = m_swapchain.get_image_views().value();
 		m_depthFormat = PickDepthFormat(ctx.GetDevice().physical_device);

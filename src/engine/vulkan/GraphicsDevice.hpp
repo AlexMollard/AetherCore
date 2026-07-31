@@ -22,7 +22,7 @@ namespace aether
 		struct Config
 		{
 			const char* appName = "AetherCore";
-			bool enableVsync = true;
+			gpu::PresentMode presentMode = gpu::PresentMode::Fifo;
 			bool enableGpuDiagnostics = false;
 			bool enableValidation = true;
 		};

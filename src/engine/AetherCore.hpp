@@ -27,6 +27,18 @@ namespace aether
 	struct FrameConstants;
 
 	class AnimationBlendSystem;
+
+	// The one place settings turn into a present mode, so the three-way choice can never
+	// disagree with itself across the call sites that need it.
+	[[nodiscard]] constexpr gpu::PresentMode DesiredPresentMode(const EngineSettings& settings) noexcept
+	{
+		if (!settings.graphics.vsync)
+		{
+			return gpu::PresentMode::Immediate;
+		}
+		return settings.graphics.lowLatencyPresent ? gpu::PresentMode::Mailbox : gpu::PresentMode::Fifo;
+	}
+
 	class GpuDevice;
 	class CameraSubsystem;
 	class RenderingSubsystem;
@@ -40,7 +52,7 @@ namespace aether
 			const char* appName = "AetherCore";
 			int width = 1280;
 			int height = 720;
-			bool enableVsync = true;
+			gpu::PresentMode presentMode = gpu::PresentMode::Fifo;
 			const char* settingsFile = "EngineSettings.toml";
 			// GameRuntime must leave this false: Aftermath is a dev tool (dumps
 			bool enableGpuDiagnostics = false;

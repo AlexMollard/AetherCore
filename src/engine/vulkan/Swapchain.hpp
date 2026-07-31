@@ -35,7 +35,7 @@ namespace aether
 		Swapchain(Swapchain&&) = delete;
 		Swapchain& operator=(Swapchain&&) = delete;
 
-		void Initialize(const VulkanContext& ctx, const Window& window, bool enableVsync);
+		void Initialize(const VulkanContext& ctx, const Window& window, gpu::PresentMode presentMode);
 		void Shutdown(VkDevice device);
 
 		// and performs swapchain-image / depth layout transitions.

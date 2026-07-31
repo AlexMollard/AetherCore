@@ -108,7 +108,17 @@ namespace aether
 			settings.window.height = defaults.window.height;
 		}
 		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
+		settings.graphics.framesInFlight = std::clamp(settings.graphics.framesInFlight, 1, 3);
 		settings.graphics.uiScale = std::clamp(settings.graphics.uiScale, 0.5f, 3.0f);
+
+		// MAILBOX never blocks the producer, so with no frame cap the loop runs as fast as it
+		// possibly can - a 2D game measured 3700 fps to put 60 on the screen, discarding 98%
+		// of them. That is a melted GPU for no visible benefit, and it is the state a user
+		// lands in by flipping one setting, so it cannot be left to documentation.
+		if (settings.graphics.vsync && settings.graphics.lowLatencyPresent && settings.app.targetFps <= 0.0f)
+		{
+			settings.app.targetFps = kUncappedMailboxFallbackFps;
+		}
 	}
 
 	std::string EngineSettingsIO::Serialize(const EngineSettings& settings)

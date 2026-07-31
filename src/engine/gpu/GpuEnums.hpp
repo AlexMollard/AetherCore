@@ -7,6 +7,15 @@
 
 namespace aether::gpu
 {
+	// How finished frames reach the screen. This is a three-way choice, not a vsync bool:
+	// Fifo and Mailbox both avoid tearing but queue very differently, and that queueing is
+	// what the player feels as input lag.
+	enum class PresentMode
+	{
+		Fifo,      // block until the next vsync; no tearing, but presents queue up behind each other
+		Mailbox,   // replace the queued image instead of queueing behind it; no tearing, less lag, more GPU
+		Immediate, // present on the spot; lowest lag and tears
+	};
 
 	template<typename Enum>
 	constexpr Enum operator|(Enum lhs, Enum rhs) noexcept

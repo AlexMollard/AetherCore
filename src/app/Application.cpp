@@ -94,7 +94,7 @@ namespace aether::app
 		aether::AetherCore::Config BuildConfigFromSettings(const aether::AetherCore::Config& baseConfig, const aether::EngineSettings& settings)
 		{
 			aether::AetherCore::Config cfg = baseConfig;
-			cfg.enableVsync = settings.graphics.vsync;
+			cfg.presentMode = aether::DesiredPresentMode(settings);
 			if (cfg.profile == aether::RuntimeProfile::UiShell)
 			{
 				return cfg;

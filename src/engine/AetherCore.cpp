@@ -105,7 +105,7 @@ namespace aether
 		m_services.Register<Window>(platform.GetWindow());
 		m_services.Register<Input>(platform.GetInput());
 
-		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation}));
+		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .presentMode = config.presentMode, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation}));
 		m_screenshotService.Init(m_gpu->GetDevice(), m_gpu->GetGraphicsQueueFamily(), m_gpu->GetGraphicsQueue());
 		m_gpu->GetSwapchain().SetPrePresentCapture([this](void* cmd, void* image, gpu::Extent2D extent) { m_screenshotService.RecordFrameCapture(cmd, image, extent, m_gpu->GetSwapchainColorFormat()); });
 
@@ -706,7 +706,7 @@ namespace aether
 	{
 		auto& platform = m_services.Get<PlatformSubsystem>();
 		auto size = platform.GetWindow().WaitForValidFramebufferSize();
-		m_gpu->RecreateSwapchain(platform.GetWindow(), m_settings.graphics.vsync);
+		m_gpu->RecreateSwapchain(platform.GetWindow(), DesiredPresentMode(m_settings));
 
 		AE_INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", size.width, size.height);
 	}

@@ -26,7 +26,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_gfx = std::make_unique<GraphicsDevice>();
-		AE_TRY_VOID(m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation}));
+		AE_TRY_VOID(m_gfx->Init(services, {.appName = config.appName, .presentMode = config.presentMode, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation}));
 
 		gpu::ResourceRegistryInitDesc regInit{};
 		regInit.vulkanDevice = static_cast<void*>(m_gfx->GetVulkanContext().GetDevice().device);
@@ -119,7 +119,7 @@ namespace aether
 		m_gfx->GetSwapchain().BeginFrame(m_gfx->GetVulkanContext().GetDevice().device);
 	}
 
-	void GpuDevice::RecreateSwapchain(Window& window, bool enableVsync)
+	void GpuDevice::RecreateSwapchain(Window& window, gpu::PresentMode presentMode)
 	{
 		AE_PROFILE_ZONE();
 		const VulkanContext& vk = m_gfx->GetVulkanContext();
@@ -128,7 +128,7 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(vk.WaitIdle());
 		swapchain.Shutdown(vk.GetDevice().device);
 		swapchain.ClearRecreationFlag();
-		swapchain.Initialize(vk, window, enableVsync);
+		swapchain.Initialize(vk, window, presentMode);
 
 		if (m_swapchainRecreatedCallback)
 		{
