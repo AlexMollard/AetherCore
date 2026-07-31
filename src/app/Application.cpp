@@ -21,6 +21,7 @@
 #	include "imgui/ImguiSubsystem.hpp"
 #endif
 #include "io/PlatformPaths.hpp"
+#include "RuntimeProjectSettings.hpp"
 #ifdef AETHERCORE_EDITOR_APP
 #	include "utils/TomlConfig.hpp"
 #endif
@@ -114,33 +115,13 @@ namespace aether::app
 #ifdef AETHERCORE_EDITOR_APP
 			return {};
 #else
-			std::filesystem::path projectRoot;
-			if (const std::string env = io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"); !env.empty())
-			{
-				projectRoot = env;
-			}
-			if (projectRoot.empty())
-			{
-				const std::filesystem::path publishedSettings = io::PlatformPaths::GetExecutableDir() / "data" / "config" / "ProjectSettings.toml";
-				std::error_code ec;
-				if (std::filesystem::exists(publishedSettings, ec))
-				{
-					return publishedSettings;
-				}
-			}
+			app::RuntimeProjectSettingsInputs inputs;
+			inputs.envProjectDir = io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR");
+			inputs.exeDir = io::PlatformPaths::GetExecutableDir();
 #	ifdef AETHER_DEFAULT_PROJECT_DIR
-			if (projectRoot.empty())
-			{
-				projectRoot = AETHER_DEFAULT_PROJECT_DIR;
-			}
+			inputs.compiledDefaultDir = AETHER_DEFAULT_PROJECT_DIR;
 #	endif
-			if (projectRoot.empty())
-			{
-				return {};
-			}
-			const std::filesystem::path candidate = projectRoot / "ProjectSettings.toml";
-			std::error_code ec;
-			return std::filesystem::exists(candidate, ec) ? candidate : std::filesystem::path{};
+			return app::ResolveRuntimeProjectSettings(inputs);
 #endif
 		}
 

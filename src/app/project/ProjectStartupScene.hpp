@@ -27,4 +27,5 @@ namespace aether::app
 	// world, and a published game has no editor to notice, so this is an error - never a
 	// warning - on every path that would bake or persist it.
 	bool ValidateProjectStartupScene(const std::filesystem::path& scenesDir, std::string_view sceneName, std::string& error);
+
 } // namespace aether::app

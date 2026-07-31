@@ -5,6 +5,7 @@
 #include <system_error>
 
 #include "io/FileUtil.hpp"
+#include "RuntimeProjectSettings.hpp"
 #include "project/ProjectStartupScene.hpp"
 
 using namespace aether;
@@ -105,6 +106,53 @@ TEST_CASE("WriteProjectStartupScene refuses to overwrite a project file that doe
     CHECK_FALSE(error.empty());
     // The unreadable file is left exactly as it was, not replaced by one key.
     CHECK(project.ProjectFileText() == corrupt);
+}
+
+// A published package must be self-contained. It ships data/project.pak and had its
+// project settings baked into its own EngineSettings.toml, so it must never pick up the
+// project directory compiled into the binary - on the machine that built it that
+// directory still exists, and its startup scene would silently replace the published one.
+TEST_CASE("A published package ignores the project directory compiled into the runtime") {
+    const TempProject devProject("runtime_dev");
+    REQUIRE(io::file_util::WriteText(devProject.projectFile, "[app]\nstartupscene = \"Testing\"\n").has_value());
+
+    const TempProject package("runtime_pkg");
+    REQUIRE(io::file_util::CreateDirectories(package.root / "data").has_value());
+    REQUIRE(io::file_util::WriteText(package.root / "data" / "project.pak", "pak").has_value());
+
+    app::RuntimeProjectSettingsInputs inputs;
+    inputs.exeDir = package.root;
+    inputs.compiledDefaultDir = devProject.root;
+
+    CHECK(app::ResolveRuntimeProjectSettings(inputs).empty());
+}
+
+TEST_CASE("A dev runtime with no package still uses the compiled-in project directory") {
+    const TempProject devProject("runtime_devonly");
+    REQUIRE(io::file_util::WriteText(devProject.projectFile, "[app]\nstartupscene = \"Testing\"\n").has_value());
+
+    const TempProject buildTree("runtime_build");
+
+    app::RuntimeProjectSettingsInputs inputs;
+    inputs.exeDir = buildTree.root; // no data/project.pak beside it
+    inputs.compiledDefaultDir = devProject.root;
+
+    CHECK(app::ResolveRuntimeProjectSettings(inputs) == devProject.projectFile);
+}
+
+TEST_CASE("AETHER_PROJECT_DIR overrides even a published package") {
+    const TempProject devProject("runtime_env");
+    REQUIRE(io::file_util::WriteText(devProject.projectFile, "[app]\nstartupscene = \"Testing\"\n").has_value());
+
+    const TempProject package("runtime_envpkg");
+    REQUIRE(io::file_util::CreateDirectories(package.root / "data").has_value());
+    REQUIRE(io::file_util::WriteText(package.root / "data" / "project.pak", "pak").has_value());
+
+    app::RuntimeProjectSettingsInputs inputs;
+    inputs.envProjectDir = devProject.root;
+    inputs.exeDir = package.root;
+
+    CHECK(app::ResolveRuntimeProjectSettings(inputs) == devProject.projectFile);
 }
 
 TEST_CASE("ProjectHasScene ignores the rebuildable .scene.bin cache") {
