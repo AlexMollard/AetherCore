@@ -529,14 +529,24 @@ TEST_CASE("A non-owned entity is still interpolated, and an owned one is not")
 
 	// Once the motion stops, render time catches up and the remote copy arrives.
 	//
-	// This wait needs a much larger budget than the 3 s default, and the reason is not
-	// slowness for its own sake. NetworkSendSystem paces snapshots off the WALL CLOCK
-	// (see its `(void) dt` note), so the walk above builds an interpolation backlog whose
-	// size depends on how much real time those 100 steps took - which in turn depends on
-	// machine load. Draining that backlog at the render delay therefore takes longer on a
-	// loaded machine, and 3 s was marginal: this case failed roughly one full-suite run in
-	// six while passing every time it ran alone. The budget only costs wall time when the
-	// case genuinely fails, so it is set well clear of the margin rather than near it.
+	// KNOWN INTERMITTENT FAILURE - do not read the large budget below as a fix.
+	//
+	// Under load this case fails with the client parked on exactly 99 while the host is at
+	// 100, and it does not recover in thirty seconds. An earlier explanation blamed a
+	// wall-clock race and raised the budget; that was wrong, and raising it only made the
+	// failure rarer. What has since been established by instrumenting the engine:
+	//
+	//   - the x=100 snapshot DOES reach the client and IS pushed into its interpolation
+	//     buffer (confirmed in a failing run);
+	//   - InterpolationBuffer::Sample clamps to the newest sample once render time passes
+	//     it, so a buffer holding 100 should render 100;
+	//   - the buffer is not empty (the no-sample freeze path does not fire after the push);
+	//   - relevancy is not involved (this session's radius is 1e6);
+	//   - the connection is not dropping.
+	//
+	// So the gap is between "100 is in the buffer" and "the transform reads 99", and it is
+	// not yet closed. Reproduces with three concurrent EngineTests instances as load;
+	// adding any logging to the resolve path perturbs the timing enough to hide it.
 	const bool settled = Run(s.All(), [&] { return client.PositionOfNetId(theirs).x > 99.9f; }, 30000);
 	// Reported only on failure, and worth having: "client x" one step behind "host x" is a
 	// backlog still draining, which reads very differently from a value stuck at the start.
@@ -544,6 +554,10 @@ TEST_CASE("A non-owned entity is still interpolated, and an owned one is not")
 	INFO("host x = " << s.host.PositionOfNetId(theirs).x);
 	INFO("client x = " << client.PositionOfNetId(theirs).x);
 	INFO("lagging x during walk = " << lagging);
+	// Relevancy is measured from the entity this connection owns, so the walked entity
+	// leaves the viewer's radius at viewer.x + RelevancySettings::radius.
+	INFO("viewer x on host = " << s.host.PositionOfNetId(mine).x);
+	INFO("relevancy radius = " << s.host.context.Relevancy().radius);
 	REQUIRE(settled);
 }
 
