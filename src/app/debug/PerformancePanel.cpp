@@ -2,220 +2,227 @@
 #include "debug/EditorChrome.hpp"
 
 #include <algorithm>
+#include <cfloat>
 #include <cstdio>
+#include <string>
+#include <vector>
 
 #include <imgui.h>
 
 #include "layers/AppLayer.hpp"
-#include "Color.hpp"
-#include "imgui/ImguiSubsystem.hpp"
-#include "rendering/Renderer.hpp"
-#include "rendering/RenderingSubsystem.hpp"
+#include "utils/FrameStats.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::editor
 {
-	void PerformancePanel::PushFrameSample(float frameMs)
+	namespace
 	{
-		m_frameSamples[m_frameSampleHead] = frameMs;
-		m_frameSampleHead = (m_frameSampleHead + 1) % kFrameSampleCount;
-		m_frameSampleCount = std::min(m_frameSampleCount + 1, kFrameSampleCount);
+		ImVec4 SmoothnessColor(const Smoothness smoothness)
+		{
+			switch (smoothness)
+			{
+				case Smoothness::Stuttering:
+					return chrome::kError;
+				case Smoothness::Alternating:
+					return chrome::kWarning;
+				case Smoothness::Even:
+					break;
+			}
+			return chrome::kSuccess;
+		}
+
+		const char* DominantPhase(const FrameTiming& frame)
+		{
+			struct Entry
+			{
+				const char* name;
+				float ms;
+			};
+			const Entry entries[] = {
+			        {"game work", frame.gameWorkMs},
+			        {"in-flight wait", frame.inFlightWaitMs},
+			        {"pacer wait", frame.pacerWaitMs},
+			        {"render exec", frame.renderExecMs},
+			        {"present wait", frame.presentWaitMs},
+			};
+			const Entry* worst = &entries[0];
+			for (const Entry& entry: entries)
+			{
+				if (entry.ms > worst->ms)
+				{
+					worst = &entry;
+				}
+			}
+			return worst->name;
+		}
+
+		float MeanOf(const std::vector<FrameTiming>& frames, float FrameTiming::*field)
+		{
+			if (frames.empty())
+			{
+				return 0.0f;
+			}
+			float total = 0.0f;
+			for (const FrameTiming& frame: frames)
+			{
+				total += frame.*field;
+			}
+			return total / static_cast<float>(frames.size());
+		}
+	} // namespace
+
+	void PerformancePanel::DrawVerdict(const FrameStats& stats) const
+	{
+		const float fps = stats.avgMs > 0.0f ? 1000.0f / stats.avgMs : 0.0f;
+		ImGui::Text("%.0f fps", static_cast<double>(fps));
+		ImGui::SameLine();
+		ImGui::TextDisabled("avg %.2f ms", static_cast<double>(stats.avgMs));
+		ImGui::SameLine();
+		const std::string label(SmoothnessLabel(stats.smoothness));
+		ImGui::TextColored(SmoothnessColor(stats.smoothness), "%s", label.c_str());
+
+		ImGui::TextDisabled("min %.2f   median %.2f   p95 %.2f   p99 %.2f   max %.2f ms",
+		        static_cast<double>(stats.minMs), static_cast<double>(stats.medianMs),
+		        static_cast<double>(stats.p95Ms), static_cast<double>(stats.p99Ms), static_cast<double>(stats.maxMs));
 	}
 
-	void PerformancePanel::OnUpdate(app::LayerContext& context)
+	void PerformancePanel::DrawPacingStrip() const
 	{
-		PushFrameSample(static_cast<float>(context.deltaTimeSeconds * 1000.0));
+		if (m_frames.empty())
+		{
+			return;
+		}
+		ImGui::SeparatorText("Pacing");
+		std::vector<float> wall;
+		wall.reserve(m_frames.size());
+		for (const FrameTiming& frame: m_frames)
+		{
+			wall.push_back(frame.wallMs);
+		}
+		const float scale = std::max(*std::ranges::max_element(wall), 1.0f);
+		ImGui::PlotHistogram("##pacing", wall.data(), static_cast<int>(wall.size()), 0, nullptr, 0.0f, scale, ImVec2(-FLT_MIN, 72.0f));
+		ImGui::TextDisabled("each column is one frame; even heights mean even delivery");
+	}
+
+	void PerformancePanel::DrawPhaseBreakdown() const
+	{
+		ImGui::SeparatorText("Where the time goes (mean ms)");
+		if (ImGui::BeginTable("##phases", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+		{
+			const struct
+			{
+				const char* label;
+				float FrameTiming::*field;
+			} rows[] = {
+			        {"Game work", &FrameTiming::gameWorkMs},
+			        {"In-flight wait", &FrameTiming::inFlightWaitMs},
+			        {"Pacer wait", &FrameTiming::pacerWaitMs},
+			        {"Render exec", &FrameTiming::renderExecMs},
+			        {"Present wait", &FrameTiming::presentWaitMs},
+			};
+			for (const auto& row: rows)
+			{
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted(row.label);
+				ImGui::TableNextColumn();
+				ImGui::Text("%.3f", static_cast<double>(MeanOf(m_frames, row.field)));
+			}
+			ImGui::EndTable();
+		}
+	}
+
+	void PerformancePanel::DrawSimVsReal() const
+	{
+		if (m_frames.empty())
+		{
+			return;
+		}
+		ImGui::SeparatorText("Simulation vs real");
+		std::size_t clamped = 0;
+		float lostMs = 0.0f;
+		for (const FrameTiming& frame: m_frames)
+		{
+			if (frame.wallMs > frame.simDtMs + 0.01f)
+			{
+				++clamped;
+				lostMs += frame.wallMs - frame.simDtMs;
+			}
+		}
+		if (clamped == 0)
+		{
+			ImGui::TextColored(chrome::kSuccess, "Simulation received the full frame time.");
+			return;
+		}
+		ImGui::TextColored(chrome::kWarning, "%zu of %zu frames were clamped, losing %.1f ms of simulation time.",
+		        clamped, m_frames.size(), static_cast<double>(lostMs));
+		ImGui::TextDisabled("The world advances slower than the clock; motion falls behind.");
+	}
+
+	void PerformancePanel::DrawStutterList(const FrameStats& stats) const
+	{
+		ImGui::SeparatorText("Worst frames");
+		const float threshold = stats.medianMs * 1.5f;
+		int shown = 0;
+		for (auto it = m_frames.rbegin(); it != m_frames.rend() && shown < 6; ++it)
+		{
+			if (it->wallMs <= threshold)
+			{
+				continue;
+			}
+			ImGui::Text("#%llu  %.2f ms", static_cast<unsigned long long>(it->frameIndex), static_cast<double>(it->wallMs));
+			ImGui::SameLine();
+			ImGui::TextDisabled("mostly %s", DominantPhase(*it));
+			++shown;
+		}
+		if (shown == 0)
+		{
+			ImGui::TextDisabled("No frame exceeded 1.5x the median.");
+		}
 	}
 
 	void PerformancePanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
-		const float curMs = m_frameSampleCount > 0 ? m_frameSamples[(m_frameSampleHead + m_frameSamples.size() - 1) % m_frameSamples.size()] : static_cast<float>(context.deltaTimeSeconds * 1000.0);
-		float totalMs = 0.0f;
-		float minMs = curMs;
-		float maxMs = curMs;
-		float p95Ms = 0.0f;
-		float p99Ms = 0.0f;
-		for (std::size_t i = 0; i < m_frameSampleCount; ++i)
+		const auto* timeline = context.TryGet<FrameTimeline>();
+		if (timeline == nullptr)
 		{
-			const std::size_t idx = (m_frameSampleHead + m_frameSamples.size() - m_frameSampleCount + i) % m_frameSamples.size();
-			const float sample = m_frameSamples[idx];
-			m_orderedSamples[i] = sample;
-			totalMs += sample;
-			minMs = std::min(minMs, sample);
-			maxMs = std::max(maxMs, sample);
+			ImGui::Begin("Performance###Performance", VisiblePtr());
+			chrome::PanelHeader("PERFORMANCE");
+			// Deliberately no fallback to context.deltaTimeSeconds: reporting the clamped
+			// simulation delta as if it were frame time is the bug this panel was rewritten
+			// to remove, and a silent fallback would quietly reintroduce it.
+			ImGui::TextColored(chrome::kError, "No frame timeline available.");
+			ImGui::End();
+			return;
 		}
 
-		const float avgMs = m_frameSampleCount > 0 ? totalMs / static_cast<float>(m_frameSampleCount) : curMs;
-		const float curFps = curMs > 0.0f ? 1000.0f / curMs : 0.0f;
-		const float avgFps = avgMs > 0.0f ? 1000.0f / avgMs : 0.0f;
+		m_frames.resize(kDisplayFrames);
+		const std::size_t count = timeline->Snapshot(m_frames);
+		m_frames.resize(count);
 
-		if (m_frameSampleCount > 0)
-		{
-			m_sorted = m_orderedSamples;
-			std::sort(m_sorted.begin(), m_sorted.begin() + static_cast<std::ptrdiff_t>(m_frameSampleCount));
-			const std::size_t count = m_frameSampleCount;
-			p95Ms = m_sorted[static_cast<std::size_t>(static_cast<float>(count) * 0.95f) % count];
-			p99Ms = m_sorted[static_cast<std::size_t>(static_cast<float>(count) * 0.99f) % count];
-		}
+		const FrameStats stats = ComputeFrameStats(m_frames);
 
-		m_titleAccum += static_cast<float>(context.deltaTimeSeconds);
+		m_titleAccum += ImGui::GetIO().DeltaTime;
 		if (m_titleFps == 0.0f || m_titleAccum >= kTitleUpdateInterval)
 		{
-			m_titleFps = avgFps;
-			m_titleMs = avgMs;
+			m_titleFps = stats.avgMs > 0.0f ? 1000.0f / stats.avgMs : 0.0f;
+			m_titleMs = stats.avgMs;
 			m_titleAccum = 0.0f;
 		}
 
-		char title[96];
-		std::snprintf(title, sizeof(title), "Performance  |  %.0f FPS  |  %.2f ms###Performance", m_titleFps, m_titleMs);
+		char title[96]{};
+		std::snprintf(title, sizeof(title), "Performance  |  %.0f FPS  |  %.2f ms###Performance",
+		        static_cast<double>(m_titleFps), static_cast<double>(m_titleMs));
+
 		ImGui::Begin(title, VisiblePtr());
-		char perfStat[48];
-		std::snprintf(perfStat, sizeof(perfStat), "%.0f FPS Â· %.2f MS", m_titleFps, m_titleMs);
-		chrome::PanelHeader("PERFORMANCE", perfStat);
-
-		if (ImGui::BeginTable("PerfStats", 4, ImGuiTableFlags_SizingStretchProp))
-		{
-			ImGui::TableNextRow();
-
-			ImGui::TableSetColumnIndex(0);
-			ImGui::TextUnformatted("Frame");
-			ImGui::SameLine();
-			ImGui::Text("#%llu", static_cast<unsigned long long>(context.frameIndex));
-
-			ImGui::TableSetColumnIndex(1);
-			ImGui::TextUnformatted("FPS ");
-			ImGui::SameLine();
-			ImGui::TextColored(FpsColor(curFps), "%.1f", curFps);
-			ImGui::SameLine();
-			ImGui::TextDisabled("(%.1f)", avgFps);
-
-			ImGui::TableSetColumnIndex(2);
-			ImGui::TextUnformatted("Delta");
-			ImGui::SameLine();
-			ImGui::TextColored(MsColor(curMs), "%.2fms", curMs);
-
-			ImGui::TableSetColumnIndex(3);
-			ImGui::TextUnformatted("Render CPU");
-			ImGui::SameLine();
-			float renderCpuMs = -1.0f;
-			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
-			{
-				renderCpuMs = imgui->GetLastRenderCpuTimeMs();
-			}
-			if (renderCpuMs >= 0.0f)
-			{
-				ImGui::TextColored(MsColor(renderCpuMs), "%.3fms", renderCpuMs);
-			}
-			else
-			{
-				ImGui::TextDisabled("N/A");
-			}
-
-			ImGui::TableNextRow();
-
-			ImGui::TableSetColumnIndex(0);
-			ImGui::TextUnformatted("Avg");
-			ImGui::SameLine();
-			ImGui::TextColored(MsColor(avgMs), "%.2fms", avgMs);
-
-			ImGui::TableSetColumnIndex(1);
-			ImGui::TextUnformatted("Min");
-			ImGui::SameLine();
-			ImGui::TextColored(ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a}, "%.2fms", minMs);
-
-			ImGui::TableSetColumnIndex(2);
-			ImGui::TextUnformatted("Max");
-			ImGui::SameLine();
-			ImGui::TextColored(MsColor(maxMs), "%.2fms", maxMs);
-
-			ImGui::TableSetColumnIndex(3);
-			ImGui::TextUnformatted("P95 ");
-			ImGui::SameLine();
-			ImGui::TextColored(MsColor(p95Ms), "%.2f", p95Ms);
-			ImGui::SameLine();
-			ImGui::TextUnformatted("  P99 ");
-			ImGui::SameLine();
-			ImGui::TextColored(MsColor(p99Ms), "%.2f", p99Ms);
-
-			ImGui::EndTable();
-		}
-
-		if (m_frameSampleCount > 0)
-		{
-			constexpr int kBucketCount = 8;
-			constexpr float kBucketThresholds[kBucketCount] = {2.0f, 4.0f, 8.333f, 12.0f, 16.667f, 33.333f, 50.0f, 100.0f};
-			const ImU32 kBucketColors[kBucketCount] = {
-			        ToU32(colors::HistFastest),
-			        ToU32(colors::HistFast),
-			        ToU32(colors::HistFair),
-			        ToU32(colors::HistOkay),
-			        ToU32(colors::HistSlow),
-			        ToU32(colors::HistSlower),
-			        ToU32(colors::HistBad),
-			        ToU32(colors::HistTerrible),
-			};
-			constexpr const char* kBucketLabels[kBucketCount] = {"<2", "<4", "<8.33", "<12", "<16.67", "<33.33", "<50", ">50"};
-
-			int bucketCounts[kBucketCount] = {};
-			for (std::size_t i = 0; i < m_frameSampleCount; ++i)
-			{
-				const float ms = m_orderedSamples[i];
-				for (int b = 0; b < kBucketCount; ++b)
-				{
-					if (ms < kBucketThresholds[b])
-					{
-						++bucketCounts[b];
-						break;
-					}
-				}
-			}
-
-			const int maxBucket = *std::ranges::max_element(bucketCounts);
-			const float barWidth = (ImGui::GetContentRegionAvail().x - static_cast<float>(kBucketCount) * 4.0f) / static_cast<float>(kBucketCount);
-			if (barWidth > 0.0f)
-			{
-				ImDrawList* dl = ImGui::GetWindowDrawList();
-				const ImVec2 origin = ImGui::GetCursorScreenPos();
-				const float barMaxHeight = 60.0f;
-				const float barMinHeight = 4.0f;
-
-				for (int b = 0; b < kBucketCount; ++b)
-				{
-					const float t = maxBucket > 0 ? static_cast<float>(bucketCounts[b]) / static_cast<float>(maxBucket) : 0.0f;
-					const float h = barMinHeight + t * (barMaxHeight - barMinHeight);
-					const ImVec2 bMin(origin.x + static_cast<float>(b) * (barWidth + 4.0f), origin.y + barMaxHeight - h);
-					const ImVec2 bMax(bMin.x + barWidth, origin.y + barMaxHeight);
-					dl->AddRectFilled(bMin, bMax, kBucketColors[b], 3.0f);
-					dl->AddRect(bMin, bMax, ToU32(colors::Border), 3.0f);
-
-					const float labelY = origin.y + barMaxHeight + 2.0f;
-					const char* label = kBucketLabels[b];
-					const ImVec2 labelSize = ImGui::CalcTextSize(label);
-					dl->AddText(ImVec2(bMin.x + (barWidth - labelSize.x) * 0.5f, labelY), ToU32(colors::TextSecondary), label);
-				}
-			}
-
-			ImGui::Dummy(ImVec2(0.0f, 60.0f + 20.0f));
-		}
-
-		{
-			const float minPlot = 0.0f;
-			const float maxPlot = std::max(33.333f, maxMs * 1.1f);
-			const float plotHeight = std::max(40.0f, ImGui::GetContentRegionAvail().y);
-
-			ImGui::PlotLines("##FrameTime", m_orderedSamples.data(), static_cast<int>(m_frameSampleCount), 0, nullptr, minPlot, maxPlot, ImVec2(-1.0f, plotHeight));
-		}
-
+		chrome::PanelHeader("PERFORMANCE");
+		DrawVerdict(stats);
+		DrawPacingStrip();
+		DrawPhaseBreakdown();
+		DrawSimVsReal();
+		DrawStutterList(stats);
 		ImGui::End();
-	}
-
-	void PerformancePanel::LoadSettings(TomlConfig& /*config*/, app::LayerContext& /*context*/)
-	{
-	}
-
-	void PerformancePanel::SaveSettings(TomlConfig& /*config*/, app::LayerContext& /*context*/) const
-	{
 	}
 } // namespace aether::editor

@@ -874,9 +874,12 @@ namespace aether
 			// presentWait is both places the render thread can block on the swapchain:
 			// acquiring an image, and submitting/presenting it. With FIFO vsync this is
 			// where the refresh cadence actually enters the frame.
-			m_frameTimeline.RecordRenderFrame(packet.frameIndex,
-			        ms(execStart, execEnd),
-			        ms(acquireStart, acquireEnd) + ms(presentStart, presentEnd));
+			const float presentWaitMs = ms(acquireStart, acquireEnd) + ms(presentStart, presentEnd);
+			// Report render EXEC with the present block taken out. The two are nested, and a
+			// phase breakdown whose rows overlap cannot be read as a breakdown - it would
+			// show the same blocked refresh interval twice and never sum to a frame.
+			const float renderWorkMs = std::max(0.0f, ms(execStart, execEnd) - presentWaitMs);
+			m_frameTimeline.RecordRenderFrame(packet.frameIndex, renderWorkMs, presentWaitMs);
 		}
 	}
 

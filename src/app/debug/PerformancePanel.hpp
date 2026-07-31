@@ -1,36 +1,39 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <string_view>
+#include <vector>
 
 #include "debug/DebugPanel.hpp"
+#include "utils/FrameStats.hpp"   // FrameStats / Smoothness appear in the signatures below
+#include "utils/FrameTimeline.hpp"
 
 namespace aether::editor
 {
+	// A view over the engine's FrameTimeline. Holds no history of its own: the ring is the
+	// single source of truth, which is what removed the three parallel sample arrays this
+	// panel used to carry.
 	class PerformancePanel final : public DebugPanel
 	{
 	public:
-		static constexpr std::size_t kFrameSampleCount = 180;
+		static constexpr std::size_t kDisplayFrames = 240;
 
 		std::string_view GetName() const override
 		{
 			return "Performance";
 		}
 
-		void OnUpdate(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
-		void PushFrameSample(float frameMs);
+		void DrawVerdict(const FrameStats& stats) const;
+		void DrawPacingStrip() const;
+		void DrawPhaseBreakdown() const;
+		void DrawSimVsReal() const;
+		void DrawStutterList(const FrameStats& stats) const;
 
-		std::array<float, kFrameSampleCount> m_frameSamples{};
-		std::array<float, kFrameSampleCount> m_orderedSamples{};
-		std::array<float, kFrameSampleCount> m_sorted{};
-		std::size_t m_frameSampleHead = 0;
-		std::size_t m_frameSampleCount = 0;
+		// Reused every frame so drawing allocates nothing.
+		std::vector<FrameTiming> m_frames;
 
 		static constexpr float kTitleUpdateInterval = 0.5f;
 		float m_titleFps = 0.0f;
