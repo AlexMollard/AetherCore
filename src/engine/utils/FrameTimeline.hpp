@@ -27,6 +27,9 @@ namespace aether
 		// Tick() takes from it. This is latency the player feels but no frame-time percentile
 		// can show, because the frame is vsync-locked either way.
 		float inputStaleMs = 0.0f;
+		// Everything the game thread did between latching input and handing the frame off.
+		// This is what LatencyPacer must fit inside its reserve.
+		float latchToSubmitMs = 0.0f;
 		bool renderComplete = false;
 	};
 

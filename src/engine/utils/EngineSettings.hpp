@@ -42,6 +42,11 @@ namespace aether
 			// that get replaced, and does nothing when vsync is off (that is already
 			// IMMEDIATE). Falls back to FIFO wherever the driver lacks MAILBOX.
 			bool lowLatencyPresent = false;
+			// Idle out most of the display interval and latch input just before the flip that
+			// will show the frame. Requires a MEASURED flip phase (VK_KHR_present_wait); where
+			// that is unavailable this does nothing, because pacing against a guessed phase was
+			// measured to be strictly worse than not pacing.
+			bool latencyPacing = true;
 
 			// Render the SCENE at this fraction of the output and let the existing final
 			// fullscreen pass upscale it; UI still draws at native resolution on top, so text
@@ -96,6 +101,7 @@ namespace aether
 		f("graphics.framesInFlight", settings.graphics.framesInFlight);
 		f("graphics.lowLatencyPresent", settings.graphics.lowLatencyPresent);
 		f("graphics.renderScale", settings.graphics.renderScale);
+		f("graphics.latencyPacing", settings.graphics.latencyPacing);
 		f("graphics.fxaa", settings.graphics.fxaa);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);

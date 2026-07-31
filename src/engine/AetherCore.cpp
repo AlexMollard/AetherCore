@@ -52,6 +52,7 @@
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/FrameStats.hpp"
+#include "utils/LatencyPacer.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether
@@ -338,6 +339,24 @@ namespace aether
 		std::vector<float> reportWall;
 		reportWall.reserve(FrameTimeline::kCapacity);
 
+		LatencyPacer latencyPacer;
+		std::uint64_t pacedFrames = 0;
+		std::uint64_t missedFlips = 0;
+
+		// Coarse sleep then a short spin: sleep_for routinely overshoots by a millisecond or
+		// more, and overshooting here means missing the very flip this is aiming at.
+		const auto idleUntil = [](const std::chrono::steady_clock::time_point deadline)
+		{
+			constexpr auto kSpin = std::chrono::milliseconds(1);
+			if (const auto remaining = deadline - std::chrono::steady_clock::now(); remaining > kSpin)
+			{
+				std::this_thread::sleep_for(remaining - kSpin);
+			}
+			while (std::chrono::steady_clock::now() < deadline)
+			{ /* spin */
+			}
+		};
+
 		while (!ShouldClose())
 		{
 			AE_PROFILE_ZONE_N("Frame");
@@ -380,6 +399,24 @@ namespace aether
 			}
 			const auto afterInFlightWait = std::chrono::steady_clock::now();
 
+			// Idle until just before the flip that will actually show this frame. Gated on a
+			// MEASURED phase: with no present-timing estimate the engine keeps its previous
+			// behaviour rather than pacing against an inferred one.
+			const PresentTimingTracker& presentTiming = m_gpu->GetPresentTiming();
+			if (m_settings.graphics.latencyPacing && presentTiming.HasEstimate() && latencyPacer.IsWarm())
+			{
+				const auto flip = presentTiming.PredictNextFlip(afterInFlightWait);
+				const auto latchAt = flip - std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<float, std::milli>(latencyPacer.ReserveMs()));
+				if (latchAt > afterInFlightWait)
+				{
+					AE_PROFILE_ZONE_N("LatencyPacer::Idle");
+					idleUntil(latchAt);
+					++pacedFrames;
+				}
+			}
+
+			const auto latchStart = std::chrono::steady_clock::now();
+			const float pacerIdleMs = std::chrono::duration<float, std::milli>(latchStart - afterInFlightWait).count();
 			PumpEvents();
 			const auto afterPump = std::chrono::steady_clock::now();
 
@@ -482,9 +519,23 @@ namespace aether
 				timing.pacerWaitMs = ms(frameStart, afterPacer);
 				timing.inFlightWaitMs = ms(beforeInFlightWait, afterInFlightWait);
 				timing.inputStaleMs = ms(afterPump, beforeTick);
+				timing.latchToSubmitMs = ms(latchStart, frameEnd);
 				// Everything the game thread did that was not spent waiting.
-				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs);
+				// The latency pacer's idle is a wait like any other; leaving it in reported a loop
+				// doing 0.1 ms of work as 10 ms. (The pacer is fed latchToSubmitMs, which starts
+				// after the idle, so it never sees its own sleep.)
+				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs - pacerIdleMs);
 				m_frameTimeline.RecordGameFrame(timing);
+
+				// Feed the pacer the MEASURED display period, not the loop period: the loop can
+				// be dragged off the display cadence by exactly the mistiming this exists to
+				// prevent, which would have the controller chasing its own error.
+				{
+					const auto periodMs = static_cast<float>(presentTiming.PeriodMs());
+					const bool missed = periodMs > 0.0f && timing.wallMs > periodMs * 1.5f;
+					missedFlips += missed ? 1 : 0;
+					latencyPacer.Observe(periodMs > 0.0f ? periodMs : timing.wallMs, timing.latchToSubmitMs, missed);
+				}
 
 				if (frameReportInterval > 0.0 && std::chrono::duration<double>(frameEnd - lastFrameReport).count() >= frameReportInterval)
 				{
@@ -505,6 +556,8 @@ namespace aether
 					float present = 0.0f;
 					float inputStale = 0.0f;
 					std::size_t clamped = 0;
+					std::size_t unthrottled = 0;
+					const auto flipPeriodMs = static_cast<float>(presentTiming.PeriodMs());
 					for (std::size_t i = 0; i < count; ++i)
 					{
 						const FrameTiming& frame = reportFrames[i];
@@ -516,6 +569,15 @@ namespace aether
 						if (frame.wallMs > frame.simDtMs + 0.01f)
 						{
 							++clamped;
+						}
+						// A vsync-locked frame cannot legitimately be much shorter than the display
+						// period. When it is, the window is occluded or minimised and the compositor
+						// has stopped throttling us, so the sample says nothing about the engine.
+						// Two separate conclusions in this area were drawn from runs like this
+						// before the counter existed, and both were wrong.
+						if (flipPeriodMs > 0.0f && frame.wallMs < flipPeriodMs * 0.5f)
+						{
+							++unthrottled;
 						}
 					}
 					if (!reportWall.empty())
@@ -533,10 +595,11 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | flipPeriod={:.3f} flips={} | clamped={}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} | clamped={} unthrottled={}{}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
 						        gameWork / n, inFlight / n, present / n, inputStale / n,
-					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), clamped);
+					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(), pacedFrames, missedFlips, clamped, unthrottled,
+					        unthrottled > count / 20 ? "  <-- SAMPLE UNRELIABLE, window was occluded" : "");
 					}
 				}
 			}
