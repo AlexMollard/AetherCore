@@ -356,7 +356,7 @@ namespace aether::editor
 			// on, so it fails the publish instead of being written out and warned about later.
 			if (!app::ValidateProjectStartupScene(project.scenesDir, loaded.base.app.startupScene, error))
 			{
-				error += " Set it in the Project panel (or the star in the Scenes list), which writes it to " + DisplayPath(project.projectFile) + ", then publish again.";
+				error += " It is read from " + DisplayPath(project.projectFile) + ".";
 				return false;
 			}
 

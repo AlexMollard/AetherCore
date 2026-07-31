@@ -27,11 +27,7 @@ namespace aether::app
 			return {};
 		}
 		TomlConfig config;
-		try
-		{
-			config.Load(*text);
-		}
-		catch (...)
+		if (!config.Load(*text))
 		{
 			return {};
 		}
@@ -58,17 +54,12 @@ namespace aether::app
 				error = "Could not read project settings; refusing to overwrite " + projectFile.generic_string();
 				return false;
 			}
-			if (text)
+			// A file that does not parse leaves the config empty, so saving would write back
+			// nothing but the key below and destroy the rest of the project. Refuse.
+			if (text && !config.Load(*text))
 			{
-				try
-				{
-					config.Load(*text);
-				}
-				catch (...)
-				{
-					error = "Could not parse project settings: " + projectFile.generic_string();
-					return false;
-				}
+				error = "Could not parse project settings; refusing to overwrite " + projectFile.generic_string();
+				return false;
 			}
 		}
 

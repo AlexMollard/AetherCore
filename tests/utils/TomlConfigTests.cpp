@@ -20,7 +20,7 @@ TEST_CASE("TomlConfig: top-level key round-trips when it sorts after a section")
     cfg.Save(saved);
 
     TomlConfig reloaded;
-    reloaded.Load(saved.str());
+    REQUIRE(reloaded.Load(saved.str()));
 
     CHECK(reloaded.Has("rendergraphautoselecthotpass"));
     CHECK_FALSE(reloaded.Has("launcher.rendergraphautoselecthotpass"));
@@ -37,7 +37,7 @@ TEST_CASE("TomlConfig: repeated save/reload does not corrupt into duplicate keys
     cfg.Save(first);
 
     TomlConfig second;
-    second.Load(first.str());
+    REQUIRE(second.Load(first.str()));
     second.Set("rendergraphautoselecthotpass", false);
 
     std::ostringstream secondOut;
@@ -45,7 +45,7 @@ TEST_CASE("TomlConfig: repeated save/reload does not corrupt into duplicate keys
 
     // Re-parsing must succeed: a duplicate-key parse error drops every value.
     TomlConfig third;
-    third.Load(secondOut.str());
+    REQUIRE(third.Load(secondOut.str()));
     CHECK(third.Has("launcher.name"));
     CHECK(third.Has("rendergraphautoselecthotpass"));
 }

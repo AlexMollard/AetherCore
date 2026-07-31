@@ -151,7 +151,7 @@ namespace aether::text
 		}
 	}
 
-	void ParseToml(std::string_view text, const std::function<void(const IniEntry&)>& onEntry)
+	bool ParseToml(std::string_view text, const std::function<void(const IniEntry&)>& onEntry)
 	{
 		toml::table parsed;
 		try
@@ -161,8 +161,9 @@ namespace aether::text
 		catch (const toml::parse_error& err)
 		{
 			AE_ERROR(LogCategory::Engine, "TOML parse error at line {}: {}", err.source().begin.line, err.description());
-			return;
+			return false;
 		}
 		EmitTomlTable(parsed, {}, onEntry);
+		return true;
 	}
 } // namespace aether::text

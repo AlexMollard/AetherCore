@@ -340,11 +340,7 @@ namespace aether::editor
 		}
 
 		TomlConfig config;
-		try
-		{
-			config.Load(*text);
-		}
-		catch (...)
+		if (!config.Load(*text))
 		{
 			m_publishStatus = "Could not parse publish settings.";
 			m_publishSucceeded = false;
@@ -378,18 +374,14 @@ namespace aether::editor
 				AE_ERROR(LogCategory::App, "{}", m_publishStatus);
 				return;
 			}
-			if (text)
+			// Same hazard again, and the one that actually bit: a file that does not parse
+			// loads as EMPTY, so writing it back would leave nothing but [publish].
+			if (text && !config.Load(*text))
 			{
-				try
-				{
-					config.Load(*text);
-				}
-				catch (...)
-				{
-					m_publishStatus = "Could not parse publish settings.";
-					m_publishSucceeded = false;
-					return;
-				}
+				m_publishStatus = "Could not parse project settings; refusing to overwrite " + settingsPath.generic_string();
+				m_publishSucceeded = false;
+				AE_ERROR(LogCategory::App, "{}", m_publishStatus);
+				return;
 			}
 		}
 

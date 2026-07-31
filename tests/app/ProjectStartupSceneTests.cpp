@@ -95,6 +95,18 @@ TEST_CASE("ValidateProjectStartupScene rejects an unset startup scene") {
     CHECK_FALSE(error.empty());
 }
 
+TEST_CASE("WriteProjectStartupScene refuses to overwrite a project file that does not parse") {
+    const TempProject project("corrupt");
+    const std::string corrupt = "[app\nstartupscene = = broken\n";
+    REQUIRE(io::file_util::WriteText(project.projectFile, corrupt).has_value());
+
+    std::string error;
+    CHECK_FALSE(app::WriteProjectStartupScene(project.projectFile, "Title", error));
+    CHECK_FALSE(error.empty());
+    // The unreadable file is left exactly as it was, not replaced by one key.
+    CHECK(project.ProjectFileText() == corrupt);
+}
+
 TEST_CASE("ProjectHasScene ignores the rebuildable .scene.bin cache") {
     const TempProject project("bin");
     // A fresh clone has the authored .toml and no .bin; a stale tree can have the .bin

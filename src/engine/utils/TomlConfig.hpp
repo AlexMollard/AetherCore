@@ -11,7 +11,10 @@ namespace aether
 	class TomlConfig
 	{
 	public:
-		void Load(std::string_view tomlText);
+		// False when the text does not parse, leaving the config EMPTY. Anything that loads,
+		// edits and writes the same file must refuse to save on false: saving would replace
+		// the file with only the keys it explicitly Set, destroying every other section.
+		[[nodiscard]] bool Load(std::string_view tomlText);
 		void Save(std::ostream& out, std::string_view headerComment = {}) const;
 
 		[[nodiscard]] bool LoadFile(std::string_view fileName);

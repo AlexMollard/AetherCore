@@ -16,6 +16,25 @@ namespace aether
 {
 	namespace
 	{
+		// A TOML basic string with the two characters that must not appear raw inside one
+		// escaped. Both Set and the re-quoting path below go through this: a Windows path
+		// round-tripped as `"D:\AetherCore\..."` is not merely ugly, `\A` is an invalid
+		// escape and the whole document stops parsing.
+		std::string QuoteTomlString(std::string_view value)
+		{
+			std::string quoted = "\"";
+			for (const char c: value)
+			{
+				if (c == '\\' || c == '"')
+				{
+					quoted += '\\';
+				}
+				quoted += c;
+			}
+			quoted += '"';
+			return quoted;
+		}
+
 		// loaded (not Set), we must re-quote bare strings to produce valid TOML.
 		bool IsBareStringValue(std::string_view value)
 		{
@@ -41,11 +60,11 @@ namespace aether
 		}
 	} // namespace
 
-	void TomlConfig::Load(std::string_view tomlText)
+	bool TomlConfig::Load(std::string_view tomlText)
 	{
 		m_values.clear();
 		m_dirty = false;
-		text::ParseToml(tomlText, [this](const text::IniEntry& entry) { m_values[entry.fullKey] = entry.value; });
+		return text::ParseToml(tomlText, [this](const text::IniEntry& entry) { m_values[entry.fullKey] = entry.value; });
 	}
 
 	namespace
@@ -55,7 +74,7 @@ namespace aether
 			out << key << " = ";
 			if (IsBareStringValue(rawValue))
 			{
-				out << '"' << rawValue << '"';
+				out << QuoteTomlString(rawValue);
 			}
 			else
 			{
@@ -127,8 +146,7 @@ namespace aether
 					{
 						text[i] = static_cast<char>(bytes[i]);
 					}
-					Load(text);
-					return true;
+					return Load(text);
 				}
 			}
 			catch (const std::exception& e)
@@ -145,8 +163,7 @@ namespace aether
 			return false;
 		}
 
-		Load(*text);
-		return true;
+		return Load(*text);
 	}
 
 	bool TomlConfig::SaveIfDirty(std::string_view fileName, std::string_view headerComment)
@@ -188,8 +205,7 @@ namespace aether
 		{
 			return false;
 		}
-		Load(*text);
-		return true;
+		return Load(*text);
 	}
 
 	bool TomlConfig::SaveToPath(const std::filesystem::path& path, std::string_view headerComment) const
@@ -263,16 +279,7 @@ namespace aether
 	void TomlConfig::Set(std::string_view key, std::string_view value)
 	{
 		const std::string lowerKey = text::ToLowerAscii(std::string(key));
-		std::string str = "\"";
-		for (const char c: value)
-		{
-			if (c == '\\' || c == '"')
-			{
-				str += '\\';
-			}
-			str += c;
-		}
-		str += '"';
+		std::string str = QuoteTomlString(value);
 		auto& entry = m_values[lowerKey];
 		if (entry != str)
 		{

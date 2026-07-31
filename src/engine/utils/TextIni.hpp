@@ -80,5 +80,8 @@ namespace aether::text
 		return out;
 	}
 
-	void ParseToml(std::string_view text, const std::function<void(const IniEntry&)>& onEntry);
+	// Returns false when the document does not parse, having emitted nothing. Callers that
+	// then write the result back MUST check it: a silent "parsed to nothing" turns a
+	// read-modify-write into a read-destroy-write.
+	bool ParseToml(std::string_view text, const std::function<void(const IniEntry&)>& onEntry);
 } // namespace aether::text

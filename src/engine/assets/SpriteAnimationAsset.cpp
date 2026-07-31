@@ -119,7 +119,10 @@ namespace aether
 		if (pathString.contains("://"))
 		{
 			AE_TRY(text, io::FileSystem::ReadFileText(pathString));
-			config.Load(*text);
+			if (!config.Load(*text))
+			{
+				AE_UNEXPECTED(AetherError::Asset("Failed to parse sprite animation '" + path.string() + "'."));
+			}
 		}
 		else if (!config.LoadFromPath(path))
 		{

@@ -34,7 +34,7 @@ TEST_CASE("Editing one key preserves every other project setting")
 	        "version = 1\n";
 
 	TomlConfig config;
-	config.Load(original);
+	REQUIRE(config.Load(original));
 	config.Set("app.startupscene", "Arena");
 
 	std::ostringstream out;
@@ -63,18 +63,72 @@ TEST_CASE("Editing one key preserves every other project setting")
 TEST_CASE("A saved project file reloads with the same values")
 {
 	TomlConfig first;
-	first.Load(
-	        "[app]\nstartupscene = \"Title\"\n\n[paths]\nassets = \"assets\"\nscenes = \"scenes\"\n\n[project]\nname = \"Whisper\"\nversion = 1\n");
+	REQUIRE(first.Load(
+	        "[app]\nstartupscene = \"Title\"\n\n[paths]\nassets = \"assets\"\nscenes = \"scenes\"\n\n[project]\nname = \"Whisper\"\nversion = 1\n"));
 	first.Set("app.startupscene", "Arena");
 
 	std::ostringstream out;
 	first.Save(out, "AetherCore project file.");
 
 	TomlConfig second;
-	second.Load(out.str());
+	REQUIRE(second.Load(out.str()));
 
 	CHECK(second.GetString("app.startupscene") == "Arena");
 	CHECK(second.GetString("paths.assets") == "assets");
 	CHECK(second.GetString("paths.scenes") == "scenes");
 	CHECK(second.GetString("project.name") == "Whisper");
+}
+
+// The corruption that destroyed a project file. Load decodes a quoted string to its raw
+// value, so Save has to re-quote it - and a Windows path re-quoted without escaping is
+// `"D:\AetherCore\..."`, where \A is an invalid TOML escape. The document then stops
+// parsing, the next Load yields nothing, and the next Save writes a file containing only
+// the keys it explicitly Set.
+TEST_CASE("A backslash path survives repeated load/save cycles")
+{
+	const std::string original =
+	        "[app]\nstartupscene = \"Title\"\n\n"
+	        "[publish]\noutputroot = \"D:\\\\AetherCore\\\\projects\\\\Whisper\\\\Builds\"\n\n"
+	        "[project]\nname = \"Whisper\"\n";
+
+	std::string text = original;
+	for (int cycle = 0; cycle < 3; ++cycle)
+	{
+		TomlConfig config;
+		REQUIRE_MESSAGE(config.Load(text), "document stopped parsing on cycle " << cycle);
+		// Only the publish keys are re-Set, exactly as the publish dialog does. Everything
+		// else is re-emitted from the loaded values, which is where the escaping was lost.
+		config.Set("publish.cleanoutput", true);
+
+		std::ostringstream out;
+		config.Save(out, "AetherCore project file.");
+		text = out.str();
+
+		INFO("cycle " << cycle << " wrote:\n" << text);
+		CHECK(config.GetString("publish.outputroot") == "D:\\AetherCore\\projects\\Whisper\\Builds");
+		CHECK(text.find("startupscene = \"Title\"") != std::string::npos);
+		CHECK(text.find("name = \"Whisper\"") != std::string::npos);
+	}
+}
+
+TEST_CASE("A quote inside a value survives a load/save cycle")
+{
+	TomlConfig first;
+	REQUIRE(first.Load("[project]\nname = \"He said \\\"hi\\\"\"\n"));
+
+	std::ostringstream out;
+	first.Save(out);
+
+	TomlConfig second;
+	REQUIRE(second.Load(out.str()));
+	CHECK(second.GetString("project.name") == "He said \"hi\"");
+}
+
+// Load must report failure rather than leave an empty config that looks successfully
+// loaded - every read-modify-write caller keys its refuse-to-save decision off this.
+TEST_CASE("Load reports failure on a document that does not parse")
+{
+	TomlConfig config;
+	CHECK_FALSE(config.Load("[app\nthis is = = not toml\n"));
+	CHECK_FALSE(config.Has("app.startupscene"));
 }
