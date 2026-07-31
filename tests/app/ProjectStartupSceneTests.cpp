@@ -155,6 +155,26 @@ TEST_CASE("AETHER_PROJECT_DIR overrides even a published package") {
     CHECK(app::ResolveRuntimeProjectSettings(inputs) == devProject.projectFile);
 }
 
+// [publish] was build-machine configuration - including an absolute output path - living
+// in a file shared through git. Publish no longer reads it, so any write drops it.
+TEST_CASE("WriteProjectStartupScene strips a stale [publish] section") {
+    const TempProject project("publishstrip");
+    REQUIRE(io::file_util::WriteText(project.projectFile,
+                                     "[app]\nstartupscene = \"Title\"\n\n"
+                                     "[publish]\noutputroot = \"D:\\\\somewhere\\\\Builds\"\ncleanoutput = true\n\n"
+                                     "[project]\nname = \"Demo\"\n")
+                .has_value());
+
+    std::string error;
+    REQUIRE(app::WriteProjectStartupScene(project.projectFile, "Arena", error));
+
+    const std::string text = project.ProjectFileText();
+    CHECK(text.find("[publish]") == std::string::npos);
+    CHECK(text.find("outputroot") == std::string::npos);
+    CHECK(app::ReadProjectStartupScene(project.projectFile) == "Arena");
+    CHECK(text.find("name = \"Demo\"") != std::string::npos);
+}
+
 TEST_CASE("ProjectHasScene ignores the rebuildable .scene.bin cache") {
     const TempProject project("bin");
     // A fresh clone has the authored .toml and no .bin; a stale tree can have the .bin

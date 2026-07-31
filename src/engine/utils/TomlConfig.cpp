@@ -293,6 +293,14 @@ namespace aether
 		return m_values.contains(text::ToLowerAscii(std::string(key)));
 	}
 
+	void TomlConfig::Erase(std::string_view key)
+	{
+		if (m_values.erase(text::ToLowerAscii(std::string(key))) > 0)
+		{
+			m_dirty = true;
+		}
+	}
+
 	void TomlConfig::Clear()
 	{
 		m_values.clear();

@@ -52,6 +52,11 @@ namespace aether
 		}
 
 		[[nodiscard]] bool Has(std::string_view key) const;
+
+		// Removes a key if present. Used to drop settings that have been retired, so a file
+		// heals on the next write instead of carrying dead keys forever.
+		void Erase(std::string_view key);
+
 		void Clear();
 
 	private:

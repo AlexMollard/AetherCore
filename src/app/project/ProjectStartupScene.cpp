@@ -65,6 +65,22 @@ namespace aether::app
 
 		config.Set(kStartupSceneKey, sceneName);
 
+		// [publish] was build-machine configuration - including an absolute output path - in
+		// a file shared through git. Publish derives all of it now, so drop the dead keys the
+		// first time we write the file rather than leaving them to confuse the next reader.
+		for (const std::string_view retired: {"publish.productname",
+		                                      "publish.platformname",
+		                                      "publish.outputroot",
+		                                      "publish.cleanoutput",
+		                                      "publish.buildscripts",
+		                                      "publish.usepackagetemplate",
+		                                      "publish.verifyoutput",
+		                                      "publish.synceditorpak",
+		                                      "publish.openafter"})
+		{
+			config.Erase(retired);
+		}
+
 		std::ostringstream buffer;
 		config.Save(buffer, "AetherCore project file.");
 		if (auto result = io::file_util::WriteText(projectFile, buffer.str()); !result)

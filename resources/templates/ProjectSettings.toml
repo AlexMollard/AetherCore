@@ -12,14 +12,3 @@ scripts = "scripts"
 
 [app]
 startupScene = "default"
-
-[publish]
-platformName = "Windows"
-productName  = "AetherProject"
-buildScripts = true
-cleanOutput  = true
-openAfter    = true
-syncEditorPak = true
-usePackageTemplate = true
-verifyOutput = true
-outputRoot   = ""
