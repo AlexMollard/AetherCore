@@ -1,5 +1,7 @@
 #include "vulkan/Swapchain.hpp"
 
+#include "vulkan/PresentTimingTracker.hpp"
+
 #include <chrono>
 #include <format>
 
@@ -43,6 +45,13 @@ namespace aether
 
 	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window, const gpu::PresentMode presentMode)
 	{
+		// The waiter must let go of the previous handle before it is destroyed; waiting on a
+		// retired swapchain is undefined.
+		if (m_presentTiming != nullptr)
+		{
+			m_presentTiming->OnSwapchainRetired();
+		}
+
 		int w = 0;
 		int h = 0;
 		glfwGetFramebufferSize(window.GetHandle(), &w, &h);
@@ -87,6 +96,7 @@ namespace aether
 		}
 
 		m_swapchain = result.value();
+		m_presentId = 0;
 
 		// vk-bootstrap silently substitutes FIFO when the desired mode is unsupported, so
 		// report what the driver actually gave us. Measuring latency against a mode you only
@@ -476,8 +486,18 @@ namespace aether
 			}
 		}
 
+		// Present ids must increase strictly within a swapchain, and restart with each new
+		// one; they are the handle vkWaitForPresentKHR uses to identify a frame.
+		const std::uint64_t presentId = m_presentTiming != nullptr ? ++m_presentId : 0;
+		const VkPresentIdKHR presentIdInfo{
+		        .sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
+		        .pNext = nullptr,
+		        .swapchainCount = 1,
+		        .pPresentIds = &presentId,
+		};
 		const VkPresentInfoKHR presentInfo{
 		        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		        .pNext = presentId != 0 ? &presentIdInfo : nullptr,
 		        .waitSemaphoreCount = 1,
 		        .pWaitSemaphores = &renderFinished,
 		        .swapchainCount = 1,
@@ -491,6 +511,10 @@ namespace aether
 			const std::lock_guard<std::mutex> queueLock(aether::vulkan::QueueSubmitMutex());
 			presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
 			AE_PROFILE_PLOT("Swapchain/PresentNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - presentStart).count()));
+		}
+		if (presentResult == VK_SUCCESS && presentId != 0)
+		{
+			m_presentTiming->OnPresented(m_swapchain.swapchain, presentId);
 		}
 		if (presentResult == VK_ERROR_DEVICE_LOST)
 		{

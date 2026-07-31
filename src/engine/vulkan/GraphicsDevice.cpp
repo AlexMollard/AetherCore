@@ -36,6 +36,12 @@ namespace aether
 		g_activeDiagnosticEngine = &m_diagnosticEngine;
 		m_vulkanContext->SetFaultCallback(&DiagnosticFaultThunk);
 		aether::VulkanContext::SetGlobalAddressBindingTracker(&m_diagnosticEngine.GetMemoryTracker());
+		// Before the first Initialize, so the very first present is already tagged.
+		if (m_vulkanContext->HasPresentTiming())
+		{
+			m_presentTiming.Start(m_vulkanContext->GetDevice().device);
+			m_swapchain.SetPresentTimingTracker(&m_presentTiming);
+		}
 		m_swapchain.Initialize(*m_vulkanContext, window, config.presentMode);
 		AE_TRY_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourceRegistry.SetBindlessManager(&m_bindlessManager);

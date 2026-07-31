@@ -47,6 +47,7 @@
 #include "scene/LightComponents.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
+#include "vulkan/PresentTimingTracker.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -532,9 +533,10 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | clamped={}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | flipPeriod={:.3f} flips={} | clamped={}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
-						        gameWork / n, inFlight / n, present / n, inputStale / n, clamped);
+						        gameWork / n, inFlight / n, present / n, inputStale / n,
+					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), clamped);
 					}
 				}
 			}

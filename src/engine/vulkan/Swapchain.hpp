@@ -36,6 +36,13 @@ namespace aether
 		Swapchain& operator=(Swapchain&&) = delete;
 
 		void Initialize(const VulkanContext& ctx, const Window& window, gpu::PresentMode presentMode);
+
+		// Tags presents with an increasing id so PresentTimingTracker can wait on them. Null
+		// disables tagging; the swapchain works exactly as before without one.
+		void SetPresentTimingTracker(class PresentTimingTracker* tracker)
+		{
+			m_presentTiming = tracker;
+		}
 		void Shutdown(VkDevice device);
 
 		// and performs swapchain-image / depth layout transitions.
@@ -87,6 +94,8 @@ namespace aether
 		// re-acquired, the presentation engine must have consumed its semaphore.
 		std::vector<VkSemaphore> m_renderFinishedSemaphores;
 		FrameSync m_frames[kMaxFramesInFlight]{};
+		class PresentTimingTracker* m_presentTiming = nullptr;
+		std::uint64_t m_presentId = 0;
 		std::uint32_t m_currentFrame = 0;
 		std::uint32_t m_imageIndex = 0;
 		std::uint32_t m_graphicsQueueFamily = 0;

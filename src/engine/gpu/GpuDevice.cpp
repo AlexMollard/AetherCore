@@ -119,6 +119,11 @@ namespace aether
 		m_gfx->GetSwapchain().BeginFrame(m_gfx->GetVulkanContext().GetDevice().device);
 	}
 
+	const PresentTimingTracker& GpuDevice::GetPresentTiming() const
+	{
+		return m_gfx->GetPresentTiming();
+	}
+
 	void GpuDevice::RecreateSwapchain(Window& window, gpu::PresentMode presentMode)
 	{
 		AE_PROFILE_ZONE();

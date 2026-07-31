@@ -12,6 +12,7 @@
 
 namespace aether
 {
+	class PresentTimingTracker;
 	class ServiceContainer;
 }
 
@@ -61,6 +62,8 @@ namespace aether
 
 		void BeginSwapchainFrame();
 		void RecreateSwapchain(class Window& window, gpu::PresentMode presentMode);
+
+		[[nodiscard]] const PresentTimingTracker& GetPresentTiming() const;
 		// implementation (`vulkan/Swapchain.cpp`); this TU never sees a
 		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr, std::uint64_t asyncComputeTimelineValue = 0);
 

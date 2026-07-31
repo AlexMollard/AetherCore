@@ -48,6 +48,14 @@ namespace aether
 
 		[[nodiscard]] const vkb::Instance& GetInstance() const;
 		[[nodiscard]] const vkb::Device& GetDevice() const;
+
+		// VK_KHR_present_wait + VK_KHR_present_id. Together they are the only way to learn
+		// when a present actually reached the screen, which is the timebase any real frame
+		// pacing needs. Optional: neither is core, and plenty of drivers lack them.
+		[[nodiscard]] bool HasPresentTiming() const
+		{
+			return m_presentTimingSupported;
+		}
 		[[nodiscard]] VkPhysicalDevice GetPhysicalDevice() const;
 
 		[[nodiscard]] VkSurfaceKHR GetSurface() const;
@@ -97,6 +105,7 @@ namespace aether
 		std::optional<vkb::Instance> m_instance;
 		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 		std::optional<vkb::Device> m_device;
+		bool m_presentTimingSupported = false;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
 		// (never CWD/exe-dir-relative -- see ResolveGpuCacheDir in VulkanContext.cpp).

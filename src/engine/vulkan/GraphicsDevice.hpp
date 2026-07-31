@@ -6,6 +6,7 @@
 #include "utils/Expected.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/ResourceRegistry.hpp"
+#include "vulkan/PresentTimingTracker.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -40,6 +41,13 @@ namespace aether
 			return m_swapchain;
 		}
 
+		// Null-safe to read even where present timing is unsupported; HasEstimate() stays
+		// false and callers fall back to not pacing.
+		[[nodiscard]] const PresentTimingTracker& GetPresentTiming() const
+		{
+			return m_presentTiming;
+		}
+
 		[[nodiscard]] BindlessManager& GetBindlessManager()
 		{
 			return m_bindlessManager;
@@ -60,6 +68,7 @@ namespace aether
 		std::unique_ptr<VulkanContext> m_vulkanContext;
 		DiagnosticEngine m_diagnosticEngine;
 		Swapchain m_swapchain;
+		PresentTimingTracker m_presentTiming;
 		BindlessManager m_bindlessManager;
 		ResourceRegistry m_resourceRegistry;
 	};

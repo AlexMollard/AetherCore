@@ -441,6 +441,23 @@ namespace aether
 		}
 #endif
 
+		// Optional present-timing pair, enabled only where the driver has both. Pacing a
+		// frame against a GUESSED vsync phase is worse than not pacing it - a mistimed frame
+		// is a dropped frame - so the feature stays off unless the real timebase exists.
+		const bool presentIdPresent = physicalDeviceResult.value().enable_extension_if_present(VK_KHR_PRESENT_ID_EXTENSION_NAME);
+		const bool presentWaitPresent = presentIdPresent && physicalDeviceResult.value().enable_extension_if_present(VK_KHR_PRESENT_WAIT_EXTENSION_NAME);
+		m_presentTimingSupported = presentIdPresent && presentWaitPresent;
+		AE_INFO(LogCategory::Vulkan, "Present timing (VK_KHR_present_id/present_wait): {} (present_id={}, present_wait={}).", m_presentTimingSupported ? "available" : "unavailable", presentIdPresent, presentWaitPresent);
+
+		VkPhysicalDevicePresentIdFeaturesKHR presentIdFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,
+		        .presentId = VK_TRUE,
+		};
+		VkPhysicalDevicePresentWaitFeaturesKHR presentWaitFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+		        .presentWait = VK_TRUE,
+		};
+
 		// chained here. vkb owns the lifetime of the core feature structs it
 		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
@@ -539,6 +556,11 @@ namespace aether
 		deviceBuilder.add_pNext(&faultFeatures);
 		deviceBuilder.add_pNext(&addressBindingReportFeatures);
 		deviceBuilder.add_pNext(&extendedDynamicStateFeatures);
+		if (m_presentTimingSupported)
+		{
+			deviceBuilder.add_pNext(&presentIdFeatures);
+			deviceBuilder.add_pNext(&presentWaitFeatures);
+		}
 		deviceBuilder.add_pNext(&extendedDynamicState2Features);
 		deviceBuilder.add_pNext(&extendedDynamicState3Features);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
