@@ -126,7 +126,7 @@ namespace aether::editor
 				case WorkflowLayout::Rendering:
 					return {"Scene Outliner", "Viewport", "Inspector", "Render Graph", "Tonemap", "Post Processing", "Lighting", "TextureInspector", "Performance", "Console"};
 				case WorkflowLayout::Scripting:
-					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Console", "Control Server", "Performance", "DevTools"};
+					return {"Scene Outliner", "Project", "Build", "File Explorer", "Viewport", "Inspector", "Console", "Control Server", "Performance", "DevTools"};
 				case WorkflowLayout::Minimal:
 					return {"Scene Outliner", "Viewport", "Inspector"};
 				case WorkflowLayout::Default:
@@ -152,6 +152,7 @@ namespace aether::editor
 					const ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.25f, nullptr, &root);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Inspector", right);
+					ImGui::DockBuilderDockWindow("Build", right);
 					ImGui::DockBuilderDockWindow("Viewport", root);
 					break;
 				}
@@ -164,6 +165,7 @@ namespace aether::editor
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.30f, nullptr, &root);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("Build", leftBottom);
 					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
 					ImGui::DockBuilderDockWindow("Inspector", right);
 					ImGui::DockBuilderDockWindow("Tile Palette", rightBottom);
@@ -184,6 +186,7 @@ namespace aether::editor
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.26f, nullptr, &root);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("Build", leftBottom);
 					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
 					ImGui::DockBuilderDockWindow("Inspector", right);
 					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
@@ -204,6 +207,7 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Post Processing", right);
 					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
 					ImGui::DockBuilderDockWindow("Inspector", rightBottom);
+					ImGui::DockBuilderDockWindow("Build", rightBottom);
 					ImGui::DockBuilderDockWindow("Performance", bottom);
 					ImGui::DockBuilderDockWindow("Textures", bottom);
 					ImGui::DockBuilderDockWindow("Console", bottom);
@@ -218,6 +222,7 @@ namespace aether::editor
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.34f, nullptr, &root);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("Build", leftBottom);
 					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
 					ImGui::DockBuilderDockWindow("Inspector", right);
 					ImGui::DockBuilderDockWindow("Console", bottom);
@@ -237,6 +242,7 @@ namespace aether::editor
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.28f, nullptr, &root);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftFiles);
+					ImGui::DockBuilderDockWindow("Build", leftFiles);
 					ImGui::DockBuilderDockWindow("File Explorer", leftFiles);
 					ImGui::DockBuilderDockWindow("Viewport", root);
 					ImGui::DockBuilderDockWindow("UI Canvas", root);
@@ -1378,11 +1384,11 @@ namespace aether::editor
 				};
 
 				static const std::vector<MenuGroup> kGroups = {
-				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
+				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "Build", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
 				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
-				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "TextureInspector"}},
-				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
-				        {ICON_FA_GEARS, "Engine", {"Settings"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "TextureInspector", "Particles"}},
+				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools", "Control Server"}},
+				        {ICON_FA_GEARS, "Engine", {"Settings", "Theme"}},
 				};
 
 				std::unordered_set<std::string_view> grouped;
