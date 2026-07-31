@@ -96,6 +96,10 @@ namespace aether
 			m_cameras = std::make_unique<CameraSubsystem>();
 		}
 		m_rendering = std::make_unique<RenderingSubsystem>();
+		// Before Init: that is where the post-process chain is first sized, and a scale applied
+		// afterwards only takes effect on the next swapchain recreate - which a correct run
+		// never performs.
+		m_rendering->SetRenderScale(m_settings.graphics.renderScale);
 
 		auto& platform = m_services.Get<PlatformSubsystem>();
 		auto& sceneSub = m_services.Get<SceneSubsystem>();
@@ -128,7 +132,6 @@ namespace aether
 		}
 
 		m_rendering->Init(m_services, m_profile);
-		m_rendering->SetRenderScale(m_settings.graphics.renderScale);
 		m_rendering->SetFrameIndexProvider([this]() { return m_frameIndex; });
 		m_services.Register<RenderingSubsystem>(*m_rendering);
 		m_services.Register<Renderer>(m_rendering->GetRenderer());

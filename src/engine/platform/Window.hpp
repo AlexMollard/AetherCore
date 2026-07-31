@@ -42,6 +42,13 @@ namespace aether
 		static void PollEvents();
 
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
+
+		// Borderless and fullscreen own their own size; only a windowed window may be resized
+		// to a configured width and height.
+		[[nodiscard]] Mode GetMode() const
+		{
+			return m_mode;
+		}
 		FramebufferSize WaitForValidFramebufferSize();
 
 		[[nodiscard]] FramebufferSize GetWindowSize() const;
@@ -69,6 +76,8 @@ namespace aether
 		static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 
 		GLFWwindow* m_window = nullptr;
+
+		Mode m_mode = Mode::Windowed;
 		std::atomic<bool> m_framebufferResized{false};
 	};
 } // namespace aether

@@ -85,6 +85,7 @@ namespace aether
 			glfwSetWindowPos(m_window, monitorX, monitorY);
 		}
 
+		m_mode = mode;
 		glfwSetWindowUserPointer(m_window, this);
 		glfwSetFramebufferSizeCallback(m_window, &Window::FramebufferSizeCallback);
 

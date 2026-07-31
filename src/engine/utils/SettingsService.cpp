@@ -80,7 +80,18 @@ namespace aether
 			if (auto* platform = m_services.TryGet<PlatformSubsystem>())
 			{
 				Window& window = platform->GetWindow();
-				const FramebufferSize current = window.GetFramebufferSize();
+				// A borderless or fullscreen window is sized to the monitor by its mode. Resizing
+				// it to the configured width and height shrinks it off the output, which both
+				// loses the presentation path the mode exists for and forces a swapchain
+				// recreate at the wrong size.
+				if (window.GetMode() != Window::Mode::Windowed)
+				{
+					return;
+				}
+				// GetWindowSize, not GetFramebufferSize: SetSize takes screen coordinates, and on
+				// a scaled display those are not pixels. Comparing pixels against a coordinate
+				// setting made this fire on every apply and resize a window that was already right.
+				const FramebufferSize current = window.GetWindowSize();
 				if (current.width != m_values.window.width || current.height != m_values.window.height)
 				{
 					window.SetSize(m_values.window.width, m_values.window.height);
