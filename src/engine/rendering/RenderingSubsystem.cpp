@@ -31,11 +31,25 @@ namespace
 
 namespace aether
 {
+	namespace
+	{
+		// Render scale is invisible in a frame-time graph on content that is not GPU-bound, so
+		// state the target size outright rather than leaving it to be inferred.
+		void LogSceneRenderExtent(const gpu::Extent2D scene, const gpu::Extent2D swapchain)
+		{
+			if (scene.width == swapchain.width && scene.height == swapchain.height)
+			{
+				return;
+			}
+			AE_INFO(LogCategory::Engine, "Scene renders at {}x{}, upscaled to {}x{} on present.", scene.width, scene.height, swapchain.width, swapchain.height);
+		}
+	} // namespace
+
 	gpu::Extent2D RenderingSubsystem::ResolveSceneViewportExtent(gpu::Extent2D swapchainExtent) const
 	{
 		if (!m_sceneViewportEnabled)
 		{
-			return swapchainExtent;
+			return ApplyRenderScale(swapchainExtent);
 		}
 
 		auto clampExtent = [](gpu::Extent2D extent)
@@ -80,7 +94,10 @@ namespace aether
 		}
 		if (!enabled)
 		{
-			return swapchainExtent;
+			// Must match ResolveSceneViewportExtent above: this one sizes the packet (and so
+			// the clustered light binning), that one sizes the post-process chain. If they
+			// disagree, lights are culled against a grid that is not the render target.
+			return ApplyRenderScale(swapchainExtent);
 		}
 
 		switch (settings.resolutionMode)
@@ -365,6 +382,7 @@ namespace aether
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
+		LogSceneRenderExtent(m_postProcessStack.GetExtent(), swapchain.GetExtent());
 		CreateSceneViewportDepth(vk.GetDevice().device, swapchain.GetDepthFormat(), m_renderGraph, bindless);
 
 		m_renderer.Initialize(&m_postProcessStack);
@@ -529,6 +547,7 @@ namespace aether
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
+		LogSceneRenderExtent(m_postProcessStack.GetExtent(), swapchain.GetExtent());
 		CreateSceneViewportDepth(gpu.GetDevice(), swapchain.GetDepthFormat(), m_renderGraph, bindless);
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);

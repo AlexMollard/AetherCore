@@ -128,6 +128,7 @@ namespace aether
 		}
 
 		m_rendering->Init(m_services, m_profile);
+		m_rendering->SetRenderScale(m_settings.graphics.renderScale);
 		m_rendering->SetFrameIndexProvider([this]() { return m_frameIndex; });
 		m_services.Register<RenderingSubsystem>(*m_rendering);
 		m_services.Register<Renderer>(m_rendering->GetRenderer());
@@ -452,7 +453,7 @@ namespace aether
 				ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
 				uiRenderer.SetWorld(&m_services.Get<SceneSubsystem>().GetWorld());
 				uiRenderer.SetCursorService(&m_cursor);
-				uiRenderer.BuildFrame({static_cast<float>(packet.renderExtent.width), static_cast<float>(packet.renderExtent.height)}, packet.drawSlot);
+				uiRenderer.BuildFrame({static_cast<float>(packet.uiExtent.width), static_cast<float>(packet.uiExtent.height)}, packet.drawSlot);
 			}
 
 			m_renderThread.SubmitFrame(std::move(packet));
@@ -721,6 +722,7 @@ namespace aether
 			packet.frameIndex = frameIndex;
 			packet.drawSlot = drawSlot;
 			packet.renderExtent = m_gpu->GetSwapchainExtent();
+			packet.uiExtent = packet.renderExtent;
 			return packet;
 		}
 
@@ -768,6 +770,9 @@ namespace aether
 		packet.frameIndex = frameIndex;
 		packet.drawSlot = drawSlot;
 		packet.renderExtent = extent;
+		// UI is never upscaled: outside the editor viewport it draws straight to the
+		// swapchain, on top of the scene, so it lays out against the full output.
+		packet.uiExtent = m_rendering->IsSceneViewportEnabled() ? extent : m_gpu->GetSwapchainExtent();
 		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
 		packet.effectParamBufferAddr = effectParamBuffer.GetDeviceAddressU64();
 		packet.sceneFeatures = world.GetSceneFeatures();

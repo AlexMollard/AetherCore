@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include <atomic>
 #include <array>
 #include <cstdint>
@@ -66,6 +68,24 @@ namespace aether
 		void RegisterPasses(ServiceContainer& services);
 
 		void RecreateSwapchainResources(ServiceContainer& services);
+		// Fraction of the output the SCENE renders at; the final fullscreen pass upscales.
+		// Only applies outside the editor viewport, which has its own resolution control.
+		void SetRenderScale(float scale)
+		{
+			m_renderScale = std::clamp(scale, 0.25f, 1.0f);
+		}
+
+		[[nodiscard]] gpu::Extent2D ApplyRenderScale(gpu::Extent2D extent) const
+		{
+			if (m_renderScale >= 1.0f)
+			{
+				return extent;
+			}
+			extent.width = std::max(64u, static_cast<std::uint32_t>(static_cast<float>(extent.width) * m_renderScale));
+			extent.height = std::max(64u, static_cast<std::uint32_t>(static_cast<float>(extent.height) * m_renderScale));
+			return extent;
+		}
+
 		void SetSceneViewportEnabled(ServiceContainer& services, bool enabled);
 		void SetSceneViewportSettings(ServiceContainer& services, const SceneViewportSettings& settings);
 		bool CommitPendingSceneViewportSettings();
@@ -343,6 +363,7 @@ namespace aether
 		LazyTargetGates m_lazyGates;
 		mutable std::mutex m_sceneViewportMutex;
 		bool m_sceneViewportEnabled = false;
+		float m_renderScale = 1.0f;
 		bool m_requestedSceneViewportEnabled = false;
 		SceneViewportSettings m_sceneViewportSettings;
 		SceneViewportSettings m_requestedSceneViewportSettings;

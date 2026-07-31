@@ -110,6 +110,9 @@ namespace aether
 		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
 		settings.graphics.framesInFlight = std::clamp(settings.graphics.framesInFlight, 1, 3);
 		settings.graphics.uiScale = std::clamp(settings.graphics.uiScale, 0.5f, 3.0f);
+		// Below a quarter the scene is unrecognisable, and above 1 it would be supersampling
+		// rather than the cost saving this exists for.
+		settings.graphics.renderScale = std::clamp(settings.graphics.renderScale, 0.25f, 1.0f);
 
 		// MAILBOX never blocks the producer, so with no frame cap the loop runs as fast as it
 		// possibly can - a 2D game measured 3700 fps to put 60 on the screen, discarding 98%

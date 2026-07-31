@@ -43,6 +43,11 @@ namespace aether
 			// IMMEDIATE). Falls back to FIFO wherever the driver lacks MAILBOX.
 			bool lowLatencyPresent = false;
 
+			// Render the SCENE at this fraction of the output and let the existing final
+			// fullscreen pass upscale it; UI still draws at native resolution on top, so text
+			// and sprites stay sharp. This is what makes borderless viable on a 4K panel,
+			// where covering the output means 2.25x the pixels of a 1440p window.
+			float renderScale = 1.0f;
 			bool fxaa = false;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
@@ -90,6 +95,7 @@ namespace aether
 		f("graphics.vsync", settings.graphics.vsync);
 		f("graphics.framesInFlight", settings.graphics.framesInFlight);
 		f("graphics.lowLatencyPresent", settings.graphics.lowLatencyPresent);
+		f("graphics.renderScale", settings.graphics.renderScale);
 		f("graphics.fxaa", settings.graphics.fxaa);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);

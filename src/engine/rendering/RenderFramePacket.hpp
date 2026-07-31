@@ -120,7 +120,13 @@ namespace aether
 		glm::mat4 proj{1.0f};
 		glm::vec4 cameraWorldPos{0.0f};
 		float cameraNearPlane = 0.1f;
+		// The extent the SCENE is rendered at. Scaled by graphics.renderScale, so clustered
+		// light binning and the post-process chain agree with the actual target size.
 		gpu::Extent2D renderExtent;
+		// The extent the UI is laid out and drawn at - never scaled, because UI goes straight
+		// to the swapchain after the upscale. Equals renderExtent inside the editor viewport,
+		// where the UI is composited into the scene texture instead.
+		gpu::Extent2D uiExtent;
 		bool hasCameraData = false;
 		SceneFeatureFlags sceneFeatures = DefaultSceneFeatures(SceneKind::Scene3D);
 
