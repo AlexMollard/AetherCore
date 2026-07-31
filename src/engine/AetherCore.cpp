@@ -363,10 +363,15 @@ namespace aether
 			// Waiting before servicing a pending swapchain recreate is safe: RunExclusive's
 			// Drain below has to wait for these same in-flight frames anyway, so a frame that
 			// could never complete would already hang there.
+			// Throttling the producer to fewer frames than there are resource slots is always
+			// safe - drawSlot still cycles modulo kMaxFramesInFlight, so a shorter run-ahead
+			// only widens the gap between reuses of a slot.
+			const auto framesInFlight = static_cast<std::uint64_t>(
+			        std::clamp(m_settings.graphics.framesInFlight, 1, static_cast<int>(Swapchain::kMaxFramesInFlight)));
 			const auto beforeInFlightWait = std::chrono::steady_clock::now();
-			if (m_producerFrameIndex >= Swapchain::kMaxFramesInFlight)
+			if (m_producerFrameIndex >= framesInFlight)
 			{
-				m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - Swapchain::kMaxFramesInFlight);
+				m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - framesInFlight);
 			}
 			const auto afterInFlightWait = std::chrono::steady_clock::now();
 

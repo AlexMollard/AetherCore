@@ -18,6 +18,14 @@ namespace aether
 		struct Graphics
 		{
 			bool vsync = true;
+			// How many frames the producer may run ahead of the screen. This is a LATENCY
+			// control, not an allocation one: per-frame resources stay sized at
+			// Swapchain::kMaxFramesInFlight, and this only throttles the game thread sooner.
+			// Every frame of run-ahead is a vsync interval of input lag (~16.7 ms at 60 Hz),
+			// so 3 costs ~50 ms; 2 trades a little CPU/GPU overlap for a frame of it, and 1
+			// is lowest-latency but leaves the GPU idle while the CPU works. Clamped to
+			// [1, Swapchain::kMaxFramesInFlight].
+			int framesInFlight = 2;
 			bool fxaa = false;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
@@ -62,6 +70,7 @@ namespace aether
 		f("window.width", settings.window.width);
 		f("window.height", settings.window.height);
 		f("graphics.vsync", settings.graphics.vsync);
+		f("graphics.framesInFlight", settings.graphics.framesInFlight);
 		f("graphics.fxaa", settings.graphics.fxaa);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
