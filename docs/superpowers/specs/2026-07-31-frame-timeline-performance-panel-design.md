@@ -261,16 +261,49 @@ thread costs 4.7 ms against Release's 0.78 ms, which is enough to miss refresh d
 irregularly and trip the 1/30 clamp. A Release build of the editor, and a Release publish,
 are smooth.
 
-**Consequences for the follow-on work:**
+**Consequences for the follow-on work** (revised after the vsync measurements below):
 
-- The pacing change this design was meant to justify is **not warranted on this evidence**.
-  Rewriting frame pacing to fix a Debug-only artifact would be a large change chasing a
-  symptom that does not exist in the shipping build.
-- What is worth doing is much smaller: publish and profile in Release, and treat any
-  future "it feels janky" report as unanswerable until this panel is read in Release.
 - The `1/30` clamp firing on 28% of Debug frames is worth remembering when interpreting
   any Debug-mode timing, gameplay or physics behaviour - the world genuinely runs slow
   there.
+
+## VSync measured (2026-07-31)
+
+Same scene and window, `[graphics] vsync` toggled in the project file. 60 Hz display.
+
+| | Debug + vsync | Debug, no vsync | Release + vsync | Release, no vsync |
+|---|---|---|---|---|
+| fps | 60 | **224** | 60 | **1494** |
+| avg | 16.75 ms | 4.46 ms | 16.68 ms | 0.67 ms |
+| median | 11.50 ms | 4.08 ms | 16.65 ms | 0.61 ms |
+| p99 / max | 47.11 / 67.18 ms | 7.21 / 34.58 ms | 19.32 / 22.82 ms | 1.75 / 3.29 ms |
+| Game work | 4.699 ms | 4.457 ms | 0.781 ms | 0.542 ms |
+| In-flight wait | 11.958 ms | **0.001 ms** | 15.885 ms | 0.126 ms |
+| Frames clamped | 68 of 240 | **1 of 240** | none | none |
+
+**This overturns the "not warranted" conclusion recorded above.**
+
+Uncapped, Debug renders the scene at **224 fps** - a 4.46 ms frame against a 16.67 ms
+budget, 3.7x headroom. With vsync on, that same build stutters and truncates the
+simulation on 28% of frames. An engine with nearly four times the headroom it needs
+cannot hold a steady 60, and the in-flight wait swinging from 0.001 ms to 11.958 ms is
+where it goes: the game thread runs free, hits the `kMaxFramesInFlight` throttle, and
+stalls for a quantised chunk of a refresh interval.
+
+Release escapes only because its game work (0.54 ms) is small enough that the beat
+never forms. That is luck, not correctness - any project whose game thread grows toward
+a few milliseconds will meet the same wall in a shipping build.
+
+So there IS a frame-pacing defect, and it is worth fixing. What the instrument changed is
+that the target is now specific and measured rather than inferred: the interaction between
+the in-flight throttle and FIFO present, with `FramePacer` disabled (`app.targetFps = 0`)
+so nothing regulates the game thread's cadence at all.
+
+**Also worth knowing about Debug's cost:** 4.46 ms of game work against Release's 0.54 ms
+is an 8x multiplier, which is ordinary for an unoptimised MSVC build but has two specific
+contributors worth checking before assuming it is irreducible - `TRACY_ENABLE` is compiled
+in for both dev configs (`Defines.hpp`), and nothing overrides `_ITERATOR_DEBUG_LEVEL`, so
+MSVC's default level 2 applies to every STL container the engine touches.
 
 ## Out of scope
 
