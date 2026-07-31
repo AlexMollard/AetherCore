@@ -75,3 +75,21 @@ TEST_CASE("The buffer discards samples far older than the render window")
 	REQUIRE(oldest.has_value());
 	CHECK(oldest->position.x > 100.f);
 }
+
+// Two samples can carry the SAME timestamp: NetworkReceiveSystem::ResolveTransforms
+// captures `now` once per call, and a push is keyed to that value, so any two pushes a
+// receiver makes inside one clock tick collide. lower_bound inserts at the FIRST element
+// not less than the key, which puts the newer sample BEFORE the older one - and Sample()
+// clamps to back(), so the entity renders the stale value and, once the sender stops
+// moving and no further delta ever arrives, stays there permanently.
+TEST_CASE("A sample sharing a timestamp with the newest still becomes the newest")
+{
+	net::InterpolationBuffer buf;
+	buf.Push({.time = 1.0f, .position = {99.f, 0.f, 0.f}});
+	buf.Push({.time = 1.0f, .position = {100.f, 0.f, 0.f}});
+
+	// Render time is past both, so this is the clamp-to-newest path.
+	const auto sample = buf.Sample(5.f);
+	REQUIRE(sample.has_value());
+	CHECK(sample->position.x == doctest::Approx(100.f));
+}

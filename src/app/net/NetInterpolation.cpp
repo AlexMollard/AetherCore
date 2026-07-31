@@ -6,8 +6,14 @@ namespace aether::net
 {
 	void InterpolationBuffer::Push(const TransformSample& sample)
 	{
-		const auto at = std::lower_bound(m_samples.begin(), m_samples.end(), sample.time,
-		        [](const TransformSample& s, float t) { return s.time < t; });
+		// upper_bound, NOT lower_bound: two samples can legitimately carry the same
+		// timestamp, because ResolveTransforms captures `now` once per call and keys every
+		// push it makes to that one value. lower_bound inserts at the first element not
+		// less than the key, which places the NEWER sample before the older one - and
+		// Sample() clamps to back(), so the entity renders the stale value. Once the sender
+		// stops moving, no further delta is ever sent and it stays stale permanently.
+		const auto at = std::upper_bound(m_samples.begin(), m_samples.end(), sample.time,
+		        [](float t, const TransformSample& s) { return t < s.time; });
 		m_samples.insert(at, sample);
 
 		if (m_samples.size() > kMaxSamples)
