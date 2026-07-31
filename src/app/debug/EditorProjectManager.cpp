@@ -175,11 +175,11 @@ namespace aether::editor
 		};
 		m_actions.packProject = [](const app::EditorProjectContext& project)
 		{
-			return PackProject(project, MakeDefaultEditorProjectPublishConfig());
+			return PackProject(project);
 		};
-		m_actions.publishProject = [](const app::EditorProjectContext& project, const EditorProjectPublishOptions& options, const EditorProjectPublishProgress& progress)
+		m_actions.publishProject = [](const app::EditorProjectContext& project, const EditorProjectPublishProgress& progress)
 		{
-			return PublishProject(project, MakeDefaultEditorProjectPublishConfig(), options, progress);
+			return PublishProject(project, progress);
 		};
 		m_actions.visualStudioInstallations = FindVisualStudioInstallations();
 		m_actions.debugScripts = [this](const std::filesystem::path& visualStudioInstall) -> EditorProjectActionResult
@@ -206,8 +206,7 @@ namespace aether::editor
 		{
 			m_actions.rebuildEnginePak = []
 			{
-				const EditorProjectPublishConfig config = MakeDefaultEditorProjectPublishConfig();
-				return BakeEnginePak(config.executableDir / "data" / "engine.pak");
+				return BakeEnginePak(io::PlatformPaths::GetExecutableDir() / "data" / "engine.pak");
 			};
 		}
 		if (CanCompileShaders())

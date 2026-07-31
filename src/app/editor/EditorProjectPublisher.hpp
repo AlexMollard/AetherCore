@@ -1,9 +1,7 @@
 #pragma once
 
-#include <filesystem>
-#include <string>
-
 #include "editor/EditorProjectActions.hpp"
+#include "editor/publish/PublishPlan.hpp"
 
 namespace aether::app
 {
@@ -12,19 +10,15 @@ namespace aether::app
 
 namespace aether::editor
 {
-	struct EditorProjectPublishConfig
-	{
-		std::filesystem::path executableDir;
-		std::filesystem::path packageTemplateDir;
-		std::filesystem::path dotnetExe;
-		std::string managedConfig;
-		std::string managedConfigDir;
-		std::filesystem::path managedSdkProject;
-		std::string runtimeExecutableName;
-	};
+	// The plan a publish would use. The Build panel calls this to show the destination and
+	// the build configuration before anything runs.
+	[[nodiscard]] PublishPlan PlanPublish(const app::EditorProjectContext& project);
 
-	[[nodiscard]] EditorProjectPublishConfig MakeDefaultEditorProjectPublishConfig();
-	[[nodiscard]] EditorProjectPublishOptions MakeDefaultEditorProjectPublishOptions(const app::EditorProjectContext& project);
-	[[nodiscard]] EditorProjectActionResult PackProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config);
-	[[nodiscard]] EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishConfig& config, const EditorProjectPublishOptions& options, const EditorProjectPublishProgress& progress = {});
+	// Bakes the project into Builds/Pack/project.pak and refreshes the editor's own copy so
+	// the dev runtime can load it. This is the dev-loop action, not a shippable package.
+	[[nodiscard]] EditorProjectActionResult PackProject(const app::EditorProjectContext& project);
+
+	// One action, no options: everything it needs is derived from the project and the
+	// running editor. Runs every step in PublishStepList and verifies the result.
+	[[nodiscard]] EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishProgress& progress = {});
 } // namespace aether::editor

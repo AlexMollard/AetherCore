@@ -258,8 +258,6 @@ namespace aether::editor
 		m_lastPublishPath.clear();
 		m_publishStatus.clear();
 		m_publishSucceeded = false;
-		ResetPublishSettings(project);
-		LoadPublishSettings(project);
 		LoadProjectSettings(project);
 
 		std::error_code ec;
@@ -331,97 +329,6 @@ namespace aether::editor
 		m_status = "Project settings saved.";
 	}
 
-	void ProjectPanel::LoadPublishSettings(const app::EditorProjectContext& project)
-	{
-		auto text = io::file_util::ReadText(PublishSettingsPath(project));
-		if (!text)
-		{
-			return;
-		}
-
-		TomlConfig config;
-		if (!config.Load(*text))
-		{
-			m_publishStatus = "Could not parse publish settings.";
-			m_publishSucceeded = false;
-			return;
-		}
-
-		m_publishProductName = config.GetString("publish.productname", m_publishProductName);
-		m_publishPlatformName = config.GetString("publish.platformname", m_publishPlatformName);
-		m_publishOutputRoot = config.GetString("publish.outputroot", m_publishOutputRoot);
-		m_publishCleanOutput = config.GetBool("publish.cleanoutput", m_publishCleanOutput);
-		m_publishBuildScripts = config.GetBool("publish.buildscripts", m_publishBuildScripts);
-		m_publishUsePackageTemplate = config.GetBool("publish.usepackagetemplate", m_publishUsePackageTemplate);
-		m_publishVerifyOutput = config.GetBool("publish.verifyoutput", m_publishVerifyOutput);
-		m_publishSyncEditorPak = config.GetBool("publish.synceditorpak", m_publishSyncEditorPak);
-		m_publishOpenAfter = config.GetBool("publish.openafter", m_publishOpenAfter);
-	}
-
-	void ProjectPanel::SavePublishSettings(const app::EditorProjectContext& project)
-	{
-		TomlConfig config;
-		{
-			const std::filesystem::path settingsPath = PublishSettingsPath(project);
-			auto text = io::file_util::ReadText(settingsPath);
-			if (!text && std::filesystem::exists(settingsPath))
-			{
-				// Same hazard as SaveProjectSettings: this writes the SAME file, so a
-				// failed read here would replace the whole project file with nothing but
-				// the publish keys below.
-				m_publishStatus = "Could not read project settings; refusing to overwrite " + settingsPath.generic_string();
-				m_publishSucceeded = false;
-				AE_ERROR(LogCategory::App, "{}", m_publishStatus);
-				return;
-			}
-			// Same hazard again, and the one that actually bit: a file that does not parse
-			// loads as EMPTY, so writing it back would leave nothing but [publish].
-			if (text && !config.Load(*text))
-			{
-				m_publishStatus = "Could not parse project settings; refusing to overwrite " + settingsPath.generic_string();
-				m_publishSucceeded = false;
-				AE_ERROR(LogCategory::App, "{}", m_publishStatus);
-				return;
-			}
-		}
-
-		config.Set("publish.productName", m_publishProductName);
-		config.Set("publish.platformName", m_publishPlatformName);
-		config.Set("publish.outputRoot", m_publishOutputRoot);
-		config.Set("publish.cleanOutput", m_publishCleanOutput);
-		config.Set("publish.buildScripts", m_publishBuildScripts);
-		config.Set("publish.usePackageTemplate", m_publishUsePackageTemplate);
-		config.Set("publish.verifyOutput", m_publishVerifyOutput);
-		config.Set("publish.syncEditorPak", m_publishSyncEditorPak);
-		config.Set("publish.openAfter", m_publishOpenAfter);
-
-		std::ostringstream buffer;
-		config.Save(buffer, "AetherCore project file.");
-
-		if (auto result = io::file_util::WriteText(PublishSettingsPath(project), buffer.str()); !result)
-		{
-			m_publishStatus = "Could not write publish settings.";
-			m_publishSucceeded = false;
-			return;
-		}
-		m_publishStatus = "Publish defaults saved.";
-		m_publishSucceeded = true;
-	}
-
-	void ProjectPanel::ResetPublishSettings(const app::EditorProjectContext& project)
-	{
-		const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
-		m_publishProductName = defaults.productName;
-		m_publishPlatformName = defaults.platformName;
-		m_publishOutputRoot = DisplayPath(defaults.outputRoot);
-		m_publishCleanOutput = defaults.cleanOutput;
-		m_publishBuildScripts = defaults.buildProjectScripts;
-		m_publishUsePackageTemplate = defaults.usePackageTemplate;
-		m_publishVerifyOutput = defaults.verifyOutput;
-		m_publishSyncEditorPak = defaults.syncEditorRuntimeProjectPak;
-		m_publishOpenAfter = true;
-	}
-
 	void ProjectPanel::DrawFolderRow(const char* label, const std::filesystem::path& path)
 	{
 		const bool exists = FolderExists(path);
@@ -476,173 +383,6 @@ namespace aether::editor
 		}
 
 		ImGui::EndTable();
-	}
-
-	void ProjectPanel::DrawPublishDialog(app::LayerContext& context, const app::EditorProjectContext& project)
-	{
-		ImGui::SetNextWindowSizeConstraints(ImVec2(480.0f, 0.0f), ImVec2(FLT_MAX, FLT_MAX));
-		if (!ImGui::BeginPopupModal("Publish Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-		{
-			return;
-		}
-
-		const bool publishing = m_publishFuture.valid();
-		if (publishing && m_publishFuture.wait_for(std::chrono::seconds{0}) == std::future_status::ready)
-		{
-			EditorProjectActionResult result;
-			try
-			{
-				result = m_publishFuture.get();
-			}
-			catch (const std::exception& ex)
-			{
-				result = {.succeeded = false, .message = std::string("Publishing failed: ") + ex.what()};
-			}
-			m_publishTask.reset();
-			m_publishSucceeded = result.succeeded;
-			m_publishStatus = result.message;
-			m_lastPublishPath = result.outputPath;
-			if (result.succeeded)
-			{
-				m_packSucceeded = true;
-				m_packStatus = "Project packed as part of publish.";
-				m_lastPackPath = result.outputPath / "data" / "project.pak";
-				if (m_publishOpenAfter)
-				{
-					OpenFolderInShell(result.outputPath);
-				}
-				ImGui::CloseCurrentPopup();
-			}
-		}
-
-		const bool publishingNow = m_publishFuture.valid();
-		ImGui::BeginDisabled(publishingNow);
-
-		ImGui::SeparatorText("Output");
-		iw::PropInputText("Product", m_publishProductName);
-		iw::PropInputText("Platform", m_publishPlatformName);
-
-		iw::LabelColumn("Output Root");
-		const float resetWidth = ImGui::GetFrameHeight();
-		ImGui::SetNextItemWidth(-(resetWidth + ImGui::GetStyle().ItemSpacing.x));
-		ImGui::InputText("##outputRoot", &m_publishOutputRoot);
-		ImGui::SameLine();
-		if (chrome::GhostIconButton(ICON_FA_ROTATE, "##resetRoot", ImVec2(resetWidth, ImGui::GetFrameHeight())))
-		{
-			const EditorProjectPublishOptions defaults = MakeDefaultEditorProjectPublishOptions(project);
-			m_publishOutputRoot = DisplayPath(defaults.outputRoot);
-		}
-
-		const std::filesystem::path outputRoot = m_publishOutputRoot;
-		const std::string platform = m_publishPlatformName.empty() ? std::string{"Windows"} : m_publishPlatformName;
-		const std::string product = m_publishProductName.empty() ? project.name : m_publishProductName;
-		const std::filesystem::path finalFolder = outputRoot / platform / product;
-		iw::LabelColumn("Destination");
-		MutedWrapped(DisplayPath(finalFolder));
-
-		ImGui::SeparatorText("Build");
-		if (ImGui::BeginTable("##publishSettings", 2, ImGuiTableFlags_SizingStretchSame))
-		{
-			ImGui::TableNextColumn();
-			ImGui::Checkbox("Clean output", &m_publishCleanOutput);
-			ImGui::Checkbox("Build scripts", &m_publishBuildScripts);
-			ImGui::Checkbox("Use package template", &m_publishUsePackageTemplate);
-			ImGui::TableNextColumn();
-			ImGui::Checkbox("Verify package", &m_publishVerifyOutput);
-			ImGui::Checkbox("Sync editor pak", &m_publishSyncEditorPak);
-			ImGui::Checkbox("Open when done", &m_publishOpenAfter);
-			ImGui::EndTable();
-		}
-		ImGui::EndDisabled();
-
-		StatusText(m_publishStatus, m_publishSucceeded);
-		if (publishingNow && m_publishTask)
-		{
-			const float completion = std::clamp(m_publishTask->completion.load(std::memory_order_acquire), 0.0f, 1.0f);
-			std::string stage;
-			{
-				const std::scoped_lock lock(m_publishTask->mutex);
-				stage = m_publishTask->stage;
-			}
-			ImGui::Spacing();
-			ImGui::TextUnformatted(stage.empty() ? "Publishing..." : stage.c_str());
-			ImGui::ProgressBar(completion, ImVec2(-FLT_MIN, 0.0f));
-		}
-
-		ImGui::Separator();
-		const auto* actions = context.TryGet<EditorProjectActions>();
-		const bool canPublish = !publishingNow && actions != nullptr && actions->publishProject && !m_publishProductName.empty() && !m_publishPlatformName.empty() && !m_publishOutputRoot.empty();
-
-		const float spacing = ImGui::GetStyle().ItemSpacing.x;
-		const float buttonWidth = (ImGui::GetContentRegionAvail().x - 2.0f * spacing) / 3.0f;
-		ImGui::BeginDisabled(publishingNow);
-		if (chrome::OutlineButton(ICON_FA_FLOPPY_DISK " Save Defaults", ImVec2(buttonWidth, 0.0f)))
-		{
-			SavePublishSettings(project);
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		ImGui::BeginDisabled(!canPublish);
-		if (chrome::PrimaryButton(ICON_FA_ROCKET " Publish", ImVec2(buttonWidth, 0.0f)))
-		{
-			std::string saveError;
-			if (!SaveCurrentSceneForPublish(context, saveError))
-			{
-				m_publishSucceeded = false;
-				m_publishStatus = std::move(saveError);
-			}
-			else
-			{
-				if (m_dirtySettings)
-				{
-					SaveProjectSettings(project);
-				}
-				SavePublishSettings(project);
-
-				EditorProjectPublishOptions options;
-				options.outputRoot = outputRoot;
-				options.productName = m_publishProductName;
-				options.platformName = m_publishPlatformName;
-				options.cleanOutput = m_publishCleanOutput;
-				options.buildProjectScripts = m_publishBuildScripts;
-				options.usePackageTemplate = m_publishUsePackageTemplate;
-				options.verifyOutput = m_publishVerifyOutput;
-				options.syncEditorRuntimeProjectPak = m_publishSyncEditorPak;
-
-				m_publishSucceeded = false;
-				m_publishStatus = "Publishing...";
-				m_publishTask = std::make_shared<PublishTask>();
-				{
-					const std::scoped_lock lock(m_publishTask->mutex);
-					m_publishTask->stage = "Preparing publish";
-				}
-				const auto publishAction = actions->publishProject;
-				const app::EditorProjectContext projectCopy = project;
-				const std::shared_ptr<PublishTask> task = m_publishTask;
-				m_publishFuture = std::async(std::launch::async,
-				        [publishAction, projectCopy, options, task]()
-				        {
-					        return publishAction(projectCopy,
-					                options,
-					                [task](const float completion, const std::string_view stage)
-					                {
-						                task->completion.store(completion, std::memory_order_release);
-						                const std::scoped_lock lock(task->mutex);
-						                task->stage = stage;
-					                });
-				        });
-			}
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		ImGui::BeginDisabled(publishingNow);
-		if (chrome::GhostButton("Cancel", ImVec2(buttonWidth, 0.0f)))
-		{
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::EndDisabled();
-
-		ImGui::EndPopup();
 	}
 
 	void ProjectPanel::OnImGui(app::LayerContext& context)
@@ -902,22 +642,51 @@ namespace aether::editor
 						ImGui::EndDisabled();
 					}
 
-					const char* publishLabel = ICON_FA_ROCKET " Publish...";
+					const char* publishLabel = ICON_FA_ROCKET " Publish";
 					row.Item(publishLabel);
-					ImGui::BeginDisabled(!actions->publishProject);
+					ImGui::BeginDisabled(!actions->publishProject || m_publishFuture.valid());
 					if (chrome::PrimaryButton(publishLabel))
 					{
-						ResetPublishSettings(*project);
-						LoadPublishSettings(*project);
 						m_publishStatus.clear();
 						m_publishSucceeded = false;
-						ImGui::OpenPopup("Publish Game");
+						m_publishTask = std::make_shared<PublishTask>();
+						const auto publishAction = actions->publishProject;
+						const app::EditorProjectContext projectCopy = *project;
+						const std::shared_ptr<PublishTask> task = m_publishTask;
+						m_publishFuture = std::async(std::launch::async,
+						        [publishAction, projectCopy, task]()
+						        {
+							        return publishAction(projectCopy,
+							                [task](const float completion, const std::string_view stage)
+							                {
+								                task->completion.store(completion, std::memory_order_release);
+								                const std::scoped_lock lock(task->mutex);
+								                task->stage = std::string(stage);
+							                });
+						        });
 					}
 					ImGui::EndDisabled();
 				}
 
-				// Modal lives in the same ID scope as its OpenPopup (this tab item).
-				DrawPublishDialog(context, *project);
+				// Pick the async publish up when it lands.
+				if (m_publishFuture.valid() && m_publishFuture.wait_for(std::chrono::seconds{0}) == std::future_status::ready)
+				{
+					const EditorProjectActionResult result = m_publishFuture.get();
+					m_publishTask.reset();
+					m_publishSucceeded = result.succeeded;
+					m_publishStatus = result.remediation.empty() ? result.message : result.message + "  " + result.remediation;
+					m_lastPublishPath = result.outputPath;
+				}
+				if (m_publishTask != nullptr)
+				{
+					std::string stage;
+					{
+						const std::scoped_lock lock(m_publishTask->mutex);
+						stage = m_publishTask->stage;
+					}
+					ImGui::TextUnformatted(stage.c_str());
+					ImGui::ProgressBar(m_publishTask->completion.load(std::memory_order_acquire), ImVec2(-FLT_MIN, 0.0f));
+				}
 
 				if (!m_lastPackPath.empty())
 				{

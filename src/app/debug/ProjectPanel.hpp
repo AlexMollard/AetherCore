@@ -50,12 +50,8 @@ namespace aether::editor
 		void EnsureStandardFolders(const app::EditorProjectContext& project);
 		void LoadProjectSettings(const app::EditorProjectContext& project);
 		void SaveProjectSettings(const app::EditorProjectContext& project);
-		void LoadPublishSettings(const app::EditorProjectContext& project);
-		void SavePublishSettings(const app::EditorProjectContext& project);
-		void ResetPublishSettings(const app::EditorProjectContext& project);
 		void DrawFolderRow(const char* label, const std::filesystem::path& path);
 		void DrawSceneTable();
-		void DrawPublishDialog(app::LayerContext& context, const app::EditorProjectContext& project);
 
 		std::filesystem::path m_lastRoot;
 		std::vector<SceneEntry> m_scenes;
@@ -70,15 +66,6 @@ namespace aether::editor
 		std::filesystem::path m_lastPublishPath;
 		std::string m_publishStatus;
 		bool m_publishSucceeded = false;
-		std::string m_publishProductName;
-		std::string m_publishPlatformName;
-		std::string m_publishOutputRoot;
-		bool m_publishCleanOutput = true;
-		bool m_publishBuildScripts = true;
-		bool m_publishUsePackageTemplate = true;
-		bool m_publishVerifyOutput = true;
-		bool m_publishSyncEditorPak = true;
-		bool m_publishOpenAfter = true;
 		std::future<EditorProjectActionResult> m_publishFuture;
 		std::shared_ptr<PublishTask> m_publishTask;
 		bool m_dirtySettings = false;

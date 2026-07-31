@@ -17,6 +17,7 @@ namespace aether::editor
 	{
 		bool succeeded = false;
 		std::string message;
+		std::string remediation; // what to do about a failure; empty on success
 		std::filesystem::path outputPath;
 	};
 
@@ -29,18 +30,6 @@ namespace aether::editor
 		bool hasDebuggerAutomation = false;
 	};
 
-	struct EditorProjectPublishOptions
-	{
-		std::filesystem::path outputRoot;
-		std::string productName;
-		std::string platformName;
-		bool cleanOutput = true;
-		bool buildProjectScripts = true;
-		bool usePackageTemplate = true;
-		bool verifyOutput = true;
-		bool syncEditorRuntimeProjectPak = true;
-	};
-
 	using EditorProjectPublishProgress = std::function<void(float completion, std::string_view stage)>;
 
 	struct EditorProjectActions
@@ -48,7 +37,7 @@ namespace aether::editor
 		std::function<void()> openLauncher;
 		std::function<void()> reloadProject;
 		std::function<EditorProjectActionResult(const app::EditorProjectContext&)> packProject;
-		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishOptions&, const EditorProjectPublishProgress&)> publishProject;
+		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishProgress&)> publishProject;
 		std::vector<VisualStudioInstallation> visualStudioInstallations;
 		std::function<EditorProjectActionResult(const std::filesystem::path& visualStudioInstall)> debugScripts;
 		std::function<EditorProjectActionResult()> rebuildEnginePak;
