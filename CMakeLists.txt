@@ -21,9 +21,9 @@ option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for f
 option(AETHERCORE_DEAD_STRIP_REPORT
     "Emit link map files (and per-section gc log) for Editor and AssetPacker" OFF)
 
-# Project root baked into the shipped game by PackageGame. Empty = skip project.pak.
+# Default project for the dev runtime and the VS debugger launch args.
 set(AETHERCORE_PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/projects/TestingProject"
-    CACHE PATH "Aether project baked into the game package by PackageGame (publish-only)")
+    CACHE PATH "Default Aether project for the dev runtime and IDE launch args")
 
 include(Dependencies)
 include(DotNet)
@@ -70,5 +70,5 @@ endfunction()
 aethercore_set_folder("Apps"         Editor Launcher GameRuntime)
 aethercore_set_folder("Tools"        AssetPacker AssetPipeline aether-ctl)
 aethercore_set_folder("Tests"        EngineTests doctest_with_main)
-aethercore_set_folder("Build"        ManagedAssemblies CompileShaders PackageGame clean-all dead-strip-report uninstall)
+aethercore_set_folder("Build"        ManagedAssemblies CompileShaders clean-all dead-strip-report uninstall)
 aethercore_set_folder("Dependencies" box2d enet freetype glfw glm imgui Jolt libzstd_static TracyClient vk-bootstrap update_mappings)

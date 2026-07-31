@@ -204,7 +204,7 @@ endif()
 #
 # project.pak (a project's baked content) is NOT built by any normal target: the editor
 # mounts project:// at the raw project folder + bakes on demand, and the launcher loads no
-# project. It is a shipping artifact, built only by PackageGame (below).
+# project. It is a shipping artifact, produced by the editor's publish flow only.
 add_custom_target(EngineAssetsPak
     COMMAND "${CMAKE_COMMAND}" -E remove_directory
         "${CMAKE_BINARY_DIR}/engine_assets"
@@ -232,7 +232,7 @@ add_custom_target(EngineAssetsPak
         "${CMAKE_BINARY_DIR}/engine_assets"
         "${CMAKE_BINARY_DIR}/data/engine.pak"
     # Shipped default settings (layer 2), staged in build-root data/config so every target
-    # and PackageGame copy from one place.
+    # and the editor's publish staging copy from one place.
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
@@ -292,7 +292,7 @@ if(NVIDIA_AFTERMATH_FOUND)
 endif()
 
 if(AETHERCORE_PROJECT_DIR AND NOT EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
-    message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; skipping data/project.pak")
+    message(WARNING "AETHERCORE_PROJECT_DIR='${AETHERCORE_PROJECT_DIR}' is not an Aether project root; the dev runtime will boot with no project.")
 endif()
 
 # The editor's publish flow packages AetherGame.exe from its own (shared) dir, so the
@@ -337,81 +337,3 @@ set_target_properties(Launcher PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE
 add_dependencies(Launcher StageAppBundle)
 add_dependencies(Launcher Editor)
 
-# ── Redistributable package ─────────────────────────────────────────────────
-# PackageGame creates a clean handoff folder (runtime exe + runtime DLLs + data/ only),
-# separate from the developer build tree.
-set(_aether_package_dir "${CMAKE_BINARY_DIR}/package/$<CONFIG>/AetherCore")
-set(_aether_package_expect_project_pak OFF)
-
-set(_aether_package_commands
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_aether_package_dir}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${_aether_package_dir}"
-        "${_aether_package_dir}/data"
-        "${_aether_package_dir}/data/config"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:GameRuntime>"
-        "${_aether_package_dir}/$<TARGET_FILE_NAME:GameRuntime>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/engine.pak"
-        "${_aether_package_dir}/data/engine.pak"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
-        "${_aether_package_dir}/data/config/EngineSettings.toml"
-    COMMAND "${CMAKE_COMMAND}"
-        -DAPP_EXE=$<TARGET_FILE:GameRuntime>
-        -DPACKAGE_DIR=${_aether_package_dir}
-        -P "${CMAKE_SOURCE_DIR}/CMake/CopyRuntimeDependencies.cmake"
-)
-
-if(AETHERCORE_PROJECT_DIR AND EXISTS "${AETHERCORE_PROJECT_DIR}/ProjectSettings.toml")
-    set(_aether_package_expect_project_pak ON)
-    # project.pak is built HERE (publish-only): no normal build produces it. Bake it
-    # straight into the package so the standalone GameRuntime carries its content.
-    list(APPEND _aether_package_commands
-        COMMAND "$<TARGET_FILE:AssetPacker>"
-            "--project"
-            "--import-materials"
-            "${AETHERCORE_PROJECT_DIR}"
-            "${_aether_package_dir}/data/project.pak")
-endif()
-
-if(AETHER_HAS_DOTNET)
-    list(APPEND _aether_package_commands
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${_aether_package_dir}/data/scripts"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-            "${CMAKE_BINARY_DIR}/data/scripts/managed"
-            "${_aether_package_dir}/data/scripts/managed")
-endif()
-
-if(WIN32 AND AETHER_NETHOST_DLL)
-    list(APPEND _aether_package_commands
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${AETHER_NETHOST_DLL}"
-            "${_aether_package_dir}/nethost.dll")
-endif()
-
-# Aftermath's DLL is NOT packaged: GameRuntime never enables it, and VerifyAppPackage.cmake
-# fails the build if a GFSDK_Aftermath* file ends up in the package.
-
-list(APPEND _aether_package_commands
-    COMMAND "${CMAKE_COMMAND}"
-        -DPACKAGE_DIR=${_aether_package_dir}
-        -P "${CMAKE_SOURCE_DIR}/CMake/PrunePackageDevFiles.cmake"
-    COMMAND "${CMAKE_COMMAND}"
-        -DPACKAGE_DIR=${_aether_package_dir}
-        -DEXPECT_PROJECT_PAK=${_aether_package_expect_project_pak}
-        -DEXPECT_DOTNET=${AETHER_HAS_DOTNET}
-        -DEXPECT_NETHOST=$<BOOL:${AETHER_NETHOST_DLL}>
-        -DRUNTIME_EXE=$<TARGET_FILE_NAME:GameRuntime>
-        -DEDITOR_EXE=$<TARGET_FILE_NAME:Editor>
-        -P "${CMAKE_SOURCE_DIR}/CMake/VerifyAppPackage.cmake")
-
-add_custom_target(PackageGame
-    ${_aether_package_commands}
-    # GameRuntime (shipped exe) + EngineAssetsPak (build-root engine.pak/config) +
-    # AssetPacker (bakes project.pak above).
-    DEPENDS GameRuntime EngineAssetsPak AssetPacker
-    COMMENT "Creating redistributable package at ${_aether_package_dir}"
-    VERBATIM USES_TERMINAL)
