@@ -226,6 +226,52 @@ measurements above imply.
   absent the panel reports no data rather than falling back to the clamped delta - a
   silent fallback to the wrong number is what this design exists to remove.
 
+## Measured after implementation (2026-07-31)
+
+Same project, layout and window as the "before" figures above, now read from the new panel.
+
+| | Debug | Release |
+|---|---|---|
+| Verdict | **stuttering** | **even** |
+| Avg | 16.75 ms | 16.68 ms |
+| Min / median | 3.36 / 11.50 ms | 11.50 / 16.65 ms |
+| p95 / p99 / max | 35.72 / 47.11 / 67.18 ms | 17.77 / 19.32 / 22.82 ms |
+| Game work | 4.699 ms | 0.781 ms |
+| In-flight wait | 11.958 ms | 15.885 ms |
+| Render exec | 0.020 ms | 0.006 ms |
+| Present wait | 16.262 ms | 16.514 ms |
+| Simulation clamped | 68 of 240 frames, 169.6 ms lost | none |
+
+**The hypothesis was half right, and the conclusion drawn before this panel existed was
+wrong.**
+
+Right: `inFlightWaitMs` does dominate the game thread, exactly as predicted from
+`AetherCore.cpp:337`. Rendering is confirmed irrelevant - render execute is 0.006 ms in
+Release, and the render thread spends its entire frame blocked on present.
+
+Wrong: the earlier reading that "Release is not meaningfully better" came from comparing
+AVERAGES, which was the only honest number the old panel had. Averages are equal because
+both builds are vsync-locked to the same 60 Hz display. The DISTRIBUTIONS are not remotely
+equal, and distribution is what the eye responds to. Release delivers frames within
+11.5-22.8 ms and never clamps; Debug swings 3.4-67.2 ms and truncates the simulation on
+28% of frames.
+
+So the judder is a **Debug-build symptom**, not an engine pacing defect. Debug's game
+thread costs 4.7 ms against Release's 0.78 ms, which is enough to miss refresh deadlines
+irregularly and trip the 1/30 clamp. A Release build of the editor, and a Release publish,
+are smooth.
+
+**Consequences for the follow-on work:**
+
+- The pacing change this design was meant to justify is **not warranted on this evidence**.
+  Rewriting frame pacing to fix a Debug-only artifact would be a large change chasing a
+  symptom that does not exist in the shipping build.
+- What is worth doing is much smaller: publish and profile in Release, and treat any
+  future "it feels janky" report as unanswerable until this panel is read in Release.
+- The `1/30` clamp firing on 28% of Debug frames is worth remembering when interpreting
+  any Debug-mode timing, gameplay or physics behaviour - the world genuinely runs slow
+  there.
+
 ## Out of scope
 
 - Fixing the pacing itself. That is the next piece of work and needs this instrument
