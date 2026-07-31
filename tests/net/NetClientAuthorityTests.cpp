@@ -528,7 +528,23 @@ TEST_CASE("A non-owned entity is still interpolated, and an owned one is not")
 	CHECK(client.PositionOfNetId(mine).x == doctest::Approx(20.f));
 
 	// Once the motion stops, render time catches up and the remote copy arrives.
-	REQUIRE(Run(s.All(), [&] { return client.PositionOfNetId(theirs).x > 99.9f; }));
+	//
+	// This wait needs a much larger budget than the 3 s default, and the reason is not
+	// slowness for its own sake. NetworkSendSystem paces snapshots off the WALL CLOCK
+	// (see its `(void) dt` note), so the walk above builds an interpolation backlog whose
+	// size depends on how much real time those 100 steps took - which in turn depends on
+	// machine load. Draining that backlog at the render delay therefore takes longer on a
+	// loaded machine, and 3 s was marginal: this case failed roughly one full-suite run in
+	// six while passing every time it ran alone. The budget only costs wall time when the
+	// case genuinely fails, so it is set well clear of the margin rather than near it.
+	const bool settled = Run(s.All(), [&] { return client.PositionOfNetId(theirs).x > 99.9f; }, 30000);
+	// Reported only on failure, and worth having: "client x" one step behind "host x" is a
+	// backlog still draining, which reads very differently from a value stuck at the start.
+	INFO("walk elapsed ms = " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+	INFO("host x = " << s.host.PositionOfNetId(theirs).x);
+	INFO("client x = " << client.PositionOfNetId(theirs).x);
+	INFO("lagging x during walk = " << lagging);
+	REQUIRE(settled);
 }
 
 // ── Single-player ───────────────────────────────────────────────────────────────
