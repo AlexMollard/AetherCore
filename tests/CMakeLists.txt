@@ -63,6 +63,7 @@ add_executable(EngineTests
     # Publish planning and package verification. Pure/near-pure halves of the publish
     # pipeline; the IO steps stay out of the test build.
     "${CMAKE_SOURCE_DIR}/src/app/editor/publish/PublishPlan.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/editor/publish/PublishVerify.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
     # Editor undo/redo command logic under test. The typed component commands
