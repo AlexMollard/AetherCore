@@ -354,7 +354,24 @@ namespace aether
 			const double rawDt = std::min(wallSeconds, kMaxDeltaTime);
 			previousFrameTime = now;
 
+			// Block for a free in-flight slot BEFORE latching input, not after. This wait is
+			// the bulk of the frame - a published build measured 0.12 ms of game work against
+			// a 16.7 ms wait - so polling first meant Tick() simulated input that was already
+			// a full vsync interval old, for no reason. Sampling on the far side of the wait
+			// is the standard late-latch and costs nothing.
+			//
+			// Waiting before servicing a pending swapchain recreate is safe: RunExclusive's
+			// Drain below has to wait for these same in-flight frames anyway, so a frame that
+			// could never complete would already hang there.
+			const auto beforeInFlightWait = std::chrono::steady_clock::now();
+			if (m_producerFrameIndex >= Swapchain::kMaxFramesInFlight)
+			{
+				m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - Swapchain::kMaxFramesInFlight);
+			}
+			const auto afterInFlightWait = std::chrono::steady_clock::now();
+
 			PumpEvents();
+			const auto afterPump = std::chrono::steady_clock::now();
 
 			// so the channel is provably empty when the render thread is parked.
 			if (NeedsSwapchainOrViewportRecreate())
@@ -368,12 +385,7 @@ namespace aether
 				        });
 			}
 
-			const auto beforeInFlightWait = std::chrono::steady_clock::now();
-			if (m_producerFrameIndex >= Swapchain::kMaxFramesInFlight)
-			{
-				m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - Swapchain::kMaxFramesInFlight);
-			}
-			const auto afterInFlightWait = std::chrono::steady_clock::now();
+			const auto beforeTick = std::chrono::steady_clock::now();
 
 			Tick(static_cast<float>(rawDt));
 			const double gameDt = rawDt * client.GetTimeScale();
@@ -459,6 +471,7 @@ namespace aether
 				timing.simDtMs = static_cast<float>(rawDt * 1000.0);
 				timing.pacerWaitMs = ms(frameStart, afterPacer);
 				timing.inFlightWaitMs = ms(beforeInFlightWait, afterInFlightWait);
+				timing.inputStaleMs = ms(afterPump, beforeTick);
 				// Everything the game thread did that was not spent waiting.
 				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs);
 				m_frameTimeline.RecordGameFrame(timing);
@@ -480,6 +493,7 @@ namespace aether
 					float gameWork = 0.0f;
 					float inFlight = 0.0f;
 					float present = 0.0f;
+					float inputStale = 0.0f;
 					std::size_t clamped = 0;
 					for (std::size_t i = 0; i < count; ++i)
 					{
@@ -488,6 +502,7 @@ namespace aether
 						gameWork += frame.gameWorkMs;
 						inFlight += frame.inFlightWaitMs;
 						present += frame.presentWaitMs;
+						inputStale += frame.inputStaleMs;
 						if (frame.wallMs > frame.simDtMs + 0.01f)
 						{
 							++clamped;
@@ -508,9 +523,9 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} | clamped={}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | clamped={}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
-						        gameWork / n, inFlight / n, present / n, clamped);
+						        gameWork / n, inFlight / n, present / n, inputStale / n, clamped);
 					}
 				}
 			}

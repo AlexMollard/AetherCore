@@ -23,6 +23,10 @@ namespace aether
 		float gameWorkMs = 0.0f;
 		float renderExecMs = 0.0f;
 		float presentWaitMs = 0.0f;
+		// How long the OS event queue sat un-drained between the poll and the input snapshot
+		// Tick() takes from it. This is latency the player feels but no frame-time percentile
+		// can show, because the frame is vsync-locked either way.
+		float inputStaleMs = 0.0f;
 		bool renderComplete = false;
 	};
 
