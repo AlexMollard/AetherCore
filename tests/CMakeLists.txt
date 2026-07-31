@@ -60,6 +60,9 @@ add_executable(EngineTests
     # Which project file a game runtime layers over its own settings - the rule that
     # keeps a published build off the build machine's project directory.
     "${CMAKE_SOURCE_DIR}/src/app/RuntimeProjectSettings.cpp"
+    # Publish planning and package verification. Pure/near-pure halves of the publish
+    # pipeline; the IO steps stay out of the test build.
+    "${CMAKE_SOURCE_DIR}/src/app/editor/publish/PublishPlan.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
     # Editor undo/redo command logic under test. The typed component commands
