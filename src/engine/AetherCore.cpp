@@ -1,6 +1,7 @@
 #include "AetherCore.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -540,6 +541,7 @@ namespace aether
 				if (frameReportInterval > 0.0 && std::chrono::duration<double>(frameEnd - lastFrameReport).count() >= frameReportInterval)
 				{
 					lastFrameReport = frameEnd;
+
 					const std::size_t count = m_frameTimeline.Snapshot(reportFrames);
 
 					// Aggregated here rather than through ComputeFrameStats. That function is

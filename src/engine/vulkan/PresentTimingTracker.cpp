@@ -3,6 +3,7 @@
 #include "vulkan/volk.hpp"
 
 #include <algorithm>
+#include <array>
 
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -21,6 +22,13 @@ namespace aether
 		// Slow enough to ignore jitter, fast enough to follow a genuine refresh-rate change
 		// within a second or so.
 		constexpr double kPeriodSmoothing = 0.05;
+
+		// Separates a variable-refresh display from ordinary jitter. A fixed 60 Hz panel was
+		// MEASURED at 15.5-18.0 ms flip to flip - a 15% spread - so a tight threshold flags
+		// every fixed display as variable and switches pacing off (paced fell 1404 -> 108).
+		// Real VRR swings far wider than this: 8 ms to 33 ms is over 150%.
+		constexpr double kVariableRateSpread = 0.5;
+		constexpr std::size_t kSpreadWindow = 32;
 	} // namespace
 
 	void PresentTimingTracker::Start(VkDevice device)
@@ -118,6 +126,9 @@ namespace aether
 		}
 
 		std::int64_t previousFlipNs = 0;
+		std::array<double, kSpreadWindow> recentMs{};
+		std::size_t recentCount = 0;
+		std::size_t recentHead = 0;
 
 		std::uint64_t nextId = 1;
 
@@ -180,6 +191,16 @@ namespace aether
 					        : static_cast<std::int64_t>(static_cast<double>(currentNs) * (1.0 - kPeriodSmoothing) + static_cast<double>(sampleNs) * kPeriodSmoothing);
 					m_periodNs.store(updatedNs, std::memory_order_release);
 					m_observedFlips.fetch_add(1, std::memory_order_relaxed);
+
+					recentMs[recentHead] = deltaMs;
+					recentHead = (recentHead + 1) % kSpreadWindow;
+					recentCount = std::min(recentCount + 1, kSpreadWindow);
+					if (recentCount == kSpreadWindow)
+					{
+						const auto [lo, hi] = std::minmax_element(recentMs.begin(), recentMs.end());
+						const double mean = static_cast<double>(updatedNs) / 1'000'000.0;
+						m_variableRate.store(mean > 0.0 && (*hi - *lo) / mean > kVariableRateSpread, std::memory_order_release);
+					}
 				}
 			}
 			previousFlipNs = nowNs;

@@ -51,9 +51,18 @@ namespace aether
 		// cannot leave the thread blocked on a handle that is about to be destroyed.
 		void OnSwapchainRetired();
 
+		// False while the display period is unstable. On a variable-refresh display (G-Sync,
+		// FreeSync) the flip deadline is not periodic at all, so extrapolating one is exactly
+		// the guess this class exists to replace - callers must stand down rather than pace
+		// against a cadence the display is not keeping.
 		[[nodiscard]] bool HasEstimate() const
 		{
-			return m_periodNs.load(std::memory_order_acquire) > 0;
+			return m_periodNs.load(std::memory_order_acquire) > 0 && !m_variableRate.load(std::memory_order_acquire);
+		}
+
+		[[nodiscard]] bool IsVariableRate() const
+		{
+			return m_variableRate.load(std::memory_order_acquire);
 		}
 
 		// Measured display period. Far more trustworthy than the mode's advertised refresh
@@ -99,5 +108,6 @@ namespace aether
 		std::atomic<std::int64_t> m_periodNs{0};
 		std::atomic<std::int64_t> m_lastFlipNs{0};
 		std::atomic<std::uint64_t> m_observedFlips{0};
+		std::atomic<bool> m_variableRate{false};
 	};
 } // namespace aether
