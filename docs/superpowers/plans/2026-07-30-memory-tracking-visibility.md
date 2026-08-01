@@ -447,7 +447,7 @@ If instead the build fails with `LNK2005` duplicate `operator new`, that is the 
 This is the spike's real question. Build and run the Editor:
 
 ```bash
-cmake --build build-vs2022-msvc --config Debug --target AetherCoreEditor
+cmake --build build/vs2022-msvc --config Debug --target Editor
 ```
 
 From the build-tree root, launch the editor, open the INKBOUND project, load a scene with scripts, and enter Play mode. Confirm from the log that scripts attach and update, and that the `CPU allocator: mimalloc` line is present.
@@ -2039,7 +2039,7 @@ Expected: all cases PASS. In particular "A block freed outside its allocating sc
 - [ ] **Step 9: Verify the editor still runs and check the overhead is not obviously bad**
 
 ```bash
-cmake --build build-vs2022-msvc --config RelWithDebInfo --target AetherCoreEditor
+cmake --build build/vs2022-msvc --config RelWithDebInfo --target Editor
 ```
 
 From the build-tree root, launch the editor with `--no-validation`, load a scene, and run:
@@ -4473,7 +4473,7 @@ In `src/app/editor/ControlMethods.cpp`, after line 2272 (`AppendPixelArtMethods(
 A brand-new `src/app/*.cpp` needs a reconfigure before the Editor target sees it:
 
 ```bash
-cmake --preset vs2022-msvc && cmake --build build-vs2022-msvc --config RelWithDebInfo --target AetherCoreEditor
+cmake --preset vs2022-msvc && cmake --build build/vs2022-msvc --config RelWithDebInfo --target Editor
 ```
 
 - [ ] **Step 5: Verify the tools over MCP**
@@ -5070,10 +5070,32 @@ and register it next to `PerformancePanel` (near line 486):
 		m_panels.push_back(std::make_unique<MemoryPanel>());
 ```
 
+Registering it is no longer enough to make it usable, because two things changed after this
+plan was written. Both are in the same file.
+
+The Window menu is built from an explicit `kGroups` list, not by enumerating `m_panels`, so a
+panel missing from it lands in the ungrouped bucket instead of beside the other diagnostics.
+Add it to the Diagnostics group:
+
+```cpp
+				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Memory", "Console", "DevTools", "Control Server"}},
+```
+
+and give it an icon in `WindowMenuIcon`, or the menu entry renders with none.
+
+Every panel also has a default docking place, applied by the layout builders. A panel absent
+from them opens floating and unpositioned. Dock it beside `"Performance"` in each layout that
+places one - `grep -n 'DockBuilderDockWindow("Performance"' src/app/layers/DebugLayer.cpp`
+finds them, currently five:
+
+```cpp
+					ImGui::DockBuilderDockWindow("Memory", bottom);
+```
+
 - [ ] **Step 4: Build and verify in the editor**
 
 ```bash
-cmake --preset vs2022-msvc && cmake --build build-vs2022-msvc --config RelWithDebInfo --target AetherCoreEditor
+cmake --preset vs2022-msvc && cmake --build build/vs2022-msvc --config RelWithDebInfo --target Editor
 ```
 
 From the build-tree root, launch the editor, open the panel from the menu, and confirm:
@@ -5106,6 +5128,22 @@ git commit -m "Add the editor memory panel
 ## Task 14: Benchmark and verify the acceptance criteria
 
 The spec's performance claims are unverified until this runs. This task either confirms them or produces the numbers that force a design change.
+
+**Measurement discipline on this machine, learned the hard way.** A day of frame-latency work
+here produced two confidently wrong conclusions from single runs, so treat any figure from one
+run as unusable:
+
+- **Always interleave and repeat A/B arms** (`off, on, off, on`, at least twice through). A
+  session that measured the CONTROL arm as badly degraded looked exactly like a real
+  regression in the experimental arm. Interleaving is what exposed it as ambient noise.
+- **Require the control arm to reproduce a known baseline** before believing anything about
+  the experimental one. If the control has drifted, discard the whole batch.
+- **Let the machine settle after a build.** Antivirus and indexing chew CPU for a good while
+  after linking; a benchmark started immediately measures that.
+- **Report the spread, not just the mean.** The distributions that mattered were bimodal, and
+  a mean hid it completely - median plus p95 made it obvious in one line.
+
+These apply to allocator throughput exactly as they applied to frame time.
 
 **Files:**
 - Create: `tests/memory/AllocatorBenchmarkTests.cpp`
@@ -5290,13 +5328,13 @@ Add `#include <algorithm>` for `std::min` and `std::max`.
 A Debug build measures the optimiser, not the allocator:
 
 ```bash
-cmake --build build-vs2022-msvc --config RelWithDebInfo --target EngineTests
+cmake --build build/vs2022-msvc --config RelWithDebInfo --target EngineTests
 ```
 
 From the build-tree root:
 
 ```bash
-./build-vs2022-msvc/RelWithDebInfo/EngineTests.exe --test-case="Allocator benchmark" --no-skip -s
+./build/vs2022-msvc/RelWithDebInfo/EngineTests.exe --test-case="Allocator benchmark" --no-skip -s
 ```
 
 Expected: the printed table, and all three `CHECK_MESSAGE` assertions passing.
