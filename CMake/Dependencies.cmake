@@ -64,6 +64,40 @@ CPMAddPackage(
     DOWNLOAD_ONLY  YES
 )
 
+# ── CPU allocator ─────────────────────────────────────────────────────────────
+option(AETHERCORE_MEMORY_SECURE "Build mimalloc in secure mode (guard pages, encoded free lists, double-free detection)" OFF)
+
+# mimalloc is the process heap. Chosen for its first-class heaps, the
+# mi_heap_visit_blocks walker and MI_SECURE, which the memory tracking
+# subsystem builds on; see docs/superpowers/specs/2026-07-30-memory-allocator-design.md.
+#
+# MI_OVERRIDE is deliberately OFF. The dynamic override runtime-patches the CRT
+# process-wide, which is a poor fit for a process that hosts CoreCLR; we replace
+# operator new/delete ourselves in one translation unit instead, so malloc/free
+# are untouched and coreclr.dll keeps its own allocator entirely.
+# Resolved here rather than with a generator expression: CPM OPTIONS are plain cache
+# values read at configure time, and a $<IF:...> string is non-empty, so it evaluates
+# TRUTHY and silently turns secure mode ON. The tell is mimalloc reporting its library
+# base name as "mimalloc-secure".
+if(AETHERCORE_MEMORY_SECURE)
+    set(AETHERCORE_MI_SECURE ON)
+else()
+    set(AETHERCORE_MI_SECURE OFF)
+endif()
+
+CPMAddPackage(
+    NAME mimalloc
+    GIT_REPOSITORY https://github.com/microsoft/mimalloc.git
+    GIT_TAG        v2.1.7
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        "MI_BUILD_SHARED OFF"
+        "MI_BUILD_OBJECT OFF"
+        "MI_BUILD_TESTS OFF"
+        "MI_OVERRIDE OFF"
+        "MI_SECURE ${AETHERCORE_MI_SECURE}"
+)
+
 # ── Image / mesh loading (header-only, no CMakeLists) ─────────────────────────
 CPMAddPackage(
     NAME stb

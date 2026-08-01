@@ -109,8 +109,22 @@ CPMAddPackage(
         "MI_BUILD_OBJECT OFF"
         "MI_BUILD_TESTS OFF"
         "MI_OVERRIDE OFF"
-        "MI_SECURE $<IF:$<BOOL:${AETHERCORE_MEMORY_SECURE}>,ON,OFF>"
+        "MI_SECURE ${AETHERCORE_MI_SECURE}"
 )
+```
+
+Resolve `AETHERCORE_MI_SECURE` with a plain `if()` immediately above the `CPMAddPackage`. A
+generator expression does NOT work here: CPM `OPTIONS` are cache values read at configure
+time, and a `$<IF:...>` string is simply non-empty, so it evaluates TRUTHY and silently
+builds secure mode. The tell is mimalloc printing `Library base name: mimalloc-secure`
+instead of `mimalloc`.
+
+```cmake
+if(AETHERCORE_MEMORY_SECURE)
+    set(AETHERCORE_MI_SECURE ON)
+else()
+    set(AETHERCORE_MI_SECURE OFF)
+endif()
 ```
 
 `MI_OVERRIDE` is deliberately **OFF**: we do the `operator new` replacement ourselves in one translation unit so the tracking hooks sit in the same place, rather than letting mimalloc patch the CRT behind our back.

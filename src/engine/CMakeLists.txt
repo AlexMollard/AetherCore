@@ -48,6 +48,10 @@ target_link_options(Engine PUBLIC
 # AETHER_HAS_DOTNET is 0 and it compiles as a stub.
 if(AETHER_HAS_DOTNET)
     target_link_libraries(Engine PRIVATE DotNet::NetHost)
+
+# PUBLIC: the operator new/delete replacement lives in Engine, but the symbols must
+# reach every executable that links it or the replacement silently does not apply.
+target_link_libraries(Engine PUBLIC mimalloc-static)
 endif()
 
 target_compile_definitions(Engine PUBLIC
