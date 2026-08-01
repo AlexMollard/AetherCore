@@ -210,6 +210,13 @@ namespace aether::net
 		// regardless of who else is connected. Wall clock, not accumulated frame dt,
 		// so pausing or time-scaling the game does not silently change the send rate.
 		std::unordered_map<ConnectionId, float> m_nextSendTimeByConnection;
+		// Snapshots are diffs sent unreliably, and BuildSnapshot records every value it
+		// writes as sent. "A dropped snapshot is superseded by the next one" therefore holds
+		// only while an entity keeps changing: lose the LAST update before it goes idle and
+		// the cache believes that value was delivered, nothing further is ever queued for it,
+		// and the client stays wrong forever. A player who stops walking is the common case.
+		// A periodic full state resend bounds that to one interval.
+		std::unordered_map<ConnectionId, float> m_nextResyncByConnection;
 
 		// Net ids relevant to each connection as of the last tick this system
 		// actually sent to it - see UpdateRelevancyMembership.

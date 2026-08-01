@@ -648,6 +648,15 @@ namespace aether::net
 	//
 	// The second half is what makes "zero correction on the owned entity" true on the
 	// wire rather than only in the receiver.
+	namespace
+	{
+		// Bounds how long a client can hold a stale value for an entity that has stopped
+		// changing, when the diff carrying its last update was dropped. Long enough that the
+		// extra full state send is negligible beside the per-tick diffs, short enough that a
+		// desync is not something a player experiences.
+		constexpr float kResyncIntervalSeconds = 1.0f;
+	} // namespace
+
 	void NetworkSendSystem::Update(World& world, float dt)
 	{
 		(void) dt; // paced off the wall clock, not the (pausable, scalable) frame delta
@@ -708,7 +717,19 @@ namespace aether::net
 			// connection still needs the Spawn for its own character, and would never
 			// be admitted at all if its own entity were filtered out here. Only the
 			// STATE is filtered.
-			const bool admitted = UpdateRelevancyMembership(world, context, connection, relevant, cache);
+			// Periodic full state resend. Forgetting only the CACHE (never relevancy) makes
+			// the next snapshot a full state write without replaying Spawns, and marking the
+			// tick admitted sends it reliably - the same "a resync is not a diff, so it must
+			// not be droppable" reasoning as the admission path above.
+			float& nextResync = m_nextResyncByConnection[connection];
+			const bool periodicResync = now >= nextResync;
+			if (periodicResync)
+			{
+				nextResync = now + kResyncIntervalSeconds;
+				cache.Clear();
+			}
+
+			const bool admitted = UpdateRelevancyMembership(world, context, connection, relevant, cache) || periodicResync;
 
 			const std::vector<Entity> replicated = ExceptOwnedBy(world, relevant, connection);
 
@@ -935,6 +956,7 @@ namespace aether::net
 	{
 		const std::unordered_set<ConnectionId> liveSet(live.begin(), live.end());
 		std::erase_if(m_nextSendTimeByConnection, [&](const auto& kv) { return !liveSet.contains(kv.first); });
+		std::erase_if(m_nextResyncByConnection, [&](const auto& kv) { return !liveSet.contains(kv.first); });
 		std::erase_if(m_relevantNetIds, [&](const auto& kv) { return !liveSet.contains(kv.first); });
 	}
 } // namespace aether::net

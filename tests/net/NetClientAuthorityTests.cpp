@@ -530,11 +530,16 @@ TEST_CASE("A non-owned entity is still interpolated, and an owned one is not")
 
 	// Once the motion stops, render time catches up and the remote copy arrives.
 	//
-	// This used to fail intermittently with the client parked one snapshot short - exactly
-	// 99 against the host's 100 - and never recovering. The cause was InterpolationBuffer::
-	// Push inserting a same-timestamp sample BEFORE the existing one, so back() held the
-	// stale value; see the regression test in NetInterpolationTests.cpp. Timestamps collide
-	// because ResolveTransforms captures `now` once per call.
+	// This failed intermittently with the client parked one snapshot short - exactly 99
+	// against the host's 100 - and never recovering. TWO separate causes, both fixed:
+	//
+	//  1. InterpolationBuffer::Push inserted a same-timestamp sample BEFORE the existing
+	//     one, so back() held the stale value; see NetInterpolationTests.cpp. Timestamps
+	//     collide because ResolveTransforms captures `now` once per call.
+	//  2. Snapshots are diffs sent unreliably, and BuildSnapshot records what it writes as
+	//     sent. Lose the LAST diff before an entity goes idle and nothing is ever queued for
+	//     it again. NetworkSendSystem now does a periodic reliable full state resend, which
+	//     bounds that to one interval.
 	const bool settled = Run(s.All(), [&] { return client.PositionOfNetId(theirs).x > 99.9f; });
 	INFO("walk elapsed ms = " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 	INFO("host x = " << s.host.PositionOfNetId(theirs).x);
