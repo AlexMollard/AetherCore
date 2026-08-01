@@ -1,7 +1,9 @@
 #include <doctest/doctest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <ostream> // doctest stringifies the std::string_view returned by SmoothnessLabel
 #include <vector>
 
@@ -150,4 +152,24 @@ TEST_CASE("Stats over a full timeline ring do not corrupt the stack") {
     CHECK(stats.sampleCount == 600);
     CHECK(stats.minMs == doctest::Approx(16.0f));
     CHECK(stats.maxMs == doctest::Approx(22.0f));
+}
+
+// Mirrors the in-engine probe EXACTLY - a 64-element std::array on the STACK, spanned - not
+// a heap vector like every other case here. A Debug GameRuntime trips /RTCs "stack around
+// the variable 'sorted' was corrupted" on this call even single-threaded in the constructor,
+// against the same Engine.lib this binary links, so pin the exact shape.
+TEST_CASE("Stats over a stack array of 64 frames do not corrupt the stack") {
+    std::array<FrameTiming, 64> frames{};
+    for (std::size_t i = 0; i < frames.size(); ++i)
+    {
+        frames[i].frameIndex = i;
+        frames[i].wallMs = 16.0f + static_cast<float>(i % 5);
+        frames[i].simDtMs = 16.0f;
+    }
+
+    const FrameStats stats = ComputeFrameStats(std::span<const FrameTiming>(frames));
+
+    CHECK(stats.sampleCount == 64);
+    CHECK(stats.minMs == doctest::Approx(16.0f));
+    CHECK(stats.maxMs == doctest::Approx(20.0f));
 }
