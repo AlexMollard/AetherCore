@@ -460,6 +460,32 @@ aether-ctl run_gauntlet
 
 Expected: the gauntlet passes and no allocator-related crash appears. If CoreCLR faults, capture the crash bundle from `LocalAppData/.../crashes/` and stop — the spec's highest risk has materialized and the design needs revisiting before any further task.
 
+The replacement is scoped to `operator new`/`delete` at link time, with `MI_OVERRIDE OFF`, so
+`malloc`/`free` are untouched and `coreclr.dll` resolves its own CRT and its own `operator
+new`. There is deliberately no shared allocator state with the runtime. That is what makes
+this safe, and it is also why the following four must be OBSERVED rather than reasoned about
+— each is a way the isolation could turn out to be less complete than the design assumes:
+
+- [ ] **Teardown with the runtime live.** Exit the editor cleanly with a scripted scene
+  loaded. Statically linked mimalloc being destroyed while CLR finalizer or GC threads still
+  run is the classic failure here, and it appears at exit, not during the gauntlet.
+- [ ] **Engine code on runtime-created threads.** Managed→native callbacks run engine code on
+  threads the CLR made. Confirm the `thread_local` scope tag default-initializes there and
+  attributes to the untagged tag instead of misattributing or tripping the reentry guard.
+  A GC callback or a finalizer that reaches engine code is the case to force.
+- [ ] **`IsMimallocActive()` in a real binary, not just the test.** A replacement `operator
+  new` in a static library is only linked in if its object file is pulled in at all — the
+  reason `aether_memory_force_link()` exists. Confirm the log line appears in BOTH a real
+  Editor and a real GameRuntime run, since they link differently.
+- [ ] **No cross-module `delete`.** First-party modules share mimalloc; third-party DLLs do
+  not. Anything `new`'d one side of that line and `delete`d on the other now breaks harder
+  than it did. Nothing in the interop layer may hand a `new`'d pointer to a DLL to free.
+
+Record the outcome in the spec. Note also a boundary to state rather than discover later:
+`coreclr.dll`'s own native heap is invisible to this system by design — the panel shows
+engine allocations plus managed GC statistics, and the gap between their sum and the process
+working set is largely the runtime's native allocations, not a leak.
+
 - [ ] **Step 9: Commit**
 
 ```bash
