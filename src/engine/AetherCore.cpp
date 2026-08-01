@@ -52,6 +52,7 @@
 #include "vulkan/Swapchain.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "memory/MemoryBackend.hpp"
 #include "utils/FrameStats.hpp"
 #include "utils/LatencyPacer.hpp"
 #include "utils/Profiler.hpp"
@@ -188,6 +189,12 @@ namespace aether
 		}
 
 		m_gpu->SetSwapchainRecreatedCallback([this]() { m_rendering->RecreateSwapchainResources(m_services); });
+
+		// Referencing the anchor is what pulls the override translation unit out of
+		// Engine.lib. Without it the linker discards an object file nothing names, and every
+		// allocation silently falls back to the CRT while the build still succeeds.
+		aether_memory_force_link();
+		AE_INFO(LogCategory::Engine, "CPU allocator: {}", aether::memory::IsMimallocActive() ? "mimalloc" : "system CRT (replacement NOT active)");
 
 		AE_INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu->GetBindlessManager().GetCapacity());
 	}
