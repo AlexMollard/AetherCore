@@ -101,3 +101,25 @@ TEST_CASE("A zero or negative interval is ignored rather than poisoning the rese
 
     CHECK(pacer.ReserveMs() == doctest::Approx(before));
 }
+
+// Before a flip estimate exists the caller feeds the loop period, which can be shorter than
+// the reserve floor. std::clamp asserts when hi < lo: that wedged a Debug editor behind a
+// modal dialog on frame 0, while release quietly ran on undefined behaviour.
+TEST_CASE("An interval shorter than the reserve floor is handled, not asserted") {
+    LatencyPacer pacer;
+
+    pacer.Observe(0.4f, 0.05f, false);
+    pacer.Observe(1.0f, 0.10f, false);
+    pacer.Observe(0.2f, 0.01f, true);
+
+    CHECK(pacer.ReserveMs() >= 0.0f);
+
+    // And it must still behave once real intervals arrive.
+    for (std::size_t i = 0; i < 200; ++i)
+    {
+        pacer.Observe(kInterval, 0.2f, false);
+    }
+    CHECK(pacer.IsWarm());
+    CHECK(pacer.ReserveMs() <= kInterval);
+    CHECK(pacer.ReserveMs() >= LatencyPacer::kFloorMs);
+}

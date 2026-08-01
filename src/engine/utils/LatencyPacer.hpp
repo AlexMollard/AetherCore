@@ -62,7 +62,11 @@ namespace aether
 				m_reserveMs = m_reserveMs * kDecay + target * (1.0f - kDecay); // decay slowly
 			}
 
-			m_reserveMs = std::clamp(m_reserveMs, kFloorMs, intervalMs);
+			// The floor cannot exceed the interval. A frame faster than kFloorMs is normal
+			// before the flip estimate exists (the caller passes the loop period then), and
+			// std::clamp with hi < lo is a debug assert - which wedged a Debug editor behind a
+			// modal dialog on frame 0 - and undefined behaviour in release.
+			m_reserveMs = std::clamp(m_reserveMs, std::min(kFloorMs, intervalMs), intervalMs);
 			m_observations += 1;
 		}
 
