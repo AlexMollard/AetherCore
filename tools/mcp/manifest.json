@@ -1,14 +1,153 @@
 {
   "methods": [
     {
-      "description": "Live editor summary: current scene name and kind, entity count, frame index, fps.",
+      "description": "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play it.",
+      "mutates": true,
+      "name": "animation.create",
+      "paramsSchema": {
+        "properties": {
+          "atlas": {
+            "type": "string"
+          },
+          "fps": {
+            "type": "number"
+          },
+          "frames": {
+            "maxItems": 1024,
+            "minItems": 1,
+            "type": "array"
+          },
+          "loop": {
+            "enum": [
+              "loop",
+              "once",
+              "pingpong",
+              "hold"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "out": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "atlas",
+          "name",
+          "frames"
+        ],
+        "type": "object"
+      },
+      "tool": "create_sprite_animation"
+    },
+    {
+      "description": "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
+      "mutates": true,
+      "name": "asset.select",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "select_asset"
+    },
+    {
+      "description": "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods.",
       "mutates": false,
-      "name": "info",
+      "name": "assets.list",
+      "paramsSchema": {
+        "properties": {
+          "glob": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "list_assets"
+    },
+    {
+      "description": "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components.",
+      "mutates": false,
+      "name": "atlas.info",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "get_atlas"
+    },
+    {
+      "description": "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. Returns the atlas path and sprite list.",
+      "mutates": true,
+      "name": "atlas.slice",
+      "paramsSchema": {
+        "properties": {
+          "cellHeight": {
+            "type": "integer"
+          },
+          "cellWidth": {
+            "type": "integer"
+          },
+          "out": {
+            "type": "string"
+          },
+          "paddingX": {
+            "type": "integer"
+          },
+          "paddingY": {
+            "type": "integer"
+          },
+          "pixelsPerUnit": {
+            "type": "number"
+          },
+          "spacingX": {
+            "type": "integer"
+          },
+          "spacingY": {
+            "type": "integer"
+          },
+          "texture": {
+            "type": "string"
+          },
+          "trimAlpha": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "texture",
+          "cellWidth",
+          "cellHeight"
+        ],
+        "type": "object"
+      },
+      "tool": "slice_atlas"
+    },
+    {
+      "description": "Active camera: projection mode, world position, forward direction, vertical field of view, and orthographic height.",
+      "mutates": false,
+      "name": "camera.info",
       "paramsSchema": {
         "properties": {},
         "type": "object"
       },
-      "tool": "engine_info"
+      "tool": "camera_info"
     },
     {
       "description": "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling.",
@@ -46,69 +185,843 @@
       "tool": "get_console_log"
     },
     {
-      "description": "List every entity in the live scene with id, name, and world position.",
-      "mutates": false,
-      "name": "scene.entities",
+      "description": "Redo the last undone scene edit (mirrors Ctrl+Y). Returns ok=false when the redo stack is empty.",
+      "mutates": true,
+      "name": "edit.redo",
       "paramsSchema": {
         "properties": {},
         "type": "object"
       },
-      "tool": "list_entities"
+      "tool": "redo"
     },
     {
-      "description": "Full detail for one entity by id: name, world position, scale, and its component type list.",
-      "mutates": false,
-      "name": "scene.get",
+      "description": "Undo the last scene edit (mirrors Ctrl+Z). Applies the top command in place so entity ids and the selection are preserved. Returns ok=false when the undo history is empty; undoDepth/redoDepth report the remaining stack sizes.",
+      "mutates": true,
+      "name": "edit.undo",
       "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
+        "properties": {},
         "type": "object"
       },
-      "tool": "get_entity"
+      "tool": "undo"
     },
     {
-      "description": "Create an entity in the live scene. Returns its id.",
+      "description": "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Edit mode only - the play camera belongs to the game.",
       "mutates": true,
-      "name": "scene.create",
+      "name": "editor.camera",
       "paramsSchema": {
         "properties": {
-          "name": {
-            "type": "string"
+          "frame": {
+            "description": "entity id to centre on",
+            "type": "integer"
+          },
+          "height": {
+            "type": "number"
           },
           "position": {
             "items": {
               "type": "number"
             },
             "maxItems": 3,
-            "minItems": 3,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "set_editor_camera"
+    },
+    {
+      "description": "Open the Inspector and scroll a specific component's drawer into view (force-opening it), e.g. 'Rigid Body' or 'Material'. Select an entity first. Matches the section label case-insensitively - use it to frame a component for a screenshot.",
+      "mutates": true,
+      "name": "editor.inspect_component",
+      "paramsSchema": {
+        "properties": {
+          "component": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "type": "object"
+      },
+      "tool": "inspect_component"
+    },
+    {
+      "description": "Apply a built-in workflow dock layout by name (from list_layouts; case-insensitive): rebuilds the dockspace and shows that workflow's panels.",
+      "mutates": true,
+      "name": "editor.layout_apply",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "apply_layout"
+    },
+    {
+      "description": "List the built-in workflow dock layouts (e.g. '2D / Sprites', 'Rendering / Look-dev'). Names feed apply_layout.",
+      "mutates": false,
+      "name": "editor.layouts_list",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_layouts"
+    },
+    {
+      "description": "Open the editor's Open Scene dialog (the same one as File > Open).",
+      "mutates": true,
+      "name": "editor.open_scene_dialog",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "open_scene_dialog"
+    },
+    {
+      "description": "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.",
+      "mutates": true,
+      "name": "editor.window_set",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "visible"
+        ],
+        "type": "object"
+      },
+      "tool": "set_window"
+    },
+    {
+      "description": "List every editor panel/window and whether it is currently open. Names feed set_window.",
+      "mutates": false,
+      "name": "editor.windows",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_windows"
+    },
+    {
+      "description": "Freeze the running simulation (state='paused'). Session stays live; no-op unless playing.",
+      "mutates": true,
+      "name": "engine.pause",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "pause"
+    },
+    {
+      "description": "Enter Play mode (async): rebuild the C# scripts on a worker thread, then snapshot + start. Returns immediately with state='compiling'; poll info.playState until 'playing'. The editor never blocks. Mirrors the Play button.",
+      "mutates": true,
+      "name": "engine.play",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "play"
+    },
+    {
+      "description": "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
+      "mutates": true,
+      "name": "engine.play_input_sequence",
+      "paramsSchema": {
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "stop": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "play_input_sequence"
+    },
+    {
+      "description": "Unfreeze a paused simulation (state='playing'). No-op unless playing.",
+      "mutates": true,
+      "name": "engine.resume",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "resume"
+    },
+    {
+      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
+      "mutates": true,
+      "name": "engine.send_input",
+      "paramsSchema": {
+        "properties": {
+          "clear": {
+            "type": "boolean"
+          },
+          "down": {
+            "items": {
+              "type": "string"
+            },
             "type": "array"
           },
-          "rotationEuler": {
+          "mouse_down": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mouse_pos": {
             "items": {
               "type": "number"
             },
-            "maxItems": 3,
-            "minItems": 3,
             "type": "array"
           },
-          "scale": {
+          "mouse_up": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mouse_world": {
             "items": {
               "type": "number"
             },
-            "maxItems": 3,
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          },
+          "up": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "send_input"
+    },
+    {
+      "description": "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
+      "mutates": true,
+      "name": "engine.set_speed",
+      "paramsSchema": {
+        "properties": {
+          "speed": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          }
+        },
+        "required": [
+          "speed"
+        ],
+        "type": "object"
+      },
+      "tool": "set_speed"
+    },
+    {
+      "description": "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.",
+      "mutates": true,
+      "name": "engine.step",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "step"
+    },
+    {
+      "description": "Exit Play mode and restore the pre-play scene snapshot.",
+      "mutates": true,
+      "name": "engine.stop",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "stop"
+    },
+    {
+      "description": "Toggle Play/Stop.",
+      "mutates": true,
+      "name": "engine.toggle_play",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "toggle_play"
+    },
+    {
+      "description": "Live editor summary: current scene name and kind, entity count, frame index, fps.",
+      "mutates": false,
+      "name": "info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "engine_info"
+    },
+    {
+      "description": "Create a Blank 2D or Blank 3D project, then hand the control port from the Launcher to its Editor process.",
+      "mutates": true,
+      "name": "launcher.create_project",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "template": {
+            "enum": [
+              "blank_3d",
+              "blank_2d"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "template"
+        ],
+        "type": "object"
+      },
+      "tool": "create_project"
+    },
+    {
+      "description": "Live Launcher summary: recent-project count, handoff state, frame index, and fps.",
+      "mutates": false,
+      "name": "launcher.info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "launcher_info"
+    },
+    {
+      "description": "Open an existing AetherCore project and hand the control port from the Launcher to its Editor process.",
+      "mutates": true,
+      "name": "launcher.open_project",
+      "paramsSchema": {
+        "properties": {
+          "root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root"
+        ],
+        "type": "object"
+      },
+      "tool": "open_project"
+    },
+    {
+      "description": "List the Launcher's recent projects, including each project name and root path.",
+      "mutates": false,
+      "name": "launcher.projects",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_projects"
+    },
+    {
+      "description": "Re-point a moved project in the recent list to a new folder (headless: no folder picker).",
+      "mutates": true,
+      "name": "launcher.relocate_recent",
+      "paramsSchema": {
+        "properties": {
+          "new_root": {
+            "type": "string"
+          },
+          "old_root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "old_root",
+          "new_root"
+        ],
+        "type": "object"
+      },
+      "tool": "relocate_recent"
+    },
+    {
+      "description": "Remove a project from the Launcher's recent list (works whether the project still exists or is missing).",
+      "mutates": true,
+      "name": "launcher.remove_recent",
+      "paramsSchema": {
+        "properties": {
+          "root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_recent"
+    },
+    {
+      "description": "Open a recent project's folder in the OS file manager.",
+      "mutates": false,
+      "name": "launcher.reveal_folder",
+      "paramsSchema": {
+        "properties": {
+          "root": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root"
+        ],
+        "type": "object"
+      },
+      "tool": "reveal_folder"
+    },
+    {
+      "description": "Flood-fill the connected region at {x, y} with 'color' (or the active colour). One undo step.",
+      "mutates": true,
+      "name": "pixel.bucket",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_bucket"
+    },
+    {
+      "description": "Clear the whole canvas to 'color' (default transparent). One undo step.",
+      "mutates": true,
+      "name": "pixel.clear",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
             "minItems": 3,
             "type": "array"
           }
         },
         "type": "object"
       },
-      "tool": "create_entity"
+      "tool": "pixel_clear"
+    },
+    {
+      "description": "Fill an inclusive cell rectangle {x0,y0,x1,y1, color?}. One undo step.",
+      "mutates": true,
+      "name": "pixel.fill_rect",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "x0": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "integer"
+          },
+          "y0": {
+            "type": "integer"
+          },
+          "y1": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_fill_rect"
+    },
+    {
+      "description": "Read the canvas back: dimensions plus a row-major 'pixels' array of 0xAABBGGRR values (only when <= 4096 texels; otherwise omitted).",
+      "mutates": false,
+      "name": "pixel.get",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "pixel_get"
+    },
+    {
+      "description": "Current pixel-art canvas dimensions, dirty flag, and file path.",
+      "mutates": false,
+      "name": "pixel.info",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "pixel_info"
+    },
+    {
+      "description": "Draw a line between two texels {x0,y0,x1,y1, color?}. One undo step.",
+      "mutates": true,
+      "name": "pixel.line",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "x0": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "integer"
+          },
+          "y0": {
+            "type": "integer"
+          },
+          "y1": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_line"
+    },
+    {
+      "description": "Create a fresh transparent pixel-art canvas of {width, height} (1-512). Clears undo history. Mirrors the Pixel Art panel's New.",
+      "mutates": true,
+      "name": "pixel.new",
+      "paramsSchema": {
+        "properties": {
+          "height": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_new"
+    },
+    {
+      "description": "Load a PNG at 'path' (project:// virtual path) into the canvas for editing.",
+      "mutates": true,
+      "name": "pixel.open",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_open"
+    },
+    {
+      "description": "Save the canvas to a PNG at 'path' (project:// virtual path; default: the current file). Creates folders.",
+      "mutates": true,
+      "name": "pixel.save",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "pixel_save"
+    },
+    {
+      "description": "Set individual texels: {pixels:[{x,y,color?}]}. 'color' omitted uses the active colour; use [0,0,0,0] to erase. One undo step for the batch.",
+      "mutates": true,
+      "name": "pixel.set",
+      "paramsSchema": {
+        "properties": {
+          "pixels": {
+            "items": {
+              "properties": {
+                "color": {
+                  "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+                  "items": {
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxItems": 4,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pixels"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_set"
+    },
+    {
+      "description": "Set the active drawing colour {color:[r,g,b,a]}.",
+      "mutates": true,
+      "name": "pixel.set_color",
+      "paramsSchema": {
+        "properties": {
+          "color": {
+            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "color"
+        ],
+        "type": "object"
+      },
+      "tool": "pixel_set_color"
+    },
+    {
+      "description": "Publish the open project to a standalone package (Builds/<platform>/<product>). Runs asynchronously; poll publish_status for progress and the result. Uses the running editor's build configuration.",
+      "mutates": true,
+      "name": "project.publish",
+      "paramsSchema": {
+        "properties": null,
+        "type": "object"
+      },
+      "tool": "publish_project"
+    },
+    {
+      "description": "Progress and result of the publish started by publish_project: state is idle, running, succeeded or failed.",
+      "mutates": false,
+      "name": "project.publish_status",
+      "paramsSchema": {
+        "properties": null,
+        "type": "object"
+      },
+      "tool": "publish_status"
+    },
+    {
+      "description": "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.",
+      "mutates": false,
+      "name": "render.benchmark",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "render_benchmark"
+    },
+    {
+      "description": "Capture a registered texture / render target (name from list_textures) to a .png and return its path - use it to SEE any GPU texture, not just the viewport. Handles 8-bit color, depth (normalized grayscale) and HDR (tonemapped) targets.",
+      "mutates": false,
+      "name": "render.capture_texture",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "capture_texture"
+    },
+    {
+      "description": "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes.",
+      "mutates": false,
+      "name": "render.memory",
+      "paramsSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "render_memory"
+    },
+    {
+      "description": "Render-graph frame statistics: pass/barrier counts, transient-image cache hit/miss, and the transient GPU heap capacity vs. bytes used - the engine's per-frame allocation profile.",
+      "mutates": false,
+      "name": "render.stats",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "render_stats"
+    },
+    {
+      "description": "List every registered texture / render target (shadow atlas, GBuffer, scene color, asset textures): name, format, extent, aspect, mips, layers, bindless slot.",
+      "mutates": false,
+      "name": "render.textures",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_textures"
+    },
+    {
+      "description": "Dump the live render graph: every compiled pass with its type, dependencies, produced/consumed frame products, and last CPU time.",
+      "mutates": false,
+      "name": "rendergraph",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "query_rendergraph"
+    },
+    {
+      "description": "Add a component to an entity by id. 'type' is a ComponentCatalog name (call list_component_types for the set).",
+      "mutates": true,
+      "name": "scene.add_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "add_component"
+    },
+    {
+      "description": "Add components to up to 10,000 entities in one request. Each item may also provide reflected field values, combining add and initialize without another round trip.",
+      "mutates": true,
+      "name": "scene.add_component_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "type"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "add_components"
     },
     {
       "description": "Add a model file to the live scene as one operation - the seamless equivalent of dragging a glTF into the editor. Bakes the raw glTF if it hasn't been imported yet, then spawns the correct layout: a lone static mesh sits on a single entity, while a multi-primitive or skinned model becomes a root with one child per primitive (each carrying its own material and skin). 'path' is a project:// or absolute model path; optional 'name', 'position', 'rotationEuler' (degrees) and 'scale' place it (skinned models authored in centimetres usually want scale ~0.01). Returns the root id and primitive count.",
@@ -155,36 +1068,77 @@
       "tool": "add_model"
     },
     {
-      "description": "Rename an entity by id.",
+      "description": "Place a LINKED prefab instance in the live scene: the scene stores a reference (not a copy), so editing the prefab propagates to every instance. 'prefab' is the prefab's save name; optional 'position'/'rotationEuler'/'scale' place the instance root. Returns the root id.",
       "mutates": true,
-      "name": "scene.rename",
+      "name": "scene.add_prefab_instance",
+      "paramsSchema": {
+        "properties": {
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "prefab": {
+            "type": "string"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "prefab"
+        ],
+        "type": "object"
+      },
+      "tool": "add_prefab_instance"
+    },
+    {
+      "description": "Attach a C# script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields: numbers, bools, strings, or [x, y, z] arrays.",
+      "mutates": true,
+      "name": "scene.add_script",
       "paramsSchema": {
         "properties": {
           "id": {
             "type": "integer"
           },
-          "name": {
+          "properties": {
+            "type": "object"
+          },
+          "type": {
             "type": "string"
           }
         },
         "required": [
           "id",
-          "name"
+          "type"
         ],
         "type": "object"
       },
-      "tool": "rename_entity"
+      "tool": "add_script"
     },
     {
-      "description": "Set an entity's parent by id. parent=0 unparents it to the scene root.",
+      "description": "Apply a prefab instance's current state (its overrides included) back to the prefab file, so every instance of that prefab picks up the change on reload. 'id' is the instance root.",
       "mutates": true,
-      "name": "scene.parent",
+      "name": "scene.apply_prefab_instance",
       "paramsSchema": {
         "properties": {
           "id": {
-            "type": "integer"
-          },
-          "parent": {
             "type": "integer"
           }
         },
@@ -193,16 +1147,26 @@
         ],
         "type": "object"
       },
-      "tool": "parent_entity"
+      "tool": "apply_prefab_instance"
     },
     {
-      "description": "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
+      "description": "List every component (name + category), plus, for components with editable fields, the field list get_component / set_component accept.",
+      "mutates": false,
+      "name": "scene.component_types",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_component_types"
+    },
+    {
+      "description": "Create an entity in the live scene. Returns its id.",
       "mutates": true,
-      "name": "scene.transform",
+      "name": "scene.create",
       "paramsSchema": {
         "properties": {
-          "id": {
-            "type": "integer"
+          "name": {
+            "type": "string"
           },
           "position": {
             "items": {
@@ -229,497 +1193,9 @@
             "type": "array"
           }
         },
-        "required": [
-          "id"
-        ],
         "type": "object"
       },
-      "tool": "set_transform"
-    },
-    {
-      "description": "Delete an entity from the live scene by id.",
-      "mutates": true,
-      "name": "scene.delete",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "delete_entity"
-    },
-    {
-      "description": "Add a component to an entity by id. 'type' is a ComponentCatalog name (call list_component_types for the set).",
-      "mutates": true,
-      "name": "scene.add_component",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "type": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type"
-        ],
-        "type": "object"
-      },
-      "tool": "add_component"
-    },
-    {
-      "description": "Remove a component from an entity by id ('type' is a ComponentCatalog name).",
-      "mutates": true,
-      "name": "scene.remove_component",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "type": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type"
-        ],
-        "type": "object"
-      },
-      "tool": "remove_component"
-    },
-    {
-      "description": "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a component name (call list_component_types for the set and each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
-      "mutates": false,
-      "name": "scene.get_component",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "type": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type"
-        ],
-        "type": "object"
-      },
-      "tool": "get_component"
-    },
-    {
-      "description": "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
-      "mutates": true,
-      "name": "scene.set_component",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "type": {
-            "type": "string"
-          },
-          "values": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "values"
-        ],
-        "type": "object"
-      },
-      "tool": "set_component"
-    },
-    {
-      "description": "List every component (name + category), plus, for components with editable fields, the field list get_component / set_component accept.",
-      "mutates": false,
-      "name": "scene.component_types",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "list_component_types"
-    },
-    {
-      "description": "Save the live scene to its committable .scene.toml. Defaults to the current scene; pass 'name' to save under a different name.",
-      "mutates": true,
-      "name": "scene.save",
-      "paramsSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "save_scene"
-    },
-    {
-      "description": "Switch the live editor to a scene by name (tears the current scene down first).",
-      "mutates": true,
-      "name": "scene.load",
-      "paramsSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
-      "tool": "load_scene"
-    },
-    {
-      "description": "Replace the live scene with a fresh scene from the shipped default template. 'kind' picks the domain: '3d' (default) or '2d' (orthographic camera, sprite/tilemap/2D-physics features).",
-      "mutates": true,
-      "name": "scene.new",
-      "paramsSchema": {
-        "properties": {
-          "kind": {
-            "enum": [
-              "2d",
-              "3d"
-            ],
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "new_scene"
-    },
-    {
-      "description": "Enter Play mode (async): rebuild the C# scripts on a worker thread, then snapshot + start. Returns immediately with state='compiling'; poll info.playState until 'playing'. The editor never blocks. Mirrors the Play button.",
-      "mutates": true,
-      "name": "engine.play",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "play"
-    },
-    {
-      "description": "Exit Play mode and restore the pre-play scene snapshot.",
-      "mutates": true,
-      "name": "engine.stop",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "stop"
-    },
-    {
-      "description": "Toggle Play/Stop.",
-      "mutates": true,
-      "name": "engine.toggle_play",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "toggle_play"
-    },
-    {
-      "description": "Undo the last scene edit (mirrors Ctrl+Z). Applies the top command in place so entity ids and the selection are preserved. Returns ok=false when the undo history is empty; undoDepth/redoDepth report the remaining stack sizes.",
-      "mutates": true,
-      "name": "edit.undo",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "undo"
-    },
-    {
-      "description": "Redo the last undone scene edit (mirrors Ctrl+Y). Returns ok=false when the redo stack is empty.",
-      "mutates": true,
-      "name": "edit.redo",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "redo"
-    },
-    {
-      "description": "Dump the live render graph: every compiled pass with its type, dependencies, produced/consumed frame products, and last CPU time.",
-      "mutates": false,
-      "name": "rendergraph",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "query_rendergraph"
-    },
-    {
-      "description": "Render-graph frame statistics: pass/barrier counts, transient-image cache hit/miss, and the transient GPU heap capacity vs. bytes used - the engine's per-frame allocation profile.",
-      "mutates": false,
-      "name": "render.stats",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "render_stats"
-    },
-    {
-      "description": "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.",
-      "mutates": false,
-      "name": "render.benchmark",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "render_benchmark"
-    },
-    {
-      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
-      "mutates": false,
-      "name": "viewport.screenshot",
-      "paramsSchema": {
-        "properties": {
-          "path": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "screenshot"
-    },
-    {
-      "description": "List every registered texture / render target (shadow atlas, GBuffer, scene color, asset textures): name, format, extent, aspect, mips, layers, bindless slot.",
-      "mutates": false,
-      "name": "render.textures",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "list_textures"
-    },
-    {
-      "description": "Capture a registered texture / render target (name from list_textures) to a .png and return its path - use it to SEE any GPU texture, not just the viewport. Handles 8-bit color, depth (normalized grayscale) and HDR (tonemapped) targets.",
-      "mutates": false,
-      "name": "render.capture_texture",
-      "paramsSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
-      "tool": "capture_texture"
-    },
-    {
-      "description": "Per-component-type entity counts in the live scene - a histogram over the ECS storage pools.",
-      "mutates": false,
-      "name": "scene.stats",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "scene_stats"
-    },
-    {
-      "description": "Every light in the live scene: id, name, type (point/spot), world position, color, intensity, radius, shadow-casting flag (spots also report cone angles and aim direction).",
-      "mutates": false,
-      "name": "scene.lights",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "list_lights"
-    },
-    {
-      "description": "Active camera: projection mode, world position, forward direction, vertical field of view, and orthographic height.",
-      "mutates": false,
-      "name": "camera.info",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "camera_info"
-    },
-    {
-      "description": "Current engine settings: resolution, vsync, and target fps.",
-      "mutates": false,
-      "name": "settings.get",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "get_settings"
-    },
-    {
-      "description": "List every editor panel/window and whether it is currently open. Names feed set_window.",
-      "mutates": false,
-      "name": "editor.windows",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "list_windows"
-    },
-    {
-      "description": "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.",
-      "mutates": true,
-      "name": "editor.window_set",
-      "paramsSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "visible": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "visible"
-        ],
-        "type": "object"
-      },
-      "tool": "set_window"
-    },
-    {
-      "description": "Open the Inspector and scroll a specific component's drawer into view (force-opening it), e.g. 'Rigid Body' or 'Material'. Select an entity first. Matches the section label case-insensitively - use it to frame a component for a screenshot.",
-      "mutates": true,
-      "name": "editor.inspect_component",
-      "paramsSchema": {
-        "properties": {
-          "component": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "component"
-        ],
-        "type": "object"
-      },
-      "tool": "inspect_component"
-    },
-    {
-      "description": "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
-      "mutates": true,
-      "name": "asset.select",
-      "paramsSchema": {
-        "properties": {
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "path"
-        ],
-        "type": "object"
-      },
-      "tool": "select_asset"
-    },
-    {
-      "description": "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",
-      "mutates": true,
-      "name": "scene.select",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "select_entity"
-    },
-    {
-      "description": "The current editor selection: the primary entity id (0 if none) plus all selected ids.",
-      "mutates": false,
-      "name": "scene.selection",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "get_selection"
-    },
-    {
-      "description": "Live Launcher summary: recent-project count, handoff state, frame index, and fps.",
-      "mutates": false,
-      "name": "launcher.info",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "launcher_info"
-    },
-    {
-      "description": "List the Launcher's recent projects, including each project name and root path.",
-      "mutates": false,
-      "name": "launcher.projects",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "list_projects"
-    },
-    {
-      "description": "Open an existing AetherCore project and hand the control port from the Launcher to its Editor process.",
-      "mutates": true,
-      "name": "launcher.open_project",
-      "paramsSchema": {
-        "properties": {
-          "root": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "root"
-        ],
-        "type": "object"
-      },
-      "tool": "open_project"
-    },
-    {
-      "description": "Create a Blank 2D or Blank 3D project, then hand the control port from the Launcher to its Editor process.",
-      "mutates": true,
-      "name": "launcher.create_project",
-      "paramsSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "root": {
-            "type": "string"
-          },
-          "template": {
-            "enum": [
-              "blank_3d",
-              "blank_2d"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "root",
-          "template"
-        ],
-        "type": "object"
-      },
-      "tool": "create_project"
+      "tool": "create_entity"
     },
     {
       "description": "Create up to 10,000 entities in one request. Each item accepts name/transform plus optional components with initial reflected values. Processing is one editor-frame command; failures are reported per item and a failed item's partial entity is rolled back.",
@@ -791,6 +1267,452 @@
       "tool": "create_entities"
     },
     {
+      "description": "Delete an entity from the live scene by id.",
+      "mutates": true,
+      "name": "scene.delete",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "delete_entity"
+    },
+    {
+      "description": "Delete up to 10,000 entities in one request. Returns ordered per-item results with partial failures.",
+      "mutates": true,
+      "name": "scene.delete_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "delete_entities"
+    },
+    {
+      "description": "List every entity in the live scene with id, name, and world position.",
+      "mutates": false,
+      "name": "scene.entities",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_entities"
+    },
+    {
+      "description": "Full detail for one entity by id: name, world position, scale, and its component type list.",
+      "mutates": false,
+      "name": "scene.get",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "get_entity"
+    },
+    {
+      "description": "Read a component's editable fields - the same fields the Inspector shows - as a JSON object. 'type' is a component name (call list_component_types for the set and each type's fields). Returns {id, type, fields:{...}}, or an error if the entity lacks that component.",
+      "mutates": false,
+      "name": "scene.get_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "get_component"
+    },
+    {
+      "description": "Every light in the live scene: id, name, type (point/spot), world position, color, intensity, radius, shadow-casting flag (spots also report cone angles and aim direction).",
+      "mutates": false,
+      "name": "scene.lights",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_lights"
+    },
+    {
+      "description": "Switch the live editor to a scene by name (tears the current scene down first).",
+      "mutates": true,
+      "name": "scene.load",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "load_scene"
+    },
+    {
+      "description": "Replace the live scene with a fresh scene from the shipped default template. 'kind' picks the domain: '3d' (default) or '2d' (orthographic camera, sprite/tilemap/2D-physics features).",
+      "mutates": true,
+      "name": "scene.new",
+      "paramsSchema": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "2d",
+              "3d"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "new_scene"
+    },
+    {
+      "description": "Set an entity's parent by id. parent=0 unparents it to the scene root.",
+      "mutates": true,
+      "name": "scene.parent",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "parent": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "parent_entity"
+    },
+    {
+      "description": "Remove a component from an entity by id ('type' is a ComponentCatalog name).",
+      "mutates": true,
+      "name": "scene.remove_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_component"
+    },
+    {
+      "description": "Remove components from up to 10,000 entities in one request, with ordered per-item results.",
+      "mutates": true,
+      "name": "scene.remove_component_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "type"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_components"
+    },
+    {
+      "description": "Detach a C# script from an entity by type name.",
+      "mutates": true,
+      "name": "scene.remove_script",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tool": "remove_script"
+    },
+    {
+      "description": "Rename an entity by id.",
+      "mutates": true,
+      "name": "scene.rename",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "tool": "rename_entity"
+    },
+    {
+      "description": "Discard a prefab instance's overrides and re-expand it from the prefab (a fresh, unmodified copy). 'id' is the instance root. Returns the new root id.",
+      "mutates": true,
+      "name": "scene.revert_prefab_instance",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "revert_prefab_instance"
+    },
+    {
+      "description": "Save the live scene to its committable .scene.toml. Defaults to the current scene; pass 'name' to save under a different name.",
+      "mutates": true,
+      "name": "scene.save",
+      "paramsSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "save_scene"
+    },
+    {
+      "description": "List the C# scripts attached to an entity.",
+      "mutates": false,
+      "name": "scene.scripts",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "list_scripts"
+    },
+    {
+      "description": "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",
+      "mutates": true,
+      "name": "scene.select",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "select_entity"
+    },
+    {
+      "description": "The current editor selection: the primary entity id (0 if none) plus all selected ids.",
+      "mutates": false,
+      "name": "scene.selection",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "get_selection"
+    },
+    {
+      "description": "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
+      "mutates": true,
+      "name": "scene.set_component",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "values"
+        ],
+        "type": "object"
+      },
+      "tool": "set_component"
+    },
+    {
+      "description": "Apply reflected component field updates to up to 10,000 entities in one request, with ordered per-item applied-field or error results.",
+      "mutates": true,
+      "name": "scene.set_component_many",
+      "paramsSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "values"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "tool": "set_components"
+    },
+    {
+      "description": "Per-component-type entity counts in the live scene - a histogram over the ECS storage pools.",
+      "mutates": false,
+      "name": "scene.stats",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "scene_stats"
+    },
+    {
+      "description": "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
+      "mutates": true,
+      "name": "scene.transform",
+      "paramsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "position": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rotationEuler": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "scale": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tool": "set_transform"
+    },
+    {
       "description": "Set transforms for up to 10,000 entities in one request. Returns ordered per-item results with partial failures instead of aborting the batch.",
       "mutates": true,
       "name": "scene.transform_many",
@@ -845,143 +1767,66 @@
       "tool": "set_transforms"
     },
     {
-      "description": "Delete up to 10,000 entities in one request. Returns ordered per-item results with partial failures.",
+      "description": "Break a prefab instance's link: its expanded entities become plain scene entities that no longer track the prefab (and are saved individually). 'id' is the instance root. Returns how many entities were unpacked.",
       "mutates": true,
-      "name": "scene.delete_many",
+      "name": "scene.unpack_prefab_instance",
       "paramsSchema": {
         "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "id"
-              ],
-              "type": "object"
-            },
-            "maxItems": 10000,
-            "minItems": 1,
-            "type": "array"
+          "id": {
+            "type": "integer"
           }
         },
         "required": [
-          "items"
+          "id"
         ],
         "type": "object"
       },
-      "tool": "delete_entities"
+      "tool": "unpack_prefab_instance"
     },
     {
-      "description": "Add components to up to 10,000 entities in one request. Each item may also provide reflected field values, combining add and initialize without another round trip.",
-      "mutates": true,
-      "name": "scene.add_component_many",
+      "description": "Current engine settings: resolution, vsync, and target fps.",
+      "mutates": false,
+      "name": "settings.get",
       "paramsSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "integer"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "values": {
-                  "type": "object"
-                }
-              },
-              "required": [
-                "id",
-                "type"
-              ],
-              "type": "object"
-            },
-            "maxItems": 10000,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
+        "properties": {},
         "type": "object"
       },
-      "tool": "add_components"
+      "tool": "get_settings"
     },
     {
-      "description": "Remove components from up to 10,000 entities in one request, with ordered per-item results.",
+      "description": "Append a layer to an entity's tilemap and return its index (paint_tiles' 'layer' parameter).",
       "mutates": true,
-      "name": "scene.remove_component_many",
+      "name": "tiles.add_layer",
       "paramsSchema": {
         "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "integer"
-                },
-                "type": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "type"
-              ],
-              "type": "object"
-            },
-            "maxItems": 10000,
-            "minItems": 1,
-            "type": "array"
+          "collision": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "opacity": {
+            "type": "number"
+          },
+          "orderInLayer": {
+            "type": "integer"
+          },
+          "save": {
+            "type": "boolean"
+          },
+          "sortingLayer": {
+            "type": "integer"
           }
         },
         "required": [
-          "items"
+          "id"
         ],
         "type": "object"
       },
-      "tool": "remove_components"
-    },
-    {
-      "description": "Apply reflected component field updates to up to 10,000 entities in one request, with ordered per-item applied-field or error results.",
-      "mutates": true,
-      "name": "scene.set_component_many",
-      "paramsSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "integer"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "values": {
-                  "type": "object"
-                }
-              },
-              "required": [
-                "id",
-                "type",
-                "values"
-              ],
-              "type": "object"
-            },
-            "maxItems": 10000,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "type": "object"
-      },
-      "tool": "set_components"
+      "tool": "add_tile_layer"
     },
     {
       "description": "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. Returns tileset/tilemap paths and the paintable tile list.",
@@ -1015,6 +1860,48 @@
         "type": "object"
       },
       "tool": "create_tile_assets"
+    },
+    {
+      "description": "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack.",
+      "mutates": true,
+      "name": "tiles.fill",
+      "paramsSchema": {
+        "properties": {
+          "flipX": {
+            "type": "boolean"
+          },
+          "flipY": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "layer": {
+            "type": "integer"
+          },
+          "rect": {
+            "description": "cell rect [x0, y0, x1, y1], inclusive",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "save": {
+            "type": "boolean"
+          },
+          "tile": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "rect"
+        ],
+        "type": "object"
+      },
+      "tool": "fill_tiles"
     },
     {
       "description": "Inspect an entity's tilemap: paintable tiles (tileset indices used by paint_tiles), layers, palette usage, painted-cell bounds, and cell count.",
@@ -1087,48 +1974,6 @@
       "tool": "paint_tiles"
     },
     {
-      "description": "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack.",
-      "mutates": true,
-      "name": "tiles.fill",
-      "paramsSchema": {
-        "properties": {
-          "flipX": {
-            "type": "boolean"
-          },
-          "flipY": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "integer"
-          },
-          "layer": {
-            "type": "integer"
-          },
-          "rect": {
-            "description": "cell rect [x0, y0, x1, y1], inclusive",
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "save": {
-            "type": "boolean"
-          },
-          "tile": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "rect"
-        ],
-        "type": "object"
-      },
-      "tool": "fill_tiles"
-    },
-    {
       "description": "Read the non-empty cells of an inclusive cell rect [x0, y0, x1, y1] back as {x, y, tile, flipX, flipY} with 'tile' as a tileset index.",
       "mutates": false,
       "name": "tiles.read",
@@ -1157,333 +2002,6 @@
         "type": "object"
       },
       "tool": "read_tiles"
-    },
-    {
-      "description": "Append a layer to an entity's tilemap and return its index (paint_tiles' 'layer' parameter).",
-      "mutates": true,
-      "name": "tiles.add_layer",
-      "paramsSchema": {
-        "properties": {
-          "collision": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "opacity": {
-            "type": "number"
-          },
-          "orderInLayer": {
-            "type": "integer"
-          },
-          "save": {
-            "type": "boolean"
-          },
-          "sortingLayer": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "add_tile_layer"
-    },
-    {
-      "description": "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. Returns the atlas path and sprite list.",
-      "mutates": true,
-      "name": "atlas.slice",
-      "paramsSchema": {
-        "properties": {
-          "cellHeight": {
-            "type": "integer"
-          },
-          "cellWidth": {
-            "type": "integer"
-          },
-          "out": {
-            "type": "string"
-          },
-          "paddingX": {
-            "type": "integer"
-          },
-          "paddingY": {
-            "type": "integer"
-          },
-          "pixelsPerUnit": {
-            "type": "number"
-          },
-          "spacingX": {
-            "type": "integer"
-          },
-          "spacingY": {
-            "type": "integer"
-          },
-          "texture": {
-            "type": "string"
-          },
-          "trimAlpha": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "texture",
-          "cellWidth",
-          "cellHeight"
-        ],
-        "type": "object"
-      },
-      "tool": "slice_atlas"
-    },
-    {
-      "description": "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components.",
-      "mutates": false,
-      "name": "atlas.info",
-      "paramsSchema": {
-        "properties": {
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "path"
-        ],
-        "type": "object"
-      },
-      "tool": "get_atlas"
-    },
-    {
-      "description": "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play it.",
-      "mutates": true,
-      "name": "animation.create",
-      "paramsSchema": {
-        "properties": {
-          "atlas": {
-            "type": "string"
-          },
-          "fps": {
-            "type": "number"
-          },
-          "frames": {
-            "maxItems": 1024,
-            "minItems": 1,
-            "type": "array"
-          },
-          "loop": {
-            "enum": [
-              "loop",
-              "once",
-              "pingpong",
-              "hold"
-            ],
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "out": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "atlas",
-          "name",
-          "frames"
-        ],
-        "type": "object"
-      },
-      "tool": "create_sprite_animation"
-    },
-    {
-      "description": "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Edit mode only - the play camera belongs to the game.",
-      "mutates": true,
-      "name": "editor.camera",
-      "paramsSchema": {
-        "properties": {
-          "frame": {
-            "description": "entity id to centre on",
-            "type": "integer"
-          },
-          "height": {
-            "type": "number"
-          },
-          "position": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 2,
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "set_editor_camera"
-    },
-    {
-      "description": "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods.",
-      "mutates": false,
-      "name": "assets.list",
-      "paramsSchema": {
-        "properties": {
-          "glob": {
-            "type": "string"
-          },
-          "limit": {
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "list_assets"
-    },
-    {
-      "description": "Attach a C# script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields: numbers, bools, strings, or [x, y, z] arrays.",
-      "mutates": true,
-      "name": "scene.add_script",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "properties": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type"
-        ],
-        "type": "object"
-      },
-      "tool": "add_script"
-    },
-    {
-      "description": "List the C# scripts attached to an entity.",
-      "mutates": false,
-      "name": "scene.scripts",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "list_scripts"
-    },
-    {
-      "description": "Detach a C# script from an entity by type name.",
-      "mutates": true,
-      "name": "scene.remove_script",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "type": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type"
-        ],
-        "type": "object"
-      },
-      "tool": "remove_script"
-    },
-    {
-      "description": "Open the editor's Open Scene dialog (the same one as File > Open).",
-      "mutates": true,
-      "name": "editor.open_scene_dialog",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "open_scene_dialog"
-    },
-    {
-      "description": "Remove a project from the Launcher's recent list (works whether the project still exists or is missing).",
-      "mutates": true,
-      "name": "launcher.remove_recent",
-      "paramsSchema": {
-        "properties": {
-          "root": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "root"
-        ],
-        "type": "object"
-      },
-      "tool": "remove_recent"
-    },
-    {
-      "description": "Open a recent project's folder in the OS file manager.",
-      "mutates": false,
-      "name": "launcher.reveal_folder",
-      "paramsSchema": {
-        "properties": {
-          "root": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "root"
-        ],
-        "type": "object"
-      },
-      "tool": "reveal_folder"
-    },
-    {
-      "description": "Re-point a moved project in the recent list to a new folder (headless: no folder picker).",
-      "mutates": true,
-      "name": "launcher.relocate_recent",
-      "paramsSchema": {
-        "properties": {
-          "new_root": {
-            "type": "string"
-          },
-          "old_root": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "old_root",
-          "new_root"
-        ],
-        "type": "object"
-      },
-      "tool": "relocate_recent"
-    },
-    {
-      "description": "List on-screen ImGui widgets from the last frame: window, label, screen rect, and hovered/active state. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
-      "mutates": false,
-      "name": "ui.query",
-      "paramsSchema": {
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "window": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "ui_query"
     },
     {
       "description": "Click a widget by {window,label} or a raw {x,y} screen point. Optional 'button' ('left'|'right') and 'double'. Async: the click plays over a few frames; query/screenshot afterwards to see the effect.",
@@ -1584,354 +2102,26 @@
       "tool": "ui_key"
     },
     {
-      "description": "Freeze the running simulation (state='paused'). Session stays live; no-op unless playing.",
-      "mutates": true,
-      "name": "engine.pause",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "pause"
-    },
-    {
-      "description": "Unfreeze a paused simulation (state='playing'). No-op unless playing.",
-      "mutates": true,
-      "name": "engine.resume",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "resume"
-    },
-    {
-      "description": "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.",
-      "mutates": true,
-      "name": "engine.step",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "step"
-    },
-    {
-      "description": "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
-      "mutates": true,
-      "name": "engine.set_speed",
+      "description": "List on-screen ImGui widgets from the last frame: window, label, screen rect, and hovered/active state. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
+      "mutates": false,
+      "name": "ui.query",
       "paramsSchema": {
         "properties": {
-          "speed": {
-            "maximum": 16.0,
-            "minimum": 0.05,
-            "type": "number"
-          }
-        },
-        "required": [
-          "speed"
-        ],
-        "type": "object"
-      },
-      "tool": "set_speed"
-    },
-    {
-      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
-      "mutates": true,
-      "name": "engine.send_input",
-      "paramsSchema": {
-        "properties": {
-          "clear": {
-            "type": "boolean"
-          },
-          "down": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "mouse_down": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "mouse_pos": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          "mouse_up": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "mouse_world": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          "text": {
+          "label": {
             "type": "string"
           },
-          "up": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
+          "window": {
+            "type": "string"
           }
         },
         "type": "object"
       },
-      "tool": "send_input"
+      "tool": "ui_query"
     },
     {
-      "description": "Create a fresh transparent pixel-art canvas of {width, height} (1-512). Clears undo history. Mirrors the Pixel Art panel's New.",
-      "mutates": true,
-      "name": "pixel.new",
-      "paramsSchema": {
-        "properties": {
-          "height": {
-            "type": "integer"
-          },
-          "width": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "width",
-          "height"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_new"
-    },
-    {
-      "description": "Current pixel-art canvas dimensions, dirty flag, and file path.",
+      "description": "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
       "mutates": false,
-      "name": "pixel.info",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "pixel_info"
-    },
-    {
-      "description": "Set the active drawing colour {color:[r,g,b,a]}.",
-      "mutates": true,
-      "name": "pixel.set_color",
-      "paramsSchema": {
-        "properties": {
-          "color": {
-            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
-            "items": {
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "color"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_set_color"
-    },
-    {
-      "description": "Set individual texels: {pixels:[{x,y,color?}]}. 'color' omitted uses the active colour; use [0,0,0,0] to erase. One undo step for the batch.",
-      "mutates": true,
-      "name": "pixel.set",
-      "paramsSchema": {
-        "properties": {
-          "pixels": {
-            "items": {
-              "properties": {
-                "color": {
-                  "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
-                  "items": {
-                    "maximum": 255,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "maxItems": 4,
-                  "minItems": 3,
-                  "type": "array"
-                },
-                "x": {
-                  "type": "integer"
-                },
-                "y": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "x",
-                "y"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "pixels"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_set"
-    },
-    {
-      "description": "Fill an inclusive cell rectangle {x0,y0,x1,y1, color?}. One undo step.",
-      "mutates": true,
-      "name": "pixel.fill_rect",
-      "paramsSchema": {
-        "properties": {
-          "color": {
-            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
-            "items": {
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "x0": {
-            "type": "integer"
-          },
-          "x1": {
-            "type": "integer"
-          },
-          "y0": {
-            "type": "integer"
-          },
-          "y1": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x0",
-          "y0",
-          "x1",
-          "y1"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_fill_rect"
-    },
-    {
-      "description": "Draw a line between two texels {x0,y0,x1,y1, color?}. One undo step.",
-      "mutates": true,
-      "name": "pixel.line",
-      "paramsSchema": {
-        "properties": {
-          "color": {
-            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
-            "items": {
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "x0": {
-            "type": "integer"
-          },
-          "x1": {
-            "type": "integer"
-          },
-          "y0": {
-            "type": "integer"
-          },
-          "y1": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x0",
-          "y0",
-          "x1",
-          "y1"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_line"
-    },
-    {
-      "description": "Flood-fill the connected region at {x, y} with 'color' (or the active colour). One undo step.",
-      "mutates": true,
-      "name": "pixel.bucket",
-      "paramsSchema": {
-        "properties": {
-          "color": {
-            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
-            "items": {
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "x": {
-            "type": "integer"
-          },
-          "y": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x",
-          "y"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_bucket"
-    },
-    {
-      "description": "Clear the whole canvas to 'color' (default transparent). One undo step.",
-      "mutates": true,
-      "name": "pixel.clear",
-      "paramsSchema": {
-        "properties": {
-          "color": {
-            "description": "[r, g, b] or [r, g, b, a], 0-255; omit to use the current colour",
-            "items": {
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "pixel_clear"
-    },
-    {
-      "description": "Read the canvas back: dimensions plus a row-major 'pixels' array of 0xAABBGGRR values (only when <= 4096 texels; otherwise omitted).",
-      "mutates": false,
-      "name": "pixel.get",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "pixel_get"
-    },
-    {
-      "description": "Save the canvas to a PNG at 'path' (project:// virtual path; default: the current file). Creates folders.",
-      "mutates": true,
-      "name": "pixel.save",
+      "name": "viewport.screenshot",
       "paramsSchema": {
         "properties": {
           "path": {
@@ -1940,177 +2130,7 @@
         },
         "type": "object"
       },
-      "tool": "pixel_save"
-    },
-    {
-      "description": "Load a PNG at 'path' (project:// virtual path) into the canvas for editing.",
-      "mutates": true,
-      "name": "pixel.open",
-      "paramsSchema": {
-        "properties": {
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "path"
-        ],
-        "type": "object"
-      },
-      "tool": "pixel_open"
-    },
-    {
-      "description": "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
-      "mutates": true,
-      "name": "engine.play_input_sequence",
-      "paramsSchema": {
-        "properties": {
-          "file": {
-            "type": "string"
-          },
-          "stop": {
-            "type": "boolean"
-          },
-          "text": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "play_input_sequence"
-    },
-    {
-      "description": "Place a LINKED prefab instance in the live scene: the scene stores a reference (not a copy), so editing the prefab propagates to every instance. 'prefab' is the prefab's save name; optional 'position'/'rotationEuler'/'scale' place the instance root. Returns the root id.",
-      "mutates": true,
-      "name": "scene.add_prefab_instance",
-      "paramsSchema": {
-        "properties": {
-          "position": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "prefab": {
-            "type": "string"
-          },
-          "rotationEuler": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "scale": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "prefab"
-        ],
-        "type": "object"
-      },
-      "tool": "add_prefab_instance"
-    },
-    {
-      "description": "Break a prefab instance's link: its expanded entities become plain scene entities that no longer track the prefab (and are saved individually). 'id' is the instance root. Returns how many entities were unpacked.",
-      "mutates": true,
-      "name": "scene.unpack_prefab_instance",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "unpack_prefab_instance"
-    },
-    {
-      "description": "Apply a prefab instance's current state (its overrides included) back to the prefab file, so every instance of that prefab picks up the change on reload. 'id' is the instance root.",
-      "mutates": true,
-      "name": "scene.apply_prefab_instance",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "apply_prefab_instance"
-    },
-    {
-      "description": "Discard a prefab instance's overrides and re-expand it from the prefab (a fresh, unmodified copy). 'id' is the instance root. Returns the new root id.",
-      "mutates": true,
-      "name": "scene.revert_prefab_instance",
-      "paramsSchema": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "type": "object"
-      },
-      "tool": "revert_prefab_instance"
-    },
-    {
-      "description": "List the built-in workflow dock layouts (e.g. '2D / Sprites', 'Rendering / Look-dev'). Names feed apply_layout.",
-      "mutates": false,
-      "name": "editor.layouts_list",
-      "paramsSchema": {
-        "properties": {},
-        "type": "object"
-      },
-      "tool": "list_layouts"
-    },
-    {
-      "description": "Apply a built-in workflow dock layout by name (from list_layouts; case-insensitive): rebuilds the dockspace and shows that workflow's panels.",
-      "mutates": true,
-      "name": "editor.layout_apply",
-      "paramsSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
-      "tool": "apply_layout"
-    },
-    {
-      "description": "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes.",
-      "mutates": false,
-      "name": "render.memory",
-      "paramsSchema": {
-        "properties": {
-          "limit": {
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "tool": "render_memory"
+      "tool": "screenshot"
     }
   ]
 }
