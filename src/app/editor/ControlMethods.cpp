@@ -4,11 +4,14 @@
 #include "imgui/UiAutomationMethods.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cctype>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <future>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -29,6 +32,8 @@
 #include "debug/UndoStack.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "editor/ComponentFields.hpp"
+#include "editor/EditorProjectContext.hpp"
+#include "editor/EditorProjectPublisher.hpp"
 #include "editor/ModelImport.hpp"
 #include "editor/ReflectionJson.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -71,6 +76,26 @@ namespace aether::editor
 	{
 		constexpr std::size_t kMaxBatchItems = 10'000;
 		const json kVec3 = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}};
+
+		// One publish at a time, owned here rather than by a panel: the control endpoint has
+		// no window to hang state off, and a publish must survive across the many handler
+		// calls a caller makes while polling it. Handlers all run on the main loop thread, so
+		// only `stage` needs guarding - the publish worker is the other writer.
+		struct PublishJob
+		{
+			std::future<EditorProjectActionResult> future;
+			std::atomic<float> completion{0.0f};
+			std::mutex mutex;
+			std::string stage;
+			bool finished = false;
+			EditorProjectActionResult result;
+		};
+
+		PublishJob& Job()
+		{
+			static PublishJob job;
+			return job;
+		}
 
 		// GLFW key code for a key name (same vocabulary as engine.send_input): a-z,
 		// 0-9, or left/right/up/down/space/enter/escape/tab/shift/ctrl/alt. -1 if unknown.
@@ -2280,6 +2305,91 @@ namespace aether::editor
 				        {
 					        j["primaryName"] = n->name;
 				        }
+			        }
+			        return j;
+		        }});
+
+		// Publishing takes minutes (script build, asset pack, verify) and control handlers run
+		// on the main loop thread, so this is start + poll rather than one blocking call - the
+		// same shape the Build panel uses, which is where the work actually happens.
+		methods.push_back({"project.publish",
+		        "publish_project",
+		        "Publish the open project to a standalone package (Builds/<platform>/<product>). Runs asynchronously; poll publish_status for progress and the result. Uses the running editor's build configuration.",
+		        true,
+		        Obj({}, {}),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* project = ctx.services.TryGet<app::EditorProjectContext>();
+			        if (project == nullptr)
+			        {
+				        return json{{"error", "no project is open"}};
+			        }
+			        PublishJob& job = Job();
+			        if (job.future.valid())
+			        {
+				        return json{{"error", "a publish is already running; poll publish_status"}};
+			        }
+			        const PublishPlan plan = PlanPublish(*project);
+			        job.finished = false;
+			        job.result = {};
+			        job.completion.store(0.0f, std::memory_order_release);
+			        {
+				        const std::scoped_lock lock(job.mutex);
+				        job.stage = "Starting";
+			        }
+			        const app::EditorProjectContext projectCopy = *project;
+			        job.future = std::async(std::launch::async,
+			                [projectCopy]()
+			                {
+				                return PublishProject(projectCopy,
+				                        [](const float completion, const std::string_view stage)
+				                        {
+					                        PublishJob& j = Job();
+					                        j.completion.store(completion, std::memory_order_release);
+					                        const std::scoped_lock lock(j.mutex);
+					                        j.stage = std::string(stage);
+				                        });
+			                });
+			        return json{{"status", "started"}, {"outputDir", plan.outputDir.string()}, {"config", plan.configName}, {"product", plan.productName}};
+		        }});
+
+		methods.push_back({"project.publish_status",
+		        "publish_status",
+		        "Progress and result of the publish started by publish_project: state is idle, running, succeeded or failed.",
+		        false,
+		        Obj({}, {}),
+		        [](const json&, MethodContext&) -> json
+		        {
+			        PublishJob& job = Job();
+			        if (job.future.valid())
+			        {
+				        if (job.future.wait_for(std::chrono::seconds{0}) != std::future_status::ready)
+				        {
+					        std::string stage;
+					        {
+						        const std::scoped_lock lock(job.mutex);
+						        stage = job.stage;
+					        }
+					        return json{{"state", "running"}, {"completion", job.completion.load(std::memory_order_acquire)}, {"stage", stage}};
+				        }
+				        try
+				        {
+					        job.result = job.future.get();
+				        }
+				        catch (const std::exception& ex)
+				        {
+					        job.result = {.succeeded = false, .message = std::string("Publishing failed: ") + ex.what()};
+				        }
+				        job.finished = true;
+			        }
+			        if (!job.finished)
+			        {
+				        return json{{"state", "idle"}};
+			        }
+			        json j{{"state", job.result.succeeded ? "succeeded" : "failed"}, {"message", job.result.message}, {"outputPath", job.result.outputPath.string()}};
+			        if (!job.result.remediation.empty())
+			        {
+				        j["remediation"] = job.result.remediation;
 			        }
 			        return j;
 		        }});
