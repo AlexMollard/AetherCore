@@ -111,6 +111,12 @@ __pycache__/
 # Generated per-project launcher preview thumbnails (editor writes these on save)
 **/.aether/preview.png
 
+# Autosave recovery copies. Machine-local and transient by definition - they exist only
+# between a crash and the next time the editor offers them back. Committing one would put
+# a half-finished scene from someone else's session into the history, and it would shadow
+# nothing useful, since the real scene is already tracked beside it.
+**/.aether/recovery/
+
 # Editor-generated per-project VS solution (paths are machine-local)
 AetherGame.slnx
 
