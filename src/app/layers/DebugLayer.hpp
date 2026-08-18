@@ -19,6 +19,7 @@
 #include "debug/PixelArtDocument.hpp"
 #include "debug/TilePaintingState.hpp"
 #include "debug/UndoStack.hpp"
+#include "editor/AutosaveService.hpp"
 #include "scene/BackgroundSceneWriter.hpp"
 
 namespace aether
@@ -80,6 +81,8 @@ namespace aether::editor
 		double m_outlinePulseStart = -1.0;
 		TomlConfig m_debugConfig;
 		ScriptErrorOverlay m_scriptErrors;
+		// Periodic crash insurance; writes a recovery copy, never the scene file itself.
+		editor::AutosaveService m_autosave;
 		bool m_dockspaceBuilt = false;
 		// Selected built-in workflow layout to apply on the next dock rebuild (-1 = the
 		// default layout). Consumed alongside m_resetLayout.

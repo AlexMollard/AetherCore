@@ -65,6 +65,7 @@ using namespace std::string_view_literals;
 #include "scene/Components.hpp"
 #include "PlayState.hpp"
 #include "scene/ModelBakeHook.hpp"
+#include "editor/EditorProjectContext.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -635,6 +636,8 @@ namespace aether::editor
 
 		m_scriptErrors.Poll(context);
 
+		m_autosave.Tick(context);
+
 		m_projects.UpdateScriptBuild();
 
 		if (!m_projects.IsProjectLoaded())
@@ -1071,6 +1074,15 @@ namespace aether::editor
 				if (auto* undo = context.TryGet<editor::UndoStack>())
 				{
 					undo->MarkSaved();
+				}
+				// The scene file now holds everything the recovery copy did, so drop it -
+				// leaving it behind would offer stale work back on the next project open.
+				if (const auto* project = context.TryGet<app::EditorProjectContext>())
+				{
+					if (const auto* scenes = context.TryGet<SceneSubsystem>())
+					{
+						editor::AutosaveService::Discard(*project, scenes->GetCurrentScene());
+					}
 				}
 				saved = true;
 			}

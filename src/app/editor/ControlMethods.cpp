@@ -32,6 +32,7 @@
 #include "debug/UndoStack.hpp"
 #include "editor/ComponentCatalog.hpp"
 #include "editor/ComponentFields.hpp"
+#include "editor/AutosaveService.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "editor/ModelImport.hpp"
@@ -2329,6 +2330,51 @@ namespace aether::editor
 				        }
 			        }
 			        return j;
+		        }});
+
+		methods.push_back({"editor.recovery_list",
+		        "recovery_list",
+		        "Autosaved recovery copies that are NEWER than the scene they shadow, newest first. Empty after a clean save, which is the normal case. Each entry gives the scene name and how far ahead of the saved file it is.",
+		        false,
+		        Obj({}, {}),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        const auto* project = ctx.services.TryGet<app::EditorProjectContext>();
+			        if (project == nullptr || !project->IsLoaded())
+			        {
+				        return json{{"error", "no project is open"}};
+			        }
+			        json list = json::array();
+			        for (const RecoveredScene& rec: AutosaveService::FindRecoverable(*project))
+			        {
+				        list.push_back(json{{"scene", rec.sceneName}, {"file", rec.recoveryFile.string()}, {"secondsAheadOfScene", rec.secondsAheadOfScene}});
+			        }
+			        return json{{"recoverable", list}};
+		        }});
+
+		methods.push_back({"editor.recovery_restore",
+		        "recovery_restore",
+		        "Promote a scene's autosaved recovery copy over its saved file. Explicit on purpose - nothing is ever restored automatically. Refuses if the copy does not parse, so a stale-but-valid scene is never destroyed by a bad one. Reload the scene afterwards to see it.",
+		        true,
+		        Obj({{"scene", StrProp()}}, {"scene"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        const auto* project = ctx.services.TryGet<app::EditorProjectContext>();
+			        if (project == nullptr || !project->IsLoaded())
+			        {
+				        return json{{"error", "no project is open"}};
+			        }
+			        const std::string scene = p.value("scene", std::string{});
+			        if (scene.empty())
+			        {
+				        return json{{"error", "'scene' is required"}};
+			        }
+			        std::string error;
+			        if (!AutosaveService::Restore(*project, scene, error))
+			        {
+				        return json{{"error", error}};
+			        }
+			        return json{{"restored", scene}};
 		        }});
 
 		// Publishing takes minutes (script build, asset pack, verify) and control handlers run

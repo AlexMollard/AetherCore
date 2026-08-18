@@ -203,6 +203,32 @@ assignment on a struct returned from a property (`CS1612`). A method always work
 
 Field names are the ones in the scene file and the `list_component_types` output.
 
+## If the editor dies
+
+The editor autosaves a recovery copy of the open scene whenever there are unsaved edits
+— by default every 120 seconds, set by `app.autosaveSeconds` in `ProjectSettings.toml`
+(0 turns it off).
+
+It never writes your scene file. Copies land under `<project>/.aether/recovery/`, and a
+real save deletes the copy it made redundant. So a recovery copy existing at all means
+there is work the scene file does not have.
+
+After a crash, reopen the project and ask:
+
+```bash
+./build/default/tools/control-client/RelWithDebInfo/aether-ctl.exe editor.recovery_list
+```
+
+Anything listed is newer than the scene it shadows. To promote one over the saved file:
+
+```bash
+./build/default/tools/control-client/RelWithDebInfo/aether-ctl.exe editor.recovery_restore '{"scene":"Level1"}'
+```
+
+Then reload the scene. Restoring is always explicit — nothing is promoted automatically,
+and a recovery copy that does not parse is refused rather than written over a scene that
+was merely out of date.
+
 ## Where to look next
 
 | You want | Look at |

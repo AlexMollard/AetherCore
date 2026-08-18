@@ -64,6 +64,9 @@ namespace aether
 			float targetFps = 0.0f;
 			std::string startupScene;
 			bool autoplay = false;
+			// Editor autosave cadence, in seconds. Writes a recovery copy beside the project
+			// (never over the scene itself) whenever there are unsaved edits. 0 disables it.
+			float autosaveSeconds = 120.0f;
 		} app;
 
 		// The engine draws the mouse pointer itself when a project asks it to (see ui::CursorService),
@@ -109,6 +112,7 @@ namespace aether
 		f("app.targetFps", settings.app.targetFps);
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);
+		f("app.autosaveSeconds", settings.app.autosaveSeconds);
 		f("cursor.custom", settings.cursor.custom);
 		f("cursor.texture", settings.cursor.texture);
 		f("cursor.size", settings.cursor.size);

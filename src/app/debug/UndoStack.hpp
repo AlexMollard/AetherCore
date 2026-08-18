@@ -79,6 +79,15 @@ namespace aether::editor
 			return m_editSeq != m_savedSeq;
 		}
 
+		// Monotonic count of recorded edits. Autosave compares it against its own last
+		// write so an idle-but-dirty session is not re-serialised every interval; it is
+		// deliberately not the same question as HasUnsavedChanges, which tracks the last
+		// real save.
+		[[nodiscard]] std::uint64_t EditSequence() const
+		{
+			return m_editSeq;
+		}
+
 	private:
 		void RecordCommand(std::unique_ptr<IEditorCommand> command);
 

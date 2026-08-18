@@ -22,6 +22,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scene/serde/UiImageSerde.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/serde/MeshSerde.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
+    # Autosave's recovery rules: pure filesystem logic, and the half where a mistake
+    # destroys work rather than merely failing to save it.
+    "${CMAKE_SOURCE_DIR}/src/app/editor/AutosaveRecovery.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
