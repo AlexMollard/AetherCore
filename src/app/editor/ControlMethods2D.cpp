@@ -31,6 +31,7 @@
 #include "scene/Entity.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::editor
@@ -808,6 +809,23 @@ namespace aether::editor
 			        if (type.empty())
 			        {
 				        return json{{"error", "'type' must be a script class name"}};
+			        }
+			        // Reject a name that is not a loaded script type. Attaching one used to
+			        // succeed and only fail on Play, by which point the dead entry is in the
+			        // saved scene. Skipped while the assembly is unloaded (no project built
+			        // yet) so this cannot reject every name just because nothing is loaded.
+			        if (const auto* csharp = ctx.services.TryGet<app::scripting::CSharpScriptingSubsystem>())
+			        {
+				        const std::vector<std::string>& known = csharp->GetScriptTypeNames();
+				        if (!known.empty() && std::find(known.begin(), known.end(), type) == known.end())
+				        {
+					        std::string message = "unknown script type '" + type + "'; loaded types: ";
+					        for (std::size_t i = 0; i < known.size(); ++i)
+					        {
+						        message += (i > 0 ? ", " : "") + known[i];
+					        }
+					        return json{{"error", std::move(message)}};
+				        }
 			        }
 			        auto* existing = world.TryGet<ScriptComponent>(entity);
 			        ScriptComponent& sc = existing != nullptr ? *existing : world.Emplace<ScriptComponent>(entity);

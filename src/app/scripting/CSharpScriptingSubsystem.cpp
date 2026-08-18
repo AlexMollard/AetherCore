@@ -46,7 +46,19 @@ namespace aether::app::scripting
 		if (m_host.Initialize(m_managedDir))
 		{
 			m_scriptsAssemblyPath = (m_managedDir / "AetherGame.dll").string();
+#ifndef AETHERCORE_EDITOR_APP
+			// A shipped game has exactly one project, so whatever is staged here is its own
+			// assembly and loading it now is correct.
 			LoadScripts();
+#else
+			// The editor does not. m_managedDir is one directory shared by every project, and
+			// at this point no project is open - so the AetherGame.dll sitting there belongs
+			// to whichever project was opened last. Loading it would publish another game's
+			// script types to the Add Script palette until the real build lands seconds later,
+			// and a type picked from that window binds to a class that then disappears.
+			// EditorProjectManager loads scripts once the open project has built its own.
+			AE_VERBOSE(LogCategory::App, "C# host ready; deferring script load until a project is open.");
+#endif
 		}
 	}
 
