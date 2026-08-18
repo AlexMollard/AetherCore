@@ -198,6 +198,21 @@ AE_SCRIPT_API Vec3 aether_get_scale(std::uint32_t id)
 	return FromGlm(aether::ExtractScale(m));
 }
 
+AE_SCRIPT_API void aether_set_scale(std::uint32_t id, Vec3 scale)
+{
+	aether::World& w = ActiveWorld();
+	const aether::Entity e{id};
+	auto* tc = w.TryGet<aether::TransformComponent>(e);
+	if (tc == nullptr)
+	{
+		return;
+	}
+	glm::vec3 pos{}, euler{}, curScale{};
+	aether::DecomposeTRS(tc->localToWorld, pos, euler, curScale);
+	aether::ecs::SetWorldTransform(w, e, aether::ComposeTransform(pos, euler, ToGlm(scale)));
+	TeleportBodyToTransform(w, e);
+}
+
 AE_SCRIPT_API void aether_set_transform(std::uint32_t id, Vec3 pos, Vec3 euler, Vec3 scale)
 {
 	aether::World& w = ActiveWorld();

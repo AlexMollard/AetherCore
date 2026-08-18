@@ -477,6 +477,9 @@ internal static unsafe partial class Native
     internal static partial Vector3 aether_get_scale(uint id);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_set_scale(uint id, Vector3 scale);
+
+    [LibraryImport(Lib)]
     internal static partial void aether_set_transform(uint id, Vector3 pos, Vector3 euler, Vector3 scale);
 
     // ── Input ─────────────────────────────────────────────────────────────────

@@ -33,8 +33,12 @@ public readonly struct Entity : IEquatable<Entity>
         set => Native.aether_set_euler(Id, value);
     }
 
-    /// <summary>World-space scale (read-only; set via <see cref="SetTransform"/>).</summary>
-    public Vector3 Scale => Native.aether_get_scale(Id);
+    /// <summary>World-space scale.</summary>
+    public Vector3 Scale
+    {
+        get => Native.aether_get_scale(Id);
+        set => Native.aether_set_scale(Id, value);
+    }
 
     public string Name
     {
