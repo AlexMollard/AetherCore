@@ -55,9 +55,16 @@
 #>
 
 param(
-    [string]$BuildDir = "build/vs2022-msvc",
-    [ValidateSet("Debug", "Release")]
-    [string]$Config = "Debug",
+    # Reuse the dev tree instead of the separate Debug one. Same validation coverage (the
+    # smokes force --validation, and the layer is compiled into both dev configs), and it
+    # skips a second full build of the whole engine - which is what makes the default mode
+    # expensive after any widely-included header changes. The tradeoff is real and worth
+    # stating: RelWithDebInfo drops AE_ASSERT, so this trades assert coverage for minutes.
+    # Use it as the routine gate; run the default before merging.
+    [switch]$Fast,
+    [string]$BuildDir = "",
+    [ValidateSet("Debug", "RelWithDebInfo", "Release")]
+    [string]$Config = "",
     [string[]]$Targets = @("Editor", "GameRuntime", "EngineTests"),
     [int]$RunSeconds = 12,
     [int]$ReadyTimeoutSeconds = 60,
@@ -72,6 +79,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+
+# -Fast picks the dev tree; an explicit -BuildDir/-Config still wins over both.
+if (-not $BuildDir) { $BuildDir = if ($Fast) { "build/default" } else { "build/vs2022-msvc" } }
+if (-not $Config)   { $Config   = if ($Fast) { "RelWithDebInfo" } else { "Debug" } }
+
 $BuildRoot = if ([System.IO.Path]::IsPathRooted($BuildDir)) { $BuildDir } else { Join-Path $RepoRoot $BuildDir }
 if (-not $ReportPath) { $ReportPath = Join-Path $BuildRoot "gauntlet-report.json" }
 
@@ -268,11 +280,12 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
     if (Test-Path $log) { Remove-Item $log -Force }
 
     # Launch from the build root: shaders:// and engine.pak resolve relative to CWD.
-    $proc = if ($ExeArgs) {
-        Start-Process -FilePath $exe -ArgumentList $ExeArgs -WorkingDirectory $BuildRoot -PassThru
-    } else {
-        Start-Process -FilePath $exe -WorkingDirectory $BuildRoot -PassThru
-    }
+    # Ask for validation explicitly rather than inheriting the config's default. The layer
+    # is compiled into BOTH dev configs (VULKAN_CPU_DEBUG is gated on AE_DEV_TOOLING) but
+    # only defaults on in Debug - so without this the same harness pointed at a
+    # RelWithDebInfo tree runs with no validation at all and still reports a clean pass.
+    $ExeArgs = ("$ExeArgs --validation").Trim()
+    $proc = Start-Process -FilePath $exe -ArgumentList $ExeArgs -WorkingDirectory $BuildRoot -PassThru
 
     # Condition-based readiness: poll the log for the startup-scene marker rather
     # than sleeping a fixed amount. Fail fast if the process dies first.
@@ -330,7 +343,15 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
         $crash = [pscustomobject]@{ exitCode = $liveExit; stack = $stack }
     }
 
-    $ok = (-not $liveCrash) -and ($f.Failing -eq 0)
+    # A smoke that cannot confirm the layer was loaded proves nothing: zero findings and
+    # zero coverage look identical from here. Treat an undetected tier as a failure rather
+    # than reporting the most reassuring possible result for the least informative run.
+    $tierUnknown = $f.Tier -eq "unknown"
+    if ($tierUnknown) {
+        Write-Bad "$Name ran without the validation layer (tier: unknown) - findings from this run mean nothing."
+    }
+
+    $ok = (-not $liveCrash) -and ($f.Failing -eq 0) -and (-not $tierUnknown)
     if ($ok) {
         Write-Ok "$Name clean - tier: $($f.Tier); 0 validation findings"
         if ($f.OtherWarn.Count -gt 0) { Write-Note "($($f.OtherWarn.Count) benign non-validation warning(s), e.g. scene-format migration)" }
@@ -352,7 +373,7 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
 
 # --- Run -----------------------------------------------------------------
 Write-Host "AetherCore Debug Gauntlet" -ForegroundColor White
-Write-Host "  build: $BuildRoot ($Config)  |  mode: $(if ($CI) { 'CI (build+unit)' } else { 'full' })" -ForegroundColor DarkGray
+Write-Host "  build: $BuildRoot ($Config)  |  mode: $(if ($CI) { 'CI (build+unit)' } elseif ($Fast) { 'fast (dev tree, no asserts)' } else { 'full' })" -ForegroundColor DarkGray
 
 $results = @{}
 $overall = $true
