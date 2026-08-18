@@ -817,6 +817,36 @@ internal static unsafe partial class Native
     internal static partial Vector3 aether_daynight_get_sun_direction();
 
     // ── World: behaviors / scripts / tags / iteration ─────────────────────────
+    // ── Reflected components ──────────────────────────────────────────────────
+    // Generic access to any AE_COMPONENT field by name, over the same reflection table
+    // the inspector and scene serializer use. See ComponentExports.cpp.
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_has(uint id, string type);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_add(uint id, string type);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_remove(uint id, string type);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_get_number(uint id, string type, string field, out double value);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_set_number(uint id, string type, string field, double value);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_get_vector(uint id, string type, string field, out Vector4 value);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_set_vector(uint id, string type, string field, Vector4 value);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial int aether_component_get_string(uint id, string type, string field, byte* buffer, int capacity);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_component_set_string(uint id, string type, string field, string value);
+
     [LibraryImport(Lib)]
     internal static partial void aether_add_bob(uint id, float amplitude, float frequency, float phase);
 

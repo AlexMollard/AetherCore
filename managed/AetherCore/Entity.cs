@@ -130,7 +130,29 @@ public readonly struct Entity : IEquatable<Entity>
 
     public void RemoveTransform() => Native.aether_remove_transform(Id);
 
+    // ── Components ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Generic access to any reflected component on this entity, by the catalog name the
+    /// Inspector shows (e.g. "Spin", "Sprite Renderer"). Read, write, add and remove its
+    /// fields by name. Prefer a typed wrapper (<see cref="Spin"/>, <see cref="Get{T}"/>)
+    /// where one exists - same mechanism, compiler-checked names.
+    /// </summary>
+    public ComponentAccess Component(string catalogName) => new(this, catalogName);
+
     // ── Behaviors ─────────────────────────────────────────────────────────────
+    // Typed handles for the components BehaviorSystem ticks. These are structs over the
+    // reflected field table, so they read and write the live component rather than only
+    // stamping one on: `e.Spin.DegreesPerSecond *= 2f` works, as does `e.Spin.Remove()`.
+
+    public SpinRef Spin => new(this);
+    public BobRef Bob => new(this);
+    public OrbitRef Orbit => new(this);
+    public ScalePulseRef ScalePulse => new(this);
+    public MaterialPulseRef MaterialPulse => new(this);
+    public LookAtRef LookAt => new(this);
+    public RootMotionRef RootMotion => new(this);
+
     public void AddBob(float amplitude, float frequency, float phase = 0f) => Native.aether_add_bob(Id, amplitude, frequency, phase);
 
     public void AddSpin(Vector3 eulerDegreesPerSecond) => Native.aether_add_spin(Id, eulerDegreesPerSecond);
