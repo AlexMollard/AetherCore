@@ -21,7 +21,7 @@ CPMAddPackage(
     NAME glfw
     GIT_REPOSITORY https://github.com/glfw/glfw
     GIT_TAG        a74efa0d5628b74adc0426af4c5710e287fa7c2c # 3.4
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
     OPTIONS
         "GLFW_BUILD_DOCS OFF"
         "GLFW_BUILD_TESTS OFF"
@@ -34,7 +34,7 @@ CPMAddPackage(
     NAME glm
     GIT_REPOSITORY https://github.com/g-truc/glm
     GIT_TAG        8d1fd52e5ab5590e2c81768ace50c72bae28f2ed # 1.0.3
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
 )
 
 # ── Vulkan helpers ────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ CPMAddPackage(
     NAME vk-bootstrap
     GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap
     GIT_TAG        29777173ac64752fe9ce3d2ff2821d1dd9c7f79b # v1.4.341
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
 )
 
 # volk: header-only mode so all loader globals are built with the same config.
@@ -60,7 +60,7 @@ CPMAddPackage(
     NAME VMA
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
     GIT_TAG        1d8f600fd424278486eade7ed3e877c99f0846b1 # v3.3.0
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
     DOWNLOAD_ONLY  YES
 )
 
@@ -98,12 +98,18 @@ CPMAddPackage(
         "MI_SECURE ${AETHERCORE_MI_SECURE}"
 )
 
+# NOTE: GIT_SHALLOW must stay FALSE wherever GIT_TAG is a commit SHA. A shallow clone
+# fetches only the default branch tip, so a pinned commit that upstream has since moved
+# past is simply absent and the checkout fails. It works on any machine with a warm CPM
+# cache and fails on a clean clone - which is why it went unnoticed until CI ran. Tag and
+# version pins are fine shallow, because a tag is fetchable directly.
+
 # ── Image / mesh loading (header-only, no CMakeLists) ─────────────────────────
 CPMAddPackage(
     NAME stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
     GIT_TAG        31c1ad37456438565541f4919958214b6e762fb4 # 2026-04-15
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
     DOWNLOAD_ONLY  YES
 )
 
@@ -281,7 +287,7 @@ CPMAddPackage(
     NAME bc7enc_rdo
     GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
     GIT_TAG        dbe416d28a5530b4e8cc45b14bf034dc6b96bbde # 2026-02-27
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
     DOWNLOAD_ONLY  YES
 )
 
