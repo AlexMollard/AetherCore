@@ -130,6 +130,8 @@ Settings: `SettingsService` is the single source of truth, a three-layer cascade
 
 ## Code conventions
 
+New to the engine as a *user* rather than a maintainer? [docs/getting-started.md](docs/getting-started.md) walks a small 2D game end to end.
+
 Full conventions (naming table, formatting, error handling, logging, ownership) live in [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — read it before writing C++. The rules most often gotten wrong:
 
 - Naming: `PascalCase` types/methods, `m_snake_case` members, `camelCase` params/locals, `kPascalCase` constants, `AE_UPPER_CASE` macros, `snake_case` namespaces.
@@ -161,7 +163,7 @@ The agent-tool MCP servers this repo expects (Mind, clangd-mcp, codebase-memory,
 
 ## Driving the live app (AetherCore MCP)
 
-The editor exposes a localhost control endpoint (`ControlServer`, ENet) that the AetherCore MCP (`tools/mcp/`) and `aether-ctl` (`tools/control-client/`) drive. `describe` returns the method manifest (~36 methods: engine info, entities, selection/windows, play, screenshot/texture capture, render/scene/camera/settings state); each MCP tool maps to a wire method (e.g. the `engine_info` tool → the `info` method). It auto-starts when `AETHER_CONTROL_PORT` is set.
+The editor exposes a localhost control endpoint (`ControlServer`, ENet) that the AetherCore MCP (`tools/mcp/`) and `aether-ctl` (`tools/control-client/`) drive. `describe` returns the method manifest (~98 methods: engine info, entities, selection/windows, play, screenshot/texture capture, render/scene/camera/settings state); each MCP tool maps to a wire method (e.g. the `engine_info` tool → the `info` method). It auto-starts when `AETHER_CONTROL_PORT` is set.
 
 **Agent workflow — launch the app yourself, then interact with it directly over MCP:**
 

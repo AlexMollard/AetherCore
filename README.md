@@ -90,7 +90,7 @@ cmake --build --preset default
 This builds both the project hub and the editor. Start with the Launcher:
 
 ```text
-build/src/app/RelWithDebInfo/Launcher.exe
+build/default/src/app/RelWithDebInfo/Launcher.exe
 ```
 
 For ClangCL:
@@ -144,7 +144,7 @@ Choose **Blank 2D** in the Launcher for an orthographic camera, 2D viewport grid
 3. Create animation clips in the **Sprite Animation** timeline, edit frame durations and events, then preview playback in Edit or Play mode.
 4. Save, script, and publish normally. Sprite regions keep stable identities across compatible re-slices, and published projects package their sprites, atlases, animations, and scenes.
 
-Physics2D and tilemaps are the next roadmap phases; the current 2D release focuses on production-ready sprite authoring and animation.
+Physics2D (Box2D) and chunked tilemaps have both shipped, alongside sprite authoring, animation, parallax, particles and 2D lighting.
 
 ## C# scripting
 
@@ -279,7 +279,6 @@ Asset references are catalogued through stable `AssetId` values, while texture a
 | `GameRuntime` | Standalone runtime executable (`AetherGame`) |
 | `AssetPacker` | Asset import, conversion, and PAK command-line tool |
 | `ManagedAssemblies` | Builds and deploys `AetherCore`, `AetherCore.Interop`, and project gameplay assemblies |
-| `PackageGame` | Produces a clean redistributable runtime package |
 
 ## Build tiers and diagnostics
 
@@ -320,6 +319,7 @@ docs/                       Architecture, asset, tooling, and design notes
 
 ## Documentation
 
+- [Getting started](docs/getting-started.md) - build a small 2D game end to end
 - [Asset database](docs/asset-database.md)
 - [Render-frame extraction architecture](docs/architecture/render-frame-extraction.md)
 - [MCP setup](docs/mcp-setup.md)
