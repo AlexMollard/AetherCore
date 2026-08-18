@@ -21,7 +21,6 @@ $engineDirs = @(
     'src/engine/physics',
     'src/engine/material',
     'src/engine/mesh',
-    'src/engine/text',
     'src/engine/assets',
     'src/engine/animation',
     'src/engine/scene',
@@ -29,6 +28,15 @@ $engineDirs = @(
     'src/engine/camera',
     'src/engine/platform',
     'src/engine/io',
+    # Added when the guard was found scanning a 'text' directory that no longer exists
+    # (rg errored per-check rather than failing, so those checks quietly did nothing) while
+    # missing five live subsystems. A list of directories drifts silently; the entries below
+    # are the ones that existed and were never covered.
+    'src/engine/memory',
+    'src/engine/net',
+    'src/engine/particles',
+    'src/engine/physics2d',
+    'src/engine/scripting',
     'src/engine/AetherCore.cpp',
     'src/engine/AetherCore.hpp'
 )
