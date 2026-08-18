@@ -113,6 +113,12 @@ namespace aether::app::scene
 					}
 				}
 			}
+			// Empty means no project has scoped a directory; joining onto it would resolve
+			// relative to the process CWD and read whatever happened to be sitting there.
+			if (diskDir.empty())
+			{
+				return std::nullopt;
+			}
 			if (auto bytes = io::file_util::ReadBinary(diskDir / (name + std::string(binSuffix))); bytes)
 			{
 				if (auto scene = ReadSceneBinary(*bytes))
@@ -416,12 +422,22 @@ namespace aether::app::scene
 			}
 		};
 
-		const std::filesystem::path scenesDir{ScenesDirectory()};
+		// A cook writes .bin siblings, so it must only ever run inside a project. Without this
+		// guard ScenesDirectory() hands back the engine's shipped-template folder when no
+		// project is scoped, and the cook drops project scenes into the engine's resources -
+		// where they then shadow the real thing on every later load.
+		if (g_projectScenesDirectory.empty())
+		{
+			AE_WARN(LogCategory::App, "CookProjectBinaries: no project scenes directory scoped; skipping (refusing to cook into the engine's resources).");
+			return 0;
+		}
+
+		const std::filesystem::path scenesDir = g_projectScenesDirectory;
 		for (const std::string& name: ListSceneFiles())
 		{
 			cookOne(scenesDir, name, kSceneSuffix, kSceneBinSuffix);
 		}
-		const std::filesystem::path prefabsDir{PrefabsDirectory()};
+		const std::filesystem::path prefabsDir = g_projectPrefabsDirectory;
 		for (const std::string& name: ListPrefabFiles())
 		{
 			cookOne(prefabsDir, name, kPrefabSuffix, kPrefabBinSuffix);
@@ -432,10 +448,17 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName)
 	{
-		const std::filesystem::path scenesDir{ScenesDirectory()};
+		// ONLY a directory a project has scoped may answer a scene lookup from disk.
+		// ScenesDirectory() substitutes the engine's shipped-template folder when nothing has,
+		// which is correct for the read-only fallback at the bottom of this function and wrong
+		// here: a shipped runtime never scopes one, so that substitution let a file sitting in
+		// the engine's resources shadow the project's own scene of the same name - silently, and
+		// only on a machine where that folder exists, which is the machine that built the game.
+		const std::filesystem::path scenesDir = g_projectScenesDirectory;
+
 		// Prefer the cooked binary, but never a stale one (see CookedBinaryIsStale):
 		// a stale .bin drops post-cook edits at runtime.
-		if (!CookedBinaryIsStale(scenesDir, sceneName, kSceneBinSuffix, kSceneSuffix))
+		if (scenesDir.empty() || !CookedBinaryIsStale(scenesDir, sceneName, kSceneBinSuffix, kSceneSuffix))
 		{
 			if (auto binary = TryReadBinary(kProjectScenesVfsDir, sceneName, kSceneBinSuffix, scenesDir))
 			{
@@ -454,10 +477,12 @@ namespace aether::app::scene
 			return ParseToml(*text);
 		}
 
-		const std::filesystem::path path = std::filesystem::path{ScenesDirectory()} / (sceneName + ".scene.toml");
-		if (auto text = io::file_util::ReadText(path))
+		if (!scenesDir.empty())
 		{
-			return ParseToml(*text);
+			if (auto text = io::file_util::ReadText(scenesDir / (sceneName + std::string(kSceneSuffix))))
+			{
+				return ParseToml(*text);
+			}
 		}
 
 #ifdef AETHER_SCENES_SOURCE_DIR
@@ -470,7 +495,7 @@ namespace aether::app::scene
 		}
 #endif
 
-		AE_WARN(LogCategory::App, "ReadSceneFile: cannot read '{}'", path.string());
+		AE_WARN(LogCategory::App, "ReadSceneFile: cannot read scene '{}' from project:// {}", sceneName, scenesDir.empty() ? std::string{"(no project scenes directory scoped)"} : scenesDir.string());
 		return std::nullopt;
 	}
 
