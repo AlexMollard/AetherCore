@@ -499,7 +499,7 @@ namespace aether::editor
 		}
 
 		// startup scene - so switching projects never leaves the old scene live.
-		const bool loaded = app::scene::SwitchScene(sceneName, *world, app::scene::MakeApplySceneDeps(*m_services));
+		const bool loaded = app::scene::SwitchScene(sceneName, *world, app::scene::MakeApplySceneDeps(*m_services), app::scene::OnLoadFailure::ClearWorld);
 		if (auto* scenes = m_services->TryGet<aether::SceneSubsystem>())
 		{
 			scenes->SetCurrentScene(loaded ? sceneName : std::string{});

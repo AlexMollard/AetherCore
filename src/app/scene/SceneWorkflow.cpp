@@ -1,6 +1,9 @@
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
 
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
+
 namespace aether::app::scene
 {
 	std::string NewScene(World& world, const ApplySceneDeps& deps, SceneKind kind)
@@ -33,11 +36,16 @@ namespace aether::app::scene
 		return SaveSceneFile(sceneName, CaptureScene(world, materials, textures, renderer));
 	}
 
-	bool SwitchScene(const std::string& sceneName, World& world, const ApplySceneDeps& deps)
+	bool SwitchScene(const std::string& sceneName, World& world, const ApplySceneDeps& deps, OnLoadFailure onFailure)
 	{
 		if (!sceneName.empty() && LoadSceneFile(sceneName, world, deps))
 		{
 			return true;
+		}
+		if (onFailure == OnLoadFailure::KeepCurrent)
+		{
+			AE_WARN(LogCategory::App, "SwitchScene: could not load '{}'; leaving the current scene untouched.", sceneName);
+			return false;
 		}
 		SceneDescription empty;
 		empty.kind = world.GetSceneKind();

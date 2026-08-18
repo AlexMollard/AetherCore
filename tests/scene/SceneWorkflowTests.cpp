@@ -63,33 +63,65 @@ TEST_CASE("SwitchScene loads a scene and tears down the previous world")
 	const Entity stale = world.Create();
 	world.Emplace<NameComponent>(stale, NameComponent{.name = "Stale"});
 
-	const bool loaded = app::scene::SwitchScene("default", world, app::scene::ApplySceneDeps{});
+	const bool loaded = app::scene::SwitchScene("default", world, app::scene::ApplySceneDeps{}, app::scene::OnLoadFailure::ClearWorld);
 
 	CHECK(loaded);
 	CHECK(!world.GetRegistry().valid(World::ToEntt(stale)));
 	CHECK(LiveEntityCount(world) > 0);
 }
 
-TEST_CASE("SwitchScene with an empty name clears the previous world")
+TEST_CASE("SwitchScene with an empty name clears the previous world under ClearWorld")
 {
 	using namespace aether;
 	World world;
 	world.Emplace<NameComponent>(world.Create(), NameComponent{.name = "Stale"});
 
-	const bool loaded = app::scene::SwitchScene(std::string{}, world, app::scene::ApplySceneDeps{});
+	const bool loaded = app::scene::SwitchScene(std::string{}, world, app::scene::ApplySceneDeps{}, app::scene::OnLoadFailure::ClearWorld);
 
 	CHECK(!loaded);
 	CHECK(LiveEntityCount(world) == 0);
 }
 
-TEST_CASE("SwitchScene clears the world when the named scene does not exist")
+TEST_CASE("SwitchScene clears the world when the named scene does not exist, under ClearWorld")
 {
 	using namespace aether;
 	World world;
 	world.Emplace<NameComponent>(world.Create(), NameComponent{.name = "Stale"});
 
-	const bool loaded = app::scene::SwitchScene("no_such_scene_zzz", world, app::scene::ApplySceneDeps{});
+	const bool loaded = app::scene::SwitchScene("no_such_scene_zzz", world, app::scene::ApplySceneDeps{}, app::scene::OnLoadFailure::ClearWorld);
 
 	CHECK(!loaded);
 	CHECK(LiveEntityCount(world) == 0);
+}
+
+// The other half of the contract, and the reason it became a parameter: opening a scene
+// that cannot be loaded must not cost the user the scene they already had open. Before
+// this, a corrupt or misnamed scene wiped the live world and left a save poised to
+// overwrite the real file with nothing.
+TEST_CASE("SwitchScene keeps the current world when the named scene does not exist, under KeepCurrent")
+{
+    using namespace aether;
+    World world;
+    const Entity kept = world.Create();
+    world.Emplace<NameComponent>(kept, NameComponent{.name = "Keep"});
+    const std::size_t before = LiveEntityCount(world);
+
+    const bool loaded = app::scene::SwitchScene("no_such_scene_zzz", world, app::scene::ApplySceneDeps{}, app::scene::OnLoadFailure::KeepCurrent);
+
+    CHECK(!loaded);
+    CHECK(world.GetRegistry().valid(World::ToEntt(kept)));
+    CHECK(LiveEntityCount(world) == before);
+}
+
+TEST_CASE("SwitchScene keeps the current world for an empty name, under KeepCurrent")
+{
+    using namespace aether;
+    World world;
+    const Entity kept = world.Create();
+    world.Emplace<NameComponent>(kept, NameComponent{.name = "Keep"});
+
+    const bool loaded = app::scene::SwitchScene(std::string{}, world, app::scene::ApplySceneDeps{}, app::scene::OnLoadFailure::KeepCurrent);
+
+    CHECK(!loaded);
+    CHECK(world.GetRegistry().valid(World::ToEntt(kept)));
 }

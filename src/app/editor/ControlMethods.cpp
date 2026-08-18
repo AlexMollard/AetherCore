@@ -1134,7 +1134,29 @@ namespace aether::editor
 				{
 					undo->Record(std::make_unique<SetComponentCommand>(entity.id, type, std::move(beforeSnapshot), values, isReflected));
 				}
-				return json{{"id", entity.id}, {"type", type}, {"applied", applied}};
+				// Name what was NOT applied. A caller that typos one field among several used to
+				// get a plain success with that field quietly dropped - only an all-wrong call
+				// reported anything. Partial silence is the worse half of the two.
+				json ignored = json::array();
+				for (const auto& [key, unused]: values.items())
+				{
+					if (std::none_of(rt->fields.begin(), rt->fields.end(), [&key](const reflect::FieldDesc& f) { return f.name == key; }))
+					{
+						ignored.push_back(key);
+					}
+				}
+				json result{{"id", entity.id}, {"type", type}, {"applied", applied}};
+				if (!ignored.empty())
+				{
+					std::string known;
+					for (const auto& f: rt->fields)
+					{
+						known += (known.empty() ? "" : ", ") + f.name;
+					}
+					result["ignored"] = ignored;
+					AE_WARN(LogCategory::App, "set_component '{}': ignored unknown field(s) {}; its fields are: {}", type, ignored.dump(), known);
+				}
+				return result;
 			}
 			const auto* fields = editor::FindComponentFields(type);
 			if (fields == nullptr)
@@ -1352,7 +1374,7 @@ namespace aether::editor
 			        const std::string beforeScene = scenes->GetCurrentScene();
 			        auto beforeDesc = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), ctx.services.TryGet<Renderer>());
 
-			        const bool loaded = app::scene::SwitchScene(name, scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services));
+			        const bool loaded = app::scene::SwitchScene(name, scenes->GetWorld(), app::scene::MakeApplySceneDeps(ctx.services), app::scene::OnLoadFailure::KeepCurrent);
 			        if (loaded)
 			        {
 				        scenes->SetCurrentScene(name);
