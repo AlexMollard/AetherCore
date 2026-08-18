@@ -308,11 +308,17 @@ namespace aether::app::scene
 			}
 		}
 
-		const std::filesystem::path prefabsDir{PrefabsDirectory()};
+		// Only a project-scoped directory, for the same reason as ReadSceneFile: PrefabsDirectory()
+		// substitutes the engine's shipped folder when nothing has scoped one, and a shipped runtime
+		// never scopes one - so a file sitting in the engine's resources would answer a lookup for
+		// the project's own prefab of that name, on the machine that built the game and nowhere else.
+		// That folder does not exist today, which is the only reason this was latent rather than the
+		// same bug scenes had.
+		const std::filesystem::path prefabsDir = g_projectPrefabsDirectory;
 		// Same freshness rule as scenes: a stale cooked .bin (e.g. after a git pull of
 		// an edited .prefab.toml) must not shadow the newer source.
 		std::optional<SceneDescription> parsed;
-		if (!CookedBinaryIsStale(prefabsDir, prefabName, kPrefabBinSuffix, kPrefabSuffix))
+		if (prefabsDir.empty() || !CookedBinaryIsStale(prefabsDir, prefabName, kPrefabBinSuffix, kPrefabSuffix))
 		{
 			parsed = TryReadBinary(kProjectPrefabsVfsDir, prefabName, kPrefabBinSuffix, prefabsDir);
 		}
@@ -326,11 +332,12 @@ namespace aether::app::scene
 		}
 		else
 		{
-			const std::filesystem::path path = prefabsDir / (prefabName + ".prefab.toml");
-			auto diskText = io::file_util::ReadText(path);
+			const std::filesystem::path path = prefabsDir.empty() ? std::filesystem::path{} : prefabsDir / (prefabName + ".prefab.toml");
+			auto diskText = path.empty() ? decltype(io::file_util::ReadText(path)){} : io::file_util::ReadText(path);
 			if (!diskText)
 			{
-				AE_WARN(LogCategory::App, "ReadPrefabFile: cannot read '{}'", path.string());
+				AE_WARN(LogCategory::App, "ReadPrefabFile: cannot read prefab '{}' from project:// {}", prefabName,
+				        prefabsDir.empty() ? std::string{"(no project prefabs directory scoped)"} : prefabsDir.string());
 				return std::nullopt;
 			}
 			parsed = ParseToml(*diskText);
