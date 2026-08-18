@@ -133,6 +133,54 @@ namespace aether
 		B8 = 7,
 	};
 
+	// Standard-gamepad layout: GLFW's remapped view of any controller found in the SDL
+	// controller database it bundles (944 entries), so an Xbox pad, a DualShock and a
+	// no-name clone all report through these same names. Values match
+	// GLFW_GAMEPAD_BUTTON_* and are cast straight across.
+	enum class GamepadButton : int
+	{
+		A = 0,
+		B = 1,
+		X = 2,
+		Y = 3,
+		LeftBumper = 4,
+		RightBumper = 5,
+		Back = 6,
+		Start = 7,
+		Guide = 8,
+		LeftThumb = 9,
+		RightThumb = 10,
+		DpadUp = 11,
+		DpadRight = 12,
+		DpadDown = 13,
+		DpadLeft = 14,
+	};
+
+	// Values match GLFW_GAMEPAD_AXIS_*. Prefer GetGamepadStick and GetGamepadTrigger over
+	// reading these raw - both fix a convention mismatch that stays invisible until a
+	// player picks up a controller. See those two functions.
+	enum class GamepadAxis : int
+	{
+		LeftX = 0,
+		LeftY = 1,
+		RightX = 2,
+		RightY = 3,
+		LeftTrigger = 4,
+		RightTrigger = 5,
+	};
+
+	enum class GamepadStick : int
+	{
+		Left = 0,
+		Right = 1,
+	};
+
+	enum class GamepadTrigger : int
+	{
+		Left = 0,
+		Right = 1,
+	};
+
 	class Input
 	{
 	public:
@@ -327,6 +375,90 @@ namespace aether
 			m_hasSyntheticMousePos = false;
 		}
 
+		// -- Gamepads ---------------------------------------------------------
+		// Polled in Update() alongside the keyboard, through GLFW's *gamepad* view rather
+		// than raw joystick axes: GLFW ships the SDL controller database, so a recognised
+		// pad reports one fixed button/axis layout whatever the vendor. A pad GLFW cannot
+		// map is reported as not connected rather than as a scrambled pile of axes, which
+		// is the honest answer - nothing useful can be done with an unmapped stick.
+		//
+		// `pad` is a slot in [0, kMaxGamepads). kAnyGamepad reads whichever slot is
+		// connected first, and is the default everywhere including the script API: GLFW
+		// slots are not compacted, so a single controller routinely enumerates as slot 1
+		// or 2 with a virtual device, a wheel or a dormant receiver holding slot 0.
+		// Hardcoding slot 0 is the classic gamepad bug that works on the developer's
+		// machine and does nothing at all on someone else's.
+		static constexpr int kAnyGamepad = -1;
+
+		[[nodiscard]] bool IsGamepadConnected(int pad = kAnyGamepad) const;
+
+		// The concrete slot `pad` names, or -1 when nothing is connected there.
+		[[nodiscard]] int ResolveGamepad(int pad) const;
+
+		// Human-readable pad name from the mapping database ("Xbox Controller"), for a
+		// bindings screen or a "controller connected" toast. Empty when disconnected.
+		[[nodiscard]] std::string_view GetGamepadName(int pad = kAnyGamepad) const;
+
+		[[nodiscard]] bool IsGamepadButtonDown(GamepadButton button, int pad = kAnyGamepad) const;
+		[[nodiscard]] bool IsGamepadButtonPressed(GamepadButton button, int pad = kAnyGamepad) const;
+		[[nodiscard]] bool IsGamepadButtonReleased(GamepadButton button, int pad = kAnyGamepad) const;
+
+		// Stick position with a radial, rescaled deadzone, y flipped so +1 is up.
+		//
+		// RADIAL, not per-axis: a per-axis deadzone carves a SQUARE dead region out of a
+		// round stick, so a fully diagonal push reads (1, 1) - magnitude 1.41, and the
+		// character moves 41% faster diagonally - while a stick just off-axis snaps to a
+		// pure cardinal and diagonal aiming becomes impossible. Both are the same bug.
+		//
+		// RESCALED: the magnitude ramps from 0 at the deadzone edge instead of jumping
+		// straight to the deadzone value, so there is no visible lurch as the stick
+		// leaves the dead region.
+		//
+		// Y FLIPPED: GLFW follows SDL, where pushing a stick up reports -1, but this
+		// engine's world is y-up - a positive velocity moves something up the screen.
+		// Passing GLFW's sign through would make every gamepad-driven character walk in
+		// the opposite direction to the stick.
+		[[nodiscard]] glm::vec2 GetGamepadStick(GamepadStick stick, int pad = kAnyGamepad) const;
+
+		// 0 released .. 1 fully pressed, past a small deadzone.
+		//
+		// GLFW reports triggers on the same -1..+1 scale as sticks, so an untouched
+		// trigger reads -1 and a pass-through reads as "half pressed, backwards". That
+		// holds both for pads whose mapping drives the trigger from a real axis and for
+		// the ~320 database entries that map it to a plain button, which GLFW converts
+		// with `button * 2 - 1` - so one conversion is correct for both.
+		[[nodiscard]] float GetGamepadTrigger(GamepadTrigger trigger, int pad = kAnyGamepad) const;
+
+		// Untouched GLFW value in [-1, 1]: no deadzone, no y flip, no trigger remap, for a
+		// game that wants its own response curve. Offered because deadzone taste genuinely
+		// varies, and withholding the raw value only means it gets reimplemented worse.
+		[[nodiscard]] float GetGamepadAxisRaw(GamepadAxis axis, int pad = kAnyGamepad) const;
+
+		// Defaults follow XInput's documented thresholds - 7849/32767 for a thumbstick and
+		// 30/255 for a trigger - which is what the hardware is physically built around.
+		// Clamped to leave headroom above the deadzone; a deadzone of 1 has no meaning.
+		void SetGamepadDeadzones(float stick, float trigger);
+
+		[[nodiscard]] float GetStickDeadzone() const
+		{
+			return m_stickDeadzone;
+		}
+
+		[[nodiscard]] float GetTriggerDeadzone() const
+		{
+			return m_triggerDeadzone;
+		}
+
+		// Synthetic gamepad injection, same contract as synthetic keys and mouse: an
+		// injected pad presents as connected, injected buttons OR into the real state, and
+		// an injected axis overrides the real one until cleared. This is what lets a
+		// headless playtest drive controller paths with no controller attached - and it is
+		// the only way the deadzone and trigger conversions above are testable at all.
+		void SetSyntheticGamepadConnected(int pad, bool connected);
+		void SetSyntheticGamepadButton(int pad, GamepadButton button, bool down);
+		void SetSyntheticGamepadAxis(int pad, GamepadAxis axis, float value);
+		void ClearSyntheticGamepads();
+
 		// Timed synthetic-input playback for auto-testing. A sequence is a list of
 		// events (seconds-from-start, key, down/up); keyCode < 0 means "release all".
 		// Driven off a wall clock in Update(), so it survives variable framerate and
@@ -354,6 +486,33 @@ namespace aether
 
 		static constexpr int kMaxKeys = 349;
 		static constexpr int kMaxMouseButtons = 8;
+		// Four rather than GLFW's sixteen: four is what XInput exposes, what console local
+		// co-op assumes, and what a couch seats. Raising it is a one-line change.
+		static constexpr int kMaxGamepads = 4;
+		static constexpr int kMaxGamepadButtons = 15;
+		static constexpr int kMaxGamepadAxes = 6;
+
+		struct GamepadState
+		{
+			std::array<bool, kMaxGamepadButtons> curr{};
+			std::array<bool, kMaxGamepadButtons> prev{};
+			// Seeded to GLFW's RESTING values rather than zero: triggers idle at -1 there,
+			// so a zero-filled array reports both triggers as half pressed on any pad that
+			// is connected but not yet polled - which a synthetic pad always is.
+			std::array<float, kMaxGamepadAxes> axes{0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
+			std::array<bool, kMaxGamepadButtons> synthetic{};
+			std::array<float, kMaxGamepadAxes> syntheticAxes{0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
+			std::array<bool, kMaxGamepadAxes> hasSyntheticAxis{};
+			std::string name;
+			bool connected = false;
+			bool syntheticConnected = false;
+		};
+
+		void UpdateGamepads();
+
+		// Resolves kAnyGamepad and range-checks the slot in one place, so every public
+		// accessor is a null check rather than its own copy of the bounds logic.
+		[[nodiscard]] const GamepadState* Pad(int pad) const;
 
 		GLFWwindow* m_window = nullptr;
 		bool m_osCursorVisible = true;
@@ -367,6 +526,10 @@ namespace aether
 		bool m_hasSyntheticMousePos = false;
 		std::array<bool, kMaxMouseButtons> m_currMouseButtons{};
 		std::array<bool, kMaxMouseButtons> m_prevMouseButtons{};
+
+		std::array<GamepadState, kMaxGamepads> m_gamepads{};
+		float m_stickDeadzone = 0.24f;
+		float m_triggerDeadzone = 0.12f;
 
 		glm::vec2 m_mousePos{};
 		glm::vec2 m_prevMousePos{};

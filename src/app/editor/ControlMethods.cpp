@@ -4,6 +4,7 @@
 #include "imgui/UiAutomationMethods.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cctype>
@@ -15,6 +16,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -415,7 +417,7 @@ namespace aether::editor
 
 		methods.push_back({"info",
 		        "engine_info",
-		        "Live editor summary: current scene name and kind, entity count, frame index, fps.",
+		        "Live editor summary: current scene name and kind, entity count, frame index, fps, and any connected gamepads with their live stick/trigger/button state - the first thing to check when a controller seems dead.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -429,6 +431,40 @@ namespace aether::editor
 					        ++count;
 				        }
 			        }
+			        // Connected pads only, so this stays empty and quiet on a machine with no
+			        // controller. "Is it even detected?" is the first question when a gamepad
+			        // seems dead, and the answer is otherwise invisible from outside the process.
+			        json gamepads = json::array();
+			        if (auto* input = ctx.services.TryGet<Input>(); input != nullptr)
+			        {
+				        static constexpr std::array<const char*, 15> kButtonNames{
+				                "a", "b", "x", "y", "lb", "rb", "back", "start", "guide", "lthumb", "rthumb", "dpad_up", "dpad_right", "dpad_down", "dpad_left"};
+				        for (int slot = 0; slot < 4; ++slot)
+				        {
+					        if (!input->IsGamepadConnected(slot))
+					        {
+						        continue;
+					        }
+					        json held = json::array();
+					        for (std::size_t b = 0; b < kButtonNames.size(); ++b)
+					        {
+						        if (input->IsGamepadButtonDown(static_cast<aether::GamepadButton>(b), slot))
+						        {
+							        held.push_back(kButtonNames[b]);
+						        }
+					        }
+					        const glm::vec2 ls = input->GetGamepadStick(aether::GamepadStick::Left, slot);
+					        const glm::vec2 rs = input->GetGamepadStick(aether::GamepadStick::Right, slot);
+					        gamepads.push_back(json{{"slot", slot},
+					                {"name", std::string(input->GetGamepadName(slot))},
+					                {"leftStick", json::array({ls.x, ls.y})},
+					                {"rightStick", json::array({rs.x, rs.y})},
+					                {"leftTrigger", input->GetGamepadTrigger(aether::GamepadTrigger::Left, slot)},
+					                {"rightTrigger", input->GetGamepadTrigger(aether::GamepadTrigger::Right, slot)},
+					                {"buttons", held}});
+				        }
+			        }
+
 			        const auto* playState = ctx.services.TryGet<app::PlayState>();
 			        const char* mode = "editing";
 			        bool paused = false;
@@ -452,7 +488,8 @@ namespace aether::editor
 			                {"paused", paused},
 			                {"playElapsed", playElapsed},
 			                {"playFrame", playFrame},
-			                {"speed", speed}};
+			                {"speed", speed},
+			                {"gamepads", gamepads}};
 		        }});
 
 		methods.push_back({"console.logs",
@@ -1508,7 +1545,7 @@ namespace aether::editor
 		methods.push_back({"engine.send_input",
 		        "send_input",
 		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, "
-		        "backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
+		        "backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field. GAMEPAD: {pad_connected:true} presents a synthetic controller (slot via {pad_slot}, default 0); {pad_down:[names], pad_up:[names]} with a/b/x/y, lb/rb, lt/rt, back/start/guide, lthumb/rthumb, dpad_up/dpad_down/dpad_left/dpad_right; {pad_axis:{left_x:0.5, left_y:-1.0}} sets axes with names left_x/left_y/right_x/right_y/left_trigger/right_trigger. Axis values use the RAW controller convention (-1 is stick UP, and a released trigger is -1, not 0) so the engine's own normalisation is what gets exercised rather than bypassed.",
 		        true,
 		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"up", json{{"type", "array"}, {"items", StrProp()}}},
@@ -1517,7 +1554,12 @@ namespace aether::editor
 		                {"mouse_down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"mouse_up", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"mouse_world", json{{"type", "array"}, {"items", json{{"type", "number"}}}}},
-		                {"mouse_pos", json{{"type", "array"}, {"items", json{{"type", "number"}}}}}}),
+		                {"mouse_pos", json{{"type", "array"}, {"items", json{{"type", "number"}}}}},
+		                {"pad_connected", json{{"type", "boolean"}}},
+		                {"pad_slot", json{{"type", "integer"}}},
+		                {"pad_down", json{{"type", "array"}, {"items", StrProp()}}},
+		                {"pad_up", json{{"type", "array"}, {"items", StrProp()}}},
+		                {"pad_axis", json{{"type", "object"}}}}),
 		        [](const json& params, MethodContext& ctx) -> json
 		        {
 			        auto* input = ctx.services.TryGet<Input>();
@@ -1530,6 +1572,7 @@ namespace aether::editor
 				        input->ClearSyntheticKeys();
 				        input->ClearSyntheticMouse();
 				        input->ClearSyntheticChars();
+				        input->ClearSyntheticGamepads();
 			        }
 			        json applied = json::array();
 			        json unknown = json::array();
@@ -1643,6 +1686,97 @@ namespace aether::editor
 					        applied.push_back("mouse_world");
 				        }
 			        }
+			        // Gamepad. Injected at the RAW controller convention on purpose: the whole
+			        // point of the deadzone and sign handling in Input is the conversion, and a
+			        // test that injects already-converted values would prove nothing about it.
+			        const int padSlot = params.value("pad_slot", 0);
+			        if (params.contains("pad_connected") && params["pad_connected"].is_boolean())
+			        {
+				        input->SetSyntheticGamepadConnected(padSlot, params["pad_connected"].get<bool>());
+				        applied.push_back("pad_connected");
+			        }
+
+			        const auto padButton = [](const std::string& n) -> int
+			        {
+				        static const std::unordered_map<std::string, aether::GamepadButton> kNames{
+				                {"a", aether::GamepadButton::A},
+				                {"b", aether::GamepadButton::B},
+				                {"x", aether::GamepadButton::X},
+				                {"y", aether::GamepadButton::Y},
+				                {"lb", aether::GamepadButton::LeftBumper},
+				                {"rb", aether::GamepadButton::RightBumper},
+				                {"back", aether::GamepadButton::Back},
+				                {"start", aether::GamepadButton::Start},
+				                {"guide", aether::GamepadButton::Guide},
+				                {"lthumb", aether::GamepadButton::LeftThumb},
+				                {"rthumb", aether::GamepadButton::RightThumb},
+				                {"dpad_up", aether::GamepadButton::DpadUp},
+				                {"dpad_right", aether::GamepadButton::DpadRight},
+				                {"dpad_down", aether::GamepadButton::DpadDown},
+				                {"dpad_left", aether::GamepadButton::DpadLeft},
+				        };
+				        const auto it = kNames.find(n);
+				        return it != kNames.end() ? static_cast<int>(it->second) : -1;
+			        };
+			        const auto applyPad = [&](const char* field, bool down)
+			        {
+				        if (!params.contains(field) || !params[field].is_array())
+				        {
+					        return;
+				        }
+				        for (const auto& entry: params[field])
+				        {
+					        if (!entry.is_string())
+					        {
+						        continue;
+					        }
+					        const std::string name = entry.get<std::string>();
+					        // lt/rt are triggers, not buttons - accept them here anyway and drive the
+					        // axis, because "press the right trigger" is what a test author means and
+					        // making them reach for pad_axis with a -1..1 value is a trap.
+					        if (name == "lt" || name == "rt")
+					        {
+						        input->SetSyntheticGamepadAxis(padSlot, name == "lt" ? aether::GamepadAxis::LeftTrigger : aether::GamepadAxis::RightTrigger, down ? 1.0f : -1.0f);
+						        applied.push_back(name);
+						        continue;
+					        }
+					        if (const int b = padButton(name); b >= 0)
+					        {
+						        input->SetSyntheticGamepadButton(padSlot, static_cast<aether::GamepadButton>(b), down);
+						        applied.push_back(name);
+					        }
+					        else
+					        {
+						        unknown.push_back(name);
+					        }
+				        }
+			        };
+			        applyPad("pad_down", true);
+			        applyPad("pad_up", false);
+
+			        if (params.contains("pad_axis") && params["pad_axis"].is_object())
+			        {
+				        static const std::unordered_map<std::string, aether::GamepadAxis> kAxes{
+				                {"left_x", aether::GamepadAxis::LeftX},
+				                {"left_y", aether::GamepadAxis::LeftY},
+				                {"right_x", aether::GamepadAxis::RightX},
+				                {"right_y", aether::GamepadAxis::RightY},
+				                {"left_trigger", aether::GamepadAxis::LeftTrigger},
+				                {"right_trigger", aether::GamepadAxis::RightTrigger},
+				        };
+				        for (const auto& [name, value]: params["pad_axis"].items())
+				        {
+					        const auto it = kAxes.find(name);
+					        if (it == kAxes.end() || !value.is_number())
+					        {
+						        unknown.push_back(name);
+						        continue;
+					        }
+					        input->SetSyntheticGamepadAxis(padSlot, it->second, value.get<float>());
+					        applied.push_back(name);
+				        }
+			        }
+
 			        return json{{"ok", true}, {"applied", applied}, {"unknown", unknown}};
 		        }});
 

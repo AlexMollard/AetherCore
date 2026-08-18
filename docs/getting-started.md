@@ -180,6 +180,54 @@ $env:AETHERCORE_SDK = "C:/your/checkout/managed/AetherCore/AetherCore.csproj"
 
 The build reports a clear error naming this variable if the baked path does not exist.
 
+## Controllers
+
+`Gamepad` works the same way `Input` does, and needs no setup — plug a controller in and it is
+there. Any pad the engine recognises reports through one fixed layout, so you never branch on
+hardware:
+
+```csharp
+float x = Input.GetAxisRaw(Key.A, Key.D) + Gamepad.LeftStick.X;
+
+if (Input.IsKeyPressed(Key.Space) || Gamepad.IsPressed(GamepadButton.A))
+{
+    Physics2D.AddImpulse(Self, new Vector2(0.0f, JumpImpulse));
+}
+```
+
+Reading a pad that is not plugged in gives zero and `false`, so the code above is safe with no
+controller attached — there is nothing to guard.
+
+Three things are handled for you, and each is a bug you would otherwise have to find yourself:
+
+- **You never pass a slot number.** Controller slots are not packed, so a lone pad often is not
+  slot 0 — a wireless receiver or a virtual device can hold it. Every call defaults to *the first
+  connected pad*. Pass a slot only for local multiplayer, where it identifies the player.
+- **`Y` is up, and a diagonal is not faster.** Controllers report sticks upside down relative to
+  world space, and a naive deadzone lets a diagonal push read 41% faster than a straight one.
+- **A released trigger is `0`.** Controllers rest triggers at `-1`, not zero. `Gamepad.LeftTrigger`
+  runs 0 to 1 like you would expect.
+
+`Gamepad.GetAxisRaw` gives you the untouched value if you want to build your own response curve.
+
+If you prefer named actions over hard-coded buttons, `InputActions` binds a key and a pad button
+to one name, so a rebinding screen has a single table to edit:
+
+```csharp
+InputActions.Register("jump", Key.Space, Key.None, GamepadButton.A);
+...
+if (InputActions.IsPressed("jump")) { }
+```
+
+Sticks are not actions — a direction is not a yes/no, so read `Gamepad.LeftStick` directly.
+
+**If a controller seems dead**, ask the editor what it can see: the `engine_info` control method
+lists every connected pad with its live stick, trigger and button state. An empty list means the
+engine never saw it, which is a different problem from your code not reading it.
+
+Not supported: **rumble** (needs a vendor API the windowing layer does not expose) and gyro or
+touchpad input.
+
 ## Touching components from script
 
 Anything the Inspector shows, a script can read and write, by the same names:
@@ -244,6 +292,6 @@ was merely out of date.
 Worth knowing before you plan a game around them:
 
 - **There is no audio.** No mixer, no `AudioSource`, no API. A game cannot make a sound today.
-- **There is no gamepad support.** `Input` is keyboard and mouse only.
+- **No rumble.** Controllers are read-only — buttons, sticks and triggers work, force feedback does not.
 
-Both are tracked as the top of the roadmap rather than oversights.
+Audio is tracked as the top of the roadmap rather than an oversight.

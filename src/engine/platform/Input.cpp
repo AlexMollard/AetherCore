@@ -5,10 +5,43 @@
 
 #include <algorithm>
 
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether
 {
+	namespace
+	{
+		// Radial, rescaled deadzone - see Input::GetGamepadStick for why this is not
+		// applied per axis, which is the usual way to get this wrong.
+		glm::vec2 ApplyRadialDeadzone(glm::vec2 v, float deadzone)
+		{
+			const float length = glm::length(v);
+			if (length <= deadzone)
+			{
+				return {0.0f, 0.0f};
+			}
+			// Clamped at 1: real sticks routinely report a magnitude slightly past full
+			// deflection on the diagonals, and without this the rescale hands back a
+			// vector longer than 1 - a character that sprints only when moving diagonally.
+			const float scaled = std::min((length - deadzone) / (1.0f - deadzone), 1.0f);
+			return v * (scaled / length);
+		}
+
+		// GLFW reports a trigger on the same -1..+1 scale as a stick. See
+		// Input::GetGamepadTrigger.
+		float TriggerToUnit(float glfwAxis, float deadzone)
+		{
+			const float unit = (glfwAxis + 1.0f) * 0.5f;
+			if (unit <= deadzone)
+			{
+				return 0.0f;
+			}
+			return std::min((unit - deadzone) / (1.0f - deadzone), 1.0f);
+		}
+	} // namespace
+
 	Input::~Input()
 	{
 		if (m_window)
@@ -121,6 +154,8 @@ namespace aether
 
 		m_typedChars = std::move(m_pendingChars);
 		m_pendingChars.clear();
+
+		UpdateGamepads();
 	}
 
 	void Input::ConsumeKey(Key key)
@@ -361,6 +396,260 @@ namespace aether
 		}
 		m_osCursorVisible = visible;
 		glfwSetInputMode(m_window, GLFW_CURSOR, visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+	}
+
+	// -- Gamepads -------------------------------------------------------------
+
+	void Input::UpdateGamepads()
+	{
+		AE_PROFILE_ZONE();
+		for (int i = 0; i < kMaxGamepads; ++i)
+		{
+			GamepadState& pad = m_gamepads[i];
+			pad.prev = pad.curr;
+
+			// One call answers both "is a pad in this slot" and "does GLFW have a mapping
+			// for it", so there is no second presence query that can fall out of step with
+			// this one. An unmapped stick reports as absent, which is the honest answer.
+			GLFWgamepadstate state{};
+			const bool present = glfwGetGamepadState(i, &state) == GLFW_TRUE;
+
+			if (present)
+			{
+				for (int b = 0; b < kMaxGamepadButtons; ++b)
+				{
+					pad.curr[b] = state.buttons[b] == GLFW_PRESS;
+				}
+				for (int a = 0; a < kMaxGamepadAxes; ++a)
+				{
+					pad.axes[a] = state.axes[a];
+				}
+			}
+			else
+			{
+				// Reset to the resting pose rather than leaving the last poll behind: an
+				// unplugged pad must not keep reporting the buttons it held on the way out.
+				// Note this is NOT a Released edge - every accessor resolves through Pad(),
+				// which stops resolving the moment `connected` drops, so a vanished pad reads
+				// uniformly "nothing pressed" rather than emitting one last event. A game that
+				// needs to react to a controller dying mid-hold should watch IsGamepadConnected;
+				// a phantom button event would be a worse thing to build on.
+				pad.curr.fill(false);
+				pad.axes = {0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
+			}
+
+			// Synthetic state layers on top, exactly like synthetic keys and mouse buttons.
+			for (int b = 0; b < kMaxGamepadButtons; ++b)
+			{
+				pad.curr[b] = pad.curr[b] || pad.synthetic[b];
+			}
+			for (int a = 0; a < kMaxGamepadAxes; ++a)
+			{
+				if (pad.hasSyntheticAxis[a])
+				{
+					pad.axes[a] = pad.syntheticAxes[a];
+				}
+			}
+
+			const bool connected = present || pad.syntheticConnected;
+			if (connected != pad.connected)
+			{
+				pad.connected = connected;
+				if (connected)
+				{
+					const char* name = present ? glfwGetGamepadName(i) : nullptr;
+					pad.name = name != nullptr ? name : "Synthetic Gamepad";
+					AE_INFO(LogCategory::Input, "Gamepad {} connected: {}", i, pad.name);
+				}
+				else
+				{
+					AE_INFO(LogCategory::Input, "Gamepad {} disconnected ({})", i, pad.name);
+					pad.name.clear();
+				}
+			}
+		}
+	}
+
+	int Input::ResolveGamepad(int pad) const
+	{
+		if (pad == kAnyGamepad)
+		{
+			for (int i = 0; i < kMaxGamepads; ++i)
+			{
+				if (m_gamepads[i].connected)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+		return (pad >= 0 && pad < kMaxGamepads && m_gamepads[pad].connected) ? pad : -1;
+	}
+
+	const Input::GamepadState* Input::Pad(int pad) const
+	{
+		const int slot = ResolveGamepad(pad);
+		return slot >= 0 ? &m_gamepads[static_cast<std::size_t>(slot)] : nullptr;
+	}
+
+	bool Input::IsGamepadConnected(int pad) const
+	{
+		return ResolveGamepad(pad) >= 0;
+	}
+
+	std::string_view Input::GetGamepadName(int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		return p != nullptr ? std::string_view(p->name) : std::string_view{};
+	}
+
+	bool Input::IsGamepadButtonDown(GamepadButton button, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		const int b = static_cast<int>(button);
+		return p != nullptr && b >= 0 && b < kMaxGamepadButtons && p->curr[static_cast<std::size_t>(b)];
+	}
+
+	bool Input::IsGamepadButtonPressed(GamepadButton button, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		const int b = static_cast<int>(button);
+		if (p == nullptr || b < 0 || b >= kMaxGamepadButtons)
+		{
+			return false;
+		}
+		return p->curr[static_cast<std::size_t>(b)] && !p->prev[static_cast<std::size_t>(b)];
+	}
+
+	bool Input::IsGamepadButtonReleased(GamepadButton button, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		const int b = static_cast<int>(button);
+		if (p == nullptr || b < 0 || b >= kMaxGamepadButtons)
+		{
+			return false;
+		}
+		return !p->curr[static_cast<std::size_t>(b)] && p->prev[static_cast<std::size_t>(b)];
+	}
+
+	glm::vec2 Input::GetGamepadStick(GamepadStick stick, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		if (p == nullptr)
+		{
+			return {0.0f, 0.0f};
+		}
+		const std::size_t base = stick == GamepadStick::Left ? 0u : 2u;
+		// y negated: GLFW/SDL report stick-up as -1, this engine's world is y-up.
+		const glm::vec2 raw{p->axes[base], -p->axes[base + 1u]};
+		return ApplyRadialDeadzone(raw, m_stickDeadzone);
+	}
+
+	float Input::GetGamepadTrigger(GamepadTrigger trigger, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		if (p == nullptr)
+		{
+			return 0.0f;
+		}
+		const std::size_t axis = trigger == GamepadTrigger::Left ? 4u : 5u;
+		return TriggerToUnit(p->axes[axis], m_triggerDeadzone);
+	}
+
+	float Input::GetGamepadAxisRaw(GamepadAxis axis, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		const int a = static_cast<int>(axis);
+		if (p == nullptr || a < 0 || a >= kMaxGamepadAxes)
+		{
+			return 0.0f;
+		}
+		return p->axes[static_cast<std::size_t>(a)];
+	}
+
+	void Input::SetGamepadDeadzones(float stick, float trigger)
+	{
+		// Upper bound of 0.9 rather than 1: the rescale divides by (1 - deadzone), so a
+		// deadzone of exactly 1 is a division by zero and anything near it turns the last
+		// sliver of stick travel into the whole output range.
+		m_stickDeadzone = std::clamp(stick, 0.0f, 0.9f);
+		m_triggerDeadzone = std::clamp(trigger, 0.0f, 0.9f);
+	}
+
+	void Input::SetSyntheticGamepadConnected(int pad, bool connected)
+	{
+		if (pad < 0 || pad >= kMaxGamepads)
+		{
+			return;
+		}
+		GamepadState& p = m_gamepads[static_cast<std::size_t>(pad)];
+		p.syntheticConnected = connected;
+		// Seed live state ONLY when there is no window, for the same reason SetSyntheticKey
+		// does: a windowless unit test never calls Update(), which is what normally derives
+		// `connected`. With a window this write would race Update() and is left to it.
+		if (m_window == nullptr)
+		{
+			p.connected = connected;
+			if (connected && p.name.empty())
+			{
+				p.name = "Synthetic Gamepad";
+			}
+		}
+	}
+
+	void Input::SetSyntheticGamepadButton(int pad, GamepadButton button, bool down)
+	{
+		const int b = static_cast<int>(button);
+		if (pad < 0 || pad >= kMaxGamepads || b < 0 || b >= kMaxGamepadButtons)
+		{
+			return;
+		}
+		GamepadState& p = m_gamepads[static_cast<std::size_t>(pad)];
+		p.synthetic[static_cast<std::size_t>(b)] = down;
+		// Windowless only - see SetSyntheticKey for why seeding curr with a window
+		// attached silently destroys the down-edge that IsGamepadButtonPressed reports.
+		if (m_window == nullptr)
+		{
+			p.prev[static_cast<std::size_t>(b)] = p.curr[static_cast<std::size_t>(b)];
+			p.curr[static_cast<std::size_t>(b)] = down;
+		}
+	}
+
+	void Input::SetSyntheticGamepadAxis(int pad, GamepadAxis axis, float value)
+	{
+		const int a = static_cast<int>(axis);
+		if (pad < 0 || pad >= kMaxGamepads || a < 0 || a >= kMaxGamepadAxes)
+		{
+			return;
+		}
+		GamepadState& p = m_gamepads[static_cast<std::size_t>(pad)];
+		const float clamped = std::clamp(value, -1.0f, 1.0f);
+		p.syntheticAxes[static_cast<std::size_t>(a)] = clamped;
+		p.hasSyntheticAxis[static_cast<std::size_t>(a)] = true;
+		if (m_window == nullptr)
+		{
+			p.axes[static_cast<std::size_t>(a)] = clamped;
+		}
+	}
+
+	void Input::ClearSyntheticGamepads()
+	{
+		for (GamepadState& p: m_gamepads)
+		{
+			p.synthetic.fill(false);
+			p.hasSyntheticAxis.fill(false);
+			p.syntheticConnected = false;
+			// Symmetric with the setters: a windowless caller has no Update() to re-derive
+			// this, so without the reset a cleared pad stays connected with its buttons held.
+			if (m_window == nullptr)
+			{
+				p.connected = false;
+				p.curr.fill(false);
+				p.prev.fill(false);
+				p.axes = {0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
+				p.name.clear();
+			}
+		}
 	}
 
 } // namespace aether

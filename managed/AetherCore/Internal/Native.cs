@@ -397,6 +397,37 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial Vector2 aether_input_scroll_delta();
 
+    // ── Gamepad input ───────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_connected(int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_resolve(int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_button_down(int button, int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_button_pressed(int button, int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_button_released(int button, int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial Vector2 aether_input_gamepad_stick(int stick, int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial float aether_input_gamepad_trigger(int trigger, int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial float aether_input_gamepad_axis_raw(int axis, int pad);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_name(int pad, byte* buf, int bufLen);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_input_gamepad_set_deadzones(float stick, float trigger);
+
     [LibraryImport(Lib)]
     internal static partial void aether_input_set_os_cursor_visible(int visible);
 
