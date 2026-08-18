@@ -283,6 +283,22 @@ namespace aether::editor
 			        json result{{"tileset", setPath}, {"tilemap", mapPath}, {"tiles", std::move(tileList)}, {"cellSize", cellSize}};
 			        if (p.contains("id"))
 			        {
+				        // Give the entity a Tile Map first if it has none. This method is handed an
+				        // entity id precisely so it can bind what it just created; refusing because
+				        // the component is absent made the obvious first call fail, and reported it
+				        // as a bindError inside an otherwise success-shaped response - so a caller
+				        // checking for an "error" key saw success and got an unbound tilemap.
+				        if (auto* scenes = ctx.services.TryGet<SceneSubsystem>())
+				        {
+					        World& world = scenes->GetWorld();
+					        const Entity target{p.value("id", std::uint32_t{0})};
+					        if (world.GetRegistry().valid(World::ToEntt(target)) && !world.Has<TileMapComponent>(target))
+					        {
+						        world.Emplace<TileMapComponent>(target, TileMapComponent{});
+						        result["addedTileMapComponent"] = true;
+					        }
+				        }
+
 				        TileContext tc = ResolveTileContext(p, ctx, false);
 				        if (!tc.error.is_null())
 				        {
