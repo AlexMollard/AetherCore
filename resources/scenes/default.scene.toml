@@ -5,24 +5,33 @@ sky_horizon = [ 0.42, 0.48, 0.64 ]
 sky_void = [ 0.001, 0.002, 0.004 ]
 sky_zenith = [ 0.09, 0.16, 0.38 ]
 sun_color = [ 1.0, 0.92, 0.82 ]
-sun_direction = [ -0.6, 0.65, 0.35 ]
+sun_direction = [ -0.630706, 0.6832648, 0.36791182 ]
 sun_intensity = 4.0
 
 [scene]
+features = [ 'meshes_3d', 'lighting_3d', 'navigation', 'physics_3d' ]
 kind = '3d'
-name = 'default'
-version = 10
-features = [ 'meshes_3d', 'lighting_3d', 'navigation' ]
+name = ''
+version = 16
+
+[[assets]]
+builtin = true
+id = '0da40010cbf8c4cc'
+path = 'cube'
+type = 'mesh'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Key Light'
+node = 2743209545019132547
 parent = -1
 position = [ 3.0, 4.0, 3.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.point_light]
     color = [ 1.0, 0.92, 0.82 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
     intensity = 18.0
     radius = 12.0
     shadow = true
@@ -30,6 +39,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Ground'
+node = -302629605295982358
 parent = -1
 position = [ 0.0, -0.05, 0.0 ]
 scale = [ 8.0, 0.1, 8.0 ]
@@ -43,6 +53,7 @@ scale = [ 8.0, 0.1, 8.0 ]
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 0.0
     occlusion = 1.0
+    receive_shadows = true
     roughness = 0.65
     vertex_color = false
 
@@ -52,15 +63,30 @@ scale = [ 8.0, 0.1, 8.0 ]
     path = 'cube'
 
     [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
     half_extents = [ 4.0, 0.05, 4.0 ]
     half_height = 0.05
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
     motion = 'static'
     radius = 0.5
+    restitution = 0.0
+    sensor = false
     shape = 'box'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Cube'
+node = 5211485563892258367
 parent = -1
 position = [ 0.0, 0.75, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -74,6 +100,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 0.0
     occlusion = 1.0
+    receive_shadows = true
     roughness = 0.55
     vertex_color = false
 
@@ -83,8 +110,22 @@ scale = [ 1.0, 1.0, 1.0 ]
     path = 'cube'
 
     [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
     half_extents = [ 0.5, 0.5, 0.5 ]
     half_height = 0.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
     motion = 'dynamic'
     radius = 0.5
+    restitution = 0.0
+    sensor = false
     shape = 'box'

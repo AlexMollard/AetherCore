@@ -1,23 +1,33 @@
 # AetherCore scene - blank 2D project template
 [scene]
+features = [ 'sprites', 'tilemaps', 'physics_2d' ]
 kind = '2d'
-name = 'Untitled'
-version = 15
-features = [ 'sprites', 'physics_2d', 'tilemaps' ]
+name = ''
+version = 16
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Main Camera'
+node = -6121002470579363918
 parent = -1
 position = [ 0.0, 0.0, 10.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.camera]
+    background = 'solid_colour'
+    clear_color = [ 0.1, 0.1, 0.12 ]
     far = 1000.0
     fov = 60.0
+    gradient_angle = 0.0
     main = true
     near = 0.1
     orthographic_height = 10.0
     projection = 'orthographic'
-    background = 'solid_colour'
-    clear_color = [ 0.10, 0.10, 0.12 ]
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
