@@ -458,7 +458,17 @@ namespace aether::editor
 				ImGui::SetNextItemWidth(-(idW + ImGui::GetStyle().ItemSpacing.x));
 				if (ImGui::InputText("##name", buf, sizeof(buf)))
 				{
+					// Record through the same coalescing buffer the reflected drawer uses, so a
+					// whole typing session collapses into one step. This header field is drawn by
+					// hand rather than by the reflected pass, so it was outside that hook entirely
+					// and renaming from the Inspector recorded nothing at all - undo silently
+					// skipped past it to whatever came before.
+					const std::string before = nc->name;
 					nc->name = buf;
+					if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr && before != nc->name)
+					{
+						undo->RecordFieldEdit(entity.id, "Name", "name", nlohmann::json(before), nlohmann::json(nc->name), /*isReflected=*/true);
+					}
 				}
 			}
 			else if (ImGui::SmallButton(ICON_FA_PEN "  Name this entity"))
