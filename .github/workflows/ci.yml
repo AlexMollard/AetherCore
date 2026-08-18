@@ -44,9 +44,20 @@ jobs:
           global-json-file: global.json
 
       # Chocolatey ships on windows-latest, so this avoids depending on a
-      # third-party action for the one step the whole build rests on.
+      # third-party action for the one step the whole build rests on. Choco sets
+      # VULKAN_SDK as a machine variable, which a later step does not inherit - so
+      # export it explicitly, or find_package(Vulkan) searches a bare "/include".
       - name: Install the Vulkan SDK
-        run: choco install vulkan-sdk -y --no-progress
+        shell: pwsh
+        run: |
+          choco install vulkan-sdk -y --no-progress
+          $sdk = Get-ChildItem 'C:\VulkanSDK' -Directory -ErrorAction Stop |
+                 Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdk) { throw 'Vulkan SDK not found under C:\VulkanSDK after install' }
+          "VULKAN_SDK=$($sdk.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          # slangc lives in the SDK's Bin; the shader step needs it on PATH.
+          "$($sdk.FullName)\Bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          Write-Host "VULKAN_SDK=$($sdk.FullName)"
 
       # CPM fetches every third-party dependency from git on a cold tree, which
       # dominates a first configure. Keyed on the dependency manifest so it only
