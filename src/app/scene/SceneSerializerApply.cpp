@@ -45,6 +45,12 @@ namespace aether::app::scene
 
 	namespace
 	{
+		// Non-zero while InstantiatePrefab is on the stack. It owns the physics-flush guard
+		// (only the outermost instance may build bodies) and doubles as the "this apply is a
+		// prefab expansion, not a scene load" signal - a prefab reaches ApplyScene through the
+		// same public entry point a scene does, so the apply itself cannot tell them apart.
+		thread_local int g_prefabInstantiateDepth = 0;
+
 		template<typename T>
 		void RemoveIf(World& world, Entity entity)
 		{
@@ -502,7 +508,18 @@ namespace aether::app::scene
 			// and shared by every apply path (load, restore, undo) via this core.
 			ExpandPrefabInstances(scene, world, deps);
 
-			AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects, {} prefab instances (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.prefabInstances.size(), scene.version);
+			// Only a real scene load is worth a line. Prefab expansion reaches this core through
+			// the same public ApplyScene a scene load uses, so `registerSceneEntities` cannot tell
+			// them apart - the instantiate depth can. A scene with ninety instances used to emit
+			// ninety "1 entities" lines, burying the one line saying how much of it actually loaded.
+			if (registerSceneEntities && g_prefabInstantiateDepth == 0)
+			{
+				AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects, {} prefab instances (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.prefabInstances.size(), scene.version);
+			}
+			else
+			{
+				AE_VERBOSE(LogCategory::App, "Scene apply (nested): {} entities (format v{})", created.size() + migratedLights.size(), scene.version);
+			}
 			return created;
 		}
 	} // namespace
@@ -709,8 +726,7 @@ namespace aether::app::scene
 		// Depth guard: ApplyScene below re-enters this function for nested prefabs, and
 		// at that point the inner instance still sits at its prefab-local pose. Only the
 		// outermost call may build physics bodies (see the flush at the end).
-		static thread_local int s_instantiateDepth = 0;
-		++s_instantiateDepth;
+		++g_prefabInstantiateDepth;
 
 		const SceneKind savedKind = world.GetSceneKind();
 		const SceneFeatureFlags savedFeatures = world.GetSceneFeatures();
@@ -738,8 +754,8 @@ namespace aether::app::scene
 		// static sensor stayed at the origin while its sprite moved here, and a dynamic
 		// body spawned at the origin and fell out of the world. Now that the instance
 		// carries its final pose, rebuild the bodies from it.
-		--s_instantiateDepth;
-		if (s_instantiateDepth == 0 && root.IsValid())
+		--g_prefabInstantiateDepth;
+		if (g_prefabInstantiateDepth == 0 && root.IsValid())
 		{
 			if (auto* physics2D = dynamic_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem")))
 			{

@@ -181,11 +181,16 @@ namespace aether::io
 				return false;
 			}
 
+			// Verbose, not a warning: the candidate list deliberately spans the ship layout and
+			// the dev build tree, so on a developer machine several of them exist and the first
+			// one legitimately wins. Warning made a normal situation look like a fault - and it
+			// fires from a published package too, naming the build tree it came from. The
+			// "Mounting pak" line below already records which one was chosen.
 			for (const auto& pak: existing)
 			{
 				if (pak != *selected)
 				{
-					AE_WARN(LogCategory::FileSystem, "Ignoring alternate {} pak '{}' because '{}' was selected.", pakName, pak.string(), selected->string());
+					AE_VERBOSE(LogCategory::FileSystem, "Ignoring alternate {} pak '{}' because '{}' was selected.", pakName, pak.string(), selected->string());
 				}
 			}
 
