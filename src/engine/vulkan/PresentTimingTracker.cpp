@@ -41,6 +41,7 @@ namespace aether
 			m_reset = true;
 			m_lastPresentedId = 0;
 			m_currentSwapchain = VK_NULL_HANDLE;
+			m_waitingOn = VK_NULL_HANDLE;
 		}
 		m_periodNs.store(0, std::memory_order_release);
 		m_lastFlipNs.store(0, std::memory_order_release);
@@ -82,10 +83,17 @@ namespace aether
 	void PresentTimingTracker::OnSwapchainRetired()
 	{
 		{
-			const std::lock_guard lock(m_mutex);
+			std::unique_lock lock(m_mutex);
 			m_reset = true;
 			m_lastPresentedId = 0;
 			m_currentSwapchain = VK_NULL_HANDLE;
+			// Clearing m_currentSwapchain stops the waiter picking the handle up again, but a
+			// wait already in flight is inside the driver and cannot be cancelled. Block until
+			// it returns of its own accord - one frame in steady state, at worst the waiter's
+			// own timeout. Costing a frame here is what buys the caller the right to destroy
+			// the handle on the next line.
+			m_cv.notify_all();
+			m_idleCv.wait(lock, [this] { return m_waitingOn == VK_NULL_HANDLE; });
 		}
 		// The period survives a recreate (the display did not change), but the phase does not.
 		m_lastFlipNs.store(0, std::memory_order_release);
@@ -152,6 +160,11 @@ namespace aether
 					continue;
 				}
 				swapchain = m_currentSwapchain;
+				// Claim the handle while still holding the lock the retire path takes, so a
+				// retire either lands before this claim (and we read VK_NULL_HANDLE) or waits
+				// for the release below. Publishing it after unlocking would reopen the exact
+				// window this is here to close.
+				m_waitingOn = swapchain;
 			}
 
 			if (swapchain == VK_NULL_HANDLE)
@@ -160,12 +173,18 @@ namespace aether
 			}
 			const std::uint64_t presentId = nextId;
 
-			// A bounded timeout matters: if the window is minimised or the swapchain is
-			// retired underneath us, this call would otherwise never return and shutdown
-			// would deadlock on the join.
+			// A bounded timeout matters: if the window is minimised the presentation engine
+			// may never display this id, and a retire blocks on the release below until this
+			// call returns.
 			constexpr std::uint64_t kTimeoutNs = 200'000'000; // 200 ms
 			const VkResult result = waitForPresent(m_device, swapchain, presentId, kTimeoutNs);
 			const auto now = Clock::now();
+			{
+				const std::lock_guard lock(m_mutex);
+				m_waitingOn = VK_NULL_HANDLE;
+			}
+			m_idleCv.notify_all();
+
 			if (result != VK_SUCCESS)
 			{
 				// Timeout, out-of-date, or suboptimal. The phase is now unknown - keeping the

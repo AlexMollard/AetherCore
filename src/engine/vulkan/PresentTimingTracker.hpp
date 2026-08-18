@@ -47,8 +47,10 @@ namespace aether
 		// waiting on a retired swapchain is undefined.
 		void OnPresented(VkSwapchainKHR swapchain, std::uint64_t presentId);
 
-		// Retire the current swapchain. The waiter drops any pending id for it, so a recreate
-		// cannot leave the thread blocked on a handle that is about to be destroyed.
+		// Retire the current swapchain. BLOCKS until the waiter is out of any wait on it, so
+		// the handle can be destroyed the moment this returns. Callers must retire BEFORE
+		// vkDestroySwapchainKHR: vkWaitForPresentKHR cannot be cancelled, and a driver left
+		// waiting on a freed handle faults rather than returning an error.
 		void OnSwapchainRetired();
 
 		// False while the display period is unstable. On a variable-refresh display (G-Sync,
@@ -96,7 +98,16 @@ namespace aether
 
 		mutable std::mutex m_mutex;
 		std::condition_variable m_cv;
+		// Signals the waiter leaving vkWaitForPresentKHR. Separate from m_cv because the two
+		// have opposite directions - m_cv parks the waiter, this one parks whoever is retiring
+		// a swapchain out from under it.
+		std::condition_variable m_idleCv;
 		VkSwapchainKHR m_currentSwapchain = VK_NULL_HANDLE;
+		// The handle the waiter is inside vkWaitForPresentKHR on right now, published under
+		// the mutex in the same critical section that reads m_currentSwapchain. Without that
+		// pairing there is a window where a retire sees "not waiting", frees the handle, and
+		// the waiter then enters the call with the stale copy it read a moment earlier.
+		VkSwapchainKHR m_waitingOn = VK_NULL_HANDLE;
 		// Highest id handed to vkQueuePresentKHR. The waiter walks ids CONSECUTIVELY up to
 		// this, rather than jumping to the newest: skipping ids yields multi-frame gaps that
 		// are useless as a refresh-period estimate. A wait on an already-displayed id returns

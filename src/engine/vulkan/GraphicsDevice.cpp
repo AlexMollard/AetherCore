@@ -58,6 +58,10 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		vkDeviceWaitIdle(m_vulkanContext->GetDevice().device);
+		// Device idle says nothing about the present waiter: it blocks on the presentation
+		// engine, not on queue work. Join it here, while its swapchain and device are both
+		// still alive, rather than leaving it to member destruction after both are gone.
+		m_presentTiming.Stop();
 		aether::VulkanContext::SetGlobalAddressBindingTracker(nullptr);
 		m_vulkanContext->SetFaultCallback(nullptr);
 		gpu::CommandList::SetDiagnosticEngine(nullptr);

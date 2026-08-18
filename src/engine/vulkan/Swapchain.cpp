@@ -239,6 +239,15 @@ namespace aether
 		}
 		m_shutdown = true;
 
+		// Before anything is destroyed, not after: this is the function that frees the handle,
+		// so it is the one place that covers both a recreate and engine teardown. Retiring
+		// only in Initialize() left the waiter inside vkWaitForPresentKHR on a swapchain this
+		// function had already destroyed.
+		if (m_presentTiming != nullptr)
+		{
+			m_presentTiming->OnSwapchainRetired();
+		}
+
 		if (m_depthView != VK_NULL_HANDLE)
 		{
 			vkDestroyImageView(device, m_depthView, nullptr);
