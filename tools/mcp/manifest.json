@@ -481,7 +481,7 @@
       "tool": "render_benchmark"
     },
     {
-      "description": "Capture the current editor frame to a .png on disk and return its path - use it to SEE what the editor is rendering. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
+      "description": "Capture the current Launcher hub frame to a .png and return its path. Pass 'path' or get a default under %LOCALAPPDATA%/AetherCore/screenshots.",
       "mutates": false,
       "name": "viewport.screenshot",
       "paramsSchema": {
@@ -1633,7 +1633,7 @@
       "tool": "set_speed"
     },
     {
-      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
+      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
       "mutates": true,
       "name": "engine.send_input",
       "paramsSchema": {
@@ -2097,6 +2097,20 @@
         "type": "object"
       },
       "tool": "apply_layout"
+    },
+    {
+      "description": "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes.",
+      "mutates": false,
+      "name": "render.memory",
+      "paramsSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "render_memory"
     }
   ]
 }
