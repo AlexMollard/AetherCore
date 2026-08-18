@@ -1,0 +1,82 @@
+name: CI
+
+# The gauntlet already knows about CI: it reads $env:CI and folds itself down to
+# build + unit, because the editor and runtime smokes need a GPU and a display that
+# hosted runners do not have. Those two phases stay a local pre-merge step - see
+# scripts/Run-DebugGauntlet.ps1.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push to the same branch makes an in-flight run pointless, and the build
+  # job is far too expensive to leave duplicates running.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Cheap, fast, and independent of the build: architectural rules and formatting.
+  # Split out so a boundary regression reports in about a minute instead of waiting
+  # on a full compile.
+  checks:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: GPU abstraction guard
+        shell: pwsh
+        run: ./scripts/check-gpu-abstraction.ps1
+
+  build-and-test:
+    name: Build and unit tests (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Chocolatey ships on windows-latest, so this avoids depending on a
+      # third-party action for the one step the whole build rests on.
+      - name: Install the Vulkan SDK
+        run: choco install vulkan-sdk -y --no-progress
+
+      # CPM fetches every third-party dependency from git on a cold tree, which
+      # dominates a first configure. Keyed on the dependency manifest so it only
+      # re-fetches when that actually changes.
+      - name: Cache CPM sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cpm-cache
+          key: cpm-${{ runner.os }}-${{ hashFiles('CMake/Dependencies.cmake') }}
+          restore-keys: cpm-${{ runner.os }}-
+
+      - name: Configure
+        run: cmake --preset default
+        env:
+          CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
+
+      - name: Build
+        run: cmake --build --preset default --target Editor GameRuntime EngineTests
+
+      # The gauntlet sees $env:CI (GitHub sets it) and skips the two GPU smokes on
+      # its own, so this is the same entry point used locally rather than a second,
+      # drifting definition of "what CI runs".
+      - name: Gauntlet (build + unit)
+        shell: pwsh
+        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build/default -Config RelWithDebInfo -SkipBuild
+
+      - name: Upload the gauntlet report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gauntlet-report
+          path: build/default/gauntlet-report.json
+          if-no-files-found: ignore

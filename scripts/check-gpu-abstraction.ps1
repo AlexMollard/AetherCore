@@ -48,11 +48,38 @@ $gpuHeaders = Get-ChildItem -Path 'src/engine/gpu' -Filter '*.hpp' -Recurse
 
 $failed = $false
 
+# Violations that predate the guard being enforced, one normalised match per line.
+# The point is a ratchet, not amnesty: anything in here is tolerated, anything NEW
+# fails. Clearing an entry means deleting its line - the file only shrinks.
+$baselineFile = Join-Path $PSScriptRoot 'gpu-abstraction-baseline.txt'
+$baseline = @{}
+if (Test-Path $baselineFile) {
+    Get-Content $baselineFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith('#')) { $baseline[$line] = $false }
+    }
+}
+
+# Paths arrive with mixed separators and variable indentation depending on which rg
+# invocation produced them; without normalising, the same violation would not match
+# its own baseline entry.
+function Get-NormalisedMatch([string]$text) {
+    return ($text -replace '\\', '/' -replace '\s+', ' ').Trim()
+}
+
 function Test-Empty([string]$label, [string[]]$matches) {
-    if ($matches) {
+    $new = @()
+    foreach ($m in $matches) {
+        $key = Get-NormalisedMatch $m
+        if ($baseline.ContainsKey($key)) { $baseline[$key] = $true } else { $new += $m }
+    }
+
+    if ($new) {
         Write-Host "[FAIL] $label" -ForegroundColor Red
-        $matches | ForEach-Object { Write-Host "  $_" }
+        $new | ForEach-Object { Write-Host "  $_" }
         $script:failed = $true
+    } elseif ($matches) {
+        Write-Host "[BASE] $label - $($matches.Count) known violation(s), no new ones" -ForegroundColor DarkYellow
     } else {
         Write-Host "[ OK ] $label" -ForegroundColor Green
     }
@@ -163,10 +190,21 @@ $headerLeaks = rg -n --field-match-separator=' ' '\bVk[A-Z]\w*\b' 'src/engine/gp
     }
 Test-Empty 'No Vk* tokens in gpu/GpuProfiler.hpp (excluding comments)' $headerLeaks
 
+# A baseline entry that no longer matches anything means the violation was fixed. Say so
+# rather than failing: the line numbers in here move whenever the file above them changes,
+# so treating staleness as an error would make the guard flaky instead of useful.
+$stale = $baseline.Keys | Where-Object { -not $baseline[$_] }
+if ($stale) {
+    Write-Host ""
+    Write-Host "$($stale.Count) baseline entr(y/ies) no longer match - delete them from scripts/gpu-abstraction-baseline.txt:" -ForegroundColor Cyan
+    $stale | Select-Object -First 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+}
+
 if ($failed) {
     Write-Host ""
     Write-Host "GPU abstraction guard: FAILED" -ForegroundColor Red
     Write-Host "Rule: engine code outside src/engine/vulkan/ must contain no raw vk*/Vk* tokens - use gpu:: types and typed handles."
+    Write-Host "If a violation is genuinely unavoidable for now, add its line to scripts/gpu-abstraction-baseline.txt."
     exit 1
 }
 
