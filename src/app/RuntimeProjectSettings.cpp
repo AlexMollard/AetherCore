@@ -2,6 +2,9 @@
 
 #include <system_error>
 
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
+
 namespace aether::app
 {
 	namespace
@@ -24,12 +27,14 @@ namespace aether::app
 		// project that is not the one compiled in.
 		if (!inputs.envProjectDir.empty())
 		{
+			AE_INFO(LogCategory::App, "Runtime project settings: AETHER_PROJECT_DIR override -> {}", inputs.envProjectDir.string());
 			return SettingsIn(inputs.envProjectDir);
 		}
 
 		std::error_code ec;
 		if (const std::filesystem::path published = inputs.exeDir / "data" / "config" / "ProjectSettings.toml"; std::filesystem::exists(published, ec))
 		{
+			AE_INFO(LogCategory::App, "Runtime project settings: shipped ProjectSettings.toml beside the executable.");
 			return published;
 		}
 
@@ -40,9 +45,19 @@ namespace aether::app
 		// replace the one that was published.
 		if (std::filesystem::exists(inputs.exeDir / "data" / "project.pak", ec))
 		{
+			// Worth logging loudly rather than returning a silent empty: a DEV build tree that
+			// has been packed into looks identical to a package from here, but has no baked
+			// settings to fall back on, so it boots an empty world and the only clue is a
+			// warning several subsystems later. AETHER_PROJECT_DIR is the way out.
+			AE_INFO(LogCategory::App,
+			        "Runtime project settings: data/project.pak found next to the executable, so this is treated as a published package and only its "
+			        "baked EngineSettings.toml is used. If this is a dev build tree that was packed into, its startup scene will be empty - set "
+			        "AETHER_PROJECT_DIR to the project directory to override.");
 			return {};
 		}
 
-		return SettingsIn(inputs.compiledDefaultDir);
+		const std::filesystem::path compiled = SettingsIn(inputs.compiledDefaultDir);
+		AE_INFO(LogCategory::App, "Runtime project settings: {}", compiled.empty() ? std::string{"none found; using the settings beside the executable"} : compiled.string());
+		return compiled;
 	}
 } // namespace aether::app

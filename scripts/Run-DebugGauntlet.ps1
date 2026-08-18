@@ -376,7 +376,18 @@ else {
     else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/$Config/Editor.exe" -LogName "Editor.log" -ExeArgs "--project `"$RepoRoot\projects\TestingProject`""; if (-not $results.editor) { $overall = $false } }
 
     if ($SkipRuntime) { Write-Head "Phase: runtime smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "runtime"; status = "skip" } }
-    else { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/$Config/AetherGame.exe" -LogName "AetherGame.log"; if (-not $results.runtime) { $overall = $false } }
+    # Point the runtime at the same project the editor smoke uses. Without this it resolves
+    # its project from the build tree, and a build tree that has ever been packed into has a
+    # data/project.pak - which the runtime correctly reads as "published package, use the
+    # baked settings" - so it boots an EMPTY world, never logs the ready marker, and the
+    # smoke reports a hang for a process that is perfectly healthy. AETHER_PROJECT_DIR is the
+    # documented override and beats that check.
+    else {
+        $env:AETHER_PROJECT_DIR = "$RepoRoot\projects\TestingProject"
+        try { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/$Config/AetherGame.exe" -LogName "AetherGame.log" }
+        finally { Remove-Item Env:\AETHER_PROJECT_DIR -ErrorAction SilentlyContinue }
+        if (-not $results.runtime) { $overall = $false }
+    }
 }
 
 # --- Report --------------------------------------------------------------
