@@ -180,6 +180,29 @@ $env:AETHERCORE_SDK = "C:/your/checkout/managed/AetherCore/AetherCore.csproj"
 
 The build reports a clear error naming this variable if the baked path does not exist.
 
+## Touching components from script
+
+Anything the Inspector shows, a script can read and write, by the same names:
+
+```csharp
+// Typed, compiler-checked - preferred where a wrapper exists.
+Self.Spin.Add();
+Self.Spin.SetDegreesPerSecond(new Vector3(0, 90, 0));
+float bobHeight = Self.Bob.Amplitude;
+Self.Spin.Remove();
+
+// Generic - works for every reflected component, including ones with no wrapper.
+ComponentAccess sprite = Self.Component("Sprite Renderer");
+sprite.SetVector4("tint", new Vector4(1, 0.3f, 0.2f, 1));
+int layer = sprite.GetInt("sorting_layer");
+```
+
+Reads are properties, writes are `Set*` methods. That asymmetry is deliberate: the
+wrappers are structs so they can be used as inspector fields, and C# rejects a property
+assignment on a struct returned from a property (`CS1612`). A method always works.
+
+Field names are the ones in the scene file and the `list_component_types` output.
+
 ## Where to look next
 
 | You want | Look at |
