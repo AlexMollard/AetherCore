@@ -103,6 +103,9 @@ namespace aether::reflect
 		std::string name;
 		std::string category;
 		std::string icon;
+		// entt's name for the underlying C++ type, e.g. "struct aether::SpriteRendererComponent".
+		// Empty for a type registered without ECS ops.
+		std::string cppTypeName;
 		std::vector<FieldDesc> fields;
 
 		std::function<bool(const World&, Entity)> has;
@@ -276,6 +279,9 @@ namespace aether::reflect
 		template<typename C>
 		void SetEcsOps()
 		{
+			// The same string entt's storage reports, so a caller holding a raw storage name
+			// can map it back to the catalog name callers actually pass to get/set_component.
+			m_type.cppTypeName = entt::type_id<C>().name();
 			m_type.has = [](const World& w, Entity e)
 			{
 				return w.Has<C>(e);

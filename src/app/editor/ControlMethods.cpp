@@ -38,6 +38,7 @@
 #include "rendering/ScreenshotService.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/EcsHelpers.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/SettingsService.hpp"
 #include "layers/AppLayer.hpp"
@@ -534,13 +535,21 @@ namespace aether::editor
 				        j["position"] = Vec3ToJson(glm::vec3(m[3]));
 				        j["scale"] = Vec3ToJson(aether::ExtractScale(m));
 			        }
+			        // Report the catalog names get_component/set_component accept, not entt's raw
+			        // C++ type names - the raw list could not be fed back into any other method.
+			        // Anything reflection does not model (internal components with no editable
+			        // fields) still gets listed under its raw name rather than disappearing.
 			        json comps = json::array();
 			        for (auto&& [typeId, storage]: world.GetRegistry().storage())
 			        {
-				        if (storage.contains(enttEntity))
+				        if (!storage.contains(enttEntity))
 				        {
-					        comps.push_back(std::string(storage.info().name()));
+					        continue;
 				        }
+				        const std::string_view raw = storage.info().name();
+				        const auto& types = reflect::ComponentTypes();
+				        const auto match = std::find_if(types.begin(), types.end(), [raw](const reflect::ComponentType& t) { return t.cppTypeName == raw; });
+				        comps.push_back(match != types.end() ? match->name : std::string(raw));
 			        }
 			        j["components"] = comps;
 			        return j;
@@ -1083,7 +1092,14 @@ namespace aether::editor
 				}
 				if (applied.empty())
 				{
-					return json{{"error", "'values' named no known fields of '" + type + "'"}};
+					// Name the fields that do exist. Guessing them from the component name is
+					// exactly the loop this error used to send a caller into.
+					std::string known;
+					for (const auto& f: rt->fields)
+					{
+						known += (known.empty() ? "" : ", ") + f.name;
+					}
+					return json{{"error", "'values' named no known fields of '" + type + "'; its fields are: " + known}};
 				}
 				if (rt->postSet)
 				{
