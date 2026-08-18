@@ -15,6 +15,7 @@
 
 #include "io/FileUtil.hpp"
 #include "utils/AetherExceptions.hpp"
+#include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 #include "utils/TextIni.hpp"
 #include "utils/TomlConfig.hpp"
@@ -101,8 +102,54 @@ namespace aether::app::project
 #endif
 		}
 
+		// A new project used to be one camera, an empty scripts folder and nothing to copy
+		// from, which hides the best thing about the engine behind "go read the SDK source".
+		// One commented script that visibly does something is the whole difference.
+		std::string MakeStarterScriptText(ProjectTemplate projectTemplate)
+		{
+			const bool is2D = ProjectKindForTemplate(projectTemplate) == ProjectKind::Scene2D;
+			std::string src;
+			src += "using System.Numerics;\n";
+			src += "using AetherCore;\n\n";
+			src += "namespace AetherGame;\n\n";
+			src += "// Attach this to an entity: select it, then Add Component > Script > Player.\n";
+			src += "// Public fields show up in the Inspector and save with the scene.\n";
+			src += "// Press Play to run it; F5 rebuilds and hot-reloads while Play is running.\n";
+			src += "public sealed class Player : EntityScript\n";
+			src += "{\n";
+			src += "\tpublic float Speed = 5.0f;\n\n";
+			src += "\tpublic override void OnUpdate(float deltaTime)\n";
+			src += "\t{\n";
+			src += "\t\t// A/D or left/right. GetAxisRaw returns -1, 0 or +1.\n";
+			src += "\t\tfloat x = Input.GetAxisRaw(Key.A, Key.D) + Input.GetAxisRaw(Key.Left, Key.Right);\n";
+			if (is2D)
+			{
+				src += "\t\tfloat y = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up);\n";
+				src += "\t\tVector3 move = new(x, y, 0.0f);\n";
+			}
+			else
+			{
+				src += "\t\tfloat z = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up);\n";
+				src += "\t\tVector3 move = new(x, 0.0f, z);\n";
+			}
+			src += "\t\tSelf.Position += move * Speed * deltaTime;\n";
+			src += "\t}\n";
+			src += "}\n";
+			return src;
+		}
+
 		bool SeedProjectTemplateFiles(const std::filesystem::path& root, ProjectTemplate projectTemplate, std::string& error)
 		{
+			const std::filesystem::path starter = root / "scripts" / "Player.cs";
+			if (!io::file_util::Exists(starter))
+			{
+				// Non-fatal: a project without the sample is still a valid project.
+				if (auto written = io::file_util::WriteText(starter, MakeStarterScriptText(projectTemplate)); !written)
+				{
+					AE_WARN(LogCategory::App, "Could not write the starter script: {}", written.error().message);
+				}
+			}
+
 			const std::filesystem::path scriptsProject = root / "scripts" / "AetherGame.csproj";
 			if (!io::file_util::Exists(scriptsProject))
 			{
@@ -334,8 +381,11 @@ namespace aether::app::project
 		       "    scripting context.\n"
 		       "\n"
 		       "    AetherCore is compile-only because the engine already loads the SDK assembly.\n"
-		       "    This reference is intentionally absolute so projects created outside the\n"
-		       "    engine checkout can still compile from their own scripts folder.\n"
+		       "    The path below is absolute so a project created outside the engine checkout\n"
+		       "    still compiles - but an absolute path is machine-specific, so it is only the\n"
+		       "    DEFAULT. Set the AETHERCORE_SDK environment variable to another checkout's\n"
+		       "    AetherCore.csproj and that wins instead, which is what makes this project\n"
+		       "    shareable with someone whose engine lives somewhere else.\n"
 		       "  -->\n"
 		       "  <PropertyGroup>\n"
 		       "    <AssemblyName>AetherGame</AssemblyName>\n"
@@ -347,10 +397,22 @@ namespace aether::app::project
 		       "    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>\n"
 		       "  </PropertyGroup>\n"
 		       "\n"
-		       "  <ItemGroup>\n"
-		       "    <ProjectReference Include=\""
+		       "  <!-- MSBuild surfaces environment variables as properties, so AETHERCORE_SDK\n"
+		       "       needs no other plumbing. -->\n"
+		       "  <PropertyGroup>\n"
+		       "    <AetherCoreSdkProject Condition=\"'$(AetherCoreSdkProject)' == ''\">$(AETHERCORE_SDK)</AetherCoreSdkProject>\n"
+		       "    <AetherCoreSdkProject Condition=\"'$(AetherCoreSdkProject)' == ''\">"
 		       + EscapeXmlAttribute(sdkProject.generic_string())
-		       + "\"\n"
+		       + "</AetherCoreSdkProject>\n"
+		         "  </PropertyGroup>\n"
+		         "\n"
+		         "  <Target Name=\"AetherCoreSdkPresent\" BeforeTargets=\"PrepareForBuild\">\n"
+		         "    <Error Condition=\"!Exists('$(AetherCoreSdkProject)')\"\n"
+		         "           Text=\"AetherCore SDK not found at '$(AetherCoreSdkProject)'. This project was created against an engine checkout at a different path; set the AETHERCORE_SDK environment variable to this machine's managed/AetherCore/AetherCore.csproj.\" />\n"
+		         "  </Target>\n"
+		         "\n"
+		         "  <ItemGroup>\n"
+		         "    <ProjectReference Include=\"$(AetherCoreSdkProject)\"\n"
 		         "                      Private=\"false\"\n"
 		         "                      ExcludeAssets=\"runtime\" />\n"
 		         "  </ItemGroup>\n"
