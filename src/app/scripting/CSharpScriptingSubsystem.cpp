@@ -147,7 +147,42 @@ namespace aether::app::scripting
 			       + "sdk=" + DeployedDllFingerprint(managedDir / "AetherCore.dll") + "\n";
 		}
 
-		bool AccumulateLatestScriptInputTime(const std::filesystem::path& root, std::optional<std::filesystem::file_time_type>& latest)
+		constexpr std::string_view kScriptInputSignatureFile = ".aethercore-script-inputs";
+
+		std::uint64_t ReadRecordedInputSignature(const std::filesystem::path& artifactsDir)
+		{
+			const auto text = io::file_util::ReadText(artifactsDir / kScriptInputSignatureFile);
+			if (!text)
+			{
+				return 0;
+			}
+			try
+			{
+				return std::stoull(*text);
+			}
+			catch (const std::exception&)
+			{
+				return 0;
+			}
+		}
+
+		// Rolling signature of WHICH inputs exist, not just when they changed. A timestamp
+		// comparison cannot see a deletion: removing a .cs leaves every surviving file's
+		// mtime untouched, so "newest input newer than the dll?" says no and the build is
+		// skipped - leaving the deleted script still loaded and running out of the stale
+		// assembly, with nothing logged. Folding each input's path into a hash makes an
+		// add, a delete and a rename all change the answer.
+		void FoldScriptInputPath(const std::filesystem::path& path, std::uint64_t& signature)
+		{
+			const std::string text = path.generic_string();
+			for (const char c: text)
+			{
+				signature = (signature ^ static_cast<std::uint64_t>(static_cast<unsigned char>(c))) * 1099511628211ULL;
+			}
+			signature ^= 0x9E3779B97F4A7C15ULL; // separator, so "ab"+"c" and "a"+"bc" differ
+		}
+
+		bool AccumulateLatestScriptInputTime(const std::filesystem::path& root, std::optional<std::filesystem::file_time_type>& latest, std::uint64_t& signature)
 		{
 			const auto rememberLatest = [&latest](const std::filesystem::file_time_type time)
 			{
@@ -175,6 +210,7 @@ namespace aether::app::scripting
 					return false;
 				}
 				rememberLatest(*time);
+				FoldScriptInputPath(root, signature);
 				return true;
 			}
 
@@ -209,6 +245,7 @@ namespace aether::app::scripting
 					return false;
 				}
 				rememberLatest(*time);
+				FoldScriptInputPath(entry.path(), signature);
 			}
 
 			return !ec;
@@ -238,14 +275,23 @@ namespace aether::app::scripting
 			}
 
 			std::optional<std::filesystem::file_time_type> latestInput;
-			if (!AccumulateLatestScriptInputTime(gameProject.parent_path(), latestInput))
+			std::uint64_t inputSignature = 1469598103934665603ULL;
+			if (!AccumulateLatestScriptInputTime(gameProject.parent_path(), latestInput, inputSignature))
 			{
 				return true;
 			}
 
 			const std::filesystem::path repoRoot = std::filesystem::path(AETHER_MANAGED_SDK_PROJECT).parent_path().parent_path().parent_path();
 			const std::filesystem::path directoryBuildProps = repoRoot / "Directory.Build.props";
-			(void) AccumulateLatestScriptInputTime(directoryBuildProps, latestInput);
+			(void) AccumulateLatestScriptInputTime(directoryBuildProps, latestInput, inputSignature);
+
+			// The set of inputs changing counts as much as any one of them being newer.
+			// Deleting a script moves no surviving mtime, so the timestamp test alone
+			// reported "current" and left the deleted type live in the stale assembly.
+			if (ReadRecordedInputSignature(artifactsDir) != inputSignature)
+			{
+				return true;
+			}
 
 			return latestInput && *latestInput > *deployedTime;
 		}
@@ -299,6 +345,17 @@ namespace aether::app::scripting
 			if (auto result = io::file_util::WriteText(artifactsDir / kEditorScriptBuildProfileFile, BuildProfileStamp(managedDir)); !result)
 			{
 				AE_WARN(LogCategory::App, "Could not record the C# script build profile: {}", result.error().message);
+			}
+			{
+				std::optional<std::filesystem::file_time_type> builtInput;
+				std::uint64_t builtSignature = 1469598103934665603ULL;
+				(void) AccumulateLatestScriptInputTime(gameProject.parent_path(), builtInput, builtSignature);
+				const std::filesystem::path propsRoot = std::filesystem::path(AETHER_MANAGED_SDK_PROJECT).parent_path().parent_path().parent_path() / "Directory.Build.props";
+				(void) AccumulateLatestScriptInputTime(propsRoot, builtInput, builtSignature);
+				if (auto written = io::file_util::WriteText(artifactsDir / kScriptInputSignatureFile, std::to_string(builtSignature)); !written)
+				{
+					AE_WARN(LogCategory::App, "Could not record the C# script input signature: {}", written.error().message);
+				}
 			}
 			return true;
 		}
