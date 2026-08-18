@@ -58,25 +58,28 @@ jobs:
           key: cpm-${{ runner.os }}-${{ hashFiles('CMake/Dependencies.cmake') }}
           restore-keys: cpm-${{ runner.os }}-
 
+      # windows-latest is now windows-2025-vs2026, which has no VS 2022 - so the
+      # `default` preset's "Visual Studio 17 2022" generator cannot be found. Use the
+      # matching preset the repo already ships rather than pinning to a retiring image.
       - name: Configure
-        run: cmake --preset default
+        run: cmake --preset vs2026-msvc
         env:
           CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
 
       - name: Build
-        run: cmake --build --preset default --target Editor GameRuntime EngineTests
+        run: cmake --build --preset vs2026-msvc --target Editor GameRuntime EngineTests
 
       # The gauntlet sees $env:CI (GitHub sets it) and skips the two GPU smokes on
       # its own, so this is the same entry point used locally rather than a second,
       # drifting definition of "what CI runs".
       - name: Gauntlet (build + unit)
         shell: pwsh
-        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build/default -Config RelWithDebInfo -SkipBuild
+        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build/vs2026-msvc -Config RelWithDebInfo -SkipBuild
 
       - name: Upload the gauntlet report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gauntlet-report
-          path: build/default/gauntlet-report.json
+          path: build/vs2026-msvc/gauntlet-report.json
           if-no-files-found: ignore
