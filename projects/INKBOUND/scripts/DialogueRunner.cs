@@ -297,10 +297,9 @@ public sealed class DialogueRunner : EntityScript
         if (_node == null) return;
         float strength = 0.6f + 0.4f * GameSettings.InkGlow;
 
-        if (Input.IsKeyPressed(Key.Escape)) { RequestClose(); return; }
+        if (Controls.CancelPressed) { RequestClose(); return; }
 
-        bool tap = Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.Enter)
-                   || Input.IsMousePressed(MouseButton.Left);
+        bool tap = Controls.AdvancePressed || Input.IsMousePressed(MouseButton.Left);
 
         // Phase 1 - typewriter. A tap snaps the line to full (and dries every glyph at once). On the
         // frame the line completes we reveal choices (if any) and return, so the same tap never also
@@ -424,8 +423,8 @@ public sealed class DialogueRunner : EntityScript
         int n = _visible.Count;
         if (n == 0) { GoTo(_node!.Goto); return; } // every choice gated out -> fall through
 
-        if (Input.IsKeyPressed(Key.Up) || Input.IsKeyPressed(Key.W)) { _focus = (_focus - 1 + n) % n; }
-        if (Input.IsKeyPressed(Key.Down) || Input.IsKeyPressed(Key.S)) { _focus = (_focus + 1) % n; }
+        if (Controls.MenuUpPressed) { _focus = (_focus - 1 + n) % n; }
+        if (Controls.MenuDownPressed) { _focus = (_focus + 1) % n; }
         for (int i = 0; i < n; i++)
         {
             if (Ui.IsHovered(_choiceUi[i])) { _focus = i; }
@@ -448,7 +447,7 @@ public sealed class DialogueRunner : EntityScript
             Ui.SetTextColor(_choiceUi[i], col);
         }
 
-        bool activate = Input.IsKeyPressed(Key.Enter) || Input.IsKeyPressed(Key.Space)
+        bool activate = Controls.AdvancePressed
                         || (Input.IsMousePressed(MouseButton.Left) && Ui.IsHovered(_choiceUi[_focus]));
         if (activate) { Choose(_focus); }
     }

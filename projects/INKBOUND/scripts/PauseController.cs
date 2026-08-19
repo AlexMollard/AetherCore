@@ -63,7 +63,7 @@ public sealed class PauseController : EntityScript
             return;
         }
 
-        if ((Input.IsKeyPressed(Key.Escape) || Input.IsKeyPressed(Key.P)) && !GameState.Won)
+        if (Controls.PausePressed && !GameState.Won)
         {
             if (_paused) { Resume(); } else { Pause(); }
         }
@@ -85,11 +85,11 @@ public sealed class PauseController : EntityScript
         if (_menuBtn.IsValid) { Ui.SetImageColor(_menuBtn, Ui.IsHovered(_menuBtn) ? MenuHover : ButtonIdle); }
 
         // Mouse click OR keyboard (Enter = resume, M = quit to menu) - both paths work.
-        if ((_resumeBtn.IsValid && Ui.WasClicked(_resumeBtn)) || Input.IsKeyPressed(Key.Enter))
+        if ((_resumeBtn.IsValid && Ui.WasClicked(_resumeBtn)) || Controls.AdvancePressed)
         {
             Resume();
         }
-        else if ((_menuBtn.IsValid && Ui.WasClicked(_menuBtn)) || Input.IsKeyPressed(Key.M))
+        else if ((_menuBtn.IsValid && Ui.WasClicked(_menuBtn)) || Controls.ReturnToMenuPressed)
         {
             // Quit to the title. Unfreeze, then tear down this HUD (it is
             // DontDestroyOnLoad, so it would otherwise follow us into the menu and

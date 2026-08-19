@@ -142,7 +142,7 @@ public sealed class PlayerController : EntityScript
         // Commit: hold Q to come apart on purpose. Whatever ink you are holding up sets into the cave
         // and stays there for the next attempt, so giving yourself to the dark is a move you make -
         // not something you have to go and find a spike for.
-        if (Input.IsKeyDown(Key.Q))
+        if (Controls.CommitHeld)
         {
             _commitHeld += deltaTime;
             if (_commitHeld >= CommitHoldSeconds)
@@ -157,9 +157,9 @@ public sealed class PlayerController : EntityScript
             _commitHeld = 0.0f;
         }
 
-        float move = 0.0f;
-        if (Input.IsKeyDown(Key.A) || Input.IsKeyDown(Key.Left)) { move -= 1.0f; }
-        if (Input.IsKeyDown(Key.D) || Input.IsKeyDown(Key.Right)) { move += 1.0f; }
+        // Analogue on a stick, all-or-nothing on keys and d-pad - so a controller can
+        // walk the last step to a ledge instead of only ever sprinting off it.
+        float move = Controls.MoveX;
 
         Vector2 velocity = Physics2D.GetLinearVelocity(Self);
         float readVelY = velocity.Y; // pre-jump read, used for landing impact
@@ -180,7 +180,7 @@ public sealed class PlayerController : EntityScript
         _wasGrounded = grounded;
         _sinceGrounded = grounded ? 0.0f : _sinceGrounded + deltaTime;
         _sinceJumpPressed += deltaTime;
-        if (Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up))
+        if (Controls.JumpPressed)
         {
             _sinceJumpPressed = 0.0f;
         }
@@ -191,7 +191,7 @@ public sealed class PlayerController : EntityScript
         }
         if (_sinceJumpPressed < JumpBuffer && _sinceGrounded < CoyoteTime)
         {
-            bool holdingDown = Input.IsKeyDown(Key.S) || Input.IsKeyDown(Key.Down);
+            bool holdingDown = Controls.DownHeld;
             if (holdingDown)
             {
                 // Down + jump drops through a one-way platform instead of hopping. The
@@ -212,7 +212,7 @@ public sealed class PlayerController : EntityScript
         }
         // Variable jump height: releasing early clips the ascent ONCE (a
         // per-frame multiplier would be framerate-dependent).
-        if (!_jumpCutDone && velocity.Y > 0.0f && !(Input.IsKeyDown(Key.Space) || Input.IsKeyDown(Key.W) || Input.IsKeyDown(Key.Up)))
+        if (!_jumpCutDone && velocity.Y > 0.0f && !Controls.JumpHeld)
         {
             velocity.Y *= JumpCutFactor;
             _jumpCutDone = true;

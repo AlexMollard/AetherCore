@@ -18,7 +18,6 @@ public sealed class DialogueTrigger : EntityScript
     /// <summary>Trigger box size in world units (self-provisioned sensor; drop the script and go).</summary>
     public Vector2 Size = new(2.0f, 3.0f);
 
-    private const Key InteractKey = Key.E; // free of the player's move/jump bindings (A/D/arrows, Space/W/Up)
 
     private bool _fired;       // has ever fired (gates Once)
     private bool _armed = true; // can fire on the current visit; consumed on fire, re-armed on exit
@@ -55,7 +54,7 @@ public sealed class DialogueTrigger : EntityScript
 
         // Fire only while armed and idle. Consuming the arm on fire means the same in-range session
         // can't restart the conversation the moment it ends - the player must step out and back in.
-        if (_armed && !Dialogue.IsActive && Input.IsKeyPressed(InteractKey))
+        if (_armed && !Dialogue.IsActive && Controls.InteractPressed)
         {
             TryFire();
             ShowPrompt(false);
