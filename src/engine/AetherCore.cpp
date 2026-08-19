@@ -53,6 +53,7 @@
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "memory/MemoryBackend.hpp"
+#include "utils/FrameDelta.hpp"
 #include "utils/FrameStats.hpp"
 #include "utils/LatencyPacer.hpp"
 #include "utils/Profiler.hpp"
@@ -342,6 +343,7 @@ namespace aether
 				AE_WARN(LogCategory::Engine, "Ignoring invalid AETHER_FRAME_REPORT value: {}", env);
 			}
 		}
+		DeltaCadenceSnapper deltaSnapper;
 		auto lastFrameReport = std::chrono::steady_clock::now();
 		std::vector<FrameTiming> reportFrames(FrameTimeline::kCapacity);
 		std::vector<float> reportWall;
@@ -380,10 +382,19 @@ namespace aether
 			// rawDt is CLAMPED so a hitch cannot explode physics. wallSeconds is the same
 			// interval unclamped, and is what the Performance panel reports - reporting the
 			// clamped value made every frame worse than 30 fps look identical.
+			//
+			// It is also SNAPPED to the display's flip cadence, which is what actually removes
+			// stutter from a vsync-locked build. This interval is when the PRODUCER ran, and
+			// the producer is released by an in-flight semaphore and a sleep - not by the flip.
+			// The two average out to the same rate while disagreeing frame by frame, so a body
+			// at constant velocity advances a different distance in each equally-spaced frame
+			// the player is shown. Measured here: an even 16.85 ms flip period with 5 missed
+			// flips in 600, against a per-frame delta ranging 14.53 - 19.95 ms. See
+			// SnapDeltaToPresentCadence - it does nothing at all when the cadence is unknown.
 			constexpr double kMaxDeltaTime = 1.0 / 30.0;
 			const auto now = std::chrono::steady_clock::now();
 			const double wallSeconds = std::chrono::duration<double>(now - previousFrameTime).count();
-			const double rawDt = std::min(wallSeconds, kMaxDeltaTime);
+			const double rawDt = deltaSnapper.Snap(std::min(wallSeconds, kMaxDeltaTime), m_gpu->GetPresentTiming().PeriodMs() / 1000.0);
 			previousFrameTime = now;
 
 			// Block for a free in-flight slot BEFORE latching input, not after. This wait is
