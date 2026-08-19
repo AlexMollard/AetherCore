@@ -11,16 +11,21 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Supersede on pull requests only. On a PR a newer push genuinely makes the older run
-  # pointless - nobody merges the middle commit - and the Windows job is far too expensive
-  # to leave duplicates running.
+  # Pull requests share one group per branch, so a newer push supersedes the older run:
+  # nobody merges the middle commit, and the Windows job is far too expensive to leave
+  # duplicates running.
   #
-  # On master it is the opposite: every commit there is a commit someone will build from, so
-  # cancelling means it ships unverified. With the Windows job taking the better part of an
-  # hour, a normal working session pushing two or three times running would cancel each run
-  # in turn and leave a whole stretch of master history with nothing ever having built it -
-  # which is exactly what happened here before this was fixed.
+  # Master gets a group PER COMMIT, so master runs never contend with each other at all.
+  # Two separate mechanisms would otherwise drop them. cancel-in-progress kills runs that
+  # have started - that is what the ref check below turns off. But a run still WAITING is
+  # dropped by a second rule that keeps only the newest pending run per group, which
+  # cancel-in-progress has no say over; three consecutive master commits were lost that way
+  # even after the first fix. A unique group per SHA is the only thing that answers both.
+  #
+  # The cost is that several hour-long Windows jobs can run at once during an active
+  # session. That is the trade: every commit on master is a commit someone can build from,
+  # so every one of them gets built.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/master' && github.sha || 'shared' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
