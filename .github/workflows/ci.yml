@@ -11,10 +11,17 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # A newer push to the same branch makes an in-flight run pointless, and the build
-  # job is far too expensive to leave duplicates running.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Supersede on pull requests only. On a PR a newer push genuinely makes the older run
+  # pointless - nobody merges the middle commit - and the Windows job is far too expensive
+  # to leave duplicates running.
+  #
+  # On master it is the opposite: every commit there is a commit someone will build from, so
+  # cancelling means it ships unverified. With the Windows job taking the better part of an
+  # hour, a normal working session pushing two or three times running would cancel each run
+  # in turn and leave a whole stretch of master history with nothing ever having built it -
+  # which is exactly what happened here before this was fixed.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   # Cheap, fast, and independent of the build: architectural rules and formatting.
