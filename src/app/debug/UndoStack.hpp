@@ -112,4 +112,14 @@ namespace aether::editor
 		std::size_t m_editSeq = 0;
 		std::size_t m_savedSeq = 0;
 	};
+
+	// The open document was REPLACED - a new scene, a scene opened, a project opened.
+	// History recorded against the previous scene addresses entity ids that no longer
+	// exist, so replaying it would corrupt the new one; and the new document starts
+	// clean, so the unsaved-changes guard must stop reporting the old scene's edits.
+	//
+	// Deliberately NOT called for Play/Stop or a gameplay scene switch: those restore
+	// the same authored document, and resetting there would report a user's outstanding
+	// edits as saved - the one thing this tracking must never do.
+	void ResetEditHistory(ServiceContainer& services);
 } // namespace aether::editor

@@ -46,4 +46,29 @@ namespace aether::app::project
 		}
 		return (parent / folder).lexically_normal();
 	}
+
+	std::filesystem::path DefaultNewProjectParent(std::span<const std::filesystem::path> recentRoots, const std::filesystem::path& documentsDir)
+	{
+		for (const std::filesystem::path& root: recentRoots)
+		{
+			if (root.empty())
+			{
+				continue;
+			}
+			// Skip entries whose folder has since been moved or deleted: proposing a path
+			// that no longer exists is worse than proposing nothing.
+			const std::filesystem::path parent = root.parent_path();
+			std::error_code ec;
+			if (!parent.empty() && std::filesystem::is_directory(parent, ec))
+			{
+				return parent.lexically_normal();
+			}
+		}
+
+		if (!documentsDir.empty())
+		{
+			return (documentsDir / "AetherCore Projects").lexically_normal();
+		}
+		return {};
+	}
 } // namespace aether::app::project

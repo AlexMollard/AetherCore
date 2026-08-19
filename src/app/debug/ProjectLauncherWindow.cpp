@@ -390,7 +390,9 @@ namespace aether::app
 				ImGui::SetNextItemWidth(width - browseSize - controlGap);
 				submit = ImGui::InputTextWithHint("##openProjectPath", "Project folder...", state.openPath.data(), state.openPath.size(), ImGuiInputTextFlags_EnterReturnsTrue);
 				ImGui::SameLine(0.0f, controlGap);
-				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize)) && actions.browseFolder)
+				const bool browsed = OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseOpen", ImVec2(browseSize, browseSize));
+				ImGui::SetItemTooltip("Browse for a project folder");
+				if (browsed && actions.browseFolder)
 				{
 					if (const auto folder = actions.browseFolder())
 					{
@@ -451,7 +453,9 @@ namespace aether::app
 				ImGui::SetNextItemWidth(width - browseSize - controlGap);
 				submit = ImGui::InputTextWithHint("##newProjectPath", "Parent folder for the new project...", state.newPath.data(), state.newPath.size(), ImGuiInputTextFlags_EnterReturnsTrue) || submit;
 				ImGui::SameLine(0.0f, controlGap);
-				if (OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize)) && actions.browseFolder)
+				const bool browsed = OutlineIconButton(ICON_FA_FOLDER_OPEN, "##browseNew", ImVec2(browseSize, browseSize));
+				ImGui::SetItemTooltip("Browse for the folder to create the project in");
+				if (browsed && actions.browseFolder)
 				{
 					if (const auto folder = actions.browseFolder())
 					{
@@ -651,7 +655,14 @@ namespace aether::app
 			const float textSize = f.dp(14.0f);
 			TextSized(f.drawList, textSize, ImVec2(f.contentMin.x, f.contentMax.y - textSize - f.dp(4.0f)), kMuted, "AetherCore Editor");
 			const char* label = "Open last project on startup";
-			const float controlWidth = ImGui::GetFrameHeight() + ImGui::CalcTextSize(label).x;
+			// Without the shared input styling this box has no frame and no border against
+			// the launcher's near-black ground: the label read as plain text and the only
+			// persistent setting in the launcher had no visible on/off state at all.
+			//
+			// The styling changes FramePadding, so the width has to be measured inside it
+			// or the control overhangs the right margin it was meant to sit against.
+			PushInputStyles(f.dp);
+			const float controlWidth = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label).x;
 			ImGui::SetCursorScreenPos(ImVec2(f.contentMax.x - controlWidth, f.contentMax.y - textSize - f.dp(8.0f)));
 			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
 			if (ImGui::Checkbox(label, &state.openLastProject) && actions.saveSettings)
@@ -659,6 +670,7 @@ namespace aether::app
 				actions.saveSettings();
 			}
 			ImGui::PopStyleColor();
+			PopInputStyles();
 		}
 
 		// Resolve the responsive layout for the current window size into a Frame.

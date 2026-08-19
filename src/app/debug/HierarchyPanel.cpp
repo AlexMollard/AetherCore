@@ -1282,6 +1282,9 @@ namespace aether::editor
 				{
 					scenes->SetCurrentScene(name);
 				}
+				// A different document is open now: the previous scene's undo history
+				// addresses entity ids this one does not have, and this one is unedited.
+				editor::ResetEditHistory(context.services);
 			}
 			ImGui::CloseCurrentPopup();
 		};
@@ -1370,6 +1373,7 @@ namespace aether::editor
 			{
 				ImGui::PushStyleColor(ImGuiCol_Text, chrome::WithAlpha(chrome::kMuted, 0.35f));
 				const bool setStartup = ImGui::SmallButton(ICON_FA_STAR "##startup");
+				ImGui::SetItemTooltip("Make this the startup scene");
 				ImGui::PopStyleColor();
 				if (setStartup)
 				{

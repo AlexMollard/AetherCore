@@ -172,7 +172,7 @@ namespace aether::editor
 		m_startupScene = app::ReadProjectStartupScene(SettingsPath(project));
 	}
 
-	void ProjectPanel::DrawFolderRow(const char* label, const std::filesystem::path& path)
+	void ProjectPanel::DrawFolderRow(const char* label, const std::filesystem::path& path, const bool required)
 	{
 		const bool exists = FolderExists(path);
 		ImGui::TableNextRow();
@@ -180,7 +180,26 @@ namespace aether::editor
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted(label);
 		ImGui::TableSetColumnIndex(1);
-		ImGui::TextColored(exists ? chrome::kSuccess : chrome::kWarning, "%s", exists ? "Ready" : "Missing");
+		// Only the folders a project cannot work without are a problem when absent. The
+		// content folders are absent because that content has not been made yet - a 2D
+		// game has no models and never will, and flagging three permanent amber warnings
+		// at it just teaches you to stop reading the column.
+		if (exists)
+		{
+			ImGui::TextColored(chrome::kSuccess, "Ready");
+		}
+		else if (required)
+		{
+			ImGui::TextColored(chrome::kWarning, "Missing");
+		}
+		else
+		{
+			ImGui::TextDisabled("Unused");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("No %s in this project yet. Created when you add some.", label);
+			}
+		}
 		ImGui::TableSetColumnIndex(2);
 		ImGui::TextDisabled("%s", DisplayPath(path).c_str());
 		ImGui::TableSetColumnIndex(3);
@@ -324,15 +343,15 @@ namespace aether::editor
 			ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 64.0f);
 			ImGui::TableSetupColumn("Path");
 			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 4.0f);
-			DrawFolderRow("Assets", project->assetsDir);
-			DrawFolderRow("Models", project->assetsDir / "models");
-			DrawFolderRow("Materials", project->assetsDir / "materials");
-			DrawFolderRow("Textures", project->assetsDir / "textures");
-			DrawFolderRow("Animations", project->assetsDir / "animations");
-			DrawFolderRow("Scenes", project->scenesDir);
-			DrawFolderRow("Prefabs", project->prefabsDir);
-			DrawFolderRow("Data", project->root / "data");
-			DrawFolderRow("Scripts", project->scriptsDir);
+			DrawFolderRow("Assets", project->assetsDir, true);
+			DrawFolderRow("Models", project->assetsDir / "models", false);
+			DrawFolderRow("Materials", project->assetsDir / "materials", false);
+			DrawFolderRow("Textures", project->assetsDir / "textures", false);
+			DrawFolderRow("Animations", project->assetsDir / "animations", false);
+			DrawFolderRow("Scenes", project->scenesDir, true);
+			DrawFolderRow("Prefabs", project->prefabsDir, false);
+			DrawFolderRow("Data", project->root / "data", false);
+			DrawFolderRow("Scripts", project->scriptsDir, true);
 			ImGui::EndTable();
 		}
 		ImGui::Dummy(ImVec2(0.0f, 4.0f));

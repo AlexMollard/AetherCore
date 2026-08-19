@@ -810,9 +810,16 @@ namespace aether::editor
 			{
 				sceneName = scenes->GetCurrentScene().c_str();
 			}
+			// The unsaved dot is the only thing on screen that answers "have I saved?".
+			// Tracking for it already existed and was read by nothing but the autosave.
+			const bool unsaved = HasUnsavedWork();
 			ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-			ImGui::Text(ICON_FA_CUBE "  %s", sceneName);
+			ImGui::Text(ICON_FA_CUBE "  %s%s", sceneName, unsaved ? " *" : "");
 			ImGui::PopStyleColor();
+			if (unsaved && ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Unsaved changes  -  Ctrl+S to save");
+			}
 
 			{
 				const char* label = playing ? ICON_FA_PLAY "  PLAYING" : (compiling ? ICON_FA_GEAR "  COMPILING" : ICON_FA_STOP "  EDITING");
@@ -885,8 +892,9 @@ namespace aether::editor
 	void DebugLayer::DrawCommandPalette(app::LayerContext& context)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
-		if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_P, false))
+		if ((io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_P, false)) || m_openCommandPalette)
 		{
+			m_openCommandPalette = false;
 			m_paletteQuery[0] = '\0';
 			m_paletteSelected = 0;
 			ImGui::OpenPopup("##CommandPalette");
@@ -1156,6 +1164,166 @@ namespace aether::editor
 		return saved;
 	}
 
+	void DebugLayer::ApplyHistoryStep(app::LayerContext& context, const bool redo)
+	{
+		IEditorCommand* command = redo ? m_undoStack.Redo(context.Get<World>(), context.services) : m_undoStack.Undo(context.Get<World>(), context.services);
+		if (command == nullptr)
+		{
+			return;
+		}
+		// Preserve the selection across the edit: remap each id through the command
+		// (identity unless it recreated entities), then drop any that no longer exist.
+		World& world = context.Get<World>();
+		std::vector<Entity> remapped = m_selection.All();
+		for (Entity& e: remapped)
+		{
+			e = command->Remap(e);
+		}
+		const Entity primary = command->Remap(m_selection.Primary());
+		m_selection.Replace(std::move(remapped), primary);
+		m_selection.Prune(world);
+	}
+
+	bool DebugLayer::HasUnsavedWork() const
+	{
+		// Tilemap cells are a second document: they live in their own .tiles asset, so a
+		// scene whose entity history is clean can still hold unsaved paint.
+		return m_undoStack.HasUnsavedChanges() || m_tilePainting.mapDirty;
+	}
+
+	void DebugLayer::ConfirmDiscard(app::LayerContext& context, const PendingNav nav)
+	{
+		m_pendingNav = nav;
+		if (!HasUnsavedWork())
+		{
+			RunPendingNav(context);
+			return;
+		}
+		m_openUnsavedPopup = true;
+	}
+
+	void DebugLayer::RunPendingNav(app::LayerContext& context)
+	{
+		const PendingNav nav = m_pendingNav;
+		m_pendingNav = PendingNav::None;
+		switch (nav)
+		{
+			case PendingNav::None:
+				return;
+			case PendingNav::NewScene3D:
+			case PendingNav::NewScene2D:
+			{
+				const SceneKind kind = (nav == PendingNav::NewScene3D) ? SceneKind::Scene3D : SceneKind::Scene2D;
+				const std::string name = app::scene::NewScene(context.Get<World>(), app::scene::MakeApplySceneDeps(context.services), kind);
+				if (name.empty())
+				{
+					return;
+				}
+				if (auto* scenes = context.TryGet<SceneSubsystem>())
+				{
+					scenes->SetCurrentScene("");
+				}
+				m_selection.Clear();
+				// The document was replaced: the old scene's history addresses entities that
+				// no longer exist, and the blank scene starts clean.
+				editor::ResetEditHistory(context.services);
+				m_tilePainting.mapDirty = false;
+				return;
+			}
+			case PendingNav::OpenScene:
+				if (m_hierarchyPanel != nullptr)
+				{
+					m_hierarchyPanel->RequestOpenPopup();
+				}
+				return;
+			case PendingNav::CloseEditor:
+				if (auto* window = context.services.TryGet<Window>())
+				{
+					window->RequestClose();
+				}
+				return;
+		}
+	}
+
+	void DebugLayer::PollCloseRequest(app::LayerContext& context)
+	{
+		auto* window = context.services.TryGet<Window>();
+		if (window == nullptr || !window->ShouldClose() || !HasUnsavedWork())
+		{
+			return; // nothing pending, or nothing to lose - let the loop exit
+		}
+		// Withdraw the OS request and ask instead. Events are pumped before layers update
+		// and the loop only re-reads the flag next iteration, so clearing it here keeps the
+		// window alive long enough for the answer.
+		window->CancelClose();
+		ConfirmDiscard(context, PendingNav::CloseEditor);
+	}
+
+	void DebugLayer::DrawUnsavedChangesPopup(app::LayerContext& context)
+	{
+		constexpr const char* kTitle = "Unsaved Changes###unsavedChanges";
+		if (m_openUnsavedPopup)
+		{
+			ImGui::OpenPopup(kTitle);
+			m_openUnsavedPopup = false;
+		}
+
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f, viewport->WorkPos.y + viewport->WorkSize.y * 0.42f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+		{
+			return;
+		}
+
+		std::string sceneName;
+		if (const auto* scenes = context.TryGet<SceneSubsystem>(); scenes != nullptr)
+		{
+			sceneName = scenes->GetCurrentScene();
+		}
+		const char* verb = (m_pendingNav == PendingNav::CloseEditor) ? "Closing the editor" : "Opening another scene";
+		if (m_pendingNav == PendingNav::NewScene2D || m_pendingNav == PendingNav::NewScene3D)
+		{
+			verb = "Starting a new scene";
+		}
+		ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION "  %s has unsaved changes.", sceneName.empty() ? "This scene" : sceneName.c_str());
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
+		ImGui::Text("%s will discard them.", verb);
+		ImGui::PopStyleColor();
+		ImGui::Spacing();
+
+		// Save is the default: Enter and Escape are the two keys people hit reflexively, so
+		// the safe action takes Enter and the reversible one takes Escape. Nothing here
+		// discards without a deliberate click.
+		if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save", ImVec2(120.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Enter))
+		{
+			if (SaveCurrentScene(context))
+			{
+				ImGui::CloseCurrentPopup();
+				RunPendingNav(context);
+			}
+			else
+			{
+				// An unnamed scene routes to Save As instead; abandon the navigation rather
+				// than run it behind the dialog the user now has to answer.
+				m_pendingNav = PendingNav::None;
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::SameLine();
+		if (chrome::OutlineButton("Discard", ImVec2(110.0f, 0.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+			RunPendingNav(context);
+		}
+		ImGui::SameLine();
+		if (chrome::OutlineButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		{
+			m_pendingNav = PendingNav::None;
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+
 	void DebugLayer::SaveAndReturnToLauncher(app::LayerContext& context)
 	{
 		if (!SaveCurrentScene(context))
@@ -1257,6 +1425,10 @@ namespace aether::editor
 
 		CaptureEditorWindowSize(context);
 
+		// Before anything draws: the OS close request arrives during the event pump earlier
+		// this frame, and the loop re-reads it after the layers run.
+		PollCloseRequest(context);
+
 		ImGuizmo::BeginFrame();
 
 		// A layout preset queued last frame is applied here, before any window
@@ -1310,22 +1482,7 @@ namespace aether::editor
 				const bool undoCombo = zKey && !io.KeyShift;
 				if (undoCombo || redoCombo)
 				{
-					IEditorCommand* command = redoCombo ? m_undoStack.Redo(context.Get<World>(), context.services) : m_undoStack.Undo(context.Get<World>(), context.services);
-					if (command != nullptr)
-					{
-						// Preserve the selection across the edit: remap each id through
-						// the command (identity unless it recreated entities), then drop
-						// any that no longer exist.
-						World& world = context.Get<World>();
-						std::vector<Entity> remapped = m_selection.All();
-						for (Entity& e: remapped)
-						{
-							e = command->Remap(e);
-						}
-						const Entity primary = command->Remap(m_selection.Primary());
-						m_selection.Replace(std::move(remapped), primary);
-						m_selection.Prune(world);
-					}
+					ApplyHistoryStep(context, redoCombo);
 				}
 			}
 		}
@@ -1383,33 +1540,21 @@ namespace aether::editor
 					SaveAndReturnToLauncher(context);
 				}
 				ImGui::Separator();
-				const auto newScene = [&](SceneKind kind)
-				{
-					const std::string name = app::scene::NewScene(context.Get<World>(), app::scene::MakeApplySceneDeps(context.services), kind);
-					if (!name.empty())
-					{
-						if (auto* scenes = context.TryGet<SceneSubsystem>())
-						{
-							scenes->SetCurrentScene("");
-						}
-						m_selection.Clear();
-					}
-				};
+				// Everything that replaces the scene in memory goes through ConfirmDiscard.
+				// These used to run straight through: one click on New Scene threw away an
+				// unsaved session with no prompt and no way back.
 				if (ImGui::MenuItem(ICON_FA_PLUS "  New 3D Scene"))
 				{
-					newScene(SceneKind::Scene3D);
+					ConfirmDiscard(context, PendingNav::NewScene3D);
 				}
 				if (ImGui::MenuItem(ICON_FA_PLUS "  New 2D Scene"))
 				{
-					newScene(SceneKind::Scene2D);
+					ConfirmDiscard(context, PendingNav::NewScene2D);
 				}
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open..."))
 				{
-					if (m_hierarchyPanel != nullptr)
-					{
-						m_hierarchyPanel->RequestOpenPopup();
-					}
+					ConfirmDiscard(context, PendingNav::OpenScene);
 				}
 				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S"))
 				{
@@ -1430,6 +1575,26 @@ namespace aether::editor
 				if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Publish..."))
 				{
 					ShowPanel("Build");
+				}
+				ImGui::EndMenu();
+			}
+			// A full undo/redo stack existed and was reachable only by knowing the keys.
+			// Nothing on screen said so, and nothing showed whether there was anything to
+			// undo - which is most of what a menu entry is for.
+			if (ImGui::BeginMenu("Edit"))
+			{
+				if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Undo", "Ctrl+Z", false, undoEditable && m_undoStack.UndoDepth() > 0))
+				{
+					ApplyHistoryStep(context, false);
+				}
+				if (ImGui::MenuItem(ICON_FA_ROTATE_RIGHT "  Redo", "Ctrl+Y", false, undoEditable && m_undoStack.RedoDepth() > 0))
+				{
+					ApplyHistoryStep(context, true);
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Command Palette...", "Ctrl+P"))
+				{
+					m_openCommandPalette = true;
 				}
 				ImGui::EndMenu();
 			}
@@ -1721,10 +1886,31 @@ namespace aether::editor
 
 		ImGui::End();
 
+		// Panels Begin their own window, so this is the one place that can bound all of
+		// them. Undocked, a panel becomes its own OS window (multi-viewport is on), and a
+		// window with no size hint auto-fits to its content - which with wrap-at-window
+		// text is a feedback loop that settles narrow and very tall, because the wrap
+		// width is measured against the width the window already has. File > Publish
+		// opened 290x2082 on a 1440px display, most of it off-screen.
+		//
+		// Both calls are FirstUseEver/advisory and are issued BEFORE OnImGui, so a panel
+		// with its own considered size (Sprite Slicer, Tile Palette) still wins - the last
+		// call before Begin is the one that counts.
+		ImVec2 maxPanelSize = ImGui::GetMainViewport()->WorkSize;
+		for (const ImGuiPlatformMonitor& monitor: ImGui::GetPlatformIO().Monitors)
+		{
+			// Largest attached work area, so dragging a panel to a bigger second display
+			// is not clamped to the size of the one the editor happens to sit on.
+			maxPanelSize.x = std::max(maxPanelSize.x, monitor.WorkSize.x);
+			maxPanelSize.y = std::max(maxPanelSize.y, monitor.WorkSize.y);
+		}
+		const ImVec2 defaultPanelSize(std::min(720.0f, maxPanelSize.x * 0.6f), std::min(560.0f, maxPanelSize.y * 0.6f));
 		for (auto& panel: m_panels)
 		{
 			if (panel->IsVisible())
 			{
+				ImGui::SetNextWindowSize(defaultPanelSize, ImGuiCond_FirstUseEver);
+				ImGui::SetNextWindowSizeConstraints(ImVec2(220.0f, 120.0f), maxPanelSize);
 				panel->OnImGui(context);
 			}
 		}
@@ -1753,6 +1939,7 @@ namespace aether::editor
 		}
 
 		DrawCommandPalette(context);
+		DrawUnsavedChangesPopup(context);
 
 		// An inspector field edit ends when its widget stops being active - a slider
 		// drag and a focused text box both stay active across frames, so this is what

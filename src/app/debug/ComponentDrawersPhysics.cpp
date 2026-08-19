@@ -379,7 +379,9 @@ namespace aether::editor
 			ImGui::EndDragDropTarget();
 		}
 		ImGui::SameLine();
-		if (ImGui::SmallButton(ICON_FA_XMARK "##clearJointTarget"))
+		const bool clearTarget = ImGui::SmallButton(ICON_FA_XMARK "##clearJointTarget");
+		ImGui::SetItemTooltip("Clear the joint target");
+		if (clearTarget)
 		{
 			joint->target = Entity{};
 			rebuild = true;

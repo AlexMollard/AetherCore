@@ -182,4 +182,50 @@ namespace aether::io
 
 		return EnsureDirectory(root / kAppFolderName);
 	}
+
+	std::filesystem::path PlatformPaths::GetUserDocumentsDir()
+	{
+		std::filesystem::path root;
+
+#if defined(_WIN32)
+		PWSTR rawPath = nullptr;
+		if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_CREATE, nullptr, &rawPath)) && rawPath != nullptr)
+		{
+			root = std::filesystem::path(rawPath);
+		}
+		if (rawPath != nullptr)
+		{
+			CoTaskMemFree(rawPath);
+		}
+		if (root.empty())
+		{
+			// Redirected or roaming Documents can fail the known-folder lookup; the profile
+			// root is still somewhere the user can write.
+			if (const std::string env = EnvironmentString("USERPROFILE"); !env.empty())
+			{
+				root = std::filesystem::path(env) / "Documents";
+			}
+		}
+#else
+		if (const std::string xdg = EnvironmentString("XDG_DOCUMENTS_DIR"); !xdg.empty())
+		{
+			root = xdg;
+		}
+		else if (const std::string home = EnvironmentString("HOME"); !home.empty())
+		{
+			// ~/Documents is not guaranteed to exist on a headless or minimal install;
+			// fall back to the home directory rather than inventing a tree there.
+			const std::filesystem::path documents = std::filesystem::path(home) / "Documents";
+			std::error_code ec;
+			root = std::filesystem::is_directory(documents, ec) ? documents : std::filesystem::path(home);
+		}
+#endif
+
+		if (root.empty())
+		{
+			return {};
+		}
+
+		return root;
+	}
 } // namespace aether::io

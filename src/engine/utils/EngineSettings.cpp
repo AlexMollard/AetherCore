@@ -1,6 +1,7 @@
 #include "utils/EngineSettings.hpp"
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -18,6 +19,35 @@ namespace aether
 {
 	namespace
 	{
+		constexpr std::array<std::string_view, 3> kWindowModes{"windowed", "borderless", "fullscreen"};
+
+		// One line per key. Ranges are what the engine will actually honour, so the UI can
+		// stop a value being typed that the loader would silently clamp or reject.
+		const std::array kSettingInfo = std::to_array<std::pair<std::string_view, SettingInfo>>({
+		        {"window.width", {.description = "Window width in pixels. Ignored in borderless and fullscreen, which match the display.", .minValue = 320.0, .maxValue = 16384.0}},
+		        {"window.height", {.description = "Window height in pixels. Ignored in borderless and fullscreen, which match the display.", .minValue = 240.0, .maxValue = 16384.0}},
+		        {"window.mode", {.description = "Borderless is the only mode besides fullscreen that can win DWM independent flip; composition costs about a frame of latency.", .choices = kWindowModes}},
+		        {"graphics.vsync", {.description = "Wait for the display to refresh. Turning it off tears, but removes a frame of latency."}},
+		        {"graphics.framesInFlight", {.description = "How far the game thread may run ahead of the screen. Every frame of run-ahead is one display interval of input lag (~17 ms at 60 Hz).", .minValue = 1.0, .maxValue = 3.0}},
+		        {"graphics.lowLatencyPresent", {.description = "Prefer MAILBOX over FIFO while vsync is on: a finished frame replaces the pending one instead of queueing behind it."}},
+		        {"graphics.latencyPacing", {.description = "Idle out most of the display interval and latch input just before the flip. Needs a measured flip phase; does nothing without one."}},
+		        {"graphics.renderScale", {.description = "Render the scene at this fraction of the output and upscale it. UI still draws at native resolution.", .minValue = 0.25, .maxValue = 1.0}},
+		        {"graphics.fxaa", {.description = "Cheap post-process antialiasing."}},
+		        {"graphics.asyncCompute", {.description = "Overlap compute work with graphics on a separate queue.", .restartRequired = true}},
+		        {"graphics.imguiViewports", {.description = "Let editor panels become separate OS windows when dragged out of the main window."}},
+		        {"graphics.uiScale", {.description = "Extra multiplier on editor UI size, on top of the display's own DPI scale.", .minValue = 0.5, .maxValue = 3.0}},
+		        {"app.targetFps", {.description = "Frame cap. 0 leaves it uncapped.", .minValue = 0.0, .maxValue = 1000.0}},
+		        {"app.startupScene", {.description = "Scene a published build boots into.", .restartRequired = true}},
+		        {"app.autoplay", {.description = "Start the game straight away instead of opening the editor.", .restartRequired = true}},
+		        {"app.autosaveSeconds", {.description = "How often the editor writes a recovery copy of unsaved scene edits, beside the project and never over the scene itself. 0 disables it.", .minValue = 0.0, .maxValue = 3600.0}},
+		        {"cursor.custom", {.description = "Draw the mouse pointer from a texture instead of using the OS pointer."}},
+		        {"cursor.texture", {.description = "VFS path to the pointer art. Empty draws nothing."}},
+		        {"cursor.size", {.description = "On-screen pointer size, in pixels.", .minValue = 4.0, .maxValue = 256.0}},
+		        {"cursor.hotspotX", {.description = "Which point of the image sits under the mouse, 0..1 across the width.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"cursor.hotspotY", {.description = "Which point of the image sits under the mouse, 0..1 down the height.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"cursor.pixelArt", {.description = "Nearest-neighbour sampling, so small pointer art scales up crisp."}},
+		});
+
 		template<class T>
 		void AssignField(T& field, std::string_view raw)
 		{
@@ -303,4 +333,18 @@ namespace aether
 		}
 		AE_INFO(LogCategory::Engine, "User settings saved to {}", path.string());
 	}
+	const SettingInfo& SettingMetadata(const std::string_view key)
+	{
+		for (const auto& [candidate, info]: kSettingInfo)
+		{
+			if (candidate == key)
+			{
+				return info;
+			}
+		}
+		// A key with no entry is not an error - it renders as a plain field with no help.
+		static const SettingInfo kNone{};
+		return kNone;
+	}
+
 } // namespace aether

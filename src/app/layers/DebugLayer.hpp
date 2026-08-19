@@ -65,6 +65,34 @@ namespace aether::editor
 		bool SaveCurrentScene(app::LayerContext& context);
 		void SaveAndReturnToLauncher(app::LayerContext& context);
 
+		// Undo or redo one step, including the selection remap both need. Shared by the
+		// Ctrl+Z/Y shortcut and the Edit menu so the two cannot drift apart.
+		void ApplyHistoryStep(app::LayerContext& context, bool redo);
+
+		// Actions that throw away the scene in memory. Each is routed through
+		// ConfirmDiscard so it cannot run over unsaved work without being asked.
+		enum class PendingNav
+		{
+			None,
+			NewScene3D,
+			NewScene2D,
+			OpenScene,
+			CloseEditor,
+		};
+		// True when the scene in memory differs from the file on disk. Covers tilemap
+		// cells too: those live in their own .tiles asset, so a scene can be "clean" by
+		// history and still have unsaved paint.
+		[[nodiscard]] bool HasUnsavedWork() const;
+		// Run nav now if there is nothing to lose, otherwise raise the prompt and run it
+		// once the user has answered.
+		void ConfirmDiscard(app::LayerContext& context, PendingNav nav);
+		void RunPendingNav(app::LayerContext& context);
+		void DrawUnsavedChangesPopup(app::LayerContext& context);
+		// Intercepts the OS close request so the prompt gets a chance to appear.
+		void PollCloseRequest(app::LayerContext& context);
+		PendingNav m_pendingNav = PendingNav::None;
+		bool m_openUnsavedPopup = false;
+
 		void ShowToast(std::string text, bool isError = false);
 		void DrawToasts();
 		std::string m_toastText;
@@ -99,6 +127,8 @@ namespace aether::editor
 		// the centre dock node (see the note at the panel draw loop).
 		bool m_focusViewportAfterLayout = false;
 
+		// Raised by the Edit menu; the palette also opens itself on Ctrl+P.
+		bool m_openCommandPalette = false;
 		char m_paletteQuery[128] = {};
 		int m_paletteSelected = 0;
 

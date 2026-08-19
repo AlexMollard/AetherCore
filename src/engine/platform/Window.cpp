@@ -263,6 +263,14 @@ namespace aether
 		}
 	}
 
+	void Window::CancelClose()
+	{
+		if (m_window != nullptr)
+		{
+			glfwSetWindowShouldClose(m_window, GLFW_FALSE);
+		}
+	}
+
 	void Window::PollEvents()
 	{
 		AE_PROFILE_ZONE();

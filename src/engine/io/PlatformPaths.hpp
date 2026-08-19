@@ -21,6 +21,12 @@ namespace aether::io
 
 		[[nodiscard]] static std::filesystem::path GetUserConfigDir();
 
+		// Where the user's own documents live, for content they author and keep - not the
+		// config dir, which is machine state. Used as the default parent for new projects,
+		// because the working directory is the engine build tree in a dev build and the
+		// (often unwritable) install directory from a shortcut. Empty if undeterminable.
+		[[nodiscard]] static std::filesystem::path GetUserDocumentsDir();
+
 		static constexpr std::string_view kAppFolderName = "AetherCore";
 	};
 } // namespace aether::io

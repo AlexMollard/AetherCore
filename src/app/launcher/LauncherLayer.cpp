@@ -343,9 +343,21 @@ namespace aether::app
 			LoadPreview(recent);
 		}
 
-		const std::filesystem::path cwd = project::NormalizePath(std::filesystem::current_path());
-		std::snprintf(m_windowState.openPath.data(), m_windowState.openPath.size(), "%s", project::DisplayPath(cwd).c_str());
-		std::snprintf(m_windowState.newPath.data(), m_windowState.newPath.size(), "%s", project::DisplayPath(cwd / "AetherProject").c_str());
+		// Location is the PARENT folder - the dialog appends the name. Seeding it with
+		// parent/name meant accepting every default created AetherProject/AetherProject.
+		std::vector<std::filesystem::path> recentRoots;
+		recentRoots.reserve(m_recentProjects.size());
+		for (const EditorProjectContext& recent: m_recentProjects)
+		{
+			recentRoots.push_back(recent.root);
+		}
+		std::filesystem::path parent = project::DefaultNewProjectParent(recentRoots, io::PlatformPaths::GetUserDocumentsDir());
+		if (parent.empty())
+		{
+			parent = project::NormalizePath(std::filesystem::current_path());
+		}
+		std::snprintf(m_windowState.openPath.data(), m_windowState.openPath.size(), "%s", project::DisplayPath(parent).c_str());
+		std::snprintf(m_windowState.newPath.data(), m_windowState.newPath.size(), "%s", project::DisplayPath(parent).c_str());
 		std::snprintf(m_windowState.newName.data(), m_windowState.newName.size(), "%s", "AetherProject");
 
 		m_controlBasePort = ResolveControlBasePort();

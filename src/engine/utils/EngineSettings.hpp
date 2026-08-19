@@ -1,8 +1,10 @@
 #pragma once
 
 #include <filesystem>
+#include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace aether
@@ -119,6 +121,50 @@ namespace aether
 		f("cursor.hotspotX", settings.cursor.hotspotX);
 		f("cursor.hotspotY", settings.cursor.hotspotY);
 		f("cursor.pixelArt", settings.cursor.pixelArt);
+	}
+
+	// What a settings key means, what it will accept, and whether it needs a restart -
+	// the part the reflection above cannot carry, because f() only sees a name and a
+	// reference. Kept immediately beside ForEachSettingField so a new setting's help text
+	// is added where its key is; a key with no entry still renders, just without help.
+	//
+	// The field comments on EngineSettings are the long form of these; this is the line
+	// that fits in a tooltip.
+	struct SettingInfo
+	{
+		std::string_view description;
+		// Inclusive bounds for a numeric setting. Equal values mean unbounded.
+		double minValue = 0.0;
+		double maxValue = 0.0;
+		// Closed value set for a string setting; empty means free text.
+		std::span<const std::string_view> choices;
+		// Read once at startup, so editing it does nothing until the next launch.
+		bool restartRequired = false;
+	};
+
+	[[nodiscard]] const SettingInfo& SettingMetadata(std::string_view key);
+
+	// Value a setting has in a default-constructed EngineSettings, for "reset this field".
+	// Returns false when the key does not exist or does not hold a T.
+	template<class T>
+	bool DefaultSettingValue(std::string_view key, T& out)
+	{
+		static const EngineSettings kDefaults{};
+		bool found = false;
+		ForEachSettingField(kDefaults,
+		        [&](std::string_view candidate, const auto& field)
+		        {
+			        if (candidate != key || found)
+			        {
+				        return;
+			        }
+			        if constexpr (std::is_same_v<std::decay_t<decltype(field)>, T>)
+			        {
+				        out = field;
+				        found = true;
+			        }
+		        });
+		return found;
 	}
 
 	// Keys that belong to the project, never to the machine. The startup scene is the one

@@ -160,7 +160,9 @@ namespace aether::editor
 			ImGui::EndDragDropTarget();
 		}
 		ImGui::SameLine();
-		if (ImGui::SmallButton(ICON_FA_XMARK))
+		const bool removeScript = ImGui::SmallButton(ICON_FA_XMARK);
+		ImGui::SetItemTooltip("Remove this script");
+		if (removeScript)
 		{
 			sc.scripts.erase(sc.scripts.begin() + static_cast<std::ptrdiff_t>(scriptIndex));
 			ImGui::PopID();

@@ -16,6 +16,7 @@
 
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
+#include "debug/UndoStack.hpp"
 #include "FontProcessor.hpp"
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"
@@ -30,6 +31,7 @@
 #include "io/FileUtil.hpp"
 #include "io/OverlayBackend.hpp"
 #include "project/ProjectCommon.hpp"
+#include "project/ProjectPaths.hpp"
 #include "rendering/ScreenshotService.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -235,9 +237,20 @@ namespace aether::editor
 
 		m_recentProjects = LoadRecentProjects(config);
 
-		const std::filesystem::path cwd = NormalizePath(std::filesystem::current_path());
-		std::snprintf(m_launcherState.openPath.data(), m_launcherState.openPath.size(), "%s", DisplayPath(cwd).c_str());
-		std::snprintf(m_launcherState.newPath.data(), m_launcherState.newPath.size(), "%s", DisplayPath(cwd / "AetherProject").c_str());
+		// Location is the PARENT folder - the dialog appends the name (see the launcher).
+		std::vector<std::filesystem::path> recentRoots;
+		recentRoots.reserve(m_recentProjects.size());
+		for (const app::EditorProjectContext& recent: m_recentProjects)
+		{
+			recentRoots.push_back(recent.root);
+		}
+		std::filesystem::path parent = DefaultNewProjectParent(recentRoots, io::PlatformPaths::GetUserDocumentsDir());
+		if (parent.empty())
+		{
+			parent = NormalizePath(std::filesystem::current_path());
+		}
+		std::snprintf(m_launcherState.openPath.data(), m_launcherState.openPath.size(), "%s", DisplayPath(parent).c_str());
+		std::snprintf(m_launcherState.newPath.data(), m_launcherState.newPath.size(), "%s", DisplayPath(parent).c_str());
 		std::snprintf(m_launcherState.newName.data(), m_launcherState.newName.size(), "%s", "AetherProject");
 
 		std::filesystem::path bootProject;
@@ -504,6 +517,8 @@ namespace aether::editor
 		{
 			scenes->SetCurrentScene(loaded ? sceneName : std::string{});
 		}
+		// Opening a project replaces the document; nothing from the previous one applies.
+		editor::ResetEditHistory(*m_services);
 	}
 
 	void EditorProjectManager::RefreshServices()

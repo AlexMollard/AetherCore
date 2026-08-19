@@ -394,7 +394,9 @@ namespace aether::editor
 			ImGui::TextUnformatted(layer.name.c_str());
 			ImGui::SameLine(ImGui::GetContentRegionMax().x - 24.0f);
 			ImGui::BeginDisabled(map->layers.size() <= 1);
-			if (ImGui::SmallButton(ICON_FA_XMARK))
+			const bool removeLayer = ImGui::SmallButton(ICON_FA_XMARK);
+			ImGui::SetItemTooltip("Delete this layer");
+			if (removeLayer)
 			{
 				map->layers.erase(map->layers.begin() + static_cast<std::ptrdiff_t>(i));
 				state->activeLayer = std::min(state->activeLayer, map->layers.size() - 1);

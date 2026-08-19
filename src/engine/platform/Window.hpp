@@ -61,6 +61,11 @@ namespace aether
 		[[nodiscard]] bool ShouldClose() const;
 		// Requests a clean application-loop exit on the next close check. Main thread only.
 		void RequestClose();
+		// Withdraws a close request the OS has already recorded (the title-bar X, Alt+F4).
+		// Events are pumped before the layers update and the loop only re-reads the flag on
+		// the next iteration, so a layer that clears it here holds the window open - which is
+		// what lets the editor ask about unsaved work instead of exiting under the question.
+		void CancelClose();
 		static void PollEvents();
 
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;

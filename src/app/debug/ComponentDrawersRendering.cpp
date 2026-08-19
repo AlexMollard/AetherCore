@@ -261,7 +261,9 @@ namespace aether::editor
 			if (assetDb != nullptr)
 			{
 				ImGui::SameLine();
-				if (ImGui::SmallButton(ICON_FA_FOLDER_OPEN))
+				const bool pickTexture = ImGui::SmallButton(ICON_FA_FOLDER_OPEN);
+				ImGui::SetItemTooltip("Pick a texture from the project");
+				if (pickTexture)
 				{
 					ImGui::OpenPopup("texpick");
 				}

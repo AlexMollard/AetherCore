@@ -129,4 +129,12 @@ namespace aether::editor
 		m_editSeq = 0;
 		m_savedSeq = 0;
 	}
+
+	void ResetEditHistory(ServiceContainer& services)
+	{
+		if (auto* undo = services.TryGet<UndoStack>())
+		{
+			undo->Clear();
+		}
+	}
 } // namespace aether::editor

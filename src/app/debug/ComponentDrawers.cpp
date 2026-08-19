@@ -396,7 +396,9 @@ namespace aether::editor
 				if (cam->gradientStops.size() > 2)
 				{
 					ImGui::SameLine();
-					if (ImGui::SmallButton(ICON_FA_XMARK))
+					const bool removeStop = ImGui::SmallButton(ICON_FA_XMARK);
+					ImGui::SetItemTooltip("Remove this gradient stop");
+					if (removeStop)
 					{
 						removeIdx = i;
 					}
@@ -465,7 +467,9 @@ namespace aether::editor
 		{
 			ImGui::SameLine();
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 22.0f);
-			if (ImGui::SmallButton(ICON_FA_XMARK "##removeHierarchy"))
+			const bool removeHierarchy = ImGui::SmallButton(ICON_FA_XMARK "##removeHierarchy");
+			ImGui::SetItemTooltip("Remove the Hierarchy component");
+			if (removeHierarchy)
 			{
 				world.Remove<HierarchyComponent>(entity);
 				return;
@@ -543,7 +547,9 @@ namespace aether::editor
 			        ImGui::SameLine();
 			        ImGui::TextUnformatted(name.c_str());
 			        ImGui::SameLine();
-			        if (ImGui::SmallButton(ICON_FA_XMARK))
+			const bool removeTag = ImGui::SmallButton(ICON_FA_XMARK);
+			ImGui::SetItemTooltip("Remove this tag");
+			if (removeTag)
 			        {
 				        pendingRemove = id;
 			        }
