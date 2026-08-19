@@ -28,7 +28,7 @@ namespace aether
 #endif
 	}
 
-	Window::Window(const char* title, int width, int height, const Mode mode)
+	Window::Window(const char* title, int width, int height, const Mode mode, const bool startHidden)
 	{
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
@@ -67,6 +67,10 @@ namespace aether
 			monitor = nullptr;
 		}
 
+			if (startHidden)
+		{
+			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+		}
 		m_window = glfwCreateWindow(width, height, title, monitor, nullptr);
 		if (m_window == nullptr)
 		{
@@ -127,6 +131,14 @@ namespace aether
 	bool Window::ShouldClose() const
 	{
 		return glfwWindowShouldClose(m_window) != 0;
+	}
+
+	void Window::Show()
+	{
+		if (m_window != nullptr)
+		{
+			glfwShowWindow(m_window);
+		}
 	}
 
 	void Window::RequestClose()

@@ -94,6 +94,15 @@ int main(int argc, char** argv)
 		// never enables it (and never needs GFSDK_Aftermath_Lib.x64.dll).
 		aether::AetherCore::Config engineConfig{}; // NOLINT(misc-const-correctness): mutated only in the editor build below.
 		engineConfig.enableValidation = enableValidation;
+		// Started BY the launcher: stay unmapped until the project is loaded, then appear as
+		// the launcher closes. Without this the editor window shows up empty the instant the
+		// process starts and sits on top of the launcher - which is still there, because it
+		// waits for the editor to report healthy - so opening a project flashes two windows.
+		//
+		// Only when the launcher started us. Run directly, a window that stays invisible for
+		// several seconds reads as "it didn't launch", and there is nothing watching to say
+		// otherwise.
+		engineConfig.startWindowHidden = !readyEvent.empty();
 #ifdef AETHERCORE_EDITOR_APP
 		engineConfig.enableGpuDiagnostics = true;
 #endif

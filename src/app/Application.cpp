@@ -377,6 +377,9 @@ namespace aether::app
 		m_layersAttached = true;
 
 		m_settingsService.ApplyAll();
+		// Reveal and report ready together: the launcher closes on this signal, so the editor
+		// appearing and the launcher going away are one transition rather than two.
+		m_engine.GetServiceContainer().Get<Window>().Show();
 		SignalEditorReady();
 
 		// hooks; the engine owns the render thread, scheduling, and recreate.

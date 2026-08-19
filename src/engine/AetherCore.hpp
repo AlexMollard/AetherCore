@@ -81,6 +81,9 @@ namespace aether
 			// Left Windowed unless a host opts in. The editor must never go borderless just
 			// because a project asked its game to.
 			Window::Mode windowMode = Window::Mode::Windowed;
+			// Start unmapped and reveal the window with AetherCore::ShowWindow() when the app
+			// is ready to be seen. The editor uses this for the launcher handoff.
+			bool startWindowHidden = false;
 
 			RuntimeProfile profile = RuntimeProfile::Full;
 		};

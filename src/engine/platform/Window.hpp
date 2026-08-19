@@ -29,8 +29,17 @@ namespace aether
 			Fullscreen, // exclusive; bypasses the compositor outright
 		};
 
-		Window(const char* title, int width, int height, Mode mode = Mode::Windowed);
+		// `startHidden` creates the window without mapping it, to be revealed later with
+		// Show(). Used for the launcher handoff: the editor takes several seconds to load a
+		// project, and a window that appears immediately spends that time as an empty
+		// rectangle sitting on top of the launcher, which is still up because it waits for the
+		// editor to report healthy. Two windows, one of them blank, then one vanishes.
+		// Staying hidden until ready turns that into a single swap.
+		Window(const char* title, int width, int height, Mode mode = Mode::Windowed, bool startHidden = false);
 		~Window();
+
+		// Map a window created with startHidden. Safe to call when already visible.
+		void Show();
 
 		Window(const Window&) = delete;
 		Window& operator=(const Window&) = delete;

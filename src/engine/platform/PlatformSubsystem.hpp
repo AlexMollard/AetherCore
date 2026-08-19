@@ -17,6 +17,9 @@ namespace aether
 			int width = 1280;
 			int height = 720;
 			Window::Mode mode = Window::Mode::Windowed;
+			// Create the window unmapped, to be revealed by Window::Show() once the app has
+			// something worth looking at. See the Window constructor.
+			bool startHidden = false;
 		};
 
 		void Init(const Config& config);
