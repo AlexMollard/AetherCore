@@ -60,4 +60,65 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "Runtime project settings: {}", compiled.empty() ? std::string{"none found; using the settings beside the executable"} : compiled.string());
 		return compiled;
 	}
+
+	bool ProjectScriptsCannotBeLoaded(const RuntimeScriptAssemblyInputs& inputs)
+	{
+		// Nobody named a project, so whatever is staged beside the runtime IS the game. This is
+		// the published-package case and the common one.
+		if (inputs.envProjectDir.empty())
+		{
+			return false;
+		}
+
+		std::error_code ec;
+		// A project with no scripts of its own has nothing to be missing.
+		if (!std::filesystem::exists(inputs.envProjectDir / "scripts" / "AetherGame.csproj", ec))
+		{
+			return false;
+		}
+
+		// Compare what is staged against what this project actually built.
+		//
+		// Deliberately NOT "is the staged assembly outside the project directory": the editor's
+		// correct path also stages outside it, into one directory shared by every project. And
+		// deliberately not the data/project.pak beside the executable either - a dev build tree
+		// that has ever been packed into has one of those, so it does not distinguish a package
+		// from a build tree at all.
+		//
+		// What does distinguish them is content. If this project has built its own assembly and
+		// the staged one is a different file, the staged one belongs to something else.
+		const std::filesystem::path builtRoot = inputs.envProjectDir / "Builds" / "Intermediate" / "managed" / "bin" / "AetherGame";
+		const std::filesystem::path staged = inputs.managedDir / "AetherGame.dll";
+		const auto stagedSize = std::filesystem::file_size(staged, ec);
+		if (ec)
+		{
+			// Nothing staged at all - the caller has bigger problems and will say so itself.
+			return false;
+		}
+
+		bool sawABuild = false;
+		if (std::filesystem::is_directory(builtRoot, ec))
+		{
+			for (const auto& entry: std::filesystem::directory_iterator(builtRoot, ec))
+			{
+				std::error_code inner;
+				const std::filesystem::path candidate = entry.path() / "AetherGame.dll";
+				const auto size = std::filesystem::file_size(candidate, inner);
+				if (inner)
+				{
+					continue;
+				}
+				sawABuild = true;
+				if (size == stagedSize)
+				{
+					return false; // the staged assembly is one this project built
+				}
+			}
+		}
+
+		// Either this project has never built its scripts, or none of its builds match what is
+		// staged. Both mean the same thing for the player: its code is not running.
+		(void) sawABuild;
+		return true;
+	}
 } // namespace aether::app

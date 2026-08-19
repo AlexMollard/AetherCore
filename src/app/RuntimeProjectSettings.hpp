@@ -23,4 +23,28 @@ namespace aether::app
 	// directory compiled into the binary would let the BUILD machine's startup scene
 	// replace the published one.
 	[[nodiscard]] std::filesystem::path ResolveRuntimeProjectSettings(const RuntimeProjectSettingsInputs& inputs);
+
+	// Which assembly the runtime is about to treat as "the game's scripts".
+	struct RuntimeScriptAssemblyInputs
+	{
+		std::filesystem::path envProjectDir; // AETHER_PROJECT_DIR; empty when unset
+		std::filesystem::path exeDir;        // where the runtime executable lives
+		std::filesystem::path managedDir;    // where AetherGame.dll is actually loaded from
+	};
+
+	// True when the runtime was pointed at a specific project but the assembly it loads
+	// cannot be that project's.
+	//
+	// The runtime stages one AetherGame.dll beside itself and loads it unconditionally,
+	// which is right for a published package - that package has exactly one project and the
+	// staged assembly is its own. It is wrong the moment someone points a DEV build tree at
+	// a project with --project: the settings and scenes come from that project while the
+	// scripts come from whatever the engine staged, so the game boots the correct world
+	// running none of its own code.
+	//
+	// That failure is completely silent and looks like a healthy start - correct window,
+	// correct scene, right entity count - which is exactly why it needs saying out loud. It
+	// cost a full debugging session: menus that answered neither mouse, keyboard nor
+	// gamepad, because the scripts that would have answered were never in the assembly.
+	[[nodiscard]] bool ProjectScriptsCannotBeLoaded(const RuntimeScriptAssemblyInputs& inputs);
 } // namespace aether::app

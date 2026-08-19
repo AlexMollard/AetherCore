@@ -8,6 +8,7 @@
 #include <thread>
 #include <utility>
 
+#include "RuntimeProjectSettings.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 #include "io/Process.hpp"
@@ -47,9 +48,26 @@ namespace aether::app::scripting
 		{
 			m_scriptsAssemblyPath = (m_managedDir / "AetherGame.dll").string();
 #ifndef AETHERCORE_EDITOR_APP
-			// A shipped game has exactly one project, so whatever is staged here is its own
-			// assembly and loading it now is correct.
-			LoadScripts();
+			// A PUBLISHED game has exactly one project, so whatever is staged here is its own
+			// assembly and loading it now is correct. A dev build tree pointed at a project
+			// with --project is the exception, and a silent one - see below.
+			const int loadedTypes = LoadScripts();
+
+			// Say so when the assembly cannot be the requested project's. Everything else about
+			// this start looks healthy - right window, right scene, right entity count, no
+			// error - and the only symptom is that nothing in the game responds to anything,
+			// because none of its code is present. Warn rather than refuse: the gauntlet's
+			// runtime smoke runs in exactly this shape on purpose, and a diagnostic must not
+			// be the thing that fails a build.
+			if (ProjectScriptsCannotBeLoaded({io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"),
+			            io::PlatformPaths::GetExecutableDir(), m_managedDir}))
+			{
+				AE_WARN(LogCategory::App,
+				        "Loaded {} script type(s) from '{}', which is NOT the project's own assembly - it is whatever this build tree staged. The "
+				        "project at '{}' has its own scripts and NONE of them are running, so the game will start and look correct while responding "
+				        "to nothing. Publish the project and run that package, or run it from the editor.",
+				        loadedTypes, m_scriptsAssemblyPath, io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"));
+			}
 #else
 			// The editor does not. m_managedDir is one directory shared by every project, and
 			// at this point no project is open - so the AetherGame.dll sitting there belongs
