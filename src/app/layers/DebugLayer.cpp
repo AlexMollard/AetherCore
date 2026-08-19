@@ -66,7 +66,6 @@ using namespace std::string_view_literals;
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
-#include "platform/CrashHandler.hpp"
 #include "platform/Window.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
@@ -322,36 +321,6 @@ namespace aether::editor
 			}
 
 			ImGui::DockBuilderFinish(id);
-		}
-
-#ifndef AETHER_LAUNCHER_EXE_NAME
-#	define AETHER_LAUNCHER_EXE_NAME "Launcher.exe"
-#endif
-#ifndef AETHER_LAUNCHER_EXE_PATH
-#	define AETHER_LAUNCHER_EXE_PATH ""
-#endif
-
-		bool SpawnStandaloneLauncher()
-		{
-#ifdef _WIN32
-			const std::filesystem::path launcherExe = io::PlatformPaths::ResolveToolExecutable("AETHER_LAUNCHER_EXE", AETHER_LAUNCHER_EXE_PATH, AETHER_LAUNCHER_EXE_NAME);
-			std::string command = "\"" + launcherExe.string() + "\"";
-			STARTUPINFOA startupInfo{};
-			startupInfo.cb = sizeof(startupInfo);
-			PROCESS_INFORMATION processInfo{};
-			const std::string workingDirectory = launcherExe.parent_path().string();
-			if (CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDirectory.empty() ? nullptr : workingDirectory.c_str(), &startupInfo, &processInfo) == 0)
-			{
-				AE_ERROR(LogCategory::App, "Editor failed to start Launcher (GetLastError={})", GetLastError());
-				return false;
-			}
-			CloseHandle(processInfo.hThread);
-			CloseHandle(processInfo.hProcess);
-			return true;
-#else
-			AE_ERROR(LogCategory::App, "Starting the standalone Launcher is only implemented on Windows.");
-			return false;
-#endif
 		}
 
 		void AppendObbEdges(std::vector<DebugVertex>& out, const glm::mat4& m, const glm::vec3& mn, const glm::vec3& mx, const glm::vec4& color)
@@ -1471,30 +1440,19 @@ namespace aether::editor
 		// block until the write lands on disk before handing off.
 		m_sceneWriter.Flush();
 
-		// Under a debugger, stay in this process. The hand-off spawns Launcher.exe and
-		// exits, so the process being stepped through dies and its replacement is a new,
-		// undebugged one - "switch project" costs you the session and a manual reattach.
+		// A running editor never starts a second process. It already contains the launcher:
+		// EditorProjectManager draws the same screen, and its OpenProject remounts the VFS,
+		// rebuilds scripts and loads the startup scene in place - the path the Project
+		// panel's Launcher button has always used.
 		//
-		// The editor already contains the launcher: EditorProjectManager draws the same
-		// screen and its OpenProject remounts the VFS, rebuilds scripts and loads the
-		// startup scene in place. That path is what the Project panel's Launcher button
-		// has always used, so this routes to it rather than adding a second one.
-		if (IsDebuggerAttached())
-		{
-			AE_INFO(LogCategory::App, "Debugger attached: opening the launcher in this process instead of spawning Launcher.exe, so the debug session survives.");
-			m_projects.OpenLauncher();
-			return;
-		}
-
-		if (!SpawnStandaloneLauncher())
-		{
-			ShowToast(ICON_FA_CIRCLE_INFO "  Could not open the project launcher.", true);
-			return;
-		}
-		if (auto* window = context.services.TryGet<Window>())
-		{
-			window->RequestClose();
-		}
+		// This used to spawn Launcher.exe and exit. That threw away a warm process (engine
+		// init, shader overlay, compiled scripts, window placement) to show a screen this
+		// one can already draw, and it silently ended any debug session attached to it -
+		// the replacement process is a new one, undebugged.
+		//
+		// Launcher.exe is still the entry point and still spawns editors; only the reverse
+		// direction is gone.
+		m_projects.OpenLauncher();
 	}
 
 	void DebugLayer::CaptureEditorWindowSize(app::LayerContext& context)
@@ -1688,16 +1646,11 @@ namespace aether::editor
 		{
 			if (ImGui::BeginMenu("File"))
 			{
-				// Two different things wear this name depending on the debugger, so the item
-				// says which one you are about to get rather than quietly doing the other.
-				const bool debugging = IsDebuggerAttached();
-				if (ImGui::MenuItem(debugging ? ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher" : ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher..."))
+				// No trailing "...": this no longer leaves for another process, it saves and
+				// shows the launcher over this editor. Esc there brings the project back.
+				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher"))
 				{
 					SaveAndReturnToLauncher(context);
-				}
-				if (debugging && ImGui::IsItemHovered())
-				{
-					ImGui::SetTooltip("A debugger is attached, so the launcher opens in this process.\nSwitching projects will not restart the editor or drop your debug session.");
 				}
 				ImGui::Separator();
 				// Everything that replaces the scene in memory goes through ConfirmDiscard.

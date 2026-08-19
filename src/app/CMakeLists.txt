@@ -124,7 +124,6 @@ target_compile_definitions(Editor PRIVATE
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
-    AETHER_LAUNCHER_EXE_NAME="$<TARGET_FILE_NAME:Launcher>"
     # So the publish verifier can reject a package that bundles the editor exe.
     AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
 )

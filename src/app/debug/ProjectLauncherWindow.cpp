@@ -549,6 +549,31 @@ namespace aether::app
 			const float openWidth = dp(112.0f);
 			const float actionGap = dp(8.0f);
 			const float buttonHeight = dp(38.0f);
+
+			// The editor draws this screen over a project that is still open, and the only
+			// ways off it were to open another project or quit - a one-way door out of the
+			// session you were working in. Sits in the action row rather than at leftMin,
+			// which the RECENT PROJECTS label already occupies. The standalone launcher has
+			// no project behind it and passes hasCurrentProject=false, so this appears only
+			// in the editor.
+			const bool canGoBack = model.hasCurrentProject && model.currentProject != nullptr && static_cast<bool>(actions.closeLauncher);
+			std::string backLabel;
+			float backWidth = 0.0f;
+			if (canGoBack)
+			{
+				backLabel = std::string(ICON_FA_ARROW_LEFT "  Back to ") + model.currentProject->name;
+				backWidth = ImGui::CalcTextSize(backLabel.c_str()).x + dp(28.0f);
+				ImGui::SetCursorScreenPos(ImVec2(leftMax.x - newWidth - actionGap - openWidth - actionGap - backWidth, leftMin.y - dp(8.0f)));
+				const bool goBack = OutlineButton(backLabel.c_str(), ImVec2(backWidth, buttonHeight));
+				ImGui::SetItemTooltip("Return to the open project without reloading it (Esc)");
+				// Esc is what people press to back out of a full-screen takeover, and there
+				// is no other dismissable thing on this screen to steal it.
+				if (goBack || (ImGui::IsKeyPressed(ImGuiKey_Escape) && state.dialog == ProjectLauncherDialog::None))
+				{
+					actions.closeLauncher();
+				}
+			}
+
 			ImGui::SetCursorScreenPos(ImVec2(leftMax.x - newWidth - actionGap - openWidth, leftMin.y - dp(8.0f)));
 			if (OutlineButton(ICON_FA_FOLDER_OPEN "  Open", ImVec2(openWidth, buttonHeight)))
 			{

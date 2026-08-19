@@ -17,10 +17,7 @@
 #include <optional>
 #include <string>
 #include <thread>
-#include <string_view>
 #include <vector>
-
-#include "utils/StringUtils.hpp"
 
 #include "io/PlatformPaths.hpp"
 #include "utils/LogRingBuffer.hpp"
@@ -1025,28 +1022,4 @@ namespace aether
 		g_context[std::string(key)] = std::string(value);
 	}
 
-	bool IsDebuggerAttached()
-	{
-#if defined(_WIN32)
-		return ::IsDebuggerPresent() != FALSE;
-#elif defined(__linux__)
-		// TracerPid is 0 unless something is ptrace-attached, which covers gdb, lldb and
-		// the IDEs that drive them.
-		std::ifstream status("/proc/self/status");
-		std::string line;
-		while (std::getline(status, line))
-		{
-			constexpr std::string_view kKey = "TracerPid:";
-			if (!line.starts_with(kKey))
-			{
-				continue;
-			}
-			const std::string_view value = utils::TrimView(std::string_view(line).substr(kKey.size()));
-			return !value.empty() && value != "0";
-		}
-		return false;
-#else
-		return false;
-#endif
-	}
 } // namespace aether
