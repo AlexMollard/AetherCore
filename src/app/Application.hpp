@@ -1,5 +1,7 @@
 #pragma once
 
+#include <climits>
+
 #include <memory>
 #include <type_traits>
 
@@ -82,6 +84,10 @@ namespace aether::app
 		[[nodiscard]] LayerContext MakeLayerContext(double dtSeconds, std::uint64_t frameIndex);
 
 		aether::AetherCore m_engine;
+		// Where to put the window before revealing it, kept from the engine config so the
+		// launcher handoff can land the editor where the launcher was. INT_MIN = leave it.
+		int m_windowCenterX = INT_MIN;
+		int m_windowCenterY = INT_MIN;
 		aether::SettingsService m_settingsService;
 		aether::coro::queued_executor m_coroExecutor;
 		LayerStack m_layers;

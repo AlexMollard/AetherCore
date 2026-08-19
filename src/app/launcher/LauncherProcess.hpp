@@ -1,5 +1,6 @@
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -33,8 +34,12 @@ namespace aether::app::launcher
 		std::uintptr_t m_processHandle = 0;
 		std::uintptr_t m_readyEventHandle = 0;
 
-		friend std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort);
+		friend std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort, int centerX, int centerY);
 	};
 
-	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort = 0);
+		// centerX/centerY are the desktop point the editor should open centred on - the
+	// launcher's own centre, so the editor appears where the launcher was rather than
+	// wherever the OS decides to put a new window (on a multi-monitor desktop, often a
+	// different screen). INT_MIN leaves the placement alone.
+	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort = 0, int centerX = INT_MIN, int centerY = INT_MIN);
 } // namespace aether::app::launcher

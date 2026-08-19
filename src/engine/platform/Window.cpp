@@ -1,5 +1,7 @@
 #include "platform/Window.hpp"
 
+#include <algorithm>
+
 #include <cmath>
 
 #include "utils/AetherExceptions.hpp"
@@ -67,7 +69,7 @@ namespace aether
 			monitor = nullptr;
 		}
 
-			if (startHidden)
+		if (startHidden)
 		{
 			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 		}
@@ -131,6 +133,118 @@ namespace aether
 	bool Window::ShouldClose() const
 	{
 		return glfwWindowShouldClose(m_window) != 0;
+	}
+
+	void Window::GetDesktopCenter(int& outX, int& outY) const
+	{
+		outX = 0;
+		outY = 0;
+		if (m_window == nullptr)
+		{
+			return;
+		}
+		int posX = 0;
+		int posY = 0;
+		int width = 0;
+		int height = 0;
+		glfwGetWindowPos(m_window, &posX, &posY);
+		glfwGetWindowSize(m_window, &width, &height);
+		outX = posX + width / 2;
+		outY = posY + height / 2;
+	}
+
+	void Window::CenterOnDesktopPoint(const int x, const int y)
+	{
+		// Only a windowed window has a position to choose. Borderless and fullscreen are
+		// pinned to a monitor by definition, and moving them is what disqualifies the
+		// independent-flip path they exist for.
+		if (m_window == nullptr || m_mode != Mode::Windowed)
+		{
+			return;
+		}
+
+		int width = 0;
+		int height = 0;
+		glfwGetWindowSize(m_window, &width, &height);
+		if (width <= 0 || height <= 0)
+		{
+			return;
+		}
+
+		// Everything below works in OUTER size. glfwGetWindowSize reports the client area, so
+		// sizing against it silently ignores the title bar and borders - the window then looks
+		// like it fits while its bottom edge, and the status bar with it, sits off-screen.
+		int frameLeft = 0;
+		int frameTop = 0;
+		int frameRight = 0;
+		int frameBottom = 0;
+		glfwGetWindowFrameSize(m_window, &frameLeft, &frameTop, &frameRight, &frameBottom);
+		const int chromeW = frameLeft + frameRight;
+		const int chromeH = frameTop + frameBottom;
+
+		// The work area of the monitor holding the requested point, so the window lands on the
+		// same screen the caller was on and never under the taskbar.
+		int monitorCount = 0;
+		GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+		int areaX = 0;
+		int areaY = 0;
+		int areaW = 0;
+		int areaH = 0;
+		bool found = false;
+		for (int i = 0; i < monitorCount && !found; ++i)
+		{
+			int mx = 0;
+			int my = 0;
+			int mw = 0;
+			int mh = 0;
+			glfwGetMonitorWorkarea(monitors[i], &mx, &my, &mw, &mh);
+			if (x >= mx && x < mx + mw && y >= my && y < my + mh)
+			{
+				areaX = mx;
+				areaY = my;
+				areaW = mw;
+				areaH = mh;
+				found = true;
+			}
+		}
+		if (!found)
+		{
+			if (GLFWmonitor* primary = glfwGetPrimaryMonitor(); primary != nullptr)
+			{
+				glfwGetMonitorWorkarea(primary, &areaX, &areaY, &areaW, &areaH);
+			}
+			else
+			{
+				return;
+			}
+		}
+
+		// Shrink to fit before placing. A configured size larger than the usable work area -
+		// easy to hit on a scaled display, where a 2560x1440 monitor at 150% leaves about
+		// 1706x920 - puts the bottom and right of the window off-screen, taking the status bar
+		// and any docked panel with it. Nothing can be centred in a space it does not fit in,
+		// so the placement below would just pin it to a corner and the overflow would stay.
+		if (width + chromeW > areaW || height + chromeH > areaH)
+		{
+			const int fittedWidth = std::min(width, areaW - chromeW);
+			const int fittedHeight = std::min(height, areaH - chromeH);
+			if (fittedWidth > 0 && fittedHeight > 0)
+			{
+				glfwSetWindowSize(m_window, fittedWidth, fittedHeight);
+				AE_INFO(LogCategory::Window, "Window {}x{} (+{}x{} chrome) exceeds the {}x{} work area; fitted to {}x{}.", width, height, chromeW, chromeH, areaW, areaH,
+				        fittedWidth, fittedHeight);
+				width = fittedWidth;
+				height = fittedHeight;
+			}
+		}
+
+		// glfwSetWindowPos places the CLIENT area, so offset by the frame to keep the whole
+		// window - title bar included - inside the work area.
+		const int outerW = width + chromeW;
+		const int outerH = height + chromeH;
+		const int outerX = std::clamp(x - outerW / 2, areaX, std::max(areaX, areaX + areaW - outerW));
+		const int outerY = std::clamp(y - outerH / 2, areaY, std::max(areaY, areaY + areaH - outerH));
+		glfwSetWindowPos(m_window, outerX + frameLeft, outerY + frameTop);
 	}
 
 	void Window::Show()

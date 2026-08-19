@@ -103,6 +103,23 @@ int main(int argc, char** argv)
 		// several seconds reads as "it didn't launch", and there is nothing watching to say
 		// otherwise.
 		engineConfig.startWindowHidden = !readyEvent.empty();
+		// "x,y" from the launcher: the point to centre on before the window is revealed.
+		if (const std::string center = aether::app::ParseOptionArg(argc, argv, "--window-center"); !center.empty())
+		{
+			if (const std::size_t comma = center.find(','); comma != std::string::npos)
+			{
+				try
+				{
+					engineConfig.windowCenterX = std::stoi(center.substr(0, comma));
+					engineConfig.windowCenterY = std::stoi(center.substr(comma + 1));
+				}
+				catch (const std::exception&)
+				{
+					// A malformed value is not worth refusing to start over; the window simply
+					// lands wherever the OS puts it, which is the old behaviour.
+				}
+			}
+		}
 #ifdef AETHERCORE_EDITOR_APP
 		engineConfig.enableGpuDiagnostics = true;
 #endif

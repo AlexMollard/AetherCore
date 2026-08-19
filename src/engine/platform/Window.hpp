@@ -41,6 +41,19 @@ namespace aether
 		// Map a window created with startHidden. Safe to call when already visible.
 		void Show();
 
+		// Move the window so its centre lands on a desktop point, clamped to stay inside the
+		// work area of whichever monitor contains that point.
+		//
+		// The launcher hands its own centre to the editor so the editor opens where the
+		// launcher was. Position rather than size: the editor keeps the resolution the user
+		// configured, it just stops appearing somewhere unrelated - which on a multi-monitor
+		// desktop could be a different screen entirely, since a windowed GLFW window is placed
+		// wherever the OS feels like.
+		void CenterOnDesktopPoint(int x, int y);
+
+		// Desktop coordinates of this window's centre. The launcher hands this to the editor.
+		void GetDesktopCenter(int& outX, int& outY) const;
+
 		Window(const Window&) = delete;
 		Window& operator=(const Window&) = delete;
 

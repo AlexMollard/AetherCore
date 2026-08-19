@@ -1,5 +1,7 @@
 #include "launcher/LauncherProcess.hpp"
 
+#include <climits>
+
 #include <string>
 #include <utility>
 
@@ -81,7 +83,7 @@ namespace aether::app::launcher
 	}
 
 #ifdef _WIN32
-	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort)
+	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort, int centerX, int centerY)
 	{
 		const std::filesystem::path editorExe = io::PlatformPaths::ResolveToolExecutable("AETHER_EDITOR_EXE", AETHER_EDITOR_EXE_PATH, AETHER_EDITOR_EXE_NAME);
 		const std::filesystem::path dir = editorExe.parent_path();
@@ -94,6 +96,10 @@ namespace aether::app::launcher
 		}
 
 		std::string command = "\"" + editorExe.string() + "\" --project \"" + projectRoot.string() + "\" --ready-event \"" + readyEventName + "\"";
+		if (centerX != INT_MIN && centerY != INT_MIN)
+		{
+			command += " --window-center \"" + std::to_string(centerX) + "," + std::to_string(centerY) + "\"";
+		}
 
 		if (controlPort > 0)
 		{
@@ -123,7 +129,7 @@ namespace aether::app::launcher
 		return std::nullopt;
 	}
 #else
-	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort)
+	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort, int centerX, int centerY)
 	{
 		(void) projectRoot;
 		(void) controlPort;

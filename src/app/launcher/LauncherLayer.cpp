@@ -1,5 +1,7 @@
 #include "launcher/LauncherLayer.hpp"
 
+#include <climits>
+
 #include <algorithm>
 #include <chrono>
 #include <cctype>
@@ -593,7 +595,15 @@ namespace aether::app
 		}
 		StopControlServer();
 		const int controlPort = m_controlBasePort;
-		if (auto editor = launcher::SpawnEditor(root, controlPort))
+		// Open the editor where the launcher is, so the handoff lands in the same place on
+		// screen instead of jumping - possibly to another monitor entirely.
+		int centerX = INT_MIN;
+		int centerY = INT_MIN;
+		if (auto* window = m_services != nullptr ? m_services->TryGet<Window>() : nullptr)
+		{
+			window->GetDesktopCenter(centerX, centerY);
+		}
+		if (auto editor = launcher::SpawnEditor(root, controlPort, centerX, centerY))
 		{
 			m_pendingEditor = std::move(*editor);
 			m_editorStartupSeconds = 0.0;

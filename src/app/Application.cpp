@@ -167,7 +167,8 @@ namespace aether::app
 	}
 
 	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded)
-	      : m_engine(BuildConfigFromSettings(engineConfig, loaded.values), loaded.values), m_settingsService(loaded.values, loaded.base, m_engine.GetServiceContainer())
+	      : m_engine(BuildConfigFromSettings(engineConfig, loaded.values), loaded.values), m_windowCenterX(engineConfig.windowCenterX), m_windowCenterY(engineConfig.windowCenterY),
+	        m_settingsService(loaded.values, loaded.base, m_engine.GetServiceContainer())
 	{
 #ifdef AETHERCORE_WITH_IMGUI
 		// (never inside AetherCore, which has zero knowledge of any UI toolkit) and
@@ -379,7 +380,15 @@ namespace aether::app
 		m_settingsService.ApplyAll();
 		// Reveal and report ready together: the launcher closes on this signal, so the editor
 		// appearing and the launcher going away are one transition rather than two.
-		m_engine.GetServiceContainer().Get<Window>().Show();
+		{
+			// Position first, then reveal, so the window never appears in one place and jumps.
+			Window& window = m_engine.GetServiceContainer().Get<Window>();
+			if (m_windowCenterX != INT_MIN && m_windowCenterY != INT_MIN)
+			{
+				window.CenterOnDesktopPoint(m_windowCenterX, m_windowCenterY);
+			}
+			window.Show();
+		}
 		SignalEditorReady();
 
 		// hooks; the engine owns the render thread, scheduling, and recreate.

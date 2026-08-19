@@ -1,5 +1,7 @@
 #pragma once
 
+#include <climits>
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -84,6 +86,10 @@ namespace aether
 			// Start unmapped and reveal the window with AetherCore::ShowWindow() when the app
 			// is ready to be seen. The editor uses this for the launcher handoff.
 			bool startWindowHidden = false;
+			// Desktop point to centre the window on before revealing it, so a handoff from
+			// another window lands where that window was. INT_MIN means "leave it to the OS".
+			int windowCenterX = INT_MIN;
+			int windowCenterY = INT_MIN;
 
 			RuntimeProfile profile = RuntimeProfile::Full;
 		};
