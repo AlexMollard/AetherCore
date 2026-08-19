@@ -1359,7 +1359,11 @@ namespace aether::editor
 			ImGui::AlignTextToFramePadding();
 			ImGui::Text(ICON_FA_CUBE "  %s", recovered.sceneName.c_str());
 			ImGui::SameLine();
-			ImGui::TextColored(chrome::kMuted, "%s ahead of the saved scene", utils::DurationLabel(recovered.secondsAheadOfScene).c_str());
+			// When the copy was WRITTEN, not the gap between it and the last save. That gap
+			// is how long you had gone without saving, and reading it as "3 weeks ahead of
+			// the saved scene" says three weeks of work are at stake when none may be.
+			const auto age = std::chrono::duration_cast<std::chrono::seconds>(std::filesystem::file_time_type::clock::now() - recovered.savedAt).count();
+			ImGui::TextColored(chrome::kMuted, "autosaved %s ago", utils::DurationLabel(age).c_str());
 
 			ImGui::SameLine(ImGui::GetContentRegionMax().x - 190.0f);
 			if (chrome::PrimaryButton("Restore", ImVec2(90.0f, 0.0f)))

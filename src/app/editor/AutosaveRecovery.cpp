@@ -7,8 +7,14 @@
 #include "editor/AutosaveService.hpp"
 
 #include <algorithm>
+#include <numeric>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <system_error>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 #include "editor/EditorProjectContext.hpp"
 #include "io/FileUtil.hpp"
@@ -26,7 +32,93 @@ namespace aether::editor
 		{
 			return project.scenesDir / (sceneName + std::string(kRecoverySuffix));
 		}
+
+		// Two documents describing the same scene are not the same text. A capture walks the
+		// ECS, so its entity order is not the file's; an entity with no `node` in the file is
+		// given one on load and it comes back on the next write; and a whole number reads as
+		// `86` from a hand-edited file and `86.0` from a capture.
+		//
+		// Parse -> normalise -> re-serialise removes all three: parsing turns both number
+		// forms into the same float, identity ids are cleared, and entity order is made
+		// deterministic. parentIndex is POSITIONAL, so the sort has to carry it through the
+		// permutation or the same parenting would serialise differently in the two documents.
+		//
+		// Returns empty when the text does not parse, which callers treat as "cannot tell" -
+		// the safe answer for a recovery copy is to offer it.
+		std::string CanonicalSceneText(const std::string_view tomlText)
+		{
+			std::optional<app::scene::SceneDescription> parsed = app::scene::ParseToml(tomlText);
+			if (!parsed)
+			{
+				return {};
+			}
+
+			const std::size_t count = parsed->entities.size();
+			std::vector<std::size_t> order(count);
+			std::iota(order.begin(), order.end(), 0);
+			// Name plus position separates everything that is actually distinct (fifteen
+			// coins sit at fifteen places). Entities that still tie are interchangeable, so
+			// which one wins does not change the text.
+			const auto sortKey = [&parsed](const std::size_t index)
+			{
+				const app::scene::EntityRecord& record = parsed->entities[index];
+				return std::tuple(std::string_view(record.name), record.position.x, record.position.y, record.position.z);
+			};
+			std::ranges::stable_sort(order, [&sortKey](const std::size_t a, const std::size_t b) { return sortKey(a) < sortKey(b); });
+
+			std::vector<std::size_t> newIndexOf(count);
+			for (std::size_t slot = 0; slot < count; ++slot)
+			{
+				newIndexOf[order[slot]] = slot;
+			}
+
+			std::vector<app::scene::EntityRecord> normalised;
+			normalised.reserve(count);
+			for (const std::size_t oldIndex: order)
+			{
+				app::scene::EntityRecord record = parsed->entities[oldIndex];
+				// Identity, not content: a scene loaded from a file that predates node ids
+				// gains them, which says nothing about whether the work differs.
+				record.nodeId = 0;
+				record.parentNodeId = 0;
+				record.guid = 0;
+				record.entityId = 0;
+				if (record.parentIndex >= 0 && static_cast<std::size_t>(record.parentIndex) < count)
+				{
+					record.parentIndex = static_cast<int>(newIndexOf[static_cast<std::size_t>(record.parentIndex)]);
+				}
+				normalised.push_back(std::move(record));
+			}
+			parsed->entities = std::move(normalised);
+
+			std::ranges::stable_sort(parsed->prefabInstances,
+			        [](const app::scene::PrefabInstanceRecord& a, const app::scene::PrefabInstanceRecord& b)
+			        { return std::tuple(std::string_view(a.name), std::string_view(a.prefabPath)) < std::tuple(std::string_view(b.name), std::string_view(b.prefabPath)); });
+
+			return app::scene::WriteToml(*parsed, true);
+		}
 	} // namespace
+
+	bool AutosaveService::HoldsNothingNew(const std::filesystem::path& recoveryFile, const std::filesystem::path& sceneFile)
+	{
+		const auto recoveryText = io::file_util::ReadText(recoveryFile);
+		const auto sceneText = io::file_util::ReadText(sceneFile);
+		if (!recoveryText || !sceneText)
+		{
+			return false; // cannot compare - offer it rather than drop it
+		}
+		const std::string canonicalRecovery = CanonicalSceneText(*recoveryText);
+		if (canonicalRecovery.empty())
+		{
+			return false;
+		}
+		const std::string canonicalScene = CanonicalSceneText(*sceneText);
+		if (canonicalScene.empty())
+		{
+			return false;
+		}
+		return canonicalRecovery == canonicalScene;
+	}
 
 	std::filesystem::path AutosaveService::RecoveryDirectory(const app::EditorProjectContext& project)
 	{
@@ -78,7 +170,8 @@ namespace aether::editor
 			// than the scene means the user saved after it was written, so it holds nothing
 			// the file does not already have - offering it would invite overwriting good
 			// work with stale work.
-			const auto sceneTime = std::filesystem::last_write_time(SceneFileFor(project, rec.sceneName), timeEc);
+			const std::filesystem::path sceneFile = SceneFileFor(project, rec.sceneName);
+			const auto sceneTime = std::filesystem::last_write_time(sceneFile, timeEc);
 			if (!timeEc)
 			{
 				if (rec.savedAt <= sceneTime)
@@ -86,6 +179,16 @@ namespace aether::editor
 					continue;
 				}
 				rec.secondsAheadOfScene = std::chrono::duration_cast<std::chrono::seconds>(rec.savedAt - sceneTime).count();
+			}
+
+			// Newer is not the same as different. Autosave writes whenever the edit history
+			// is dirty, and that stays dirty after an undo has put the scene back to what is
+			// on disk - so a copy can be newer and hold nothing at all. Offering those is how
+			// a recovery prompt teaches people to dismiss it without reading, which is the
+			// one thing it cannot afford.
+			if (HoldsNothingNew(entry.path(), sceneFile))
+			{
+				continue;
 			}
 			found.push_back(std::move(rec));
 		}

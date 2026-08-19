@@ -58,6 +58,12 @@ namespace aether::editor
 		// Drop the recovery copy for a scene - used after a real save makes it redundant.
 		static void Discard(const app::EditorProjectContext& project, const std::string& sceneName);
 
+		// Whether a recovery copy describes the same scene as the file it shadows, once the
+		// differences that carry no work are normalised away (entity order, generated node
+		// ids and guids, int-vs-float spelling of whole numbers). False when either file
+		// cannot be read or parsed, so a copy is never dropped on a maybe.
+		[[nodiscard]] static bool HoldsNothingNew(const std::filesystem::path& recoveryFile, const std::filesystem::path& sceneFile);
+
 		[[nodiscard]] static std::filesystem::path RecoveryDirectory(const app::EditorProjectContext& project);
 
 	private:
