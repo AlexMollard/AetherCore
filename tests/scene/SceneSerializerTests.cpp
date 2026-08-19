@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
+
 #include <chrono>
 #include <filesystem>
 
@@ -676,7 +678,7 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     REQUIRE(scene.has_value());
     CHECK(scene->kind == SceneKind::Scene2D);
     CHECK(scene->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
-    REQUIRE(scene->entities.size() == 1);
+    REQUIRE(scene->entities.size() == 2);
     REQUIRE(scene->entities[0].camera.has_value());
     CHECK(scene->entities[0].mainCamera);
     CHECK(scene->entities[0].camera->projection == CameraProjection::Orthographic);
@@ -687,10 +689,42 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
 
     World world = MakeWorld();
     const auto created = ApplyScene(*scene, world, ApplySceneDeps{});
-    REQUIRE(created.size() == 1);
+    REQUIRE(created.size() == 2);
     CHECK(world.GetSceneKind() == SceneKind::Scene2D);
     CHECK(world.GetSceneFeatures() == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
     CHECK(world.Get<CameraComponent>(created[0]).projection == CameraProjection::Orthographic);
+}
+
+// The template's whole job: a project made from it must DO something the first time Play is
+// pressed. It used to be a lone camera with the starter script attached to nothing, so a new
+// project opened on an empty grid and Play did visibly nothing.
+TEST_CASE("Blank 2D template ships a player that runs without being wired up") {
+    const auto text = io::file_util::ReadText(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / "default2d.scene.toml");
+    REQUIRE(text.has_value());
+    const auto scene = ParseToml(*text);
+    REQUIRE(scene.has_value());
+
+    const auto player = std::ranges::find_if(scene->entities, [](const auto& e) { return e.name == "Player"; });
+    REQUIRE(player != scene->entities.end());
+
+    // Attached, not merely present in the project: an unattached script is what made the old
+    // template look broken.
+    REQUIRE(player->scripts.size() == 1);
+    CHECK(player->scripts[0].type == "Player");
+
+    // Visible without any art. A sprite is sized as pixelSize / pixelsPerUnit, so leaving
+    // pixelSize at zero - the usual "let the texture decide" - yields a sprite that exists,
+    // moves, and is zero pixels across. That is worse than no sprite, because nothing about
+    // it looks wrong in the outliner.
+    REQUIRE(player->sprite.has_value());
+    CHECK(player->sprite->texturePath.empty()); // empty path samples white so the tint shows
+    CHECK(player->sprite->pixelSize.x > 0.0f);
+    CHECK(player->sprite->pixelSize.y > 0.0f);
+    CHECK(player->sprite->pixelsPerUnit > 0.0f);
+    CHECK(player->sprite->tint.a > 0.0f);
+
+    // Roughly one world unit against a camera ten units tall - big enough to spot immediately.
+    CHECK(player->sprite->pixelSize.x / player->sprite->pixelsPerUnit == doctest::Approx(1.0f));
 }
 #endif
 

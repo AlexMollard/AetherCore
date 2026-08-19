@@ -77,9 +77,21 @@ namespace aether::editor
 		[[nodiscard]] virtual std::string_view GetName() const = 0;
 
 		// Whether the panel's window is open on a fresh layout, before any persisted
+		// Off unless a panel says otherwise.
+		//
+		// This was on, which meant a panel joined the default layout simply by existing. With
+		// 23 of them that is not a layout, it is everything at once: a first run opened with a
+		// UI Canvas editor over the main area, a Lighting panel, and a raw texture list of
+		// RenderGraph.Transient.Aliased[n] filling the bottom half - while the Console, where
+		// script errors and Log.Info go, was one of the few that had opted out.
+		//
+		// Opting in is also the safer direction. A new panel added later is a specialist tool
+		// far more often than it is something every project wants on screen, and the cost of
+		// guessing wrong is now a panel someone has to go and find rather than one shipped
+		// into everybody's first impression.
 		[[nodiscard]] virtual bool DefaultVisible() const
 		{
-			return true;
+			return false;
 		}
 
 		[[nodiscard]] bool IsVisible() const

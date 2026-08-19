@@ -19,6 +19,7 @@ namespace aether::editor
 			return "Project";
 		}
 
+		// Part of the default layout: the project and its folders.
 		[[nodiscard]] bool DefaultVisible() const override
 		{
 			return true;

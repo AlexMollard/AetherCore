@@ -1,4 +1,13 @@
 # AetherCore scene - blank 2D project template
+#
+# Ships with one thing you can actually run: a Player square with scripts/Player.cs already
+# attached, so a brand-new project answers WASD the first time you press Play.
+#
+# It used to contain only the camera, with Player.cs sitting in the project attached to
+# nothing. That meant a new project opened on an empty grid, Play did visibly nothing, and
+# the starter script explained how to attach itself in a comment nobody had a reason to open.
+# It also made the launcher thumbnail a black rectangle, because the preview is a faithful
+# photograph of an empty scene.
 [scene]
 features = [ 'sprites', 'tilemaps', 'physics_2d' ]
 kind = '2d'
@@ -31,3 +40,38 @@ scale = [ 1.0, 1.0, 1.0 ]
         [[entities.camera.gradient_stops]]
         colour = [ 0.02, 0.02, 0.03 ]
         position = 1.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Player'
+node = 4416320991174266881
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    # No texture on purpose: an empty path samples plain white, so the tint below is the
+    # colour you see. A new project therefore needs no art to show something on screen.
+    #
+    # pixel_size MUST be non-zero. The quad is sized as pixel_size / pixels_per_unit, so the
+    # usual "leave it at zero and let the texture decide" cannot work without a texture - it
+    # produces a sprite that exists, moves, and is zero pixels across. 16/16 = one world unit,
+    # against a camera ten units tall.
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 0
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = false
+    pixel_size = [ 16.0, 16.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 0
+    texture = ''
+    tint = [ 0.95, 0.55, 0.15, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [[entities.scripts]]
+    type = 'Player'

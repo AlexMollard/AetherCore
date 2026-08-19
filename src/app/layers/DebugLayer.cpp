@@ -1,6 +1,7 @@
 #include "DebugLayer.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <filesystem>
@@ -8,8 +9,14 @@
 #include <fstream>
 #include <functional>
 #include <string_view>
+#include <system_error>
 #include <unordered_set>
 #include <vector>
+
+#ifdef _WIN32
+#	include <Windows.h>
+#	include <shellapi.h>
+#endif
 
 #ifdef _WIN32
 #	ifndef WIN32_LEAN_AND_MEAN
@@ -82,6 +89,50 @@ namespace aether::editor
 {
 	namespace
 	{
+		// Ask the OS to open a file or folder with whatever is associated with it. Same shape
+		// as the one in BuildPanel; kept local rather than shared because two call sites is
+		// not yet a reason for a header.
+		void OpenPathInShell(const std::filesystem::path& path)
+		{
+#ifdef _WIN32
+			if (path.empty())
+			{
+				return;
+			}
+			ShellExecuteW(nullptr, L"open", path.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+			static_cast<void>(path);
+#endif
+		}
+
+		// The docs folder as seen from a running editor. It runs out of a build tree during
+		// development and out of an install directory otherwise, so walk up from the executable
+		// the way the asset mounts do. An empty result greys the menu item out rather than
+		// opening nothing - a menu entry that silently does nothing is worse than one that is
+		// visibly unavailable.
+		std::filesystem::path FindDocsFile(const std::filesystem::path& leaf)
+		{
+			const std::filesystem::path exeDir = io::PlatformPaths::GetExecutableDir();
+			const std::array<std::filesystem::path, 6> roots = {
+			        exeDir / "docs",
+			        exeDir / ".." / "docs",
+			        exeDir / ".." / ".." / "docs",
+			        exeDir / ".." / ".." / ".." / "docs",
+			        exeDir / ".." / ".." / ".." / ".." / "docs",
+			        std::filesystem::current_path() / "docs",
+			};
+			std::error_code ec;
+			for (const std::filesystem::path& root: roots)
+			{
+				const std::filesystem::path candidate = leaf.empty() ? root : root / leaf;
+				if (std::filesystem::exists(candidate, ec))
+				{
+					return candidate.lexically_normal();
+				}
+			}
+			return {};
+		}
+
 		// Built-in dock layouts for common workflows. Each one rebuilds the dockspace
 		// via DockBuilder (like Reset Layout) and drives which panels are shown, so a
 		// user can jump between "2D authoring", "look-dev", "scripting", etc. in a click.
@@ -1371,6 +1422,15 @@ namespace aether::editor
 						m_hierarchyPanel->RequestSaveAsPopup();
 					}
 				}
+				ImGui::Separator();
+				// Publishing is the end of the pipeline and had no entry point here at all: the
+				// Build panel is hidden by default and lives inside a Window submenu, so shipping
+				// a game meant already knowing where the button was. This is where anyone would
+				// look for it first.
+				if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Publish..."))
+				{
+					ShowPanel("Build");
+				}
 				ImGui::EndMenu();
 			}
 			if (ImGui::BeginMenu("Window"))
@@ -1567,6 +1627,26 @@ namespace aether::editor
 
 			{
 				using namespace chrome;
+			// Somewhere to go when you are stuck. The engine ships a getting-started walkthrough
+			// and until now nothing in the editor mentioned it existed.
+			if (ImGui::BeginMenu("Help"))
+			{
+				const std::filesystem::path guide = FindDocsFile("getting-started.md");
+				if (ImGui::MenuItem(ICON_FA_BOOK "  Getting Started", nullptr, false, !guide.empty()))
+				{
+					OpenPathInShell(guide);
+				}
+				if (guide.empty() && ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("docs/getting-started.md was not found next to the editor.");
+				}
+				const std::filesystem::path docs = FindDocsFile({});
+				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open Documentation Folder", nullptr, false, !docs.empty()))
+				{
+					OpenPathInShell(docs);
+				}
+				ImGui::EndMenu();
+			}
 				const auto* playState = context.TryGet<app::PlayState>();
 				const bool compiling = playState != nullptr && playState->IsCompiling();
 				const char* chip = compiling ? ICON_FA_HAMMER "  BUILD" : "AETHERCORE";
@@ -1683,5 +1763,21 @@ namespace aether::editor
 		}
 
 		PersistSettings(context);
+	}
+
+	void DebugLayer::ShowPanel(const std::string_view name)
+	{
+		for (auto& panel: m_panels)
+		{
+			if (panel->GetName() == name)
+			{
+				if (bool* visible = panel->VisiblePtr(); visible != nullptr)
+				{
+					*visible = true;
+				}
+				ImGui::SetWindowFocus(std::string(name).c_str());
+				return;
+			}
+		}
 	}
 } // namespace aether::editor

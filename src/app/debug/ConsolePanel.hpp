@@ -16,9 +16,10 @@ namespace aether::editor
 			return "Console";
 		}
 
+		// Part of the default layout: where script errors and Log.Info land.
 		[[nodiscard]] bool DefaultVisible() const override
 		{
-			return false;
+			return true;
 		}
 
 		void OnImGui(app::LayerContext& context) override;

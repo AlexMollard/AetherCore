@@ -28,6 +28,12 @@ namespace aether::editor
 			return "Scene Outliner";
 		}
 
+		// Part of the default layout: what is in the scene.
+		[[nodiscard]] bool DefaultVisible() const override
+		{
+			return true;
+		}
+
 		void OnImGui(app::LayerContext& context) override;
 		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
 		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;

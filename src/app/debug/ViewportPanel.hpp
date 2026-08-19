@@ -26,6 +26,12 @@ namespace aether::editor
 			return "Viewport";
 		}
 
+		// Part of the default layout: the scene itself.
+		[[nodiscard]] bool DefaultVisible() const override
+		{
+			return true;
+		}
+
 		void OnAttach(app::LayerContext& context) override;
 		void OnDetach(app::LayerContext& context) override;
 		void OnUpdate(app::LayerContext& context) override;

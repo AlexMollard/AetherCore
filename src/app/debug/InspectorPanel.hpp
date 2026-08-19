@@ -20,6 +20,12 @@ namespace aether::editor
 			return "Inspector";
 		}
 
+		// Part of the default layout: what the selected thing is.
+		[[nodiscard]] bool DefaultVisible() const override
+		{
+			return true;
+		}
+
 		void OnImGui(app::LayerContext& context) override;
 
 	private:

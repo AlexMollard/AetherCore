@@ -70,6 +70,33 @@ namespace aether::app
 			return path.empty() ? std::string{} : path.lexically_normal().string();
 		}
 
+		// Trim a path from the LEFT, keeping the end.
+		//
+		// Clipping it from the right - which is what a clip rect does - removes exactly the
+		// part that identifies the project. Four cards reading "C:\Users\alex.mollard\AppData\
+		// Local" tell you nothing about which is which, while "...\scratchpad\SeedCheck2D"
+		// tells you everything. The front of a path is the part every project shares.
+		[[nodiscard]] std::string ElideLeft(const std::string& text, const float maxWidth, const float fontSize)
+		{
+			if (text.empty() || maxWidth <= 0.0f || MeasureSized(fontSize, text.c_str()).x <= maxWidth)
+			{
+				return text;
+			}
+
+			constexpr std::string_view kLead = "...";
+			// Longest suffix that still fits behind the ellipsis. Linear from the end is fine:
+			// paths are short and this runs once per visible card.
+			for (std::size_t drop = 1; drop < text.size(); ++drop)
+			{
+				std::string candidate = std::string(kLead) + text.substr(drop);
+				if (MeasureSized(fontSize, candidate.c_str()).x <= maxWidth)
+				{
+					return candidate;
+				}
+			}
+			return std::string(kLead);
+		}
+
 		template<std::size_t N>
 		void CopyToBuffer(std::array<char, N>& buffer, const std::filesystem::path& path)
 		{
@@ -149,7 +176,8 @@ namespace aether::app
 
 			const float textX = start.x + textInset;
 			TextSized(drawList, dp(16.0f), ImVec2(textX, thumbMax.y + dp(10.0f)), missing ? kMuted : kText, project.name.c_str());
-			const std::string path = DisplayPath(project.root);
+			const float pathWidth = (end.x - textInset) - textX;
+			const std::string path = ElideLeft(DisplayPath(project.root), pathWidth, dp(13.0f));
 			ImGui::PushClipRect(ImVec2(textX, thumbMax.y + dp(32.0f)), Sub(end, ImVec2(textInset, dp(8.0f))), true);
 			TextSized(drawList, dp(13.0f), ImVec2(textX, thumbMax.y + dp(33.0f)), missing ? kFaint : kMuted, path.c_str());
 			ImGui::PopClipRect();

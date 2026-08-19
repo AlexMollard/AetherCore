@@ -41,6 +41,11 @@ namespace aether::editor
 		void OnRenderTargetsInvalidated(app::LayerContext& context) override;
 
 	private:
+		// Make a panel visible and bring it forward, by the name it reports from GetName().
+		// Used by menu items that are about doing a thing rather than toggling a window -
+		// File > Publish should open the Build panel, not ask you to find it.
+		void ShowPanel(std::string_view name);
+
 		// drawn from the second frame on, so it never resizes the docked viewport
 		void DrawStatusBar(app::LayerContext& context);
 		// Ctrl+P fuzzy command palette (panel toggles, play, layout).
