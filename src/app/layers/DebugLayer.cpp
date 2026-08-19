@@ -66,6 +66,7 @@ using namespace std::string_view_literals;
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
+#include "platform/CrashHandler.hpp"
 #include "platform/Window.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
@@ -1469,6 +1470,22 @@ namespace aether::editor
 		// The save is asynchronous; the launcher reads the project's scene files, so
 		// block until the write lands on disk before handing off.
 		m_sceneWriter.Flush();
+
+		// Under a debugger, stay in this process. The hand-off spawns Launcher.exe and
+		// exits, so the process being stepped through dies and its replacement is a new,
+		// undebugged one - "switch project" costs you the session and a manual reattach.
+		//
+		// The editor already contains the launcher: EditorProjectManager draws the same
+		// screen and its OpenProject remounts the VFS, rebuilds scripts and loads the
+		// startup scene in place. That path is what the Project panel's Launcher button
+		// has always used, so this routes to it rather than adding a second one.
+		if (IsDebuggerAttached())
+		{
+			AE_INFO(LogCategory::App, "Debugger attached: opening the launcher in this process instead of spawning Launcher.exe, so the debug session survives.");
+			m_projects.OpenLauncher();
+			return;
+		}
+
 		if (!SpawnStandaloneLauncher())
 		{
 			ShowToast(ICON_FA_CIRCLE_INFO "  Could not open the project launcher.", true);
@@ -1671,9 +1688,16 @@ namespace aether::editor
 		{
 			if (ImGui::BeginMenu("File"))
 			{
-				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher..."))
+				// Two different things wear this name depending on the debugger, so the item
+				// says which one you are about to get rather than quietly doing the other.
+				const bool debugging = IsDebuggerAttached();
+				if (ImGui::MenuItem(debugging ? ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher" : ICON_FA_FOLDER_OPEN "  Save & Return to Project Launcher..."))
 				{
 					SaveAndReturnToLauncher(context);
+				}
+				if (debugging && ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("A debugger is attached, so the launcher opens in this process.\nSwitching projects will not restart the editor or drop your debug session.");
 				}
 				ImGui::Separator();
 				// Everything that replaces the scene in memory goes through ConfirmDiscard.
