@@ -152,6 +152,19 @@ public static class Ui
     public static bool HasFocus => Native.aether_ui_focused_entity() != 0;
 
     /// <summary>Make this selectable the focused one.</summary>
+    /// <summary>
+    /// Make an element navigable - focusable by mouse, arrow keys, d-pad and stick, and
+    /// activatable by click, Enter/Space or the gamepad's A button.
+    /// </summary>
+    /// <remarks>
+    /// Scene-authored widgets already carry this. Call it for UI you build at runtime, or for
+    /// elements assembled by hand out of images and text, so they join the same navigation
+    /// every other screen uses instead of tracking a highlight index themselves.
+    /// <para><see cref="SetFocus"/> only works on an element that is selectable, so call this
+    /// first.</para>
+    /// </remarks>
+    public static void SetSelectable(Entity e, bool selectable = true) => Native.aether_ui_set_selectable(e.Id, selectable ? 1 : 0);
+
     public static void SetFocus(Entity e) => Native.aether_ui_set_focus(e.Id);
 
     /// <summary>

@@ -181,6 +181,16 @@ namespace aether
 		Right = 1,
 	};
 
+	// A stick pushed far enough to count as a direction, for anything that wants a stick to
+	// behave like a d-pad (menus, choice lists). See Input::IsGamepadStickFlicked.
+	enum class GamepadDirection : int
+	{
+		Up = 0,
+		Down = 1,
+		Left = 2,
+		Right = 3,
+	};
+
 	class Input
 	{
 	public:
@@ -449,6 +459,33 @@ namespace aether
 			return m_triggerDeadzone;
 		}
 
+		// A stick pushed past the threshold THIS frame, having been inside it last frame -
+		// a stick behaving like a d-pad.
+		//
+		// Menus and choice lists need one step per push, and a stick has no press edge of
+		// its own: it is a position, so "is it pushed up" is true every frame it is held and
+		// a menu written against it scrolls at one entry per frame. Latched here rather than
+		// by each caller because every caller needs the identical thing, and the per-caller
+		// version has to invent its own idea of "this frame" - which is how it ends up
+		// firing twice when something reads it twice.
+		//
+		// Release uses a lower threshold than engagement, so a stick resting near the line
+		// does not chatter between the two. Both are measured against the DEADZONED magnitude
+		// - the same value GetGamepadStick returns - rather than the raw axis, so raising the
+		// deadzone raises the physical lean a flick needs, which is what a player adjusting it
+		// for a worn stick means.
+		[[nodiscard]] bool IsGamepadStickFlicked(GamepadStick stick, GamepadDirection dir, int pad = kAnyGamepad) const;
+
+		// Gamepad-button counterpart of ConsumeKey, and needed for exactly the same reason:
+		// the button that activates a menu item must not also reach the game. Without it,
+		// the A that picks "Resume" is read a moment later by the player controller and the
+		// character jumps as the menu closes.
+		//
+		// Cleared at the top of every frame's poll, so a consumption lasts one frame and
+		// nothing has to remember to give the button back.
+		void ConsumeGamepadButton(GamepadButton button, int pad = kAnyGamepad);
+		[[nodiscard]] bool IsGamepadButtonConsumed(GamepadButton button, int pad = kAnyGamepad) const;
+
 		// Synthetic gamepad injection, same contract as synthetic keys and mouse: an
 		// injected pad presents as connected, injected buttons OR into the real state, and
 		// an injected axis overrides the real one until cleared. This is what lets a
@@ -503,12 +540,23 @@ namespace aether
 			std::array<bool, kMaxGamepadButtons> synthetic{};
 			std::array<float, kMaxGamepadAxes> syntheticAxes{0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
 			std::array<bool, kMaxGamepadAxes> hasSyntheticAxis{};
+			std::array<bool, kMaxGamepadButtons> consumed{};
+			// [stick][direction] - whether the stick was past the threshold last frame, and
+			// whether it crossed on this one. Derived during the poll rather than on read, so
+			// reading a flick twice in one frame gives the same answer both times.
+			std::array<std::array<bool, 4>, 2> stickHeld{};
+			std::array<std::array<bool, 4>, 2> stickFlicked{};
 			std::string name;
 			bool connected = false;
 			bool syntheticConnected = false;
 		};
 
 		void UpdateGamepads();
+
+		// Shared by the real poll and by synthetic injection: a windowless test never calls
+		// Update(), so without this the flick latch would only ever exist on a real frame and
+		// nothing about it would be testable.
+		static void DeriveStickFlicks(GamepadState& pad, float deadzone);
 
 		// Resolves kAnyGamepad and range-checks the slot in one place, so every public
 		// accessor is a null check rather than its own copy of the bounds logic.

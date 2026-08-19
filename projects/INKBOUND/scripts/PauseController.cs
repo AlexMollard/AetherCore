@@ -37,6 +37,13 @@ public sealed class PauseController : EntityScript
         _paused = false;
         Time.Resume();
 
+        // Join the engine's UI navigation. These are hand-built image buttons rather than
+        // authored widgets, so without this they are mouse-only: the d-pad cannot reach them
+        // and - worse - A resumed the game AND was read by the player controller on the same
+        // frame, so the character jumped every time the menu closed.
+        Ui.SetSelectable(_resumeBtn);
+        Ui.SetSelectable(_menuBtn);
+
         // Ink theming: the title glyphs get the glitch-ink material (like the main wordmark) and the
         // overlay + buttons get the brushed pixel-ink material. Applied once; params drive the anim.
         ApplyMaterial(_title, "ui_glitch_text", Cyan);
@@ -85,11 +92,13 @@ public sealed class PauseController : EntityScript
         if (_menuBtn.IsValid) { Ui.SetImageColor(_menuBtn, Ui.IsHovered(_menuBtn) ? MenuHover : ButtonIdle); }
 
         // Mouse click OR keyboard (Enter = resume, M = quit to menu) - both paths work.
-        if ((_resumeBtn.IsValid && Ui.WasClicked(_resumeBtn)) || Controls.AdvancePressed)
+        // WasActivated covers all three: a click, Enter/Space, and the pad's A button. The
+        // navigation system consumes whichever one it used, so none of them reach the game.
+        if (_resumeBtn.IsValid && Ui.WasActivated(_resumeBtn))
         {
             Resume();
         }
-        else if ((_menuBtn.IsValid && Ui.WasClicked(_menuBtn)) || Controls.ReturnToMenuPressed)
+        else if ((_menuBtn.IsValid && Ui.WasActivated(_menuBtn)) || Controls.ReturnToMenuPressed)
         {
             // Quit to the title. Unfreeze, then tear down this HUD (it is
             // DontDestroyOnLoad, so it would otherwise follow us into the menu and
@@ -106,6 +115,8 @@ public sealed class PauseController : EntityScript
     {
         _paused = true;
         Time.Pause();
+        // Land the highlight on Resume so the menu is usable without a mouse the moment it opens.
+        Ui.SetFocus(_resumeBtn);
         ShowOverlay(true);
         Log.Info("[INKBOUND] Paused.");
     }

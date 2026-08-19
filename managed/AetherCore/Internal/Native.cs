@@ -237,6 +237,9 @@ internal static unsafe partial class Native
     internal static partial void aether_ui_set_focus(uint id);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_selectable(uint id, int selectable);
+
+    [LibraryImport(Lib)]
     internal static partial void aether_ui_clear_focus();
 
     [LibraryImport(Lib)]
@@ -424,6 +427,9 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     internal static partial int aether_input_gamepad_name(int pad, byte* buf, int bufLen);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_input_gamepad_stick_flicked(int stick, int dir, int pad);
 
     [LibraryImport(Lib)]
     internal static partial void aether_input_gamepad_set_deadzones(float stick, float trigger);

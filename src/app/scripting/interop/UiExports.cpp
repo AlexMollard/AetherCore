@@ -252,6 +252,38 @@ AE_SCRIPT_API std::uint32_t aether_ui_focused_entity()
 	return focused;
 }
 
+// Join (or leave) the navigation system at runtime.
+//
+// Focus, spatial navigation, click-and-key activation and controller support all key off
+// UISelectable, which until now only the scene could author - so a menu built at runtime, or
+// one assembled from plain images because it wanted its own look, could not be navigated at
+// all and had to hand-roll an index and its own idea of "confirm". This is the one call that
+// was missing to make that a solved problem everywhere rather than per game.
+//
+// Idempotent in both directions. An element with no UIRect simply never appears in the
+// navigation view, so this is safe to call before layout has run.
+AE_SCRIPT_API void aether_ui_set_selectable(std::uint32_t id, std::int32_t selectable)
+{
+	auto& world = ActiveWorld();
+	const aether::Entity e{id};
+	// A UIRect is what makes something a laid-out UI element, and the navigation view is keyed
+	// on having one - so requiring it here is both the meaningful precondition and the guard
+	// against being handed an entity that is not UI at all.
+	if (world.TryGet<aether::ui::UIRect>(e) == nullptr)
+	{
+		return;
+	}
+	const bool has = world.TryGet<aether::ui::UISelectable>(e) != nullptr;
+	if (selectable != 0 && !has)
+	{
+		world.Emplace<aether::ui::UISelectable>(e);
+	}
+	else if (selectable == 0 && has)
+	{
+		world.Remove<aether::ui::UISelectable>(e);
+	}
+}
+
 AE_SCRIPT_API void aether_ui_set_focus(std::uint32_t id)
 {
 	auto& world = ActiveWorld();

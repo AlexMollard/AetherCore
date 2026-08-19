@@ -123,6 +123,18 @@ namespace aether::ui
 
 		if (cands.empty())
 		{
+			// Nothing navigable this frame - but the flags written on the LAST frame that had
+			// candidates are still sitting on the components, and `activated` is a one-frame
+			// event, so leaving it set makes it fire again whenever the screen comes back.
+			//
+			// This bites precisely the screens that close themselves: a Resume button hides
+			// the pause menu as it is activated, which empties the candidate list on the very
+			// next frame - so the clear below never ran, and re-opening the menu read a stale
+			// activation and resumed instantly, forever.
+			//
+			// `focused` is deliberately left alone. It is persistent state by design, and a
+			// screen that is briefly hidden should come back with the player's place intact.
+			world.View<UISelectable>().each([](entt::entity, UISelectable& sel) { sel.activated = false; });
 			return;
 		}
 
@@ -199,20 +211,33 @@ namespace aether::ui
 			// A focused horizontal slider captures Left/Right for value adjustment
 			// (UiWidgetSystem handles them); vertical nav still works.
 			const bool focusedIsSlider = focused.IsValid() && world.TryGet<UISlider>(focused) != nullptr;
+			// Gamepad reads as a third source of the same four directions, so every screen
+			// that already navigates by arrow keys navigates by controller with no change to
+			// it. The d-pad gives real press edges; the stick is latched by Input into the
+			// same shape, so a held stick steps one element rather than one per frame.
+			const auto padDir = [&input](GamepadButton button, GamepadDirection dir)
+			{
+				return input.IsGamepadButtonPressed(button) || input.IsGamepadStickFlicked(GamepadStick::Left, dir);
+			};
+			const bool wantDown = input.IsKeyPressed(Key::Down) || padDir(GamepadButton::DpadDown, GamepadDirection::Down);
+			const bool wantUp = input.IsKeyPressed(Key::Up) || padDir(GamepadButton::DpadUp, GamepadDirection::Up);
+			const bool wantRight = input.IsKeyPressed(Key::Right) || padDir(GamepadButton::DpadRight, GamepadDirection::Right);
+			const bool wantLeft = input.IsKeyPressed(Key::Left) || padDir(GamepadButton::DpadLeft, GamepadDirection::Left);
+
 			glm::vec2 dir{0.0f, 0.0f};
-			if (input.IsKeyPressed(Key::Down))
+			if (wantDown)
 			{
 				dir = {0.0f, 1.0f};
 			}
-			else if (input.IsKeyPressed(Key::Up))
+			else if (wantUp)
 			{
 				dir = {0.0f, -1.0f};
 			}
-			else if (input.IsKeyPressed(Key::Right) && !focusedIsSlider)
+			else if (wantRight && !focusedIsSlider)
 			{
 				dir = {1.0f, 0.0f};
 			}
-			else if (input.IsKeyPressed(Key::Left) && !focusedIsSlider)
+			else if (wantLeft && !focusedIsSlider)
 			{
 				dir = {-1.0f, 0.0f};
 			}
@@ -288,6 +313,15 @@ namespace aether::ui
 			// runs, so no script has to know a menu exists.
 			input.ConsumeKey(Key::Enter);
 			input.ConsumeKey(Key::Space);
+		}
+		// The controller has exactly the same problem, and worse odds of avoiding it: A is
+		// both the universal menu-confirm and the universal jump, so without consuming it the
+		// A that resumes a game is guaranteed to also make the character jump on the frame
+		// the menu closes.
+		if (!captured && input.IsGamepadButtonPressed(GamepadButton::A) && focused.IsValid())
+		{
+			toActivate = focused;
+			input.ConsumeGamepadButton(GamepadButton::A);
 		}
 		if (input.IsMouseButtonPressed(MouseButton::Left) && hovered.IsValid())
 		{

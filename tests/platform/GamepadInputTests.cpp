@@ -207,3 +207,103 @@ TEST_CASE("Clearing synthetic pads returns everything to disconnected")
 	CHECK_FALSE(input.IsGamepadButtonDown(GamepadButton::Start));
 	CHECK(input.GetGamepadTrigger(GamepadTrigger::Right) == doctest::Approx(0.0f));
 }
+
+// ── Stick-as-direction ──────────────────────────────────────────────────────
+// The property a menu depends on. A stick is a position, not an event, so "is it pushed
+// down" is true every frame it is held - a choice list written against that scrolls to the
+// bottom in a few frames. Each windowless SetSyntheticGamepadAxis call stands in for one
+// frame's poll.
+
+TEST_CASE("Holding the stick flicks once, not once per frame")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f); // raw +1 is down
+	CHECK(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+
+	// Still held, next frame - the menu must not step again.
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f);
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+}
+
+TEST_CASE("Returning the stick to centre re-arms the flick")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f);
+	REQUIRE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 0.0f);
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f);
+	CHECK(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+}
+
+// Why engagement and release use different thresholds. With one threshold, a stick held
+// near the line crosses it repeatedly as it jitters and the menu walks on its own.
+TEST_CASE("A stick easing back but staying past the release point does not re-flick")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f);
+	REQUIRE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+
+	// Both thresholds are compared against the DEADZONED magnitude, not the raw axis - the
+	// raw value is not what any caller sees. Raw 0.56 lands at (0.56 - 0.24) / 0.76 = 0.42
+	// once rescaled: below the 0.5 engage point, above the 0.35 release point, so still held.
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 0.56f);
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f);
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+}
+
+TEST_CASE("Pushing the stick one way does not flick the others")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftX, 1.0f);
+
+	CHECK(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Right));
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Left));
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Up));
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Left, GamepadDirection::Down));
+	// The other stick is untouched.
+	CHECK_FALSE(input.IsGamepadStickFlicked(GamepadStick::Right, GamepadDirection::Right));
+}
+
+// ── Button consumption ──────────────────────────────────────────────────────
+// The gamepad half of ConsumeKey. Without it the A that confirms a menu item also reaches
+// the game and the character jumps as the menu closes.
+
+TEST_CASE("A consumed button is invisible to everything downstream")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	REQUIRE(input.IsGamepadButtonPressed(GamepadButton::A));
+
+	input.ConsumeGamepadButton(GamepadButton::A);
+
+	CHECK(input.IsGamepadButtonConsumed(GamepadButton::A));
+	CHECK_FALSE(input.IsGamepadButtonPressed(GamepadButton::A));
+	CHECK_FALSE(input.IsGamepadButtonDown(GamepadButton::A));
+	// Consuming one button says nothing about any other.
+	CHECK_FALSE(input.IsGamepadButtonConsumed(GamepadButton::B));
+}
+
+TEST_CASE("Consumption lasts one frame and not longer")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	input.ConsumeGamepadButton(GamepadButton::A);
+	REQUIRE_FALSE(input.IsGamepadButtonDown(GamepadButton::A));
+
+	// Next frame, still held: the consumption expired with the frame that made it.
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	CHECK(input.IsGamepadButtonDown(GamepadButton::A));
+	CHECK_FALSE(input.IsGamepadButtonConsumed(GamepadButton::A));
+}

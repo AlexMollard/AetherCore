@@ -271,3 +271,174 @@ TEST_CASE("A key that activates nothing is left for the game")
 	CHECK_FALSE(input.IsKeyConsumed(Key::Space));
 	CHECK(input.IsKeyPressed(Key::Space)); // still the jump button
 }
+
+// ── Gamepad navigation ──────────────────────────────────────────────────────
+// The point of putting controller support here rather than in a game: these screens are the
+// same ones the arrow keys already drove, and none of them had to change.
+
+namespace
+{
+	// A pad in slot 0 with nothing pressed. Windowless, so the synthetic setters stand in
+	// for the poll - see Input::SetSyntheticGamepadConnected.
+	void ConnectPad(Input& input)
+	{
+		input.SetSyntheticGamepadConnected(0, true);
+	}
+} // namespace
+
+TEST_CASE("The d-pad moves focus like the arrow keys")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity bottom = MakeSelectable(w, {0, 100, 100, 20});
+	Sel(w, top).focused = true;
+
+	input.SetSyntheticGamepadButton(0, GamepadButton::DpadDown, true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, bottom).focused);
+	CHECK_FALSE(Sel(w, top).focused);
+}
+
+TEST_CASE("A direction on the pad enters a screen that had no focus")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity bottom = MakeSelectable(w, {0, 100, 100, 20});
+
+	input.SetSyntheticGamepadButton(0, GamepadButton::DpadDown, true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	// Lights the first element rather than stepping off one nobody chose.
+	CHECK(Sel(w, top).focused);
+	CHECK_FALSE(Sel(w, bottom).focused);
+}
+
+TEST_CASE("Holding the stick steps one element, not one per frame")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	const Entity a = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity b = MakeSelectable(w, {0, 100, 100, 20});
+	const Entity c = MakeSelectable(w, {0, 200, 100, 20});
+	Sel(w, a).focused = true;
+
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f); // hold down
+	ui::UiNavigationSystem::Update(w, input);
+	REQUIRE(Sel(w, b).focused);
+
+	// Second frame, stick still held: focus must stay put or a three-item menu is
+	// unusable on a controller.
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 1.0f);
+	ui::UiNavigationSystem::Update(w, input);
+	CHECK(Sel(w, b).focused);
+	CHECK_FALSE(Sel(w, c).focused);
+}
+
+TEST_CASE("A activates the focused element")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	const Entity only = MakeSelectable(w, {0, 0, 100, 20});
+	Sel(w, only).focused = true;
+
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, only).activated);
+}
+
+// The reason the nav system consumes: A is both "confirm" on every menu and "jump" in every
+// platformer, so an unconsumed A resumes the game AND jumps on the same frame.
+TEST_CASE("The A that activates a menu item never reaches the game")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	const Entity only = MakeSelectable(w, {0, 0, 100, 20});
+	Sel(w, only).focused = true;
+
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	REQUIRE(input.IsGamepadButtonPressed(GamepadButton::A));
+
+	ui::UiNavigationSystem::Update(w, input);
+
+	REQUIRE(Sel(w, only).activated);
+	CHECK_FALSE(input.IsGamepadButtonPressed(GamepadButton::A));
+	CHECK_FALSE(input.IsGamepadButtonDown(GamepadButton::A));
+}
+
+// With nothing focused there is no menu to confirm, so A belongs to the game and must
+// survive - otherwise merely having a canvas on screen would eat the jump button.
+TEST_CASE("A is left alone when nothing is focused")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	MakeSelectable(w, {0, 0, 100, 20});
+
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(input.IsGamepadButtonPressed(GamepadButton::A));
+}
+
+TEST_CASE("A field that owns the keyboard also owns the pad")
+{
+	World w;
+	Input input;
+	ConnectPad(input);
+
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity bottom = MakeSelectable(w, {0, 100, 100, 20});
+	Sel(w, top).focused = true;
+	w.Emplace<ui::UIKeyboardCapture>(top);
+
+	input.SetSyntheticGamepadButton(0, GamepadButton::DpadDown, true);
+	input.SetSyntheticGamepadButton(0, GamepadButton::A, true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, top).focused);
+	CHECK_FALSE(Sel(w, bottom).focused);
+	CHECK_FALSE(Sel(w, top).activated);
+}
+
+// A screen that closes itself on activation - a Resume button hiding the pause menu - empties
+// the candidate list on the very next frame. The clear that ends a one-frame activation used
+// to live after an early return, so `activated` stayed true until the screen was shown again,
+// and then fired immediately. The menu resumed the instant it was opened, every time after
+// the first.
+TEST_CASE("An activation does not survive the frame its screen disappears")
+{
+	World w;
+	Input input;
+
+	const Entity button = MakeSelectable(w, {0, 0, 100, 20});
+	Sel(w, button).focused = true;
+
+	input.SetSyntheticKey(static_cast<int>(Key::Enter), true);
+	ui::UiNavigationSystem::Update(w, input);
+	REQUIRE(Sel(w, button).activated);
+
+	// The screen goes away: with no UIRect the element is no longer a navigation candidate,
+	// which is the same position a hidden screen leaves it in.
+	w.Remove<ui::UIRect>(button);
+	input.ClearSyntheticKeys();
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK_FALSE(Sel(w, button).activated);
+	// Focus is persistent state and should survive, so the screen comes back where it was.
+	CHECK(Sel(w, button).focused);
+}

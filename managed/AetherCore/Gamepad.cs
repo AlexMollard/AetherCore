@@ -46,6 +46,9 @@ public enum GamepadAxis
 
 public enum GamepadStick { Left = 0, Right = 1 }
 
+/// <summary>A direction a stick can be pushed. See <see cref="Gamepad.IsFlicked"/>.</summary>
+public enum GamepadDirection { Up = 0, Down = 1, Left = 2, Right = 3 }
+
 public enum GamepadTrigger { Left = 0, Right = 1 }
 
 /// <summary>
@@ -146,6 +149,23 @@ public static class Gamepad
     /// </summary>
     public static float GetAxisRaw(GamepadAxis axis, int pad = Any)
         => Native.aether_input_gamepad_axis_raw((int)axis, pad);
+
+    /// <summary>
+    /// Whether the stick was pushed into <paramref name="direction"/> this frame, having been
+    /// centred on the previous one - the stick behaving like a d-pad.
+    /// <para>
+    /// Use this, never <c>Stick(...).Y &gt; 0.5f</c>, to step through a list: a stick is a
+    /// position rather than an event, so a raw comparison is true on every frame it is held
+    /// and the list runs to its end in a fraction of a second. Engaging and releasing use
+    /// different thresholds, so a stick resting near the edge cannot chatter.
+    /// </para>
+    /// <para>
+    /// Anything built from <c>UISelectable</c> already gets this for free - the UI navigation
+    /// system reads the stick itself. This is for lists you build by hand.
+    /// </para>
+    /// </summary>
+    public static bool IsFlicked(GamepadStick stick, GamepadDirection direction, int pad = Any)
+        => Native.aether_input_gamepad_stick_flicked((int)stick, (int)direction, pad) != 0;
 
     /// <summary>
     /// Override the deadzones applied by <see cref="Stick"/> and <see cref="Trigger"/>.

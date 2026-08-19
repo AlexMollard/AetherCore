@@ -20,9 +20,6 @@ using AetherCore;
 /// </summary>
 public static class Controls
 {
-    /// <summary>How far the stick must lean before it counts as a menu press.</summary>
-    private const float NavThreshold = 0.5f;
-
     /// <summary>How far the stick must lean before it counts as "holding down".</summary>
     private const float DownThreshold = 0.5f;
 
@@ -104,55 +101,20 @@ public static class Controls
 
     // ── Menu navigation ─────────────────────────────────────────────────────────
 
+    // Only the dialogue choice list needs these. Anything built on UISelectable - every menu
+    // screen in the game - is navigated by the engine's UI system directly and needs nothing
+    // here; the dialogue choices are created at runtime and carry no selectable, so they are
+    // steered by hand.
+
     /// <summary>Move the highlight up one entry.</summary>
     public static bool MenuUpPressed =>
         Input.IsKeyPressed(Key.Up) || Input.IsKeyPressed(Key.W)
         || Gamepad.IsPressed(GamepadButton.DpadUp)
-        || StickNavUp;
+        || Gamepad.IsFlicked(GamepadStick.Left, GamepadDirection.Up);
 
     /// <summary>Move the highlight down one entry.</summary>
     public static bool MenuDownPressed =>
         Input.IsKeyPressed(Key.Down) || Input.IsKeyPressed(Key.S)
         || Gamepad.IsPressed(GamepadButton.DpadDown)
-        || StickNavDown;
-
-    // A stick has no press edge of its own - it is just a position, so a held stick would
-    // scroll a menu at one entry per frame. These latch it: the edge fires once when the
-    // stick crosses the threshold and not again until it comes back inside.
-    //
-    // Recomputed at most once per frame and cached, so reading MenuUpPressed twice in the
-    // same frame gives the same answer both times, the way a real key press does. Frame
-    // count is used rather than elapsed time because it keeps advancing while the game is
-    // paused, which is exactly when a menu is on screen.
-    private static long _navFrame = -1;
-    private static bool _navUpEdge;
-    private static bool _navDownEdge;
-    private static bool _navUpLatched;
-    private static bool _navDownLatched;
-
-    private static bool StickNavUp
-    {
-        get { RefreshStickNav(); return _navUpEdge; }
-    }
-
-    private static bool StickNavDown
-    {
-        get { RefreshStickNav(); return _navDownEdge; }
-    }
-
-    private static void RefreshStickNav()
-    {
-        long frame = Time.FrameCount;
-        if (frame == _navFrame) { return; }
-        _navFrame = frame;
-
-        float y = Gamepad.LeftStick.Y;
-        bool up = y > NavThreshold;
-        bool down = y < -NavThreshold;
-
-        _navUpEdge = up && !_navUpLatched;
-        _navDownEdge = down && !_navDownLatched;
-        _navUpLatched = up;
-        _navDownLatched = down;
-    }
+        || Gamepad.IsFlicked(GamepadStick.Left, GamepadDirection.Down);
 }

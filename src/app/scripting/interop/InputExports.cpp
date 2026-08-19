@@ -151,6 +151,14 @@ AE_SCRIPT_API std::int32_t aether_input_gamepad_name(std::int32_t pad, char* buf
 	return n;
 }
 
+AE_SCRIPT_API std::int32_t aether_input_gamepad_stick_flicked(std::int32_t stick, std::int32_t dir, std::int32_t pad)
+{
+	return ActiveContext().input->IsGamepadStickFlicked(static_cast<aether::GamepadStick>(stick), static_cast<aether::GamepadDirection>(dir), pad) ? 1 : 0;
+}
+
+// ConsumeGamepadButton is deliberately NOT exported: its keyboard counterpart is not either,
+// and consumption is how the UI layer keeps a menu press away from the game underneath. A
+// script reaching into that would be taking input away from itself.
 AE_SCRIPT_API void aether_input_gamepad_set_deadzones(float stick, float trigger)
 {
 	ActiveContext().input->SetGamepadDeadzones(stick, trigger);

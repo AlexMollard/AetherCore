@@ -29,6 +29,19 @@ namespace aether
 			return v * (scaled / length);
 		}
 
+		// Raw axis pair -> usable stick vector. The y negation lives here so the poll and the
+		// accessor cannot drift apart on which way is up.
+		glm::vec2 StickVector(float rawX, float rawY, float deadzone)
+		{
+			return ApplyRadialDeadzone({rawX, -rawY}, deadzone);
+		}
+
+		// How far a stick must lean to register as a direction, and how far it must fall back
+		// before it can register again. Two values, not one: a single threshold makes a stick
+		// held near the line flick repeatedly as it jitters across it.
+		constexpr float kFlickEnter = 0.5f;
+		constexpr float kFlickExit = 0.35f;
+
 		// GLFW reports a trigger on the same -1..+1 scale as a stick. See
 		// Input::GetGamepadTrigger.
 		float TriggerToUnit(float glfwAxis, float deadzone)
@@ -400,6 +413,24 @@ namespace aether
 
 	// -- Gamepads -------------------------------------------------------------
 
+	void Input::DeriveStickFlicks(GamepadState& pad, float deadzone)
+	{
+		for (std::size_t stick = 0; stick < 2; ++stick)
+		{
+			const glm::vec2 v = StickVector(pad.axes[stick * 2], pad.axes[stick * 2 + 1], deadzone);
+			const float component[4] = {v.y, -v.y, -v.x, v.x}; // Up, Down, Left, Right
+			for (std::size_t dir = 0; dir < 4; ++dir)
+			{
+				// Hysteresis: engage above kFlickEnter, then stay engaged until the stick
+				// falls back below kFlickExit, so a stick resting on the line cannot chatter.
+				const bool wasHeld = pad.stickHeld[stick][dir];
+				const bool held = component[dir] > (wasHeld ? kFlickExit : kFlickEnter);
+				pad.stickFlicked[stick][dir] = held && !wasHeld;
+				pad.stickHeld[stick][dir] = held;
+			}
+		}
+	}
+
 	void Input::UpdateGamepads()
 	{
 		AE_PROFILE_ZONE();
@@ -450,6 +481,14 @@ namespace aether
 					pad.axes[a] = pad.syntheticAxes[a];
 				}
 			}
+
+			// Same lifetime as m_consumedKeys: one frame, dropped by the owner of the state
+			// rather than by whoever consumed it, so a consumer that dies mid-frame cannot
+			// leave a button muted forever.
+			pad.consumed.fill(false);
+
+			// Stick-as-direction edges, derived once here so every reader this frame agrees.
+			DeriveStickFlicks(pad, m_stickDeadzone);
 
 			const bool connected = present || pad.syntheticConnected;
 			if (connected != pad.connected)
@@ -507,7 +546,11 @@ namespace aether
 	{
 		const GamepadState* p = Pad(pad);
 		const int b = static_cast<int>(button);
-		return p != nullptr && b >= 0 && b < kMaxGamepadButtons && p->curr[static_cast<std::size_t>(b)];
+		if (p == nullptr || b < 0 || b >= kMaxGamepadButtons)
+		{
+			return false;
+		}
+		return p->curr[static_cast<std::size_t>(b)] && !p->consumed[static_cast<std::size_t>(b)];
 	}
 
 	bool Input::IsGamepadButtonPressed(GamepadButton button, int pad) const
@@ -518,7 +561,7 @@ namespace aether
 		{
 			return false;
 		}
-		return p->curr[static_cast<std::size_t>(b)] && !p->prev[static_cast<std::size_t>(b)];
+		return p->curr[static_cast<std::size_t>(b)] && !p->prev[static_cast<std::size_t>(b)] && !p->consumed[static_cast<std::size_t>(b)];
 	}
 
 	bool Input::IsGamepadButtonReleased(GamepadButton button, int pad) const
@@ -540,9 +583,7 @@ namespace aether
 			return {0.0f, 0.0f};
 		}
 		const std::size_t base = stick == GamepadStick::Left ? 0u : 2u;
-		// y negated: GLFW/SDL report stick-up as -1, this engine's world is y-up.
-		const glm::vec2 raw{p->axes[base], -p->axes[base + 1u]};
-		return ApplyRadialDeadzone(raw, m_stickDeadzone);
+		return StickVector(p->axes[base], p->axes[base + 1u], m_stickDeadzone);
 	}
 
 	float Input::GetGamepadTrigger(GamepadTrigger trigger, int pad) const
@@ -574,6 +615,34 @@ namespace aether
 		// sliver of stick travel into the whole output range.
 		m_stickDeadzone = std::clamp(stick, 0.0f, 0.9f);
 		m_triggerDeadzone = std::clamp(trigger, 0.0f, 0.9f);
+	}
+
+	bool Input::IsGamepadStickFlicked(GamepadStick stick, GamepadDirection dir, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		if (p == nullptr)
+		{
+			return false;
+		}
+		return p->stickFlicked[stick == GamepadStick::Left ? 0u : 1u][static_cast<std::size_t>(dir)];
+	}
+
+	void Input::ConsumeGamepadButton(GamepadButton button, int pad)
+	{
+		const int slot = ResolveGamepad(pad);
+		const int b = static_cast<int>(button);
+		if (slot < 0 || b < 0 || b >= kMaxGamepadButtons)
+		{
+			return;
+		}
+		m_gamepads[static_cast<std::size_t>(slot)].consumed[static_cast<std::size_t>(b)] = true;
+	}
+
+	bool Input::IsGamepadButtonConsumed(GamepadButton button, int pad) const
+	{
+		const GamepadState* p = Pad(pad);
+		const int b = static_cast<int>(button);
+		return p != nullptr && b >= 0 && b < kMaxGamepadButtons && p->consumed[static_cast<std::size_t>(b)];
 	}
 
 	void Input::SetSyntheticGamepadConnected(int pad, bool connected)
@@ -612,6 +681,9 @@ namespace aether
 		{
 			p.prev[static_cast<std::size_t>(b)] = p.curr[static_cast<std::size_t>(b)];
 			p.curr[static_cast<std::size_t>(b)] = down;
+			// A fresh frame for this button, so last frame's consumption expires with it -
+			// otherwise a windowless caller could consume once and mute the button forever.
+			p.consumed[static_cast<std::size_t>(b)] = false;
 		}
 	}
 
@@ -629,6 +701,9 @@ namespace aether
 		if (m_window == nullptr)
 		{
 			p.axes[static_cast<std::size_t>(a)] = clamped;
+			// Windowless there is no Update() to derive the latch, and a caller setting an
+			// axis IS the frame. Without this the flick edge would be unreachable from a test.
+			DeriveStickFlicks(p, m_stickDeadzone);
 		}
 	}
 
@@ -647,6 +722,9 @@ namespace aether
 				p.curr.fill(false);
 				p.prev.fill(false);
 				p.axes = {0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
+				p.consumed.fill(false);
+				p.stickHeld = {};
+				p.stickFlicked = {};
 				p.name.clear();
 			}
 		}

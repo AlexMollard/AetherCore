@@ -88,7 +88,7 @@ public sealed class MenuController : EntityScript
 
         if (_phase == Phase.Idle)
         {
-            if (Current != MenuScreen.Title && Input.IsKeyPressed(Key.Escape)) { Go(MenuScreen.Title); return; }
+            if (Current != MenuScreen.Title && Controls.CancelPressed) { Go(MenuScreen.Title); return; }
             ActiveScreen()?.HandleInput();
             return;
         }

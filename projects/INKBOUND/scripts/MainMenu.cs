@@ -45,8 +45,7 @@ public sealed class MainMenu : EntityScript
         }
 
         bool start = (_play.IsValid && Ui.WasClicked(_play))
-                     || Input.IsKeyPressed(Key.Enter)
-                     || Input.IsKeyPressed(Key.Space);
+                     || Controls.AdvancePressed;
         if (start)
         {
             Log.Info($"[INKBOUND] Starting '{StartScene}'");

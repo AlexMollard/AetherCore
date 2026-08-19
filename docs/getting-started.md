@@ -210,6 +210,23 @@ Three things are handled for you, and each is a bug you would otherwise have to 
 
 `Gamepad.GetAxisRaw` gives you the untouched value if you want to build your own response curve.
 
+**Menus need no controller code at all.** Anything navigable - a scene-authored `UI Button`, or
+any element you call `Ui.SetSelectable` on - is driven by the engine's UI navigation: the d-pad
+and left stick move the highlight to the nearest element in that direction, and `A` activates it
+alongside Enter, Space and the mouse. Read `Ui.IsFocused` to style the highlight and act on
+`Ui.WasActivated`, and the same screen works with all three input devices:
+
+```csharp
+Ui.SetSelectable(_resumeButton);   // runtime-built UI opts in; authored widgets already have it
+Ui.SetFocus(_resumeButton);        // land the highlight somewhere when the menu opens
+...
+if (Ui.WasActivated(_resumeButton)) { Resume(); }
+```
+
+The activating key or button is **consumed**, so it never also reaches the game underneath - `A`
+confirms the menu item without the character also jumping on the frame the menu closes. That is
+the whole reason to go through `Ui.WasActivated` rather than testing the button yourself.
+
 If you prefer named actions over hard-coded buttons, `InputActions` binds a key and a pad button
 to one name, so a rebinding screen has a single table to edit:
 
