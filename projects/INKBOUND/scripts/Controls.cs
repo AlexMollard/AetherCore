@@ -11,9 +11,13 @@ using AetherCore;
 ///
 /// <para>Kept in the project rather than the SDK because a control scheme is a game design
 /// decision. The engine's <see cref="InputActions"/> covers the simple case of one name over
-/// one or two keys plus a pad button; several of these need more than that - an analogue
-/// axis, a three-key jump, a stick that has to behave like a d-pad - so they are spelled out
-/// here instead of bent to fit.</para>
+/// one or two keys plus a pad button; a couple of these need more than that - an analogue
+/// axis, a three-key jump - so they are spelled out here instead of bent to fit.</para>
+///
+/// <para>There is deliberately nothing here for menus. Every screen in the game, the pause
+/// overlay and the dialogue choice list are all driven by the engine's UI navigation, which
+/// already handles focus, direction and confirm for keyboard, mouse and pad alike. Duplicating
+/// any of that here is how the two drift apart.</para>
 ///
 /// <para>Pad layout: <b>A</b> jump/confirm, <b>B</b> cancel, <b>X</b> interact, <b>Y</b> hold
 /// to commit, <b>Start</b> pause, <b>Back</b> quit to menu, stick and d-pad move.</para>
@@ -86,7 +90,8 @@ public static class Controls
         Input.IsKeyPressed(Key.Escape) || Input.IsKeyPressed(Key.P)
         || Gamepad.IsPressed(GamepadButton.Start);
 
-    /// <summary>Confirm, advance a line of dialogue, take the highlighted choice.</summary>
+    /// <summary>Advance a line of dialogue. Picking a highlighted choice is NOT this - that
+    /// goes through the UI navigation, which consumes the press so it cannot do both.</summary>
     public static bool AdvancePressed =>
         Input.IsKeyPressed(Key.Space) || Input.IsKeyPressed(Key.Enter)
         || Gamepad.IsPressed(GamepadButton.A);
@@ -98,23 +103,4 @@ public static class Controls
     /// <summary>Abandon the run and return to the menu.</summary>
     public static bool ReturnToMenuPressed =>
         Input.IsKeyPressed(Key.M) || Gamepad.IsPressed(GamepadButton.Back);
-
-    // ── Menu navigation ─────────────────────────────────────────────────────────
-
-    // Only the dialogue choice list needs these. Anything built on UISelectable - every menu
-    // screen in the game - is navigated by the engine's UI system directly and needs nothing
-    // here; the dialogue choices are created at runtime and carry no selectable, so they are
-    // steered by hand.
-
-    /// <summary>Move the highlight up one entry.</summary>
-    public static bool MenuUpPressed =>
-        Input.IsKeyPressed(Key.Up) || Input.IsKeyPressed(Key.W)
-        || Gamepad.IsPressed(GamepadButton.DpadUp)
-        || Gamepad.IsFlicked(GamepadStick.Left, GamepadDirection.Up);
-
-    /// <summary>Move the highlight down one entry.</summary>
-    public static bool MenuDownPressed =>
-        Input.IsKeyPressed(Key.Down) || Input.IsKeyPressed(Key.S)
-        || Gamepad.IsPressed(GamepadButton.DpadDown)
-        || Gamepad.IsFlicked(GamepadStick.Left, GamepadDirection.Down);
 }

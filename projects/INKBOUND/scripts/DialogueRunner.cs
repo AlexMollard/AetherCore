@@ -68,8 +68,10 @@ public sealed class DialogueRunner : EntityScript
     private float _nodeT;       // per-node content fade-in
     private float _choiceStartU; // UnscaledTime when choices were shown (drives the stagger)
 
-    // Choices (created at runtime; runtime elements can't be given the scene-authored Selectable nav
-    // component, so the runner tracks the focused index itself and styles it like the menu markers).
+    // Choices are created at runtime and opt into the engine's UI navigation with
+    // Ui.SetSelectable, so focus, hover, arrow keys, d-pad, stick and activation are all the
+    // shared system every menu screen uses. The runner only reads which one is focused in
+    // order to style it; it tracks no index and knows about no input device.
     private const int MaxChoices = 6;
     private const float ChoiceTop = 112f;
     private const float ChoiceH = 30f;
@@ -77,7 +79,6 @@ public sealed class DialogueRunner : EntityScript
     private static readonly Vector4 ChoiceDim = new(0.60f, 0.66f, 0.72f, 0.80f);
     private readonly Entity[] _choiceUi = new Entity[MaxChoices];
     private readonly List<DialogueChoice> _visible = new();
-    private int _focus;
     private bool _choicesShown;
 
     // Exactly one runner is guaranteed by PlayerController, which spawns this prefab only when
@@ -168,6 +169,9 @@ public sealed class DialogueRunner : EntityScript
             Ui.SetFontSize(c, ChoiceFont);
             Ui.SetTextAlign(c, UiHAlign.Left, UiVAlign.Top);
             Ui.SetTextWrap(c, false);
+            // Joins the shared navigation. Without this the slot is a plain label and the
+            // runner would have to re-implement focus, hover and confirm for every device.
+            Ui.SetSelectable(c);
             c.SetActive(false);
             _choiceUi[i] = c;
         }
@@ -399,7 +403,6 @@ public sealed class DialogueRunner : EntityScript
         {
             if (DialogueState.Evaluate(c.If)) { _visible.Add(c); }
         }
-        _focus = 0;
         _choicesShown = true;
         _choiceStartU = Time.UnscaledTime;
         _hint.SetActive(false);
@@ -407,6 +410,10 @@ public sealed class DialogueRunner : EntityScript
         {
             _choiceUi[i].SetActive(i < _visible.Count);
         }
+        // After SetActive, not before: the navigation system only keeps focus on an element
+        // that is actually live. It never picks one on its own either, so without this a
+        // controller would have a list in front of it and nothing to confirm.
+        if (_visible.Count > 0) { Ui.SetFocus(_choiceUi[0]); }
     }
 
     private void HideChoices()
@@ -423,11 +430,12 @@ public sealed class DialogueRunner : EntityScript
         int n = _visible.Count;
         if (n == 0) { GoTo(_node!.Goto); return; } // every choice gated out -> fall through
 
-        if (Controls.MenuUpPressed) { _focus = (_focus - 1 + n) % n; }
-        if (Controls.MenuDownPressed) { _focus = (_focus + 1) % n; }
+        // Which one is lit is the navigation system's answer, not ours - it has already
+        // handled the arrow keys, the d-pad, the stick and mouse hover before this runs.
+        int focus = -1;
         for (int i = 0; i < n; i++)
         {
-            if (Ui.IsHovered(_choiceUi[i])) { _focus = i; }
+            if (Ui.IsFocused(_choiceUi[i])) { focus = i; break; }
         }
 
         float breathe = 0.72f + 0.28f * MathF.Sin(Time.UnscaledTime * 4.5f);
@@ -440,16 +448,19 @@ public sealed class DialogueRunner : EntityScript
             Ui.SetOffsets(_choiceUi[i], new Vector2(_bodyLeft, ChoiceTop + i * ChoiceH + slide),
                           new Vector2(-Pad, ChoiceTop + (i + 1) * ChoiceH + slide));
 
-            bool on = i == _focus;
+            bool on = i == focus;
             Ui.SetText(_choiceUi[i], (on ? "> " : "  ") + _visible[i].Text);
             Vector4 col = on ? new Vector4(Accent.X, Accent.Y, Accent.Z, breathe * reveal)
                              : new Vector4(ChoiceDim.X, ChoiceDim.Y, ChoiceDim.Z, ChoiceDim.W * reveal);
             Ui.SetTextColor(_choiceUi[i], col);
         }
 
-        bool activate = Controls.AdvancePressed
-                        || (Input.IsMousePressed(MouseButton.Left) && Ui.IsHovered(_choiceUi[_focus]));
-        if (activate) { Choose(_focus); }
+        // One check covers click, Enter, Space and the pad's A button - and whichever it was
+        // has already been consumed, so the same press cannot also skip the next line.
+        for (int i = 0; i < n; i++)
+        {
+            if (Ui.WasActivated(_choiceUi[i])) { Choose(i); return; }
+        }
     }
 
     private void Choose(int i)
