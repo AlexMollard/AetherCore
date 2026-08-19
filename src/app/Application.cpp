@@ -324,11 +324,6 @@ namespace aether::app
 				attachContext.Get<World>().RegisterSystem(std::move(lightSystem));
 				services.Register<aether::LightSystem>(*lightPtr);
 
-				auto cameraSystem = std::make_unique<aether::CameraSystem>(*attachContext.TryGet<aether::CameraManager>());
-				auto* cameraPtr = cameraSystem.get();
-				attachContext.Get<World>().RegisterSystem(std::move(cameraSystem));
-				services.Register<aether::CameraSystem>(*cameraPtr);
-
 				attachContext.Get<World>().RegisterSystem(std::make_unique<BehaviorSystem>(attachContext.Get<AssetManager>()));
 
 				auto scriptSystem = std::make_unique<ScriptComponentSystem>(services);
@@ -354,6 +349,22 @@ namespace aether::app
 				auto* particlePtr = particleSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(particleSystem));
 				services.Register<aether::ParticleSystem>(*particlePtr);
+
+				// AFTER scripts and behaviours, because CameraSystem does not read the camera -
+				// it PUBLISHES it, copying each camera entity's transform into the backing
+				// Camera the renderer actually draws with. Run before the things that move
+				// cameras and every one of them lands a frame late.
+				//
+				// A follow camera is a script, so that was the normal case rather than an edge
+				// one: measured here, 636 frames out of 1110 rendered from a camera position
+				// the entity had already left, by up to 0.79 world units - the better part of a
+				// tile. The player is drawn from this frame's transform against a world drawn
+				// from last frame's camera, so the sprite slides against the background and
+				// reads as being in two places at once.
+				auto cameraSystem = std::make_unique<aether::CameraSystem>(*attachContext.TryGet<aether::CameraManager>());
+				auto* cameraPtr = cameraSystem.get();
+				attachContext.Get<World>().RegisterSystem(std::move(cameraSystem));
+				services.Register<aether::CameraSystem>(*cameraPtr);
 
 				// After everything: the host broadcasts post-simulation state, so clients
 				// receive the world as it ended the frame rather than mid-update.
