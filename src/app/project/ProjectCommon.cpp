@@ -17,6 +17,7 @@
 #include "utils/AetherExceptions.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
+#include "utils/StringUtils.hpp"
 #include "utils/TextIni.hpp"
 #include "utils/TomlConfig.hpp"
 
@@ -272,27 +273,13 @@ namespace aether::app::project
 		{
 			return "just now";
 		}
-		const long long minutes = secs / 60;
-		if (minutes < 60)
+		// Past a month a relative span stops being useful and an actual date is what you
+		// want; everything shorter shares utils::DurationLabel with the recovery prompt.
+		if (secs >= 60LL * 60LL * 24LL * 30LL)
 		{
-			return std::format("{} min ago", minutes);
+			return std::format("{:%b %d, %Y}", std::chrono::floor<std::chrono::days>(when));
 		}
-		const long long hours = minutes / 60;
-		if (hours < 24)
-		{
-			return std::format("{} hr ago", hours);
-		}
-		const long long days = hours / 24;
-		if (days < 7)
-		{
-			return std::format("{} day{} ago", days, days == 1 ? "" : "s");
-		}
-		if (days < 30)
-		{
-			const long long weeks = days / 7;
-			return std::format("{} week{} ago", weeks, weeks == 1 ? "" : "s");
-		}
-		return std::format("{:%b %d, %Y}", std::chrono::floor<std::chrono::days>(when));
+		return aether::utils::DurationLabel(secs) + " ago";
 	}
 
 	Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root)

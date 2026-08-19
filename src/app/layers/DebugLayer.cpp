@@ -83,6 +83,7 @@ using namespace std::string_view_literals;
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/StringUtils.hpp"
 #include "utils/TomlConfig.hpp"
 
 namespace aether::editor
@@ -1324,6 +1325,140 @@ namespace aether::editor
 		ImGui::EndPopup();
 	}
 
+	void DebugLayer::PollRecoveryOffer(app::LayerContext& context)
+	{
+		const auto* project = context.TryGet<app::EditorProjectContext>();
+		if (project == nullptr || !project->IsLoaded())
+		{
+			return;
+		}
+		if (project->root == m_recoveryCheckedRoot)
+		{
+			return; // already asked for this project
+		}
+		m_recoveryCheckedRoot = project->root;
+		m_recoveryError.clear();
+
+		// Touches the disk, so it runs once per project open rather than per frame. Empty
+		// is the normal case: a clean save discards the copy it made redundant.
+		m_recoverable = editor::AutosaveService::FindRecoverable(*project);
+		m_openRecoveryPopup = !m_recoverable.empty();
+	}
+
+	void DebugLayer::DrawRecoveryPopup(app::LayerContext& context)
+	{
+		constexpr const char* kTitle = "Recover Unsaved Work###recoverScenes";
+		if (m_openRecoveryPopup)
+		{
+			ImGui::OpenPopup(kTitle);
+			m_openRecoveryPopup = false;
+		}
+
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f, viewport->WorkPos.y + viewport->WorkSize.y * 0.42f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSizeConstraints(ImVec2(460.0f, 0.0f), ImVec2(720.0f, viewport->WorkSize.y * 0.8f));
+		if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+		{
+			return;
+		}
+
+		const auto* project = context.TryGet<app::EditorProjectContext>();
+		if (project == nullptr || !project->IsLoaded() || m_recoverable.empty())
+		{
+			ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+			return;
+		}
+
+		ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION "  Autosave has newer work for %d scene%s.", static_cast<int>(m_recoverable.size()), m_recoverable.size() == 1 ? "" : "s");
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
+		ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+		ImGui::TextUnformatted("These are recovery copies written while the editor was running. Your saved scenes are untouched until you choose Restore.");
+		ImGui::PopTextWrapPos();
+		ImGui::PopStyleColor();
+		ImGui::Spacing();
+
+		auto* scenes = context.TryGet<SceneSubsystem>();
+		const std::string currentScene = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
+
+		std::string handled;
+		bool restored = false;
+		for (const RecoveredScene& recovered: m_recoverable)
+		{
+			ImGui::PushID(recovered.sceneName.c_str());
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text(ICON_FA_CUBE "  %s", recovered.sceneName.c_str());
+			ImGui::SameLine();
+			ImGui::TextColored(chrome::kMuted, "%s ahead of the saved scene", utils::DurationLabel(recovered.secondsAheadOfScene).c_str());
+
+			ImGui::SameLine(ImGui::GetContentRegionMax().x - 190.0f);
+			if (chrome::PrimaryButton("Restore", ImVec2(90.0f, 0.0f)))
+			{
+				std::string error;
+				if (editor::AutosaveService::Restore(*project, recovered.sceneName, error))
+				{
+					handled = recovered.sceneName;
+					restored = true;
+				}
+				else
+				{
+					// Restore refuses a copy that does not parse, rather than destroying a
+					// stale-but-valid scene with a broken one. Say so instead of silently
+					// leaving the row in place.
+					m_recoveryError = "Could not restore '" + recovered.sceneName + "': " + error;
+				}
+			}
+			ImGui::SameLine();
+			if (chrome::OutlineButton("Discard", ImVec2(90.0f, 0.0f)))
+			{
+				editor::AutosaveService::Discard(*project, recovered.sceneName);
+				handled = recovered.sceneName;
+			}
+			ImGui::PopID();
+		}
+
+		if (!m_recoveryError.empty())
+		{
+			ImGui::Spacing();
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kError);
+			ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+			ImGui::TextUnformatted(m_recoveryError.c_str());
+			ImGui::PopTextWrapPos();
+			ImGui::PopStyleColor();
+		}
+
+		if (!handled.empty())
+		{
+			std::erase_if(m_recoverable, [&handled](const RecoveredScene& entry) { return entry.sceneName == handled; });
+			// Restoring the scene that is already open replaces the file under it, so pull
+			// the new contents in - otherwise the editor keeps showing the version that was
+			// just overwritten and a save would put it straight back.
+			if (restored && handled == currentScene)
+			{
+				if (app::scene::LoadSceneFile(handled, context.Get<World>(), app::scene::MakeApplySceneDeps(context.services)))
+				{
+					m_selection.Clear();
+					editor::ResetEditHistory(context.services);
+					m_tilePainting.mapDirty = false;
+				}
+			}
+			if (restored)
+			{
+				ShowToast(std::string(ICON_FA_ROTATE_LEFT "  Restored  ") + handled);
+			}
+		}
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		// Closing without choosing leaves every copy exactly where it is, so the offer
+		// comes back next time the project opens. Nothing here is destructive by default.
+		if (m_recoverable.empty() || chrome::OutlineButton("Decide later", ImVec2(120.0f, 0.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+
 	void DebugLayer::SaveAndReturnToLauncher(app::LayerContext& context)
 	{
 		if (!SaveCurrentScene(context))
@@ -1428,6 +1563,7 @@ namespace aether::editor
 		// Before anything draws: the OS close request arrives during the event pump earlier
 		// this frame, and the loop re-reads it after the layers run.
 		PollCloseRequest(context);
+		PollRecoveryOffer(context);
 
 		ImGuizmo::BeginFrame();
 
@@ -1940,6 +2076,7 @@ namespace aether::editor
 
 		DrawCommandPalette(context);
 		DrawUnsavedChangesPopup(context);
+		DrawRecoveryPopup(context);
 
 		// An inspector field edit ends when its widget stops being active - a slider
 		// drag and a focused text box both stay active across frames, so this is what

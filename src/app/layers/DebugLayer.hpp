@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -92,6 +93,19 @@ namespace aether::editor
 		void PollCloseRequest(app::LayerContext& context);
 		PendingNav m_pendingNav = PendingNav::None;
 		bool m_openUnsavedPopup = false;
+
+		// Autosave leaves a recovery copy beside the project when the editor dies with
+		// unsaved work. Restoring one is deliberately never automatic, so until now the
+		// copies existed and nothing in the editor ever mentioned them - the offer is made
+		// here, once, when a project opens.
+		void PollRecoveryOffer(app::LayerContext& context);
+		void DrawRecoveryPopup(app::LayerContext& context);
+		// Project whose recovery copies have already been looked for, so the scan (and the
+		// offer) happen once per open rather than every frame.
+		std::filesystem::path m_recoveryCheckedRoot;
+		std::vector<RecoveredScene> m_recoverable;
+		bool m_openRecoveryPopup = false;
+		std::string m_recoveryError;
 
 		void ShowToast(std::string text, bool isError = false);
 		void DrawToasts();
