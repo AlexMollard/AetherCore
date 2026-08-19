@@ -366,7 +366,7 @@
       "tool": "resume"
     },
     {
-      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field.",
+      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field. GAMEPAD: {pad_connected:true} presents a synthetic controller (slot via {pad_slot}, default 0); {pad_down:[names], pad_up:[names]} with a/b/x/y, lb/rb, lt/rt, back/start/guide, lthumb/rthumb, dpad_up/dpad_down/dpad_left/dpad_right; {pad_axis:{left_x:0.5, left_y:-1.0}} sets axes with names left_x/left_y/right_x/right_y/left_trigger/right_trigger. Axis values use the RAW controller convention (-1 is stick UP, and a released trigger is -1, not 0) so the engine's own normalisation is what gets exercised rather than bypassed.",
       "mutates": true,
       "name": "engine.send_input",
       "paramsSchema": {
@@ -401,6 +401,27 @@
           "mouse_world": {
             "items": {
               "type": "number"
+            },
+            "type": "array"
+          },
+          "pad_axis": {
+            "type": "object"
+          },
+          "pad_connected": {
+            "type": "boolean"
+          },
+          "pad_down": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pad_slot": {
+            "type": "integer"
+          },
+          "pad_up": {
+            "items": {
+              "type": "string"
             },
             "type": "array"
           },
@@ -468,7 +489,7 @@
       "tool": "toggle_play"
     },
     {
-      "description": "Live editor summary: current scene name and kind, entity count, frame index, fps.",
+      "description": "Live editor summary: current scene name and kind, entity count, frame index, fps, and any connected gamepads with their live stick/trigger/button state - the first thing to check when a controller seems dead.",
       "mutates": false,
       "name": "info",
       "paramsSchema": {
@@ -2131,6 +2152,33 @@
         "type": "object"
       },
       "tool": "screenshot"
+    },
+    {
+      "description": "Autosaved recovery copies that are NEWER than the scene they shadow, newest first. Empty after a clean save, which is the normal case. Each entry gives the scene name and how far ahead of the saved file it is.",
+      "mutates": false,
+      "name": "editor.recovery_list",
+      "paramsSchema": {
+        "properties": null,
+        "type": "object"
+      },
+      "tool": "recovery_list"
+    },
+    {
+      "description": "Promote a scene's autosaved recovery copy over its saved file. Explicit on purpose - nothing is ever restored automatically. Refuses if the copy does not parse, so a stale-but-valid scene is never destroyed by a bad one. Reload the scene afterwards to see it.",
+      "mutates": true,
+      "name": "editor.recovery_restore",
+      "paramsSchema": {
+        "properties": {
+          "scene": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scene"
+        ],
+        "type": "object"
+      },
+      "tool": "recovery_restore"
     }
   ]
 }
