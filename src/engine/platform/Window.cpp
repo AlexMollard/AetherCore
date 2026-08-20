@@ -1,4 +1,5 @@
 #include "platform/Window.hpp"
+#include "platform/WindowPlacement.hpp"
 
 #include <algorithm>
 
@@ -92,6 +93,22 @@ namespace aether
 		}
 
 		m_mode = mode;
+
+		// A windowed window is created at exactly the configured size, with no reference to
+		// the display it lands on. The shipped default is 2560x1440, so a published game on
+		// a 1080p screen - or any laptop - opened a window bigger than the desktop, with the
+		// title bar off the top and no way to drag or resize it back. Borderless and
+		// fullscreen are already sized from the video mode above and must not be touched.
+		//
+		// Only when it does NOT fit. Repositioning a window that was already fine posts a
+		// move (and on a mixed-DPI desktop a scale change) that lands as a framebuffer
+		// resize on the first frame, and the first present then returns OUT_OF_DATE - a
+		// recreate the engine handles, but noise it should not be creating for itself.
+		if (mode == Mode::Windowed)
+		{
+			FitToPrimaryWorkArea();
+		}
+
 		glfwSetWindowUserPointer(m_window, this);
 		glfwSetFramebufferSizeCallback(m_window, &Window::FramebufferSizeCallback);
 
@@ -133,6 +150,64 @@ namespace aether
 	bool Window::ShouldClose() const
 	{
 		return glfwWindowShouldClose(m_window) != 0;
+	}
+
+	void Window::FitToPrimaryWorkArea()
+	{
+		if (m_window == nullptr || m_mode != Mode::Windowed)
+		{
+			return;
+		}
+		GLFWmonitor* primary = glfwGetPrimaryMonitor();
+		if (primary == nullptr)
+		{
+			return; // headless: nothing to fit into
+		}
+
+		int width = 0;
+		int height = 0;
+		glfwGetWindowSize(m_window, &width, &height);
+		int frameLeft = 0;
+		int frameTop = 0;
+		int frameRight = 0;
+		int frameBottom = 0;
+		glfwGetWindowFrameSize(m_window, &frameLeft, &frameTop, &frameRight, &frameBottom);
+
+		int areaX = 0;
+		int areaY = 0;
+		int areaW = 0;
+		int areaH = 0;
+		glfwGetMonitorWorkarea(primary, &areaX, &areaY, &areaW, &areaH);
+
+		const WindowFit fit = FitWindowToWorkArea(width, height, frameLeft + frameRight, frameTop + frameBottom, areaX, areaY, areaW, areaH, areaX + areaW / 2, areaY + areaH / 2);
+		if (!fit.resized)
+		{
+			// It already fits. Leave the placement the platform chose - moving it here buys
+			// nothing and costs a spurious resize on the first frame.
+			return;
+		}
+		glfwSetWindowSize(m_window, fit.clientWidth, fit.clientHeight);
+		glfwSetWindowPos(m_window, fit.outerX + frameLeft, fit.outerY + frameTop);
+		AE_INFO(LogCategory::Window, "Window {}x{} (+{}x{} chrome) does not fit the {}x{} work area; opened at {}x{}.", width, height, frameLeft + frameRight, frameTop + frameBottom, areaW, areaH, fit.clientWidth,
+		        fit.clientHeight);
+	}
+
+	void Window::GetPrimaryWorkAreaCenter(int& outX, int& outY)
+	{
+		outX = 0;
+		outY = 0;
+		GLFWmonitor* primary = glfwGetPrimaryMonitor();
+		if (primary == nullptr)
+		{
+			return; // headless: leave it at the origin and let the clamp be a no-op
+		}
+		int areaX = 0;
+		int areaY = 0;
+		int areaW = 0;
+		int areaH = 0;
+		glfwGetMonitorWorkarea(primary, &areaX, &areaY, &areaW, &areaH);
+		outX = areaX + areaW / 2;
+		outY = areaY + areaH / 2;
 	}
 
 	void Window::GetDesktopCenter(int& outX, int& outY) const
@@ -220,31 +295,19 @@ namespace aether
 		}
 
 		// Shrink to fit before placing. A configured size larger than the usable work area -
-		// easy to hit on a scaled display, where a 2560x1440 monitor at 150% leaves about
-		// 1706x920 - puts the bottom and right of the window off-screen, taking the status bar
-		// and any docked panel with it. Nothing can be centred in a space it does not fit in,
-		// so the placement below would just pin it to a corner and the overflow would stay.
-		if (width + chromeW > areaW || height + chromeH > areaH)
+		// easy to hit on a scaled display, and the default on any screen smaller than the
+		// shipped 2560x1440 - puts the bottom and right of the window off-screen, taking the
+		// title bar with it. Nothing can be centred in a space it does not fit in.
+		const WindowFit fit = FitWindowToWorkArea(width, height, chromeW, chromeH, areaX, areaY, areaW, areaH, x, y);
+		if (fit.resized)
 		{
-			const int fittedWidth = std::min(width, areaW - chromeW);
-			const int fittedHeight = std::min(height, areaH - chromeH);
-			if (fittedWidth > 0 && fittedHeight > 0)
-			{
-				glfwSetWindowSize(m_window, fittedWidth, fittedHeight);
-				AE_INFO(LogCategory::Window, "Window {}x{} (+{}x{} chrome) exceeds the {}x{} work area; fitted to {}x{}.", width, height, chromeW, chromeH, areaW, areaH,
-				        fittedWidth, fittedHeight);
-				width = fittedWidth;
-				height = fittedHeight;
-			}
+			glfwSetWindowSize(m_window, fit.clientWidth, fit.clientHeight);
+			AE_INFO(LogCategory::Window, "Window {}x{} (+{}x{} chrome) exceeds the {}x{} work area; fitted to {}x{}.", width, height, chromeW, chromeH, areaW, areaH, fit.clientWidth, fit.clientHeight);
 		}
 
 		// glfwSetWindowPos places the CLIENT area, so offset by the frame to keep the whole
 		// window - title bar included - inside the work area.
-		const int outerW = width + chromeW;
-		const int outerH = height + chromeH;
-		const int outerX = std::clamp(x - outerW / 2, areaX, std::max(areaX, areaX + areaW - outerW));
-		const int outerY = std::clamp(y - outerH / 2, areaY, std::max(areaY, areaY + areaH - outerH));
-		glfwSetWindowPos(m_window, outerX + frameLeft, outerY + frameTop);
+		glfwSetWindowPos(m_window, fit.outerX + frameLeft, fit.outerY + frameTop);
 	}
 
 	void Window::Show()

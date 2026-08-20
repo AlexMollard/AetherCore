@@ -54,6 +54,15 @@ namespace aether
 		// Desktop coordinates of this window's centre. The launcher hands this to the editor.
 		void GetDesktopCenter(int& outX, int& outY) const;
 
+		// Centre of the primary monitor's usable area (taskbar excluded). Where a window
+		// goes when nothing has asked for somewhere better.
+		static void GetPrimaryWorkAreaCenter(int& outX, int& outY);
+
+		// Shrink a windowed window that is larger than the primary display and place it on
+		// screen. Does NOTHING when it already fits, so a normal start keeps the platform's
+		// own placement and never triggers a resize on the first frame.
+		void FitToPrimaryWorkArea();
+
 		Window(const Window&) = delete;
 		Window& operator=(const Window&) = delete;
 
