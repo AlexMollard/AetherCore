@@ -752,6 +752,22 @@ namespace aether
 		AE_INFO(LogCategory::Engine, "VSync {}.", enabled ? "enabled" : "disabled");
 	}
 
+	void AetherCore::SetLowLatencyPresent(bool enabled)
+	{
+		if (m_settings.graphics.lowLatencyPresent == enabled)
+		{
+			return;
+		}
+		m_settings.graphics.lowLatencyPresent = enabled;
+		if (m_gpu)
+		{
+			// PresentModeFor() is read when the swapchain is built, so the recreate is what
+			// makes the producer thread pick the new mode up - exactly as for vsync.
+			m_gpu->RequestSwapchainRecreation();
+		}
+		AE_INFO(LogCategory::Engine, "Low-latency present (MAILBOX) {}.", enabled ? "enabled" : "disabled");
+	}
+
 	void AetherCore::SetImguiViewportsEnabled(bool enabled)
 	{
 		if (m_profile != RuntimeProfile::Full)

@@ -145,6 +145,11 @@ namespace aether
 		// recreate (present-mode change) on the next producer-thread poll. No-op
 		void SetVsync(bool enabled);
 
+		// MAILBOX instead of FIFO while vsync is on. Same mechanism as SetVsync, because it
+		// decides the same thing: the present mode the swapchain is built with. Without
+		// this the setting only took hold if you happened to toggle vsync afterwards.
+		void SetLowLatencyPresent(bool enabled);
+
 		[[nodiscard]] bool IsVsyncEnabled() const
 		{
 			return m_settings.graphics.vsync;

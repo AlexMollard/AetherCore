@@ -1,5 +1,8 @@
 #include "imgui/UiAutomation.hpp"
 
+#include <string>
+#include <vector>
+
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -47,32 +50,57 @@ namespace aether::app
 
 	std::optional<UiItem> UiAutomation::FindItem(const std::string& window, const std::string& label, std::string& err) const
 	{
-		const UiItem* match = nullptr;
-		int matches = 0;
-		for (const UiItem& item: m_snapshot)
+		// Exact first, then substring. ui_query is the documented way to find a target and
+		// filters by substring, so what it hands back has to work here - and what it hands
+		// back is ImGui's real label, carrying "###id" suffixes, icon glyphs and whatever
+		// the panel appended. Matching only exactly meant the discovery tool and the action
+		// tool disagreed about what a filter means, and the values you had just been shown
+		// were rejected.
+		//
+		// Exact is still tried first so a label that is a prefix of a longer one ("Save"
+		// beside "Save As...") resolves to itself rather than reporting an ambiguity.
+		for (const bool exact: {true, false})
 		{
-			if (item.label != label)
+			std::vector<const UiItem*> hits;
+			for (const UiItem& item: m_snapshot)
 			{
-				continue;
+				const bool labelMatches = exact ? item.label == label : item.label.find(label) != std::string::npos;
+				if (!labelMatches)
+				{
+					continue;
+				}
+				const bool windowMatches = window.empty() || (exact ? item.window == window : item.window.find(window) != std::string::npos);
+				if (!windowMatches)
+				{
+					continue;
+				}
+				hits.push_back(&item);
 			}
-			if (!window.empty() && item.window != window)
+
+			if (hits.size() == 1)
 			{
-				continue;
+				return *hits.front();
 			}
-			match = &item;
-			++matches;
+			if (hits.size() > 1)
+			{
+				// Name the candidates: "pass a window to disambiguate" is no help when the
+				// windows are what you cannot see from here.
+				err = "ambiguous: " + std::to_string(hits.size()) + " widgets match label '" + label + "'";
+				constexpr std::size_t kMaxListed = 6;
+				for (std::size_t i = 0; i < hits.size() && i < kMaxListed; ++i)
+				{
+					err += "\n  '" + hits[i]->label + "' in '" + hits[i]->window + "'";
+				}
+				if (hits.size() > kMaxListed)
+				{
+					err += "\n  ... and " + std::to_string(hits.size() - kMaxListed) + " more";
+				}
+				return std::nullopt;
+			}
 		}
-		if (matches == 0)
-		{
-			err = "no widget labelled '" + label + "'" + (window.empty() ? "" : " in window '" + window + "'");
-			return std::nullopt;
-		}
-		if (matches > 1)
-		{
-			err = "ambiguous: " + std::to_string(matches) + " widgets labelled '" + label + "' (pass a window to disambiguate)";
-			return std::nullopt;
-		}
-		return *match;
+
+		err = "no widget labelled '" + label + "'" + (window.empty() ? "" : " in window '" + window + "'");
+		return std::nullopt;
 	}
 
 	void UiAutomation::ApplyInput(ImGuiIO& io)

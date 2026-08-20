@@ -56,6 +56,13 @@ namespace aether
 				engine->SetVsync(m_values.graphics.vsync);
 			}
 		}
+		else if (key == "graphics.lowLatencyPresent")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetLowLatencyPresent(m_values.graphics.lowLatencyPresent);
+			}
+		}
 		else if (key == "graphics.imguiViewports")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())

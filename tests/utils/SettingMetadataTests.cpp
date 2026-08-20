@@ -135,3 +135,48 @@ TEST_CASE("DefaultSettingValue reads the type it was asked for, and only that")
 	CHECK_FALSE(DefaultSettingValue<int>("nope.missing", missing));
 	CHECK(missing == 7);
 }
+
+// ── Which settings actually take effect while running ───────────────────────
+//
+// The panel marks a setting "read once at startup". Getting that wrong is a lie the user
+// cannot detect: they drag the slider, nothing happens, and the UI told them it would.
+// Three were wrong on the first pass - window.mode and renderScale are read at init but
+// were unmarked, and lowLatencyPresent only took hold if you happened to toggle vsync
+// afterwards. The list is hand-maintained because "takes effect immediately" is not
+// derivable: some keys have a SettingsService::ApplyLive hook, and others need none
+// because the engine re-reads them every frame.
+TEST_CASE("The set of restart-only settings is exactly what the engine reads once")
+{
+	std::vector<std::string> restartOnly;
+	const EngineSettings defaults{};
+	ForEachSettingField(defaults,
+	        [&](std::string_view key, const auto&)
+	        {
+		        if (SettingMetadata(key).restartRequired)
+		        {
+			        restartOnly.emplace_back(key);
+		        }
+	        });
+	std::ranges::sort(restartOnly);
+
+	// Each of these is read during startup and never again:
+	//   window.mode          AetherCore.cpp - platform.Init
+	//   graphics.renderScale AetherCore.cpp - SetRenderScale, before Init
+	//   graphics.asyncCompute AetherCore.cpp - queue selection during init
+	//   app.startupScene     read by the boot path / bake
+	//   app.autoplay         read by the boot path
+	//
+	// Deliberately NOT here, and each for a reason worth keeping straight:
+	//   framesInFlight, latencyPacing  - re-read inside the frame loop
+	//   autosaveSeconds                - re-read every autosave tick
+	//   vsync, lowLatencyPresent, fxaa, targetFps, uiScale, imguiViewports,
+	//   window.width/height, cursor.*  - pushed by SettingsService::ApplyLive
+	const std::vector<std::string> expected{
+	        "app.autoplay",
+	        "app.startupScene",
+	        "graphics.asyncCompute",
+	        "graphics.renderScale",
+	        "window.mode",
+	};
+	CHECK(restartOnly == expected);
+}
