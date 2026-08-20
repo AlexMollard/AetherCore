@@ -190,6 +190,28 @@ namespace aether::editor
 			{
 				return 267;
 			}
+			// Function keys. The editor puts its own reload/pause/step on F5-F7 and a game is
+			// free to put a quicksave or a debug overlay anywhere along the row; without them
+			// none of it can be reached from a headless test, including the "F5 rebuilds and
+			// hot-reloads while Play is running" that the starter script promises.
+			if (name.size() >= 2 && (name[0] == 'f' || name[0] == 'F'))
+			{
+				int number = 0;
+				bool digitsOnly = true;
+				for (std::size_t i = 1; i < name.size(); ++i)
+				{
+					if (name[i] < '0' || name[i] > '9')
+					{
+						digitsOnly = false;
+						break;
+					}
+					number = number * 10 + (name[i] - '0');
+				}
+				if (digitsOnly && number >= 1 && number <= 12)
+				{
+					return 290 + number - 1; // GLFW_KEY_F1 .. GLFW_KEY_F12
+				}
+			}
 			return -1;
 		}
 
@@ -1545,7 +1567,7 @@ namespace aether::editor
 		methods.push_back({"engine.send_input",
 		        "send_input",
 		        "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, "
-		        "backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field. GAMEPAD: {pad_connected:true} presents a synthetic controller (slot via {pad_slot}, default 0); {pad_down:[names], pad_up:[names]} with a/b/x/y, lb/rb, lt/rt, back/start/guide, lthumb/rthumb, dpad_up/dpad_down/dpad_left/dpad_right; {pad_axis:{left_x:0.5, left_y:-1.0}} sets axes with names left_x/left_y/right_x/right_y/left_trigger/right_trigger. Axis values use the RAW controller convention (-1 is stick UP, and a released trigger is -1, not 0) so the engine's own normalisation is what gets exercised rather than bypassed.",
+		        "backspace, delete, home, end, pageup, pagedown, f1-f12, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field. GAMEPAD: {pad_connected:true} presents a synthetic controller (slot via {pad_slot}, default 0); {pad_down:[names], pad_up:[names]} with a/b/x/y, lb/rb, lt/rt, back/start/guide, lthumb/rthumb, dpad_up/dpad_down/dpad_left/dpad_right; {pad_axis:{left_x:0.5, left_y:-1.0}} sets axes with names left_x/left_y/right_x/right_y/left_trigger/right_trigger. Axis values use the RAW controller convention (-1 is stick UP, and a released trigger is -1, not 0) so the engine's own normalisation is what gets exercised rather than bypassed.",
 		        true,
 		        Obj({{"down", json{{"type", "array"}, {"items", StrProp()}}},
 		                {"up", json{{"type", "array"}, {"items", StrProp()}}},
