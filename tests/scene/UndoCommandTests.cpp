@@ -112,8 +112,8 @@ TEST_CASE("UndoStack tracks unsaved changes across edits, save, undo and load")
 	stack.MarkSaved();
 	CHECK_FALSE(stack.HasUnsavedChanges()); // saving pins the clean point
 
-	// Undoing after a save still counts as an outstanding change (conservative: never
-	// reports clean while the on-disk state differs from what a save just wrote).
+	// Undoing after a save moves AWAY from what was written, so it is an outstanding
+	// change - the scene no longer matches the file.
 	CHECK(stack.Undo(world, services) != nullptr);
 	CHECK(stack.HasUnsavedChanges());
 
@@ -370,4 +370,99 @@ TEST_CASE("UnpackPrefabCommand re-links the prefab instance in place on undo")
 	CHECK_FALSE(world.Has<PrefabInstanceComponent>(root));
 	CHECK_FALSE(world.Has<PrefabLinkComponent>(child));
 	CHECK_FALSE(world.Has<SceneTransientComponent>(child));
+}
+
+// ── Undoing back to the saved state is clean ────────────────────────────────
+//
+// This tracked a COUNT of operations, so undo looked like another edit and a scene
+// edited once then undone read as dirty forever. That had autosave writing recovery
+// copies holding no work, and the recovery prompt offering them on every project open.
+
+namespace
+{
+	// One recorded edit, applied. Content does not matter here - only the shape of the
+	// history the clean marker moves through.
+	std::unique_ptr<IEditorCommand> AnEdit(Entity entity, const glm::mat4& from, const glm::mat4& to)
+	{
+		return std::make_unique<TransformCommand>(std::vector<TransformCommand::Item>{{entity.id, from, to}});
+	}
+} // namespace
+
+TEST_CASE("Undoing back to the saved state reports clean again")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	const glm::mat4 origin = world.TryGet<TransformComponent>(entity)->localToWorld;
+	const glm::mat4 one = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+	UndoStack stack;
+	stack.MarkSaved(); // the scene as loaded, matching the file
+
+	stack.Record(AnEdit(entity, origin, one));
+	CHECK(stack.HasUnsavedChanges());
+
+	// Back to exactly what the file holds. Nothing to save, nothing to recover.
+	CHECK(stack.Undo(world, services) != nullptr);
+	CHECK_FALSE(stack.HasUnsavedChanges());
+
+	// And forward again.
+	CHECK(stack.Redo(world, services) != nullptr);
+	CHECK(stack.HasUnsavedChanges());
+}
+
+TEST_CASE("Undo then a different edit is never reported clean")
+{
+	// The failure a position-based marker has to defend against: the depth returns to
+	// where the save happened while the content is something else entirely.
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	const glm::mat4 origin = world.TryGet<TransformComponent>(entity)->localToWorld;
+	const glm::mat4 one = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	const glm::mat4 two = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, 0.0f));
+
+	UndoStack stack;
+	stack.Record(AnEdit(entity, origin, one));
+	stack.MarkSaved(); // saved at depth 1
+	CHECK_FALSE(stack.HasUnsavedChanges());
+
+	CHECK(stack.Undo(world, services) != nullptr); // depth 0
+	stack.Record(AnEdit(entity, origin, two));     // depth 1 again, different content
+
+	CHECK(stack.UndoDepth() == 1); // same depth the save was pinned at
+	CHECK(stack.HasUnsavedChanges());
+
+	// It must stay dirty: the saved state is behind a discarded branch, so no amount of
+	// undoing gets back to it.
+	CHECK(stack.Undo(world, services) != nullptr);
+	CHECK(stack.HasUnsavedChanges());
+}
+
+TEST_CASE("A saved state that ages out of the ring stops being reachable")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	const glm::mat4 origin = world.TryGet<TransformComponent>(entity)->localToWorld;
+	const glm::mat4 one = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+	UndoStack stack;
+	stack.MarkSaved(); // clean at depth 0
+
+	// Fill past the ring so the command that depth 0 sat before is discarded.
+	for (std::size_t i = 0; i <= UndoStack::kMaxDepth; ++i)
+	{
+		stack.Record(AnEdit(entity, origin, one));
+	}
+	CHECK(stack.UndoDepth() == UndoStack::kMaxDepth);
+	CHECK(stack.HasUnsavedChanges());
+
+	// Undoing everything still available cannot reach the saved state, so it must not
+	// claim to have.
+	while (stack.UndoDepth() > 0)
+	{
+		CHECK(stack.Undo(world, services) != nullptr);
+	}
+	CHECK(stack.HasUnsavedChanges());
 }

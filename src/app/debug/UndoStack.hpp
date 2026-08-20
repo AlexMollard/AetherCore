@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -63,20 +65,30 @@ namespace aether::editor
 			return m_redo.size();
 		}
 
-		// Unsaved-changes tracking. MarkSaved() pins the current history position as
-		// the on-disk state; HasUnsavedChanges() is true after any later edit/undo/redo
-		// until the next save or scene load (Clear). Intentionally conservative - it may
-		// report changes after an undo returns to the saved content, but it never
-		// reports "clean" while edits are outstanding, so a save/exit guard cannot
-		// silently drop work.
-		void MarkSaved()
-		{
-			m_savedSeq = m_editSeq;
-		}
+		// Unsaved-changes tracking. MarkSaved() pins the current position in the history
+		// as the on-disk state; HasUnsavedChanges() is true whenever the position differs
+		// from it, and goes back to false if an undo returns to it.
+		//
+		// POSITION, not a count of operations. Counting made undo look like just another
+		// edit, so a scene edited once and then undone read as dirty forever - which had
+		// the autosave writing recovery copies holding no work, and the recovery prompt
+		// offering them back on every project open.
+		//
+		// It still never reports clean while edits are outstanding. Undo then a DIFFERENT
+		// edit lands on the same depth with different content, so the pin is dropped when
+		// the branch holding it is discarded; see RecordCommand.
+		void MarkSaved();
 
 		[[nodiscard]] bool HasUnsavedChanges() const
 		{
-			return m_editSeq != m_savedSeq;
+			// A field edit mid-drag is already applied to the world but not yet recorded,
+			// so the depth has not moved. Count it: erring dirty costs a prompt, erring
+			// clean costs the work.
+			if (!m_pendingFields.empty())
+			{
+				return true;
+			}
+			return !m_cleanDepth.has_value() || *m_cleanDepth != m_undo.size();
 		}
 
 		// Monotonic count of recorded edits. Autosave compares it against its own last
@@ -107,10 +119,15 @@ namespace aether::editor
 		std::vector<std::unique_ptr<IEditorCommand>> m_undo;
 		std::vector<std::unique_ptr<IEditorCommand>> m_redo;
 
-		// Monotonic count of scene-mutating operations (record/undo/redo); compared
-		// against m_savedSeq to detect unsaved changes.
-		std::size_t m_editSeq = 0;
-		std::size_t m_savedSeq = 0;
+		// Monotonic count of scene-mutating operations (record/undo/redo). Autosave's
+		// "has anything happened since my last write" question, which is not the same as
+		// "does this differ from disk" - see HasUnsavedChanges.
+		std::uint64_t m_editSeq = 0;
+
+		// Undo depth at which the scene matches the file. Empty means the saved state is
+		// no longer reachable by undoing (its branch was discarded, or it aged out of the
+		// ring), so the document stays dirty until the next save.
+		std::optional<std::size_t> m_cleanDepth = 0;
 	};
 
 	// The open document was REPLACED - a new scene, a scene opened, a project opened.
