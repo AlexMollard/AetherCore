@@ -119,9 +119,12 @@ public sealed class Parish
 		// a scene file can know.
 		for (int i = 0; i < kBearerPool; i++)
 		{
-			Entity body = UiKit.Image(_nave, -500.0f, -500.0f, 14.0f, 14.0f, Palette.Transparent);
-			Ui.SetImageTexture(body, "project://assets/textures/rites/bearer.png");
-			Ui.SetImagePixelArt(body, true);
+			// A rounded rect at full radius IS a circle, so the wisp needs no texture. The
+			// sprite it used to carry was a near-black outline ring around a few green texels,
+			// and at the size these are actually drawn that outline swallowed the core - every
+			// bearer read as a black blob crossing the floor.
+			Entity body = UiKit.Image(_nave, -500.0f, -500.0f, 14.0f, 14.0f, Palette.Ichor);
+			Ui.SetImageCornerRadius(body, 7.0f);
 			_bearers[i] = new Bearer { Body = body, Live = false };
 		}
 		for (int i = 0; i < kPopPool; i++)
@@ -432,13 +435,17 @@ public sealed class Parish
 			// expect: the same walk further away is a smaller figure.
 			// Fades away to nothing as it is drawn into the sigil.
 			float scale = 1.0f - e * 0.55f;
-			float size = bd.W * 0.030f * Math.Clamp(scale, 0.5f, 1.4f);
+			// Small. As an outlined sprite this could afford to be forty pixels across; as a
+			// solid disc of the one colour in the game that means anything, that size made
+			// every wisp louder than the rite that sent it.
+			float size = bd.W * 0.0125f * Math.Clamp(scale, 0.5f, 1.4f);
 			Ui.SetAnchors(b.Body, Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(b.Body, new Vector2(0.5f, 1.0f));
 			Ui.SetRect(b.Body, px.X, px.Y, size, size);
+			Ui.SetImageCornerRadius(b.Body, size * 0.5f);
 
 			float fade = MathF.Min(1.0f, MathF.Min(b.Age * 6.0f, (1.0f - w) * 5.0f));
-			Ui.SetImageColor(b.Body, Palette.Fade(Palette.Ichor, Math.Clamp(fade, 0.0f, 1.0f)));
+			Ui.SetImageColor(b.Body, Palette.Fade(Palette.Ichor, Math.Clamp(fade, 0.0f, 1.0f) * 0.85f));
 
 			if (b.Age >= total)
 			{

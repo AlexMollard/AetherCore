@@ -300,44 +300,113 @@ float Structure(int rite, float2 p, float time, out float core, out float detail
     }
     else if (rite == 5)
     {
-        // Drowned Chapel: a pitched roof and a cross over a lit window, half under water.
-        d = opUnion(d, sdBox(p - float2(0.0, 0.42), float2(0.62, 0.52)));    // nave
-        // The roof: a triangle, as the half-plane intersection of two slopes.
-        const float roof = max(max(p.y - (-0.10), -p.y - 0.86),
-                               abs(p.x) * 1.30 + p.y + 0.10);
-        d = opUnion(d, roof);
-        d = opUnion(d, sdBox(p - float2(0.0, -0.86), float2(0.05, 0.16)));   // cross
-        d = opUnion(d, sdBox(p - float2(0.0, -0.90), float2(0.14, 0.05)));
-        detail = sdArch(p - float2(0.0, 0.44), float2(0.20, 0.30), 0.20);    // window frame
-        core = sdArch(p - float2(0.0, 0.44), float2(0.14, 0.24), 0.14);
-        // The waterline, rocking. Everything under it is cut away into the dark.
-        const float water = 0.72 + sin(time * 0.7 + p.x * 2.0) * 0.02;
-        detail = opUnion(detail, max(abs(p.y - water) - 0.020, abs(p.x) - 1.0));
+        // Drowned Chapel: a nave with a lit window and a bell tower, standing in water.
+        //
+        // The roof was upside down. The half-plane test allowed a width proportional to
+        // -(y + base) instead of (y - apex), which put the wide end at the ridge and the
+        // point at the eaves - a funnel hovering over a crate. It only showed up once the
+        // rite was actually owned, which is why every structure now gets looked at.
+        d = opUnion(d, sdBox(p - float2(-0.06, 0.44), float2(0.60, 0.50)));   // nave
+
+        // The roof: wide at the eaves (y = -0.06), meeting at a ridge (y = -0.80).
+        d = opUnion(d, max(max(abs(p.x + 0.06) * 1.22 - (p.y + 0.80), p.y + 0.06), -p.y - 0.82));
+
+        // A bell tower off one shoulder, so the chapel is not a symmetric shed.
+        d = opUnion(d, sdBox(p - float2(0.66, 0.28), float2(0.20, 0.66)));
+        d = opUnion(d, max(abs(p.x - 0.66) * 1.05 - (p.y + 0.62), p.y + 0.38));
+        d = opUnion(d, sdBox(p - float2(0.66, -0.76), float2(0.04, 0.14)));   // cross
+        d = opUnion(d, sdBox(p - float2(0.66, -0.82), float2(0.11, 0.04)));
+        detail = sdArch(p - float2(0.66, 0.14), float2(0.10, 0.16), 0.10);    // belfry opening
+
+        // The window: the one lit thing, an arch cut into the nave.
+        detail = opUnion(detail, sdArch(p - float2(-0.06, 0.38), float2(0.24, 0.32), 0.24));
+        core = sdArch(p - float2(-0.06, 0.40), float2(0.17, 0.26), 0.17);
+
+        // Courses of stone across the nave.
+        const float course = abs(frac(p.y * 5.0 + 0.5) - 0.5) / 5.0;
+        detail = opUnion(detail, max(course - 0.014, sdBox(p - float2(-0.06, 0.44), float2(0.54, 0.44))));
+
+        // The waterline, rocking. What is under it is in the dark, and the reflection of
+        // the window lies on it.
+        const float water = 0.70 + sin(time * 0.7 + p.x * 2.4) * 0.022;
+        detail = opUnion(detail, max(abs(p.y - water) - 0.022, abs(p.x) - 1.0));
+        core = opUnion(core, max(abs(p.y - water - 0.06) - 0.030,
+                                 abs(p.x + 0.06) - 0.13 - sin(time * 1.9) * 0.02));
     }
     else if (rite == 6)
     {
-        // Pale Shepherd: a tall figure with a crook, and its flock at its feet.
-        const float robe = lerp(0.13, 0.30, saturate((p.y + 0.20) / 1.05));
-        d = opUnion(d, max(abs(p.x + 0.18) - robe, abs(p.y - 0.32) - 0.56));
-        d = opUnion(d, sdCircle(p - float2(-0.18, -0.42), 0.23));            // head
-        d = opUnion(d, sdBox(p - float2(0.52, 0.10), float2(0.045, 0.84)));  // crook
-        d = opUnion(d, abs(sdCircle(p - float2(0.40, -0.66), 0.17)) - 0.045);
-        d = opUnion(d, sdCircle(p - float2(-0.72, 0.80), 0.19));             // flock
-        d = opUnion(d, sdCircle(p - float2(-0.44, 0.87), 0.15));
-        detail = sdCircle(p - float2(-0.18, -0.46), 0.16);
-        core = sdCircle(p - float2(-0.24, -0.46), 0.055);                    // the eye
+        // Pale Shepherd: a figure holding a crook, with its flock at its feet.
+        //
+        // It was a cone with a ball on it and a rod floating alongside, which read as a
+        // lollipop next to a stick. A crook has to be HELD - the hand has to be on it, or
+        // it is just another object standing in the same place.
+        const float waist = 0.155 + smoothstep(0.10, 0.78, p.y) * 0.20
+                          + sin(p.y * 7.0) * 0.012;
+        d = opUnion(d, max(abs(p.x + 0.18) - waist, abs(p.y - 0.30) - 0.56));
+        d = opUnion(d, sdRound(p - float2(-0.18, -0.28), float2(0.22, 0.09), 0.09));  // shoulders
+        d = opUnion(d, sdCircle(p - float2(-0.18, -0.52), 0.19));                     // head
+        // A broad hat, which is what tells a shepherd from any other robed figure. The brim
+        // is wide and thin and the crown is a cone above it - a short cylinder on a short
+        // disc came out as a nut on a bolt.
+        d = opUnion(d, sdRound(p - float2(-0.18, -0.655), float2(0.40, 0.028), 0.028));
+        d = opUnion(d, max(abs(p.x + 0.18) * 1.55 - (p.y + 0.94), p.y + 0.63));
+
+        // The staff, and the arm that holds it. The hand closes on the shaft.
+        d = opUnion(d, sdSeg(p, float2(0.30, -0.86), float2(0.34, 0.90), 0.042));
+        d = opUnion(d, abs(sdCircle(p - float2(0.22, -0.84), 0.155)) - 0.042);        // the crook
+        d = opUnion(d, sdSeg(p, float2(-0.02, -0.24), float2(0.28, -0.10), 0.062));   // arm
+        d = opUnion(d, sdCircle(p - float2(0.31, -0.09), 0.078));                     // hand on it
+
+        // The flock: three of them, bodies and heads, crowded at the shepherd's feet.
+        for (int f = 0; f < 3; ++f)
+        {
+            const float fx = -0.74 + float(f) * 0.16;
+            const float fy = 0.80 + float((f + 1) % 2) * 0.07;
+            d = opUnion(d, sdRound(p - float2(fx, fy), float2(0.115, 0.085), 0.075));
+            d = opUnion(d, sdCircle(p - float2(fx + 0.11, fy - 0.05), 0.055));
+            d = opUnion(d, sdSeg(p, float2(fx - 0.04, fy + 0.07), float2(fx - 0.04, fy + 0.14), 0.020));
+            d = opUnion(d, sdSeg(p, float2(fx + 0.05, fy + 0.07), float2(fx + 0.05, fy + 0.14), 0.020));
+        }
+
+        detail = sdCircle(p - float2(-0.18, -0.50), 0.135);          // the face, in the hat's shade
+        detail = opUnion(detail, max(abs(p.y - 0.28) - 0.020, abs(p.x + 0.18) - 0.15));
+        core = sdCircle(p - float2(-0.25, -0.52), 0.048);            // the eye under the brim
     }
     else
     {
         // Hollow Mouth: a ring of teeth around a throat that goes nowhere.
-        d = abs(sdCircle(p, 0.72)) - 0.16;
-        // Teeth: wedges pointing inward, all the way round.
-        const float a = atan2(p.y, p.x);
+        //
+        // The teeth were thin slivers of constant width, which came out as the graduations
+        // on a clock face - the whole rite read as a porthole. A tooth has to TAPER: fat
+        // where it meets the gum and sharp where it points, which is the only thing that
+        // separates a mouth from a dial.
         const float r = length(p);
-        const float tooth = abs(frac(a * (16.0 / 6.28318530718) + 0.5) - 0.5);
-        d = opUnion(d, max(tooth * r * 2.6 - 0.075, abs(r - 0.50) - 0.22));
-        detail = sdCircle(p, 0.26);
-        core = sdCircle(p, 0.10 + sin(time * 1.7) * 0.012);
+        const float a = atan2(p.y, p.x);
+
+        // The lips: a heavy ring, slightly out of round so it is flesh and not machined.
+        const float lip = 0.80 + sin(a * 3.0 + 0.7) * 0.030;
+        d = abs(r - lip) - 0.135;
+
+        // The teeth. Angular distance to the nearest of sixteen, times the radius, gives
+        // the distance to the tooth's centre line in the plane; allowing a half-width that
+        // falls to zero at the inner end makes each one a triangle pointing inward.
+        const float count = 16.0;
+        const float sa = abs(frac(a * count / 6.28318530718 + 0.5) - 0.5) * 6.28318530718 / count;
+        const float outer = lip - 0.10;
+        const float inner = 0.24;
+        const float taper = saturate((r - inner) / (outer - inner));
+        d = opUnion(d, max(sa * r - 0.105 * taper * taper, max(r - outer, inner - r)));
+
+        // The gums behind them, so the teeth are set into something.
+        d = opUnion(d, abs(r - (outer - 0.02)) - 0.075);
+
+        // The throat: genuinely dark, and deepening inward, so the middle of the rite is a
+        // hole rather than a flat disc with a ring drawn round it.
+        detail = sdCircle(p, inner + 0.02);
+        detail = opUnion(detail, abs(r - lip) - 0.020);
+
+        // What is down there, breathing.
+        core = sdCircle(p, (0.085 + sin(time * 1.7) * 0.014));
     }
     return d;
 }
