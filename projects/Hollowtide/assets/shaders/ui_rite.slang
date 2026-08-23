@@ -56,6 +56,15 @@ float sdRound(float2 p, float2 b, float r)
 
 float sdCircle(float2 p, float r) { return length(p) - r; }
 
+// A capsule from a to b. Limbs are capsules; nothing else describes an arm as cheaply.
+float sdSeg(float2 p, float2 a, float2 b, float r)
+{
+    const float2 pa = p - a;
+    const float2 ba = b - a;
+    const float h = saturate(dot(pa, ba) / max(dot(ba, ba), 1e-6));
+    return length(pa - ba * h) - r;
+}
+
 // A pointed arch: two circles meeting at a point over a rectangular opening. The single
 // shape that says "this is a building somebody worshipped in" more than any other.
 float sdArch(float2 p, float2 b, float r)
@@ -137,17 +146,50 @@ float Structure(int rite, float2 p, float time, out float core, out float detail
     }
     else if (rite == 2)
     {
-        // Weeping Statue: a bowed figure on a plinth, one tear falling.
-        d = opUnion(d, sdBox(p - float2(0.0, 0.90), float2(0.52, 0.10)));   // plinth
-        d = opUnion(d, sdBox(p - float2(0.0, 0.74), float2(0.40, 0.10)));
-        // Robe: widens toward the ground.
-        const float robe = lerp(0.14, 0.36, saturate((p.y + 0.30) / 1.00));
-        d = opUnion(d, max(abs(p.x) - robe, abs(p.y - 0.24) - 0.48));
-        d = opUnion(d, sdCircle(p - float2(0.0, -0.44), 0.26));             // bowed head
-        detail = sdCircle(p - float2(0.0, -0.52), 0.20);                    // cowl shadow
-        // The tear, falling on a loop.
-        const float fall = frac(time * 0.32);
-        core = sdCircle(p - float2(0.10, -0.34 + fall * 0.95), 0.045 + fall * 0.02);
+        // Weeping Statue: a hooded figure with its face in its hands, on a stepped plinth.
+        //
+        // Two earlier attempts came out as a chess pawn, and both failed the same way: the
+        // robe was wider than the body at every height, so the shoulders, the arms and the
+        // head were all swallowed into one bell. A figure needs a WAIST - something narrower
+        // than what is above and below it - and it needs limbs that leave the silhouette.
+        // Hands at the face put the elbows outside the body and cut two clear voids through
+        // it, which no object shape can imitate.
+        d = opUnion(d, sdBox(p - float2(0.0, 0.94), float2(0.60, 0.06)));   // plinth, stepped
+        d = opUnion(d, sdBox(p - float2(0.0, 0.84), float2(0.48, 0.06)));
+        d = opUnion(d, sdBox(p - float2(0.0, 0.74), float2(0.38, 0.05)));
+
+        // The robe. Narrow through the torso, flaring only below the waist, with a slow
+        // ripple down the hem so the edge reads as cloth rather than as a cone.
+        const float waist = 0.185 + smoothstep(0.20, 0.70, p.y) * 0.245
+                          + sin(p.y * 8.0 + 1.1) * 0.014;
+        d = opUnion(d, max(abs(p.x - 0.02) - waist, abs(p.y - 0.24) - 0.48));
+
+        // Shoulders, set forward of the hips - the bow is in the offset, not in a tilt.
+        d = opUnion(d, sdRound(p - float2(0.05, -0.24), float2(0.27, 0.09), 0.09));
+        d = opUnion(d, sdSeg(p, float2(0.07, -0.30), float2(0.09, -0.40), 0.075)); // neck
+
+        // The head, bowed, under a hood that overhangs the face.
+        const float2 h = p - float2(0.10, -0.55);
+        d = opUnion(d, sdCircle(h, 0.185));
+        d = opUnion(d, opSub(sdCircle(h - float2(0.0, -0.02), 0.245), sdCircle(h - float2(0.05, 0.10), 0.215)));
+
+        // Arms up to the face: shoulder to elbow held wide, elbow back in to the hands. The
+        // elbows sit ABOVE the shoulders, which is what makes the pose read as grief.
+        d = opUnion(d, sdSeg(p, float2(-0.19, -0.24), float2(-0.36, -0.44), 0.070));
+        d = opUnion(d, sdSeg(p, float2(-0.36, -0.44), float2(-0.03, -0.56), 0.060));
+        d = opUnion(d, sdSeg(p, float2(0.29, -0.24), float2(0.46, -0.42), 0.070));
+        d = opUnion(d, sdSeg(p, float2(0.46, -0.42), float2(0.22, -0.56), 0.060));
+
+        // Cut: the hollow under the hood, the fold at the waist, the plinth courses.
+        detail = sdCircle(h - float2(0.02, 0.06), 0.095);
+        detail = opUnion(detail, max(abs(p.y - 0.22) - 0.022, abs(p.x - 0.02) - 0.17));
+        detail = opUnion(detail, max(abs(p.y - 0.79) - 0.010, abs(p.x) - 0.52));
+        detail = opUnion(detail, max(abs(p.y - 0.89) - 0.010, abs(p.x) - 0.52));
+
+        // The tear, falling from between the hands and drying where it lands.
+        const float fall = frac(time * 0.28);
+        core = sdCircle(p - float2(0.10, -0.44 + fall * 1.20), 0.040 * (1.0 - fall * 0.30));
+        core = opUnion(core, max(abs(p.y - 0.725) - 0.011, abs(p.x - 0.10) - 0.07 * (1.0 - fall)));
     }
     else if (rite == 3)
     {
@@ -172,19 +214,58 @@ float Structure(int rite, float2 p, float time, out float core, out float detail
     }
     else if (rite == 4)
     {
-        // Ossuary Engine: a ribbed housing on a bed, with a furnace and a stack.
-        d = opUnion(d, sdBox(p - float2(0.0, 0.86), float2(0.92, 0.14)));    // bed
-        d = opUnion(d, sdRound(p - float2(0.0, 0.18), float2(0.74, 0.56), 0.06));
-        d = opUnion(d, sdBox(p - float2(-0.48, -0.62), float2(0.15, 0.24))); // stack
-        // Ribs banding the housing, cut as deep grooves so they catch the light along
-        // their edges rather than smearing into a gradient across the whole face.
-        const float rib = abs(frac(p.y * 4.0 + 0.5) - 0.5) / 4.0;
-        detail = max(rib - 0.030, sdBox(p - float2(0.0, 0.18), float2(0.66, 0.48)));
-        // A hatch on the front, and the bolts round it.
-        detail = opUnion(detail, sdRound(p - float2(-0.28, 0.22), float2(0.22, 0.26), 0.05));
-        // The furnace, breathing.
-        const float breath = 0.20 + sin(time * 2.3) * 0.02;
-        core = sdCircle(p - float2(0.30, 0.20), breath);
+        // Ossuary Engine: a boiler on a frame, a stack, and a flywheel that actually turns.
+        //
+        // It was a rounded box with grooves in it, which is a crate. What makes a machine
+        // read as a machine is moving parts and the linkage between them, so it has a wheel
+        // now, and a rod running from the wheel into the boiler that drives with it.
+        d = opUnion(d, sdBox(p - float2(0.0, 0.90), float2(0.96, 0.10)));    // bed
+        d = opUnion(d, sdBox(p - float2(-0.62, 0.66), float2(0.11, 0.24)));  // legs
+        d = opUnion(d, sdBox(p - float2(0.10, 0.66), float2(0.11, 0.24)));
+
+        // The boiler: a horizontal drum, with a banded collar at each end.
+        d = opUnion(d, sdRound(p - float2(-0.22, 0.24), float2(0.62, 0.34), 0.16));
+        d = opUnion(d, sdRound(p - float2(-0.80, 0.24), float2(0.07, 0.38), 0.05));
+        d = opUnion(d, sdRound(p - float2(0.34, 0.24), float2(0.07, 0.38), 0.05));
+
+        // The stack, rising off the boiler with a flared cowl.
+        d = opUnion(d, sdBox(p - float2(-0.52, -0.34), float2(0.13, 0.40)));
+        d = opUnion(d, sdBox(p - float2(-0.52, -0.72), float2(0.20, 0.07)));
+
+        // The flywheel. Rim, hub and six spokes, turning at a rate the eye can follow -
+        // this is the single thing that stops the rite reading as a box.
+        const float2 w = p - float2(0.52, 0.36);
+        const float wr = length(w);
+        const float wa = atan2(w.y, w.x) + time * 0.55;
+        const float spokes = 6.0;
+        const float sa = abs(frac(wa * spokes / 6.28318530718 + 0.5) - 0.5) * 6.28318530718 / spokes;
+        float wheel = abs(wr - 0.40) - 0.055;                                // rim
+        wheel = opUnion(wheel, wr - 0.10);                                   // hub
+        wheel = opUnion(wheel, max(sa * wr - 0.035, wr - 0.40));             // spokes
+        d = opUnion(d, wheel);
+
+        // The connecting rod, from a crank pin on the wheel back into the boiler. It moves
+        // with the wheel, so the whole assembly reads as one mechanism.
+        const float2 pin = float2(0.52, 0.36) + float2(cos(wa), sin(wa)) * 0.26;
+        const float2 head = float2(0.02, 0.36);
+        const float2 axis = pin - head;
+        const float len = length(axis);
+        const float2 dir = axis / max(len, 1e-4);
+        const float2 rel = p - (head + pin) * 0.5;
+        d = opUnion(d, sdRound(float2(dot(rel, dir), dot(rel, float2(-dir.y, dir.x))),
+                               float2(len * 0.5, 0.045), 0.04));
+
+        // Cut: the boiler's bands, and the furnace door.
+        const float band = abs(frac(p.x * 3.2 + 0.5) - 0.5) / 3.2;
+        detail = max(band - 0.026, sdRound(p - float2(-0.22, 0.24), float2(0.54, 0.28), 0.12));
+        detail = opUnion(detail, sdRound(p - float2(-0.58, 0.30), float2(0.19, 0.20), 0.06));
+
+        // The furnace behind the door, breathing.
+        const float breath = 0.145 + sin(time * 2.3) * 0.014;
+        core = sdRound(p - float2(-0.58, 0.30), float2(0.13, 0.14), breath * 0.6);
+        // And what escapes up the stack.
+        core = opUnion(core, sdCircle(p - float2(-0.52, -0.78 - frac(time * 0.4) * 0.22),
+                                      0.035 * (1.0 - frac(time * 0.4))));
     }
     else if (rite == 5)
     {
@@ -270,9 +351,20 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     // ── Shading ──────────────────────────────────────────────────────────────────────
     // One light, high and to the left, shared with the parish's own sense of where the
-    // light is. The gradient of the distance field IS the surface normal, so the shape
-    // shades itself without anyone painting highlights into it by hand.
-    const float2 grad = normalize(float2(ddx(d), ddy(d)) + 1e-6);
+    // light is. The gradient of the distance field is the surface normal, so the shape
+    // shades itself without anyone painting a highlight into it by hand.
+    //
+    // Sampled at a fixed offset rather than taken from ddx/ddy. A screen derivative of a
+    // signed distance field flips sign across the shape's medial axis, which put a hard
+    // seam straight down the middle of every symmetric rite - the light was correct on
+    // both halves, but the change between them happened in one pixel.
+    const float eps = 0.012;
+    float cx0, cx1, dx0, dx1;
+    const float gx = Structure(rite, q + float2(eps, 0.0), time, cx0, dx0)
+                   - Structure(rite, q - float2(eps, 0.0), time, cx1, dx1);
+    const float gy = Structure(rite, q + float2(0.0, eps), time, cx0, dx0)
+                   - Structure(rite, q - float2(0.0, eps), time, cx1, dx1);
+    const float2 grad = normalize(float2(gx, gy) + 1e-6);
     const float2 lightDir = normalize(float2(-0.55, -1.0));
     const float lambert = saturate(dot(grad, -lightDir) * 0.5 + 0.5);
 
