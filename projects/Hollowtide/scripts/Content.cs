@@ -24,8 +24,12 @@ public sealed class RiteDef
 	/// rites are slower and pay far more per working, which is what makes the parish read as
 	/// a set of machines running at different speeds rather than one number going up.</summary>
 	public double CycleSeconds;
-	/// <summary>Tint for this rite in the world and in the ledger.</summary>
-	public Vector4 Colour;
+	/// <summary>Tint for this rite in the world and in the ledger. Not stored: it is a step
+	/// on the one ramp, so a rite cannot invent a colour of its own. See Palette's remarks
+	/// for why eight arbitrary hues were the problem rather than the decoration.</summary>
+	public Vector4 Colour => Palette.RiteTint(Index);
+	/// <summary>Position in the table, which is what the tint and the light are derived from.</summary>
+	public int Index;
 	/// <summary>What the parish says when one of these is taken from you.</summary>
 	public string TakenLine = "";
 	/// <summary>The sprite that stands for this rite in the parish. Drawn in greyscale and
@@ -70,14 +74,13 @@ public static class Content
 	/// and the reason a tier you have outgrown is still worth topping up.</summary>
 	public const int MilestoneStep = 25;
 
-	public static readonly RiteDef[] Rites =
+	public static readonly RiteDef[] Rites = NumberThem(new RiteDef[]
 	{
 		new RiteDef
 		{
 			Name = "Grave Lantern", Art = "project://assets/textures/rites/grave_lantern.png", CycleSeconds = 2.5,
 			Blurb = "It burns low, and something moves at the edge of it.",
 			BaseCost = 15.0, BaseRate = 0.1, Growth = 1.13, DreadRate = 0.0010,
-			Colour = new Vector4(0.85f, 0.74f, 0.42f, 1.0f),
 			TakenLine = "A lantern goes out. You did not hear it fall.",
 		},
 		new RiteDef
@@ -85,7 +88,6 @@ public static class Content
 			Name = "Bone Choir", Art = "project://assets/textures/rites/bone_choir.png", CycleSeconds = 3.5,
 			Blurb = "Twelve throats, no air, and they keep perfect time.",
 			BaseCost = 110.0, BaseRate = 0.9, Growth = 1.14, DreadRate = 0.0022,
-			Colour = new Vector4(0.80f, 0.83f, 0.86f, 1.0f),
 			TakenLine = "The choir drops a voice. The others do not adjust.",
 		},
 		new RiteDef
@@ -93,7 +95,6 @@ public static class Content
 			Name = "Weeping Statue", Art = "project://assets/textures/rites/weeping_statue.png", CycleSeconds = 5.0,
 			Blurb = "You have never seen it move. It is never where it was.",
 			BaseCost = 1300.0, BaseRate = 7.0, Growth = 1.15, DreadRate = 0.0044,
-			Colour = new Vector4(0.55f, 0.68f, 0.72f, 1.0f),
 			TakenLine = "A plinth stands empty. The stains lead away from it.",
 		},
 		new RiteDef
@@ -101,7 +102,6 @@ public static class Content
 			Name = "Flesh Loom", Art = "project://assets/textures/rites/flesh_loom.png", CycleSeconds = 7.0,
 			Blurb = "It asks for very little and it never stops asking.",
 			BaseCost = 15000.0, BaseRate = 44.0, Growth = 1.15, DreadRate = 0.0080,
-			Colour = new Vector4(0.72f, 0.34f, 0.36f, 1.0f),
 			TakenLine = "The loom is unthreaded. Something wore what it made.",
 		},
 		new RiteDef
@@ -109,7 +109,6 @@ public static class Content
 			Name = "Ossuary Engine", Art = "project://assets/textures/rites/ossuary_engine.png", CycleSeconds = 9.0,
 			Blurb = "Built from the parish it drains. It is very efficient.",
 			BaseCost = 190000.0, BaseRate = 260.0, Growth = 1.16, DreadRate = 0.0140,
-			Colour = new Vector4(0.62f, 0.60f, 0.50f, 1.0f),
 			TakenLine = "An engine seizes. The bones in it were not ours.",
 		},
 		new RiteDef
@@ -117,7 +116,6 @@ public static class Content
 			Name = "Drowned Chapel", Art = "project://assets/textures/rites/drowned_chapel.png", CycleSeconds = 12.0,
 			Blurb = "The tide keeps the congregation. The congregation keeps singing.",
 			BaseCost = 2600000.0, BaseRate = 1500.0, Growth = 1.16, DreadRate = 0.0240,
-			Colour = new Vector4(0.34f, 0.56f, 0.62f, 1.0f),
 			TakenLine = "A chapel slips under. The singing does not stop, only muffles.",
 		},
 		new RiteDef
@@ -125,7 +123,6 @@ public static class Content
 			Name = "Pale Shepherd", Art = "project://assets/textures/rites/pale_shepherd.png", CycleSeconds = 16.0,
 			Blurb = "It gathers what wanders. You have agreed not to wander.",
 			BaseCost = 42000000.0, BaseRate = 8800.0, Growth = 1.17, DreadRate = 0.0420,
-			Colour = new Vector4(0.78f, 0.78f, 0.90f, 1.0f),
 			TakenLine = "A shepherd walks off with its flock. Count yourself.",
 		},
 		new RiteDef
@@ -133,10 +130,20 @@ public static class Content
 			Name = "Hollow Mouth", Art = "project://assets/textures/rites/hollow_mouth.png", CycleSeconds = 22.0,
 			Blurb = "It is not a door. Doors are for going back through.",
 			BaseCost = 720000000.0, BaseRate = 51000.0, Growth = 1.18, DreadRate = 0.0700,
-			Colour = new Vector4(0.55f, 0.28f, 0.66f, 1.0f),
 			TakenLine = "A mouth closes. You are certain it swallowed.",
 		},
-	};
+	});
+
+	/// <summary>Stamps each rite with its position, so the palette can derive its step on the
+	/// ramp without every entry repeating a number that must match its own index.</summary>
+	private static RiteDef[] NumberThem(RiteDef[] rites)
+	{
+		for (int i = 0; i < rites.Length; i++)
+		{
+			rites[i].Index = i;
+		}
+		return rites;
+	}
 
 	/// <summary>Three offerings per rite on a fixed ladder, plus the hand-written global
 	/// ones. Generating the ladder keeps 24 near-identical entries out of the file and

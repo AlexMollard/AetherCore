@@ -125,7 +125,7 @@ public sealed class VigilPresence : EntityScript
 	{
 		Vector4 tint = Deepest >= 0 && Deepest < Content.RiteCount
 			? Content.Rites[Deepest].Colour
-			: Palette.BoneDim;
+			: Palette.TextDim;
 		// Dread pulls the flame toward rust. A keeper about to be visited is visibly the
 		// wrong colour from across the parish.
 		Vector4 lit = Palette.Mix(tint, Palette.Dread, Math.Clamp(Dread, 0.0f, 1.0f) * 0.85f);

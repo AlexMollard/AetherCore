@@ -194,7 +194,7 @@ public sealed class Hud
 			_bell.Style(ready, Palette.Mix(Palette.Row, Palette.Sigil, 0.40f), Palette.Row, Palette.PanelDeep);
 		}
 
-		Ui.SetTextColor(_sigilHint, Palette.Mix(Palette.BoneFaint, Palette.Ichor, eased));
-		Ui.SetTextColor(_title, Palette.Mix(Palette.BoneDim, Palette.Dread, dread * 0.8f));
+		Ui.SetTextColor(_sigilHint, Palette.Mix(Palette.TextFaint, Palette.Ichor, eased));
+		Ui.SetTextColor(_title, Palette.Mix(Palette.TextDim, Palette.Dread, dread * 0.8f));
 	}
 }

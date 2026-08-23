@@ -75,6 +75,7 @@ public sealed class Parish
 
 	private Entity _motes;
 	private Entity _ground;
+	private bool _groundDressed;
 	private Entity _camera;
 	private Vector3 _cameraHome;
 	private Entity _ambient;
@@ -128,8 +129,9 @@ public sealed class Parish
 		_ground = Scene.Create("ParishGround", new Vector3(-3.4f, _collection.Y - 0.62f, 0.0f));
 		ComponentAccess floor = _ground.Component("Sprite Renderer");
 		floor.Add();
-		floor.SetVector4("tint", new Vector4(0.055f, 0.052f, 0.062f, 1.0f));
+		floor.SetVector4("tint", Palette.Ink);
 		floor.SetInt("sorting_layer", 0);
+		_groundDressed = false;
 		_ground.Scale = new Vector3(26.0f, 1.1f, 1.0f);
 
 		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
@@ -278,6 +280,23 @@ public sealed class Parish
 	public void Update(float deltaTime, float unscaledDelta)
 	{
 		_time += unscaledDelta;
+
+		// Same later-frame rule as the rites: a sprite will not take its texture on the frame
+		// its component was added.
+		if (!_groundDressed && _ground.IsValid)
+		{
+			ComponentAccess floor = _ground.Component("Sprite Renderer");
+			floor.SetString("texture", "project://assets/textures/rites/ground.png");
+			floor.SetBool("pixel_art", true);
+			floor.SetVector2("pixel_size", new Vector2(64.0f, 64.0f));
+			floor.SetFloat("pixels_per_unit", 64.0f);
+			if (floor.GetString("texture").Length > 0)
+			{
+				// The stone carries its own value; the tint only has to stop it glowing.
+				floor.SetVector4("tint", Palette.Mix(Palette.Stone, Palette.Ink, 0.6f));
+				_groundDressed = true;
+			}
+		}
 		for (int i = 0; i < _flare.Length; i++)
 		{
 			_flare[i] = MathF.Max(0.0f, _flare[i] - unscaledDelta * 2.2f);
@@ -329,7 +348,7 @@ public sealed class Parish
 				// and the flare when it delivers instead.
 				_lanterns[rite] = e;
 
-				WorldLabel label = new WorldLabel(240.0f, 22.0f);
+				WorldLabel label = new WorldLabel(90.0f, 20.0f);
 				label.SetFontSize(17.0f);
 				_labels[rite] = label;
 			}
@@ -352,8 +371,9 @@ public sealed class Parish
 				_dressed[rite] = art.GetString("texture").Length > 0;
 			}
 
-			Vector4 colour = Content.Rites[rite].Colour;
-			Vector4 lit = Palette.Mix(colour, Palette.Dread, dread * 0.7f);
+			// Structure stays on the ramp; only the souring toward dread is allowed to add a
+			// hue, and only as far as the meter has actually filled.
+			Vector4 lit = Palette.Mix(Palette.RiteTint(rite), Palette.Dread, dread * 0.30f);
 			_lanterns[rite].Component("Sprite Renderer").SetVector4("tint", lit);
 
 			// Flicker is per-lantern and out of phase, so the parish never pulses in unison -
@@ -364,8 +384,11 @@ public sealed class Parish
 			// visibly the one that paid, and it fades rather than snapping back.
 			float flare = _flare[rite] * _flare[rite];
 			float reach = (2.1f + bulk * 2.6f) * (1.0f + flare * 0.55f);
+			// The light is cold like everything it falls on. A warm light over a warm tint
+			// over a warm sprite is how the parish went salmon.
+			Vector4 lamp = Palette.Mix(Palette.RiteLight(rite), Palette.Dread, dread * 0.35f);
 			Lighting2D.SubmitLight(new Vector2(at.X, at.Y), reach,
-				new Vector3(lit.X, lit.Y, lit.Z), (1.9f + bulk) * flicker * (1.0f + flare * 1.6f), castsShadow: false);
+				new Vector3(lamp.X, lamp.Y, lamp.Z), (1.6f + bulk) * flicker * (1.0f + flare * 1.6f), castsShadow: false);
 
 			// It swells as it works and settles as it hands over - the lantern breathes with
 			// its own cadence instead of every lantern pulsing in unison.
@@ -373,9 +396,8 @@ public sealed class Parish
 			_lanterns[rite].Scale = new Vector3(bulk * (1.0f + working * 0.06f + flare * 0.18f),
 				bulk * (1.0f + working * 0.06f + flare * 0.18f), 1.0f);
 
-			_labels[rite]?.SetColor(Palette.Fade(lit, 0.75f));
-			_labels[rite]?.Track(at + new Vector3(0.0f, bulk + 0.45f, 0.0f),
-				Content.Rites[rite].Name + " x" + owned);
+			_labels[rite]?.SetColor(Palette.Fade(Palette.TextDim, 0.8f));
+			_labels[rite]?.Track(at + new Vector3(0.0f, 1.5f * bulk * 0.5f + 0.30f, 0.0f), "x" + owned);
 		}
 	}
 
@@ -436,8 +458,9 @@ public sealed class Parish
 		_ground = Scene.Create("ParishGround", new Vector3(-3.4f, _collection.Y - 0.62f, 0.0f));
 		ComponentAccess floor = _ground.Component("Sprite Renderer");
 		floor.Add();
-		floor.SetVector4("tint", new Vector4(0.055f, 0.052f, 0.062f, 1.0f));
+		floor.SetVector4("tint", Palette.Ink);
 		floor.SetInt("sorting_layer", 0);
+		_groundDressed = false;
 		_ground.Scale = new Vector3(26.0f, 1.1f, 1.0f);
 
 		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
@@ -487,10 +510,8 @@ public sealed class Parish
 			return;
 		}
 		settings.SetFloat("ambientIntensity", 0.42f - dread * 0.34f);
-		settings.SetVector3("ambient_color", new Vector3(
-			0.10f + dread * 0.16f,
-			0.12f - dread * 0.06f,
-			0.16f - dread * 0.07f));
+		Vector4 ambient = Palette.Mix(Palette.Ash, Palette.DreadDeep, dread * 0.6f);
+		settings.SetVector3("ambient_color", new Vector3(ambient.X, ambient.Y, ambient.Z));
 	}
 
 	/// <summary>Two things move the camera: a decaying kick after a visitation, and a slow

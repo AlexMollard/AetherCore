@@ -20,13 +20,14 @@ CTL = os.path.join("build", "default", "tools", "control-client", "RelWithDebInf
 SIZE = 48
 OUT_DIR = "project://assets/textures/rites"
 
-# A five-tone ramp, which is all a silhouette at this size can carry. Anything more and the
-# shape stops reading once it is tinted and lit.
-LINE = (28, 26, 32, 255)      # outline, almost black
-DARK = (74, 70, 78, 255)      # shadowed interior
-MID = (150, 146, 140, 255)    # body
-LIT = (214, 212, 200, 255)    # struck by the light
-CORE = (255, 250, 235, 255)   # the ichor itself
+# Five steps of the ONE ramp, taken straight from scripts/Palette.cs. The art carries no hue
+# of its own - it is tinted per rite at runtime - and the single exception is the core, which
+# is ichor, because ichor is the only thing in this game allowed to be a colour.
+LINE = (0x07, 0x08, 0x0B, 255)   # Ink - outline
+DARK = (0x23, 0x28, 0x33, 255)   # Stone - shadowed interior
+MID = (0x3A, 0x41, 0x50, 255)    # Ash - body
+LIT = (0xA8, 0xB0, 0xBE, 255)    # Pale - struck by the light
+CORE = (0x4A, 0xDE, 0x9A, 255)   # Ichor - the only colour on the sprite
 
 
 def ctl(method, params=None):
@@ -227,6 +228,30 @@ def hollow_mouth():
     return s
 
 
+def ground():
+    """The floor the parish stands on. Wide and stretched across the view, so it is drawn as
+    flagstones with enough variation that the eye stops reading it as one flat band - which is
+    the whole problem with a rectangle standing in for a surface."""
+    import random
+    rng = random.Random(7)          # fixed, so the floor is the same floor every bake
+    s = Sprite(64)
+    s.rect(0, 0, 63, 63, DARK)
+    s.rect(0, 0, 63, 1, MID)        # the lip, where the light catches
+    y = 2
+    row = 0
+    while y < 64:
+        h = 7 + (row % 2)
+        x = -4 if row % 2 else 0    # offset courses, like real flagging
+        while x < 64:
+            w = 9 + rng.randint(0, 4)
+            tone = LINE if rng.random() < 0.22 else DARK
+            s.rect(x + 1, y + 1, min(x + w - 1, 63), min(y + h - 1, 63), tone)
+            x += w
+        y += h + 1
+        row += 1
+    return s
+
+
 def bearer():
     """The wisp that carries a rite's yield to the keeper. Small, because a dozen of them
     are in the air at once and they must read as traffic rather than as objects."""
@@ -243,7 +268,7 @@ RITES = [
     ("weeping_statue", weeping_statue), ("flesh_loom", flesh_loom),
     ("ossuary_engine", ossuary_engine), ("drowned_chapel", drowned_chapel),
     ("pale_shepherd", pale_shepherd), ("hollow_mouth", hollow_mouth),
-    ("bearer", bearer),
+    ("bearer", bearer), ("ground", ground),
 ]
 
 

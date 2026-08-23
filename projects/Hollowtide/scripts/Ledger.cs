@@ -107,13 +107,13 @@ public sealed class Ledger
 			// The composed button's own centred label is unused: a ledger row has four columns,
 			// so they are placed individually and the pooled label is emptied.
 			Ui.SetText(row.Box.Label, "");
-			row.Title = UiKit.Text(row.Box.Root, "", 14.0f, 8.0f, 370.0f, 24.0f, 17.0f, Palette.Bone);
-			row.Sub = UiKit.Text(row.Box.Root, "", 14.0f, 34.0f, 420.0f, 24.0f, 15.0f, Palette.BoneFaint,
+			row.Title = UiKit.Text(row.Box.Root, "", 14.0f, 8.0f, 370.0f, 24.0f, 17.0f, Palette.TextBright);
+			row.Sub = UiKit.Text(row.Box.Root, "", 14.0f, 34.0f, 420.0f, 24.0f, 15.0f, Palette.TextFaint,
 				UiHAlign.Left, Palette.Body);
 			row.Cost = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 8.0f, 176.0f, 24.0f, 17.0f,
 				Palette.Ichor, UiHAlign.Right);
 			row.Note = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 34.0f, 176.0f, 24.0f, 15.0f,
-				Palette.BoneFaint, UiHAlign.Right);
+				Palette.TextFaint, UiHAlign.Right);
 			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
 			_rows[i] = row;
 			_payload[i] = -1;
@@ -134,7 +134,7 @@ public sealed class Ledger
 		{
 			bool active = (int)_tab == i;
 			_tabs[i].SetColour(active ? Palette.RowHot : Palette.Row);
-			_tabs[i].SetLabelColour(active ? Palette.Ichor : Palette.BoneDim);
+			_tabs[i].SetLabelColour(active ? Palette.Ichor : Palette.TextDim);
 			if (_tabs[i].Activated && !active)
 			{
 				_tab = (LedgerTab)i;
@@ -152,7 +152,7 @@ public sealed class Ledger
 			}
 			bool active = _amountIndex == i;
 			_amounts[i].SetColour(active ? Palette.RowHot : Palette.Row);
-			_amounts[i].SetLabelColour(active ? Palette.Ichor : Palette.BoneDim);
+			_amounts[i].SetLabelColour(active ? Palette.Ichor : Palette.TextDim);
 			if (_amounts[i].Activated)
 			{
 				_amountIndex = i;
@@ -240,7 +240,7 @@ public sealed class Ledger
 				Ui.SetText(row.Sub, "Something further down. You are not deep enough to name it.");
 				Ui.SetText(row.Cost, "");
 				Ui.SetText(row.Note, "");
-				Ui.SetTextColor(row.Title, Palette.BoneFaint);
+				Ui.SetTextColor(row.Title, Palette.TextFaint);
 				row.Box.SetEnabled(false);
 				row.Box.SetColour(Palette.PanelDeep);
 				continue;
@@ -251,14 +251,14 @@ public sealed class Ledger
 			bool affordable = cost <= Vigil.Ichor;
 
 			Ui.SetText(row.Title, def.Name + (owned > 0 ? "   x" + owned : ""));
-			Ui.SetTextColor(row.Title, owned > 0 ? def.Colour : Palette.Bone);
+			Ui.SetTextColor(row.Title, owned > 0 ? def.Colour : Palette.TextBright);
 			Ui.SetText(row.Sub, owned > 0
 				? Numbers.Rate(owned * def.BaseRate * Vigil.RiteMultiplier(rite)) + "   each " +
 				  Numbers.Mult(Vigil.RiteMultiplier(rite)) + "   next double at " +
 				  ((owned / Content.MilestoneStep + 1) * Content.MilestoneStep)
 				: def.Blurb);
 			Ui.SetText(row.Cost, Numbers.Short(cost));
-			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.BoneFaint);
+			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.TextFaint);
 			Ui.SetText(row.Note, "buy " + count + (Vigil.Overseers[rite] ? "   overseen" : ""));
 
 			// The working bar: owned rites show their cadence, unowned ones show nothing,
@@ -307,10 +307,10 @@ public sealed class Ledger
 
 			bool affordable = def.Cost <= Vigil.Ichor;
 			Ui.SetText(row.Title, def.Name);
-			Ui.SetTextColor(row.Title, Palette.Bone);
+			Ui.SetTextColor(row.Title, Palette.TextBright);
 			Ui.SetText(row.Sub, def.Blurb);
 			Ui.SetText(row.Cost, Numbers.Short(def.Cost));
-			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.BoneFaint);
+			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.TextFaint);
 			Ui.SetText(row.Note, Numbers.Mult(def.Multiplier) + (def.Target == OfferingDef.TargetGlobal
 				? " everything"
 				: def.Target == OfferingDef.TargetHand ? " by hand" : ""));
@@ -331,7 +331,7 @@ public sealed class Ledger
 			Ui.SetText(row.Sub, "Keep more of a rite, or gather more, and the parish will ask.");
 			Ui.SetText(row.Cost, "");
 			Ui.SetText(row.Note, "");
-			Ui.SetTextColor(row.Title, Palette.BoneFaint);
+			Ui.SetTextColor(row.Title, Palette.TextFaint);
 			row.Box.SetEnabled(false);
 			row.Box.SetColour(Palette.PanelDeep);
 			slot = 1;
@@ -353,7 +353,7 @@ public sealed class Ledger
 			Row row = _rows[slot];
 			_payload[slot] = -100;
 			Ui.SetText(row.Title, "COMMUNE   +" + payout + " sigils");
-			Ui.SetTextColor(row.Title, ready ? Palette.Sigil : Palette.BoneFaint);
+			Ui.SetTextColor(row.Title, ready ? Palette.Sigil : Palette.TextFaint);
 			Ui.SetText(row.Sub, ready
 				? "Give the parish back. You keep the sigils, the overseers and the marks."
 				: "Gather " + Numbers.Short(NextSigilAt()) + " this run for the first sigil.");
@@ -378,12 +378,12 @@ public sealed class Ledger
 			bool affordable = !hired && Vigil.Sigils >= cost;
 
 			Ui.SetText(row.Title, "Overseer: " + Content.Rites[rite].Name);
-			Ui.SetTextColor(row.Title, hired ? Content.Rites[rite].Colour : Palette.Bone);
+			Ui.SetTextColor(row.Title, hired ? Content.Rites[rite].Colour : Palette.TextBright);
 			Ui.SetText(row.Sub, hired
 				? "It buys for you, out of surplus, and never touches the ward money."
 				: "Hire someone to keep this rite topped up while you are elsewhere.");
 			Ui.SetText(row.Cost, hired ? "HIRED" : cost + " sigils");
-			Ui.SetTextColor(row.Cost, hired ? Palette.Ichor : affordable ? Palette.Sigil : Palette.BoneFaint);
+			Ui.SetTextColor(row.Cost, hired ? Palette.Ichor : affordable ? Palette.Sigil : Palette.TextFaint);
 			Ui.SetText(row.Note, "");
 			row.Box.SetEnabled(affordable);
 			row.Box.Style(affordable, Palette.RowHot, hired ? Palette.PanelDeep : Palette.Row, Palette.PanelDeep);
@@ -415,7 +415,7 @@ public sealed class Ledger
 		{
 			Row row = _rows[slot];
 			Ui.SetText(row.Title, "THE RECORD");
-			Ui.SetTextColor(row.Title, Palette.BoneDim);
+			Ui.SetTextColor(row.Title, Palette.TextDim);
 			Ui.SetText(row.Sub, "Kept " + Numbers.Duration(Vigil.PlayedSeconds) + "   " +
 				Vigil.Communions + " communions   " + Vigil.TimesTaken + " taken   " +
 				Vigil.WardsRaised + " wards");
@@ -432,7 +432,7 @@ public sealed class Ledger
 			Row row = _rows[slot];
 			bool earned = Vigil.MarksEarned[i];
 			Ui.SetText(row.Title, Content.Marks[i].Name);
-			Ui.SetTextColor(row.Title, earned ? Palette.Ichor : Palette.BoneFaint);
+			Ui.SetTextColor(row.Title, earned ? Palette.Ichor : Palette.TextFaint);
 			Ui.SetText(row.Sub, Content.Marks[i].Blurb);
 			Ui.SetText(row.Cost, earned ? "KEPT" : "");
 			Ui.SetTextColor(row.Cost, Palette.IchorDim);

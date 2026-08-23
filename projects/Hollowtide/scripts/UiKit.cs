@@ -92,7 +92,7 @@ public static class UiKit
 	{
 		Entity root = Image(parent, x, y, w, h, Palette.Row, 4.0f);
 		Ui.SetSelectable(root);
-		Entity text = Text(root, label, 0.0f, 0.0f, w, h, size, Palette.Bone, UiHAlign.Center, font);
+		Entity text = Text(root, label, 0.0f, 0.0f, w, h, size, Palette.TextBright, UiHAlign.Center, font);
 		// The label stretches with the box so a button that is later resized keeps its text
 		// centred, rather than centred on the width it happened to be created at.
 		Ui.SetAnchors(text, kZero, new Vector2(1.0f, 1.0f));
@@ -225,6 +225,6 @@ public readonly struct Button
 		}
 		bool lit = affordable && Label.IsValid && (Hovered || Focused);
 		SetColour(!affordable ? dead : lit ? hot : cold);
-		SetLabelColour(affordable ? Palette.Bone : Palette.BoneFaint);
+		SetLabelColour(affordable ? Palette.TextBright : Palette.TextFaint);
 	}
 }

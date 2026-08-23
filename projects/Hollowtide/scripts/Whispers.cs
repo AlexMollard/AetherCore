@@ -115,6 +115,6 @@ public sealed class Whispers
 		Omen.Good => Palette.Ichor,
 		Omen.Dread => Palette.Dread,
 		Omen.Taken => new Vector4(0.902f, 0.416f, 0.353f, 1.0f),
-		_ => Palette.BoneDim,
+		_ => Palette.TextDim,
 	};
 }

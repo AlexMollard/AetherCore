@@ -96,7 +96,7 @@ public sealed class Congregation
 			float dread = Math.Clamp(presence.Dread, 0.0f, 1.0f);
 
 			Ui.SetText(row.Name, presence.Keeper + (isSelf ? "  (you)" : ""));
-			Ui.SetTextColor(row.Name, isSelf ? Palette.Ichor : Palette.Bone);
+			Ui.SetTextColor(row.Name, isSelf ? Palette.Ichor : Palette.TextBright);
 			Ui.SetText(row.Rate, Numbers.Rate(presence.Rate) + "   " + presence.Sigils + " sigils");
 			Ui.SetText(row.Ping, isSelf ? "" : Net.GetPlayerPing(presence.Self) + "ms");
 
