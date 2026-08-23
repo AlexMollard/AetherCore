@@ -22,50 +22,45 @@ float4 CurveTexel(Texture2D curves, uint index, uint width)
     return curves.Load(int3(int(index % width), int(index / width), 0));
 }
 
-// Roots of the quadratic a*t^2 + b*t + c within [0,1], returned in `roots`. Returns how many
-// were found. The near-linear case is handled separately: as `a` goes to zero the quadratic
-// formula loses all its precision, and a glyph is full of curves whose control point sits
-// almost exactly on the chord.
-int SolveQuadratic01(float a, float b, float c, out float2 roots)
+// How many crossings a curve contributes to a ray, and which of its two roots they are,
+// derived from the SIGN PATTERN of its three control points relative to the ray.
+//
+// This is the heart of the algorithm and the part I first tried to do without. Solving the
+// quadratic and keeping the roots in [0,1] looks equivalent and is not: consecutive curves
+// share an endpoint, so a ray through a vertex finds a root on both and counts one crossing
+// twice, and a ray through a turning point finds a root that is a touch rather than a
+// crossing. Both flip the winding for an entire scanline. Clamping the interval half-open
+// fixes the first and not the second.
+//
+// Classifying by configuration has no such gaps: each of the eight sign patterns says
+// exactly how the curve meets the ray, so an endpoint is owned by one curve and an extremum
+// contributes nothing, by construction rather than by tolerance. The table is Lengyel's.
+uint RootCode(float c0, float c1, float c2)
 {
-    roots = float2(0.0, 0.0);
-    if (abs(a) < 1e-6)
-    {
-        if (abs(b) < 1e-6)
-        {
-            return 0;
-        }
-        const float t = -c / b;
-        if (t < 0.0 || t > 1.0)
-        {
-            return 0;
-        }
-        roots.x = t;
-        return 1;
-    }
+    const uint pattern = (c0 > 0.0 ? 2u : 0u) + (c1 > 0.0 ? 4u : 0u) + (c2 > 0.0 ? 8u : 0u);
+    return (0x2E74u >> pattern) & 3u;
+}
 
-    const float disc = b * b - 4.0 * a * c;
-    if (disc < 0.0)
+// The two roots of the quadratic through (c0, c1, c2), in Bezier form a*t^2 - 2b*t + c.
+// The near-linear branch matters: a glyph is full of curves whose control point sits almost
+// exactly on the chord, and the quadratic formula loses all its precision as `a` vanishes.
+void SolveCurve(float c0, float c1, float c2, out float t1, out float t2)
+{
+    const float a = c0 - 2.0 * c1 + c2;
+    const float b = c0 - c1;
+    if (abs(a) >= 1e-5)
     {
-        return 0;
+        const float d = sqrt(max(b * b - a * c0, 0.0));
+        t1 = (b - d) / a;
+        t2 = (b + d) / a;
     }
-    const float sd = sqrt(disc);
-    const float inv = 0.5 / a;
-    const float t0 = (-b - sd) * inv;
-    const float t1 = (-b + sd) * inv;
-
-    int count = 0;
-    if (t0 >= 0.0 && t0 <= 1.0)
+    else
     {
-        roots.x = t0;
-        ++count;
+        // Degenerate to the straight-line solution rather than dividing by ~0.
+        const float t = c0 / (2.0 * b);
+        t1 = t;
+        t2 = t;
     }
-    if (t1 >= 0.0 && t1 <= 1.0)
-    {
-        if (count == 0) { roots.x = t1; } else { roots.y = t1; }
-        ++count;
-    }
-    return count;
 }
 
 // Signed coverage along one axis. `p` is the sample point in glyph space, `bandBase` the
@@ -98,43 +93,43 @@ float AxisCoverage(Texture2D curves, uint width, float2 p, uint bandBase, uint b
     {
         const float4 a = CurveTexel(curves, runStart + i * 2u, width);
         const float4 b = CurveTexel(curves, runStart + i * 2u + 1u, width);
-        const float2 p0 = a.xy;
-        const float2 p1 = a.zw;
-        const float2 p2 = b.xy;
+        // Control points relative to the sample point, so the ray is the axis through zero.
+        const float2 p0 = a.xy - p;
+        const float2 p1 = a.zw - p;
+        const float2 p2 = b.xy - p;
 
-        // Solve for the parameter where the curve meets the ray, on whichever component the
-        // ray holds constant.
-        const float c0 = horizontal ? p0.y : p0.x;
-        const float c1 = horizontal ? p1.y : p1.x;
-        const float c2 = horizontal ? p2.y : p2.x;
-        const float target = horizontal ? p.y : p.x;
+        // Along = the component the ray holds constant and solves for; across = the one whose
+        // crossing position decides how much of this pixel the curve leaves covered.
+        const float a0 = horizontal ? p0.y : p0.x;
+        const float a1 = horizontal ? p1.y : p1.x;
+        const float a2 = horizontal ? p2.y : p2.x;
 
-        float2 roots;
-        const int found = SolveQuadratic01(c0 - 2.0 * c1 + c2, 2.0 * (c1 - c0), c0 - target, roots);
-
-        for (int r = 0; r < found; ++r)
+        const uint code = RootCode(a0, a1, a2);
+        if (code == 0u)
         {
-            const float t = (r == 0) ? roots.x : roots.y;
-            const float omt = 1.0 - t;
+            continue;
+        }
 
-            // Position of the crossing on the ray, and the direction the contour is moving
-            // through it. A crossing exactly at a tangent contributes nothing, which is what
-            // stops a curve that merely grazes the ray from flipping the winding.
-            const float2 point = omt * omt * p0 + 2.0 * omt * t * p1 + t * t * p2;
-            const float2 tangent = 2.0 * omt * (p1 - p0) + 2.0 * t * (p2 - p1);
-            const float direction = horizontal ? tangent.y : tangent.x;
-            if (abs(direction) < 1e-9)
-            {
-                continue;
-            }
+        float t1, t2;
+        SolveCurve(a0, a1, a2, t1, t2);
 
-            const float hit = horizontal ? point.x : point.y;
-            const float side = horizontal ? p.x : p.y;
-            // How much of THIS pixel the crossing leaves covered: a box filter one pixel
-            // wide, which is where the antialiasing comes from. No smoothstep, no fudge
-            // factor - the value is the actual fraction of the pixel inside the outline.
-            const float window = saturate((hit - side) * invExtent + 0.5);
-            total += (direction > 0.0 ? 1.0 : -1.0) * window;
+        const float x0 = horizontal ? p0.x : p0.y;
+        const float x1 = horizontal ? p1.x : p1.y;
+        const float x2 = horizontal ? p2.x : p2.y;
+
+        // The sign of each contribution comes from the classification, not from a tangent
+        // test - which is the other thing that made the naive version fragile.
+        if ((code & 1u) != 0u)
+        {
+            const float omt = 1.0 - t1;
+            const float hit = omt * omt * x0 + 2.0 * omt * t1 * x1 + t1 * t1 * x2;
+            total += saturate(hit * invExtent + 0.5);
+        }
+        if (code > 1u)
+        {
+            const float omt = 1.0 - t2;
+            const float hit = omt * omt * x0 + 2.0 * omt * t2 * x1 + t2 * t2 * x2;
+            total -= saturate(hit * invExtent + 0.5);
         }
     }
 
