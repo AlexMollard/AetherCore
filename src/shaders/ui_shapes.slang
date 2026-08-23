@@ -120,11 +120,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // exactly one pixel wide at any size.
         const float2 pixelSize = 1.0 / max(input.localScale, float2(1e-4, 1e-4));
 
+        // NonUniformResourceIndex is REQUIRED here, not decorative: one batch draws glyphs
+        // from every font on screen, so the slot varies between lanes of the same wave.
+        // Indexing the heap without it is undefined, and what it does in practice is let one
+        // lane's font win for the whole wave - text in font A rendered against font B's
+        // curves, which reads as glyphs that are subtly wrong or missing entirely.
+        Texture2D curveTexture = g_textures[NonUniformResourceIndex(input.textureSlot)];
         uint texWidth, texHeight;
-        g_textures[input.textureSlot].GetDimensions(texWidth, texHeight);
+        curveTexture.GetDimensions(texWidth, texHeight);
 
         const float alpha = GlyphCoverage(
-            g_textures[input.textureSlot], texWidth, glyphLocal, pixelSize,
+            curveTexture, texWidth, glyphLocal, pixelSize,
             uint(input.glyphBands.x), uint(input.glyphBands.y), uint(input.glyphBands.z));
         if (alpha <= 0.002)
             discard;
@@ -139,11 +145,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             // Pixel art: snap to texel centres so icons stay crisp under the
             // shared linear sampler.
             uint width, height;
-            g_textures[input.textureSlot].GetDimensions(width, height);
+            g_textures[NonUniformResourceIndex(input.textureSlot)].GetDimensions(width, height);
             const float2 texSize = float2(max(width, 1u), max(height, 1u));
             uv = (floor(uv * texSize) + 0.5) / texSize;
         }
-        const float4 texColor = g_textures[input.textureSlot].Sample(g_linearSampler, uv);
+        const float4 texColor = g_textures[NonUniformResourceIndex(input.textureSlot)].Sample(g_linearSampler, uv);
         return texColor * input.color;
     }
 
