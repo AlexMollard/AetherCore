@@ -23,7 +23,13 @@ public sealed class VigilSave
 	public bool[] Offerings { get; set; } = Array.Empty<bool>();
 	public bool[] Marks { get; set; } = Array.Empty<bool>();
 	public bool[] Overseers { get; set; } = Array.Empty<bool>();
+	/// <summary>Levels held in each boon. Bought with sigils and kept through communion, so
+	/// losing them to a reload would undo hours of prestige rather than one run.</summary>
+	public int[] Boons { get; set; } = Array.Empty<int>();
 	public int Sigils { get; set; }
+	/// <summary>Sigils ever taken. Absent from saves written before the balance and the score
+	/// were separated, which is why loading floors it at the balance.</summary>
+	public int SigilsEarned { get; set; }
 	public int Communions { get; set; }
 	public double Dread { get; set; }
 	/// <summary>Wards in hand. Saved because they are bought, and losing paid-for protection
@@ -208,7 +214,9 @@ public static class SaveSystem
 		Offerings = (bool[])Vigil.OfferingsTaken.Clone(),
 		Marks = (bool[])Vigil.MarksEarned.Clone(),
 		Overseers = (bool[])Vigil.Overseers.Clone(),
+		Boons = (int[])Vigil.Boons.Clone(),
 		Sigils = Vigil.Sigils,
+		SigilsEarned = Vigil.SigilsEarned,
 		Communions = Vigil.Communions,
 		Dread = Vigil.Dread,
 		Wards = Vigil.Wards,
@@ -232,8 +240,15 @@ public static class SaveSystem
 		Vigil.RunIchor = save.RunIchor;
 		Vigil.LifetimeIchor = save.LifetimeIchor;
 		Vigil.Sigils = save.Sigils;
+		// An older save has no earned count, only a balance. Reading zero there would wipe the
+		// permanent multiplier off a keeper who had already earned it, so the balance is the
+		// floor: worst case an old keeper is credited exactly what they still hold.
+		Vigil.SigilsEarned = Math.Max(save.SigilsEarned, save.Sigils);
 		Vigil.Communions = save.Communions;
 		Vigil.Dread = Math.Clamp(save.Dread, 0.0, 1.0);
+		// Before the ward clamp below, and that order matters: the ward cap is itself a boon,
+		// so clamping first would confiscate the wards a Deeper Wards keeper was carrying.
+		CopyInto(save.Boons, Vigil.Boons);
 		Vigil.Wards = Math.Clamp(save.Wards, 0, Vigil.MaxWards);
 		Vigil.AftermathSeconds = Math.Max(0.0, save.Aftermath);
 		Vigil.PlayedSeconds = save.PlayedSeconds;

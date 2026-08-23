@@ -166,7 +166,14 @@ public sealed class Hud
 		Ui.SetTextColor(_multiplier, Vigil.SurgeSeconds > 0.0 ? Palette.Ichor : Palette.Sigil);
 
 		Ui.SetProgress(_dreadTrack, dread);
-		Ui.SetText(_dreadLabel, Numbers.Percent(dread));
+		// The meter says how close, and now also how long. The whole game is a clock the
+		// keeper is choosing to stand next to; hiding the clock made riding the top of the
+		// meter a guess rather than a decision. A parish too small to reach the top says so
+		// instead of quoting an infinity.
+		double due = Vigil.SecondsToVisitation;
+		Ui.SetText(_dreadLabel, double.IsInfinity(due)
+			? Numbers.Percent(dread) + "   holding"
+			: Numbers.Percent(dread) + "   " + Numbers.Duration(due));
 		// The meter goes from rust to something brighter as it fills, so the last quarter
 		// reads as urgent without a second widget to say so.
 		_dreadTrack.Component("UI Progress Bar").SetVector4("fill_color",
@@ -175,11 +182,15 @@ public sealed class Hud
 		Ui.SetText(_sigilCount, Vigil.Sigils + " sigils   " + Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks");
 
 		// ── Buttons ──────────────────────────────────────────────────────────────────
-		// Stoking pays now, so the button says what it pays. A push-your-luck button that
-		// does not quote its offer is just a dare.
-		bool canStoke = Vigil.Dread < 0.999;
-		double offer = (Vigil.Rate * 15.0 + Vigil.HandGain * 8.0) * Vigil.GlobalMultiplier;
-		_stoke.SetLabel(canStoke ? "STOKE THE DARK  +" + Numbers.Short(offer) : "IT IS AS CLOSE AS IT GETS");
+		// Stoking pays now, so the button says what it pays - and the figure is asked of the
+		// simulation rather than recomputed here, because this line and Vigil.Stoke were two
+		// copies of one formula and had already drifted into being wrong together.
+		bool canStoke = Vigil.CanStoke;
+		_stoke.SetLabel(Vigil.Dread >= 0.999
+			? "IT IS AS CLOSE AS IT GETS"
+			: Vigil.StokeCooldown > 0.0
+				? "IT IS STILL LISTENING  " + Numbers.Duration(Vigil.StokeCooldown)
+				: "STOKE THE DARK  +" + Numbers.Short(Vigil.StokeOffer));
 		_stoke.SetEnabled(canStoke);
 		_stoke.Style(canStoke, Palette.Mix(Palette.Row, Palette.Dread, 0.55f), Palette.Row, Palette.PanelDeep);
 

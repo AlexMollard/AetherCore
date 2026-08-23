@@ -56,6 +56,31 @@ public sealed class OfferingDef
 	public double LifetimeNeeded;
 }
 
+/// <summary>
+/// A permanent sigil purchase, kept through every communion.
+/// </summary>
+/// <remarks>
+/// Every boon turns a knob the game already has - the ward cap, the aftermath, what dread
+/// pays, how fast fervour drains, the offline cap, the stoke cooldown - rather than adding a
+/// system of its own. That is deliberate: a sigil should make the vigil you already know how
+/// to play deeper, not hand you a second game to learn. It also means a boon cannot fall out
+/// of step with the thing it modifies, because there is only ever one of them.
+/// </remarks>
+public sealed class BoonDef
+{
+	public string Name = "";
+	public string Blurb = "";
+	/// <summary>Sigils for the first level. Each level after costs <see cref="Growth"/> times
+	/// more, so a boon runs out of road on its own rather than needing a hand-written price
+	/// per level that some later edit forgets to keep in order.</summary>
+	public double BaseCost;
+	public double Growth = 2.4;
+	public int MaxLevel = 3;
+	/// <summary>How much one level is worth, in whatever unit the boon deals in. Read by the
+	/// one place in <see cref="Vigil"/> that applies it.</summary>
+	public double Step;
+}
+
 /// <summary>Something the keeper did, remembered across communion and across sessions.
 /// None of them pay out - a vigil is a record, not a wage.</summary>
 public sealed class MarkDef
@@ -219,6 +244,64 @@ public static class Content
 		return list.ToArray();
 	}
 
+	/// <summary>
+	/// What sigils are for.
+	/// </summary>
+	/// <remarks>
+	/// Overseers alone were 108 sigils of spending in a game that will hand out thousands, so
+	/// every communion after the first bought nothing and the prestige currency decayed into a
+	/// flat percentage. These are the long tail: expensive enough that the last levels are many
+	/// runs away, and each one changes how the vigil is PLAYED rather than only how fast the
+	/// number climbs.
+	/// </remarks>
+	public static readonly BoonDef[] Boons =
+	{
+		new BoonDef
+		{
+			Name = "Deeper Wards", Blurb = "Set one more ward aside than the last keeper could.",
+			BaseCost = 6.0, MaxLevel = 3, Step = 1.0,
+		},
+		new BoonDef
+		{
+			Name = "Cold Blood", Blurb = "You recover faster from a visitation. A fifth faster, each time.",
+			BaseCost = 5.0, MaxLevel = 3, Step = 0.20,
+		},
+		new BoonDef
+		{
+			Name = "The Old Bargain", Blurb = "Dread pays better. It always did, for the ones who asked twice.",
+			BaseCost = 10.0, MaxLevel = 3, Step = 0.55,
+		},
+		new BoonDef
+		{
+			Name = "Steady Hand", Blurb = "Fervour leaves you a quarter more slowly.",
+			BaseCost = 4.0, MaxLevel = 3, Step = 0.25,
+		},
+		new BoonDef
+		{
+			Name = "Unsleeping", Blurb = "The parish keeps four more hours without you, and works harder doing it.",
+			BaseCost = 6.0, MaxLevel = 3, Step = 1.0,
+		},
+		new BoonDef
+		{
+			Name = "Quick Kindling", Blurb = "You can lean on the dark again sooner.",
+			BaseCost = 5.0, MaxLevel = 3, Step = 0.25,
+		},
+	};
+
+	/// <summary>Pulled out of the table because a lambda with a loop in it reads badly inside
+	/// a list of one-liners, and the mark is the only entry that needs to ask about all six.</summary>
+	private static bool AnyBoonMaxed()
+	{
+		for (int i = 0; i < Boons.Length; i++)
+		{
+			if (Vigil.Boons[i] >= Boons[i].MaxLevel)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public static readonly MarkDef[] Marks =
 	{
 		new MarkDef { Name = "First Light", Blurb = "Light a Grave Lantern.", Earned = () => Vigil.Owned[0] >= 1 },
@@ -228,10 +311,11 @@ public static class Content
 		new MarkDef { Name = "Warded", Blurb = "Turn a visitation away with a ward.", Earned = () => Vigil.WardsRaised >= 1 },
 		new MarkDef { Name = "Bereaved", Blurb = "Lose something to the dark.", Earned = () => Vigil.TimesTaken >= 1 },
 		new MarkDef { Name = "Communed", Blurb = "Give the parish back and take a sigil.", Earned = () => Vigil.Communions >= 1 },
-		new MarkDef { Name = "Marked", Blurb = "Hold ten sigils at once.", Earned = () => Vigil.Sigils >= 10 },
+		new MarkDef { Name = "Marked", Blurb = "Take ten sigils, all told.", Earned = () => Vigil.SigilsEarned >= 10 },
 		new MarkDef { Name = "The Whole Nave", Blurb = "Own one of every rite.", Earned = () => Vigil.OwnsOneOfEach() },
 		new MarkDef { Name = "Mouth to Mouth", Blurb = "Open a Hollow Mouth.", Earned = () => Vigil.Owned[7] >= 1 },
 		new MarkDef { Name = "Not Alone", Blurb = "Keep vigil beside another keeper.", Earned = () => Vigil.SharedVigilSeconds >= 30.0 },
 		new MarkDef { Name = "Answered", Blurb = "Ring the bell into a communion.", Earned = () => Vigil.CommunionSurges >= 1 },
+		new MarkDef { Name = "Deepened", Blurb = "Carry one boon as far as it goes.", Earned = AnyBoonMaxed },
 	};
 }

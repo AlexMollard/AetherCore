@@ -341,9 +341,12 @@ public sealed class Ledger
 
 	// ── Communion ────────────────────────────────────────────────────────────────────
 
+	/// <summary>The communion tab is one list of three kinds of row - the communion itself,
+	/// then the boons, then the overseers - so scrolling and hit-testing stay the ledger's one
+	/// model rather than three that have to agree.</summary>
 	private void FillCommunion()
 	{
-		_itemCount = 1 + Content.RiteCount;
+		_itemCount = 1 + Content.Boons.Length + Content.RiteCount;
 		int slot = 0;
 
 		if (_scroll == 0 && slot < _visibleRows)
@@ -355,11 +358,13 @@ public sealed class Ledger
 			Ui.SetText(row.Title, "COMMUNE   +" + payout + " sigils");
 			Ui.SetTextColor(row.Title, ready ? Palette.Sigil : Palette.TextFaint);
 			Ui.SetText(row.Sub, ready
-				? "Give the parish back. You keep the sigils, the overseers and the marks."
+				? "Give the parish back. You keep the sigils, the boons, the overseers and the marks."
 				: "Gather " + Numbers.Short(NextSigilAt()) + " this run for the first sigil.");
-			Ui.SetText(row.Cost, Vigil.Sigils + " held");
+			// Held and earned, both, because the difference between them is the one rule of this
+			// tab a player has to trust: spending sigils never costs you the bonus they pay.
+			Ui.SetText(row.Cost, Vigil.Sigils + " held  /  " + Vigil.SigilsEarned + " taken");
 			Ui.SetTextColor(row.Cost, Palette.Sigil);
-			Ui.SetText(row.Note, Numbers.Mult(Vigil.SigilMultiplier) + " from sigils");
+			Ui.SetText(row.Note, Numbers.Mult(Vigil.SigilMultiplier) + " from every sigil taken");
 			row.Box.SetEnabled(ready);
 			row.Box.Style(ready, Palette.Mix(Palette.RowHot, Palette.Sigil, 0.28f), Palette.Row, Palette.PanelDeep);
 			if (row.Box.Activated && ready)
@@ -369,7 +374,42 @@ public sealed class Ledger
 			slot++;
 		}
 
-		for (int rite = Math.Max(0, _scroll - 1); rite < Content.RiteCount && slot < _visibleRows; rite++, slot++)
+		// ── Boons ────────────────────────────────────────────────────────────────────
+		for (int i = Math.Max(0, _scroll - 1); i < Content.Boons.Length && slot < _visibleRows; i++, slot++)
+		{
+			Row row = _rows[slot];
+			_payload[slot] = i;
+			BoonDef def = Content.Boons[i];
+			int level = Vigil.Boons[i];
+			int cost = Vigil.BoonCost(i);
+			bool maxed = level >= def.MaxLevel;
+			bool affordable = !maxed && Vigil.Sigils >= cost;
+
+			Ui.SetText(row.Title, def.Name + "   " + level + "/" + def.MaxLevel);
+			Ui.SetTextColor(row.Title, level > 0 ? Palette.Sigil : Palette.TextBright);
+			Ui.SetText(row.Sub, def.Blurb);
+			Ui.SetText(row.Cost, maxed ? "KEPT" : cost + " sigils");
+			Ui.SetTextColor(row.Cost, maxed ? Palette.Ichor : affordable ? Palette.Sigil : Palette.TextFaint);
+			Ui.SetText(row.Note, "");
+
+			// The level pips: the same thin fill a rite uses for its working, standing in for
+			// how far along a boon is. One widget, two meanings, no third layout to keep.
+			float boonWidth = kWidth - kPad * 2.0f;
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f,
+				boonWidth * ((float)level / def.MaxLevel), 3.0f);
+			Ui.SetImageColor(row.Progress, Palette.Fade(Palette.Sigil, level > 0 ? 0.75f : 0.0f));
+
+			row.Box.SetEnabled(affordable);
+			row.Box.Style(affordable, Palette.RowHot, maxed ? Palette.PanelDeep : Palette.Row, Palette.PanelDeep);
+
+			if (row.Box.Activated && affordable)
+			{
+				Vigil.BuyBoon(i);
+			}
+		}
+
+		// ── Overseers ────────────────────────────────────────────────────────────────
+		for (int rite = Math.Max(0, _scroll - 1 - Content.Boons.Length); rite < Content.RiteCount && slot < _visibleRows; rite++, slot++)
 		{
 			Row row = _rows[slot];
 			_payload[slot] = rite;
@@ -385,6 +425,7 @@ public sealed class Ledger
 			Ui.SetText(row.Cost, hired ? "HIRED" : cost + " sigils");
 			Ui.SetTextColor(row.Cost, hired ? Palette.Ichor : affordable ? Palette.Sigil : Palette.TextFaint);
 			Ui.SetText(row.Note, "");
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
 			row.Box.SetEnabled(affordable);
 			row.Box.Style(affordable, Palette.RowHot, hired ? Palette.PanelDeep : Palette.Row, Palette.PanelDeep);
 
@@ -396,13 +437,10 @@ public sealed class Ledger
 		BlankFrom(slot);
 	}
 
-	/// <summary>Run ichor needed for the next whole sigil - the inverse of the payout curve, so
-	/// the target shown is the one the button will actually honour.</summary>
-	private static double NextSigilAt()
-	{
-		int next = Vigil.SigilsOnOffer + 1;
-		return Math.Pow(next / 8.0, 2.0) * 1e7;
-	}
+	/// <summary>Run ichor needed for the next whole sigil. Asked of the simulation rather than
+	/// re-derived here: this used to be a hand-inverted copy of the payout curve, which is
+	/// exactly the kind of duplicate that goes quietly wrong the day the curve is retuned.</summary>
+	private static double NextSigilAt() => Vigil.RunIchorForSigils(Vigil.SigilsOnOffer + 1);
 
 	// ── Marks ────────────────────────────────────────────────────────────────────────
 

@@ -293,7 +293,8 @@ public sealed class HollowtideGame : EntityScript
 				Ui.SetText(_offlineBody,
 					"The parish kept working for " + Numbers.Duration(report.Seconds) +
 					(report.Capped ? " (as long as it will keep going unattended).\n\n" : ".\n\n") +
-					"It gathered " + Numbers.Short(report.Ichor) + " ichor at half its usual pace, " +
+					"It gathered " + Numbers.Short(report.Ichor) + " ichor at " +
+					Numbers.Percent(Vigil.OfflineEfficiency) + " of its usual pace, " +
 					"and the dark came " + Numbers.Percent(report.Dread) + " closer.");
 			}
 			_offlinePanel.SetActive(true);
