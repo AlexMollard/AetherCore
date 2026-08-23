@@ -424,6 +424,10 @@ namespace aether::ui
 		frame.mapped = view.mappedPtr;
 		frame.address = view.deviceAddress;
 		frame.capacity = newCapacity;
+		// Growing the command buffer swaps the device address every DrawGroup's commands are
+		// read from. Rare in steady state; if it turns out to be happening constantly while the
+		// UI churns, that is the thing to chase.
+		AE_INFO(LogCategory::UI, "UiRenderer: command buffer grew to {} commands (needed {})", newCapacity, count);
 	}
 
 	void UiRenderer::BuildFrame(glm::vec2 outputExtent, std::uint32_t frameSlot)
@@ -431,6 +435,8 @@ namespace aether::ui
 		AE_PROFILE_ZONE();
 
 		Frame& frame = m_frames[frameSlot % kFrames];
+		frame.builtForSlot = frameSlot;
+		frame.buildSeq = ++m_buildSeq;
 		frame.count = 0;
 		frame.effects.clear();
 		frame.materials.clear();
@@ -644,6 +650,22 @@ namespace aether::ui
 		                [this, &bindless](PassContext& ctx)
 		                {
 			                const Frame& frame = m_frames[ctx.frameSlot % kFrames];
+
+			                // The build side indexes this array by packet.drawSlot and the record side
+			                // by ctx.frameSlot. Nothing in the types ties those together, so if they
+			                // ever drift this pass draws one frame's DrawGroups - indices into the
+			                // command buffer - against a different frame's buffer contents, and a
+			                // material's fragment lands on whatever element happens to sit at those
+			                // indices. Reported rather than asserted so an intermittent drift can be
+			                // caught during real play instead of taking the editor down with it.
+			                if (frame.builtForSlot != ctx.frameSlot)
+			                {
+				                AE_ERROR(LogCategory::UI,
+				                        "UiRenderer: frame slot drift - recording slot {} but m_frames[{}] was built "
+				                        "for slot {} (buildSeq {}). UI materials will draw against the wrong commands.",
+				                        ctx.frameSlot, ctx.frameSlot % kFrames, frame.builtForSlot, frame.buildSeq);
+			                }
+
 			                if (frame.count == 0 && frame.effects.empty())
 			                {
 				                return;

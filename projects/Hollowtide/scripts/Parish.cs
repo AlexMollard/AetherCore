@@ -104,7 +104,7 @@ public sealed class Parish
 		{
 			Vector4 bd = Backdrop;
 			Vector4 sg = Ui.GetRect(_sigil);
-			if (bd.Z <= 0.0f || sg.Z <= 0.0f)
+			if (bd.Z < kMinFrame || sg.Z < kMinFrame)
 			{
 				return new Vector2(0.5f, 0.45f);
 			}
@@ -147,6 +147,31 @@ public sealed class Parish
 	private Vector4 Backdrop => Ui.GetRect(_backdrop);
 
 	/// <summary>
+	/// The smallest rect this file will do arithmetic against, in pixels.
+	/// </summary>
+	/// <remarks>
+	/// Guarding on "width greater than zero" is not enough. Layout resolves over a frame, and a
+	/// resize or a swapchain recreate can hand back a rect that is a pixel or two wide before it
+	/// settles. Every fraction here is divided by that width, so a rect of 1 turned
+	/// <see cref="RiteRight"/> into a huge number, which turned the rite spacing into a huge
+	/// number, which sized a rite off the screen - a structure stretched across the interface for
+	/// exactly one frame. The more rites are standing the more chances there are to land on it,
+	/// which is why it looked like a renderer fault that got worse with the parish.
+	/// </remarks>
+	private const float kMinFrame = 32.0f;
+
+	/// <summary>Whether both frames are resolved enough to position anything against.</summary>
+	private bool Laid
+	{
+		get
+		{
+			Vector4 bd = Backdrop;
+			Vector4 nave = Nave;
+			return bd.Z >= kMinFrame && bd.W >= kMinFrame && nave.Z >= kMinFrame && nave.W >= kMinFrame;
+		}
+	}
+
+	/// <summary>
 	/// A fraction of the backdrop to a pixel offset inside the nave.
 	/// </summary>
 	/// <remarks>
@@ -180,11 +205,14 @@ public sealed class Parish
 		{
 			Vector4 bd = Backdrop;
 			Vector4 sg = Ui.GetRect(_sigil);
-			if (bd.Z <= 0.0f || sg.Z <= 0.0f)
+			if (bd.Z < kMinFrame || sg.Z < kMinFrame)
 			{
 				return 0.34f;
 			}
-			return MathF.Max(kRiteLeft + 0.05f, (sg.X - bd.X) / bd.Z - 0.03f);
+			// Clamped at BOTH ends. The upper bound is the load-bearing one: this is a division
+			// by a live rect, and an unbounded result here propagates straight into the size of
+			// every rite on screen.
+			return Math.Clamp((sg.X - bd.X) / bd.Z - 0.03f, kRiteLeft + 0.05f, 0.55f);
 		}
 	}
 
@@ -252,11 +280,11 @@ public sealed class Parish
 	/// <summary>Create, retire and dress one element per rite the keeper holds.</summary>
 	private void SyncRites(float dread, float unscaledDelta)
 	{
-		Vector4 bd = Backdrop;
-		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
+		if (!Laid)
 		{
 			return;
 		}
+		Vector4 bd = Backdrop;
 
 		_standing = 0;
 		for (int rite = 0; rite < Content.RiteCount; rite++)
@@ -313,7 +341,11 @@ public sealed class Parish
 			// Raised into place with an overshoot the first time, and punched on every
 			// purchase after that: the reward for spending is that the parish moves.
 			float a = _appear[rite];
-			float raise = a >= 1.0f ? 1.0f : 1.0f - MathF.Cos(a * 1.9f) * (1.0f - a);
+			// Never exactly zero. The curve is 1 - cos(0)*(1-0) = 0 at a = 0, so every rite spent
+			// its first frame as a zero-area quad carrying a material - a degenerate rect whose
+			// derivatives are meaningless, handed to a shader that antialiases off fwidth. A
+			// floor costs nothing and means the element is always a real rectangle.
+			float raise = a >= 1.0f ? 1.0f : MathF.Max(0.06f, 1.0f - MathF.Cos(a * 1.9f) * (1.0f - a));
 			float punch = _punch[rite] * _punch[rite];
 			float size = bd.W * 0.20f * bulk * raise
 				* (1.0f + working * 0.05f + flare * 0.16f + punch * 0.20f);
@@ -321,6 +353,22 @@ public sealed class Parish
 			// that has outgrown its slot reads as a collision, not as progress - so past this
 			// point it stops widening and the count under it carries the rest of the story.
 			size = MathF.Min(size, bd.Z * RiteSpacing * 0.92f);
+			// A last clamp against the backdrop itself. Every term above is derived from live
+			// rects, and one screen-filling quad is worse than every rite being a little small.
+			//
+			// If the clamp ever actually BITES, say so. A rite has been seen stretched across
+			// the interface for a frame and the cause is not yet pinned down; this reports the
+			// inputs at the moment it would have happened, which is the one thing that will
+			// settle whether the fault is in this arithmetic or below it in the renderer.
+			if (size > bd.W * 0.60f || size < 4.0f)
+			{
+				Log.Warn("Parish: rite " + rite + " sized " + size.ToString("F0")
+					+ "px against backdrop " + bd.Z.ToString("F0") + "x" + bd.W.ToString("F0")
+					+ " nave " + Nave.Z.ToString("F0") + "x" + Nave.W.ToString("F0")
+					+ " standing " + _standing + " spacing " + RiteSpacing.ToString("F3")
+					+ " riteRight " + RiteRight.ToString("F3"));
+			}
+			size = Math.Clamp(size, 4.0f, bd.W * 0.60f);
 
 			// Art is drawn on a square canvas but its subject stands in the middle of it, so
 			// the sprite is sunk slightly to put the SUBJECT'S feet on the line, not the box's.
@@ -410,11 +458,11 @@ public sealed class Parish
 	/// <summary>A gather by hand, at the point the keeper struck.</summary>
 	public void Gathered(double amount, Vector2 screenPoint)
 	{
-		Vector4 bd = Backdrop;
-		if (bd.Z <= 0.0f)
+		if (!Laid)
 		{
 			return;
 		}
+		Vector4 bd = Backdrop;
 		Vector2 f = new Vector2((screenPoint.X - bd.X) / bd.Z, (screenPoint.Y - bd.Y) / bd.W);
 		ShowPop(f, "+" + Numbers.Short(amount), Palette.Ichor);
 	}
@@ -422,11 +470,11 @@ public sealed class Parish
 	/// <summary>Walk every live bearer down off its rite and along the floor to the keeper.</summary>
 	private void UpdateBearers(float unscaledDelta)
 	{
-		Vector4 bd = Backdrop;
-		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
+		if (!Laid)
 		{
 			return;
 		}
+		Vector4 bd = Backdrop;
 
 		for (int i = 0; i < kBearerPool; i++)
 		{
@@ -460,7 +508,7 @@ public sealed class Parish
 			// Small. As an outlined sprite this could afford to be forty pixels across; as a
 			// solid disc of the one colour in the game that means anything, that size made
 			// every wisp louder than the rite that sent it.
-			float size = bd.W * 0.0125f * Math.Clamp(scale, 0.5f, 1.4f);
+			float size = Math.Clamp(bd.W * 0.0125f * Math.Clamp(scale, 0.5f, 1.4f), 2.0f, bd.W * 0.05f);
 			Ui.SetAnchors(b.Body, Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(b.Body, new Vector2(0.5f, 1.0f));
 			Ui.SetRect(b.Body, px.X, px.Y, size, size);
@@ -496,11 +544,11 @@ public sealed class Parish
 	/// read while the game is frozen behind a menu.</summary>
 	private void UpdatePops(float unscaledDelta)
 	{
-		Vector4 bd = Backdrop;
-		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
+		if (!Laid)
 		{
 			return;
 		}
+		Vector4 bd = Backdrop;
 		for (int i = 0; i < kPopPool; i++)
 		{
 			Pop pop = _pops[i];

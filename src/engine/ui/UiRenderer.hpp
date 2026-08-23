@@ -104,6 +104,15 @@ namespace aether::ui
 			// command buffer into runs, each drawn with its material's fragment shader.
 			std::vector<UiMaterialDraw> materials;
 			std::vector<DrawGroup> groups;
+
+			// Which absolute frame slot BuildFrame filled this in for, and how many times this
+			// slot has been rebuilt. The pass records from m_frames[ctx.frameSlot % kFrames] and
+			// the build indexes m_frames[packet.drawSlot % kFrames]; if those two ever disagree,
+			// a pass draws one frame's groups against another frame's command buffer, which
+			// shows up as a material's fragment stretched across an unrelated element. Checked
+			// rather than assumed - see the check in RegisterPass's Execute.
+			std::uint32_t builtForSlot = 0xFFFFFFFFu;
+			std::uint64_t buildSeq = 0;
 		};
 
 		void AppendCursor();
@@ -153,6 +162,9 @@ namespace aether::ui
 		std::vector<RetiringPipeline> m_effectPipelinesRetiring;
 		std::uint64_t m_shaderGen = 0;
 		std::array<Frame, kFrames> m_frames{};
+		/// Monotonic count of BuildFrame calls, stamped into each frame so a drift report says
+		/// how stale the data it recorded against actually was.
+		std::uint64_t m_buildSeq = 0;
 		std::vector<UiDrawCommand> m_scratch;
 	};
 } // namespace aether::ui
