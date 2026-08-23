@@ -49,10 +49,21 @@ public sealed class Parish
 		public double Amount;
 		public Vector4 Colour;
 		public float Age;
-		public float Life;
-		public float Arc;
+		/// <summary>Seconds spent climbing down from the rite before the walk begins.</summary>
+		public float Descent;
+		/// <summary>Seconds of walking, derived from the DISTANCE rather than fixed - a bearer
+		/// from the far end of the parish takes visibly longer to arrive, which is the whole
+		/// reason to show the journey at all.</summary>
+		public float Walk;
+		public float Bob;
 		public bool Live;
 	}
+
+	/// <summary>How fast a bearer walks, in world units per second.</summary>
+	private const float kBearerSpeed = 2.3f;
+
+	/// <summary>The line bearers walk along, and what the parish stands on.</summary>
+	private float GroundY => _collection.Y;
 
 	private const int kBearerPool = 40;
 	private readonly Bearer[] _bearers = new Bearer[kBearerPool];
@@ -63,6 +74,7 @@ public sealed class Parish
 	private Vector3 _collection = new Vector3(-3.4f, -0.3f, 0.0f);
 
 	private Entity _motes;
+	private Entity _ground;
 	private Entity _camera;
 	private Vector3 _cameraHome;
 	private Entity _ambient;
@@ -110,6 +122,16 @@ public sealed class Parish
 		emitter.SetVector4("end_color", Palette.Fade(Palette.IchorDim, 0.0f));
 		emitter.SetInt("sorting_layer", 2);
 
+		// Something for the parish to stand on. A quad used as a quad: the ground is a flat
+		// dark band, and the rites reading as objects ON it is most of what stopped them
+		// looking like sprites floating in a void.
+		_ground = Scene.Create("ParishGround", new Vector3(-3.4f, _collection.Y - 0.62f, 0.0f));
+		ComponentAccess floor = _ground.Component("Sprite Renderer");
+		floor.Add();
+		floor.SetVector4("tint", new Vector4(0.055f, 0.052f, 0.062f, 1.0f));
+		floor.SetInt("sorting_layer", 0);
+		_ground.Scale = new Vector3(26.0f, 1.1f, 1.0f);
+
 		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
 		// busy parish, and creating an entity per payout would churn the scene constantly.
 		for (int i = 0; i < kBearerPool; i++)
@@ -135,14 +157,23 @@ public sealed class Parish
 		}
 	}
 
-	/// <summary>Where a rite's lantern stands. An arc across the left of the view, deepest
-	/// rites furthest in - so the parish visibly extends as the keeper goes down.</summary>
-	private static Vector3 LanternAt(int rite)
+	/// <summary>Where a rite stands along the ground, left to right, deepest furthest in - so
+	/// the parish visibly extends as the keeper goes down.</summary>
+	private static float LanternX(int rite)
 	{
 		float t = rite / (float)Math.Max(1, Content.RiteCount - 1);
-		float x = -7.2f + t * 7.4f;
-		float y = 2.9f - MathF.Sin(t * 2.4f) * 1.7f;
-		return new Vector3(x, y, 0.0f);
+		// Stops short of the sigil: the rites are the workings, the sigil is where the keeper
+		// stands, and a rite drawn under it reads as one object rather than two.
+		return -7.6f + t * 5.9f;
+	}
+
+	/// <summary>A rite's position: its base ON the ground, so it reads as a thing standing in
+	/// a place rather than a sprite hanging in a void. Recomputed as it grows, because the
+	/// bigger it gets the further its centre has to rise to keep its feet down.</summary>
+	private Vector3 LanternAt(int rite, float bulk)
+	{
+		// 48px art at 32 texels per unit is 1.5 units tall before scaling.
+		return new Vector3(LanternX(rite), GroundY + 1.5f * bulk * 0.5f, 0.0f);
 	}
 
 	/// <summary>A rite finished a working. Flare its lantern and throw the yield toward the
@@ -155,7 +186,7 @@ public sealed class Parish
 			return;
 		}
 		_flare[rite] = 1.0f;
-		Vector3 at = LanternAt(rite);
+		Vector3 at = _lanterns[rite].IsValid ? _lanterns[rite].Position : new Vector3(LanternX(rite), GroundY, 0.0f);
 		if (_motes.IsValid)
 		{
 			_motes.Position = at;
@@ -170,8 +201,9 @@ public sealed class Parish
 		bearer.Amount = amount;
 		bearer.Colour = Content.Rites[rite].Colour;
 		bearer.Age = 0.0f;
-		bearer.Life = 1.1f + AetherCore.Random.Range(0.0f, 0.5f);
-		bearer.Arc = AetherCore.Random.Range(0.8f, 2.2f);
+		bearer.Descent = 0.30f + AetherCore.Random.Range(0.0f, 0.10f);
+		bearer.Walk = MathF.Max(0.25f, MathF.Abs(_collection.X - at.X) / kBearerSpeed);
+		bearer.Bob = AetherCore.Random.Range(0.0f, 6.28f);
 		bearer.Live = true;
 		if (bearer.Body.IsValid)
 		{
@@ -197,19 +229,33 @@ public sealed class Parish
 				continue;
 			}
 			b.Age += unscaledDelta;
-			float t = Math.Clamp(b.Age / b.Life, 0.0f, 1.0f);
+			float total = b.Descent + b.Walk;
+			float t = Math.Clamp(b.Age / total, 0.0f, 1.0f);
 
-			// Eased along the path and lofted over it, so it reads as carried rather than
-			// slid. The arc differs per bearer, which is what stops a busy parish from
-			// looking like a conveyor belt.
-			float ease = t * t * (3.0f - 2.0f * t);
-			Vector3 pos = Vector3.Lerp(b.From, _collection, ease);
-            pos.Y += MathF.Sin(t * MathF.PI) * b.Arc;
-			b.Body.Position = pos;
+			// Down off the rite first, then along the ground. A bearer that flew a smooth arc
+			// read as a particle; one that climbs down and walks reads as something carrying
+			// a load, which is the whole point of showing the journey.
+			float x, y;
+			if (b.Age < b.Descent)
+			{
+				float d = Math.Clamp(b.Age / b.Descent, 0.0f, 1.0f);
+				x = b.From.X;
+				y = b.From.Y + (GroundY - b.From.Y) * (d * d * (3.0f - 2.0f * d));
+			}
+			else
+			{
+				float w = Math.Clamp((b.Age - b.Descent) / b.Walk, 0.0f, 1.0f);
+				x = b.From.X + (_collection.X - b.From.X) * w;
+				// A step, not a hover: the bob is the gait, so a line of bearers along the
+				// ground is visibly a procession rather than a drifting shoal.
+				y = GroundY + MathF.Abs(MathF.Sin(b.Age * 9.0f + b.Bob)) * 0.09f;
+			}
+			b.Body.Position = new Vector3(x, y, 0.0f);
 
-			// Fades in and out at the ends so it does not pop into existence.
-			float alpha = MathF.Min(1.0f, MathF.Min(t * 6.0f, (1.0f - t) * 4.0f));
-			b.Body.Component("Sprite Renderer").SetVector4("tint", Palette.Fade(b.Colour, alpha));
+			ComponentAccess look = b.Body.Component("Sprite Renderer");
+			look.SetBool("flip_x", _collection.X < b.From.X);
+			float alpha = MathF.Min(1.0f, MathF.Min(b.Age * 6.0f, (1.0f - t) * 8.0f));
+			look.SetVector4("tint", Palette.Fade(b.Colour, alpha));
 
 			if (t >= 1.0f)
 			{
@@ -263,7 +309,8 @@ public sealed class Parish
 				continue;
 			}
 
-			Vector3 at = LanternAt(rite);
+			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
+			Vector3 at = LanternAt(rite, bulk);
 			if (!_lanterns[rite].IsValid)
 			{
 				Entity e = Scene.Create("Lantern_" + Content.Rites[rite].Name, at);
@@ -277,9 +324,9 @@ public sealed class Parish
 				sprite.SetInt("sorting_layer", 1);
 				// The engine's own behaviours do the idle motion, so nothing here has to run a
 				// sine per lantern per frame.
-				// Bob only. These are drawn objects now - a lantern that slowly rotates reads
-				// as the debug primitive it used to be.
-				e.AddBob(0.10f + rite * 0.012f, 0.45f + rite * 0.06f, rite * 0.9f);
+				// No bob and no spin. These stand on the ground now, and a standing object
+				// that hovers is back to floating - the life comes from the working swell
+				// and the flare when it delivers instead.
 				_lanterns[rite] = e;
 
 				WorldLabel label = new WorldLabel(240.0f, 22.0f);
@@ -287,10 +334,10 @@ public sealed class Parish
 				_labels[rite] = label;
 			}
 
-			// A lantern grows with the tier it stands for, on a log curve: the difference
-			// between 1 and 10 should be visible, and the difference between 1000 and 10000
-			// should not fill the screen.
-			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
+			// A rite grows with the tier it stands for, on a log curve: the difference between
+			// 1 and 10 should be visible, and the difference between 1000 and 10000 should
+			// not fill the screen. Its position follows, so its feet stay on the ground.
+			_lanterns[rite].Position = at;
 
 			// Each rite has its own drawn silhouette rather than a tinted square. The art is
 			// greyscale, so the tint still carries both the rite's colour and its souring
@@ -383,6 +430,16 @@ public sealed class Parish
 	/// while the game is frozen behind a menu.</summary>
 	private void UpdatePops(float unscaledDelta)
 	{
+		// Something for the parish to stand on. A quad used as a quad: the ground is a flat
+		// dark band, and the rites reading as objects ON it is most of what stopped them
+		// looking like sprites floating in a void.
+		_ground = Scene.Create("ParishGround", new Vector3(-3.4f, _collection.Y - 0.62f, 0.0f));
+		ComponentAccess floor = _ground.Component("Sprite Renderer");
+		floor.Add();
+		floor.SetVector4("tint", new Vector4(0.055f, 0.052f, 0.062f, 1.0f));
+		floor.SetInt("sorting_layer", 0);
+		_ground.Scale = new Vector3(26.0f, 1.1f, 1.0f);
+
 		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
 		// busy parish, and creating an entity per payout would churn the scene constantly.
 		for (int i = 0; i < kBearerPool; i++)

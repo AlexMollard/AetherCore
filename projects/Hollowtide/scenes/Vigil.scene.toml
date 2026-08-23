@@ -84,7 +84,7 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn0'
 node = -7613930373011205752
 parent = -1
-position = [ -7.0, -1.9, 0.0 ]
+position = [ 2.6, -0.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
@@ -92,7 +92,7 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn1'
 node = -5801442975002615644
 parent = -1
-position = [ -5.2, -1.9, 0.0 ]
+position = [ 3.9, -0.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
@@ -100,7 +100,7 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn2'
 node = -2259171247891328202
 parent = -1
-position = [ -1.6, -1.9, 0.0 ]
+position = [ 5.2, -0.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
@@ -108,7 +108,7 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn3'
 node = -8734603812152616673
 parent = -1
-position = [ 0.2, -1.9, 0.0 ]
+position = [ 6.5, -0.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 
@@ -1896,7 +1896,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 1 ]
     anchor_min = [ 0, 1 ]
-    offset_max = [ 754, -164 ]
+    offset_max = [ 954, -164 ]
     offset_min = [ 34, -190 ]
     pivot = [ 0, 1 ]
 
@@ -1921,7 +1921,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 1 ]
     anchor_min = [ 0, 1 ]
-    offset_max = [ 754, -138 ]
+    offset_max = [ 954, -138 ]
     offset_min = [ 34, -164 ]
     pivot = [ 0, 1 ]
 
@@ -1946,7 +1946,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 1 ]
     anchor_min = [ 0, 1 ]
-    offset_max = [ 754, -112 ]
+    offset_max = [ 954, -112 ]
     offset_min = [ 34, -138 ]
     pivot = [ 0, 1 ]
 
@@ -1971,7 +1971,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 1 ]
     anchor_min = [ 0, 1 ]
-    offset_max = [ 754, -86 ]
+    offset_max = [ 954, -86 ]
     offset_min = [ 34, -112 ]
     pivot = [ 0, 1 ]
 
@@ -1996,7 +1996,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 1 ]
     anchor_min = [ 0, 1 ]
-    offset_max = [ 754, -60 ]
+    offset_max = [ 954, -60 ]
     offset_min = [ 34, -86 ]
     pivot = [ 0, 1 ]
 
@@ -2021,7 +2021,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 1 ]
     anchor_min = [ 0, 1 ]
-    offset_max = [ 754, -34 ]
+    offset_max = [ 954, -34 ]
     offset_min = [ 34, -60 ]
     pivot = [ 0, 1 ]
 

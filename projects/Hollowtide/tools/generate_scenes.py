@@ -498,7 +498,7 @@ def vigil():
     for i in range(6):
         y = -34.0 - (5 - i) * 26.0
         s.add(f"WhisperLine{i}", canvas, [
-            Scene.box(34, y, 720, 26, (0.0, 1.0), (0.0, 1.0)),
+            Scene.box(34, y, 920, 26, (0.0, 1.0), (0.0, 1.0)),
             Scene.text("", WHISPER, 18.0, BONE_DIM),
         ])
 
@@ -516,11 +516,11 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn%d'
 node = %d
 parent = -1
-position = [ %.1f, -1.9, 0.0 ]
+position = [ %.1f, -0.1, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 """ % (i, node_id(f"Spawn{i}"), x)
-        for i, x in enumerate([-7.0, -5.2, -1.6, 0.2])
+        for i, x in enumerate([2.6, 3.9, 5.2, 6.5])
     )
     prologue = (
         CAMERA.format(node=node_id("Main Camera"), clear="0.016, 0.019, 0.024")
