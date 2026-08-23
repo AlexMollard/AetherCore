@@ -90,12 +90,37 @@ namespace aether::ui
 			gpu::PipelineHandle pipeline{}; // resolved on the producer thread (default or material)
 		};
 
-		struct Frame
+		// One GPU-visible command buffer. A frame slot owns several and rotates between them.
+		struct SlotBuffer
 		{
 			gpu::BufferHandle buffer{};
 			void* mapped = nullptr;
 			std::uint64_t address = 0;
 			std::uint32_t capacity = 0;
+		};
+
+		struct Frame
+		{
+			// A slot is reused every kFrames frames, but the GPU is not necessarily finished
+			// with it by then. The pass bakes each DrawGroup's device address into the recorded
+			// command buffer as a push constant, so the GPU reads this MEMORY well after the
+			// render thread has moved on - and the producer, which is throttled against frame
+			// SUBMISSION rather than GPU completion, was free to memcpy over it in the meantime.
+			// That is what turned rites into flat fills and stretched a material across the
+			// panel: correct commands, overwritten underneath the GPU.
+			//
+			// Rotating between several buffers means a rebuild never touches the memory the GPU
+			// is still reading. Three of them tolerates the GPU running nine frames behind the
+			// producer, which is far past anything the frame throttle permits.
+			static constexpr std::uint32_t kBuffersPerSlot = 3;
+			std::array<SlotBuffer, kBuffersPerSlot> buffers{};
+			std::uint32_t cursor = 0;
+
+			// The buffer chosen for the frame currently being built, and then recorded. Safe to
+			// read at record time: the producer is throttled to fewer frames ahead than it takes
+			// to come back round to this slot, so it cannot have re-pointed these yet.
+			void* mapped = nullptr;
+			std::uint64_t address = 0;
 			std::uint32_t count = 0;
 			// (not a shared member) so a producer-thread BuildFrame for the next
 			glm::vec2 extent{0.f};
@@ -116,7 +141,7 @@ namespace aether::ui
 		};
 
 		void AppendCursor();
-		void EnsureCapacity(Frame& frame, std::uint32_t count);
+		static void EnsureCapacity(SlotBuffer& buf, std::uint32_t count);
 		bool EnsureFontCurvesUploaded(std::string_view name);
 		// Per-frame gate in front of the upload: cheap when the font already holds a live slot,
 		// uploads when it does not, and reports a font that cannot be uploaded exactly once.

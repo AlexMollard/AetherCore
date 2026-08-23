@@ -113,9 +113,12 @@ namespace aether::ui
 
 		for (Frame& frame: m_frames)
 		{
-			if (frame.buffer.IsValid())
+			for (SlotBuffer& buf: frame.buffers)
 			{
-				gpu::ResourceRegistry::Destroy(frame.buffer);
+				if (buf.buffer.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(buf.buffer);
+				}
 			}
 			frame = Frame{};
 		}
@@ -385,25 +388,25 @@ namespace aether::ui
 		return handle;
 	}
 
-	void UiRenderer::EnsureCapacity(Frame& frame, std::uint32_t count)
+	void UiRenderer::EnsureCapacity(SlotBuffer& buf, std::uint32_t count)
 	{
-		if (frame.capacity >= count && frame.buffer.IsValid())
+		if (buf.capacity >= count && buf.buffer.IsValid())
 		{
 			return;
 		}
 
-		std::uint32_t newCapacity = frame.capacity == 0 ? kInitialCommandCapacity : frame.capacity;
+		std::uint32_t newCapacity = buf.capacity == 0 ? kInitialCommandCapacity : buf.capacity;
 		while (newCapacity < count)
 		{
 			newCapacity *= 2;
 		}
 
-		if (frame.buffer.IsValid())
+		if (buf.buffer.IsValid())
 		{
-			gpu::ResourceRegistry::Destroy(frame.buffer);
-			frame.buffer = {};
-			frame.mapped = nullptr;
-			frame.address = 0;
+			gpu::ResourceRegistry::Destroy(buf.buffer);
+			buf.buffer = {};
+			buf.mapped = nullptr;
+			buf.address = 0;
 		}
 
 		const gpu::MappedBufferDesc desc{
@@ -412,18 +415,18 @@ namespace aether::ui
 		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
 		        .debugName = "UI.Commands",
 		};
-		frame.buffer = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-		if (!frame.buffer.IsValid())
+		buf.buffer = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!buf.buffer.IsValid())
 		{
 			AE_ERROR(LogCategory::UI, "UiRenderer: failed to allocate command buffer ({} commands)", newCapacity);
-			frame.capacity = 0;
+			buf.capacity = 0;
 			return;
 		}
 
-		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(frame.buffer);
-		frame.mapped = view.mappedPtr;
-		frame.address = view.deviceAddress;
-		frame.capacity = newCapacity;
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(buf.buffer);
+		buf.mapped = view.mappedPtr;
+		buf.address = view.deviceAddress;
+		buf.capacity = newCapacity;
 		// Growing the command buffer swaps the device address every DrawGroup's commands are
 		// read from. Rare in steady state; if it turns out to be happening constantly while the
 		// UI churns, that is the thing to chase.
@@ -590,16 +593,25 @@ namespace aether::ui
 			i = j;
 		}
 
-		EnsureCapacity(frame, count);
-		if (!frame.buffer.IsValid())
+		// Rotate to the next buffer in this slot's ring BEFORE writing. The one we just came
+		// off may still be being read by the GPU for the last frame that used this slot; the
+		// device address of that read was baked into a command buffer three frames ago and
+		// nothing since has told the GPU to stop.
+		frame.cursor = (frame.cursor + 1u) % Frame::kBuffersPerSlot;
+		SlotBuffer& buf = frame.buffers[frame.cursor];
+
+		EnsureCapacity(buf, count);
+		if (!buf.buffer.IsValid())
 		{
 			frame.groups.clear();
 			return;
 		}
 
 		const auto byteSize = static_cast<gpu::DeviceSize>(count) * sizeof(UiDrawCommand);
-		std::memcpy(frame.mapped, m_scratch.data(), byteSize);
-		gpu::ResourceRegistry::FlushMappedBuffer(frame.buffer, 0, byteSize);
+		std::memcpy(buf.mapped, m_scratch.data(), byteSize);
+		gpu::ResourceRegistry::FlushMappedBuffer(buf.buffer, 0, byteSize);
+		frame.mapped = buf.mapped;
+		frame.address = buf.address;
 		frame.count = count;
 	}
 
