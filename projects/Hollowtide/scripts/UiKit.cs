@@ -111,10 +111,27 @@ public static class UiKit
 	}
 }
 
-/// <summary>A box plus its label, and the handful of things a caller does to one.</summary>
+/// <summary>
+/// A button, in either of the two shapes this game uses.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Chrome authored in the scene is a real engine <c>UI Button</c>: it owns its own label and
+/// its own focus colours, so the engine styles the highlight and nothing here has to. Those
+/// are bound with <see cref="Find"/> and leave <see cref="Label"/> invalid.
+/// </para>
+/// <para>
+/// A ledger row cannot be one, because a row is four columns of text and a UI Button has one
+/// label. Those stay an image with a selectable and separate text children, built by
+/// <see cref="UiKit.MakeButton"/>. Both answer the same calls; the only difference is where
+/// the label lives, which is what the <see cref="Label"/> check below is deciding.
+/// </para>
+/// </remarks>
 public readonly struct Button
 {
 	public readonly Entity Root;
+	/// <summary>The separate label entity of a composed button, or invalid for an authored
+	/// UI Button, which carries its label in the component.</summary>
 	public readonly Entity Label;
 
 	public Button(Entity root, Entity label)
@@ -122,6 +139,9 @@ public readonly struct Button
 		Root = root;
 		Label = label;
 	}
+
+	/// <summary>Bind an authored UI Button from the scene by name.</summary>
+	public static Button Find(string name) => new Button(Scene.Find(name), default);
 
 	public bool IsValid => Root.IsValid;
 
@@ -140,6 +160,10 @@ public readonly struct Button
 		{
 			Ui.SetText(Label, text);
 		}
+		else if (Root.IsValid)
+		{
+			Ui.SetButtonLabel(Root, text);
+		}
 	}
 
 	public void SetLabelColour(Vector4 colour)
@@ -148,13 +172,27 @@ public readonly struct Button
 		{
 			Ui.SetTextColor(Label, colour);
 		}
+		else if (Root.IsValid)
+		{
+			// Only the resting colour. The engine picks text_color_focused itself while the
+			// button holds focus, so writing that here would fight the highlight.
+			Root.Component("UI Button").SetVector4("text_color", colour);
+		}
 	}
 
 	public void SetColour(Vector4 colour)
 	{
-		if (Root.IsValid)
+		if (!Root.IsValid)
+		{
+			return;
+		}
+		if (Label.IsValid)
 		{
 			Ui.SetImageColor(Root, colour);
+		}
+		else
+		{
+			Root.Component("UI Button").SetVector4("bg_color", colour);
 		}
 	}
 
@@ -176,15 +214,16 @@ public readonly struct Button
 		}
 	}
 
-	/// <summary>The usual per-frame styling: a lit box when it can be used and the pointer is
-	/// on it, a flat one when it can, and a sunken one when it cannot.</summary>
+	/// <summary>Per-frame styling for whether the button can be used at all. An authored button
+	/// already answers focus on its own, so this only ever expresses AFFORDABILITY - the lit
+	/// state is the engine's business, and a composed row button gets it applied here.</summary>
 	public void Style(bool affordable, Vector4 hot, Vector4 cold, Vector4 dead)
 	{
 		if (!Root.IsValid)
 		{
 			return;
 		}
-		bool lit = affordable && (Hovered || Focused);
+		bool lit = affordable && Label.IsValid && (Hovered || Focused);
 		SetColour(!affordable ? dead : lit ? hot : cold);
 		SetLabelColour(affordable ? Palette.Bone : Palette.BoneFaint);
 	}

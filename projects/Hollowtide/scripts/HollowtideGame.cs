@@ -39,6 +39,7 @@ public sealed class HollowtideGame : EntityScript
 	private Entity _flash;
 
 	private Entity _offlinePanel;
+	private Entity _offlineBody;
 	private Button _offlineDismiss;
 
 	private float _autosave;
@@ -57,13 +58,13 @@ public sealed class HollowtideGame : EntityScript
 			_canvas = Ui.CreateCanvas();
 		}
 
-		BuildBackdrop();
-		_hud.Build(_canvas);
-		_ledger.Build(_canvas);
-		_congregation.Build(_canvas);
-		_whispers.Build(_canvas);
+		BindBackdrop();
+		_hud.Bind();
+		_ledger.Bind();
+		_congregation.Bind();
+		_whispers.Bind();
 		_parish.Build(_canvas, Self);
-		BuildOfflinePanel();
+		BindOfflinePanel();
 
 		// Assigned, never subscribed: these are statics that outlive a hot reload, and a
 		// += here would stack a second copy of the feed onto every rebuild.
@@ -141,19 +142,13 @@ public sealed class HollowtideGame : EntityScript
 
 	// ── Backdrop ─────────────────────────────────────────────────────────────────────
 
-	/// <summary>Two instances of one shader: a fog BEHIND the interface that thickens with
-	/// dread, and a flash IN FRONT of it for the moment something arrives.</summary>
-	private void BuildBackdrop()
+	/// <summary>Two instances of one shader, both authored: a fog BEHIND the interface that
+	/// thickens with dread, and a flash IN FRONT of it for the moment something arrives. Only
+	/// their per-frame params are driven from here.</summary>
+	private void BindBackdrop()
 	{
-		_gloom = Ui.CreateEffect(_canvas, "ui_gloom");
-		ComponentAccess gloom = _gloom.Component("UI Effect");
-		gloom.SetBool("background", true);
-		Ui.SetEffectSortOrder(_gloom, -10);
-		Ui.SetEffectColors(_gloom, Palette.Void, Palette.DreadDeep);
-
-		_flash = Ui.CreateEffect(_canvas, "ui_gloom");
-		Ui.SetEffectSortOrder(_flash, 1000);
-		Ui.SetEffectColors(_flash, Palette.Dread, Palette.Void);
+		_gloom = Scene.Find("VigilGloom");
+		_flash = Scene.Find("VigilFlash");
 	}
 
 	private void UpdateBackdrop(float unscaled)
@@ -258,15 +253,13 @@ public sealed class HollowtideGame : EntityScript
 
 	// ── Offline ──────────────────────────────────────────────────────────────────────
 
-	private void BuildOfflinePanel()
+	/// <summary>Bind the authored report. Hidden here rather than in the scene because a scene
+	/// stores no active flag - what is authored is the layout, and whether it is up is state.</summary>
+	private void BindOfflinePanel()
 	{
-		_offlinePanel = UiKit.Stretch(_canvas, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-			new Vector2(-320.0f, -170.0f), new Vector2(320.0f, 170.0f), Palette.PanelDeep, 6.0f);
-		UiKit.Text(_offlinePanel, "WHILE YOU WERE AWAY", 32.0f, 30.0f, 560.0f, 30.0f, 20.0f,
-			Palette.BoneDim, UiHAlign.Left, Palette.Display);
-		UiKit.Paragraph(_offlinePanel, "", 32.0f, 78.0f, 560.0f, 150.0f, 17.0f, Palette.Bone);
-		_offlineDismiss = UiKit.MakeButton(_offlinePanel, "TAKE UP THE VIGIL", 190.0f, 262.0f, 260.0f, 44.0f,
-			15.0f, Palette.Display);
+		_offlinePanel = Scene.Find("OfflinePanel");
+		_offlineBody = Scene.Find("OfflineBody");
+		_offlineDismiss = Button.Find("OfflineDismiss");
 		_offlinePanel.SetActive(false);
 	}
 
@@ -279,12 +272,9 @@ public sealed class HollowtideGame : EntityScript
 		if (!_offlinePanel.ActiveInHierarchy)
 		{
 			OfflineReport report = SaveSystem.PendingOffline.Value;
-			// The body is the second child: the heading, then the paragraph. Looked up rather
-			// than cached so the panel can be rebuilt without a stale handle.
-			Entity body = _offlinePanel.GetChild(1);
-			if (body.IsValid)
+			if (_offlineBody.IsValid)
 			{
-				Ui.SetText(body,
+				Ui.SetText(_offlineBody,
 					"The parish kept working for " + Numbers.Duration(report.Seconds) +
 					(report.Capped ? " (as long as it will keep going unattended).\n\n" : ".\n\n") +
 					"It gathered " + Numbers.Short(report.Ichor) + " ichor at half its usual pace, " +

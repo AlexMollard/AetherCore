@@ -26,7 +26,6 @@ public sealed class ThresholdScreen : EntityScript
 	public float JoinTimeoutSeconds = 8.0f;
 
 	private Entity _canvas;
-	private Entity _gloom;
 	private Entity _nameBox;
 	private Entity _addressBox;
 	private Entity _status;
@@ -46,10 +45,6 @@ public sealed class ThresholdScreen : EntityScript
 	public override void OnAttach()
 	{
 		_canvas = Scene.Find("ThresholdUI");
-		if (!_canvas.IsValid)
-		{
-			_canvas = Ui.CreateCanvas();
-		}
 
 		// The name field has to come up holding the keeper who was last on this machine, and
 		// the two settings below have to come up where they were left. EnsureLoaded is what
@@ -58,34 +53,22 @@ public sealed class ThresholdScreen : EntityScript
 		// the screen that can show it.
 		SaveSystem.EnsureLoaded();
 
-		_gloom = Ui.CreateEffect(_canvas, "ui_gloom");
-		_gloom.Component("UI Effect").SetBool("background", true);
-		Ui.SetEffectSortOrder(_gloom, -10);
-		Ui.SetEffectColors(_gloom, Palette.Void, Palette.DreadDeep);
+		// Everything on this screen is authored in the scene. Binding it is the whole of the
+		// setup: where the fields sit and what colour they are is the editor's business, and
+		// this script only seeds their values and reads them back.
+		_nameBox = Scene.Find("ThNameBox");
+		_addressBox = Scene.Find("ThAddressBox");
+		_status = Scene.Find("ThStatus");
+		_whisperToggle = Scene.Find("ThWhisperToggle");
+		_shakeSlider = Scene.Find("ThShakeSlider");
+		_shakeLabel = Scene.Find("ThShakeLabel");
+		_alone = Button.Find("ThAlone");
+		_host = Button.Find("ThHost");
+		_join = Button.Find("ThJoin");
 
-		Centred(UiKit.Text(_canvas, "HOLLOWTIDE", 0.0f, 0.0f, 900.0f, 90.0f, 72.0f, Palette.Bone,
-			UiHAlign.Center, Palette.Display), 0.0f, -250.0f, 900.0f, 90.0f);
-		Centred(UiKit.Text(_canvas, "keep the parish, and count what it costs you", 0.0f, 0.0f,
-			900.0f, 30.0f, 18.0f, Palette.BoneFaint, UiHAlign.Center, Palette.Whisper),
-			0.0f, -186.0f, 900.0f, 30.0f);
-
-		Centred(UiKit.Text(_canvas, "YOUR NAME", 0.0f, 0.0f, 400.0f, 26.0f, 15.0f, Palette.BoneFaint,
-			UiHAlign.Left, Palette.Display), -200.0f, -118.0f, 400.0f, 26.0f);
-		_nameBox = MakeBox("Keeper", 20, UiContentType.Alphanumeric, -86.0f);
 		Ui.SetTextBoxText(_nameBox, Vigil.KeeperName);
-
-		Centred(UiKit.Text(_canvas, "HOST ADDRESS", 0.0f, 0.0f, 400.0f, 26.0f, 15.0f, Palette.BoneFaint,
-			UiHAlign.Left, Palette.Display), -200.0f, -30.0f, 400.0f, 26.0f);
-		_addressBox = MakeBox("127.0.0.1:7777", 48, UiContentType.Host, 2.0f);
-
-		_alone = CentredButton("KEEP VIGIL ALONE", 0.0f, 72.0f, 400.0f, 48.0f);
-		_host = CentredButton("HOST A CONGREGATION", -104.0f, 130.0f, 192.0f, 44.0f);
-		_join = CentredButton("JOIN ONE", 104.0f, 130.0f, 192.0f, 44.0f);
-
-		BuildSettings();
-
-		_status = Centred(UiKit.Text(_canvas, "", 0.0f, 0.0f, 900.0f, 26.0f, 16.0f, Palette.BoneDim,
-			UiHAlign.Center, Palette.Whisper), 0.0f, 262.0f, 900.0f, 26.0f);
+		Ui.SetToggle(_whisperToggle, SaveSystem.ShowWhispers);
+		Ui.SetSliderValue(_shakeSlider, SaveSystem.DreadShake);
 
 		// Whatever ended the last session - a host that vanished, a deliberate exit - is
 		// reported here, because this is where the player was sent.
@@ -96,63 +79,6 @@ public sealed class ThresholdScreen : EntityScript
 		}
 
 		Net.ReplicationReady = true;
-	}
-
-	private Entity MakeBox(string placeholder, int maxLength, UiContentType type, float y)
-	{
-		Entity box = Ui.CreateTextBox(_canvas);
-		box.SetParent(_canvas);
-		Ui.SetAnchors(box, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-		Ui.SetPivot(box, new Vector2(0.5f, 0.5f));
-		Ui.SetRect(box, 0.0f, y, 400.0f, 44.0f);
-		Ui.SetPlaceholder(box, placeholder);
-		Ui.SetMaxLength(box, maxLength);
-		Ui.SetContentType(box, type);
-		Ui.SetFontSize(box, 18.0f);
-		return box;
-	}
-
-	private void BuildSettings()
-	{
-		Centred(UiKit.Text(_canvas, "SHOW WHISPERS", 0.0f, 0.0f, 240.0f, 26.0f, 15.0f, Palette.BoneFaint,
-			UiHAlign.Left, Palette.Display), -200.0f, 196.0f, 240.0f, 26.0f);
-
-		// No create-export exists for a toggle or a slider, so the widget is an image with the
-		// component added: the same entity the editor would author, assembled from script.
-		_whisperToggle = UiKit.Image(_canvas, 0.0f, 0.0f, 56.0f, 26.0f, Palette.Transparent);
-		Centred(_whisperToggle, 24.0f, 196.0f, 56.0f, 26.0f);
-		_whisperToggle.Component("UI Toggle").Add();
-		Ui.SetToggle(_whisperToggle, SaveSystem.ShowWhispers);
-		Ui.SetSelectable(_whisperToggle);
-
-		_shakeLabel = Centred(UiKit.Text(_canvas, "", 0.0f, 0.0f, 240.0f, 26.0f, 15.0f, Palette.BoneFaint,
-			UiHAlign.Left, Palette.Display), 68.0f, 196.0f, 240.0f, 26.0f);
-
-		_shakeSlider = UiKit.Image(_canvas, 0.0f, 0.0f, 120.0f, 22.0f, Palette.Transparent);
-		Centred(_shakeSlider, 200.0f, 196.0f, 120.0f, 22.0f);
-		ComponentAccess slider = _shakeSlider.Component("UI Slider");
-		slider.Add();
-		slider.SetFloat("min", 0.0f);
-		slider.SetFloat("max", 1.5f);
-		slider.SetFloat("step", 0.1f);
-		slider.SetVector4("fill_color", Palette.Dread);
-		Ui.SetSliderValue(_shakeSlider, SaveSystem.DreadShake);
-		Ui.SetSelectable(_shakeSlider);
-	}
-
-	private static Entity Centred(Entity e, float x, float y, float w, float h)
-	{
-		Ui.SetAnchors(e, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-		Ui.SetPivot(e, new Vector2(0.5f, 0.5f));
-		Ui.SetRect(e, x, y, w, h);
-		return e;
-	}
-
-	private Button CentredButton(string label, float x, float y, float w, float h)
-	{
-		Button b = UiKit.MakeButton(_canvas, label, 0.0f, 0.0f, w, h, 15.0f, Palette.Display);
-		Centred(b.Root, x, y, w, h);
-		return b;
 	}
 
 	public override void OnUpdate(float deltaTime)
@@ -170,7 +96,6 @@ public sealed class ThresholdScreen : EntityScript
 			Ui.SetFocus(_alone.Root);
 		}
 
-		StyleButtons();
 		ReadSettings();
 
 		if (_joinTarget.Length > 0)
@@ -192,13 +117,6 @@ public sealed class ThresholdScreen : EntityScript
 		{
 			StartJoin(Ui.GetTextBoxText(_addressBox));
 		}
-	}
-
-	private void StyleButtons()
-	{
-		_alone.Style(true, Palette.Mix(Palette.RowHot, Palette.Ichor, 0.30f), Palette.Row, Palette.PanelDeep);
-		_host.Style(true, Palette.Mix(Palette.RowHot, Palette.Sigil, 0.30f), Palette.Row, Palette.PanelDeep);
-		_join.Style(true, Palette.Mix(Palette.RowHot, Palette.Sigil, 0.30f), Palette.Row, Palette.PanelDeep);
 	}
 
 	/// <summary>Settings are persisted the moment they change rather than on the way out, so a

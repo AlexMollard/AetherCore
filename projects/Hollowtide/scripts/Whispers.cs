@@ -42,27 +42,13 @@ public sealed class Whispers
 
 	/// <summary>Build the feed under the given canvas, anchored to the bottom-left so it sits
 	/// clear of the ledger on the right and grows upward.</summary>
-	public void Build(Entity canvas)
+	/// <summary>Bind the authored feed. Six lines, fixed, so the scene owns where they sit and
+	/// this only ever rewrites the string and the colour.</summary>
+	public void Bind()
 	{
-		if (_built)
-		{
-			return;
-		}
 		for (int i = 0; i < kLines; i++)
 		{
-			// Anchored to the bottom edge (0, 1) with a bottom-left pivot, then pushed UP by
-			// row index. y is down, so the newest line sits at the smallest negative offset.
-			Entity e = Ui.CreateText(canvas, "");
-			e.SetParent(canvas);
-			Ui.SetAnchors(e, new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f));
-			Ui.SetPivot(e, new Vector2(0.0f, 1.0f));
-			Ui.SetRect(e, 34.0f, -34.0f - (kLines - 1 - i) * kLineHeight, kWidth, kLineHeight);
-			Ui.SetFont(e, Palette.Whisper);
-			Ui.SetFontSize(e, 18.0f);
-			Ui.SetTextWrap(e, false);
-			Ui.SetTextAlign(e, UiHAlign.Left, UiVAlign.Middle);
-			Ui.SetText(e, "");
-			_elements[i] = e;
+			_elements[i] = Scene.Find("WhisperLine" + i);
 		}
 		_built = true;
 	}

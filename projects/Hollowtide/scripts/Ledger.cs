@@ -69,41 +69,37 @@ public sealed class Ledger
 	/// <summary>How many copies a buy button buys: 1, 10, 100, or as many as the purse covers.</summary>
 	public int BuyAmount => s_amounts[_amountIndex];
 
-	public void Build(Entity canvas)
+	/// <summary>
+	/// Bind the authored chrome, then build the row pool.
+	/// </summary>
+	/// <remarks>
+	/// The split the scene draws is the split that matters: the panel, its tabs and its
+	/// buy-amount buttons are fixed furniture and live in the editor, while the ROWS are a
+	/// function of the content tables - eight rites, thirty-three offerings, twelve marks -
+	/// and are re-filled per tab. Authoring fourteen identical rows in a scene file would be
+	/// fourteen copies of one layout to keep in step by hand.
+	/// </remarks>
+	public void Bind()
 	{
-		_panel = UiKit.Stretch(canvas, new Vector2(1.0f, 0.0f), new Vector2(1.0f, 1.0f),
-			new Vector2(-kWidth, 0.0f), new Vector2(0.0f, 0.0f), Palette.Panel);
+		_panel = Scene.Find("LedgerPanel");
+		_viewport = Scene.Find("LedgerViewport");
 
-		UiKit.Text(_panel, "THE LEDGER", kPad + 4.0f, 18.0f, 300.0f, 30.0f, 21.0f, Palette.BoneDim,
-			UiHAlign.Left, Palette.Display);
-
-		string[] tabNames = { "RITES", "OFFERINGS", "COMMUNION", "MARKS" };
-		float tabWidth = (kWidth - kPad * 2.0f - 3.0f * 6.0f) / 4.0f;
 		for (int i = 0; i < _tabs.Length; i++)
 		{
-			_tabs[i] = UiKit.MakeButton(_panel, tabNames[i], kPad + i * (tabWidth + 6.0f), 56.0f,
-				tabWidth, 36.0f, 15.0f, Palette.Display);
+			_tabs[i] = Button.Find("LedgerTab" + i);
 		}
-
 		for (int i = 0; i < _amounts.Length; i++)
 		{
-			_amounts[i] = UiKit.MakeButton(_panel, s_amountLabels[i], kPad + i * 78.0f, 102.0f,
-				72.0f, 32.0f, 16.0f, Palette.Display);
+			_amounts[i] = Button.Find("LedgerAmount" + i);
 		}
-
-		// The viewport clips its whole subtree, so a row scrolled past the top is cut off at
-		// the pixel rather than drawn over the tabs.
-		_viewport = UiKit.Stretch(_panel, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f),
-			new Vector2(kPad, kListTop), new Vector2(-kPad, -kPad), Palette.Transparent);
-		_viewport.Component("UI Mask").Add();
 
 		float rowWidth = kWidth - kPad * 2.0f;
 		for (int i = 0; i < kRowPool; i++)
 		{
 			Row row = default;
 			row.Box = UiKit.MakeButton(_viewport, "", 0.0f, i * (kRowHeight + kRowGap), rowWidth, kRowHeight);
-			// The button's own centred label is unused here: a ledger row has four columns, so
-			// they are placed individually and the pooled label is emptied.
+			// The composed button's own centred label is unused: a ledger row has four columns,
+			// so they are placed individually and the pooled label is emptied.
 			Ui.SetText(row.Box.Label, "");
 			row.Title = UiKit.Text(row.Box.Root, "", 14.0f, 8.0f, 370.0f, 24.0f, 17.0f, Palette.Bone);
 			row.Sub = UiKit.Text(row.Box.Root, "", 14.0f, 34.0f, 420.0f, 24.0f, 15.0f, Palette.BoneFaint,

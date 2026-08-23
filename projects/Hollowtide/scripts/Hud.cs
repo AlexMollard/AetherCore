@@ -22,7 +22,6 @@ public sealed class Hud
 
 	private const float kSigilSize = 268.0f;
 
-	private Entity _canvas;
 	private Entity _bar;
 	private Entity _nave;
 
@@ -55,80 +54,26 @@ public sealed class Hud
 	public bool WardPressed { get; private set; }
 	public bool BellPressed { get; private set; }
 
-	public void Build(Entity canvas)
+	/// <summary>Bind the authored chrome. Every element here lives in the scene, so this only
+	/// looks things up - laying the bar out is a job for the editor, not for a rebuild.</summary>
+	public void Bind()
 	{
-		_canvas = canvas;
+		_bar = Scene.Find("HudBar");
+		_title = Scene.Find("HudTitle");
+		_keeper = Scene.Find("HudKeeper");
+		_ichor = Scene.Find("HudIchor");
+		_rate = Scene.Find("HudRate");
+		_multiplier = Scene.Find("HudMultiplier");
+		_dreadTrack = Scene.Find("HudDreadBar");
+		_dreadLabel = Scene.Find("HudDreadValue");
+		_sigilCount = Scene.Find("HudSigils");
 
-		// ── The bar ──────────────────────────────────────────────────────────────────
-		_bar = UiKit.Stretch(canvas, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 0.0f),
-			new Vector2(0.0f, 0.0f), new Vector2(-LedgerWidth, BarHeight), Palette.PanelDeep);
-
-		_title = UiKit.Text(_bar, "HOLLOWTIDE", 28.0f, 14.0f, 320.0f, 30.0f, 22.0f, Palette.BoneDim,
-			UiHAlign.Left, Palette.Display);
-		_keeper = UiKit.Text(_bar, "", 28.0f, 48.0f, 340.0f, 26.0f, 17.0f, Palette.BoneDim,
-			UiHAlign.Left, Palette.Body);
-
-		_ichor = UiKit.Text(_bar, "0", 320.0f, 12.0f, 300.0f, 46.0f, 40.0f, Palette.Ichor, UiHAlign.Left);
-		_rate = UiKit.Text(_bar, "0/s", 322.0f, 56.0f, 300.0f, 24.0f, 18.0f, Palette.IchorDim, UiHAlign.Left);
-		_multiplier = UiKit.Text(_bar, "", 322.0f, 56.0f, 300.0f, 24.0f, 17.0f, Palette.Sigil, UiHAlign.Right);
-
-		// The dread meter is an engine UI Progress Bar rather than two images kept in step by
-		// hand: the widget already owns the track/fill/rounding, and driving it is one call.
-		_dreadTrack = UiKit.Image(_bar, 660.0f, 34.0f, 360.0f, 20.0f, Palette.Transparent, 6.0f);
-		ComponentAccess progress = _dreadTrack.Component("UI Progress Bar");
-		progress.Add();
-		progress.SetVector4("track_color", new Vector4(0.086f, 0.075f, 0.078f, 1.0f));
-		progress.SetVector4("fill_color", Palette.Dread);
-		progress.SetFloat("corner_radius", 6.0f);
-		UiKit.Text(_bar, "DREAD", 660.0f, 12.0f, 120.0f, 20.0f, 15.0f, Palette.BoneFaint, UiHAlign.Left, Palette.Display);
-		_dreadLabel = UiKit.Text(_bar, "0.0%", 900.0f, 12.0f, 120.0f, 20.0f, 16.0f, Palette.Dread, UiHAlign.Right);
-
-		_sigilCount = UiKit.Text(_bar, "", -260.0f, 34.0f, 240.0f, 28.0f, 18.0f, Palette.Sigil, UiHAlign.Right);
-		// Pinned to the bar's own right edge so it stays put when the window widens.
-		Ui.SetAnchors(_sigilCount, new Vector2(1.0f, 0.0f), new Vector2(1.0f, 0.0f));
-		Ui.SetPivot(_sigilCount, new Vector2(1.0f, 0.0f));
-		Ui.SetRect(_sigilCount, -24.0f, 34.0f, 260.0f, 28.0f);
-
-		// ── The nave ─────────────────────────────────────────────────────────────────
-		_nave = UiKit.Stretch(canvas, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f),
-			new Vector2(0.0f, BarHeight), new Vector2(-LedgerWidth, 0.0f), Palette.Transparent);
-
-		_sigil = Ui.CreateImage(_nave);
-		_sigil.SetParent(_nave);
-		Ui.SetAnchors(_sigil, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-		Ui.SetPivot(_sigil, new Vector2(0.5f, 0.5f));
-		Ui.SetRect(_sigil, 0.0f, -60.0f, kSigilSize, kSigilSize);
-		Ui.SetImageColor(_sigil, Vector4.One);
-		Ui.SetImageCornerRadius(_sigil, 0.0f);
-		// Its own fragment shader, masked to the element: the sigil is the one thing on screen
-		// that has to look drawn rather than laid out.
-		Ui.SetMaterial(_sigil, "ui_sigil");
-		Ui.SetSelectable(_sigil);
-
-		_sigilHint = Centered(_nave, "GATHER", 0.0f, 108.0f, 400.0f, 26.0f, 17.0f, Palette.BoneFaint, Palette.Display);
-		_handValue = Centered(_nave, "", 0.0f, 136.0f, 400.0f, 26.0f, 17.0f, Palette.IchorDim, Palette.Body);
-
-		_ward = CenteredButton(_nave, "RAISE WARD", -132.0f, 186.0f, 250.0f, 44.0f);
-		_bell = CenteredButton(_nave, "RING THE BELL", 132.0f, 186.0f, 250.0f, 44.0f);
-	}
-
-	private static Entity Centered(Entity parent, string text, float x, float y, float w, float h,
-		float size, Vector4 colour, string font)
-	{
-		Entity e = UiKit.Text(parent, text, 0.0f, 0.0f, w, h, size, colour, UiHAlign.Center, font);
-		Ui.SetAnchors(e, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-		Ui.SetPivot(e, new Vector2(0.5f, 0.5f));
-		Ui.SetRect(e, x, y, w, h);
-		return e;
-	}
-
-	private static Button CenteredButton(Entity parent, string label, float x, float y, float w, float h)
-	{
-		Button b = UiKit.MakeButton(parent, label, 0.0f, 0.0f, w, h, 16.0f, Palette.Display);
-		Ui.SetAnchors(b.Root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-		Ui.SetPivot(b.Root, new Vector2(0.5f, 0.5f));
-		Ui.SetRect(b.Root, x, y, w, h);
-		return b;
+		_nave = Scene.Find("HudNave");
+		_sigil = Scene.Find("NaveSigil");
+		_sigilHint = Scene.Find("NaveHint");
+		_handValue = Scene.Find("NaveHandValue");
+		_ward = Button.Find("NaveWard");
+		_bell = Button.Find("NaveBell");
 	}
 
 	/// <summary>Read input, animate, and write every live number. Called once a frame.</summary>

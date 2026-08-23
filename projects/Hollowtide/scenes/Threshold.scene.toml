@@ -1,6 +1,5 @@
-# Hollowtide - the threshold. Name yourself, decide whether anyone else is coming, and
-# step in. The screen builds itself from ThresholdScreen; this file is the camera, the
-# canvas and the script.
+# Hollowtide - the threshold. Authored chrome; ThresholdScreen only binds and drives it.
+
 [scene]
 features = [ 'sprites', 'tilemaps', 'physics_2d' ]
 kind = '2d'
@@ -10,7 +9,7 @@ version = 16
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Main Camera'
-node = 9061137025419310283
+node = -3665374025594527881
 parent = -1
 position = [ 0.0, 0.0, 10.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -37,7 +36,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'Threshold'
-node = 2946630219554171408
+node = 8773423998746207757
 parent = -1
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -47,7 +46,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 name = 'ThresholdUI'
-node = 5148097382290551926
+node = -6729419949155474458
 parent = -1
 
     [entities.ui_canvas]
@@ -61,3 +60,420 @@ parent = -1
     offset_max = [ 0.0, 0.0 ]
     offset_min = [ 0.0, 0.0 ]
     pivot = [ 0.5, 0.5 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThGloom'
+node = -2259204205133562836
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 1, 1 ]
+    anchor_min = [ 0, 0 ]
+    offset_max = [ 0, 0 ]
+    offset_min = [ 0, 0 ]
+    pivot = [ 0, 0 ]
+
+    [entities.ui_effect]
+    background = true
+    color0 = [ 0.02, 0.024, 0.03, 1 ]
+    color1 = [ 0.38, 0.11, 0.11, 1 ]
+    shader = 'ui_gloom'
+    sort_order = -10
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThTitle'
+node = -9009645126887827619
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 450, -205 ]
+    offset_min = [ -450, -295 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.855, 0.851, 0.816, 1 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 72
+    text = 'HOLLOWTIDE'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThSubtitle'
+node = 223496796075479581
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 450, -171 ]
+    offset_min = [ -450, -201 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 18
+    text = 'keep the parish, and count what it costs you'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThNameLabel'
+node = -5930190052139365851
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 0, -105 ]
+    offset_min = [ -400, -131 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 15
+    text = 'YOUR NAME'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThNameBox'
+node = 5406620095698808898
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, -64 ]
+    offset_min = [ -200, -108 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text_box]
+    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    bg_color_focused = [ 0.075, 0.086, 0.101, 0.9 ]
+    caret_color = [ 0.454, 0.855, 0.678, 1 ]
+    content_type = 'alphanumeric'
+    corner_radius = 4
+    font = 'Roboto-Regular'
+    max_length = 20
+    padding = 10
+    pixel_size = 18
+    placeholder = 'Keeper'
+    placeholder_color = [ 0.29, 0.302, 0.322, 1 ]
+    selection_color = [ 0.22, 0.45, 0.36, 1 ]
+    text = ''
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThAddressLabel'
+node = -8403542169678525829
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 0, -17 ]
+    offset_min = [ -400, -43 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 15
+    text = 'HOST ADDRESS'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThAddressBox'
+node = -1356049658452355196
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 24 ]
+    offset_min = [ -200, -20 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text_box]
+    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    bg_color_focused = [ 0.075, 0.086, 0.101, 0.9 ]
+    caret_color = [ 0.454, 0.855, 0.678, 1 ]
+    content_type = 'host'
+    corner_radius = 4
+    font = 'Roboto-Regular'
+    max_length = 48
+    padding = 10
+    pixel_size = 18
+    placeholder = '127.0.0.1:7777'
+    placeholder_color = [ 0.29, 0.302, 0.322, 1 ]
+    selection_color = [ 0.22, 0.45, 0.36, 1 ]
+    text = ''
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThAlone'
+node = -1446460472036721029
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 96 ]
+    offset_min = [ -200, 48 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.2237, 0.358, 0.3154, 0.972 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'KEEP VIGIL ALONE'
+    pixel_size = 15
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThHost'
+node = 6831013632470334853
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ -8, 152 ]
+    offset_min = [ -200, 108 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.3098, 0.2932, 0.3895, 0.972 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'HOST A CONGREGATION'
+    pixel_size = 15
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.741, 0.639, 0.925, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThJoin'
+node = -4568680218364121888
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 152 ]
+    offset_min = [ 8, 108 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.3098, 0.2932, 0.3895, 0.972 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'JOIN ONE'
+    pixel_size = 15
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.741, 0.639, 0.925, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThWhisperLabel'
+node = -7141702378134161841
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ -140, 209 ]
+    offset_min = [ -380, 183 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 15
+    text = 'SHOW WHISPERS'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThWhisperToggle'
+node = -8684531746366430276
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ -72, 209 ]
+    offset_min = [ -128, 183 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_toggle]
+    corner_radius = 13
+    knob_color = [ 0.855, 0.851, 0.816, 1 ]
+    knob_radius = 10
+    on = true
+    on_color = [ 0.22, 0.45, 0.36, 1 ]
+    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThShakeLabel'
+node = -47813003947569778
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 180, 209 ]
+    offset_min = [ -60, 183 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 15
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThShakeSlider'
+node = 7295567082053894993
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 310, 207 ]
+    offset_min = [ 190, 185 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_slider]
+    corner_radius = 4
+    fill_color = [ 0.706, 0.267, 0.22, 1 ]
+    handle_color = [ 0.855, 0.851, 0.816, 1 ]
+    handle_radius = 8
+    max = 1.5
+    min = 0
+    step = 0.1
+    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    value = 1
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThStatus'
+node = 637954680369338430
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 450, 275 ]
+    offset_min = [ -450, 249 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.502, 0.51, 0.522, 1 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 16
+    text = ''
+    v_align = 'middle'
+    wrap = false

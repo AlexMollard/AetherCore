@@ -45,27 +45,24 @@ public sealed class Congregation
 	private Entity _heading;
 	private readonly Row[] _rows = new Row[MaxKeepers];
 
-	public void Build(Entity canvas)
+	/// <summary>Bind the authored panel and its four rows. The roster is a fixed size - one
+	/// row per seat in a congregation - so all of it lives in the scene.</summary>
+	public void Bind()
 	{
-		_panel = UiKit.Stretch(canvas, new Vector2(0.0f, 0.0f), new Vector2(0.0f, 1.0f),
-			new Vector2(20.0f, Hud.BarHeight + 16.0f), new Vector2(20.0f + kWidth, -220.0f), Palette.Panel, 4.0f);
-
-		_heading = UiKit.Text(_panel, "THE CONGREGATION", 16.0f, 12.0f, 300.0f, 26.0f, 16.0f,
-			Palette.BoneDim, UiHAlign.Left, Palette.Display);
+		_panel = Scene.Find("CongregationPanel");
+		_heading = Scene.Find("CongHeading");
 
 		for (int i = 0; i < MaxKeepers; i++)
 		{
-			float y = 44.0f + i * (kRowHeight + kRowGap);
 			Row row = default;
-			row.Box = UiKit.Image(_panel, 12.0f, y, kWidth - 24.0f, kRowHeight, Palette.Row, 4.0f);
-			row.Name = UiKit.Text(row.Box, "", 12.0f, 8.0f, 220.0f, 22.0f, 16.0f, Palette.Bone);
-			row.Ping = UiKit.Text(row.Box, "", kWidth - 130.0f, 8.0f, 90.0f, 24.0f, 15.0f,
-				Palette.BoneFaint, UiHAlign.Right);
-			row.Rate = UiKit.Text(row.Box, "", 12.0f, 30.0f, 240.0f, 22.0f, 16.0f, Palette.IchorDim);
-			row.Track = UiKit.Image(row.Box, 12.0f, 52.0f, kWidth - 48.0f, 6.0f, Palette.PanelDeep, 3.0f);
-			row.Fill = UiKit.Image(row.Track, 0.0f, 0.0f, 1.0f, 6.0f, Palette.Dread, 3.0f);
-			row.Tithe = UiKit.MakeButton(row.Box, "TITHE", 12.0f, 62.0f, 140.0f, 26.0f, 15.0f, Palette.Display);
-			row.Shunt = UiKit.MakeButton(row.Box, "SHUNT", 160.0f, 62.0f, 140.0f, 26.0f, 15.0f, Palette.Display);
+			row.Box = Scene.Find("CongRow" + i);
+			row.Name = Scene.Find("CongRow" + i + "Name");
+			row.Ping = Scene.Find("CongRow" + i + "Ping");
+			row.Rate = Scene.Find("CongRow" + i + "Rate");
+			row.Track = Scene.Find("CongRow" + i + "Track");
+			row.Fill = Scene.Find("CongRow" + i + "Fill");
+			row.Tithe = Button.Find("CongRow" + i + "Tithe");
+			row.Shunt = Button.Find("CongRow" + i + "Shunt");
 			_rows[i] = row;
 		}
 	}
