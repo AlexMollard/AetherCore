@@ -26,6 +26,12 @@ public sealed class VigilSave
 	public int Sigils { get; set; }
 	public int Communions { get; set; }
 	public double Dread { get; set; }
+	/// <summary>Wards in hand. Saved because they are bought, and losing paid-for protection
+	/// to a reload would be a charge the player never agreed to.</summary>
+	public int Wards { get; set; }
+	/// <summary>What is left of a visitation's aftermath. Saved so quitting is not a way to
+	/// skip the one cost a visitation has.</summary>
+	public double Aftermath { get; set; }
 	public double PlayedSeconds { get; set; }
 	public double HighDreadSeconds { get; set; }
 	public int WardsRaised { get; set; }
@@ -205,6 +211,8 @@ public static class SaveSystem
 		Sigils = Vigil.Sigils,
 		Communions = Vigil.Communions,
 		Dread = Vigil.Dread,
+		Wards = Vigil.Wards,
+		Aftermath = Vigil.AftermathSeconds,
 		PlayedSeconds = Vigil.PlayedSeconds,
 		HighDreadSeconds = Vigil.HighDreadSeconds,
 		WardsRaised = Vigil.WardsRaised,
@@ -226,6 +234,8 @@ public static class SaveSystem
 		Vigil.Sigils = save.Sigils;
 		Vigil.Communions = save.Communions;
 		Vigil.Dread = Math.Clamp(save.Dread, 0.0, 1.0);
+		Vigil.Wards = Math.Clamp(save.Wards, 0, Vigil.MaxWards);
+		Vigil.AftermathSeconds = Math.Max(0.0, save.Aftermath);
 		Vigil.PlayedSeconds = save.PlayedSeconds;
 		Vigil.HighDreadSeconds = save.HighDreadSeconds;
 		Vigil.WardsRaised = save.WardsRaised;

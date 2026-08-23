@@ -83,6 +83,10 @@ public sealed class Parish
 	private float _wave;
 	private float _waveFrom = 0.5f;
 
+	/// <summary>Eased 0..1 while a visitation's aftermath runs, so the parish sags into it and
+	/// comes back rather than snapping between two looks.</summary>
+	private float _reel;
+
 	private Entity _sigil;
 
 	/// <summary>
@@ -224,12 +228,21 @@ public sealed class Parish
 		}
 
 		float dread = (float)Vigil.Dread;
+		// The parish is visibly subdued while it is reeling. A cost the player cannot see is
+		// not a cost they can weigh, and the aftermath is the whole price of a visitation now.
+		float reeling = Vigil.AftermathSeconds > 0.0 ? 1.0f : 0.0f;
+		_reel += (reeling - _reel) * MathF.Min(1.0f, unscaledDelta * 3.0f);
 		Ui.SetEffectParams(_backdrop,
-			new Vector4(_time, dread, _shake * _shake * SaveSystem.DreadShake, _wave));
+			new Vector4(_time, MathF.Max(dread, _reel * 0.75f),
+				_shake * _shake * SaveSystem.DreadShake, _wave));
 		// The void's ALPHA carries where the wave started, because params is full and the
 		// backdrop only ever reads the void's rgb. Documented on both sides rather than
 		// silently smuggled: see the same note in ui_parish.slang.
-		Ui.SetEffectColors(_backdrop, Palette.Fade(Palette.Ink, _waveFrom), Palette.Dread);
+		// Reeling reads as the dread souring without any of the dread payoff - the parish
+		// looks like it has been got at, which is exactly what has happened to it.
+		Ui.SetEffectColors(_backdrop,
+			Palette.Fade(Palette.Ink, _waveFrom),
+			Palette.Mix(Palette.Dread, Palette.DreadDeep, _reel));
 
 		SyncRites(dread, unscaledDelta);
 		UpdateBearers(unscaledDelta);
@@ -378,9 +391,18 @@ public sealed class Parish
 		}
 	}
 
-	/// <summary>Something arrived. Shake the place and mark where it happened.</summary>
-	public void Visitation()
+	/// <summary>The dark arrived. <paramref name="held"/> is whether a ward stood in the way -
+	/// the two read completely differently, because they mean opposite things.</summary>
+	public void Visitation(bool held)
 	{
+		if (held)
+		{
+			_shake = 0.35f;
+			_wave = 0.0001f;
+			_waveFrom = Collection.X;
+			ShowPop(Collection + new Vector2(0.0f, -0.05f), "WARDED", Palette.Sigil);
+			return;
+		}
 		_shake = 1.0f;
 		ShowPop(Collection + new Vector2(0.0f, -0.05f), "TAKEN", Palette.Dread);
 	}

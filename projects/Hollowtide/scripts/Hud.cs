@@ -175,13 +175,21 @@ public sealed class Hud
 		Ui.SetText(_sigilCount, Vigil.Sigils + " sigils   " + Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks");
 
 		// ── Buttons ──────────────────────────────────────────────────────────────────
+		// Stoking pays now, so the button says what it pays. A push-your-luck button that
+		// does not quote its offer is just a dare.
 		bool canStoke = Vigil.Dread < 0.999;
-		_stoke.SetLabel(canStoke ? "STOKE THE DARK" : "IT IS AS CLOSE AS IT GETS");
+		double offer = (Vigil.Rate * 15.0 + Vigil.HandGain * 8.0) * Vigil.GlobalMultiplier;
+		_stoke.SetLabel(canStoke ? "STOKE THE DARK  +" + Numbers.Short(offer) : "IT IS AS CLOSE AS IT GETS");
 		_stoke.SetEnabled(canStoke);
 		_stoke.Style(canStoke, Palette.Mix(Palette.Row, Palette.Dread, 0.55f), Palette.Row, Palette.PanelDeep);
 
-		bool canWard = Vigil.Ichor >= Vigil.WardCost && Vigil.Dread > 0.0;
-		_ward.SetLabel("RAISE WARD  " + Numbers.Short(Vigil.WardCost));
+		// Wards are held charges, so the label reports how many are in hand. Insurance the
+		// player cannot count is insurance they will not trust.
+		bool full = Vigil.Wards >= Vigil.MaxWards;
+		bool canWard = Vigil.Ichor >= Vigil.WardCost && !full;
+		_ward.SetLabel(full
+			? "WARDS  " + Vigil.Wards + "/" + Vigil.MaxWards
+			: "SET A WARD  " + Vigil.Wards + "/" + Vigil.MaxWards + "   " + Numbers.Short(Vigil.WardCost));
 		_ward.SetEnabled(canWard);
 		_ward.Style(canWard, Palette.Mix(Palette.Row, Palette.Dread, 0.45f), Palette.Row, Palette.PanelDeep);
 

@@ -172,9 +172,17 @@ public sealed class HollowtideGame : EntityScript
 		Ui.SetEffectParams(_flash, new Vector4(Time.UnscaledTime, dread, 1.0f, _flashAmount));
 	}
 
-	private void OnVisitation()
+	private void OnVisitation(bool held)
 	{
-		_parish.Visitation();
+		_parish.Visitation(held);
+		if (held)
+		{
+			// A ward holding is a RELIEF. No held breath and a much smaller flash, because
+			// stopping the world for something that did not happen teaches the player that
+			// insurance feels the same as being caught.
+			_flashAmount = 0.35f;
+			return;
+		}
 		_flashAmount = 1.0f;
 		_heldBreath = 0.85f;
 	}

@@ -511,5 +511,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 outCol = lerp(float3(0.0, 0.0, 0.0), col, solid);
     float outA = max(solid, pool * 0.60 * (1.0 - solid));
 
-    return float4(outCol, outA * input.color.a);
+    // Deliberately NOT multiplied by input.color.a. Gating on the element's alpha forced the
+    // element to carry an opaque fill for the material to draw at all, which meant any frame
+    // the material did not draw - the creation frame, a hot reload, a dropped pipeline - showed
+    // that fill as a solid slab across the rite's rect. Ignoring it lets the element be fully
+    // transparent, so a missed frame is invisible instead of a black square.
+    return float4(outCol, outA);
 }

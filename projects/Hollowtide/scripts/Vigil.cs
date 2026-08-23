@@ -52,6 +52,56 @@ public static class Vigil
 	/// <summary>0 to 1. The multiplier it pays and the thing that comes for you.</summary>
 	public static double Dread;
 
+	/// <summary>
+	/// Wards in hand. Each one stands between the keeper and a visitation, and is spent doing
+	/// it. Capped at <see cref="MaxWards"/>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Wards used to be a one-shot half-step down the meter, which made them a REACTION TIMER:
+	/// at a mid parish a ward bought 19 seconds before the next was due and at a full parish
+	/// 12, because the climb scaled with holdings while the decay was a flat constant. Progress
+	/// made the game more annoying and the only correct play was to sit and press a button.
+	/// </para>
+	/// <para>
+	/// The first attempt at a fix had the ward hold the climb BACK, which was worse: dread is
+	/// the thing that pays, so suppressing it meant a ward was a purchase that made you poorer,
+	/// and simulating it confirmed no rational keeper would ever buy one. A ward is insurance
+	/// now. It does not keep you away from the top of the meter - it lets you STAY there, which
+	/// is where you want to be, and it is spent when the dark arrives. Its real price is not
+	/// the ichor, it is that the ichor did not go on the next rite.
+	/// </para>
+	/// </remarks>
+	public static int Wards;
+
+	/// <summary>How many wards can be held. A small buffer, not a stockpile you can hide
+	/// behind indefinitely.</summary>
+	public const int MaxWards = 3;
+
+	/// <summary>
+	/// Seconds left of the aftermath of a visitation, during which the parish works at half
+	/// pace. This is what a visitation COSTS now.
+	/// </summary>
+	/// <remarks>
+	/// It used to take 35% of banked ichor. Saving up for the next tier is the whole activity
+	/// of an idle game, so taxing the bank punished the player for playing properly, and it
+	/// punished them hardest at exactly the moment they were closest to a breakthrough. A
+	/// stretch of halved production costs time instead of stock: it scales with how good the
+	/// parish is without anyone tuning it, and it can never undo a purchase or a save-up.
+	/// </remarks>
+	public static double AftermathSeconds;
+
+	/// <summary>
+	/// 0 to 1. Built by gathering with your own hands, and it drains when you stop.
+	/// </summary>
+	/// <remarks>
+	/// The reason to touch the screen. Hand gathering was worth a twentieth of a second of
+	/// production per click, so there was never a point to it once the first rite was up.
+	/// Fervour makes clicking worth something WITHOUT making it mandatory: idle play simply
+	/// runs at the base rate, which is what the whole economy is tuned against.
+	/// </remarks>
+	public static double Fervour;
+
 	// ── Records, kept for the marks and the ledger ───────────────────────────────────
 
 	public static double PlayedSeconds;
@@ -79,9 +129,12 @@ public static class Vigil
 	/// the whisper feed; nothing in here knows that.</summary>
 	public static Action<string, Omen>? Announce;
 
-	/// <summary>Raised the moment a visitation takes something, so the presentation layer can
-	/// react with more than a line of text.</summary>
-	public static Action? OnVisitation;
+	/// <summary>
+	/// Raised the moment the dark arrives. The argument is whether a ward HELD it: the two
+	/// outcomes are opposite in meaning and must not look the same, or buying insurance would
+	/// be indistinguishable from being caught without it.
+	/// </summary>
+	public static Action<bool>? OnVisitation;
 
 	/// <summary>Bumped whenever a purchase, a loss or a communion changes what the ledger
 	/// should show. Panels rebuild on a change rather than every frame.</summary>
@@ -168,7 +221,7 @@ public static class Vigil
 	{
 		get
 		{
-			double mult = SigilMultiplier * DreadMultiplier * CongregationBonus;
+			double mult = SigilMultiplier * DreadMultiplier * CongregationBonus * FervourMultiplier;
 			if (SurgeSeconds > 0.0)
 			{
 				mult *= SurgeMultiplier;
@@ -189,10 +242,24 @@ public static class Vigil
 
 	/// <summary>The bargain at the centre of the game: dread pays, up to two and a half times
 	/// at the brink. Every point of it is also what brings a visitation closer.</summary>
-	public static double DreadMultiplier => 1.0 + 1.5 * Dread;
+	/// <summary>
+	/// What dread pays. Steeper than linear on purpose.
+	/// </summary>
+	/// <remarks>
+	/// At 1 + 1.5d the whole meter was worth 2.5x at the very top, so the difference between
+	/// playing it safe at 0.3 and riding the edge at 0.9 was 1.45x against 2.35x - not enough
+	/// to be worth a visitation, which made the only sane play "keep it low" and turned the
+	/// central mechanic into pure downside. Curving it puts most of the reward in the top
+	/// third, so choosing to sit up there is a real strategy with a real prize.
+	/// </remarks>
+	public static double DreadMultiplier => 1.0 + 2.6 * Math.Pow(Dread, 1.4);
 
-	/// <summary>Ichor per second from rites alone.</summary>
-	public static double Rate
+	/// <summary>Ichor per second from rites alone, after any aftermath.</summary>
+	public static double Rate => RawRate * AftermathScale;
+
+	/// <summary>Production before a visitation's aftermath is applied. The ward's price is
+	/// quoted off this, so being hit does not also make recovering cheaper.</summary>
+	public static double RawRate
 	{
 		get
 		{
@@ -208,6 +275,19 @@ public static class Vigil
 		}
 	}
 
+	/// <summary>Half while a visitation's aftermath is running, otherwise full.</summary>
+	public static double AftermathScale => AftermathSeconds > 0.0 ? 0.5 : 1.0;
+
+	/// <summary>How fast fervour drains, per second.</summary>
+	public const double kFervourDrain = 0.085;
+
+	/// <summary>What one hand gather adds to fervour. Roughly three seconds of steady
+	/// clicking to fill it, and about twelve seconds of not clicking to lose it.</summary>
+	public const double kFervourPerGather = 0.075;
+
+	/// <summary>What fervour is worth at the top: a little over half again.</summary>
+	public static double FervourMultiplier => 1.0 + Fervour * 0.6;
+
 	/// <summary>How fast dread falls on its own, per second.</summary>
 	/// <remarks>
 	/// An idle game must not punish idling. Dread that only ever climbs turns "leave it
@@ -217,11 +297,11 @@ public static class Vigil
 	/// visitation becomes something you walk INTO by reaching for the multiplier, never
 	/// something that happens because you looked away.
 	/// </remarks>
-	public const double DreadDecay = 0.011;
+	public const double DreadDecay = 0.004;
 
-	/// <summary>Dread per second from holdings alone, before decay. Wards do not reduce this -
-	/// they cut the level, not the climb.</summary>
-	public static double DreadRate
+	/// <summary>The pressure the parish puts on the meter, before the ward holds any of it
+	/// back. Owning more raises this; it is the reason a big parish is a dangerous one.</summary>
+	public static double DreadPressure
 	{
 		get
 		{
@@ -230,12 +310,16 @@ public static class Vigil
 			{
 				total += Owned[i] * Content.Rites[i].DreadRate;
 			}
-			// A late run would otherwise pin the meter within seconds of a ward. Owning more
-			// of a tier should raise dread; owning ALL the tiers should not make the game
-			// unplayable, so the climb is compressed rather than summed flat.
-			return Math.Sqrt(total) * 0.06;
+			// A late run would otherwise pin the meter within seconds. Owning more of a tier
+			// should raise dread; owning ALL the tiers should not make the game unplayable,
+			// so the climb is compressed rather than summed flat.
+			return Math.Sqrt(total) * 0.022;
 		}
 	}
+
+	/// <summary>What the meter climbs at. Wards do not touch this - they catch what happens
+	/// when it arrives at the top.</summary>
+	public static double DreadRate => DreadPressure;
 
 	/// <summary>What one gather by hand is worth: a floor of one, plus a slice of the parish,
 	/// so hand-gathering never stops being the thing you do while you wait.</summary>
@@ -256,7 +340,9 @@ public static class Vigil
 	}
 
 	/// <summary>What raising a ward costs. Scales with the parish so it stays a real decision.</summary>
-	public static double WardCost => 40.0 + Rate * 25.0;
+	/// <summary>What a ward costs. Around a tenth of what the parish makes between visitations,
+	/// so keeping insured is a visible drag on growth without being a tax you cannot pay.</summary>
+	public static double WardCost => 40.0 + RawRate * 12.0;
 
 	/// <summary>Sigils a communion would pay right now.</summary>
 	public static int SigilsOnOffer => (int)Math.Floor(8.0 * Math.Sqrt(Math.Max(0.0, RunIchor) / 1e7));
@@ -321,6 +407,7 @@ public static class Vigil
 		RunIchor += gain;
 		LifetimeIchor += gain;
 		HandGathers++;
+		Fervour = Math.Min(1.0, Fervour + kFervourPerGather);
 	}
 
 	public static bool BuyRite(int rite, int count)
@@ -360,19 +447,19 @@ public static class Vigil
 		return true;
 	}
 
-	/// <summary>Spend to push the dark back half a step.</summary>
+	/// <summary>Spend to set the ward standing again, holding the climb back while it lasts.</summary>
 	public static bool RaiseWard()
 	{
 		double cost = WardCost;
-		if (cost > Ichor || Dread <= 0.0)
+		if (cost > Ichor || Wards >= MaxWards)
 		{
 			return false;
 		}
 		Ichor -= cost;
-		Dread = Math.Max(0.0, Dread - 0.5);
+		Wards++;
 		WardsRaised++;
 		Revision++;
-		Say("A ward goes up. Whatever was closing stops where it is.", Omen.Good);
+		Say("A ward is set aside. It will stand between you once.", Omen.Good);
 		return true;
 	}
 
@@ -390,8 +477,15 @@ public static class Vigil
 		{
 			return false;
 		}
-		Dread = Math.Min(1.0, Dread + 0.15);
-		Say("You lean closer. It notices.", Omen.Dread);
+		Dread = Math.Min(1.0, Dread + 0.18);
+		// It PAYS. Stoking used to add risk and nothing else, which made it a button with no
+		// argument for pressing it - the multiplier it bought arrived slowly and could be had
+		// by waiting. Taking the offer up front is what makes this a trade rather than a dare.
+		double offered = (Rate * 15.0 + HandGain * 8.0) * GlobalMultiplier;
+		Ichor += offered;
+		RunIchor += offered;
+		LifetimeIchor += offered;
+		Say("You lean closer. It gives you " + Numbers.Short(offered) + " and remembers.", Omen.Dread);
 		return true;
 	}
 
@@ -515,6 +609,14 @@ public static class Vigil
 			}
 		}
 
+		if (AftermathSeconds > 0.0)
+		{
+			AftermathSeconds = Math.Max(0.0, AftermathSeconds - deltaSeconds);
+		}
+		// Fervour drains steadily, so it is a reward for playing NOW rather than a level you
+		// grind once and keep.
+		Fervour = Math.Max(0.0, Fervour - kFervourDrain * deltaSeconds);
+
 		double efficiency = offline ? 0.5 : 1.0;
 		if (offline)
 		{
@@ -578,7 +680,7 @@ public static class Vigil
 			while (CycleProgress[rite] >= 1.0)
 			{
 				CycleProgress[rite] -= 1.0;
-				double yield = Owned[rite] * Content.Rites[rite].BaseRate * RiteMultiplier(rite) * cycle;
+				double yield = Owned[rite] * Content.Rites[rite].BaseRate * RiteMultiplier(rite) * cycle * AftermathScale;
 				Ichor += yield;
 				RunIchor += yield;
 				LifetimeIchor += yield;
@@ -621,18 +723,33 @@ public static class Vigil
 	/// </remarks>
 	private static void Visitation()
 	{
-		Dread = 0.35;
-		TimesTaken++;
 		Revision++;
 
-		double taken = Ichor * 0.35;
-		Ichor -= taken;
+		// A ward stands in the way and is spent doing it. Dread falls back only part way, so
+		// being insured leaves the keeper HIGH on the meter and still earning - which is the
+		// entire reason to have bought one.
+		if (Wards > 0)
+		{
+			Wards--;
+			Dread = 0.55;
+			Say("A ward takes it. The parish does not notice, and you do.", Omen.Good);
+			OnVisitation?.Invoke(true);
+			return;
+		}
+
+		Dread = 0.0;
+		AftermathSeconds = kAftermath;
+		TimesTaken++;
 
 		int rite = DeepestRite();
 		string flavour = rite >= 0 ? Content.Rites[rite].TakenLine : "Something walks the empty parish, and finds only you.";
-		Say(flavour + "  It takes " + Numbers.Short(taken) + " ichor with it.", Omen.Taken);
-		OnVisitation?.Invoke();
+		Say(flavour + "  The parish works at half pace for " + (int)kAftermath + "s.", Omen.Taken);
+		OnVisitation?.Invoke(false);
 	}
+
+	/// <summary>How long a parish is left reeling. Long enough to hurt, short enough that the
+	/// answer is to keep playing rather than to put the game down.</summary>
+	private const double kAftermath = 30.0;
 
 	private static void CheckMarks()
 	{
