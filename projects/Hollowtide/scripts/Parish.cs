@@ -356,10 +356,11 @@ public sealed class Parish
 			// A last clamp against the backdrop itself. Every term above is derived from live
 			// rects, and one screen-filling quad is worse than every rite being a little small.
 			//
-			// If the clamp ever actually BITES, say so. A rite has been seen stretched across
-			// the interface for a frame and the cause is not yet pinned down; this reports the
-			// inputs at the moment it would have happened, which is the one thing that will
-			// settle whether the fault is in this arithmetic or below it in the renderer.
+			// If the clamp ever actually BITES, say so. The stretched-material artifact this was
+			// added to chase turned out to be a producer/GPU race on the UI command buffer, not
+			// this arithmetic, and it is fixed in the renderer. The report stays because it costs
+			// nothing and it is what separated the two the first time: if a rite ever looks wrong
+			// again, silence here puts the fault below this script.
 			if (size > bd.W * 0.60f || size < 4.0f)
 			{
 				Log.Warn("Parish: rite " + rite + " sized " + size.ToString("F0")

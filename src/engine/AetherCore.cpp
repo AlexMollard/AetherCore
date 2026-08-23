@@ -507,7 +507,11 @@ namespace aether
 			packet.elapsedTime = static_cast<float>(m_gameElapsedSeconds);
 			packet.uiOverlay = std::move(overlayFrame);
 
+			// Resolve the scene UI (canvases -> draw commands) HERE, on the producer,
 			// which owns the ECS - never on the render thread, which runs concurrently
+			// and would race a structural registry change (script attach on Play). The
+			// draw commands land in this slot's buffer; the render graph's $UiOverlay
+			// pass reads that same slot when it executes the submitted packet.
 			if (m_rendering && m_profile == RuntimeProfile::Full)
 			{
 				ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();

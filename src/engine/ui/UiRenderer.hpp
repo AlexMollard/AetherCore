@@ -112,6 +112,14 @@ namespace aether::ui
 			// Rotating between several buffers means a rebuild never touches the memory the GPU
 			// is still reading. Three of them tolerates the GPU running nine frames behind the
 			// producer, which is far past anything the frame throttle permits.
+			//
+			// Neither of the usual tools can see a hazard of this shape, which is worth knowing
+			// before trusting them on the next one. Sync validation models hazards between GPU
+			// ACCESSES; a host memcpy into a persistently mapped CpuToGpu buffer is outside that
+			// model, so a clean sync-validation run says nothing about it. Loading the validation
+			// layer at all serialises enough to hide it outright. The lever that does answer the
+			// question is graphics framesInFlight: at the default of 2 it reproduces, at 1 the
+			// slot cannot be reused early and it stops.
 			static constexpr std::uint32_t kBuffersPerSlot = 3;
 			std::array<SlotBuffer, kBuffersPerSlot> buffers{};
 			std::uint32_t cursor = 0;
@@ -122,7 +130,11 @@ namespace aether::ui
 			void* mapped = nullptr;
 			std::uint64_t address = 0;
 			std::uint32_t count = 0;
-			// (not a shared member) so a producer-thread BuildFrame for the next
+			// Screen extent the commands in this slot's buffer were resolved against == the
+			// shader's screenSize. Paired per-slot with `address` (not a shared member) so a
+			// producer-thread BuildFrame for the next frame cannot overwrite the extent the
+			// render thread still needs for this slot's not-yet-executed pass (e.g. across a
+			// viewport resize).
 			glm::vec2 extent{0.f};
 			std::vector<EffectDraw> effects;
 			// Custom-material batches: the material table (shaderId-1 == index) and the split of the
