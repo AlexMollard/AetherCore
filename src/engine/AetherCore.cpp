@@ -513,6 +513,18 @@ namespace aether
 				ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
 				uiRenderer.SetWorld(&m_services.Get<SceneSubsystem>().GetWorld());
 				uiRenderer.SetCursorService(&m_cursor);
+				// NOTE: this is the ONE place the producer thread fills a GPU-visible buffer.
+				// Every other per-slot GPU write in the engine - Renderer2D, CustomPassRenderer,
+				// Light2DCompositor, RenderQueue, the shadow and lighting services - happens
+				// inside ExecuteRenderFrame, which begins by waiting on the swapchain fence for
+				// this same slot and therefore knows the GPU has finished the frame that last
+				// used it. BuildFrame has no such guarantee: the producer is throttled against
+				// frame SUBMISSION, not GPU completion.
+				//
+				// It has to stay here, because it walks the ECS and the render thread must never
+				// touch that. UiRenderer covers the gap on its own by rotating between several
+				// command buffers per slot, so a rebuild never lands on memory still being read.
+				// If anything else ever writes GPU memory from this thread, it needs the same.
 				uiRenderer.BuildFrame({static_cast<float>(packet.uiExtent.width), static_cast<float>(packet.uiExtent.height)}, packet.drawSlot);
 			}
 
