@@ -1,0 +1,158 @@
+// Analytic glyph coverage from outline curves (the technique Lengyel published as Slug).
+//
+// A glyph is a list of quadratic Bezier curves in its own [0,1] box, plus a band table that
+// says which curves a ray through a given row or column can possibly meet. For each pixel we
+// cast one horizontal and one vertical ray, count signed crossings, and weight each crossing
+// by how far it falls across the pixel - which gives exact analytic antialiasing at any
+// scale, from one asset, with no atlas and no bake size.
+//
+// Curve texture layout (RGBA32F, one per font):
+//   band entry : (curveTexelStart, curveCount, 0, 0)
+//   curve      : (p0.x, p0.y, p1.x, p1.y) then (p2.x, p2.y, 0, 0)
+// A curve appears in every band it spans, so the inner loop below is a flat run with no
+// indirection past the band entry.
+
+#ifndef TEXT_CURVES_SLANGH
+#define TEXT_CURVES_SLANGH
+
+// Texel index -> texture coordinate. The width is read from the resource rather than passed
+// in, so nothing has to keep a copy of it in step with the asset.
+float4 CurveTexel(Texture2D curves, uint index, uint width)
+{
+    return curves.Load(int3(int(index % width), int(index / width), 0));
+}
+
+// Roots of the quadratic a*t^2 + b*t + c within [0,1], returned in `roots`. Returns how many
+// were found. The near-linear case is handled separately: as `a` goes to zero the quadratic
+// formula loses all its precision, and a glyph is full of curves whose control point sits
+// almost exactly on the chord.
+int SolveQuadratic01(float a, float b, float c, out float2 roots)
+{
+    roots = float2(0.0, 0.0);
+    if (abs(a) < 1e-6)
+    {
+        if (abs(b) < 1e-6)
+        {
+            return 0;
+        }
+        const float t = -c / b;
+        if (t < 0.0 || t > 1.0)
+        {
+            return 0;
+        }
+        roots.x = t;
+        return 1;
+    }
+
+    const float disc = b * b - 4.0 * a * c;
+    if (disc < 0.0)
+    {
+        return 0;
+    }
+    const float sd = sqrt(disc);
+    const float inv = 0.5 / a;
+    const float t0 = (-b - sd) * inv;
+    const float t1 = (-b + sd) * inv;
+
+    int count = 0;
+    if (t0 >= 0.0 && t0 <= 1.0)
+    {
+        roots.x = t0;
+        ++count;
+    }
+    if (t1 >= 0.0 && t1 <= 1.0)
+    {
+        if (count == 0) { roots.x = t1; } else { roots.y = t1; }
+        ++count;
+    }
+    return count;
+}
+
+// Signed coverage along one axis. `p` is the sample point in glyph space, `bandBase` the
+// texel of the first band entry for this axis, `bandCount` how many bands it has, and
+// `horizontal` picks which component the ray is cast along.
+//
+// The winding sum is signed by the direction the contour crosses the ray, so counters (the
+// hole in an 'o') subtract exactly as the non-zero fill rule says they should.
+float AxisCoverage(Texture2D curves, uint width, float2 p, uint bandBase, uint bandCount,
+                   bool horizontal, float pixelExtent)
+{
+    if (bandCount == 0)
+    {
+        return 0.0;
+    }
+
+    // The ray's position along the banded axis picks the band; clamped because a sample half
+    // a pixel outside the quad is legitimate at the very edge of the glyph.
+    const float along = horizontal ? p.y : p.x;
+    const uint band = uint(clamp(float(bandCount) * along, 0.0, float(bandCount) - 1.0));
+
+    const float4 entry = CurveTexel(curves, bandBase + band, width);
+    const uint runStart = uint(entry.x);
+    const uint runCount = uint(entry.y);
+
+    const float invExtent = 1.0 / max(pixelExtent, 1e-8);
+    float total = 0.0;
+
+    for (uint i = 0; i < runCount; ++i)
+    {
+        const float4 a = CurveTexel(curves, runStart + i * 2u, width);
+        const float4 b = CurveTexel(curves, runStart + i * 2u + 1u, width);
+        const float2 p0 = a.xy;
+        const float2 p1 = a.zw;
+        const float2 p2 = b.xy;
+
+        // Solve for the parameter where the curve meets the ray, on whichever component the
+        // ray holds constant.
+        const float c0 = horizontal ? p0.y : p0.x;
+        const float c1 = horizontal ? p1.y : p1.x;
+        const float c2 = horizontal ? p2.y : p2.x;
+        const float target = horizontal ? p.y : p.x;
+
+        float2 roots;
+        const int found = SolveQuadratic01(c0 - 2.0 * c1 + c2, 2.0 * (c1 - c0), c0 - target, roots);
+
+        for (int r = 0; r < found; ++r)
+        {
+            const float t = (r == 0) ? roots.x : roots.y;
+            const float omt = 1.0 - t;
+
+            // Position of the crossing on the ray, and the direction the contour is moving
+            // through it. A crossing exactly at a tangent contributes nothing, which is what
+            // stops a curve that merely grazes the ray from flipping the winding.
+            const float2 point = omt * omt * p0 + 2.0 * omt * t * p1 + t * t * p2;
+            const float2 tangent = 2.0 * omt * (p1 - p0) + 2.0 * t * (p2 - p1);
+            const float direction = horizontal ? tangent.y : tangent.x;
+            if (abs(direction) < 1e-9)
+            {
+                continue;
+            }
+
+            const float hit = horizontal ? point.x : point.y;
+            const float side = horizontal ? p.x : p.y;
+            // How much of THIS pixel the crossing leaves covered: a box filter one pixel
+            // wide, which is where the antialiasing comes from. No smoothstep, no fudge
+            // factor - the value is the actual fraction of the pixel inside the outline.
+            const float window = saturate((hit - side) * invExtent + 0.5);
+            total += (direction > 0.0 ? 1.0 : -1.0) * window;
+        }
+    }
+
+    return total;
+}
+
+// Coverage of one pixel of a glyph. `local` is the fragment's position in the glyph's [0,1]
+// box and `pixelSize` the size of a pixel in that same space, both of which the vertex stage
+// derives from the quad - so this needs nothing else about the glyph.
+float GlyphCoverage(Texture2D curves, uint width, float2 local, float2 pixelSize,
+                    uint bandTexel, uint bandCountX, uint bandCountY)
+{
+    // Two rays rather than one. A single horizontal ray is exact for vertical stems and
+    // degenerate for horizontal ones (a crossbar lying along the ray produces no crossing at
+    // all); averaging the two axes is what keeps a 'T' and an 'e' equally solid.
+    const float horizontal = AxisCoverage(curves, width, local, bandTexel, bandCountX, true, pixelSize.x);
+    const float vertical = AxisCoverage(curves, width, local, bandTexel + bandCountX, bandCountY, false, pixelSize.y);
+    return saturate((abs(horizontal) + abs(vertical)) * 0.5);
+}
+
+#endif // TEXT_CURVES_SLANGH

@@ -219,7 +219,7 @@ namespace aether::editor
 		if (ImGui::BeginCombo("##fontName", text->fontName.empty() ? "Roboto" : text->fontName.c_str()))
 		{
 			std::vector<std::string> fonts;
-			for (const char* pattern: {"engine://fonts/*.fontmeta", "project://assets/fonts/*.fontmeta"})
+			for (const char* pattern: {"engine://fonts/*.fontcurves", "project://assets/fonts/*.fontcurves"})
 			{
 				if (const auto matches = io::FileSystem::Glob(pattern); matches.has_value())
 				{

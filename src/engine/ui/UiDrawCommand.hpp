@@ -12,7 +12,7 @@ namespace aether::ui
 		kShapeCircle = 1,
 		kShapeLine = 2,
 		kShapeTexturedRect = 3,
-		kShapeSdfGlyph = 4,
+		kShapeGlyph = 4,
 	};
 
 	// UiDrawCommand::flags layout: bit 0 = pixel-art (nearest) sampling; bit 1 = exclude this command

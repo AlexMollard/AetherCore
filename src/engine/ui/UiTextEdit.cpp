@@ -47,7 +47,7 @@ namespace aether::ui
 
 		float GlyphAdvance(const FontAsset& font, char c, float scale)
 		{
-			const GlyphMeta* glyph = font.Find(static_cast<std::uint32_t>(static_cast<unsigned char>(c)));
+			const GlyphCurve* glyph = font.Find(static_cast<std::uint32_t>(static_cast<unsigned char>(c)));
 			return glyph != nullptr ? glyph->advance * scale : 0.f;
 		}
 	} // namespace
@@ -262,11 +262,12 @@ namespace aether::ui
 
 	float TextWidth(const FontAsset& font, std::string_view text, float pixelSize)
 	{
-		if (font.bakeSize <= 0.f)
+		if (pixelSize <= 0.f)
 		{
 			return 0.f;
 		}
-		const float scale = pixelSize / font.bakeSize;
+		// Advances are in em units, so the requested pixel size is the scale outright.
+		const float scale = pixelSize;
 		float width = 0.f;
 		for (const char c: text)
 		{
@@ -283,11 +284,11 @@ namespace aether::ui
 
 	int CaretFromPixelX(const FontAsset& font, std::string_view text, float pixelSize, float localX)
 	{
-		if (font.bakeSize <= 0.f || text.empty())
+		if (pixelSize <= 0.f || text.empty())
 		{
 			return 0;
 		}
-		const float scale = pixelSize / font.bakeSize;
+		const float scale = pixelSize;
 		float x = 0.f;
 		for (std::size_t i = 0; i < text.size(); ++i)
 		{

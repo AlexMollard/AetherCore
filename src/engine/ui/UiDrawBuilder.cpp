@@ -37,7 +37,7 @@ namespace aether::ui
 	static void EmitTextRun(const glm::vec4& rect, const std::string& text, const std::string& fontName, float pixelSize, const glm::vec4& color, UIText::HAlign hAlign, UIText::VAlign vAlign, bool wrap, FontRegistry& fonts, int& layer, std::vector<UiDrawCommand>& out)
 	{
 		const FontAsset* font = fonts.Load(fontName);
-		if (font == nullptr || font->atlasBindlessSlot == 0xFFFFFFFFu)
+		if (font == nullptr || font->curveBindlessSlot == 0xFFFFFFFFu)
 		{
 			return;
 		}
@@ -47,11 +47,11 @@ namespace aether::ui
 		{
 			UiDrawCommand cmd;
 			cmd.data0 = glyph.rect;
-			cmd.data1 = glyph.uv;
+			cmd.data1 = glyph.bands;
 			cmd.color = color;
-			cmd.type = kShapeSdfGlyph;
+			cmd.type = kShapeGlyph;
 			cmd.layer = layer++;
-			cmd.textureSlot = font->atlasBindlessSlot;
+			cmd.textureSlot = font->curveBindlessSlot;
 			out.push_back(cmd);
 		}
 	}

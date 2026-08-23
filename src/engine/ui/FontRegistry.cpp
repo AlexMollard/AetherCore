@@ -22,12 +22,14 @@ namespace aether::ui
 	std::vector<ShapedGlyph> ShapeText(const FontAsset& font, std::string_view text, float pixelSize, glm::vec4 boxRect, bool wrap, int hAlign, int vAlign)
 	{
 		std::vector<ShapedGlyph> out;
-		if (font.bakeSize <= 0.f || text.empty())
+		if (pixelSize <= 0.f || text.empty())
 		{
 			return out;
 		}
 
-		const float scale = pixelSize / font.bakeSize;
+		// Metrics are in em units, so the requested pixel size IS the scale. There is no bake
+		// size to divide by, and nothing degrades when a label asks for a size no one baked.
+		const float scale = pixelSize;
 		std::vector<LineRange> lines;
 
 		glm::vec2 pen{boxRect.x, boxRect.y};
@@ -56,7 +58,7 @@ namespace aether::ui
 			}
 
 			const auto codepoint = static_cast<std::uint32_t>(static_cast<unsigned char>(ch));
-			const GlyphMeta* glyph = font.Find(codepoint);
+			const GlyphCurve* glyph = font.Find(codepoint);
 			if (glyph == nullptr)
 			{
 				continue;
@@ -72,10 +74,25 @@ namespace aether::ui
 
 			const float baseline = boxRect.y + (font.ascent + static_cast<float>(line) * font.lineHeight) * scale;
 
-			ShapedGlyph shaped;
-			shaped.rect = {pen.x + glyph->bearingX * scale, baseline - glyph->bearingY * scale, glyph->sizeX * scale, glyph->sizeY * scale};
-			shaped.uv = {glyph->u0, glyph->v0, glyph->u1, glyph->v1};
-			out.push_back(shaped);
+			// A blank glyph (a space) has no outline: it advances the pen and emits nothing,
+			// so no degenerate quad ever reaches the shader.
+			if (glyph->bandCountX > 0)
+			{
+				ShapedGlyph shaped;
+				// The quad IS the outline box, which is what lets the shader read its own
+				// interpolated local coordinate as a position in the glyph's curve space.
+				shaped.rect = {
+				        pen.x + glyph->bearingX * scale,
+				        baseline - glyph->bearingY * scale,
+				        (glyph->maxX - glyph->minX) * scale,
+				        (glyph->maxY - glyph->minY) * scale};
+				shaped.bands = {
+				        static_cast<float>(glyph->bandTexel),
+				        static_cast<float>(glyph->bandCountX),
+				        static_cast<float>(glyph->bandCountY),
+				        0.f};
+				out.push_back(shaped);
+			}
 
 			pen.x += advance;
 		}
@@ -124,72 +141,84 @@ namespace aether::ui
 		// own typefaces), then the engine's shipped set; both accept the plain
 		// stem and the conventional -Regular suffix.
 		const std::array<std::string, 4> candidates{
-		        "project://assets/fonts/" + std::string(name) + ".fontmeta",
-		        "project://assets/fonts/" + std::string(name) + "-Regular.fontmeta",
-		        "engine://fonts/" + std::string(name) + ".fontmeta",
-		        "engine://fonts/" + std::string(name) + "-Regular.fontmeta",
+		        "project://assets/fonts/" + std::string(name) + ".fontcurves",
+		        "project://assets/fonts/" + std::string(name) + "-Regular.fontcurves",
+		        "engine://fonts/" + std::string(name) + ".fontcurves",
+		        "engine://fonts/" + std::string(name) + "-Regular.fontcurves",
 		};
-		std::string metaPath;
-		Expected<std::vector<std::byte>> metaBytes = Unexpected{AetherError::Asset("no font candidates tried")};
+		std::string curvePath;
+		Expected<std::vector<std::byte>> bytesResult = Unexpected{AetherError::Asset("no font candidates tried")};
 		for (const std::string& candidate: candidates)
 		{
-			metaBytes = io::FileSystem::ReadFile(candidate);
-			if (metaBytes.has_value())
+			bytesResult = io::FileSystem::ReadFile(candidate);
+			if (bytesResult.has_value())
 			{
-				metaPath = candidate;
+				curvePath = candidate;
 				break;
 			}
 		}
-		if (!metaBytes.has_value())
+		if (!bytesResult.has_value())
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: no .fontmeta for font '{}' in project://assets/fonts or engine://fonts (bake the TTF or check the name)", name);
+			AE_ERROR(LogCategory::UI, "FontRegistry: no .fontcurves for font '{}' in project://assets/fonts or engine://fonts (bake the TTF or check the name)", name);
 			return nullptr;
 		}
 
-		const std::vector<std::byte>& bytes = *metaBytes;
-		if (bytes.size() < sizeof(FontMetaHeader))
+		const std::vector<std::byte>& bytes = *bytesResult;
+		if (bytes.size() < sizeof(FontCurveHeader))
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' is too small for a FontMetaHeader", metaPath);
+			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' is too small for a FontCurveHeader", curvePath);
 			return nullptr;
 		}
 
-		FontMetaHeader header{};
-		std::memcpy(&header, bytes.data(), sizeof(FontMetaHeader));
+		FontCurveHeader header{};
+		std::memcpy(&header, bytes.data(), sizeof(FontCurveHeader));
 
-		if (header.magic != kFontMetaMagic)
+		if (header.magic != kFontCurveMagic)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' has an unrecognised magic - corrupt or not a .fontmeta file", metaPath);
+			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' has an unrecognised magic - corrupt or not a .fontcurves file", curvePath);
 			return nullptr;
 		}
-		if (header.version != kFontMetaVersion)
+		if (header.version != kFontCurveVersion)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' is format version {}, expected {} - re-bake with AssetPacker", metaPath, header.version, kFontMetaVersion);
+			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' is format version {}, expected {} - re-bake with AssetPacker", curvePath, header.version, kFontCurveVersion);
 			return nullptr;
 		}
 
-		const std::size_t expectedSize = sizeof(FontMetaHeader) + static_cast<std::size_t>(header.glyphCount) * sizeof(GlyphMeta);
+		const std::size_t glyphBytes = static_cast<std::size_t>(header.glyphCount) * sizeof(GlyphCurve);
+		const std::size_t texelBytes = static_cast<std::size_t>(header.texelCount) * sizeof(glm::vec4);
+		const std::size_t expectedSize = sizeof(FontCurveHeader) + glyphBytes + texelBytes;
 		if (bytes.size() != expectedSize)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' size {} does not match header (expected {} for {} glyphs)", metaPath, bytes.size(), expectedSize, header.glyphCount);
+			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' size {} does not match its header (expected {} for {} glyphs and {} texels)", curvePath, bytes.size(), expectedSize, header.glyphCount, header.texelCount);
+			return nullptr;
+		}
+		if (static_cast<std::size_t>(header.textureWidth) * header.textureHeight != header.texelCount)
+		{
+			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' declares a {}x{} curve texture that does not hold its {} texels", curvePath, header.textureWidth, header.textureHeight, header.texelCount);
 			return nullptr;
 		}
 
 		FontAsset asset;
-		asset.atlasPath = metaPath.substr(0, metaPath.size() - std::string_view{".fontmeta"}.size()) + ".fontatlas";
-		asset.atlasWidth = header.atlasWidth;
-		asset.atlasHeight = header.atlasHeight;
+		asset.curvePath = curvePath;
+		asset.textureWidth = header.textureWidth;
+		asset.textureHeight = header.textureHeight;
 		asset.ascent = header.ascent;
 		asset.descent = header.descent;
 		asset.lineHeight = header.lineHeight;
-		asset.bakeSize = header.bakeSize;
 		asset.glyphs.reserve(header.glyphCount);
 
-		const std::byte* glyphBytes = bytes.data() + sizeof(FontMetaHeader);
+		const std::byte* glyphBase = bytes.data() + sizeof(FontCurveHeader);
 		for (std::uint32_t i = 0; i < header.glyphCount; ++i)
 		{
-			GlyphMeta glyph{};
-			std::memcpy(&glyph, glyphBytes + static_cast<std::size_t>(i) * sizeof(GlyphMeta), sizeof(GlyphMeta));
+			GlyphCurve glyph{};
+			std::memcpy(&glyph, glyphBase + static_cast<std::size_t>(i) * sizeof(GlyphCurve), sizeof(GlyphCurve));
 			asset.glyphs.emplace(glyph.codepoint, glyph);
+		}
+
+		asset.texels.resize(header.texelCount);
+		if (header.texelCount > 0)
+		{
+			std::memcpy(asset.texels.data(), glyphBase + glyphBytes, texelBytes);
 		}
 
 		const auto [it, inserted] = m_fonts.emplace(std::string(name), std::move(asset));

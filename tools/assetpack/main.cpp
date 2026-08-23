@@ -81,7 +81,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 				std::cerr << "AssetPacker: bake-font failed: " << result.error << "\n";
 				std::exit(1);
 			}
-			std::cout << "AssetPacker: baked '" << ttfPath.generic_string() << "' -> " << result.glyphCount << " glyphs, atlas " << result.atlasWidth << "x" << result.atlasHeight << "\n";
+			std::cout << "AssetPacker: baked '" << ttfPath.generic_string() << "' -> " << result.glyphCount << " glyphs, " << result.curveCount << " curves, " << result.textureWidth << "x" << result.textureHeight << " curve texture\n";
 			std::exit(0);
 		}
 		else

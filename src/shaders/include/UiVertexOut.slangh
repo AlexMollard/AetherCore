@@ -18,6 +18,9 @@ struct VSOutput
     nointerpolation uint textureSlot : TEXCOORD6;
     nointerpolation uint flags       : TEXCOORD7;
     nointerpolation float4 clipRect  : TEXCOORD8; // x,y,w,h px; live only when kUiFlagClip
+    // Outline-glyph addressing: (bandTexel, bandCountX, bandCountY, unused). Flat, because
+    // it is an index into the font's curve texture, not a value to interpolate across a quad.
+    nointerpolation float4 glyphBands : TEXCOORD9;
 };
 
 // Mirrors aether::ui::kFlagClip in engine/ui/UiDrawCommand.hpp.

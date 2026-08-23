@@ -104,7 +104,7 @@ namespace aether::ui
 			AE_ERROR(LogCategory::UI, "UiRenderer: failed to create ui_shapes pipeline");
 		}
 
-		m_defaultFontReady = EnsureFontAtlasUploaded("Roboto");
+		m_defaultFontReady = EnsureFontCurvesUploaded("Roboto");
 	}
 
 	void UiRenderer::Shutdown()
@@ -151,11 +151,16 @@ namespace aether::ui
 		}
 		m_effectPipelinesRetiring.clear();
 
-		if (m_defaultFontAtlas.IsValid())
+		// Every font's curve texture, not just the last one uploaded.
+		for (auto& [name, curves]: m_fontCurveTextures)
 		{
-			gpu::ResourceRegistry::Destroy(m_defaultFontAtlas);
-			m_defaultFontAtlas = {};
+			if (curves.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(curves);
+			}
 		}
+		m_fontCurveTextures.clear();
+		m_fontUploadFailed.clear();
 
 		m_defaultFontReady = false;
 		m_textures = nullptr;
@@ -163,7 +168,34 @@ namespace aether::ui
 		m_gpu = nullptr;
 	}
 
-	bool UiRenderer::EnsureFontAtlasUploaded(std::string_view name)
+	void UiRenderer::EnsureFontReady(std::string_view name)
+	{
+		if (name.empty())
+		{
+			return;
+		}
+		// The live case, and the only one that runs most frames: the font is loaded and its
+		// atlas still holds a valid bindless slot. Get() is a map lookup and never touches the
+		// filesystem, so this is cheap enough to ask for every text element every frame.
+		const FontAsset* font = m_fontRegistry.Get(name);
+		if (font != nullptr && font->curveBindlessSlot != kInvalidBindlessSlot)
+		{
+			return;
+		}
+		// Asking again is how a font recovers - from a slot that was invalidated, or from an
+		// atlas that simply had not been uploaded yet. Only an outright FAILURE is remembered,
+		// so a missing font is reported once instead of once per element per frame.
+		if (m_fontUploadFailed.contains(std::string(name)))
+		{
+			return;
+		}
+		if (!EnsureFontCurvesUploaded(name))
+		{
+			m_fontUploadFailed.emplace(name);
+		}
+	}
+
+	bool UiRenderer::EnsureFontCurvesUploaded(std::string_view name)
 	{
 		FontAsset* font = nullptr;
 		if (m_fontRegistry.Load(name) != nullptr)
@@ -174,69 +206,46 @@ namespace aether::ui
 		{
 			return false;
 		}
-		if (font->atlasBindlessSlot != kInvalidBindlessSlot)
+		if (font->curveBindlessSlot != kInvalidBindlessSlot)
 		{
 			return true;
 		}
-		if (m_gpu == nullptr || m_upload == nullptr || !m_upload->IsValid())
+		if (m_gpu == nullptr)
 		{
-			AE_ERROR(LogCategory::UI, "UiRenderer: cannot upload font atlas '{}', GPU upload context is unavailable", name);
+			AE_ERROR(LogCategory::UI, "UiRenderer: cannot upload font curves for '{}', the GPU device is unavailable", name);
+			return false;
+		}
+		if (font->texels.empty() || font->textureWidth == 0 || font->textureHeight == 0)
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: font '{}' carries no curve data", name);
 			return false;
 		}
 
-		// The registry recorded the paired atlas path when the meta loaded -
-		// no name-based guessing here.
-		const std::string& atlasPath = font->atlasPath;
-		const auto atlasBytes = io::FileSystem::ReadFile(atlasPath);
-		if (!atlasBytes.has_value())
-		{
-			AE_ERROR(LogCategory::UI, "UiRenderer: failed to read '{}'", atlasPath);
-			return false;
-		}
-		if (atlasBytes->size() < sizeof(FontAtlasHeader))
-		{
-			AE_ERROR(LogCategory::UI, "UiRenderer: '{}' is too small for a FontAtlasHeader", atlasPath);
-			return false;
-		}
-
-		FontAtlasHeader header{};
-		std::memcpy(&header, atlasBytes->data(), sizeof(FontAtlasHeader));
-		if (header.magic != kFontAtlasMagic || header.width == 0 || header.height == 0)
-		{
-			AE_ERROR(LogCategory::UI, "UiRenderer: '{}' has an invalid font atlas header", atlasPath);
-			return false;
-		}
-
-		const std::size_t texelBytes = static_cast<std::size_t>(header.width) * static_cast<std::size_t>(header.height);
-		const std::size_t expectedSize = sizeof(FontAtlasHeader) + texelBytes;
-		if (atlasBytes->size() != expectedSize)
-		{
-			AE_ERROR(LogCategory::UI, "UiRenderer: '{}' size {} does not match atlas dimensions (expected {})", atlasPath, atlasBytes->size(), expectedSize);
-			return false;
-		}
-
-		const std::string debugName = "UI.FontAtlas." + std::string(name);
+		// One RGBA32F texture per font holding every glyph's band table and curve runs. A
+		// texture rather than a storage buffer because it rides the bindless heap the draw
+		// command already addresses - a glyph names its font in the same field a textured
+		// rect names its image, and nothing about the command layout has to change.
+		const std::string debugName = "UI.FontCurves." + std::string(name);
 		const gpu::TextureDesc desc{
-		        .format = gpu::Format::R8Unorm,
-		        .extent = {header.width, header.height},
+		        .format = gpu::Format::R32G32B32A32Sfloat,
+		        .extent = {font->textureWidth, font->textureHeight},
 		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = debugName.c_str(),
 		};
-		const gpu::TextureHandle atlas = gpu::ResourceRegistry::CreateTexture(desc);
-		if (!atlas.IsValid())
+		const gpu::TextureHandle curves = gpu::ResourceRegistry::CreateTexture(desc);
+		if (!curves.IsValid())
 		{
-			AE_ERROR(LogCategory::UI, "UiRenderer: failed to create font atlas texture '{}'", atlasPath);
+			AE_ERROR(LogCategory::UI, "UiRenderer: failed to create the curve texture for '{}'", name);
 			return false;
 		}
 
-		const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(atlas);
-		const void* texels = atlasBytes->data() + sizeof(FontAtlasHeader);
-		const std::int32_t copyResult = vkutil::HostCopyToImage(m_gpu->GetDevice(), image, texels, header.width, header.height);
+		const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(curves);
+		const std::int32_t copyResult = vkutil::HostCopyToImage(m_gpu->GetDevice(), image, font->texels.data(), font->textureWidth, font->textureHeight);
 		if (copyResult != 0)
 		{
-			gpu::ResourceRegistry::Destroy(atlas);
-			AE_ERROR(LogCategory::UI, "UiRenderer: HostCopyToImage failed for '{}' (VkResult={})", atlasPath, copyResult);
+			gpu::ResourceRegistry::Destroy(curves);
+			AE_ERROR(LogCategory::UI, "UiRenderer: HostCopyToImage failed for the curves of '{}' (VkResult={})", name, copyResult);
 			return false;
 		}
 
@@ -246,42 +255,53 @@ namespace aether::ui
 		{
 			if (vkutil::HostTransitionImageToShaderRead(m_gpu->GetDevice(), image) != 0)
 			{
-				gpu::ResourceRegistry::Destroy(atlas);
-				AE_ERROR(LogCategory::UI, "UiRenderer: host layout transition failed for '{}'", atlasPath);
+				gpu::ResourceRegistry::Destroy(curves);
+				AE_ERROR(LogCategory::UI, "UiRenderer: host layout transition failed for the curves of '{}'", name);
 				return false;
 			}
 		}
 		else
 		{
 			gpu::OneShotCmd cmd;
-			if (!cmd.Begin(m_gpu->GetDevice(), m_upload->GetCommandPool()))
+			if (m_upload == nullptr || !m_upload->IsValid() || !cmd.Begin(m_gpu->GetDevice(), m_upload->GetCommandPool()))
 			{
-				gpu::ResourceRegistry::Destroy(atlas);
-				AE_ERROR(LogCategory::UI, "UiRenderer: failed to begin font atlas upload barrier command");
+				gpu::ResourceRegistry::Destroy(curves);
+				AE_ERROR(LogCategory::UI, "UiRenderer: failed to begin the curve upload barrier command for '{}'", name);
 				return false;
 			}
 			cmd.CmdList().ImageMemoryBarrier(
 			        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
 			if (!cmd.EndAndSubmit(m_gpu->GetGraphicsQueue()))
 			{
-				gpu::ResourceRegistry::Destroy(atlas);
-				AE_ERROR(LogCategory::UI, "UiRenderer: failed to submit font atlas upload barrier command");
+				gpu::ResourceRegistry::Destroy(curves);
+				AE_ERROR(LogCategory::UI, "UiRenderer: failed to submit the curve upload barrier command for '{}'", name);
 				return false;
 			}
 		}
 
-		gpu::ResourceRegistry::EnsureBindlessSampled(atlas, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
-		const std::uint32_t slot = gpu::ResourceRegistry::GetBindlessSampledSlot(atlas);
+		gpu::ResourceRegistry::EnsureBindlessSampled(curves, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		const std::uint32_t slot = gpu::ResourceRegistry::GetBindlessSampledSlot(curves);
 		if (slot == kInvalidBindlessSlot)
 		{
-			gpu::ResourceRegistry::Destroy(atlas);
-			AE_ERROR(LogCategory::UI, "UiRenderer: bindless registration failed for '{}'", atlasPath);
+			gpu::ResourceRegistry::Destroy(curves);
+			AE_ERROR(LogCategory::UI, "UiRenderer: bindless registration failed for the curves of '{}'", name);
 			return false;
 		}
 
-		font->atlasBindlessSlot = slot;
-		m_defaultFontAtlas = atlas;
-		AE_INFO(LogCategory::UI, "UiRenderer: uploaded font atlas '{}' ({}x{}, slot {})", atlasPath, header.width, header.height, slot);
+		font->curveBindlessSlot = slot;
+		// Keyed by font name, because this map holds the only owning reference to the texture.
+		// Anything already stored under this name is a previous upload for the SAME font (a
+		// re-upload after its slot was invalidated), so it is destroyed rather than leaked.
+		if (const auto it = m_fontCurveTextures.find(std::string(name)); it != m_fontCurveTextures.end() && it->second.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(it->second);
+		}
+		m_fontCurveTextures[std::string(name)] = curves;
+
+		AE_INFO(LogCategory::UI, "UiRenderer: uploaded font curves '{}' ({}x{} texels, slot {})", font->curvePath, font->textureWidth, font->textureHeight, slot);
+		// The payload is on the GPU now; a loaded font costs a map of metrics from here on.
+		font->texels.clear();
+		font->texels.shrink_to_fit();
 		return true;
 	}
 
@@ -488,15 +508,23 @@ namespace aether::ui
 		std::stable_sort(frame.effects.begin(), frame.effects.end(),
 		        [](const EffectDraw& a, const EffectDraw& b) { return a.sortOrder < b.sortOrder; });
 
-		// Lazily upload the atlas of every font the scene's text references -
-		// project fonts appear here the first frame a UIText names them.
+		// Lazily upload the atlas of every font the scene draws glyphs with - project fonts
+		// appear here the first frame something names them.
+		//
+		// Every text-bearing component is asked, not just UIText: a button label and a text box
+		// each carry their own font name, so a font used ONLY by one of those was never uploaded
+		// and rendered nothing at all.
 		for (const auto& [enttEntity, text]: m_world->View<UIText>().each())
 		{
-			if (!text.fontName.empty() && !m_fontsTried.contains(text.fontName))
-			{
-				m_fontsTried.insert(text.fontName);
-				EnsureFontAtlasUploaded(text.fontName);
-			}
+			EnsureFontReady(text.fontName);
+		}
+		for (const auto& [enttEntity, button]: m_world->View<UIButton>().each())
+		{
+			EnsureFontReady(button.fontName);
+		}
+		for (const auto& [enttEntity, box]: m_world->View<UITextBox>().each())
+		{
+			EnsureFontReady(box.fontName);
 		}
 
 		BuildDrawCommands(*m_world, m_scratch, frame.materials, m_defaultFontReady ? &m_fontRegistry : nullptr, m_textures);

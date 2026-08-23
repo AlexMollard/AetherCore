@@ -4,13 +4,13 @@
 
 #include "include/UIStructs.slangh"
 #include "include/UiVertexOut.slangh"
-#include "text_sdf.slangh"
+#include "text_curves.slangh"
 
 static const uint kShapeRect        = 0;
 static const uint kShapeCircle      = 1;
 static const uint kShapeLine        = 2;
 static const uint kShapeTexturedRect = 3;
-static const uint kShapeSdfGlyph    = 4;
+static const uint kShapeGlyph       = 4;
 
 // Bindless resources (set 0).
 [[vk::binding(0, 0)]] Texture2D g_textures[];
@@ -45,13 +45,13 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     const float2 uv = uvRect[vertexId % 6u];
     float2 outTexUV = float2(0.0, 0.0);
 
-    if (cmd.type == kShapeRect || cmd.type == kShapeTexturedRect || cmd.type == kShapeSdfGlyph)
+    if (cmd.type == kShapeRect || cmd.type == kShapeTexturedRect || cmd.type == kShapeGlyph)
     {
         const float2 minPt = cmd.data0.xy;
         const float2 size  = cmd.data0.zw;
         sp = minPt + uv * size;
 
-        if (cmd.type == kShapeTexturedRect || cmd.type == kShapeSdfGlyph)
+        if (cmd.type == kShapeTexturedRect || cmd.type == kShapeGlyph)
         {
             // data1 = u0, v0, u1, v1
             outTexUV = float2(
@@ -88,9 +88,10 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.color       = cmd.color;
     output.local       = uv * 2.0 - 1.0;
     output.localScale  = cmd.data0.zw;
-    output.cornerRadius = (cmd.type == kShapeTexturedRect || cmd.type == kShapeSdfGlyph) ? 0.0 : cmd.data1.x;
+    output.cornerRadius = (cmd.type == kShapeTexturedRect || cmd.type == kShapeGlyph) ? 0.0 : cmd.data1.x;
     output.type        = cmd.type;
     output.texUV       = outTexUV;
+    output.glyphBands  = cmd.data1;
     output.textureSlot = cmd.textureSlot;
     output.flags       = cmd.flags;
     output.clipRect    = cmd.clipRect;
@@ -109,10 +110,23 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         return input.color;
     }
 
-    if (input.type == kShapeSdfGlyph)
+    if (input.type == kShapeGlyph)
     {
-        const float alpha = SdfGlyphAlpha(g_textures[input.textureSlot], g_linearSampler, input.texUV);
-        if (alpha <= 0.001)
+        // The quad IS the glyph's outline box, so the interpolated local coordinate is a
+        // position in the glyph's own [0,1] curve space - after flipping Y, because UI space
+        // runs downward and font outlines run upward.
+        const float2 glyphLocal = float2(input.local.x * 0.5 + 0.5, 0.5 - input.local.y * 0.5);
+        // One pixel measured in that same space, which is what makes the coverage filter
+        // exactly one pixel wide at any size.
+        const float2 pixelSize = 1.0 / max(input.localScale, float2(1e-4, 1e-4));
+
+        uint texWidth, texHeight;
+        g_textures[input.textureSlot].GetDimensions(texWidth, texHeight);
+
+        const float alpha = GlyphCoverage(
+            g_textures[input.textureSlot], texWidth, glyphLocal, pixelSize,
+            uint(input.glyphBands.x), uint(input.glyphBands.y), uint(input.glyphBands.z));
+        if (alpha <= 0.002)
             discard;
         return float4(input.color.rgb, input.color.a * alpha);
     }

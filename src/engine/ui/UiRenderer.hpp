@@ -108,7 +108,10 @@ namespace aether::ui
 
 		void AppendCursor();
 		void EnsureCapacity(Frame& frame, std::uint32_t count);
-		bool EnsureFontAtlasUploaded(std::string_view name);
+		bool EnsureFontCurvesUploaded(std::string_view name);
+		// Per-frame gate in front of the upload: cheap when the font already holds a live slot,
+		// uploads when it does not, and reports a font that cannot be uploaded exactly once.
+		void EnsureFontReady(std::string_view name);
 		// Lazily create + cache a pipeline for a UIEffect shader ("shaders://<shader>.spv").
 		gpu::PipelineHandle EffectPipeline(const std::string& shader);
 		// Lazily create + cache a per-element material pipeline: the shared ui_shapes vertex shader
@@ -123,10 +126,18 @@ namespace aether::ui
 		gpu::UploadContext* m_upload = nullptr;
 		TextureRegistry* m_textures = nullptr;
 		FontRegistry m_fontRegistry;
-		gpu::TextureHandle m_defaultFontAtlas{};
+		// One curve texture per font, keyed by font name, and the ONLY owning reference to
+		// each. A single handle here used to be overwritten by every upload, which dropped the
+		// previous font's texture: its bindless slot could then be recycled by another texture
+		// while the FontAsset still pointed at it, and glyphs sampled whatever had taken the
+		// slot - text that corrupted and then vanished across play/stop cycles.
+		std::unordered_map<std::string, gpu::TextureHandle> m_fontCurveTextures;
 		bool m_defaultFontReady = false;
-		// Font names whose atlas upload was attempted (success or not) - one try each.
-		std::unordered_set<std::string> m_fontsTried;
+		// Font names whose atlas upload has already FAILED, so the error is reported once
+		// rather than every frame. Successes are not memoised: EnsureFontAtlasUploaded early-
+		// outs on a font that still holds a valid slot, which is also what lets a font whose
+		// slot was invalidated re-upload instead of staying broken for the process.
+		std::unordered_set<std::string> m_fontUploadFailed;
 		// Effect pipelines retired after a shader overlay change; destroyed a few frames later
 		// (they may still be referenced by in-flight command buffers).
 		struct RetiringPipeline

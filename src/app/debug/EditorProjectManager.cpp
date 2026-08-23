@@ -475,7 +475,7 @@ namespace aether::editor
 			{
 				continue;
 			}
-			const std::filesystem::path meta = entry.path().parent_path() / (entry.path().stem().string() + ".fontmeta");
+			const std::filesystem::path meta = entry.path().parent_path() / (entry.path().stem().string() + ".fontcurves");
 			std::error_code metaEc;
 			if (std::filesystem::exists(meta, metaEc) && std::filesystem::last_write_time(meta, metaEc) >= entry.last_write_time(metaEc))
 			{
@@ -484,7 +484,7 @@ namespace aether::editor
 			const auto result = aether::assetpipeline::FontProcessor::BakeFont(entry.path(), fontsDir);
 			if (result.success)
 			{
-				AE_INFO(LogCategory::App, "Project font baked: {} ({} glyphs, {}x{} atlas)", entry.path().filename().string(), result.glyphCount, result.atlasWidth, result.atlasHeight);
+				AE_INFO(LogCategory::App, "Project font baked: {} ({} glyphs, {} curves, {}x{} curve texture)", entry.path().filename().string(), result.glyphCount, result.curveCount, result.textureWidth, result.textureHeight);
 			}
 			else
 			{
