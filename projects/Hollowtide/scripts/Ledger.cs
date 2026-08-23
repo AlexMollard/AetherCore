@@ -471,8 +471,18 @@ public sealed class Ledger
 		BlankFrom(slot);
 	}
 
-	/// <summary>Switch off every pooled row a tab did not use, so a short list cannot leave the
-	/// previous tab's text sitting under it.</summary>
+	/// <summary>
+	/// Switch off every pooled row a tab did not use.
+	/// </summary>
+	/// <remarks>
+	/// Two jobs, and the second one is the load-bearing one: a short list must not leave the
+	/// previous tab's text sitting under it, and a row left ACTIVE is a row that can still be
+	/// clicked. Together with each fill method reading its own <c>row.Box.Activated</c> inside
+	/// the same iteration that populated it - with the live index in scope, never from a
+	/// remembered one - that is the whole of what stops a click landing on a row that has since
+	/// come to mean something else. There is no separate bookkeeping guarding this, so do not
+	/// hoist an Activated check out of a fill loop and do not skip this call on an early out.
+	/// </remarks>
 	private void BlankFrom(int slot)
 	{
 		for (int i = slot; i < kRowPool; i++)
