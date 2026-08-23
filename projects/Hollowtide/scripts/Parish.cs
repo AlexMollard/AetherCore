@@ -69,6 +69,20 @@ public sealed class Parish
 	private float _shake;
 	private float _time;
 
+	/// <summary>Per-rite purchase impulse: the structure punches in scale and flares.</summary>
+	private readonly float[] _punch = new float[Content.RiteCount];
+
+	/// <summary>Per-rite arrival: 0 the frame a rite is first owned, 1 once it has been
+	/// raised into place. A rite that simply popped into existence full-size was the single
+	/// clearest sign that the parish was a readout rather than a place.</summary>
+	private readonly float[] _appear = new float[Content.RiteCount];
+
+	/// <summary>The wave: 0 idle, otherwise 0 -> 1 as a front of light rolls out across the
+	/// floor from whatever was just bought. Every purchase gets one, so spending always does
+	/// something you can see even when what you bought has no body in the parish.</summary>
+	private float _wave;
+	private float _waveFrom = 0.5f;
+
 	private Entity _sigil;
 
 	/// <summary>
@@ -189,22 +203,38 @@ public sealed class Parish
 	{
 		_time += unscaledDelta;
 		_shake = MathF.Max(0.0f, _shake - unscaledDelta * 1.7f);
+		if (_wave > 0.0f)
+		{
+			_wave = MathF.Min(1.0f, _wave + unscaledDelta * 1.15f);
+			if (_wave >= 1.0f)
+			{
+				_wave = 0.0f;
+			}
+		}
+		for (int i = 0; i < _punch.Length; i++)
+		{
+			_punch[i] = MathF.Max(0.0f, _punch[i] - unscaledDelta * 2.4f);
+		}
 		for (int i = 0; i < _flare.Length; i++)
 		{
 			_flare[i] = MathF.Max(0.0f, _flare[i] - unscaledDelta * 2.2f);
 		}
 
 		float dread = (float)Vigil.Dread;
-		Ui.SetEffectParams(_backdrop, new Vector4(_time, dread, _shake * _shake * SaveSystem.DreadShake, 0.0f));
-		Ui.SetEffectColors(_backdrop, Palette.Ink, Palette.Dread);
+		Ui.SetEffectParams(_backdrop,
+			new Vector4(_time, dread, _shake * _shake * SaveSystem.DreadShake, _wave));
+		// The void's ALPHA carries where the wave started, because params is full and the
+		// backdrop only ever reads the void's rgb. Documented on both sides rather than
+		// silently smuggled: see the same note in ui_parish.slang.
+		Ui.SetEffectColors(_backdrop, Palette.Fade(Palette.Ink, _waveFrom), Palette.Dread);
 
-		SyncRites(dread);
+		SyncRites(dread, unscaledDelta);
 		UpdateBearers(unscaledDelta);
 		UpdatePops(unscaledDelta);
 	}
 
 	/// <summary>Create, retire and dress one element per rite the keeper holds.</summary>
-	private void SyncRites(float dread)
+	private void SyncRites(float dread, float unscaledDelta)
 	{
 		Vector4 bd = Backdrop;
 		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
@@ -231,6 +261,8 @@ public sealed class Parish
 					_rites[rite].SetActive(false);
 					_counts[rite].SetActive(false);
 				}
+				// Reset, so a communion's next parish is raised again rather than snapping in.
+				_appear[rite] = 0.0f;
 				continue;
 			}
 
@@ -255,13 +287,20 @@ public sealed class Parish
 			}
 			_rites[rite].SetActive(true);
 			_counts[rite].SetActive(true);
+			_appear[rite] = MathF.Min(1.0f, _appear[rite] + unscaledDelta * 2.2f);
 
 			// Grows on a log curve and stands ON the horizon: its base is pinned there and its
 			// top rises, so buying more is a bigger thing in the same place.
 			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
 			float working = (float)Vigil.CycleProgress[rite];
 			float flare = _flare[rite] * _flare[rite];
-			float size = bd.W * 0.20f * bulk * (1.0f + working * 0.05f + flare * 0.16f);
+			// Raised into place with an overshoot the first time, and punched on every
+			// purchase after that: the reward for spending is that the parish moves.
+			float a = _appear[rite];
+			float raise = a >= 1.0f ? 1.0f : 1.0f - MathF.Cos(a * 1.9f) * (1.0f - a);
+			float punch = _punch[rite] * _punch[rite];
+			float size = bd.W * 0.20f * bulk * raise
+				* (1.0f + working * 0.05f + flare * 0.16f + punch * 0.20f);
 			// Capped to the gap between neighbours. Growth is the reward for buying, but a rite
 			// that has outgrown its slot reads as a collision, not as progress - so past this
 			// point it stops widening and the count under it carries the rest of the story.
@@ -312,6 +351,28 @@ public sealed class Parish
 		b.Live = true;
 		_bearers[_nextBearer] = b;
 		_nextBearer = (_nextBearer + 1) % kBearerPool;
+	}
+
+	/// <summary>
+	/// The keeper spent on something. <paramref name="rite"/> is which rite, or -1 for an
+	/// offering, a mark or a communion.
+	/// </summary>
+	/// <remarks>
+	/// Every purchase sends a front of light out across the floor, so buying anything at all
+	/// does something in the parish - offerings, marks and communions previously took the
+	/// money and changed nothing visible, which made most of the shop feel inert. A rite also
+	/// punches and flares where it stands, so the thing you actually bought is the thing the
+	/// eye is pulled to.
+	/// </remarks>
+	public void Bought(int rite)
+	{
+		_wave = 0.0001f;
+		_waveFrom = rite >= 0 && rite < Content.RiteCount ? RiteX(rite) : Collection.X;
+		if (rite >= 0 && rite < Content.RiteCount)
+		{
+			_punch[rite] = 1.0f;
+			_flare[rite] = 1.0f;
+		}
 	}
 
 	/// <summary>Something arrived. Shake the place and mark where it happened.</summary>

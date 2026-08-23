@@ -71,6 +71,7 @@ public sealed class HollowtideGame : EntityScript
 		Vigil.Announce = (line, omen) => _whispers.Say(line, omen);
 		Vigil.OnVisitation = OnVisitation;
 		Vigil.OnYield = (rite, amount) => _parish.Delivered(rite, amount);
+		Vigil.OnSpent = rite => _parish.Bought(rite);
 
 		if (!SaveSystem.EnsureLoaded())
 		{
@@ -89,6 +90,7 @@ public sealed class HollowtideGame : EntityScript
 		Vigil.Announce = null;
 		Vigil.OnVisitation = null;
 		Vigil.OnYield = null;
+		Vigil.OnSpent = null;
 		Time.Resume();
 	}
 

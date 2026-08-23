@@ -193,24 +193,55 @@ float Structure(int rite, float2 p, float time, out float core, out float detail
     }
     else if (rite == 3)
     {
-        // Flesh Loom: a frame with warp threads and a shuttle crossing it.
-        d = opUnion(d, sdBox(p - float2(-0.80, 0.10), float2(0.10, 0.86)));  // uprights
-        d = opUnion(d, sdBox(p - float2(0.80, 0.10), float2(0.10, 0.86)));
-        d = opUnion(d, sdBox(p - float2(0.0, -0.68), float2(0.88, 0.10)));   // beams
-        d = opUnion(d, sdBox(p - float2(0.0, 0.88), float2(0.88, 0.10)));
-        // The warp: the threads are part of the SOLID, not a detail cut into an empty
-        // frame - carving them out of nothing left the loom reading as a picture frame.
+        // Flesh Loom: warp coming off a beam, a shed for the shuttle, and cloth being taken
+        // up below it.
+        //
+        // The previous version was a rectangular frame filled edge to edge with evenly
+        // spaced vertical bars, which is a cage - a symmetric grid you can see through
+        // everywhere has no other reading. Two things fix it. The frame leans, so nothing
+        // about it is a rectangle. And the lower half is SOLID cloth: the moment part of
+        // the shape stops being see-through, the eye stops reading bars and starts reading
+        // thread becoming fabric, which is the only thing a loom is for.
+
+        // The frame leans in toward the top, braced by feet.
+        d = opUnion(d, sdSeg(p, float2(-0.74, 0.90), float2(-0.54, -0.84), 0.070));
+        d = opUnion(d, sdSeg(p, float2(0.74, 0.90), float2(0.54, -0.84), 0.070));
+        d = opUnion(d, sdRound(p - float2(-0.74, 0.92), float2(0.19, 0.07), 0.04));
+        d = opUnion(d, sdRound(p - float2(0.74, 0.92), float2(0.19, 0.07), 0.04));
+
+        // The warp beam at the top and the cloth beam at the bottom, both rollers.
+        d = opUnion(d, sdSeg(p, float2(-0.58, -0.80), float2(0.58, -0.80), 0.095));
+        d = opUnion(d, sdSeg(p, float2(-0.60, 0.72), float2(0.60, 0.72), 0.110));
+
+        // The warp: thread off the beam, running down to the fell line. Thin, and it stops
+        // where the cloth starts - that boundary is the whole picture.
         const float warp = abs(frac(p.x * 4.5 + 0.5) - 0.5) / 4.5;
-        const float threads = max(warp - 0.016, abs(p.y - 0.10) - 0.74);
-        d = opUnion(d, threads);
-        // A few crossed wefts already woven, near the bottom.
-        d = opUnion(d, max(abs(p.y - 0.62) - 0.020, abs(p.x) - 0.80));
-        d = opUnion(d, max(abs(p.y - 0.74) - 0.020, abs(p.x) - 0.80));
-        detail = max(abs(p.y - 0.68) - 0.05, abs(p.x) - 0.78);
-        // The shuttle runs back and forth across the warp, trailing the thread it is laying.
-        const float pass = sin(time * 1.1) * 0.62;
-        core = sdRound(p - float2(pass, 0.10), float2(0.15, 0.06), 0.05);
-        core = opUnion(core, max(abs(p.y - 0.10) - 0.014, abs(p.x) - abs(pass)));
+        d = opUnion(d, max(warp - 0.013, max(abs(p.y + 0.35) - 0.39, abs(p.x) - 0.52)));
+
+        // The heddle frames, hung across the warp. These are what lift alternate threads,
+        // so they belong above the shed, not in it.
+        d = opUnion(d, max(abs(p.y + 0.30) - 0.035, abs(p.x) - 0.50));
+        d = opUnion(d, max(abs(p.y + 0.18) - 0.035, abs(p.x) - 0.50));
+        d = opUnion(d, sdSeg(p, float2(-0.40, -0.78), float2(-0.40, -0.32), 0.016));
+        d = opUnion(d, sdSeg(p, float2(0.40, -0.78), float2(0.40, -0.32), 0.016));
+
+        // The cloth. Solid, with a woven edge that is not quite straight, taken up over the
+        // beam and hanging a little past it.
+        const float selvage = 0.50 + sin(p.y * 9.0) * 0.013;
+        d = opUnion(d, max(abs(p.x) - selvage, abs(p.y - 0.38) - 0.34));
+        d = opUnion(d, max(abs(p.x) - 0.44, abs(p.y - 0.86) - 0.10));
+
+        // Cut: the weft courses across the cloth, and the grain of the two beams.
+        const float weft = abs(frac(p.y * 13.0 + 0.5) - 0.5) / 13.0;
+        detail = max(weft - 0.011, max(abs(p.x) - 0.46, abs(p.y - 0.38) - 0.30));
+        const float grain = abs(frac(p.x * 7.0 + 0.5) - 0.5) / 7.0;
+        detail = opUnion(detail, max(grain - 0.012, max(abs(p.y - 0.72) - 0.07, abs(p.x) - 0.56)));
+
+        // The shuttle, running the shed back and forth, and the fell line it is laying -
+        // the line where thread stops being warp and becomes fabric.
+        const float pass = sin(time * 1.1) * 0.44;
+        core = sdRound(p - float2(pass, 0.03), float2(0.13, 0.045), 0.045);
+        core = opUnion(core, max(abs(p.y - 0.045) - 0.010, abs(p.x) - 0.50));
     }
     else if (rite == 4)
     {

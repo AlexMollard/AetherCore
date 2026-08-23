@@ -6,8 +6,12 @@
 // perspective that catches what little light there is. No texture, no lighting pass, so
 // nothing can lift the floor to the brightest thing on screen behind my back.
 //
-//   params = (time, dread 0..1, shake 0..1, unused)
+//   params = (time, dread 0..1, shake 0..1, wave 0..1)
 //   color0 = the void (the ramp's darkest)   color1 = dread, for the souring
+//
+// color0's ALPHA carries where the wave started, as a fraction of the width. params is full
+// and only the void's rgb is ever read, so the spare channel is used rather than adding a
+// second effect - noted here and at the call site in Parish.cs so it is not a surprise.
 //
 // The palette is passed in rather than written here, so this cannot drift from Palette.cs.
 
@@ -190,6 +194,28 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // Ground fog, thickest where the floor meets the horizon and gone by mid-ground.
         const float mist = fbm(float2(uv.x * 5.0 - time * 0.03, uv.y * 14.0)) * saturate(1.0 - d * 9.0);
         col = lerp(col, Ramp(0.22), mist * 0.60);
+    }
+
+    // ── The wave ─────────────────────────────────────────────────────────────────────
+    // A front of light rolling out across the floor toward the viewer, fired by every
+    // purchase. It accelerates as it comes, and it is brightest in line with whatever was
+    // bought, so spending reads as something leaving that thing and reaching you.
+    const float wave = saturate(pc.params.w);
+    if (wave > 0.0)
+    {
+        const float front = horizon + (1.0 - horizon) * wave * wave;
+        const float width = 0.028 + wave * 0.075;
+        const float band = smoothstep(width, 0.0, abs(uv.y - front)) * step(horizon, uv.y);
+        const float lane = 0.35 + 0.65 * smoothstep(0.80, 0.0, abs(uv.x - pc.color0.a));
+        col += Ramp(0.92) * band * lane * (1.0 - wave * 0.7) * 1.35;
+        // A wash of light ahead of the front, so the floor it is about to reach lifts too -
+        // a single bright line reads as a scanline, a line with light in front of it reads
+        // as something travelling.
+        col += Ramp(0.55) * smoothstep(front + 0.16, front, uv.y) * step(horizon, uv.y)
+             * lane * (1.0 - wave) * 0.22;
+        // And a breath of light on the skyline as it sets off, so the whole parish
+        // registers the purchase and not just the strip of floor the front is on.
+        col += Ramp(0.45) * smoothstep(0.0, 0.18, wave) * (1.0 - wave) * 0.11;
     }
 
     // The horizon itself: a thin catch of light, which is what makes the two halves read as

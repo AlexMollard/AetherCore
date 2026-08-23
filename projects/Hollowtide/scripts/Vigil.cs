@@ -95,6 +95,19 @@ public static class Vigil
 	/// turns it into a flare and a mote travelling to the purse; nothing here knows that.</summary>
 	public static Action<int, double>? OnYield;
 
+	/// <summary>
+	/// Fired whenever the keeper spends on ANYTHING: a rite (with its index), or an offering,
+	/// a mark or a communion (index -1).
+	/// </summary>
+	/// <remarks>
+	/// The hook lives here, on the one type that takes the payment, rather than at each of the
+	/// four call sites that trigger a purchase. Spending and the parish answering are the same
+	/// event, so a new thing to buy should not be able to be added without the scene noticing -
+	/// which is exactly what happened to offerings, marks and communions, all of which took the
+	/// money and changed nothing you could see.
+	/// </remarks>
+	public static Action<int>? OnSpent;
+
 	// ── Derived values ───────────────────────────────────────────────────────────────
 
 	/// <summary>What one more copy of a rite costs.</summary>
@@ -329,6 +342,7 @@ public static class Vigil
 		{
 			Say(Content.Rites[rite].Name + " doubles. The parish leans toward it.", Omen.Good);
 		}
+		OnSpent?.Invoke(rite);
 		return true;
 	}
 
@@ -342,6 +356,7 @@ public static class Vigil
 		OfferingsTaken[index] = true;
 		Revision++;
 		Say("Offered: " + Content.Offerings[index].Name, Omen.Good);
+		OnSpent?.Invoke(-1);
 		return true;
 	}
 
@@ -415,6 +430,7 @@ public static class Vigil
 		Array.Clear(OfferingsTaken, 0, OfferingsTaken.Length);
 		Revision++;
 		Say("Communion. You wake with " + payout + " more sigils and none of the parish.", Omen.Good);
+		OnSpent?.Invoke(-1);
 		return true;
 	}
 
