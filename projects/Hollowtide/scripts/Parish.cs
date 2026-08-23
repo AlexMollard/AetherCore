@@ -277,8 +277,9 @@ public sealed class Parish
 				sprite.SetInt("sorting_layer", 1);
 				// The engine's own behaviours do the idle motion, so nothing here has to run a
 				// sine per lantern per frame.
-				e.AddBob(0.12f + rite * 0.01f, 0.5f + rite * 0.07f, rite * 0.9f);
-				e.AddSpin(new Vector3(0.0f, 0.0f, rite % 2 == 0 ? 9.0f : -7.0f));
+				// Bob only. These are drawn objects now - a lantern that slowly rotates reads
+				// as the debug primitive it used to be.
+				e.AddBob(0.10f + rite * 0.012f, 0.45f + rite * 0.06f, rite * 0.9f);
 				_lanterns[rite] = e;
 
 				WorldLabel label = new WorldLabel(240.0f, 22.0f);
@@ -299,8 +300,8 @@ public sealed class Parish
 				ComponentAccess art = _lanterns[rite].Component("Sprite Renderer");
 				art.SetString("texture", Content.Rites[rite].Art);
 				art.SetBool("pixel_art", true);
-				art.SetVector2("pixel_size", new Vector2(64.0f, 64.0f));
-				art.SetFloat("pixels_per_unit", 42.0f);
+				art.SetVector2("pixel_size", new Vector2(48.0f, 48.0f));
+				art.SetFloat("pixels_per_unit", 32.0f);
 				_dressed[rite] = art.GetString("texture").Length > 0;
 			}
 
