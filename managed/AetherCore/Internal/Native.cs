@@ -216,6 +216,9 @@ internal static unsafe partial class Native
     internal static partial void aether_ui_set_image_texture(uint id, string path);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_image_pixel_art(uint id, int enabled);
+
+    [LibraryImport(Lib)]
     internal static partial int aether_ui_contains_point(uint id, Vector2 pt);
 
     [LibraryImport(Lib)]

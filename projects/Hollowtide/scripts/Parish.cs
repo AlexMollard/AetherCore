@@ -5,182 +5,295 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// The parish itself: the world behind the interface. One lantern per rite the keeper
-/// holds, lit by transient 2D lights, with motes coming off a gather and the whole place
-/// going dark and unsteady as dread rises.
+/// The parish: the place behind the interface. A shader draws the world - sky, skyline, fog
+/// and a flagged floor in perspective - and the rites stand on it with their bearers walking
+/// between them.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nothing here is authored in the scene. A rite the keeper does not own has no entity at
-/// all, and buying the first copy of one is what creates it - so the world is a readout of
-/// the save rather than a set piece that has to be kept in step with it.
+/// <b>Why this is UI and not the scene.</b> The ground used to be a world sprite lit by the
+/// 2D light map, and the light map washed it to the palest thing on screen whatever it was
+/// tinted - a flat quad standing in for a surface. Drawing it analytically fixes that, but a
+/// background UI effect composites over the scene, so anything left in the world would be
+/// hidden behind it. The rites came with it. They lose nothing by the move: they were always
+/// flat and always at fixed positions, and the glow they had from submitted lights is a
+/// better glow now that a shader is drawing it.
 /// </para>
 /// <para>
-/// The lights are submitted per frame through <see cref="Lighting2D"/> rather than placed
-/// as components. A lantern's brightness is a function of how many copies are held, which
-/// changes constantly; a submitted light is re-stated every frame anyway, so there is no
-/// component field to write and nothing to clean up when a visitation takes the last copy.
+/// Everything is positioned in NAVE FRACTIONS against the shader's horizon, which is the one
+/// number both sides have to agree on - see <see cref="kHorizon"/>. Fractions rather than
+/// pixels so the parish reflows with the window instead of baking a resolution.
 /// </para>
 /// </remarks>
 public sealed class Parish
 {
-	private const int kPopPool = 10;
+	/// <summary>Height of the horizon as a fraction of the nave, matching the same constant in
+	/// ui_parish.slang. The rites stand on it, so the two MUST agree.</summary>
+	private const float kHorizon = 0.62f;
 
-	private readonly Entity[] _lanterns = new Entity[Content.RiteCount];
-	private readonly WorldLabel?[] _labels = new WorldLabel?[Content.RiteCount];
+	private const int kPopPool = 12;
+	private const int kBearerPool = 40;
+	/// <summary>How fast a bearer walks, in fractions of the backdrop per second.</summary>
+	private const float kBearerSpeed = 0.16f;
 
 	private struct Pop
 	{
-		public WorldLabel Label;
-		public Vector3 From;
-		public string Text;
+		public Entity Label;
+		public Vector2 From;
 		public Vector4 Colour;
 		public float Age;
 	}
 
-	private readonly Pop[] _pops = new Pop[kPopPool];
-	private int _nextPop;
-
-	/// <summary>One delivery in flight: a wisp carrying a rite's yield to the keeper.</summary>
 	private struct Bearer
 	{
 		public Entity Body;
-		public Vector3 From;
+		public Vector2 From;
+		public Vector2 To;
 		public double Amount;
-		public Vector4 Colour;
 		public float Age;
-		/// <summary>Seconds spent climbing down from the rite before the walk begins.</summary>
-		public float Descent;
-		/// <summary>Seconds of walking, derived from the DISTANCE rather than fixed - a bearer
-		/// from the far end of the parish takes visibly longer to arrive, which is the whole
-		/// reason to show the journey at all.</summary>
-		public float Walk;
+		public float Bow;
 		public float Bob;
 		public bool Live;
 	}
 
-	/// <summary>How fast a bearer walks, in world units per second.</summary>
-	private const float kBearerSpeed = 2.3f;
-
-	/// <summary>The line bearers walk along, and what the parish stands on.</summary>
-	private float GroundY => _collection.Y;
-
-	private const int kBearerPool = 40;
+	private Entity _nave;
+	private Entity _backdrop;
+	private readonly Entity[] _rites = new Entity[Content.RiteCount];
+	private readonly Entity[] _counts = new Entity[Content.RiteCount];
+	private readonly float[] _flare = new float[Content.RiteCount];
 	private readonly Bearer[] _bearers = new Bearer[kBearerPool];
+	private readonly Pop[] _pops = new Pop[kPopPool];
 	private int _nextBearer;
-
-	/// <summary>Where deliveries are carried to: under the sigil, which is where the keeper
-	/// is. Set from the nave so the destination follows the interface rather than a guess.</summary>
-	private Vector3 _collection = new Vector3(-3.4f, -0.3f, 0.0f);
-
-	private Entity _motes;
-	private Entity _ground;
-	private bool _groundDressed;
-	private Entity _camera;
-	private Vector3 _cameraHome;
-	private Entity _ambient;
+	private int _nextPop;
 
 	private float _shake;
 	private float _time;
 
-	/// <summary>Per-rite flare, decaying. Raised when a rite delivers, so the lantern that
-	/// just paid out is the one that brightens - the player can see WHICH thing earned.</summary>
-	private readonly float[] _flare = new float[Content.RiteCount];
-	/// <summary>Whether a rite's sprite has taken its art yet. Applied on a LATER frame than
-	/// the one that adds the component: written in the same frame, the texture does not
-	/// stick, and a sprite silently reverts to an untextured quad.</summary>
-	private readonly bool[] _dressed = new bool[Content.RiteCount];
+	private Entity _sigil;
 
-	public void Build(Entity canvas, Entity ambientOwner)
+	/// <summary>
+	/// Where deliveries are carried to: the centre of the sigil, in backdrop fractions.
+	/// </summary>
+	/// <remarks>
+	/// Read off the sigil's live rect rather than written down, so the destination is wherever
+	/// the sigil actually is. Bearers used to walk to a bare patch of floor, which left the
+	/// obvious question of what they were walking towards unanswered - carrying the yield into
+	/// the thing that counts it is the whole point of the walk, so it should be visible.
+	/// </remarks>
+	private Vector2 Collection
 	{
-		_camera = Camera.Main;
-		if (_camera.IsValid)
+		get
 		{
-			_cameraHome = _camera.Position;
+			Vector4 bd = Backdrop;
+			Vector4 sg = Ui.GetRect(_sigil);
+			if (bd.Z <= 0.0f || sg.Z <= 0.0f)
+			{
+				return new Vector2(0.5f, 0.45f);
+			}
+			return new Vector2((sg.X + sg.Z * 0.5f - bd.X) / bd.Z, (sg.Y + sg.W * 0.5f - bd.Y) / bd.W);
 		}
-		_ambient = ambientOwner;
+	}
 
-		// One emitter, parked at the middle of the nave, fired by hand. Authoring it here
-		// rather than in the scene keeps every particle setting next to the code that bursts
-		// it, which is the only place either is ever read.
-		_motes = Scene.Create("Motes", new Vector3(-3.4f, -0.4f, 0.0f));
-		ComponentAccess emitter = _motes.Component("Particle Emitter");
-		emitter.Add();
-		emitter.SetFloat("rate", 0.0f);
-		emitter.SetBool("emit_on_start", false);
-		emitter.SetBool("emitting", false);
-		emitter.SetInt("max_particles", 400);
-		emitter.SetFloat("lifetime_min", 0.7f);
-		emitter.SetFloat("lifetime_max", 1.8f);
-		emitter.SetFloat("speed_min", 1.2f);
-		emitter.SetFloat("speed_max", 3.6f);
-		emitter.SetFloat("direction_deg", 90.0f);
-		emitter.SetFloat("spread_deg", 150.0f);
-		emitter.SetVector2("gravity", new Vector2(0.0f, -1.4f));
-		emitter.SetFloat("start_size", 0.14f);
-		emitter.SetFloat("end_size", 0.0f);
-		emitter.SetVector4("start_color", Palette.Ichor);
-		emitter.SetVector4("end_color", Palette.Fade(Palette.IchorDim, 0.0f));
-		emitter.SetInt("sorting_layer", 2);
+	public void Bind()
+	{
+		_nave = Scene.Find("HudNave");
+		_backdrop = Scene.Find("ParishBackdrop");
+		_sigil = Scene.Find("NaveSigil");
 
-		// Something for the parish to stand on. A quad used as a quad: the ground is a flat
-		// dark band, and the rites reading as objects ON it is most of what stopped them
-		// looking like sprites floating in a void.
-		_ground = Scene.Create("ParishGround", new Vector3(-3.4f, _collection.Y - 0.62f, 0.0f));
-		ComponentAccess floor = _ground.Component("Sprite Renderer");
-		floor.Add();
-		floor.SetVector4("tint", Palette.Ink);
-		floor.SetInt("sorting_layer", 0);
-		_groundDressed = false;
-		_ground.Scale = new Vector3(26.0f, 1.1f, 1.0f);
-
-		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
-		// busy parish, and creating an entity per payout would churn the scene constantly.
+		// Bearers and rites are created here rather than authored: there is one per rite the
+		// keeper actually owns, and forty bearers is a pool sized to traffic, neither of which
+		// a scene file can know.
 		for (int i = 0; i < kBearerPool; i++)
 		{
-			Entity body = Scene.Create("Bearer" + i, new Vector3(-999.0f, -999.0f, 0.0f));
-			ComponentAccess sprite = body.Component("Sprite Renderer");
-			sprite.Add();
-			sprite.SetInt("sorting_layer", 2);
-			_bearers[i] = new Bearer { Body = body, Live = false, Colour = Palette.Ichor };
+			Entity body = UiKit.Image(_nave, -500.0f, -500.0f, 14.0f, 14.0f, Palette.Transparent);
+			Ui.SetImageTexture(body, "project://assets/textures/rites/bearer.png");
+			Ui.SetImagePixelArt(body, true);
+			_bearers[i] = new Bearer { Body = body, Live = false };
 		}
-
 		for (int i = 0; i < kPopPool; i++)
 		{
-			// No outline. A WorldLabel's outline is four extra dark copies of the string, and
-			// SetColor deliberately does not touch them - so a label that FADES keeps a fully
-			// opaque black ghost of itself once its text has gone transparent. That is exactly
-			// wrong for a floating number, and the parish behind it is dark enough that the
-			// outline was buying no readability anyway.
-			WorldLabel label = new WorldLabel(200.0f, 26.0f, canvas, outlineWidth: 0.0f);
-			label.SetFontSize(19.0f);
-			label.SetColor(Palette.Fade(Palette.Ichor, 0.0f));
-			_pops[i] = new Pop { Label = label, Age = 99.0f, From = Vector3.Zero, Text = "", Colour = Palette.Ichor };
+			Entity label = UiKit.Text(_nave, "", -500.0f, -500.0f, 180.0f, 24.0f, 18.0f, Palette.Ichor,
+				UiHAlign.Center);
+			_pops[i] = new Pop { Label = label, Age = 99.0f, Colour = Palette.Ichor };
 		}
 	}
 
-	/// <summary>Where a rite stands along the ground, left to right, deepest furthest in - so
-	/// the parish visibly extends as the keeper goes down.</summary>
-	private static float LanternX(int rite)
+	/// <summary>The nave's pixel rect: the frame these entities are laid out in.</summary>
+	private Vector4 Nave => Ui.GetRect(_nave);
+
+	/// <summary>The backdrop's pixel rect: the frame the SHADER is drawing in, and so the frame
+	/// every fraction in this file is measured against.</summary>
+	private Vector4 Backdrop => Ui.GetRect(_backdrop);
+
+	/// <summary>
+	/// A fraction of the backdrop to a pixel offset inside the nave.
+	/// </summary>
+	/// <remarks>
+	/// The two rects are not the same - the backdrop covers the whole canvas and the nave is a
+	/// panel inside it - so measuring the horizon against the nave put every rite's feet a long
+	/// way below the line the shader had drawn. Going through the backdrop and subtracting the
+	/// nave's origin is what makes <see cref="kHorizon"/> mean the same thing on both sides.
+	/// </remarks>
+	private Vector2 ToLocal(Vector2 f)
 	{
-		float t = rite / (float)Math.Max(1, Content.RiteCount - 1);
-		// Stops short of the sigil: the rites are the workings, the sigil is where the keeper
-		// stands, and a rite drawn under it reads as one object rather than two.
-		return -7.6f + t * 5.9f;
+		Vector4 bd = Backdrop;
+		Vector4 nave = Nave;
+		return new Vector2(bd.X + bd.Z * f.X - nave.X, bd.Y + bd.W * f.Y - nave.Y);
 	}
 
-	/// <summary>A rite's position: its base ON the ground, so it reads as a thing standing in
-	/// a place rather than a sprite hanging in a void. Recomputed as it grows, because the
-	/// bigger it gets the further its centre has to rise to keep its feet down.</summary>
-	private Vector3 LanternAt(int rite, float bulk)
+	/// <summary>Left end of the stretch of horizon the rites stand along, as a backdrop fraction.</summary>
+	private const float kRiteLeft = 0.035f;
+
+	/// <summary>
+	/// Right end of that stretch: just clear of the sigil's left edge.
+	/// </summary>
+	/// <remarks>
+	/// Measured off the sigil rather than written down as a constant. The sigil is centred in
+	/// the nave and the nave is not centred in the canvas, so any number picked by hand here is
+	/// only correct at one window size - and the one I picked put the deepest rite directly on
+	/// top of it.
+	/// </remarks>
+	private float RiteRight
 	{
-		// 48px art at 32 texels per unit is 1.5 units tall before scaling.
-		return new Vector3(LanternX(rite), GroundY + 1.5f * bulk * 0.5f, 0.0f);
+		get
+		{
+			Vector4 bd = Backdrop;
+			Vector4 sg = Ui.GetRect(_sigil);
+			if (bd.Z <= 0.0f || sg.Z <= 0.0f)
+			{
+				return 0.34f;
+			}
+			return MathF.Max(kRiteLeft + 0.05f, (sg.X - bd.X) / bd.Z - 0.03f);
+		}
 	}
 
-	/// <summary>A rite finished a working. Flare its lantern and throw the yield toward the
-	/// keeper, so the payout is something that happens in a place rather than a number that
-	/// changes in the corner.</summary>
+	/// <summary>How many rites are standing. The band is shared between these and not between
+	/// all eight - budgeting for a parish the keeper will not have for hours left the early
+	/// ones as specks in slots sized for someone else.</summary>
+	private int _standing = 1;
+
+	/// <summary>Gap between neighbouring rites, in backdrop fractions. Every rite is capped to
+	/// this wide, which is what stops a heavily-bought rite from swallowing the one beside it.</summary>
+	private float RiteSpacing => _standing > 1 ? (RiteRight - kRiteLeft) / (_standing - 1) : 0.14f;
+
+	/// <summary>Where a rite stands, in backdrop fractions: evenly along the horizon, deepest
+	/// furthest in. Centred when there are too few to fill the band.</summary>
+	private float RiteX(int rite)
+	{
+		float span = (_standing - 1) * RiteSpacing;
+		float left = kRiteLeft + ((RiteRight - kRiteLeft) - span) * 0.5f;
+		return left + rite * RiteSpacing;
+	}
+
+	public void Update(float deltaTime, float unscaledDelta)
+	{
+		_time += unscaledDelta;
+		_shake = MathF.Max(0.0f, _shake - unscaledDelta * 1.7f);
+		for (int i = 0; i < _flare.Length; i++)
+		{
+			_flare[i] = MathF.Max(0.0f, _flare[i] - unscaledDelta * 2.2f);
+		}
+
+		float dread = (float)Vigil.Dread;
+		Ui.SetEffectParams(_backdrop, new Vector4(_time, dread, _shake * _shake * SaveSystem.DreadShake, 0.0f));
+		Ui.SetEffectColors(_backdrop, Palette.Ink, Palette.Dread);
+
+		SyncRites(dread);
+		UpdateBearers(unscaledDelta);
+		UpdatePops(unscaledDelta);
+	}
+
+	/// <summary>Create, retire and dress one element per rite the keeper holds.</summary>
+	private void SyncRites(float dread)
+	{
+		Vector4 bd = Backdrop;
+		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
+		{
+			return;
+		}
+
+		_standing = 0;
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			if (Vigil.Owned[rite] > 0)
+			{
+				_standing++;
+			}
+		}
+
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			int owned = Vigil.Owned[rite];
+			if (owned <= 0)
+			{
+				if (_rites[rite].IsValid)
+				{
+					_rites[rite].SetActive(false);
+					_counts[rite].SetActive(false);
+				}
+				continue;
+			}
+
+			if (!_rites[rite].IsValid)
+			{
+				// A material, not a sprite. Drawn analytically for the same reason the floor
+				// is: a 48x48 hand-drawn image has no light on it, no contact with the ground
+				// and no resolution beyond its own, so however crisply it was sampled it still
+				// read as a sticker laid over a lit scene.
+				// Created INK, not white. ui_rite takes only the alpha from the element's colour
+				// and computes its own rgb, so the fill is invisible while the material is
+				// drawing - but on any frame the material is not yet resolved (the creation
+				// frame, and again after a shader hot-reload) the plain image draws instead, and
+				// a white one flashed as a solid quad across the parish. Ink flashes as nothing.
+				_rites[rite] = UiKit.Image(_nave, 0.0f, 0.0f, 10.0f, 10.0f, Palette.Ink);
+				Ui.SetMaterial(_rites[rite], "ui_rite");
+				// Params before the first draw, so a rite never renders as rite 0 for a frame.
+				Ui.SetMaterialParams(_rites[rite], new Vector4(_time, rite, 0.0f, 0.0f));
+				Ui.SetMaterialColors(_rites[rite], Palette.RiteTint(rite), Palette.Ichor);
+				_counts[rite] = UiKit.Text(_nave, "", 0.0f, 0.0f, 90.0f, 20.0f, 15.0f, Palette.TextDim,
+					UiHAlign.Center);
+			}
+			_rites[rite].SetActive(true);
+			_counts[rite].SetActive(true);
+
+			// Grows on a log curve and stands ON the horizon: its base is pinned there and its
+			// top rises, so buying more is a bigger thing in the same place.
+			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
+			float working = (float)Vigil.CycleProgress[rite];
+			float flare = _flare[rite] * _flare[rite];
+			float size = bd.W * 0.20f * bulk * (1.0f + working * 0.05f + flare * 0.16f);
+			// Capped to the gap between neighbours. Growth is the reward for buying, but a rite
+			// that has outgrown its slot reads as a collision, not as progress - so past this
+			// point it stops widening and the count under it carries the rest of the story.
+			size = MathF.Min(size, bd.Z * RiteSpacing * 0.92f);
+
+			// Art is drawn on a square canvas but its subject stands in the middle of it, so
+			// the sprite is sunk slightly to put the SUBJECT'S feet on the line, not the box's.
+			Vector2 foot = ToLocal(new Vector2(RiteX(rite), kHorizon));
+			Ui.SetAnchors(_rites[rite], Vector2.Zero, Vector2.Zero);
+			Ui.SetPivot(_rites[rite], new Vector2(0.5f, 1.0f));
+			// Pivot is bottom-centre, so the foot IS the y - subtracting the height as well
+			// lifted every rite by its own size and turned the row into a diagonal.
+			Ui.SetRect(_rites[rite], foot.X, foot.Y, size, size);
+
+			// Structure stays on the ramp; the flare is the only thing that brightens it, and
+			// only for as long as the rite is handing something over.
+			Ui.SetMaterialParams(_rites[rite], new Vector4(_time, rite, working, flare));
+			Ui.SetMaterialColors(_rites[rite],
+				Palette.Mix(Palette.RiteTint(rite), Palette.Dread, dread * 0.30f),
+				Palette.Mix(Palette.Ichor, Palette.Dread, dread * 0.45f));
+
+			// Above each rite rather than in a row on the floor. A row was tidier, but the floor
+			// just below the horizon is where the buttons are, and a count sitting on a control
+			// is worse than a count at an uneven height.
+			Ui.SetAnchors(_counts[rite], Vector2.Zero, Vector2.Zero);
+			Ui.SetPivot(_counts[rite], new Vector2(0.5f, 1.0f));
+			Ui.SetRect(_counts[rite], foot.X, foot.Y - size - 8.0f, 90.0f, 20.0f);
+			Ui.SetText(_counts[rite], "x" + owned);
+		}
+	}
+
+	/// <summary>A rite finished a working: flare it, and send a bearer with the yield.</summary>
 	public void Delivered(int rite, double amount)
 	{
 		if (rite < 0 || rite >= Content.RiteCount)
@@ -188,41 +301,47 @@ public sealed class Parish
 			return;
 		}
 		_flare[rite] = 1.0f;
-		Vector3 at = _lanterns[rite].IsValid ? _lanterns[rite].Position : new Vector3(LanternX(rite), GroundY, 0.0f);
-		if (_motes.IsValid)
-		{
-			_motes.Position = at;
-			Particles.Burst(_motes, 6);
-		}
 
-		// Send the yield across as a thing that travels. The number is deliberately NOT shown
-		// here: it appears where the ichor lands, so the payout reads as something carried to
-		// the keeper rather than a figure that materialises over a prop.
-		Bearer bearer = _bearers[_nextBearer];
-		bearer.From = at;
-		bearer.Amount = amount;
-		bearer.Colour = Content.Rites[rite].Colour;
-		bearer.Age = 0.0f;
-		bearer.Descent = 0.30f + AetherCore.Random.Range(0.0f, 0.10f);
-		bearer.Walk = MathF.Max(0.25f, MathF.Abs(_collection.X - at.X) / kBearerSpeed);
-		bearer.Bob = AetherCore.Random.Range(0.0f, 6.28f);
-		bearer.Live = true;
-		if (bearer.Body.IsValid)
-		{
-			ComponentAccess sprite = bearer.Body.Component("Sprite Renderer");
-			sprite.SetString("texture", "project://assets/textures/rites/bearer.png");
-			sprite.SetBool("pixel_art", true);
-			sprite.SetVector2("pixel_size", new Vector2(16.0f, 16.0f));
-			sprite.SetFloat("pixels_per_unit", 44.0f);
-			sprite.SetVector4("tint", bearer.Colour);
-		}
-		_bearers[_nextBearer] = bearer;
+		Bearer b = _bearers[_nextBearer];
+		b.From = new Vector2(RiteX(rite), kHorizon);
+		b.Amount = amount;
+		b.Age = 0.0f;
+		b.To = Collection;
+		b.Bow = AetherCore.Random.Range(-0.035f, 0.035f);
+		b.Bob = AetherCore.Random.Range(0.0f, 6.28f);
+		b.Live = true;
+		_bearers[_nextBearer] = b;
 		_nextBearer = (_nextBearer + 1) % kBearerPool;
 	}
 
-	/// <summary>Carry every live bearer toward the keeper, and pay out when it arrives.</summary>
+	/// <summary>Something arrived. Shake the place and mark where it happened.</summary>
+	public void Visitation()
+	{
+		_shake = 1.0f;
+		ShowPop(Collection + new Vector2(0.0f, -0.05f), "TAKEN", Palette.Dread);
+	}
+
+	/// <summary>A gather by hand, at the point the keeper struck.</summary>
+	public void Gathered(double amount, Vector2 screenPoint)
+	{
+		Vector4 bd = Backdrop;
+		if (bd.Z <= 0.0f)
+		{
+			return;
+		}
+		Vector2 f = new Vector2((screenPoint.X - bd.X) / bd.Z, (screenPoint.Y - bd.Y) / bd.W);
+		ShowPop(f, "+" + Numbers.Short(amount), Palette.Ichor);
+	}
+
+	/// <summary>Walk every live bearer down off its rite and along the floor to the keeper.</summary>
 	private void UpdateBearers(float unscaledDelta)
 	{
+		Vector4 bd = Backdrop;
+		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
+		{
+			return;
+		}
+
 		for (int i = 0; i < kBearerPool; i++)
 		{
 			Bearer b = _bearers[i];
@@ -231,305 +350,88 @@ public sealed class Parish
 				continue;
 			}
 			b.Age += unscaledDelta;
-			float total = b.Descent + b.Walk;
-			float t = Math.Clamp(b.Age / total, 0.0f, 1.0f);
+			float total = (b.To - b.From).Length() / kBearerSpeed;
 
-			// Down off the rite first, then along the ground. A bearer that flew a smooth arc
-			// read as a particle; one that climbs down and walks reads as something carrying
-			// a load, which is the whole point of showing the journey.
-			float x, y;
-			if (b.Age < b.Descent)
-			{
-				float d = Math.Clamp(b.Age / b.Descent, 0.0f, 1.0f);
-				x = b.From.X;
-				y = b.From.Y + (GroundY - b.From.Y) * (d * d * (3.0f - 2.0f * d));
-			}
-			else
-			{
-				float w = Math.Clamp((b.Age - b.Descent) / b.Walk, 0.0f, 1.0f);
-				x = b.From.X + (_collection.X - b.From.X) * w;
-				// A step, not a hover: the bob is the gait, so a line of bearers along the
-				// ground is visibly a procession rather than a drifting shoal.
-				y = GroundY + MathF.Abs(MathF.Sin(b.Age * 9.0f + b.Bob)) * 0.09f;
-			}
-			b.Body.Position = new Vector3(x, y, 0.0f);
+			// A single walk from the rite's foot toward the keeper, eased at both ends so a
+			// bearer sets off and arrives rather than snapping into a constant slide, and bowed
+			// out sideways so a dozen of them on the same route do not stack into one line.
+			float w = Math.Clamp(b.Age / total, 0.0f, 1.0f);
+			float e = w * w * (3.0f - 2.0f * w);
+			Vector2 at = b.From + (b.To - b.From) * e;
+			// Bowed sideways AND lifted, so the wisp rises off the floor into the sigil rather
+			// than sliding up the screen in a straight line.
+			at.X += MathF.Sin(e * 3.14159f) * b.Bow;
+			at.Y += MathF.Sin(e * 3.14159f) * 0.05f;
+			// The gait. Cheap, but a step is the difference between a figure walking and a
+			// sprite being interpolated across the floor.
+			at.Y -= MathF.Abs(MathF.Sin(b.Age * 8.0f + b.Bob)) * 0.010f;
 
-			ComponentAccess look = b.Body.Component("Sprite Renderer");
-			look.SetBool("flip_x", _collection.X < b.From.X);
-			float alpha = MathF.Min(1.0f, MathF.Min(b.Age * 6.0f, (1.0f - t) * 8.0f));
-			look.SetVector4("tint", Palette.Fade(b.Colour, alpha));
+			Vector2 px = ToLocal(at);
+			// Bearers shrink toward the horizon, which the perspective floor makes the eye
+			// expect: the same walk further away is a smaller figure.
+			// Fades away to nothing as it is drawn into the sigil.
+			float scale = 1.0f - e * 0.55f;
+			float size = bd.W * 0.030f * Math.Clamp(scale, 0.5f, 1.4f);
+			Ui.SetAnchors(b.Body, Vector2.Zero, Vector2.Zero);
+			Ui.SetPivot(b.Body, new Vector2(0.5f, 1.0f));
+			Ui.SetRect(b.Body, px.X, px.Y, size, size);
 
-			if (t >= 1.0f)
+			float fade = MathF.Min(1.0f, MathF.Min(b.Age * 6.0f, (1.0f - w) * 5.0f));
+			Ui.SetImageColor(b.Body, Palette.Fade(Palette.Ichor, Math.Clamp(fade, 0.0f, 1.0f)));
+
+			if (b.Age >= total)
 			{
 				b.Live = false;
-				b.Body.Position = new Vector3(-999.0f, -999.0f, 0.0f);
-				// The payout lands HERE, where the keeper is, which is the whole point of
-				// having carried it.
-				ShowPop(_collection + new Vector3(AetherCore.Random.Range(-0.4f, 0.4f), 0.3f, 0.0f),
-					"+" + Numbers.Short(b.Amount), b.Colour);
-				if (_motes.IsValid)
-				{
-					_motes.Position = _collection;
-					Particles.Burst(_motes, 5);
-				}
+				Ui.SetRect(b.Body, -500.0f, -500.0f, 1.0f, 1.0f);
+				// The payout lands where the keeper is, which is the point of the walk.
+				ShowPop(b.To + new Vector2(AetherCore.Random.Range(-0.03f, 0.03f), -0.08f),
+					"+" + Numbers.Short(b.Amount), Palette.Ichor);
 			}
 			_bearers[i] = b;
 		}
 	}
 
-	public void Update(float deltaTime, float unscaledDelta)
-	{
-		_time += unscaledDelta;
-
-		// Same later-frame rule as the rites: a sprite will not take its texture on the frame
-		// its component was added.
-		if (!_groundDressed && _ground.IsValid)
-		{
-			ComponentAccess floor = _ground.Component("Sprite Renderer");
-			floor.SetString("texture", "project://assets/textures/rites/ground.png");
-			floor.SetBool("pixel_art", true);
-			floor.SetVector2("pixel_size", new Vector2(64.0f, 64.0f));
-			floor.SetFloat("pixels_per_unit", 64.0f);
-			if (floor.GetString("texture").Length > 0)
-			{
-				// The stone carries its own value; the tint only has to stop it glowing.
-				floor.SetVector4("tint", Palette.Mix(Palette.Stone, Palette.Ink, 0.6f));
-				_groundDressed = true;
-			}
-		}
-		for (int i = 0; i < _flare.Length; i++)
-		{
-			_flare[i] = MathF.Max(0.0f, _flare[i] - unscaledDelta * 2.2f);
-		}
-		float dread = (float)Vigil.Dread;
-
-		SyncLanterns(dread);
-		UpdateBearers(unscaledDelta);
-		UpdatePops(unscaledDelta);
-		UpdateAmbient(dread);
-		UpdateCamera(unscaledDelta, dread);
-	}
-
-	/// <summary>Create, retire and light one lantern per rite.</summary>
-	private void SyncLanterns(float dread)
-	{
-		for (int rite = 0; rite < Content.RiteCount; rite++)
-		{
-			int owned = Vigil.Owned[rite];
-			if (owned <= 0)
-			{
-				if (_lanterns[rite].IsValid)
-				{
-					_lanterns[rite].Destroy();
-					_lanterns[rite] = default;
-					_labels[rite]?.Destroy();
-					_labels[rite] = null;
-				}
-				continue;
-			}
-
-			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
-			Vector3 at = LanternAt(rite, bulk);
-			if (!_lanterns[rite].IsValid)
-			{
-				Entity e = Scene.Create("Lantern_" + Content.Rites[rite].Name, at);
-				ComponentAccess sprite = e.Component("Sprite Renderer");
-				sprite.Add();
-				// No texture: an empty path samples plain white, so the tint below IS the
-				// colour. The parish needs no art to read.
-				sprite.SetVector2("pixel_size", new Vector2(16.0f, 16.0f));
-				sprite.SetFloat("pixels_per_unit", 16.0f);
-				sprite.SetVector4("tint", Content.Rites[rite].Colour);
-				sprite.SetInt("sorting_layer", 1);
-				// The engine's own behaviours do the idle motion, so nothing here has to run a
-				// sine per lantern per frame.
-				// No bob and no spin. These stand on the ground now, and a standing object
-				// that hovers is back to floating - the life comes from the working swell
-				// and the flare when it delivers instead.
-				_lanterns[rite] = e;
-
-				WorldLabel label = new WorldLabel(90.0f, 20.0f);
-				label.SetFontSize(17.0f);
-				_labels[rite] = label;
-			}
-
-			// A rite grows with the tier it stands for, on a log curve: the difference between
-			// 1 and 10 should be visible, and the difference between 1000 and 10000 should
-			// not fill the screen. Its position follows, so its feet stay on the ground.
-			_lanterns[rite].Position = at;
-
-			// Each rite has its own drawn silhouette rather than a tinted square. The art is
-			// greyscale, so the tint still carries both the rite's colour and its souring
-			// toward rust as dread rises - one sprite, both readings.
-			if (!_dressed[rite])
-			{
-				ComponentAccess art = _lanterns[rite].Component("Sprite Renderer");
-				art.SetString("texture", Content.Rites[rite].Art);
-				art.SetBool("pixel_art", true);
-				art.SetVector2("pixel_size", new Vector2(48.0f, 48.0f));
-				art.SetFloat("pixels_per_unit", 32.0f);
-				_dressed[rite] = art.GetString("texture").Length > 0;
-			}
-
-			// Structure stays on the ramp; only the souring toward dread is allowed to add a
-			// hue, and only as far as the meter has actually filled.
-			Vector4 lit = Palette.Mix(Palette.RiteTint(rite), Palette.Dread, dread * 0.30f);
-			_lanterns[rite].Component("Sprite Renderer").SetVector4("tint", lit);
-
-			// Flicker is per-lantern and out of phase, so the parish never pulses in unison -
-			// a synchronised flicker reads as a rendering bug rather than as candlelight.
-			float flicker = 0.86f + MathF.Sin(_time * (3.1f + rite * 0.7f) + rite) * 0.09f
-				+ MathF.Sin(_time * (11.0f + rite)) * 0.05f * (0.3f + dread);
-			// The flare rides on top of the idle flicker: a rite that just delivered is
-			// visibly the one that paid, and it fades rather than snapping back.
-			float flare = _flare[rite] * _flare[rite];
-			float reach = (2.1f + bulk * 2.6f) * (1.0f + flare * 0.55f);
-			// The light is cold like everything it falls on. A warm light over a warm tint
-			// over a warm sprite is how the parish went salmon.
-			Vector4 lamp = Palette.Mix(Palette.RiteLight(rite), Palette.Dread, dread * 0.35f);
-			Lighting2D.SubmitLight(new Vector2(at.X, at.Y), reach,
-				new Vector3(lamp.X, lamp.Y, lamp.Z), (1.6f + bulk) * flicker * (1.0f + flare * 1.6f), castsShadow: false);
-
-			// It swells as it works and settles as it hands over - the lantern breathes with
-			// its own cadence instead of every lantern pulsing in unison.
-			float working = (float)Vigil.CycleProgress[rite];
-			_lanterns[rite].Scale = new Vector3(bulk * (1.0f + working * 0.06f + flare * 0.18f),
-				bulk * (1.0f + working * 0.06f + flare * 0.18f), 1.0f);
-
-			_labels[rite]?.SetColor(Palette.Fade(Palette.TextDim, 0.8f));
-			_labels[rite]?.Track(at + new Vector3(0.0f, 1.5f * bulk * 0.5f + 0.30f, 0.0f), "x" + owned);
-		}
-	}
-
-	/// <summary>A gather: motes and a number, both thrown from wherever the keeper actually
-	/// struck rather than from a spot the emitter happens to sit at. Feedback that appears
-	/// somewhere other than the thing you clicked reads as unrelated to it.</summary>
-	public void Gathered(double amount, Vector3 at)
-	{
-		if (_motes.IsValid)
-		{
-			// The emitter is moved to the strike, not the strike to the emitter.
-			_motes.Position = at;
-			Particles.Burst(_motes, 14);
-		}
-		ShowPop(at + new Vector3(AetherCore.Random.Range(-0.25f, 0.25f), 0.1f, 0.0f),
-			"+" + Numbers.Short(amount), Palette.Ichor);
-	}
-
-	/// <summary>A visitation: shake the parish, and throw the motes the wrong colour.</summary>
-	public void Visitation(Vector3 at)
-	{
-		_shake = 1.0f;
-		if (_motes.IsValid)
-		{
-			_motes.Position = at;
-			ComponentAccess emitter = _motes.Component("Particle Emitter");
-			emitter.SetVector4("start_color", Palette.Dread);
-			emitter.SetFloat("speed_max", 7.0f);
-			Particles.Burst(_motes, 220);
-			// Put the emitter back for the next ordinary gather; the burst above has already
-			// been spawned with the settings it wanted.
-			emitter.SetVector4("start_color", Palette.Ichor);
-			emitter.SetFloat("speed_max", 3.6f);
-		}
-		ShowPop(at + new Vector3(0.0f, 0.7f, 0.0f), "TAKEN", Palette.Dread);
-	}
-
-	private void ShowPop(Vector3 at, string text, Vector4 colour)
+	private void ShowPop(Vector2 at, string text, Vector4 colour)
 	{
 		Pop pop = _pops[_nextPop];
-		pop.Age = 0.0f;
 		pop.From = at;
-		pop.Text = text;
 		pop.Colour = colour;
-		pop.Label.SetColor(colour);
-		pop.Label.Track(at, text);
+		pop.Age = 0.0f;
+		Ui.SetText(pop.Label, text);
 		_pops[_nextPop] = pop;
 		_nextPop = (_nextPop + 1) % kPopPool;
 	}
 
-	/// <summary>Float the live popups upward and fade them out. Unscaled, so they still read
-	/// while the game is frozen behind a menu.</summary>
+	/// <summary>Float the live popups up and fade them out, on unscaled time so they still
+	/// read while the game is frozen behind a menu.</summary>
 	private void UpdatePops(float unscaledDelta)
 	{
-		// Something for the parish to stand on. A quad used as a quad: the ground is a flat
-		// dark band, and the rites reading as objects ON it is most of what stopped them
-		// looking like sprites floating in a void.
-		_ground = Scene.Create("ParishGround", new Vector3(-3.4f, _collection.Y - 0.62f, 0.0f));
-		ComponentAccess floor = _ground.Component("Sprite Renderer");
-		floor.Add();
-		floor.SetVector4("tint", Palette.Ink);
-		floor.SetInt("sorting_layer", 0);
-		_groundDressed = false;
-		_ground.Scale = new Vector3(26.0f, 1.1f, 1.0f);
-
-		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
-		// busy parish, and creating an entity per payout would churn the scene constantly.
-		for (int i = 0; i < kBearerPool; i++)
+		Vector4 bd = Backdrop;
+		if (bd.Z <= 0.0f || Nave.Z <= 0.0f)
 		{
-			Entity body = Scene.Create("Bearer" + i, new Vector3(-999.0f, -999.0f, 0.0f));
-			ComponentAccess sprite = body.Component("Sprite Renderer");
-			sprite.Add();
-			sprite.SetInt("sorting_layer", 2);
-			_bearers[i] = new Bearer { Body = body, Live = false, Colour = Palette.Ichor };
+			return;
 		}
-
 		for (int i = 0; i < kPopPool; i++)
 		{
 			Pop pop = _pops[i];
-			if (pop.Age > 1.4f)
+			if (pop.Age > 1.5f)
 			{
 				continue;
 			}
 			pop.Age += unscaledDelta;
-			float t = Math.Clamp(pop.Age / 1.4f, 0.0f, 1.0f);
-			// Rises quickly and slows: a linear float reads as a UI element sliding, an eased
-			// one reads as something leaving.
+			float t = Math.Clamp(pop.Age / 1.5f, 0.0f, 1.0f);
 			float rise = 1.0f - (1.0f - t) * (1.0f - t);
-			pop.Label.SetColor(Palette.Fade(pop.Colour, 1.0f - t));
-			// Cleared rather than left at zero alpha on the last tick. A transparent label is
-			// still a label: it holds its string and its rect, and anything that later reads or
-			// re-styles it brings the ghost back. Blanking is what actually ends it.
-			string shown = t >= 1.0f ? "" : pop.Text;
-			pop.Label.Track(pop.From + new Vector3(0.0f, rise * 1.5f, 0.0f), shown);
+
+			Vector2 px = ToLocal(pop.From);
+			Ui.SetAnchors(pop.Label, Vector2.Zero, Vector2.Zero);
+			Ui.SetPivot(pop.Label, new Vector2(0.5f, 0.5f));
+			Ui.SetRect(pop.Label, px.X, px.Y - rise * bd.W * 0.05f, 180.0f, 24.0f);
+			Ui.SetTextColor(pop.Label, Palette.Fade(pop.Colour, 1.0f - t));
+			if (t >= 1.0f)
+			{
+				Ui.SetText(pop.Label, "");
+			}
 			_pops[i] = pop;
 		}
-	}
-
-	/// <summary>The parish darkens as dread rises - the ambient light drops away, so the only
-	/// thing left lighting the place is the rites the keeper is afraid to sell.</summary>
-	private void UpdateAmbient(float dread)
-	{
-		if (!_ambient.IsValid)
-		{
-			return;
-		}
-		ComponentAccess settings = _ambient.Component("Light 2D Settings");
-		if (!settings.Exists)
-		{
-			return;
-		}
-		settings.SetFloat("ambientIntensity", 0.42f - dread * 0.34f);
-		Vector4 ambient = Palette.Mix(Palette.Ash, Palette.DreadDeep, dread * 0.6f);
-		settings.SetVector3("ambient_color", new Vector3(ambient.X, ambient.Y, ambient.Z));
-	}
-
-	/// <summary>Two things move the camera: a decaying kick after a visitation, and a slow
-	/// unease that only exists at high dread. Both are added to the scene-authored home
-	/// position rather than accumulated, so they cannot drift.</summary>
-	private void UpdateCamera(float unscaledDelta, float dread)
-	{
-		if (!_camera.IsValid)
-		{
-			return;
-		}
-		_shake = MathF.Max(0.0f, _shake - unscaledDelta * 1.7f);
-
-		float kick = _shake * _shake * 0.55f * SaveSystem.DreadShake;
-		float unease = MathF.Max(0.0f, dread - 0.55f) * 0.10f * SaveSystem.DreadShake;
-
-		float x = MathF.Sin(_time * 37.0f) * kick + MathF.Sin(_time * 1.3f) * unease;
-		float y = MathF.Cos(_time * 41.0f) * kick + MathF.Cos(_time * 0.9f) * unease;
-		_camera.Position = _cameraHome + new Vector3(x, y, 0.0f);
 	}
 }

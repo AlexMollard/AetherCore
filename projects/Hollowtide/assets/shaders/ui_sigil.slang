@@ -66,10 +66,15 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // while dread is high - the tell that the thing is awake.
     const float breath = sin(time * 0.9) * 0.012 + sin(time * 3.7) * 0.010 * smoothstep(0.5, 1.0, dread);
 
-    // The colour the whole sigil is mixed toward. Ichor at rest, rust at the brink, and
-    // briefly bright on a strike.
-    const float3 live = lerp(pc.color0.rgb, pc.color1.rgb, dread * 0.85);
-    const float3 hot  = lerp(live, float3(1.0, 0.96, 0.90), punch * 0.55 + surge * 0.15);
+    // Ichor and dread are kept APART rather than mixed. Crossfading a green toward a rust
+    // walks straight through the mud between them, and the sigil - the thing the eye goes to
+    // first - spent most of the game as a gold disc that matches nothing else on screen.
+    // So the iris stays ichor and merely dims, and dread arrives as its own colour on the
+    // ring and the rim, where it reads as something closing in from outside.
+    const float3 live = pc.color0.rgb * (1.0 - dread * 0.45);
+    const float3 rust = pc.color1.rgb;
+    const float3 edge = lerp(live, rust, smoothstep(0.35, 0.95, dread));
+    const float3 hot  = lerp(edge, float3(1.0, 0.96, 0.90), punch * 0.55 + surge * 0.15);
 
     float3 col = float3(0.0, 0.0, 0.0);
     float alpha = 0.0;
@@ -77,31 +82,43 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // ── The outer ring ───────────────────────────────────────────────────────────────
     const float ringR = 0.86 + breath + punch * 0.05;
     const float ring = smoothstep(0.055, 0.0, abs(r - ringR));
-    col += hot * ring * (0.55 + surge * 0.5);
+    col = lerp(col, hot * (0.75 + surge * 0.35), saturate(ring));
     alpha = max(alpha, ring);
 
     // ── The marks ────────────────────────────────────────────────────────────────────
     // Twelve strokes around the ring. Their spacing is perfect at rest and drifts apart as
     // dread rises: the ring stops being a made thing and starts being a growth.
+    // Thin ticks struck OUTSIDE the ring, like the graduations on a dial. They used to be a
+    // band of fat tapered blobs sitting inside it, which read as gear teeth rather than as
+    // marks cut into a thing, and buried the iris behind them.
     const float spokes = 12.0;
     const float drift = dread * 0.35;
     const float spoke = frac((a / 6.28318530718) * spokes + vnoise(float2(floor(a * 3.0), 7.0)) * drift);
-    const float markBand = smoothstep(0.16, 0.0, abs(r - (0.68 + breath)));
-    const float mark = markBand * smoothstep(0.30, 0.0, abs(spoke - 0.5));
-    col += hot * mark * 0.9;
-    alpha = max(alpha, mark);
+    const float markBand = smoothstep(0.05, 0.0, abs(r - (0.94 + breath)));
+    const float mark = markBand * smoothstep(0.09, 0.03, abs(spoke - 0.5));
+    col = lerp(col, hot * 0.8, saturate(mark));
+    alpha = max(alpha, mark * 0.8);
 
     // ── The pupil ────────────────────────────────────────────────────────────────────
     // Widens with dread and snaps open on a strike. The dark inside it is genuinely dark:
     // the one part of the screen with no light in it at all.
-    const float pupilR = 0.24 + dread * 0.16 + punch * 0.10;
-    const float pupil = smoothstep(pupilR + 0.03, pupilR - 0.03, r);
-    const float iris = smoothstep(pupilR + 0.34, pupilR, r) - pupil;
+    const float pupilR = 0.20 + dread * 0.14 + punch * 0.09;
+    const float pupil = smoothstep(pupilR + 0.02, pupilR - 0.02, r);
+    // Fills everything from the pupil out to the ring, with a hard limbus at its edge - an
+    // eye, rather than a thin annulus floating inside an unrelated circle.
+    const float iris = smoothstep(ringR - 0.02, ringR - 0.08, r) - pupil;
 
-    // The iris is not flat: strands running out from the pupil, turning slowly.
-    const float strands = 0.55 + 0.45 * vnoise(float2(a * 6.0 + time * 0.09, r * 9.0 - time * 0.15));
-    col += lerp(live * 0.55, hot, punch) * iris * strands;
-    alpha = max(alpha, iris * 0.95);
+    // Fibres running out from the pupil, turning slowly, brighter near the pupil so the
+    // iris has a direction to it instead of being an even fill.
+    const float fibre = 0.45 + 0.55 * vnoise(float2(a * 14.0 + time * 0.07, r * 5.0 - time * 0.10));
+    const float inward = smoothstep(ringR, pupilR, r);
+    const float3 irisCol = lerp(live * 0.55, float3(1.0, 0.96, 0.90), punch * 0.5)
+                         * fibre * (0.35 + inward * 0.90);
+    col = lerp(col, irisCol, saturate(iris));
+    alpha = max(alpha, iris * 0.92);
+
+    // The limbus: the dark edge every iris has where it meets the white.
+    col *= 1.0 - smoothstep(0.09, 0.0, abs(r - (ringR - 0.05))) * 0.45;
 
     col = lerp(col, float3(0.010, 0.012, 0.016), pupil);
     alpha = max(alpha, pupil);
@@ -109,12 +126,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // ── The bloom under it ───────────────────────────────────────────────────────────
     // A faint fill across the whole disc so the sigil sits in its own light rather than on
     // the background, and a rim that catches when it is struck.
-    const float fill = smoothstep(1.0, 0.15, r);
-    col += live * fill * (0.06 + punch * 0.22 + surge * 0.10);
-    alpha = max(alpha, fill * (0.16 + punch * 0.35));
+    const float fill = smoothstep(1.0, 0.55, r);
+    col += live * fill * (0.02 + punch * 0.12 + surge * 0.05);
+    alpha = max(alpha, fill * (0.10 + punch * 0.30));
 
     const float rim = smoothstep(0.02, 0.0, abs(r - 0.99));
-    col += hot * rim * (0.25 + punch * 0.7);
+    col = lerp(col, hot, saturate(rim * (0.35 + punch * 0.6)));
     alpha = max(alpha, rim * (0.4 + punch * 0.6));
 
     // Grain, so the large flat areas do not band.

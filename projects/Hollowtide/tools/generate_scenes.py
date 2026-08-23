@@ -409,6 +409,14 @@ def vigil():
         Scene.effect("ui_gloom", VOID, DREAD_DEEP, background=True, sort_order=-10),
     ])
 
+    # The parish, drawn analytically. Behind everything but the gloom, and covering the whole
+    # canvas: it IS the world now, so there is nothing in the scene left for it to hide.
+    s.add("ParishBackdrop", canvas, [
+        Scene.stretch((0, 0), (1, 1), (0, 0), (0, 0)),
+        Scene.effect("ui_parish", (0.027, 0.031, 0.043, 1.0), (0.698, 0.271, 0.227, 1.0),
+                     background=True, sort_order=-9),
+    ])
+
     # ── the bar ─────────────────────────────────────────────────────────────────────
     bar = s.add("HudBar", canvas, [
         Scene.stretch((0, 0), (1, 0), (0, 0), (-LEDGER_W, BAR_H)),

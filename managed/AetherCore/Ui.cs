@@ -99,6 +99,11 @@ public static class Ui
     /// pass an empty string to clear back to a solid colour fill.</summary>
     public static void SetImageTexture(Entity e, string path) => Native.aether_ui_set_image_texture(e.Id, path);
 
+    /// <summary>Sample this image's texture nearest-neighbour rather than linear. Pixel art
+    /// scaled up under a linear sampler blurs; this keeps the texels square.</summary>
+    public static void SetImagePixelArt(Entity e, bool enabled)
+        => Native.aether_ui_set_image_pixel_art(e.Id, enabled ? 1 : 0);
+
     // ── Interactivity (poll these to make a button) ───────────────────────────────
 
     /// <summary>The element's resolved rect as (x, y, width, height) in screen px

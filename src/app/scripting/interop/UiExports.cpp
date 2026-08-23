@@ -196,6 +196,17 @@ AE_SCRIPT_API void aether_ui_set_image_corner_radius(std::uint32_t id, float rad
 	}
 }
 
+// Nearest sampling. Small art blown up under the shared linear sampler turns to mush; the
+// draw builder already honours this flag, there was just no way to ask for it from a script.
+AE_SCRIPT_API void aether_ui_set_image_pixel_art(std::uint32_t id, std::int32_t enabled)
+{
+	auto* img = ActiveWorld().TryGet<aether::ui::UIImage>(aether::Entity{id});
+	if (img != nullptr)
+	{
+		img->pixelArt = enabled != 0;
+	}
+}
+
 // back to a solid colour fill. The image holds the registry ref for its lifetime.
 AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* path)
 {
