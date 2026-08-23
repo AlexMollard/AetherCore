@@ -35,18 +35,43 @@ namespace aether::ui
 		glm::vec2 pen{boxRect.x, boxRect.y};
 		int line = 0;
 		std::size_t lineStart = 0;
+		// Where the word being built started, so a wrap can carry the whole of it down
+		// instead of guillotining it at whichever glyph happened to cross the edge.
+		std::size_t wordStart = 0;
+		float wordStartPen = boxRect.x;
 
-		const auto endLine = [&](float penXAtEnd)
+		const auto endLineAt = [&](std::size_t endIndex, float penXAtEnd)
 		{
-			lines.push_back(LineRange{lineStart, out.size(), penXAtEnd - boxRect.x});
-			lineStart = out.size();
+			lines.push_back(LineRange{lineStart, endIndex, penXAtEnd - boxRect.x});
+			lineStart = endIndex;
 		};
 
 		const auto newLine = [&]()
 		{
-			endLine(pen.x);
+			endLineAt(out.size(), pen.x);
 			++line;
 			pen.x = boxRect.x;
+			wordStart = out.size();
+			wordStartPen = pen.x;
+		};
+
+		// Move the partially-typed word at the end of the current line down onto the next
+		// one. Text wraps between WORDS - breaking inside one is the difference between a
+		// paragraph and a ransom note - and the glyphs are already placed, so carrying them
+		// is a shift of both axes rather than a re-layout.
+		const auto carryWordToNextLine = [&]()
+		{
+			const float dx = boxRect.x - wordStartPen;
+			const float dy = font.lineHeight * scale;
+			endLineAt(wordStart, wordStartPen);
+			for (std::size_t i = wordStart; i < out.size(); ++i)
+			{
+				out[i].rect.x += dx;
+				out[i].rect.y += dy;
+			}
+			++line;
+			pen.x += dx;
+			wordStartPen = boxRect.x;
 		};
 
 		for (const char ch: text)
@@ -66,10 +91,21 @@ namespace aether::ui
 
 			const float advance = glyph->advance * scale;
 
-			// Wrap before placing a glyph that would overflow the box - but never
+			// Wrap before placing a glyph that would overflow the box - but never on the
+			// first glyph of a line, or a box narrower than one character would loop forever.
 			if (wrap && pen.x > boxRect.x && pen.x + advance > boxRect.x + boxRect.z)
 			{
-				newLine();
+				// Carry the word down whole when there is something before it on this line to
+				// keep. A single word wider than the whole box has nowhere to go, so that one
+				// still breaks where it overflows - which is the only case that should.
+				if (wordStart > lineStart)
+				{
+					carryWordToNextLine();
+				}
+				else
+				{
+					newLine();
+				}
 			}
 
 			const float baseline = boxRect.y + (font.ascent + static_cast<float>(line) * font.lineHeight) * scale;
@@ -95,8 +131,15 @@ namespace aether::ui
 			}
 
 			pen.x += advance;
+
+			// A space ends the word: everything after it is the next candidate to carry.
+			if (ch == ' ')
+			{
+				wordStart = out.size();
+				wordStartPen = pen.x;
+			}
 		}
-		endLine(pen.x);
+		endLineAt(out.size(), pen.x);
 
 		// Horizontal alignment: shift each line's glyphs by its own slack.
 		if (hAlign != 0)
