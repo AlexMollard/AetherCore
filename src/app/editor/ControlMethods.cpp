@@ -2,6 +2,8 @@
 #include "editor/ControlSchema.hpp"
 
 #include "imgui/UiAutomationMethods.hpp"
+#include "scene/Hierarchy.hpp"
+#include "ui/UiComponents.hpp"
 
 #include <algorithm>
 #include <array>
@@ -588,6 +590,89 @@ namespace aether::editor
 				        }
 			        }
 			        return json{{"entities", arr}};
+		        }});
+
+		methods.push_back({"ui.layout",
+		        "ui_layout",
+		        "Every UI element's RESOLVED rect after the last layout pass - what is actually on "
+		        "screen, not what was authored - with its text, font, size and alignment. For "
+		        "checking alignment, gutters and overlap numerically instead of reading pixels.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        if (scenes == nullptr)
+			        {
+				        return ErrNoScene();
+			        }
+			        World& world = scenes->GetWorld();
+
+			        json arr = json::array();
+			        for (auto enttEntity: world.View<ui::UIRect>())
+			        {
+				        const Entity entity = World::FromEntt(enttEntity);
+				        const ui::UIRect& rect = world.Get<ui::UIRect>(entity);
+
+				        json e{{"id", entity.id}};
+				        if (const auto* name = world.TryGet<NameComponent>(entity))
+				        {
+					        e["name"] = name->name;
+				        }
+				        if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity); hierarchy != nullptr && hierarchy->parent.IsValid())
+				        {
+					        e["parent"] = hierarchy->parent.id;
+				        }
+				        // The resolved rect, which is the whole point: anchors and offsets are
+				        // authored, but where an element LANDS is the product of every ancestor.
+				        e["rect"] = json::array({rect.resolvedRect.x, rect.resolvedRect.y, rect.resolvedRect.z, rect.resolvedRect.w});
+				        e["anchorMin"] = json::array({rect.anchorMin.x, rect.anchorMin.y});
+				        e["anchorMax"] = json::array({rect.anchorMax.x, rect.anchorMax.y});
+				        e["pivot"] = json::array({rect.pivot.x, rect.pivot.y});
+				        e["active"] = ecs::IsActiveInHierarchy(world, entity);
+
+				        json kinds = json::array();
+				        if (world.Has<ui::UICanvas>(entity)) { kinds.push_back("canvas"); }
+				        if (world.Has<ui::UIImage>(entity)) { kinds.push_back("image"); }
+				        if (world.Has<ui::UIMask>(entity)) { kinds.push_back("mask"); }
+				        if (world.Has<ui::UISelectable>(entity)) { kinds.push_back("selectable"); }
+				        if (world.Has<ui::UIEffect>(entity)) { kinds.push_back("effect"); }
+				        if (world.Has<ui::UIMaterial>(entity)) { kinds.push_back("material"); }
+				        if (world.Has<ui::UISlider>(entity)) { kinds.push_back("slider"); }
+				        if (world.Has<ui::UIToggle>(entity)) { kinds.push_back("toggle"); }
+				        if (world.Has<ui::UIProgressBar>(entity)) { kinds.push_back("progress"); }
+
+				        // Anything that draws glyphs reports what it will draw, so a caller can
+				        // measure the string against the box it has to fit in.
+				        if (const auto* text = world.TryGet<ui::UIText>(entity))
+				        {
+					        kinds.push_back("text");
+					        e["text"] = text->text;
+					        e["font"] = text->fontName;
+					        e["pixelSize"] = text->pixelSize;
+					        e["hAlign"] = static_cast<int>(text->hAlign);
+					        e["vAlign"] = static_cast<int>(text->vAlign);
+					        e["wrap"] = text->wrap;
+				        }
+				        if (const auto* button = world.TryGet<ui::UIButton>(entity))
+				        {
+					        kinds.push_back("button");
+					        e["text"] = button->label;
+					        e["font"] = button->fontName;
+					        e["pixelSize"] = button->pixelSize;
+					        e["hAlign"] = static_cast<int>(button->hAlign);
+				        }
+				        if (const auto* box = world.TryGet<ui::UITextBox>(entity))
+				        {
+					        kinds.push_back("textbox");
+					        e["text"] = box->text;
+					        e["font"] = box->fontName;
+					        e["pixelSize"] = box->pixelSize;
+				        }
+				        e["kinds"] = std::move(kinds);
+				        arr.push_back(std::move(e));
+			        }
+			        return json{{"elements", arr}, {"count", arr.size()}};
 		        }});
 
 		methods.push_back({"scene.get",
