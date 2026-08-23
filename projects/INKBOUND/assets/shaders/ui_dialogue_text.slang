@@ -24,17 +24,35 @@ struct ShapesPush
 };
 [[vk::push_constant]] ShapesPush pc;
 
-static const uint kShapeSdfGlyph = 4;
+
+#include "text_curves.slangh"
+
+static const uint kShapeGlyph = 4;
+
+// Coverage of THIS glyph at the fragment's own position, displaced by `offset` in glyph-local
+// space (1.0 = the glyph's whole box). This replaces sampling an SDF atlas: there is no atlas
+// any more, so the outline is evaluated directly and the old texel-sized offsets become
+// screen-pixel-sized ones, which is what these effects always meant anyway.
+float GlyphCov(VSOutput input, float2 offset)
+{
+    Texture2D curves = g_textures[NonUniformResourceIndex(input.textureSlot)];
+    uint w, h;
+    curves.GetDimensions(w, h);
+    const float2 local = float2(input.local.x * 0.5 + 0.5, 0.5 - input.local.y * 0.5) + offset;
+    const float2 px = 1.0 / max(input.localScale, float2(1e-4, 1e-4));
+    return GlyphCoverage(curves, w, local, px,
+        uint(input.glyphBands.x), uint(input.glyphBands.y), uint(input.glyphBands.z));
+}
+
+// One screen pixel, measured in this glyph's local space.
+float2 GlyphPixel(VSOutput input)
+{
+    return 1.0 / max(input.localScale, float2(1e-4, 1e-4));
+}
+
 
 float hash11(float x) { return frac(sin(x * 12.9898) * 43758.5453); }
 
-// Antialiased SDF glyph coverage at an atlas uv (single-channel R8 SDF).
-float SdfCov(uint slot, float2 uv)
-{
-    const float d = g_textures[slot].Sample(g_linearSampler, uv).r;
-    const float w = clamp(fwidth(d) * 0.7, 0.001, 0.5);
-    return smoothstep(0.5 - w, 0.5 + w, d);
-}
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
@@ -42,7 +60,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     UiClipDiscard(input);
 
     // Non-text shapes wearing this material: pass their colour through untouched.
-    if (input.type != kShapeSdfGlyph)
+    if (input.type != kShapeGlyph)
     {
         return input.color;
     }
@@ -51,9 +69,9 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const uint  fx   = (uint)(pc.params.y + 0.5);
     const float amp  = pc.params.z <= 0.0 ? 1.0 : pc.params.z;
 
-    uint texW, texH;
-    g_textures[input.textureSlot].GetDimensions(texW, texH);
-    const float2 texel = 1.0 / float2(max(texW, 1u), max(texH, 1u));
+    // One screen pixel in glyph space. The effects below were written against atlas texels;
+    // pixels are what they always meant, and an outline has no texels to measure in.
+    const float2 texel = GlyphPixel(input);
 
     // Per-glyph phase from screen position so motion differs glyph-to-glyph (blocky, not rigid).
     const float gphase = input.position.x * 0.15 + input.position.y * 0.07;
@@ -98,15 +116,21 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float birth = saturate(pc.params.w);
     const float wet   = 1.0 - birth;
 
-    const float2 sampUV = input.texUV + off;
-    const float  d = g_textures[input.textureSlot].Sample(g_linearSampler, sampUV).r;
-
-    // Irregular blob edge: perturb the iso threshold with position/time value-noise while wet.
+    // Irregular blob edge: the old path fattened the letter by lowering the SDF iso, which an
+    // outline has no equivalent of. Dilating the COVERAGE instead gives the same wet blob - take
+    // the widest of a few offset evaluations, jittered by the same value-noise - and collapses
+    // to a single evaluation the moment the glyph has dried.
     const float en  = hash11(floor(input.position.x * 0.7) + floor(input.position.y * 0.7) * 91.0
                              + floor(time * 12.0)) - 0.5;
-    const float iso = 0.5 - wet * 0.16 - wet * 0.08 * en; // fatter + rougher when wet
-    const float aa  = clamp(fwidth(d) * 0.7, 0.001, 0.5) + wet * 0.09; // gooier edge when wet
-    const float cov = smoothstep(iso - aa, iso + aa, d);
+    float cov = GlyphCov(input, off);
+    if (wet > 0.001)
+    {
+        const float2 grow = texel * (1.5 + 0.9 * en) * wet;
+        cov = max(cov, GlyphCov(input, off + float2(grow.x, 0.0)));
+        cov = max(cov, GlyphCov(input, off - float2(grow.x, 0.0)));
+        cov = max(cov, GlyphCov(input, off + float2(0.0, grow.y)));
+        cov = max(cov, GlyphCov(input, off - float2(0.0, grow.y)));
+    }
     if (cov <= 0.003)
     {
         discard;
@@ -124,7 +148,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     if (fx == 5) // glitch: add an accent fringe on the split
     {
         const float split = texel.x * 1.6;
-        const float cr = SdfCov(input.textureSlot, input.texUV + off + float2(split, 0.0));
+        const float cr = GlyphCov(input, off + float2(split, 0.0));
         rgb += pc.color1.rgb * max(cr - cov, 0.0) * 1.1;
     }
 

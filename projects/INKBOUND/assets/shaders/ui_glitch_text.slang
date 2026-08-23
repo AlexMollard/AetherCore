@@ -27,19 +27,35 @@ struct ShapesPush
 
 [[vk::push_constant]] ShapesPush pc;
 
-static const uint kShapeSdfGlyph = 4;
+
+#include "text_curves.slangh"
+
+static const uint kShapeGlyph = 4;
+
+// Coverage of THIS glyph at the fragment's own position, displaced by `offset` in glyph-local
+// space (1.0 = the glyph's whole box). This replaces sampling an SDF atlas: there is no atlas
+// any more, so the outline is evaluated directly and the old texel-sized offsets become
+// screen-pixel-sized ones, which is what these effects always meant anyway.
+float GlyphCov(VSOutput input, float2 offset)
+{
+    Texture2D curves = g_textures[NonUniformResourceIndex(input.textureSlot)];
+    uint w, h;
+    curves.GetDimensions(w, h);
+    const float2 local = float2(input.local.x * 0.5 + 0.5, 0.5 - input.local.y * 0.5) + offset;
+    const float2 px = 1.0 / max(input.localScale, float2(1e-4, 1e-4));
+    return GlyphCoverage(curves, w, local, px,
+        uint(input.glyphBands.x), uint(input.glyphBands.y), uint(input.glyphBands.z));
+}
+
+// One screen pixel, measured in this glyph's local space.
+float2 GlyphPixel(VSOutput input)
+{
+    return 1.0 / max(input.localScale, float2(1e-4, 1e-4));
+}
 
 float hash11(float x)
 {
     return frac(sin(x * 12.9898) * 43758.5453);
-}
-
-// Antialiased SDF glyph coverage at an atlas uv (single-channel R8 SDF).
-float SdfCov(uint slot, float2 uv)
-{
-    const float d = g_textures[slot].Sample(g_linearSampler, uv).r;
-    const float w = clamp(fwidth(d) * 0.7, 0.001, 0.5);
-    return smoothstep(0.5 - w, 0.5 + w, d);
 }
 
 [shader("fragment")]
@@ -48,33 +64,31 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     UiClipDiscard(input);
 
     // Non-text shapes wearing this material: just pass their colour through untouched.
-    if (input.type != kShapeSdfGlyph)
+    if (input.type != kShapeGlyph)
     {
         return input.color;
     }
 
     const float time = pc.params.x;
 
-    uint texW, texH;
-    g_textures[input.textureSlot].GetDimensions(texW, texH);
-    const float2 texel = 1.0 / float2(max(texW, 1u), max(texH, 1u));
-    const float row = input.position.y; // screen pixel row for scanlines / bands
+    const float2 texel = GlyphPixel(input); // one screen pixel, in glyph space
+    const float row = input.position.y;     // screen pixel row for scanlines / bands
 
     // A time-driven envelope that mostly sits low and occasionally spikes -> glitch bursts.
     const float burst = pow(saturate(sin(time * 3.0) * 0.5 + 0.5), 8.0)
                       + pow(saturate(sin(time * 11.0 + 1.7) * 0.5 + 0.5), 12.0);
 
-    // Per-row jitter; a few rows jump hard, more often during a burst. Kept within the glyph's SDF
-    // padding so the offset sampling never bleeds neighbouring atlas glyphs.
+    // Per-row jitter; a few rows jump hard, more often during a burst. Offsets are free to be
+    // any size now - an outline has no neighbour in an atlas to bleed into.
     const float rny = hash11(floor(row * 0.5) + floor(time * 18.0));
     const float jump = (rny > 0.93 ? 1.0 : 0.0) * (0.35 + burst);
     const float shift = (rny - 0.5) * texel.x * (1.5 + 9.0 * jump);
 
     // Chromatic split - sample coverage slightly left/right for R and B fringing.
     const float split = texel.x * (1.1 + 6.0 * burst);
-    const float covR = SdfCov(input.textureSlot, input.texUV + float2(shift + split, 0.0));
-    const float covG = SdfCov(input.textureSlot, input.texUV + float2(shift, 0.0));
-    const float covB = SdfCov(input.textureSlot, input.texUV + float2(shift - split, 0.0));
+    const float covR = GlyphCov(input, float2(shift + split, 0.0));
+    const float covG = GlyphCov(input, float2(shift, 0.0));
+    const float covB = GlyphCov(input, float2(shift - split, 0.0));
     const float cov = max(covG, max(covR, covB));
     if (cov <= 0.003)
     {
