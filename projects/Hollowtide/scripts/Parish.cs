@@ -41,6 +41,27 @@ public sealed class Parish
 	private readonly Pop[] _pops = new Pop[kPopPool];
 	private int _nextPop;
 
+	/// <summary>One delivery in flight: a wisp carrying a rite's yield to the keeper.</summary>
+	private struct Bearer
+	{
+		public Entity Body;
+		public Vector3 From;
+		public double Amount;
+		public Vector4 Colour;
+		public float Age;
+		public float Life;
+		public float Arc;
+		public bool Live;
+	}
+
+	private const int kBearerPool = 40;
+	private readonly Bearer[] _bearers = new Bearer[kBearerPool];
+	private int _nextBearer;
+
+	/// <summary>Where deliveries are carried to: under the sigil, which is where the keeper
+	/// is. Set from the nave so the destination follows the interface rather than a guess.</summary>
+	private Vector3 _collection = new Vector3(-3.4f, -0.3f, 0.0f);
+
 	private Entity _motes;
 	private Entity _camera;
 	private Vector3 _cameraHome;
@@ -48,6 +69,14 @@ public sealed class Parish
 
 	private float _shake;
 	private float _time;
+
+	/// <summary>Per-rite flare, decaying. Raised when a rite delivers, so the lantern that
+	/// just paid out is the one that brightens - the player can see WHICH thing earned.</summary>
+	private readonly float[] _flare = new float[Content.RiteCount];
+	/// <summary>Whether a rite's sprite has taken its art yet. Applied on a LATER frame than
+	/// the one that adds the component: written in the same frame, the texture does not
+	/// stick, and a sprite silently reverts to an untextured quad.</summary>
+	private readonly bool[] _dressed = new bool[Content.RiteCount];
 
 	public void Build(Entity canvas, Entity ambientOwner)
 	{
@@ -81,6 +110,17 @@ public sealed class Parish
 		emitter.SetVector4("end_color", Palette.Fade(Palette.IchorDim, 0.0f));
 		emitter.SetInt("sorting_layer", 2);
 
+		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
+		// busy parish, and creating an entity per payout would churn the scene constantly.
+		for (int i = 0; i < kBearerPool; i++)
+		{
+			Entity body = Scene.Create("Bearer" + i, new Vector3(-999.0f, -999.0f, 0.0f));
+			ComponentAccess sprite = body.Component("Sprite Renderer");
+			sprite.Add();
+			sprite.SetInt("sorting_layer", 2);
+			_bearers[i] = new Bearer { Body = body, Live = false, Colour = Palette.Ichor };
+		}
+
 		for (int i = 0; i < kPopPool; i++)
 		{
 			// No outline. A WorldLabel's outline is four extra dark copies of the string, and
@@ -105,12 +145,101 @@ public sealed class Parish
 		return new Vector3(x, y, 0.0f);
 	}
 
+	/// <summary>A rite finished a working. Flare its lantern and throw the yield toward the
+	/// keeper, so the payout is something that happens in a place rather than a number that
+	/// changes in the corner.</summary>
+	public void Delivered(int rite, double amount)
+	{
+		if (rite < 0 || rite >= Content.RiteCount)
+		{
+			return;
+		}
+		_flare[rite] = 1.0f;
+		Vector3 at = LanternAt(rite);
+		if (_motes.IsValid)
+		{
+			_motes.Position = at;
+			Particles.Burst(_motes, 6);
+		}
+
+		// Send the yield across as a thing that travels. The number is deliberately NOT shown
+		// here: it appears where the ichor lands, so the payout reads as something carried to
+		// the keeper rather than a figure that materialises over a prop.
+		Bearer bearer = _bearers[_nextBearer];
+		bearer.From = at;
+		bearer.Amount = amount;
+		bearer.Colour = Content.Rites[rite].Colour;
+		bearer.Age = 0.0f;
+		bearer.Life = 1.1f + AetherCore.Random.Range(0.0f, 0.5f);
+		bearer.Arc = AetherCore.Random.Range(0.8f, 2.2f);
+		bearer.Live = true;
+		if (bearer.Body.IsValid)
+		{
+			ComponentAccess sprite = bearer.Body.Component("Sprite Renderer");
+			sprite.SetString("texture", "project://assets/textures/rites/bearer.png");
+			sprite.SetBool("pixel_art", true);
+			sprite.SetVector2("pixel_size", new Vector2(16.0f, 16.0f));
+			sprite.SetFloat("pixels_per_unit", 44.0f);
+			sprite.SetVector4("tint", bearer.Colour);
+		}
+		_bearers[_nextBearer] = bearer;
+		_nextBearer = (_nextBearer + 1) % kBearerPool;
+	}
+
+	/// <summary>Carry every live bearer toward the keeper, and pay out when it arrives.</summary>
+	private void UpdateBearers(float unscaledDelta)
+	{
+		for (int i = 0; i < kBearerPool; i++)
+		{
+			Bearer b = _bearers[i];
+			if (!b.Live)
+			{
+				continue;
+			}
+			b.Age += unscaledDelta;
+			float t = Math.Clamp(b.Age / b.Life, 0.0f, 1.0f);
+
+			// Eased along the path and lofted over it, so it reads as carried rather than
+			// slid. The arc differs per bearer, which is what stops a busy parish from
+			// looking like a conveyor belt.
+			float ease = t * t * (3.0f - 2.0f * t);
+			Vector3 pos = Vector3.Lerp(b.From, _collection, ease);
+            pos.Y += MathF.Sin(t * MathF.PI) * b.Arc;
+			b.Body.Position = pos;
+
+			// Fades in and out at the ends so it does not pop into existence.
+			float alpha = MathF.Min(1.0f, MathF.Min(t * 6.0f, (1.0f - t) * 4.0f));
+			b.Body.Component("Sprite Renderer").SetVector4("tint", Palette.Fade(b.Colour, alpha));
+
+			if (t >= 1.0f)
+			{
+				b.Live = false;
+				b.Body.Position = new Vector3(-999.0f, -999.0f, 0.0f);
+				// The payout lands HERE, where the keeper is, which is the whole point of
+				// having carried it.
+				ShowPop(_collection + new Vector3(AetherCore.Random.Range(-0.4f, 0.4f), 0.3f, 0.0f),
+					"+" + Numbers.Short(b.Amount), b.Colour);
+				if (_motes.IsValid)
+				{
+					_motes.Position = _collection;
+					Particles.Burst(_motes, 5);
+				}
+			}
+			_bearers[i] = b;
+		}
+	}
+
 	public void Update(float deltaTime, float unscaledDelta)
 	{
 		_time += unscaledDelta;
+		for (int i = 0; i < _flare.Length; i++)
+		{
+			_flare[i] = MathF.Max(0.0f, _flare[i] - unscaledDelta * 2.2f);
+		}
 		float dread = (float)Vigil.Dread;
 
 		SyncLanterns(dread);
+		UpdateBearers(unscaledDelta);
 		UpdatePops(unscaledDelta);
 		UpdateAmbient(dread);
 		UpdateCamera(unscaledDelta, dread);
@@ -161,7 +290,19 @@ public sealed class Parish
 			// between 1 and 10 should be visible, and the difference between 1000 and 10000
 			// should not fill the screen.
 			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
-			_lanterns[rite].Scale = new Vector3(bulk, bulk, 1.0f);
+
+			// Each rite has its own drawn silhouette rather than a tinted square. The art is
+			// greyscale, so the tint still carries both the rite's colour and its souring
+			// toward rust as dread rises - one sprite, both readings.
+			if (!_dressed[rite])
+			{
+				ComponentAccess art = _lanterns[rite].Component("Sprite Renderer");
+				art.SetString("texture", Content.Rites[rite].Art);
+				art.SetBool("pixel_art", true);
+				art.SetVector2("pixel_size", new Vector2(64.0f, 64.0f));
+				art.SetFloat("pixels_per_unit", 42.0f);
+				_dressed[rite] = art.GetString("texture").Length > 0;
+			}
 
 			Vector4 colour = Content.Rites[rite].Colour;
 			Vector4 lit = Palette.Mix(colour, Palette.Dread, dread * 0.7f);
@@ -171,9 +312,18 @@ public sealed class Parish
 			// a synchronised flicker reads as a rendering bug rather than as candlelight.
 			float flicker = 0.86f + MathF.Sin(_time * (3.1f + rite * 0.7f) + rite) * 0.09f
 				+ MathF.Sin(_time * (11.0f + rite)) * 0.05f * (0.3f + dread);
-			float reach = 2.1f + bulk * 2.6f;
+			// The flare rides on top of the idle flicker: a rite that just delivered is
+			// visibly the one that paid, and it fades rather than snapping back.
+			float flare = _flare[rite] * _flare[rite];
+			float reach = (2.1f + bulk * 2.6f) * (1.0f + flare * 0.55f);
 			Lighting2D.SubmitLight(new Vector2(at.X, at.Y), reach,
-				new Vector3(lit.X, lit.Y, lit.Z), (1.9f + bulk) * flicker, castsShadow: false);
+				new Vector3(lit.X, lit.Y, lit.Z), (1.9f + bulk) * flicker * (1.0f + flare * 1.6f), castsShadow: false);
+
+			// It swells as it works and settles as it hands over - the lantern breathes with
+			// its own cadence instead of every lantern pulsing in unison.
+			float working = (float)Vigil.CycleProgress[rite];
+			_lanterns[rite].Scale = new Vector3(bulk * (1.0f + working * 0.06f + flare * 0.18f),
+				bulk * (1.0f + working * 0.06f + flare * 0.18f), 1.0f);
 
 			_labels[rite]?.SetColor(Palette.Fade(lit, 0.75f));
 			_labels[rite]?.Track(at + new Vector3(0.0f, bulk + 0.45f, 0.0f),
@@ -181,22 +331,28 @@ public sealed class Parish
 		}
 	}
 
-	/// <summary>A gather: motes off the emitter and a number that floats away.</summary>
-	public void Gathered(double amount)
+	/// <summary>A gather: motes and a number, both thrown from wherever the keeper actually
+	/// struck rather than from a spot the emitter happens to sit at. Feedback that appears
+	/// somewhere other than the thing you clicked reads as unrelated to it.</summary>
+	public void Gathered(double amount, Vector3 at)
 	{
 		if (_motes.IsValid)
 		{
+			// The emitter is moved to the strike, not the strike to the emitter.
+			_motes.Position = at;
 			Particles.Burst(_motes, 14);
 		}
-		ShowPop(new Vector3(-3.4f + AetherCore.Random.Range(-0.8f, 0.8f), -0.3f, 0.0f), "+" + Numbers.Short(amount), Palette.Ichor);
+		ShowPop(at + new Vector3(AetherCore.Random.Range(-0.25f, 0.25f), 0.1f, 0.0f),
+			"+" + Numbers.Short(amount), Palette.Ichor);
 	}
 
 	/// <summary>A visitation: shake the parish, and throw the motes the wrong colour.</summary>
-	public void Visitation()
+	public void Visitation(Vector3 at)
 	{
 		_shake = 1.0f;
 		if (_motes.IsValid)
 		{
+			_motes.Position = at;
 			ComponentAccess emitter = _motes.Component("Particle Emitter");
 			emitter.SetVector4("start_color", Palette.Dread);
 			emitter.SetFloat("speed_max", 7.0f);
@@ -206,7 +362,7 @@ public sealed class Parish
 			emitter.SetVector4("start_color", Palette.Ichor);
 			emitter.SetFloat("speed_max", 3.6f);
 		}
-		ShowPop(new Vector3(-3.4f, 0.6f, 0.0f), "TAKEN", Palette.Dread);
+		ShowPop(at + new Vector3(0.0f, 0.7f, 0.0f), "TAKEN", Palette.Dread);
 	}
 
 	private void ShowPop(Vector3 at, string text, Vector4 colour)
@@ -226,6 +382,17 @@ public sealed class Parish
 	/// while the game is frozen behind a menu.</summary>
 	private void UpdatePops(float unscaledDelta)
 	{
+		// The bearers. Pooled and parked off-screen: a delivery is a frequent event in a
+		// busy parish, and creating an entity per payout would churn the scene constantly.
+		for (int i = 0; i < kBearerPool; i++)
+		{
+			Entity body = Scene.Create("Bearer" + i, new Vector3(-999.0f, -999.0f, 0.0f));
+			ComponentAccess sprite = body.Component("Sprite Renderer");
+			sprite.Add();
+			sprite.SetInt("sorting_layer", 2);
+			_bearers[i] = new Bearer { Body = body, Live = false, Colour = Palette.Ichor };
+		}
+
 		for (int i = 0; i < kPopPool; i++)
 		{
 			Pop pop = _pops[i];

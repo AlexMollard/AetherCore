@@ -19,10 +19,19 @@ public sealed class RiteDef
 	/// <summary>Dread added per second, per owned copy. The whole tension of the game: the
 	/// deeper rites pay far better and pull the dark in far faster.</summary>
 	public double DreadRate;
+	/// <summary>Seconds one working of this rite takes. A rite does not trickle - it WORKS,
+	/// and then it delivers, so buying one buys a thing you can watch do something. Deeper
+	/// rites are slower and pay far more per working, which is what makes the parish read as
+	/// a set of machines running at different speeds rather than one number going up.</summary>
+	public double CycleSeconds;
 	/// <summary>Tint for this rite in the world and in the ledger.</summary>
 	public Vector4 Colour;
 	/// <summary>What the parish says when one of these is taken from you.</summary>
 	public string TakenLine = "";
+	/// <summary>The sprite that stands for this rite in the parish. Drawn in greyscale and
+	/// tinted by <see cref="Colour"/> at runtime, so one sprite serves both the lit and the
+	/// dread-soured version of the same thing.</summary>
+	public string Art = "";
 }
 
 /// <summary>A one-off purchase that multiplies something. <see cref="Target"/> is a rite
@@ -65,7 +74,7 @@ public static class Content
 	{
 		new RiteDef
 		{
-			Name = "Grave Lantern",
+			Name = "Grave Lantern", Art = "project://assets/textures/rites/grave_lantern.png", CycleSeconds = 2.5,
 			Blurb = "It burns low, and something moves at the edge of it.",
 			BaseCost = 15.0, BaseRate = 0.1, Growth = 1.13, DreadRate = 0.0010,
 			Colour = new Vector4(0.85f, 0.74f, 0.42f, 1.0f),
@@ -73,7 +82,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Bone Choir",
+			Name = "Bone Choir", Art = "project://assets/textures/rites/bone_choir.png", CycleSeconds = 3.5,
 			Blurb = "Twelve throats, no air, and they keep perfect time.",
 			BaseCost = 110.0, BaseRate = 0.9, Growth = 1.14, DreadRate = 0.0022,
 			Colour = new Vector4(0.80f, 0.83f, 0.86f, 1.0f),
@@ -81,7 +90,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Weeping Statue",
+			Name = "Weeping Statue", Art = "project://assets/textures/rites/weeping_statue.png", CycleSeconds = 5.0,
 			Blurb = "You have never seen it move. It is never where it was.",
 			BaseCost = 1300.0, BaseRate = 7.0, Growth = 1.15, DreadRate = 0.0044,
 			Colour = new Vector4(0.55f, 0.68f, 0.72f, 1.0f),
@@ -89,7 +98,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Flesh Loom",
+			Name = "Flesh Loom", Art = "project://assets/textures/rites/flesh_loom.png", CycleSeconds = 7.0,
 			Blurb = "It asks for very little and it never stops asking.",
 			BaseCost = 15000.0, BaseRate = 44.0, Growth = 1.15, DreadRate = 0.0080,
 			Colour = new Vector4(0.72f, 0.34f, 0.36f, 1.0f),
@@ -97,7 +106,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Ossuary Engine",
+			Name = "Ossuary Engine", Art = "project://assets/textures/rites/ossuary_engine.png", CycleSeconds = 9.0,
 			Blurb = "Built from the parish it drains. It is very efficient.",
 			BaseCost = 190000.0, BaseRate = 260.0, Growth = 1.16, DreadRate = 0.0140,
 			Colour = new Vector4(0.62f, 0.60f, 0.50f, 1.0f),
@@ -105,7 +114,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Drowned Chapel",
+			Name = "Drowned Chapel", Art = "project://assets/textures/rites/drowned_chapel.png", CycleSeconds = 12.0,
 			Blurb = "The tide keeps the congregation. The congregation keeps singing.",
 			BaseCost = 2600000.0, BaseRate = 1500.0, Growth = 1.16, DreadRate = 0.0240,
 			Colour = new Vector4(0.34f, 0.56f, 0.62f, 1.0f),
@@ -113,7 +122,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Pale Shepherd",
+			Name = "Pale Shepherd", Art = "project://assets/textures/rites/pale_shepherd.png", CycleSeconds = 16.0,
 			Blurb = "It gathers what wanders. You have agreed not to wander.",
 			BaseCost = 42000000.0, BaseRate = 8800.0, Growth = 1.17, DreadRate = 0.0420,
 			Colour = new Vector4(0.78f, 0.78f, 0.90f, 1.0f),
@@ -121,7 +130,7 @@ public static class Content
 		},
 		new RiteDef
 		{
-			Name = "Hollow Mouth",
+			Name = "Hollow Mouth", Art = "project://assets/textures/rites/hollow_mouth.png", CycleSeconds = 22.0,
 			Blurb = "It is not a door. Doors are for going back through.",
 			BaseCost = 720000000.0, BaseRate = 51000.0, Growth = 1.18, DreadRate = 0.0700,
 			Colour = new Vector4(0.55f, 0.28f, 0.66f, 1.0f),

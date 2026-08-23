@@ -18,7 +18,7 @@ public sealed class Hud
 {
 	/// <summary>Width the ledger reserves on the right. Everything here stops short of it.</summary>
 	public const float LedgerWidth = 620.0f;
-	public const float BarHeight = 96.0f;
+	public const float BarHeight = 104.0f;
 
 	private const float kSigilSize = 268.0f;
 
@@ -37,6 +37,7 @@ public sealed class Hud
 	private Entity _sigil;
 	private Entity _sigilHint;
 	private Entity _handValue;
+	private Button _stoke;
 	private Button _ward;
 	private Button _bell;
 
@@ -53,6 +54,12 @@ public sealed class Hud
 
 	public bool WardPressed { get; private set; }
 	public bool BellPressed { get; private set; }
+	public bool StokePressed { get; private set; }
+
+	/// <summary>Where the last gather landed, in SCREEN pixels: the pointer when the sigil was
+	/// clicked, and the sigil itself when it was the space bar. Feedback is thrown from here,
+	/// so it appears where the keeper actually struck.</summary>
+	public Vector2 StrikePoint { get; private set; }
 
 	/// <summary>Bind the authored chrome. Every element here lives in the scene, so this only
 	/// looks things up - laying the bar out is a job for the editor, not for a rebuild.</summary>
@@ -72,6 +79,7 @@ public sealed class Hud
 		_sigil = Scene.Find("NaveSigil");
 		_sigilHint = Scene.Find("NaveHint");
 		_handValue = Scene.Find("NaveHandValue");
+		_stoke = Button.Find("NaveStoke");
 		_ward = Button.Find("NaveWard");
 		_bell = Button.Find("NaveBell");
 	}
@@ -82,6 +90,7 @@ public sealed class Hud
 		GatheredThisFrame = false;
 		WardPressed = false;
 		BellPressed = false;
+		StokePressed = false;
 
 		// ── Input ────────────────────────────────────────────────────────────────────
 		// WasActivated covers the click, Enter/Space-while-focused and the pad button, and
@@ -89,15 +98,27 @@ public sealed class Hud
 		if (_sigil.IsValid && Ui.WasActivated(_sigil))
 		{
 			GatheredThisFrame = true;
+			// The pointer if it is over the sigil, the sigil's middle if the activation came
+			// from a key or a pad - either way, a place the player was looking at.
+			Vector4 rect = Ui.GetRect(_sigil);
+			StrikePoint = Ui.IsHovered(_sigil)
+				? Input.MousePosition
+				: new Vector2(rect.X + rect.Z * 0.5f, rect.Y + rect.W * 0.5f);
 		}
 		else if (Input.IsKeyPressed(Key.Space) && !Ui.HasFocus)
 		{
+			Vector4 rect = Ui.GetRect(_sigil);
+			StrikePoint = new Vector2(rect.X + rect.Z * 0.5f, rect.Y + rect.W * 0.5f);
 			// Space works with nothing focused, which is the state the game spends most of its
 			// time in. Gated on HasFocus so it cannot double-fire with the line above, and so a
 			// keeper typing a name into the threshold screen is not also gathering.
 			GatheredThisFrame = true;
 		}
 
+		if (_stoke.Activated)
+		{
+			StokePressed = true;
+		}
 		if (_ward.Activated)
 		{
 			WardPressed = true;
@@ -154,6 +175,11 @@ public sealed class Hud
 		Ui.SetText(_sigilCount, Vigil.Sigils + " sigils   " + Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks");
 
 		// ── Buttons ──────────────────────────────────────────────────────────────────
+		bool canStoke = Vigil.Dread < 0.999;
+		_stoke.SetLabel(canStoke ? "STOKE THE DARK" : "IT IS AS CLOSE AS IT GETS");
+		_stoke.SetEnabled(canStoke);
+		_stoke.Style(canStoke, Palette.Mix(Palette.Row, Palette.Dread, 0.55f), Palette.Row, Palette.PanelDeep);
+
 		bool canWard = Vigil.Ichor >= Vigil.WardCost && Vigil.Dread > 0.0;
 		_ward.SetLabel("RAISE WARD  " + Numbers.Short(Vigil.WardCost));
 		_ward.SetEnabled(canWard);

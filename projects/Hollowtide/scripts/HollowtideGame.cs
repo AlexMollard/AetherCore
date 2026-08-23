@@ -48,6 +48,9 @@ public sealed class HollowtideGame : EntityScript
 	/// touches the global time scale.</summary>
 	private float _heldBreath;
 	private float _lastUnscaled;
+	/// <summary>Where the last gather landed in world space, so a visitation erupts from the
+	/// place the keeper was working rather than from a fixed spot.</summary>
+	private Vector3 _lastStrike;
 
 	public override void OnAttach()
 	{
@@ -70,6 +73,7 @@ public sealed class HollowtideGame : EntityScript
 		// += here would stack a second copy of the feed onto every rebuild.
 		Vigil.Announce = (line, omen) => _whispers.Say(line, omen);
 		Vigil.OnVisitation = OnVisitation;
+		Vigil.OnYield = (rite, amount) => _parish.Delivered(rite, amount);
 
 		if (!SaveSystem.EnsureLoaded())
 		{
@@ -87,6 +91,7 @@ public sealed class HollowtideGame : EntityScript
 		SaveSystem.Save();
 		Vigil.Announce = null;
 		Vigil.OnVisitation = null;
+		Vigil.OnYield = null;
 		Time.Resume();
 	}
 
@@ -120,7 +125,12 @@ public sealed class HollowtideGame : EntityScript
 			{
 				double before = Vigil.Ichor;
 				Vigil.Gather();
-				_parish.Gathered(Vigil.Ichor - before);
+				_lastStrike = Camera.ScreenToWorld(_hud.StrikePoint);
+				_parish.Gathered(Vigil.Ichor - before, _lastStrike);
+			}
+			if (_hud.StokePressed)
+			{
+				Vigil.Stoke();
 			}
 			if (_hud.WardPressed)
 			{
@@ -166,7 +176,7 @@ public sealed class HollowtideGame : EntityScript
 
 	private void OnVisitation()
 	{
-		_parish.Visitation();
+		_parish.Visitation(_lastStrike);
 		_flashAmount = 1.0f;
 		_heldBreath = 0.85f;
 	}

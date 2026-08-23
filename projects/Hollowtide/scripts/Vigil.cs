@@ -87,6 +87,14 @@ public static class Vigil
 	/// should show. Panels rebuild on a change rather than every frame.</summary>
 	public static int Revision;
 
+	/// <summary>How far through its current working each rite is, 0 to 1. Read by the ledger
+	/// and by the parish, so the player can watch the thing they bought doing its job.</summary>
+	public static readonly double[] CycleProgress = new double[Content.RiteCount];
+
+	/// <summary>A rite completed a working and delivered this much. The presentation layer
+	/// turns it into a flare and a mote travelling to the purse; nothing here knows that.</summary>
+	public static Action<int, double>? OnYield;
+
 	// ── Derived values ───────────────────────────────────────────────────────────────
 
 	/// <summary>What one more copy of a rite costs.</summary>
@@ -187,8 +195,19 @@ public static class Vigil
 		}
 	}
 
-	/// <summary>Dread per second at the current holdings. Wards do not reduce this - they cut
-	/// the level, not the climb, so a deep parish is permanently harder to keep.</summary>
+	/// <summary>How fast dread falls on its own, per second.</summary>
+	/// <remarks>
+	/// An idle game must not punish idling. Dread that only ever climbs turns "leave it
+	/// running" - the thing the whole genre is built on - into the losing move, and makes a
+	/// button you have to come back and press the price of playing at all. With decay, a
+	/// parish left alone settles at whatever level its holdings sustain and stays there. A
+	/// visitation becomes something you walk INTO by reaching for the multiplier, never
+	/// something that happens because you looked away.
+	/// </remarks>
+	public const double DreadDecay = 0.011;
+
+	/// <summary>Dread per second from holdings alone, before decay. Wards do not reduce this -
+	/// they cut the level, not the climb.</summary>
 	public static double DreadRate
 	{
 		get
@@ -342,6 +361,25 @@ public static class Vigil
 		return true;
 	}
 
+	/// <summary>
+	/// Reach for the dark deliberately: a step up the meter, for the multiplier it pays.
+	/// </summary>
+	/// <remarks>
+	/// This is what makes dread a CHOICE rather than a timer. Decay means the meter drifts
+	/// down on its own, so the only way to sit high enough to be worth it - and close enough
+	/// to be dangerous - is to keep putting yourself there.
+	/// </remarks>
+	public static bool Stoke()
+	{
+		if (Dread >= 0.999)
+		{
+			return false;
+		}
+		Dread = Math.Min(1.0, Dread + 0.15);
+		Say("You lean closer. It notices.", Omen.Dread);
+		return true;
+	}
+
 	/// <summary>An overseer buys one rite for you forever, paid for in sigils.</summary>
 	public static int OverseerCost(int rite) => 3 * (rite + 1);
 
@@ -462,13 +500,23 @@ public static class Vigil
 		}
 
 		double efficiency = offline ? 0.5 : 1.0;
-		double gained = Rate * deltaSeconds * efficiency;
-		Ichor += gained;
-		RunIchor += gained;
-		LifetimeIchor += gained;
+		if (offline)
+		{
+			// Catching up on hours does not need eight cycle timers stepped thousands of
+			// times; the continuous rate is the same total by construction.
+			double gained = Rate * deltaSeconds * efficiency;
+			Ichor += gained;
+			RunIchor += gained;
+			LifetimeIchor += gained;
+		}
+		else
+		{
+			RunCycles(deltaSeconds);
+		}
 		PlayedSeconds += deltaSeconds;
 
-		Dread = Math.Clamp(Dread + DreadRate * deltaSeconds * efficiency, 0.0, 1.0);
+		// Net of decay, so a parish tends toward an equilibrium rather than a cliff.
+		Dread = Math.Clamp(Dread + (DreadRate - DreadDecay) * deltaSeconds * efficiency, 0.0, 1.0);
 		if (Dread >= 0.75)
 		{
 			HighDreadSeconds += deltaSeconds;
@@ -486,6 +534,41 @@ public static class Vigil
 		}
 
 		CheckMarks();
+	}
+
+	/// <summary>
+	/// Advance every rite's working and pay out the ones that finish.
+	/// </summary>
+	/// <remarks>
+	/// The economics are identical to a per-second trickle - a working pays exactly what the
+	/// rite would have earned over its cadence - but it arrives as an EVENT. That is the
+	/// whole difference between owning a number and owning a thing: you bought a loom, and
+	/// now you can watch the loom finish a bolt and hand it over.
+	/// </remarks>
+	private static void RunCycles(double deltaSeconds)
+	{
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			if (Owned[rite] <= 0)
+			{
+				CycleProgress[rite] = 0.0;
+				continue;
+			}
+
+			double cycle = Math.Max(0.05, Content.Rites[rite].CycleSeconds);
+			CycleProgress[rite] += deltaSeconds / cycle;
+			// A long frame, or a surge, can finish more than one working; pay for each so a
+			// stutter never eats production.
+			while (CycleProgress[rite] >= 1.0)
+			{
+				CycleProgress[rite] -= 1.0;
+				double yield = Owned[rite] * Content.Rites[rite].BaseRate * RiteMultiplier(rite) * cycle;
+				Ichor += yield;
+				RunIchor += yield;
+				LifetimeIchor += yield;
+				OnYield?.Invoke(rite, yield);
+			}
+		}
 	}
 
 	/// <summary>Overseers buy one copy at a time and only out of surplus, so automation never
@@ -509,26 +592,29 @@ public static class Vigil
 		}
 	}
 
-	/// <summary>The meter filled. Something takes a share of the deepest thing you own and
-	/// leaves the dread most of the way down, so a visitation resets the bargain rather than
-	/// ending the run.</summary>
+	/// <summary>
+	/// The meter filled. Something takes a share of the ichor you have not spent yet, and
+	/// leaves the dread most of the way down.
+	/// </summary>
+	/// <remarks>
+	/// It takes the PURSE, never the parish. Losing rites is unrecoverable progress loss for
+	/// a player who stepped away from a game designed to be stepped away from; losing unspent
+	/// ichor is a setback the next few minutes of idling repair. The tension survives - you
+	/// still lose something you wanted - and the punishment now lands on the player who
+	/// pushed their luck rather than the one who went to make a coffee.
+	/// </remarks>
 	private static void Visitation()
 	{
-		int rite = DeepestRite();
 		Dread = 0.35;
 		TimesTaken++;
 		Revision++;
 
-		if (rite < 0)
-		{
-			Say("Something walks the empty parish and finds nothing to take.", Omen.Dread);
-			OnVisitation?.Invoke();
-			return;
-		}
+		double taken = Ichor * 0.35;
+		Ichor -= taken;
 
-		int taken = Math.Max(1, (int)Math.Ceiling(Owned[rite] * 0.15));
-		Owned[rite] = Math.Max(0, Owned[rite] - taken);
-		Say(Content.Rites[rite].TakenLine, Omen.Taken);
+		int rite = DeepestRite();
+		string flavour = rite >= 0 ? Content.Rites[rite].TakenLine : "Something walks the empty parish, and finds only you.";
+		Say(flavour + "  It takes " + Numbers.Short(taken) + " ichor with it.", Omen.Taken);
 		OnVisitation?.Invoke();
 	}
 
@@ -607,6 +693,7 @@ public static class Vigil
 		SharedVigilSeconds = 0.0;
 		SurgeSeconds = 0.0;
 		SurgeMultiplier = 1.0;
+		Array.Clear(CycleProgress, 0, CycleProgress.Length);
 		Revision++;
 	}
 }
