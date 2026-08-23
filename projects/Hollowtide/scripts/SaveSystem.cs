@@ -9,33 +9,38 @@ namespace AetherGame;
 /// serializer needs nothing configured and a future field is a one-line addition.</summary>
 public sealed class VigilSave
 {
-	public int Version = 1;
-	public string KeeperName = "Keeper";
-	public double Ichor;
-	public double RunIchor;
-	public double LifetimeIchor;
-	public int[] Owned = Array.Empty<int>();
-	public bool[] Offerings = Array.Empty<bool>();
-	public bool[] Marks = Array.Empty<bool>();
-	public bool[] Overseers = Array.Empty<bool>();
-	public int Sigils;
-	public int Communions;
-	public double Dread;
-	public double PlayedSeconds;
-	public double HighDreadSeconds;
-	public int WardsRaised;
-	public int TimesTaken;
-	public int CommunionSurges;
-	public int HandGathers;
-	public double SharedVigilSeconds;
+	// Auto-PROPERTIES, not fields, and that distinction is the whole file working or not:
+	// System.Text.Json ignores public fields unless every call site opts in with
+	// IncludeFields, and a serializer that quietly writes "{}" is indistinguishable from a
+	// game that had nothing to save. Properties need no options object, so the two call
+	// sites cannot disagree about it.
+	public int Version { get; set; } = 1;
+	public string KeeperName { get; set; } = "Keeper";
+	public double Ichor { get; set; }
+	public double RunIchor { get; set; }
+	public double LifetimeIchor { get; set; }
+	public int[] Owned { get; set; } = Array.Empty<int>();
+	public bool[] Offerings { get; set; } = Array.Empty<bool>();
+	public bool[] Marks { get; set; } = Array.Empty<bool>();
+	public bool[] Overseers { get; set; } = Array.Empty<bool>();
+	public int Sigils { get; set; }
+	public int Communions { get; set; }
+	public double Dread { get; set; }
+	public double PlayedSeconds { get; set; }
+	public double HighDreadSeconds { get; set; }
+	public int WardsRaised { get; set; }
+	public int TimesTaken { get; set; }
+	public int CommunionSurges { get; set; }
+	public int HandGathers { get; set; }
+	public double SharedVigilSeconds { get; set; }
 	/// <summary>Unix seconds at the last write. The only thing offline progress is measured
 	/// from, and deliberately UTC so a machine changing timezone does not hand out eight hours.</summary>
-	public long SavedAtUnix;
+	public long SavedAtUnix { get; set; }
 
 	// Settings live in the same file: there is one vigil, and a second file to keep in step
 	// with it would only be a second thing to go missing.
-	public bool ShowWhispers = true;
-	public float DreadShake = 1.0f;
+	public bool ShowWhispers { get; set; } = true;
+	public float DreadShake { get; set; } = 1.0f;
 }
 
 /// <summary>
