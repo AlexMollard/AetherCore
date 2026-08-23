@@ -1,0 +1,60 @@
+# One keeper, as the other keepers see them: a lantern with a light in it.
+#
+# `network_identity` is deliberately an empty table - netId, owner and spawnPrefab are
+# runtime state the host assigns at Net.Spawn, and authoring them here would fight that.
+# The table's PRESENCE is the whole point: it is the "this entity is replicated" mark.
+#
+# No network_transform: a keeper's lantern stands at its spawn marker and never moves, so
+# there is nothing to interpolate. What travels is the four numbers on VigilPresence.
+[[entities]]
+name = 'Vigil'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.55, 0.55, 1.0 ]
+
+    [entities.net_player]
+    display_name = ''
+
+    [entities.network_identity]
+
+    # No texture on purpose: an empty path samples plain white, so the tint IS the colour,
+    # and VigilPresence rewrites it every frame from that keeper's dread.
+    [entities.sprite]
+    atlas = ''
+    blend_mode = 'alpha'
+    flip_x = false
+    flip_y = false
+    order_in_layer = 2
+    pivot = [ 0.5, 0.5 ]
+    pixel_art = false
+    pixel_size = [ 16.0, 16.0 ]
+    pixel_snap = false
+    pixels_per_unit = 16.0
+    sorting_layer = 1
+    texture = ''
+    tint = [ 0.8, 0.8, 0.82, 1.0 ]
+    uv_rect = [ 0.0, 0.0, 1.0, 1.0 ]
+    visible = true
+
+    [entities.point_light]
+    color = [ 0.8, 0.8, 0.82 ]
+    flicker = 0.2
+    flickerSpeed = 6.0
+    intensity = 2.4
+    radius = 5.0
+    shadow = false
+
+    [entities.bob]
+    amplitude = 0.09
+    frequency = 0.6
+    phase = 0.0
+
+    [[entities.scripts]]
+    type = 'VigilPresence'
+
+    # Listed after the presence, whose replicated fields it never touches: this is the
+    # request/answer half, and it is on the keeper rather than on the scene because the
+    # host only accepts a server RPC aimed at an entity the sending connection owns.
+    [[entities.scripts]]
+    type = 'VigilRites'

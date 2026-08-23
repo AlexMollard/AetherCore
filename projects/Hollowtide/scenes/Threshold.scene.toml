@@ -1,0 +1,63 @@
+# Hollowtide - the threshold. Name yourself, decide whether anyone else is coming, and
+# step in. The screen builds itself from ThresholdScreen; this file is the camera, the
+# canvas and the script.
+[scene]
+features = [ 'sprites', 'tilemaps', 'physics_2d' ]
+kind = '2d'
+name = ''
+version = 16
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 9061137025419310283
+parent = -1
+position = [ 0.0, 0.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    background = 'solid_colour'
+    clear_color = [ 0.012, 0.014, 0.018 ]
+    far = 1000.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'orthographic'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.024, 0.032 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.008, 0.008, 0.012 ]
+        position = 1.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Threshold'
+node = 2946630219554171408
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'ThresholdScreen'
+
+[[entities]]
+name = 'ThresholdUI'
+node = 5148097382290551926
+parent = -1
+
+    [entities.ui_canvas]
+    reference = [ 1920.0, 1080.0 ]
+    scale_mode = 'constant_pixel'
+    sort_bias = 0
+
+    [entities.ui_rect]
+    anchor_max = [ 1.0, 1.0 ]
+    anchor_min = [ 0.0, 0.0 ]
+    offset_max = [ 0.0, 0.0 ]
+    offset_min = [ 0.0, 0.0 ]
+    pivot = [ 0.5, 0.5 ]

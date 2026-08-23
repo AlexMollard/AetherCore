@@ -1,0 +1,21 @@
+# AetherCore project file.
+
+[app]
+startupscene = "Threshold"
+targetfps = 0
+autosaveSeconds = 120
+
+[graphics]
+asynccompute = true
+fxaa = true
+vsync = true
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+name = "Hollowtide"
+version = 1

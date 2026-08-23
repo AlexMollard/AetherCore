@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Project-owned game scripts. The editor builds this assembly at runtime from the
+    open project, then loads AetherGame.dll through the collectible scripting context.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherGame</AssemblyName>
+    <RootNamespace>AetherGame</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../managed/AetherCore/AetherCore.csproj"
+                      Private="false"
+                      ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>
