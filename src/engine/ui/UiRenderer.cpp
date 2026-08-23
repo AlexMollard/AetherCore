@@ -556,13 +556,34 @@ namespace aether::ui
 			}
 			gpu::PipelineHandle pipe = m_pipeline;
 			std::uint32_t effectiveId = 0; // 0 unless a valid material pipeline was resolved
-			if (shaderId != 0 && shaderId <= frame.materials.size())
+			if (shaderId != 0)
 			{
-				const gpu::PipelineHandle mat = MaterialPipeline(frame.materials[shaderId - 1].shader);
-				if (mat.IsValid())
+				// Both ways this can fail used to be silent, and both of them look the same on
+				// screen: the element draws on the default pipeline, which renders its plain
+				// fill instead of its material. That is the "structure turned into a flat
+				// square" report, so neither is allowed to pass without saying so.
+				if (shaderId > frame.materials.size())
 				{
-					pipe = mat;
-					effectiveId = shaderId;
+					AE_ERROR(LogCategory::UI,
+					        "UiRenderer: command carries shaderId {} but the frame only has {} materials - "
+					        "the material table and the command flags disagree.",
+					        shaderId, frame.materials.size());
+				}
+				else
+				{
+					const gpu::PipelineHandle mat = MaterialPipeline(frame.materials[shaderId - 1].shader);
+					if (mat.IsValid())
+					{
+						pipe = mat;
+						effectiveId = shaderId;
+					}
+					else
+					{
+						AE_ERROR(LogCategory::UI,
+						        "UiRenderer: no pipeline for material '{}' (shaderId {}); {} commands fall back to "
+						        "the default pipeline and will draw their plain fill.",
+						        frame.materials[shaderId - 1].shader, shaderId, j - i);
+					}
 				}
 			}
 			frame.groups.push_back(DrawGroup{i, j - i, effectiveId, pipe});
