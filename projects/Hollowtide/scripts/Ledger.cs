@@ -57,9 +57,6 @@ public sealed class Ledger
 	private readonly Button[] _tabs = new Button[4];
 	private readonly Button[] _amounts = new Button[4];
 	private readonly Row[] _rows = new Row[kRowPool];
-	/// <summary>What each visible row currently stands for. -1 means the slot is empty this
-	/// frame, which is also what stops a stale click from buying the wrong thing.</summary>
-	private readonly int[] _payload = new int[kRowPool];
 
 	private static readonly int[] s_amounts = { 1, 10, 100, -1 };
 	private static readonly string[] s_amountLabels = { "x1", "x10", "x100", "MAX" };
@@ -116,7 +113,6 @@ public sealed class Ledger
 				Palette.TextFaint, UiHAlign.Right);
 			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
 			_rows[i] = row;
-			_payload[i] = -1;
 		}
 	}
 
@@ -195,7 +191,6 @@ public sealed class Ledger
 	{
 		for (int i = 0; i < kRowPool; i++)
 		{
-			_payload[i] = -1;
 			_rows[i].Box.SetActive(i < _visibleRows);
 		}
 
@@ -230,7 +225,6 @@ public sealed class Ledger
 		for (int rite = _scroll; rite < Content.RiteCount && slot < _visibleRows; rite++, slot++)
 		{
 			Row row = _rows[slot];
-			_payload[slot] = rite;
 			RiteDef def = Content.Rites[rite];
 			int owned = Vigil.Owned[rite];
 
@@ -303,7 +297,6 @@ public sealed class Ledger
 			int index = available[i];
 			OfferingDef def = Content.Offerings[index];
 			Row row = _rows[slot];
-			_payload[slot] = index;
 
 			bool affordable = def.Cost <= Vigil.Ichor;
 			Ui.SetText(row.Title, def.Name);
@@ -354,7 +347,6 @@ public sealed class Ledger
 			int payout = Vigil.SigilsOnOffer;
 			bool ready = payout > 0;
 			Row row = _rows[slot];
-			_payload[slot] = -100;
 			Ui.SetText(row.Title, "COMMUNE   +" + payout + " sigils");
 			Ui.SetTextColor(row.Title, ready ? Palette.Sigil : Palette.TextFaint);
 			Ui.SetText(row.Sub, ready
@@ -378,7 +370,6 @@ public sealed class Ledger
 		for (int i = Math.Max(0, _scroll - 1); i < Content.Boons.Length && slot < _visibleRows; i++, slot++)
 		{
 			Row row = _rows[slot];
-			_payload[slot] = i;
 			BoonDef def = Content.Boons[i];
 			int level = Vigil.Boons[i];
 			int cost = Vigil.BoonCost(i);
@@ -412,7 +403,6 @@ public sealed class Ledger
 		for (int rite = Math.Max(0, _scroll - 1 - Content.Boons.Length); rite < Content.RiteCount && slot < _visibleRows; rite++, slot++)
 		{
 			Row row = _rows[slot];
-			_payload[slot] = rite;
 			int cost = Vigil.OverseerCost(rite);
 			bool hired = Vigil.Overseers[rite];
 			bool affordable = !hired && Vigil.Sigils >= cost;
