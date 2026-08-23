@@ -31,7 +31,10 @@ public enum LedgerTab
 public sealed class Ledger
 {
 	private const float kWidth = Hud.LedgerWidth;
-	private const float kPad = 16.0f;
+	/// <summary>Gutter inside the panel. Must match the LedgerViewport inset authored in the
+	/// scene: the row pool is sized from it, and 4px of disagreement puts every row past the
+	/// mask.</summary>
+	private const float kPad = 20.0f;
 	private const float kRowHeight = 66.0f;
 	private const float kRowGap = 6.0f;
 	private const float kListTop = 150.0f;
@@ -44,6 +47,9 @@ public sealed class Ledger
 		public Entity Sub;
 		public Entity Cost;
 		public Entity Note;
+		/// <summary>A thin fill along the bottom of the row showing how far through its
+		/// working the rite is. The row stops being a price tag and becomes a machine.</summary>
+		public Entity Progress;
 	}
 
 	private Entity _panel;
@@ -108,6 +114,7 @@ public sealed class Ledger
 				Palette.Ichor, UiHAlign.Right);
 			row.Note = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 34.0f, 176.0f, 24.0f, 15.0f,
 				Palette.BoneFaint, UiHAlign.Right);
+			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
 			_rows[i] = row;
 			_payload[i] = -1;
 		}
@@ -253,6 +260,13 @@ public sealed class Ledger
 			Ui.SetText(row.Cost, Numbers.Short(cost));
 			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.BoneFaint);
 			Ui.SetText(row.Note, "buy " + count + (Vigil.Overseers[rite] ? "   overseen" : ""));
+
+			// The working bar: owned rites show their cadence, unowned ones show nothing,
+			// because an empty bar on something you do not have is just noise.
+			float rowWidth = kWidth - kPad * 2.0f;
+			float fill = owned > 0 ? (float)Vigil.CycleProgress[rite] : 0.0f;
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, rowWidth * fill, 3.0f);
+			Ui.SetImageColor(row.Progress, Palette.Fade(def.Colour, owned > 0 ? 0.75f : 0.0f));
 
 			row.Box.SetEnabled(affordable);
 			row.Box.Style(affordable, Palette.RowHot, Palette.Row, Palette.PanelDeep);

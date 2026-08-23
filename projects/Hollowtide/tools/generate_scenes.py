@@ -49,7 +49,7 @@ WHISPER = "IBMPlexMono-Italic"
 DISPLAY = "PixelStorm"
 
 LEDGER_W = 620.0
-BAR_H = 96.0
+BAR_H = 104.0
 
 
 def node_id(name):
@@ -344,21 +344,30 @@ def threshold():
     centred("ThTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 72.0, BONE, "center")], 0, -250, 900, 90)
     centred("ThSubtitle", [Scene.text("keep the parish, and count what it costs you", WHISPER, 18.0, BONE_FAINT, "center")], 0, -186, 900, 30)
 
-    centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], -200, -118, 400, 26)
-    centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, -86, 400, 44)
-    centred("ThAddressLabel", [Scene.text("HOST ADDRESS", DISPLAY, 15.0, BONE_FAINT)], -200, -30, 400, 26)
-    centred("ThAddressBox", [Scene.text_box("127.0.0.1:7777", 48, "host")], 0, 2, 400, 44)
+    # A stack, not a scatter. Each field is a caption sitting ABOVE its control, both on the
+    # same 400px column, so every left edge on the screen is the same left edge. The captions
+    # used to be a half-width box laid across the control next to them: legible only because
+    # the words were short.
+    FIELD_W = 400.0
+    centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], 0, -129, FIELD_W, 22)
+    centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, -90, FIELD_W, 44)
+    centred("ThAddressLabel", [Scene.text("HOST ADDRESS", DISPLAY, 15.0, BONE_FAINT)], 0, -33, FIELD_W, 22)
+    centred("ThAddressBox", [Scene.text_box("127.0.0.1:7777", 48, "host")], 0, 6, FIELD_W, 44)
 
-    centred("ThAlone", [Scene.button("KEEP VIGIL ALONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, ICHOR, 0.30), BONE, ICHOR), Scene.selectable("threshold")], 0, 72, 400, 48)
-    centred("ThHost", [Scene.button("HOST A CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], -104, 130, 192, 44)
-    centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], 104, 130, 192, 44)
+    centred("ThAlone", [Scene.button("KEEP VIGIL ALONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, ICHOR, 0.30), BONE, ICHOR), Scene.selectable("threshold")], 0, 84, FIELD_W, 48)
+    centred("ThHost", [Scene.button("HOST A CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], -104, 142, 192, 44)
+    centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], 104, 142, 192, 44)
 
-    centred("ThWhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -260, 196, 240, 26)
-    centred("ThWhisperToggle", [Scene.toggle(True), Scene.selectable("threshold")], -100, 196, 56, 26)
-    centred("ThShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], 60, 196, 240, 26)
-    centred("ThShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable("threshold")], 250, 196, 120, 22)
+    # Settings live in the SAME 400px column as the fields above, one setting per row with
+    # its control flush to the column's right edge. They used to straddle a wider band than
+    # anything else on screen, which read as a second, misaligned form.
+    SETTINGS_H = 26.0
+    centred("ThWhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -100, 217, 200, SETTINGS_H)
+    centred("ThWhisperToggle", [Scene.toggle(True), Scene.selectable("threshold")], 172, 217, 56, SETTINGS_H)
+    centred("ThShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, 255, 200, SETTINGS_H)
+    centred("ThShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable("threshold")], 140, 255, 120, SETTINGS_H)
 
-    centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 262, 900, 26)
+    centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 312, 900, 26)
 
     body = s.render("# Hollowtide - the threshold. Authored chrome; ThresholdScreen only binds and drives it.\n")
     # Splice the hand-written camera / script-root / canvas prologue over the placeholders.
@@ -408,15 +417,24 @@ def vigil():
     def at(parent, name, comps, x, y, w, h, pivot=(0.0, 0.0), anchor=(0.0, 0.0)):
         return s.add(name, parent, [Scene.box(x, y, w, h, pivot, anchor)] + comps)
 
-    at(bar, "HudTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 22.0, BONE_DIM)], 28, 14, 320, 30)
-    at(bar, "HudKeeper", [Scene.text("", BODY, 17.0, BONE_DIM)], 28, 48, 340, 26)
-    at(bar, "HudIchor", [Scene.text("0", BODY, 40.0, ICHOR)], 320, 12, 300, 46)
-    at(bar, "HudRate", [Scene.text("0/s", BODY, 18.0, ICHOR_DIM)], 322, 56, 300, 24)
-    at(bar, "HudMultiplier", [Scene.text("", BODY, 17.0, SIGIL, "right")], 322, 56, 300, 24)
-    at(bar, "HudDreadCaption", [Scene.text("DREAD", DISPLAY, 15.0, BONE_FAINT)], 660, 12, 120, 20)
-    at(bar, "HudDreadBar", [Scene.image(CLEAR, 6.0), Scene.progress((0.086, 0.075, 0.078, 1.0), DREAD)], 660, 34, 360, 20)
-    at(bar, "HudDreadValue", [Scene.text("0.0%", BODY, 16.0, DREAD, "right")], 900, 12, 120, 20)
-    at(bar, "HudSigils", [Scene.text("", BODY, 18.0, SIGIL, "right")], -24, 34, 260, 28, (1.0, 0.0), (1.0, 0.0))
+    # Four columns on a 28px gutter, each holding one idea. The previous layout had the
+    # ichor number sitting on top of the keeper line and the rate sharing a rect with the
+    # multiplier - readable only because the strings happened to be short.
+    #   identity 28..328 | ichor 356..636 | multiplier 664..904 | dread 932..1332 | sigils right
+    # TWO ROWS, and every element starts on one of them. Row A carries the headline of each
+    # column, row B its detail; nothing sits at an in-between y, which is what turns a bar
+    # into a grid rather than nine independent guesses.
+    ROW_A, ROW_B = 14.0, 64.0
+    at(bar, "HudTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 22.0, BONE_DIM)], 28, ROW_A, 300, 30)
+    at(bar, "HudIchor", [Scene.text("0", BODY, 40.0, ICHOR)], 356, ROW_A, 280, 48)
+    at(bar, "HudDreadCaption", [Scene.text("DREAD", DISPLAY, 15.0, BONE_FAINT)], 932, ROW_A, 160, 22)
+    at(bar, "HudDreadValue", [Scene.text("0.0%", BODY, 16.0, DREAD, "right")], 1192, ROW_A, 140, 22)
+
+    at(bar, "HudKeeper", [Scene.text("", BODY, 16.0, BONE_DIM)], 28, ROW_B, 300, 26)
+    at(bar, "HudRate", [Scene.text("0/s", BODY, 18.0, ICHOR_DIM)], 356, ROW_B, 280, 24)
+    at(bar, "HudMultiplier", [Scene.text("", BODY, 18.0, SIGIL)], 664, ROW_B, 240, 24)
+    at(bar, "HudDreadBar", [Scene.image(CLEAR, 6.0), Scene.progress((0.086, 0.075, 0.078, 1.0), DREAD)], 932, ROW_B, 400, 20)
+    at(bar, "HudSigils", [Scene.text("", BODY, 18.0, SIGIL, "right")], -28, ROW_B, 300, 28, (1.0, 0.0), (1.0, 0.0))
 
     # ── the nave ────────────────────────────────────────────────────────────────────
     nave = s.add("HudNave", canvas, [
@@ -426,8 +444,12 @@ def vigil():
     at(nave, "NaveSigil", [Scene.image((1, 1, 1, 1)), Scene.material("ui_sigil", ICHOR, DREAD), Scene.selectable("nave")], 0, -60, 268, 268, MID, CENTRE)
     at(nave, "NaveHint", [Scene.text("GATHER", DISPLAY, 17.0, BONE_FAINT, "center")], 0, 108, 400, 26, MID, CENTRE)
     at(nave, "NaveHandValue", [Scene.text("", BODY, 17.0, ICHOR_DIM, "center")], 0, 136, 400, 26, MID, CENTRE)
-    at(nave, "NaveWard", [Scene.button("RAISE WARD", DISPLAY, 16.0, ROW, mix(ROW_HOT, DREAD, 0.45), BONE, BONE), Scene.selectable("nave")], -132, 186, 250, 44, MID, CENTRE)
-    at(nave, "NaveBell", [Scene.button("RING THE BELL", DISPLAY, 16.0, ROW, mix(ROW_HOT, SIGIL, 0.40), BONE, BONE), Scene.selectable("nave")], 132, 186, 250, 44, MID, CENTRE)
+    # Stoke and ward are a pair - the two directions you can push the meter - so they share a
+    # row. The bell is a different kind of thing (and only exists in a congregation), so it
+    # sits on its own beneath them rather than making a row of three that is sometimes two.
+    at(nave, "NaveStoke", [Scene.button("STOKE THE DARK", DISPLAY, 16.0, ROW, mix(ROW_HOT, DREAD, 0.55), BONE, BONE), Scene.selectable("nave")], -132, 186, 250, 44, MID, CENTRE)
+    at(nave, "NaveWard", [Scene.button("RAISE WARD", DISPLAY, 16.0, ROW, mix(ROW_HOT, ICHOR, 0.35), BONE, BONE), Scene.selectable("nave")], 132, 186, 250, 44, MID, CENTRE)
+    at(nave, "NaveBell", [Scene.button("RING THE BELL", DISPLAY, 16.0, ROW, mix(ROW_HOT, SIGIL, 0.40), BONE, BONE), Scene.selectable("nave")], 0, 240, 250, 44, MID, CENTRE)
 
     # ── the ledger ──────────────────────────────────────────────────────────────────
     ledger = s.add("LedgerPanel", canvas, [
@@ -435,13 +457,13 @@ def vigil():
         Scene.image(PANEL),
     ])
     at(ledger, "LedgerHeading", [Scene.text("THE LEDGER", DISPLAY, 21.0, BONE_DIM)], 20, 18, 300, 30)
-    tab_w = (LEDGER_W - 32.0 - 18.0) / 4.0
+    tab_w = (LEDGER_W - 40.0 - 18.0) / 4.0
     for i, label in enumerate(["RITES", "OFFERINGS", "COMMUNION", "MARKS"]):
-        at(ledger, f"LedgerTab{i}", [Scene.button(label, DISPLAY, 15.0), Scene.selectable("ledger")], 16 + i * (tab_w + 6.0), 56, tab_w, 36)
+        at(ledger, f"LedgerTab{i}", [Scene.button(label, DISPLAY, 15.0), Scene.selectable("ledger")], 20 + i * (tab_w + 6.0), 56, tab_w, 36)
     for i, label in enumerate(["x1", "x10", "x100", "MAX"]):
-        at(ledger, f"LedgerAmount{i}", [Scene.button(label, DISPLAY, 16.0), Scene.selectable("ledger")], 16 + i * 78.0, 102, 72, 32)
+        at(ledger, f"LedgerAmount{i}", [Scene.button(label, DISPLAY, 16.0), Scene.selectable("ledger")], 20 + i * 78.0, 102, 72, 32)
     s.add("LedgerViewport", ledger, [
-        Scene.stretch((0, 0), (1, 1), (16, 150), (-16, -16)),
+        Scene.stretch((0, 0), (1, 1), (20, 150), (-20, -20)),
         Scene.image(CLEAR),
         Scene.mask(),
     ])
@@ -453,14 +475,14 @@ def vigil():
     ])
     at(cong, "CongHeading", [Scene.text("THE CONGREGATION", DISPLAY, 16.0, BONE_DIM)], 16, 12, 300, 26)
     for i in range(4):
-        row = at(cong, f"CongRow{i}", [Scene.image(ROW, 4.0)], 12, 44 + i * 100.0, 320, 92)
-        at(row, f"CongRow{i}Name", [Scene.text("", BODY, 16.0, BONE)], 12, 8, 220, 22)
-        at(row, f"CongRow{i}Ping", [Scene.text("", BODY, 15.0, BONE_FAINT, "right")], 214, 8, 90, 24)
+        row = at(cong, f"CongRow{i}", [Scene.image(ROW, 4.0)], 12, 44 + i * 104.0, 320, 96)
+        at(row, f"CongRow{i}Name", [Scene.text("", BODY, 16.0, BONE)], 12, 8, 180, 22)
+        at(row, f"CongRow{i}Ping", [Scene.text("", BODY, 15.0, BONE_FAINT, "right")], 200, 8, 108, 22)
         at(row, f"CongRow{i}Rate", [Scene.text("", BODY, 16.0, ICHOR_DIM)], 12, 30, 240, 22)
         track = at(row, f"CongRow{i}Track", [Scene.image(PANEL_DEEP, 3.0)], 12, 52, 296, 6)
         at(track, f"CongRow{i}Fill", [Scene.image(DREAD, 3.0)], 0, 0, 1, 6)
-        at(row, f"CongRow{i}Tithe", [Scene.button("TITHE", DISPLAY, 15.0, PANEL_DEEP, mix(ROW_HOT, ICHOR, 0.35), BONE_DIM, ICHOR), Scene.selectable("congregation")], 12, 62, 140, 26)
-        at(row, f"CongRow{i}Shunt", [Scene.button("SHUNT", DISPLAY, 15.0, PANEL_DEEP, mix(ROW_HOT, DREAD, 0.45), BONE_DIM, DREAD), Scene.selectable("congregation")], 160, 62, 140, 26)
+        at(row, f"CongRow{i}Tithe", [Scene.button("TITHE", DISPLAY, 15.0, PANEL_DEEP, mix(ROW_HOT, ICHOR, 0.35), BONE_DIM, ICHOR), Scene.selectable("congregation")], 12, 64, 140, 26)
+        at(row, f"CongRow{i}Shunt", [Scene.button("SHUNT", DISPLAY, 15.0, PANEL_DEEP, mix(ROW_HOT, DREAD, 0.45), BONE_DIM, DREAD), Scene.selectable("congregation")], 168, 64, 140, 26)
 
     # ── the offline report ──────────────────────────────────────────────────────────
     offline = s.add("OfflinePanel", canvas, [
