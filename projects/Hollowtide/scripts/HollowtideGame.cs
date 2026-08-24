@@ -198,7 +198,10 @@ public sealed class HollowtideGame : EntityScript
 	/// with nothing left to do.</summary>
 	private void OnApproach(int rite)
 	{
-		_flashAmount = 0.6f;
+		// Max, not assignment. Three things reach for this one number now - a visitation, an
+		// approach, and turning up something Hollowed - and a plain assignment lets a quieter
+		// event STEAL the screen back from a louder one that is still playing out.
+		_flashAmount = MathF.Max(_flashAmount, 0.6f);
 	}
 
 	private void OnVisitation(bool held)
@@ -209,10 +212,10 @@ public sealed class HollowtideGame : EntityScript
 			// A ward holding is a RELIEF. No held breath and a much smaller flash, because
 			// stopping the world for something that did not happen teaches the player that
 			// insurance feels the same as being caught.
-			_flashAmount = 0.35f;
+			_flashAmount = MathF.Max(_flashAmount, 0.35f);
 			return;
 		}
-		_flashAmount = 1.0f;
+		_flashAmount = MathF.Max(_flashAmount, 1.0f);
 		_heldBreath = 0.85f;
 	}
 

@@ -42,6 +42,10 @@ public sealed class Parish
 		public Vector2 From;
 		public Vector4 Colour;
 		public float Age;
+		/// <summary>How much this one is worth keeping. A gather is 0 and everything else is
+		/// above it, so the thing a keeper actually wants to see cannot be recycled away by the
+		/// ordinary clicking that produced it.</summary>
+		public int Worth;
 	}
 
 	private struct Bearer
@@ -64,7 +68,6 @@ public sealed class Parish
 	private readonly Bearer[] _bearers = new Bearer[kBearerPool];
 	private readonly Pop[] _pops = new Pop[kPopPool];
 	private int _nextBearer;
-	private int _nextPop;
 
 	private float _shake;
 	private float _time;
@@ -596,22 +599,65 @@ public sealed class Parish
 		// the same thing means the same thing in both places.
 		float weight = (int)relic.Grade / 4.0f;
 		ShowPop(f, Relics.GradeName(relic.Grade).ToUpperInvariant(),
-			Palette.Mix(Palette.TextDim, Palette.Ichor, 0.35f + weight * 0.65f));
+			Palette.Mix(Palette.TextDim, Palette.Ichor, 0.35f + weight * 0.65f),
+			worth: 1 + (int)relic.Grade);
 		if (relic.Grade >= Grade.Hallowed)
 		{
 			_shake = MathF.Max(_shake, 0.20f + weight * 0.25f);
 		}
 	}
 
-	private void ShowPop(Vector2 at, string text, Vector4 colour)
+	/// <summary>
+	/// Throw a popup, taking the slot that will be missed least.
+	/// </summary>
+	/// <remarks>
+	/// Twelve slots, a second and a half each: round-robin, a popup survives until twelve more
+	/// are thrown, so anything above about eight a second starts evicting popups that are still
+	/// on screen. That rate used to be unreachable - and then relics made hand-gathering worth
+	/// hammering, which means the keepers most likely to turn something up are exactly the ones
+	/// clicking fast enough to wipe it out before they read it.
+	///
+	/// So a slot is chosen rather than taken in turn: a dead one first, then the least
+	/// important, and only then the oldest. A gather is worth nothing to keep - there is
+	/// another one coming in a quarter of a second.
+	/// </remarks>
+	private void ShowPop(Vector2 at, string text, Vector4 colour, int worth = 0)
 	{
-		Pop pop = _pops[_nextPop];
+		int chosen = -1;
+		int worstWorth = int.MaxValue;
+		float oldest = -1.0f;
+		for (int i = 0; i < kPopPool; i++)
+		{
+			Pop candidate = _pops[i];
+			// Aged out: free, take it and stop looking.
+			if (candidate.Age > 1.5f)
+			{
+				chosen = i;
+				break;
+			}
+			// Otherwise remember the least worth keeping, oldest first among equals.
+			if (candidate.Worth < worstWorth || (candidate.Worth == worstWorth && candidate.Age > oldest))
+			{
+				worstWorth = candidate.Worth;
+				oldest = candidate.Age;
+				chosen = i;
+			}
+		}
+
+		// Everything alive is worth more than what is being thrown: let it be. A find on screen
+		// beats a gather figure that will be replaced before anybody looks at it.
+		if (chosen < 0 || (worstWorth > worth && _pops[chosen].Age <= 1.5f))
+		{
+			return;
+		}
+
+		Pop pop = _pops[chosen];
 		pop.From = at;
 		pop.Colour = colour;
 		pop.Age = 0.0f;
+		pop.Worth = worth;
 		Ui.SetText(pop.Label, text);
-		_pops[_nextPop] = pop;
-		_nextPop = (_nextPop + 1) % kPopPool;
+		_pops[chosen] = pop;
 	}
 
 	/// <summary>Float the live popups up and fade them out, on unscaled time so they still
