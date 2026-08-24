@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Collections.Generic;
 
 namespace AetherGame.Balance;
@@ -2459,6 +2460,172 @@ internal static class Balance
 			"the least varied five minutes was " + Numbers.Percent(leastVaried) + " new lines");
 	}
 
+	// -- The parish holds itself together ---------------------------------------------
+
+	/// <summary>Windows to lay the parish out in. The second is the one the game was actually
+	/// being played at when the conduits turned out to cross the buttons - very wide and very
+	/// short, which is the shape that breaks layout arithmetic tuned on a 16:9 guess.</summary>
+	private static readonly (int W, int H)[] s_windows =
+	{
+		(1920, 1080), (1636, 541), (1280, 800), (2560, 1080), (1024, 1400), (3440, 900),
+	};
+
+	/// <summary>
+	/// The tallest a rite can stand, as a fraction of the window height.
+	/// </summary>
+	/// <remarks>
+	/// Mirrors the cap in Parish.SyncRites: growth is a log curve on how many are owned, but it
+	/// is capped to the gap between neighbours so a heavily-bought rite cannot swallow the one
+	/// beside it, and capped again against the window. Taking the cap rather than the curve is
+	/// deliberate - the checks below want the WORST case, which is a keeper who has bought
+	/// enough of everything for every structure to be against its ceiling.
+	/// </remarks>
+	private static float TallestRite(int w, int h, int standing, float riteRight)
+	{
+		float spacing = Layout.RiteSpacing(standing, riteRight);
+		float bySpacing = spacing * w * 0.92f / h;
+		return MathF.Min(bySpacing, Layout.RiteHeightCap(h));
+	}
+
+	/// <summary>
+	/// Nothing the parish draws crosses anything else it draws.
+	/// </summary>
+	/// <remarks>
+	/// Every one of these was first "checked" by working a single example on paper, and the
+	/// paper was wrong: the route it justified ran straight across the stoke and ward buttons at
+	/// the window the game was being played at. Layout is engine-free precisely so these can be
+	/// held here, at every window shape and every parish size, instead of by eye.
+	/// </remarks>
+	private static void TheParishHoldsItselfTogether()
+	{
+		Console.WriteLine("The parish holds itself together");
+
+		int belowHorizon = 0;
+		int offTop = 0;
+		int throughRite = 0;
+		int onTheSigil = 0;
+		int backwards = 0;
+		int shortcut = 0;
+		int cases = 0;
+		float tightest = 1.0f;
+
+		foreach ((int w, int h) in s_windows)
+		{
+			// Wherever the sigil sits: the nave is inset from the canvas by a top bar and the
+			// ledger, so its centre moves with both, and no single figure covers every window.
+			for (int step = 0; step <= 6; step++)
+			{
+				float centreX = 0.45f + step * 0.05f;
+				float restW = 268.0f / w;
+				float restH = 268.0f / h;
+				Vector2 centre = new Vector2(centreX, 0.467f);
+
+				float riteRight = Layout.RiteRight(centreX, restW, Layout.RiteWidthCap(w, h) * 0.5f);
+				Vector2 intake = Layout.Intake(centre, restW, restH);
+
+				for (int standing = 1; standing <= Content.RiteCount; standing++)
+				{
+					cases++;
+					// Per-rite, because the descent cap depends on how near the sigil a rite
+					// stands. Modelling one shared height was what hid the descent fault: it made
+					// every structure the same, and the fault is specifically about the LAST one.
+					float[] tall = new float[standing];
+					float[] crowns = new float[standing];
+					float[] halves = new float[standing];
+					float highest = intake.Y;
+					for (int r = 0; r < standing; r++)
+					{
+						tall[r] = TallestRite(w, h, standing, riteRight);
+						crowns[r] = Layout.CrownY(tall[r], h);
+						halves[r] = tall[r] * h * 0.5f / w;
+						highest = MathF.Min(highest, crowns[r]);
+					}
+					float canopy = Layout.CanopyY(highest);
+
+					// The deepest rite must sit clear of the sigil, or the conduits are the
+					// least of it.
+					float deepest = Layout.RiteX(standing - 1, standing, riteRight);
+					float gap = centreX - restW * 0.5f - (deepest + halves[standing - 1]);
+					if (gap < 0.0f)
+					{
+						onTheSigil++;
+					}
+
+					// Rites in order, left to right, with no two in the same place.
+					for (int i = 1; i < standing; i++)
+					{
+						if (Layout.RiteX(i, standing, riteRight) <= Layout.RiteX(i - 1, standing, riteRight))
+						{
+							backwards++;
+						}
+					}
+
+					for (int rite = 0; rite < standing; rite++)
+					{
+						Vector2 from = new Vector2(Layout.RiteX(rite, standing, riteRight), crowns[rite]);
+						float radius = Layout.CornerRadius(from, intake, canopy,
+							Layout.RiteSpacing(standing, riteRight));
+
+						// Never shorter than the straight line it replaces.
+						if (Layout.ConduitLength(from, intake, canopy, radius) < (intake - from).Length() - 1e-4f)
+						{
+							shortcut++;
+						}
+
+						for (int step2 = 0; step2 <= 96; step2++)
+						{
+							Vector2 at = Layout.Conduit(from, intake, canopy, radius, step2 / 96.0f);
+
+							// THE claim. Everything the keeper clicks - stoke, ward, bell, the
+							// found banner - lives below the horizon. A conduit that stays above
+							// it cannot reach any of them, at any window, ever.
+							if (at.Y > Layout.Horizon)
+							{
+								belowHorizon++;
+							}
+							if (at.Y < 0.0f)
+							{
+								offTop++;
+							}
+							tightest = MathF.Min(tightest, Layout.Horizon - at.Y);
+
+							// And it must not pass through a structure on the way. A rite fills
+							// the band from its crown down to the horizon, so being over one
+							// horizontally is only a fault if the wire has sunk into that band.
+							for (int other = 0; other < standing; other++)
+							{
+								if (other == rite)
+								{
+									continue;
+								}
+								float ox = Layout.RiteX(other, standing, riteRight);
+								if (MathF.Abs(at.X - ox) < halves[other] && at.Y > crowns[other])
+								{
+									throughRite++;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		Check("a conduit never reaches the button row", belowHorizon == 0,
+			belowHorizon == 0
+				? "clear of the horizon by " + tightest.ToString("F3") + " at its worst, over " + cases + " parishes"
+				: belowHorizon + " samples below the horizon");
+		Check("nor leaves the top of the window", offTop == 0,
+			offTop == 0 ? "the arch stays on screen at every aspect" : offTop + " samples off screen");
+		Check("nor passes through a structure", throughRite == 0,
+			throughRite == 0 ? "every arch clears every crown beside it" : throughRite + " samples inside a rite");
+		Check("the deepest rite stands clear of the sigil", onTheSigil == 0,
+			onTheSigil == 0 ? "at every window and parish size" : onTheSigil + " overlaps");
+		Check("rites stand in order and never share a slot", backwards == 0,
+			backwards == 0 ? "left to right, always" : backwards + " out of order");
+		Check("a conduit is never shorter than the line it replaces", shortcut == 0,
+			shortcut == 0 ? "so a bead never outruns its own wire" : shortcut + " too short");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -2490,6 +2657,7 @@ internal static class Balance
 		AVigilSurvivesBeingWrittenDown();
 		TheReadoutsAgree();
 		TheClockOutlastsTheKeeper();
+		TheParishHoldsItselfTogether();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

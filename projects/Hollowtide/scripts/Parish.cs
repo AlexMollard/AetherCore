@@ -21,41 +21,18 @@ namespace AetherGame;
 /// </para>
 /// <para>
 /// Everything is positioned in NAVE FRACTIONS against the shader's horizon, which is the one
-/// number both sides have to agree on - see <see cref="kHorizon"/>. Fractions rather than
+/// number both sides have to agree on - see <see cref="Layout.Horizon"/>. Fractions rather than
 /// pixels so the parish reflows with the window instead of baking a resolution.
 /// </para>
 /// </remarks>
 public sealed class Parish
 {
-	/// <summary>Height of the horizon as a fraction of the nave, matching the same constant in
-	/// ui_parish.slang. The rites stand on it, so the two MUST agree.</summary>
-	private const float kHorizon = 0.62f;
-
 	private const int kPopPool = 12;
 	private const int kBearerPool = 40;
 	/// <summary>How fast a bearer travels, in fractions of the backdrop per second. Faster than
 	/// the old straight walk because the conduit route is about twice as long; the time from a
 	/// rite finishing to the yield landing is roughly what it was.</summary>
 	private const float kBearerSpeed = 0.34f;
-
-	/// <summary>
-	/// How far below the horizon the conduit spine runs, as a fraction of the nave.
-	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// Bearers used to cross AT horizon height, straight through the middle of the parish, so a
-	/// yield leaving the far left rite passed behind every structure between it and the sigil -
-	/// reading as an orb clipping through the scenery rather than as something being carried.
-	/// </para>
-	/// <para>
-	/// Every rite stands ON the horizon and grows UPWARD, so the band immediately below it is
-	/// free of structures by construction, at any parish size and any window. That is why the
-	/// route sags rather than arcs: a hand's width down is all it takes to clear every rite for
-	/// good, and it is the only band that stays clear without knowing how big the parish is.
-	/// The near floor further down is not an option - the stoke, ward and bell row lives there.
-	/// </para>
-	/// </remarks>
-	private const float kSag = 0.045f;
 
 	/// <summary>How far the widest lane of the pop fan carries, as a fraction of the backdrop
 	/// width. Wide enough that two figures beside each other are legible, narrow enough that a
@@ -87,7 +64,10 @@ public sealed class Parish
 	private struct Bearer
 	{
 		public Entity Body;
-		public Vector2 From;
+		/// <summary>Which rite sent it. The rite, not the point it left from: a structure grows
+		/// as the keeper buys, and the canopy lifts with it, so a captured start would leave a
+		/// bead travelling a route its own wire had already moved off.</summary>
+		public int Rite;
 		public Vector2 To;
 		public double Amount;
 		public float Age;
@@ -107,6 +87,12 @@ public sealed class Parish
 	private readonly Bearer[] _bearers = new Bearer[kBearerPool];
 	/// <summary>The conduits themselves, one run of pips per rite, raised with the rite.</summary>
 	private readonly Entity[,] _wire = new Entity[Content.RiteCount, kWirePips];
+	/// <summary>Where each standing rite's conduit leaves it: the top of its count, in backdrop
+	/// fractions. Recorded while the rites are dressed, because the canopy has to clear the
+	/// tallest of them and none of their heights are known until they have all been sized.</summary>
+	private readonly Vector2[] _crown = new Vector2[Content.RiteCount];
+	/// <summary>The height every conduit arches at this frame. See Layout.CanopyY.</summary>
+	private float _canopy = Layout.Horizon - 0.2f;
 	private readonly Pop[] _pops = new Pop[kPopPool];
 	private int _nextBearer;
 	/// <summary>Which lane of the fan the next pop takes. A counter, not a die roll - see
@@ -193,21 +179,7 @@ public sealed class Parish
 		}
 	}
 
-	/// <summary>
-	/// Where the conduits arrive: the sigil's lower-left rim.
-	/// </summary>
-	/// <remarks>
-	/// Not its centre. A wire that runs to the middle of a disc has to pass over the face of it
-	/// to get there, and the face is the one thing on screen the keeper is looking at. Meeting
-	/// the rim means the line stops at the edge of the mark and the yield is taken IN, which is
-	/// also how it reads: eight conduits terminating on one boundary.
-	/// </remarks>
-	/// <remarks>
-	/// Offset by the sigil's RESTING size (see <see cref="MeasureSigil"/>), never its live one.
-	/// The sigil is centre-pivoted and grows about a tenth when struck, so an offset measured off
-	/// the live rect would walk every conduit's endpoint outward on each click - the same fault
-	/// that used to shuffle the whole parish sideways when the keeper gathered.
-	/// </remarks>
+	/// <summary>Where the conduits arrive. See Layout.Intake.</summary>
 	private Vector2 Intake
 	{
 		get
@@ -218,11 +190,7 @@ public sealed class Parish
 			{
 				return centre;
 			}
-			// 0.34 of the resting width on each axis puts the point on the diagonal at about
-			// 0.48 of the width from the middle - just inside the rim, so the line meets stone
-			// rather than stopping in the air beside it.
-			float reach = SigilRest * 0.34f;
-			return new Vector2(centre.X - reach / bd.Z, centre.Y + reach / bd.W);
+			return Layout.Intake(centre, SigilRest / bd.Z, SigilRest / bd.W);
 		}
 	}
 
@@ -306,7 +274,7 @@ public sealed class Parish
 	/// The two rects are not the same - the backdrop covers the whole canvas and the nave is a
 	/// panel inside it - so measuring the horizon against the nave put every rite's feet a long
 	/// way below the line the shader had drawn. Going through the backdrop and subtracting the
-	/// nave's origin is what makes <see cref="kHorizon"/> mean the same thing on both sides.
+	/// nave's origin is what makes <see cref="Layout.Horizon"/> mean the same thing on both sides.
 	/// </remarks>
 	private Vector2 ToLocal(Vector2 f)
 	{
@@ -315,18 +283,8 @@ public sealed class Parish
 		return new Vector2(bd.X + bd.Z * f.X - nave.X, bd.Y + bd.W * f.Y - nave.Y);
 	}
 
-	/// <summary>Left end of the stretch of horizon the rites stand along, as a backdrop fraction.</summary>
-	private const float kRiteLeft = 0.035f;
-
-	/// <summary>
-	/// Right end of that stretch: just clear of the sigil's left edge.
-	/// </summary>
-	/// <remarks>
-	/// Measured off the sigil rather than written down as a constant. The sigil is centred in
-	/// the nave and the nave is not centred in the canvas, so any number picked by hand here is
-	/// only correct at one window size - and the one I picked put the deepest rite directly on
-	/// top of it.
-	/// </remarks>
+	/// <summary>Right end of the stretch the rites stand along. See Layout.RiteRight - the
+	/// arithmetic is there so the harness can hold it; this only supplies the measurements.</summary>
 	private float RiteRight
 	{
 		get
@@ -337,22 +295,9 @@ public sealed class Parish
 			{
 				return 0.34f;
 			}
-			// Measured from the sigil's CENTRE, never its edge. The sigil is centre-pivoted and
-			// grows about a tenth when struck, so its left edge slides outward on every click -
-			// and this figure sets the spacing and the position of every structure in the
-			// parish. Reading the edge meant the whole parish shuffled sideways each time the
-			// keeper gathered, which is exactly as rough as it sounds. The centre does not move
-			// when the sigil scales, so the layout now holds still while the sigil breathes.
-			// The clearance is the sigil's RESTING half-width plus a margin - the same gap the
-			// old edge-reading gave, but measured from something that holds still. See
-			// MeasureSigil for where that resting width comes from.
-			float clearance = SigilRest * 0.5f / bd.Z + 0.03f;
 			float centre = (sg.X + sg.Z * 0.5f - bd.X) / bd.Z;
-
-			// Clamped at BOTH ends. The upper bound is the load-bearing one: this is a division
-			// by a live rect, and an unbounded result here propagates straight into the size of
-			// every rite on screen.
-			return Math.Clamp(centre - clearance, kRiteLeft + 0.05f, 0.55f);
+			return Layout.RiteRight(centre, SigilRest / bd.Z,
+				Layout.RiteWidthCap(bd.Z, bd.W) * 0.5f);
 		}
 	}
 
@@ -398,16 +343,10 @@ public sealed class Parish
 
 	/// <summary>Gap between neighbouring rites, in backdrop fractions. Every rite is capped to
 	/// this wide, which is what stops a heavily-bought rite from swallowing the one beside it.</summary>
-	private float RiteSpacing => _standing > 1 ? (RiteRight - kRiteLeft) / (_standing - 1) : 0.14f;
+	private float RiteSpacing => Layout.RiteSpacing(_standing, RiteRight);
 
-	/// <summary>Where a rite stands, in backdrop fractions: evenly along the horizon, deepest
-	/// furthest in. Centred when there are too few to fill the band.</summary>
-	private float RiteX(int rite)
-	{
-		float span = (_standing - 1) * RiteSpacing;
-		float left = kRiteLeft + ((RiteRight - kRiteLeft) - span) * 0.5f;
-		return left + rite * RiteSpacing;
-	}
+	/// <summary>Where a rite stands, in backdrop fractions.</summary>
+	private float RiteX(int rite) => Layout.RiteX(rite, _standing, RiteRight);
 
 	public void Update(float deltaTime, float unscaledDelta)
 	{
@@ -566,7 +505,12 @@ public sealed class Parish
 			// this arithmetic, and it is fixed in the renderer. The report stays because it costs
 			// nothing and it is what separated the two the first time: if a rite ever looks wrong
 			// again, silence here puts the fault below this script.
-			if (size > bd.W * 0.60f || size < 4.0f)
+			// Capped by the room above the horizon: the structure, its count and the canopy the
+			// conduits run along all have to fit in there. There was a second cap here for a
+			// while, squeezing the rites nearest the sigil to buy the conduits room to descend
+			// through - unnecessary once the descent was anchored to the sigil's own column.
+			float tallest = Layout.RiteHeightCap(bd.W) * bd.W;
+			if (size > tallest || size < 4.0f)
 			{
 				Log.Warn("Parish: rite " + rite + " sized " + size.ToString("F0")
 					+ "px against backdrop " + bd.Z.ToString("F0") + "x" + bd.W.ToString("F0")
@@ -574,11 +518,14 @@ public sealed class Parish
 					+ " standing " + _standing + " spacing " + RiteSpacing.ToString("F3")
 					+ " riteRight " + RiteRight.ToString("F3"));
 			}
-			size = Math.Clamp(size, 4.0f, bd.W * 0.60f);
+			// Capped by the room above the horizon, not by a flat fraction of the window: the
+			// structure, its count and the canopy the conduits arch along all have to fit in
+			// there. See Layout.RiteHeightCap.
+			size = Math.Clamp(size, 4.0f, tallest);
 
 			// Art is drawn on a square canvas but its subject stands in the middle of it, so
 			// the sprite is sunk slightly to put the SUBJECT'S feet on the line, not the box's.
-			Vector2 foot = ToLocal(new Vector2(RiteX(rite), kHorizon));
+			Vector2 foot = ToLocal(new Vector2(RiteX(rite), Layout.Horizon));
 			Ui.SetAnchors(_rites[rite], Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(_rites[rite], new Vector2(0.5f, 1.0f));
 			// Pivot is bottom-centre, so the foot IS the y - subtracting the height as well
@@ -600,55 +547,37 @@ public sealed class Parish
 			Ui.SetRect(_counts[rite], foot.X, foot.Y - size - 8.0f, 90.0f, 20.0f);
 			Ui.SetText(_counts[rite], "x" + owned);
 
+			// Where this rite's conduit leaves it: above its count, not at its foot. The wire is
+			// tapped off the top of the structure, so it must start clear of the number sitting
+			// there or the first pip lands on a digit.
+			_crown[rite] = new Vector2(RiteX(rite), Layout.CrownY(size / bd.W, bd.W));
+		}
+
+		// The canopy, once every crown is known, and then the conduits under it. Two passes
+		// rather than one: the arch has to clear the TALLEST thing standing, and on the frame a
+		// keeper buys their eighth rite that is not known until the last one has been sized.
+		Vector2 intake = Intake;
+		float highest = intake.Y;
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			if (Vigil.Owned[rite] > 0)
+			{
+				highest = MathF.Min(highest, _crown[rite].Y);
+			}
+		}
+		_canopy = Layout.CanopyY(highest);
+
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
 			// The conduit this rite sends its yield down, drawn whether anything is on it or not.
 			// A wire that only appears when a bead is travelling is just a longer bead: what
 			// makes the yield read as CARRIED rather than as floating is that the route was
 			// visibly there beforehand.
-			DressWire(rite, RiteX(rite), Intake, bd);
+			if (Vigil.Owned[rite] > 0)
+			{
+				DressWire(rite, _crown[rite], intake, bd);
+			}
 		}
-	}
-
-	/// <summary>
-	/// A point along the conduit running from a rite's foot to the sigil.
-	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// One function, sampled twice: once per frame to lay out the pips that draw the conduit,
-	/// and again every frame per bearer to place the bead travelling along it. Sharing the
-	/// function is the whole point - a wire drawn from one curve and a bead moved along another
-	/// drifts apart the moment either is touched, and a bead that is visibly off its own wire
-	/// looks worse than no wire at all.
-	/// </para>
-	/// <para>
-	/// A cubic with both handles on the spine: out of the rite's foot going straight down, along
-	/// the sag, then up into the sigil's rim. Handles on the spine rather than anywhere between
-	/// are what flatten the middle into a run instead of a diagonal, so the shape reads as
-	/// plumbing rather than as an arc.
-	/// </para>
-	/// </remarks>
-	private static Vector2 Conduit(float fromX, Vector2 to, float t)
-	{
-		const float spine = kHorizon + kSag;
-		Vector2 p0 = new Vector2(fromX, kHorizon);
-		Vector2 p1 = new Vector2(fromX, spine);
-		Vector2 p2 = new Vector2(to.X, spine);
-		float u = 1.0f - t;
-		return p0 * (u * u * u) + p1 * (3.0f * u * u * t) + p2 * (3.0f * u * t * t) + to * (t * t * t);
-	}
-
-	/// <summary>How long the conduit is, in nave fractions. Sampled rather than solved: a cubic
-	/// has no closed-form length, and eight chords is inside a pixel at the sizes drawn.</summary>
-	private static float ConduitLength(float fromX, Vector2 to)
-	{
-		float length = 0.0f;
-		Vector2 last = Conduit(fromX, to, 0.0f);
-		for (int i = 1; i <= 8; i++)
-		{
-			Vector2 next = Conduit(fromX, to, i / 8.0f);
-			length += (next - last).Length();
-			last = next;
-		}
-		return MathF.Max(length, 0.05f);
 	}
 
 	/// <summary>
@@ -660,8 +589,9 @@ public sealed class Parish
 	/// stood when the eighth was bought. Cheap: eighteen rects against a parish that is already
 	/// moving forty bearers.
 	/// </remarks>
-	private void DressWire(int rite, float x, Vector2 to, Vector4 bd)
+	private void DressWire(int rite, Vector2 from, Vector2 to, Vector4 bd)
 	{
+		float radius = Layout.CornerRadius(from, to, _canopy, RiteSpacing);
 		for (int i = 0; i < kWirePips; i++)
 		{
 			Entity pip = _wire[rite, i];
@@ -670,10 +600,10 @@ public sealed class Parish
 				continue;
 			}
 			pip.SetActive(true);
-			// Skips t=0: the first pip would sit inside the rite's foot, where it reads as a
-			// smudge on the structure rather than the start of a line.
+			// Skips t=0: the first pip would sit on the rite's crown, where it reads as a smudge
+			// on the structure rather than the start of a line.
 			float t = (i + 1.0f) / (kWirePips + 1.0f);
-			Vector2 px = ToLocal(Conduit(x, to, t));
+			Vector2 px = ToLocal(Layout.Conduit(from, to, _canopy, radius, t));
 			float size = Math.Clamp(bd.W * 0.004f, 1.0f, 6.0f);
 			Ui.SetAnchors(pip, Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(pip, new Vector2(0.5f, 0.5f));
@@ -708,7 +638,7 @@ public sealed class Parish
 		_flare[rite] = 1.0f;
 
 		Bearer b = _bearers[_nextBearer];
-		b.From = new Vector2(RiteX(rite), kHorizon);
+		b.Rite = rite;
 		b.Amount = amount;
 		b.Age = 0.0f;
 		b.To = Intake;
@@ -768,7 +698,7 @@ public sealed class Parish
 		ShowPop(f, "+" + Numbers.Short(amount), Palette.Ichor);
 	}
 
-	/// <summary>Walk every live bearer down off its rite and along the floor to the keeper.</summary>
+	/// <summary>Draw every live bearer along its conduit, over the parish and into the sigil.</summary>
 	private void UpdateBearers(float unscaledDelta)
 	{
 		if (!Laid)
@@ -785,14 +715,18 @@ public sealed class Parish
 				continue;
 			}
 			b.Age += unscaledDelta * b.Pace;
-			float total = ConduitLength(b.From.X, b.To) / kBearerSpeed;
+			// The rite's CURRENT crown, so the bead stays on the wire even if the structure has
+			// grown or the canopy lifted since it set off.
+			Vector2 from = _crown[b.Rite];
+			float radius = Layout.CornerRadius(from, b.To, _canopy, RiteSpacing);
+			float total = Layout.ConduitLength(from, b.To, _canopy, radius) / kBearerSpeed;
 
 			// A bead drawn along the conduit, eased at both ends so it sets off and arrives
 			// rather than snapping into a constant slide. No bow and no gait: it is not walking,
 			// it is being drawn down a line, and a bounce on a fixed wire reads as a fault.
 			float w = Math.Clamp(b.Age / total, 0.0f, 1.0f);
 			float e = w * w * (3.0f - 2.0f * w);
-			Vector2 at = Conduit(b.From.X, b.To, e);
+			Vector2 at = Layout.Conduit(from, b.To, _canopy, radius, e);
 
 			Vector2 px = ToLocal(at);
 			// Holds its size along the run and only narrows over the last stretch, as the sigil
@@ -818,10 +752,12 @@ public sealed class Parish
 			{
 				b.Live = false;
 				Ui.SetRect(b.Body, -500.0f, -500.0f, 1.0f, 1.0f);
-				// The payout lands where the sigil took it in, which is the point of the run.
-				// No jitter of its own any more: the fan in ShowPop separates these properly,
-				// and a random nudge on top of it only blurred which lane a figure was in.
-				ShowPop(b.To + new Vector2(0.0f, -0.08f),
+				// The payout lands where the sigil took it in, which is the point of the run. No
+				// jitter of its own: the fan in ShowPop separates these properly, and a random
+				// nudge on top of it only blurred which lane a figure was in. No offset either -
+				// the intake is already above the sigil now, so lifting it further put the
+				// figure out among the conduits it had just arrived down.
+				ShowPop(b.To,
 					"+" + Numbers.Short(b.Amount), Palette.Ichor);
 			}
 			_bearers[i] = b;
