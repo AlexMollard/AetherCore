@@ -29,6 +29,7 @@ public sealed class VigilSave
 	public int RelicsRendered { get; set; }
 	public int BestRelicGrade { get; set; } = -1;
 	public int Consecrations { get; set; }
+	public int RelicsLost { get; set; }
 
 	/// <summary>
 	/// What the parish has said, oldest first.
@@ -139,6 +140,7 @@ public static class VigilData
 		RelicsRendered = Vigil.RelicsRendered,
 		BestRelicGrade = Vigil.BestRelicGrade,
 		Consecrations = Vigil.Consecrations,
+		RelicsLost = Vigil.RelicsLost,
 		Spoken = Transcript.Capture().Lines,
 		SpokenOmens = Transcript.Capture().Omens,
 		SpokenAt = Transcript.Capture().At,
@@ -225,6 +227,7 @@ public static class VigilData
 		Vigil.RelicsRendered = Math.Max(0, save.RelicsRendered);
 		Vigil.BestRelicGrade = Math.Clamp(save.BestRelicGrade, -1, (int)Grade.Hollowed);
 		Vigil.Consecrations = Math.Max(0, save.Consecrations);
+		Vigil.RelicsLost = Math.Max(0, save.RelicsLost);
 		Transcript.Restore(save.Spoken, save.SpokenOmens, save.SpokenAt);
 		CopyInto(save.Marks, Vigil.MarksEarned);
 		CopyInto(save.Overseers, Vigil.Overseers);

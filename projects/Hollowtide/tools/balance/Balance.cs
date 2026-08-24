@@ -3608,6 +3608,104 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// Stand still and let the thing arrive.
+	/// </summary>
+	/// <remarks>
+	/// <c>Give(Answer.None)</c> does NOT resolve a visitation - it returns early, because "no
+	/// answer" is not an answer a keeper gives, it is one they fail to give, and the encounter
+	/// resolves on the clock. A fixture that called it and then asserted the consequences
+	/// asserted them about a visitation still walking: two checks here passed that way, finding
+	/// an intact satchel because nothing had happened to it yet. Ticking to the end is the only
+	/// way to test the branch an absent keeper actually lands on.
+	/// </remarks>
+	private static void LetItLand()
+	{
+		for (int step = 0; step < 60000 && Vigil.Approaching; step++)
+		{
+			Vigil.Tick(kDt);
+		}
+	}
+
+	/// <summary>
+	/// What is worn is safe, and what is loose is not.
+	/// </summary>
+	/// <remarks>
+	/// The rule the whole thing rests on: a keeper who wants to keep a relic can put it on, and
+	/// nothing they are relying on ever disappears without their having chosen to leave it
+	/// loose. If a worn relic could ever be taken, the satchel stops being a decision and the
+	/// loss stops being fair.
+	/// <para>
+	/// Everything is set up AFTER Summon, which resets the vigil - a fixture that arranges a
+	/// satchel and then summons is testing an empty one, and would have passed by finding
+	/// nothing to lose.
+	/// </para>
+	/// </remarks>
+	private static void TheDarkTakesWhatIsLoose()
+	{
+		Console.WriteLine("The dark takes what is loose");
+
+		// Nothing to lose: a visitation must still resolve rather than falling over.
+		Summon(0, 0, 1e9);
+		LetItLand();
+		Check("an empty satchel survives a visitation", Vigil.TimesTaken >= 1 && Vigil.RelicsLost == 0,
+			"nothing to take, and nothing breaks");
+
+		// Worn relics are untouchable, however many visitations land.
+		Summon(0, 0, 1e9);
+		int[] wornSeeds = new int[Relics.Slots];
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			Vigil.Worn[slot] = new Relic { Seed = 900 + slot, Grade = Grade.Hollowed };
+			wornSeeds[slot] = Vigil.Worn[slot].Seed;
+		}
+		LetItLand();
+		for (int i = 0; i < 8; i++)
+		{
+			Vigil.Dread = 1.0;
+			Vigil.Tick(kDt);
+			LetItLand();
+		}
+		bool wornHeld = true;
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			wornHeld &= Vigil.Worn[slot].Seed == wornSeeds[slot];
+		}
+		Check("nothing worn is ever taken", wornHeld && Vigil.RelicsLost == 0,
+			"visitations landed, three hands untouched");
+
+		// The best carried thing goes, and only one per visitation.
+		Summon(0, 0, 1e9);
+		Vigil.Satchel.Add(new Relic { Seed = 11, Grade = Grade.Leavings });
+		Vigil.Satchel.Add(new Relic { Seed = 12, Grade = Grade.Hollowed });
+		Vigil.Satchel.Add(new Relic { Seed = 13, Grade = Grade.Keepsake });
+		LetItLand();
+		bool tookTheBest = Vigil.Satchel.Count == 2 && Vigil.RelicsLost == 1;
+		foreach (Relic left in Vigil.Satchel)
+		{
+			tookTheBest &= left.Grade != Grade.Hollowed;
+		}
+		Check("it takes the best thing in the satchel, and one of them", tookTheBest,
+			Vigil.Satchel.Count + " left, the best one gone");
+
+		// A ward that holds costs nothing but the ward.
+		Summon(0, 3, 1e9);
+		Vigil.Satchel.Add(new Relic { Seed = 21, Grade = Grade.Hallowed });
+		LetItLand();
+		Check("a ward that holds loses nothing", Vigil.Satchel.Count == 1 && Vigil.RelicsLost == 0,
+			"the ward is spent and the satchel is not");
+
+		// Answering correctly loses nothing either - knowing the answer must never cost more
+		// than not knowing it, which this suite has caught before.
+		Summon(0, 0, 1e9);
+		Vigil.Satchel.Add(new Relic { Seed = 31, Grade = Grade.Hallowed });
+		Vigil.Give(Vigil.CorrectAnswer);
+		Check("and knowing the answer loses nothing", Vigil.Satchel.Count == 1 && Vigil.RelicsLost == 0,
+			"turned away, satchel intact");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3650,6 +3748,7 @@ internal static class Balance
 		EveryRelicCanBeRead();
 		LuckIsWorthWearing();
 		TheParishHasEnoughToSay();
+		TheDarkTakesWhatIsLoose();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

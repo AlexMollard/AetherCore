@@ -102,6 +102,9 @@ public static class Vigil
 	/// the enum written into the file.</summary>
 	public static int BestRelicGrade = -1;
 
+	/// <summary>How many relics the dark has taken out of the satchel.</summary>
+	public static int RelicsLost;
+
 	/// <summary>How many vigils this keeper has consecrated a rite in. Counted rather than
 	/// read off <see cref="Consecrated"/>, which is cleared every communion - a mark has to
 	/// remember something the run does not.</summary>
@@ -1312,6 +1315,50 @@ public static class Vigil
 		return moved;
 	}
 
+	/// <summary>
+	/// The dark takes something it can reach.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A visitation that lands used to cost dread and half a window's production and nothing
+	/// else - which for a game about a thing coming to take from you is a strange omission, and
+	/// left a mark called Bereaved describing an event where nothing was actually lost.
+	/// </para>
+	/// <para>
+	/// It takes the BEST thing in the satchel, and never anything worn. That is the whole design:
+	/// what is on your hands is yours, and what is loose in the bag is the parish's if it comes
+	/// for it. So the satchel stops being a waiting room and starts being an exposure, hoarding
+	/// finds for rendering or trading becomes a real risk against a real reward, and the
+	/// wear-the-best button acquires a second reason to exist. A keeper who wants to keep a thing
+	/// can simply put it on.
+	/// </para>
+	/// <para>
+	/// The best rather than a random one, because a loss you do not feel is not a cost - and
+	/// because it is the one the keeper had the clearest chance to protect.
+	/// </para>
+	/// </remarks>
+	private static void TakeSomething()
+	{
+		int best = -1;
+		for (int i = 0; i < Satchel.Count; i++)
+		{
+			if (best < 0 || RelicWorth(Satchel[i]) > RelicWorth(Satchel[best]))
+			{
+				best = i;
+			}
+		}
+		if (best < 0)
+		{
+			return;
+		}
+		Relic lost = Satchel[best];
+		Satchel.RemoveAt(best);
+		RelicsLost++;
+		Revision++;
+		Say("It takes " + Relics.NameOf(lost) + " out of your satchel. You were not holding it.",
+			Omen.Taken);
+	}
+
 	/// <summary>Take a relic off and put it back in the satchel.</summary>
 	public static bool Remove(int slot)
 	{
@@ -2118,6 +2165,7 @@ public static class Vigil
 			TimesTaken++;
 			Say(Content.Rites[rite].VisitorName + " was not looking for that.  " +
 				Content.Rites[rite].TakenLine, Omen.Taken);
+			TakeSomething();
 			OnVisitation?.Invoke(false);
 			return;
 		}
@@ -2143,6 +2191,9 @@ public static class Vigil
 
 		string flavour = rite >= 0 ? Content.Rites[rite].TakenLine : "Something walks the empty parish, and finds only you.";
 		Say(flavour + "  The parish works at half pace for " + (int)AftermathSeconds + "s.", Omen.Taken);
+		// The unwarded landing, which is the branch an absent keeper always takes - so this is
+		// also the one that most needs the satchel to have been a choice rather than a default.
+		TakeSomething();
 		OnVisitation?.Invoke(false);
 	}
 
@@ -2396,10 +2447,15 @@ public static class Vigil
 		// is a progress bar with adjectives.
 		if (Rng.NextDouble() < 0.45)
 		{
+			// Excluding whatever was said last. The first version did not, on the reasoning that
+			// the two pools are separate and a noticed line is rare enough by its own
+			// conditions - which is wrong, and the harness said so within a minute: when only
+			// ONE noticed line is eligible, it is the only candidate every time, so it follows
+			// itself. Rarity of a pool says nothing about repetition inside it.
 			int eligible = 0;
 			for (int i = 0; i < Content.Noticed.Length; i++)
 			{
-				if (Content.Noticed[i].When())
+				if (Content.Noticed[i].When() && Content.Noticed[i].Line != s_lastSpoken)
 				{
 					eligible++;
 				}
@@ -2409,14 +2465,12 @@ public static class Vigil
 				int want = Rng.Next(eligible);
 				for (int i = 0; i < Content.Noticed.Length; i++)
 				{
-					if (!Content.Noticed[i].When())
+					if (!Content.Noticed[i].When() || Content.Noticed[i].Line == s_lastSpoken)
 					{
 						continue;
 					}
 					if (want-- == 0)
 					{
-						// Deliberately not tracked against s_lastAmbient: the two pools are
-						// separate, and a noticed line is rare enough by its own conditions.
 						Say(Content.Noticed[i].Line, Omen.Plain);
 						return;
 					}
@@ -2492,6 +2546,14 @@ public static class Vigil
 		Satchel.Clear();
 		Array.Clear(Worn, 0, Worn.Length);
 		RelicsFound = 0;
+		// Every counter added since has to be cleared here too. Reset is what a NEW GAME runs,
+		// so anything left behind is one keeper's record showing up in another's - and the marks
+		// read these, which makes it a record of things the new keeper never did. Found by the
+		// harness, where a leaked count made two unrelated checks fail.
+		RelicsRendered = 0;
+		RelicsLost = 0;
+		BestRelicGrade = -1;
+		Consecrations = 0;
 		// Somewhere in the first billion, leaving room to count up without ever wrapping into
 		// another keeper's stretch of the space.
 		RelicSeed = Rng.Next(1, 1_000_000_000);
