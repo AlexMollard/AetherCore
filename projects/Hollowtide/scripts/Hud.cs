@@ -188,7 +188,9 @@ public sealed class Hud
 
 		RiteDef visitor = Content.Rites[Vigil.ApproachRite];
 		Ui.SetText(_visName, visitor.VisitorName);
-		Ui.SetText(_visLine, visitor.Approach);
+		// The line the parish actually said, not the canonical one - otherwise the panel and the
+		// whisper describe the same visitor in two different sentences.
+		Ui.SetText(_visLine, Vigil.ApproachLine.Length > 0 ? Vigil.ApproachLine : visitor.Approach);
 		// What is at stake, said while there is still time to do something about it. A visitation
 		// that lands takes the best thing loose in the satchel, and a keeper who only finds that
 		// out afterwards has been punished for a rule nobody told them. Said HERE rather than in

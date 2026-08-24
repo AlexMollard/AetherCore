@@ -1788,6 +1788,7 @@ public static class Vigil
 		StokeCooldown = 0.0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
+		ApproachLine = "";
 		ShuntCooldown = 0.0;
 		s_murmurBand = -1;
 		s_quiet = 0.0;
@@ -2067,8 +2068,32 @@ public static class Vigil
 		ApproachSeconds = kApproachSeconds * (1.0 + Wearing(Power.Patience));
 		ApproachTotal = ApproachSeconds;
 		Revision++;
-		Say(Content.Rites[rite].Approach, Omen.Dread);
+		// Chosen ONCE, here, and read by everything else. The panel, the whisper and the
+		// transcript all show this line, and picking independently in each would have the
+		// parish warn you about one thing while the panel described another.
+		ApproachLine = PickApproach(rite);
+		Say(ApproachLine, Omen.Dread);
 		OnApproach?.Invoke(rite);
+	}
+
+	/// <summary>What the thing now walking said when it announced itself. Empty when nothing
+	/// is coming.</summary>
+	public static string ApproachLine = "";
+
+	/// <summary>
+	/// One of the ways this visitor announces itself.
+	/// </summary>
+	/// <remarks>
+	/// Every variant carries the same tell, so which one is drawn changes the words and not the
+	/// puzzle - see the note on RiteDef.AlsoApproach. The canonical line is included in the
+	/// draw rather than being a fallback, so it is not rarer than the others.
+	/// </remarks>
+	private static string PickApproach(int rite)
+	{
+		RiteDef def = Content.Rites[rite];
+		int choices = 1 + def.AlsoApproach.Length;
+		int pick = Rng.Next(choices);
+		return pick == 0 ? def.Approach : def.AlsoApproach[pick - 1];
 	}
 
 	/// <summary>
@@ -2189,6 +2214,7 @@ public static class Vigil
 		Answer wanted = CorrectAnswer;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
+		ApproachLine = "";
 		Revision++;
 
 		// Answered correctly. Turned away without the parish paying for it, and the keeper is
@@ -2643,6 +2669,7 @@ public static class Vigil
 		CommunionSurges = 0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
+		ApproachLine = "";
 		HandGathers = 0;
 		SharedVigilSeconds = 0.0;
 		SurgeSeconds = 0.0;

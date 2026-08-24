@@ -61,6 +61,26 @@ public sealed class RiteDef
 	/// the line has to be enough for a keeper who has met this one before to know what to
 	/// reach for, and not enough for one who has not.</summary>
 	public string Approach = "";
+
+	/// <summary>
+	/// Other ways this one announces itself.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The encounter is the most dramatic thing in the game and each visitor said the same
+	/// sentence every single time it came, which turns a warning into a label. These are drawn
+	/// from instead, once per approach.
+	/// </para>
+	/// <para>
+	/// Every variant keeps the TELL. The line is the only thing a keeper has to work out what
+	/// the thing wants, and the whole progression of the encounter lives in the player learning
+	/// to read it - so a variant that dropped or moved the cue would not be flavour, it would be
+	/// the game cheating. Each of these says the same thing about what is coming in different
+	/// words. <see cref="Approach"/> itself stays the canonical one, and is what the bestiary
+	/// shows, so what a keeper studies is stable even though what they hear is not.
+	/// </para>
+	/// </remarks>
+	public string[] AlsoApproach = Array.Empty<string>();
 	/// <summary>The one thing that turns this visitor away. Learned by meeting it, which is
 	/// the only progression in the game that lives in the player rather than in the save.</summary>
 	public Answer Answer = Answer.None;
@@ -184,6 +204,11 @@ public static class Content
 			TakenLine = "A lantern goes out. You did not hear it fall.",
 			VisitorName = "The Wick-Thin Man", Answer = Answer.Still,
 			Approach = "Something thin is walking the lantern line, and stopping at each one.",
+			AlsoApproach = new[]
+			{
+				"There is a thin shape between the lanterns. It stops whenever you do.",
+				"Something narrow is going along the lights, pausing at every one of them.",
+			},
 		},
 		new RiteDef
 		{
@@ -193,6 +218,11 @@ public static class Content
 			TakenLine = "The choir drops a voice. The others do not adjust.",
 			VisitorName = "The Thirteenth Voice", Answer = Answer.Bell,
 			Approach = "A voice joins the choir. It is holding a note none of them started.",
+			AlsoApproach = new[]
+			{
+				"The choir has gained a voice. It is singing something they did not begin.",
+				"There is one more note in the choir than there are throats for.",
+			},
 		},
 		new RiteDef
 		{
@@ -202,6 +232,11 @@ public static class Content
 			TakenLine = "A plinth stands empty. The stains lead away from it.",
 			VisitorName = "The Unmoved", Answer = Answer.Still,
 			Approach = "The statue is facing the other way. You are certain it is watching.",
+			AlsoApproach = new[]
+			{
+				"The statue has turned from you, and you have never been more sure of being watched.",
+				"It is facing the wall now. It is still looking at you.",
+			},
 		},
 		new RiteDef
 		{
@@ -211,6 +246,11 @@ public static class Content
 			TakenLine = "The loom is unthreaded. Something wore what it made.",
 			VisitorName = "The Unthreaded", Answer = Answer.Offer,
 			Approach = "Something is pulling at the weave, and it is hungry rather than cruel.",
+			AlsoApproach = new[]
+			{
+				"Something is tugging at the loom. It wants, rather than hates.",
+				"The weave is being drawn at by something starving. It has asked for nothing yet.",
+			},
 		},
 		new RiteDef
 		{
@@ -220,6 +260,11 @@ public static class Content
 			TakenLine = "An engine seizes. The bones in it were not ours.",
 			VisitorName = "The Millwright", Answer = Answer.Offer,
 			Approach = "The engine is running faster than you set it. Something is feeding it.",
+			AlsoApproach = new[]
+			{
+				"The engine has sped up. Something is putting more in than you did.",
+				"You did not set it this fast. Something is giving it more to work with.",
+			},
 		},
 		new RiteDef
 		{
@@ -229,6 +274,11 @@ public static class Content
 			TakenLine = "A chapel slips under. The singing does not stop, only muffles.",
 			VisitorName = "The Tide-Sung", Answer = Answer.Bell,
 			Approach = "The water in the nave is rising, and the singing is getting louder.",
+			AlsoApproach = new[]
+			{
+				"The nave is filling, and whatever is singing is singing harder for it.",
+				"Water over the flags, and the song under it climbing.",
+			},
 		},
 		new RiteDef
 		{
@@ -238,6 +288,11 @@ public static class Content
 			TakenLine = "A shepherd walks off with its flock. Count yourself.",
 			VisitorName = "The Shepherd's Count", Answer = Answer.Ward,
 			Approach = "It has begun counting the flock. Do not let it reach you.",
+			AlsoApproach = new[]
+			{
+				"Something is going along the parish counting. You are near the end of the row.",
+				"It is numbering everything here, one at a time, and coming your way.",
+			},
 		},
 		new RiteDef
 		{
@@ -247,6 +302,11 @@ public static class Content
 			TakenLine = "A mouth closes. You are certain it swallowed.",
 			VisitorName = "What Came Through", Answer = Answer.Ward,
 			Approach = "The mouth is open wider than it opens. Something is using it as a door.",
+			AlsoApproach = new[]
+			{
+				"The mouth has opened past its own hinge. Something is coming through it.",
+				"It is open further than it can open. Something is treating it as a way in.",
+			},
 		},
 	});
 

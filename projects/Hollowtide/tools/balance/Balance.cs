@@ -4420,6 +4420,90 @@ internal static class Balance
 				: string.Join("; ", always));
 	}
 
+	/// <summary>
+	/// A visitor announces itself differently and means the same thing.
+	/// </summary>
+	/// <remarks>
+	/// The approach line is the ONLY thing a keeper has to work out what a visitor wants, and
+	/// learning to read it is the whole progression of the encounter. So varying the wording is
+	/// flavour and varying the meaning would be the game cheating. What can be checked
+	/// mechanically is that the variation is only ever wording: the same visitor, the same
+	/// answer, one line chosen per approach and shown identically everywhere.
+	/// </remarks>
+	private static void AVisitorMeansTheSameHoweverItSpeaks()
+	{
+		Console.WriteLine("A visitor means the same however it speaks");
+
+		int blank = 0;
+		int duplicated = 0;
+		int thin = 0;
+		HashSet<string> everything = new HashSet<string>();
+		foreach (RiteDef rite in Content.Rites)
+		{
+			if (string.IsNullOrWhiteSpace(rite.Approach))
+			{
+				blank++;
+			}
+			if (rite.AlsoApproach.Length == 0)
+			{
+				thin++;
+			}
+			foreach (string line in rite.AlsoApproach)
+			{
+				if (string.IsNullOrWhiteSpace(line))
+				{
+					blank++;
+				}
+			}
+			// Two visitors sharing a sentence would make the tell ambiguous, which is the one
+			// thing the encounter cannot survive.
+			foreach (string line in new List<string>(rite.AlsoApproach) { rite.Approach })
+			{
+				if (!everything.Add(line))
+				{
+					duplicated++;
+				}
+			}
+		}
+
+		Check("every visitor has more than one way of announcing itself", thin == 0 && blank == 0,
+			everything.Count + " lines across " + Content.Rites.Length + " visitors");
+		Check("and no two of them share a sentence", duplicated == 0,
+			duplicated == 0 ? "every tell belongs to exactly one visitor" : duplicated + " shared");
+
+		// The line is drawn once per approach and everything reads that one. Summon repeatedly
+		// and confirm the line always belongs to the visitor that is actually walking.
+		int mismatched = 0;
+		HashSet<string> seen = new HashSet<string>();
+		for (int attempt = 0; attempt < 200; attempt++)
+		{
+			Summon(attempt % Content.RiteCount, 0, 1e9);
+			if (!Vigil.Approaching)
+			{
+				continue;
+			}
+			RiteDef walking = Content.Rites[Vigil.ApproachRite];
+			bool belongs = Vigil.ApproachLine == walking.Approach
+				|| Array.IndexOf(walking.AlsoApproach, Vigil.ApproachLine) >= 0;
+			if (!belongs)
+			{
+				mismatched++;
+			}
+			seen.Add(Vigil.ApproachLine);
+			LetItLand();
+		}
+		Check("the line said always belongs to the thing walking", mismatched == 0,
+			mismatched == 0 ? seen.Count + " different announcements, all of them the right one"
+				: mismatched + " described a different visitor");
+		Check("and more than one of them actually gets used", seen.Count > Content.Rites.Length,
+			seen.Count + " distinct lines drawn across 200 approaches");
+
+		// Nothing walking, nothing said - so the panel cannot show last time's warning.
+		Vigil.Reset();
+		Check("nothing is announced when nothing is coming", Vigil.ApproachLine.Length == 0,
+			"the line is cleared with the encounter");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4471,6 +4555,7 @@ internal static class Balance
 		EveryNumberStaysReadable();
 		ARescuedSaveNeverLandsOnAnother();
 		NothingHereIsAssertedForShow();
+		AVisitorMeansTheSameHoweverItSpeaks();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
