@@ -279,6 +279,67 @@ internal static class Balance
 		Check("ward never costs more than the window pays", highest < 0.6,
 			"worst case " + (highest * 100.0).ToString("0.0") + "%");
 
+		// -- Insurance has to be affordable from the start, and cost nothing to keep back. --
+		// A ward is priced off production, so it could in principle outrun a young parish
+		// entirely; and if holding the money back cost a keeper real progress, the correct play
+		// would be never to insure and the mechanic would be decoration.
+		Vigil.Reset();
+		Vigil.Rng = new Random(3);
+		double affordedAt = -1.0;
+		double clock2 = 0.0;
+		double clicking2 = 0.0;
+		for (int step = 0; step < 300.0 / kDt; step++, clock2 += kDt)
+		{
+			clicking2 += 3.0 * kDt;
+			while (clicking2 >= 1.0)
+			{
+				clicking2 -= 1.0;
+				Vigil.Gather();
+			}
+			double keepBack = Vigil.WardCost;
+			for (int i = 0; i < Content.RiteCount; i++)
+			{
+				if (Vigil.CostOf(i, Vigil.Owned[i]) + keepBack <= Vigil.Ichor)
+				{
+					Vigil.BuyRite(i, 1);
+					break;
+				}
+			}
+			if (affordedAt < 0.0 && Vigil.Ichor >= Vigil.WardCost)
+			{
+				affordedAt = clock2;
+			}
+			Vigil.Tick(kDt);
+		}
+		int reservedTier = Vigil.DeepestRite();
+		Check("a ward is affordable in the first minute", affordedAt is >= 0.0 and < 60.0,
+			"first affordable at " + Numbers.Duration(affordedAt));
+
+		// The same stretch, spending everything, to see what holding back actually costs.
+		Vigil.Reset();
+		Vigil.Rng = new Random(3);
+		clicking2 = 0.0;
+		for (int step = 0; step < 300.0 / kDt; step++)
+		{
+			clicking2 += 3.0 * kDt;
+			while (clicking2 >= 1.0)
+			{
+				clicking2 -= 1.0;
+				Vigil.Gather();
+			}
+			for (int i = 0; i < Content.RiteCount; i++)
+			{
+				if (Vigil.CostOf(i, Vigil.Owned[i]) <= Vigil.Ichor)
+				{
+					Vigil.BuyRite(i, 1);
+					break;
+				}
+			}
+			Vigil.Tick(kDt);
+		}
+		Check("and keeping it back costs no progress", reservedTier >= Vigil.DeepestRite(),
+			"tier " + (reservedTier + 1) + " insured against tier " + (Vigil.DeepestRite() + 1) + " spent out");
+
 		Vigil.Reset();
 		for (int i = 0; i < Content.RiteCount; i++)
 		{
