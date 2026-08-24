@@ -70,7 +70,27 @@ public sealed class Parish
 	private int _nextBearer;
 
 	private float _shake;
-	private float _time;
+	/// <summary>
+	/// The parish's own clock, in seconds, kept as a double and handed to shaders wrapped.
+	/// </summary>
+	/// <remarks>
+	/// It was a float, and a float accumulating a frame delta STOPS at about 524,300 seconds -
+	/// six days of continuous running - because by then its own spacing is wider than a
+	/// sixtieth of a second and the addition rounds to nothing. Every animation the parish
+	/// drives would simply stop, permanently, in a game whose whole premise is being left
+	/// running. A double is exact for longer than anybody will ever leave it on.
+	/// </remarks>
+	private double _time;
+
+	/// <summary>What the shaders get: the clock wrapped into an hour, so the value handed
+	/// across is always small enough for a float to resolve finely. Everything drawn from it is
+	/// periodic, so the wrap costs one discontinuity an hour in drifting fog and grain -
+	/// against a clock that otherwise freezes solid on the sixth day.</summary>
+	private float ShaderTime => (float)(_time % kClockWrap);
+
+	/// <summary>How long the wrap is. Any animation slower than this would visibly restart, so
+	/// nothing driven by the clock should have a period near it.</summary>
+	private const double kClockWrap = 3600.0;
 
 	/// <summary>Per-rite purchase impulse: the structure punches in scale and flares.</summary>
 	private readonly float[] _punch = new float[Content.RiteCount];
@@ -297,7 +317,7 @@ public sealed class Parish
 		// while something is on its way in whatever the meter happens to read. The shake still
 		// passes through DreadShake, so a keeper who turned the unsteadiness down keeps it down.
 		Ui.SetEffectParams(_backdrop,
-			new Vector4(_time, MathF.Max(dread, MathF.Max(_reel * 0.75f, _walking)),
+			new Vector4(ShaderTime, MathF.Max(dread, MathF.Max(_reel * 0.75f, _walking)),
 				_shake * _shake * SaveSystem.DreadShake, _wave));
 		// The void's ALPHA carries where the wave started, because params is full and the
 		// backdrop only ever reads the void's rgb. Documented on both sides rather than
@@ -360,7 +380,7 @@ public sealed class Parish
 				_rites[rite] = UiKit.Image(_nave, 0.0f, 0.0f, 10.0f, 10.0f, Palette.Ink);
 				Ui.SetMaterial(_rites[rite], "ui_rite");
 				// Params before the first draw, so a rite never renders as rite 0 for a frame.
-				Ui.SetMaterialParams(_rites[rite], new Vector4(_time, rite, 0.0f, 0.0f));
+				Ui.SetMaterialParams(_rites[rite], new Vector4(ShaderTime, rite, 0.0f, 0.0f));
 				Ui.SetMaterialColors(_rites[rite], Palette.RiteTint(rite), Palette.Ichor);
 				_counts[rite] = UiKit.Text(_nave, "", 0.0f, 0.0f, 90.0f, 20.0f, 15.0f, Palette.TextDim,
 					UiHAlign.Center);
@@ -381,7 +401,7 @@ public sealed class Parish
 				// the bestiary asks the player to learn, taught by the parish instead of by a
 				// table. Max rather than assignment so a working that finishes mid-approach can
 				// still flare over the top of it.
-				flare = MathF.Max(flare, (0.45f + 0.35f * MathF.Sin(_time * 11.0f)) * _walking);
+				flare = MathF.Max(flare, (0.45f + 0.35f * MathF.Sin(ShaderTime * 11.0f)) * _walking);
 			}
 			// Raised into place with an overshoot the first time, and punched on every
 			// purchase after that: the reward for spending is that the parish moves.
@@ -427,7 +447,7 @@ public sealed class Parish
 
 			// Structure stays on the ramp; the flare is the only thing that brightens it, and
 			// only for as long as the rite is handing something over.
-			Ui.SetMaterialParams(_rites[rite], new Vector4(_time, rite, working, flare));
+			Ui.SetMaterialParams(_rites[rite], new Vector4(ShaderTime, rite, working, flare));
 			Ui.SetMaterialColors(_rites[rite],
 				Palette.Mix(Palette.RiteTint(rite), Palette.Dread, dread * 0.30f),
 				Palette.Mix(Palette.Ichor, Palette.Dread, dread * 0.45f));

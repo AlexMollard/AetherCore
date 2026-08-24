@@ -1170,6 +1170,45 @@ internal static class Balance
 		return "";
 	}
 
+	/// <summary>
+	/// A clock a keeper can leave running has to keep running.
+	/// </summary>
+	/// <remarks>
+	/// Not a rule of the game, but the arithmetic underneath one, and the harness is the only
+	/// place it can be checked at all. A float accumulating a frame delta stops advancing
+	/// entirely at about 524,300 seconds, because by then its own spacing is wider than a
+	/// sixtieth of a second - so the parish's animation froze permanently on the sixth day of
+	/// continuous running, in a game whose whole premise is being left running.
+	/// </remarks>
+	private static void TheClockOutlastsTheKeeper()
+	{
+		Console.WriteLine("The clock outlasts the keeper");
+
+		// The shape of the bug, so this documents what was wrong as well as what is right.
+		float asFloat = 1.0f;
+		while (asFloat + (1.0f / 60.0f) != asFloat)
+		{
+			asFloat *= 1.0001f;
+		}
+		Check("a float clock would have stopped inside a week", asFloat / 86400.0f < 8.0f,
+			"it freezes after " + (asFloat / 86400.0f).ToString("0.0") + " days");
+
+		// A double keeps resolving a frame for longer than any machine will stay up.
+		double asDouble = 3650.0 * 86400.0;
+		Check("a double clock still advances after ten years", asDouble + (1.0 / 60.0) != asDouble,
+			"ten years of uptime, still ticking");
+
+		// And what the shader is handed stays small enough to resolve finely, forever.
+		bool wrapHolds = true;
+		foreach (double days in new[] { 1.0, 7.0, 30.0, 365.0, 3650.0 })
+		{
+			float handed = (float)(days * 86400.0 % 3600.0);
+			wrapHolds &= handed >= 0.0f && handed < 3600.0f && handed + (1.0f / 60.0f) != handed;
+		}
+		Check("and what the shader is handed always resolves", wrapHolds,
+			"wrapped into an hour, so a float never coarsens");
+	}
+
 	/// <summary>Every promise the rules make about their own state, in one place. Returns the
 	/// first one broken, or empty.</summary>
 	private static string Describe()
@@ -2083,6 +2122,7 @@ internal static class Balance
 		TradingMovesRatherThanCopies();
 		TheDeadRememberWhatTheyTake();
 		AVigilSurvivesBeingWrittenDown();
+		TheClockOutlastsTheKeeper();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
