@@ -74,6 +74,31 @@ public sealed class VigilRites : EntityScript
 		return Send("shunt|" + toConnection + "|" + shed.ToString("R", CultureInfo.InvariantCulture));
 	}
 
+	/// <summary>
+	/// Hand a relic to another keeper.
+	/// </summary>
+	/// <remarks>
+	/// A relic travels as its seed and its grade, and nothing else - the name, the powers and
+	/// the drawing are all regenerated on the far side from those two numbers. That is what
+	/// makes trading cheap enough to be worth having: the same seed is the same relic in
+	/// anyone's hands, so there is nothing to serialise and nothing to keep in step.
+	/// </remarks>
+	public bool GiveRelic(uint toConnection, int satchelIndex)
+	{
+		if (!Vigil.GiveRelic(satchelIndex, out Relic given))
+		{
+			return false;
+		}
+		if (Send("relic|" + toConnection + "|" + given.Seed + "|" + (int)given.Grade))
+		{
+			return true;
+		}
+		// The send failed after the satchel was already lightened - put it back rather than
+		// letting a dropped packet eat the relic.
+		Vigil.RestoreRelic(given);
+		return false;
+	}
+
 	private bool Send(string payload)
 	{
 		if (!Net.IsConnected)
@@ -128,6 +153,15 @@ public sealed class VigilRites : EntityScript
 				if (uint.TryParse(parts[1], out uint shunted) && ParseAmount(parts[2], out double dread))
 				{
 					Proclaim("shunt|" + shunted + "|" + dread.ToString("R", CultureInfo.InvariantCulture) + "|" + from);
+				}
+				break;
+
+			case "relic" when parts.Length >= 4:
+				if (uint.TryParse(parts[1], out uint toKeeper)
+					&& int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int seed)
+					&& int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out int grade))
+				{
+					Proclaim("relic|" + toKeeper + "|" + seed + "|" + grade + "|" + from);
 				}
 				break;
 		}
@@ -217,6 +251,22 @@ public sealed class VigilRites : EntityScript
 					else
 					{
 						Vigil.Announce?.Invoke(parts[3] + " turns something loose on another keeper.", Omen.Dread);
+					}
+				}
+				break;
+
+			case "relic" when parts.Length >= 5:
+				if (uint.TryParse(parts[1], out uint toRelic)
+					&& int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int seed)
+					&& int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out int grade))
+				{
+					if (toRelic == me)
+					{
+						Vigil.ReceiveRelic(seed, grade, parts[4]);
+					}
+					else
+					{
+						Vigil.Announce?.Invoke(parts[4] + " hands something to another keeper.", Omen.Plain);
 					}
 				}
 				break;

@@ -1421,7 +1421,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 152, 90 ]
+    offset_max = [ 105, 90 ]
     offset_min = [ 12, 64 ]
     pivot = [ 0, 0 ]
 
@@ -1432,7 +1432,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
@@ -1453,8 +1453,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 308, 90 ]
-    offset_min = [ 168, 64 ]
+    offset_max = [ 206, 90 ]
+    offset_min = [ 113, 64 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
@@ -1464,9 +1464,41 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'congregation'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'CongRow0Give'
+node = 3616020934074957484
+parent = 50
+parent_node = 1190168854857221185
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0, 0 ]
+    anchor_min = [ 0, 0 ]
+    offset_max = [ 308, 90 ]
+    offset_min = [ 214, 64 ]
+    pivot = [ 0, 0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'RELIC'
+    pixel_size = 13
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1499,7 +1531,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Name'
 node = -6584543200989152517
-parent = 58
+parent = 59
 parent_node = 8710995097474980729
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1524,7 +1556,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Ping'
 node = -853424326932717143
-parent = 58
+parent = 59
 parent_node = 8710995097474980729
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1549,7 +1581,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Rate'
 node = 9182181137319715092
-parent = 58
+parent = 59
 parent_node = 8710995097474980729
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1574,7 +1606,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Track'
 node = -5983293465594267781
-parent = 58
+parent = 59
 parent_node = 8710995097474980729
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1596,7 +1628,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Fill'
 node = -7882866324296759809
-parent = 62
+parent = 63
 parent_node = -5983293465594267781
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1618,7 +1650,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Tithe'
 node = -6776439386589484457
-parent = 58
+parent = 59
 parent_node = 8710995097474980729
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1626,7 +1658,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 152, 90 ]
+    offset_max = [ 105, 90 ]
     offset_min = [ 12, 64 ]
     pivot = [ 0, 0 ]
 
@@ -1637,7 +1669,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
@@ -1650,7 +1682,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow1Shunt'
 node = 5189090978053505287
-parent = 58
+parent = 59
 parent_node = 8710995097474980729
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1658,8 +1690,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 308, 90 ]
-    offset_min = [ 168, 64 ]
+    offset_max = [ 206, 90 ]
+    offset_min = [ 113, 64 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
@@ -1669,9 +1701,41 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'congregation'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'CongRow1Give'
+node = 1300111022457000819
+parent = 59
+parent_node = 8710995097474980729
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0, 0 ]
+    anchor_min = [ 0, 0 ]
+    offset_max = [ 308, 90 ]
+    offset_min = [ 214, 64 ]
+    pivot = [ 0, 0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'RELIC'
+    pixel_size = 13
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1704,7 +1768,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Name'
 node = 7300038935311777916
-parent = 66
+parent = 68
 parent_node = -351949316851353657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1729,7 +1793,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Ping'
 node = 4464719761066469167
-parent = 66
+parent = 68
 parent_node = -351949316851353657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1754,7 +1818,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Rate'
 node = -3794256291747180528
-parent = 66
+parent = 68
 parent_node = -351949316851353657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1779,7 +1843,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Track'
 node = 4019484807605122825
-parent = 66
+parent = 68
 parent_node = -351949316851353657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1801,7 +1865,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Fill'
 node = 8366703701641023220
-parent = 70
+parent = 72
 parent_node = 4019484807605122825
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1823,7 +1887,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Tithe'
 node = 7890942116009131438
-parent = 66
+parent = 68
 parent_node = -351949316851353657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1831,7 +1895,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 152, 90 ]
+    offset_max = [ 105, 90 ]
     offset_min = [ 12, 64 ]
     pivot = [ 0, 0 ]
 
@@ -1842,7 +1906,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
@@ -1855,7 +1919,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow2Shunt'
 node = 6742760826807139301
-parent = 66
+parent = 68
 parent_node = -351949316851353657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1863,8 +1927,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 308, 90 ]
-    offset_min = [ 168, 64 ]
+    offset_max = [ 206, 90 ]
+    offset_min = [ 113, 64 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
@@ -1874,9 +1938,41 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'congregation'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'CongRow2Give'
+node = -4619168213511227366
+parent = 68
+parent_node = -351949316851353657
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0, 0 ]
+    anchor_min = [ 0, 0 ]
+    offset_max = [ 308, 90 ]
+    offset_min = [ 214, 64 ]
+    pivot = [ 0, 0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'RELIC'
+    pixel_size = 13
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1909,7 +2005,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Name'
 node = -1888501173692102849
-parent = 74
+parent = 77
 parent_node = 4751532566774237657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1934,7 +2030,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Ping'
 node = -3972354442760155037
-parent = 74
+parent = 77
 parent_node = 4751532566774237657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1959,7 +2055,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Rate'
 node = 9004909672054571254
-parent = 74
+parent = 77
 parent_node = 4751532566774237657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1984,7 +2080,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Track'
 node = 8770820137442167906
-parent = 74
+parent = 77
 parent_node = 4751532566774237657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -2006,7 +2102,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Fill'
 node = -4456963220280574422
-parent = 78
+parent = 81
 parent_node = 8770820137442167906
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -2028,7 +2124,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Tithe'
 node = 1685901403806996606
-parent = 74
+parent = 77
 parent_node = 4751532566774237657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -2036,7 +2132,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 152, 90 ]
+    offset_max = [ 105, 90 ]
     offset_min = [ 12, 64 ]
     pivot = [ 0, 0 ]
 
@@ -2047,7 +2143,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
@@ -2060,7 +2156,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'CongRow3Shunt'
 node = 5932434909009744441
-parent = 74
+parent = 77
 parent_node = 4751532566774237657
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -2068,8 +2164,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 308, 90 ]
-    offset_min = [ 168, 64 ]
+    offset_max = [ 206, 90 ]
+    offset_min = [ 113, 64 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
@@ -2079,9 +2175,41 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
-    pixel_size = 15
+    pixel_size = 13
     text_color = [ 0.502, 0.51, 0.522, 1 ]
     text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'congregation'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'CongRow3Give'
+node = -7723949998820064209
+parent = 77
+parent_node = 4751532566774237657
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0, 0 ]
+    anchor_min = [ 0, 0 ]
+    offset_max = [ 308, 90 ]
+    offset_min = [ 214, 64 ]
+    pivot = [ 0, 0 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'RELIC'
+    pixel_size = 13
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2114,7 +2242,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'OfflineHeading'
 node = 3295840540001162078
-parent = 82
+parent = 86
 parent_node = -2094373122575494275
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -2139,7 +2267,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'OfflineBody'
 node = -815276289161997161
-parent = 82
+parent = 86
 parent_node = -2094373122575494275
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -2164,7 +2292,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 euler = [ 0.0, 0.0, 0.0 ]
 name = 'OfflineDismiss'
 node = 3777394010251393597
-parent = 82
+parent = 86
 parent_node = -2094373122575494275
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]

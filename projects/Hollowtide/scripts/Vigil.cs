@@ -927,6 +927,98 @@ public static class Vigil
 		return true;
 	}
 
+	/// <summary>
+	/// Hand a carried relic over, taking it out of the satchel as it goes.
+	/// </summary>
+	/// <remarks>
+	/// Removed HERE and only sent if the removal succeeded, exactly as a tithe deducts before
+	/// it sends. This process is the only one that knows what is in this keeper's satchel, so
+	/// it is the only one that can spend it - a message sent first and deducted afterwards is
+	/// how one relic becomes two.
+	/// </remarks>
+	public static bool GiveRelic(int satchelIndex, out Relic given)
+	{
+		given = default;
+		if (satchelIndex < 0 || satchelIndex >= Satchel.Count)
+		{
+			return false;
+		}
+		given = Satchel[satchelIndex];
+		Satchel.RemoveAt(satchelIndex);
+		Revision++;
+		return true;
+	}
+
+	/// <summary>
+	/// A relic arriving from another keeper.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// It always lands. A full satchel drops its worst carried relic to make room, because the
+	/// alternative is refusing a relic that has ALREADY left the sender's hands - and a trade
+	/// that destroys the thing being traded is worse than one that costs the receiver their
+	/// cheapest keepsake. Worn relics are never displaced; nothing a keeper is relying on
+	/// disappears because somebody was generous.
+	/// </para>
+	/// <para>
+	/// The grade is clamped rather than trusted. A relic is two numbers on the wire, and while
+	/// nothing can be forged into an item that does not exist - every seed is a valid relic -
+	/// a grade outside the ladder would index the name tables and the art shader with a number
+	/// neither was written for.
+	/// </para>
+	/// </remarks>
+	public static void ReceiveRelic(int seed, int grade, string from)
+	{
+		if (seed == 0)
+		{
+			return;
+		}
+		Relic arriving = new Relic
+		{
+			Seed = seed,
+			Grade = (Grade)Math.Clamp(grade, 0, (int)Grade.Hollowed),
+		};
+
+		MakeRoom();
+		Satchel.Add(arriving);
+		Revision++;
+		Say(from + " puts " + Relics.NameOf(arriving) + " into your hands.", Omen.Good);
+	}
+
+	/// <summary>Put a relic back after an offer failed to leave. Silent, because nothing
+	/// happened as far as the keeper is concerned - routing this through ReceiveRelic produced
+	/// a line about somebody handing you your own relic, which is a lie about an event that
+	/// did not occur.</summary>
+	public static void RestoreRelic(Relic relic)
+	{
+		if (!relic.Exists)
+		{
+			return;
+		}
+		MakeRoom();
+		Satchel.Add(relic);
+		Revision++;
+	}
+
+	/// <summary>Drop the worst CARRIED relic if the satchel is full. Worn relics are never
+	/// touched: nothing a keeper is relying on disappears because something arrived.</summary>
+	private static void MakeRoom()
+	{
+		if (Satchel.Count < Relics.Satchel)
+		{
+			return;
+		}
+		int worst = 0;
+		for (int i = 1; i < Satchel.Count; i++)
+		{
+			if (Satchel[i].Grade < Satchel[worst].Grade)
+			{
+				worst = i;
+			}
+		}
+		Satchel.RemoveAt(worst);
+	}
+
 	/// <summary>Throw a carried relic away. Worn ones cannot be discarded without taking them
 	/// off first, so nothing a keeper is relying on vanishes on a misclick.</summary>
 	public static bool Discard(int satchelIndex)

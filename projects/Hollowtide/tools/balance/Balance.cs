@@ -1442,6 +1442,83 @@ internal static class Balance
 			leavings + " Leavings among " + Vigil.Satchel.Count + " carried");
 	}
 
+	/// <summary>
+	/// Handing a relic to another keeper must move it, not copy it.
+	/// </summary>
+	/// <remarks>
+	/// The network layer cannot be exercised here, but the half that would duplicate items can:
+	/// a trade is a removal on one side and an arrival on the other, and every duping bug ever
+	/// written is those two steps disagreeing. So the removal is checked to happen BEFORE
+	/// anything is sent, and the arrival is checked to cost the sender exactly what it gives
+	/// the receiver.
+	/// </remarks>
+	private static void TradingMovesRatherThanCopies()
+	{
+		Console.WriteLine("Trading moves rather than copies");
+
+		Vigil.Reset();
+		for (int i = 0; i < 4; i++)
+		{
+			Vigil.Satchel.Add(new Relic { Seed = 900 + i, Grade = Grade.Anointed });
+		}
+		int held = Vigil.Satchel.Count;
+		bool gave = Vigil.GiveRelic(0, out Relic given);
+		Check("giving takes it out of the satchel first", gave && Vigil.Satchel.Count == held - 1,
+			"satchel " + held + " becomes " + Vigil.Satchel.Count);
+
+		// The far side, simulated: what left one keeper arrives at the other, unchanged.
+		Vigil.Reset();
+		Vigil.ReceiveRelic(given.Seed, (int)given.Grade, "Another keeper");
+		Check("and what arrives is the same relic", Vigil.Satchel.Count == 1
+			&& Vigil.Satchel[0].Seed == given.Seed && Vigil.Satchel[0].Grade == given.Grade,
+			Relics.NameOf(Vigil.Satchel[0]) + " arrives intact");
+
+		Check("nothing can be given that is not there", !Vigil.GiveRelic(99, out _),
+			"an index past the satchel is refused");
+
+		// A relic that has already left the sender must land, even into a full satchel - the
+		// alternative is a trade that destroys the thing being traded.
+		Vigil.Reset();
+		for (int i = 0; i < Relics.Satchel; i++)
+		{
+			Vigil.Satchel.Add(new Relic { Seed = 700 + i, Grade = Grade.Leavings });
+		}
+		Vigil.Worn[0] = new Relic { Seed = 5, Grade = Grade.Hollowed };
+		Vigil.ReceiveRelic(4242, (int)Grade.Hallowed, "Another keeper");
+		bool landed = false;
+		foreach (Relic relic in Vigil.Satchel)
+		{
+			landed |= relic.Seed == 4242;
+		}
+		Check("a full satchel still takes what it is handed", landed && Vigil.Satchel.Count <= Relics.Satchel,
+			"it lands and the satchel stays at " + Vigil.Satchel.Count);
+		Check("and never at the cost of what is worn", Vigil.Worn[0].Seed == 5,
+			"the worn relic is untouched");
+
+		// The wire carries two numbers, so the numbers have to be treated as hostile.
+		Vigil.Reset();
+		Vigil.ReceiveRelic(77, 999, "Someone");
+		Check("a grade off the ladder is clamped, not trusted",
+			Vigil.Satchel.Count == 1 && Vigil.Satchel[0].Grade <= Grade.Hollowed,
+			"999 becomes " + Relics.GradeName(Vigil.Satchel[0].Grade));
+		Vigil.Reset();
+		Vigil.ReceiveRelic(0, 2, "Someone");
+		Check("and a relic that does not exist is refused", Vigil.Satchel.Count == 0,
+			"seed 0 is how nothing is spelled");
+
+		// A failed send must give it back, silently.
+		Vigil.Reset();
+		Vigil.Satchel.Add(new Relic { Seed = 31337, Grade = Grade.Hallowed });
+		int spoken = 0;
+		Vigil.GiveRelic(0, out Relic dropped);
+		Vigil.Announce = (_, _) => spoken++;
+		Vigil.RestoreRelic(dropped);
+		Vigil.Announce = null;
+		Check("a dropped offer comes back without comment",
+			Vigil.Satchel.Count == 1 && Vigil.Satchel[0].Seed == 31337 && spoken == 0,
+			"restored, and nothing claimed to have happened");
+	}
+
 	/// <summary>Every relic the keeper holds, worn or carried.</summary>
 	private static int Count()
 	{
@@ -1469,6 +1546,7 @@ internal static class Balance
 		TablesLineUp();
 		IdlingWorks();
 		TheParishGivesThingsUp();
+		TradingMovesRatherThanCopies();
 		TheDeadRememberWhatTheyTake();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();

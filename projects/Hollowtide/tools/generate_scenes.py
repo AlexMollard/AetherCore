@@ -541,8 +541,13 @@ def vigil():
         at(row, f"CongRow{i}Rate", [Scene.text("", BODY, 16.0, ICHOR_DIM)], 12, 30, 240, 22)
         track = at(row, f"CongRow{i}Track", [Scene.image(PANEL_DEEP, 3.0)], 12, 52, 296, 6)
         at(track, f"CongRow{i}Fill", [Scene.image(DREAD, 3.0)], 0, 0, 1, 6)
-        at(row, f"CongRow{i}Tithe", [Scene.button("TITHE", DISPLAY, 15.0, PANEL_DEEP, mix(ROW_HOT, ICHOR, 0.35), BONE_DIM, ICHOR), Scene.selectable("congregation")], 12, 64, 140, 26)
-        at(row, f"CongRow{i}Shunt", [Scene.button("SHUNT", DISPLAY, 15.0, PANEL_DEEP, mix(ROW_HOT, DREAD, 0.45), BONE_DIM, DREAD), Scene.selectable("congregation")], 168, 64, 140, 26)
+        # Three verbs now, on one line: give them ichor, give them your dread, or give them
+        # something you dug up. Narrowed to fit rather than stacked onto a second row, because
+        # a row that is sometimes two buttons tall and sometimes three is a panel that jumps
+        # about as keepers join.
+        at(row, f"CongRow{i}Tithe", [Scene.button("TITHE", DISPLAY, 13.0, PANEL_DEEP, mix(ROW_HOT, ICHOR, 0.35), BONE_DIM, ICHOR), Scene.selectable("congregation")], 12, 64, 93, 26)
+        at(row, f"CongRow{i}Shunt", [Scene.button("SHUNT", DISPLAY, 13.0, PANEL_DEEP, mix(ROW_HOT, DREAD, 0.45), BONE_DIM, DREAD), Scene.selectable("congregation")], 113, 64, 93, 26)
+        at(row, f"CongRow{i}Give", [Scene.button("RELIC", DISPLAY, 13.0, PANEL_DEEP, mix(ROW_HOT, ICHOR, 0.20), BONE_DIM, ICHOR), Scene.selectable("congregation")], 214, 64, 94, 26)
 
     # ── the offline report ──────────────────────────────────────────────────────────
     offline = s.add("OfflinePanel", canvas, [

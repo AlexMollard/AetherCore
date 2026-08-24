@@ -39,6 +39,7 @@ public sealed class Congregation
 		public Entity Ping;
 		public Button Tithe;
 		public Button Shunt;
+		public Button Give;
 	}
 
 	private Entity _panel;
@@ -63,6 +64,7 @@ public sealed class Congregation
 			row.Fill = Scene.Find("CongRow" + i + "Fill");
 			row.Tithe = Button.Find("CongRow" + i + "Tithe");
 			row.Shunt = Button.Find("CongRow" + i + "Shunt");
+			row.Give = Button.Find("CongRow" + i + "Give");
 			_rows[i] = row;
 		}
 	}
@@ -128,6 +130,24 @@ public sealed class Congregation
 			// the lone keeper's panel learned to draw ghosts.
 			row.Tithe.SetActive(true);
 			row.Tithe.SetLabel(canTithe ? "TITHE " + Numbers.Short(gift) : "TITHE");
+
+			// Hands over the FIRST thing in the satchel, and says which. There is no per-relic
+			// target picker and there should not be one for three buttons in a 320px row - the
+			// satchel's order is on the relics tab where a keeper can already see it, so what
+			// this button will give is never a surprise even though it is not chosen here.
+			row.Give.SetActive(true);
+			bool canGive = canAct && Vigil.Satchel.Count > 0;
+			row.Give.SetLabel(canGive
+				? Relics.GradeName(Vigil.Satchel[0].Grade).ToUpperInvariant()
+				: "NOTHING");
+			row.Give.SetEnabled(canGive);
+			row.Give.Style(canGive, Palette.Mix(Palette.RowHot, Palette.Ichor, 0.20f),
+				Palette.PanelDeep, Palette.PanelDeep);
+			if (canGive && row.Give.Activated)
+			{
+				VigilRites? handing = local!.Self.GetScript<VigilRites>();
+				handing?.GiveRelic(presence.Connection, 0);
+			}
 			row.Tithe.SetEnabled(canTithe);
 			row.Tithe.Style(canTithe, Palette.Mix(Palette.RowHot, Palette.Ichor, 0.35f), Palette.PanelDeep, Palette.PanelDeep);
 
@@ -195,8 +215,10 @@ public sealed class Congregation
 			Ui.SetImageColor(row.Fill, Palette.Mix(Palette.DreadDeep, Palette.Dread, burden));
 			Ui.SetImageColor(row.Box, Palette.Row);
 
-			// There is nobody to tithe. The dead have no use for ichor.
+			// There is nobody to tithe, and nobody to trade with. The dead have no use for
+			// ichor and no hands to take a relic with.
 			row.Tithe.SetActive(false);
+			row.Give.SetActive(false);
 
 			bool canShunt = Vigil.CanShunt(i);
 			row.Shunt.SetLabel(Vigil.ShuntCooldown > 0.0
