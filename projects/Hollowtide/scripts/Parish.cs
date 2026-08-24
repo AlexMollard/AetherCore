@@ -87,6 +87,20 @@ public sealed class Parish
 	/// comes back rather than snapping between two looks.</summary>
 	private float _reel;
 
+	/// <summary>
+	/// 0 the moment something is named, 1 as it arrives, and 0 again the instant it resolves.
+	/// </summary>
+	/// <remarks>
+	/// The encounter used to happen entirely inside a UI panel: for nine seconds a visitor was
+	/// walking toward the keeper and the world behind the banner carried on exactly as before -
+	/// bearers strolling, lanterns steady, nothing amiss. The best moment in the game was a
+	/// rectangle of text laid over an unbothered parish.
+	/// </remarks>
+	private float _walking;
+
+	/// <summary>Which rite called the thing currently walking, or -1.</summary>
+	private int _calling = -1;
+
 	private Entity _sigil;
 
 	/// <summary>
@@ -255,13 +269,32 @@ public sealed class Parish
 			_flare[i] = MathF.Max(0.0f, _flare[i] - unscaledDelta * 2.2f);
 		}
 
+		// ── Something is walking ─────────────────────────────────────────────────────
+		// Read off the simulation rather than pushed in through a callback, exactly as the
+		// dread and the aftermath below already are: the parish is a VIEW, and a view that has
+		// to be told things can be told them late or not at all.
+		_calling = Vigil.Approaching ? Vigil.ApproachRite : -1;
+		_walking = Vigil.Approaching
+			? Math.Clamp(1.0f - (float)(Vigil.ApproachSeconds / Vigil.kApproachSeconds), 0.0f, 1.0f)
+			: 0.0f;
+		if (Vigil.Approaching)
+		{
+			// A tremor that GROWS rather than a hit that fades - this is the sound of something
+			// coming, not the moment it lands, and the two should not feel alike. Folded in with
+			// Max so it rides over the decay above without fighting the impact shake.
+			_shake = MathF.Max(_shake, 0.10f + _walking * 0.45f);
+		}
+
 		float dread = (float)Vigil.Dread;
 		// The parish is visibly subdued while it is reeling. A cost the player cannot see is
 		// not a cost they can weigh, and the aftermath is the whole price of a visitation now.
 		float reeling = Vigil.AftermathSeconds > 0.0 ? 1.0f : 0.0f;
 		_reel += (reeling - _reel) * MathF.Min(1.0f, unscaledDelta * 3.0f);
+		// The approach drives the same channel as dread, so the parish sours toward its worst
+		// while something is on its way in whatever the meter happens to read. The shake still
+		// passes through DreadShake, so a keeper who turned the unsteadiness down keeps it down.
 		Ui.SetEffectParams(_backdrop,
-			new Vector4(_time, MathF.Max(dread, _reel * 0.75f),
+			new Vector4(_time, MathF.Max(dread, MathF.Max(_reel * 0.75f, _walking)),
 				_shake * _shake * SaveSystem.DreadShake, _wave));
 		// The void's ALPHA carries where the wave started, because params is full and the
 		// backdrop only ever reads the void's rgb. Documented on both sides rather than
@@ -338,6 +371,15 @@ public sealed class Parish
 			float bulk = 0.42f + (float)Math.Log10(owned + 1.0) * 0.30f;
 			float working = (float)Vigil.CycleProgress[rite];
 			float flare = _flare[rite] * _flare[rite];
+			if (_walking > 0.0f && rite == _calling)
+			{
+				// The rite that called it, lit and pulsing. This is the only place the game
+				// shows WHICH holding summoned the thing now walking - the visitor-to-rite link
+				// the bestiary asks the player to learn, taught by the parish instead of by a
+				// table. Max rather than assignment so a working that finishes mid-approach can
+				// still flare over the top of it.
+				flare = MathF.Max(flare, (0.45f + 0.35f * MathF.Sin(_time * 11.0f)) * _walking);
+			}
 			// Raised into place with an overshoot the first time, and punched on every
 			// purchase after that: the reward for spending is that the parish moves.
 			float a = _appear[rite];

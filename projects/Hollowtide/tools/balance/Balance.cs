@@ -568,6 +568,27 @@ internal static class Balance
 		Check("an empty parish is never visited", !Vigil.Approaching && Vigil.TimesTaken == 0,
 			"nothing comes for a keeper with nothing");
 
+		// -- The contract the parish presents the approach through. --
+		// Presentation cannot be tested here, but what it READS can be. The parish drives a
+		// shader from 1 - ApproachSeconds/kApproachSeconds and indexes a rite array with
+		// ApproachRite, so a fraction that leaves 0..1 or an index that goes stale while
+		// Approaching is still true would be a bad frame or an exception, not a wrong number.
+		Summon(5, 0, 0);
+		double worstFraction = 0.0;
+		bool indexAlwaysValid = true;
+		while (Vigil.Approaching)
+		{
+			double fraction = 1.0 - Vigil.ApproachSeconds / Vigil.kApproachSeconds;
+			worstFraction = Math.Max(worstFraction, Math.Abs(fraction - Math.Clamp(fraction, 0.0, 1.0)));
+			indexAlwaysValid &= Vigil.ApproachRite >= 0 && Vigil.ApproachRite < Content.RiteCount;
+			Vigil.Tick(kDt);
+		}
+		Check("the approach reads as a clean 0 to 1", worstFraction < 1e-9,
+			"never leaves the range by more than " + worstFraction.ToString("0.0e+0"));
+		Check("its rite stays indexable for the whole walk", indexAlwaysValid, "valid every tick");
+		Check("and is released the moment it resolves", Vigil.ApproachRite == -1 && Vigil.ApproachSeconds == 0.0,
+			"cleared on resolution");
+
 		// -- Reachable BY CHOICE, from the very first rite. --
 		// A parish under the equilibrium threshold is never visited unprovoked, which is
 		// correct - but a keeper who deliberately walks toward one must be able to arrive.
