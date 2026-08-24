@@ -1775,6 +1775,24 @@ internal static class Balance
 		Check("and a relic that does not exist is refused", Vigil.Satchel.Count == 0,
 			"seed 0 is how nothing is spelled");
 
+		// -- What the trade button offers is steerable. --
+		// The congregation hands over the FIRST carried relic, because three buttons in a 320px
+		// row leave no space for a target picker. That is only acceptable if a keeper can change
+		// which relic is first - so discarding and wearing both have to move it, and the ledger
+		// labels the one that is next to go.
+		Vigil.Reset();
+		Vigil.Satchel.Add(new Relic { Seed = 61, Grade = Grade.Leavings });
+		Vigil.Satchel.Add(new Relic { Seed = 62, Grade = Grade.Hollowed });
+		int wouldGive = Vigil.Satchel[0].Seed;
+		Vigil.Discard(0);
+		Check("leaving one behind changes what is offered", Vigil.Satchel[0].Seed != wouldGive,
+			"the offer moves from " + wouldGive + " to " + Vigil.Satchel[0].Seed);
+
+		Vigil.Satchel.Insert(0, new Relic { Seed = 63, Grade = Grade.Keepsake });
+		Vigil.Wear(0, 0);
+		Check("and so does wearing one", Vigil.Satchel.Count > 0 && Vigil.Satchel[0].Seed == 62,
+			"wearing the first promotes the next");
+
 		// A failed send must give it back, silently.
 		Vigil.Reset();
 		Vigil.Satchel.Add(new Relic { Seed = 31337, Grade = Grade.Hallowed });

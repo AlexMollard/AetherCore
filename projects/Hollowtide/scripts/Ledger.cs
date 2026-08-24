@@ -496,8 +496,27 @@ public sealed class Ledger
 			Row row = _rows[slot];
 			Relic relic = Vigil.Satchel[i];
 			DressRelic(row, relic, worn: false);
+			// The first carried relic is the one the congregation's RELIC button hands over. It
+			// always was - there is no room for a target picker in a 320px row - but nothing
+			// said so, which made trading a surprise rather than a choice. Saying it turns the
+			// rule into something a keeper can steer with the two clicks they already have.
+			if (i == 0)
+			{
+				Ui.SetText(row.Note, "next to give");
+				Ui.SetTextColor(row.Note, Palette.Sigil);
+			}
 			row.Box.SetEnabled(true);
 			row.Box.Style(true, Palette.RowHot, Palette.Row, Palette.PanelDeep);
+
+			// Right-click leaves it in the parish. The satchel already throws its worst away
+			// when it is full, so losing a carried relic on purpose is no more final than what
+			// the game does on the keeper's behalf - and it is the only way to choose what the
+			// next offer will be without wearing something to get it out of the way.
+			if (Ui.IsHovered(row.Box.Root) && Input.IsMousePressed(MouseButton.Right))
+			{
+				Vigil.Discard(i);
+				break;
+			}
 
 			if (row.Box.Activated)
 			{
@@ -556,7 +575,7 @@ public sealed class Ledger
 
 		Ui.SetText(row.Cost, Relics.GradeName(relic.Grade));
 		Ui.SetTextColor(row.Cost, Palette.Mix(Palette.TextFaint, Palette.Ichor, (int)relic.Grade / 4.0f));
-		Ui.SetText(row.Note, worn ? "worn" : "carried");
+		Ui.SetText(row.Note, worn ? "worn" : "carried  -  right-click to leave it");
 		Ui.SetTextColor(row.Note, Palette.TextFaint);
 		Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
 	}
