@@ -203,7 +203,14 @@ public sealed class Congregation
 			Echo echo = Vigil.Echoes[i];
 			float burden = (float)Math.Clamp(echo.Burden / Vigil.kEchoCapacity, 0.0, 1.0);
 
-			Ui.SetText(row.Name, echo.Name);
+			// Who they were, not just what they are carrying. A line of four names with four
+			// burdens is a table; a line of four keepers you can tell apart is a congregation.
+			string was = echo.Rite >= 0
+				? "  -  gave it all to the " + Content.Rites[echo.Rite].Name
+				: echo.Depth >= 0
+					? "  -  never chose, and got as far as the " + Content.Rites[echo.Depth].Name
+					: "";
+			Ui.SetText(row.Name, echo.Name + was);
 			Ui.SetTextColor(row.Name, Palette.TextDim);
 			Ui.SetText(row.Rate, burden > 0.01f
 				? "carrying " + Numbers.Percent(burden) + " of what you gave them"

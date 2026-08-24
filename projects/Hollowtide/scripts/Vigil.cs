@@ -758,7 +758,16 @@ public static class Vigil
 	/// </remarks>
 	private static void RecordEcho()
 	{
-		Echo fresh = new Echo { Name = KeeperName, Burden = 0.0 };
+		// Captured HERE, before the communion clears any of it. RecordEcho runs first in
+		// Commune for exactly this reason, and moving it later would quietly record every echo
+		// as an uncommitted keeper with an empty parish.
+		Echo fresh = new Echo
+		{
+			Name = KeeperName,
+			Burden = 0.0,
+			Rite = Consecrated,
+			Depth = DeepestRite(),
+		};
 		if (Echoes.Count < MaxEchoes)
 		{
 			Echoes.Add(fresh);
@@ -2584,6 +2593,21 @@ public struct Echo
 	/// <summary>0 to <see cref="Vigil.kEchoCapacity"/>. Dread that left the living keeper and
 	/// did not stop existing.</summary>
 	public double Burden;
+
+	/// <summary>
+	/// The rite that keeper consecrated, or -1 if they never chose one.
+	/// </summary>
+	/// <remarks>
+	/// An echo is meant to be a keeper you used to be, and it remembered a name and a number -
+	/// so four of them read as four identical slots with different labels. A run now HAS an
+	/// identity, because consecration gives it one, and this is where that identity goes when
+	/// the run ends. The line stops being a list and becomes a set of people you can tell
+	/// apart: the one who gave everything to the Bone Choir, the one who never committed.
+	/// </remarks>
+	public int Rite;
+
+	/// <summary>How deep that keeper got, as a rite index, or -1 for a parish of nothing.</summary>
+	public int Depth;
 }
 
 /// <summary>What the keeper missed while the game was closed.</summary>

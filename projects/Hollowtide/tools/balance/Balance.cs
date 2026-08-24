@@ -3802,6 +3802,72 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// An echo remembers which keeper it was.
+	/// </summary>
+	/// <remarks>
+	/// The capture happens inside Commune, BEFORE the reset that clears the consecration and
+	/// empties the parish - which is an ordering, and orderings drift. If RecordEcho ever moved
+	/// below those lines every echo would silently record as an uncommitted keeper who owned
+	/// nothing, and the line would go back to being four names with no past. Nothing about that
+	/// would throw.
+	/// </remarks>
+	private static void AnEchoRemembersWhoItWas()
+	{
+		Console.WriteLine("An echo remembers who it was");
+
+		Vigil.Reset();
+		Vigil.Ichor = 1e14;
+		Vigil.BuyRite(0, 5);
+		Vigil.BuyRite(2, 5);
+		Vigil.Consecrate(2);
+		Vigil.RunIchor = 1e15;
+		Vigil.LifetimeIchor = 1e15;
+		bool communed = Vigil.Commune();
+
+		Check("a communion leaves an echo of that keeper", communed && Vigil.Echoes.Count == 1,
+			communed ? Vigil.Echoes.Count + " standing behind" : "no communion happened");
+		Check("and it remembers what the run was given to",
+			Vigil.Echoes.Count == 1 && Vigil.Echoes[0].Rite == 2,
+			Vigil.Echoes.Count == 1 ? "consecrated to rite " + Vigil.Echoes[0].Rite : "no echo");
+		Check("and how deep it got", Vigil.Echoes.Count == 1 && Vigil.Echoes[0].Depth == 2,
+			Vigil.Echoes.Count == 1 ? "deepest rite " + Vigil.Echoes[0].Depth : "no echo");
+
+		// A keeper who never committed leaves an echo that says so, rather than one that
+		// claims the first rite.
+		Vigil.Ichor = 1e14;
+		Vigil.BuyRite(0, 5);
+		Vigil.RunIchor = 1e15;
+		Vigil.LifetimeIchor = 1e15;
+		Vigil.Commune();
+		Echo second = Vigil.Echoes[Vigil.Echoes.Count - 1];
+		Check("a keeper who never chose is remembered as one who never chose", second.Rite == -1,
+			"rite " + second.Rite + ", so the panel says they never chose");
+
+		// The round trip a save makes, including the two fields added last.
+		VigilSave saved = VigilData.Capture();
+		Vigil.Reset();
+		VigilData.Apply(saved);
+		bool held = Vigil.Echoes.Count >= 2 && Vigil.Echoes[0].Rite == 2 && Vigil.Echoes[0].Depth == 2;
+		Check("a saved echo keeps its past", held,
+			held ? "the line survives being written down" : "the past did not survive the save");
+
+		// A save from before echoes had a past must load without one, not throw and not invent.
+		saved.EchoRites = Array.Empty<int>();
+		saved.EchoDepths = null!;
+		Vigil.Reset();
+		VigilData.Apply(saved);
+		bool olderLoads = Vigil.Echoes.Count >= 2;
+		foreach (Echo echo in Vigil.Echoes)
+		{
+			olderLoads &= echo.Rite == -1 && echo.Depth == -1;
+		}
+		Check("and an older save loads a line with no past at all", olderLoads,
+			"missing fields become 'never chose', not rite zero");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3846,6 +3912,7 @@ internal static class Balance
 		TheParishHasEnoughToSay();
 		TheDarkTakesWhatIsLoose();
 		TimeAwayIsWorthWhatItSays();
+		AnEchoRemembersWhoItWas();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

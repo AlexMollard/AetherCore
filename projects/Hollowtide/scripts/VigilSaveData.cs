@@ -81,6 +81,12 @@ public sealed class VigilSave
 	public string[] EchoNames { get; set; } = Array.Empty<string>();
 	public double[] EchoBurdens { get; set; } = Array.Empty<double>();
 
+	/// <summary>What each echo's run was. Read only as far as the names go, and defaulted to
+	/// "never chose, owned nothing" when absent, so a save written before echoes had a past
+	/// loads as a line of keepers whose past is simply not recorded.</summary>
+	public int[] EchoRites { get; set; } = Array.Empty<int>();
+	public int[] EchoDepths { get; set; } = Array.Empty<int>();
+
 	/// <summary>Relics carried and relics worn, as seeds and grades. A relic is entirely
 	/// derived from those two numbers, so this is the whole of it - the name, the powers and
 	/// the art are all regenerated rather than stored, which is what keeps an endless supply of
@@ -162,6 +168,8 @@ public static class VigilData
 		VisitorsBested = (bool[])Vigil.VisitorsBested.Clone(),
 		EchoNames = Vigil.Echoes.ConvertAll(e => e.Name).ToArray(),
 		EchoBurdens = Vigil.Echoes.ConvertAll(e => e.Burden).ToArray(),
+		EchoRites = Vigil.Echoes.ConvertAll(e => e.Rite).ToArray(),
+		EchoDepths = Vigil.Echoes.ConvertAll(e => e.Depth).ToArray(),
 		SatchelSeeds = Vigil.Satchel.ConvertAll(r => r.Seed).ToArray(),
 		SatchelGrades = Vigil.Satchel.ConvertAll(r => (int)r.Grade).ToArray(),
 		WornSeeds = Array.ConvertAll(Vigil.Worn, r => r.Seed),
@@ -237,10 +245,16 @@ public static class VigilData
 		int echoes = Math.Min(save.EchoNames.Length, save.EchoBurdens.Length);
 		for (int i = 0; i < echoes && i < Vigil.MaxEchoes; i++)
 		{
+			// Ragged on purpose: the two arrays below were added later, so a save that predates
+			// them is shorter in those and must not throw or drop the echo entirely.
+			int rite = save.EchoRites != null && i < save.EchoRites.Length ? save.EchoRites[i] : -1;
+			int depth = save.EchoDepths != null && i < save.EchoDepths.Length ? save.EchoDepths[i] : -1;
 			Vigil.Echoes.Add(new Echo
 			{
 				Name = string.IsNullOrWhiteSpace(save.EchoNames[i]) ? "Keeper" : save.EchoNames[i],
 				Burden = Math.Clamp(save.EchoBurdens[i], 0.0, Vigil.kEchoCapacity),
+				Rite = rite >= 0 && rite < Content.RiteCount ? rite : -1,
+				Depth = depth >= 0 && depth < Content.RiteCount ? depth : -1,
 			});
 		}
 
