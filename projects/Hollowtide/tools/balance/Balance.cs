@@ -406,6 +406,17 @@ internal static class Balance
 		Check("spending sigils never weakens the keeper", Vigil.SigilMultiplier > 1.0 + 0.06 * Vigil.Sigils,
 			Vigil.SigilsEarned + " taken, " + Vigil.Sigils + " still held");
 
+		// -- Patience at the communion has to be the better play, and visibly so. --
+		// Twelve hours of simulated play separates a keeper who communes the moment it pays
+		// anything from one who waits for the offer to be worth a quarter of what they hold by
+		// a factor in the millions. That is a fine thing for a game to reward - and an unfair
+		// thing to hide behind a button that reads "+4 sigils", which is why the ledger now
+		// quotes the payout as a share of what is already taken.
+		double greedy = Communing(90, patience: 0.0);
+		double patient = Communing(90, patience: 0.25);
+		Check("waiting to commune beats taking it early", patient > greedy * 5.0,
+			"patience is worth " + Numbers.Short(patient / greedy) + "x over ninety minutes");
+
 		int spendable = 0;
 		Vigil.Reset();
 		for (int i = 0; i < Content.Boons.Length; i++)
@@ -1411,6 +1422,51 @@ internal static class Balance
 			(skilledLoaded / skilledClear).ToString("0.00") + "x for one who knows the answers");
 		Check("and does not pay one who does not", carelessLoaded < skilledLoaded / skilledClear * carelessClear,
 			(carelessLoaded / carelessClear).ToString("0.00") + "x for one who does not");
+	}
+
+	/// <summary>Play a stretch, communing whenever the payout is worth at least
+	/// <paramref name="patience"/> of the sigils already taken.</summary>
+	private static double Communing(double minutes, double patience)
+	{
+		Vigil.Reset();
+		Vigil.Rng = new Random(11);
+		double click = 0.0;
+		double stoke = 0.0;
+		for (int step = 0; step < minutes * 60.0 / kDt; step++)
+		{
+			click += 4.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			stoke += 0.4 * kDt;
+			while (stoke >= 1.0)
+			{
+				stoke -= 1.0;
+				if (Vigil.Dread < 0.85)
+				{
+					Vigil.Stoke();
+				}
+			}
+			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
+			{
+				Vigil.RaiseWard();
+			}
+			TakeOfferings();
+			Buy();
+			int offer = Vigil.SigilsOnOffer;
+			if (offer > 0 && offer >= Math.Max(1.0, Vigil.SigilsEarned * patience))
+			{
+				Vigil.Commune();
+			}
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			Vigil.Tick(kDt);
+		}
+		return Vigil.LifetimeIchor;
 	}
 
 	/// <summary>Play a stretch, optionally leaning on the dead and optionally answering what

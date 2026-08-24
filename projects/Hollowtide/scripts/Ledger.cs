@@ -365,16 +365,30 @@ public sealed class Ledger
 			int payout = Vigil.SigilsOnOffer;
 			bool ready = payout > 0;
 			Row row = _rows[slot];
+			// What the payout is worth AGAINST WHAT IS ALREADY HELD, because that is the whole
+			// decision and the raw number hides it. Simulated over twelve hours, a keeper who
+			// communes the moment it pays anything finishes twenty-four MILLION times behind one
+			// who waits for the offer to be worth half again what they have - the harshest
+			// consequence in the game, attached to a button that said only "+4 sigils".
+			double already = Math.Max(1, Vigil.SigilsEarned);
+			double share = payout / already;
+			bool worthIt = share >= 0.25;
+
 			Ui.SetText(row.Title, "COMMUNE   +" + payout + " sigils");
-			Ui.SetTextColor(row.Title, ready ? Palette.Sigil : Palette.TextFaint);
+			Ui.SetTextColor(row.Title, !ready ? Palette.TextFaint : worthIt ? Palette.Sigil : Palette.TextDim);
 			Ui.SetText(row.Sub, ready
-				? "Give the parish back. You keep the sigils, the boons, the overseers and the marks."
+				? worthIt
+					? "Give the parish back. You keep the sigils, the boons, the overseers and the marks."
+					: "Only " + Numbers.Percent(share) + " more than you have already taken. The parish is worth more standing."
 				: "Gather " + Numbers.Short(NextSigilAt()) + " this run for the first sigil.");
 			// Held and earned, both, because the difference between them is the one rule of this
 			// tab a player has to trust: spending sigils never costs you the bonus they pay.
 			Ui.SetText(row.Cost, Vigil.Sigils + " held  /  " + Vigil.SigilsEarned + " taken");
 			Ui.SetTextColor(row.Cost, Palette.Sigil);
-			Ui.SetText(row.Note, Numbers.Mult(Vigil.SigilMultiplier) + " from every sigil taken");
+			Ui.SetText(row.Note, ready && Vigil.SigilsEarned > 0
+				? "+" + Numbers.Percent(share) + " on what you hold"
+				: Numbers.Mult(Vigil.SigilMultiplier) + " from every sigil taken");
+			Ui.SetTextColor(row.Note, ready && !worthIt ? Palette.TextFaint : Palette.Sigil);
 			row.Box.SetEnabled(ready);
 			row.Box.Style(ready, Palette.Mix(Palette.RowHot, Palette.Sigil, 0.28f), Palette.Row, Palette.PanelDeep);
 			if (row.Box.Activated && ready)
