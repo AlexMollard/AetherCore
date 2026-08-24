@@ -599,12 +599,61 @@ internal static class Balance
 		Check("no single visitor dominates the encounter", commonest < total / 2,
 			"commonest is " + (commonest * 100.0 / Math.Max(1, total)).ToString("0") + "% of draws");
 
+		// -- The ordering the whole encounter rests on: knowing > silence > guessing. --
+		// Checked as OUTCOMES over a real run rather than as branches, because the branches
+		// were always going to be right; what matters is whether the numbers they produce put
+		// the three kinds of player in the right order.
+		double silent = PlayAnswering(45, null);
+		double knowing = PlayAnswering(45, Answer.None);
+		double guessing = PlayAnswering(45, Answer.Still);
+		Check("knowing the answer beats doing nothing", knowing > silent * 1.05,
+			(knowing / silent).ToString("0.00") + "x doing nothing");
+		Check("guessing loses to doing nothing", guessing < silent,
+			(guessing / silent).ToString("0.00") + "x doing nothing");
+
+		// -- Stoking has to be worth pressing on the parish a new keeper actually has. --
+		Vigil.Reset();
+		Vigil.Owned[0] = 1;
+		Check("a new keeper's stoke buys something", Vigil.StokeOffer > Vigil.CostOf(0, 1) * 0.15,
+			Numbers.Short(Vigil.StokeOffer) + " against a " + Numbers.Short(Vigil.CostOf(0, 1)) + " lantern");
+
 		// -- Offline may not start one: you cannot answer a door you were not behind. --
 		Vigil.Reset();
 		Vigil.Owned[5] = 60;
 		Vigil.CatchUp(8.0 * 3600.0);
 		Check("offline never starts a walk", !Vigil.Approaching && Vigil.TimesTaken == 0,
 			"eight hours away, nothing arrived");
+	}
+
+	/// <summary>Play a stretch, answering every encounter the same way. A null policy never
+	/// answers at all; <see cref="Answer.None"/> means answer each one CORRECTLY, which is the
+	/// only value of it that could not otherwise be expressed.</summary>
+	private static double PlayAnswering(double minutes, Answer? policy)
+	{
+		Vigil.Reset();
+		Vigil.Rng = new Random(7);
+		double click = 0.0;
+		for (int step = 0; step < minutes * 60.0 / kDt; step++)
+		{
+			click += 4.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
+			{
+				Vigil.RaiseWard();
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching && policy.HasValue)
+			{
+				Vigil.Give(policy.Value == Answer.None ? Vigil.CorrectAnswer : policy.Value);
+			}
+			Vigil.Tick(kDt);
+		}
+		return Vigil.LifetimeIchor;
 	}
 
 	private static int Main()

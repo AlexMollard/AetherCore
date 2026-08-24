@@ -706,11 +706,27 @@ public static class Vigil
 	/// exit from the game.
 	/// </para>
 	/// </remarks>
-	public static double StokeOffer => Rate * kStokeSeconds * (1.0 - Dread);
+	public static double StokeOffer => (Rate + HandGain) * kStokeSeconds * (1.0 - Dread);
 
-	/// <summary>Seconds of production one stoke offers at an empty meter. Chosen so a full
-	/// climb from nothing pays roughly what one visitation costs - stoking is close to free in
-	/// ichor and expensive in exposure, which is the trade it is supposed to be.</summary>
+	/// <summary>
+	/// Seconds of income one stoke offers at an empty meter.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Chosen so a full climb from nothing pays roughly what one visitation costs - stoking is
+	/// close to free in ichor and expensive in exposure, which is the trade it is meant to be.
+	/// </para>
+	/// <para>
+	/// Measured against <see cref="Rate"/> PLUS <see cref="HandGain"/>, and the second term is
+	/// there because dropping it broke the early game. A keeper with one lantern has a rate of
+	/// 0.1/s, so a rate-only offer paid 0.4 ichor against a 16-ichor lantern while still
+	/// costing eighteen points of the meter: a button that visibly did nothing, at exactly the
+	/// moment a player is deciding whether it is worth pressing. Their hands are most of their
+	/// income for the first few minutes, so their hands have to count. This is not the old
+	/// double-multiplier bug returning - HandGain already carries the global multiplier exactly
+	/// once, and nothing is re-applied here.
+	/// </para>
+	/// </remarks>
 	private const double kStokeSeconds = 4.0;
 
 	/// <summary>Seconds before the dark will take another step. Not saved: it outlives nothing,
