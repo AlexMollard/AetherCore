@@ -965,6 +965,34 @@ public static class Vigil
 	private const double kSigilScale = 3.0;
 	private const double kSigilBase = 2e8;
 
+	/// <summary>The most copies held of any one rite. The counting half of
+	/// <see cref="AnyOwnedAtLeast"/>, so a mark can show how near it is rather than only
+	/// whether it is done.</summary>
+	public static int MostOwned()
+	{
+		int most = 0;
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			most = Math.Max(most, Owned[i]);
+		}
+		return most;
+	}
+
+	/// <summary>How many rites the keeper holds at least one of. The counting half of
+	/// <see cref="OwnsOneOfEach"/>.</summary>
+	public static int RitesHeld()
+	{
+		int held = 0;
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			if (Owned[i] > 0)
+			{
+				held++;
+			}
+		}
+		return held;
+	}
+
 	public static bool AnyOwnedAtLeast(int count)
 	{
 		for (int i = 0; i < Content.RiteCount; i++)

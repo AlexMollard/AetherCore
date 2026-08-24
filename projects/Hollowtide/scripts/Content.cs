@@ -148,6 +148,21 @@ public sealed class MarkDef
 	/// instead of reading them as ones they have simply not managed yet - and it is the only
 	/// thing on the vigil screen that tells them the game has a congregation at all.</summary>
 	public bool NeedsCongregation;
+
+	/// <summary>
+	/// How far along this mark is, from 0 to 1, or null when it cannot be halfway.
+	/// </summary>
+	/// <remarks>
+	/// Twenty-three marks with nothing but a name and a sentence read as a list of things you
+	/// have not done. The ones that COUNT something - twenty visitors turned away, fifty relics
+	/// dug up, forty offerings standing - are a track, and showing where a keeper is on it is
+	/// the difference between a goal and a reproach.
+	/// <para>
+	/// Null for the marks that genuinely cannot be partly done: lighting a first lantern is not
+	/// 40% complete. A bar on those would be theatre.
+	/// </para>
+	/// </remarks>
+	public Func<double>? Toward;
 }
 
 /// <summary>Every table the game is made of. Static data only.</summary>
@@ -687,23 +702,27 @@ public static class Content
 	/// give advice.</summary>
 	public const string Beckon = "The dark keeps its distance. It will not come to you unless you go to it.";
 
+	/// <summary>Progress toward a count, clamped, for a mark's bar.</summary>
+	private static double Along(double have, double need)
+		=> need <= 0.0 ? 0.0 : Math.Clamp(have / need, 0.0, 1.0);
+
 	public static readonly MarkDef[] Marks =
 	{
 		new MarkDef { Name = "First Light", Blurb = "Light a Grave Lantern.", Earned = () => Vigil.Owned[0] >= 1 },
-		new MarkDef { Name = "Full Choir", Blurb = "Keep twelve of anything.", Earned = () => Vigil.AnyOwnedAtLeast(12) },
-		new MarkDef { Name = "Deep Ledger", Blurb = "Gather a million ichor, all told.", Earned = () => Vigil.LifetimeIchor >= 1e6 },
-		new MarkDef { Name = "Steady Nerve", Blurb = "Hold above three quarters dread for a minute.", Earned = () => Vigil.HighDreadSeconds >= 60.0 },
+		new MarkDef { Name = "Full Choir", Blurb = "Keep twelve of anything.", Earned = () => Vigil.AnyOwnedAtLeast(12), Toward = () => Along(Vigil.MostOwned(), 12) },
+		new MarkDef { Name = "Deep Ledger", Blurb = "Gather a million ichor, all told.", Earned = () => Vigil.LifetimeIchor >= 1e6, Toward = () => Along(Vigil.LifetimeIchor, 1e6) },
+		new MarkDef { Name = "Steady Nerve", Blurb = "Hold above three quarters dread for a minute.", Earned = () => Vigil.HighDreadSeconds >= 60.0, Toward = () => Along(Vigil.HighDreadSeconds, 60.0) },
 		new MarkDef { Name = "Warded", Blurb = "Turn a visitation away with a ward.", Earned = () => Vigil.WardsRaised >= 1 },
 		new MarkDef { Name = "Bereaved", Blurb = "Lose something to the dark.", Earned = () => Vigil.TimesTaken >= 1 },
 		new MarkDef { Name = "Communed", Blurb = "Give the parish back and take a sigil.", Earned = () => Vigil.Communions >= 1 },
-		new MarkDef { Name = "Marked", Blurb = "Take ten sigils, all told.", Earned = () => Vigil.SigilsEarned >= 10 },
-		new MarkDef { Name = "The Whole Nave", Blurb = "Own one of every rite.", Earned = () => Vigil.OwnsOneOfEach() },
+		new MarkDef { Name = "Marked", Blurb = "Take ten sigils, all told.", Earned = () => Vigil.SigilsEarned >= 10, Toward = () => Along(Vigil.SigilsEarned, 10) },
+		new MarkDef { Name = "The Whole Nave", Blurb = "Own one of every rite.", Earned = () => Vigil.OwnsOneOfEach(), Toward = () => Along(Vigil.RitesHeld(), RiteCount) },
 		new MarkDef { Name = "Mouth to Mouth", Blurb = "Open a Hollow Mouth.", Earned = () => Vigil.Owned[7] >= 1 },
-		new MarkDef { Name = "Not Alone", Blurb = "Keep vigil beside another keeper.", NeedsCongregation = true, Earned = () => Vigil.SharedVigilSeconds >= 30.0 },
+		new MarkDef { Name = "Not Alone", Blurb = "Keep vigil beside another keeper.", NeedsCongregation = true, Earned = () => Vigil.SharedVigilSeconds >= 30.0, Toward = () => Along(Vigil.SharedVigilSeconds, 30.0) },
 		new MarkDef { Name = "Answered", Blurb = "Ring the bell into a communion.", NeedsCongregation = true, Earned = () => Vigil.CommunionSurges >= 1 },
 		new MarkDef { Name = "Deepened", Blurb = "Carry one boon as far as it goes.", Earned = AnyBoonMaxed },
 		new MarkDef { Name = "Named", Blurb = "Turn something away by knowing what it wanted.", Earned = () => Vigil.VisitorsAnswered >= 1 },
-		new MarkDef { Name = "Well Read", Blurb = "Turn away twenty of them.", Earned = () => Vigil.VisitorsAnswered >= 20 },
+		new MarkDef { Name = "Well Read", Blurb = "Turn away twenty of them.", Earned = () => Vigil.VisitorsAnswered >= 20, Toward = () => Along(Vigil.VisitorsAnswered, 20) },
 
 		// ── Appended, and they must stay appended ────────────────────────────────────
 		// Which marks a keeper has earned is stored as flags indexed by POSITION, exactly as
@@ -711,12 +730,12 @@ public static class Content
 		// never did. New marks go on the end. There is a check in the harness that holds the
 		// order of everything above this line.
 		new MarkDef { Name = "Turned Up", Blurb = "Dig something out of the parish.", Earned = () => Vigil.RelicsFound >= 1 },
-		new MarkDef { Name = "Grave Goods", Blurb = "Turn up fifty of them.", Earned = () => Vigil.RelicsFound >= 50 },
-		new MarkDef { Name = "Hollowed Out", Blurb = "Find something that should not have been down there.", Earned = () => Vigil.BestRelicGrade >= (int)Grade.Hollowed },
-		new MarkDef { Name = "Both Hands and One More", Blurb = "Wear three relics at once.", Earned = () => Vigil.RelicsWorn() >= 3 },
-		new MarkDef { Name = "Rendered Down", Blurb = "Melt twenty finds back into ichor.", Earned = () => Vigil.RelicsRendered >= 20 },
+		new MarkDef { Name = "Grave Goods", Blurb = "Turn up fifty of them.", Earned = () => Vigil.RelicsFound >= 50, Toward = () => Along(Vigil.RelicsFound, 50) },
+		new MarkDef { Name = "Hollowed Out", Blurb = "Find something that should not have been down there.", Earned = () => Vigil.BestRelicGrade >= (int)Grade.Hollowed, Toward = () => Along(Vigil.BestRelicGrade + 1, (int)Grade.Hollowed + 1) },
+		new MarkDef { Name = "Both Hands and One More", Blurb = "Wear three relics at once.", Earned = () => Vigil.RelicsWorn() >= 3, Toward = () => Along(Vigil.RelicsWorn(), Relics.Slots) },
+		new MarkDef { Name = "Rendered Down", Blurb = "Melt twenty finds back into ichor.", Earned = () => Vigil.RelicsRendered >= 20, Toward = () => Along(Vigil.RelicsRendered, 20) },
 		new MarkDef { Name = "Underwritten", Blurb = "Wear something that stands where nothing was built.", Earned = Vigil.WearingAFoundation },
 		new MarkDef { Name = "Consecrant", Blurb = "Give a vigil to one rite and mean it.", Earned = () => Vigil.Consecrations >= 1 },
-		new MarkDef { Name = "Well Provisioned", Blurb = "Have forty offerings standing at once.", Earned = () => Vigil.OfferingsCount() >= 40 },
+		new MarkDef { Name = "Well Provisioned", Blurb = "Have forty offerings standing at once.", Earned = () => Vigil.OfferingsCount() >= 40, Toward = () => Along(Vigil.OfferingsCount(), 40) },
 	};
 }

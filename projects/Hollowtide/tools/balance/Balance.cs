@@ -3025,6 +3025,102 @@ internal static class Balance
 				unearnable++;
 			}
 		}
+		// A bar and a mark that disagree are worse than a mark with no bar: one says "you are
+		// nearly there" while the other says nothing has happened, and a keeper believes the bar.
+		// Checked at BOTH ends of the game - a fresh vigil and a maximal one - because the
+		// interesting disagreements are exactly at zero and at one.
+		int lying = 0;
+		int outOfRange = 0;
+		string firstLie = "";
+		// Empty, PART-WAY, and full. The middle one is the load-bearing case and was missing at
+		// first: at zero every bar is empty and at a maximal keeper every bar is full, so both
+		// ends agree with the mark no matter what denominator the bar was written with. A bar
+		// that fills at twenty-five finds for a mark needing fifty is only visible in between -
+		// and a keeper reading a full bar under an unearned mark believes the bar.
+		foreach (int stage in new[] { 0, 1, 2 })
+		{
+			bool maximal = stage == 2;
+			Vigil.Reset();
+			if (stage == 1)
+			{
+				// Deliberately just under every threshold the marks name.
+				Vigil.Ichor = 1e15;
+				for (int rite = 0; rite < Content.RiteCount - 1; rite++)
+				{
+					Vigil.BuyRite(rite, 11);
+				}
+				Vigil.LifetimeIchor = 9.9e5;
+				Vigil.HighDreadSeconds = 59.0;
+				Vigil.SigilsEarned = 9;
+				Vigil.VisitorsAnswered = 19;
+				Vigil.RelicsFound = 49;
+				Vigil.RelicsRendered = 19;
+				Vigil.BestRelicGrade = (int)Grade.Hallowed;
+				Vigil.SharedVigilSeconds = 29.0;
+				for (int slot = 0; slot < Relics.Slots - 1; slot++)
+				{
+					Vigil.Worn[slot] = new Relic { Seed = 700 + slot, Grade = Grade.Anointed };
+				}
+				for (int i = 0; i < 39 && i < Content.Offerings.Length; i++)
+				{
+					Vigil.OfferingsTaken[i] = true;
+				}
+			}
+			if (maximal)
+			{
+				Vigil.Ichor = 1e15;
+				for (int rite = 0; rite < Content.RiteCount; rite++)
+				{
+					Vigil.BuyRite(rite, 60);
+				}
+				Vigil.LifetimeIchor = 1e12;
+				Vigil.HighDreadSeconds = 1e4;
+				Vigil.SigilsEarned = 99;
+				Vigil.VisitorsAnswered = 99;
+				Vigil.RelicsFound = 999;
+				Vigil.RelicsRendered = 99;
+				Vigil.BestRelicGrade = (int)Grade.Hollowed;
+				Vigil.SharedVigilSeconds = 1e4;
+				for (int slot = 0; slot < Relics.Slots; slot++)
+				{
+					Vigil.Worn[slot] = new Relic { Seed = 500 + slot, Grade = Grade.Anointed };
+				}
+				for (int i = 0; i < Content.Offerings.Length; i++)
+				{
+					Vigil.OfferingsTaken[i] = true;
+				}
+			}
+			foreach (MarkDef mark in Content.Marks)
+			{
+				if (mark.Toward == null)
+				{
+					continue;
+				}
+				double toward = mark.Toward();
+				if (toward < 0.0 || toward > 1.0 || double.IsNaN(toward))
+				{
+					outOfRange++;
+				}
+				// Full bar and unearned, or earned and not full: either way the two disagree.
+				bool full = toward >= 0.999;
+				if (full != mark.Earned())
+				{
+					lying++;
+					if (firstLie.Length == 0)
+					{
+						firstLie = mark.Name + " reads " + Numbers.Percent(toward)
+							+ " and is " + (mark.Earned() ? "earned" : "not earned");
+					}
+				}
+			}
+		}
+		Vigil.Reset();
+
+		Check("no mark's progress disagrees with the mark", lying == 0,
+			lying == 0 ? "empty and full, every bar matches its mark" : firstLie);
+		Check("and none of them reads outside its own bar", outOfRange == 0,
+			outOfRange == 0 ? "every figure between nothing and all of it" : outOfRange + " out of range");
+
 		Check("every mark is named and can be asked about", unearnable == 0,
 			unearnable == 0 ? "all " + Content.Marks.Length + " answerable" : unearnable + " broken");
 

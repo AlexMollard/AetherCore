@@ -1165,7 +1165,24 @@ public sealed class Ledger
 			// unlabelled they read as a completionist's dead end rather than as an invitation.
 			Ui.SetText(row.Note, !earned && Content.Marks[i].NeedsCongregation ? "needs a congregation" : "");
 			Ui.SetTextColor(row.Note, Palette.Sigil);
-			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
+
+			// How far along, for the marks that count something. The same bar the relics use for
+			// rarity and the rites use for a working, so a length means the same thing wherever
+			// it appears - and drawn only while the mark is unearned, because a full bar under a
+			// mark already marked KEPT is one more thing to read that says nothing.
+			float rowWidth = kWidth - kPad * 2.0f;
+			double toward = !earned && Content.Marks[i].Toward != null
+				? Math.Clamp(Content.Marks[i].Toward!(), 0.0, 1.0)
+				: 0.0;
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, rowWidth * (float)toward, 3.0f);
+			Ui.SetImageColor(row.Progress, Palette.Fade(Palette.IchorDim, 0.85f));
+			// Never over the congregation note: "needs a congregation" is the more useful of
+			// the two, since it explains why the bar is not moving.
+			if (!earned && Content.Marks[i].Toward != null && !Content.Marks[i].NeedsCongregation)
+			{
+				Ui.SetText(row.Note, Numbers.Percent(toward));
+				Ui.SetTextColor(row.Note, Palette.TextFaint);
+			}
 			row.Box.SetEnabled(false);
 			row.Box.SetColour(earned ? Palette.Row : Palette.PanelDeep);
 		}
