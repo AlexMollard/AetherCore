@@ -185,6 +185,7 @@ public sealed class HollowtideGame : EntityScript
 	private void OnFound(Relic relic)
 	{
 		_parish.Found(relic, _hud.StrikePoint);
+		_hud.ShowFound(relic);
 		if (relic.Grade >= Grade.Hollowed)
 		{
 			// Only the top grade takes the screen. A flash for anything less would spend the

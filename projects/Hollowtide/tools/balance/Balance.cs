@@ -1618,8 +1618,13 @@ internal static class Balance
 		string inverted = "";
 		foreach (double depth in new[] { 0.25, 0.5, 0.75, 0.9, 1.0 })
 		{
+			// Enough digs to RESOLVE the bands, not merely to sample them. Relics were made eight
+			// times rarer to stop them being litter, which shrank this sample by the same factor
+			// and left the two narrowest bands inside the noise - the check began failing on the
+			// count rather than on the ladder. A rate change silently weakened a check that never
+			// mentioned the rate.
 			int[] seen = new int[5];
-			for (int i = 0; i < 60000; i++)
+			for (int i = 0; i < 500000; i++)
 			{
 				Relic dug = Relics.Dig(ladder, depth, i + 1);
 				if (dug.Exists)

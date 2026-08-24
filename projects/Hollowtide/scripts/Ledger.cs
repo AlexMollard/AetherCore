@@ -583,7 +583,7 @@ public sealed class Ledger
 		Ui.SetText(row.Title, Relics.NameOf(relic));
 		// Grade shown by how much ichor the name carries, not by a colour of its own: the
 		// palette allows three accents and a rarity ramp is not one of them.
-		Ui.SetTextColor(row.Title, Palette.Mix(Palette.TextDim, Palette.Ichor, (int)relic.Grade / 4.0f));
+		Ui.SetTextColor(row.Title, Palette.Mix(Palette.TextDim, Palette.Ichor, Hud.GradeWeight(relic.Grade)));
 
 		string powers = "";
 		for (int i = 0; i < Relics.PowerCount(relic.Grade); i++)
@@ -593,11 +593,21 @@ public sealed class Ledger
 		}
 		Ui.SetText(row.Sub, powers);
 
-		Ui.SetText(row.Cost, Relics.GradeName(relic.Grade));
-		Ui.SetTextColor(row.Cost, Palette.Mix(Palette.TextFaint, Palette.Ichor, (int)relic.Grade / 4.0f));
+		// The grade spelled out AND counted in marks. Playtested, a keeper could not tell what
+		// they were holding: one word in a slightly different shade is not a rarity, and shades
+		// cannot be compared across two rows that are not next to each other.
+		Ui.SetText(row.Cost, Relics.GradeName(relic.Grade).ToUpperInvariant() + Hud.Pips(relic.Grade));
+		Ui.SetTextColor(row.Cost, Palette.Mix(Palette.TextFaint, Palette.Ichor, Hud.GradeWeight(relic.Grade)));
 		Ui.SetText(row.Note, worn ? "worn" : "carried");
 		Ui.SetTextColor(row.Note, Palette.TextFaint);
-		Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
+		// The row's own fill, used here as a rarity bar - the same widget the rites use for a
+		// working and the boons for their levels. A length can be compared down a column at a
+		// glance, which is the thing a shade of green cannot do.
+		float rowWidth = kWidth - kPad * 2.0f;
+		Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f,
+			rowWidth * ((int)relic.Grade + 1) / (float)((int)Grade.Hollowed + 1), 3.0f);
+		Ui.SetImageColor(row.Progress, Palette.Fade(
+			Palette.Mix(Palette.IchorDim, Palette.Ichor, Hud.GradeWeight(relic.Grade)), 0.85f));
 	}
 
 	// ── Marks ────────────────────────────────────────────────────────────────────────

@@ -39,6 +39,16 @@ public sealed class Hud
 	private Entity _sigilHint;
 	private Entity _handValue;
 	private Entity _fervourBar;
+	private Entity _foundPanel;
+	private Entity _foundArt;
+	private Entity _foundGrade;
+	private Entity _foundName;
+	private Entity _foundPowers;
+
+	/// <summary>Seconds the found banner has left. Long enough to read a name and three
+	/// powers, short enough that a keeper turning things up steadily is not reading a wall.</summary>
+	private float _foundFor;
+
 	private Entity _visPanel;
 	private Entity _visName;
 	private Entity _visLine;
@@ -73,6 +83,81 @@ public sealed class Hud
 	/// clicked, and the sigil itself when it was the space bar. Feedback is thrown from here,
 	/// so it appears where the keeper actually struck.</summary>
 	public Vector2 StrikePoint { get; private set; }
+
+	/// <summary>
+	/// Put a find on screen, properly.
+	/// </summary>
+	/// <remarks>
+	/// The whole reason relics exist is to make hand-gathering worth doing at hour ten, and a
+	/// reward that arrives silently in a panel the keeper may not have open is not a reward
+	/// they feel. Playtested, a keeper could not tell they had found anything without watching
+	/// the satchel - so the find now takes the same band the visitation uses, with its own
+	/// drawing, its grade, its name and what it does.
+	/// </remarks>
+	public void ShowFound(Relic relic)
+	{
+		if (!relic.Exists)
+		{
+			return;
+		}
+		_found = relic;
+		// Better things stay up longer. A Leavings is a glance; a Hollowed thing is an event.
+		_foundFor = 3.5f + (int)relic.Grade * 0.9f;
+	}
+
+	private Relic _found;
+
+	/// <summary>
+	/// Count the banner down, and yield the band to anything walking.
+	/// </summary>
+	/// <remarks>
+	/// A visitation always wins the slot: for the nine seconds something is coming, that is the
+	/// only thing worth looking at, and two panels fighting over one place on screen is worse
+	/// than either of them missing.
+	/// </remarks>
+	private void UpdateFound(float deltaTime)
+	{
+		_foundFor = MathF.Max(0.0f, _foundFor - deltaTime);
+		bool show = _foundFor > 0.0f && _found.Exists && !Vigil.Approaching;
+		_foundPanel.SetActive(show);
+		if (!show)
+		{
+			return;
+		}
+
+		Ui.SetMaterialParams(_foundArt, new Vector4(Time.UnscaledTime, Relics.ArtSeed(_found),
+			(float)(int)_found.Grade, 1.0f));
+		Ui.SetMaterialColors(_foundArt, Palette.Ichor, Palette.Dread);
+
+		// The grade said outright and in full, not implied by a shade. A keeper should not have
+		// to compare two rows to work out whether what they just dug up was any good.
+		Ui.SetText(_foundGrade, Relics.GradeName(_found.Grade).ToUpperInvariant() + Pips(_found.Grade));
+		Ui.SetTextColor(_foundGrade, Palette.Mix(Palette.TextDim, Palette.Ichor, GradeWeight(_found.Grade)));
+		Ui.SetText(_foundName, Relics.NameOf(_found));
+
+		string powers = "";
+		for (int i = 0; i < Relics.PowerCount(_found.Grade); i++)
+		{
+			powers += (powers.Length > 0 ? "   " : "") +
+				Relics.Describe(Relics.PowerAt(_found, i), Relics.MagnitudeAt(_found, i));
+		}
+		Ui.SetText(_foundPowers, powers);
+	}
+
+	/// <summary>Grade as a run of marks. ASCII only - the font pipeline bakes no other glyph
+	/// set, which is the same reason Numbers keeps to two-character suffixes.</summary>
+	public static string Pips(Grade grade)
+	{
+		string pips = "  ";
+		for (int i = 0; i <= (int)grade; i++)
+		{
+			pips += "+";
+		}
+		return pips;
+	}
+
+	/// <summary>0 to 1 across the ladder, for tinting.</summary>
+	public static float GradeWeight(Grade grade) => 0.3f + (int)grade / 4.0f * 0.7f;
 
 	/// <summary>
 	/// Show whatever is walking, and read the answer.
@@ -145,6 +230,12 @@ public sealed class Hud
 		_sigilHint = Scene.Find("NaveHint");
 		_handValue = Scene.Find("NaveHandValue");
 		_fervourBar = Scene.Find("NaveFervourBar");
+		_foundPanel = Scene.Find("FoundPanel");
+		_foundArt = Scene.Find("FoundArt");
+		_foundGrade = Scene.Find("FoundGrade");
+		_foundName = Scene.Find("FoundName");
+		_foundPowers = Scene.Find("FoundPowers");
+
 		_visPanel = Scene.Find("VisitationPanel");
 		_visName = Scene.Find("VisitationName");
 		_visLine = Scene.Find("VisitationLine");
@@ -312,6 +403,7 @@ public sealed class Hud
 			_bell.Style(ready, Palette.Mix(Palette.Row, Palette.Sigil, 0.40f), Palette.Row, Palette.PanelDeep);
 		}
 
+		UpdateFound(deltaTime);
 		UpdateVisitation();
 
 		Ui.SetTextColor(_sigilHint, Palette.Mix(Palette.TextFaint, Palette.Ichor, eased));

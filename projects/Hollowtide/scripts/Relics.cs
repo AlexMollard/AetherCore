@@ -296,8 +296,14 @@ public static class Relics
 	/// </remarks>
 	public static Relic Dig(Random rng, double dread, int roll)
 	{
-		// Roughly one in sixty clicks in safety, one in fifteen at the brink.
-		double chance = 0.017 + 0.05 * dread;
+		// Roughly one in five hundred clicks in safety, one in a hundred and twenty at the brink.
+		//
+		// Cut by eight from the first sizing, which handed a keeper clicking at a normal pace
+		// FOURTEEN relics in two minutes and filled a twelve-slot satchel inside ninety seconds.
+		// At that rate a find is litter: it arrives while the last one is still on screen,
+		// nothing is worth reading, and the satchel is permanently full of things the keeper
+		// never chose. A relic has to be rare enough that turning one up is an event.
+		double chance = 0.002 + 0.006 * dread;
 		if (rng.NextDouble() > chance)
 		{
 			return default;

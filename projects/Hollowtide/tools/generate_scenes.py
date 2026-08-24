@@ -507,6 +507,20 @@ def vigil():
             Scene.selectable("nave"),
         ], -264 + i * 176, 300, 168, 44, MID, CENTRE)
 
+    # ── something turned up ─────────────────────────────────────────────────────────
+    # Shares the visitation's slot above the sigil, and yields to it: for the nine seconds
+    # something is walking, that is the only thing worth looking at. A find otherwise gets the
+    # same prominent band, because the whole point of relics is to make hand-gathering worth
+    # doing and a reward the keeper has to go and look for is not a reward they feel.
+    found = at(nave, "FoundPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -262, 620, 116, MID, CENTRE)
+    # VOID, not white: ui_relic computes its own colour and takes only the alpha from the
+    # element, so on any frame before the material resolves the plain image draws instead - and
+    # a white one flashes as a solid block. The same trap the rites and the ledger icons hit.
+    at(found, "FoundArt", [Scene.image(VOID), Scene.material("ui_relic", ICHOR, DREAD)], 16, 16, 84, 84)
+    at(found, "FoundGrade", [Scene.text("", DISPLAY, 15.0, ICHOR)], 116, 14, 480, 22)
+    at(found, "FoundName", [Scene.text("", DISPLAY, 21.0, BONE)], 116, 38, 480, 28)
+    at(found, "FoundPowers", [Scene.text("", BODY, 15.0, ICHOR_DIM)], 116, 72, 480, 24)
+
     # ── the ledger ──────────────────────────────────────────────────────────────────
     ledger = s.add("LedgerPanel", canvas, [
         Scene.stretch((1, 0), (1, 1), (-LEDGER_W, 0), (0, 0)),
