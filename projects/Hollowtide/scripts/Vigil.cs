@@ -941,8 +941,17 @@ public static class Vigil
 		}
 		PlayedSeconds += deltaSeconds;
 
+		// Captured BEFORE the relaxation below, and that ordering is the difference between the
+		// encounter being reachable and being unreachable. Relaxation is proportional to how
+		// much dread is there, so at the very top a small parish relaxes FASTER than it pulls -
+		// a keeper who stoked all the way to 1.0 had it pulled back to 0.999 in the same tick,
+		// before the brink was ever tested. The effect was that no parish under the equilibrium
+		// threshold could reach a visitation at all, however deliberately its keeper walked
+		// toward one, which quietly gated the whole encounter behind an hour of growth.
+		bool reachedTheBrink = Dread >= 1.0;
+
 		// Pressure in, relaxation out, so a parish tends toward an equilibrium rather than a
-		// cliff - and one whose equilibrium sits under 1.0 never sees a visitation at all.
+		// cliff - and one whose equilibrium sits under 1.0 is never visited unprovoked.
 		Dread = Math.Clamp(Dread + DreadRate * deltaSeconds * efficiency, 0.0, 1.0);
 		if (Dread >= 0.75)
 		{
@@ -972,7 +981,7 @@ public static class Vigil
 					Resolve(Answer.None);
 				}
 			}
-			else if (Dread >= 1.0)
+			else if (reachedTheBrink || Dread >= 1.0)
 			{
 				BeginApproach();
 			}

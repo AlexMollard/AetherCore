@@ -211,8 +211,19 @@ internal static class Balance
 			advantage.ToString("0.0") + "x over a clean run");
 		Check("mashing it pays no more than pacing it", frantic / patient.Lifetime < 1.5,
 			"4/s is " + (frantic / patient.Lifetime).ToString("0.00") + "x of 0.5/s");
-		Check("riding high costs uptime", patient.ReelingFraction is > 0.05 and < 0.5,
+		// Stated as a RELATIONSHIP rather than a ceiling on reeling. It used to assert that a
+		// stoker spends under half the run at half pace, which was only ever true because a bug
+		// stopped small parishes reaching the brink at all - once stoking genuinely summoned
+		// things, a keeper who provokes them and then ignores them reeled 53% of the time and
+		// the check failed. That is the correct punishment, not a regression. What actually has
+		// to hold is that provoking costs you when you ignore it and pays when you answer.
+		Check("riding high costs uptime when ignored", patient.ReelingFraction > 0.05,
 			"reeling " + (patient.ReelingFraction * 100.0).ToString("0") + "% of the run");
+
+		double ignoring = PlayAnswering(45, null, stokePerSecond: 0.5);
+		double engaging = PlayAnswering(45, Answer.None, stokePerSecond: 0.5);
+		Check("answering what you provoked is the best play", engaging > ignoring * 2.0,
+			(engaging / ignoring).ToString("0.0") + "x ignoring it");
 		// Pressed every single tick at any dread - the shape of play the old formula paid
 		// 4,919,000x for. The cooldown alone does not bound this; the offer shrinking toward
 		// the brink is what makes the last press worthless.
@@ -557,6 +568,27 @@ internal static class Balance
 		Check("an empty parish is never visited", !Vigil.Approaching && Vigil.TimesTaken == 0,
 			"nothing comes for a keeper with nothing");
 
+		// -- Reachable BY CHOICE, from the very first rite. --
+		// A parish under the equilibrium threshold is never visited unprovoked, which is
+		// correct - but a keeper who deliberately walks toward one must be able to arrive.
+		// Relaxation is proportional, so at the top a small parish sheds dread faster than it
+		// gathers it, and stoking to exactly 1.0 used to be undone inside the same tick. The
+		// whole encounter was gated behind an hour of growth without anyone choosing that.
+		Vigil.Reset();
+		Vigil.Owned[0] = 1;
+		double walked = 0.0;
+		while (walked < 180.0 && !Vigil.Approaching)
+		{
+			if (Vigil.CanStoke)
+			{
+				Vigil.Stoke();
+			}
+			Vigil.Tick(kDt);
+			walked += kDt;
+		}
+		Check("one rite is enough to walk into one", Vigil.Approaching,
+			Vigil.Approaching ? "arrived after " + Numbers.Duration(walked) + " of stoking" : "never arrived");
+
 		// -- Variety. An encounter with one answer is a keypress, not a decision. --
 		Vigil.Reset();
 		Vigil.Rng = new Random(1);
@@ -628,11 +660,12 @@ internal static class Balance
 	/// <summary>Play a stretch, answering every encounter the same way. A null policy never
 	/// answers at all; <see cref="Answer.None"/> means answer each one CORRECTLY, which is the
 	/// only value of it that could not otherwise be expressed.</summary>
-	private static double PlayAnswering(double minutes, Answer? policy)
+	private static double PlayAnswering(double minutes, Answer? policy, double stokePerSecond = 0.0)
 	{
 		Vigil.Reset();
 		Vigil.Rng = new Random(7);
 		double click = 0.0;
+		double stoke = 0.0;
 		for (int step = 0; step < minutes * 60.0 / kDt; step++)
 		{
 			click += 4.0 * kDt;
@@ -640,6 +673,15 @@ internal static class Balance
 			{
 				click -= 1.0;
 				Vigil.Gather();
+			}
+			stoke += stokePerSecond * kDt;
+			while (stoke >= 1.0)
+			{
+				stoke -= 1.0;
+				if (Vigil.Dread < 0.85)
+				{
+					Vigil.Stoke();
+				}
 			}
 			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
 			{
