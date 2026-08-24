@@ -74,10 +74,6 @@ public static class SaveSystem
 
 	private static string FilePath() => Path.Combine(Dir(), kFileName);
 
-	/// <summary>What a half-finished save is called. One place, because Save writes it and Load
-	/// recovers from it, and two spellings of it would mean the recovery silently never fired.</summary>
-	private const string kTempSuffix = ".tmp";
-
 	/// <summary>True when the vigil on screen came out of a half-finished write rather than the
 	/// save proper. Read by nothing yet; set so the game CAN say so rather than pretending
 	/// nothing happened.</summary>
@@ -120,11 +116,10 @@ public static class SaveSystem
 			{
 				return;
 			}
-			string kept = path + ".broken";
-			for (int i = 1; File.Exists(kept) && i < 100; i++)
-			{
-				kept = path + ".broken" + i;
-			}
+			// The naming lives in SaveNaming, engine-free, so the harness can hold the one
+			// decision here that can destroy data: which name the keeper's only surviving copy
+			// is moved to.
+			string kept = SaveNaming.Kept(path, File.Exists);
 			File.Move(path, kept);
 			Log.Warn("[Hollowtide] could not read the save (" + why + "). It has been kept at "
 				+ kept + " and a fresh vigil started. Nothing has been deleted.");
@@ -198,7 +193,7 @@ public static class SaveSystem
 			// difference between losing a session and losing nothing. It is only ever tried
 			// when the real save cannot be read, so an older temporary file can only ever
 			// replace something already unusable.
-			VigilSave? rescued = TryRead(FilePath() + kTempSuffix);
+			VigilSave? rescued = TryRead(FilePath() + SaveNaming.TempSuffix);
 			if (rescued != null)
 			{
 				VigilData.Apply(rescued);
@@ -221,7 +216,7 @@ public static class SaveSystem
 			// Write beside the real file and move into place: a crash mid-write then costs
 			// the newest save rather than every save.
 			string path = FilePath();
-			string temp = path + kTempSuffix;
+			string temp = path + SaveNaming.TempSuffix;
 			File.WriteAllText(temp, JsonSerializer.Serialize(save, new JsonSerializerOptions { WriteIndented = false }));
 			File.Move(temp, path, overwrite: true);
 		}

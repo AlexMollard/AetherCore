@@ -4206,6 +4206,60 @@ internal static class Balance
 			inverted == 0 ? "ordering holds across thirteen tiers" : inverted + " inverted");
 	}
 
+	/// <summary>
+	/// A rescued save never lands on a name already in use.
+	/// </summary>
+	/// <remarks>
+	/// This runs at the worst possible moment - the keeper's save is already unreadable and the
+	/// copy being moved is the only one left. Returning a name that is taken would have the
+	/// rescue destroy the thing it exists to preserve, and it would only ever happen to somebody
+	/// who had broken a save twice, which is to say almost nobody, which is to say it would
+	/// never be found.
+	/// </remarks>
+	private static void ARescuedSaveNeverLandsOnAnother()
+	{
+		Console.WriteLine("A rescued save never lands on another");
+
+		const string save = "hollowtide.save";
+		HashSet<string> onDisk = new HashSet<string>();
+		bool Taken(string name) => onDisk.Contains(name);
+
+		Check("the first rescue takes the plain name", SaveNaming.Kept(save, Taken) == save + ".broken",
+			SaveNaming.Kept(save, Taken));
+
+		// Fill them up one at a time, exactly as a keeper breaking saves repeatedly would.
+		int collisions = 0;
+		for (int i = 0; i < 40; i++)
+		{
+			string name = SaveNaming.Kept(save, Taken);
+			if (!onDisk.Add(name))
+			{
+				collisions++;
+			}
+		}
+		Check("and forty of them in a row are forty different files", collisions == 0,
+			collisions == 0 ? onDisk.Count + " distinct names" : collisions + " would have overwritten");
+
+		// Past the ceiling it has to return SOMETHING, and it must never be the live save.
+		HashSet<string> everything = new HashSet<string>();
+		for (int i = 0; i < SaveNaming.MaxKept + 5; i++)
+		{
+			everything.Add(SaveNaming.Kept(save, everything.Contains));
+		}
+		string beyond = SaveNaming.Kept(save, everything.Contains);
+		Check("and once they are all taken it still names a file, never the save itself",
+			beyond.Length > 0 && beyond != save && beyond.StartsWith(save + ".broken"),
+			"the hundredth name is reused rather than the live save overwritten");
+
+		// A missing predicate must not throw - the rescue is already handling a failure.
+		Check("a rescue with nothing to ask still names something",
+			SaveNaming.Kept(save, null!) == save + ".broken", "no predicate, no exception");
+
+		// The temp suffix is shared, which is the whole reason it lives here.
+		Check("the unfinished write has exactly one name", SaveNaming.TempSuffix == ".tmp",
+			"Save writes it and Load recovers from it, spelled once");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4255,6 +4309,7 @@ internal static class Balance
 		TheSceneHasWhatTheScriptsAskFor();
 		TheGeneratorAgreesWithTheGame();
 		EveryNumberStaysReadable();
+		ARescuedSaveNeverLandsOnAnother();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
