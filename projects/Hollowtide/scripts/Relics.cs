@@ -265,7 +265,13 @@ public static class Relics
 		return power switch
 		{
 			Power.Hand => amount + " by hand",
-			Power.Bargain => amount + " from dread",
+			// "What dread ADDS", precisely: the multiplier is 1 + coefficient * dread^1.4, and this
+			// raises the coefficient - so it increases the added part by exactly this much, while
+			// the effect on the total is smaller and grows with depth. The old wording, "+X% from
+			// dread", read as a claim about the whole multiplier and measured about half of it.
+			// The behaviour is right and worth keeping: a power that pays more the deeper you are
+			// is the bargain, where a flat bonus would pay a cautious keeper the same.
+			Power.Bargain => amount + " to what dread adds",
 			Power.Warding => Numbers.Percent(magnitude) + " off wards",
 			Power.Patience => amount + " longer to answer",
 			Power.Almsgiving => Numbers.Percent(magnitude) + " off offerings",

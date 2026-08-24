@@ -1769,6 +1769,7 @@ internal static class Balance
 				Vigil.Dread = 0.7;
 				Vigil.Fervour = 0.5;
 				double hand = Vigil.HandGain;
+				double bareDread = Vigil.DreadMultiplier;
 				double ward = Vigil.WardCost;
 				double offer = Vigil.OfferCost;
 				double drain = Vigil.FervourDrain;
@@ -1788,17 +1789,18 @@ internal static class Balance
 				}
 				Vigil.Worn[0] = one;
 
-				// Bargain is measured against the COEFFICIENT it multiplies rather than the
-				// resulting multiplier: what dread pays is 1 + coeff * d^1.4, and the leading one
-				// dilutes any change to the coefficient. The row says "from dread", which is the
-				// part it moves.
+				// Bargain is measured against WHAT DREAD ADDS, which is what its row now claims:
+				// the multiplier is 1 + coefficient * d^1.4, so the added part is everything above
+				// one. Measuring the whole multiplier would find about half the claimed figure and
+				// call the row a liar, when the row is describing the part it actually moves.
+				double addedBare = bareDread - 1.0;
 				double got = power switch
 				{
 					Power.Hand => Vigil.HandGain / hand - 1.0,
 					Power.Warding => 1.0 - Vigil.WardCost / ward,
 					Power.Almsgiving => 1.0 - Vigil.OfferCost / offer,
 					Power.Steadiness => 1.0 - Vigil.FervourDrain / drain,
-					Power.Bargain => Vigil.Wearing(Power.Bargain),
+					Power.Bargain => (Vigil.DreadMultiplier - 1.0) / addedBare - 1.0,
 					_ => Vigil.Wearing(Power.Patience),
 				};
 				if (Math.Abs(got - claimed) > claimed * 0.02 && lying.Length == 0)
