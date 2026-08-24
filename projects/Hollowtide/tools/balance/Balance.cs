@@ -1611,7 +1611,13 @@ internal static class Balance
 					seen[(int)dug.Grade]++;
 				}
 			}
-			for (int g = 1; g < 5 && inverted.Length == 0; g++)
+			// From ANOINTED upward only. The bottom two bands are 0.30 and 0.32 of the roll wide,
+			// so at middling dread Keepsake genuinely outnumbers Leavings - by design, and by a
+			// margin sampling noise can push past any fixed tolerance. Asserting a strict ladder
+			// there was asserting something untrue, and it duly failed on a different seed. What
+			// the game actually promises is that the GOOD grades stay ordered and the top one
+			// never runs away, which is the failure this check was written for.
+			for (int g = 2; g < 5 && inverted.Length == 0; g++)
 			{
 				// A grade may be absent at this depth, and the bottom two bands are near enough
 				// the same width that which of them leads is noise - Keepsake runs 50% against
@@ -1625,8 +1631,8 @@ internal static class Balance
 				}
 			}
 		}
-		Check("no grade is commoner than the one beneath it", inverted.Length == 0,
-			inverted.Length == 0 ? "the ladder holds at every depth" : inverted);
+		Check("no good grade is commoner than the one beneath", inverted.Length == 0,
+			inverted.Length == 0 ? "Anointed upward, ordered at every depth" : inverted);
 
 		// -- Rarity has to mean something at a glance. --
 		double bestKeepsake = 0.0;
