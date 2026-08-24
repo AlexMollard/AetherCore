@@ -57,6 +57,11 @@ public sealed class Parish
 	/// </remarks>
 	private const float kSag = 0.045f;
 
+	/// <summary>How far the widest lane of the pop fan carries, as a fraction of the backdrop
+	/// width. Wide enough that two figures beside each other are legible, narrow enough that a
+	/// gather still reads as coming from the sigil rather than from somewhere near it.</summary>
+	private const float kPopFan = 0.045f;
+
 	/// <summary>Pips drawn per conduit. Enough to read as a continuous line at the sizes the
 	/// nave is actually drawn, few enough that eight of them cost nothing.</summary>
 	private const int kWirePips = 18;
@@ -67,6 +72,12 @@ public sealed class Parish
 		public Vector2 From;
 		public Vector4 Colour;
 		public float Age;
+		/// <summary>Sideways travel per unit of rise, in backdrop fractions. Zero would be
+		/// straight up, which is what put every figure in one column.</summary>
+		public float Drift;
+		/// <summary>How hard this one climbs. Varying it separates two pops that share a lane
+		/// as well, so the fan does not have to be the only thing keeping them apart.</summary>
+		public float Lift;
 		/// <summary>How much this one is worth keeping. A gather is 0 and everything else is
 		/// above it, so the thing a keeper actually wants to see cannot be recycled away by the
 		/// ordinary clicking that produced it.</summary>
@@ -98,6 +109,9 @@ public sealed class Parish
 	private readonly Entity[,] _wire = new Entity[Content.RiteCount, kWirePips];
 	private readonly Pop[] _pops = new Pop[kPopPool];
 	private int _nextBearer;
+	/// <summary>Which lane of the fan the next pop takes. A counter, not a die roll - see
+	/// <see cref="ShowPop"/>.</summary>
+	private int _nextLane;
 
 	private float _shake;
 	/// <summary>
@@ -775,8 +789,10 @@ public sealed class Parish
 			{
 				b.Live = false;
 				Ui.SetRect(b.Body, -500.0f, -500.0f, 1.0f, 1.0f);
-				// The payout lands where the keeper is, which is the point of the walk.
-				ShowPop(b.To + new Vector2(AetherCore.Random.Range(-0.03f, 0.03f), -0.08f),
+				// The payout lands where the sigil took it in, which is the point of the run.
+				// No jitter of its own any more: the fan in ShowPop separates these properly,
+				// and a random nudge on top of it only blurred which lane a figure was in.
+				ShowPop(b.To + new Vector2(0.0f, -0.08f),
 					"+" + Numbers.Short(b.Amount), Palette.Ichor);
 			}
 			_bearers[i] = b;
@@ -859,7 +875,26 @@ public sealed class Parish
 			return;
 		}
 
+		// A fan, not a jitter.
+		//
+		// Every gather originates at exactly the same place - the keeper strikes the sigil and
+		// the sigil does not move - so a keeper clicking quickly sent a dozen figures up one
+		// column, each hiding the one before it. Bearer arrivals now do the same, since they all
+		// land on the one intake.
+		//
+		// Lanes are handed out by a counter rather than by chance, because chance still drops two
+		// consecutive pops into the same place often enough to be noticed, and it is precisely
+		// the consecutive ones that need to be told apart. Six lanes, alternating sides and
+		// widening: at the pool's twelve slots and a second and a half each, that is enough for
+		// anyone clicking as fast as a hand can.
+		int step = _nextLane % 6;
+		_nextLane = (_nextLane + 1) % 6;
+		float side = step % 2 == 0 ? 1.0f : -1.0f;
+		float spread = (step / 2 + 1) / 3.0f;
+
 		Pop pop = _pops[chosen];
+		pop.Drift = side * spread * kPopFan;
+		pop.Lift = 0.85f + spread * 0.35f;
 		pop.From = at;
 		pop.Colour = colour;
 		pop.Age = 0.0f;
@@ -889,9 +924,13 @@ public sealed class Parish
 			float rise = 1.0f - (1.0f - t) * (1.0f - t);
 
 			Vector2 px = ToLocal(pop.From);
+			// Drift scales with the rise, so every figure leaves from the same point and splays
+			// as it climbs. Fanning from the start would have read as figures appearing beside
+			// the sigil rather than out of it.
 			Ui.SetAnchors(pop.Label, Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(pop.Label, new Vector2(0.5f, 0.5f));
-			Ui.SetRect(pop.Label, px.X, px.Y - rise * bd.W * 0.05f, 180.0f, 24.0f);
+			Ui.SetRect(pop.Label, px.X + rise * pop.Drift * bd.Z,
+				px.Y - rise * bd.W * 0.05f * pop.Lift, 180.0f, 24.0f);
 			Ui.SetTextColor(pop.Label, Palette.Fade(pop.Colour, 1.0f - t));
 			if (t >= 1.0f)
 			{
