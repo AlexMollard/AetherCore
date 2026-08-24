@@ -246,10 +246,26 @@ public sealed class Parish
 			{
 				return 0.34f;
 			}
+			// Measured from the sigil's CENTRE, never its edge. The sigil is centre-pivoted and
+			// grows about a tenth when struck, so its left edge slides outward on every click -
+			// and this figure sets the spacing and the position of every structure in the
+			// parish. Reading the edge meant the whole parish shuffled sideways each time the
+			// keeper gathered, which is exactly as rough as it sounds. The centre does not move
+			// when the sigil scales, so the layout now holds still while the sigil breathes.
+			// The clearance is the sigil's RESTING half-width plus a margin - the same gap the
+			// old edge-reading gave, but measured from something that holds still. The resting
+			// width is the smallest ever seen, which is self-calibrating: a punch only ever
+			// makes the sigil bigger, so the minimum is the unstruck size at whatever window
+			// width the keeper is playing at, and a fixed fraction would have been wrong at
+			// every size but one.
+			_sigilRest = MathF.Min(_sigilRest, sg.Z);
+			float clearance = _sigilRest * 0.5f / bd.Z + 0.03f;
+			float centre = (sg.X + sg.Z * 0.5f - bd.X) / bd.Z;
+
 			// Clamped at BOTH ends. The upper bound is the load-bearing one: this is a division
 			// by a live rect, and an unbounded result here propagates straight into the size of
 			// every rite on screen.
-			return Math.Clamp((sg.X - bd.X) / bd.Z - 0.03f, kRiteLeft + 0.05f, 0.55f);
+			return Math.Clamp(centre - clearance, kRiteLeft + 0.05f, 0.55f);
 		}
 	}
 
@@ -257,6 +273,9 @@ public sealed class Parish
 	/// all eight - budgeting for a parish the keeper will not have for hours left the early
 	/// ones as specks in slots sized for someone else.</summary>
 	private int _standing = 1;
+
+	/// <summary>The smallest sigil width seen, which is its unstruck size. See RiteRight.</summary>
+	private float _sigilRest = float.MaxValue;
 
 	/// <summary>Gap between neighbouring rites, in backdrop fractions. Every rite is capped to
 	/// this wide, which is what stops a heavily-bought rite from swallowing the one beside it.</summary>
