@@ -3726,6 +3726,82 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// Time away is worth what the parish is actually worth.
+	/// </summary>
+	/// <remarks>
+	/// Offline runs the same Tick as everything else, which is a design decision worth PINNING
+	/// rather than trusting: the two newest things that change production - a consecrated rite
+	/// and relics that lend structures - would each be easy to add to the live path and forget
+	/// on the away path, and the failure is invisible because both numbers look plausible. This
+	/// suite has already caught the offline report measuring the wrong quantity once.
+	/// </remarks>
+	private static void TimeAwayIsWorthWhatItSays()
+	{
+		Console.WriteLine("Time away is worth what the parish is worth");
+
+		// A consecrated rite pays three times as much away as well as at home.
+		Vigil.Reset();
+		Vigil.Ichor = 1e12;
+		Vigil.BuyRite(0, 40);
+		double plainRate = Vigil.Rate;
+		Vigil.Ichor = 0.0;
+		for (int i = 0; i < (int)(60.0 / kDt); i++)
+		{
+			Vigil.Tick(kDt, offline: true);
+		}
+		double plainAway = Vigil.Ichor;
+
+		Vigil.Reset();
+		Vigil.Ichor = 1e12;
+		Vigil.BuyRite(0, 40);
+		Vigil.Consecrate(0);
+		double blessedRate = Vigil.Rate;
+		Vigil.Ichor = 0.0;
+		for (int i = 0; i < (int)(60.0 / kDt); i++)
+		{
+			Vigil.Tick(kDt, offline: true);
+		}
+		double blessedAway = Vigil.Ichor;
+
+		double awayRatio = plainAway > 0.0 ? blessedAway / plainAway : 0.0;
+		double homeRatio = plainRate > 0.0 ? blessedRate / plainRate : 0.0;
+		Check("a consecrated rite pays the same multiple away as at home",
+			Math.Abs(awayRatio - homeRatio) < 0.02 && awayRatio > 2.5,
+			homeRatio.ToString("F2") + "x at home, " + awayRatio.ToString("F2") + "x away");
+
+		// Lent structures work while the keeper is not there, exactly as bought ones do.
+		Vigil.Reset();
+		Relic lender = default;
+		for (int seed = 1; seed < 400000 && !lender.Exists; seed++)
+		{
+			Relic candidate = new Relic { Seed = seed, Grade = Grade.Hollowed };
+			for (int i = 0; i < Relics.PowerCount(candidate.Grade); i++)
+			{
+				if (Relics.PowerAt(candidate, i) == Power.Foundation)
+				{
+					lender = candidate;
+					break;
+				}
+			}
+		}
+		Vigil.Worn[0] = lender;
+		Vigil.Ichor = 0.0;
+		for (int i = 0; i < (int)(60.0 / kDt); i++)
+		{
+			Vigil.Tick(kDt, offline: true);
+		}
+		Check("structures a relic lends work while the keeper is away", Vigil.Ichor > 0.0,
+			"a parish of nothing but lent structures still earns overnight");
+
+		// And the away rate is a SHARE of the home rate, never more than it.
+		Check("time away never pays better than being there",
+			Vigil.OfflineEfficiency > 0.0 && Vigil.OfflineEfficiency <= 1.0,
+			"away runs at " + Numbers.Percent(Vigil.OfflineEfficiency) + " of the parish");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3769,6 +3845,7 @@ internal static class Balance
 		LuckIsWorthWearing();
 		TheParishHasEnoughToSay();
 		TheDarkTakesWhatIsLoose();
+		TimeAwayIsWorthWhatItSays();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

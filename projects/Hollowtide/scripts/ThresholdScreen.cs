@@ -157,11 +157,24 @@ public sealed class ThresholdScreen : EntityScript
 			}
 		}
 
+		// What they turned up, which had grown into the largest thing in the game while this
+		// line still listed only time, sigils, marks and visitors. A keeper coming back after a
+		// week should see the part of their record they are proudest of.
+		string dug = Vigil.RelicsFound > 0
+			? "   " + Vigil.RelicsFound + " found"
+				+ (Vigil.BestRelicGrade >= 0
+					? ", best " + Relics.GradeName((Grade)Vigil.BestRelicGrade).ToLowerInvariant()
+					: "")
+			: "";
+		// Only mentioned once it has happened, so a first-time keeper is not shown a zero for a
+		// system they have not met.
+		string lost = Vigil.RelicsLost > 0 ? "   " + Vigil.RelicsLost + " taken from you" : "";
+
 		Ui.SetText(_standing,
 			"kept " + Numbers.Duration(Vigil.PlayedSeconds) +
 			"   " + Vigil.SigilsEarned + " sigils taken" +
 			"   " + Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks" +
-			"   " + named + "/" + Content.RiteCount + " named");
+			"   " + named + "/" + Content.RiteCount + " named" + dug + lost);
 		Ui.SetTextColor(_standing, Palette.TextDim);
 	}
 
