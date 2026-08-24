@@ -2050,6 +2050,44 @@ internal static class Balance
 		return Vigil.LifetimeIchor;
 	}
 
+	/// <summary>
+	/// Two readouts of the same thing must not disagree.
+	/// </summary>
+	/// <remarks>
+	/// The ledger shows what each rite makes and the bar shows what the parish makes, and a
+	/// player reads both. They were computed from different expressions, so during a
+	/// visitation's aftermath the rows claimed full production while the bar said half - out by
+	/// exactly two, in the one state where a keeper is most likely to be checking.
+	///
+	/// Checked as an identity rather than by inspection: whatever either side is built from,
+	/// the rows have to add up to the total.
+	/// </remarks>
+	private static void TheReadoutsAgree()
+	{
+		Console.WriteLine("The readouts agree with each other");
+		foreach (double aftermath in new[] { 0.0, 20.0 })
+		{
+			Vigil.Reset();
+			for (int i = 0; i < Content.RiteCount; i++)
+			{
+				Vigil.Owned[i] = 40;
+			}
+			Vigil.Dread = 0.7;
+			Vigil.AftermathSeconds = aftermath;
+
+			double rows = 0.0;
+			for (int rite = 0; rite < Content.RiteCount; rite++)
+			{
+				// Exactly the expression the ledger row uses.
+				rows += Vigil.Owned[rite] * Content.Rites[rite].BaseRate * Vigil.RiteMultiplier(rite)
+					* Vigil.AftermathScale;
+			}
+			Check(aftermath > 0.0 ? "  while reeling from a visitation" : "  in a calm parish",
+				Math.Abs(rows - Vigil.Rate) < Vigil.Rate * 1e-9,
+				Numbers.Rate(rows) + " of rows against " + Numbers.Rate(Vigil.Rate) + " on the bar");
+		}
+	}
+
 	/// <summary>Every relic the keeper holds, worn or carried.</summary>
 	private static int Count()
 	{
@@ -2200,6 +2238,7 @@ internal static class Balance
 		TradingMovesRatherThanCopies();
 		TheDeadRememberWhatTheyTake();
 		AVigilSurvivesBeingWrittenDown();
+		TheReadoutsAgree();
 		TheClockOutlastsTheKeeper();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();

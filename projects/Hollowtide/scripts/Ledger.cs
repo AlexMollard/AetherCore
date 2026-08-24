@@ -264,9 +264,13 @@ public sealed class Ledger
 
 			Ui.SetText(row.Title, def.Name + (owned > 0 ? "   x" + owned : ""));
 			Ui.SetTextColor(row.Title, owned > 0 ? def.Colour : Palette.TextBright);
+			// AftermathScale included, because the HUD's total includes it and two readouts of the
+			// same thing must not disagree. Without it, a keeper who had just been visited saw
+			// every rite claiming full production while the bar above said half - the ledger
+			// being the one that was wrong, and by exactly two.
 			Ui.SetText(row.Sub, owned > 0
-				? Numbers.Rate(owned * def.BaseRate * Vigil.RiteMultiplier(rite)) + "   each " +
-				  Numbers.Mult(Vigil.RiteMultiplier(rite)) + "   next double at " +
+				? Numbers.Rate(owned * def.BaseRate * Vigil.RiteMultiplier(rite) * Vigil.AftermathScale) +
+				  "   each " + Numbers.Mult(Vigil.RiteMultiplier(rite)) + "   next double at " +
 				  ((owned / Content.MilestoneStep + 1) * Content.MilestoneStep)
 				: def.Blurb);
 			Ui.SetText(row.Cost, Numbers.Short(cost));
