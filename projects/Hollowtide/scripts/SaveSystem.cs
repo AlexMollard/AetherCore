@@ -42,6 +42,8 @@ public sealed class VigilSave
 	public double HighDreadSeconds { get; set; }
 	public int WardsRaised { get; set; }
 	public int TimesTaken { get; set; }
+	/// <summary>Visitors turned away by naming what they wanted.</summary>
+	public int VisitorsAnswered { get; set; }
 	public int CommunionSurges { get; set; }
 	public int HandGathers { get; set; }
 	public double SharedVigilSeconds { get; set; }
@@ -225,6 +227,7 @@ public static class SaveSystem
 		HighDreadSeconds = Vigil.HighDreadSeconds,
 		WardsRaised = Vigil.WardsRaised,
 		TimesTaken = Vigil.TimesTaken,
+		VisitorsAnswered = Vigil.VisitorsAnswered,
 		CommunionSurges = Vigil.CommunionSurges,
 		HandGathers = Vigil.HandGathers,
 		SharedVigilSeconds = Vigil.SharedVigilSeconds,
@@ -255,6 +258,7 @@ public static class SaveSystem
 		Vigil.HighDreadSeconds = save.HighDreadSeconds;
 		Vigil.WardsRaised = save.WardsRaised;
 		Vigil.TimesTaken = save.TimesTaken;
+		Vigil.VisitorsAnswered = save.VisitorsAnswered;
 		Vigil.CommunionSurges = save.CommunionSurges;
 		Vigil.HandGathers = save.HandGathers;
 		Vigil.SharedVigilSeconds = save.SharedVigilSeconds;

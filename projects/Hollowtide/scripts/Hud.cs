@@ -39,6 +39,14 @@ public sealed class Hud
 	private Entity _sigilHint;
 	private Entity _handValue;
 	private Entity _fervourBar;
+	private Entity _visPanel;
+	private Entity _visName;
+	private Entity _visLine;
+	private Entity _visClock;
+	/// <summary>The four answers, indexed by <see cref="Answer"/> minus one - None has no
+	/// button, because not answering is what happens when you touch nothing.</summary>
+	private readonly Button[] _answers = new Button[4];
+
 	private Button _stoke;
 	private Button _ward;
 	private Button _bell;
@@ -58,10 +66,64 @@ public sealed class Hud
 	public bool BellPressed { get; private set; }
 	public bool StokePressed { get; private set; }
 
+	/// <summary>The answer the keeper reached for this frame, or <see cref="Answer.None"/>.</summary>
+	public Answer AnswerGiven { get; private set; }
+
 	/// <summary>Where the last gather landed, in SCREEN pixels: the pointer when the sigil was
 	/// clicked, and the sigil itself when it was the space bar. Feedback is thrown from here,
 	/// so it appears where the keeper actually struck.</summary>
 	public Vector2 StrikePoint { get; private set; }
+
+	/// <summary>
+	/// Show whatever is walking, and read the answer.
+	/// </summary>
+	/// <remarks>
+	/// Every answer stays on screen for the whole encounter, including the ones this keeper
+	/// cannot pay for - they go dead rather than disappearing. A row that changes shape as
+	/// your purse changes is a row you cannot learn, and learning which verb belongs to which
+	/// visitor is the only progression this game keeps in the player rather than in the save.
+	/// Seeing that a ward WOULD have answered is how the next one goes better.
+	/// </remarks>
+	private void UpdateVisitation()
+	{
+		bool walking = Vigil.Approaching;
+		_visPanel.SetActive(walking);
+		for (int i = 0; i < _answers.Length; i++)
+		{
+			_answers[i].SetActive(walking);
+		}
+		if (!walking)
+		{
+			return;
+		}
+
+		RiteDef visitor = Content.Rites[Vigil.ApproachRite];
+		Ui.SetText(_visName, visitor.VisitorName);
+		Ui.SetText(_visLine, visitor.Approach);
+		Ui.SetText(_visClock, "IT ARRIVES IN " + MathF.Ceiling((float)Vigil.ApproachSeconds).ToString("0") + "s");
+		// The clock reddens as it runs out, so the pressure is felt rather than read.
+		float urgency = 1.0f - (float)(Vigil.ApproachSeconds / Vigil.kApproachSeconds);
+		Ui.SetTextColor(_visClock, Palette.Mix(Palette.TextFaint, Palette.Dread, urgency));
+
+		bool canWard = Vigil.Wards > 0;
+		bool canOffer = Vigil.Ichor >= Vigil.OfferCost;
+		_answers[0].SetLabel(canWard ? "WARD IT  " + Vigil.Wards : "NO WARD");
+		_answers[1].SetLabel(canOffer ? "OFFER " + Numbers.Short(Vigil.OfferCost) : "CANNOT OFFER");
+		_answers[0].SetEnabled(canWard);
+		_answers[1].SetEnabled(canOffer);
+		_answers[2].SetEnabled(true);
+		_answers[3].SetEnabled(true);
+
+		for (int i = 0; i < _answers.Length; i++)
+		{
+			bool live = i switch { 0 => canWard, 1 => canOffer, _ => true };
+			_answers[i].Style(live, Palette.Mix(Palette.Row, Palette.Dread, 0.45f), Palette.Row, Palette.PanelDeep);
+			if (live && _answers[i].Activated)
+			{
+				AnswerGiven = (Answer)(i + 1);
+			}
+		}
+	}
 
 	/// <summary>Bind the authored chrome. Every element here lives in the scene, so this only
 	/// looks things up - laying the bar out is a job for the editor, not for a rebuild.</summary>
@@ -83,6 +145,15 @@ public sealed class Hud
 		_sigilHint = Scene.Find("NaveHint");
 		_handValue = Scene.Find("NaveHandValue");
 		_fervourBar = Scene.Find("NaveFervourBar");
+		_visPanel = Scene.Find("VisitationPanel");
+		_visName = Scene.Find("VisitationName");
+		_visLine = Scene.Find("VisitationLine");
+		_visClock = Scene.Find("VisitationClock");
+		_answers[0] = Button.Find("AnswerWard");
+		_answers[1] = Button.Find("AnswerOffer");
+		_answers[2] = Button.Find("AnswerBell");
+		_answers[3] = Button.Find("AnswerStill");
+
 		_stoke = Button.Find("NaveStoke");
 		_ward = Button.Find("NaveWard");
 		_bell = Button.Find("NaveBell");
@@ -95,6 +166,7 @@ public sealed class Hud
 		WardPressed = false;
 		BellPressed = false;
 		StokePressed = false;
+		AnswerGiven = Answer.None;
 
 		// ── Input ────────────────────────────────────────────────────────────────────
 		// WasActivated covers the click, Enter/Space-while-focused and the pad button, and
@@ -212,7 +284,7 @@ public sealed class Hud
 		// Stoking pays now, so the button says what it pays - and the figure is asked of the
 		// simulation rather than recomputed here, because this line and Vigil.Stoke were two
 		// copies of one formula and had already drifted into being wrong together.
-		bool canStoke = Vigil.CanStoke;
+		bool canStoke = Vigil.CanStoke && !Vigil.Approaching;
 		_stoke.SetLabel(Vigil.Dread >= 0.999
 			? "IT IS AS CLOSE AS IT GETS"
 			: Vigil.StokeCooldown > 0.0
@@ -239,6 +311,8 @@ public sealed class Hud
 			_bell.SetEnabled(ready);
 			_bell.Style(ready, Palette.Mix(Palette.Row, Palette.Sigil, 0.40f), Palette.Row, Palette.PanelDeep);
 		}
+
+		UpdateVisitation();
 
 		Ui.SetTextColor(_sigilHint, Palette.Mix(Palette.TextFaint, Palette.Ichor, eased));
 		Ui.SetTextColor(_title, Palette.Mix(Palette.TextDim, Palette.Dread, dread * 0.8f));

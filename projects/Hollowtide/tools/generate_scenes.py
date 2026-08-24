@@ -471,6 +471,31 @@ def vigil():
     at(nave, "NaveWard", [Scene.button("RAISE WARD", DISPLAY, 16.0, ROW, mix(ROW_HOT, ICHOR, 0.35), BONE, BONE), Scene.selectable("nave")], 132, 186, 250, 44, MID, CENTRE)
     at(nave, "NaveBell", [Scene.button("RING THE BELL", DISPLAY, 16.0, ROW, mix(ROW_HOT, SIGIL, 0.40), BONE, BONE), Scene.selectable("nave")], 0, 240, 250, 44, MID, CENTRE)
 
+    # ── the visitation ──────────────────────────────────────────────────────────────
+    # Hidden unless something is walking. It sits ABOVE the sigil rather than beside the
+    # buttons because for nine seconds it is the only thing in the game that matters, and a
+    # banner tucked into a corner would read as another readout rather than as an arrival.
+    vis = at(nave, "VisitationPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -262, 720, 132, MID, CENTRE)
+    at(vis, "VisitationName", [Scene.text("", DISPLAY, 24.0, DREAD, "center")], 20, 14, 680, 32)
+    at(vis, "VisitationLine", [Scene.text("", BODY, 16.0, BONE_DIM, "center", wrap=True)], 40, 52, 640, 46)
+    at(vis, "VisitationClock", [Scene.text("", BODY, 15.0, BONE_FAINT, "center")], 20, 102, 680, 22)
+
+    # Four answers on one row, always in the same order and always all four shown - including
+    # the ones this keeper cannot currently pay for. A menu that hides the answers you cannot
+    # afford teaches nothing; a keeper has to be able to SEE that a ward was the thing to have
+    # bought, which is how the next encounter goes better than this one.
+    ANSWERS = [
+        ("AnswerWard", "WARD IT"),
+        ("AnswerOffer", "OFFER"),
+        ("AnswerBell", "THE BELL"),
+        ("AnswerStill", "STAND STILL"),
+    ]
+    for i, (nm, label) in enumerate(ANSWERS):
+        at(nave, nm, [
+            Scene.button(label, DISPLAY, 15.0, ROW, mix(ROW_HOT, DREAD, 0.40), BONE, BONE),
+            Scene.selectable("nave"),
+        ], -264 + i * 176, 300, 168, 44, MID, CENTRE)
+
     # ── the ledger ──────────────────────────────────────────────────────────────────
     ledger = s.add("LedgerPanel", canvas, [
         Scene.stretch((1, 0), (1, 1), (-LEDGER_W, 0), (0, 0)),

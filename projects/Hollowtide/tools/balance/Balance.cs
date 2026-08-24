@@ -416,6 +416,151 @@ internal static class Balance
 		Check("offline never provokes a visitation", Vigil.TimesTaken == 0, "nothing arrives while away");
 	}
 
+	/// <summary>
+	/// Put a keeper at the brink with a known parish and let something come for them.
+	/// </summary>
+	/// <remarks>
+	/// Deterministic on purpose: the visitor is drawn from the deepest rite, so owning exactly
+	/// one tier fixes which one arrives and makes the right answer knowable to the test.
+	/// </remarks>
+	private static void Summon(int rite, int wards, double ichor)
+	{
+		Vigil.Reset();
+		// Enough that this parish's dread EQUILIBRIUM clears the brink. Forcing the meter to
+		// 1.0 on a smaller holding proves nothing: the first tick relaxes it straight back
+		// down, no walk begins, and every check below passes vacuously because nothing is
+		// approaching for them to be wrong about. Owning one tier keeps it the deepest, so
+		// which visitor arrives stays fixed.
+		Vigil.Owned[rite] = 2000;
+		Vigil.Wards = wards;
+		Vigil.Ichor = ichor;
+		Vigil.Dread = 1.0;
+		Vigil.Tick(kDt);
+		if (!Vigil.Approaching)
+		{
+			// Never silently: a fixture that stops summoning turns this whole section green.
+			Console.WriteLine("  [FAIL] fixture: nothing came for rite " + rite
+				+ " (equilibrium " + Vigil.DreadEquilibrium.ToString("0.00") + ")");
+			s_failures++;
+		}
+	}
+
+	/// <summary>
+	/// The encounter has to add a decision without ever taxing the keeper who is not there.
+	/// </summary>
+	/// <remarks>
+	/// The load-bearing check is <c>the absent keeper is treated exactly as before</c>. An idle
+	/// game may not require attendance: the moment answering becomes mandatory, walking away
+	/// stops being a legitimate way to play and the genre's whole promise is broken. So the
+	/// no-answer branch is deliberately the OLD code path, and this pins it there.
+	/// </remarks>
+	private static void TheEncounterIsOptional()
+	{
+		Console.WriteLine("The encounter is an offer, not a demand");
+
+		bool named = true;
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			named &= Content.Rites[i].VisitorName.Length > 0
+				&& Content.Rites[i].Approach.Length > 0
+				&& Content.Rites[i].Answer != Answer.None;
+		}
+		Check("every rite names what comes for it", named, Content.RiteCount + " visitors, each answerable");
+
+		// A table where every visitor wants the same thing is a table with no decision in it.
+		int distinct = 0;
+		foreach (Answer a in Enum.GetValues<Answer>())
+		{
+			if (a == Answer.None)
+			{
+				continue;
+			}
+			foreach (RiteDef r in Content.Rites)
+			{
+				if (r.Answer == a)
+				{
+					distinct++;
+					break;
+				}
+			}
+		}
+		Check("the answers are spread across the verbs", distinct >= 3, distinct + " of 4 verbs are somebody's answer");
+
+		Summon(0, 0, 0);
+		Check("the meter filling starts a walk, not a loss", Vigil.Approaching && Vigil.AftermathSeconds == 0.0,
+			"\"" + Content.Rites[0].VisitorName + "\" is " + Vigil.ApproachSeconds.ToString("0") + "s away");
+
+		// -- The absent keeper: both branches must be byte-for-byte the old behaviour. --
+		Summon(3, 1, 0);
+		while (Vigil.Approaching)
+		{
+			Vigil.Tick(kDt);
+		}
+		Check("absent, warded: the ward is spent as always", Vigil.Wards == 0 && Vigil.AftermathSeconds == 0.0
+			&& Math.Abs(Vigil.Dread - 0.55) < 1e-9, "ward consumed, dread left at 0.55");
+
+		Summon(3, 0, 0);
+		while (Vigil.Approaching)
+		{
+			Vigil.Tick(kDt);
+		}
+		Check("absent, unwarded: the aftermath lands as always", Vigil.AftermathSeconds > 0.0 && Vigil.TimesTaken == 1,
+			"half pace for " + Vigil.AftermathSeconds.ToString("0") + "s");
+
+		// -- Knowing beats guessing beats nothing is wrong; knowing beats nothing beats guessing. --
+		Summon(3, 1, 0);
+		// Funded AFTER the summon, because what an offering costs is priced off production and
+		// production is not known until the parish exists. An unfunded keeper cannot give the
+		// right answer when the right answer is ichor, which is a refusal rather than a loss.
+		Vigil.Ichor = Vigil.OfferCost * 2.0;
+		Vigil.Give(Content.Rites[3].Answer);
+		bool turned = !Vigil.Approaching && Vigil.AftermathSeconds == 0.0 && Vigil.Wards == 1 && Vigil.Dread > 0.4;
+		Check("the right answer costs no ward and no pace", turned,
+			"turned away, dread left at " + Vigil.Dread.ToString("0.00"));
+
+		Answer wrong = Content.Rites[3].Answer == Answer.Still ? Answer.Bell : Answer.Still;
+		Summon(3, 1, 0);
+		Vigil.Give(wrong);
+		Check("a wrong answer is worse than no answer", Vigil.AftermathSeconds > 0.0 && Vigil.Wards == 1,
+			"it lands anyway, and the ward could not be reached");
+
+		// Guessing must not be free, or the correct play is to mash the cheapest verb forever.
+		Summon(3, 0, 0);
+		Vigil.Give(Answer.Still);
+		double guessed = Vigil.AftermathSeconds;
+		Summon(3, 0, 0);
+		while (Vigil.Approaching)
+		{
+			Vigil.Tick(kDt);
+		}
+		Check("guessing never beats standing back", guessed >= Vigil.AftermathSeconds - 1e-9,
+			"a bad guess costs at least what silence does");
+
+		// -- An offer has to be payable, and refused when it is not. --
+		Summon(4, 0, 0);
+		Check("an answer you cannot afford is refused", !Vigil.Give(Answer.Offer) && Vigil.Approaching,
+			"the walk continues rather than resolving for free");
+
+		Summon(0, 0, 0);
+		Vigil.Ichor = Vigil.OfferCost;
+		Check("an answer you can afford is taken", Vigil.Give(Answer.Offer) && !Vigil.Approaching,
+			"offering costs " + Numbers.Short(Vigil.OfferCost));
+
+		// -- Nothing may come for a keeper who owns nothing, or the tutorial is an ambush. --
+		Vigil.Reset();
+		Vigil.Dread = 1.0;
+		Vigil.Tick(kDt);
+		Check("an empty parish is never visited", !Vigil.Approaching && Vigil.TimesTaken == 0,
+			"nothing comes for a keeper with nothing");
+
+		// -- Offline may not start one: you cannot answer a door you were not behind. --
+		Vigil.Reset();
+		Vigil.Owned[5] = 60;
+		Vigil.CatchUp(8.0 * 3600.0);
+		Check("offline never starts a walk", !Vigil.Approaching && Vigil.TimesTaken == 0,
+			"eight hours away, nothing arrived");
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -423,6 +568,7 @@ internal static class Balance
 		InsuranceCostsTheSameAtEveryScale();
 		DreadIsAliveFromTheFirstRite();
 		PrestigeRatchets();
+		TheEncounterIsOptional();
 		TablesLineUp();
 		IdlingWorks();
 		Console.WriteLine();

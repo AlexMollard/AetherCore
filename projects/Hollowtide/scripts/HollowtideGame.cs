@@ -70,6 +70,7 @@ public sealed class HollowtideGame : EntityScript
 		// += here would stack a second copy of the feed onto every rebuild.
 		Vigil.Announce = (line, omen) => _whispers.Say(line, omen);
 		Vigil.OnVisitation = OnVisitation;
+		Vigil.OnApproach = OnApproach;
 		Vigil.OnYield = (rite, amount) => _parish.Delivered(rite, amount);
 		Vigil.OnSpent = rite => _parish.Bought(rite);
 
@@ -89,6 +90,7 @@ public sealed class HollowtideGame : EntityScript
 		SaveSystem.Save();
 		Vigil.Announce = null;
 		Vigil.OnVisitation = null;
+		Vigil.OnApproach = null;
 		Vigil.OnYield = null;
 		Vigil.OnSpent = null;
 		Time.Resume();
@@ -129,6 +131,10 @@ public sealed class HollowtideGame : EntityScript
 			if (_hud.StokePressed)
 			{
 				Vigil.Stoke();
+			}
+			if (_hud.AnswerGiven != Answer.None)
+			{
+				Vigil.Give(_hud.AnswerGiven);
 			}
 			if (_hud.WardPressed)
 			{
@@ -172,6 +178,14 @@ public sealed class HollowtideGame : EntityScript
 		Ui.SetEffectParams(_flash, new Vector4(Time.UnscaledTime, dread, 1.0f, _flashAmount));
 	}
 
+	/// <summary>Something started walking. A flash, but no held breath - the slowed moment
+	/// belongs to the ARRIVAL, and spending it on the warning would leave the arrival itself
+	/// with nothing left to do.</summary>
+	private void OnApproach(int rite)
+	{
+		_flashAmount = 0.6f;
+	}
+
 	private void OnVisitation(bool held)
 	{
 		_parish.Visitation(held);
@@ -207,6 +221,21 @@ public sealed class HollowtideGame : EntityScript
 	{
 		if (Ui.HasFocus)
 		{
+			return;
+		}
+
+		// While something is walking, 1-4 answer it rather than buying rites. The encounter
+		// borrows the keys it needs and gives them straight back, so a keeper reaching for an
+		// answer in a hurry cannot accidentally buy a tier instead.
+		if (Vigil.Approaching)
+		{
+			for (int i = 0; i < 4; i++)
+			{
+				if (Input.IsKeyPressed((Key)((int)Key.Num1 + i)))
+				{
+					Vigil.Give((Answer)(i + 1));
+				}
+			}
 			return;
 		}
 

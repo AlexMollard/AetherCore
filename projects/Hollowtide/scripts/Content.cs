@@ -4,6 +4,28 @@ using System.Numerics;
 
 namespace AetherGame;
 
+/// <summary>
+/// What a keeper can do about something walking toward them.
+/// </summary>
+/// <remarks>
+/// Four verbs, and every one of them is a thing the game could already do - spend a ward,
+/// pay ichor, ring the bell, or stand still and let it pass. Nothing here is a new system;
+/// it is the existing controls given a moment where WHICH one you reach for matters.
+/// </remarks>
+public enum Answer
+{
+	/// <summary>Nobody answered. The keeper was away, and the vigil defends itself.</summary>
+	None,
+	/// <summary>Put a ward between you.</summary>
+	Ward,
+	/// <summary>Give it something so it takes that instead.</summary>
+	Offer,
+	/// <summary>Drown it out.</summary>
+	Bell,
+	/// <summary>Do not move. Some of them find you by looking.</summary>
+	Still,
+}
+
 /// <summary>One buyable producer. Immutable data; everything that changes lives in
 /// <see cref="Vigil"/> so a save is a list of numbers rather than a graph of objects.</summary>
 public sealed class RiteDef
@@ -32,6 +54,16 @@ public sealed class RiteDef
 	public int Index;
 	/// <summary>What the parish says when one of these is taken from you.</summary>
 	public string TakenLine = "";
+	/// <summary>What comes for a keeper whose deepest holding is this rite. Every tier has its
+	/// own, so going deeper does not only raise the stakes - it changes who arrives.</summary>
+	public string VisitorName = "";
+	/// <summary>The warning, a few seconds before it gets here. This is the whole encounter:
+	/// the line has to be enough for a keeper who has met this one before to know what to
+	/// reach for, and not enough for one who has not.</summary>
+	public string Approach = "";
+	/// <summary>The one thing that turns this visitor away. Learned by meeting it, which is
+	/// the only progression in the game that lives in the player rather than in the save.</summary>
+	public Answer Answer = Answer.None;
 	/// <summary>The sprite that stands for this rite in the parish. Drawn in greyscale and
 	/// tinted by <see cref="Colour"/> at runtime, so one sprite serves both the lit and the
 	/// dread-soured version of the same thing.</summary>
@@ -107,6 +139,8 @@ public static class Content
 			Blurb = "It burns low, and something moves at the edge of it.",
 			BaseCost = 15.0, BaseRate = 0.1, Growth = 1.13, DreadRate = 0.0010,
 			TakenLine = "A lantern goes out. You did not hear it fall.",
+			VisitorName = "The Wick-Thin Man", Answer = Answer.Still,
+			Approach = "Something thin is walking the lantern line, and stopping at each one.",
 		},
 		new RiteDef
 		{
@@ -114,6 +148,8 @@ public static class Content
 			Blurb = "Twelve throats, no air, and they keep perfect time.",
 			BaseCost = 110.0, BaseRate = 0.9, Growth = 1.14, DreadRate = 0.0022,
 			TakenLine = "The choir drops a voice. The others do not adjust.",
+			VisitorName = "The Thirteenth Voice", Answer = Answer.Bell,
+			Approach = "A voice joins the choir. It is holding a note none of them started.",
 		},
 		new RiteDef
 		{
@@ -121,6 +157,8 @@ public static class Content
 			Blurb = "You have never seen it move. It is never where it was.",
 			BaseCost = 1300.0, BaseRate = 7.0, Growth = 1.15, DreadRate = 0.0044,
 			TakenLine = "A plinth stands empty. The stains lead away from it.",
+			VisitorName = "The Unmoved", Answer = Answer.Still,
+			Approach = "The statue is facing the other way. You are certain it is watching.",
 		},
 		new RiteDef
 		{
@@ -128,6 +166,8 @@ public static class Content
 			Blurb = "It asks for very little and it never stops asking.",
 			BaseCost = 15000.0, BaseRate = 44.0, Growth = 1.15, DreadRate = 0.0080,
 			TakenLine = "The loom is unthreaded. Something wore what it made.",
+			VisitorName = "The Unthreaded", Answer = Answer.Offer,
+			Approach = "Something is pulling at the weave, and it is hungry rather than cruel.",
 		},
 		new RiteDef
 		{
@@ -135,6 +175,8 @@ public static class Content
 			Blurb = "Built from the parish it drains. It is very efficient.",
 			BaseCost = 190000.0, BaseRate = 260.0, Growth = 1.16, DreadRate = 0.0140,
 			TakenLine = "An engine seizes. The bones in it were not ours.",
+			VisitorName = "The Millwright", Answer = Answer.Offer,
+			Approach = "The engine is running faster than you set it. Something is feeding it.",
 		},
 		new RiteDef
 		{
@@ -142,6 +184,8 @@ public static class Content
 			Blurb = "The tide keeps the congregation. The congregation keeps singing.",
 			BaseCost = 2600000.0, BaseRate = 1500.0, Growth = 1.16, DreadRate = 0.0240,
 			TakenLine = "A chapel slips under. The singing does not stop, only muffles.",
+			VisitorName = "The Tide-Sung", Answer = Answer.Bell,
+			Approach = "The water in the nave is rising, and the singing is getting louder.",
 		},
 		new RiteDef
 		{
@@ -149,6 +193,8 @@ public static class Content
 			Blurb = "It gathers what wanders. You have agreed not to wander.",
 			BaseCost = 42000000.0, BaseRate = 8800.0, Growth = 1.17, DreadRate = 0.0420,
 			TakenLine = "A shepherd walks off with its flock. Count yourself.",
+			VisitorName = "The Shepherd's Count", Answer = Answer.Ward,
+			Approach = "It has begun counting the flock. Do not let it reach you.",
 		},
 		new RiteDef
 		{
@@ -156,6 +202,8 @@ public static class Content
 			Blurb = "It is not a door. Doors are for going back through.",
 			BaseCost = 720000000.0, BaseRate = 51000.0, Growth = 1.18, DreadRate = 0.0700,
 			TakenLine = "A mouth closes. You are certain it swallowed.",
+			VisitorName = "What Came Through", Answer = Answer.Ward,
+			Approach = "The mouth is open wider than it opens. Something is using it as a door.",
 		},
 	});
 
@@ -317,5 +365,7 @@ public static class Content
 		new MarkDef { Name = "Not Alone", Blurb = "Keep vigil beside another keeper.", Earned = () => Vigil.SharedVigilSeconds >= 30.0 },
 		new MarkDef { Name = "Answered", Blurb = "Ring the bell into a communion.", Earned = () => Vigil.CommunionSurges >= 1 },
 		new MarkDef { Name = "Deepened", Blurb = "Carry one boon as far as it goes.", Earned = AnyBoonMaxed },
+		new MarkDef { Name = "Named", Blurb = "Turn something away by knowing what it wanted.", Earned = () => Vigil.VisitorsAnswered >= 1 },
+		new MarkDef { Name = "Well Read", Blurb = "Turn away twenty of them.", Earned = () => Vigil.VisitorsAnswered >= 20 },
 	};
 }

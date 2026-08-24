@@ -143,11 +143,52 @@ public static class Vigil
 	public static double HighDreadSeconds;
 	public static int WardsRaised;
 	public static int TimesTaken;
+	/// <summary>Visitors turned away by naming what they wanted. The record of the one kind of
+	/// progress this game keeps in the player rather than in the save.</summary>
+	public static int VisitorsAnswered;
 	public static int CommunionSurges;
 	public static int HandGathers;
 	public static double SharedVigilSeconds;
 
 	// ── Live state, not saved ────────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Which rite's visitor is currently walking toward the keeper, or -1 for nothing.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The encounter, and the reason the game is not a spreadsheet wearing a horror skin. A
+	/// visitation used to RESOLVE the instant the meter filled: a ward went, or the parish
+	/// worked at half pace, and either way the player watched a number change. Every rite
+	/// carried a beautifully written line about something walking off with what you owned,
+	/// attached to an event with no decision anywhere in it.
+	/// </para>
+	/// <para>
+	/// Now the meter filling starts a WALK. Something is named, it is a few seconds away, and
+	/// a keeper who knows what it is can answer it - see <see cref="Give"/>.
+	/// </para>
+	/// </remarks>
+	public static int ApproachRite = -1;
+
+	/// <summary>Seconds until it gets here.</summary>
+	public static double ApproachSeconds;
+
+	public static bool Approaching => ApproachRite >= 0;
+
+	/// <summary>How long a keeper has to answer. Long enough to read the line and decide,
+	/// short enough that it stays a moment rather than a menu.</summary>
+	public const double kApproachSeconds = 9.0;
+
+	/// <summary>The one answer that turns the current visitor away.</summary>
+	public static Answer CorrectAnswer => Approaching ? Content.Rites[ApproachRite].Answer : Answer.None;
+
+	/// <summary>What offering it something costs. Priced off production so it stays a real
+	/// decision at every tier rather than free by the second hour.</summary>
+	public static double OfferCost => 20.0 + Rate * 8.0;
+
+	/// <summary>Raised when something starts walking, with the rite whose visitor it is. The
+	/// presentation layer names it and starts the clock; nothing here knows that.</summary>
+	public static Action<int>? OnApproach;
 
 	/// <summary>Seconds left on a shared surge, and what it multiplies by while it lasts.</summary>
 	public static double SurgeSeconds;
@@ -753,6 +794,8 @@ public static class Vigil
 		Wards = 0;
 		AftermathSeconds = 0.0;
 		StokeCooldown = 0.0;
+		ApproachRite = -1;
+		ApproachSeconds = 0.0;
 		SurgeSeconds = 0.0;
 		Array.Clear(Owned, 0, Owned.Length);
 		Array.Clear(OfferingsTaken, 0, OfferingsTaken.Length);
@@ -885,9 +928,27 @@ public static class Vigil
 
 		RunOverseers();
 
-		if (!offline && Dread >= 1.0)
+		// Offline never starts one: a keeper cannot answer a door they were not behind, and
+		// the one promise offline progress makes is that it cannot cost you anything you were
+		// not there to defend.
+		if (!offline)
 		{
-			Visitation();
+			if (Approaching)
+			{
+				ApproachSeconds -= deltaSeconds;
+				if (ApproachSeconds <= 0.0)
+				{
+					// Nobody answered. Resolve exactly as the game always did - a ward, or the
+					// aftermath - because an idle game must not punish the player for idling.
+					// The encounter is an OPPORTUNITY for the attentive keeper to do better
+					// than the default, never a penalty on the absent one.
+					Resolve(Answer.None);
+				}
+			}
+			else if (Dread >= 1.0)
+			{
+				BeginApproach();
+			}
 		}
 
 		CheckMarks();
@@ -949,9 +1010,64 @@ public static class Vigil
 		}
 	}
 
+	/// <summary>Something starts walking. The meter stays pinned while it does, so the keeper
+	/// answers at the top of the bargain rather than watching it drain to safety.</summary>
+	private static void BeginApproach()
+	{
+		int rite = DeepestRite();
+		if (rite < 0)
+		{
+			// Nothing owned, so nothing to come for. Let the meter sit just under the brink
+			// rather than inventing a visitor for an empty parish.
+			Dread = 0.85;
+			return;
+		}
+		ApproachRite = rite;
+		ApproachSeconds = kApproachSeconds;
+		Revision++;
+		Say(Content.Rites[rite].Approach, Omen.Dread);
+		OnApproach?.Invoke(rite);
+	}
+
 	/// <summary>
-	/// The meter filled. Something takes a share of the ichor you have not spent yet, and
-	/// leaves the dread most of the way down.
+	/// Answer whatever is walking. Returns false when the keeper cannot pay for the answer they
+	/// chose, so a button can be disabled rather than a press silently doing nothing.
+	/// </summary>
+	/// <remarks>
+	/// A WRONG answer is worse than no answer, and that asymmetry is the whole design. If
+	/// guessing were free the correct play would be to mash the cheapest verb every time and
+	/// collect the wins, so standing still - the answer that costs nothing - has to be able to
+	/// go badly. Knowing what is coming beats guessing, guessing loses to doing nothing, and
+	/// doing nothing is exactly as safe as it has always been.
+	/// </remarks>
+	public static bool Give(Answer answer)
+	{
+		if (!Approaching || answer == Answer.None)
+		{
+			return false;
+		}
+		switch (answer)
+		{
+			case Answer.Ward when Wards <= 0:
+				return false;
+			case Answer.Ward:
+				Wards--;
+				break;
+			case Answer.Offer when Ichor < OfferCost:
+				return false;
+			case Answer.Offer:
+				Ichor -= OfferCost;
+				break;
+			default:
+				// The bell and standing still cost nothing to attempt. Being wrong is the price.
+				break;
+		}
+		Resolve(answer);
+		return true;
+	}
+
+	/// <summary>
+	/// Something arrived, and this is what it found.
 	/// </summary>
 	/// <remarks>
 	/// It takes the PURSE, never the parish. Losing rites is unrecoverable progress loss for
@@ -960,10 +1076,50 @@ public static class Vigil
 	/// still lose something you wanted - and the punishment now lands on the player who
 	/// pushed their luck rather than the one who went to make a coffee.
 	/// </remarks>
-	private static void Visitation()
+	/// <remarks>
+	/// It takes the PURSE, never the parish. Losing rites is unrecoverable progress loss for
+	/// a player who stepped away from a game designed to be stepped away from; losing unspent
+	/// ichor is a setback the next few minutes of idling repair. The tension survives - you
+	/// still lose something you wanted - and the punishment now lands on the player who
+	/// pushed their luck rather than the one who went to make a coffee.
+	/// </remarks>
+	private static void Resolve(Answer given)
 	{
+		int rite = ApproachRite;
+		Answer wanted = CorrectAnswer;
+		ApproachRite = -1;
+		ApproachSeconds = 0.0;
 		Revision++;
 
+		// Answered correctly. Turned away without the parish paying for it, and the keeper is
+		// left high on the meter - still earning at the top of the bargain, which is the prize
+		// for having learned what this one is.
+		if (given != Answer.None && given == wanted)
+		{
+			Dread = 0.45;
+			BeginSurge(6.0, 1.35, fromCongregation: false);
+			VisitorsAnswered++;
+			Say(Content.Rites[rite].VisitorName + " is turned away. You knew what it wanted.", Omen.Good);
+			OnVisitation?.Invoke(true);
+			return;
+		}
+
+		// Answered WRONGLY. Whatever was spent is spent, and it noticed you anyway - so no ward
+		// can be reached for now. That is the entire cost of guessing.
+		if (given != Answer.None)
+		{
+			Dread = 0.0;
+			AftermathSeconds = Aftermath();
+			TimesTaken++;
+			Say(Content.Rites[rite].VisitorName + " was not looking for that.  " +
+				Content.Rites[rite].TakenLine, Omen.Taken);
+			OnVisitation?.Invoke(false);
+			return;
+		}
+
+		// Nobody answered - the original behaviour, unchanged, because this is the branch an
+		// absent keeper always lands on and it must cost them exactly what it always did.
+		//
 		// A ward stands in the way and is spent doing it. Dread falls back only part way, so
 		// being insured leaves the keeper HIGH on the meter and still earning - which is the
 		// entire reason to have bought one.
@@ -980,7 +1136,6 @@ public static class Vigil
 		AftermathSeconds = Aftermath();
 		TimesTaken++;
 
-		int rite = DeepestRite();
 		string flavour = rite >= 0 ? Content.Rites[rite].TakenLine : "Something walks the empty parish, and finds only you.";
 		Say(flavour + "  The parish works at half pace for " + (int)AftermathSeconds + "s.", Omen.Taken);
 		OnVisitation?.Invoke(false);
@@ -1089,7 +1244,10 @@ public static class Vigil
 		HighDreadSeconds = 0.0;
 		WardsRaised = 0;
 		TimesTaken = 0;
+		VisitorsAnswered = 0;
 		CommunionSurges = 0;
+		ApproachRite = -1;
+		ApproachSeconds = 0.0;
 		HandGathers = 0;
 		SharedVigilSeconds = 0.0;
 		SurgeSeconds = 0.0;
