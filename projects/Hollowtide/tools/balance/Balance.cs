@@ -4468,6 +4468,34 @@ internal static class Balance
 
 		Check("every visitor has more than one way of announcing itself", thin == 0 && blank == 0,
 			everything.Count + " lines across " + Content.Rites.Length + " visitors");
+		// The same treatment for what the parish says when something is LOST, which fires at the
+		// worst moment in the game and had one sentence per rite.
+		int thinLoss = 0;
+		foreach (RiteDef rite in Content.Rites)
+		{
+			if (rite.AlsoTaken.Length == 0 || string.IsNullOrWhiteSpace(rite.TakenLine))
+			{
+				thinLoss++;
+			}
+			foreach (string line in rite.AlsoTaken)
+			{
+				if (!everything.Add(line))
+				{
+					duplicated++;
+				}
+				if (string.IsNullOrWhiteSpace(line))
+				{
+					blank++;
+				}
+			}
+			if (!everything.Add(rite.TakenLine))
+			{
+				duplicated++;
+			}
+		}
+		Check("and more than one way of reporting a loss", thinLoss == 0 && blank == 0,
+			everything.Count + " lines in all, across announcements and losses");
+
 		Check("and no two of them share a sentence", duplicated == 0,
 			duplicated == 0 ? "every tell belongs to exactly one visitor" : duplicated + " shared");
 

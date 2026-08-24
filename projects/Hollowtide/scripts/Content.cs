@@ -81,6 +81,11 @@ public sealed class RiteDef
 	/// </para>
 	/// </remarks>
 	public string[] AlsoApproach = Array.Empty<string>();
+
+	/// <summary>Other ways the parish reports having lost this one. Unlike the approach lines
+	/// these carry no tell - nothing is being learned at the moment something is taken - so they
+	/// are flavour and nothing else, and can be drawn freely.</summary>
+	public string[] AlsoTaken = Array.Empty<string>();
 	/// <summary>The one thing that turns this visitor away. Learned by meeting it, which is
 	/// the only progression in the game that lives in the player rather than in the save.</summary>
 	public Answer Answer = Answer.None;
@@ -202,6 +207,11 @@ public static class Content
 			Blurb = "It burns low, and something moves at the edge of it.",
 			BaseCost = 15.0, BaseRate = 0.1, Growth = 1.13, DreadRate = 0.0010,
 			TakenLine = "A lantern goes out. You did not hear it fall.",
+			AlsoTaken = new[]
+			{
+				"One of the lanterns is dark, and cold, and has been for longer than that.",
+				"There is a lantern missing from the line. The bracket is bent outward.",
+			},
 			VisitorName = "The Wick-Thin Man", Answer = Answer.Still,
 			Approach = "Something thin is walking the lantern line, and stopping at each one.",
 			AlsoApproach = new[]
@@ -216,6 +226,11 @@ public static class Content
 			Blurb = "Twelve throats, no air, and they keep perfect time.",
 			BaseCost = 110.0, BaseRate = 0.9, Growth = 1.14, DreadRate = 0.0022,
 			TakenLine = "The choir drops a voice. The others do not adjust.",
+			AlsoTaken = new[]
+			{
+				"The choir is one quieter. Nobody has moved to fill the gap.",
+				"A voice stops. The rest sing the same as they did with it.",
+			},
 			VisitorName = "The Thirteenth Voice", Answer = Answer.Bell,
 			Approach = "A voice joins the choir. It is holding a note none of them started.",
 			AlsoApproach = new[]
@@ -230,6 +245,11 @@ public static class Content
 			Blurb = "You have never seen it move. It is never where it was.",
 			BaseCost = 1300.0, BaseRate = 7.0, Growth = 1.15, DreadRate = 0.0044,
 			TakenLine = "A plinth stands empty. The stains lead away from it.",
+			AlsoTaken = new[]
+			{
+				"One plinth has nothing on it. The marks go off toward the door.",
+				"Something has stepped down off its stone. It did not go far in a straight line.",
+			},
 			VisitorName = "The Unmoved", Answer = Answer.Still,
 			Approach = "The statue is facing the other way. You are certain it is watching.",
 			AlsoApproach = new[]
@@ -244,6 +264,11 @@ public static class Content
 			Blurb = "It asks for very little and it never stops asking.",
 			BaseCost = 15000.0, BaseRate = 44.0, Growth = 1.15, DreadRate = 0.0080,
 			TakenLine = "The loom is unthreaded. Something wore what it made.",
+			AlsoTaken = new[]
+			{
+				"The loom hangs bare. What came off it is being worn somewhere.",
+				"The weave is gone from the frame, and gone from the room.",
+			},
 			VisitorName = "The Unthreaded", Answer = Answer.Offer,
 			Approach = "Something is pulling at the weave, and it is hungry rather than cruel.",
 			AlsoApproach = new[]
@@ -258,6 +283,11 @@ public static class Content
 			Blurb = "Built from the parish it drains. It is very efficient.",
 			BaseCost = 190000.0, BaseRate = 260.0, Growth = 1.16, DreadRate = 0.0140,
 			TakenLine = "An engine seizes. The bones in it were not ours.",
+			AlsoTaken = new[]
+			{
+				"An engine stops hard. What was inside it never belonged to this parish.",
+				"One of the engines has locked up around something it should not have held.",
+			},
 			VisitorName = "The Millwright", Answer = Answer.Offer,
 			Approach = "The engine is running faster than you set it. Something is feeding it.",
 			AlsoApproach = new[]
@@ -272,6 +302,11 @@ public static class Content
 			Blurb = "The tide keeps the congregation. The congregation keeps singing.",
 			BaseCost = 2600000.0, BaseRate = 1500.0, Growth = 1.16, DreadRate = 0.0240,
 			TakenLine = "A chapel slips under. The singing does not stop, only muffles.",
+			AlsoTaken = new[]
+			{
+				"A chapel goes down under the water. The song keeps on, thicker.",
+				"Water closes over a chapel. Whatever is singing does not come up.",
+			},
 			VisitorName = "The Tide-Sung", Answer = Answer.Bell,
 			Approach = "The water in the nave is rising, and the singing is getting louder.",
 			AlsoApproach = new[]
@@ -286,6 +321,11 @@ public static class Content
 			Blurb = "It gathers what wanders. You have agreed not to wander.",
 			BaseCost = 42000000.0, BaseRate = 8800.0, Growth = 1.17, DreadRate = 0.0420,
 			TakenLine = "A shepherd walks off with its flock. Count yourself.",
+			AlsoTaken = new[]
+			{
+				"A shepherd leaves, and takes its count with it. You are still here to be counted.",
+				"One shepherd is gone, and so is everything it was numbering.",
+			},
 			VisitorName = "The Shepherd's Count", Answer = Answer.Ward,
 			Approach = "It has begun counting the flock. Do not let it reach you.",
 			AlsoApproach = new[]
@@ -300,6 +340,11 @@ public static class Content
 			Blurb = "It is not a door. Doors are for going back through.",
 			BaseCost = 720000000.0, BaseRate = 51000.0, Growth = 1.18, DreadRate = 0.0700,
 			TakenLine = "A mouth closes. You are certain it swallowed.",
+			AlsoTaken = new[]
+			{
+				"A mouth shuts. Something went down with it.",
+				"The mouth is closed now, and fuller than it was.",
+			},
 			VisitorName = "What Came Through", Answer = Answer.Ward,
 			Approach = "The mouth is open wider than it opens. Something is using it as a door.",
 			AlsoApproach = new[]

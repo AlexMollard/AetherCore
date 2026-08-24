@@ -2088,6 +2088,17 @@ public static class Vigil
 	/// puzzle - see the note on RiteDef.AlsoApproach. The canonical line is included in the
 	/// draw rather than being a fallback, so it is not rarer than the others.
 	/// </remarks>
+	/// <summary>One of the ways the parish reports losing this rite. Drawn at the moment it is
+	/// said rather than stored, because unlike the approach nothing else has to agree with it -
+	/// it is spoken once and then it is only in the transcript.</summary>
+	private static string PickTaken(int rite)
+	{
+		RiteDef def = Content.Rites[rite];
+		int choices = 1 + def.AlsoTaken.Length;
+		int pick = Rng.Next(choices);
+		return pick == 0 ? def.TakenLine : def.AlsoTaken[pick - 1];
+	}
+
 	private static string PickApproach(int rite)
 	{
 		RiteDef def = Content.Rites[rite];
@@ -2245,7 +2256,7 @@ public static class Vigil
 			AftermathSeconds = Aftermath();
 			TimesTaken++;
 			Say(Content.Rites[rite].VisitorName + " was not looking for that.  " +
-				Content.Rites[rite].TakenLine, Omen.Taken);
+				PickTaken(rite), Omen.Taken);
 			TakeSomething();
 			OnVisitation?.Invoke(false);
 			return;
@@ -2270,7 +2281,7 @@ public static class Vigil
 		AftermathSeconds = Aftermath();
 		TimesTaken++;
 
-		string flavour = rite >= 0 ? Content.Rites[rite].TakenLine : "Something walks the empty parish, and finds only you.";
+		string flavour = rite >= 0 ? PickTaken(rite) : "Something walks the empty parish, and finds only you.";
 		Say(flavour + "  The parish works at half pace for " + (int)AftermathSeconds + "s.", Omen.Taken);
 		// The unwarded landing, which is the branch an absent keeper always takes - so this is
 		// also the one that most needs the satchel to have been a choice rather than a default.
