@@ -9,9 +9,12 @@
 // of the cuts the way pressing a thumb into a wound brings blood.
 //
 // Everything it reports, it reports through that one idea:
-//   - struck      the grooves flood with ichor, brightest at the centre, and drain back
-//   - dread       the stone sours, the rim chips, and hairline cracks open across the face
-//   - surge       the whole mark rings, a bright pulse travelling out along the channels
+//   - at rest     a slow tide breathes along the channels, and an outer ring of teeth turns
+//   - struck      a front leaves the centre and travels out, the grooves flood behind it,
+//                 and embers lift off the cuts as the flood drains back
+//   - dread       the stone sours, the rim chips, hairline cracks open, and the whole mark
+//                 begins to tremble
+//   - surge       the carving rings, a bright pulse travelling out along the channels
 //
 //   params = (time, dread 0..1, punch 0..1, surge)
 //   color0 = ichor,  color1 = dread
@@ -104,6 +107,12 @@ float3 Ramp(float t)
 
 float Channels(float2 p, float time, float dread)
 {
+    // At high dread the whole mark trembles - a small, fast, unhappy motion, distinct from
+    // the slow tide below it. Nothing else in the game shakes at the keeper except a
+    // visitation, so this reads as the stone itself being uneasy rather than as the camera.
+    const float unease = smoothstep(0.55, 1.0, dread);
+    p += float2(sin(time * 27.0), cos(time * 23.0)) * 0.004 * unease;
+
     const float r = length(p);
     const float a = atan2(p.y, p.x);
 
@@ -126,6 +135,15 @@ float Channels(float2 p, float time, float dread)
     d = min(d, sdSeg(q, float2(-0.19, 0.0), float2(0.19, 0.0), 0.018));
     d = min(d, sdSeg(q, float2(0.0, -0.19), float2(0.0, 0.19), 0.018));
     d = min(d, abs(r - 0.075) - 0.014);
+
+    // An outer ring of teeth, turning slowly against the carving. A mechanism, not decoration:
+    // the sigil is a thing that WORKS, and something that never moves at rest reads as a
+    // picture of a sigil rather than one that is running.
+    const float teeth = 24.0;
+    const float turn = time * 0.16;
+    const float toothed = abs(fmod(a + turn + 6.2831853 * 4.0, 6.2831853 / teeth) - 3.14159265 / teeth);
+    const float toothMask = smoothstep(0.06, 0.02, toothed);
+    d = min(d, max(abs(r - 0.875) - 0.026, -toothMask + 0.5));
 
     // Dread opens hairline cracks across the face. They are cut too, so they fill with ichor
     // like everything else - the parish does not distinguish between a channel somebody carved
@@ -201,14 +219,42 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // ── Ichor in the cuts ────────────────────────────────────────────────────────────
     // Struck, the channels flood from the middle outward and drain back. This is the whole
     // gesture of the game in one effect: you press the stone, and what is underneath comes up.
+    //
+    // The punch arrives at 1 and decays, so 1 - punch is a radius leaving the centre. That
+    // gives a FRONT with a position rather than a brightness that merely fades everywhere at
+    // once - which is the difference between the stone carrying something outward and the
+    // stone simply flashing.
+    const float front = 1.0 - punch;
+    const float crest = smoothstep(0.30, 0.0, abs(r - front)) * smoothstep(0.0, 0.15, punch);
     const float wave = saturate(punch * 1.9 - r * 0.85);
-    const float resting = 0.10 + 0.16 * dread;
-    const float flood = saturate(resting + wave * 1.5 + surge * 0.35);
+
+    // At rest the channels are never quite still: a slow tide runs along them, strongest at
+    // the centre. Idle motion is what stops a thing looking switched off.
+    const float tide = 0.5 + 0.5 * sin(time * 1.15 - r * 3.4);
+    const float resting = (0.085 + 0.14 * dread) * (0.72 + 0.28 * tide);
+
+    const float flood = saturate(resting + wave * 1.5 + crest * 0.9 + surge * 0.35);
 
     col = lerp(col, ichor, cut * flood);
     // The glow the flooded channels throw onto the stone beside them.
     col += ichor * cut * flood * 0.5;
     col += ichor * smoothstep(0.055, 0.0, abs(channel)) * flood * 0.35;
+
+    // ── Embers ───────────────────────────────────────────────────────────────────────
+    // Motes lifting off the carving while the flood drains back. They rise and fade, so the
+    // strike has an aftermath instead of simply ending - the eye keeps something to follow
+    // once the front has gone.
+    if (punch > 0.02)
+    {
+        const float2 cell = floor(p * 9.0);
+        const float seed = hash21(cell);
+        const float rise = frac(seed * 7.3 + time * 0.9);
+        const float2 local = frac(p * 9.0) - float2(0.5, 0.5 - rise * 0.55);
+        const float mote = smoothstep(0.16, 0.0, length(local));
+        // Only where there is a channel to lift off, and only while the strike is settling.
+        const float lit = smoothstep(0.05, -0.01, channel) * (1.0 - rise) * punch;
+        col += ichor * mote * lit * 0.85 * step(0.55, seed);
+    }
 
     // ── The ring, when a surge is on ─────────────────────────────────────────────────
     // A bright front travelling out along the carving, so a communion is visible on the one
@@ -224,8 +270,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float fill = smoothstep(1.0, 0.30, r);
     col += ichor * fill * (0.015 + punch * 0.10 + surge * 0.04);
 
+    // The rim catches hard and briefly on a strike - a fast attack against the slower drain
+    // in the channels, so the moment of contact is sharp and what follows is not.
+    const float snap = punch * punch;
     const float rim = smoothstep(0.03, 0.0, abs(edge));
-    col = lerp(col, lerp(Ramp(0.72), ichor, punch * 0.6), rim * (0.30 + punch * 0.5));
+    col = lerp(col, lerp(Ramp(0.72), ichor, saturate(punch * 0.9)), rim * (0.30 + snap * 0.65));
 
     // Grain, so the large flat stone does not band.
     col += (hash21(p * 320.0 + time) - 0.5) * 0.014;
