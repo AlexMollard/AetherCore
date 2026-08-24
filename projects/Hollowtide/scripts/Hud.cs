@@ -130,7 +130,8 @@ public sealed class Hud
 
 		Ui.SetMaterialParams(_foundArt, new Vector4(Time.UnscaledTime, Relics.ArtSeed(_found),
 			(float)(int)_found.Grade, 1.0f));
-		Ui.SetMaterialColors(_foundArt, Palette.Ichor, Palette.Dread);
+		Ui.SetMaterialColors(_foundArt, Palette.Fade(Palette.Ichor, Relics.PackedPowerMask(_found)),
+			Palette.Dread);
 
 		// The grade said outright and in full, not implied by a shade. A keeper should not have
 		// to compare two rows to work out whether what they just dug up was any good.
@@ -142,7 +143,7 @@ public sealed class Hud
 		for (int i = 0; i < Relics.PowerCount(_found.Grade); i++)
 		{
 			powers += (powers.Length > 0 ? "   " : "") +
-				Relics.Describe(Relics.PowerAt(_found, i), Relics.MagnitudeAt(_found, i));
+				Relics.DescribeOn(_found, i);
 		}
 		Ui.SetText(_foundPowers, powers);
 	}

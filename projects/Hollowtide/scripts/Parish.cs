@@ -445,7 +445,7 @@ public sealed class Parish
 		_standing = 0;
 		for (int rite = 0; rite < Content.RiteCount; rite++)
 		{
-			if (Vigil.Owned[rite] > 0)
+			if (Vigil.EffectiveOwned(rite) > 0)
 			{
 				_standing++;
 			}
@@ -453,7 +453,10 @@ public sealed class Parish
 
 		for (int rite = 0; rite < Content.RiteCount; rite++)
 		{
-			int owned = Vigil.Owned[rite];
+			// What is STANDING, which includes anything a worn relic is lending. A relic that
+			// says it puts three more looms in the parish had better put three more looms in the
+			// parish, or it is a number in a panel pretending to be a thing.
+			int owned = Vigil.EffectiveOwned(rite);
 			if (owned <= 0)
 			{
 				if (_rites[rite].IsValid)

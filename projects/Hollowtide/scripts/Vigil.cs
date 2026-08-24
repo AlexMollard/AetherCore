@@ -379,6 +379,40 @@ public static class Vigil
 
 	/// <summary>Everything that multiplies one rite: its milestones, its offerings, and every
 	/// global multiplier that also applies to it.</summary>
+	/// <summary>
+	/// Copies of a rite the keeper holds only because of what they are wearing.
+	/// </summary>
+	/// <remarks>
+	/// They WORK and they stand in the parish, but the parish does not count them: they are not
+	/// on the books, so they pay nothing toward the free doublings and nothing toward the price
+	/// of the next one. That keeps a relic from being a shortcut through the cost curve - it is
+	/// a loan of production, not of progress - and it is why taking the relic off simply removes
+	/// them again with nothing left behind.
+	/// </remarks>
+	public static int GrantedCopies(int rite)
+	{
+		int granted = 0;
+		foreach (Relic worn in Worn)
+		{
+			if (!worn.Exists)
+			{
+				continue;
+			}
+			for (int i = 0; i < Relics.PowerCount(worn.Grade); i++)
+			{
+				if (Relics.PowerAt(worn, i) == Power.Foundation && Relics.FoundationRite(worn) == rite)
+				{
+					granted += Relics.FoundationCopies(worn);
+				}
+			}
+		}
+		return granted;
+	}
+
+	/// <summary>What is standing, bought or lent. What produces, and what the parish draws.</summary>
+	public static int EffectiveOwned(int rite)
+		=> (rite >= 0 && rite < Content.RiteCount ? Owned[rite] : 0) + GrantedCopies(rite);
+
 	public static double RiteMultiplier(int rite)
 	{
 		double mult = MilestoneMultiplier(rite) * ConsecrationFactor(rite);
@@ -499,9 +533,14 @@ public static class Vigil
 			double total = 0.0;
 			for (int i = 0; i < Content.RiteCount; i++)
 			{
-				if (Owned[i] > 0)
+				// EffectiveOwned on BOTH sides. The guard read Owned, so a relic lending copies of
+				// a rite the keeper had never bought put those copies in the parish - the
+				// structures stood there, visibly - and they produced nothing at all. A relic
+				// whose whole point is that you can see what it does must not be a lie in the
+				// one case where it is most visible.
+				if (EffectiveOwned(i) > 0)
 				{
-					total += Owned[i] * Content.Rites[i].BaseRate * RiteMultiplier(i);
+					total += EffectiveOwned(i) * Content.Rites[i].BaseRate * RiteMultiplier(i);
 				}
 			}
 			return total;

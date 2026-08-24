@@ -5,15 +5,24 @@
 // the sigil are: signed-distance shapes, one shared grey ramp, and accent colour used only
 // where it means something.
 //
-// WHAT THE GRADE DOES. A Leavings is a bare silhouette in ramp grey. Every grade above it
-// earns another layer - a bevel, then a setting, then rays, then a living core and a rim
-// that will not sit still - and takes a little more accent colour. So a common thing cannot
-// look like a legendary one: the difference is how much is THERE, not which palette entry it
-// was assigned. That also keeps the parish's one rule intact, that a coloured pixel means
-// something, because the colour arrives in step with the rarity it is reporting.
+// WHAT THE RELIC DOES IS WHAT IT LOOKS LIKE. Each power a relic carries adds its own
+// feature to the object: a grip, a hanging weight, a ward-ring, rays, an alms bowl, a
+// standing foot. So a thing that does five things has five things on it and reads as
+// elaborate at a glance, and two relics that do different things are different OBJECTS
+// rather than the same object in a different tier of jewellery.
+//
+// The grade still shows, but through the things a count of features cannot say: how much
+// accent colour has crept in, whether the core is alive, whether the whole thing has stopped
+// sitting still. Since the power count rises with the grade, elaborate and rare coincide -
+// which is the point - without the drawing ever being told the grade twice.
 //
 //   params = (time, seed, grade 0..4, glow 0..1)
 //   color0 = ichor, for cores and accents   color1 = dread, for the top grade's rim
+//
+// color0's ALPHA carries the POWER MASK, one bit per kind of power, packed into [0,1) by
+// Relics.PackedPowerMask. Only the rgb of either colour is ever read as a colour, so the
+// alpha is free; smuggled deliberately and documented on both sides, exactly as the parish
+// backdrop carries its rolling fronts.
 //
 // local space: x in [-1, 1], y in [-1, 1] with y DOWN. The relic is centred; unlike a rite
 // it stands on nothing, because it is being held rather than being visited.
@@ -176,6 +185,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const int   grade = int(saturate(pc.params.z / 4.0) * 4.0 + 0.5);
     const float glow  = saturate(pc.params.w);
 
+    // The powers, unpacked. Six bits; see Relics.PackedPowerMask, which is the other half of
+    // this format. Rounded rather than floored on the way in because the value has been through
+    // a float32 colour channel to get here.
+    const int   powers = int(saturate(pc.color0.a) * 64.0 + 0.5);
+    const bool  hasHand       = (powers & 1)  != 0;
+    const bool  hasBargain    = (powers & 2)  != 0;
+    const bool  hasWarding    = (powers & 4)  != 0;
+    const bool  hasPatience   = (powers & 8)  != 0;
+    const bool  hasAlmsgiving = (powers & 16) != 0;
+    const bool  hasSteadiness = (powers & 32) != 0;
+
     // Every choice below is drawn from its own hash of the seed, so adding a feature later
     // cannot shift the ones already rolled - the same discipline the C# generator keeps, and
     // for the same reason: a relic must look the same tomorrow as it did when it was found.
@@ -192,34 +212,73 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float core;
     float d = Body(kind, p, core);
 
-    // ── What the grade adds ──────────────────────────────────────────────────────────
-    // Layers, not louder colours. Each one is another thing present in the silhouette, so
-    // the difference between grades survives being seen small and in grey.
+    // ── What the POWERS add ──────────────────────────────────────────────────────────
+    // One feature per power, each in a different place on the object so several at once read
+    // as an elaborate thing rather than as a smudge. Layers, not louder colours: the whole
+    // difference survives being seen small and in grey.
 
-    if (grade >= 1)
+    if (hasHand)
     {
-        // A notch or a bead worked into the body: the mark of something kept deliberately.
-        const float2 n = p - float2(0.0, 0.36 - notch * 0.72);
-        d = opSub(d, sdCircle(n, 0.055 + notch * 0.03));
+        // A grip. Something made to be held, for the power that pays you for holding it.
+        const float2 g = rot(p, spin * 0.35);
+        float grip = sdRound(g - float2(0.0, 0.52), float2(0.30, 0.085), 0.075);
+        grip = opSub(grip, sdRound(g - float2(0.0, 0.52), float2(0.20, 0.028), 0.028));
+        d = opUnion(d, grip);
+    }
+
+    if (hasBargain)
+    {
+        // A weight hung off it, and the hook it hangs from. The bargain has a price and the
+        // object carries it about.
+        const float2 b = p - float2(0.0, -0.30);
+        d = opUnion(d, sdSeg(b, float2(0.0, 0.0), float2(0.0, -0.34), 0.022));
+        d = opUnion(d, sdCircle(b - float2(0.0, -0.44), 0.10 + notch * 0.03));
     }
 
     float setting = 1.0;
-    if (grade >= 2)
+    if (hasWarding)
     {
-        // A setting around it, turned off the body's own angle.
+        // A ring around the whole thing, turned off the body's own angle. A ward is a circle
+        // drawn round something, so this one is drawn round the relic.
         setting = sdRing(rot(p, spin * 0.6), 0.74, 0.035);
         d = opUnion(d, setting);
     }
 
-    if (grade >= 3)
+    if (hasPatience)
     {
-        // Rays. Four of them, struck through the setting.
+        // Rays, struck through wherever the setting sits. Slow light, for the power that buys
+        // time.
         const float2 r = rot(p, spin * 0.6 + 0.785398);
         float rays = sdSeg(r, float2(-0.94, 0.0), float2(-0.62, 0.0), 0.028);
         rays = opUnion(rays, sdSeg(r, float2(0.62, 0.0), float2(0.94, 0.0), 0.028));
         rays = opUnion(rays, sdSeg(r, float2(0.0, -0.94), float2(0.0, -0.62), 0.028));
         rays = opUnion(rays, sdSeg(r, float2(0.0, 0.62), float2(0.0, 0.94), 0.028));
         d = opUnion(d, rays);
+    }
+
+    if (hasAlmsgiving)
+    {
+        // A bowl, cut into the body and left open at the top. Something to give out of.
+        const float2 a = p - float2(0.0, 0.10);
+        const float bowl = max(sdCircle(a, 0.30), -a.y - 0.02);
+        d = opSub(d, bowl);
+    }
+
+    if (hasSteadiness)
+    {
+        // A foot. The one feature that says the object can be PUT DOWN and will stay where it
+        // is put, which is the whole of what steadiness means here.
+        d = opUnion(d, sdRound(p - float2(0.0, 0.86), float2(0.34, 0.055), 0.045));
+        d = opUnion(d, sdRound(p - float2(0.0, 0.74), float2(0.20, 0.045), 0.035));
+    }
+
+    // A notch worked into the body of anything better than leavings: the mark of something
+    // kept deliberately. Grade, not power - it is the only shape cue the grade still owns, and
+    // it is small enough not to compete with the features above.
+    if (grade >= 1)
+    {
+        const float2 n = p - float2(0.0, 0.36 - notch * 0.72);
+        d = opSub(d, sdCircle(n, 0.055 + notch * 0.03));
     }
 
     const float aa = fwidth(d) * 0.9 + 1e-5;

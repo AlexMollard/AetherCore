@@ -34,6 +34,17 @@ public enum Power
 	Almsgiving,
 	/// <summary>Fervour leaves you more slowly.</summary>
 	Steadiness,
+	/// <summary>
+	/// While worn, the keeper holds copies of one rite that they never bought.
+	/// </summary>
+	/// <remarks>
+	/// The only power that is not a percentage, and the reason it exists: every other power
+	/// makes a number somewhere slightly larger, which is a fine thing for a relic to do and a
+	/// dull thing for ALL of them to do. This one changes the parish - three more looms stand on
+	/// the floor while it is worn, and they are gone the moment it comes off. A relic you can
+	/// SEE the effect of is worth more than one that adds a fifth to a figure in a panel.
+	/// </remarks>
+	Foundation,
 }
 
 /// <summary>
@@ -202,14 +213,17 @@ public static class Relics
 
 	/// <summary>How many powers a relic of this grade carries. The whole reason a grade is
 	/// worth wanting: rarity is not a bigger number on the same line, it is more lines.</summary>
-	public static int PowerCount(Grade grade) => grade switch
-	{
-		Grade.Leavings => 1,
-		Grade.Keepsake => 1,
-		Grade.Anointed => 2,
-		Grade.Hallowed => 2,
-		_ => 3,
-	};
+	/// <summary>
+	/// How many powers a relic of this grade carries.
+	/// </summary>
+	/// <remarks>
+	/// One per step, so the ladder is legible at a glance: a Hollowed thing does five things and
+	/// Leavings do one. It was 1, 1, 2, 2, 3, which meant the two grades a keeper sees most were
+	/// identical in kind and the whole system read as "a relic does a thing" rather than as a
+	/// loadout. Magnitudes came down to pay for it - see MagnitudeAt - because the point is that
+	/// a good relic is more INTERESTING, not that it is a bigger number.
+	/// </remarks>
+	public static int PowerCount(Grade grade) => (int)grade + 1;
 
 	/// <summary>The powers a relic carries, in order. Distinct by construction: a relic with
 	/// the same power twice reads as a bug however it is presented.</summary>
@@ -238,6 +252,44 @@ public static class Relics
 		return (Power)chosen;
 	}
 
+	/// <summary>How many kinds of power there are. The art has one feature per kind, so this
+	/// is also how many bits <see cref="PowerMask"/> uses.</summary>
+	public static int PowerKinds => Enum.GetValues<Power>().Length;
+
+	/// <summary>
+	/// Which powers a relic carries, as one bit each.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Handed to the shader so the DRAWING can be built out of the same facts as the tooltip:
+	/// one feature per power, so a relic that grants five things has five things on it and looks
+	/// it. Before this the art was gated on grade alone, which meant two Hollowed relics with
+	/// completely different powers were identical objects wearing the same jewellery - the art
+	/// said "this is rare" and nothing else, when it could have said what the thing DOES.
+	/// </para>
+	/// <para>
+	/// A bitmask rather than a list because it has to cross into a shader, where it rides in a
+	/// spare colour alpha. Six kinds is a mask under 64, which a float32 carries exactly.
+	/// </para>
+	/// </remarks>
+	public static int PowerMask(Relic relic)
+	{
+		int mask = 0;
+		if (!relic.Exists)
+		{
+			return 0;
+		}
+		for (int i = 0; i < PowerCount(relic.Grade); i++)
+		{
+			mask |= 1 << (int)PowerAt(relic, i);
+		}
+		return mask;
+	}
+
+	/// <summary>The mask as the shader wants it: in [0,1), because it travels in a colour's
+	/// alpha and a colour channel is no place to assume nothing will ever clamp.</summary>
+	public static float PackedPowerMask(Relic relic) => PowerMask(relic) / (float)(1 << PowerKinds);
+
 	/// <summary>
 	/// How strong one of a relic's powers is, as a fraction.
 	/// </summary>
@@ -253,9 +305,59 @@ public static class Relics
 		// 1.24x, answering visitors at 1.45x, stoking at 4.9x - that made relics the whole
 		// game and the rest of it decoration. They should be the best single lever a keeper
 		// has and still be in the same conversation as the others.
-		double floor = 0.02 + 0.025 * (int)relic.Grade;
-		double spread = 0.01 + 0.01 * (int)relic.Grade;
+		// Flattened when the power COUNT was put on a step per grade. A Hollowed relic went from
+		// three powers to five, so leaving the per-power magnitudes alone would have handed the
+		// top grade nearly twice what it used to be worth on top of two extra effects. The grade
+		// still matters to each power's size, just far less than it did: most of what a better
+		// relic gives you is now that it does more things.
+		double floor = 0.018 + 0.010 * (int)relic.Grade;
+		double spread = 0.008 + 0.005 * (int)relic.Grade;
 		return floor + spread * (Hash(relic.Seed, 20 + index) % 1000u) / 1000.0;
+	}
+
+	/// <summary>
+	/// Which rite a Foundation relic stands for, and how many copies it grants.
+	/// </summary>
+	/// <remarks>
+	/// Both derived from the seed like everything else, and hashed off their own salts so
+	/// adding them cannot disturb any roll a relic has already made. The count leans on the
+	/// grade, but shallowly: the interesting part is WHICH rite it props up, because a relic
+	/// that grants copies of a tier the keeper has barely started is worth far more to them
+	/// than one that adds to a tier they already hold hundreds of.
+	/// </remarks>
+	public static int FoundationRite(Relic relic) => (int)(Hash(relic.Seed, 60) % (uint)Content.RiteCount);
+
+	/// <summary>
+	/// How many copies one Foundation relic lends.
+	/// </summary>
+	/// <remarks>
+	/// One per grade and nothing else. The first pass added up to two more at random, which put
+	/// seven copies of a deep rite on a single Hollowed relic and took a full loadout from 1.7x a
+	/// bare keeper to 3.5x - relics stopped being the best lever a keeper has and started being
+	/// the game. The variance is already in WHICH rite it props up, which is worth far more than
+	/// a couple of extra copies: three of a tier you have just unlocked beats seven of the tier
+	/// you own four hundred of.
+	/// </remarks>
+	public static int FoundationCopies(Relic relic) => 1 + (int)relic.Grade;
+
+	/// <summary>
+	/// What one of THIS relic's powers reads as.
+	/// </summary>
+	/// <remarks>
+	/// Needed because <see cref="Foundation"/> is not a percentage of anything - it is a number
+	/// of copies of a particular rite, both of which are properties of the relic rather than of
+	/// the power. Everything else still goes through the plain description, which cannot see
+	/// the relic and does not need to.
+	/// </remarks>
+	public static string DescribeOn(Relic relic, int index)
+	{
+		Power power = PowerAt(relic, index);
+		if (power != Power.Foundation)
+		{
+			return Describe(power, MagnitudeAt(relic, index));
+		}
+		int rite = FoundationRite(relic);
+		return "+" + FoundationCopies(relic) + " " + Content.Rites[rite].Name;
 	}
 
 	/// <summary>What one power reads as on the page.</summary>
@@ -274,6 +376,10 @@ public static class Relics
 			Power.Bargain => amount + " to what dread adds",
 			Power.Warding => Numbers.Percent(magnitude) + " off wards",
 			Power.Patience => amount + " longer to answer",
+			// Only reached if something asks for a Foundation without the relic - see DescribeOn,
+			// which is what every caller should be using. Says the shape of the thing rather
+			// than a wrong number.
+			Power.Foundation => "copies of a rite, while worn",
 			Power.Almsgiving => Numbers.Percent(magnitude) + " off offerings",
 			_ => Numbers.Percent(magnitude) + " slower to lose fervour",
 		};

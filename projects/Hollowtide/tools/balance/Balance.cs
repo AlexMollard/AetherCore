@@ -1895,6 +1895,10 @@ internal static class Balance
 					Power.Almsgiving => 1.0 - Vigil.OfferCost / offer,
 					Power.Steadiness => 1.0 - Vigil.FervourDrain / drain,
 					Power.Bargain => (Vigil.DreadMultiplier - 1.0) / addedBare - 1.0,
+					// Foundation is not a percentage of anything - it lends whole copies of a
+					// rite - so measuring it against a claimed magnitude compares two different
+					// units. It has checks of its own below.
+					Power.Foundation => claimed,
 					_ => Vigil.Wearing(Power.Patience),
 				};
 				if (Math.Abs(got - claimed) > claimed * 0.02 && lying.Length == 0)
@@ -3158,6 +3162,71 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// A relic that lends structures lends them, and takes them back.
+	/// </summary>
+	/// <remarks>
+	/// The only power that changes the parish rather than a coefficient, so it is the only one
+	/// that can leave something behind. What it must never do is let a keeper keep the copies -
+	/// or count them toward the free doublings or the price of the next rite, which would turn a
+	/// loan of production into a shortcut through the cost curve.
+	/// </remarks>
+	private static void LentStructuresAreOnlyLent()
+	{
+		Console.WriteLine("A relic that lends structures takes them back");
+
+		// A relic that definitely carries Foundation, found by asking rather than assuming.
+		Relic lender = default;
+		for (int seed = 1; seed < 200000 && !lender.Exists; seed++)
+		{
+			Relic candidate = new Relic { Seed = seed, Grade = Grade.Hollowed };
+			for (int i = 0; i < Relics.PowerCount(candidate.Grade); i++)
+			{
+				if (Relics.PowerAt(candidate, i) == Power.Foundation)
+				{
+					lender = candidate;
+					break;
+				}
+			}
+		}
+		Check("a lending relic exists to test at all", lender.Exists,
+			lender.Exists ? "found one to wear" : "no Foundation relic in 200k seeds");
+		if (!lender.Exists)
+		{
+			return;
+		}
+
+		int rite = Relics.FoundationRite(lender);
+		int copies = Relics.FoundationCopies(lender);
+
+		Vigil.Reset();
+		Vigil.Satchel.Add(lender);
+		Vigil.Wear(0, 0);
+
+		Check("the copies stand even where nothing was bought", Vigil.EffectiveOwned(rite) == copies
+			&& Vigil.Owned[rite] == 0, copies + " lent against " + Vigil.Owned[rite] + " bought");
+		Check("and they produce", Vigil.Rate > 0.0,
+			"a parish of nothing but lent structures still works");
+
+		double lentRate = Vigil.Rate;
+		int costBefore = 0;
+		double priceBefore = Vigil.CostOf(rite, Vigil.Owned[rite]);
+		double milestoneBefore = Vigil.MilestoneMultiplier(rite);
+
+		Check("the parish does not count them toward the next price",
+			priceBefore == Vigil.CostOf(rite, 0), "priced as though nothing were standing");
+		Check("nor toward the free doublings", milestoneBefore == 1.0,
+			"lent copies earn no milestone");
+
+		Vigil.Remove(0);
+		Check("taking it off takes them back", Vigil.EffectiveOwned(rite) == 0 && Vigil.Rate == 0.0,
+			"nothing left behind");
+		Check("and it was really doing something while worn", lentRate > 0.0 && costBefore == 0,
+			Numbers.Short(lentRate) + "/s while worn, nothing after");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3196,6 +3265,7 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		LentStructuresAreOnlyLent();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

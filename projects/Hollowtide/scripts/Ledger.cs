@@ -891,7 +891,11 @@ public sealed class Ledger
 		// about sixteen million, and relic seeds run to a billion.
 		Ui.SetMaterialParams(row.Icon, new Vector4(Time.UnscaledTime, Relics.ArtSeed(relic),
 			(float)(int)relic.Grade, worn ? 1.0f : 0.35f));
-		Ui.SetMaterialColors(row.Icon, Palette.Ichor, Palette.Dread);
+		// The ichor's ALPHA carries which powers this relic has, one bit each, so the drawing
+		// is built from the same facts as the description beside it. See Relics.PackedPowerMask;
+		// only the rgb is ever read as a colour.
+		Ui.SetMaterialColors(row.Icon, Palette.Fade(Palette.Ichor, Relics.PackedPowerMask(relic)),
+			Palette.Dread);
 
 		Ui.SetText(row.Title, Relics.NameOf(relic));
 		// Grade shown by how much ichor the name carries, not by a colour of its own: the
@@ -902,7 +906,7 @@ public sealed class Ledger
 		for (int i = 0; i < Relics.PowerCount(relic.Grade); i++)
 		{
 			powers += (powers.Length > 0 ? "   " : "") +
-				Relics.Describe(Relics.PowerAt(relic, i), Relics.MagnitudeAt(relic, i));
+				Relics.DescribeOn(relic, i);
 		}
 		Ui.SetText(row.Sub, powers);
 
