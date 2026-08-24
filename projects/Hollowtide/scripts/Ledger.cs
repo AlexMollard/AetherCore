@@ -63,6 +63,10 @@ public sealed class Ledger
 	private readonly Button[] _amounts = new Button[4];
 	private readonly Row[] _rows = new Row[kRowPool];
 
+	/// <summary>Tab labels, kept here because the tab now has a mark appended when it has
+	/// something waiting, and the scene's authored label is no longer the whole story.</summary>
+	private static readonly string[] s_tabNames = { "RITES", "OFFERINGS", "COMMUNION", "MARKS", "RELICS" };
+
 	private static readonly int[] s_amounts = { 1, 10, 100, -1 };
 	private static readonly string[] s_amountLabels = { "x1", "x10", "x100", "MAX" };
 
@@ -140,8 +144,13 @@ public sealed class Ledger
 		for (int i = 0; i < _tabs.Length; i++)
 		{
 			bool active = (int)_tab == i;
+			// A mark on any tab with something worth opening it for. Five tabs and no signal
+			// meant a keeper had to poll all of them to find out whether the parish was asking
+			// for anything - and offerings are permanent doublings, easily missed for an hour.
+			bool waiting = Waiting((LedgerTab)i);
+			_tabs[i].SetLabel(s_tabNames[i] + (waiting ? " +" : ""));
 			_tabs[i].SetColour(active ? Palette.RowHot : Palette.Row);
-			_tabs[i].SetLabelColour(active ? Palette.Ichor : Palette.TextDim);
+			_tabs[i].SetLabelColour(active ? Palette.Ichor : waiting ? Palette.Sigil : Palette.TextDim);
 			if (_tabs[i].Activated && !active)
 			{
 				_tab = (LedgerTab)i;
@@ -172,6 +181,82 @@ public sealed class Ledger
 		{
 			_tab = (LedgerTab)(((int)_tab + 1) % _tabs.Length);
 			_scroll = 0;
+		}
+	}
+
+	/// <summary>
+	/// Is there anything on this tab worth opening it for?
+	/// </summary>
+	/// <remarks>
+	/// Affordability, not mere existence - a tab full of things the keeper cannot buy is not
+	/// news. Marks never signal: nothing there is bought, and a record that nags is just a
+	/// record you stop reading.
+	/// </remarks>
+	private static bool Waiting(LedgerTab tab)
+	{
+		switch (tab)
+		{
+			case LedgerTab.Rites:
+				for (int rite = 0; rite < Content.RiteCount; rite++)
+				{
+					if (Vigil.CostOf(rite, Vigil.Owned[rite]) <= Vigil.Ichor)
+					{
+						return true;
+					}
+				}
+				return false;
+
+			case LedgerTab.Offerings:
+				for (int i = 0; i < Content.Offerings.Length; i++)
+				{
+					if (Vigil.OfferingAvailable(i) && Content.Offerings[i].Cost <= Vigil.Ichor)
+					{
+						return true;
+					}
+				}
+				return false;
+
+			case LedgerTab.Communion:
+				for (int i = 0; i < Content.Boons.Length; i++)
+				{
+					int cost = Vigil.BoonCost(i);
+					if (cost > 0 && Vigil.Sigils >= cost)
+					{
+						return true;
+					}
+				}
+				for (int rite = 0; rite < Content.RiteCount; rite++)
+				{
+					if (!Vigil.Overseers[rite] && Vigil.Sigils >= Vigil.OverseerCost(rite))
+					{
+						return true;
+					}
+				}
+				return false;
+
+			case LedgerTab.Relics:
+				// Something carried that beats something worn, or a free hand to fill.
+				for (int slot = 0; slot < Relics.Slots; slot++)
+				{
+					if (!Vigil.Worn[slot].Exists && Vigil.Satchel.Count > 0)
+					{
+						return true;
+					}
+				}
+				foreach (Relic carried in Vigil.Satchel)
+				{
+					foreach (Relic worn in Vigil.Worn)
+					{
+						if (worn.Exists && carried.Grade > worn.Grade)
+						{
+							return true;
+						}
+					}
+				}
+				return false;
+
+			default:
+				return false;
 		}
 	}
 

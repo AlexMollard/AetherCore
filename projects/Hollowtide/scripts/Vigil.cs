@@ -1298,6 +1298,12 @@ public static class Vigil
 		s_beckons = 0;
 		s_lastAmbient = -1;
 		s_lastStokeLine = 0.0;
+		// Both call sites - a fresh vigil AND a communion. Communion clears the offerings
+		// taken, so every one of them becomes available again at once; without re-priming, a
+		// keeper would be told about thirty offerings in a single frame.
+		s_offeringsNoticed = new bool[Content.Offerings.Length];
+		s_offeringsPrimed = false;
+		s_lastSpoken = "";
 		SurgeSeconds = 0.0;
 		Array.Clear(Owned, 0, Owned.Length);
 		Array.Clear(OfferingsTaken, 0, OfferingsTaken.Length);
@@ -1460,6 +1466,7 @@ public static class Vigil
 		if (!offline)
 		{
 			Murmur(deltaSeconds);
+			NoticeOfferings();
 		}
 
 		// Offline never starts one: a keeper cannot answer a door they were not behind, and
@@ -1825,8 +1832,58 @@ public static class Vigil
 		};
 	}
 
+	/// <summary>Which offerings the keeper has already been told about. Not saved: it is primed
+	/// from whatever is available the first time it runs, so a reload re-primes silently instead
+	/// of announcing thirty things at once.</summary>
+	private static bool[] s_offeringsNoticed = new bool[Content.Offerings.Length];
+	private static bool s_offeringsPrimed;
+
+	/// <summary>
+	/// Say when the parish starts asking for something new.
+	/// </summary>
+	/// <remarks>
+	/// An offering is a permanent doubling or tripling, and it simply APPEARS in a tab the
+	/// keeper may not have open - nothing announced it, so the only way to know was to go and
+	/// look. That is the same fault relics had: a reward that has to be discovered by polling
+	/// is not a reward, it is homework. Low volume by nature, so it costs the feed almost
+	/// nothing: there are thirty-odd offerings across a whole run.
+	/// </remarks>
+	private static void NoticeOfferings()
+	{
+		if (s_offeringsNoticed.Length != Content.Offerings.Length)
+		{
+			s_offeringsNoticed = new bool[Content.Offerings.Length];
+			s_offeringsPrimed = false;
+		}
+
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			bool available = OfferingAvailable(i);
+			if (!available)
+			{
+				// Taken, or no longer offered: let it be announced again if it ever returns.
+				s_offeringsNoticed[i] = false;
+				continue;
+			}
+			if (s_offeringsNoticed[i])
+			{
+				continue;
+			}
+			s_offeringsNoticed[i] = true;
+			if (s_offeringsPrimed)
+			{
+				Say("The parish asks for something: " + Content.Offerings[i].Name + ".", Omen.Good);
+			}
+		}
+		s_offeringsPrimed = true;
+	}
+
+	/// <summary>The last thing said, so nothing follows itself.</summary>
+	private static string s_lastSpoken = "";
+
 	private static void Say(string line, Omen omen)
 	{
+		s_lastSpoken = line;
 		// Anything said at all counts as the parish having spoken, so the ambient voice only
 		// ever fills real silence rather than talking over the game.
 		s_quiet = 0.0;
@@ -1904,7 +1961,11 @@ public static class Vigil
 		{
 			neverLooked &= !VisitorsMet[i];
 		}
-		if (neverLooked && s_beckons < kMaxBeckons)
+		// ...and not if it was the last thing said. The nudge is capped at two, but nothing
+		// stopped those two being consecutive - the ambient draw avoids repeating itself and the
+		// beckon simply bypassed that rule. A line delivered twice running reads as a bug even
+		// when it is only a coincidence of timing.
+		if (neverLooked && s_beckons < kMaxBeckons && s_lastSpoken != Content.Beckon)
 		{
 			s_beckons++;
 			Say(Content.Beckon, Omen.Plain);
@@ -1954,6 +2015,12 @@ public static class Vigil
 		s_beckons = 0;
 		s_lastAmbient = -1;
 		s_lastStokeLine = 0.0;
+		// Both call sites - a fresh vigil AND a communion. Communion clears the offerings
+		// taken, so every one of them becomes available again at once; without re-priming, a
+		// keeper would be told about thirty offerings in a single frame.
+		s_offeringsNoticed = new bool[Content.Offerings.Length];
+		s_offeringsPrimed = false;
+		s_lastSpoken = "";
 		CommunionSurges = 0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
