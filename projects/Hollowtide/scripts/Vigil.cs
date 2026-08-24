@@ -1155,6 +1155,13 @@ public static class Vigil
 
 	private const double kStokeInterval = 5.0;
 
+	/// <summary>Seconds between stoke lines, however often the button is pressed.</summary>
+	private const double kStokeLineGap = 25.0;
+
+	/// <summary>When the stoke line was last said, in played seconds. Measured against played
+	/// time rather than wall time so it means the same thing in a test as in a session.</summary>
+	private static double s_lastStokeLine;
+
 	public static bool CanStoke => Dread < 0.999 && StokeCooldown <= 0.0;
 
 	public static bool Stoke()
@@ -1169,7 +1176,16 @@ public static class Vigil
 		Ichor += offered;
 		RunIchor += offered;
 		LifetimeIchor += offered;
-		Say("You lean closer. It gives you " + Numbers.Short(offered) + " and remembers.", Omen.Dread);
+		// Not every press. A keeper riding the meter stokes nine times a minute, and nine
+		// identical sentences a minute is not atmosphere, it is a log - measured, the feed ran
+		// at 30 lines a minute against the six-line, nine-second window it has to show them in,
+		// so lines were being pushed off before they could be read. The meter moves and the
+		// purse changes on every stoke; the SENTENCE is for the moments it is worth saying.
+		if (s_lastStokeLine <= 0.0 || PlayedSeconds - s_lastStokeLine >= kStokeLineGap)
+		{
+			s_lastStokeLine = PlayedSeconds;
+			Say("You lean closer. It gives you " + Numbers.Short(offered) + " and remembers.", Omen.Dread);
+		}
 		return true;
 	}
 
@@ -1246,6 +1262,7 @@ public static class Vigil
 		s_quiet = 0.0;
 		s_beckons = 0;
 		s_lastAmbient = -1;
+		s_lastStokeLine = 0.0;
 		SurgeSeconds = 0.0;
 		Array.Clear(Owned, 0, Owned.Length);
 		Array.Clear(OfferingsTaken, 0, OfferingsTaken.Length);
@@ -1793,6 +1810,9 @@ public static class Vigil
 	/// be noticed and few enough to stay a suggestion.</summary>
 	private const int kMaxBeckons = 2;
 
+	/// <summary>How far below a band dread must fall before that band will speak again.</summary>
+	private const double kMurmurHysteresis = 0.10;
+
 	/// <summary>Which ambient line was last spoken, so the next draw can exclude it.</summary>
 	private static int s_lastAmbient = -1;
 
@@ -1823,7 +1843,11 @@ public static class Vigil
 			Say(Content.Murmurs[band].Line, Omen.Dread);
 			return;
 		}
-		if (band < s_murmurBand)
+		// Re-armed only when dread falls a clear margin BELOW the band it last spoke at. Without
+		// the margin, a keeper hovering on a boundary - which is exactly what stoking and being
+		// visited do, since both drop dread onto one - hears the same four lines over and over.
+		// Atmosphere repeated on a loop stops being atmosphere faster than anything else here.
+		if (band < s_murmurBand && Dread < Content.Murmurs[s_murmurBand].At - kMurmurHysteresis)
 		{
 			s_murmurBand = band;
 		}
@@ -1889,6 +1913,7 @@ public static class Vigil
 		s_quiet = 0.0;
 		s_beckons = 0;
 		s_lastAmbient = -1;
+		s_lastStokeLine = 0.0;
 		CommunionSurges = 0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;

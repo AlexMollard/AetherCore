@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace AetherGame.Balance;
 
@@ -801,6 +802,66 @@ internal static class Balance
 		Check("nor is it a notification tray", said <= 40, said + " lines, roughly one a minute");
 		Check("the nudge is a suggestion, not a nag", beckons <= 2, beckons + " beckons all session");
 		Check("no line follows itself", repeats == 0, repeats + " immediate repeats");
+
+		// -- The feed cannot say more than it can show. --
+		// Six lines, nine seconds each: about forty a minute before a line is pushed off before
+		// anybody could read it. That budget is shared by every system that talks, so it is the
+		// one place a new feature quietly ruins an old one - relics, murmurs, stoking and
+		// visitations all landed in it, and a keeper riding the brink was at forty-one.
+		// Measured for the LOUDEST kind of play, because the average is never the problem.
+		List<double> spoken = new List<double>();
+		double clock = 0.0;
+		Vigil.Reset();
+		Vigil.Rng = new Random(21);
+		Vigil.Announce = (_, _) => spoken.Add(clock);
+		double clicking = 0.0;
+		double stoking = 0.0;
+		for (int step = 0; step < 20 * 60.0 / kDt; step++, clock += kDt)
+		{
+			clicking += 4.0 * kDt;
+			while (clicking >= 1.0)
+			{
+				clicking -= 1.0;
+				Vigil.Gather();
+			}
+			stoking += 1.0 * kDt;
+			while (stoking >= 1.0)
+			{
+				stoking -= 1.0;
+				if (Vigil.Dread < 0.9)
+				{
+					Vigil.Stoke();
+				}
+			}
+			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
+			{
+				Vigil.RaiseWard();
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			Vigil.Tick(kDt);
+		}
+		Vigil.Announce = null;
+
+		int busiest = 0;
+		foreach (double at in spoken)
+		{
+			int within = 0;
+			foreach (double other in spoken)
+			{
+				if (other >= at && other < at + 60.0)
+				{
+					within++;
+				}
+			}
+			busiest = Math.Max(busiest, within);
+		}
+		Check("the busiest minute still fits in the feed", busiest < 38,
+			busiest + " lines in the loudest minute, against about 40 the feed can show");
 
 		// Offline must stay mute: replaying eight hours would otherwise dump every dread band
 		// and a hundred ambient lines into the feed the instant a keeper came back.
