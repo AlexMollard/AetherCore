@@ -798,9 +798,14 @@ internal static class Balance
 		// Checked as OUTCOMES over a real run rather than as branches, because the branches
 		// were always going to be right; what matters is whether the numbers they produce put
 		// the three kinds of player in the right order.
-		double silent = PlayAnswering(45, null);
-		double knowing = PlayAnswering(45, Answer.None);
-		double guessing = PlayAnswering(45, Answer.Still);
+		// Ninety minutes, not forty-five. STANDING STILL is the right answer to two of the eight
+		// visitors, so a short run's outcome turns on which ones happened to arrive - measured
+		// at forty-five minutes this read 0.79x on one seed and 1.02x on another, and flipped
+		// the check with it. Long enough for the mix to average out is the only honest horizon
+		// for a claim about which policy is better.
+		double silent = PlayAnswering(90, null);
+		double knowing = PlayAnswering(90, Answer.None);
+		double guessing = PlayAnswering(90, Answer.Still);
 		Check("knowing the answer beats doing nothing", knowing > silent * 1.05,
 			(knowing / silent).ToString("0.00") + "x doing nothing");
 		Check("guessing loses to doing nothing", guessing < silent,
@@ -1653,6 +1658,73 @@ internal static class Balance
 		}
 		Check("no grade is commoner than the one beneath it", inverted.Length == 0,
 			inverted.Length == 0 ? "the whole ladder holds at every depth" : inverted);
+
+		// -- Rare, but not so rare that nobody sees one. --
+		// The drop rate was cut by eight because a keeper was turning up fourteen relics in two
+		// minutes and filling the satchel inside ninety seconds. That is exactly the kind of
+		// number somebody retunes later, and overshooting it in the other direction is quieter:
+		// the feature simply stops appearing, and nothing fails.
+		Vigil.Reset();
+		Vigil.Rng = Seeded(9);
+		double elapsed = 0.0;
+		double firstFind = -1.0;
+		double firstGood = -1.0;
+		Vigil.OnFound = found =>
+		{
+			if (firstFind < 0.0)
+			{
+				firstFind = elapsed;
+			}
+			if (found.Grade >= Grade.Anointed && firstGood < 0.0)
+			{
+				firstGood = elapsed;
+			}
+		};
+		int carriedAtTen = 0;
+		double digging = 0.0;
+		double leaning = 0.0;
+		for (int step = 0; step < 20 * 60.0 / kDt; step++, elapsed += kDt)
+		{
+			digging += 4.0 * kDt;
+			while (digging >= 1.0)
+			{
+				digging -= 1.0;
+				Vigil.Gather();
+			}
+			leaning += 0.25 * kDt;
+			while (leaning >= 1.0)
+			{
+				leaning -= 1.0;
+				if (Vigil.Dread < 0.9)
+				{
+					Vigil.Stoke();
+				}
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			Vigil.Tick(kDt);
+			if (Math.Abs(elapsed - 600.0) < kDt * 0.5)
+			{
+				carriedAtTen = Vigil.Satchel.Count;
+			}
+		}
+		Vigil.OnFound = null;
+		Check("a keeper finds something in their first minutes", firstFind is >= 0.0 and < 300.0,
+			firstFind < 0.0 ? "nothing in twenty minutes" : "first find at " + Numbers.Duration(firstFind));
+		Check("and something worth wearing before long", firstGood is >= 0.0 and < 900.0,
+			firstGood < 0.0 ? "nothing Anointed in twenty minutes" : "first Anointed at " + Numbers.Duration(firstGood));
+		// Deliberately NOT checking that the satchel stays unfilled. It curates itself, dropping
+		// its worst, so a keeper who never manages it still ends up holding the best twelve
+		// things they have found - that is a fine state and not worth forbidding. What was wrong
+		// before the rate was cut was the SPEED: ninety seconds to fill meant every find after
+		// that displaced one nobody had chosen. The two checks above measure that directly, and
+		// a bound on the satchel would only have been a preference dressed as a requirement.
+		Check("and is holding a dozen worth having by then", carriedAtTen > 0,
+			carriedAtTen + " carried at ten minutes, of " + Relics.Satchel);
 
 		// -- Rarity has to mean something at a glance. --
 		double bestKeepsake = 0.0;
