@@ -95,8 +95,17 @@ public static class Vigil
 	/// <summary>Relics ever dug out of the parish, for the record.</summary>
 	public static int RelicsFound;
 
-	/// <summary>Seeds the digger has already used, so two relics are never the same object.
-	/// Rolled from a counter rather than at random for exactly that reason.</summary>
+	/// <summary>
+	/// Seeds the digger has already used.
+	/// </summary>
+	/// <remarks>
+	/// A counter rather than a random draw, so one keeper never digs up the same relic twice -
+	/// but the counter STARTS somewhere random, which matters as soon as relics can be traded.
+	/// Starting every keeper at zero means every keeper's fifth find is the same relic as every
+	/// other keeper's fifth find, so handing somebody a relic would routinely hand them a
+	/// duplicate of something already in their satchel, and the whole point of trading is that
+	/// what arrives is something you could not have dug up yourself.
+	/// </remarks>
 	public static int RelicSeed;
 
 	/// <summary>How many keepers stand close enough to be asked. Matches the roster the
@@ -1892,7 +1901,9 @@ public static class Vigil
 		Satchel.Clear();
 		Array.Clear(Worn, 0, Worn.Length);
 		RelicsFound = 0;
-		RelicSeed = 0;
+		// Somewhere in the first billion, leaving room to count up without ever wrapping into
+		// another keeper's stretch of the space.
+		RelicSeed = Rng.Next(1, 1_000_000_000);
 		Revision++;
 	}
 }

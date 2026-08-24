@@ -958,8 +958,21 @@ internal static class Balance
 
 		for (int step = 0; step < 250000; step++)
 		{
-			switch (rng.Next(12))
+			switch (rng.Next(16))
 			{
+				case 12:
+					Vigil.Wear(rng.Next(Relics.Satchel + 2) - 1, rng.Next(Relics.Slots + 1) - 1);
+					break;
+				case 13:
+					Vigil.Remove(rng.Next(Relics.Slots + 1) - 1);
+					break;
+				case 14:
+					Vigil.Discard(rng.Next(Relics.Satchel + 2) - 1);
+					break;
+				case 15:
+					// A relic off the wire, with the hostile values a peer could actually send.
+					Vigil.ReceiveRelic(rng.Next(-5, 100000), rng.Next(-3, 12), "Someone");
+					break;
 				case 0:
 					Vigil.Gather();
 					break;
@@ -1069,9 +1082,17 @@ internal static class Balance
 			{
 				return "walking rite " + Vigil.ApproachRite;
 			}
-			if (Vigil.ApproachSeconds < 0.0 || Vigil.ApproachSeconds > Vigil.kApproachSeconds)
+			// Against what THIS walk started with, not against the constant: a Patience relic
+			// lengthens the warning, so a keeper wearing one legitimately has more than
+			// kApproachSeconds left. Checking the constant was a check that a relic could break
+			// by working correctly.
+			if (Vigil.ApproachSeconds < 0.0 || Vigil.ApproachSeconds > Vigil.ApproachTotal + 1e-9)
 			{
-				return "walk clock is " + Vigil.ApproachSeconds;
+				return "walk clock is " + Vigil.ApproachSeconds + " of " + Vigil.ApproachTotal;
+			}
+			if (Vigil.ApproachTotal < Vigil.kApproachSeconds - 1e-9)
+			{
+				return "a walk started shorter than the warning is meant to be";
 			}
 			if (Vigil.Owned[Vigil.ApproachRite] <= 0)
 			{
@@ -1094,6 +1115,29 @@ internal static class Balance
 			if (Vigil.Boons[i] < 0 || Vigil.Boons[i] > Content.Boons[i].MaxLevel)
 			{
 				return "boon " + i + " is level " + Vigil.Boons[i];
+			}
+		}
+
+		if (Vigil.Satchel.Count > Relics.Satchel)
+		{
+			return "satchel holds " + Vigil.Satchel.Count + " of " + Relics.Satchel;
+		}
+		foreach (Relic relic in Vigil.Satchel)
+		{
+			if (!relic.Exists)
+			{
+				return "a nothing is being carried";
+			}
+			if (relic.Grade < Grade.Leavings || relic.Grade > Grade.Hollowed)
+			{
+				return "a carried relic is grade " + (int)relic.Grade;
+			}
+		}
+		foreach (Relic relic in Vigil.Worn)
+		{
+			if (relic.Exists && (relic.Grade < Grade.Leavings || relic.Grade > Grade.Hollowed))
+			{
+				return "a worn relic is grade " + (int)relic.Grade;
 			}
 		}
 		return "";
