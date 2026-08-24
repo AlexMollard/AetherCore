@@ -527,24 +527,51 @@ public static class Vigil
 		return moved;
 	}
 
-	/// <summary>Remember the keeper this run was, so a later one can lean on them. The line is
-	/// capped, and it is the LONGEST-carrying echo that goes rather than the oldest: a ghost
-	/// still holding your dread is the one worth keeping around to answer for it.</summary>
+	/// <summary>
+	/// Remember the keeper this run was, so a later one can lean on them.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The line is capped, and once it is full the newcomer takes the LIGHTEST-burdened
+	/// keeper's place and inherits what they were carrying. Both halves of that matter.
+	/// </para>
+	/// <para>
+	/// Inheriting the burden is what stops communion laundering the debt. Drop the heaviest
+	/// echo instead and a keeper clears a fully loaded line by communing four times, which
+	/// turns the one real cost of shunting into a formality - and communion is a thing players
+	/// already do constantly for sigils, so it would not even be a detour.
+	/// </para>
+	/// <para>
+	/// Taking their PLACE rather than being appended is what stops the line going stale. The
+	/// first version simply dropped the lightest, which meant a fresh echo carrying nothing was
+	/// always the one evicted: past four communions the panel showed the same four names
+	/// forever and no keeper ever saw themselves join the line they were adding to.
+	/// </para>
+	/// </remarks>
 	private static void RecordEcho()
 	{
-		Echoes.Add(new Echo { Name = KeeperName, Burden = 0.0 });
-		while (Echoes.Count > MaxEchoes)
+		Echo fresh = new Echo { Name = KeeperName, Burden = 0.0 };
+		if (Echoes.Count < MaxEchoes)
 		{
-			int lightest = 0;
-			for (int i = 1; i < Echoes.Count; i++)
-			{
-				if (Echoes[i].Burden < Echoes[lightest].Burden)
-				{
-					lightest = i;
-				}
-			}
-			Echoes.RemoveAt(lightest);
+			Echoes.Add(fresh);
+			return;
 		}
+
+		int lightest = 0;
+		for (int i = 1; i < Echoes.Count; i++)
+		{
+			if (Echoes[i].Burden < Echoes[lightest].Burden)
+			{
+				lightest = i;
+			}
+		}
+		// Removed and appended rather than overwritten in place, so the list stays in the order
+		// the keepers arrived. Overwriting put every newcomer into the same slot whenever the
+		// burdens were level - which they are once a line is full - so one name cycled and the
+		// other three were fossils.
+		fresh.Burden = Echoes[lightest].Burden;
+		Echoes.RemoveAt(lightest);
+		Echoes.Add(fresh);
 	}
 
 	/// <summary>The pressure the parish puts on the meter, before the ward holds any of it

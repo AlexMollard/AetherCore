@@ -1165,6 +1165,37 @@ internal static class Balance
 		Check("the dead put it down eventually", Vigil.BurdenTotal < loaded * 0.5,
 			"burden " + loaded.ToString("0.00") + " eases to " + Vigil.BurdenTotal.ToString("0.00"));
 
+		// -- Communion must not launder the debt. --
+		// The one cost of shunting is that a loaded line pulls the dark in faster. Communion is
+		// something players already do constantly for sigils, so if giving the parish back also
+		// shed the burden, the cost would not even be a detour around - it would just be gone.
+		Vigil.Reset();
+		for (int i = 0; i < Vigil.MaxEchoes; i++)
+		{
+			Vigil.Echoes.Add(new Echo { Name = "old" + i, Burden = Vigil.kEchoCapacity });
+		}
+		double owed = Vigil.BurdenTotal;
+		for (int c = 0; c < 12; c++)
+		{
+			Vigil.KeeperName = "new" + c;
+			Vigil.RunIchor = Vigil.RunIchorForSigils(3);
+			Vigil.Commune();
+		}
+		Check("communion cannot shed what the line carries", Vigil.BurdenTotal >= owed - 1e-9,
+			"burden " + owed.ToString("0.00") + " survives twelve communions");
+
+		// ...but the line still has to be the keepers you actually were.
+		int fossils = 0;
+		foreach (Echo echo in Vigil.Echoes)
+		{
+			if (echo.Name.StartsWith("old"))
+			{
+				fossils++;
+			}
+		}
+		Check("and the line is still who you were lately", fossils == 0,
+			Vigil.Echoes.Count + " echoes, none of them fossils");
+
 		// The trade itself: worth it only if you can answer what it brings.
 		double skilledClear = Lean(75, shunt: false, answers: true);
 		double skilledLoaded = Lean(75, shunt: true, answers: true);
