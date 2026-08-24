@@ -3227,6 +3227,90 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// Everything the inspector can show, it can show for every relic.
+	/// </summary>
+	/// <remarks>
+	/// The panel reads a relic's powers, its name and its history straight out of the generator,
+	/// and there is no fallback for a blank: an empty line just leaves a gap in the panel that
+	/// looks like a rendering fault. Cheap to guarantee here and impossible to notice by playing,
+	/// since it would need the one seed in thousands that lands on a missing case.
+	/// </remarks>
+	private static void EveryRelicCanBeRead()
+	{
+		Console.WriteLine("Every relic can be read");
+
+		Random rng = Seeded(808);
+		int blankPower = 0;
+		int blankName = 0;
+		int blankFlavour = 0;
+		int repeatedPower = 0;
+		HashSet<string> flavours = new HashSet<string>();
+		HashSet<Power> seen = new HashSet<Power>();
+		int sampled = 20000;
+
+		for (int i = 0; i < sampled; i++)
+		{
+			Relic relic = new Relic { Seed = rng.Next(1, int.MaxValue), Grade = (Grade)(i % 5) };
+			if (string.IsNullOrWhiteSpace(Relics.NameOf(relic)))
+			{
+				blankName++;
+			}
+			string flavour = Relics.Flavour(relic);
+			if (string.IsNullOrWhiteSpace(flavour))
+			{
+				blankFlavour++;
+			}
+			flavours.Add(flavour);
+
+			HashSet<Power> here = new HashSet<Power>();
+			for (int slot = 0; slot < Relics.PowerCount(relic.Grade); slot++)
+			{
+				Power power = Relics.PowerAt(relic, slot);
+				seen.Add(power);
+				if (!here.Add(power))
+				{
+					repeatedPower++;
+				}
+				if (string.IsNullOrWhiteSpace(Relics.DescribeOn(relic, slot)))
+				{
+					blankPower++;
+				}
+			}
+		}
+
+		Check("no relic has a nameless line in it", blankName == 0 && blankPower == 0
+			&& blankFlavour == 0, "over " + sampled + " relics, nothing blank");
+		Check("no relic grants the same power twice", repeatedPower == 0,
+			repeatedPower == 0 ? "every loadout distinct" : repeatedPower + " repeats");
+		Check("every kind of power actually turns up", seen.Count == Relics.PowerKinds,
+			seen.Count + " of " + Relics.PowerKinds + " kinds seen");
+		Check("and a relic's history is not the same story every time", flavours.Count >= 32,
+			flavours.Count + " distinct histories");
+
+		// The mask the art is drawn from has to agree with the powers the text lists, or the
+		// object on screen is not the object described beside it.
+		int disagreed = 0;
+		for (int i = 0; i < 5000; i++)
+		{
+			Relic relic = new Relic { Seed = rng.Next(1, int.MaxValue), Grade = (Grade)(i % 5) };
+			int mask = Relics.PowerMask(relic);
+			int rebuilt = 0;
+			for (int slot = 0; slot < Relics.PowerCount(relic.Grade); slot++)
+			{
+				rebuilt |= 1 << (int)Relics.PowerAt(relic, slot);
+			}
+			int packed = (int)(Relics.PackedPowerMask(relic) * (1 << Relics.PowerKinds) + 0.5f);
+			if (mask != rebuilt || packed != mask)
+			{
+				disagreed++;
+			}
+		}
+		Check("the drawing is made of the same powers as the words", disagreed == 0,
+			disagreed == 0 ? "mask survives the trip through a colour channel"
+				: disagreed + " disagreed");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3266,6 +3350,7 @@ internal static class Balance
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
 		LentStructuresAreOnlyLent();
+		EveryRelicCanBeRead();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

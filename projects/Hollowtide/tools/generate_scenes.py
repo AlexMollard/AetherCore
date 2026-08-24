@@ -539,6 +539,26 @@ def vigil():
     at(found, "FoundName", [Scene.text("", DISPLAY, 21.0, BONE)], 116, 40, 480, 34)
     at(found, "FoundPowers", [Scene.text("", BODY, 15.0, ICHOR_DIM)], 116, 78, 480, 28)
 
+    # ── inspecting a relic ──────────────────────────────────────────────────────────
+    # Sits to the LEFT of the ledger and outside it, for two reasons: the ledger's viewport is
+    # masked, so anything parented into it would be clipped by the scroll area, and a panel that
+    # covered the list would hide the row the keeper is pointing at. Hidden unless something is
+    # under the pointer.
+    INSPECT_W = 430.0
+    inspect = s.add("RelicInspect", canvas, [
+        Scene.box(-(LEDGER_W + INSPECT_W + 14.0), 150, INSPECT_W, 430, (0, 0), (1, 0)),
+        Scene.image(PANEL_DEEP, 8.0),
+    ])
+    at(inspect, "InspectArt", [Scene.image(VOID), Scene.material("ui_relic", ICHOR, DREAD)], 18, 18, 104, 104)
+    at(inspect, "InspectName", [Scene.text("", DISPLAY, 20.0, BONE, wrap=True)], 136, 16, 278, 60)
+    at(inspect, "InspectGrade", [Scene.text("", DISPLAY, 15.0, ICHOR)], 136, 80, 278, 26)
+    at(inspect, "InspectRule", [Scene.image(ROW)], 18, 136, INSPECT_W - 36, 2)
+    at(inspect, "InspectWhat", [Scene.text("WHAT IT DOES", DISPLAY, 13.0, BONE_FAINT)], 18, 148, 260, 22)
+    for i in range(5):
+        at(inspect, f"InspectPower{i}", [Scene.text("", BODY, 16.0, ICHOR_DIM)], 18, 178 + i * 30, INSPECT_W - 36, 28)
+    at(inspect, "InspectFlavour", [Scene.text("", BODY, 14.0, BONE_FAINT, wrap=True)], 18, 336, INSPECT_W - 36, 52)
+    at(inspect, "InspectFoot", [Scene.text("", BODY, 15.0, BONE_DIM)], 18, 394, INSPECT_W - 36, 24)
+
     # ── the ledger ──────────────────────────────────────────────────────────────────
     ledger = s.add("LedgerPanel", canvas, [
         Scene.stretch((1, 0), (1, 1), (-LEDGER_W, 0), (0, 0)),

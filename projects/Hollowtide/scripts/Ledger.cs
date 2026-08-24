@@ -97,6 +97,30 @@ public sealed class Ledger
 	/// Shares the strip the buy-amount buttons use, which is empty on every tab but the rites.
 	/// </remarks>
 	private Button _wearBest;
+
+	/// <summary>
+	/// The panel that says what a relic actually is.
+	/// </summary>
+	/// <remarks>
+	/// A row has space for a name, a grade and one line of effects, and a relic now carries up
+	/// to five of them plus a lender's worth of structures - so the row had become a summary of
+	/// something the keeper could not read in full anywhere. This is that full reading: the
+	/// drawing at a size where its features can be told apart, every power on its own line, and
+	/// what the thing is worth if it is rendered down.
+	/// </remarks>
+	private Entity _inspect;
+	private Entity _inspectArt;
+	private Entity _inspectName;
+	private Entity _inspectGrade;
+	private Entity _inspectFlavour;
+	private Entity _inspectFoot;
+	private readonly Entity[] _inspectPowers = new Entity[5];
+
+	/// <summary>Set while dressing a relic row the pointer is over. Read after the rows are
+	/// filled, because which row is hovered is only known once they have all been placed.</summary>
+	private Relic _inspecting;
+	private bool _inspectingWorn;
+	private double _inspectRenders;
 	private readonly Row[] _rows = new Row[kRowPool];
 
 	/// <summary>Tab labels, kept here because the tab now has a mark appended when it has
@@ -138,6 +162,22 @@ public sealed class Ledger
 			_tabs[i] = Button.Find("LedgerTab" + i);
 		}
 		_wearBest = Button.Find("LedgerWearBest");
+		_inspect = Scene.Find("RelicInspect");
+		// Authored active so it can be seen while editing the scene; hidden the moment the game
+		// owns it, so it cannot show an empty panel on the frames before the first update.
+		if (_inspect.IsValid)
+		{
+			_inspect.SetActive(false);
+		}
+		_inspectArt = Scene.Find("InspectArt");
+		_inspectName = Scene.Find("InspectName");
+		_inspectGrade = Scene.Find("InspectGrade");
+		_inspectFlavour = Scene.Find("InspectFlavour");
+		_inspectFoot = Scene.Find("InspectFoot");
+		for (int i = 0; i < _inspectPowers.Length; i++)
+		{
+			_inspectPowers[i] = Scene.Find("InspectPower" + i);
+		}
 		for (int i = 0; i < _amounts.Length; i++)
 		{
 			_amounts[i] = Button.Find("LedgerAmount" + i);
@@ -324,6 +364,67 @@ public sealed class Ledger
 		}
 	}
 
+	/// <summary>
+	/// Show what the pointer is on, in full.
+	/// </summary>
+	/// <remarks>
+	/// Runs after the rows are dressed, because which row is hovered is only settled once they
+	/// have all been placed. Hover rather than a click: inspecting is not a decision, and making
+	/// somebody click to read - and click again to stop reading - turns browsing a satchel into
+	/// a chore. Clicking a row already means WEAR, which is the right thing for a click to mean.
+	/// </remarks>
+	private void DrawInspector()
+	{
+		if (!_inspect.IsValid)
+		{
+			return;
+		}
+		bool show = _tab == LedgerTab.Relics && _inspecting.Exists;
+		_inspect.SetActive(show);
+		if (!show)
+		{
+			return;
+		}
+
+		Relic relic = _inspecting;
+		Ui.SetMaterialParams(_inspectArt, new Vector4(Time.UnscaledTime, Relics.ArtSeed(relic),
+			(float)(int)relic.Grade, 1.0f));
+		// The same power mask the row's small drawing gets, so the big one is the same object
+		// rather than a second illustration that might disagree with it.
+		Ui.SetMaterialColors(_inspectArt, Palette.Fade(Palette.Ichor, Relics.PackedPowerMask(relic)),
+			Palette.Dread);
+
+		Ui.SetText(_inspectName, Relics.NameOf(relic));
+		Ui.SetTextColor(_inspectName, Palette.Mix(Palette.TextDim, Palette.Ichor,
+			Hud.GradeWeight(relic.Grade)));
+		Ui.SetText(_inspectGrade, Relics.GradeName(relic.Grade).ToUpperInvariant() + Hud.Pips(relic.Grade));
+		Ui.SetTextColor(_inspectGrade, Palette.Mix(Palette.TextFaint, Palette.Ichor,
+			Hud.GradeWeight(relic.Grade)));
+
+		int powers = Relics.PowerCount(relic.Grade);
+		for (int i = 0; i < _inspectPowers.Length; i++)
+		{
+			bool has = i < powers;
+			_inspectPowers[i].SetActive(has);
+			if (has)
+			{
+				Ui.SetText(_inspectPowers[i], "- " + Relics.DescribeOn(relic, i));
+				// The power that lends structures is the only one that changes the parish
+				// instead of a coefficient, so it is the only one drawn in the colour reserved
+				// for what a communion leaves behind.
+				Ui.SetTextColor(_inspectPowers[i], Relics.PowerAt(relic, i) == Power.Foundation
+					? Palette.Sigil : Palette.Ichor);
+			}
+		}
+
+		Ui.SetText(_inspectFlavour, Relics.Flavour(relic));
+		Ui.SetText(_inspectFoot, _inspectingWorn
+			? "Worn. Click the row to take it off."
+			: "Carried. Click to wear   -   right-click twice to render for +"
+				+ Numbers.Short(_inspectRenders));
+		Ui.SetTextColor(_inspectFoot, _inspectingWorn ? Palette.Ichor : Palette.TextFaint);
+	}
+
 	/// <summary>Put every row's four columns back where the shared layout wants them.</summary>
 	/// <remarks>
 	/// Mirrors the rects the rows are BUILT with, and has to keep mirroring them: if a column
@@ -433,6 +534,10 @@ public sealed class Ledger
 			_consecrateArmed = -1;
 		}
 
+		// Cleared before the rows are dressed and set by whichever one is under the pointer, so
+		// the panel follows the pointer without any row needing to know the panel exists.
+		_inspecting = default;
+
 		switch (_tab)
 		{
 			case LedgerTab.Rites:
@@ -454,6 +559,8 @@ public sealed class Ledger
 				FillMarks();
 				break;
 		}
+
+		DrawInspector();
 	}
 
 	// ── Rites ────────────────────────────────────────────────────────────────────────
@@ -807,6 +914,10 @@ public sealed class Ledger
 			// rule into something a keeper can steer with the two clicks they already have.
 			// What rendering it pays, on the row, because a price nobody can see is one nobody
 			// weighs - and the first carried relic is also the one the congregation hands over.
+			if (Ui.IsHovered(row.Box.Root))
+			{
+				_inspectRenders = Vigil.RenderValue(i);
+			}
 			Ui.SetText(row.Note, (i == 0 ? "next to give   " : "") +
 				"render +" + Numbers.Short(Vigil.RenderValue(i)));
 			Ui.SetTextColor(row.Note, i == 0 ? Palette.Sigil : Palette.IchorDim);
@@ -885,6 +996,11 @@ public sealed class Ledger
 	private void DressRelic(Row row, Relic relic, bool worn)
 	{
 		row.Icon.SetActive(true);
+		if (Ui.IsHovered(row.Box.Root))
+		{
+			_inspecting = relic;
+			_inspectingWorn = worn;
+		}
 		// Seed and grade, exactly what the C# generator works from - so the drawing and the
 		// name can never disagree about which relic this is.
 		// ArtSeed, not the seed: a float4 carries float32, which holds integers exactly only to

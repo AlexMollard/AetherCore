@@ -115,6 +115,51 @@ public static class Relics
 		"the Mouth Returned", "of the Salt Line", "the Statue Faced", "from the Second Grave",
 	};
 
+	/// <summary>Where a relic was found, and in what state. Flavour only - nothing reads it but
+	/// the inspector.</summary>
+	private static readonly string[] s_found =
+	{
+		"Turned up in the spoil from a grave nobody had marked.",
+		"Found wedged under a flagstone that had not been lifted in years.",
+		"Came up whole out of ground that should have held nothing.",
+		"Pulled from the wall of the old vestry, still warm.",
+		"Left on the step. Nobody saw who.",
+		"Dug out of the tide-line at the wrong hour.",
+		"Taken from a hand that had closed around it.",
+		"Was in the ossuary, on a shelf, labelled in a hand you do not know.",
+	};
+
+	private static readonly string[] s_condition =
+	{
+		"It has been mended once, badly.",
+		"Something has been filed off it.",
+		"It is warmer than the air around it.",
+		"There is a name on the underside, worn almost away.",
+		"It does not weigh what it should.",
+		"The marks on it are recent.",
+		"It will not stay where it is put.",
+		"Nothing has grown on it.",
+	};
+
+	/// <summary>
+	/// Two sentences about where a relic came from.
+	/// </summary>
+	/// <remarks>
+	/// Costs nothing and is worth a great deal: sixty-four pairings across two lists means a
+	/// keeper who inspects a dozen relics has read a dozen different things, and a procedurally
+	/// generated object that has a HISTORY reads as found rather than as rolled. Hashed off
+	/// their own salts, so adding them cannot disturb any roll a relic has already made.
+	/// </remarks>
+	public static string Flavour(Relic relic)
+	{
+		if (!relic.Exists)
+		{
+			return "";
+		}
+		return s_found[Hash(relic.Seed, 70) % (uint)s_found.Length] + " "
+			+ s_condition[Hash(relic.Seed, 71) % (uint)s_condition.Length];
+	}
+
 	/// <summary>
 	/// What rendering a relic down is worth, in seconds of the parish's production.
 	/// </summary>
