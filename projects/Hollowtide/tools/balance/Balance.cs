@@ -3330,7 +3330,6 @@ internal static class Balance
 			"a parish of nothing but lent structures still works");
 
 		double lentRate = Vigil.Rate;
-		int costBefore = 0;
 		double priceBefore = Vigil.CostOf(rite, Vigil.Owned[rite]);
 		double milestoneBefore = Vigil.MilestoneMultiplier(rite);
 
@@ -3340,10 +3339,14 @@ internal static class Balance
 			"lent copies earn no milestone");
 
 		Vigil.Remove(0);
-		Check("taking it off takes them back", Vigil.EffectiveOwned(rite) == 0 && Vigil.Rate == 0.0,
-			"nothing left behind");
-		Check("and it was really doing something while worn", lentRate > 0.0 && costBefore == 0,
-			Numbers.Short(lentRate) + "/s while worn, nothing after");
+		// One check, with both figures in it. There were two, and the second read
+		// `lentRate > 0.0 && costBefore == 0` where costBefore was declared zero and never
+		// assigned - so half of it was always true and the other half repeated the check above.
+		// It looked like an assertion about cost and asserted nothing at all, which is worse
+		// than not being there: a reader counting checks would have counted it.
+		Check("taking it off takes them back", Vigil.EffectiveOwned(rite) == 0 && Vigil.Rate == 0.0
+			&& lentRate > 0.0,
+			Numbers.Short(lentRate) + "/s while worn, " + Numbers.Short(Vigil.Rate) + "/s after");
 
 		Vigil.Reset();
 	}
@@ -4264,6 +4267,53 @@ internal static class Balance
 			"Save writes it and Load recovers from it, spelled once");
 	}
 
+	/// <summary>
+	/// This suite does not assert things that cannot fail.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A check that passes for the wrong reason is worse than no check: it is counted, it is
+	/// reported green, and it occupies the place where a real one would have gone. This project
+	/// has produced several - a fixture that answered a visitation with a call that resolves
+	/// nothing, a comparison of C# against C# for a value that crosses into a shader, an
+	/// assertion on a variable declared zero and never assigned.
+	/// </para>
+	/// <para>
+	/// Only the crudest form can be caught mechanically - a condition written as a literal - so
+	/// that is what this catches. It reads its own source, which is the same trick the shader
+	/// and scene checks use, and fails if the file cannot be found rather than passing quietly.
+	/// </para>
+	/// </remarks>
+	private static void NothingHereIsAssertedForShow()
+	{
+		Console.WriteLine("Nothing here is asserted for show");
+
+		string self = ProjectFile("tools", "balance", "Balance.cs");
+		if (self.Length == 0)
+		{
+			Check("the suite can read itself", false, "could not find Balance.cs");
+			return;
+		}
+
+		string text = File.ReadAllText(self);
+		MatchCollection calls = Regex.Matches(text, @"Check\(\s*""([^""]+)"",\s*(true|false)\s*,");
+		List<string> always = new List<string>();
+		foreach (Match call in calls)
+		{
+			// A literal `false` is legitimate: it is how a check reports that the thing it
+			// needed was missing, and it only runs on that path. A literal `true` never can be.
+			if (call.Groups[2].Value == "true")
+			{
+				always.Add(call.Groups[1].Value);
+			}
+		}
+
+		Check("no check is written as a constant truth", always.Count == 0,
+			always.Count == 0
+				? Regex.Matches(text, @"Check\(").Count + " checks, none of them decorative"
+				: string.Join("; ", always));
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4314,6 +4364,7 @@ internal static class Balance
 		TheGeneratorAgreesWithTheGame();
 		EveryNumberStaysReadable();
 		ARescuedSaveNeverLandsOnAnother();
+		NothingHereIsAssertedForShow();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
