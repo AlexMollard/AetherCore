@@ -32,6 +32,7 @@ public sealed class Hud
 	private Entity _multiplier;
 	private Entity _dreadTrack;
 	private Entity _dreadLabel;
+	private Entity _dreadCaption;
 	private Entity _sigilCount;
 
 	private Entity _sigil;
@@ -72,6 +73,7 @@ public sealed class Hud
 		_ichor = Scene.Find("HudIchor");
 		_rate = Scene.Find("HudRate");
 		_multiplier = Scene.Find("HudMultiplier");
+		_dreadCaption = Scene.Find("HudDreadCaption");
 		_dreadTrack = Scene.Find("HudDreadBar");
 		_dreadLabel = Scene.Find("HudDreadValue");
 		_sigilCount = Scene.Find("HudSigils");
@@ -179,6 +181,16 @@ public sealed class Hud
 			? mult + "  SURGE " + Numbers.Duration(Vigil.SurgeSeconds)
 			: mult);
 		Ui.SetTextColor(_multiplier, Vigil.SurgeSeconds > 0.0 ? Palette.Ichor : Palette.Sigil);
+
+		// What the bargain is paying, which is the whole reason anyone stands this close to it.
+		// The meter said how full it was and how long was left, but never what the risk BOUGHT -
+		// so the game's central decision had two of its four inputs missing, and "ride the top
+		// or play it safe" was a judgement the interface gave the player no way to make.
+		Ui.SetText(_dreadCaption, "DREAD   PAYS " + Numbers.Mult(Vigil.DreadMultiplier));
+		// Faint when the bargain is worth nothing, full dread when it is worth a great deal:
+		// the caption brightens as the offer gets good, which is the same thing that makes it
+		// dangerous.
+		Ui.SetTextColor(_dreadCaption, Palette.Mix(Palette.TextFaint, Palette.Dread, dread));
 
 		Ui.SetProgress(_dreadTrack, dread);
 		// The meter says how close, and now also how long. The whole game is a clock the

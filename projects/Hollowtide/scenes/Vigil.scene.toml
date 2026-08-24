@@ -242,7 +242,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0, 0 ]
     anchor_min = [ 0, 0 ]
-    offset_max = [ 1092, 36 ]
+    offset_max = [ 1192, 36 ]
     offset_min = [ 932, 14 ]
     pivot = [ 0, 0 ]
 

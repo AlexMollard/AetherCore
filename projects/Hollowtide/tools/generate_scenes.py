@@ -435,7 +435,12 @@ def vigil():
     ROW_A, ROW_B = 14.0, 64.0
     at(bar, "HudTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 22.0, BONE_DIM)], 28, ROW_A, 300, 30)
     at(bar, "HudIchor", [Scene.text("0", BODY, 40.0, ICHOR)], 356, ROW_A, 280, 48)
-    at(bar, "HudDreadCaption", [Scene.text("DREAD", DISPLAY, 15.0, BONE_FAINT)], 932, ROW_A, 160, 22)
+    # Widened from 160 to run up to the value column, because this caption stopped being the
+    # static word "DREAD" and now carries what the bargain PAYS - the one number the game's
+    # central decision turns on, and the one it never showed. A player could read how close the
+    # dark was and how long they had, but not what standing there was buying them, which left
+    # "is riding the meter worth it?" as a question the interface refused to answer.
+    at(bar, "HudDreadCaption", [Scene.text("DREAD", DISPLAY, 15.0, BONE_FAINT)], 932, ROW_A, 260, 22)
     at(bar, "HudDreadValue", [Scene.text("0.0%", BODY, 16.0, DREAD, "right")], 1192, ROW_A, 140, 22)
 
     at(bar, "HudKeeper", [Scene.text("", BODY, 16.0, BONE_DIM)], 28, ROW_B, 300, 26)
