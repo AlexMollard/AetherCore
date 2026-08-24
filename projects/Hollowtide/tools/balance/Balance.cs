@@ -2999,6 +2999,121 @@ internal static class Balance
 		Transcript.Clear();
 	}
 
+	/// <summary>
+	/// The button that wears the best three can only ever help.
+	/// </summary>
+	/// <remarks>
+	/// It rewrites both hands and satchel in one go, which is the kind of operation that loses a
+	/// relic quietly - and losing a relic is not recoverable. So: nothing may vanish, nothing may
+	/// duplicate, the hand may never get worse, and pressing it twice must do nothing the second
+	/// time. Fuzzed over random inventories rather than a tidy example, because the interesting
+	/// cases are ties and part-filled hands.
+	/// </remarks>
+	private static void WearingTheBestOnlyHelps()
+	{
+		Console.WriteLine("Wearing the best three only ever helps");
+
+		Random rng = Seeded(4242);
+		int worseHand = 0;
+		int lost = 0;
+		int duplicated = 0;
+		int notIdempotent = 0;
+		int predicateWrong = 0;
+		int rounds = 3000;
+
+		for (int round = 0; round < rounds; round++)
+		{
+			Vigil.Reset();
+			int held = rng.Next(0, Relics.Satchel + 1);
+			List<int> seeds = new List<int>();
+			for (int i = 0; i < held; i++)
+			{
+				Relic relic = new Relic { Seed = rng.Next(1, 1000000), Grade = (Grade)rng.Next(0, 5) };
+				seeds.Add(relic.Seed);
+				Vigil.Satchel.Add(relic);
+			}
+			// Wear a random few first, so part-filled and full hands both get exercised.
+			for (int slot = 0; slot < Relics.Slots && Vigil.Satchel.Count > 0; slot++)
+			{
+				if (rng.Next(0, 3) == 0)
+				{
+					Vigil.Wear(rng.Next(0, Vigil.Satchel.Count), slot);
+				}
+			}
+
+			double before = 0.0;
+			foreach (Relic worn in Vigil.Worn)
+			{
+				before += Math.Max(0.0, Vigil.RelicWorth(worn));
+			}
+			bool predicted = Vigil.WouldWearBestChange();
+
+			int moved = Vigil.WearBest();
+
+			double after = 0.0;
+			foreach (Relic worn in Vigil.Worn)
+			{
+				after += Math.Max(0.0, Vigil.RelicWorth(worn));
+			}
+			if (after < before - 1e-6)
+			{
+				worseHand++;
+			}
+			if (predicted != (moved > 0))
+			{
+				predicateWrong++;
+			}
+
+			// Every relic that went in is still somewhere, exactly once.
+			List<int> now = new List<int>();
+			foreach (Relic worn in Vigil.Worn)
+			{
+				if (worn.Exists)
+				{
+					now.Add(worn.Seed);
+				}
+			}
+			foreach (Relic carried in Vigil.Satchel)
+			{
+				now.Add(carried.Seed);
+			}
+			seeds.Sort();
+			now.Sort();
+			if (now.Count != seeds.Count)
+			{
+				lost++;
+			}
+			else
+			{
+				for (int i = 0; i < now.Count; i++)
+				{
+					if (now[i] != seeds[i])
+					{
+						duplicated++;
+						break;
+					}
+				}
+			}
+
+			if (Vigil.WearBest() != 0)
+			{
+				notIdempotent++;
+			}
+		}
+
+		Check("it never leaves a worse hand than it found", worseHand == 0,
+			worseHand == 0 ? "over " + rounds + " random satchels" : worseHand + " made worse");
+		Check("nothing is lost and nothing is copied", lost == 0 && duplicated == 0,
+			lost == 0 && duplicated == 0 ? "every relic still held, exactly once"
+				: lost + " lost, " + duplicated + " altered");
+		Check("pressing it twice does nothing", notIdempotent == 0,
+			notIdempotent == 0 ? "already best, so it stays put" : notIdempotent + " kept moving");
+		Check("and the button is dark exactly when it would do nothing", predicateWrong == 0,
+			predicateWrong == 0 ? "the label never lies" : predicateWrong + " disagreed");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3035,6 +3150,7 @@ internal static class Balance
 		EverythingCanBeRead();
 		OldSavesStillMeanWhatTheyMeant();
 		NothingSaidIsLost();
+		WearingTheBestOnlyHelps();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

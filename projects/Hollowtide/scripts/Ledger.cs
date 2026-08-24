@@ -87,6 +87,16 @@ public sealed class Ledger
 	private Entity _viewport;
 	private readonly Button[] _tabs = new Button[5];
 	private readonly Button[] _amounts = new Button[4];
+
+	/// <summary>
+	/// Fills the three hands with the best three relics held.
+	/// </summary>
+	/// <remarks>
+	/// Every find meant opening the satchel and comparing rows by hand, and since a better grade
+	/// is simply better there was no judgement in it - only bookkeeping the game would not do.
+	/// Shares the strip the buy-amount buttons use, which is empty on every tab but the rites.
+	/// </remarks>
+	private Button _wearBest;
 	private readonly Row[] _rows = new Row[kRowPool];
 
 	/// <summary>Tab labels, kept here because the tab now has a mark appended when it has
@@ -127,6 +137,7 @@ public sealed class Ledger
 		{
 			_tabs[i] = Button.Find("LedgerTab" + i);
 		}
+		_wearBest = Button.Find("LedgerWearBest");
 		for (int i = 0; i < _amounts.Length; i++)
 		{
 			_amounts[i] = Button.Find("LedgerAmount" + i);
@@ -186,6 +197,23 @@ public sealed class Ledger
 			{
 				_tab = (LedgerTab)i;
 				_scroll = 0;
+			}
+		}
+
+		bool showBest = _tab == LedgerTab.Relics;
+		_wearBest.SetActive(showBest);
+		if (showBest)
+		{
+			// Lit only when it would actually change something, so it never invites a click that
+			// does nothing - and says so plainly when the hand is already the best it can be.
+			bool worthIt = Vigil.WouldWearBestChange();
+			_wearBest.SetEnabled(worthIt);
+			_wearBest.SetColour(worthIt ? Palette.Row : Palette.PanelDeep);
+			_wearBest.SetLabel(worthIt ? "WEAR THE BEST THREE" : "WEARING THE BEST THREE");
+			_wearBest.SetLabelColour(worthIt ? Palette.Ichor : Palette.TextFaint);
+			if (_wearBest.Activated && worthIt)
+			{
+				Vigil.WearBest();
 			}
 		}
 
@@ -320,6 +348,23 @@ public sealed class Ledger
 	/// <summary>Which tab the rows are currently laid out for.</summary>
 	private LedgerTab _lastTab = LedgerTab.Rites;
 
+	/// <summary>
+	/// Which carried relic is one click away from being rendered, or -1.
+	/// </summary>
+	/// <remarks>
+	/// Rendering used to happen on the first right-click, with nothing said before or after: the
+	/// relic was simply gone. A keeper could not tell whether they had rendered it, dropped it,
+	/// or hit a bug - and if it was a good one, they could not get it back. The gesture stays a
+	/// right-click, but it now takes two, and the row says so in between.
+	/// </remarks>
+	private int _renderArmed = -1;
+
+	/// <summary>When the armed row forgets, on the UNSCALED clock. A deadline rather than a
+	/// countdown because the only delta the SDK exposes is the scaled one, which stops while the
+	/// game is paused - and an arming that never expires while paused is an arming a keeper can
+	/// come back to an hour later and fire by accident, which is the whole thing being fixed.</summary>
+	private float _renderArmedUntil;
+
 	private void HandleScroll()
 	{
 		// How many rows actually fit is a function of the window height, so it is measured from
@@ -363,6 +408,15 @@ public sealed class Ledger
 		{
 			ResetColumns();
 			_lastTab = _tab;
+			// Leaving the tab is as clear a "no" as any.
+			_renderArmed = -1;
+		}
+
+		// An armed row forgets on its own. Scrolling disarms too, because the row indices under
+		// the pointer have moved and an armed index would point at a different relic.
+		if (_renderArmed >= 0 && (Time.UnscaledTime >= _renderArmedUntil || _tab != LedgerTab.Relics))
+		{
+			_renderArmed = -1;
 		}
 
 		switch (_tab)
@@ -707,9 +761,35 @@ public sealed class Ledger
 			// throw away a thing they went and found is a poor trade even when the thing is
 			// junk; melting it is the same tidying gesture with something to show for it, and
 			// it is still how a keeper chooses what the next offer will be.
+			//
+			// TWICE, though. The first click arms the row and says what it is about to do and
+			// what it pays; the second does it. One click destroying a thing the keeper spent
+			// an hour finding, with no warning and no undo, is the kind of interaction people
+			// remember a game for and not fondly.
+			if (_renderArmed == i)
+			{
+				Ui.SetText(row.Note, "RIGHT-CLICK AGAIN   +" + Numbers.Short(Vigil.RenderValue(i)));
+				Ui.SetTextColor(row.Note, Palette.DreadText);
+			}
+
 			if (Ui.IsHovered(row.Box.Root) && Input.IsMousePressed(MouseButton.Right))
 			{
-				Vigil.Render(i);
+				if (_renderArmed == i)
+				{
+					// Vigil.Render says what it did, so the confirmation lands in the feed and
+					// stays in the transcript. No event back to the game for it: the parish's
+					// voice is the channel every other consequence already uses, and a line a
+					// keeper can scroll back to beats a pop they might blink through.
+					Vigil.Render(i);
+					_renderArmed = -1;
+				}
+				else
+				{
+					_renderArmed = i;
+					// Long enough to read the row, short enough that it cannot be armed now and
+					// fired by an unrelated click later.
+					_renderArmedUntil = Time.UnscaledTime + 3.0f;
+				}
 				break;
 			}
 

@@ -952,6 +952,211 @@ public static class Vigil
 		return true;
 	}
 
+	/// <summary>
+	/// How good a relic is, as one number.
+	/// </summary>
+	/// <remarks>
+	/// Grade dominates, because a better grade carries MORE POWERS rather than bigger ones and
+	/// three powers beat one whatever the rolls were. Magnitude only settles ties within a
+	/// grade. The grade term is scaled far past any possible sum of magnitudes so the ordering
+	/// can never invert: a Hollowed thing with poor rolls still outranks a lucky Keepsake.
+	/// </remarks>
+	public static double RelicWorth(Relic relic)
+	{
+		if (!relic.Exists)
+		{
+			return -1.0;
+		}
+		double magnitude = 0.0;
+		for (int i = 0; i < Relics.PowerCount(relic.Grade); i++)
+		{
+			magnitude += Relics.MagnitudeAt(relic, i);
+		}
+		return (int)relic.Grade * 1000.0 + magnitude;
+	}
+
+	/// <summary>
+	/// Wear the best three relics the keeper has, from what is worn and what is carried.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Every find used to mean opening the satchel and comparing rows by hand, and since a
+	/// better grade is simply better there was never a judgement in it - just bookkeeping the
+	/// player was made to do because the game would not. A button that does the obvious thing is
+	/// not a loss of decision when there was no decision to lose.
+	/// </para>
+	/// <para>
+	/// Works on worn AND carried together, so it is idempotent: pressing it twice does nothing
+	/// the second time, and pressing it when the loadout is already best does nothing at all.
+	/// It can only ever improve the hand, which is what makes it safe to press without reading
+	/// anything first.
+	/// </para>
+	/// </remarks>
+	/// <summary>
+	/// Would <see cref="WearBest"/> actually change anything?
+	/// </summary>
+	/// <remarks>
+	/// Asked so the button can be dark when it would do nothing. A control that is always
+	/// available and usually pointless trains a keeper to press it out of habit and stop reading
+	/// it; one that lights up when it has something to say is worth glancing at.
+	/// </remarks>
+	public static bool WouldWearBestChange()
+	{
+		double worstWorn = double.MaxValue;
+		int wornCount = 0;
+		foreach (Relic worn in Worn)
+		{
+			if (worn.Exists)
+			{
+				wornCount++;
+				worstWorn = Math.Min(worstWorn, RelicWorth(worn));
+			}
+		}
+		if (wornCount < Relics.Slots)
+		{
+			// A free hand and anything at all to put in it.
+			return Satchel.Count > 0;
+		}
+		foreach (Relic carried in Satchel)
+		{
+			if (RelicWorth(carried) > worstWorn)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <returns>How many slots changed.</returns>
+	public static int WearBest()
+	{
+		// Worn first in the pool, and ties broken in favour of staying worn. Without that, two
+		// relics of equal worth swap places every time the button is pressed - the hand is no
+		// better, the button never goes dark, and pressing it again keeps moving things. Churn
+		// that gains nothing reads as the button not working.
+		List<Relic> pool = new List<Relic>();
+		int alreadyWorn = 0;
+		foreach (Relic worn in Worn)
+		{
+			if (worn.Exists)
+			{
+				pool.Add(worn);
+				alreadyWorn++;
+			}
+		}
+		pool.AddRange(Satchel);
+		if (pool.Count == 0)
+		{
+			return 0;
+		}
+
+		int[] order = new int[pool.Count];
+		for (int i = 0; i < order.Length; i++)
+		{
+			order[i] = i;
+		}
+		Array.Sort(order, (a, b) =>
+		{
+			int byWorth = RelicWorth(pool[b]).CompareTo(RelicWorth(pool[a]));
+			if (byWorth != 0)
+			{
+				return byWorth;
+			}
+			// Equal worth: whatever was already worn keeps its place.
+			bool aWorn = a < alreadyWorn;
+			bool bWorn = b < alreadyWorn;
+			if (aWorn != bWorn)
+			{
+				return aWorn ? -1 : 1;
+			}
+			return a.CompareTo(b);
+		});
+		List<Relic> sorted = new List<Relic>(pool.Count);
+		foreach (int index in order)
+		{
+			sorted.Add(pool[index]);
+		}
+		pool = sorted;
+
+		Relic[] before = (Relic[])Worn.Clone();
+
+		// Which relics end up worn is settled by the sort; WHERE each one sits is settled by
+		// where it already sat. Assigning the sorted list straight down the slots reordered the
+		// hand every time - a low relic in slot 0 and a high one in slot 1 would swap, changing
+		// both slots to reach an identical hand. Slot order means nothing (Wearing sums across
+		// all three), so that was churn, and it made the button report work it had not done.
+		int keep = Math.Min(Relics.Slots, pool.Count);
+		Relic[] hands = new Relic[Relics.Slots];
+		bool[] placed = new bool[keep];
+		bool[] kept = new bool[Relics.Slots];
+
+		// Anything still in the best three stays in the slot it is already in.
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			if (!before[slot].Exists)
+			{
+				continue;
+			}
+			for (int i = 0; i < keep; i++)
+			{
+				if (!placed[i] && pool[i].Seed == before[slot].Seed && pool[i].Grade == before[slot].Grade)
+				{
+					placed[i] = true;
+					hands[slot] = pool[i];
+					kept[slot] = true;
+					break;
+				}
+			}
+		}
+
+		// Whatever is left of the best three fills the slots nothing kept. A slot whose relic
+		// dropped out is simply not kept, and so is written over here - it must NOT be left
+		// holding its old relic, or that relic ends up both worn and back in the satchel.
+		int cursor = 0;
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			if (kept[slot])
+			{
+				continue;
+			}
+			while (cursor < keep && placed[cursor])
+			{
+				cursor++;
+			}
+			if (cursor < keep)
+			{
+				placed[cursor] = true;
+				hands[slot] = pool[cursor];
+			}
+		}
+
+		Satchel.Clear();
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			Worn[slot] = hands[slot];
+		}
+		for (int i = keep; i < pool.Count; i++)
+		{
+			Satchel.Add(pool[i]);
+		}
+
+		int moved = 0;
+		for (int i = 0; i < Relics.Slots; i++)
+		{
+			// Seed and grade ARE the relic - Exists is derived from the seed - so these two
+			// fields settle whether the slot changed.
+			if (before[i].Seed != Worn[i].Seed || before[i].Grade != Worn[i].Grade)
+			{
+				moved++;
+			}
+		}
+		if (moved > 0)
+		{
+			Revision++;
+		}
+		return moved;
+	}
+
 	/// <summary>Take a relic off and put it back in the satchel.</summary>
 	public static bool Remove(int slot)
 	{
@@ -1085,6 +1290,11 @@ public static class Vigil
 		Relic rendered = Satchel[satchelIndex];
 		double paid = RenderValue(satchelIndex);
 		Satchel.RemoveAt(satchelIndex);
+		// Said, because until now a rendered relic simply stopped existing: no line, no figure,
+		// nothing to tell a keeper whether they had rendered it, dropped it or hit a bug. It
+		// goes through the parish's voice rather than a popup so it also lands in the transcript,
+		// which is where somebody goes when they are not sure what just happened.
+		Say("Rendered " + Relics.NameOf(rendered) + " for " + Numbers.Short(paid) + " ichor.", Omen.Plain);
 		Ichor += paid;
 		RunIchor += paid;
 		LifetimeIchor += paid;

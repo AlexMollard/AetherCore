@@ -553,6 +553,8 @@ def vigil():
     tab_w = (LEDGER_W - 40.0 - 6.0 * (len(LEDGER_TABS) - 1)) / len(LEDGER_TABS)
     for i, label in enumerate(LEDGER_TABS):
         at(ledger, f"LedgerTab{i}", [Scene.button(label, DISPLAY, 13.0), Scene.selectable("ledger")], 20 + i * (tab_w + 6.0), 56, tab_w, 36)
+    # Shares the strip the buy-amount buttons use, which is empty on every tab but the rites.
+    at(ledger, "LedgerWearBest", [Scene.button("WEAR THE BEST THREE", DISPLAY, 15.0), Scene.selectable("ledger")], 20, 102, 300, 32)
     for i, label in enumerate(["x1", "x10", "x100", "MAX"]):
         at(ledger, f"LedgerAmount{i}", [Scene.button(label, DISPLAY, 16.0), Scene.selectable("ledger")], 20 + i * 78.0, 102, 72, 32)
     s.add("LedgerViewport", ledger, [
