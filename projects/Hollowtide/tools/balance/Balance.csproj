@@ -25,6 +25,7 @@
     <Compile Include="../../scripts/VigilSaveData.cs" />
     <Compile Include="../../scripts/Numbers.cs" />
     <Compile Include="../../scripts/Palette.cs" />
+    <Compile Include="../../scripts/Typography.cs" />
     <Compile Include="../../scripts/Layout.cs" />
     <Compile Include="Balance.cs" />
   </ItemGroup>

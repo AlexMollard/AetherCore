@@ -237,7 +237,8 @@ public sealed class Parish
 		}
 		for (int i = 0; i < kPopPool; i++)
 		{
-			Entity label = UiKit.Text(_nave, "", -500.0f, -500.0f, 200.0f, 30.0f, 22.0f, Palette.Ichor,
+			Entity label = UiKit.Text(_nave, "", -500.0f, -500.0f, Typography.Box(164.0f),
+				Typography.Box(24.0f), Typography.Face(18.0f), Palette.Ichor,
 				UiHAlign.Center);
 			_pops[i] = new Pop { Label = label, Age = 99.0f, Colour = Palette.Ichor };
 		}
@@ -474,7 +475,8 @@ public sealed class Parish
 				// Params before the first draw, so a rite never renders as rite 0 for a frame.
 				Ui.SetMaterialParams(_rites[rite], new Vector4(ShaderTime, rite, 0.0f, 0.0f));
 				Ui.SetMaterialColors(_rites[rite], Palette.RiteTint(rite), Palette.Ichor);
-				_counts[rite] = UiKit.Text(_nave, "", 0.0f, 0.0f, 110.0f, 26.0f, 18.0f, Palette.TextDim,
+				_counts[rite] = UiKit.Text(_nave, "", 0.0f, 0.0f, Typography.Box(90.0f),
+					Typography.Box(21.0f), Typography.Face(15.0f), Palette.TextDim,
 					UiHAlign.Center);
 			}
 			_rites[rite].SetActive(true);
@@ -557,7 +559,8 @@ public sealed class Parish
 			// is worse than a count at an uneven height.
 			Ui.SetAnchors(_counts[rite], Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(_counts[rite], new Vector2(0.5f, 1.0f));
-			Ui.SetRect(_counts[rite], foot.X, foot.Y - size - 8.0f, 110.0f, 26.0f);
+			Ui.SetRect(_counts[rite], foot.X, foot.Y - size - 8.0f,
+				Typography.Box(90.0f), Typography.Box(21.0f));
 			Ui.SetText(_counts[rite], "x" + owned);
 
 			// Where this rite's conduit leaves it: above its count, not at its foot. The wire is
@@ -958,7 +961,7 @@ public sealed class Parish
 			Ui.SetAnchors(pop.Label, Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(pop.Label, new Vector2(0.5f, 0.5f));
 			Ui.SetRect(pop.Label, px.X + rise * pop.Drift * bd.Z,
-				px.Y - rise * bd.W * 0.05f * pop.Lift, 200.0f, 30.0f);
+				px.Y - rise * bd.W * 0.05f * pop.Lift, Typography.Box(164.0f), Typography.Box(24.0f));
 			Ui.SetTextColor(pop.Label, Palette.Fade(pop.Colour, 1.0f - t));
 			if (t >= 1.0f)
 			{

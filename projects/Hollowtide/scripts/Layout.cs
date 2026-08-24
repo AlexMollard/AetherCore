@@ -68,11 +68,25 @@ public static class Layout
 	/// against this instead, which grazes the tallest crown rather than vanishing.</summary>
 	public const float Ceiling = 0.03f;
 
-	/// <summary>Room left above a rite for the count that sits there, in pixels. Parish places
-	/// the count 8 above the crown and it is 26 tall, so this has to be at least 34 - when the
-	/// type was made bigger this was 30, and the canopy would have been laid across the numbers
-	/// it is meant to clear.</summary>
-	public const float CountAllowance = 36.0f;
+	/// <summary>
+	/// Room left above a rite for the count that sits there, in pixels.
+	/// </summary>
+	/// <remarks>
+	/// Derived from where Parish actually puts that count - eight above the crown, in a box of
+	/// its own scaled height - rather than written down. It was a flat 30, and when the type was
+	/// made larger the count grew past it, which would have laid the canopy across the very
+	/// numbers it exists to clear.
+	/// <para>
+	/// Deriving it keeps that clearance right at any type scale, but do not mistake it for a
+	/// checked one. The parish's clearance invariants pass at ANY scale, including absurd ones,
+	/// and this was tested rather than assumed: at six times the type they all still hold. They
+	/// have to - RiteHeightCap subtracts this allowance, so a larger count simply makes the
+	/// structures shorter and the geometry stays consistent with itself the whole way down. What
+	/// no check here can see is the type outgrowing its BOXES, which is what actually breaks
+	/// first. That one still needs eyes.
+	/// </para>
+	/// </remarks>
+	public static readonly float CountAllowance = 8.0f + Typography.Box(21.0f);
 
 	/// <summary>
 	/// The tallest a rite may be drawn, as a fraction of the window height.

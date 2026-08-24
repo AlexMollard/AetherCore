@@ -39,6 +39,11 @@ ROW_HOT = (0.125, 0.145, 0.160, 0.960)
 # interface as a whole rather than any one label: at a short window the whole thing read small.
 # Boxes that were sized tightly around their old text are grown alongside it below - a bigger
 # face in an unchanged box clips, which is worse than a small one.
+#
+# PAIRED with Typography.Scale in scripts/Typography.cs, which covers the type this file does
+# not author: the ledger's rows and the parish's own labels are built at runtime. Python cannot
+# read a C# constant, so the two have to be moved together - move both or neither, or half the
+# interface grows and half stays where it was.
 TYPE = 1.22
 BONE = (0.855, 0.851, 0.816, 1.0)
 BONE_DIM = (0.502, 0.510, 0.522, 1.0)
