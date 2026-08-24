@@ -67,6 +67,22 @@ that is the signal to move the arithmetic here and let the harness do it instead
 dotnet run -c Release --project projects/Hollowtide/tools/balance
 ```
 
+### Verifying everything at once
+
+```bash
+python projects/Hollowtide/tools/verify.py
+```
+
+Builds the scripts, plays the rules on the default seed and a couple of others, and compiles
+every shader — reporting each step and **exiting non-zero if any of them broke**.
+
+Prefer it to running the three by hand. Verifying by hand meant chaining commands with `&&`
+and reading the harness's verdict by piping it to `tail`, which makes the pipeline's exit
+status `tail`'s rather than the harness's: a run that printed `1 invariant(s) broken` in plain
+sight reported success to the shell, and a red tree was committed. The script never pipes
+anything, checks every return code directly, and runs every step even after one fails so a
+single command tells you everything that is wrong.
+
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
 at speed and checks **178 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
