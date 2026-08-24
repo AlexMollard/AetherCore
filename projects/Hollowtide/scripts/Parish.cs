@@ -203,10 +203,10 @@ public sealed class Parish
 	/// also how it reads: eight conduits terminating on one boundary.
 	/// </remarks>
 	/// <remarks>
-	/// Offset by the sigil's RESTING size, never its live one. The sigil is centre-pivoted and
-	/// grows about a tenth when struck, so an offset measured off the live rect would walk every
-	/// conduit's endpoint outward on each click - the same fault that used to shuffle the whole
-	/// parish sideways when the keeper gathered.
+	/// Offset by the sigil's RESTING size (see <see cref="MeasureSigil"/>), never its live one.
+	/// The sigil is centre-pivoted and grows about a tenth when struck, so an offset measured off
+	/// the live rect would walk every conduit's endpoint outward on each click - the same fault
+	/// that used to shuffle the whole parish sideways when the keeper gathered.
 	/// </remarks>
 	private Vector2 Intake
 	{
@@ -214,14 +214,14 @@ public sealed class Parish
 		{
 			Vector2 centre = Collection;
 			Vector4 bd = Backdrop;
-			if (bd.Z < kMinFrame || bd.W < kMinFrame || _sigilRest == float.MaxValue)
+			if (bd.Z < kMinFrame || bd.W < kMinFrame || SigilRest < kMinFrame)
 			{
 				return centre;
 			}
 			// 0.34 of the resting width on each axis puts the point on the diagonal at about
 			// 0.48 of the width from the middle - just inside the rim, so the line meets stone
 			// rather than stopping in the air beside it.
-			float reach = _sigilRest * 0.34f;
+			float reach = SigilRest * 0.34f;
 			return new Vector2(centre.X - reach / bd.Z, centre.Y + reach / bd.W);
 		}
 	}
@@ -344,13 +344,9 @@ public sealed class Parish
 			// keeper gathered, which is exactly as rough as it sounds. The centre does not move
 			// when the sigil scales, so the layout now holds still while the sigil breathes.
 			// The clearance is the sigil's RESTING half-width plus a margin - the same gap the
-			// old edge-reading gave, but measured from something that holds still. The resting
-			// width is the smallest ever seen, which is self-calibrating: a punch only ever
-			// makes the sigil bigger, so the minimum is the unstruck size at whatever window
-			// width the keeper is playing at, and a fixed fraction would have been wrong at
-			// every size but one.
-			_sigilRest = MathF.Min(_sigilRest, sg.Z);
-			float clearance = _sigilRest * 0.5f / bd.Z + 0.03f;
+			// old edge-reading gave, but measured from something that holds still. See
+			// MeasureSigil for where that resting width comes from.
+			float clearance = SigilRest * 0.5f / bd.Z + 0.03f;
 			float centre = (sg.X + sg.Z * 0.5f - bd.X) / bd.Z;
 
 			// Clamped at BOTH ends. The upper bound is the load-bearing one: this is a division
@@ -365,8 +361,40 @@ public sealed class Parish
 	/// ones as specks in slots sized for someone else.</summary>
 	private int _standing = 1;
 
-	/// <summary>The smallest sigil width seen, which is its unstruck size. See RiteRight.</summary>
+	/// <summary>The smallest sigil width seen. See <see cref="MeasureSigil"/>.</summary>
 	private float _sigilRest = float.MaxValue;
+
+	/// <summary>The sigil's unstruck width in pixels, or its live width if it has not been
+	/// measured yet - which only happens before the first frame that laid out.</summary>
+	private float SigilRest => _sigilRest == float.MaxValue ? Ui.GetRect(_sigil).Z : _sigilRest;
+
+	/// <summary>
+	/// Take the sigil's resting size, once per frame, before anything reads it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Self-calibrating rather than a constant: a punch only ever makes the sigil BIGGER, so the
+	/// smallest width ever seen is its unstruck size at whatever window the keeper is playing
+	/// at. A fixed fraction would have been right at exactly one window width.
+	/// </para>
+	/// <para>
+	/// This used to happen as a side effect of reading <c>RiteRight</c>, which meant everything
+	/// else that needs the resting size - the rite spacing, and now the point the conduits
+	/// arrive at - was quietly depending on the rite layout having been computed first. It held
+	/// only because <c>SyncRites</c> happened to run before the rest; a yield delivered on a
+	/// frame before the first layout took the fallback instead, putting one bead off its own
+	/// wire. A measurement that everything reads belongs in one place at the top of the frame,
+	/// not in the getter of whichever caller happened to need it first.
+	/// </para>
+	/// </remarks>
+	private void MeasureSigil()
+	{
+		Vector4 sg = Ui.GetRect(_sigil);
+		if (sg.Z >= kMinFrame)
+		{
+			_sigilRest = MathF.Min(_sigilRest, sg.Z);
+		}
+	}
 
 	/// <summary>Gap between neighbouring rites, in backdrop fractions. Every rite is capped to
 	/// this wide, which is what stops a heavily-bought rite from swallowing the one beside it.</summary>
@@ -383,6 +411,7 @@ public sealed class Parish
 
 	public void Update(float deltaTime, float unscaledDelta)
 	{
+		MeasureSigil();
 		_time += unscaledDelta;
 		_shake = MathF.Max(0.0f, _shake - unscaledDelta * 1.7f);
 		if (_wave > 0.0f)
