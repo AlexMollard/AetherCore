@@ -24,6 +24,12 @@ public sealed class VigilSave
 	/// silently consecrated their first rite.</summary>
 	public int Consecrated { get; set; } = -1;
 
+	/// <summary>Counters the marks ask about. All default to nothing, so a save written before
+	/// they existed loads as a keeper who has not done these things yet - which is true.</summary>
+	public int RelicsRendered { get; set; }
+	public int BestRelicGrade { get; set; } = -1;
+	public int Consecrations { get; set; }
+
 	/// <summary>
 	/// What the parish has said, oldest first.
 	/// </summary>
@@ -130,6 +136,9 @@ public static class VigilData
 		Owned = (int[])Vigil.Owned.Clone(),
 		Offerings = (bool[])Vigil.OfferingsTaken.Clone(),
 		Consecrated = Vigil.Consecrated,
+		RelicsRendered = Vigil.RelicsRendered,
+		BestRelicGrade = Vigil.BestRelicGrade,
+		Consecrations = Vigil.Consecrations,
 		Spoken = Transcript.Capture().Lines,
 		SpokenOmens = Transcript.Capture().Omens,
 		SpokenAt = Transcript.Capture().At,
@@ -213,6 +222,9 @@ public static class VigilData
 		// would index the rite tables directly.
 		Vigil.Consecrated = save.Consecrated >= 0 && save.Consecrated < Content.RiteCount
 			? save.Consecrated : -1;
+		Vigil.RelicsRendered = Math.Max(0, save.RelicsRendered);
+		Vigil.BestRelicGrade = Math.Clamp(save.BestRelicGrade, -1, (int)Grade.Hollowed);
+		Vigil.Consecrations = Math.Max(0, save.Consecrations);
 		Transcript.Restore(save.Spoken, save.SpokenOmens, save.SpokenAt);
 		CopyInto(save.Marks, Vigil.MarksEarned);
 		CopyInto(save.Overseers, Vigil.Overseers);

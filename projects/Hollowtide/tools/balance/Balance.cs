@@ -1075,6 +1075,41 @@ internal static class Balance
 		Vigil.HandGathers = 99999;
 		Vigil.VisitorsAnswered = 999;
 		// SharedVigilSeconds and CommunionSurges stay at zero: no solo keeper can move them.
+		//
+		// Everything the relic and consecration marks ask about. A fixture that does not know
+		// about a counter reports the mark reading it as impossible, which is a lie about the
+		// game told by the test - the exact failure this suite has hit before, and the reason
+		// this list has to grow whenever a mark starts asking a new question.
+		Vigil.RelicsFound = 9999;
+		Vigil.RelicsRendered = 9999;
+		Vigil.BestRelicGrade = (int)Grade.Hollowed;
+		Vigil.Consecrations = 9;
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			Vigil.OfferingsTaken[i] = true;
+		}
+
+		// Three hands full, one of them lending structures - both reachable by a keeper alone,
+		// so the fixture has to actually do it rather than assume it.
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			Vigil.Worn[slot] = default;
+		}
+		int filled = 0;
+		for (int seed = 1; seed < 400000 && filled < Relics.Slots; seed++)
+		{
+			Relic candidate = new Relic { Seed = seed, Grade = Grade.Hollowed };
+			bool lends = false;
+			for (int i = 0; i < Relics.PowerCount(candidate.Grade); i++)
+			{
+				lends |= Relics.PowerAt(candidate, i) == Power.Foundation;
+			}
+			// One lender is enough; the other two hands can hold anything.
+			if (lends || filled > 0)
+			{
+				Vigil.Worn[filled++] = candidate;
+			}
+		}
 
 		int unflagged = 0;
 		int flagged = 0;
@@ -1730,8 +1765,39 @@ internal static class Balance
 			}
 		}
 		Vigil.OnFound = null;
-		Check("a keeper finds something in their first minutes", firstFind is >= 0.0 and < 300.0,
+		// A BOUND, and a loose one, because this is one sample of an exponential waiting time.
+		// At four gathers a second and a base chance near one in four hundred, the mean wait is
+		// about a hundred seconds - but the tail is long, and the old bound of 300s sat near the
+		// 95th percentile, so it failed roughly one seed in twenty. It duly failed on seed 8 at
+		// 5m23s with nothing wrong with the game. A single draw from a long-tailed distribution
+		// cannot be bounded tightly; what it can say is that a new keeper does not spend a
+		// quarter of an hour finding nothing. The property this was reaching for is asserted
+		// deterministically just below, where no seed can move it.
+		Check("a keeper finds something in their first minutes", firstFind is >= 0.0 and < 900.0,
 			firstFind < 0.0 ? "nothing in twenty minutes" : "first find at " + Numbers.Duration(firstFind));
+		// The property the sampled check above was really reaching for, stated so that no seed
+		// can move it: how long a NEW keeper - no dread, nothing worn - waits on average for the
+		// ground to give something up. Measured over a hundred thousand digs, so the figure is
+		// the rate itself rather than one draw from it.
+		{
+			Random ground = Seeded(9001);
+			const int digs = 200000;
+			int finds = 0;
+			for (int i = 0; i < digs; i++)
+			{
+				if (Relics.Dig(ground, 0.0, i + 1).Exists)
+				{
+					finds++;
+				}
+			}
+			// Four gathers a second is the rate the simulated keeper above clicks at.
+			double perClick = (double)finds / digs;
+			double seconds = perClick > 0.0 ? 1.0 / (perClick * 4.0) : double.MaxValue;
+			Check("and the ground gives up its first thing within a few minutes on average",
+				seconds > 20.0 && seconds < 240.0,
+				"a new keeper waits " + Numbers.Duration(seconds) + " on average, clicking steadily");
+		}
+
 		Check("and something worth wearing before long", firstGood is >= 0.0 and < 900.0,
 			firstGood < 0.0 ? "nothing Anointed in twenty minutes" : "first Anointed at " + Numbers.Duration(firstGood));
 		// Deliberately NOT checking that the satchel stays unfilled. It curates itself, dropping
@@ -2915,6 +2981,49 @@ internal static class Balance
 		Check("and there are more of them than there were", Content.Offerings.Length > frozen.Length,
 			Content.Offerings.Length + " offerings, " + (Content.Offerings.Length - frozen.Length)
 				+ " added past the frozen prefix");
+
+		// The marks carry the SAME hazard and had no check at all: which ones a keeper has earned
+		// is another array of flags indexed by position, so reordering that table hands somebody
+		// a record of things they never did - and a record is the one thing in this game that is
+		// meant to be permanent and true.
+		string[] frozenMarks =
+		{
+			"First Light", "Full Choir", "Deep Ledger", "Steady Nerve", "Warded", "Bereaved",
+			"Communed", "Marked", "The Whole Nave", "Mouth to Mouth", "Not Alone", "Answered",
+			"Deepened", "Named", "Well Read",
+		};
+		int marksMoved = 0;
+		string firstMarkMoved = "";
+		for (int i = 0; i < frozenMarks.Length; i++)
+		{
+			if (i >= Content.Marks.Length || Content.Marks[i].Name != frozenMarks[i])
+			{
+				if (marksMoved == 0)
+				{
+					firstMarkMoved = "index " + i + " should be \"" + frozenMarks[i] + "\"";
+				}
+				marksMoved++;
+			}
+		}
+		Check("the marks a save indexes have not moved", marksMoved == 0,
+			marksMoved == 0 ? "all " + frozenMarks.Length + " still where a record expects them"
+				: marksMoved + " moved - " + firstMarkMoved);
+		Check("and there are more marks than there were", Content.Marks.Length > frozenMarks.Length,
+			Content.Marks.Length + " marks, " + (Content.Marks.Length - frozenMarks.Length) + " added");
+
+		// A mark nobody can earn is worse than no mark: it sits on the page forever telling a
+		// keeper there is something left to do.
+		int unearnable = 0;
+		foreach (MarkDef mark in Content.Marks)
+		{
+			if (string.IsNullOrWhiteSpace(mark.Name) || string.IsNullOrWhiteSpace(mark.Blurb)
+				|| mark.Earned == null)
+			{
+				unearnable++;
+			}
+		}
+		Check("every mark is named and can be asked about", unearnable == 0,
+			unearnable == 0 ? "all " + Content.Marks.Length + " answerable" : unearnable + " broken");
 
 		// Every offering has to be reachable, or it is a row nobody will ever see.
 		int unreachable = 0;

@@ -95,6 +95,18 @@ public static class Vigil
 	/// <summary>Relics ever dug out of the parish, for the record.</summary>
 	public static int RelicsFound;
 
+	/// <summary>How many relics this keeper has rendered down, all told.</summary>
+	public static int RelicsRendered;
+
+	/// <summary>The best grade ever turned up, as an int so it survives a save without needing
+	/// the enum written into the file.</summary>
+	public static int BestRelicGrade = -1;
+
+	/// <summary>How many vigils this keeper has consecrated a rite in. Counted rather than
+	/// read off <see cref="Consecrated"/>, which is cleared every communion - a mark has to
+	/// remember something the run does not.</summary>
+	public static int Consecrations;
+
 	/// <summary>
 	/// Seeds the digger has already used.
 	/// </summary>
@@ -409,6 +421,48 @@ public static class Vigil
 		return granted;
 	}
 
+	/// <summary>Is the keeper wearing something that lends structures? Asked by a mark, and
+	/// worth asking as a question rather than as a loop repeated at the call site.</summary>
+	public static bool WearingAFoundation()
+	{
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			if (GrantedCopies(rite) > 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>How many hands are full.</summary>
+	public static int RelicsWorn()
+	{
+		int worn = 0;
+		foreach (Relic relic in Worn)
+		{
+			if (relic.Exists)
+			{
+				worn++;
+			}
+		}
+		return worn;
+	}
+
+	/// <summary>How many offerings the parish has taken this vigil.</summary>
+	public static int OfferingsCount()
+	{
+		int taken = 0;
+		for (int i = 0; i < OfferingsTaken.Length; i++)
+		{
+			if (OfferingsTaken[i])
+			{
+				taken++;
+			}
+		}
+		return taken;
+	}
+
 	/// <summary>What is standing, bought or lent. What produces, and what the parish draws.</summary>
 	public static int EffectiveOwned(int rite)
 		=> (rite >= 0 && rite < Content.RiteCount ? Owned[rite] : 0) + GrantedCopies(rite);
@@ -474,6 +528,7 @@ public static class Vigil
 			return false;
 		}
 		Consecrated = rite;
+		Consecrations++;
 		Revision++;
 		Say("You consecrate the " + Content.Rites[rite].Name + ". The rest of the parish feels it.",
 			Omen.Good);
@@ -999,6 +1054,10 @@ public static class Vigil
 			return;
 		}
 		RelicsFound++;
+		// Recorded on the FIND, not on what survives into the satchel: a keeper who turns up a
+		// Hollowed thing with a full bag has still turned one up, and a mark that quietly
+		// depended on having room for it would be unearnable at exactly the wrong moment.
+		BestRelicGrade = Math.Max(BestRelicGrade, (int)found.Grade);
 		if (Satchel.Count >= Relics.Satchel)
 		{
 			// Full. The oldest LEAVINGS go first, and only if the newcomer is better than it -
@@ -1386,6 +1445,7 @@ public static class Vigil
 		Relic rendered = Satchel[satchelIndex];
 		double paid = RenderValue(satchelIndex);
 		Satchel.RemoveAt(satchelIndex);
+		RelicsRendered++;
 		// Said, because until now a rendered relic simply stopped existing: no line, no figure,
 		// nothing to tell a keeper whether they had rendered it, dropped it or hit a bug. It
 		// goes through the parish's voice rather than a popup so it also lands in the transcript,

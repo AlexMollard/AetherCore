@@ -560,5 +560,19 @@ public static class Content
 		new MarkDef { Name = "Deepened", Blurb = "Carry one boon as far as it goes.", Earned = AnyBoonMaxed },
 		new MarkDef { Name = "Named", Blurb = "Turn something away by knowing what it wanted.", Earned = () => Vigil.VisitorsAnswered >= 1 },
 		new MarkDef { Name = "Well Read", Blurb = "Turn away twenty of them.", Earned = () => Vigil.VisitorsAnswered >= 20 },
+
+		// ── Appended, and they must stay appended ────────────────────────────────────
+		// Which marks a keeper has earned is stored as flags indexed by POSITION, exactly as
+		// the offerings are, so reordering this table hands somebody a record of things they
+		// never did. New marks go on the end. There is a check in the harness that holds the
+		// order of everything above this line.
+		new MarkDef { Name = "Turned Up", Blurb = "Dig something out of the parish.", Earned = () => Vigil.RelicsFound >= 1 },
+		new MarkDef { Name = "Grave Goods", Blurb = "Turn up fifty of them.", Earned = () => Vigil.RelicsFound >= 50 },
+		new MarkDef { Name = "Hollowed Out", Blurb = "Find something that should not have been down there.", Earned = () => Vigil.BestRelicGrade >= (int)Grade.Hollowed },
+		new MarkDef { Name = "Both Hands and One More", Blurb = "Wear three relics at once.", Earned = () => Vigil.RelicsWorn() >= 3 },
+		new MarkDef { Name = "Rendered Down", Blurb = "Melt twenty finds back into ichor.", Earned = () => Vigil.RelicsRendered >= 20 },
+		new MarkDef { Name = "Underwritten", Blurb = "Wear something that stands where nothing was built.", Earned = Vigil.WearingAFoundation },
+		new MarkDef { Name = "Consecrant", Blurb = "Give a vigil to one rite and mean it.", Earned = () => Vigil.Consecrations >= 1 },
+		new MarkDef { Name = "Well Provisioned", Blurb = "Have forty offerings standing at once.", Earned = () => Vigil.OfferingsCount() >= 40 },
 	};
 }
