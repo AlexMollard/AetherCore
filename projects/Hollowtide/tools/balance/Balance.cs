@@ -3703,6 +3703,26 @@ internal static class Balance
 		Check("and knowing the answer loses nothing", Vigil.Satchel.Count == 1 && Vigil.RelicsLost == 0,
 			"turned away, satchel intact");
 
+		// The panel names a relic while something is walking; that name has to be the thing that
+		// actually goes, or the warning is worse than silence.
+		Summon(0, 0, 1e9);
+		Vigil.Satchel.Add(new Relic { Seed = 41, Grade = Grade.Keepsake });
+		Vigil.Satchel.Add(new Relic { Seed = 42, Grade = Grade.Hallowed });
+		Vigil.Satchel.Add(new Relic { Seed = 43, Grade = Grade.Leavings });
+		int warned = Vigil.MostExposed();
+		Relic named = Vigil.Satchel[warned];
+		LetItLand();
+		bool namedOneWentMissing = true;
+		foreach (Relic left in Vigil.Satchel)
+		{
+			namedOneWentMissing &= left.Seed != named.Seed;
+		}
+		Check("the one it warns about is the one it takes", warned >= 0 && namedOneWentMissing,
+			"warned about the " + Relics.GradeName(named.Grade) + ", and that is what went");
+
+		Vigil.Satchel.Clear();
+		Check("nothing carried, nothing named", Vigil.MostExposed() == -1, "-1, so the panel says nothing");
+
 		Vigil.Reset();
 	}
 

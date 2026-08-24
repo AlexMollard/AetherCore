@@ -189,7 +189,19 @@ public sealed class Hud
 		RiteDef visitor = Content.Rites[Vigil.ApproachRite];
 		Ui.SetText(_visName, visitor.VisitorName);
 		Ui.SetText(_visLine, visitor.Approach);
-		Ui.SetText(_visClock, "IT ARRIVES IN " + MathF.Ceiling((float)Vigil.ApproachSeconds).ToString("0") + "s");
+		// What is at stake, said while there is still time to do something about it. A visitation
+		// that lands takes the best thing loose in the satchel, and a keeper who only finds that
+		// out afterwards has been punished for a rule nobody told them. Said HERE rather than in
+		// the feed because this is the panel they are already looking at, and the decision - put
+		// it on, or risk it - has a clock running on it.
+		// Asks the simulation which one is exposed rather than working it out again here, so the
+		// name on the panel is always the name of the thing that would actually go.
+		int exposedIndex = Vigil.MostExposed();
+		string exposed = exposedIndex >= 0
+			? "   -   " + Relics.NameOf(Vigil.Satchel[exposedIndex]) + " is loose in your satchel"
+			: "";
+		Ui.SetText(_visClock, "IT ARRIVES IN " + MathF.Ceiling((float)Vigil.ApproachSeconds).ToString("0")
+			+ "s" + exposed);
 		// The clock reddens as it runs out, so the pressure is felt rather than read.
 		float urgency = 1.0f - (float)(Vigil.ApproachSeconds / Math.Max(0.001, Vigil.ApproachTotal));
 		Ui.SetTextColor(_visClock, Palette.Mix(Palette.TextFaint, Palette.DreadText, urgency));

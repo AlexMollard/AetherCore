@@ -1339,14 +1339,7 @@ public static class Vigil
 	/// </remarks>
 	private static void TakeSomething()
 	{
-		int best = -1;
-		for (int i = 0; i < Satchel.Count; i++)
-		{
-			if (best < 0 || RelicWorth(Satchel[i]) > RelicWorth(Satchel[best]))
-			{
-				best = i;
-			}
-		}
+		int best = MostExposed();
 		if (best < 0)
 		{
 			return;
@@ -1357,6 +1350,29 @@ public static class Vigil
 		Revision++;
 		Say("It takes " + Relics.NameOf(lost) + " out of your satchel. You were not holding it.",
 			Omen.Taken);
+	}
+
+	/// <summary>
+	/// Which carried relic the dark would take, or -1 if there is nothing to take.
+	/// </summary>
+	/// <remarks>
+	/// One rule, one place. The visitation panel names this relic while something is walking, so
+	/// the keeper can put it on before it arrives - and a panel that named a DIFFERENT relic
+	/// from the one actually taken would be worse than saying nothing at all. It was briefly
+	/// written out twice, once here and once in the HUD, which is the shape of every drift bug
+	/// in this project.
+	/// </remarks>
+	public static int MostExposed()
+	{
+		int best = -1;
+		for (int i = 0; i < Satchel.Count; i++)
+		{
+			if (best < 0 || RelicWorth(Satchel[i]) > RelicWorth(Satchel[best]))
+			{
+				best = i;
+			}
+		}
+		return best;
 	}
 
 	/// <summary>Take a relic off and put it back in the satchel.</summary>
