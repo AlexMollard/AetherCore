@@ -2917,6 +2917,88 @@ internal static class Balance
 			unreachable == 0 ? "all priced and all gated" : unreachable + " unreachable");
 	}
 
+	/// <summary>
+	/// Nothing the parish said is lost while it is still worth reading.
+	/// </summary>
+	/// <remarks>
+	/// A ring buffer that drops the WRONG end is the classic version of this bug and it is
+	/// completely silent: the transcript still fills, still scrolls, still looks right, and the
+	/// line the keeper actually wants - the one just spoken - is the one missing. The feed is
+	/// capable of forty lines a minute, so the ring wraps in ordinary play rather than as an
+	/// edge case.
+	/// </remarks>
+	private static void NothingSaidIsLost()
+	{
+		Console.WriteLine("Nothing the parish said is lost");
+
+		Transcript.Clear();
+		Check("an empty transcript reads as empty", Transcript.Count == 0 && Transcript.At(0).Line == "",
+			"nothing said, nothing held");
+
+		for (int i = 0; i < 12; i++)
+		{
+			Transcript.Add("line " + i, Omen.Plain, i);
+		}
+		Check("it reads newest first", Transcript.At(0).Line == "line 11" && Transcript.At(11).Line == "line 0",
+			"12 lines, newest at the top");
+
+		// Wrap it many times over, which is what a long vigil does.
+		Transcript.Clear();
+		int total = Transcript.Capacity * 7 + 13;
+		for (int i = 0; i < total; i++)
+		{
+			Transcript.Add("said " + i, i % 2 == 0 ? Omen.Dread : Omen.Good, i);
+		}
+
+		Check("it never holds more than it promised", Transcript.Count == Transcript.Capacity,
+			Transcript.Count + " of " + Transcript.Capacity + " after " + total + " lines");
+
+		bool ordered = true;
+		for (int i = 0; i < Transcript.Count; i++)
+		{
+			if (Transcript.At(i).Line != "said " + (total - 1 - i))
+			{
+				ordered = false;
+				break;
+			}
+		}
+		Check("the newest survive and the oldest fall off", ordered,
+			ordered ? "the last " + Transcript.Capacity + " in order, after wrapping seven times"
+				: "wrapped to the wrong end");
+
+		Check("past the end is empty, not a wrong line", Transcript.At(Transcript.Count).Line == ""
+			&& Transcript.At(-1).Line == "", "out of range reads as nothing");
+
+		bool omensHeld = Transcript.At(0).Omen == ((total - 1) % 2 == 0 ? Omen.Dread : Omen.Good);
+		Check("a line keeps the weight it was said with", omensHeld,
+			"omen travels with the words");
+
+		// The round trip a save makes.
+		(string[] lines, int[] omens, double[] at) = Transcript.Capture();
+		Check("a save writes them oldest first", lines.Length == Transcript.Capacity
+			&& lines[0] == "said " + (total - Transcript.Capacity),
+			lines.Length + " written, oldest first");
+
+		string newest = Transcript.At(0).Line;
+		Transcript.Restore(lines, omens, at);
+		Check("and reading them back is the same transcript",
+			Transcript.Count == Transcript.Capacity && Transcript.At(0).Line == newest
+				&& Transcript.At(Transcript.Count - 1).Line == lines[0],
+			"round-trips whole");
+
+		// A save that has been edited, or written by a version that did not have all three
+		// arrays, must not throw - it must simply carry what it can.
+		Transcript.Restore(new[] { "a", "b", "c" }, new[] { 99 }, null);
+		Check("a ragged save loads without complaint", Transcript.Count == 3
+			&& Transcript.At(0).Line == "c" && Transcript.At(0).Omen == Omen.Plain,
+			"missing and out-of-range fields fall back");
+
+		Transcript.Restore(null, null, null);
+		Check("and a save with none at all is simply empty", Transcript.Count == 0, "nothing to read");
+
+		Transcript.Clear();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -2952,6 +3034,7 @@ internal static class Balance
 		TheFrontsSurviveBeingPacked();
 		EverythingCanBeRead();
 		OldSavesStillMeanWhatTheyMeant();
+		NothingSaidIsLost();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

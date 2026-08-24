@@ -1910,6 +1910,11 @@ public static class Vigil
 		// Anything said at all counts as the parish having spoken, so the ambient voice only
 		// ever fills real silence rather than talking over the game.
 		s_quiet = 0.0;
+		// Kept before it is shown, and kept HERE rather than in the feed, because this is the
+		// one place everything the parish says passes through. Recording it where it is drawn
+		// would have missed every line spoken while the feed was full, which is exactly the
+		// busy stretch a keeper is most likely to have looked away during.
+		Transcript.Add(line, omen, PlayedSeconds);
 		Announce?.Invoke(line, omen);
 	}
 
@@ -2026,6 +2031,10 @@ public static class Vigil
 	/// <summary>Wipe live state back to a fresh vigil. Used by a new game and by the tests.</summary>
 	public static void Reset()
 	{
+		// A fresh vigil starts with nothing said. Note this is Reset and not Commune: a keeper
+		// who communes is the SAME keeper carrying on, and throwing away what the parish has
+		// told them at the one moment the game gets most interesting would be perverse.
+		Transcript.Clear();
 		Ichor = 0.0;
 		RunIchor = 0.0;
 		LifetimeIchor = 0.0;

@@ -18,6 +18,22 @@ public sealed class VigilSave
 	public double LifetimeIchor { get; set; }
 	public int[] Owned { get; set; } = Array.Empty<int>();
 	public bool[] Offerings { get; set; } = Array.Empty<bool>();
+
+	/// <summary>
+	/// What the parish has said, oldest first.
+	/// </summary>
+	/// <remarks>
+	/// Saved because "the messages disappear forever and I cannot read them after they are
+	/// gone" is not answered by a transcript that empties when the game closes. Bounded by
+	/// Transcript.Capacity, so this cannot grow with playtime - a save that gets bigger the
+	/// longer somebody enjoys the game is a punishment for playing it.
+	///
+	/// Three parallel arrays rather than one array of a small class, matching how everything
+	/// else in this file is stored, and tolerant of being ragged: see Transcript.Restore.
+	/// </remarks>
+	public string[] Spoken { get; set; } = Array.Empty<string>();
+	public int[] SpokenOmens { get; set; } = Array.Empty<int>();
+	public double[] SpokenAt { get; set; } = Array.Empty<double>();
 	public bool[] Marks { get; set; } = Array.Empty<bool>();
 	public bool[] Overseers { get; set; } = Array.Empty<bool>();
 	/// <summary>Levels held in each boon. Bought with sigils and kept through communion, so
@@ -108,6 +124,9 @@ public static class VigilData
 		LifetimeIchor = Vigil.LifetimeIchor,
 		Owned = (int[])Vigil.Owned.Clone(),
 		Offerings = (bool[])Vigil.OfferingsTaken.Clone(),
+		Spoken = Transcript.Capture().Lines,
+		SpokenOmens = Transcript.Capture().Omens,
+		SpokenAt = Transcript.Capture().At,
 		Marks = (bool[])Vigil.MarksEarned.Clone(),
 		Overseers = (bool[])Vigil.Overseers.Clone(),
 		Boons = (int[])Vigil.Boons.Clone(),
@@ -184,6 +203,7 @@ public static class VigilData
 		// adding content and invalidating everybody.
 		CopyInto(save.Owned, Vigil.Owned);
 		CopyInto(save.Offerings, Vigil.OfferingsTaken);
+		Transcript.Restore(save.Spoken, save.SpokenOmens, save.SpokenAt);
 		CopyInto(save.Marks, Vigil.MarksEarned);
 		CopyInto(save.Overseers, Vigil.Overseers);
 		// Rebuilt from the shorter of the two, so a half-written save cannot produce an echo

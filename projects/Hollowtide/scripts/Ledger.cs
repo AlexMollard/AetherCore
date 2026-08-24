@@ -11,6 +11,7 @@ public enum LedgerTab
 	Communion,
 	Marks,
 	Relics,
+	Voices,
 }
 
 /// <summary>
@@ -90,7 +91,8 @@ public sealed class Ledger
 
 	/// <summary>Tab labels, kept here because the tab now has a mark appended when it has
 	/// something waiting, and the scene's authored label is no longer the whole story.</summary>
-	private static readonly string[] s_tabNames = { "RITES", "OFFERINGS", "COMMUNION", "MARKS", "RELICS" };
+	private static readonly string[] s_tabNames =
+		{ "RITES", "OFFERINGS", "COMMUNION", "MARKS", "RELICS", "VOICES" };
 
 	private static readonly int[] s_amounts = { 1, 10, 100, -1 };
 	private static readonly string[] s_amountLabels = { "x1", "x10", "x100", "MAX" };
@@ -263,6 +265,11 @@ public sealed class Ledger
 				}
 				return false;
 
+			case LedgerTab.Voices:
+				// Never marked. A transcript that nags is a transcript you stop opening, and
+				// the feed has already said everything in it once, on screen, in its own time.
+				return false;
+
 			case LedgerTab.Relics:
 				// Something carried that beats something worn, or a free hand to fill.
 				for (int slot = 0; slot < Relics.Slots; slot++)
@@ -288,6 +295,30 @@ public sealed class Ledger
 				return false;
 		}
 	}
+
+	/// <summary>Put every row's four columns back where the shared layout wants them.</summary>
+	/// <remarks>
+	/// Mirrors the rects the rows are BUILT with, and has to keep mirroring them: if a column
+	/// moves where it is created and not here, switching tabs would quietly undo the change.
+	/// </remarks>
+	private void ResetColumns()
+	{
+		foreach (Row row in _rows)
+		{
+			if (!row.Title.IsValid)
+			{
+				continue;
+			}
+			Ui.SetRect(row.Title, kTextLeft, Typography.Box(6.0f), TextWidth, Typography.Box(24.0f));
+			Ui.SetTextWrap(row.Title, false);
+			Ui.SetRect(row.Sub, kTextLeft, Typography.Box(32.0f), TextWidth, Typography.Box(23.0f));
+			Ui.SetRect(row.Cost, FiguresLeft, Typography.Box(6.0f), FiguresWidth, Typography.Box(24.0f));
+			Ui.SetRect(row.Note, FiguresLeft, Typography.Box(32.0f), FiguresWidth, Typography.Box(23.0f));
+		}
+	}
+
+	/// <summary>Which tab the rows are currently laid out for.</summary>
+	private LedgerTab _lastTab = LedgerTab.Rites;
 
 	private void HandleScroll()
 	{
@@ -323,6 +354,17 @@ public sealed class Ledger
 			_rows[i].Icon.SetActive(false);
 		}
 
+		// Every tab shares eleven rows, and the voices tab lays them out differently - one wide
+		// wrapped sentence instead of four columns. So the columns are put BACK whenever the tab
+		// changes, rather than each tab being trusted to leave them as it found them. This is the
+		// same shape of fault as the icon above: a pooled thing one tab alters and the others
+		// never restore follows the reader around, and the reader blames the tab they are on.
+		if (_tab != _lastTab)
+		{
+			ResetColumns();
+			_lastTab = _tab;
+		}
+
 		switch (_tab)
 		{
 			case LedgerTab.Rites:
@@ -336,6 +378,9 @@ public sealed class Ledger
 				break;
 			case LedgerTab.Relics:
 				FillRelics();
+				break;
+			case LedgerTab.Voices:
+				FillVoices();
 				break;
 			default:
 				FillMarks();
@@ -741,6 +786,81 @@ public sealed class Ledger
 		Ui.SetImageColor(row.Progress, Palette.Fade(
 			Palette.Mix(Palette.IchorDim, Palette.Ichor, Hud.GradeWeight(relic.Grade)), 0.85f));
 	}
+
+	// ── Voices ───────────────────────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Everything the parish has said, newest first.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The feed holds a line for nine seconds and then it is gone. That is the right way to
+	/// speak - a wall of standing text is not a voice - but it made the only part of the game
+	/// with anything to say the only part a keeper could not go back to. Look away for a minute
+	/// and a thing was said to you that you cannot now read.
+	/// </para>
+	/// <para>
+	/// Laid out differently from every other tab, because a row here is a sentence rather than
+	/// four columns of figures: the line takes the whole width and wraps, and the only thing in
+	/// the right-hand column is when it was said. The columns the other tabs use are put back
+	/// on the way out, since eleven rows are shared between all six tabs.
+	/// </para>
+	/// </remarks>
+	private void FillVoices()
+	{
+		_itemCount = Transcript.Count;
+		int slot = 0;
+
+		for (int i = _scroll; i < Transcript.Count && slot < _visibleRows; i++, slot++)
+		{
+			Row row = _rows[slot];
+			(string line, Omen omen, double at) = Transcript.At(i);
+
+			// The whole row for the sentence, wrapped, and the clock alone on the right.
+			Ui.SetRect(row.Title, kTextLeft - 46.0f, Typography.Box(6.0f),
+				kWidth - kPad * 2.0f - (kTextLeft - 46.0f) - FiguresWidth - kColumnGap,
+				Typography.Box(52.0f));
+			Ui.SetTextWrap(row.Title, true);
+			Ui.SetText(row.Title, line);
+			Ui.SetTextColor(row.Title, ColourOf(omen));
+
+			Ui.SetText(row.Sub, "");
+			Ui.SetText(row.Cost, Numbers.Duration(at));
+			Ui.SetTextColor(row.Cost, Palette.TextFaint);
+			Ui.SetText(row.Note, "");
+
+			row.Icon.SetActive(false);
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
+			// Nothing here is bought, so nothing here is a button. Left focusable would put
+			// eleven dead stops in the d-pad's path through the ledger.
+			row.Box.SetEnabled(false);
+			row.Box.SetColour(Palette.PanelDeep);
+		}
+
+		if (Transcript.Count == 0 && _visibleRows > 0)
+		{
+			Row row = _rows[0];
+			Ui.SetText(row.Title, "The parish has said nothing yet.");
+			Ui.SetText(row.Sub, "It will. Everything it says is kept here, and kept through a communion.");
+			Ui.SetText(row.Cost, "");
+			Ui.SetText(row.Note, "");
+			Ui.SetTextColor(row.Title, Palette.TextFaint);
+			row.Box.SetEnabled(false);
+			row.Box.SetColour(Palette.PanelDeep);
+			slot = 1;
+		}
+		BlankFrom(slot);
+	}
+
+	/// <summary>An omen as a colour. The same three the feed uses, so a line means the same
+	/// thing read back as it did when it was said.</summary>
+	private static Vector4 ColourOf(Omen omen) => omen switch
+	{
+		Omen.Good => Palette.Ichor,
+		Omen.Dread => Palette.DreadText,
+		Omen.Taken => Palette.DreadText,
+		_ => Palette.TextDim,
+	};
 
 	// ── Marks ────────────────────────────────────────────────────────────────────────
 
