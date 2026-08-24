@@ -408,6 +408,29 @@ public static class Content
 			});
 		}
 
+		// And the mirror of it. The parish's whole sentence is "the dark pays, and it is coming",
+		// and Muffled Bell lets a keeper buy a little distance from the second half. This sells
+		// them the first half instead: more taken, and more of it coming. Two offerings pointing
+		// opposite ways on the same axis is the clearest way to put the bargain in a keeper's
+		// hands - and unlike everything that was thrown away, neither of them is free.
+		//
+		// Buying both on one rite very nearly cancels out. That is allowed. A keeper who does it
+		// has spent ichor to end up where they started, which is their business, and machinery to
+		// forbid it would cost more than the mistake does.
+		for (int rite = 0; rite < Rites.Length; rite++)
+		{
+			list.Add(new OfferingDef
+			{
+				Name = Rites[rite].Name + ": Unhooded Lantern",
+				Blurb = "Nothing between it and the dark: two fifths more taken, and half again the dread.",
+				Cost = Rites[rite].BaseCost * 2500.0,
+				Target = rite,
+				Multiplier = 1.40,
+				DreadScale = 1.50,
+				OwnedNeeded = 80,
+			});
+		}
+
 		return list.ToArray();
 	}
 

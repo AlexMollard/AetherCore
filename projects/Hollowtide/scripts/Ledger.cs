@@ -440,9 +440,27 @@ public sealed class Ledger
 			Ui.SetText(row.Sub, def.Blurb);
 			Ui.SetText(row.Cost, Numbers.Short(def.Cost));
 			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.TextFaint);
-			Ui.SetText(row.Note, Numbers.Mult(def.Multiplier) + (def.Target == OfferingDef.TargetGlobal
+			// Both halves of what it does, or the figures column lies.
+			//
+			// It showed the multiplier alone, which was true while every offering was only a
+			// multiplier and became a misreport the moment one of them cost something: the
+			// offering that quiets a rite showed "x0.85" and never mentioned the dread it takes
+			// away, so the only reason to buy it was invisible and the row read as strictly bad.
+			// The one that leans into the dark showed "x1.40" and hid its price, which is worse -
+			// a row that looks like a pure gain and is not. The blurb says both in words; the
+			// figures have to agree with the words.
+			string effect = Numbers.Mult(def.Multiplier) + (def.Target == OfferingDef.TargetGlobal
 				? " everything"
-				: def.Target == OfferingDef.TargetHand ? " by hand" : ""));
+				: def.Target == OfferingDef.TargetHand ? " by hand" : "");
+			if (def.DreadScale != 1.0)
+			{
+				effect += "   dread " + Numbers.Mult(def.DreadScale);
+			}
+			Ui.SetText(row.Note, effect);
+			// A bargain that raises the dread is the only row in the ledger that carries a
+			// warning, so it is the only one drawn in the colour the game uses for the dark.
+			Ui.SetTextColor(row.Note, def.DreadScale > 1.0 ? Palette.DreadText
+				: def.DreadScale < 1.0 ? Palette.Ichor : Palette.TextFaint);
 
 			row.Box.SetEnabled(affordable);
 			row.Box.Style(affordable, Palette.RowHot, Palette.Row, Palette.PanelDeep);
