@@ -1728,6 +1728,68 @@ internal static class Balance
 		Check("carried ones do not", Vigil.Worn[0].Exists && Vigil.Satchel.Count == 0,
 			"wearing it took it out of the satchel");
 
+		// -- A power has to do what its row says it does. --
+		// The ledger prints "+5% by hand" beside a relic, and a keeper takes that literally.
+		// Hand used to multiply only the bare hand value rather than the whole figure, so it
+		// reached all of the number early and NONE of it later - a relic claiming five percent
+		// moved nothing once a parish was three tiers deep, because the slice off production had
+		// swamped the term being boosted. A power that quietly stops working as you progress is
+		// worse than one that was never offered.
+		string lying = "";
+		foreach (int owned in new[] { 5, 60, 200 })
+		{
+			foreach (Power power in Enum.GetValues<Power>())
+			{
+				Vigil.Reset();
+				for (int i = 0; i < Content.RiteCount; i++)
+				{
+					Vigil.Owned[i] = owned;
+				}
+				Vigil.Dread = 0.7;
+				Vigil.Fervour = 0.5;
+				double hand = Vigil.HandGain;
+				double ward = Vigil.WardCost;
+				double offer = Vigil.OfferCost;
+				double drain = Vigil.FervourDrain;
+
+				// A Keepsake carries exactly ONE power, so nothing else can move the number being
+				// measured - a Hollowed relic carries three and every reading contaminates.
+				Relic one = default;
+				double claimed = 0.0;
+				for (int seed = 1; seed < 40000 && !one.Exists; seed++)
+				{
+					Relic candidate = new Relic { Seed = seed, Grade = Grade.Keepsake };
+					if (Relics.PowerAt(candidate, 0) == power)
+					{
+						one = candidate;
+						claimed = Relics.MagnitudeAt(candidate, 0);
+					}
+				}
+				Vigil.Worn[0] = one;
+
+				// Bargain is measured against the COEFFICIENT it multiplies rather than the
+				// resulting multiplier: what dread pays is 1 + coeff * d^1.4, and the leading one
+				// dilutes any change to the coefficient. The row says "from dread", which is the
+				// part it moves.
+				double got = power switch
+				{
+					Power.Hand => Vigil.HandGain / hand - 1.0,
+					Power.Warding => 1.0 - Vigil.WardCost / ward,
+					Power.Almsgiving => 1.0 - Vigil.OfferCost / offer,
+					Power.Steadiness => 1.0 - Vigil.FervourDrain / drain,
+					Power.Bargain => Vigil.Wearing(Power.Bargain),
+					_ => Vigil.Wearing(Power.Patience),
+				};
+				if (Math.Abs(got - claimed) > claimed * 0.02 && lying.Length == 0)
+				{
+					lying = power + " claims " + Numbers.Percent(claimed) + " and gives "
+						+ Numbers.Percent(got) + " at x" + owned;
+				}
+			}
+		}
+		Check("every power does what its row claims", lying.Length == 0,
+			lying.Length == 0 ? "all six, at every parish size" : lying);
+
 		// -- The bug every inventory has: items multiplying. --
 		Vigil.Reset();
 		Vigil.Rng = new Random(5);
@@ -1962,6 +2024,17 @@ internal static class Balance
 	{
 		Vigil.Reset();
 		Vigil.Rng = new Random(11);
+		if (wearing)
+		{
+			// A KNOWN loadout, not whatever the run happens to turn up. Wearing the best of what
+			// was found made this measurement depend on the drops, and the same policy scored
+			// 2.51x on one reading and 1.54x on another - a check that can fail on luck is not a
+			// check. Three fixed Hollowed relics measure the budget instead of the weather.
+			for (int slot = 0; slot < Relics.Slots; slot++)
+			{
+				Vigil.Worn[slot] = new Relic { Seed = 7000 + slot * 137, Grade = Grade.Hollowed };
+			}
+		}
 		double click = 0.0;
 		double stoke = 0.0;
 		for (int step = 0; step < minutes * 60.0 / kDt; step++)
@@ -1991,17 +2064,7 @@ internal static class Balance
 			{
 				Vigil.Give(Vigil.CorrectAnswer);
 			}
-			if (wearing && Vigil.Satchel.Count > 0)
-			{
-				for (int slot = 0; slot < Relics.Slots; slot++)
-				{
-					if (!Vigil.Worn[slot].Exists || Vigil.Satchel[0].Grade > Vigil.Worn[slot].Grade)
-					{
-						Vigil.Wear(0, slot);
-						break;
-					}
-				}
-			}
+			// Nothing here: the loadout is FIXED before the run starts, see below.
 			Vigil.Tick(kDt);
 		}
 		return Vigil.LifetimeIchor;

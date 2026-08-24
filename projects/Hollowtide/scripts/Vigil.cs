@@ -738,11 +738,18 @@ public static class Vigil
 				}
 			}
 			// The parish slice is taken off Rate, which ALREADY carries the global multiplier
-			// through RiteMultiplier - so only the bare hand value is multiplied here. It used
+			// through RiteMultiplier - so only the bare hand value is multiplied by it. It used
 			// to be `(hand + Rate * 0.05) * GlobalMultiplier`, which applied the multiplier to
 			// the slice twice and made hand gathering scale as the SQUARE of every bonus in the
 			// game. Compounding, so it grew worse exactly as a run went on.
-			return (hand * (1.0 + Wearing(Power.Hand))) * GlobalMultiplier + Rate * 0.05;
+			//
+			// A relic's Hand power multiplies the WHOLE figure, though, because that is what its
+			// label promises. Applied to the bare term only it reached all of the figure early
+			// and none of it later - measured, a relic claiming five percent by hand moved the
+			// number by nothing at all once a parish was three tiers deep, since the slice off
+			// production had swamped the term being boosted. A power that quietly stops working
+			// as you progress is worse than one that was never offered.
+			return (hand * GlobalMultiplier + Rate * 0.05) * (1.0 + Wearing(Power.Hand));
 		}
 	}
 
