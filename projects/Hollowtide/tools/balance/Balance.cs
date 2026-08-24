@@ -568,6 +568,37 @@ internal static class Balance
 		Check("an empty parish is never visited", !Vigil.Approaching && Vigil.TimesTaken == 0,
 			"nothing comes for a keeper with nothing");
 
+		// -- Knowing must beat silence for EVERY visitor, not on average. --
+		// The policy check earlier compares whole runs, which averages across the eight and can
+		// hide a visitor whose answer is a bad trade. This walks them one at a time: after a
+		// correct answer the keeper must hold at least as many wards AND stand at least as high
+		// on the meter as they would have by doing nothing. Dread is what pays, so being left
+		// lower for having known is a penalty dressed as a reward.
+		int worseOff = 0;
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			Summon(rite, 2, 0);
+			// Funded, or an Offer answer is refused rather than given - which reads as a
+			// resolution that never happened and quietly passes whatever is checked next.
+			Vigil.Ichor = Vigil.OfferCost * 2.0;
+			bool given = Vigil.Give(Content.Rites[rite].Answer);
+			double knowingDread = Vigil.Dread;
+			int knowingWards = Vigil.Wards;
+
+			Summon(rite, 2, 0);
+			while (Vigil.Approaching)
+			{
+				Vigil.Tick(kDt);
+			}
+			if (!given || knowingDread < Vigil.Dread || knowingWards < Vigil.Wards)
+			{
+				worseOff++;
+				Console.WriteLine("         knowing pays less against " + Content.Rites[rite].VisitorName);
+			}
+		}
+		Check("knowing beats silence against every visitor", worseOff == 0,
+			Content.RiteCount + " visitors, none of them worth not knowing");
+
 		// -- The contract the parish presents the approach through. --
 		// Presentation cannot be tested here, but what it READS can be. The parish drives a
 		// shader from 1 - ApproachSeconds/kApproachSeconds and indexes a rite array with

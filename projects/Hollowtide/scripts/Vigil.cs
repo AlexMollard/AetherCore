@@ -1209,7 +1209,13 @@ public static class Vigil
 		// for having learned what this one is.
 		if (given != Answer.None && given == wanted)
 		{
-			Dread = 0.45;
+			// ABOVE the 0.55 a ward leaves behind, and that ordering is load-bearing. Turning
+			// something away by naming it used to drop the keeper to 0.45 - lower than simply
+			// letting a ward eat it - so on the one axis that actually pays, knowing the answer
+			// was a penalty. For the two visitors a ward is the answer TO, it was strictly
+			// worse than not knowing: same ward spent, less dread left. A keeper who did not
+			// flinch should still be standing where they were.
+			Dread = 0.62;
 			BeginSurge(6.0, 1.35, fromCongregation: false);
 			VisitorsAnswered++;
 			VisitorsBested[rite] = true;
