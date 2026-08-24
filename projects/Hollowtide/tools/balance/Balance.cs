@@ -1,5 +1,8 @@
 using System;
 using System.Numerics;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.IO;
 using System.Collections.Generic;
 
 namespace AetherGame.Balance;
@@ -3868,6 +3871,106 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// Where the shaders keep the game's own constants.
+	/// </summary>
+	/// <remarks>
+	/// Found by walking up from wherever the harness was built to, rather than assumed: the
+	/// build output sits several directories under the project and the working directory
+	/// depends on how the harness was launched.
+	/// </remarks>
+	private static string ShaderPath(string file)
+	{
+		DirectoryInfo dir = new DirectoryInfo(AppContext.BaseDirectory);
+		for (int up = 0; up < 12 && dir != null; up++, dir = dir.Parent)
+		{
+			string candidate = Path.Combine(dir.FullName, "assets", "shaders", file);
+			if (File.Exists(candidate))
+			{
+				return candidate;
+			}
+		}
+		return "";
+	}
+
+	/// <summary>Pull one number out of a shader by matching the line it is written on.</summary>
+	private static double ShaderNumber(string file, string pattern, out string trouble)
+	{
+		trouble = "";
+		string path = ShaderPath(file);
+		if (path.Length == 0)
+		{
+			trouble = "could not find " + file;
+			return double.NaN;
+		}
+		Match match = Regex.Match(File.ReadAllText(path), pattern);
+		if (!match.Success)
+		{
+			trouble = "no line matching /" + pattern + "/ in " + file;
+			return double.NaN;
+		}
+		return double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+	}
+
+	/// <summary>
+	/// The numbers the shaders share with the game still agree with it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Several constants are written twice: once in C# and once, by hand, in a shader. Every
+	/// comment around them says the two MUST agree, and for the power mask that was not enough -
+	/// C# moved from 64 to 128 when a seventh power was added, the shader did not, and every
+	/// relic in the game drew the wrong features. Silently, because there is no build step that
+	/// compares them and no way for a wrong-but-plausible drawing to look like a fault.
+	/// </para>
+	/// <para>
+	/// The first fix pinned the number in a second place here, which only moves the problem. This
+	/// READS THE SHADER. If the file cannot be found or the line cannot be matched, the check
+	/// FAILS rather than passing quietly - a verifier that silently stops verifying is worse
+	/// than none, because it keeps reporting green.
+	/// </para>
+	/// </remarks>
+	private static void TheShadersAgreeWithTheGame()
+	{
+		Console.WriteLine("The shaders still agree with the game");
+
+		double horizon = ShaderNumber("ui_parish.slang",
+			@"const\s+float\s+horizon\s*=\s*([0-9.]+)\s*;", out string trouble);
+		Check("the horizon is in the same place on both sides",
+			trouble.Length == 0 && Math.Abs(horizon - Layout.Horizon) < 1e-6,
+			trouble.Length > 0 ? trouble
+				: "ui_parish draws it at " + horizon.ToString("0.000")
+					+ ", the parish stands on " + Layout.Horizon.ToString("0.000"));
+
+		double divisor = ShaderNumber("ui_relic.slang",
+			@"saturate\(pc\.color0\.a\)\s*\*\s*([0-9.]+)", out trouble);
+		Check("the relic power mask unpacks with the number it was packed by",
+			trouble.Length == 0 && Math.Abs(divisor - (1 << Relics.PowerKinds)) < 1e-6,
+			trouble.Length > 0 ? trouble
+				: "ui_relic multiplies by " + divisor.ToString("0")
+					+ ", C# divides by " + (1 << Relics.PowerKinds));
+
+		// The rolling fronts: three numbers, all of which have to match Layout.PackWave.
+		double scale = ShaderNumber("ui_parish.slang",
+			@"saturate\(packed\)\s*\*\s*([0-9.]+)", out trouble);
+		Check("a front's packing scale matches", trouble.Length == 0 && Math.Abs(scale - 256.0) < 1e-6,
+			trouble.Length > 0 ? trouble : "both use " + scale.ToString("0"));
+
+		double weightBits = ShaderNumber("ui_parish.slang",
+			@"fmod\(high,\s*([0-9.]+)\)", out trouble);
+		Check("and so does the room left for a front's weight",
+			trouble.Length == 0 && Math.Abs(weightBits - Layout.WaveWeight) < 1e-6,
+			trouble.Length > 0 ? trouble
+				: "ui_parish reads " + weightBits.ToString("0") + " weights, Layout allows "
+					+ Layout.WaveWeight);
+
+		double originSteps = ShaderNumber("ui_parish.slang",
+			@"floor\(high\s*/\s*8\.0\)\s*/\s*([0-9.]+)", out trouble);
+		Check("and the steps a front's origin is quantised to",
+			trouble.Length == 0 && Math.Abs(originSteps - 31.0) < 1e-6,
+			trouble.Length > 0 ? trouble : "both use " + originSteps.ToString("0") + " steps");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3913,6 +4016,7 @@ internal static class Balance
 		TheDarkTakesWhatIsLoose();
 		TimeAwayIsWorthWhatItSays();
 		AnEchoRemembersWhoItWas();
+		TheShadersAgreeWithTheGame();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
