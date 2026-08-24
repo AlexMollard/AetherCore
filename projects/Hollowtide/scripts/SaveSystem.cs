@@ -44,6 +44,10 @@ public sealed class VigilSave
 	public int TimesTaken { get; set; }
 	/// <summary>Visitors turned away by naming what they wanted.</summary>
 	public int VisitorsAnswered { get; set; }
+	/// <summary>Visitors met, and visitors named. Kept through communion: what the keeper has
+	/// learned is not part of the parish they gave back.</summary>
+	public bool[] VisitorsMet { get; set; } = Array.Empty<bool>();
+	public bool[] VisitorsBested { get; set; } = Array.Empty<bool>();
 	public int CommunionSurges { get; set; }
 	public int HandGathers { get; set; }
 	public double SharedVigilSeconds { get; set; }
@@ -228,6 +232,8 @@ public static class SaveSystem
 		WardsRaised = Vigil.WardsRaised,
 		TimesTaken = Vigil.TimesTaken,
 		VisitorsAnswered = Vigil.VisitorsAnswered,
+		VisitorsMet = (bool[])Vigil.VisitorsMet.Clone(),
+		VisitorsBested = (bool[])Vigil.VisitorsBested.Clone(),
 		CommunionSurges = Vigil.CommunionSurges,
 		HandGathers = Vigil.HandGathers,
 		SharedVigilSeconds = Vigil.SharedVigilSeconds,
@@ -272,6 +278,8 @@ public static class SaveSystem
 		CopyInto(save.Offerings, Vigil.OfferingsTaken);
 		CopyInto(save.Marks, Vigil.MarksEarned);
 		CopyInto(save.Overseers, Vigil.Overseers);
+		CopyInto(save.VisitorsMet, Vigil.VisitorsMet);
+		CopyInto(save.VisitorsBested, Vigil.VisitorsBested);
 		Vigil.Revision++;
 	}
 

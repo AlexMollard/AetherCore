@@ -458,6 +458,10 @@ internal static class Balance
 	{
 		Console.WriteLine("The encounter is an offer, not a demand");
 
+		// Seeded, so a parish visited twice is visited the same way twice and this section does
+		// not fail once a fortnight on an unlucky draw.
+		Vigil.Rng = new Random(20260824);
+
 		bool named = true;
 		for (int i = 0; i < Content.RiteCount; i++)
 		{
@@ -552,6 +556,48 @@ internal static class Balance
 		Vigil.Tick(kDt);
 		Check("an empty parish is never visited", !Vigil.Approaching && Vigil.TimesTaken == 0,
 			"nothing comes for a keeper with nothing");
+
+		// -- Variety. An encounter with one answer is a keypress, not a decision. --
+		Vigil.Reset();
+		Vigil.Rng = new Random(1);
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			Vigil.Owned[i] = 100;
+		}
+		int[] drawn = new int[Content.RiteCount];
+		for (int trial = 0; trial < 4000; trial++)
+		{
+			Vigil.Dread = 1.0;
+			Vigil.Tick(kDt);
+			if (!Vigil.Approaching)
+			{
+				continue;
+			}
+			drawn[Vigil.ApproachRite]++;
+			// Standing still, always, because it is the one answer that can never be REFUSED.
+			// Answering each visitor with what it actually wants looks more thorough and is a
+			// trap: an offering needs a purse, this keeper has none, so Give declines, the walk
+			// never ends, and the loop counts the same stuck encounter four thousand times. It
+			// read as one visitor taking 60% of every draw - a distribution bug that was not in
+			// the game at all.
+			Vigil.Give(Answer.Still);
+		}
+		int absent = 0;
+		int commonest = 0;
+		int total = 0;
+		foreach (int n in drawn)
+		{
+			if (n == 0)
+			{
+				absent++;
+			}
+			commonest = Math.Max(commonest, n);
+			total += n;
+		}
+		Check("every rite you own can call something", absent == 0,
+			absent + " of " + Content.RiteCount + " visitors never appeared");
+		Check("no single visitor dominates the encounter", commonest < total / 2,
+			"commonest is " + (commonest * 100.0 / Math.Max(1, total)).ToString("0") + "% of draws");
 
 		// -- Offline may not start one: you cannot answer a door you were not behind. --
 		Vigil.Reset();

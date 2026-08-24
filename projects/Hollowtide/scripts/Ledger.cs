@@ -434,9 +434,20 @@ public sealed class Ledger
 
 	// ── Marks ────────────────────────────────────────────────────────────────────────
 
+	/// <summary>How a verb reads on the page the keeper keeps it on.</summary>
+	private static string AnswerWord(Answer answer) => answer switch
+	{
+		Answer.Ward => "a ward",
+		Answer.Offer => "an offering",
+		Answer.Bell => "the bell",
+		Answer.Still => "standing still",
+		_ => "",
+	};
+
 	private void FillMarks()
 	{
-		_itemCount = Content.Marks.Length + 1;
+		// The record, then the marks, then everything that has come for this keeper.
+		_itemCount = 1 + Content.Marks.Length + Content.RiteCount;
 		int slot = 0;
 
 		if (_scroll == 0 && slot < _visibleRows)
@@ -465,8 +476,40 @@ public sealed class Ledger
 			Ui.SetText(row.Cost, earned ? "KEPT" : "");
 			Ui.SetTextColor(row.Cost, Palette.IchorDim);
 			Ui.SetText(row.Note, "");
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
 			row.Box.SetEnabled(false);
 			row.Box.SetColour(earned ? Palette.Row : Palette.PanelDeep);
+		}
+
+		// ── What has come for you ────────────────────────────────────────────────────
+		// The keeper's own notes, and the only place the answers are ever written down. A
+		// visitor is a rumour until you meet it, a name once you have, and an ANSWER only once
+		// you have turned it away yourself - so the page fills in as the encounters teach it,
+		// and never hands over a verb the keeper has not earned. That ordering is the whole
+		// reason this is a bestiary rather than a hint list.
+		for (int i = Math.Max(0, _scroll - 1 - Content.Marks.Length); i < Content.RiteCount && slot < _visibleRows; i++, slot++)
+		{
+			Row row = _rows[slot];
+			RiteDef def = Content.Rites[i];
+			bool met = Vigil.VisitorsMet[i];
+			bool bested = Vigil.VisitorsBested[i];
+
+			Ui.SetText(row.Title, met ? def.VisitorName : "Something else");
+			Ui.SetTextColor(row.Title, bested ? def.Colour : met ? Palette.TextBright : Palette.TextFaint);
+			Ui.SetText(row.Sub, bested
+				? def.Approach
+				: met
+					? "You have seen it. You have not yet learned what it wants."
+					: "The " + def.Name + " has not called anything to you yet.");
+			Ui.SetText(row.Cost, bested ? "ANSWERED" : "");
+			Ui.SetTextColor(row.Cost, Palette.Ichor);
+			// The answer, and only once it has been proved - being taken by something teaches
+			// you nothing about it.
+			Ui.SetText(row.Note, bested ? "turned by " + AnswerWord(def.Answer) : "");
+			Ui.SetTextColor(row.Note, Palette.TextDim);
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
+			row.Box.SetEnabled(false);
+			row.Box.SetColour(bested ? Palette.Row : Palette.PanelDeep);
 		}
 		BlankFrom(slot);
 	}

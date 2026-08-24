@@ -146,6 +146,13 @@ public static class Vigil
 	/// <summary>Visitors turned away by naming what they wanted. The record of the one kind of
 	/// progress this game keeps in the player rather than in the save.</summary>
 	public static int VisitorsAnswered;
+
+	/// <summary>Which visitors this keeper has met, and which they have turned away. The
+	/// second is what the ledger will admit it knows the answer to: a visitor you have beaten
+	/// once is one you have PROVED you can name, and writing it down is the difference between
+	/// a mechanic you learn and a mechanic you look up in a wiki.</summary>
+	public static bool[] VisitorsMet = new bool[Content.RiteCount];
+	public static bool[] VisitorsBested = new bool[Content.RiteCount];
 	public static int CommunionSurges;
 	public static int HandGathers;
 	public static double SharedVigilSeconds;
@@ -189,6 +196,10 @@ public static class Vigil
 	/// <summary>Raised when something starts walking, with the rite whose visitor it is. The
 	/// presentation layer names it and starts the clock; nothing here knows that.</summary>
 	public static Action<int>? OnApproach;
+
+	/// <summary>Where the draw for the next visitor comes from. Replaceable so the balance
+	/// harness can seed it and get the same parish visited the same way twice.</summary>
+	public static Random Rng = new Random();
 
 	/// <summary>Seconds left on a shared surge, and what it multiplies by while it lasts.</summary>
 	public static double SurgeSeconds;
@@ -1014,7 +1025,7 @@ public static class Vigil
 	/// answers at the top of the bargain rather than watching it drain to safety.</summary>
 	private static void BeginApproach()
 	{
-		int rite = DeepestRite();
+		int rite = DrawVisitor();
 		if (rite < 0)
 		{
 			// Nothing owned, so nothing to come for. Let the meter sit just under the brink
@@ -1022,11 +1033,70 @@ public static class Vigil
 			Dread = 0.85;
 			return;
 		}
+		VisitorsMet[rite] = true;
 		ApproachRite = rite;
 		ApproachSeconds = kApproachSeconds;
 		Revision++;
 		Say(Content.Rites[rite].Approach, Omen.Dread);
 		OnApproach?.Invoke(rite);
+	}
+
+	/// <summary>
+	/// Choose whose visitor arrives, weighted by how much dread that rite is pulling in.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Drawn from the PRESSURE, which is the same quantity that decides how often anything
+	/// comes at all - so the thing that arrives is drawn from whatever called it. A parish
+	/// leaning on its chapels meets what chapels attract; broadening the parish broadens who
+	/// walks in.
+	/// </para>
+	/// <para>
+	/// It used to be simply <c>DeepestRite()</c>, and simulating two hours of play showed what
+	/// that cost: five of the eight visitors NEVER appeared, and 91% of encounters were the two
+	/// that want a ward. An encounter with one answer is a keypress, not a decision - the whole
+	/// mechanic collapsed within minutes of owning a deep rite. Weighting fixes it without a
+	/// table of appearance rates to tune, because the weights are already there.
+	/// </para>
+	/// </remarks>
+	/// <summary>
+	/// How likely one rite is to be the one that called something, as the root of the dread it
+	/// is pulling in.
+	/// </summary>
+	/// <remarks>
+	/// The root, not the pressure itself, and the difference is the whole distribution. Dread
+	/// rates span seventy times from the first rite to the last, so weighting them linearly
+	/// gave the deepest visitor 42% of every encounter and the shallowest 0.6% - measured, not
+	/// guessed - which is a table of eight with two entries that matter. Compressing it keeps
+	/// the ordering honest, deeper still means likelier, while leaving every rite a real share
+	/// of the door.
+	/// </remarks>
+	private static double VisitorWeight(int rite)
+		=> Math.Sqrt(Owned[rite] * Content.Rites[rite].DreadRate);
+
+	private static int DrawVisitor()
+	{
+		double total = 0.0;
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			total += VisitorWeight(i);
+		}
+		if (total <= 0.0)
+		{
+			return -1;
+		}
+		double roll = Rng.NextDouble() * total;
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			roll -= VisitorWeight(i);
+			if (roll <= 0.0)
+			{
+				return i;
+			}
+		}
+		// Only reachable on a floating-point hair; the last contributing rite is the honest
+		// answer rather than a throw.
+		return DeepestRite();
 	}
 
 	/// <summary>
@@ -1099,6 +1169,7 @@ public static class Vigil
 			Dread = 0.45;
 			BeginSurge(6.0, 1.35, fromCongregation: false);
 			VisitorsAnswered++;
+			VisitorsBested[rite] = true;
 			Say(Content.Rites[rite].VisitorName + " is turned away. You knew what it wanted.", Omen.Good);
 			OnVisitation?.Invoke(true);
 			return;
@@ -1245,6 +1316,8 @@ public static class Vigil
 		WardsRaised = 0;
 		TimesTaken = 0;
 		VisitorsAnswered = 0;
+		VisitorsMet = new bool[Content.RiteCount];
+		VisitorsBested = new bool[Content.RiteCount];
 		CommunionSurges = 0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
