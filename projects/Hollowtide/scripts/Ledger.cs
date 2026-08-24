@@ -500,21 +500,21 @@ public sealed class Ledger
 			// always was - there is no room for a target picker in a 320px row - but nothing
 			// said so, which made trading a surprise rather than a choice. Saying it turns the
 			// rule into something a keeper can steer with the two clicks they already have.
-			if (i == 0)
-			{
-				Ui.SetText(row.Note, "next to give");
-				Ui.SetTextColor(row.Note, Palette.Sigil);
-			}
+			// What rendering it pays, on the row, because a price nobody can see is one nobody
+			// weighs - and the first carried relic is also the one the congregation hands over.
+			Ui.SetText(row.Note, (i == 0 ? "next to give   " : "") +
+				"render +" + Numbers.Short(Vigil.RenderValue(i)));
+			Ui.SetTextColor(row.Note, i == 0 ? Palette.Sigil : Palette.IchorDim);
 			row.Box.SetEnabled(true);
 			row.Box.Style(true, Palette.RowHot, Palette.Row, Palette.PanelDeep);
 
-			// Right-click leaves it in the parish. The satchel already throws its worst away
-			// when it is full, so losing a carried relic on purpose is no more final than what
-			// the game does on the keeper's behalf - and it is the only way to choose what the
-			// next offer will be without wearing something to get it out of the way.
+			// Right-click renders it down for ichor rather than binning it. Asking somebody to
+			// throw away a thing they went and found is a poor trade even when the thing is
+			// junk; melting it is the same tidying gesture with something to show for it, and
+			// it is still how a keeper chooses what the next offer will be.
 			if (Ui.IsHovered(row.Box.Root) && Input.IsMousePressed(MouseButton.Right))
 			{
-				Vigil.Discard(i);
+				Vigil.Render(i);
 				break;
 			}
 
@@ -556,8 +556,10 @@ public sealed class Ledger
 		row.Icon.SetActive(true);
 		// Seed and grade, exactly what the C# generator works from - so the drawing and the
 		// name can never disagree about which relic this is.
-		Ui.SetMaterialParams(row.Icon, new Vector4(Time.UnscaledTime, relic.Seed, (float)(int)relic.Grade,
-			worn ? 1.0f : 0.35f));
+		// ArtSeed, not the seed: a float4 carries float32, which holds integers exactly only to
+		// about sixteen million, and relic seeds run to a billion.
+		Ui.SetMaterialParams(row.Icon, new Vector4(Time.UnscaledTime, Relics.ArtSeed(relic),
+			(float)(int)relic.Grade, worn ? 1.0f : 0.35f));
 		Ui.SetMaterialColors(row.Icon, Palette.Ichor, Palette.Dread);
 
 		Ui.SetText(row.Title, Relics.NameOf(relic));
@@ -575,7 +577,7 @@ public sealed class Ledger
 
 		Ui.SetText(row.Cost, Relics.GradeName(relic.Grade));
 		Ui.SetTextColor(row.Cost, Palette.Mix(Palette.TextFaint, Palette.Ichor, (int)relic.Grade / 4.0f));
-		Ui.SetText(row.Note, worn ? "worn" : "carried  -  right-click to leave it");
+		Ui.SetText(row.Note, worn ? "worn" : "carried");
 		Ui.SetTextColor(row.Note, Palette.TextFaint);
 		Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
 	}

@@ -104,6 +104,25 @@ public static class Relics
 		"the Mouth Returned", "of the Salt Line", "the Statue Faced", "from the Second Grave",
 	};
 
+	/// <summary>
+	/// What rendering a relic down is worth, in seconds of the parish's production.
+	/// </summary>
+	/// <remarks>
+	/// Leaving a relic behind used to simply delete it, which is a poor thing to ask of anybody
+	/// holding something they went and found. It renders down instead - the parish already has
+	/// the word for it, in the Third Rendering - and pays out in ichor.
+	///
+	/// Sized as TIDYING, not as an income. Relics come out of clicking, so if rendering paid
+	/// well the loop would become click-render-repeat and quietly replace the parish it is
+	/// meant to sit beside. Doubling per grade means junk is worth clearing and a Hollowed
+	/// thing is still worth far more worn than melted.
+	///
+	/// The first sizing was eight times this, and a keeper who rendered everything the instant
+	/// it landed took a QUARTER of their whole income that way and finished three times ahead
+	/// of one who did not. That is not a bonus for tidying, it is the game.
+	/// </remarks>
+	public static double RenderSeconds(Grade grade) => 0.05 * Math.Pow(2.0, (int)grade);
+
 	/// <summary>Said of the very best. One line, and only Hollowed things get one.</summary>
 	private static readonly string[] s_epithet =
 	{
@@ -151,6 +170,18 @@ public static class Relics
 	}
 
 	private static int Pick(int seed, int channel, int count) => (int)(Hash(seed, channel) % (uint)count);
+
+	/// <summary>
+	/// The seed as the art shader has to receive it.
+	/// </summary>
+	/// <remarks>
+	/// Material parameters travel as a float4, and float32 holds integers exactly only up to
+	/// 16,777,216. Relic seeds start near a billion and count up by one, so passing the seed
+	/// itself put runs of SIXTY-FIVE consecutive relics onto the same float - sixty-five relics
+	/// with different names, different powers and identical pictures. Hashed down to a range a
+	/// float carries exactly, every relic gets its own drawing again.
+	/// </remarks>
+	public static float ArtSeed(Relic relic) => Hash(relic.Seed, 40) % 65536u;
 
 	/// <summary>The name, built from the seed. Longer and stranger the better the grade, so a
 	/// keeper can tell roughly what they are holding before reading a single number.</summary>

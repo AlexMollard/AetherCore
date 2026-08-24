@@ -1028,16 +1028,44 @@ public static class Vigil
 		Satchel.RemoveAt(worst);
 	}
 
-	/// <summary>Throw a carried relic away. Worn ones cannot be discarded without taking them
-	/// off first, so nothing a keeper is relying on vanishes on a misclick.</summary>
-	public static bool Discard(int satchelIndex)
+	/// <summary>What rendering the relic at this index would pay.</summary>
+	public static double RenderValue(int satchelIndex)
+	{
+		if (satchelIndex < 0 || satchelIndex >= Satchel.Count)
+		{
+			return 0.0;
+		}
+		// A floor off the hand, so an early keeper with no parish still gets something back
+		// rather than being told their find was worth nothing.
+		return HandGain * 1.5 + Rate * Relics.RenderSeconds(Satchel[satchelIndex].Grade);
+	}
+
+	/// <summary>
+	/// Render a carried relic down for ichor.
+	/// </summary>
+	/// <remarks>
+	/// Worn relics cannot be rendered without being taken off first, so nothing a keeper is
+	/// relying on goes into the pot on a misclick.
+	/// </remarks>
+	public static bool Render(int satchelIndex)
 	{
 		if (satchelIndex < 0 || satchelIndex >= Satchel.Count)
 		{
 			return false;
 		}
+		Relic rendered = Satchel[satchelIndex];
+		double paid = RenderValue(satchelIndex);
 		Satchel.RemoveAt(satchelIndex);
+		Ichor += paid;
+		RunIchor += paid;
+		LifetimeIchor += paid;
 		Revision++;
+		if (rendered.Grade >= Grade.Hallowed)
+		{
+			// Only worth remarking on when a keeper melts something good - the feed is a shared
+			// budget and rendering junk is a thing they will do dozens of times.
+			Say("You render down " + Relics.NameOf(rendered) + ". It goes quietly.", Omen.Plain);
+		}
 		return true;
 	}
 

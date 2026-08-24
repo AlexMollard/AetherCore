@@ -1089,7 +1089,7 @@ internal static class Balance
 					Vigil.Remove(rng.Next(Relics.Slots + 1) - 1);
 					break;
 				case 14:
-					Vigil.Discard(rng.Next(Relics.Satchel + 2) - 1);
+					Vigil.Render(rng.Next(Relics.Satchel + 2) - 1);
 					break;
 				case 15:
 					// A relic off the wire, with the hostile values a peer could actually send.
@@ -1563,6 +1563,39 @@ internal static class Balance
 		Check("and does not repeat itself within a session", names.Count > 3400,
 			names.Count + " distinct in 4000 seeds, against " + Numbers.Short(space) + " possible");
 
+		// -- The art seed has to survive being a float. --
+		// Material parameters travel as a float4. float32 holds integers exactly only to about
+		// sixteen million, and relic seeds start near a billion and count up by one - so passing
+		// the seed straight through put runs of sixty-five consecutive relics onto one float:
+		// different names, different powers, identical pictures.
+		int artCollisions = 0;
+		float previousArt = -1.0f;
+		for (int seed = 900_000_000; seed < 900_000_400; seed++)
+		{
+			float art = Relics.ArtSeed(new Relic { Seed = seed, Grade = Grade.Anointed });
+			if (art == previousArt)
+			{
+				artCollisions++;
+			}
+			previousArt = art;
+			// And it must be a value a float carries exactly, or the shader sees something else.
+			if (art != (float)(int)art || art < 0.0f || art > 65535.0f)
+			{
+				artCollisions += 1000;
+			}
+		}
+		Check("neighbouring relics get their own picture", artCollisions == 0,
+			"400 consecutive seeds, no two drawn alike");
+
+		// -- Rendering is a bonus for tidying, not a second economy. --
+		// Relics come out of clicking, so a generous render turns the game into
+		// click-render-repeat and the parish becomes decoration. Measured by rendering
+		// everything the instant it lands, which is the greediest play available.
+		double keeping = Rendering(60, melt: false);
+		double melting = Rendering(60, melt: true);
+		Check("rendering everything is a bonus, not a business", melting < keeping * 1.35,
+			"worth " + (melting / keeping).ToString("0.00") + "x keeping it");
+
 		// -- Wearing one has to actually do something. --
 		Vigil.Reset();
 		Vigil.Owned[2] = 50;
@@ -1784,7 +1817,7 @@ internal static class Balance
 		Vigil.Satchel.Add(new Relic { Seed = 61, Grade = Grade.Leavings });
 		Vigil.Satchel.Add(new Relic { Seed = 62, Grade = Grade.Hollowed });
 		int wouldGive = Vigil.Satchel[0].Seed;
-		Vigil.Discard(0);
+		Vigil.Render(0);
 		Check("leaving one behind changes what is offered", Vigil.Satchel[0].Seed != wouldGive,
 			"the offer moves from " + wouldGive + " to " + Vigil.Satchel[0].Seed);
 
@@ -1851,6 +1884,49 @@ internal static class Balance
 						break;
 					}
 				}
+			}
+			Vigil.Tick(kDt);
+		}
+		return Vigil.LifetimeIchor;
+	}
+
+	/// <summary>Play a stretch, optionally rendering every relic the moment it is found.</summary>
+	private static double Rendering(double minutes, bool melt)
+	{
+		Vigil.Reset();
+		Vigil.Rng = new Random(11);
+		double click = 0.0;
+		double stoke = 0.0;
+		for (int step = 0; step < minutes * 60.0 / kDt; step++)
+		{
+			click += 4.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			stoke += 0.4 * kDt;
+			while (stoke >= 1.0)
+			{
+				stoke -= 1.0;
+				if (Vigil.Dread < 0.85)
+				{
+					Vigil.Stoke();
+				}
+			}
+			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
+			{
+				Vigil.RaiseWard();
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			while (melt && Vigil.Satchel.Count > 0)
+			{
+				Vigil.Render(0);
 			}
 			Vigil.Tick(kDt);
 		}
