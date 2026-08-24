@@ -321,6 +321,7 @@ parent = -1
 """
 
 CENTRE = (0.5, 0.5)
+BOTTOM = (0.5, 1.0)
 MID = (0.5, 0.5)
 
 
@@ -508,11 +509,14 @@ def vigil():
         ], -264 + i * 176, 300, 168, 44, MID, CENTRE)
 
     # ── something turned up ─────────────────────────────────────────────────────────
-    # Shares the visitation's slot above the sigil, and yields to it: for the nine seconds
-    # something is walking, that is the only thing worth looking at. A find otherwise gets the
-    # same prominent band, because the whole point of relics is to make hand-gathering worth
-    # doing and a reward the keeper has to go and look for is not a reward they feel.
-    found = at(nave, "FoundPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -262, 620, 116, MID, CENTRE)
+    # Along the BOTTOM of the nave, not over the sigil. Above the sigil it sat in the middle of
+    # where a keeper is looking while they click, so a find interrupted the thing that produced
+    # it; at the foot of the view it is read without being in the way.
+    #
+    # It still yields to a visitation. They no longer share a slot, but at window heights below
+    # about 1030 the answer row and the foot of the nave meet, and a find is never worth
+    # covering an answer the keeper has nine seconds to give.
+    found = at(nave, "FoundPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -24, 620, 116, BOTTOM, BOTTOM)
     # VOID, not white: ui_relic computes its own colour and takes only the alpha from the
     # element, so on any frame before the material resolves the plain image draws instead - and
     # a white one flashes as a solid block. The same trap the rites and the ledger icons hit.
