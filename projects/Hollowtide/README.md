@@ -7,6 +7,8 @@ and dread is the bargain at the centre of the game: it pays up to several times 
 when the meter fills something walks toward you. Everything else in here exists to make that
 one trade interesting.
 
+See `CHANGELOG.md` for what changed and why.
+
 ## The loop
 
 | system | what it is | why it exists |
