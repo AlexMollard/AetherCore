@@ -3534,6 +3534,29 @@ internal static class Balance
 				blank++;
 			}
 		}
+		// A band whose atmosphere belonged to a different depth would be worse than silence, so
+		// the two tables have to stay lined up band for band.
+		Check("every dread band has something to say once it has finished teaching",
+			Content.Deeper.Length == Content.Murmurs.Length,
+			Content.Deeper.Length + " bands of atmosphere against " + Content.Murmurs.Length + " lessons");
+		int emptyBand = 0;
+		foreach (string[] band in Content.Deeper)
+		{
+			if (band.Length == 0)
+			{
+				emptyBand++;
+			}
+			foreach (string line in band)
+			{
+				if (string.IsNullOrWhiteSpace(line))
+				{
+					blank++;
+				}
+			}
+		}
+		Check("and none of those bands is empty", emptyBand == 0,
+			emptyBand == 0 ? "every depth keeps a voice" : emptyBand + " silent bands");
+
 		Check("nothing it says is blank", blank == 0,
 			Content.Ambient.Length + " plain and " + Content.Noticed.Length + " noticed");
 

@@ -2431,6 +2431,22 @@ public static class Vigil
 			{
 				s_murmursSaid[band]++;
 				Say(Content.Murmurs[band].Line, Omen.Dread);
+				return;
+			}
+			// The lesson is done, so the band says something that is not a lesson. Without this
+			// the meter went quiet for the rest of the vigil - correct about not repeating
+			// itself, and silent about the one thing the whole game is about.
+			if (band >= 0 && band < Content.Deeper.Length && Content.Deeper[band].Length > 0)
+			{
+				string[] pool = Content.Deeper[band];
+				// Never the line it just said, which at three or four to a band would otherwise
+				// come round often enough to notice in the transcript.
+				int chosen = Rng.Next(pool.Length);
+				if (pool.Length > 1 && pool[chosen] == s_lastSpoken)
+				{
+					chosen = (chosen + 1) % pool.Length;
+				}
+				Say(pool[chosen], Omen.Dread);
 			}
 			return;
 		}

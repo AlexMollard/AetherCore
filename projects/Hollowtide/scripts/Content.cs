@@ -518,6 +518,54 @@ public static class Content
 	};
 
 	/// <summary>
+	/// What each dread band says once it has finished teaching.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The lines above are LESSONS, and a lesson is said twice and then never again - a keeper
+	/// who has been told they are earning more than they ever have does not need telling a
+	/// hundredth time. Correct, and it left a hole: after roughly ten minutes the dread meter,
+	/// which is the whole of this game, went permanently silent. Crossing into the brink - the
+	/// most dangerous thing a keeper can choose to do - said nothing at all.
+	/// </para>
+	/// <para>
+	/// These say nothing a player needs to learn, so they can keep coming. Indexed to match
+	/// <see cref="Murmurs"/> band for band, which is checked, because a band whose atmosphere
+	/// belonged to a different depth would be worse than silence.
+	/// </para>
+	/// </remarks>
+	public static readonly string[][] Deeper =
+	{
+		new[]
+		{
+			"The dark has moved a little closer to the door.",
+			"Something outside is keeping pace with you.",
+			"You are being read, page by page.",
+		},
+		new[]
+		{
+			"The lanterns are all leaning the same way now.",
+			"There is weight on the flags outside. It is not walking.",
+			"Whatever it is has stopped pretending not to be there.",
+			"The cold is coming from one direction only.",
+		},
+		new[]
+		{
+			"You have never had this much. You have never been this close.",
+			"The parish is working beautifully. That is the trade.",
+			"It is worth it. That is the problem with it.",
+			"Everything is louder. Everything is nearer.",
+		},
+		new[]
+		{
+			"It is at the edge of the light and it is not moving.",
+			"You could put a hand out and touch it.",
+			"The lanterns have stopped guttering. Nothing is moving at all.",
+			"There is nothing between you and it now.",
+		},
+	};
+
+	/// <summary>
 	/// Things the parish does when nothing else is happening.
 	/// </summary>
 	/// <remarks>
