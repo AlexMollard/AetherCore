@@ -121,6 +121,12 @@ public sealed class Congregation
 			bool canTithe = canAct && gift > 0.0;
 			bool canShunt = canAct && Vigil.Dread > 0.02;
 
+			// Shown explicitly, because the echo panel hides it and one mode hiding something the
+			// other never shows again is how a two-mode panel rots. Net.IsConnected is false for
+			// the first frames of EVERY session, hosted ones included, so the echo path always
+			// runs first - without this line, tithing was dead in multiplayer from the moment
+			// the lone keeper's panel learned to draw ghosts.
+			row.Tithe.SetActive(true);
 			row.Tithe.SetLabel(canTithe ? "TITHE " + Numbers.Short(gift) : "TITHE");
 			row.Tithe.SetEnabled(canTithe);
 			row.Tithe.Style(canTithe, Palette.Mix(Palette.RowHot, Palette.Ichor, 0.35f), Palette.PanelDeep, Palette.PanelDeep);
