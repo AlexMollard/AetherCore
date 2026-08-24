@@ -6,14 +6,18 @@
 // perspective that catches what little light there is. No texture, no lighting pass, so
 // nothing can lift the floor to the brightest thing on screen behind my back.
 //
-//   params = (time, dread 0..1, shake 0..1, wave 0..1)
+//   params = (time, dread 0..1, shake 0..1, wave A)
 //   color0 = the void (the ramp's darkest)   color1 = dread, for the souring
 //
-// color0's ALPHA carries where the wave started, as a fraction of the width. params is full
-// and only the void's rgb is ever read, so the spare channel is used rather than adding a
-// second effect - noted here and at the call site in Parish.cs so it is not a surprise.
+// Three waves can be in flight at once, and each needs both a progress and an origin - six
+// numbers, against the one free slot in params. So each is PACKED into a single float in
+// [0,1): the origin quantised to 255 steps in the high part, the progress in the low. Unpacked
+// by Unwave below, packed by Parish.PackWave, and the two must agree.
 //
-// The palette is passed in rather than written here, so this cannot drift from Palette.cs.
+// Waves A, B and C live in params.w, color0's ALPHA and color1's ALPHA. Only the rgb of either
+// colour is ever read as a colour, so both alphas are free - smuggling them is documented on
+// both sides rather than silently, and the ceiling is three: a fourth wave needs the engine to
+// carry a second params vector, which is the point to stop packing and go and add one.
 
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
@@ -79,6 +83,14 @@ float fbm(float2 p)
 // The one ramp, mirrored from scripts/Palette.cs. Written as a function of a single 0..1
 // value so everything in here samples the SAME eight steps the rest of the game is built
 // from, rather than inventing greys of its own.
+/// Unpack a wave slot into (origin, progress). See the packing note in the header - this and
+/// Parish.PackWave are one format in two places, so a change to either is a change to both.
+float2 Unwave(float packed)
+{
+    const float scaled = saturate(packed) * 256.0;
+    return float2(floor(scaled) / 255.0, frac(scaled));
+}
+
 float3 Ramp(float t)
 {
     const float3 ink   = float3(0.027, 0.031, 0.043);
@@ -91,6 +103,32 @@ float3 Ramp(float t)
     if (t < 0.50) { return lerp(slate, stone, (t - 0.25) / 0.25); }
     if (t < 0.75) { return lerp(stone, ash,   (t - 0.50) / 0.25); }
     return lerp(ash, bone, (t - 0.75) / 0.25);
+}
+
+/// One rolling front, or nothing if the slot is idle. Split out of the entry point so three of
+/// them cost three calls rather than three copies of the same twenty lines.
+float3 WaveLight(float packed, float2 uv, float horizon)
+{
+    const float2 w = Unwave(packed);
+    const float wave = w.y;
+    if (wave <= 0.0)
+    {
+        return float3(0.0);
+    }
+    const float front = horizon + (1.0 - horizon) * wave * wave;
+    const float width = 0.028 + wave * 0.075;
+    const float band = smoothstep(width, 0.0, abs(uv.y - front)) * step(horizon, uv.y);
+    const float lane = 0.35 + 0.65 * smoothstep(0.80, 0.0, abs(uv.x - w.x));
+    float3 col = Ramp(0.92) * band * lane * (1.0 - wave * 0.7) * 1.35;
+    // A wash of light ahead of the front, so the floor it is about to reach lifts too - a
+    // single bright line reads as a scanline, a line with light in front of it reads as
+    // something travelling.
+    col += Ramp(0.55) * smoothstep(front + 0.16, front, uv.y) * step(horizon, uv.y)
+         * lane * (1.0 - wave) * 0.22;
+    // And a breath of light on the skyline as it sets off, so the whole parish registers the
+    // purchase and not just the strip of floor the front is on.
+    col += Ramp(0.45) * smoothstep(0.0, 0.18, wave) * (1.0 - wave) * 0.11;
+    return col;
 }
 
 // A skyline of blocks and spires at a given depth. Deterministic per rank, so the parish is
@@ -196,27 +234,19 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         col = lerp(col, Ramp(0.22), mist * 0.60);
     }
 
-    // ── The wave ─────────────────────────────────────────────────────────────────────
-    // A front of light rolling out across the floor toward the viewer, fired by every
-    // purchase. It accelerates as it comes, and it is brightest in line with whatever was
+    // ── The waves ────────────────────────────────────────────────────────────────────
+    // Fronts of light rolling out across the floor toward the viewer, one fired by every
+    // purchase. Each accelerates as it comes, and is brightest in line with whatever was
     // bought, so spending reads as something leaving that thing and reaching you.
-    const float wave = saturate(pc.params.w);
-    if (wave > 0.0)
-    {
-        const float front = horizon + (1.0 - horizon) * wave * wave;
-        const float width = 0.028 + wave * 0.075;
-        const float band = smoothstep(width, 0.0, abs(uv.y - front)) * step(horizon, uv.y);
-        const float lane = 0.35 + 0.65 * smoothstep(0.80, 0.0, abs(uv.x - pc.color0.a));
-        col += Ramp(0.92) * band * lane * (1.0 - wave * 0.7) * 1.35;
-        // A wash of light ahead of the front, so the floor it is about to reach lifts too -
-        // a single bright line reads as a scanline, a line with light in front of it reads
-        // as something travelling.
-        col += Ramp(0.55) * smoothstep(front + 0.16, front, uv.y) * step(horizon, uv.y)
-             * lane * (1.0 - wave) * 0.22;
-        // And a breath of light on the skyline as it sets off, so the whole parish
-        // registers the purchase and not just the strip of floor the front is on.
-        col += Ramp(0.45) * smoothstep(0.0, 0.18, wave) * (1.0 - wave) * 0.11;
-    }
+    //
+    // THREE of them, because there was one and a keeper buying quickly could not tell that
+    // anything had happened: the second purchase overwrote the first's progress, so the front
+    // already crossing the floor snapped back to the horizon and set off again. One purchase
+    // looked identical to five. Three in flight covers a burst about as fast as a hand can
+    // buy, and the oldest is only displaced once all three are busy.
+    col += WaveLight(pc.params.w, uv, horizon);
+    col += WaveLight(pc.color0.a, uv, horizon);
+    col += WaveLight(pc.color1.a, uv, horizon);
 
     // The horizon itself: a thin catch of light, which is what makes the two halves read as
     // a ground plane meeting a sky rather than as two fills.

@@ -68,8 +68,11 @@ public static class Layout
 	/// against this instead, which grazes the tallest crown rather than vanishing.</summary>
 	public const float Ceiling = 0.03f;
 
-	/// <summary>Room left above a rite for the count that sits there, in pixels.</summary>
-	public const float CountAllowance = 30.0f;
+	/// <summary>Room left above a rite for the count that sits there, in pixels. Parish places
+	/// the count 8 above the crown and it is 26 tall, so this has to be at least 34 - when the
+	/// type was made bigger this was 30, and the canopy would have been laid across the numbers
+	/// it is meant to clear.</summary>
+	public const float CountAllowance = 36.0f;
 
 	/// <summary>
 	/// The tallest a rite may be drawn, as a fraction of the window height.

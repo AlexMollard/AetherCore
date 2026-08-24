@@ -162,34 +162,45 @@ float Structure(int rite, float2 p, float time, out float core, out float detail
         // ripple down the hem so the edge reads as cloth rather than as a cone.
         const float waist = 0.185 + smoothstep(0.20, 0.70, p.y) * 0.245
                           + sin(p.y * 8.0 + 1.1) * 0.014;
-        d = opUnion(d, max(abs(p.x - 0.02) - waist, abs(p.y - 0.24) - 0.48));
+        d = opUnion(d, max(abs(p.x) - waist, abs(p.y - 0.24) - 0.48));
 
-        // Shoulders, set forward of the hips - the bow is in the offset, not in a tilt.
-        d = opUnion(d, sdRound(p - float2(0.05, -0.24), float2(0.27, 0.09), 0.09));
-        d = opUnion(d, sdSeg(p, float2(0.07, -0.30), float2(0.09, -0.40), 0.075)); // neck
+        // Shoulders, square over the hips.
+        //
+        // These used to march rightward as they rose - robe at 0.02, shoulders 0.05, neck
+        // 0.07, head 0.10 - on the theory that offsetting the upper body would read as a bow.
+        // It does not. Against a plinth that is dead centre and a pair of steps that are
+        // visibly level, a stack of small offsets reads as one thing: the statue is not
+        // straight. The bow now lives entirely in the head - lower, and hooded so the face is
+        // buried - which is where a viewer looks for it anyway.
+        d = opUnion(d, sdRound(p - float2(0.0, -0.24), float2(0.27, 0.09), 0.09));
+        d = opUnion(d, sdSeg(p, float2(0.0, -0.30), float2(0.02, -0.40), 0.075)); // neck
 
-        // The head, bowed, under a hood that overhangs the face.
-        const float2 h = p - float2(0.10, -0.55);
+        // The head, bowed, under a hood that overhangs the face. The last 0.03 of lean is the
+        // whole tilt: enough that it is not standing to attention, small enough to read as a
+        // bowed head rather than as a crooked carving.
+        const float2 h = p - float2(0.03, -0.55);
         d = opUnion(d, sdCircle(h, 0.185));
         d = opUnion(d, opSub(sdCircle(h - float2(0.0, -0.02), 0.245), sdCircle(h - float2(0.05, 0.10), 0.215)));
 
         // Arms up to the face: shoulder to elbow held wide, elbow back in to the hands. The
         // elbows sit ABOVE the shoulders, which is what makes the pose read as grief.
-        d = opUnion(d, sdSeg(p, float2(-0.19, -0.24), float2(-0.36, -0.44), 0.070));
-        d = opUnion(d, sdSeg(p, float2(-0.36, -0.44), float2(-0.03, -0.56), 0.060));
-        d = opUnion(d, sdSeg(p, float2(0.29, -0.24), float2(0.46, -0.42), 0.070));
-        d = opUnion(d, sdSeg(p, float2(0.46, -0.42), float2(0.22, -0.56), 0.060));
+        // Symmetric about the body's axis now, where they used to be centred on the offset
+        // shoulders and so sat off-centre against the plinth with everything else.
+        d = opUnion(d, sdSeg(p, float2(-0.24, -0.24), float2(-0.41, -0.44), 0.070));
+        d = opUnion(d, sdSeg(p, float2(-0.41, -0.44), float2(-0.05, -0.56), 0.060));
+        d = opUnion(d, sdSeg(p, float2(0.24, -0.24), float2(0.41, -0.42), 0.070));
+        d = opUnion(d, sdSeg(p, float2(0.41, -0.42), float2(0.11, -0.56), 0.060));
 
         // Cut: the hollow under the hood, the fold at the waist, the plinth courses.
         detail = sdCircle(h - float2(0.02, 0.06), 0.095);
-        detail = opUnion(detail, max(abs(p.y - 0.22) - 0.022, abs(p.x - 0.02) - 0.17));
+        detail = opUnion(detail, max(abs(p.y - 0.22) - 0.022, abs(p.x) - 0.17));
         detail = opUnion(detail, max(abs(p.y - 0.79) - 0.010, abs(p.x) - 0.52));
         detail = opUnion(detail, max(abs(p.y - 0.89) - 0.010, abs(p.x) - 0.52));
 
         // The tear, falling from between the hands and drying where it lands.
         const float fall = frac(time * 0.28);
-        core = sdCircle(p - float2(0.10, -0.44 + fall * 1.20), 0.040 * (1.0 - fall * 0.30));
-        core = opUnion(core, max(abs(p.y - 0.725) - 0.011, abs(p.x - 0.10) - 0.07 * (1.0 - fall)));
+        core = sdCircle(p - float2(0.03, -0.44 + fall * 1.20), 0.040 * (1.0 - fall * 0.30));
+        core = opUnion(core, max(abs(p.y - 0.725) - 0.011, abs(p.x - 0.03) - 0.07 * (1.0 - fall)));
     }
     else if (rite == 3)
     {

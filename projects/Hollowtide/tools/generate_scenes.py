@@ -34,6 +34,12 @@ PANEL = (0.043, 0.050, 0.060, 0.941)
 PANEL_DEEP = (0.027, 0.032, 0.040, 0.960)
 ROW = (0.075, 0.086, 0.101, 0.900)
 ROW_HOT = (0.125, 0.145, 0.160, 0.960)
+
+# Every authored face is multiplied by this. One number, because the complaint was about the
+# interface as a whole rather than any one label: at a short window the whole thing read small.
+# Boxes that were sized tightly around their old text are grown alongside it below - a bigger
+# face in an unchanged box clips, which is worse than a small one.
+TYPE = 1.22
 BONE = (0.855, 0.851, 0.816, 1.0)
 BONE_DIM = (0.502, 0.510, 0.522, 1.0)
 BONE_FAINT = (0.290, 0.302, 0.322, 1.0)
@@ -120,13 +126,16 @@ class Scene:
 
     @staticmethod
     def text(value, font=BODY, size=17.0, color=BONE, h="left", v="middle", wrap=False):
+        # Sizes below are written at their original values and scaled here, in one place, so
+        # the whole interface can be made more readable by moving one number rather than
+        # thirty-odd. Playtested at a short window, everything on screen was hard to read.
         return (
             "ui_text",
             [
                 ("color", list(color)),
                 ("font", font),
                 ("h_align", h),
-                ("pixel_size", size),
+                ("pixel_size", round(size * TYPE, 2)),
                 ("text", value),
                 ("v_align", v),
                 ("wrap", wrap),
@@ -145,7 +154,7 @@ class Scene:
                 ("font", font),
                 ("h_align", h),
                 ("label", label),
-                ("pixel_size", size),
+                ("pixel_size", round(size * TYPE, 2)),
                 ("text_color", list(fg)),
                 ("text_color_focused", list(fg_focus)),
                 ("v_align", "middle"),
@@ -197,7 +206,7 @@ class Scene:
                 ("font", BODY),
                 ("max_length", max_length),
                 ("padding", 10.0),
-                ("pixel_size", size),
+                ("pixel_size", round(size * TYPE, 2)),
                 ("placeholder", placeholder),
                 ("placeholder_color", list(BONE_FAINT)),
                 ("selection_color", list(ICHOR_DIM)),
@@ -489,7 +498,7 @@ def vigil():
     # banner tucked into a corner would read as another readout rather than as an arrival.
     vis = at(nave, "VisitationPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -262, 720, 132, MID, CENTRE)
     at(vis, "VisitationName", [Scene.text("", DISPLAY, 24.0, DREAD, "center")], 20, 14, 680, 32)
-    at(vis, "VisitationLine", [Scene.text("", BODY, 16.0, BONE_DIM, "center", wrap=True)], 40, 52, 640, 46)
+    at(vis, "VisitationLine", [Scene.text("", BODY, 16.0, BONE_DIM, "center", wrap=True)], 40, 52, 640, 60)
     at(vis, "VisitationClock", [Scene.text("", BODY, 15.0, BONE_FAINT, "center")], 20, 102, 680, 22)
 
     # Four answers on one row, always in the same order and always all four shown - including
@@ -516,14 +525,14 @@ def vigil():
     # It still yields to a visitation. They no longer share a slot, but at window heights below
     # about 1030 the answer row and the foot of the nave meet, and a find is never worth
     # covering an answer the keeper has nine seconds to give.
-    found = at(nave, "FoundPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -24, 620, 116, BOTTOM, BOTTOM)
+    found = at(nave, "FoundPanel", [Scene.image(PANEL_DEEP, 8.0)], 0, -24, 660, 126, BOTTOM, BOTTOM)
     # VOID, not white: ui_relic computes its own colour and takes only the alpha from the
     # element, so on any frame before the material resolves the plain image draws instead - and
     # a white one flashes as a solid block. The same trap the rites and the ledger icons hit.
     at(found, "FoundArt", [Scene.image(VOID), Scene.material("ui_relic", ICHOR, DREAD)], 16, 16, 84, 84)
-    at(found, "FoundGrade", [Scene.text("", DISPLAY, 15.0, ICHOR)], 116, 14, 480, 22)
-    at(found, "FoundName", [Scene.text("", DISPLAY, 21.0, BONE)], 116, 38, 480, 28)
-    at(found, "FoundPowers", [Scene.text("", BODY, 15.0, ICHOR_DIM)], 116, 72, 480, 24)
+    at(found, "FoundGrade", [Scene.text("", DISPLAY, 15.0, ICHOR)], 116, 12, 480, 26)
+    at(found, "FoundName", [Scene.text("", DISPLAY, 21.0, BONE)], 116, 40, 480, 34)
+    at(found, "FoundPowers", [Scene.text("", BODY, 15.0, ICHOR_DIM)], 116, 78, 480, 28)
 
     # ── the ledger ──────────────────────────────────────────────────────────────────
     ledger = s.add("LedgerPanel", canvas, [

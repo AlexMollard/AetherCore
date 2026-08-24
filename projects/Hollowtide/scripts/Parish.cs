@@ -130,11 +130,19 @@ public sealed class Parish
 	/// clearest sign that the parish was a readout rather than a place.</summary>
 	private readonly float[] _appear = new float[Content.RiteCount];
 
-	/// <summary>The wave: 0 idle, otherwise 0 -> 1 as a front of light rolls out across the
+	/// <summary>How many fronts can be crossing the floor at once. Three, because there was one
+	/// and a keeper buying quickly could not tell anything had happened - the second purchase
+	/// overwrote the first's progress, so a front halfway across snapped back to the horizon and
+	/// set off again, and one purchase looked exactly like five. The ceiling is the shader's:
+	/// three packed slots is all the room the effect's parameters have.</summary>
+	private const int kWavePool = 3;
+
+	/// <summary>Each wave: 0 idle, otherwise 0 -> 1 as a front of light rolls out across the
 	/// floor from whatever was just bought. Every purchase gets one, so spending always does
 	/// something you can see even when what you bought has no body in the parish.</summary>
-	private float _wave;
-	private float _waveFrom = 0.5f;
+	private readonly float[] _wave = new float[kWavePool];
+	/// <summary>Where each front set off from, as a fraction of the width.</summary>
+	private readonly float[] _waveFrom = new float[kWavePool];
 
 	/// <summary>Eased 0..1 while a visitation's aftermath runs, so the parish sags into it and
 	/// comes back rather than snapping between two looks.</summary>
@@ -229,7 +237,7 @@ public sealed class Parish
 		}
 		for (int i = 0; i < kPopPool; i++)
 		{
-			Entity label = UiKit.Text(_nave, "", -500.0f, -500.0f, 180.0f, 24.0f, 18.0f, Palette.Ichor,
+			Entity label = UiKit.Text(_nave, "", -500.0f, -500.0f, 200.0f, 30.0f, 22.0f, Palette.Ichor,
 				UiHAlign.Center);
 			_pops[i] = new Pop { Label = label, Age = 99.0f, Colour = Palette.Ichor };
 		}
@@ -353,12 +361,16 @@ public sealed class Parish
 		MeasureSigil();
 		_time += unscaledDelta;
 		_shake = MathF.Max(0.0f, _shake - unscaledDelta * 1.7f);
-		if (_wave > 0.0f)
+		for (int i = 0; i < kWavePool; i++)
 		{
-			_wave = MathF.Min(1.0f, _wave + unscaledDelta * 1.15f);
-			if (_wave >= 1.0f)
+			if (_wave[i] <= 0.0f)
 			{
-				_wave = 0.0f;
+				continue;
+			}
+			_wave[i] = MathF.Min(1.0f, _wave[i] + unscaledDelta * 1.15f);
+			if (_wave[i] >= 1.0f)
+			{
+				_wave[i] = 0.0f;
 			}
 		}
 		for (int i = 0; i < _punch.Length; i++)
@@ -396,15 +408,16 @@ public sealed class Parish
 		// passes through DreadShake, so a keeper who turned the unsteadiness down keeps it down.
 		Ui.SetEffectParams(_backdrop,
 			new Vector4(ShaderTime, MathF.Max(dread, MathF.Max(_reel * 0.75f, _walking)),
-				_shake * _shake * SaveSystem.DreadShake, _wave));
-		// The void's ALPHA carries where the wave started, because params is full and the
-		// backdrop only ever reads the void's rgb. Documented on both sides rather than
-		// silently smuggled: see the same note in ui_parish.slang.
+				_shake * _shake * SaveSystem.DreadShake, PackWave(0)));
+		// The two ALPHAS carry the other two waves. Params holds four numbers and three of them
+		// are spoken for, while neither colour's alpha is ever read as a colour - so the spare
+		// waves ride there. Documented on both sides rather than silently smuggled: see the
+		// same note in ui_parish.slang.
 		// Reeling reads as the dread souring without any of the dread payoff - the parish
 		// looks like it has been got at, which is exactly what has happened to it.
 		Ui.SetEffectColors(_backdrop,
-			Palette.Fade(Palette.Ink, _waveFrom),
-			Palette.Mix(Palette.Dread, Palette.DreadDeep, _reel));
+			Palette.Fade(Palette.Ink, PackWave(1)),
+			Palette.Fade(Palette.Mix(Palette.Dread, Palette.DreadDeep, _reel), PackWave(2)));
 
 		SyncRites(dread, unscaledDelta);
 		UpdateBearers(unscaledDelta);
@@ -461,7 +474,7 @@ public sealed class Parish
 				// Params before the first draw, so a rite never renders as rite 0 for a frame.
 				Ui.SetMaterialParams(_rites[rite], new Vector4(ShaderTime, rite, 0.0f, 0.0f));
 				Ui.SetMaterialColors(_rites[rite], Palette.RiteTint(rite), Palette.Ichor);
-				_counts[rite] = UiKit.Text(_nave, "", 0.0f, 0.0f, 90.0f, 20.0f, 15.0f, Palette.TextDim,
+				_counts[rite] = UiKit.Text(_nave, "", 0.0f, 0.0f, 110.0f, 26.0f, 18.0f, Palette.TextDim,
 					UiHAlign.Center);
 			}
 			_rites[rite].SetActive(true);
@@ -544,7 +557,7 @@ public sealed class Parish
 			// is worse than a count at an uneven height.
 			Ui.SetAnchors(_counts[rite], Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(_counts[rite], new Vector2(0.5f, 1.0f));
-			Ui.SetRect(_counts[rite], foot.X, foot.Y - size - 8.0f, 90.0f, 20.0f);
+			Ui.SetRect(_counts[rite], foot.X, foot.Y - size - 8.0f, 110.0f, 26.0f);
 			Ui.SetText(_counts[rite], "x" + owned);
 
 			// Where this rite's conduit leaves it: above its count, not at its foot. The wire is
@@ -628,6 +641,58 @@ public sealed class Parish
 		}
 	}
 
+	/// <summary>
+	/// Send a front of light out across the floor from <paramref name="from"/>.
+	/// </summary>
+	/// <remarks>
+	/// Takes an idle slot if there is one, and otherwise the front that is nearest finished - so
+	/// a burst of purchases each get their own wave, and the only one ever cut short is the one
+	/// closest to being over anyway.
+	/// </remarks>
+	private void FireWave(float from)
+	{
+		int chosen = 0;
+		float furthest = -1.0f;
+		for (int i = 0; i < kWavePool; i++)
+		{
+			if (_wave[i] <= 0.0f)
+			{
+				chosen = i;
+				break;
+			}
+			if (_wave[i] > furthest)
+			{
+				furthest = _wave[i];
+				chosen = i;
+			}
+		}
+		_wave[chosen] = 0.0001f;
+		_waveFrom[chosen] = from;
+	}
+
+	/// <summary>
+	/// One wave's origin and progress squeezed into a single float in [0,1).
+	/// </summary>
+	/// <remarks>
+	/// The origin quantised to 255 steps in the high part, the progress in the low. Kept inside
+	/// [0,1) rather than spread over a wider range because these ride in colour alphas, and a
+	/// colour channel is not a place to assume nothing will ever clamp. Zero means idle, which a
+	/// live wave cannot collide with: it starts at a progress of 0.0001, never at 0.
+	///
+	/// Unpacked by Unwave in ui_parish.slang. One format in two places - change either and you
+	/// have changed both.
+	/// </remarks>
+	private float PackWave(int slot)
+	{
+		float progress = _wave[slot];
+		if (progress <= 0.0f)
+		{
+			return 0.0f;
+		}
+		float origin = MathF.Floor(Math.Clamp(_waveFrom[slot], 0.0f, 1.0f) * 255.0f);
+		return (origin + MathF.Min(progress, 0.999f)) / 256.0f;
+	}
+
 	/// <summary>A rite finished a working: flare it, and send a bearer with the yield.</summary>
 	public void Delivered(int rite, double amount)
 	{
@@ -661,8 +726,7 @@ public sealed class Parish
 	/// </remarks>
 	public void Bought(int rite)
 	{
-		_wave = 0.0001f;
-		_waveFrom = rite >= 0 && rite < Content.RiteCount ? RiteX(rite) : Collection.X;
+		FireWave(rite >= 0 && rite < Content.RiteCount ? RiteX(rite) : Collection.X);
 		if (rite >= 0 && rite < Content.RiteCount)
 		{
 			_punch[rite] = 1.0f;
@@ -677,8 +741,7 @@ public sealed class Parish
 		if (held)
 		{
 			_shake = 0.35f;
-			_wave = 0.0001f;
-			_waveFrom = Collection.X;
+			FireWave(Collection.X);
 			ShowPop(Collection + new Vector2(0.0f, -0.05f), "WARDED", Palette.Sigil);
 			return;
 		}
@@ -895,7 +958,7 @@ public sealed class Parish
 			Ui.SetAnchors(pop.Label, Vector2.Zero, Vector2.Zero);
 			Ui.SetPivot(pop.Label, new Vector2(0.5f, 0.5f));
 			Ui.SetRect(pop.Label, px.X + rise * pop.Drift * bd.Z,
-				px.Y - rise * bd.W * 0.05f * pop.Lift, 180.0f, 24.0f);
+				px.Y - rise * bd.W * 0.05f * pop.Lift, 200.0f, 30.0f);
 			Ui.SetTextColor(pop.Label, Palette.Fade(pop.Colour, 1.0f - t));
 			if (t >= 1.0f)
 			{

@@ -36,7 +36,9 @@ public sealed class Ledger
 	/// scene: the row pool is sized from it, and 4px of disagreement puts every row past the
 	/// mask.</summary>
 	private const float kPad = 20.0f;
-	private const float kRowHeight = 66.0f;
+	/// <summary>Grown from 66 along with the type on it. A row is two lines and a rarity bar,
+	/// and raising the faces without raising the row put the second line through the bar.</summary>
+	private const float kRowHeight = 78.0f;
 	private const float kRowGap = 6.0f;
 	private const float kListTop = 150.0f;
 	private const int kRowPool = 14;
@@ -113,12 +115,12 @@ public sealed class Ledger
 			// The composed button's own centred label is unused: a ledger row has four columns,
 			// so they are placed individually and the pooled label is emptied.
 			Ui.SetText(row.Box.Label, "");
-			row.Title = UiKit.Text(row.Box.Root, "", 68.0f, 8.0f, 320.0f, 24.0f, 17.0f, Palette.TextBright);
-			row.Sub = UiKit.Text(row.Box.Root, "", 68.0f, 34.0f, 366.0f, 24.0f, 15.0f, Palette.TextFaint,
+			row.Title = UiKit.Text(row.Box.Root, "", 68.0f, 8.0f, 320.0f, 30.0f, 21.0f, Palette.TextBright);
+			row.Sub = UiKit.Text(row.Box.Root, "", 68.0f, 40.0f, 366.0f, 28.0f, 18.0f, Palette.TextFaint,
 				UiHAlign.Left, Palette.Body);
-			row.Cost = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 8.0f, 176.0f, 24.0f, 17.0f,
+			row.Cost = UiKit.Text(row.Box.Root, "", rowWidth - 214.0f, 8.0f, 200.0f, 30.0f, 21.0f,
 				Palette.Ichor, UiHAlign.Right);
-			row.Note = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 34.0f, 176.0f, 24.0f, 15.0f,
+			row.Note = UiKit.Text(row.Box.Root, "", rowWidth - 214.0f, 40.0f, 200.0f, 28.0f, 18.0f,
 				Palette.TextFaint, UiHAlign.Right);
 			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
 			// Ink, not white: ui_relic computes its own colour and takes only the alpha from the
