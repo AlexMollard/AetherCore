@@ -1000,6 +1000,10 @@ internal static class Balance
 					Vigil.ReceiveTithe(rng.NextDouble() * 1e6, "someone");
 					break;
 				case 10:
+					if (rng.Next(30) == 0)
+					{
+						Vigil.ShuntToEcho(rng.Next(Vigil.MaxEchoes));
+					}
 					// Also rare, and for the same reason as communion. Shedding is a congregation
 					// verb that dumps up to a whole point of dread; drawn evenly it zeroed the
 					// meter roughly every twelfth action, so nothing could ever climb to the
@@ -1095,6 +1099,138 @@ internal static class Balance
 		return "";
 	}
 
+	/// <summary>
+	/// Leaning on the dead has to be a loan, never a bin.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Shedding dread is the one verb that could end this game. Dread is the whole bargain -
+	/// it is what pays, and the meter filling is the only thing that threatens anybody - so a
+	/// button that removes it keeps every reward and deletes every risk. The fuzz already
+	/// showed what that looks like from the other side: drawn evenly, shedding zeroed the meter
+	/// so often that nothing could ever reach a visitation at all.
+	/// </para>
+	/// <para>
+	/// So the checks are about the PRICE. What an echo takes it keeps, a loaded line draws the
+	/// dark in faster, and the whole thing has to be worth doing only for a keeper who can
+	/// answer what it brings.
+	/// </para>
+	/// </remarks>
+	private static void TheDeadRememberWhatTheyTake()
+	{
+		Console.WriteLine("The dead remember what they take");
+
+		Vigil.Reset();
+		Check("a keeper with no past has nobody to lean on", !Vigil.CanShunt(0),
+			"no echoes before the first communion");
+
+		// Earn a communion the honest way, so the echo is real rather than fabricated.
+		Vigil.RunIchor = Vigil.RunIchorForSigils(3);
+		Vigil.Commune();
+		Check("a communion leaves a keeper behind", Vigil.Echoes.Count == 1,
+			Vigil.Echoes.Count + " standing behind this one");
+
+		Vigil.Owned[2] = 200;
+		Vigil.Dread = 0.9;
+		double before = Vigil.Dread;
+		double moved = Vigil.ShuntToEcho(0);
+		Check("what leaves the keeper arrives on the echo", moved > 0.0
+			&& Math.Abs((before - Vigil.Dread) - moved) < 1e-9
+			&& Math.Abs(Vigil.Echoes[0].Burden - moved) < 1e-9,
+			Numbers.Percent(moved) + " moved, none of it lost");
+
+		Check("and not again immediately", !Vigil.CanShunt(0),
+			"settling for " + Numbers.Duration(Vigil.ShuntCooldown));
+
+		// The price: a loaded line pulls the dark in faster.
+		Vigil.Reset();
+		Vigil.Owned[4] = 120;
+		double clearWindow = Vigil.SecondsToVisitation;
+		for (int i = 0; i < Vigil.MaxEchoes; i++)
+		{
+			Vigil.Echoes.Add(new Echo { Name = "K" + i, Burden = Vigil.kEchoCapacity });
+		}
+		double loadedWindow = Vigil.SecondsToVisitation;
+		Check("a loaded line costs real peace", loadedWindow < clearWindow * 0.7,
+			Numbers.Duration(clearWindow) + " of quiet becomes " + Numbers.Duration(loadedWindow));
+		Check("but never so much that it cannot be climbed out of", loadedWindow > 4.0,
+			"still " + Numbers.Duration(loadedWindow) + " between them at full burden");
+
+		// And it eases, so a keeper who stops leaning gets their meter back.
+		double loaded = Vigil.BurdenTotal;
+		for (int i = 0; i < 4000; i++)
+		{
+			Vigil.Tick(1.0);
+		}
+		Check("the dead put it down eventually", Vigil.BurdenTotal < loaded * 0.5,
+			"burden " + loaded.ToString("0.00") + " eases to " + Vigil.BurdenTotal.ToString("0.00"));
+
+		// The trade itself: worth it only if you can answer what it brings.
+		double skilledClear = Lean(75, shunt: false, answers: true);
+		double skilledLoaded = Lean(75, shunt: true, answers: true);
+		double carelessClear = Lean(75, shunt: false, answers: false);
+		double carelessLoaded = Lean(75, shunt: true, answers: false);
+
+		Check("leaning pays a keeper who answers", skilledLoaded > skilledClear,
+			(skilledLoaded / skilledClear).ToString("0.00") + "x for one who knows the answers");
+		Check("and does not pay one who does not", carelessLoaded < skilledLoaded / skilledClear * carelessClear,
+			(carelessLoaded / carelessClear).ToString("0.00") + "x for one who does not");
+	}
+
+	/// <summary>Play a stretch, optionally leaning on the dead and optionally answering what
+	/// that brings. Communes on sight so there is a line to lean on at all.</summary>
+	private static double Lean(double minutes, bool shunt, bool answers)
+	{
+		Vigil.Reset();
+		Vigil.Rng = new Random(11);
+		double click = 0.0;
+		double stoke = 0.0;
+		for (int step = 0; step < minutes * 60.0 / kDt; step++)
+		{
+			click += 4.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			stoke += 0.4 * kDt;
+			while (stoke >= 1.0)
+			{
+				stoke -= 1.0;
+				if (Vigil.Dread < 0.85)
+				{
+					Vigil.Stoke();
+				}
+			}
+			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
+			{
+				Vigil.RaiseWard();
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.SigilsOnOffer >= 4)
+			{
+				Vigil.Commune();
+			}
+			if (shunt && Vigil.Dread > 0.8)
+			{
+				for (int e = 0; e < Vigil.Echoes.Count; e++)
+				{
+					if (Vigil.ShuntToEcho(e) > 0.0)
+					{
+						break;
+					}
+				}
+			}
+			if (Vigil.Approaching && answers)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			Vigil.Tick(kDt);
+		}
+		return Vigil.LifetimeIchor;
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -1107,6 +1243,7 @@ internal static class Balance
 		EveryMarkIsReachable();
 		TablesLineUp();
 		IdlingWorks();
+		TheDeadRememberWhatTheyTake();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

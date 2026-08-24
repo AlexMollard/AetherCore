@@ -63,6 +63,32 @@ public static class Vigil
 	/// like the sigils that bought them.</summary>
 	public static int[] Boons = new int[Content.Boons.Length];
 
+	/// <summary>
+	/// The keepers this one used to be, and what each of them is carrying for you.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The congregation, for a keeper who has none. Pushing your dread onto somebody else is
+	/// the most distinctive thing this game does and it needed a second player online to do
+	/// it, so in the sessions almost everybody actually plays, it did not exist. A communion
+	/// leaves a keeper behind - the game opens on "the last keeper left the ledger open" - and
+	/// those are the ones standing close enough to take something from you.
+	/// </para>
+	/// <para>
+	/// <b>It is a loan, not a bin.</b> Shedding dread at will would end the game: dread is the
+	/// whole bargain, the meter filling is the only thing that threatens anybody, and a free
+	/// dump button removes the risk while keeping the reward. So what an echo takes it KEEPS,
+	/// and while it is carrying it the line as a whole lets go of dread more slowly - see
+	/// <see cref="DreadRelax"/>. You do not get rid of anything. You borrow against the dead
+	/// and the interest is a meter that never settles as low again.
+	/// </para>
+	/// </remarks>
+	public static readonly List<Echo> Echoes = new List<Echo>();
+
+	/// <summary>How many keepers stand close enough to be asked. Matches the roster the
+	/// congregation panel already draws, so the same four rows serve both.</summary>
+	public const int MaxEchoes = 4;
+
 	/// <summary>Sigils in hand, to spend. Spending these does NOT weaken the keeper - see
 	/// <see cref="SigilsEarned"/>.</summary>
 	public static int Sigils;
@@ -413,6 +439,114 @@ public static class Vigil
 	/// </remarks>
 	public const double DreadRelax = 0.02;
 
+	/// <summary>
+	/// What the echoes are carrying, 0 to 1 across the whole line.
+	/// </summary>
+	/// <remarks>
+	/// Averaged over <see cref="MaxEchoes"/> rather than over however many echoes exist, so
+	/// handing everything to a single keeper is not a way to make the burden read as full while
+	/// the line is mostly empty - the debt is the line's, not one ghost's.
+	/// </remarks>
+	public static double BurdenTotal
+	{
+		get
+		{
+			double total = 0.0;
+			foreach (Echo echo in Echoes)
+			{
+				total += echo.Burden;
+			}
+			return Math.Clamp(total / MaxEchoes, 0.0, 1.0);
+		}
+	}
+
+	/// <summary>What a fully burdened line adds to the pressure on the meter, per second. Set
+	/// so that leaning on the dead roughly halves the peace between visitations rather than
+	/// nudging it: a cost the keeper cannot feel is not a cost they will weigh.</summary>
+	public const double kBurdenPressure = 0.05;
+
+	/// <summary>
+	/// How fast an echo puts down what it is carrying, per second.
+	/// </summary>
+	/// <remarks>
+	/// Slow enough that a shunt is a decision you live with, fast enough that a keeper who
+	/// stops leaning gets their meter back inside a session: a fully loaded line clears in a
+	/// bit under two hours. It was four and a half at first, which made one press of one button
+	/// a penalty carried for the rest of the day - a cost that outlives the situation that
+	/// justified it stops reading as a trade and starts reading as a mistake.
+	/// </remarks>
+	public const double kBurdenEase = 0.00015;
+
+	/// <summary>Most one shunt can move. The same quarter the congregation verb pushes onto
+	/// another player, because it is the same act - only the recipient has changed.</summary>
+	public const double kShuntShare = 0.25;
+
+	/// <summary>What an echo can hold before it will not take any more.</summary>
+	public const double kEchoCapacity = 1.0;
+
+	/// <summary>True when this echo has room for more.</summary>
+	public static bool CanShunt(int index)
+		=> index >= 0 && index < Echoes.Count && Dread > 0.02 && ShuntCooldown <= 0.0
+			&& Echoes[index].Burden < kEchoCapacity - kShuntShare * 0.5;
+
+	/// <summary>Seconds before the line will take anything else. Without it a keeper can hold
+	/// the meter at any level they like by shunting the trickle that easing frees up every
+	/// frame - simulated, that was seventy-two thousand shunts in ninety minutes, which is not
+	/// a decision anybody is making.</summary>
+	public static double ShuntCooldown;
+
+	public const double kShuntInterval = 20.0;
+
+	/// <summary>
+	/// Push what you are carrying onto one of the keepers you used to be.
+	/// </summary>
+	/// <remarks>
+	/// Returns what actually moved, which is never more than the echo has room for - so a
+	/// keeper cannot shed a quarter into a ghost that could only take a tenth and quietly lose
+	/// the rest. The same care <see cref="ShedDread"/> takes for the same reason.
+	/// </remarks>
+	public static double ShuntToEcho(int index)
+	{
+		if (!CanShunt(index))
+		{
+			return 0.0;
+		}
+		Echo echo = Echoes[index];
+		double room = kEchoCapacity - echo.Burden;
+		double moved = Math.Min(Math.Min(Dread, kShuntShare), room);
+		if (moved <= 0.0)
+		{
+			return 0.0;
+		}
+		Dread -= moved;
+		echo.Burden += moved;
+		Echoes[index] = echo;
+		ShuntCooldown = kShuntInterval;
+		Revision++;
+		Say(echo.Name + " takes it from you. They do not seem to mind, which is worse.", Omen.Dread);
+		return moved;
+	}
+
+	/// <summary>Remember the keeper this run was, so a later one can lean on them. The line is
+	/// capped, and it is the LONGEST-carrying echo that goes rather than the oldest: a ghost
+	/// still holding your dread is the one worth keeping around to answer for it.</summary>
+	private static void RecordEcho()
+	{
+		Echoes.Add(new Echo { Name = KeeperName, Burden = 0.0 });
+		while (Echoes.Count > MaxEchoes)
+		{
+			int lightest = 0;
+			for (int i = 1; i < Echoes.Count; i++)
+			{
+				if (Echoes[i].Burden < Echoes[lightest].Burden)
+				{
+					lightest = i;
+				}
+			}
+			Echoes.RemoveAt(lightest);
+		}
+	}
+
 	/// <summary>The pressure the parish puts on the meter, before the ward holds any of it
 	/// back. Owning more raises this; it is the reason a big parish is a dangerous one.</summary>
 	public static double DreadPressure
@@ -434,7 +568,16 @@ public static class Vigil
 			// aftermath can be short enough to fit between two of them. The cap gives the
 			// deepest parish a floor on its rhythm - about a quarter of a minute - and the
 			// danger stops escalating past the point where escalating it only means flicker.
-			return Math.Min(Math.Sqrt(total) * 0.022, kMaxPressure);
+			// The burden is added AFTER the cap, not folded in before it, and that is the whole
+			// bite of a shunt. Inside the cap it would vanish for any parish already at the
+			// ceiling - which is precisely the keeper rich enough to be leaning on the dead.
+			//
+			// It was tried the other way first, as a drag on relaxation instead of a push on
+			// pressure. That reads better and does almost nothing: halving relaxation doubles
+			// the equilibrium and the time between visitations together, so a fully burdened
+			// line moved the window from 21 seconds to 19. Pressure shortens the window
+			// directly, which is what "you will answer for this" has to mean here.
+			return Math.Min(Math.Sqrt(total) * 0.022, kMaxPressure) + BurdenTotal * kBurdenPressure;
 		}
 	}
 
@@ -824,6 +967,7 @@ public static class Vigil
 		Sigils += payout;
 		SigilsEarned += payout;
 		Communions++;
+		RecordEcho();
 		Ichor = 0.0;
 		RunIchor = 0.0;
 		Dread = 0.0;
@@ -832,6 +976,7 @@ public static class Vigil
 		StokeCooldown = 0.0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
+		ShuntCooldown = 0.0;
 		s_murmurBand = -1;
 		s_quiet = 0.0;
 		s_beckons = 0;
@@ -934,9 +1079,27 @@ public static class Vigil
 		{
 			StokeCooldown = Math.Max(0.0, StokeCooldown - deltaSeconds);
 		}
+		if (ShuntCooldown > 0.0)
+		{
+			ShuntCooldown = Math.Max(0.0, ShuntCooldown - deltaSeconds);
+		}
 		// Fervour drains steadily, so it is a reward for playing NOW rather than a level you
 		// grind once and keep.
 		Fervour = Math.Max(0.0, Fervour - FervourDrain * deltaSeconds);
+
+		// The dead put things down eventually. Applied offline as well as on, because the debt
+		// is time passing rather than attention paid - and a keeper who walks away for a night
+		// should come back to a line that has eased rather than to the same weight exactly.
+		for (int i = 0; i < Echoes.Count; i++)
+		{
+			Echo echo = Echoes[i];
+			if (echo.Burden <= 0.0)
+			{
+				continue;
+			}
+			echo.Burden = Math.Max(0.0, echo.Burden - kBurdenEase * deltaSeconds);
+			Echoes[i] = echo;
+		}
 
 		double efficiency = offline ? OfflineEfficiency : 1.0;
 		if (offline)
@@ -1468,8 +1631,18 @@ public static class Vigil
 		SurgeSeconds = 0.0;
 		SurgeMultiplier = 1.0;
 		Array.Clear(CycleProgress, 0, CycleProgress.Length);
+		Echoes.Clear();
 		Revision++;
 	}
+}
+
+/// <summary>One keeper this one used to be, and what they are holding.</summary>
+public struct Echo
+{
+	public string Name;
+	/// <summary>0 to <see cref="Vigil.kEchoCapacity"/>. Dread that left the living keeper and
+	/// did not stop existing.</summary>
+	public double Burden;
 }
 
 /// <summary>What the keeper missed while the game was closed.</summary>

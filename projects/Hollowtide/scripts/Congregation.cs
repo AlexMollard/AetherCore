@@ -71,11 +71,16 @@ public sealed class Congregation
 	/// present, which the rest of the game uses to size the congregation bonus.</summary>
 	public int Update(bool connected)
 	{
-		_panel.SetActive(connected);
+		// Alone, the panel shows the keepers this one USED to be. Pushing dread onto somebody
+		// else is the most distinctive thing this game does, and it needed a second player
+		// online - so in the sessions almost everybody actually plays, the panel was hidden and
+		// the mechanic did not exist. A communion leaves a keeper behind; they will do.
 		if (!connected)
 		{
+			ShowEchoes();
 			return VigilPresence.All.Count;
 		}
+		_panel.SetActive(true);
 
 		VigilPresence? local = VigilPresence.Local;
 		int count = VigilPresence.All.Count;
@@ -137,5 +142,70 @@ public sealed class Congregation
 		}
 
 		return count;
+	}
+
+	/// <summary>
+	/// Draw the line of keepers behind this one, and let the living one lean on them.
+	/// </summary>
+	/// <remarks>
+	/// The same four rows, the same bar, the same button. An echo is not a second system with
+	/// its own panel - it is what stands in the empty seats, which is why the dread bar reads
+	/// as their BURDEN here and as their exposure when they are alive: in both cases it is what
+	/// that keeper is carrying.
+	/// </remarks>
+	private void ShowEchoes()
+	{
+		bool any = Vigil.Echoes.Count > 0;
+		_panel.SetActive(any);
+		if (!any)
+		{
+			return;
+		}
+
+		Ui.SetText(_heading, "THOSE WHO CAME BEFORE  " + Vigil.Echoes.Count);
+
+		for (int i = 0; i < MaxKeepers; i++)
+		{
+			Row row = _rows[i];
+			if (i >= Vigil.Echoes.Count)
+			{
+				row.Box.SetActive(false);
+				continue;
+			}
+			row.Box.SetActive(true);
+
+			Echo echo = Vigil.Echoes[i];
+			float burden = (float)Math.Clamp(echo.Burden / Vigil.kEchoCapacity, 0.0, 1.0);
+
+			Ui.SetText(row.Name, echo.Name);
+			Ui.SetTextColor(row.Name, Palette.TextDim);
+			Ui.SetText(row.Rate, burden > 0.01f
+				? "carrying " + Numbers.Percent(burden) + " of what you gave them"
+				: "carrying nothing yet");
+			Ui.SetText(row.Ping, "");
+
+			Vector4 trackRect = Ui.GetRect(row.Track);
+			Ui.SetRect(row.Fill, 0.0f, 0.0f, MathF.Max(1.0f, trackRect.Z * burden), 6.0f);
+			Ui.SetImageColor(row.Fill, Palette.Mix(Palette.DreadDeep, Palette.Dread, burden));
+			Ui.SetImageColor(row.Box, Palette.Row);
+
+			// There is nobody to tithe. The dead have no use for ichor.
+			row.Tithe.SetActive(false);
+
+			bool canShunt = Vigil.CanShunt(i);
+			row.Shunt.SetLabel(Vigil.ShuntCooldown > 0.0
+				? "THEY ARE STILL SETTLING"
+				: canShunt
+					? "GIVE THEM " + Numbers.Percent(Math.Min(Vigil.kShuntShare, Vigil.Dread))
+					: burden >= 1.0 - 1e-6 ? "THEY CAN HOLD NO MORE" : "GIVE THEM YOUR DREAD");
+			row.Shunt.SetEnabled(canShunt);
+			row.Shunt.Style(canShunt, Palette.Mix(Palette.RowHot, Palette.Dread, 0.45f),
+				Palette.PanelDeep, Palette.PanelDeep);
+
+			if (canShunt && row.Shunt.Activated)
+			{
+				Vigil.ShuntToEcho(i);
+			}
+		}
 	}
 }

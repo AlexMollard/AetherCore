@@ -48,6 +48,13 @@ public sealed class VigilSave
 	/// learned is not part of the parish they gave back.</summary>
 	public bool[] VisitorsMet { get; set; } = Array.Empty<bool>();
 	public bool[] VisitorsBested { get; set; } = Array.Empty<bool>();
+
+	/// <summary>The keepers this one used to be, and what each is carrying. Two parallel arrays
+	/// rather than an array of Echo, deliberately: Echo has public FIELDS, and this file exists
+	/// partly because System.Text.Json silently ignores fields - a nested type would serialise
+	/// as a row of empty objects and nobody would find out until a save came back blank.</summary>
+	public string[] EchoNames { get; set; } = Array.Empty<string>();
+	public double[] EchoBurdens { get; set; } = Array.Empty<double>();
 	public int CommunionSurges { get; set; }
 	public int HandGathers { get; set; }
 	public double SharedVigilSeconds { get; set; }
@@ -239,6 +246,8 @@ public static class SaveSystem
 		VisitorsAnswered = Vigil.VisitorsAnswered,
 		VisitorsMet = (bool[])Vigil.VisitorsMet.Clone(),
 		VisitorsBested = (bool[])Vigil.VisitorsBested.Clone(),
+		EchoNames = Vigil.Echoes.ConvertAll(e => e.Name).ToArray(),
+		EchoBurdens = Vigil.Echoes.ConvertAll(e => e.Burden).ToArray(),
 		CommunionSurges = Vigil.CommunionSurges,
 		HandGathers = Vigil.HandGathers,
 		SharedVigilSeconds = Vigil.SharedVigilSeconds,
@@ -283,6 +292,19 @@ public static class SaveSystem
 		CopyInto(save.Offerings, Vigil.OfferingsTaken);
 		CopyInto(save.Marks, Vigil.MarksEarned);
 		CopyInto(save.Overseers, Vigil.Overseers);
+		// Rebuilt from the shorter of the two, so a half-written save cannot produce an echo
+		// with a name and no burden or the reverse.
+		Vigil.Echoes.Clear();
+		int echoes = Math.Min(save.EchoNames.Length, save.EchoBurdens.Length);
+		for (int i = 0; i < echoes && i < Vigil.MaxEchoes; i++)
+		{
+			Vigil.Echoes.Add(new Echo
+			{
+				Name = string.IsNullOrWhiteSpace(save.EchoNames[i]) ? "Keeper" : save.EchoNames[i],
+				Burden = Math.Clamp(save.EchoBurdens[i], 0.0, Vigil.kEchoCapacity),
+			});
+		}
+
 		CopyInto(save.VisitorsMet, Vigil.VisitorsMet);
 		CopyInto(save.VisitorsBested, Vigil.VisitorsBested);
 		Vigil.Revision++;
