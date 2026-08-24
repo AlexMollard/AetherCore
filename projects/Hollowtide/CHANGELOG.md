@@ -65,6 +65,57 @@ straight through whatever structures stood between it and the sigil.
   thing on screen depends on both the parish and the window.
 - No bounce and no gait. Beads that would overlap are separated by pace, not by a wobble.
 
+### A relic is made of what it does
+Relics carried one power at the two grades a keeper sees most, so the whole system read as
+"a relic does a thing" rather than as a loadout.
+
+- **One power per grade**: Leavings do one thing, a Hollowed relic does **five**. Magnitudes
+  came down to pay for it — a better relic is more *interesting*, not a bigger number.
+- **The art is built from the powers.** Each one adds its own feature to the object: a grip, a
+  hung weight, a ward ring, rays, an alms bowl, a standing foot, structures at the base, a
+  struck spark, a chamber with something kept in it. A relic that does five things has five
+  things on it, and two relics with different powers are different **objects** rather than the
+  same object in a higher tier of jewellery.
+- **Foundation** — while worn, the keeper holds copies of one rite they never bought. They
+  stand in the parish and produce, and they are gone the moment it comes off. Kept off the
+  books: no milestone credit, no discount on the next purchase. A loan of production, not of
+  progress.
+- **Kindling** shortens the wait to stoke; **Reliquary** makes the ground give things up more
+  often — a relic that finds relics. Nine kinds in all.
+- **An inspector**: hover any relic for the drawing at a size where its features can be told
+  apart, every power on its own line, what rendering it pays, and two sentences of history
+  from its own seed.
+- **A wear-the-best button** that works on worn and carried together, so it is idempotent and
+  can only improve the hand — lit only when it would change something.
+- **Rendering takes two right-clicks**, and says what it destroyed and for how much.
+
+### The parish keeps its voice
+The whisper feed shows a line for nine seconds and then loses it forever.
+
+- A **VOICES tab** holds the last 160 lines, newest first, in the colour each was said in.
+- Recorded where the parish **speaks**, not where it is drawn, so nothing said while the feed
+  was full is missed — which is exactly the busy stretch a keeper looks away during.
+- **Saved**, and carried through a communion. A record that empties on quit is still gone.
+
+### Consecration
+Every other choice in a vigil is a purchase, and a purchase is not a decision you live with.
+
+- Once per vigil, give the run to one rite: it is worth **three times** as much and every other
+  rite gives up a fifth.
+- Refused a second time, and refused for a rite the keeper does not hold.
+- Cleared by a communion, so the question is asked again rather than answered once, ten runs
+  ago.
+
+### Offerings that do not run out
+Three per rite ran out at fifty copies, and then the tab was empty and told a keeper to buy
+more of a rite they owned hundreds of.
+
+- **86 offerings**, on a deep ladder reaching to six hundred copies.
+- **Muffled Bell** — a third less dread from a rite for a seventh less yield. The first
+  offering that is a *bargain* rather than a bonus.
+- **Unhooded Lantern** — its mirror: two fifths more taken for half again the dread. Two
+  offerings pointing opposite ways on one axis put the game's bargain in the keeper's hands.
+
 ### Relic trading
 - Hand a relic to another keeper; it travels as its seed and grade alone.
 - Removal happens **before** anything is sent, and is restored if the send fails.
@@ -132,6 +183,29 @@ straight through whatever structures stood between it and the sigil.
 - **Fresh echoes were evicted the instant they were added**, so the line showed the same four
   names forever.
 
+### Things nobody could see
+- **The second line of every ledger row vanished under the pointer.** `TextFaint` and `RowHot`
+  were the same step of the grey ramp — a contrast ratio of **1.04:1**. Not dim: gone. Faint
+  text on a normal row was only 1.50:1, which is why the interface read as unreadable
+  generally.
+- **A row's description ran underneath its own price.** The two column widths were hardcoded
+  against a figures column inset from the right and overlapped by **70px**; raising the type
+  made it worse, because the inset scaled and the text widths did not.
+- **Every relic in the game drew the wrong features.** The power mask is packed in C# by
+  `1 << PowerKinds` and unpacked in the shader by a number typed out in the shader; adding a
+  seventh power moved one and not the other, halving every mask. Silent, because a
+  wrong-but-plausible object looks like art.
+- **A relic that lent structures put them in the parish and produced nothing** — the rate loop
+  guarded on what was *bought* rather than what was *standing*.
+- **Wearing the best three churned the hand.** A low relic in slot 0 and a high one in slot 1
+  would swap, changing both slots to reach an identical hand. The first fix for that
+  **duplicated relics** — a demoted relic stayed worn *and* went back to the satchel — in 962
+  of 3000 random inventories.
+- **A second purchase reset the first purchase's wave** instead of sending another, so a front
+  halfway across the floor snapped back and set off again. One purchase looked like five.
+- **The weeping statue was crooked** — its robe, shoulders, neck and head each sat a little
+  further right than the last.
+
 ### The parish's layout
 All four found by making the geometry checkable, not by looking at it.
 
@@ -171,6 +245,10 @@ All four found by making the geometry checkable, not by looking at it.
   one still playing out.
 
 ### Persistence
+- **The offerings and marks tables are save formats.** Both are stored as flags indexed by
+  position, so reordering either silently re-points every flag in every existing save — a
+  keeper loads their game and owns things they never bought, or holds a record of things they
+  never did. Everything new is appended, and both prefixes are now frozen by a check.
 - **A corrupt save could hand a keeper negative sigils.** Everything read off the file is now
   clamped, including NaN and infinity in the doubles.
 
@@ -192,7 +270,7 @@ Mechanics that existed and worked, but that no player could see:
 
 ## Tooling
 
-- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **125
+- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **178
   invariants**. Every check exists because the thing it checks was once broken.
 - **The parish's layout is checked too.** The geometry was split into an engine-free `Layout`
   and the harness now lays the parish out at **336 sizes across six window shapes**, asserting
@@ -205,6 +283,23 @@ Mechanics that existed and worked, but that no player could see:
   next can be found. It found two.
 - **The save is testable** — the data model was split from the file IO, so a whole vigil
   round-trips through JSON in memory without touching the player's real save.
+
+## Three things the checks themselves got wrong
+
+Worth recording, because each was a *check* failing rather than the game.
+
+- **A check that compared C# to C#.** "The drawing is made of the same powers as the words"
+  verified `PackedPowerMask` against `1 << PowerKinds` — both sides of the comparison were the
+  same side, so it passed happily while every relic drew the wrong features. A format that
+  crosses a language boundary is not checked until something pins the number on the far side.
+- **A fixture that did not know about a field.** The solo-reachability check maxes out every
+  counter and asserts each non-congregation mark becomes earnable; it had never heard of the
+  relic counters, so it reported **six perfectly earnable marks as impossible**.
+- **A bound tighter than its own distribution.** "A keeper finds something in their first
+  minutes" bounded one sample of an exponential waiting time at 300s. Measured over 200k digs
+  the mean wait is **1m56s**, putting that bound near the 92nd percentile — it would have
+  failed roughly one seed in twelve, forever, at random. The property is now asserted on the
+  rate, where no seed can move it.
 
 ## What is still only checked by eye
 

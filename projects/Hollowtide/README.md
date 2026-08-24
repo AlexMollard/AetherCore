@@ -39,6 +39,7 @@ scripts/Content.cs         rites, offerings, marks, boons, visitors, the parish'
 scripts/VigilSaveData.cs   what a save contains and how it is applied (engine-free)
 scripts/SaveSystem.cs      reading and writing the file
 scripts/Layout.cs          where things stand in the parish, as pure arithmetic (engine-free)
+scripts/Transcript.cs      everything the parish has said, as a ring (engine-free)
 scripts/Typography.cs      how big the type is - one number (engine-free)
 scripts/{Hud,Ledger,Parish,Congregation,Whispers}.cs   views onto the simulation
 assets/shaders/ui_relic.slang   relics drawn from their seed; grade adds layers, not colours
@@ -46,7 +47,8 @@ tools/generate_scenes.py   scaffolds the authored chrome - read its header befor
 tools/balance/             the balance harness
 ```
 
-`Vigil`, `Relics`, `Content`, `VigilSaveData`, `Palette`, `Layout` and `Typography` carry
+`Vigil`, `Relics`, `Content`, `VigilSaveData`, `Palette`, `Layout`, `Typography` and
+`Transcript` carry
 **no `AetherCore` reference**. That is not tidiness — it is what lets the harness compile the
 rules on their own and play them ten thousand times without a window, and what lets a whole
 save round-trip through JSON in a test that never goes near the player's real one.
@@ -66,7 +68,7 @@ dotnet run -c Release --project projects/Hollowtide/tools/balance
 ```
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **125 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **178 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -86,6 +88,11 @@ visible by reading the code:
   rite's own width.
 - Every conduit began its descent at the same *fraction* of its journey, so the longest one
   came down through the middle of the parish.
+- The quietest text and the highlighted row behind it were the same grey, so a row's second
+  line disappeared the instant the pointer touched it.
+- Every relic drew the wrong features, because C# packed their powers with one number and the
+  shader unpacked them with another.
+- Wearing the best three relics duplicated one in a third of random inventories.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
