@@ -268,12 +268,19 @@ public static class Relics
 
 		// Each grade needs the dread that justifies it AND a roll on top, so the brink makes
 		// good things possible rather than guaranteed.
-		double luck = rng.NextDouble() * (0.35 + dread);
+		//
+		// The TOP band is the one to watch, because it is open-ended: everything above the last
+		// threshold is Hollowed, so if the roll can reach much past it the rarest grade quietly
+		// becomes the commonest of the good ones. Measured at the brink under the first numbers,
+		// Hollowed came up 22.2% against Hallowed's 17.2% and Anointed's 17.8% - a ladder that
+		// inverted exactly where a keeper spends their most dangerous minutes. The range now
+		// runs further than the last threshold by less than the bands below it are wide.
+		double luck = rng.NextDouble() * (0.35 + dread * 1.15);
 		Grade grade = luck switch
 		{
-			> 1.05 => Grade.Hollowed,
-			> 0.82 => Grade.Hallowed,
-			> 0.58 => Grade.Anointed,
+			> 1.30 => Grade.Hollowed,
+			> 0.95 => Grade.Hallowed,
+			> 0.62 => Grade.Anointed,
 			> 0.30 => Grade.Keepsake,
 			_ => Grade.Leavings,
 		};

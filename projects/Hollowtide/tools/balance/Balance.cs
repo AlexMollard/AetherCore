@@ -1353,6 +1353,42 @@ internal static class Balance
 		Check("but the brink is not a guarantee", brinkGrades[0] > brinkFinds / 20,
 			Numbers.Percent((double)brinkGrades[0] / brinkFinds) + " of brink finds are still Leavings");
 
+		// -- The ladder must never invert, at ANY depth. --
+		// The overall mix can look perfectly graded while the top band is broken, because most
+		// digs happen at moderate dread and drown out the brink. The last band is open-ended -
+		// everything above the final threshold is Hollowed - so a roll that reaches too far past
+		// it makes the rarest grade the commonest of the good ones exactly where a keeper spends
+		// their most dangerous minutes. Checked per depth for that reason.
+		Random ladder = new Random(3);
+		string inverted = "";
+		foreach (double depth in new[] { 0.25, 0.5, 0.75, 0.9, 1.0 })
+		{
+			int[] seen = new int[5];
+			for (int i = 0; i < 60000; i++)
+			{
+				Relic dug = Relics.Dig(ladder, depth, i + 1);
+				if (dug.Exists)
+				{
+					seen[(int)dug.Grade]++;
+				}
+			}
+			for (int g = 1; g < 5 && inverted.Length == 0; g++)
+			{
+				// A grade may be absent at this depth, and the bottom two bands are near enough
+				// the same width that which of them leads is noise - Keepsake runs 50% against
+				// Leavings' 47% at shallow dread and nobody could tell. What must not happen is
+				// a grade running away from the one below it: the bug this exists for had
+				// Hollowed at 22% against Hallowed's 17%, a ratio of 1.29.
+				if (seen[g] > seen[g - 1] * 1.15)
+				{
+					inverted = Relics.GradeName((Grade)g) + " outnumbers " + Relics.GradeName((Grade)(g - 1))
+						+ " at dread " + depth.ToString("0.00");
+				}
+			}
+		}
+		Check("no grade is commoner than the one beneath it", inverted.Length == 0,
+			inverted.Length == 0 ? "the ladder holds at every depth" : inverted);
+
 		// -- Rarity has to mean something at a glance. --
 		double bestKeepsake = 0.0;
 		double worstHallowed = double.MaxValue;
