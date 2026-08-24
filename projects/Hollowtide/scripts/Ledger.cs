@@ -475,7 +475,10 @@ public sealed class Ledger
 			Ui.SetText(row.Sub, Content.Marks[i].Blurb);
 			Ui.SetText(row.Cost, earned ? "KEPT" : "");
 			Ui.SetTextColor(row.Cost, Palette.IchorDim);
-			Ui.SetText(row.Note, "");
+			// Say when a mark needs other people. Two of them cannot be earned alone, and left
+			// unlabelled they read as a completionist's dead end rather than as an invitation.
+			Ui.SetText(row.Note, !earned && Content.Marks[i].NeedsCongregation ? "needs a congregation" : "");
+			Ui.SetTextColor(row.Note, Palette.Sigil);
 			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
 			row.Box.SetEnabled(false);
 			row.Box.SetColour(earned ? Palette.Row : Palette.PanelDeep);

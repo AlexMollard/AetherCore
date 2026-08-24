@@ -790,6 +790,71 @@ internal static class Balance
 			total + " lines, all of them things that happened");
 	}
 
+	/// <summary>
+	/// Every mark is either earnable alone or says out loud that it is not.
+	/// </summary>
+	/// <remarks>
+	/// The check grants a solo keeper everything solo play can possibly produce and then asks
+	/// what is left. Anything still unearned needs a second player, and must be flagged as
+	/// such - otherwise a mark quietly becomes impossible the day someone writes one against a
+	/// counter only the congregation moves, and the only person who finds out is a completionist
+	/// who cannot be told why.
+	/// </remarks>
+	private static void EveryMarkIsReachable()
+	{
+		Console.WriteLine("Every mark is reachable, or says why not");
+		Vigil.Reset();
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			Vigil.Owned[i] = 500;
+			Vigil.Overseers[i] = true;
+			Vigil.VisitorsMet[i] = true;
+			Vigil.VisitorsBested[i] = true;
+		}
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			Vigil.OfferingsTaken[i] = true;
+		}
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			Vigil.Boons[i] = Content.Boons[i].MaxLevel;
+		}
+		Vigil.LifetimeIchor = 1e30;
+		Vigil.Sigils = 9999;
+		Vigil.SigilsEarned = 9999;
+		Vigil.Communions = 50;
+		Vigil.PlayedSeconds = 1e6;
+		Vigil.HighDreadSeconds = 1e5;
+		Vigil.WardsRaised = 999;
+		Vigil.TimesTaken = 999;
+		Vigil.HandGathers = 99999;
+		Vigil.VisitorsAnswered = 999;
+		// SharedVigilSeconds and CommunionSurges stay at zero: no solo keeper can move them.
+
+		int unflagged = 0;
+		int flagged = 0;
+		for (int i = 0; i < Content.Marks.Length; i++)
+		{
+			if (Content.Marks[i].Earned())
+			{
+				continue;
+			}
+			if (Content.Marks[i].NeedsCongregation)
+			{
+				flagged++;
+			}
+			else
+			{
+				unflagged++;
+				Console.WriteLine("         unreachable and unlabelled: " + Content.Marks[i].Name);
+			}
+		}
+		Check("no mark is quietly impossible alone", unflagged == 0,
+			flagged + " need a congregation and say so, " + unflagged + " do not");
+		Check("solo play can still earn most of them", flagged < Content.Marks.Length / 3,
+			(Content.Marks.Length - flagged) + " of " + Content.Marks.Length + " are earnable alone");
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -799,6 +864,7 @@ internal static class Balance
 		PrestigeRatchets();
 		TheEncounterIsOptional();
 		TheParishSpeaks();
+		EveryMarkIsReachable();
 		TablesLineUp();
 		IdlingWorks();
 		Console.WriteLine();

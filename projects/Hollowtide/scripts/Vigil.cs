@@ -126,16 +126,6 @@ public static class Vigil
 	/// </remarks>
 	public static double AftermathSeconds;
 
-	/// <summary>
-	/// 0 to 1. Built by gathering with your own hands, and it drains when you stop.
-	/// </summary>
-	/// <remarks>
-	/// The reason to touch the screen. Hand gathering was worth a twentieth of a second of
-	/// production per click, so there was never a point to it once the first rite was up.
-	/// Fervour makes clicking worth something WITHOUT making it mandatory: idle play simply
-	/// runs at the base rate, which is what the whole economy is tuned against.
-	/// </remarks>
-	public static double Fervour;
 
 	// ── Records, kept for the marks and the ledger ───────────────────────────────────
 
@@ -200,6 +190,25 @@ public static class Vigil
 	/// <summary>Where the draw for the next visitor comes from. Replaceable so the balance
 	/// harness can seed it and get the same parish visited the same way twice.</summary>
 	public static Random Rng = new Random();
+
+	/// <summary>
+	/// 0 to 1. Built by gathering with your own hands, and it drains when you stop.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Not saved, and it belongs HERE rather than with the persistent state it used to be
+	/// filed under: it empties in twelve seconds, so it measures whether the keeper is
+	/// gathering RIGHT NOW and there is nothing in it a reload could meaningfully restore.
+	/// Listing it as persistent only invited someone to wonder why it was not in the save.
+	/// </para>
+	/// <para>
+	/// The reason to touch the screen. Hand gathering was worth a twentieth of a second of
+	/// production per click, so there was never a point to it once the first rite was up.
+	/// Fervour makes clicking worth something WITHOUT making it mandatory: idle play simply
+	/// runs at the base rate, which is what the whole economy is tuned against.
+	/// </para>
+	/// </remarks>
+	public static double Fervour;
 
 	/// <summary>Seconds left on a shared surge, and what it multiplies by while it lasts.</summary>
 	public static double SurgeSeconds;

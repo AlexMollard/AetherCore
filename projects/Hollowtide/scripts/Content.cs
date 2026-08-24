@@ -120,6 +120,11 @@ public sealed class MarkDef
 	public string Name = "";
 	public string Blurb = "";
 	public Func<bool> Earned = () => false;
+	/// <summary>True for a mark no keeper can earn on their own. Flagged rather than hidden:
+	/// a solo player should be able to see that the two they cannot reach need other people,
+	/// instead of reading them as ones they have simply not managed yet - and it is the only
+	/// thing on the vigil screen that tells them the game has a congregation at all.</summary>
+	public bool NeedsCongregation;
 }
 
 /// <summary>Every table the game is made of. Static data only.</summary>
@@ -413,8 +418,8 @@ public static class Content
 		new MarkDef { Name = "Marked", Blurb = "Take ten sigils, all told.", Earned = () => Vigil.SigilsEarned >= 10 },
 		new MarkDef { Name = "The Whole Nave", Blurb = "Own one of every rite.", Earned = () => Vigil.OwnsOneOfEach() },
 		new MarkDef { Name = "Mouth to Mouth", Blurb = "Open a Hollow Mouth.", Earned = () => Vigil.Owned[7] >= 1 },
-		new MarkDef { Name = "Not Alone", Blurb = "Keep vigil beside another keeper.", Earned = () => Vigil.SharedVigilSeconds >= 30.0 },
-		new MarkDef { Name = "Answered", Blurb = "Ring the bell into a communion.", Earned = () => Vigil.CommunionSurges >= 1 },
+		new MarkDef { Name = "Not Alone", Blurb = "Keep vigil beside another keeper.", NeedsCongregation = true, Earned = () => Vigil.SharedVigilSeconds >= 30.0 },
+		new MarkDef { Name = "Answered", Blurb = "Ring the bell into a communion.", NeedsCongregation = true, Earned = () => Vigil.CommunionSurges >= 1 },
 		new MarkDef { Name = "Deepened", Blurb = "Carry one boon as far as it goes.", Earned = AnyBoonMaxed },
 		new MarkDef { Name = "Named", Blurb = "Turn something away by knowing what it wanted.", Earned = () => Vigil.VisitorsAnswered >= 1 },
 		new MarkDef { Name = "Well Read", Blurb = "Turn away twenty of them.", Earned = () => Vigil.VisitorsAnswered >= 20 },
