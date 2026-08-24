@@ -307,12 +307,18 @@ public static class Relics
 		// inverted exactly where a keeper spends their most dangerous minutes. The range now
 		// runs further than the last threshold by less than the bands below it are wide.
 		double luck = rng.NextDouble() * (0.35 + dread * 1.15);
+		// Bands that narrow all the way up, so the ladder is monotonic at EVERY depth rather
+		// than only at the top. The previous thresholds gave Hallowed a wider band than
+		// Anointed and Keepsake a wider one than Leavings, so at some depths a better grade was
+		// genuinely commoner than the one beneath it - which is not what a rarity ladder means,
+		// and it forced the check that guards this into asserting less and less until it was
+		// only watching the top. Widths at full dread: .40 .35 .30 .25 .20.
 		Grade grade = luck switch
 		{
 			> 1.30 => Grade.Hollowed,
-			> 0.95 => Grade.Hallowed,
-			> 0.62 => Grade.Anointed,
-			> 0.30 => Grade.Keepsake,
+			> 1.05 => Grade.Hallowed,
+			> 0.75 => Grade.Anointed,
+			> 0.40 => Grade.Keepsake,
 			_ => Grade.Leavings,
 		};
 

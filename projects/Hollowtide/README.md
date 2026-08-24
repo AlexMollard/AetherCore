@@ -72,7 +72,22 @@ visible by reading the code:
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
 
-### Two things to know before adding checks
+### Sweeping the seeds
+
+```bash
+dotnet run -c Release --project projects/Hollowtide/tools/balance -- --seed 3
+```
+
+Shifts every seed in the suite. **A check that passes on one sample and fails on the next is
+worse than no check**, and running a few offsets is the only way to tell those apart. Sweeping
+found two checks that held on the seeds they were written with and broke on others — both
+because they asserted a strict rarity ladder the *bands* did not actually provide. The honest
+fix was to the bands, not the checks.
+
+A guard that keeps being loosened to keep passing is telling you something about the thing it
+guards.
+
+### Three things to know before adding checks
 
 **Verify a check can fail.** Several here passed while testing nothing: a fixture answering an
 encounter with an offering it could not afford (so the walk never resolved and one stuck
@@ -83,7 +98,13 @@ to carry none of the power in question. Reintroduce the bug and watch it go red.
 **Check what your instrument counts.** The relic grade distribution was measured through
 `OnFound`, which only fires for relics that make it into the satchel — and a full satchel
 refuses anything worse than its worst. It reported an inversion far more dramatic than the
-real one.
+real one. The same trap caught the offline report, which measured a keeper's gains from the
+purse — and overseers *spend* from the purse while you are away.
+
+**Do not let luck choose the subject.** Seeding a run is fine; letting the run decide what is
+being measured is not. The relic power budget wore whatever the run happened to turn up and
+scored 2.51x one time and 1.54x the next, drifting toward its own failure bound. It wears a
+fixed loadout now.
 
 ## Shared budgets
 

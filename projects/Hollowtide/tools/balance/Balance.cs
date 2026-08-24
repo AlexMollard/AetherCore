@@ -29,6 +29,22 @@ internal static class Balance
 
 	private static int s_failures;
 
+	/// <summary>
+	/// Shifts every seed in the suite, so the whole thing can be re-run against different luck.
+	/// </summary>
+	/// <remarks>
+	/// A check that passes on one sample and fails on the next is worse than no check, and the
+	/// only way to tell the two apart is to run it against several. Sweeping this found a check
+	/// asserting a strict rarity ladder that the game never promised - it held on the seeds it
+	/// was written with and broke on others.
+	///
+	///   dotnet run -c Release -- --seed 3
+	/// </remarks>
+	private static int s_seedOffset;
+
+	/// <summary>A generator for a fixed seed, shifted by whatever the run was asked for.</summary>
+	private static Random Seeded(int seed) => new Random(seed + s_seedOffset);
+
 	private static void Check(string what, bool ok, string detail)
 	{
 		Console.WriteLine("  [" + (ok ? "PASS" : "FAIL") + "] " + what.PadRight(46) + " " + detail);
@@ -284,7 +300,7 @@ internal static class Balance
 		// entirely; and if holding the money back cost a keeper real progress, the correct play
 		// would be never to insure and the mechanic would be decoration.
 		Vigil.Reset();
-		Vigil.Rng = new Random(3);
+		Vigil.Rng = Seeded(3);
 		double affordedAt = -1.0;
 		double clock2 = 0.0;
 		double clicking2 = 0.0;
@@ -317,7 +333,7 @@ internal static class Balance
 
 		// The same stretch, spending everything, to see what holding back actually costs.
 		Vigil.Reset();
-		Vigil.Rng = new Random(3);
+		Vigil.Rng = Seeded(3);
 		clicking2 = 0.0;
 		for (int step = 0; step < 300.0 / kDt; step++)
 		{
@@ -501,7 +517,7 @@ internal static class Balance
 		// told a keeper who produced 205B that they had gathered 2.5B - and the more overseers
 		// they had hired, the bigger the lie got.
 		Vigil.Reset();
-		Vigil.Rng = new Random(5);
+		Vigil.Rng = Seeded(5);
 		for (int i = 0; i < Content.RiteCount; i++)
 		{
 			Vigil.Owned[i] = 30;
@@ -566,7 +582,7 @@ internal static class Balance
 
 		// Seeded, so a parish visited twice is visited the same way twice and this section does
 		// not fail once a fortnight on an unlucky draw.
-		Vigil.Rng = new Random(20260824);
+		Vigil.Rng = Seeded(20260824);
 
 		bool named = true;
 		for (int i = 0; i < Content.RiteCount; i++)
@@ -738,7 +754,7 @@ internal static class Balance
 
 		// -- Variety. An encounter with one answer is a keypress, not a decision. --
 		Vigil.Reset();
-		Vigil.Rng = new Random(1);
+		Vigil.Rng = Seeded(1);
 		for (int i = 0; i < Content.RiteCount; i++)
 		{
 			Vigil.Owned[i] = 100;
@@ -810,7 +826,7 @@ internal static class Balance
 	private static double PlayAnswering(double minutes, Answer? policy, double stokePerSecond = 0.0)
 	{
 		Vigil.Reset();
-		Vigil.Rng = new Random(7);
+		Vigil.Rng = Seeded(7);
 		double click = 0.0;
 		double stoke = 0.0;
 		for (int step = 0; step < minutes * 60.0 / kDt; step++)
@@ -863,7 +879,7 @@ internal static class Balance
 		int repeats = 0;
 		string last = "";
 		Vigil.Reset();
-		Vigil.Rng = new Random(3);
+		Vigil.Rng = Seeded(3);
 		Vigil.Announce = (line, omen) =>
 		{
 			said++;
@@ -906,7 +922,7 @@ internal static class Balance
 		List<double> spoken = new List<double>();
 		double clock = 0.0;
 		Vigil.Reset();
-		Vigil.Rng = new Random(21);
+		Vigil.Rng = Seeded(21);
 		Vigil.Announce = (_, _) => spoken.Add(clock);
 		double clicking = 0.0;
 		double stoking = 0.0;
@@ -1451,7 +1467,7 @@ internal static class Balance
 	private static double Communing(double minutes, double patience)
 	{
 		Vigil.Reset();
-		Vigil.Rng = new Random(11);
+		Vigil.Rng = Seeded(11);
 		double click = 0.0;
 		double stoke = 0.0;
 		for (int step = 0; step < minutes * 60.0 / kDt; step++)
@@ -1496,7 +1512,7 @@ internal static class Balance
 	private static double Lean(double minutes, bool shunt, bool answers)
 	{
 		Vigil.Reset();
-		Vigil.Rng = new Random(11);
+		Vigil.Rng = Seeded(11);
 		double click = 0.0;
 		double stoke = 0.0;
 		for (int step = 0; step < minutes * 60.0 / kDt; step++)
@@ -1569,7 +1585,7 @@ internal static class Balance
 		int[] brinkGrades = new int[5];
 		int safeFinds = 0;
 		int brinkFinds = 0;
-		Random rng = new Random(4);
+		Random rng = Seeded(4);
 		for (int i = 0; i < 200000; i++)
 		{
 			Relic safe = Relics.Dig(rng, 0.05, i + 1);
@@ -1598,7 +1614,7 @@ internal static class Balance
 		// everything above the final threshold is Hollowed - so a roll that reaches too far past
 		// it makes the rarest grade the commonest of the good ones exactly where a keeper spends
 		// their most dangerous minutes. Checked per depth for that reason.
-		Random ladder = new Random(3);
+		Random ladder = Seeded(3);
 		string inverted = "";
 		foreach (double depth in new[] { 0.25, 0.5, 0.75, 0.9, 1.0 })
 		{
@@ -1611,13 +1627,12 @@ internal static class Balance
 					seen[(int)dug.Grade]++;
 				}
 			}
-			// From ANOINTED upward only. The bottom two bands are 0.30 and 0.32 of the roll wide,
-			// so at middling dread Keepsake genuinely outnumbers Leavings - by design, and by a
-			// margin sampling noise can push past any fixed tolerance. Asserting a strict ladder
-			// there was asserting something untrue, and it duly failed on a different seed. What
-			// the game actually promises is that the GOOD grades stay ordered and the top one
-			// never runs away, which is the failure this check was written for.
-			for (int g = 2; g < 5 && inverted.Length == 0; g++)
+			// The WHOLE ladder, every grade. This check was weakened twice to accommodate bands
+			// that did not actually narrow - first to tolerate a ratio, then to watch only the
+			// good grades - before it was clear the honest fix was to the bands rather than to
+			// the check. A guard that keeps being loosened to keep passing is telling you
+			// something about the thing it guards.
+			for (int g = 1; g < 5 && inverted.Length == 0; g++)
 			{
 				// A grade may be absent at this depth, and the bottom two bands are near enough
 				// the same width that which of them leads is noise - Keepsake runs 50% against
@@ -1631,8 +1646,8 @@ internal static class Balance
 				}
 			}
 		}
-		Check("no good grade is commoner than the one beneath", inverted.Length == 0,
-			inverted.Length == 0 ? "Anointed upward, ordered at every depth" : inverted);
+		Check("no grade is commoner than the one beneath it", inverted.Length == 0,
+			inverted.Length == 0 ? "the whole ladder holds at every depth" : inverted);
 
 		// -- Rarity has to mean something at a glance. --
 		double bestKeepsake = 0.0;
@@ -1798,13 +1813,13 @@ internal static class Balance
 
 		// -- The bug every inventory has: items multiplying. --
 		Vigil.Reset();
-		Vigil.Rng = new Random(5);
+		Vigil.Rng = Seeded(5);
 		for (int i = 0; i < 8; i++)
 		{
 			Vigil.Satchel.Add(new Relic { Seed = 100 + i, Grade = Grade.Keepsake });
 		}
 		int before = Count();
-		Random shuffle = new Random(6);
+		Random shuffle = Seeded(6);
 		for (int i = 0; i < 20000; i++)
 		{
 			switch (shuffle.Next(3))
@@ -1908,7 +1923,7 @@ internal static class Balance
 
 		// -- The satchel has to hold, and hold the RIGHT things. --
 		Vigil.Reset();
-		Vigil.Rng = new Random(7);
+		Vigil.Rng = Seeded(7);
 		Vigil.Owned[0] = 50;
 		Vigil.Dread = 1.0;
 		for (int i = 0; i < 40000; i++)
@@ -2029,7 +2044,7 @@ internal static class Balance
 	private static double Digging(double minutes, bool wearing)
 	{
 		Vigil.Reset();
-		Vigil.Rng = new Random(11);
+		Vigil.Rng = Seeded(11);
 		if (wearing)
 		{
 			// A KNOWN loadout, not whatever the run happens to turn up. Wearing the best of what
@@ -2080,7 +2095,7 @@ internal static class Balance
 	private static double Rendering(double minutes, bool melt)
 	{
 		Vigil.Reset();
-		Vigil.Rng = new Random(11);
+		Vigil.Rng = Seeded(11);
 		double click = 0.0;
 		double stoke = 0.0;
 		for (int step = 0; step < minutes * 60.0 / kDt; step++)
@@ -2191,7 +2206,7 @@ internal static class Balance
 		Console.WriteLine("A vigil survives being written down");
 
 		Vigil.Reset();
-		Vigil.Rng = new Random(4242);
+		Vigil.Rng = Seeded(4242);
 		Vigil.KeeperName = "Someone";
 		Vigil.Ichor = 123456.75;
 		Vigil.RunIchor = 5555.5;
@@ -2291,9 +2306,21 @@ internal static class Balance
 		return sb.ToString();
 	}
 
-	private static int Main()
+	private static int Main(string[] args)
 	{
+		for (int i = 0; i < args.Length - 1; i++)
+		{
+			if (args[i] == "--seed" && int.TryParse(args[i + 1], out int offset))
+			{
+				s_seedOffset = offset;
+			}
+		}
+
 		Console.WriteLine();
+		if (s_seedOffset != 0)
+		{
+			Console.WriteLine("(every seed shifted by " + s_seedOffset + ")");
+		}
 		StokeIsATradeNotAnExit();
 		InsuranceCostsTheSameAtEveryScale();
 		DreadIsAliveFromTheFirstRite();
