@@ -71,6 +71,7 @@ public sealed class HollowtideGame : EntityScript
 		Vigil.Announce = (line, omen) => _whispers.Say(line, omen);
 		Vigil.OnVisitation = OnVisitation;
 		Vigil.OnApproach = OnApproach;
+		Vigil.OnFound = OnFound;
 		Vigil.OnYield = (rite, amount) => _parish.Delivered(rite, amount);
 		Vigil.OnSpent = rite => _parish.Bought(rite);
 
@@ -91,6 +92,7 @@ public sealed class HollowtideGame : EntityScript
 		Vigil.Announce = null;
 		Vigil.OnVisitation = null;
 		Vigil.OnApproach = null;
+		Vigil.OnFound = null;
 		Vigil.OnYield = null;
 		Vigil.OnSpent = null;
 		Time.Resume();
@@ -176,6 +178,19 @@ public sealed class HollowtideGame : EntityScript
 		// costs nothing while it is zero: the shader discards on it rather than blending a
 		// transparent full-screen quad every frame.
 		Ui.SetEffectParams(_flash, new Vector4(Time.UnscaledTime, dread, 1.0f, _flashAmount));
+	}
+
+	/// <summary>The parish gave something up. Thrown from wherever the keeper struck, because
+	/// that is where they were looking - the same reason a gather's figure is thrown there.</summary>
+	private void OnFound(Relic relic)
+	{
+		_parish.Found(relic, _hud.StrikePoint);
+		if (relic.Grade >= Grade.Hollowed)
+		{
+			// Only the top grade takes the screen. A flash for anything less would spend the
+			// game's loudest gesture on something a keeper turns up every few minutes.
+			_flashAmount = MathF.Max(_flashAmount, 0.5f);
+		}
 	}
 
 	/// <summary>Something started walking. A flash, but no held breath - the slowed moment

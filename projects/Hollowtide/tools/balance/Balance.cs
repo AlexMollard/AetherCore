@@ -1479,6 +1479,57 @@ internal static class Balance
 		Check("relics are the best lever, not the whole game", worth is > 1.4 and < 5.0,
 			"a full loadout is worth " + worth.ToString("0.00") + "x a bare keeper");
 
+		// -- And the ceiling, with everything else stacked under them. --
+		// Relics multiply THROUGH the other systems: a Bargain relic raises what dread pays,
+		// which raises production, which buys rites. Measuring a loadout against a bare keeper
+		// says nothing about what it does on top of maxed boons, every offering and two hundred
+		// sigils - which is the state a long save actually reaches.
+		Vigil.Reset();
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			Vigil.Owned[i] = 200;
+		}
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			Vigil.OfferingsTaken[i] = true;
+		}
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			Vigil.Boons[i] = Content.Boons[i].MaxLevel;
+		}
+		Vigil.SigilsEarned = 200;
+		Vigil.Dread = 1.0;
+		Vigil.Fervour = 1.0;
+		double ceilingBare = Vigil.GlobalMultiplier;
+		// Relics that actually carry the power being measured. Three arbitrary seeds happened to
+		// carry no Bargain at all, so the check compared the ceiling against itself and passed
+		// reporting 1.00x - a fixture testing nothing, which is the only kind of green worth
+		// being suspicious of.
+		for (int slot = 0; slot < Relics.Slots; slot++)
+		{
+			for (int seed = 1 + slot * 9000; seed < 9000 + slot * 9000; seed++)
+			{
+				Relic candidate = new Relic { Seed = seed, Grade = Grade.Hollowed };
+				bool bargains = false;
+				for (int i = 0; i < Relics.PowerCount(candidate.Grade); i++)
+				{
+					bargains |= Relics.PowerAt(candidate, i) == Power.Bargain;
+				}
+				if (bargains)
+				{
+					Vigil.Worn[slot] = candidate;
+					break;
+				}
+			}
+		}
+		double ceilingLaden = Vigil.GlobalMultiplier;
+		Check("the fixture is wearing what it means to measure", Vigil.Wearing(Power.Bargain) > 0.0,
+			"Bargain " + Numbers.Percent(Vigil.Wearing(Power.Bargain)) + " worn");
+		Check("the top end stays a number", !double.IsNaN(ceilingLaden) && !double.IsInfinity(ceilingLaden)
+			&& ceilingLaden > 0.0, Numbers.Short(ceilingLaden) + "x with everything");
+		Check("and relics only tilt it, never own it", ceilingLaden < ceilingBare * 2.0,
+			"they add " + (ceilingLaden / ceilingBare).ToString("0.00") + "x on top of everything else");
+
 		// -- The satchel has to hold, and hold the RIGHT things. --
 		Vigil.Reset();
 		Vigil.Rng = new Random(7);

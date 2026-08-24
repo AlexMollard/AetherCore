@@ -572,6 +572,37 @@ public sealed class Parish
 		}
 	}
 
+	/// <summary>
+	/// The parish gives something up.
+	/// </summary>
+	/// <remarks>
+	/// The payoff for clicking, and it was presented by nothing: relics arrived in a panel the
+	/// keeper might not have open, with a whisper line only for the better half of them. The
+	/// whole reason the feature exists is to make hand-gathering worth doing at hour ten, and a
+	/// reward you have to go and look for is not a reward you feel.
+	///
+	/// Named rather than numbered, because a relic is not a quantity - and the better it is the
+	/// louder it lands, so a Hollowed thing shakes the parish and Leavings do not.
+	/// </remarks>
+	public void Found(Relic relic, Vector2 screenPoint)
+	{
+		if (!Laid || !relic.Exists)
+		{
+			return;
+		}
+		Vector4 bd = Backdrop;
+		Vector2 f = new Vector2((screenPoint.X - bd.X) / bd.Z, (screenPoint.Y - bd.Y) / bd.W);
+		// Grade carried by how much ichor the text takes, exactly as the ledger shows it, so
+		// the same thing means the same thing in both places.
+		float weight = (int)relic.Grade / 4.0f;
+		ShowPop(f, Relics.GradeName(relic.Grade).ToUpperInvariant(),
+			Palette.Mix(Palette.TextDim, Palette.Ichor, 0.35f + weight * 0.65f));
+		if (relic.Grade >= Grade.Hallowed)
+		{
+			_shake = MathF.Max(_shake, 0.20f + weight * 0.25f);
+		}
+	}
+
 	private void ShowPop(Vector2 at, string text, Vector4 colour)
 	{
 		Pop pop = _pops[_nextPop];
