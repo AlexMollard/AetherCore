@@ -74,6 +74,68 @@ public static class SaveSystem
 
 	private static string FilePath() => Path.Combine(Dir(), kFileName);
 
+	/// <summary>What a half-finished save is called. One place, because Save writes it and Load
+	/// recovers from it, and two spellings of it would mean the recovery silently never fired.</summary>
+	private const string kTempSuffix = ".tmp";
+
+	/// <summary>True when the vigil on screen came out of a half-finished write rather than the
+	/// save proper. Read by nothing yet; set so the game CAN say so rather than pretending
+	/// nothing happened.</summary>
+	public static bool Salvaged { get; private set; }
+
+	/// <summary>Read a vigil from a file, or null if it is missing or unreadable. Never throws:
+	/// every caller is already handling a failure when it asks.</summary>
+	private static VigilSave? TryRead(string path)
+	{
+		try
+		{
+			return File.Exists(path)
+				? JsonSerializer.Deserialize<VigilSave>(File.ReadAllText(path))
+				: null;
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// Move a save that could not be read out of the way, so the next one cannot overwrite it.
+	/// </summary>
+	/// <remarks>
+	/// Numbered rather than timestamped, and never overwriting an earlier rescue: somebody whose
+	/// save breaks twice has two problems, and losing the first copy while rescuing the second
+	/// would be the same fault this exists to prevent.
+	/// <para>
+	/// Every failure here is swallowed. This runs while the game is already recovering from a
+	/// broken save, and a keeper who cannot start their game because the rescue of their old one
+	/// failed is worse off than one who simply lost it.
+	/// </para>
+	/// </remarks>
+	private static void SetAside(string path, string why)
+	{
+		try
+		{
+			if (!File.Exists(path))
+			{
+				return;
+			}
+			string kept = path + ".broken";
+			for (int i = 1; File.Exists(kept) && i < 100; i++)
+			{
+				kept = path + ".broken" + i;
+			}
+			File.Move(path, kept);
+			Log.Warn("[Hollowtide] could not read the save (" + why + "). It has been kept at "
+				+ kept + " and a fresh vigil started. Nothing has been deleted.");
+		}
+		catch (Exception rescue)
+		{
+			Log.Warn("[Hollowtide] could not read the save (" + why
+				+ "), and could not move it aside either: " + rescue.Message);
+		}
+	}
+
 	public static bool Exists()
 	{
 		try
@@ -101,8 +163,12 @@ public static class SaveSystem
 			VigilSave? save = JsonSerializer.Deserialize<VigilSave>(File.ReadAllText(path));
 			if (save == null)
 			{
+				// Valid JSON that is not a vigil. Just as unusable as a truncated file, and
+				// just as worth keeping.
+				SetAside(path, "it did not contain a vigil");
 				return false;
 			}
+			Salvaged = false;
 			VigilData.Apply(save);
 
 			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -121,7 +187,28 @@ public static class SaveSystem
 		}
 		catch (Exception e)
 		{
-			Log.Warn("[Hollowtide] save load failed, starting a fresh vigil: " + e.Message);
+			// Kept, not stepped over. Returning false starts a fresh vigil, and the first
+			// autosave of that vigil would have written straight over the file - so a keeper
+			// whose save was truncated by a bad shutdown or a full disk lost everything
+			// permanently, and the only trace was one line in a log nobody reads. Moving it
+			// aside costs nothing and means the data still exists to be repaired.
+			// Before giving up: a save is written to a temporary file and then moved over the
+			// real one, so a machine that died in the gap between those two steps leaves a
+			// COMPLETE and NEWER vigil sitting in the temporary file. Reading it is the
+			// difference between losing a session and losing nothing. It is only ever tried
+			// when the real save cannot be read, so an older temporary file can only ever
+			// replace something already unusable.
+			VigilSave? rescued = TryRead(FilePath() + kTempSuffix);
+			if (rescued != null)
+			{
+				VigilData.Apply(rescued);
+				Salvaged = true;
+				SetAside(FilePath(), e.Message);
+				Log.Warn("[Hollowtide] the save could not be read, but an unfinished write of it"
+					+ " could. The vigil has been recovered from it.");
+				return true;
+			}
+			SetAside(FilePath(), e.Message);
 			return false;
 		}
 	}
@@ -134,7 +221,7 @@ public static class SaveSystem
 			// Write beside the real file and move into place: a crash mid-write then costs
 			// the newest save rather than every save.
 			string path = FilePath();
-			string temp = path + ".tmp";
+			string temp = path + kTempSuffix;
 			File.WriteAllText(temp, JsonSerializer.Serialize(save, new JsonSerializerOptions { WriteIndented = false }));
 			File.Move(temp, path, overwrite: true);
 		}
