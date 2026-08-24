@@ -1772,6 +1772,8 @@ public static class Vigil
 		s_offeringsNoticed = new bool[Content.Offerings.Length];
 		s_offeringsPrimed = false;
 		s_murmursSaid = new int[Content.Murmurs.Length];
+		s_deeperNext = new int[Content.Murmurs.Length];
+		s_lastDeeper = -1000.0;
 		s_lastSpoken = "";
 		SurgeSeconds = 0.0;
 		Array.Clear(Owned, 0, Owned.Length);
@@ -2394,6 +2396,17 @@ public static class Vigil
 
 	private static int[] s_murmursSaid = new int[Content.Murmurs.Length];
 
+	/// <summary>Where each band is in its own pool of lines, so it walks through them rather
+	/// than drawing at random. See the note where it is used.</summary>
+	private static int[] s_deeperNext = new int[Content.Murmurs.Length];
+
+	/// <summary>Seconds between anything the dread bands say beyond their lessons. Long enough
+	/// that the meter is a presence rather than a narrator.</summary>
+	private const double kDeeperGap = 75.0;
+
+	/// <summary>When a band last said something that was not a lesson, in played seconds.</summary>
+	private static double s_lastDeeper = -1000.0;
+
 	/// <summary>Which ambient line was last spoken, so the next draw can exclude it.</summary>
 	private static int s_lastAmbient = -1;
 
@@ -2436,17 +2449,27 @@ public static class Vigil
 			// The lesson is done, so the band says something that is not a lesson. Without this
 			// the meter went quiet for the rest of the vigil - correct about not repeating
 			// itself, and silent about the one thing the whole game is about.
-			if (band >= 0 && band < Content.Deeper.Length && Content.Deeper[band].Length > 0)
+			// Rate-limited by the CLOCK, not by band transitions. The lessons were capped at two
+			// each, which made murmurs rare by accident; lifting the cap made them fire on every
+			// re-entry, and a keeper hovering on a boundary re-enters constantly. Measured, the
+			// parish's variety over five minutes fell from 35% to 29% - the meter had stopped
+			// being silent and started being the only thing talking. Enlarging the pools did not
+			// help and cycling them made it worse, because the fault was never which line was
+			// picked, it was how often anything was picked at all.
+			if (band >= 0 && band < Content.Deeper.Length && Content.Deeper[band].Length > 0
+				&& PlayedSeconds - s_lastDeeper >= kDeeperGap)
 			{
+				s_lastDeeper = PlayedSeconds;
 				string[] pool = Content.Deeper[band];
-				// Never the line it just said, which at three or four to a band would otherwise
-				// come round often enough to notice in the transcript.
-				int chosen = Rng.Next(pool.Length);
-				if (pool.Length > 1 && pool[chosen] == s_lastSpoken)
-				{
-					chosen = (chosen + 1) % pool.Length;
-				}
-				Say(pool[chosen], Omen.Dread);
+				// Cycled, not drawn. A random pick from three or four lines was measurably worse
+				// than saying nothing had been added at all: a keeper hovering on a band boundary
+				// re-enters it constantly, and a small pool sampled with replacement filled a
+				// busy five minutes with the same two or three lines - the variety check fell to
+				// 32% where it wants 35%. Walking the pool guarantees a band says everything it
+				// has before it says anything twice.
+				int cursor = s_deeperNext[band] % pool.Length;
+				s_deeperNext[band] = cursor + 1;
+				Say(pool[cursor], Omen.Dread);
 			}
 			return;
 		}
@@ -2574,6 +2597,8 @@ public static class Vigil
 		s_offeringsNoticed = new bool[Content.Offerings.Length];
 		s_offeringsPrimed = false;
 		s_murmursSaid = new int[Content.Murmurs.Length];
+		s_deeperNext = new int[Content.Murmurs.Length];
+		s_lastDeeper = -1000.0;
 		s_lastSpoken = "";
 		CommunionSurges = 0;
 		ApproachRite = -1;
