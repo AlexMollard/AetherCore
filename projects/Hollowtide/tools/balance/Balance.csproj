@@ -22,6 +22,7 @@
     <Compile Include="../../scripts/Vigil.cs" />
     <Compile Include="../../scripts/Content.cs" />
     <Compile Include="../../scripts/Relics.cs" />
+    <Compile Include="../../scripts/VigilSaveData.cs" />
     <Compile Include="../../scripts/Numbers.cs" />
     <Compile Include="../../scripts/Palette.cs" />
     <Compile Include="Balance.cs" />

@@ -1695,6 +1695,126 @@ internal static class Balance
 		return total;
 	}
 
+	/// <summary>
+	/// A vigil must survive being written down and read back.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The most dangerous code in the game and, until now, the only part with no test at all -
+	/// because SaveSystem writes to a real user profile and a test that eats somebody's save is
+	/// worse than no test. Splitting the data model out of the storage fixed that: a whole
+	/// vigil can go through JSON and back in memory, touching nothing.
+	/// </para>
+	/// <para>
+	/// The failure this guards is a field captured and never applied, which loses exactly one
+	/// thing and says nothing about it. Ten fields were added to this save in a day.
+	/// </para>
+	/// </remarks>
+	private static void AVigilSurvivesBeingWrittenDown()
+	{
+		Console.WriteLine("A vigil survives being written down");
+
+		Vigil.Reset();
+		Vigil.Rng = new Random(4242);
+		Vigil.KeeperName = "Someone";
+		Vigil.Ichor = 123456.75;
+		Vigil.RunIchor = 5555.5;
+		Vigil.LifetimeIchor = 9.87e18;
+		Vigil.Dread = 0.731;
+		Vigil.Sigils = 17;
+		Vigil.SigilsEarned = 91;
+		Vigil.Communions = 6;
+		Vigil.Wards = 2;
+		Vigil.AftermathSeconds = 4.25;
+		Vigil.PlayedSeconds = 98765.5;
+		Vigil.TimesTaken = 13;
+		Vigil.VisitorsAnswered = 44;
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			Vigil.Owned[i] = 3 + i * 11;
+			Vigil.Overseers[i] = i % 2 == 0;
+			Vigil.VisitorsMet[i] = i != 3;
+			Vigil.VisitorsBested[i] = i > 4;
+		}
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			Vigil.Boons[i] = i % (Content.Boons[i].MaxLevel + 1);
+		}
+		Vigil.OfferingsTaken[2] = true;
+		Vigil.OfferingsTaken[9] = true;
+		Vigil.MarksEarned[1] = true;
+		Vigil.Echoes.Add(new Echo { Name = "Before", Burden = 0.42 });
+		Vigil.Echoes.Add(new Echo { Name = "Earlier", Burden = 0.9 });
+		Vigil.Satchel.Add(new Relic { Seed = 777, Grade = Grade.Hallowed });
+		Vigil.Satchel.Add(new Relic { Seed = 778, Grade = Grade.Leavings });
+		Vigil.Worn[1] = new Relic { Seed = 999, Grade = Grade.Hollowed };
+		Vigil.RelicSeed = 55555;
+		Vigil.RelicsFound = 120;
+		VigilData.ShowWhispers = false;
+		VigilData.DreadShake = 0.4f;
+
+		string before = Describe(full: true);
+		string json = System.Text.Json.JsonSerializer.Serialize(VigilData.Capture());
+
+		// Wiped completely between, so anything that survives came out of the JSON rather than
+		// out of the fact that it was never cleared.
+		Vigil.Reset();
+		VigilData.ShowWhispers = true;
+		VigilData.DreadShake = 1.0f;
+		VigilData.Apply(System.Text.Json.JsonSerializer.Deserialize<VigilSave>(json)!);
+
+		string after = Describe(full: true);
+		Check("everything comes back as it went in", before == after,
+			before == after ? "a whole vigil round-trips" : "before: " + before + "  after: " + after);
+
+		// An older save is just a save with fields missing, which is what every addition today
+		// produced. It must load as a valid early vigil rather than as a broken one.
+		Vigil.Reset();
+		VigilData.Apply(System.Text.Json.JsonSerializer.Deserialize<VigilSave>(
+			"{\"KeeperName\":\"Old\",\"Ichor\":500,\"Sigils\":4}")!);
+		Check("a save from before all of this still loads", Vigil.KeeperName == "Old"
+			&& Vigil.Sigils == 4 && Vigil.SigilsEarned >= 4 && Vigil.Echoes.Count == 0
+			&& Vigil.Satchel.Count == 0 && Vigil.Boons.Length == Content.Boons.Length,
+			"an empty-fielded save becomes a valid early vigil");
+
+		// And a hostile one cannot put the vigil into a state the rules do not allow.
+		Vigil.Reset();
+		VigilData.Apply(System.Text.Json.JsonSerializer.Deserialize<VigilSave>(
+			"{\"Dread\":9,\"Wards\":99,\"Sigils\":-5,\"WornSeeds\":[7],\"WornGrades\":[42]}")!);
+		string broken = Describe(full: false);
+		Check("and a corrupt one cannot make an impossible vigil", broken.Length == 0,
+			broken.Length == 0 ? "clamped into something the rules allow" : broken);
+	}
+
+	/// <summary>A vigil written out as one string, for comparing two of them.</summary>
+	private static string Describe(bool full)
+	{
+		if (!full)
+		{
+			return Describe();
+		}
+		System.Text.StringBuilder sb = new System.Text.StringBuilder();
+		sb.Append(Vigil.KeeperName).Append('|').Append(Vigil.Ichor).Append('|').Append(Vigil.RunIchor)
+			.Append('|').Append(Vigil.LifetimeIchor).Append('|').Append(Vigil.Dread)
+			.Append('|').Append(Vigil.Sigils).Append('|').Append(Vigil.SigilsEarned)
+			.Append('|').Append(Vigil.Communions).Append('|').Append(Vigil.Wards)
+			.Append('|').Append(Vigil.AftermathSeconds).Append('|').Append(Vigil.PlayedSeconds)
+			.Append('|').Append(Vigil.TimesTaken).Append('|').Append(Vigil.VisitorsAnswered)
+			.Append('|').Append(Vigil.RelicSeed).Append('|').Append(Vigil.RelicsFound)
+			.Append('|').Append(VigilData.ShowWhispers).Append('|').Append(VigilData.DreadShake);
+		foreach (int owned in Vigil.Owned) { sb.Append('|').Append(owned); }
+		foreach (bool b in Vigil.Overseers) { sb.Append('|').Append(b); }
+		foreach (bool b in Vigil.OfferingsTaken) { sb.Append('|').Append(b); }
+		foreach (bool b in Vigil.MarksEarned) { sb.Append('|').Append(b); }
+		foreach (bool b in Vigil.VisitorsMet) { sb.Append('|').Append(b); }
+		foreach (bool b in Vigil.VisitorsBested) { sb.Append('|').Append(b); }
+		foreach (int level in Vigil.Boons) { sb.Append('|').Append(level); }
+		foreach (Echo echo in Vigil.Echoes) { sb.Append('|').Append(echo.Name).Append(':').Append(echo.Burden); }
+		foreach (Relic relic in Vigil.Satchel) { sb.Append('|').Append(relic.Seed).Append(':').Append((int)relic.Grade); }
+		foreach (Relic relic in Vigil.Worn) { sb.Append('|').Append(relic.Seed).Append(':').Append((int)relic.Grade); }
+		return sb.ToString();
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -1710,6 +1830,7 @@ internal static class Balance
 		TheParishGivesThingsUp();
 		TradingMovesRatherThanCopies();
 		TheDeadRememberWhatTheyTake();
+		AVigilSurvivesBeingWrittenDown();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
