@@ -116,6 +116,26 @@ more of a rite they owned hundreds of.
 - **Unhooded Lantern** — its mirror: two fifths more taken for half again the dread. Two
   offerings pointing opposite ways on one axis put the game's bargain in the keeper's hands.
 
+### The dark takes something
+A visitation that landed cost dread and half a window's production and nothing else — odd for
+a game about a thing that comes to take from you, and it left a mark called **Bereaved**
+describing an event where nothing was lost.
+
+- It now takes **the best thing loose in your satchel**, and never anything worn. What is on
+  your hands is yours; what is in the bag is the parish's if it comes for it.
+- The visitation panel **names the relic at risk** while the clock runs, so putting it on is a
+  decision rather than a rule learned by losing something.
+- A held ward and a right answer still cost nothing.
+
+### The parish notices
+- **24 ambient lines** where there were eight, and **twelve more** the parish says only when
+  they are true of this vigil — a rite consecrated, structures standing that were never bought,
+  a ledger already in your handwriting throughout.
+- Each dread band keeps a voice **after its lesson is done**. The lessons are still said twice
+  and never again; the meter used to go permanently silent behind them.
+- An **echo remembers which keeper it was** — the rite that run was given to, and how deep it
+  got. The line reads as people you can tell apart rather than four names with four numbers.
+
 ### Relic trading
 - Hand a relic to another keeper; it travels as its seed and grade alone.
 - Removal happens **before** anything is sent, and is restored if the send fails.
@@ -270,7 +290,14 @@ Mechanics that existed and worked, but that no player could see:
 
 ## Tooling
 
-- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **178
+- **One command that verifies everything** (`tools/verify.py`) — builds, plays the rules on
+  several seeds, and compiles every shader, exiting non-zero if any of it broke. It exists
+  because verifying by hand meant piping the harness to `tail`, which hands the pipeline
+  `tail`'s exit status: a run printing `1 invariant(s) broken` reported success to the shell
+  and a red tree was committed. It never pipes, checks every return code directly, keeps going
+  after a failure so one run reports everything, and skips the shaders **loudly** when no
+  compiler is present.
+- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **213
   invariants**. Every check exists because the thing it checks was once broken.
 - **The parish's layout is checked too.** The geometry was split into an engine-free `Layout`
   and the harness now lays the parish out at **336 sizes across six window shapes**, asserting
@@ -283,6 +310,24 @@ Mechanics that existed and worked, but that no player could see:
   next can be found. It found two.
 - **The save is testable** — the data model was split from the file IO, so a whole vigil
   round-trips through JSON in memory without touching the player's real save.
+
+## Boundaries, now read rather than trusted
+
+Constants written on both sides of a language boundary caused the worst bug of the project:
+C# packed a relic's powers with one number, a shader unpacked them with another, and every
+relic in the game drew the wrong features — silently, because a wrong-but-plausible object
+looks like art. Every such pairing is now **verified by reading the other side**:
+
+- The horizon, the relic power divisor, and the three numbers a rolling front is packed with,
+  parsed out of the shader source. The horizon had said *"the two MUST agree"* in a comment
+  since it was written, with nothing enforcing it.
+- **Every element name a script binds** — 77 of them — against the generated scene, because
+  `Scene.Find` answers a rename with an invalid entity rather than an error, and the feature
+  simply stops existing with nothing in the log.
+- The type scale and the ledger width, read out of the Python scene generator.
+
+A missing file or an unmatched line **fails** rather than passing quietly: a verifier that
+silently stops verifying keeps reporting green.
 
 ## Three things the checks themselves got wrong
 

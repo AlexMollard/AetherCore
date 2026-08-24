@@ -4120,6 +4120,92 @@ internal static class Balance
 				: "could not read one of the two");
 	}
 
+	/// <summary>
+	/// Every number the keeper reads stays readable.
+	/// </summary>
+	/// <remarks>
+	/// An idle game's numbers do not stop, and this is the one function standing between all of
+	/// them and the screen - with no coverage at all until now. The failures it has to be free
+	/// of are the quiet kind: a column that changes width and makes the whole panel jump, a
+	/// suffix table that runs out and starts printing exponents mid-game, or a glyph the font
+	/// was never baked with.
+	/// </remarks>
+	private static void EveryNumberStaysReadable()
+	{
+		Console.WriteLine("Every number the keeper reads stays readable");
+
+		int tooLong = 0;
+		int empty = 0;
+		int nonAscii = 0;
+		int widest = 0;
+		string worst = "";
+
+		// Every decade from a fraction to well past anything the game can reach.
+		for (int exponent = -2; exponent <= 40; exponent++)
+		{
+			foreach (double lead in new[] { 1.0, 1.5, 3.33, 9.99 })
+			{
+				double value = lead * Math.Pow(10.0, exponent);
+				foreach (string text in new[] { Numbers.Short(value), Numbers.Short(-value) })
+				{
+					if (string.IsNullOrEmpty(text))
+					{
+						empty++;
+						continue;
+					}
+					if (text.Length > widest)
+					{
+						widest = text.Length;
+						worst = text;
+					}
+					if (text.Length > 10)
+					{
+						tooLong++;
+					}
+					foreach (char c in text)
+					{
+						if (c > 126)
+						{
+							nonAscii++;
+						}
+					}
+				}
+			}
+		}
+
+		Check("no figure is ever blank", empty == 0, "every decade from a hundredth upward prints");
+		Check("and none of them is wide enough to move a column", tooLong == 0,
+			"the widest was \"" + worst + "\" at " + widest + " characters");
+		Check("and all of them are ASCII", nonAscii == 0,
+			nonAscii == 0 ? "the font bakes no other glyphs" : nonAscii + " characters the font lacks");
+
+		// A broken save, or a runaway multiplier, must not put "NaN" on the HUD.
+		Check("nothing impossible reaches the screen",
+			Numbers.Short(double.NaN) == "-" && Numbers.Short(double.PositiveInfinity) == "-"
+				&& Numbers.Short(double.NegativeInfinity) == "-",
+			"NaN and infinity read as a dash");
+
+		// The suffixes have to be used wherever they exist; falling back to exponents early
+		// would be correct and unreadable.
+		bool suffixed = !Numbers.Short(1.0e30).Contains("e") && !Numbers.Short(9.9e32).Contains("e");
+		Check("the named tiers are used before exponents are", suffixed,
+			Numbers.Short(1.0e30) + " and " + Numbers.Short(9.9e32));
+
+		// Ordering: bigger numbers must not read as smaller ones within a tier.
+		int inverted = 0;
+		for (int exponent = 0; exponent <= 12; exponent++)
+		{
+			double small = 1.2 * Math.Pow(10.0, exponent);
+			double large = 8.7 * Math.Pow(10.0, exponent);
+			if (string.CompareOrdinal(Numbers.Short(small), Numbers.Short(large)) >= 0)
+			{
+				inverted++;
+			}
+		}
+		Check("and within a tier the larger figure reads larger", inverted == 0,
+			inverted == 0 ? "ordering holds across thirteen tiers" : inverted + " inverted");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4168,6 +4254,7 @@ internal static class Balance
 		TheShadersAgreeWithTheGame();
 		TheSceneHasWhatTheScriptsAskFor();
 		TheGeneratorAgreesWithTheGame();
+		EveryNumberStaysReadable();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
