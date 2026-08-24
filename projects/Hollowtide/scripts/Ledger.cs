@@ -359,6 +359,15 @@ public sealed class Ledger
 	/// </remarks>
 	private int _renderArmed = -1;
 
+	/// <summary>Which rite is one click away from being consecrated, or -1. Same two-step as
+	/// rendering, and deliberately the same gesture: both are choices that cannot be undone, and
+	/// a keeper who has learned the arming on one has learned it on the other.</summary>
+	private int _consecrateArmed = -1;
+
+	/// <summary>When an armed consecration forgets. Same clock and the same reason as the
+	/// rendering deadline below.</summary>
+	private float _armedUntil;
+
 	/// <summary>When the armed row forgets, on the UNSCALED clock. A deadline rather than a
 	/// countdown because the only delta the SDK exposes is the scaled one, which stops while the
 	/// game is paused - and an arming that never expires while paused is an arming a keeper can
@@ -410,6 +419,7 @@ public sealed class Ledger
 			_lastTab = _tab;
 			// Leaving the tab is as clear a "no" as any.
 			_renderArmed = -1;
+			_consecrateArmed = -1;
 		}
 
 		// An armed row forgets on its own. Scrolling disarms too, because the row indices under
@@ -417,6 +427,10 @@ public sealed class Ledger
 		if (_renderArmed >= 0 && (Time.UnscaledTime >= _renderArmedUntil || _tab != LedgerTab.Relics))
 		{
 			_renderArmed = -1;
+		}
+		if (_consecrateArmed >= 0 && (Time.UnscaledTime >= _armedUntil || _tab != LedgerTab.Rites))
+		{
+			_consecrateArmed = -1;
 		}
 
 		switch (_tab)
@@ -481,6 +495,12 @@ public sealed class Ledger
 			// same thing must not disagree. Without it, a keeper who had just been visited saw
 			// every rite claiming full production while the bar above said half - the ledger
 			// being the one that was wrong, and by exactly two.
+			// Once a rite is consecrated, every OTHER row has to say what that cost it, or a
+			// keeper sees their whole parish quietly producing a fifth less with no explanation.
+			if (Vigil.Consecrated >= 0 && Vigil.Consecrated != rite && owned > 0)
+			{
+				Ui.SetTextColor(row.Title, Palette.TextDim);
+			}
 			Ui.SetText(row.Sub, owned > 0
 				? Numbers.Rate(owned * def.BaseRate * Vigil.RiteMultiplier(rite) * Vigil.AftermathScale) +
 				  "   each " + Numbers.Mult(Vigil.RiteMultiplier(rite)) + "   next double at " +
@@ -489,6 +509,42 @@ public sealed class Ledger
 			Ui.SetText(row.Cost, Numbers.Short(cost));
 			Ui.SetTextColor(row.Cost, affordable ? Palette.Ichor : Palette.TextFaint);
 			Ui.SetText(row.Note, "buy " + count + (Vigil.Overseers[rite] ? "   overseen" : ""));
+
+			// The one irreversible choice in a vigil, offered on the row of the thing being
+			// chosen rather than behind a menu of its own - it is a statement ABOUT a rite, so
+			// it belongs where the keeper is already looking at that rite. Right-click arms it
+			// and says what it will cost, exactly as rendering a relic does.
+			if (Vigil.Consecrated == rite)
+			{
+				Ui.SetText(row.Note, "CONSECRATED   x" + Numbers.Mult(Vigil.ConsecratedGain).Substring(1));
+				Ui.SetTextColor(row.Note, Palette.Sigil);
+			}
+			else if (Vigil.Consecrated >= 0)
+			{
+				Ui.SetTextColor(row.Note, Palette.TextFaint);
+			}
+			else if (owned > 0)
+			{
+				bool armed = _consecrateArmed == rite;
+				Ui.SetText(row.Note, armed
+					? "RIGHT-CLICK AGAIN TO CONSECRATE"
+					: "buy " + count + "   right-click to consecrate");
+				Ui.SetTextColor(row.Note, armed ? Palette.Sigil : Palette.TextFaint);
+
+				if (Ui.IsHovered(row.Box.Root) && Input.IsMousePressed(MouseButton.Right))
+				{
+					if (armed)
+					{
+						Vigil.Consecrate(rite);
+						_consecrateArmed = -1;
+					}
+					else
+					{
+						_consecrateArmed = rite;
+						_armedUntil = Time.UnscaledTime + 3.0f;
+					}
+				}
+			}
 
 			// The working bar: owned rites show their cadence, unowned ones show nothing,
 			// because an empty bar on something you do not have is just noise.

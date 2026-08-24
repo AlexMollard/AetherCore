@@ -381,7 +381,7 @@ public static class Vigil
 	/// global multiplier that also applies to it.</summary>
 	public static double RiteMultiplier(int rite)
 	{
-		double mult = MilestoneMultiplier(rite);
+		double mult = MilestoneMultiplier(rite) * ConsecrationFactor(rite);
 		for (int i = 0; i < Content.Offerings.Length; i++)
 		{
 			if (OfferingsTaken[i] && Content.Offerings[i].Target == rite)
@@ -390,6 +390,60 @@ public static class Vigil
 			}
 		}
 		return mult * GlobalMultiplier;
+	}
+
+	/// <summary>
+	/// Which rite this keeper has consecrated, or -1.
+	/// </summary>
+	/// <remarks>
+	/// The one decision in a vigil that cannot be taken back and cannot be bought out of. Every
+	/// other choice in the game is a purchase - reversible in effect if not in ichor, and made
+	/// again next run without consequence - which means a run has no shape to it beyond how far
+	/// down the ladder the keeper got. Committing to one rite gives a run an identity: a keeper
+	/// who consecrates the Grave Lantern is playing a different game from one who waits and
+	/// consecrates the Ossuary Engine, and neither can find out how the other went without
+	/// starting again.
+	/// </remarks>
+	public static int Consecrated = -1;
+
+	/// <summary>What consecration does to a rite's output.</summary>
+	/// <remarks>
+	/// A bargain, like everything here that survived contact with the harness: the chosen rite
+	/// is worth three times as much and every other rite loses a fifth. A free choice of "which
+	/// rite gets better" is not a decision, it is a formality with a menu in front of it.
+	/// </remarks>
+	public const double ConsecratedGain = 3.0;
+	public const double ForsakenLoss = 0.80;
+
+	/// <summary>The consecration's effect on one rite. Neutral until a keeper has chosen.</summary>
+	public static double ConsecrationFactor(int rite)
+	{
+		if (Consecrated < 0)
+		{
+			return 1.0;
+		}
+		return rite == Consecrated ? ConsecratedGain : ForsakenLoss;
+	}
+
+	/// <summary>
+	/// Give a vigil its shape. Once, and never undone.
+	/// </summary>
+	/// <remarks>
+	/// Refuses a second attempt rather than replacing the first, and refuses a rite the keeper
+	/// does not hold - consecrating something you have never owned would be a way to take the
+	/// decision without making it.
+	/// </remarks>
+	public static bool Consecrate(int rite)
+	{
+		if (Consecrated >= 0 || rite < 0 || rite >= Content.RiteCount || Owned[rite] <= 0)
+		{
+			return false;
+		}
+		Consecrated = rite;
+		Revision++;
+		Say("You consecrate the " + Content.Rites[rite].Name + ". The rest of the parish feels it.",
+			Omen.Good);
+		return true;
 	}
 
 	/// <summary>Multipliers that apply to everything: global offerings, sigils, the dread
@@ -1519,6 +1573,11 @@ public static class Vigil
 		Ichor = 0.0;
 		RunIchor = 0.0;
 		Dread = 0.0;
+		// The consecration is what gave THIS run its shape, so it goes with the run. Carrying it
+		// across a communion would turn a decision into a permanent upgrade, which the boons
+		// already are - and would mean a keeper made the choice once, ten runs ago, and never
+		// again.
+		Consecrated = -1;
 		Wards = 0;
 		AftermathSeconds = 0.0;
 		StokeCooldown = 0.0;
@@ -2245,6 +2304,7 @@ public static class Vigil
 		// who communes is the SAME keeper carrying on, and throwing away what the parish has
 		// told them at the one moment the game gets most interesting would be perverse.
 		Transcript.Clear();
+		Consecrated = -1;
 		Ichor = 0.0;
 		RunIchor = 0.0;
 		LifetimeIchor = 0.0;

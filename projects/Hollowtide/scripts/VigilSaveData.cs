@@ -19,6 +19,11 @@ public sealed class VigilSave
 	public int[] Owned { get; set; } = Array.Empty<int>();
 	public bool[] Offerings { get; set; } = Array.Empty<bool>();
 
+	/// <summary>Which rite this run consecrated, or -1. Defaults to -1 rather than 0, so a save
+	/// written before consecration existed loads as "not yet chosen" and not as a keeper who
+	/// silently consecrated their first rite.</summary>
+	public int Consecrated { get; set; } = -1;
+
 	/// <summary>
 	/// What the parish has said, oldest first.
 	/// </summary>
@@ -124,6 +129,7 @@ public static class VigilData
 		LifetimeIchor = Vigil.LifetimeIchor,
 		Owned = (int[])Vigil.Owned.Clone(),
 		Offerings = (bool[])Vigil.OfferingsTaken.Clone(),
+		Consecrated = Vigil.Consecrated,
 		Spoken = Transcript.Capture().Lines,
 		SpokenOmens = Transcript.Capture().Omens,
 		SpokenAt = Transcript.Capture().At,
@@ -203,6 +209,10 @@ public static class VigilData
 		// adding content and invalidating everybody.
 		CopyInto(save.Owned, Vigil.Owned);
 		CopyInto(save.Offerings, Vigil.OfferingsTaken);
+		// Clamped, because everything read off a file is: a hand-edited or corrupt value here
+		// would index the rite tables directly.
+		Vigil.Consecrated = save.Consecrated >= 0 && save.Consecrated < Content.RiteCount
+			? save.Consecrated : -1;
 		Transcript.Restore(save.Spoken, save.SpokenOmens, save.SpokenAt);
 		CopyInto(save.Marks, Vigil.MarksEarned);
 		CopyInto(save.Overseers, Vigil.Overseers);

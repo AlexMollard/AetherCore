@@ -3114,6 +3114,50 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// Consecration gives a run its shape and cannot be walked back.
+	/// </summary>
+	private static void ConsecrationIsACommitment()
+	{
+		Console.WriteLine("Consecration is a commitment");
+
+		Vigil.Reset();
+		Check("nothing is consecrated to begin with", Vigil.Consecrated == -1
+			&& Vigil.ConsecrationFactor(0) == 1.0, "every rite untouched");
+
+		Check("a rite the keeper does not hold cannot be chosen", !Vigil.Consecrate(0),
+			"you cannot consecrate what you have never owned");
+
+		Vigil.Ichor = 1e12;
+		Vigil.BuyRite(0, 1);
+		Vigil.BuyRite(1, 1);
+		Check("one that is held can be", Vigil.Consecrate(0) && Vigil.Consecrated == 0,
+			"the first rite carries the run");
+		Check("and it cannot be changed afterwards", !Vigil.Consecrate(1) && Vigil.Consecrated == 0,
+			"a second attempt is refused, not honoured");
+
+		Check("the chosen rite gains and the rest give up", Vigil.ConsecrationFactor(0) == Vigil.ConsecratedGain
+			&& Vigil.ConsecrationFactor(1) == Vigil.ForsakenLoss,
+			Vigil.ConsecratedGain + "x chosen, " + Vigil.ForsakenLoss + "x the rest");
+
+		// It has to be a real trade rather than a free upgrade, or it is not a decision.
+		Check("consecrating everything would be worse than consecrating nothing",
+			Vigil.ForsakenLoss < 1.0 && Vigil.ConsecratedGain > 1.0
+				&& Math.Pow(Vigil.ForsakenLoss, Content.RiteCount - 1) * Vigil.ConsecratedGain < Content.RiteCount,
+			"the gain is one rite's, the cost is every other rite's");
+
+		// A communion only happens if there is a payout, so the run has to be worth something
+		// first - asserting the commune SUCCEEDED, because a check that silently tests a
+		// refused communion is a check that passes for the wrong reason.
+		Vigil.RunIchor = 1e15;
+		Vigil.LifetimeIchor = 1e15;
+		bool communed = Vigil.Commune();
+		Check("a communion asks the question again", communed && Vigil.Consecrated == -1,
+			communed ? "the choice belongs to the run, not the keeper" : "no communion happened");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3151,6 +3195,7 @@ internal static class Balance
 		OldSavesStillMeanWhatTheyMeant();
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
+		ConsecrationIsACommitment();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
