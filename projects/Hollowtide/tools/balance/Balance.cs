@@ -907,6 +907,194 @@ internal static class Balance
 			(Content.Marks.Length - flagged) + " of " + Content.Marks.Length + " are earnable alone");
 	}
 
+	/// <summary>
+	/// Throw everything at the simulation in every order and check it never lies.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The targeted checks above each know what they are looking for, which is exactly their
+	/// limit: every one of them was written after a bug, and none of them would have caught
+	/// the next one. This does the opposite - it makes no assumptions about what the keeper is
+	/// trying to do, hammers the rules with legal actions in illegal-looking orders, and asks
+	/// only that the state stay describable afterwards.
+	/// </para>
+	/// <para>
+	/// Long frames are part of the fuzz on purpose. A stutter, a breakpoint or a laptop lid
+	/// produces a single enormous delta, and most of the ordering bugs found in this project
+	/// were ordering bugs precisely because one step did something a smaller step would not.
+	/// </para>
+	/// </remarks>
+	private static void NothingBreaksUnderPressure()
+	{
+		Console.WriteLine("Nothing breaks under pressure");
+		string broken = "";
+		int approaches = 0;
+		int communions = 0;
+
+		// Several seeds, because one is an anecdote. A single run that happens never to buy a
+		// boon while something is walking proves nothing about the case where it does.
+		foreach (int seed in new[] { 99, 1234, 20260824 })
+		{
+			string trouble = Hammer(seed, ref approaches, ref communions);
+			if (trouble.Length > 0)
+			{
+				broken = "seed " + seed + ": " + trouble;
+				break;
+			}
+		}
+
+		Check("state stays describable under any order", broken.Length == 0, broken.Length == 0
+			? approaches + " walks and " + communions + " communions across 750k actions, three seeds"
+			: broken);
+	}
+
+	/// <summary>One seed's worth of abuse. Returns the first broken promise, or empty.</summary>
+	private static string Hammer(int seed, ref int approaches, ref int communions)
+	{
+		Random rng = new Random(seed);
+		Vigil.Reset();
+		Vigil.Rng = new Random(seed);
+		bool wasApproaching = false;
+
+		for (int step = 0; step < 250000; step++)
+		{
+			switch (rng.Next(12))
+			{
+				case 0:
+					Vigil.Gather();
+					break;
+				case 1:
+					Vigil.BuyRite(rng.Next(Content.RiteCount), rng.Next(1, 40));
+					break;
+				case 2:
+					Vigil.Stoke();
+					break;
+				case 3:
+					Vigil.RaiseWard();
+					break;
+				case 4:
+					Vigil.TakeOffering(rng.Next(Content.Offerings.Length));
+					break;
+				case 5:
+					// RARE. An even draw communed five thousand times in four hundred thousand
+					// actions, which wipes the parish faster than dread can ever build on it -
+					// so the fuzz reported a clean sweep having never once reached the brink,
+					// and the encounter, the newest and least proven code in the game, went
+					// entirely unexercised. A uniform fuzzer is not an unbiased one.
+					if (rng.Next(400) == 0 && Vigil.Commune())
+					{
+						communions++;
+					}
+					break;
+				case 6:
+					Vigil.BuyBoon(rng.Next(Content.Boons.Length));
+					break;
+				case 7:
+					Vigil.HireOverseer(rng.Next(Content.RiteCount));
+					break;
+				case 8:
+					// Any answer at any moment, including when nothing is walking.
+					Vigil.Give((Answer)rng.Next(Enum.GetValues<Answer>().Length));
+					break;
+				case 9:
+					Vigil.ReceiveTithe(rng.NextDouble() * 1e6, "someone");
+					break;
+				case 10:
+					// Also rare, and for the same reason as communion. Shedding is a congregation
+					// verb that dumps up to a whole point of dread; drawn evenly it zeroed the
+					// meter roughly every twelfth action, so nothing could ever climb to the
+					// brink and the fuzz swept 400k actions without one encounter in it. The
+					// actions that RESET state have to be rare or they are the only thing tested.
+					if (rng.Next(200) == 0)
+					{
+						Vigil.ShedDread(rng.NextDouble());
+					}
+					break;
+				default:
+					// Frames from a sixtieth of a second to five whole seconds.
+					Vigil.Tick(rng.NextDouble() < 0.9 ? kDt : rng.NextDouble() * 5.0);
+					break;
+			}
+
+			if (Vigil.Approaching && !wasApproaching)
+			{
+				approaches++;
+			}
+			wasApproaching = Vigil.Approaching;
+			string trouble = Describe();
+			if (trouble.Length > 0)
+			{
+				return trouble;
+			}
+		}
+
+		return "";
+	}
+
+	/// <summary>Every promise the rules make about their own state, in one place. Returns the
+	/// first one broken, or empty.</summary>
+	private static string Describe()
+	{
+		if (double.IsNaN(Vigil.Ichor) || double.IsInfinity(Vigil.Ichor) || Vigil.Ichor < 0.0)
+		{
+			return "ichor is " + Vigil.Ichor;
+		}
+		if (double.IsNaN(Vigil.Dread) || Vigil.Dread < 0.0 || Vigil.Dread > 1.0)
+		{
+			return "dread is " + Vigil.Dread;
+		}
+		if (Vigil.Wards < 0 || Vigil.Wards > Vigil.MaxWards)
+		{
+			return "wards is " + Vigil.Wards + " of " + Vigil.MaxWards;
+		}
+		if (Vigil.Fervour < 0.0 || Vigil.Fervour > 1.0)
+		{
+			return "fervour is " + Vigil.Fervour;
+		}
+		if (Vigil.AftermathSeconds < 0.0 || Vigil.StokeCooldown < 0.0)
+		{
+			return "a timer went negative";
+		}
+		if (Vigil.Sigils < 0 || Vigil.SigilsEarned < Vigil.Sigils)
+		{
+			return "sigils " + Vigil.Sigils + " against " + Vigil.SigilsEarned + " earned";
+		}
+		if (Vigil.Approaching)
+		{
+			if (Vigil.ApproachRite < 0 || Vigil.ApproachRite >= Content.RiteCount)
+			{
+				return "walking rite " + Vigil.ApproachRite;
+			}
+			if (Vigil.ApproachSeconds < 0.0 || Vigil.ApproachSeconds > Vigil.kApproachSeconds)
+			{
+				return "walk clock is " + Vigil.ApproachSeconds;
+			}
+			if (Vigil.Owned[Vigil.ApproachRite] <= 0)
+			{
+				return "something is walking from a rite the keeper does not own";
+			}
+		}
+		else if (Vigil.ApproachSeconds != 0.0)
+		{
+			return "a walk clock is running with nothing walking";
+		}
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			if (Vigil.Owned[i] < 0)
+			{
+				return "owned " + i + " is " + Vigil.Owned[i];
+			}
+		}
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			if (Vigil.Boons[i] < 0 || Vigil.Boons[i] > Content.Boons[i].MaxLevel)
+			{
+				return "boon " + i + " is level " + Vigil.Boons[i];
+			}
+		}
+		return "";
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -919,6 +1107,7 @@ internal static class Balance
 		EveryMarkIsReachable();
 		TablesLineUp();
 		IdlingWorks();
+		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
 		return s_failures == 0 ? 0 : 1;
