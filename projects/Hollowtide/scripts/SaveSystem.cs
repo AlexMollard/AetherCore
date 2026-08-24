@@ -55,6 +55,17 @@ public sealed class VigilSave
 	/// as a row of empty objects and nobody would find out until a save came back blank.</summary>
 	public string[] EchoNames { get; set; } = Array.Empty<string>();
 	public double[] EchoBurdens { get; set; } = Array.Empty<double>();
+
+	/// <summary>Relics carried and relics worn, as seeds and grades. A relic is entirely
+	/// derived from those two numbers, so this is the whole of it - the name, the powers and
+	/// the art are all regenerated rather than stored, which is what keeps an endless supply of
+	/// items from becoming an endless save file.</summary>
+	public int[] SatchelSeeds { get; set; } = Array.Empty<int>();
+	public int[] SatchelGrades { get; set; } = Array.Empty<int>();
+	public int[] WornSeeds { get; set; } = Array.Empty<int>();
+	public int[] WornGrades { get; set; } = Array.Empty<int>();
+	public int RelicsFound { get; set; }
+	public int RelicSeed { get; set; }
 	public int CommunionSurges { get; set; }
 	public int HandGathers { get; set; }
 	public double SharedVigilSeconds { get; set; }
@@ -248,6 +259,12 @@ public static class SaveSystem
 		VisitorsBested = (bool[])Vigil.VisitorsBested.Clone(),
 		EchoNames = Vigil.Echoes.ConvertAll(e => e.Name).ToArray(),
 		EchoBurdens = Vigil.Echoes.ConvertAll(e => e.Burden).ToArray(),
+		SatchelSeeds = Vigil.Satchel.ConvertAll(r => r.Seed).ToArray(),
+		SatchelGrades = Vigil.Satchel.ConvertAll(r => (int)r.Grade).ToArray(),
+		WornSeeds = Array.ConvertAll(Vigil.Worn, r => r.Seed),
+		WornGrades = Array.ConvertAll(Vigil.Worn, r => (int)r.Grade),
+		RelicsFound = Vigil.RelicsFound,
+		RelicSeed = Vigil.RelicSeed,
 		CommunionSurges = Vigil.CommunionSurges,
 		HandGathers = Vigil.HandGathers,
 		SharedVigilSeconds = Vigil.SharedVigilSeconds,
@@ -305,9 +322,53 @@ public static class SaveSystem
 			});
 		}
 
+		Vigil.RelicsFound = save.RelicsFound;
+		// Never lower than what is already in hand: the seed counter is what stops two relics
+		// ever being the same object, so a save written before it existed must not hand out
+		// seeds that are already spoken for.
+		Vigil.RelicSeed = Math.Max(save.RelicSeed, HighestSeed(save));
+
+		Vigil.Satchel.Clear();
+		int carried = Math.Min(save.SatchelSeeds.Length, save.SatchelGrades.Length);
+		for (int i = 0; i < carried && Vigil.Satchel.Count < Relics.Satchel; i++)
+		{
+			Vigil.Satchel.Add(ReadRelic(save.SatchelSeeds[i], save.SatchelGrades[i]));
+		}
+
+		Array.Clear(Vigil.Worn, 0, Vigil.Worn.Length);
+		int worn = Math.Min(save.WornSeeds.Length, save.WornGrades.Length);
+		for (int i = 0; i < worn && i < Relics.Slots; i++)
+		{
+			Vigil.Worn[i] = ReadRelic(save.WornSeeds[i], save.WornGrades[i]);
+		}
+
 		CopyInto(save.VisitorsMet, Vigil.VisitorsMet);
 		CopyInto(save.VisitorsBested, Vigil.VisitorsBested);
 		Vigil.Revision++;
+	}
+
+	/// <summary>One relic off the wire, with its grade clamped to something that exists. A
+	/// grade out of range would index the name tables and the art shader with a number neither
+	/// was written for.</summary>
+	private static Relic ReadRelic(int seed, int grade) => new Relic
+	{
+		Seed = seed,
+		Grade = (Grade)Math.Clamp(grade, 0, (int)Grade.Hollowed),
+	};
+
+	/// <summary>The largest seed anywhere in a save, so the counter can be floored above it.</summary>
+	private static int HighestSeed(VigilSave save)
+	{
+		int highest = 0;
+		foreach (int seed in save.SatchelSeeds)
+		{
+			highest = Math.Max(highest, seed);
+		}
+		foreach (int seed in save.WornSeeds)
+		{
+			highest = Math.Max(highest, seed);
+		}
+		return highest;
 	}
 
 	private static void CopyInto(int[] from, int[] to)

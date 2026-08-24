@@ -1262,6 +1262,200 @@ internal static class Balance
 		return Vigil.LifetimeIchor;
 	}
 
+	/// <summary>
+	/// What the parish gives up, and whether it is worth digging for.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Relics exist to give hand-gathering an arc. Measured before they were added, a click was
+	/// worth a flat twentieth of a second of production at every parish size from three tiers
+	/// to all eight - never worthless, but exactly as interesting at hour ten as at hour one.
+	/// </para>
+	/// <para>
+	/// Grade is drawn against DREAD on purpose, so the reason to click and the reason to ride
+	/// the meter are one reason. These checks are mostly about that, and about the two ways an
+	/// inventory always breaks: items multiplying, and rarity meaning nothing.
+	/// </para>
+	/// </remarks>
+	private static void TheParishGivesThingsUp()
+	{
+		Console.WriteLine("The parish gives things up");
+
+		// -- Digging deeper turns up better things. --
+		int[] safeGrades = new int[5];
+		int[] brinkGrades = new int[5];
+		int safeFinds = 0;
+		int brinkFinds = 0;
+		Random rng = new Random(4);
+		for (int i = 0; i < 200000; i++)
+		{
+			Relic safe = Relics.Dig(rng, 0.05, i + 1);
+			if (safe.Exists)
+			{
+				safeGrades[(int)safe.Grade]++;
+				safeFinds++;
+			}
+			Relic brink = Relics.Dig(rng, 1.0, i + 1);
+			if (brink.Exists)
+			{
+				brinkGrades[(int)brink.Grade]++;
+				brinkFinds++;
+			}
+		}
+		Check("the brink gives up more", brinkFinds > safeFinds * 2,
+			safeFinds + " finds in safety against " + brinkFinds + " at the brink");
+		Check("and gives up better", brinkGrades[4] > 0 && safeGrades[4] == 0,
+			"Hollowed things exist only at the brink");
+		Check("but the brink is not a guarantee", brinkGrades[0] > brinkFinds / 20,
+			Numbers.Percent((double)brinkGrades[0] / brinkFinds) + " of brink finds are still Leavings");
+
+		// -- Rarity has to mean something at a glance. --
+		double bestKeepsake = 0.0;
+		double worstHallowed = double.MaxValue;
+		for (int seed = 1; seed < 20000; seed++)
+		{
+			bestKeepsake = Math.Max(bestKeepsake,
+				Relics.MagnitudeAt(new Relic { Seed = seed, Grade = Grade.Keepsake }, 0));
+			worstHallowed = Math.Min(worstHallowed,
+				Relics.MagnitudeAt(new Relic { Seed = seed, Grade = Grade.Hallowed }, 0));
+		}
+		Check("a lucky Keepsake never beats an unlucky Hallowed", bestKeepsake < worstHallowed,
+			"best " + Numbers.Percent(bestKeepsake) + " against worst " + Numbers.Percent(worstHallowed));
+		Check("and a better grade carries more powers",
+			Relics.PowerCount(Grade.Hollowed) > Relics.PowerCount(Grade.Leavings),
+			Relics.PowerCount(Grade.Leavings) + " power against " + Relics.PowerCount(Grade.Hollowed));
+
+		// -- A relic is entirely its seed, and never repeats a power. --
+		bool stable = true;
+		bool distinct = true;
+		for (int seed = 1; seed < 5000; seed++)
+		{
+			Relic relic = new Relic { Seed = seed, Grade = Grade.Hollowed };
+			stable &= Relics.NameOf(relic) == Relics.NameOf(new Relic { Seed = seed, Grade = Grade.Hollowed });
+			int count = Relics.PowerCount(relic.Grade);
+			for (int a = 0; a < count && distinct; a++)
+			{
+				for (int b = a + 1; b < count; b++)
+				{
+					distinct &= Relics.PowerAt(relic, a) != Relics.PowerAt(relic, b);
+				}
+			}
+		}
+		Check("a seed always makes the same relic", stable, "5000 seeds, all reproducible");
+		Check("no relic carries the same power twice", distinct, "5000 seeds, all distinct");
+
+		// -- Names actually vary, or "endless" is a lie. --
+		System.Collections.Generic.HashSet<string> names = new System.Collections.Generic.HashSet<string>();
+		for (int seed = 1; seed < 4000; seed++)
+		{
+			names.Add(Relics.NameOf(new Relic { Seed = seed, Grade = Grade.Anointed }));
+		}
+		// Against the SPACE, not against a sample. Four thousand seeds drawn from a space of
+		// nine thousand collide constantly by the birthday paradox alone - the first version of
+		// this check demanded 3000 distinct names from 4000 seeds and was simply asking for
+		// something arithmetic makes impossible. What matters is that the space is deep enough
+		// that a keeper does not see the same name twice in a session.
+		long space = (long)Relics.Materials * Relics.Forms * Relics.Provenances;
+		Check("the parish has more to give than anyone will dig", space > 15000,
+			Numbers.Short(space) + " possible Anointed names, " + Numbers.Short(space * Relics.Epithets) + " Hollowed");
+		Check("and does not repeat itself within a session", names.Count > 3400,
+			names.Count + " distinct in 4000 seeds, against " + Numbers.Short(space) + " possible");
+
+		// -- Wearing one has to actually do something. --
+		Vigil.Reset();
+		Vigil.Owned[2] = 50;
+		Vigil.Dread = 0.6;
+		double bareHand = Vigil.HandGain;
+		double bareWard = Vigil.WardCost;
+		Vigil.Satchel.Add(new Relic { Seed = 12345, Grade = Grade.Hollowed });
+		Vigil.Wear(0, 0);
+		bool moved = Math.Abs(Vigil.HandGain - bareHand) > 1e-9 || Math.Abs(Vigil.WardCost - bareWard) > 1e-9
+			|| Vigil.Wearing(Power.Bargain) > 0.0 || Vigil.Wearing(Power.Patience) > 0.0
+			|| Vigil.Wearing(Power.Almsgiving) > 0.0 || Vigil.Wearing(Power.Steadiness) > 0.0;
+		Check("worn relics change the vigil", moved, "a Hollowed relic moves at least one knob");
+		Check("carried ones do not", Vigil.Worn[0].Exists && Vigil.Satchel.Count == 0,
+			"wearing it took it out of the satchel");
+
+		// -- The bug every inventory has: items multiplying. --
+		Vigil.Reset();
+		Vigil.Rng = new Random(5);
+		for (int i = 0; i < 8; i++)
+		{
+			Vigil.Satchel.Add(new Relic { Seed = 100 + i, Grade = Grade.Keepsake });
+		}
+		int before = Count();
+		Random shuffle = new Random(6);
+		for (int i = 0; i < 20000; i++)
+		{
+			switch (shuffle.Next(3))
+			{
+				case 0:
+					Vigil.Wear(shuffle.Next(Relics.Satchel + 2), shuffle.Next(Relics.Slots + 1));
+					break;
+				case 1:
+					Vigil.Remove(shuffle.Next(Relics.Slots + 1));
+					break;
+				default:
+					// Discard is the only one allowed to reduce the count, so it is checked apart.
+					break;
+			}
+			if (Count() != before)
+			{
+				break;
+			}
+		}
+		Check("relics are never lost or copied by handling", Count() == before,
+			before + " relics survive 20k wears and removals");
+
+		System.Collections.Generic.HashSet<int> seeds = new System.Collections.Generic.HashSet<int>();
+		bool unique = true;
+		foreach (Relic relic in Vigil.Satchel)
+		{
+			unique &= seeds.Add(relic.Seed);
+		}
+		foreach (Relic relic in Vigil.Worn)
+		{
+			unique &= !relic.Exists || seeds.Add(relic.Seed);
+		}
+		Check("and no two of them are the same object", unique, seeds.Count + " distinct seeds held");
+
+		// -- The satchel has to hold, and hold the RIGHT things. --
+		Vigil.Reset();
+		Vigil.Rng = new Random(7);
+		Vigil.Owned[0] = 50;
+		Vigil.Dread = 1.0;
+		for (int i = 0; i < 40000; i++)
+		{
+			Vigil.Gather();
+		}
+		Check("the satchel does not overflow", Vigil.Satchel.Count <= Relics.Satchel,
+			Vigil.Satchel.Count + " of " + Relics.Satchel + " carried after 40k digs");
+		int leavings = 0;
+		foreach (Relic relic in Vigil.Satchel)
+		{
+			if (relic.Grade == Grade.Leavings)
+			{
+				leavings++;
+			}
+		}
+		Check("and a full one is not all rubbish", leavings < Vigil.Satchel.Count,
+			leavings + " Leavings among " + Vigil.Satchel.Count + " carried");
+	}
+
+	/// <summary>Every relic the keeper holds, worn or carried.</summary>
+	private static int Count()
+	{
+		int total = Vigil.Satchel.Count;
+		foreach (Relic relic in Vigil.Worn)
+		{
+			if (relic.Exists)
+			{
+				total++;
+			}
+		}
+		return total;
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -1274,6 +1468,7 @@ internal static class Balance
 		EveryMarkIsReachable();
 		TablesLineUp();
 		IdlingWorks();
+		TheParishGivesThingsUp();
 		TheDeadRememberWhatTheyTake();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();

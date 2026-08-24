@@ -275,7 +275,7 @@ public sealed class Parish
 		// to be told things can be told them late or not at all.
 		_calling = Vigil.Approaching ? Vigil.ApproachRite : -1;
 		_walking = Vigil.Approaching
-			? Math.Clamp(1.0f - (float)(Vigil.ApproachSeconds / Vigil.kApproachSeconds), 0.0f, 1.0f)
+			? Math.Clamp(1.0f - (float)(Vigil.ApproachSeconds / Math.Max(0.001, Vigil.ApproachTotal)), 0.0f, 1.0f)
 			: 0.0f;
 		if (Vigil.Approaching)
 		{

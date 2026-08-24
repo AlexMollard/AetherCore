@@ -85,6 +85,20 @@ public static class Vigil
 	/// </remarks>
 	public static readonly List<Echo> Echoes = new List<Echo>();
 
+	/// <summary>What the keeper is carrying but not wearing.</summary>
+	public static readonly List<Relic> Satchel = new List<Relic>();
+
+	/// <summary>What the keeper has on them. A relic in a slot is the only kind that does
+	/// anything - carrying one is not wearing it.</summary>
+	public static readonly Relic[] Worn = new Relic[Relics.Slots];
+
+	/// <summary>Relics ever dug out of the parish, for the record.</summary>
+	public static int RelicsFound;
+
+	/// <summary>Seeds the digger has already used, so two relics are never the same object.
+	/// Rolled from a counter rather than at random for exactly that reason.</summary>
+	public static int RelicSeed;
+
 	/// <summary>How many keepers stand close enough to be asked. Matches the roster the
 	/// congregation panel already draws, so the same four rows serve both.</summary>
 	public const int MaxEchoes = 4;
@@ -196,6 +210,10 @@ public static class Vigil
 	/// <summary>Seconds until it gets here.</summary>
 	public static double ApproachSeconds;
 
+	/// <summary>What this particular walk started with. Relics can lengthen the warning, so a
+	/// presentation layer dividing by the constant would read past 1 for a patient keeper.</summary>
+	public static double ApproachTotal = kApproachSeconds;
+
 	public static bool Approaching => ApproachRite >= 0;
 
 	/// <summary>How long a keeper has to answer. Long enough to read the line and decide,
@@ -207,7 +225,7 @@ public static class Vigil
 
 	/// <summary>What offering it something costs. Priced off production so it stays a real
 	/// decision at every tier rather than free by the second hour.</summary>
-	public static double OfferCost => 20.0 + Rate * 8.0;
+	public static double OfferCost => (20.0 + Rate * 8.0) * Math.Max(0.1, 1.0 - Wearing(Power.Almsgiving));
 
 	/// <summary>Raised when something starts walking, with the rite whose visitor it is. The
 	/// presentation layer names it and starts the clock; nothing here knows that.</summary>
@@ -282,6 +300,34 @@ public static class Vigil
 	/// money and changed nothing you could see.
 	/// </remarks>
 	public static Action<int>? OnSpent;
+
+	/// <summary>
+	/// What the worn relics add up to for one power, as a fraction.
+	/// </summary>
+	/// <remarks>
+	/// Summed, not multiplied, and only across WORN relics. Summing keeps three good relics
+	/// from compounding into something the balance was never checked against, and it makes the
+	/// numbers on the page add up the way a player reading them expects.
+	/// </remarks>
+	public static double Wearing(Power power)
+	{
+		double total = 0.0;
+		foreach (Relic relic in Worn)
+		{
+			if (!relic.Exists)
+			{
+				continue;
+			}
+			for (int i = 0; i < Relics.PowerCount(relic.Grade); i++)
+			{
+				if (Relics.PowerAt(relic, i) == power)
+				{
+					total += Relics.MagnitudeAt(relic, i);
+				}
+			}
+		}
+		return total;
+	}
 
 	// ── Derived values ───────────────────────────────────────────────────────────────
 
@@ -375,7 +421,8 @@ public static class Vigil
 	/// central mechanic into pure downside. Curving it puts most of the reward in the top
 	/// third, so choosing to sit up there is a real strategy with a real prize.
 	/// </remarks>
-	public static double DreadMultiplier => 1.0 + (2.6 + BoonFactor(Boon.OldBargain)) * Math.Pow(Dread, 1.4);
+	public static double DreadMultiplier
+		=> 1.0 + (2.6 + BoonFactor(Boon.OldBargain)) * (1.0 + Wearing(Power.Bargain)) * Math.Pow(Dread, 1.4);
 
 	/// <summary>Ichor per second from rites alone, after any aftermath.</summary>
 	public static double Rate => RawRate * AftermathScale;
@@ -406,7 +453,8 @@ public static class Vigil
 
 	/// <summary>What fervour actually drains at, after a keeper has communed for a steadier
 	/// hand.</summary>
-	public static double FervourDrain => kFervourDrain * (1.0 - BoonFactor(Boon.SteadyHand));
+	public static double FervourDrain
+		=> kFervourDrain * Math.Max(0.05, 1.0 - BoonFactor(Boon.SteadyHand) - Wearing(Power.Steadiness));
 
 	/// <summary>What one hand gather adds to fervour. Roughly three seconds of steady
 	/// clicking to fill it, and about twelve seconds of not clicking to lose it.</summary>
@@ -685,7 +733,7 @@ public static class Vigil
 			// to be `(hand + Rate * 0.05) * GlobalMultiplier`, which applied the multiplier to
 			// the slice twice and made hand gathering scale as the SQUARE of every bonus in the
 			// game. Compounding, so it grew worse exactly as a run went on.
-			return hand * GlobalMultiplier + Rate * 0.05;
+			return (hand * (1.0 + Wearing(Power.Hand))) * GlobalMultiplier + Rate * 0.05;
 		}
 	}
 
@@ -709,7 +757,8 @@ public static class Vigil
 	/// hour ten.
 	/// </para>
 	/// </remarks>
-	public static double WardCost => 40.0 + RawRate * VisitationWindow * kWardShare;
+	public static double WardCost
+		=> (40.0 + RawRate * VisitationWindow * kWardShare) * Math.Max(0.1, 1.0 - Wearing(Power.Warding));
 
 	/// <summary>What fraction of a window's income a ward costs. Set just above what eating
 	/// the aftermath costs instead (<see cref="kAftermathShare"/> of the window at half pace),
@@ -793,6 +842,10 @@ public static class Vigil
 
 	// ── Actions ──────────────────────────────────────────────────────────────────────
 
+	/// <summary>Raised when the parish gives something up. The presentation layer names it and
+	/// throws it on screen; nothing here knows that.</summary>
+	public static Action<Relic>? OnFound;
+
 	public static void Gather()
 	{
 		double gain = HandGain;
@@ -801,6 +854,90 @@ public static class Vigil
 		LifetimeIchor += gain;
 		HandGathers++;
 		Fervour = Math.Min(1.0, Fervour + kFervourPerGather);
+
+		// You are gathering with your hands, in a parish full of buried things, and the deeper
+		// in the dark you are the better what you turn up. This is what stops hand-gathering
+		// being the same chore at hour ten as at hour one: measured, a click is worth a flat
+		// twentieth of a second of production forever, whatever the parish is doing.
+		Relic found = Relics.Dig(Rng, Dread, ++RelicSeed);
+		if (!found.Exists)
+		{
+			return;
+		}
+		RelicsFound++;
+		if (Satchel.Count >= Relics.Satchel)
+		{
+			// Full. The oldest LEAVINGS go first, and only if the newcomer is better than it -
+			// so a satchel of good things is never quietly emptied by a run of rubbish.
+			int worst = -1;
+			for (int i = 0; i < Satchel.Count; i++)
+			{
+				if (worst < 0 || Satchel[i].Grade < Satchel[worst].Grade)
+				{
+					worst = i;
+				}
+			}
+			if (worst < 0 || Satchel[worst].Grade > found.Grade)
+			{
+				return;
+			}
+			Satchel.RemoveAt(worst);
+		}
+		Satchel.Add(found);
+		Revision++;
+		// Only the ones worth remarking on. Announcing every find put 45 lines into a ten-minute
+		// session against 13 before, which is the parish going back to being a notification tray
+		// - the exact thing its voice was written to stop being. Leavings and keepsakes land in
+		// the satchel quietly and the panel is where you notice them.
+		if (found.Grade >= Grade.Anointed)
+		{
+			Say("You turn something up: " + Relics.NameOf(found) + ".", Omen.Good);
+		}
+		OnFound?.Invoke(found);
+	}
+
+	/// <summary>Put a carried relic on, swapping out whatever was in that slot.</summary>
+	public static bool Wear(int satchelIndex, int slot)
+	{
+		if (satchelIndex < 0 || satchelIndex >= Satchel.Count || slot < 0 || slot >= Relics.Slots)
+		{
+			return false;
+		}
+		Relic taking = Satchel[satchelIndex];
+		Satchel.RemoveAt(satchelIndex);
+		if (Worn[slot].Exists)
+		{
+			Satchel.Add(Worn[slot]);
+		}
+		Worn[slot] = taking;
+		Revision++;
+		return true;
+	}
+
+	/// <summary>Take a relic off and put it back in the satchel.</summary>
+	public static bool Remove(int slot)
+	{
+		if (slot < 0 || slot >= Relics.Slots || !Worn[slot].Exists || Satchel.Count >= Relics.Satchel)
+		{
+			return false;
+		}
+		Satchel.Add(Worn[slot]);
+		Worn[slot] = default;
+		Revision++;
+		return true;
+	}
+
+	/// <summary>Throw a carried relic away. Worn ones cannot be discarded without taking them
+	/// off first, so nothing a keeper is relying on vanishes on a misclick.</summary>
+	public static bool Discard(int satchelIndex)
+	{
+		if (satchelIndex < 0 || satchelIndex >= Satchel.Count)
+		{
+			return false;
+		}
+		Satchel.RemoveAt(satchelIndex);
+		Revision++;
+		return true;
 	}
 
 	public static bool BuyRite(int rite, int count)
@@ -1268,7 +1405,8 @@ public static class Vigil
 		}
 		VisitorsMet[rite] = true;
 		ApproachRite = rite;
-		ApproachSeconds = kApproachSeconds;
+		ApproachSeconds = kApproachSeconds * (1.0 + Wearing(Power.Patience));
+		ApproachTotal = ApproachSeconds;
 		Revision++;
 		Say(Content.Rites[rite].Approach, Omen.Dread);
 		OnApproach?.Invoke(rite);
@@ -1659,6 +1797,10 @@ public static class Vigil
 		SurgeMultiplier = 1.0;
 		Array.Clear(CycleProgress, 0, CycleProgress.Length);
 		Echoes.Clear();
+		Satchel.Clear();
+		Array.Clear(Worn, 0, Worn.Length);
+		RelicsFound = 0;
+		RelicSeed = 0;
 		Revision++;
 	}
 }

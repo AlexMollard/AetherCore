@@ -102,7 +102,7 @@ public sealed class Hud
 		Ui.SetText(_visLine, visitor.Approach);
 		Ui.SetText(_visClock, "IT ARRIVES IN " + MathF.Ceiling((float)Vigil.ApproachSeconds).ToString("0") + "s");
 		// The clock reddens as it runs out, so the pressure is felt rather than read.
-		float urgency = 1.0f - (float)(Vigil.ApproachSeconds / Vigil.kApproachSeconds);
+		float urgency = 1.0f - (float)(Vigil.ApproachSeconds / Math.Max(0.001, Vigil.ApproachTotal));
 		Ui.SetTextColor(_visClock, Palette.Mix(Palette.TextFaint, Palette.Dread, urgency));
 
 		bool canWard = Vigil.Wards > 0;
