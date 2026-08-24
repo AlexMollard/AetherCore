@@ -348,6 +348,12 @@ def threshold():
     # same 400px column, so every left edge on the screen is the same left edge. The captions
     # used to be a half-width box laid across the control next to them: legible only because
     # the words were short.
+    # What this keeper already is, for a keeper who is already something. The threshold used
+    # to greet a player with fifty-eight sigils and five visitors named exactly as it greeted
+    # someone who had never opened the game - so a title screen that is the front door to a
+    # long save said nothing at all about the save.
+    centred("ThStanding", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, -155, 900, 26)
+
     FIELD_W = 400.0
     centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], 0, -129, FIELD_W, 22)
     centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, -90, FIELD_W, 44)
@@ -368,6 +374,11 @@ def threshold():
     centred("ThShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable("threshold")], 140, 255, 120, SETTINGS_H)
 
     centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 312, 900, 26)
+
+    # Beginning again. Hidden entirely for a keeper with nothing to lose, and it asks twice
+    # before it does anything - there is no undo behind this button and no dialog system to
+    # put in front of it, so the button is its own confirmation.
+    centred("ThWipe", [Scene.button("BEGIN A NEW VIGIL", DISPLAY, 14.0, ROW, mix(ROW_HOT, DREAD, 0.45), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, 352, 260, 36)
 
     body = s.render("# Hollowtide - the threshold. Authored chrome; ThresholdScreen only binds and drives it.\n")
     # Splice the hand-written camera / script-root / canvas prologue over the placeholders.

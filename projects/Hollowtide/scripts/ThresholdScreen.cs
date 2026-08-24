@@ -32,10 +32,16 @@ public sealed class ThresholdScreen : EntityScript
 	private Entity _whisperToggle;
 	private Entity _shakeSlider;
 	private Entity _shakeLabel;
+	private Entity _standing;
 
 	private Button _alone;
 	private Button _host;
 	private Button _join;
+	private Button _wipe;
+
+	/// <summary>True once the wipe has been pressed and is waiting to be pressed again.</summary>
+	private bool _wipeArmed;
+	private float _wipeArms;
 
 	private string _joinTarget = "";
 	private float _joinElapsed;
@@ -65,8 +71,11 @@ public sealed class ThresholdScreen : EntityScript
 		_alone = Button.Find("ThAlone");
 		_host = Button.Find("ThHost");
 		_join = Button.Find("ThJoin");
+		_wipe = Button.Find("ThWipe");
+		_standing = Scene.Find("ThStanding");
 
 		Ui.SetTextBoxText(_nameBox, Vigil.KeeperName);
+		ShowStanding();
 		Ui.SetToggle(_whisperToggle, SaveSystem.ShowWhispers);
 		Ui.SetSliderValue(_shakeSlider, SaveSystem.DreadShake);
 
@@ -97,6 +106,7 @@ public sealed class ThresholdScreen : EntityScript
 		}
 
 		ReadSettings();
+		ReadWipe(deltaTime);
 
 		if (_joinTarget.Length > 0)
 		{
@@ -117,6 +127,82 @@ public sealed class ThresholdScreen : EntityScript
 		{
 			StartJoin(Ui.GetTextBoxText(_addressBox));
 		}
+	}
+
+	/// <summary>
+	/// Say what this keeper already is, or say nothing at all.
+	/// </summary>
+	/// <remarks>
+	/// Drawn from the save rather than from the parish, because the parish is gone by now: what
+	/// survives a communion - sigils taken, marks kept, visitors named - is exactly what a
+	/// returning player wants to see they still have. A keeper with no save gets a blank line
+	/// and no wipe button, so a first run is not greeted with an offer to delete itself.
+	/// </remarks>
+	private void ShowStanding()
+	{
+		bool returning = SaveSystem.HadSave;
+		_wipe.SetActive(returning);
+		if (!returning)
+		{
+			Ui.SetText(_standing, "");
+			return;
+		}
+
+		int named = 0;
+		foreach (bool bested in Vigil.VisitorsBested)
+		{
+			if (bested)
+			{
+				named++;
+			}
+		}
+
+		Ui.SetText(_standing,
+			"kept " + Numbers.Duration(Vigil.PlayedSeconds) +
+			"   " + Vigil.SigilsEarned + " sigils taken" +
+			"   " + Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks" +
+			"   " + named + "/" + Content.RiteCount + " named");
+		Ui.SetTextColor(_standing, Palette.TextDim);
+	}
+
+	/// <summary>The wipe asks twice. There is no undo behind it and no dialog system in this
+	/// project to put in front of it, so the button is its own confirmation - and it disarms on
+	/// its own, because a destructive control left armed is a trap for the next click.</summary>
+	private void ReadWipe(float deltaTime)
+	{
+		if (!SaveSystem.HadSave)
+		{
+			return;
+		}
+
+		if (_wipeArmed)
+		{
+			_wipeArms -= deltaTime;
+			if (_wipeArms <= 0.0f)
+			{
+				_wipeArmed = false;
+				_wipe.SetLabel("BEGIN A NEW VIGIL");
+			}
+		}
+
+		if (!_wipe.Activated)
+		{
+			return;
+		}
+		if (!_wipeArmed)
+		{
+			_wipeArmed = true;
+			_wipeArms = 4.0f;
+			_wipe.SetLabel("EVERYTHING? PRESS AGAIN");
+			return;
+		}
+
+		SaveSystem.Wipe();
+		_wipeArmed = false;
+		_wipe.SetLabel("BEGIN A NEW VIGIL");
+		Ui.SetTextBoxText(_nameBox, Vigil.KeeperName);
+		ShowStanding();
+		SetStatus("The ledger is blank. Whoever you were, the parish has forgotten.", Palette.Dread);
 	}
 
 	/// <summary>Settings are persisted the moment they change rather than on the way out, so a

@@ -208,6 +208,11 @@ public static class SaveSystem
 			Log.Warn("[Hollowtide] wipe failed: " + e.Message);
 		}
 		Vigil.Reset();
+		// Forget the load as well as the file. Without this the process still believes it has
+		// read a save, so HadSave stays true and the threshold goes on reporting the standing
+		// of a keeper who no longer exists.
+		Forget();
+		EnsureLoaded();
 	}
 
 	private static VigilSave Capture() => new VigilSave

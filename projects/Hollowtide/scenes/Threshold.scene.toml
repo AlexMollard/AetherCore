@@ -136,6 +136,31 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThStanding'
+node = -8246257654077060922
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 450, -142 ]
+    offset_min = [ -450, -168 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.502, 0.51, 0.522, 1 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 16
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'ThNameLabel'
 node = -5930190052139365851
 parent = 2
@@ -477,3 +502,35 @@ scale = [ 1.0, 1.0, 1.0 ]
     text = ''
     v_align = 'middle'
     wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThWipe'
+node = 2902597180214582897
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 130, 370 ]
+    offset_min = [ -130, 334 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.3865, 0.1999, 0.187, 0.978 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'BEGIN A NEW VIGIL'
+    pixel_size = 14
+    text_color = [ 0.29, 0.302, 0.322, 1 ]
+    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
