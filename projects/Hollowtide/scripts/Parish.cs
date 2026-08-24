@@ -144,6 +144,14 @@ public sealed class Parish
 	/// <summary>Where each front set off from, as a fraction of the width.</summary>
 	private readonly float[] _waveFrom = new float[kWavePool];
 
+	/// <summary>How many purchases each front is carrying, 1 to <see cref="kWaveWeight"/>. A
+	/// front that stands for six purchases is brighter and broader than one standing for a
+	/// single one, which is what lets a burst longer than the pool still register.</summary>
+	private readonly int[] _waveWeight = new int[kWavePool];
+
+	/// <summary>The most a single front can carry. The packed slot's format sets it.</summary>
+	private const int kWaveWeight = Layout.WaveWeight;
+
 	/// <summary>Eased 0..1 while a visitation's aftermath runs, so the parish sags into it and
 	/// comes back rather than snapping between two looks.</summary>
 	private float _reel;
@@ -648,14 +656,32 @@ public sealed class Parish
 	/// Send a front of light out across the floor from <paramref name="from"/>.
 	/// </summary>
 	/// <remarks>
-	/// Takes an idle slot if there is one, and otherwise the front that is nearest finished - so
-	/// a burst of purchases each get their own wave, and the only one ever cut short is the one
-	/// closest to being over anyway.
+	/// <para>
+	/// Takes an idle slot if there is one. If they are all busy it does NOT take one back: it
+	/// adds its weight to the youngest front instead, so that front reads as carrying more.
+	/// </para>
+	/// <para>
+	/// This used to displace the front nearest finished, on the grounds that it was the one with
+	/// least left to lose. That was the same fault the pool was built to fix, only further along
+	/// - the displaced front snapped back to the horizon and set off again, so a keeper buying
+	/// hard saw a front jump backwards instead of a fourth one appear. NOTHING may ever move a
+	/// live front backwards; that is the whole rule here.
+	/// </para>
+	/// <para>
+	/// Weight rather than more slots on purpose. Slots are a treadmill - whatever the pool holds,
+	/// buying faster exhausts it - and a fourth would have wanted the engine to carry another
+	/// vector of shader parameters, which is a change to every UI effect in the engine for one
+	/// game's floor. Three fronts each able to stand for eight purchases covers twenty-four, and
+	/// past that a keeper is buying faster than a front takes to cross the floor, where more
+	/// fronts would read as mush anyway. It costs nothing: the weight rides in precision the
+	/// packed slot already had spare.
+	/// </para>
 	/// </remarks>
 	private void FireWave(float from)
 	{
-		int chosen = 0;
-		float furthest = -1.0f;
+		int chosen = -1;
+		int youngest = 0;
+		float least = float.MaxValue;
 		for (int i = 0; i < kWavePool; i++)
 		{
 			if (_wave[i] <= 0.0f)
@@ -663,38 +689,27 @@ public sealed class Parish
 				chosen = i;
 				break;
 			}
-			if (_wave[i] > furthest)
+			if (_wave[i] < least)
 			{
-				furthest = _wave[i];
-				chosen = i;
+				least = _wave[i];
+				youngest = i;
 			}
+		}
+
+		if (chosen < 0)
+		{
+			// All busy: lean on the freshest front rather than resetting anything.
+			_waveWeight[youngest] = Math.Min(kWaveWeight, _waveWeight[youngest] + 1);
+			return;
 		}
 		_wave[chosen] = 0.0001f;
 		_waveFrom[chosen] = from;
+		_waveWeight[chosen] = 1;
 	}
 
-	/// <summary>
-	/// One wave's origin and progress squeezed into a single float in [0,1).
-	/// </summary>
-	/// <remarks>
-	/// The origin quantised to 255 steps in the high part, the progress in the low. Kept inside
-	/// [0,1) rather than spread over a wider range because these ride in colour alphas, and a
-	/// colour channel is not a place to assume nothing will ever clamp. Zero means idle, which a
-	/// live wave cannot collide with: it starts at a progress of 0.0001, never at 0.
-	///
-	/// Unpacked by Unwave in ui_parish.slang. One format in two places - change either and you
-	/// have changed both.
-	/// </remarks>
+	/// <summary>This slot, as the shader wants it. See Layout.PackWave for the format.</summary>
 	private float PackWave(int slot)
-	{
-		float progress = _wave[slot];
-		if (progress <= 0.0f)
-		{
-			return 0.0f;
-		}
-		float origin = MathF.Floor(Math.Clamp(_waveFrom[slot], 0.0f, 1.0f) * 255.0f);
-		return (origin + MathF.Min(progress, 0.999f)) / 256.0f;
-	}
+		=> Layout.PackWave(_waveFrom[slot], _waveWeight[slot], _wave[slot]);
 
 	/// <summary>A rite finished a working: flare it, and send a bearer with the yield.</summary>
 	public void Delivered(int rite, double amount)

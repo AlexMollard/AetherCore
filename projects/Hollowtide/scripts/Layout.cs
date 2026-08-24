@@ -52,6 +52,57 @@ public static class Layout
 	/// height. Just inside the rim, so a line meets stone rather than stopping in the air.</summary>
 	public const float IntakeRise = 0.44f;
 
+	/// <summary>The most purchases one rolling front can stand for. Three bits of the packed
+	/// slot, so eight.</summary>
+	public const int WaveWeight = 8;
+
+	/// <summary>
+	/// One rolling front's origin, weight and progress squeezed into a single float in [0,1).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The high part carries the origin in 32 steps and the weight in 8, as origin * 8 + weight;
+	/// the low part carries the progress. Kept inside [0,1) rather than spread over a wider range
+	/// because these ride in colour alphas, and a colour channel is not a place to assume nothing
+	/// will ever clamp. Zero means idle, which a live front cannot collide with: a weight is
+	/// never below 1, so a live slot's high part is never 0.
+	/// </para>
+	/// <para>
+	/// The origin used to have all 255 steps to itself. Giving three of them to the weight leaves
+	/// it 32, which is a thirtieth of the width - and the only thing that reads it is a falloff
+	/// four fifths of the screen wide, so the quantisation is far below anything visible.
+	/// Spending real precision on a value nothing needs precisely is how the pool came to have a
+	/// hard ceiling in the first place.
+	/// </para>
+	/// <para>
+	/// Here rather than in <c>Parish</c> because it is arithmetic shared with a shader, and a
+	/// packing bug is invisible until someone notices a front in the wrong place. Unpacked by
+	/// <c>Unwave</c> in <c>ui_parish.slang</c> - one format in THREE places now, so the harness
+	/// round-trips it.
+	/// </para>
+	/// </remarks>
+	public static float PackWave(float origin, int weight, float progress)
+	{
+		if (progress <= 0.0f)
+		{
+			return 0.0f;
+		}
+		float steps = MathF.Floor(Math.Clamp(origin, 0.0f, 1.0f) * 31.0f);
+		float held = Math.Clamp(weight, 1, WaveWeight) - 1;
+		return (steps * 8.0f + held + MathF.Min(progress, 0.999f)) / 256.0f;
+	}
+
+	/// <summary>Undo <see cref="PackWave"/>. Mirrors Unwave in ui_parish.slang line for line, so
+	/// the harness checking this is checking what the shader does.</summary>
+	public static (float Origin, float Progress, int Weight) UnpackWave(float packed)
+	{
+		float scaled = Math.Clamp(packed, 0.0f, 1.0f) * 256.0f;
+		float high = MathF.Floor(scaled);
+		int weight = (int)MathF.Floor(high % 8.0f) + 1;
+		float origin = MathF.Floor(high / 8.0f) / 31.0f;
+		return (origin, scaled - high, weight);
+	}
+
 	/// <summary>
 	/// How far above the tallest thing in the parish the conduits arch.
 	/// </summary>

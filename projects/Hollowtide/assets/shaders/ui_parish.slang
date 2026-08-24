@@ -9,15 +9,21 @@
 //   params = (time, dread 0..1, shake 0..1, wave A)
 //   color0 = the void (the ramp's darkest)   color1 = dread, for the souring
 //
-// Three waves can be in flight at once, and each needs both a progress and an origin - six
-// numbers, against the one free slot in params. So each is PACKED into a single float in
-// [0,1): the origin quantised to 255 steps in the high part, the progress in the low. Unpacked
-// by Unwave below, packed by Parish.PackWave, and the two must agree.
+// Three waves can be in flight at once, and each carries a progress, an origin and a weight -
+// nine numbers, against the one free slot in params. So each is PACKED into a single float in
+// [0,1): the origin in 32 steps and the weight in 8 sharing the high part as origin * 8 +
+// weight, and the progress in the low. Unpacked by Unwave below, packed by Parish.PackWave,
+// and the two must agree.
 //
 // Waves A, B and C live in params.w, color0's ALPHA and color1's ALPHA. Only the rgb of either
 // colour is ever read as a colour, so both alphas are free - smuggling them is documented on
-// both sides rather than silently, and the ceiling is three: a fourth wave needs the engine to
-// carry a second params vector, which is the point to stop packing and go and add one.
+// both sides rather than silently.
+//
+// The WEIGHT is what removed the hard ceiling. There were three fronts and no more, so a keeper
+// buying quickly ran the pool out and the fourth purchase had to take a front back off another
+// one. Now a front can stand for up to eight purchases and grow instead, which is bounded
+// where a pool of slots never is - buy faster than the floor can be crossed and no number of
+// fronts would have been enough.
 
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
@@ -83,12 +89,16 @@ float fbm(float2 p)
 // The one ramp, mirrored from scripts/Palette.cs. Written as a function of a single 0..1
 // value so everything in here samples the SAME eight steps the rest of the game is built
 // from, rather than inventing greys of its own.
-/// Unpack a wave slot into (origin, progress). See the packing note in the header - this and
-/// Parish.PackWave are one format in two places, so a change to either is a change to both.
-float2 Unwave(float packed)
+/// Unpack a wave slot into (origin, progress, weight). See the packing note in the header -
+/// this and Parish.PackWave are one format in two places, so a change to either is a change to
+/// both.
+float3 Unwave(float packed)
 {
     const float scaled = saturate(packed) * 256.0;
-    return float2(floor(scaled) / 255.0, frac(scaled));
+    const float high = floor(scaled);
+    const float weight = floor(fmod(high, 8.0)) + 1.0;
+    const float origin = floor(high / 8.0) / 31.0;
+    return float3(origin, frac(scaled), weight);
 }
 
 float3 Ramp(float t)
@@ -109,17 +119,21 @@ float3 Ramp(float t)
 /// them cost three calls rather than three copies of the same twenty lines.
 float3 WaveLight(float packed, float2 uv, float horizon)
 {
-    const float2 w = Unwave(packed);
+    const float3 w = Unwave(packed);
     const float wave = w.y;
     if (wave <= 0.0)
     {
         return float3(0.0);
     }
+    // How many purchases this front stands for. Compressed hard - a front carrying eight is
+    // meant to read as a heavier surge, not as eight times the light, and the floor is lit by
+    // the ramp's brightest step already.
+    const float heft = 1.0 + 0.42 * log2(w.z);
     const float front = horizon + (1.0 - horizon) * wave * wave;
-    const float width = 0.028 + wave * 0.075;
+    const float width = (0.028 + wave * 0.075) * (0.85 + 0.15 * w.z);
     const float band = smoothstep(width, 0.0, abs(uv.y - front)) * step(horizon, uv.y);
     const float lane = 0.35 + 0.65 * smoothstep(0.80, 0.0, abs(uv.x - w.x));
-    float3 col = Ramp(0.92) * band * lane * (1.0 - wave * 0.7) * 1.35;
+    float3 col = Ramp(0.92) * band * lane * (1.0 - wave * 0.7) * 1.35 * heft;
     // A wash of light ahead of the front, so the floor it is about to reach lifts too - a
     // single bright line reads as a scanline, a line with light in front of it reads as
     // something travelling.
@@ -127,7 +141,7 @@ float3 WaveLight(float packed, float2 uv, float horizon)
          * lane * (1.0 - wave) * 0.22;
     // And a breath of light on the skyline as it sets off, so the whole parish registers the
     // purchase and not just the strip of floor the front is on.
-    col += Ramp(0.45) * smoothstep(0.0, 0.18, wave) * (1.0 - wave) * 0.11;
+    col += Ramp(0.45) * smoothstep(0.0, 0.18, wave) * (1.0 - wave) * 0.11 * heft;
     return col;
 }
 

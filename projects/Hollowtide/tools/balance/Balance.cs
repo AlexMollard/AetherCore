@@ -2626,6 +2626,69 @@ internal static class Balance
 			shortcut == 0 ? "so a bead never outruns its own wire" : shortcut + " too short");
 	}
 
+	/// <summary>
+	/// The rolling fronts survive being squeezed into one float each.
+	/// </summary>
+	/// <remarks>
+	/// Three numbers per front share a single float32, and the same format is written in C# and
+	/// read in Slang. Nothing about a packing fault announces itself: a front simply appears at
+	/// the wrong place on the floor, or carries the wrong weight, and there is no error anywhere.
+	/// Exactly the kind of arithmetic that should not be trusted because it looked right.
+	/// </remarks>
+	private static void TheFrontsSurviveBeingPacked()
+	{
+		Console.WriteLine("The rolling fronts survive being packed");
+
+		float worstOrigin = 0.0f;
+		float worstProgress = 0.0f;
+		int wrongWeight = 0;
+		int falseIdle = 0;
+		int cases = 0;
+
+		for (int o = 0; o <= 40; o++)
+		{
+			for (int weight = 1; weight <= Layout.WaveWeight; weight++)
+			{
+				for (int step = 1; step <= 60; step++)
+				{
+					cases++;
+					float origin = o / 40.0f;
+					float progress = step / 60.0f * 0.999f;
+					float packed = Layout.PackWave(origin, weight, progress);
+
+					// A live front must never pack to the value that means idle.
+					if (packed <= 0.0f)
+					{
+						falseIdle++;
+					}
+
+					(float gotOrigin, float gotProgress, int gotWeight) = Layout.UnpackWave(packed);
+					if (gotWeight != weight)
+					{
+						wrongWeight++;
+					}
+					// The origin is deliberately coarse - 32 steps - so it is checked against
+					// that, not against equality.
+					worstOrigin = MathF.Max(worstOrigin, MathF.Abs(gotOrigin - origin));
+					worstProgress = MathF.Max(worstProgress, MathF.Abs(gotProgress - progress));
+				}
+			}
+		}
+
+		Check("the weight comes back exactly", wrongWeight == 0,
+			wrongWeight == 0 ? "every weight of " + Layout.WaveWeight + " across " + cases + " fronts"
+				: wrongWeight + " wrong");
+		Check("the progress comes back to within a pixel", worstProgress < 0.002f,
+			"worst drift " + worstProgress.ToString("F5"));
+		Check("the origin comes back inside its quantisation", worstOrigin <= 1.0f / 31.0f + 1e-4f,
+			"worst drift " + worstOrigin.ToString("F4") + " against a step of "
+				+ (1.0f / 31.0f).ToString("F4"));
+		Check("a live front never reads as an idle one", falseIdle == 0,
+			falseIdle == 0 ? "zero means idle and nothing else does" : falseIdle + " vanished");
+		Check("and an idle one stays idle", Layout.PackWave(0.5f, 4, 0.0f) == 0.0f,
+			"no progress, no front");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -2658,6 +2721,7 @@ internal static class Balance
 		TheReadoutsAgree();
 		TheClockOutlastsTheKeeper();
 		TheParishHoldsItselfTogether();
+		TheFrontsSurviveBeingPacked();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
