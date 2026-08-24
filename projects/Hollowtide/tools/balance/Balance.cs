@@ -3560,6 +3560,16 @@ internal static class Balance
 		Check("and none of those bands is empty", emptyBand == 0,
 			emptyBand == 0 ? "every depth keeps a voice" : emptyBand + " silent bands");
 
+		// The game's own channel has to reach the transcript, or a line about somebody's save
+		// would be spoken into a feed that holds it for nine seconds and then loses it - which
+		// is precisely the line they would want to go back and read.
+		Transcript.Clear();
+		Vigil.Tell("a thing the game had to report", Omen.Dread);
+		Check("what the game itself reports is kept too",
+			Transcript.Count == 1 && Transcript.At(0).Omen == Omen.Dread,
+			"it goes through the same channel the parish does");
+		Transcript.Clear();
+
 		Check("nothing it says is blank", blank == 0,
 			Content.Ambient.Length + " plain and " + Content.Noticed.Length + " noticed");
 

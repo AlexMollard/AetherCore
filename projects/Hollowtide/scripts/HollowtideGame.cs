@@ -100,6 +100,7 @@ public sealed class HollowtideGame : EntityScript
 
 	public override void OnUpdate(float deltaTime)
 	{
+		ReportSalvage();
 		// Unscaled delta, derived rather than read: presentation must keep moving through the
 		// slowed moment after a visitation, and Time.DeltaTime is scaled by definition.
 		float now = Time.UnscaledTime;
@@ -325,6 +326,30 @@ public sealed class HollowtideGame : EntityScript
 		_offlineBody = Scene.Find("OfflineBody");
 		_offlineDismiss = Button.Find("OfflineDismiss");
 		_offlinePanel.SetActive(false);
+	}
+
+	/// <summary>Whether the keeper has been told their save was rescued.</summary>
+	private bool _saidSalvaged;
+
+	/// <summary>
+	/// Tell the keeper if their vigil came out of a half-finished write.
+	/// </summary>
+	/// <remarks>
+	/// Said here rather than where the recovery happens, because the recovery runs during boot -
+	/// before anything is listening to the feed - and a line nobody is there to hear is the same
+	/// as no line. A keeper whose save was rescued has had something quietly unusual happen to
+	/// them and should be told, both because it explains any small discrepancy they notice and
+	/// because a game that silently repairs itself is a game you cannot trust when it does not.
+	/// </remarks>
+	private void ReportSalvage()
+	{
+		if (_saidSalvaged || !SaveSystem.Salvaged)
+		{
+			return;
+		}
+		_saidSalvaged = true;
+		Vigil.Tell("Your last save was cut short. The vigil has been recovered from what had"
+			+ " been written; the unreadable copy has been kept.", Omen.Dread);
 	}
 
 	private void UpdateOfflinePanel()

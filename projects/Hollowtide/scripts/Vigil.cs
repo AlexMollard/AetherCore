@@ -2356,6 +2356,18 @@ public static class Vigil
 	/// <summary>The last thing said, so nothing follows itself.</summary>
 	private static string s_lastSpoken = "";
 
+	/// <summary>
+	/// Something the GAME needs to tell the keeper, said through the parish's channel.
+	/// </summary>
+	/// <remarks>
+	/// Narrow on purpose. Everything the parish says of its own accord is decided in this file;
+	/// this is for the handful of things the game itself has to report - a save recovered from
+	/// an unfinished write being the first of them. It goes through Say rather than to the feed
+	/// directly so it lands in the transcript too, which is where somebody goes when they are
+	/// not sure what just happened, and is exactly the audience for a line about their save.
+	/// </remarks>
+	public static void Tell(string line, Omen omen) => Say(line, omen);
+
 	private static void Say(string line, Omen omen)
 	{
 		s_lastSpoken = line;
