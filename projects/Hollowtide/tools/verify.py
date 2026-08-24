@@ -42,8 +42,14 @@ SLANGC_CANDIDATES = [
 ]
 
 
-def run(label, argv, cwd=None):
-    """One step. Prints its own result and returns True if it passed."""
+def run(label, argv, cwd=None, warnings_fail=False):
+    """One step. Prints its own result and returns True if it passed.
+
+    `warnings_fail` treats compiler warnings as a failure. Applied to the things this
+    project builds, because a warning nobody is required to fix is a warning that
+    accumulates until it hides the one that mattered - and the harness is what decides
+    whether anything here is green, so it is the last place noise should be tolerated.
+    """
     print(f"  {label} ... ", end="", flush=True)
     try:
         done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
@@ -51,6 +57,12 @@ def run(label, argv, cwd=None):
         print("SKIPPED (not installed)")
         return None
     if done.returncode == 0:
+        noisy = [line for line in (done.stdout + done.stderr).splitlines() if "warning CS" in line]
+        if warnings_fail and noisy:
+            print(f"FAILED ({len(noisy)} warnings)")
+            for line in noisy[:10]:
+                print("      " + line.strip())
+            return False
         print("ok")
         return True
     print("FAILED")
@@ -78,7 +90,17 @@ def main():
     results = []
 
     print("Building the game's scripts")
-    results.append(("build", run("AetherGame", ["dotnet", "build", GAME, "-v", "q", "--nologo"])))
+    results.append(("build", run("AetherGame",
+                                 ["dotnet", "build", GAME, "-v", "n", "--nologo"],
+                                 warnings_fail=True)))
+    # Release, matching the configuration the harness is RUN in below. Building Debug here and
+    # running Release meant two sets of artefacts, and on a cold output directory the two
+    # collided: the run died partway through and reported a failure that was not there.
+    results.append(("build harness",
+                    run("balance harness (build)",
+                        ["dotnet", "build", os.path.join(HARNESS, "Balance.csproj"),
+                         "-c", "Release", "-v", "n", "--nologo"],
+                        warnings_fail=True)))
 
     print("Playing the rules")
     results.append(("harness", run("balance harness",

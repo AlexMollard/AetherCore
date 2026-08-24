@@ -114,9 +114,16 @@ public static class Transcript
 		return (lines, omens, at);
 	}
 
-	/// <summary>Put a saved transcript back, oldest first. Tolerates ragged input: a file that
-	/// has been edited, or written by an older version, must not throw.</summary>
-	public static void Restore(string[] lines, int[] omens, double[] at)
+	/// <summary>
+	/// Put a saved transcript back, oldest first.
+	/// </summary>
+	/// <remarks>
+	/// Every parameter is NULLABLE in the signature and not merely tolerated in the body. A save
+	/// written before one of these arrays existed deserialises it as null, so null is a real
+	/// value this is called with rather than a defensive afterthought - and a signature that
+	/// claimed otherwise made every honest caller look like a mistake to the compiler.
+	/// </remarks>
+	public static void Restore(string[]? lines, int[]? omens, double[]? at)
 	{
 		Clear();
 		if (lines == null)

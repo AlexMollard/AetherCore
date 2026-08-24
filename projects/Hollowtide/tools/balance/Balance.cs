@@ -3904,7 +3904,9 @@ internal static class Balance
 	/// </remarks>
 	private static string ShaderPath(string file)
 	{
-		DirectoryInfo dir = new DirectoryInfo(AppContext.BaseDirectory);
+		// Nullable, because Parent IS null at a drive root - which is exactly where this walk
+		// ends when the file is not found.
+		DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
 		for (int up = 0; up < 12 && dir != null; up++, dir = dir.Parent)
 		{
 			string candidate = Path.Combine(dir.FullName, "assets", "shaders", file);
@@ -3997,7 +3999,9 @@ internal static class Balance
 	/// <summary>Any file in the project, found by walking up from the build output.</summary>
 	private static string ProjectFile(params string[] parts)
 	{
-		DirectoryInfo dir = new DirectoryInfo(AppContext.BaseDirectory);
+		// Nullable, because Parent IS null at a drive root - which is exactly where this walk
+		// ends when the file is not found.
+		DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
 		for (int up = 0; up < 12 && dir != null; up++, dir = dir.Parent)
 		{
 			string candidate = Path.Combine(dir.FullName, Path.Combine(parts));
