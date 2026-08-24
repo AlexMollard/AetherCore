@@ -495,6 +495,28 @@ internal static class Balance
 			Numbers.Short(report.Ichor) + " over six hours");
 		Check("offline is capped", Vigil.CatchUp(100.0 * 3600.0).Seconds <= Vigil.OfflineCapSeconds + 1.0,
 			"cap " + Numbers.Duration(Vigil.OfflineCapSeconds));
+		// -- The report has to describe what happened, not what is left over. --
+		// Overseers spend while the keeper is away, which is their whole job, so the purse can
+		// come back SMALLER than it left even as the parish grows. A report drawn from the purse
+		// told a keeper who produced 205B that they had gathered 2.5B - and the more overseers
+		// they had hired, the bigger the lie got.
+		Vigil.Reset();
+		Vigil.Rng = new Random(5);
+		for (int i = 0; i < Content.RiteCount; i++)
+		{
+			Vigil.Owned[i] = 30;
+			Vigil.Overseers[i] = true;
+		}
+		Vigil.Ichor = 1e6;
+		double purseBefore = Vigil.Ichor;
+		double rateBefore = Vigil.Rate;
+		OfflineReport withOverseers = Vigil.CatchUp(20.0 * 3600.0);
+		Check("the offline report counts what was produced", withOverseers.Ichor > (Vigil.Ichor - purseBefore) * 5.0,
+			"reports " + Numbers.Short(withOverseers.Ichor) + " produced, not the "
+				+ Numbers.Short(Vigil.Ichor - purseBefore) + " left in the purse");
+		Check("and the parish is better for having been left", Vigil.Rate > rateBefore * 2.0,
+			Numbers.Rate(rateBefore) + " becomes " + Numbers.Rate(Vigil.Rate));
+
 		// The one promise offline progress makes: it cannot cost you anything you were not
 		// there to defend.
 		Check("offline never provokes a visitation", Vigil.TimesTaken == 0, "nothing arrives while away");

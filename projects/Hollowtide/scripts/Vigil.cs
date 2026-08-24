@@ -1794,7 +1794,12 @@ public static class Vigil
 	public static OfflineReport CatchUp(double seconds)
 	{
 		double clamped = Math.Clamp(seconds, 0.0, OfflineCapSeconds);
-		double before = Ichor;
+		// Measured off LIFETIME, not off the purse. Overseers spend while the keeper is away -
+		// that is what they are for - so the purse can easily be SMALLER on return than it was
+		// on leaving, and a report drawn from it tells a keeper who came back to a parish half
+		// again as productive that they gathered almost nothing. Lifetime only ever counts what
+		// was produced, which is the number the sentence is actually claiming.
+		double before = LifetimeIchor;
 		double dreadBefore = Dread;
 
 		const int kSteps = 60;
@@ -1808,7 +1813,7 @@ public static class Vigil
 		{
 			Seconds = clamped,
 			Capped = seconds > OfflineCapSeconds,
-			Ichor = Ichor - before,
+			Ichor = LifetimeIchor - before,
 			Dread = Dread - dreadBefore,
 		};
 	}
