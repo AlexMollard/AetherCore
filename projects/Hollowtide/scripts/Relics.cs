@@ -217,8 +217,13 @@ public static class Relics
 	/// </remarks>
 	public static double MagnitudeAt(Relic relic, int index)
 	{
-		double floor = 0.04 + 0.05 * (int)relic.Grade;
-		double spread = 0.02 + 0.02 * (int)relic.Grade;
+		// Halved from the first pass, which put a full loadout at roughly ten times a bare
+		// keeper over an hour. Measured against everything else in the game - the echoes at
+		// 1.24x, answering visitors at 1.45x, stoking at 4.9x - that made relics the whole
+		// game and the rest of it decoration. They should be the best single lever a keeper
+		// has and still be in the same conversation as the others.
+		double floor = 0.02 + 0.025 * (int)relic.Grade;
+		double spread = 0.01 + 0.01 * (int)relic.Grade;
 		return floor + spread * (Hash(relic.Seed, 20 + index) % 1000u) / 1000.0;
 	}
 

@@ -1463,6 +1463,22 @@ internal static class Balance
 		}
 		Check("and no two of them are the same object", unique, seeds.Count + " distinct seeds held");
 
+		// -- What a loadout is WORTH, against everything else in the game. --
+		// The one balance question a power system has to answer. Relics should be the best
+		// single lever a keeper has and still be in the same conversation as stoking at 4.9x
+		// and answering visitors at 1.45x. The first pass put them at ten times a bare keeper,
+		// which is not a lever, it is the game - measured, not guessed, and only measurable by
+		// playing it out.
+		// An hour, not three quarters of one. Relics compound - they raise what dread pays,
+		// which raises production, which buys rites - so the same loadout measures 1.1x at
+		// forty-five minutes and well over twice that at sixty. A power budget checked over too
+		// short a run reads as harmless right up until somebody plays for an evening.
+		double bare = Digging(60, wearing: false);
+		double laden = Digging(60, wearing: true);
+		double worth = laden / bare;
+		Check("relics are the best lever, not the whole game", worth is > 1.4 and < 5.0,
+			"a full loadout is worth " + worth.ToString("0.00") + "x a bare keeper");
+
 		// -- The satchel has to hold, and hold the RIGHT things. --
 		Vigil.Reset();
 		Vigil.Rng = new Random(7);
@@ -1561,6 +1577,57 @@ internal static class Balance
 		Check("a dropped offer comes back without comment",
 			Vigil.Satchel.Count == 1 && Vigil.Satchel[0].Seed == 31337 && spoken == 0,
 			"restored, and nothing claimed to have happened");
+	}
+
+	/// <summary>Play a stretch digging, optionally wearing the best three things found. The
+	/// keeper rides the meter, because that is where relics come from.</summary>
+	private static double Digging(double minutes, bool wearing)
+	{
+		Vigil.Reset();
+		Vigil.Rng = new Random(11);
+		double click = 0.0;
+		double stoke = 0.0;
+		for (int step = 0; step < minutes * 60.0 / kDt; step++)
+		{
+			click += 4.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			stoke += 0.4 * kDt;
+			while (stoke >= 1.0)
+			{
+				stoke -= 1.0;
+				if (Vigil.Dread < 0.85)
+				{
+					Vigil.Stoke();
+				}
+			}
+			if (Vigil.Wards < Vigil.MaxWards && Vigil.Ichor > Vigil.WardCost * 3.0)
+			{
+				Vigil.RaiseWard();
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			if (wearing && Vigil.Satchel.Count > 0)
+			{
+				for (int slot = 0; slot < Relics.Slots; slot++)
+				{
+					if (!Vigil.Worn[slot].Exists || Vigil.Satchel[0].Grade > Vigil.Worn[slot].Grade)
+					{
+						Vigil.Wear(0, slot);
+						break;
+					}
+				}
+			}
+			Vigil.Tick(kDt);
+		}
+		return Vigil.LifetimeIchor;
 	}
 
 	/// <summary>Every relic the keeper holds, worn or carried.</summary>
