@@ -38,16 +38,26 @@ scripts/Relics.cs          relic generation; a relic is a seed plus a grade, not
 scripts/Content.cs         rites, offerings, marks, boons, visitors, the parish's voice
 scripts/VigilSaveData.cs   what a save contains and how it is applied (engine-free)
 scripts/SaveSystem.cs      reading and writing the file
+scripts/Layout.cs          where things stand in the parish, as pure arithmetic (engine-free)
+scripts/Typography.cs      how big the type is - one number (engine-free)
 scripts/{Hud,Ledger,Parish,Congregation,Whispers}.cs   views onto the simulation
 assets/shaders/ui_relic.slang   relics drawn from their seed; grade adds layers, not colours
 tools/generate_scenes.py   scaffolds the authored chrome - read its header before running it
 tools/balance/             the balance harness
 ```
 
-`Vigil`, `Relics`, `Content` and `VigilSaveData` carry **no `AetherCore` reference**. That is
-not tidiness — it is what lets the harness compile the rules on their own and play them ten
-thousand times without a window, and what lets a whole save round-trip through JSON in a test
-that never goes near the player's real one.
+`Vigil`, `Relics`, `Content`, `VigilSaveData`, `Palette`, `Layout` and `Typography` carry
+**no `AetherCore` reference**. That is not tidiness — it is what lets the harness compile the
+rules on their own and play them ten thousand times without a window, and what lets a whole
+save round-trip through JSON in a test that never goes near the player's real one.
+
+`Layout` is the newest member and joined for exactly that reason. The parish's geometry used to
+live inside `Parish`, tangled up with live rect reads, and so the only way to check any of it
+was to look at the screen. A claim about it that had been "verified" by working one example on
+paper turned out to route every conduit straight across the stoke and ward buttons. Pulled out,
+the same claim is a statement about a curve and a clearance — and the harness holds it at every
+window shape and parish size. **If you find yourself reasoning about parish geometry on paper,
+that is the signal to move the arithmetic here and let the harness do it instead.**
 
 ## The balance harness
 
@@ -55,8 +65,8 @@ that never goes near the player's real one.
 dotnet run -c Release --project projects/Hollowtide/tools/balance
 ```
 
-**Run it after any change to the economy.** It plays the real rules at speed and checks ~100
-invariants, printing PASS/FAIL and returning non-zero on a break.
+**Run it after any change to the economy, or to the parish's layout.** It plays the real rules
+at speed and checks **125 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -70,6 +80,12 @@ visible by reading the code:
 - Ten communions left the tenth run *worse* than the first.
 - A full relic loadout was worth **ten times** a bare keeper.
 - At the brink, the rarest relic grade was the **commonest** of the good ones.
+- A rite could be drawn taller than the room above the horizon, drawing its count off the top
+  of a short window.
+- The deepest rite could sit on top of the sigil, because the clearance never counted the
+  rite's own width.
+- Every conduit began its descent at the same *fraction* of its journey, so the longest one
+  came down through the middle of the parish.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.

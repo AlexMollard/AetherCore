@@ -52,6 +52,19 @@ required a second player online.
 - Worth **1.24×** to a keeper who answers what it brings, **1.10×** to one who does not.
 - The congregation panel shows the line when nobody else is there.
 
+### The parish carries its own yield
+Every rite's output used to arrive as an orb that crossed the scene at horizon height —
+straight through whatever structures stood between it and the sigil.
+
+- Each rite now has a **visible conduit**: a run of dim pips rising from its crown, along a
+  shared canopy above the parish, and down into the sigil's rim. Drawn whether anything is on
+  it or not, because what makes a yield read as *carried* is that the route was there first.
+- The wire lights with the rite as it works. The line is infrastructure; the bead is the light.
+- **The canopy clears the tallest structure standing**, measured rather than written down — a
+  rite's height is a curve on how many are owned and is capped by the spacing, so the tallest
+  thing on screen depends on both the parish and the window.
+- No bounce and no gait. Beads that would overlap are separated by pace, not by a wobble.
+
 ### Relic trading
 - Hand a relic to another keeper; it travels as its seed and grade alone.
 - Removal happens **before** anything is sent, and is restored if the send fails.
@@ -119,6 +132,36 @@ required a second player online.
 - **Fresh echoes were evicted the instant they were added**, so the line showed the same four
   names forever.
 
+### The parish's layout
+All four found by making the geometry checkable, not by looking at it.
+
+- **A rite could be drawn 60% of the window height** when only 62% exists above the horizon —
+  so on a short window a tall structure drew its count off the top, and the canopy, having
+  nowhere to go, clamped *below* the crowns and sent every conduit through the structures it
+  exists to clear.
+- **The deepest rite could overlap the sigil.** The clearance reserved a flat 0.03 and never
+  counted the rite's own half-width, which on a wide window is nearer 0.08.
+- **The conduits' descent was anchored to the wrong variable.** A cubic's height profile
+  depends only on its endpoints, not its length, so every wire began dropping at the same
+  *fraction* of its journey — meaning the one from the far-left rite started down over the
+  middle of the parish. Two attempts were made at capping structure sizes to buy it room
+  before it was clear the descent has to be anchored in *position*.
+- **Clicking the sigil shuffled the whole parish sideways.** The rite spacing was measured from
+  the sigil's animated left edge, which slides outward every time it is struck.
+
+### The parish's presentation
+- **The weeping statue was crooked.** Its robe, shoulders, neck and head each sat a little
+  further right than the last, on the theory that offsetting the upper body reads as a bow.
+  Against a plinth that is dead centre it reads as one thing: not straight.
+- **A second purchase reset the first purchase's wave** instead of sending another, so a front
+  halfway across the floor snapped back to the horizon and set off again — one purchase looked
+  exactly like five. Three fronts can now be in flight.
+- **Fast clicking stacked every floating figure in one column,** each hiding the one before it.
+- **The whole interface was too small to read** at a short window.
+- **A getter was mutating the field it returned arithmetic from.** The sigil's resting size was
+  measured as a side effect of reading the rite layout, so everything else needing it quietly
+  depended on the layout having been computed first.
+
 ### Presentation budgets
 - **The whisper feed ran at 41 lines a minute** against a display showing ~40, so lines were
   pushed off unread.
@@ -149,14 +192,35 @@ Mechanics that existed and worked, but that no player could see:
 
 ## Tooling
 
-- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **115
+- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **125
   invariants**. Every check exists because the thing it checks was once broken.
+- **The parish's layout is checked too.** The geometry was split into an engine-free `Layout`
+  and the harness now lays the parish out at **336 sizes across six window shapes**, asserting
+  that nothing reaches the button row, leaves the screen, crosses a structure or overlaps the
+  sigil. It was written after a claim "verified" by working one example on paper turned out to
+  route every conduit across the stoke and ward buttons, and it found four faults immediately.
 - **A fuzzer** — 750k legal actions in illegal-looking orders across three seeds, with frames
   up to five seconds.
 - **`--seed N`** — shifts every seed, so a check that passes on one sample and fails on the
   next can be found. It found two.
 - **The save is testable** — the data model was split from the file IO, so a whole vigil
   round-trips through JSON in memory without touching the player's real save.
+
+## What is still only checked by eye
+
+Named because the rest of this document is measured, and the difference matters.
+
+- **Whether any of it looks right.** Every visual change here was verified by build, by shader
+  compile and by contract — never by looking. A single brief playtest found three problems that
+  dozens of simulated iterations never surfaced, which is the whole signal.
+- **Type outgrowing its boxes.** The layout invariants pass at *any* type scale, tested at six
+  times the current one — they have to, because the rite height cap subtracts the space the
+  labels need, so a larger label just makes the structures shorter and the geometry stays
+  consistent with itself. What breaks first is text clipping its container, and nothing here
+  can see it.
+- **The two type scales staying in step.** Most of the game's type is authored into the scene
+  files by a Python generator, and the rest is built at runtime in C#. They hold the same
+  number and it is named on both sides, but nothing enforces it.
 
 ## Documentation
 
