@@ -65,11 +65,44 @@ public static class Palette
 	public static Vector4 Panel => Fade(Slate, 0.94f);
 	public static Vector4 PanelDeep => Fade(Pitch, 0.96f);
 	public static Vector4 Row => Fade(Stone, 0.90f);
-	public static Vector4 RowHot => Fade(Ash, 0.96f);
+	/// <summary>
+	/// A row under the pointer.
+	/// </summary>
+	/// <remarks>
+	/// Between Stone and Ash rather than at Ash. It WAS Ash - and so was
+	/// <see cref="TextFaint"/>, which meant the second line of a row vanished completely the
+	/// moment the pointer touched it: the text and the surface it sat on were the same colour,
+	/// a contrast ratio of 1.04. Highlighting a row is supposed to make it easier to read, not
+	/// impossible.
+	/// </remarks>
+	public static Vector4 RowHot => Fade(Mix(Stone, Ash, 0.55f), 0.97f);
+
+	// ── Text. All four sit ABOVE every surface on the ramp, which is the rule that keeps them
+	// legible. Ash and below are surfaces; Bone and above are text. Nothing may straddle.
 	public static Vector4 TextBright => Chalk;
 	public static Vector4 TextBody => Pale;
-	public static Vector4 TextDim => Bone;
-	public static Vector4 TextFaint => Ash;
+	/// <summary>Secondary text. Between Bone and Pale - still plainly quieter than the body,
+	/// but no longer the one step above the brightest surface, which read as unlit.</summary>
+	public static Vector4 TextDim => Mix(Bone, Pale, 0.55f);
+	/// <summary>
+	/// Dread, as TYPE.
+	/// </summary>
+	/// <remarks>
+	/// The accent itself is a dark rust, which is right for a bar, a fill or a shader tint and
+	/// marginal for words - 2.25:1 on a highlighted row, which is legible only if you already
+	/// know what it says. Lifted toward the body grey until it clears the floor, and no further:
+	/// at much more than this it stops reading as rust and starts reading as pink.
+	/// <para>
+	/// A ROLE, not a ninth colour. <c>Dread</c> stays exactly as it was everywhere it is a
+	/// surface, because that is where it works.
+	/// </para>
+	/// </remarks>
+	public static Vector4 DreadText => Mix(Dread, Pale, 0.30f);
+
+	/// <summary>The quietest text there is. Bone, the first step above every surface. It used
+	/// to be Ash, whose own note in the ramp above calls it "structure in shade" - it is a
+	/// surface colour, and it was never legible as type.</summary>
+	public static Vector4 TextFaint => Bone;
 	/// <summary>The floor. Near-black on purpose: it is lit by every rite standing on it, and
 	/// anything brighter came back off the light map as the most prominent thing on screen -
 	/// which is exactly wrong for the surface everything else is supposed to sit against.</summary>

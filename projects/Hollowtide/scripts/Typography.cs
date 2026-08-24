@@ -26,7 +26,7 @@ public static class Typography
 {
 	/// <summary>Multiplier on every face in the game. Paired with <c>TYPE</c> in
 	/// <c>tools/generate_scenes.py</c> - move both or neither.</summary>
-	public const float Scale = 1.22f;
+	public const float Scale = 1.30f;
 
 	/// <summary>A face, at its written size times the scale.</summary>
 	public static float Face(float size) => size * Scale;

@@ -36,6 +36,29 @@ public sealed class Ledger
 	/// scene: the row pool is sized from it, and 4px of disagreement puts every row past the
 	/// mask.</summary>
 	private const float kPad = 20.0f;
+
+	/// <summary>Left edge of a row's text, clear of its icon.</summary>
+	private const float kTextLeft = 68.0f;
+
+	/// <summary>Gap kept between the text column and the figures column.</summary>
+	private const float kColumnGap = 14.0f;
+
+	/// <summary>
+	/// The two column widths, derived rather than written down.
+	/// </summary>
+	/// <remarks>
+	/// They were hardcoded at 320 and 366 against a figures column inset from the right, and
+	/// the two overlapped by seventy pixels - a row's description ran underneath its own price.
+	/// Raising the type made it worse, because the inset scaled with the type while the text
+	/// widths did not, walking the price column leftward into the words. Derived from the panel
+	/// there is nothing left to fall out of step: the figures take a fixed column and the text
+	/// takes whatever is left.
+	/// </remarks>
+	private static float FiguresWidth => Typography.Box(150.0f);
+
+	private static float TextWidth => kWidth - kPad * 2.0f - FiguresWidth - kTextLeft - kColumnGap;
+
+	private static float FiguresLeft => kWidth - kPad * 2.0f - FiguresWidth;
 	/// <summary>Scaled with the type on it. A row is two lines and a rarity bar, and raising the
 	/// faces without raising the row put the second line straight through the bar.</summary>
 	private static readonly float kRowHeight = Typography.Box(64.0f);
@@ -115,16 +138,16 @@ public sealed class Ledger
 			// The composed button's own centred label is unused: a ledger row has four columns,
 			// so they are placed individually and the pooled label is emptied.
 			Ui.SetText(row.Box.Label, "");
-			row.Title = UiKit.Text(row.Box.Root, "", 68.0f, Typography.Box(6.0f), 320.0f,
+			row.Title = UiKit.Text(row.Box.Root, "", kTextLeft, Typography.Box(6.0f), TextWidth,
 				Typography.Box(24.0f), Typography.Face(17.0f), Palette.TextBright);
-			row.Sub = UiKit.Text(row.Box.Root, "", 68.0f, Typography.Box(32.0f), 366.0f,
+			row.Sub = UiKit.Text(row.Box.Root, "", kTextLeft, Typography.Box(32.0f), TextWidth,
 				Typography.Box(23.0f), Typography.Face(15.0f), Palette.TextFaint,
 				UiHAlign.Left, Palette.Body);
-			row.Cost = UiKit.Text(row.Box.Root, "", rowWidth - Typography.Box(176.0f),
-				Typography.Box(6.0f), Typography.Box(164.0f), Typography.Box(24.0f), Typography.Face(17.0f),
+			row.Cost = UiKit.Text(row.Box.Root, "", FiguresLeft,
+				Typography.Box(6.0f), FiguresWidth, Typography.Box(24.0f), Typography.Face(17.0f),
 				Palette.Ichor, UiHAlign.Right);
-			row.Note = UiKit.Text(row.Box.Root, "", rowWidth - Typography.Box(176.0f),
-				Typography.Box(32.0f), Typography.Box(164.0f), Typography.Box(23.0f), Typography.Face(15.0f),
+			row.Note = UiKit.Text(row.Box.Root, "", FiguresLeft,
+				Typography.Box(32.0f), FiguresWidth, Typography.Box(23.0f), Typography.Face(15.0f),
 				Palette.TextFaint, UiHAlign.Right);
 			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
 			// Ink, not white: ui_relic computes its own colour and takes only the alpha from the

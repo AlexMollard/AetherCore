@@ -17,7 +17,10 @@ namespace AetherGame;
 public sealed class Hud
 {
 	/// <summary>Width the ledger reserves on the right. Everything here stops short of it.</summary>
-	public const float LedgerWidth = 620.0f;
+	/// <summary>Width of the ledger. Widened from 620: every row is four columns of one-line
+	/// text, and at 620 the longest of them ran out of room and clipped mid-word. The parish has
+	/// the space to give - it is mostly empty floor.</summary>
+	public const float LedgerWidth = 760.0f;
 	public const float BarHeight = 104.0f;
 
 	private const float kSigilSize = 268.0f;
@@ -188,7 +191,7 @@ public sealed class Hud
 		Ui.SetText(_visClock, "IT ARRIVES IN " + MathF.Ceiling((float)Vigil.ApproachSeconds).ToString("0") + "s");
 		// The clock reddens as it runs out, so the pressure is felt rather than read.
 		float urgency = 1.0f - (float)(Vigil.ApproachSeconds / Math.Max(0.001, Vigil.ApproachTotal));
-		Ui.SetTextColor(_visClock, Palette.Mix(Palette.TextFaint, Palette.Dread, urgency));
+		Ui.SetTextColor(_visClock, Palette.Mix(Palette.TextFaint, Palette.DreadText, urgency));
 
 		bool canWard = Vigil.Wards > 0;
 		bool canOffer = Vigil.Ichor >= Vigil.OfferCost;
@@ -353,7 +356,7 @@ public sealed class Hud
 		// Faint when the bargain is worth nothing, full dread when it is worth a great deal:
 		// the caption brightens as the offer gets good, which is the same thing that makes it
 		// dangerous.
-		Ui.SetTextColor(_dreadCaption, Palette.Mix(Palette.TextFaint, Palette.Dread, dread));
+		Ui.SetTextColor(_dreadCaption, Palette.Mix(Palette.TextFaint, Palette.DreadText, dread));
 
 		Ui.SetProgress(_dreadTrack, dread);
 		// The meter says how close, and now also how long. The whole game is a clock the
@@ -407,6 +410,6 @@ public sealed class Hud
 		UpdateVisitation();
 
 		Ui.SetTextColor(_sigilHint, Palette.Mix(Palette.TextFaint, Palette.Ichor, eased));
-		Ui.SetTextColor(_title, Palette.Mix(Palette.TextDim, Palette.Dread, dread * 0.8f));
+		Ui.SetTextColor(_title, Palette.Mix(Palette.TextDim, Palette.DreadText, dread * 0.8f));
 	}
 }

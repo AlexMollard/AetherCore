@@ -2689,6 +2689,147 @@ internal static class Balance
 			"no progress, no front");
 	}
 
+	// -- Everything on screen can actually be read --------------------------------------
+
+	/// <summary>Relative luminance, the sRGB way. Not the average of the channels - green is
+	/// most of what an eye sees and blue is almost none of it, and a naive average calls this
+	/// palette's greens and rusts equally bright when they are nothing like it.</summary>
+	private static double Luminance(Vector4 c)
+	{
+		static double Channel(double v) => v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+		return 0.2126 * Channel(c.X) + 0.7152 * Channel(c.Y) + 0.0722 * Channel(c.Z);
+	}
+
+	/// <summary>Composite a colour over what is behind it, since half this palette is alpha.</summary>
+	private static Vector4 Over(Vector4 fg, Vector4 bg)
+	{
+		float a = Math.Clamp(fg.W, 0.0f, 1.0f);
+		return new Vector4(fg.X * a + bg.X * (1.0f - a), fg.Y * a + bg.Y * (1.0f - a),
+			fg.Z * a + bg.Z * (1.0f - a), 1.0f);
+	}
+
+	/// <summary>The usual ratio, so the figures mean the same as they do everywhere else.</summary>
+	private static double Contrast(Vector4 a, Vector4 b)
+	{
+		double la = Luminance(a);
+		double lb = Luminance(b);
+		return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+	}
+
+	/// <summary>
+	/// Every text colour is legible on every surface it can land on.
+	/// </summary>
+	/// <remarks>
+	/// Written because it was not. <c>TextFaint</c> and <c>RowHot</c> were the same step of the
+	/// grey ramp, so the second line of a ledger row - what a relic does, what a boon costs you -
+	/// disappeared completely the moment the pointer touched the row. A contrast ratio of 1.04:
+	/// not dim, not hard, gone. Nothing about it was detectable except by hovering a row and
+	/// noticing that words had stopped being there.
+	/// <para>
+	/// The floor is a BOUND and a low one. This is a horror game played in near-darkness and its
+	/// quietest text is meant to be quiet; the check is not here to make the palette bright, it
+	/// is here to stop a colour being invented that cannot be read at all.
+	/// </para>
+	/// </remarks>
+	private static void EverythingCanBeRead()
+	{
+		Console.WriteLine("Everything on screen can be read");
+
+		(string Name, Vector4 Colour)[] surfaces =
+		{
+			("the void", Palette.Void),
+			("a panel", Palette.Panel),
+			("a sunken panel", Palette.PanelDeep),
+			("a row", Palette.Row),
+			("a row under the pointer", Palette.RowHot),
+		};
+
+		(string Name, Vector4 Colour)[] texts =
+		{
+			("bright", Palette.TextBright),
+			("body", Palette.TextBody),
+			("dim", Palette.TextDim),
+			("faint", Palette.TextFaint),
+		};
+
+		// The accents carry meaning, so they are held to the same floor - a price in ichor that
+		// cannot be read on a highlighted row is the same fault as a description that cannot.
+		//
+		// DreadText rather than Dread: the accent is also a bar fill and a shader tint, where a
+		// dark rust is exactly right, and holding a fill to a type's contrast floor would be
+		// checking the wrong thing. What has to be legible is the colour words are drawn in.
+		(string Name, Vector4 Colour)[] accents =
+		{
+			("ichor", Palette.Ichor),
+			("dread", Palette.DreadText),
+			("a sigil", Palette.Sigil),
+		};
+
+		const double floor = 2.4;
+		string worstPair = "";
+		double worst = double.MaxValue;
+
+		foreach ((string surfaceName, Vector4 surface) in surfaces)
+		{
+			Vector4 bg = Over(surface, Palette.Void);
+			foreach ((string textName, Vector4 text) in texts)
+			{
+				double ratio = Contrast(Over(text, bg), bg);
+				if (ratio < worst)
+				{
+					worst = ratio;
+					worstPair = textName + " on " + surfaceName;
+				}
+			}
+		}
+
+		Check("the quietest text is still text", worst >= floor,
+			worstPair + " at " + worst.ToString("F2") + ":1 against a floor of " + floor.ToString("F1"));
+
+		double worstAccent = double.MaxValue;
+		string worstAccentPair = "";
+		foreach ((string surfaceName, Vector4 surface) in surfaces)
+		{
+			Vector4 bg = Over(surface, Palette.Void);
+			foreach ((string accentName, Vector4 accent) in accents)
+			{
+				double ratio = Contrast(Over(accent, bg), bg);
+				if (ratio < worstAccent)
+				{
+					worstAccent = ratio;
+					worstAccentPair = accentName + " on " + surfaceName;
+				}
+			}
+		}
+
+		Check("and so is every accent that means something", worstAccent >= floor,
+			worstAccentPair + " at " + worstAccent.ToString("F2") + ":1");
+
+		// The one that actually shipped broken: a surface and a text colour at the same step.
+		int collisions = 0;
+		foreach ((string _, Vector4 surface) in surfaces)
+		{
+			foreach ((string _, Vector4 text) in texts)
+			{
+				if (Contrast(Over(text, Over(surface, Palette.Void)), Over(surface, Palette.Void)) < 1.15)
+				{
+					collisions++;
+				}
+			}
+		}
+		Check("no text is the same colour as its background", collisions == 0,
+			collisions == 0 ? "every pair distinguishable" : collisions + " invisible");
+
+		// Highlighting a row must make it MORE readable, never less. The old RowHot failed this
+		// in the worst possible way, and it is the property a hover state exists to have.
+		Vector4 cold = Over(Palette.Row, Palette.Void);
+		Vector4 hot = Over(Palette.RowHot, Palette.Void);
+		double coldRatio = Contrast(Over(Palette.TextFaint, cold), cold);
+		double hotRatio = Contrast(Over(Palette.TextFaint, hot), hot);
+		Check("a highlighted row is no harder to read than a quiet one", hotRatio >= coldRatio * 0.75,
+			"faint text at " + coldRatio.ToString("F2") + ":1 quiet, " + hotRatio.ToString("F2") + ":1 lit");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -2722,6 +2863,7 @@ internal static class Balance
 		TheClockOutlastsTheKeeper();
 		TheParishHoldsItselfTogether();
 		TheFrontsSurviveBeingPacked();
+		EverythingCanBeRead();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

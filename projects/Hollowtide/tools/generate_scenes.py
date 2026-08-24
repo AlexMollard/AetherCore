@@ -44,7 +44,7 @@ ROW_HOT = (0.125, 0.145, 0.160, 0.960)
 # not author: the ledger's rows and the parish's own labels are built at runtime. Python cannot
 # read a C# constant, so the two have to be moved together - move both or neither, or half the
 # interface grows and half stays where it was.
-TYPE = 1.22
+TYPE = 1.30
 BONE = (0.855, 0.851, 0.816, 1.0)
 BONE_DIM = (0.502, 0.510, 0.522, 1.0)
 BONE_FAINT = (0.290, 0.302, 0.322, 1.0)
@@ -59,7 +59,7 @@ BODY = "Roboto-Regular"
 WHISPER = "IBMPlexMono-Italic"
 DISPLAY = "PixelStorm"
 
-LEDGER_W = 620.0
+LEDGER_W = 760.0  # paired with Hud.LedgerWidth
 BAR_H = 104.0
 
 
