@@ -3503,6 +3503,111 @@ internal static class Balance
 			"at the brink, fully loaded: " + (100.0 * loaded / digs).ToString("F1") + "% of clicks");
 	}
 
+	/// <summary>
+	/// The parish has enough to say, and every line it can say is reachable.
+	/// </summary>
+	/// <remarks>
+	/// A conditional line whose condition can never hold is invisible: it costs nothing, breaks
+	/// nothing and simply never appears, so no amount of playing finds it. The transcript makes
+	/// the other failure visible instead - a keeper can now scroll back and see the parish say
+	/// the same thing four times in a row, which a nine-second feed used to hide.
+	/// </remarks>
+	private static void TheParishHasEnoughToSay()
+	{
+		Console.WriteLine("The parish has enough to say");
+
+		int blank = 0;
+		foreach (string line in Content.Ambient)
+		{
+			if (string.IsNullOrWhiteSpace(line))
+			{
+				blank++;
+			}
+		}
+		foreach (Content.AmbientDef def in Content.Noticed)
+		{
+			if (string.IsNullOrWhiteSpace(def.Line) || def.When == null)
+			{
+				blank++;
+			}
+		}
+		Check("nothing it says is blank", blank == 0,
+			Content.Ambient.Length + " plain and " + Content.Noticed.Length + " noticed");
+
+		HashSet<string> distinct = new HashSet<string>(Content.Ambient);
+		foreach (Content.AmbientDef def in Content.Noticed)
+		{
+			distinct.Add(def.Line);
+		}
+		Check("and it never says the same thing twice", distinct.Count
+			== Content.Ambient.Length + Content.Noticed.Length,
+			distinct.Count + " distinct lines");
+
+		// Every conditional line has to be reachable by SOME keeper, or it is dead text.
+		Vigil.Reset();
+		Vigil.Ichor = 1e14;
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			Vigil.BuyRite(rite, 1);
+		}
+		Vigil.Consecrate(0);
+		Vigil.Dread = 0.8;
+		Vigil.HandGathers = 9999;
+		Vigil.RelicsRendered = 99;
+		Vigil.Communions = 3;
+		Vigil.BestRelicGrade = (int)Grade.Hollowed;
+		Vigil.Wards = 2;
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			Vigil.OfferingsTaken[i] = true;
+		}
+		for (int i = 0; i < 8; i++)
+		{
+			Vigil.Satchel.Add(new Relic { Seed = i + 1, Grade = Grade.Keepsake });
+		}
+		// A lender worn, and a long-running vigil, for the two lines that ask about those.
+		for (int seed = 1; seed < 400000; seed++)
+		{
+			Relic candidate = new Relic { Seed = seed, Grade = Grade.Hollowed };
+			bool lends = false;
+			for (int i = 0; i < Relics.PowerCount(candidate.Grade); i++)
+			{
+				lends |= Relics.PowerAt(candidate, i) == Power.Foundation;
+			}
+			if (lends)
+			{
+				Vigil.Worn[0] = candidate;
+				break;
+			}
+		}
+		Vigil.PlayedSeconds = 3600.0;
+
+		int unreachableHigh = 0;
+		foreach (Content.AmbientDef def in Content.Noticed)
+		{
+			if (!def.When())
+			{
+				unreachableHigh++;
+			}
+		}
+		// One line is deliberately about a QUIET parish, so it cannot hold at once with the
+		// rest - checked separately rather than pretending a single keeper satisfies everything.
+		Vigil.Dread = 0.1;
+		int stillUnreachable = 0;
+		foreach (Content.AmbientDef def in Content.Noticed)
+		{
+			if (!def.When())
+			{
+				stillUnreachable++;
+			}
+		}
+		Check("every line it can say, some keeper can hear",
+			unreachableHigh <= 1 && stillUnreachable <= 1,
+			"all but one hold at the brink, all but one hold in the quiet");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -3544,6 +3649,7 @@ internal static class Balance
 		LentStructuresAreOnlyLent();
 		EveryRelicCanBeRead();
 		LuckIsWorthWearing();
+		TheParishHasEnoughToSay();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

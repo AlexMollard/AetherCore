@@ -536,6 +536,102 @@ public static class Content
 		"The cold comes up through the flags. It has always done that.",
 		"Somewhere behind you, the singing stops to listen.",
 		"There is a name in the ledger you do not remember writing.",
+		"The bell rope is swinging. Nobody has touched it.",
+		"You find a chair pulled out, and put it back.",
+		"Water is getting in somewhere. You cannot find where.",
+		"For a moment the parish sounds like it is full.",
+		"Your breath shows. The night is not that cold.",
+		"Something is counting along with you, one behind.",
+		"The flags by the door have been worn smooth. Not by you.",
+		"A moth goes into a lantern and does not come out the other side.",
+		"You have been holding your breath. You do not know for how long.",
+		"The floor is dry where the rain came in.",
+		"Somebody has laid the table for a service. There is no service.",
+		"The dark past the pillars has depth to it tonight.",
+		"You hear the outer door close. You did not hear it open.",
+		"There is less dust than there should be.",
+		"One of the candles is burning down faster than the rest.",
+		"The silence has a shape, and you are standing in the middle of it.",
+	};
+
+	/// <summary>
+	/// A line, and when the parish would say it.
+	/// </summary>
+	/// <remarks>
+	/// The atmosphere above is true of any night in the parish. These are true of THIS one - a
+	/// keeper who has just consecrated a rite, or is wearing a relic that stands where nothing
+	/// was built, or has been leaning on the dark all evening, hears the place remark on it.
+	/// A voice that knows what you have been doing is worth a great deal more than a longer
+	/// list of things it says regardless.
+	/// </remarks>
+	public sealed class AmbientDef
+	{
+		public string Line = "";
+		public Func<bool> When = () => true;
+	}
+
+	public static readonly AmbientDef[] Noticed =
+	{
+		new AmbientDef
+		{
+			Line = "Whatever you gave the rite, it has started asking for it by name.",
+			When = () => Vigil.Consecrated >= 0,
+		},
+		new AmbientDef
+		{
+			Line = "There are more of them standing than you remember paying for.",
+			When = Vigil.WearingAFoundation,
+		},
+		new AmbientDef
+		{
+			Line = "The things in your satchel have stopped rattling against each other.",
+			When = () => Vigil.Satchel.Count >= 6,
+		},
+		new AmbientDef
+		{
+			Line = "Your hands know the work now. You have stopped watching them.",
+			When = () => Vigil.HandGathers >= 500,
+		},
+		new AmbientDef
+		{
+			Line = "The parish is louder than one keeper should be able to make it.",
+			When = () => Vigil.OfferingsCount() >= 20,
+		},
+		new AmbientDef
+		{
+			Line = "You have been at the edge of it so long that the edge has moved.",
+			When = () => Vigil.Dread >= 0.75,
+		},
+		new AmbientDef
+		{
+			Line = "Nothing has come for a while. That is not the same as nothing coming.",
+			When = () => Vigil.Dread <= 0.25 && Vigil.PlayedSeconds > 600.0,
+		},
+		new AmbientDef
+		{
+			Line = "Something you are carrying is warm, and it was not a moment ago.",
+			When = () => Vigil.BestRelicGrade >= (int)Grade.Hallowed,
+		},
+		new AmbientDef
+		{
+			Line = "The deepest of them has stopped needing to be lit.",
+			When = () => Vigil.Owned[Content.RiteCount - 1] > 0,
+		},
+		new AmbientDef
+		{
+			Line = "You have done this before. The ledger is in your handwriting throughout.",
+			When = () => Vigil.Communions >= 1,
+		},
+		new AmbientDef
+		{
+			Line = "Whatever you rendered down, some of it is still in the air.",
+			When = () => Vigil.RelicsRendered >= 5,
+		},
+		new AmbientDef
+		{
+			Line = "One of the wards has gone out. You did not see which.",
+			When = () => Vigil.Wards >= 1,
+		},
 	};
 
 	/// <summary>Said to a keeper who has never gone looking. The one nudge in the game, and it

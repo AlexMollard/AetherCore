@@ -2389,10 +2389,45 @@ public static class Vigil
 			Say(Content.Beckon, Omen.Plain);
 			return;
 		}
-		// Never the same line twice running. A uniform draw over eight lines repeats about one
-		// time in eight, which at this cadence means hearing the ossuary shift twice inside two
-		// minutes - and a repeated atmospheric line stops being atmosphere and starts being a
-		// string in an array.
+		// Two pools. The plain one is true of any night in the parish; the other is true of THIS
+		// night, and is preferred when anything in it applies, because a place that remarks on
+		// what you have actually been doing is worth more than a longer list of things it says
+		// regardless. Not ALWAYS preferred - a voice that only ever comments on your progress
+		// is a progress bar with adjectives.
+		if (Rng.NextDouble() < 0.45)
+		{
+			int eligible = 0;
+			for (int i = 0; i < Content.Noticed.Length; i++)
+			{
+				if (Content.Noticed[i].When())
+				{
+					eligible++;
+				}
+			}
+			if (eligible > 0)
+			{
+				int want = Rng.Next(eligible);
+				for (int i = 0; i < Content.Noticed.Length; i++)
+				{
+					if (!Content.Noticed[i].When())
+					{
+						continue;
+					}
+					if (want-- == 0)
+					{
+						// Deliberately not tracked against s_lastAmbient: the two pools are
+						// separate, and a noticed line is rare enough by its own conditions.
+						Say(Content.Noticed[i].Line, Omen.Plain);
+						return;
+					}
+				}
+			}
+		}
+
+		// Never the same line twice running. A uniform draw repeats often enough at this cadence
+		// to be noticed, and a repeated atmospheric line stops being atmosphere and starts being
+		// a string in an array - which the transcript now makes plain, since a keeper can scroll
+		// back and see it said the same thing four times.
 		int pick = Rng.Next(Content.Ambient.Length - 1);
 		if (pick >= s_lastAmbient)
 		{
