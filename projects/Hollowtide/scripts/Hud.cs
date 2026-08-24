@@ -37,6 +37,7 @@ public sealed class Hud
 	private Entity _sigil;
 	private Entity _sigilHint;
 	private Entity _handValue;
+	private Entity _fervourBar;
 	private Button _stoke;
 	private Button _ward;
 	private Button _bell;
@@ -79,6 +80,7 @@ public sealed class Hud
 		_sigil = Scene.Find("NaveSigil");
 		_sigilHint = Scene.Find("NaveHint");
 		_handValue = Scene.Find("NaveHandValue");
+		_fervourBar = Scene.Find("NaveFervourBar");
 		_stoke = Button.Find("NaveStoke");
 		_ward = Button.Find("NaveWard");
 		_bell = Button.Find("NaveBell");
@@ -157,7 +159,20 @@ public sealed class Hud
 		Ui.SetText(_ichor, Numbers.Short(Vigil.Ichor));
 		Ui.SetText(_rate, Numbers.Rate(Vigil.Rate));
 		Ui.SetText(_keeper, Vigil.KeeperName + (connected ? "  -  keeping vigil with " + Math.Max(0, keeperCount - 1) : "  -  alone"));
-		Ui.SetText(_handValue, "+" + Numbers.Short(Vigil.HandGain) + " by hand");
+		// ── Fervour ──────────────────────────────────────────────────────────────────
+		// Drawn at all, which it never used to be. It is worth up to x1.60 - second only to
+		// dread - and it empties in twelve seconds, so a player who could not see it had no
+		// way to learn that gathering by hand does anything beyond the ichor it hands over,
+		// and no way to read the one boon sold against it.
+		float fervour = (float)Vigil.Fervour;
+		Ui.SetProgress(_fervourBar, fervour);
+		// Dim and cold when it is empty, full ichor when it is not: the bar has to read as
+		// something you LIT rather than as a gauge that happens to be low.
+		_fervourBar.Component("UI Progress Bar").SetVector4("fill_color",
+			Palette.Mix(Palette.IchorDim, Palette.Ichor, MathF.Min(1.0f, fervour * 1.4f)));
+
+		Ui.SetText(_handValue, "+" + Numbers.Short(Vigil.HandGain) + " by hand" +
+			(fervour > 0.005f ? "   FERVOUR " + Numbers.Mult(Vigil.FervourMultiplier) : ""));
 
 		string mult = Numbers.Mult(Vigil.GlobalMultiplier);
 		Ui.SetText(_multiplier, Vigil.SurgeSeconds > 0.0

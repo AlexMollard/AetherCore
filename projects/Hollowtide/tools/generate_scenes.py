@@ -452,6 +452,13 @@ def vigil():
     at(nave, "NaveSigil", [Scene.image((1, 1, 1, 1)), Scene.material("ui_sigil", ICHOR, DREAD), Scene.selectable("nave")], 0, -60, 268, 268, MID, CENTRE)
     at(nave, "NaveHint", [Scene.text("GATHER", DISPLAY, 17.0, BONE_FAINT, "center")], 0, 108, 400, 26, MID, CENTRE)
     at(nave, "NaveHandValue", [Scene.text("", BODY, 17.0, ICHOR_DIM, "center")], 0, 136, 400, 26, MID, CENTRE)
+    # FERVOUR. It sits directly under the hand figure and directly above the buttons, because
+    # it is the one meter you fill with the sigil rather than with the parish - the bar belongs
+    # in the gap between what your hand is worth and what you can spend it on. It was worth up
+    # to 1.6x and drained in twelve seconds while being drawn nowhere at all, which made the
+    # second-largest multiplier in the game invisible, and made a boon that slows its drain a
+    # purchase against something the player could not see.
+    at(nave, "NaveFervourBar", [Scene.image(CLEAR, 4.0), Scene.progress((0.086, 0.075, 0.078, 1.0), ICHOR)], 0, 157, 260, 8, MID, CENTRE)
     # Stoke and ward are a pair - the two directions you can push the meter - so they share a
     # row. The bell is a different kind of thing (and only exists in a congregation), so it
     # sits on its own beneath them rather than making a row of three that is sometimes two.
