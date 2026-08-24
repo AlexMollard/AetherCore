@@ -640,7 +640,7 @@ public static class Vigil
 			double total = 0.0;
 			for (int i = 0; i < Content.RiteCount; i++)
 			{
-				total += Owned[i] * Content.Rites[i].DreadRate;
+				total += Owned[i] * Content.Rites[i].DreadRate * RiteDreadScale(i);
 			}
 			// A late run would otherwise pin the meter within seconds. Owning more of a tier
 			// should raise dread; owning ALL the tiers should not make the game unplayable,
@@ -830,6 +830,28 @@ public static class Vigil
 	}
 
 	/// <summary>An offering is shown once its condition is met; taken ones drop off the list.</summary>
+	/// <summary>
+	/// How much of this rite's dread still lands, from offerings taken. Below 1 is quieter.
+	/// </summary>
+	/// <remarks>
+	/// Floored at a third and never at zero. The bargain of the game is that the deep rites pay
+	/// better and pull the dark in faster; an offering that let a keeper buy that off entirely
+	/// would not make the parish safer, it would make it pointless - there would be nothing left
+	/// to weigh against anything. Quieter is a decision. Silent is the end of the decision.
+	/// </remarks>
+	public static double RiteDreadScale(int rite)
+	{
+		double scale = 1.0;
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			if (OfferingsTaken[i] && Content.Offerings[i].Target == rite)
+			{
+				scale *= Content.Offerings[i].DreadScale;
+			}
+		}
+		return Math.Max(0.33, scale);
+	}
+
 	public static bool OfferingAvailable(int index)
 	{
 		if (OfferingsTaken[index])

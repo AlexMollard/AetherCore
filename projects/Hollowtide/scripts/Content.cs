@@ -81,7 +81,30 @@ public sealed class OfferingDef
 	public string Blurb = "";
 	public double Cost;
 	public int Target;
-	public double Multiplier;
+
+	/// <summary>
+	/// What this multiplies its target's output by.
+	/// </summary>
+	/// <remarks>
+	/// Defaults to 1, not 0. Every offering used to be a multiplier so every entry set it, and a
+	/// field that is always written needs no default - but the offerings below are no longer all
+	/// multipliers, and one that only changes a rite's SPEED would otherwise have multiplied its
+	/// output by zero and silently switched the rite off.
+	/// </remarks>
+	public double Multiplier = 1.0;
+
+	/// <summary>
+	/// What this multiplies its rite's dread contribution by. Below 1 is quieter.
+	/// </summary>
+	/// <remarks>
+	/// The most interesting knob in the game to hand to a player, because it plays directly
+	/// against the central bargain: the deep rites pay far better AND pull the dark in far
+	/// faster, and this lets a keeper buy off part of the second half of that sentence. It never
+	/// buys off all of it - see the floor in <c>Vigil.RiteDreadScale</c> - because a parish that
+	/// can be made safe is a parish with nothing left to decide.
+	/// </remarks>
+	public double DreadScale = 1.0;
+
 	/// <summary>Copies of <see cref="Target"/> needed before this is offered. Global and
 	/// hand offerings use <see cref="LifetimeNeeded"/> instead.</summary>
 	public int OwnedNeeded;
@@ -223,9 +246,17 @@ public static class Content
 		return rites;
 	}
 
-	/// <summary>Three offerings per rite on a fixed ladder, plus the hand-written global
-	/// ones. Generating the ladder keeps 24 near-identical entries out of the file and
-	/// makes adding a ninth rite a one-line change.</summary>
+	/// <summary>
+	/// Everything the parish will ask for.
+	/// </summary>
+	/// <remarks>
+	/// <b>The first thirty entries may never move.</b> A save stores which offerings have been
+	/// taken as a bare array of flags indexed by position, so reordering this table silently
+	/// re-points every flag in every existing save at a different offering - a keeper would load
+	/// their game and find they had bought things they never bought. Anything new goes on the
+	/// END, which is why the deep ladder below is a separate pass rather than more steps woven
+	/// into the first one. There is a check in the balance harness that holds this.
+	/// </remarks>
 	public static readonly OfferingDef[] Offerings = BuildOfferings();
 
 	private static OfferingDef[] BuildOfferings()
@@ -293,6 +324,89 @@ public static class Content
 			Name = "The Parish Remembers", Blurb = "Everything gives triple. Nothing has forgotten you.",
 			Cost = 900000000.0, Target = OfferingDef.TargetGlobal, Multiplier = 3.0, LifetimeNeeded = 400000000.0,
 		});
+
+		// ── Everything past here was added later, and must stay past here ────────────────
+		// See the note on Offerings: a save indexes this table by position.
+		//
+		// THREE kinds of offering beyond a plain multiplier were tried here and two were thrown
+		// away, both because of what they did to the balance rather than to the code. Recorded
+		// so the next one does not have to learn it twice:
+		//
+		//   - A rite that WORKS FASTER (a quarter off its cycle) is a third more ichor at no cost
+		//     in dread, and that gain lands on a keeper who is not yet against any ceiling. It cut
+		//     the reward for patience at the communion from 9.8x to 5.6x. A gain is not neutral;
+		//     what matters is WHOSE.
+		//   - A rite whose free doublings come every TWENTY copies instead of twenty-five looks
+		//     like the mildest entry on this list and is by far the strongest thing ever put in
+		//     it. The doublings are an exponent, so shortening its divisor multiplies output by
+		//     2^(owned/20 - owned/25) - four times over at two hundred copies and climbing
+		//     forever. It broke the floor under stoking and what leaning on an echo pays, at
+		//     once. Never buy an exponent with a one-off purchase.
+		//
+		// What survived is the one that costs the keeper something. That is not a coincidence:
+		// this game is a single bargain, and an offering that only gives is an offering that
+		// flattens it.
+
+		// The deep ladder. The first three steps run out at fifty copies of a rite, which a
+		// keeper who leans on one tier passes inside an hour - and then the tab is empty and
+		// says to go and keep more of a rite they already have hundreds of. These carry on.
+		string[] deepName = { "Bone Ash", "Wound Tally", "The Long Feeding", "Grave Tithe", "Unmarked Debt" };
+		string[] deepBlurb =
+		{
+			"What is left when the burning is done properly.",
+			"One mark for each. The wall is running out of room.",
+			"It has stopped needing to be asked.",
+			"Paid in the only coin the ground accepts.",
+			"Nobody living remembers agreeing to this.",
+		};
+		int[] deepNeeded = { 100, 150, 250, 400, 600 };
+		// Deliberately gentle. The first attempt ran 2x 2x 2x 3x 3x - seventy-two times per rite
+		// on top of the twelve the early ladder already gives - and measured, that broke two
+		// things at once: a parish that rich sits near the brink on its own, so deliberately
+		// stoking toward it bought almost nothing (1.1x against a floor of 1.2x), and every other
+		// source in the game - what dread pays, what a relic is worth, what a congregation adds -
+		// shrank against it. The complaint these answer is that the tab RUNS OUT, which is a
+		// question of how many there are, not how big they are.
+		double[] deepMult = { 1.5, 1.5, 2.0, 2.0, 2.0 };
+		double[] deepCost = { 12000.0, 60000.0, 400000.0, 5000000.0, 100000000.0 };
+
+		for (int rite = 0; rite < Rites.Length; rite++)
+		{
+			for (int step = 0; step < deepName.Length; step++)
+			{
+				list.Add(new OfferingDef
+				{
+					Name = Rites[rite].Name + ": " + deepName[step],
+					Blurb = deepBlurb[step],
+					Cost = Rites[rite].BaseCost * deepCost[step],
+					Target = rite,
+					Multiplier = deepMult[step],
+					OwnedNeeded = deepNeeded[step],
+				});
+			}
+		}
+
+		// A rite that pulls the dark in less. The one offering in the game that makes going
+		// DEEPER cheaper in the only currency that actually costs a keeper anything.
+		for (int rite = 0; rite < Rites.Length; rite++)
+		{
+			list.Add(new OfferingDef
+			{
+				Name = Rites[rite].Name + ": Muffled Bell",
+				Blurb = "Carries less far: a third less dread, and a seventh less taken.",
+				Cost = Rites[rite].BaseCost * 6000.0,
+				Target = rite,
+				DreadScale = 0.70,
+				// A BARGAIN, not a bonus, and it has to be. Measured, a free dread reduction cut
+				// the reward for patience at the communion clean in half - from 9.8x to 4.8x -
+				// because riding the meter high for a long run is precisely how patience pays,
+				// and quieting the meter for nothing takes that away. The whole game is one
+				// trade: the dark pays, and it is coming. An offering may let a keeper sit
+				// further from it, but not for free, or there was never a decision there.
+				Multiplier = 0.85,
+				OwnedNeeded = 60,
+			});
+		}
 
 		return list.ToArray();
 	}

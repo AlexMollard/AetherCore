@@ -85,10 +85,26 @@ internal static class Balance
 		}
 	}
 
+	/// <summary>
+	/// Take every offering that is plainly worth taking.
+	/// </summary>
+	/// <remarks>
+	/// PLAINLY. It used to take all of them, which was fine while every offering was a straight
+	/// multiplier and stopped being fine the moment one of them cost something: a keeper who
+	/// buys a yield cut without weighing it is not "what an attentive player converges on", it
+	/// is a keeper making a mistake, and a reference strategy that makes mistakes measures the
+	/// mistake instead of the rules. The offerings that trade output for a quieter parish are a
+	/// real decision, so this one declines them and the figures below describe a keeper playing
+	/// for yield.
+	/// </remarks>
 	private static void TakeOfferings()
 	{
 		for (int i = 0; i < Content.Offerings.Length; i++)
 		{
+			if (Content.Offerings[i].Multiplier < 1.0)
+			{
+				continue;
+			}
 			if (Vigil.OfferingAvailable(i) && Content.Offerings[i].Cost <= Vigil.Ichor * 0.5)
 			{
 				Vigil.TakeOffering(i);
@@ -2830,6 +2846,77 @@ internal static class Balance
 			"faint text at " + coldRatio.ToString("F2") + ":1 quiet, " + hotRatio.ToString("F2") + ":1 lit");
 	}
 
+	/// <summary>
+	/// A save written before today still means what it meant.
+	/// </summary>
+	/// <remarks>
+	/// Which offerings a keeper has taken is stored as a bare array of flags indexed by position
+	/// in <c>Content.Offerings</c>. So the order of that table is a SAVE FORMAT, and reordering it
+	/// silently re-points every flag in every existing save at a different offering - a keeper
+	/// loads their game and finds they own things they never bought and have lost things they
+	/// did. Nothing about it throws; the numbers just quietly become wrong.
+	///
+	/// Forty new offerings were added below the original thirty for exactly this reason, instead
+	/// of being woven into the ladder that generates them, which is where they belong tidily and
+	/// would have broken every save in existence.
+	/// </remarks>
+	private static void OldSavesStillMeanWhatTheyMeant()
+	{
+		Console.WriteLine("A save written before today still means the same");
+
+		// The first thirty, in order, as they have always been. Not a sample - the whole prefix,
+		// because a check that spot-tests three of them passes on the one reordering that moves
+		// the other twenty-seven.
+		string[] frozen =
+		{
+			"Grave Lantern: Wick of Hair", "Grave Lantern: Second Wick", "Grave Lantern: Vigil Oil",
+			"Bone Choir: Wick of Hair", "Bone Choir: Second Wick", "Bone Choir: Vigil Oil",
+			"Weeping Statue: Wick of Hair", "Weeping Statue: Second Wick", "Weeping Statue: Vigil Oil",
+			"Flesh Loom: Wick of Hair", "Flesh Loom: Second Wick", "Flesh Loom: Vigil Oil",
+			"Ossuary Engine: Wick of Hair", "Ossuary Engine: Second Wick", "Ossuary Engine: Vigil Oil",
+			"Drowned Chapel: Wick of Hair", "Drowned Chapel: Second Wick", "Drowned Chapel: Vigil Oil",
+			"Pale Shepherd: Wick of Hair", "Pale Shepherd: Second Wick", "Pale Shepherd: Vigil Oil",
+			"Hollow Mouth: Wick of Hair", "Hollow Mouth: Second Wick", "Hollow Mouth: Vigil Oil",
+			"Steady Hands", "Bitten Tongue", "Red Thumb",
+			"The Long Hour", "Names in the Ledger", "The Parish Remembers",
+		};
+
+		int moved = 0;
+		string firstMoved = "";
+		for (int i = 0; i < frozen.Length; i++)
+		{
+			if (i >= Content.Offerings.Length || Content.Offerings[i].Name != frozen[i])
+			{
+				if (moved == 0)
+				{
+					firstMoved = "index " + i + " should be \"" + frozen[i] + "\" and is \""
+						+ (i < Content.Offerings.Length ? Content.Offerings[i].Name : "off the end") + "\"";
+				}
+				moved++;
+			}
+		}
+
+		Check("the offerings a save indexes have not moved", moved == 0,
+			moved == 0 ? "all " + frozen.Length + " still where a save expects them"
+				: moved + " moved - " + firstMoved);
+		Check("and there are more of them than there were", Content.Offerings.Length > frozen.Length,
+			Content.Offerings.Length + " offerings, " + (Content.Offerings.Length - frozen.Length)
+				+ " added past the frozen prefix");
+
+		// Every offering has to be reachable, or it is a row nobody will ever see.
+		int unreachable = 0;
+		foreach (OfferingDef def in Content.Offerings)
+		{
+			bool reachable = def.Target >= 0 ? def.OwnedNeeded > 0 : def.LifetimeNeeded > 0.0;
+			if (!reachable || def.Cost <= 0.0)
+			{
+				unreachable++;
+			}
+		}
+		Check("every offering can actually be offered", unreachable == 0,
+			unreachable == 0 ? "all priced and all gated" : unreachable + " unreachable");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -2864,6 +2951,7 @@ internal static class Balance
 		TheParishHoldsItselfTogether();
 		TheFrontsSurviveBeingPacked();
 		EverythingCanBeRead();
+		OldSavesStillMeanWhatTheyMeant();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
