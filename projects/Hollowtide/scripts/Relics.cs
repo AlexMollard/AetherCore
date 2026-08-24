@@ -45,6 +45,10 @@ public enum Power
 	/// SEE the effect of is worth more than one that adds a fifth to a figure in a panel.
 	/// </remarks>
 	Foundation,
+	/// <summary>The dark can be leaned on again sooner.</summary>
+	Kindling,
+	/// <summary>The ground gives things up more often.</summary>
+	Reliquary,
 }
 
 /// <summary>
@@ -421,6 +425,11 @@ public static class Relics
 			Power.Bargain => amount + " to what dread adds",
 			Power.Warding => Numbers.Percent(magnitude) + " off wards",
 			Power.Patience => amount + " longer to answer",
+			Power.Kindling => Numbers.Percent(magnitude) + " off the wait to stoke",
+			// Stated as what a keeper actually gets, not as the raw roll: the magnitude is a
+			// share that Dig multiplies by SeekingFactor, so quoting the share would have
+			// understated the power sixfold on its own row.
+			Power.Reliquary => "+" + Numbers.Percent(magnitude * SeekingFactor) + " to what the ground gives up",
 			// Only reached if something asks for a Foundation without the relic - see DescribeOn,
 			// which is what every caller should be using. Says the shape of the thing rather
 			// than a wrong number.
@@ -445,7 +454,15 @@ public static class Relics
 	/// Returns a relic with a zero seed when nothing was found, which is most of the time.
 	/// </para>
 	/// </remarks>
-	public static Relic Dig(Random rng, double dread, int roll)
+	/// <summary>How much a point of Reliquary is worth against the find chance. Lives here
+	/// rather than at the call site because the row that describes the power has to quote the
+	/// same number the roll uses, and two copies of it would drift.</summary>
+	public const double SeekingFactor = 6.0;
+
+	/// <param name="seeking">Extra chance from worn relics, as a fraction. Zero for a bare
+	/// keeper. Named for what it is rather than "luck", which this method already uses for the
+	/// GRADE roll - two different kinds of luck, and confusing them would be easy.</param>
+	public static Relic Dig(Random rng, double dread, int roll, double seeking = 0.0)
 	{
 		// Roughly one in five hundred clicks in safety, one in a hundred and twenty at the brink.
 		//
@@ -454,7 +471,10 @@ public static class Relics
 		// At that rate a find is litter: it arrives while the last one is still on screen,
 		// nothing is worth reading, and the satchel is permanently full of things the keeper
 		// never chose. A relic has to be rare enough that turning one up is an event.
-		double chance = 0.002 + 0.006 * dread;
+		// Luck is a MULTIPLIER on the chance rather than an addition to it, so a relic that makes
+		// finds likelier is worth the same proportion in safety as at the brink - and cannot, by
+		// stacking, turn a floor of one in five hundred into a certainty.
+		double chance = (0.002 + 0.006 * dread) * (1.0 + seeking);
 		if (rng.NextDouble() > chance)
 		{
 			return default;

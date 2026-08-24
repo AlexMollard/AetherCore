@@ -990,7 +990,10 @@ public static class Vigil
 		// in the dark you are the better what you turn up. This is what stops hand-gathering
 		// being the same chore at hour ten as at hour one: measured, a click is worth a flat
 		// twentieth of a second of production forever, whatever the parish is doing.
-		Relic found = Relics.Dig(Rng, Dread, ++RelicSeed);
+		// Luck from what is already worn, which is the pleasing loop: a relic that turns up more
+		// relics. Bounded by the multiplier in Dig rather than here, so several of them stack
+		// into something strong and never into a certainty.
+		Relic found = Relics.Dig(Rng, Dread, ++RelicSeed, Wearing(Power.Reliquary) * Relics.SeekingFactor);
 		if (!found.Exists)
 		{
 			return;
@@ -1511,7 +1514,10 @@ public static class Vigil
 	public static double StokeCooldown;
 
 	/// <summary>How long between stokes, after any communion has shortened it.</summary>
-	public static double StokeInterval => kStokeInterval * (1.0 - BoonFactor(Boon.QuickKindling));
+	/// <summary>Floored, because a stoke with no wait at all is not a decision that costs
+	/// anything - the cooldown is the whole reason leaning on the dark is a trade.</summary>
+	public static double StokeInterval => Math.Max(1.0,
+		kStokeInterval * (1.0 - BoonFactor(Boon.QuickKindling) - Wearing(Power.Kindling)));
 
 	private const double kStokeInterval = 5.0;
 

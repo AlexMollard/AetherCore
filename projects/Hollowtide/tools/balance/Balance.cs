@@ -1867,6 +1867,7 @@ internal static class Balance
 				double ward = Vigil.WardCost;
 				double offer = Vigil.OfferCost;
 				double drain = Vigil.FervourDrain;
+				double stoke = Vigil.StokeInterval;
 
 				// A Keepsake carries exactly ONE power, so nothing else can move the number being
 				// measured - a Hollowed relic carries three and every reading contaminates.
@@ -1899,6 +1900,14 @@ internal static class Balance
 					// rite - so measuring it against a claimed magnitude compares two different
 					// units. It has checks of its own below.
 					Power.Foundation => claimed,
+					// Measured against the interval a bare keeper waits, which is what the row
+					// claims a share of. Not floored in this range - five of these together come
+					// nowhere near the one-second floor in StokeInterval.
+					Power.Kindling => 1.0 - Vigil.StokeInterval / stoke,
+					// Reliquary changes the odds on a random draw rather than a coefficient
+					// anything here can read, so it is measured by actually digging - see
+					// LuckIsWorthWearing below.
+					Power.Reliquary => claimed,
 					_ => Vigil.Wearing(Power.Patience),
 				};
 				if (Math.Abs(got - claimed) > claimed * 0.02 && lying.Length == 0)
@@ -1909,7 +1918,7 @@ internal static class Balance
 			}
 		}
 		Check("every power does what its row claims", lying.Length == 0,
-			lying.Length == 0 ? "all six, at every parish size" : lying);
+			lying.Length == 0 ? "every kind, at every parish size" : lying);
 
 		// -- The bug every inventory has: items multiplying. --
 		Vigil.Reset();
@@ -3309,6 +3318,80 @@ internal static class Balance
 		Check("the drawing is made of the same powers as the words", disagreed == 0,
 			disagreed == 0 ? "mask survives the trip through a colour channel"
 				: disagreed + " disagreed");
+
+		// The one above compares C# to C#, which is why it passed while the drawing was wrong.
+		// PackedPowerMask divides by 2^kinds and ui_relic.slang multiplies by a NUMBER TYPED OUT
+		// IN THE SHADER; when a seventh power was added, C# moved to 128 and the shader stayed at
+		// 64, halving every mask and drawing the wrong features on every relic in the game. No
+		// check could see it, because both sides of the comparison were the same side.
+		//
+		// This is the tripwire. It cannot read the shader, so it pins the number instead: add a
+		// power and this fails, naming the file and the constant that has to move with it.
+		const int shaderDivisor = 512;
+		Check("the shader's power divisor still matches", (1 << Relics.PowerKinds) == shaderDivisor,
+			(1 << Relics.PowerKinds) == shaderDivisor
+				? Relics.PowerKinds + " kinds, so " + shaderDivisor + " in ui_relic.slang"
+				: "PowerKinds is now " + Relics.PowerKinds + " - ui_relic.slang must multiply by "
+					+ (1 << Relics.PowerKinds) + ", not " + shaderDivisor);
+	}
+
+	/// <summary>
+	/// A relic that finds relics actually finds relics.
+	/// </summary>
+	/// <remarks>
+	/// The only power whose effect is on a random draw, so it cannot be read off a coefficient
+	/// the way the others can - it has to be measured by digging. Worth checking precisely
+	/// because it is invisible: a keeper wearing it has no way of telling whether it is doing
+	/// anything, and neither would anyone reading the code.
+	/// </remarks>
+	private static void LuckIsWorthWearing()
+	{
+		Console.WriteLine("A relic that finds relics finds relics");
+
+		const int digs = 400000;
+		const double dread = 0.5;
+
+		Random bareRng = Seeded(31337);
+		int bare = 0;
+		for (int i = 0; i < digs; i++)
+		{
+			if (Relics.Dig(bareRng, dread, i + 1).Exists)
+			{
+				bare++;
+			}
+		}
+
+		// The same seed, so the only difference between the two runs is the luck.
+		Random luckyRng = Seeded(31337);
+		double seeking = 0.05 * Relics.SeekingFactor;
+		int lucky = 0;
+		for (int i = 0; i < digs; i++)
+		{
+			if (Relics.Dig(luckyRng, dread, i + 1, seeking).Exists)
+			{
+				lucky++;
+			}
+		}
+
+		double gain = bare > 0 ? (double)lucky / bare : 0.0;
+		Check("wearing it turns up more", gain > 1.15,
+			bare + " finds bare, " + lucky + " with it on (" + gain.ToString("F2") + "x)");
+		Check("and it is close to what the row promises", Math.Abs(gain - (1.0 + seeking)) < 0.06,
+			"promised " + (1.0 + seeking).ToString("F2") + "x, measured " + gain.ToString("F2") + "x");
+
+		// However much is worn, a find must stay a find. The multiplier form is what guarantees
+		// this - an additive bonus of the same size would reach certainty.
+		Random loadedRng = Seeded(31337);
+		int loaded = 0;
+		for (int i = 0; i < digs; i++)
+		{
+			if (Relics.Dig(loadedRng, 1.0, i + 1, 1.0).Exists)
+			{
+				loaded++;
+			}
+		}
+		Check("and a find is never a certainty", loaded < digs / 3,
+			"at the brink, fully loaded: " + (100.0 * loaded / digs).ToString("F1") + "% of clicks");
 	}
 
 	private static int Main(string[] args)
@@ -3351,6 +3434,7 @@ internal static class Balance
 		ConsecrationIsACommitment();
 		LentStructuresAreOnlyLent();
 		EveryRelicCanBeRead();
+		LuckIsWorthWearing();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

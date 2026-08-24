@@ -188,13 +188,21 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // The powers, unpacked. Six bits; see Relics.PackedPowerMask, which is the other half of
     // this format. Rounded rather than floored on the way in because the value has been through
     // a float32 colour channel to get here.
-    const int   powers = int(saturate(pc.color0.a) * 64.0 + 0.5);
+    // 512 = 2^(number of power kinds), and it MUST match Relics.PackedPowerMask, which divides
+    // by exactly that. It said 64 while C# packed with 128 for two commits, which halved every
+    // mask on arrival and drew the wrong features on every relic in the game - silently, because
+    // a wrong-but-plausible object looks like art rather than like a fault. There is a check in
+    // the balance harness that fails if a power is added without this number being changed.
+    const int   powers = int(saturate(pc.color0.a) * 512.0 + 0.5);
     const bool  hasHand       = (powers & 1)  != 0;
     const bool  hasBargain    = (powers & 2)  != 0;
     const bool  hasWarding    = (powers & 4)  != 0;
     const bool  hasPatience   = (powers & 8)  != 0;
     const bool  hasAlmsgiving = (powers & 16) != 0;
     const bool  hasSteadiness = (powers & 32) != 0;
+    const bool  hasFoundation = (powers & 64)  != 0;
+    const bool  hasKindling   = (powers & 128) != 0;
+    const bool  hasReliquary  = (powers & 256) != 0;
 
     // Every choice below is drawn from its own hash of the seed, so adding a feature later
     // cannot shift the ones already rolled - the same discipline the C# generator keeps, and
@@ -270,6 +278,36 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // is put, which is the whole of what steadiness means here.
         d = opUnion(d, sdRound(p - float2(0.0, 0.86), float2(0.34, 0.055), 0.045));
         d = opUnion(d, sdRound(p - float2(0.0, 0.74), float2(0.20, 0.045), 0.035));
+    }
+
+    if (hasFoundation)
+    {
+        // Small standing things at the foot of it, because that is literally what the power
+        // does: it puts structures in the parish that the keeper never bought.
+        for (int i = 0; i < 3; ++i)
+        {
+            const float x = (float(i) - 1.0) * 0.30;
+            d = opUnion(d, sdRound(p - float2(x, 0.70), float2(0.055, 0.13), 0.03));
+        }
+    }
+
+    if (hasKindling)
+    {
+        // A struck spark above it. Three short marks leaving the crown, for the power that
+        // lets a keeper lean on the dark again sooner.
+        const float2 k = rot(p - float2(0.0, -0.78), spin * 0.4);
+        d = opUnion(d, sdSeg(k, float2(0.0, 0.10), float2(0.0, -0.16), 0.024));
+        d = opUnion(d, sdSeg(k, float2(-0.13, 0.06), float2(-0.20, -0.10), 0.020));
+        d = opUnion(d, sdSeg(k, float2(0.13, 0.06), float2(0.20, -0.10), 0.020));
+    }
+
+    if (hasReliquary)
+    {
+        // A chamber with something kept in it. The only feature that adds a second body inside
+        // the first, which is what a reliquary is.
+        const float2 r = p - float2(0.0, 0.02);
+        d = opSub(d, sdRound(r, float2(0.17, 0.22), 0.05));
+        d = opUnion(d, sdRound(r, float2(0.055, 0.11), 0.03));
     }
 
     // A notch worked into the body of anything better than leavings: the mark of something
