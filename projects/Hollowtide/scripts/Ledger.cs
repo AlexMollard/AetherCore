@@ -10,6 +10,7 @@ public enum LedgerTab
 	Offerings,
 	Communion,
 	Marks,
+	Relics,
 }
 
 /// <summary>
@@ -50,11 +51,15 @@ public sealed class Ledger
 		/// <summary>A thin fill along the bottom of the row showing how far through its
 		/// working the rite is. The row stops being a price tag and becomes a machine.</summary>
 		public Entity Progress;
+		/// <summary>The relic's own drawing, on the one tab that has anything to draw. Created
+		/// with the pool rather than per relic: there is no upper bound on how many relics
+		/// exist, but there is a hard bound on how many rows can be on screen.</summary>
+		public Entity Icon;
 	}
 
 	private Entity _panel;
 	private Entity _viewport;
-	private readonly Button[] _tabs = new Button[4];
+	private readonly Button[] _tabs = new Button[5];
 	private readonly Button[] _amounts = new Button[4];
 	private readonly Row[] _rows = new Row[kRowPool];
 
@@ -104,14 +109,20 @@ public sealed class Ledger
 			// The composed button's own centred label is unused: a ledger row has four columns,
 			// so they are placed individually and the pooled label is emptied.
 			Ui.SetText(row.Box.Label, "");
-			row.Title = UiKit.Text(row.Box.Root, "", 14.0f, 8.0f, 370.0f, 24.0f, 17.0f, Palette.TextBright);
-			row.Sub = UiKit.Text(row.Box.Root, "", 14.0f, 34.0f, 420.0f, 24.0f, 15.0f, Palette.TextFaint,
+			row.Title = UiKit.Text(row.Box.Root, "", 68.0f, 8.0f, 320.0f, 24.0f, 17.0f, Palette.TextBright);
+			row.Sub = UiKit.Text(row.Box.Root, "", 68.0f, 34.0f, 366.0f, 24.0f, 15.0f, Palette.TextFaint,
 				UiHAlign.Left, Palette.Body);
 			row.Cost = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 8.0f, 176.0f, 24.0f, 17.0f,
 				Palette.Ichor, UiHAlign.Right);
 			row.Note = UiKit.Text(row.Box.Root, "", rowWidth - 190.0f, 34.0f, 176.0f, 24.0f, 15.0f,
 				Palette.TextFaint, UiHAlign.Right);
 			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
+			// Ink, not white: ui_relic computes its own colour and takes only the alpha from the
+			// element, so on any frame before the material resolves the plain image draws
+			// instead - and a white one flashes as a solid block. The same trap the rites hit.
+			row.Icon = UiKit.Image(row.Box.Root, 8.0f, 7.0f, 52.0f, 52.0f, Palette.Ink);
+			Ui.SetMaterial(row.Icon, "ui_relic");
+			row.Icon.SetActive(false);
 			_rows[i] = row;
 		}
 	}
@@ -192,6 +203,10 @@ public sealed class Ledger
 		for (int i = 0; i < kRowPool; i++)
 		{
 			_rows[i].Box.SetActive(i < _visibleRows);
+			// Off by default and switched on only by the relic tab. A pooled decoration that one
+			// tab turns on and the others forget to turn off follows the reader around - the
+			// same shape as the tithe button that went missing from the congregation.
+			_rows[i].Icon.SetActive(false);
 		}
 
 		switch (_tab)
@@ -204,6 +219,9 @@ public sealed class Ledger
 				break;
 			case LedgerTab.Communion:
 				FillCommunion();
+				break;
+			case LedgerTab.Relics:
+				FillRelics();
 				break;
 			default:
 				FillMarks();
@@ -431,6 +449,117 @@ public sealed class Ledger
 	/// re-derived here: this used to be a hand-inverted copy of the payout curve, which is
 	/// exactly the kind of duplicate that goes quietly wrong the day the curve is retuned.</summary>
 	private static double NextSigilAt() => Vigil.RunIchorForSigils(Vigil.SigilsOnOffer + 1);
+
+	// ── Relics ───────────────────────────────────────────────────────────────────────
+
+	/// <summary>
+	/// What the keeper is wearing, then what they are carrying.
+	/// </summary>
+	/// <remarks>
+	/// The worn slots come first and always, empty or not, so the three things a keeper can
+	/// have on them are a fixed shape at the top of the page rather than something that moves
+	/// as the satchel fills. Clicking a worn slot takes it off; clicking a carried relic puts
+	/// it on. One click, one meaning, in a list a player is going to be clicking quickly.
+	/// </remarks>
+	private void FillRelics()
+	{
+		_itemCount = Relics.Slots + Vigil.Satchel.Count;
+		int slot = 0;
+
+		for (int worn = _scroll; worn < Relics.Slots && slot < _visibleRows; worn++, slot++)
+		{
+			Row row = _rows[slot];
+			Relic relic = Vigil.Worn[worn];
+			if (!relic.Exists)
+			{
+				Ui.SetText(row.Title, "An empty hand");
+				Ui.SetTextColor(row.Title, Palette.TextFaint);
+				Ui.SetText(row.Sub, "Anything you are carrying can go here.");
+				Ui.SetText(row.Cost, "");
+				Ui.SetText(row.Note, "");
+				row.Box.SetEnabled(false);
+				row.Box.SetColour(Palette.PanelDeep);
+				continue;
+			}
+
+			DressRelic(row, relic, worn: true);
+			row.Box.SetEnabled(true);
+			row.Box.Style(true, Palette.RowHot, Palette.Row, Palette.PanelDeep);
+			if (row.Box.Activated)
+			{
+				Vigil.Remove(worn);
+			}
+		}
+
+		for (int i = Math.Max(0, _scroll - Relics.Slots); i < Vigil.Satchel.Count && slot < _visibleRows; i++, slot++)
+		{
+			Row row = _rows[slot];
+			Relic relic = Vigil.Satchel[i];
+			DressRelic(row, relic, worn: false);
+			row.Box.SetEnabled(true);
+			row.Box.Style(true, Palette.RowHot, Palette.Row, Palette.PanelDeep);
+
+			if (row.Box.Activated)
+			{
+				// Into the first empty hand, or the first one if every hand is full. Choosing a
+				// slot would be a second click for a decision almost nobody wants to make.
+				int into = 0;
+				for (int s = 0; s < Relics.Slots; s++)
+				{
+					if (!Vigil.Worn[s].Exists)
+					{
+						into = s;
+						break;
+					}
+				}
+				Vigil.Wear(i, into);
+			}
+		}
+
+		if (_itemCount == Relics.Slots && Vigil.Satchel.Count == 0 && slot < _visibleRows)
+		{
+			Row row = _rows[slot];
+			Ui.SetText(row.Title, "You are carrying nothing.");
+			Ui.SetText(row.Sub, "Gather by hand. The deeper in the dark you are, the better what you turn up.");
+			Ui.SetText(row.Cost, "");
+			Ui.SetText(row.Note, "");
+			Ui.SetTextColor(row.Title, Palette.TextFaint);
+			row.Box.SetEnabled(false);
+			row.Box.SetColour(Palette.PanelDeep);
+			slot++;
+		}
+		BlankFrom(slot);
+	}
+
+	/// <summary>Put one relic on a row: its drawing, its name, what it does, and its grade.</summary>
+	private void DressRelic(Row row, Relic relic, bool worn)
+	{
+		row.Icon.SetActive(true);
+		// Seed and grade, exactly what the C# generator works from - so the drawing and the
+		// name can never disagree about which relic this is.
+		Ui.SetMaterialParams(row.Icon, new Vector4(Time.UnscaledTime, relic.Seed, (float)(int)relic.Grade,
+			worn ? 1.0f : 0.35f));
+		Ui.SetMaterialColors(row.Icon, Palette.Ichor, Palette.Dread);
+
+		Ui.SetText(row.Title, Relics.NameOf(relic));
+		// Grade shown by how much ichor the name carries, not by a colour of its own: the
+		// palette allows three accents and a rarity ramp is not one of them.
+		Ui.SetTextColor(row.Title, Palette.Mix(Palette.TextDim, Palette.Ichor, (int)relic.Grade / 4.0f));
+
+		string powers = "";
+		for (int i = 0; i < Relics.PowerCount(relic.Grade); i++)
+		{
+			powers += (powers.Length > 0 ? "   " : "") +
+				Relics.Describe(Relics.PowerAt(relic, i), Relics.MagnitudeAt(relic, i));
+		}
+		Ui.SetText(row.Sub, powers);
+
+		Ui.SetText(row.Cost, Relics.GradeName(relic.Grade));
+		Ui.SetTextColor(row.Cost, Palette.Mix(Palette.TextFaint, Palette.Ichor, (int)relic.Grade / 4.0f));
+		Ui.SetText(row.Note, worn ? "worn" : "carried");
+		Ui.SetTextColor(row.Note, Palette.TextFaint);
+		Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f);
+	}
 
 	// ── Marks ────────────────────────────────────────────────────────────────────────
 

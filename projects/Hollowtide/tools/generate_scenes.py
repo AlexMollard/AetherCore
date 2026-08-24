@@ -513,9 +513,13 @@ def vigil():
         Scene.image(PANEL),
     ])
     at(ledger, "LedgerHeading", [Scene.text("THE LEDGER", DISPLAY, 21.0, BONE_DIM)], 20, 18, 300, 30)
-    tab_w = (LEDGER_W - 40.0 - 18.0) / 4.0
-    for i, label in enumerate(["RITES", "OFFERINGS", "COMMUNION", "MARKS"]):
-        at(ledger, f"LedgerTab{i}", [Scene.button(label, DISPLAY, 15.0), Scene.selectable("ledger")], 20 + i * (tab_w + 6.0), 56, tab_w, 36)
+    # Five tabs now, and the type drops a couple of points to pay for it: RELICS is where a
+    # keeper looks at what the parish has given up, and it belongs in the same column as
+    # everything else they can spend or wear rather than in a panel of its own.
+    LEDGER_TABS = ["RITES", "OFFERINGS", "COMMUNION", "MARKS", "RELICS"]
+    tab_w = (LEDGER_W - 40.0 - 6.0 * (len(LEDGER_TABS) - 1)) / len(LEDGER_TABS)
+    for i, label in enumerate(LEDGER_TABS):
+        at(ledger, f"LedgerTab{i}", [Scene.button(label, DISPLAY, 13.0), Scene.selectable("ledger")], 20 + i * (tab_w + 6.0), 56, tab_w, 36)
     for i, label in enumerate(["x1", "x10", "x100", "MAX"]):
         at(ledger, f"LedgerAmount{i}", [Scene.button(label, DISPLAY, 16.0), Scene.selectable("ledger")], 20 + i * 78.0, 102, 72, 32)
     s.add("LedgerViewport", ledger, [
