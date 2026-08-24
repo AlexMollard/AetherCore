@@ -823,6 +823,10 @@ public static class Vigil
 		StokeCooldown = 0.0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
+		s_murmurBand = -1;
+		s_quiet = 0.0;
+		s_beckons = 0;
+		s_lastAmbient = -1;
 		SurgeSeconds = 0.0;
 		Array.Clear(Owned, 0, Owned.Length);
 		Array.Clear(OfferingsTaken, 0, OfferingsTaken.Length);
@@ -963,6 +967,11 @@ public static class Vigil
 		}
 
 		RunOverseers();
+
+		if (!offline)
+		{
+			Murmur(deltaSeconds);
+		}
 
 		// Offline never starts one: a keeper cannot answer a door they were not behind, and
 		// the one promise offline progress makes is that it cannot cost you anything you were
@@ -1315,7 +1324,96 @@ public static class Vigil
 		};
 	}
 
-	private static void Say(string line, Omen omen) => Announce?.Invoke(line, omen);
+	private static void Say(string line, Omen omen)
+	{
+		// Anything said at all counts as the parish having spoken, so the ambient voice only
+		// ever fills real silence rather than talking over the game.
+		s_quiet = 0.0;
+		Announce?.Invoke(line, omen);
+	}
+
+	/// <summary>Highest murmur band already spoken this climb, or -1. Re-arms as dread falls,
+	/// so a keeper who rides the meter up and down hears the parish each time rather than
+	/// once ever.</summary>
+	private static int s_murmurBand = -1;
+
+	/// <summary>Seconds since anything was said.</summary>
+	private static double s_quiet;
+
+	/// <summary>How many times the parish has pointed the keeper at the dark.</summary>
+	private static int s_beckons;
+
+	/// <summary>The nudge is spoken twice and then never again. Said into every silence it
+	/// qualified for, it landed eight times in ten minutes - which is a tutorial popup with
+	/// atmosphere painted on, and reads as nagging rather than as a place. Twice is enough to
+	/// be noticed and few enough to stay a suggestion.</summary>
+	private const int kMaxBeckons = 2;
+
+	/// <summary>Which ambient line was last spoken, so the next draw can exclude it.</summary>
+	private static int s_lastAmbient = -1;
+
+	/// <summary>How long a silence has to run before the parish fills it. Long enough that it
+	/// never talks over play, short enough that a dead stretch is never truly dead.</summary>
+	private const double kAmbientSeconds = 55.0;
+
+	/// <summary>
+	/// Let the parish speak: on the way up the meter, and into a long enough quiet.
+	/// </summary>
+	/// <remarks>
+	/// Offline never speaks - replaying eight hours would otherwise dump every band and a
+	/// hundred ambient lines into the feed the moment a keeper returned.
+	/// </remarks>
+	private static void Murmur(double deltaSeconds)
+	{
+		int band = -1;
+		for (int i = 0; i < Content.Murmurs.Length; i++)
+		{
+			if (Dread >= Content.Murmurs[i].At)
+			{
+				band = i;
+			}
+		}
+		if (band > s_murmurBand)
+		{
+			s_murmurBand = band;
+			Say(Content.Murmurs[band].Line, Omen.Dread);
+			return;
+		}
+		if (band < s_murmurBand)
+		{
+			s_murmurBand = band;
+		}
+
+		s_quiet += deltaSeconds;
+		if (s_quiet < kAmbientSeconds)
+		{
+			return;
+		}
+		// A keeper who has never met anything is told, once the silence is long enough, that
+		// meeting something is a thing they can choose. Everyone else just gets the parish.
+		bool neverLooked = VisitorsAnswered == 0 && !Approaching && Dread < 0.5 && DeepestRite() >= 0;
+		for (int i = 0; i < VisitorsMet.Length && neverLooked; i++)
+		{
+			neverLooked &= !VisitorsMet[i];
+		}
+		if (neverLooked && s_beckons < kMaxBeckons)
+		{
+			s_beckons++;
+			Say(Content.Beckon, Omen.Plain);
+			return;
+		}
+		// Never the same line twice running. A uniform draw over eight lines repeats about one
+		// time in eight, which at this cadence means hearing the ossuary shift twice inside two
+		// minutes - and a repeated atmospheric line stops being atmosphere and starts being a
+		// string in an array.
+		int pick = Rng.Next(Content.Ambient.Length - 1);
+		if (pick >= s_lastAmbient)
+		{
+			pick++;
+		}
+		s_lastAmbient = pick;
+		Say(Content.Ambient[pick], Omen.Plain);
+	}
 
 	/// <summary>Wipe live state back to a fresh vigil. Used by a new game and by the tests.</summary>
 	public static void Reset()
@@ -1343,6 +1441,10 @@ public static class Vigil
 		VisitorsAnswered = 0;
 		VisitorsMet = new bool[Content.RiteCount];
 		VisitorsBested = new bool[Content.RiteCount];
+		s_murmurBand = -1;
+		s_quiet = 0.0;
+		s_beckons = 0;
+		s_lastAmbient = -1;
 		CommunionSurges = 0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;

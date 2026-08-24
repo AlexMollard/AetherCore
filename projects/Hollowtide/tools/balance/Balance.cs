@@ -698,6 +698,98 @@ internal static class Balance
 		return Vigil.LifetimeIchor;
 	}
 
+	/// <summary>
+	/// The parish has to sound like a place without becoming a notification tray.
+	/// </summary>
+	/// <remarks>
+	/// A first session used to be six lines in ten minutes, every one of them a receipt for
+	/// something the player had just done, while the dread meter climbed to a third full
+	/// unremarked. The failure mode of fixing that is the opposite one - a nudge repeated into
+	/// every silence, which is a tutorial popup wearing a costume - so both ends are pinned.
+	/// </remarks>
+	private static void TheParishSpeaks()
+	{
+		Console.WriteLine("The parish speaks");
+
+		int said = 0;
+		int beckons = 0;
+		int repeats = 0;
+		string last = "";
+		Vigil.Reset();
+		Vigil.Rng = new Random(3);
+		Vigil.Announce = (line, omen) =>
+		{
+			said++;
+			if (line == Content.Beckon)
+			{
+				beckons++;
+			}
+			if (line == last)
+			{
+				repeats++;
+			}
+			last = line;
+		};
+
+		double click = 0.0;
+		for (int step = 0; step < 10 * 60.0 / kDt; step++)
+		{
+			click += 3.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			Buy();
+			Vigil.Tick(kDt);
+		}
+		Vigil.Announce = null;
+
+		Check("a first session is not silent", said >= 10, said + " lines in ten minutes");
+		Check("nor is it a notification tray", said <= 40, said + " lines, roughly one a minute");
+		Check("the nudge is a suggestion, not a nag", beckons <= 2, beckons + " beckons all session");
+		Check("no line follows itself", repeats == 0, repeats + " immediate repeats");
+
+		// Offline must stay mute: replaying eight hours would otherwise dump every dread band
+		// and a hundred ambient lines into the feed the instant a keeper came back.
+		int atmosphere = 0;
+		int total = 0;
+		Vigil.Reset();
+		Vigil.Owned[3] = 60;
+		Vigil.Announce = (line, _) =>
+		{
+			total++;
+			if (line == Content.Beckon)
+			{
+				atmosphere++;
+			}
+			foreach (string ambient in Content.Ambient)
+			{
+				if (line == ambient)
+				{
+					atmosphere++;
+				}
+			}
+			foreach ((double _, string murmur) in Content.Murmurs)
+			{
+				if (line == murmur)
+				{
+					atmosphere++;
+				}
+			}
+		};
+		Vigil.CatchUp(8.0 * 3600.0);
+		Vigil.Announce = null;
+		// Atmosphere specifically, not everything. Marks earned while away are worth hearing
+		// about - that is the game reporting what the parish achieved without you - but eight
+		// hours of replayed dread bands and ambient lines would bury them the instant you
+		// returned, which is the actual failure being guarded against.
+		Check("coming back is not a wall of atmosphere", atmosphere == 0,
+			atmosphere + " atmospheric lines from eight hours away");
+		Check("but it still reports what you missed", total is > 0 and < 12,
+			total + " lines, all of them things that happened");
+	}
+
 	private static int Main()
 	{
 		Console.WriteLine();
@@ -706,6 +798,7 @@ internal static class Balance
 		DreadIsAliveFromTheFirstRite();
 		PrestigeRatchets();
 		TheEncounterIsOptional();
+		TheParishSpeaks();
 		TablesLineUp();
 		IdlingWorks();
 		Console.WriteLine();

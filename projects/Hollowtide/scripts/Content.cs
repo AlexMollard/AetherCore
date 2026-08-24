@@ -350,6 +350,57 @@ public static class Content
 		return false;
 	}
 
+	/// <summary>
+	/// What the parish says as the dark gets closer, and the level it says it at.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// These do the job the interface cannot. A new keeper's first ten minutes used to be six
+	/// lines, every one of them a receipt - "Offered: X", "Marked: Y" - while the dread meter
+	/// climbed to a third full and the game never once mentioned it. A horror game whose only
+	/// voice congratulates you is not atmospheric, it is a notification tray.
+	/// </para>
+	/// <para>
+	/// They also TEACH, which is why the wording is careful. The line at 0.20 says the dark
+	/// pays; the one at 0.70 says you are earning more than you ever have and could stop. A
+	/// keeper who reads those two has been told the central bargain of the game without a
+	/// tutorial box ever appearing.
+	/// </para>
+	/// </remarks>
+	public static readonly (double At, string Line)[] Murmurs =
+	{
+		(0.20, "Something has noticed the parish. It pays better when it is watching."),
+		(0.45, "The lanterns lean away from the door. Whatever is out there is nearer."),
+		(0.70, "You could stop now. You are earning more than you ever have."),
+		(0.90, "It is at the edge of the light. One more step and it will be inside."),
+	};
+
+	/// <summary>
+	/// Things the parish does when nothing else is happening.
+	/// </summary>
+	/// <remarks>
+	/// Pure atmosphere, no mechanics, and that is deliberate: an idle game has long quiet
+	/// stretches by design - a first session runs thirteen minutes with one event in it - and
+	/// the quiet is either dread or boredom depending entirely on whether anything fills it.
+	/// Spoken only into real silence, never on top of something the player did.
+	/// </remarks>
+	public static readonly string[] Ambient =
+	{
+		"The candles gutter, all at once, and settle.",
+		"Something in the ossuary shifts its weight.",
+		"A door you did not open is open.",
+		"The last keeper wrote in a hand very like yours.",
+		"You count the lanterns twice and get different numbers.",
+		"The cold comes up through the flags. It has always done that.",
+		"Somewhere behind you, the singing stops to listen.",
+		"There is a name in the ledger you do not remember writing.",
+	};
+
+	/// <summary>Said to a keeper who has never gone looking. The one nudge in the game, and it
+	/// is phrased as an observation rather than an instruction, because the parish does not
+	/// give advice.</summary>
+	public const string Beckon = "The dark keeps its distance. It will not come to you unless you go to it.";
+
 	public static readonly MarkDef[] Marks =
 	{
 		new MarkDef { Name = "First Light", Blurb = "Light a Grave Lantern.", Earned = () => Vigil.Owned[0] >= 1 },
