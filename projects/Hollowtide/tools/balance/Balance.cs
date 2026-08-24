@@ -2385,6 +2385,80 @@ internal static class Balance
 		return sb.ToString();
 	}
 
+	/// <summary>
+	/// A feed can be quiet enough and still be unreadable.
+	/// </summary>
+	/// <remarks>
+	/// Volume is not the only way this goes wrong. A keeper riding the meter answers an
+	/// encounter, drops to 0.45 dread, climbs back through every band and hears the same three
+	/// teaching lines again - thirty seconds, forever, at a rate the budget check passes
+	/// happily. So variety is measured directly: across any busy window, how much of what was
+	/// said was something new.
+	/// </remarks>
+	private static void TheParishDoesNotRepeatItself()
+	{
+		Console.WriteLine("The parish does not repeat itself");
+
+		List<string> lines = new List<string>();
+		List<double> stamps = new List<double>();
+		double clock = 0.0;
+		Vigil.Reset();
+		Vigil.Rng = Seeded(3);
+		Vigil.Announce = (line, _) =>
+		{
+			lines.Add(line);
+			stamps.Add(clock);
+		};
+
+		double tapping = 0.0;
+		double leaning = 0.0;
+		for (int step = 0; step < 30 * 60.0 / kDt; step++, clock += kDt)
+		{
+			tapping += 3.0 * kDt;
+			while (tapping >= 1.0)
+			{
+				tapping -= 1.0;
+				Vigil.Gather();
+			}
+			leaning += 0.3 * kDt;
+			while (leaning >= 1.0)
+			{
+				leaning -= 1.0;
+				if (Vigil.Dread < 0.9)
+				{
+					Vigil.Stoke();
+				}
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			Vigil.Tick(kDt);
+		}
+		Vigil.Announce = null;
+
+		double leastVaried = 1.0;
+		for (int i = 0; i < lines.Count; i++)
+		{
+			HashSet<string> distinct = new HashSet<string>();
+			int within = 0;
+			for (int j = i; j < lines.Count && stamps[j] < stamps[i] + 300.0; j++)
+			{
+				distinct.Add(lines[j]);
+				within++;
+			}
+			// Only windows busy enough for repetition to be noticeable.
+			if (within >= 12)
+			{
+				leastVaried = Math.Min(leastVaried, (double)distinct.Count / within);
+			}
+		}
+		Check("the parish does not talk in circles", leastVaried > 0.35,
+			"the least varied five minutes was " + Numbers.Percent(leastVaried) + " new lines");
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -2406,6 +2480,7 @@ internal static class Balance
 		PrestigeRatchets();
 		TheEncounterIsOptional();
 		TheParishSpeaks();
+		TheParishDoesNotRepeatItself();
 		EveryMarkIsReachable();
 		TablesLineUp();
 		IdlingWorks();

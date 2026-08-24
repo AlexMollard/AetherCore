@@ -1303,6 +1303,7 @@ public static class Vigil
 		// keeper would be told about thirty offerings in a single frame.
 		s_offeringsNoticed = new bool[Content.Offerings.Length];
 		s_offeringsPrimed = false;
+		s_murmursSaid = new int[Content.Murmurs.Length];
 		s_lastSpoken = "";
 		SurgeSeconds = 0.0;
 		Array.Clear(Owned, 0, Owned.Length);
@@ -1910,6 +1911,12 @@ public static class Vigil
 	/// <summary>How far below a band dread must fall before that band will speak again.</summary>
 	private const double kMurmurHysteresis = 0.10;
 
+	/// <summary>How many times each dread band will say its piece in a run. They exist to teach
+	/// the bargain, and a lesson repeated past learning is noise.</summary>
+	private const int kMurmursPerBand = 2;
+
+	private static int[] s_murmursSaid = new int[Content.Murmurs.Length];
+
 	/// <summary>Which ambient line was last spoken, so the next draw can exclude it.</summary>
 	private static int s_lastAmbient = -1;
 
@@ -1937,7 +1944,17 @@ public static class Vigil
 		if (band > s_murmurBand)
 		{
 			s_murmurBand = band;
-			Say(Content.Murmurs[band].Line, Omen.Dread);
+			// Each band speaks a few times and then never again. Hysteresis alone could not save
+			// this: an answered encounter drops dread from the brink to 0.45, so every band
+			// re-armed on every cycle and the same three lines replayed on a thirty-second loop
+			// forever. They are TEACHING lines - a keeper who has been told twice that they are
+			// earning more than they ever have does not need telling a hundredth time - so the
+			// honest limit is a count, not a gap.
+			if (s_murmursSaid[band] < kMurmursPerBand)
+			{
+				s_murmursSaid[band]++;
+				Say(Content.Murmurs[band].Line, Omen.Dread);
+			}
 			return;
 		}
 		// Re-armed only when dread falls a clear margin BELOW the band it last spoke at. Without
@@ -2020,6 +2037,7 @@ public static class Vigil
 		// keeper would be told about thirty offerings in a single frame.
 		s_offeringsNoticed = new bool[Content.Offerings.Length];
 		s_offeringsPrimed = false;
+		s_murmursSaid = new int[Content.Murmurs.Length];
 		s_lastSpoken = "";
 		CommunionSurges = 0;
 		ApproachRite = -1;
