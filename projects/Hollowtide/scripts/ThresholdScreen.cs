@@ -34,10 +34,21 @@ public sealed class ThresholdScreen : EntityScript
 	private Entity _shakeLabel;
 	private Entity _standing;
 
-	private Button _alone;
+	private Entity _typeSlider;
+	private Entity _typeLabel;
+
+	private Button _play;
+	private Button _congregation;
+	private Button _settings;
+	private Button _leave;
+	private Button _back;
 	private Button _host;
 	private Button _join;
 	private Button _wipe;
+
+	/// <summary>Every control the menu knows about, kept beside its name so the page switch is
+	/// one loop rather than twenty calls that have to stay in agreement.</summary>
+	private readonly System.Collections.Generic.Dictionary<string, Entity> _widgets = new();
 
 	/// <summary>True once the wipe has been pressed and is waiting to be pressed again.</summary>
 	private bool _wipeArmed;
@@ -68,16 +79,38 @@ public sealed class ThresholdScreen : EntityScript
 		_whisperToggle = Scene.Find("ThWhisperToggle");
 		_shakeSlider = Scene.Find("ThShakeSlider");
 		_shakeLabel = Scene.Find("ThShakeLabel");
-		_alone = Button.Find("ThAlone");
+		_typeSlider = Scene.Find("ThTypeSlider");
+		_typeLabel = Scene.Find("ThTypeLabel");
+		_play = Button.Find("ThPlay");
+		_congregation = Button.Find("ThCongregation");
+		_settings = Button.Find("ThSettings");
+		_leave = Button.Find("ThLeave");
+		_back = Button.Find("ThBack");
 		_host = Button.Find("ThHost");
 		_join = Button.Find("ThJoin");
 		_wipe = Button.Find("ThWipe");
 		_standing = Scene.Find("ThStanding");
 
+		// Found by the names the menu itself uses, so a control the table mentions and the scene
+		// does not is an invalid entity here rather than a control that never hides.
+		Menu.Reset();
+		foreach (MenuPage page in Menu.Pages)
+		{
+			foreach (string name in Menu.Widgets(page))
+			{
+				_widgets[name] = Scene.Find(name);
+			}
+		}
+		_widgets[Menu.BackWidget] = _back.Root;
+
 		Ui.SetTextBoxText(_nameBox, Vigil.KeeperName);
 		ShowStanding();
 		Ui.SetToggle(_whisperToggle, SaveSystem.ShowWhispers);
 		Ui.SetSliderValue(_shakeSlider, SaveSystem.DreadShake);
+		Ui.SetSliderValue(_typeSlider, SaveSystem.TypeScale);
+		TypeScale.Adopt(_canvas);
+		TypeScale.Apply(SaveSystem.TypeScale);
+		ShowPage();
 
 		// Whatever ended the last session - a host that vanished, a deliberate exit - is
 		// reported here, because this is where the player was sent.
@@ -102,7 +135,7 @@ public sealed class ThresholdScreen : EntityScript
 		if (!_focusSeeded)
 		{
 			_focusSeeded = true;
-			Ui.SetFocus(_alone.Root);
+			Ui.SetFocus(_play.Root);
 		}
 
 		ReadSettings();
@@ -114,18 +147,102 @@ public sealed class ThresholdScreen : EntityScript
 			return;
 		}
 
-		if (_alone.Activated)
+		// Escape goes back a page before it does anything else. On the root it does nothing at
+		// all - LEAVE is a button a keeper has to mean, and a menu that quits on a stray Escape
+		// is a menu people learn to be careful around.
+		if (Input.IsKeyPressed(Key.Escape) && !Ui.HasFocus && Menu.Back())
+		{
+			ShowPage();
+			return;
+		}
+
+		if (_back.Activated && Menu.Back())
+		{
+			ShowPage();
+			return;
+		}
+
+		switch (Menu.Page)
+		{
+			case MenuPage.Root:
+				ReadRoot();
+				break;
+			case MenuPage.Congregation:
+				ReadCongregation();
+				break;
+			default:
+				break;
+		}
+	}
+
+	private void ReadRoot()
+	{
+		if (_play.Activated)
 		{
 			CommitName();
 			Enter("");
 		}
-		else if (_host.Activated)
+		else if (_congregation.Activated && Menu.Open(MenuPage.Congregation))
+		{
+			CommitName();
+			ShowPage();
+		}
+		else if (_settings.Activated && Menu.Open(MenuPage.Settings))
+		{
+			ShowPage();
+		}
+		else if (_leave.Activated)
+		{
+			// The name first: somebody who types a name and then leaves has still named
+			// themselves, and losing it would make the field feel like it did not take.
+			CommitName();
+			App.Quit();
+		}
+	}
+
+	private void ReadCongregation()
+	{
+		if (_host.Activated)
 		{
 			StartHost();
 		}
 		else if (_join.Activated || (Ui.WasSubmitted(_addressBox) && Ui.GetTextBoxText(_addressBox).Length > 0))
 		{
 			StartJoin(Ui.GetTextBoxText(_addressBox));
+		}
+	}
+
+	/// <summary>
+	/// Put the screen where the menu says it is.
+	/// </summary>
+	/// <remarks>
+	/// One loop over one table. Every control the menu names is asked the same question and
+	/// nothing else decides visibility, so a control cannot be shown on its own page and left
+	/// standing on the other two - which is the failure that hand-written SetActive calls
+	/// produce and which looks entirely correct until somebody opens the other page.
+	/// </remarks>
+	private void ShowPage()
+	{
+		foreach (System.Collections.Generic.KeyValuePair<string, Entity> pair in _widgets)
+		{
+			if (pair.Value.IsValid)
+			{
+				pair.Value.SetActive(Menu.Shows(pair.Key));
+			}
+		}
+		_wipeArmed = false;
+		_wipe.SetLabel("BEGIN A NEW VIGIL");
+		// Focus follows the page, because a pad or a keyboard left pointing at a control that is
+		// no longer on screen has nowhere sensible to go next.
+		Ui.SetFocus(Menu.Page switch
+		{
+			MenuPage.Congregation => _host.Root,
+			MenuPage.Settings => _back.Root,
+			_ => _play.Root,
+		});
+		if (SaveSystem.HadSave)
+		{
+			_wipe.SetActive(Menu.Page == MenuPage.Settings);
 		}
 	}
 
@@ -233,6 +350,17 @@ public sealed class ThresholdScreen : EntityScript
 			SaveSystem.Save();
 		}
 		Ui.SetText(_shakeLabel, "UNSTEADINESS " + Numbers.Percent(SaveSystem.DreadShake / 1.5f));
+
+		if (Ui.WasChanged(_typeSlider))
+		{
+			SaveSystem.TypeScale = Ui.GetSliderValue(_typeSlider);
+			// Applied on the spot rather than on the way out. Type size is the one setting whose
+			// effect IS the thing being looked at while it is chosen - a slider that only takes
+			// effect on the next launch cannot be judged at all.
+			TypeScale.Apply(SaveSystem.TypeScale);
+			SaveSystem.Save();
+		}
+		Ui.SetText(_typeLabel, "TYPE SIZE " + Numbers.Percent(SaveSystem.TypeScale / Typography.Authored));
 	}
 
 	private void CommitName()

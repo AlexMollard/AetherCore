@@ -37,6 +37,15 @@ public static class SaveSystem
 		set => VigilData.DreadShake = value;
 	}
 
+	/// <summary>How big the interface's type is, as the keeper set it. Saved with the other two
+	/// presentation settings rather than with the vigil, because it belongs to the person at the
+	/// machine and not to the parish.</summary>
+	public static float TypeScale
+	{
+		get => VigilData.TypeScale;
+		set => VigilData.TypeScale = value;
+	}
+
 	/// <summary>True once <see cref="EnsureLoaded"/> has run in this process.</summary>
 	public static bool Loaded { get; private set; }
 

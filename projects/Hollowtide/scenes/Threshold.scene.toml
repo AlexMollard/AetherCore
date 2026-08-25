@@ -161,6 +161,31 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThStatus'
+node = 637954680369338430
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 450, 335 ]
+    offset_min = [ -450, 309 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.502, 0.51, 0.522, 1 ]
+    font = 'IBMPlexMono-Italic'
+    h_align = 'center'
+    pixel_size = 20.8
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'ThNameLabel'
 node = -5930190052139365851
 parent = 2
@@ -171,8 +196,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, -118 ]
-    offset_min = [ -200, -140 ]
+    offset_max = [ 200, -101 ]
+    offset_min = [ -200, -123 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
@@ -196,8 +221,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, -68 ]
-    offset_min = [ -200, -112 ]
+    offset_max = [ 200, -50 ]
+    offset_min = [ -200, -94 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text_box]
@@ -218,6 +243,134 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThPlay'
+node = 1306529922585768450
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 29 ]
+    offset_min = [ -200, -25 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.2369, 0.3864, 0.3361, 0.9736 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'KEEP VIGIL'
+    pixel_size = 22.1
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThCongregation'
+node = 4575068077372924947
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 86 ]
+    offset_min = [ -200, 38 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.3098, 0.2932, 0.3895, 0.972 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'CONGREGATION'
+    pixel_size = 19.5
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.741, 0.639, 0.925, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThSettings'
+node = 2625726087429041117
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 140 ]
+    offset_min = [ -200, 92 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'SETTINGS'
+    pixel_size = 19.5
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThLeave'
+node = 7521152400659074616
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 194 ]
+    offset_min = [ -200, 146 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.3283, 0.1877, 0.181, 0.974 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'LEAVE'
+    pixel_size = 19.5
+    text_color = [ 0.29, 0.302, 0.322, 1 ]
+    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'ThAddressLabel'
 node = -8403542169678525829
 parent = 2
@@ -228,8 +381,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, -22 ]
-    offset_min = [ -200, -44 ]
+    offset_max = [ 200, -101 ]
+    offset_min = [ -200, -123 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
@@ -253,8 +406,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, 28 ]
-    offset_min = [ -200, -16 ]
+    offset_max = [ 200, -50 ]
+    offset_min = [ -200, -94 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text_box]
@@ -275,38 +428,6 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'ThAlone'
-node = -1446460472036721029
-parent = 2
-parent_node = -6729419949155474458
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.ui_rect]
-    anchor_max = [ 0.5, 0.5 ]
-    anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, 108 ]
-    offset_min = [ -200, 60 ]
-    pivot = [ 0.5, 0.5 ]
-
-    [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.2237, 0.358, 0.3154, 0.972 ]
-    corner_radius = 4
-    font = 'PixelStorm'
-    h_align = 'center'
-    label = 'KEEP VIGIL ALONE'
-    pixel_size = 19.5
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
-    v_align = 'middle'
-
-    [entities.ui_selectable]
-    group = 'threshold'
-    interactable = true
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
 name = 'ThHost'
 node = 6831013632470334853
 parent = 2
@@ -317,8 +438,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ -8, 164 ]
-    offset_min = [ -200, 120 ]
+    offset_max = [ 200, 26 ]
+    offset_min = [ -200, -22 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
@@ -329,7 +450,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     h_align = 'center'
     label = 'HOST A CONGREGATION'
     pixel_size = 19.5
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
     text_color_focused = [ 0.741, 0.639, 0.925, 1 ]
     v_align = 'middle'
 
@@ -349,8 +470,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, 164 ]
-    offset_min = [ 8, 120 ]
+    offset_max = [ 200, 80 ]
+    offset_min = [ -200, 32 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
@@ -361,7 +482,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     h_align = 'center'
     label = 'JOIN ONE'
     pixel_size = 19.5
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
     text_color_focused = [ 0.741, 0.639, 0.925, 1 ]
     v_align = 'middle'
 
@@ -381,8 +502,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 0, 230 ]
-    offset_min = [ -200, 204 ]
+    offset_max = [ 0, -91 ]
+    offset_min = [ -200, -117 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
@@ -406,8 +527,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, 230 ]
-    offset_min = [ 144, 204 ]
+    offset_max = [ 200, -91 ]
+    offset_min = [ 144, -117 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_toggle]
@@ -434,8 +555,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 0, 268 ]
-    offset_min = [ -200, 242 ]
+    offset_max = [ 0, -47 ]
+    offset_min = [ -200, -73 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
@@ -459,8 +580,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 200, 268 ]
-    offset_min = [ 80, 242 ]
+    offset_max = [ 200, -47 ]
+    offset_min = [ 80, -73 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_slider]
@@ -480,8 +601,8 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'ThStatus'
-node = 637954680369338430
+name = 'ThTypeLabel'
+node = -7168194554278303688
 parent = 2
 parent_node = -6729419949155474458
 position = [ 0.0, 0.0, 0.0 ]
@@ -490,18 +611,49 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 450, 325 ]
-    offset_min = [ -450, 299 ]
+    offset_max = [ 0, -3 ]
+    offset_min = [ -200, -29 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
-    font = 'IBMPlexMono-Italic'
-    h_align = 'center'
-    pixel_size = 20.8
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 19.5
     text = ''
     v_align = 'middle'
     wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThTypeSlider'
+node = -2122919254262369970
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, -3 ]
+    offset_min = [ 80, -29 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_slider]
+    corner_radius = 4
+    fill_color = [ 0.706, 0.267, 0.22, 1 ]
+    handle_color = [ 0.855, 0.851, 0.816, 1 ]
+    handle_radius = 8
+    max = 1.75
+    min = 0.85
+    step = 0.05
+    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    value = 1.3
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -515,8 +667,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.5, 0.5 ]
     anchor_min = [ 0.5, 0.5 ]
-    offset_max = [ 130, 370 ]
-    offset_min = [ -130, 334 ]
+    offset_max = [ 130, 122 ]
+    offset_min = [ -130, 86 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
@@ -529,6 +681,38 @@ scale = [ 1.0, 1.0, 1.0 ]
     pixel_size = 18.2
     text_color = [ 0.29, 0.302, 0.322, 1 ]
     text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'threshold'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ThBack'
+node = 904449476018700237
+parent = 2
+parent_node = -6729419949155474458
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 90, 260 ]
+    offset_min = [ -90, 220 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'BACK'
+    pixel_size = 19.5
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]

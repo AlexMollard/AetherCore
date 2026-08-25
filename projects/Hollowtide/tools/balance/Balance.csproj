@@ -29,6 +29,7 @@
     <Compile Include="../../scripts/Layout.cs" />
     <Compile Include="../../scripts/Transcript.cs" />
     <Compile Include="../../scripts/SaveNaming.cs" />
+    <Compile Include="../../scripts/Menu.cs" />
     <Compile Include="Balance.cs" />
   </ItemGroup>
 

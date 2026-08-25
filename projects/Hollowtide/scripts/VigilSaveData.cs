@@ -108,6 +108,10 @@ public sealed class VigilSave
 	// with it would only be a second thing to go missing.
 	public bool ShowWhispers { get; set; } = true;
 	public float DreadShake { get; set; } = 1.0f;
+
+	/// <summary>Defaulted to what the scenes are authored at, so a save written before type size
+	/// was a setting loads as "leave it as it was" rather than as a keeper who chose zero.</summary>
+	public float TypeScale { get; set; } = Typography.Authored;
 }
 
 /// <summary>
@@ -133,6 +137,7 @@ public static class VigilData
 	/// </remarks>
 	public static bool ShowWhispers = true;
 	public static float DreadShake = 1.0f;
+	public static float TypeScale = Typography.Authored;
 
 	public static VigilSave Capture() => new VigilSave
 	{
@@ -182,6 +187,7 @@ public static class VigilData
 		SavedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
 		ShowWhispers = ShowWhispers,
 		DreadShake = DreadShake,
+		TypeScale = TypeScale,
 	};
 
 	/// <summary>A quantity off the file: never negative, never a NaN or an infinity. JSON can
@@ -230,6 +236,9 @@ Vigil.Boons[i] = Math.Clamp(Vigil.Boons[i], 0, Content.Boons[i].MaxLevel);
 		Vigil.SharedVigilSeconds = Math.Max(0.0, save.SharedVigilSeconds);
 		ShowWhispers = save.ShowWhispers;
 		DreadShake = save.DreadShake;
+		// Clamped on the way in like every other quantity off the file: a type scale of zero
+		// draws an interface of nothing, and one of a thousand draws one glyph.
+		TypeScale = Math.Clamp(save.TypeScale, Typography.Smallest, Typography.Largest);
 
 		// Copied element-wise against the CURRENT table sizes. A save written before a rite or
 		// an offering was added is then still a valid save, which is the difference between

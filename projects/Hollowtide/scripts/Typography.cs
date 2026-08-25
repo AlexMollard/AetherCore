@@ -24,9 +24,35 @@ namespace AetherGame;
 /// </remarks>
 public static class Typography
 {
-	/// <summary>Multiplier on every face in the game. Paired with <c>TYPE</c> in
-	/// <c>tools/generate_scenes.py</c> - move both or neither.</summary>
-	public const float Scale = 1.30f;
+	/// <summary>
+	/// The multiplier the scene files were BAKED at. Paired with <c>TYPE</c> in
+	/// <c>tools/generate_scenes.py</c> - move both or neither.
+	/// </summary>
+	/// <remarks>
+	/// A constant, and it has to stay one: it is not a preference, it is a fact about what is
+	/// already written into the authored scenes. Dividing an authored size by it recovers the
+	/// size somebody actually typed, which is the only way to re-scale a label at runtime
+	/// without keeping a second copy of every authored size in script.
+	/// </remarks>
+	public const float Authored = 1.30f;
+
+	/// <summary>
+	/// Multiplier on every face in the game, as the player has it set.
+	/// </summary>
+	/// <remarks>
+	/// Starts at <see cref="Authored"/>, which is what the scenes already look like, and moves
+	/// when a keeper moves the slider. It used to be a constant, so the one complaint a playtest
+	/// actually produced - that the whole interface was too small - could only be answered by
+	/// editing two numbers in two languages and rebuilding.
+	/// </remarks>
+	public static float Scale = Authored;
+
+	/// <summary>How far a keeper may take it. Below the floor the ledger's columns stop fitting
+	/// their own figures; above the ceiling a 400px column stops holding its own captions.</summary>
+	public const float Smallest = 0.85f;
+
+	/// <inheritdoc cref="Smallest"/>
+	public const float Largest = 1.75f;
 
 	/// <summary>A face, at its written size times the scale.</summary>
 	public static float Face(float size) => size * Scale;

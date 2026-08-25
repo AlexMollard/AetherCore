@@ -356,44 +356,59 @@ def threshold():
         Scene.stretch((0, 0), (1, 1), (0, 0), (0, 0)),
         Scene.effect("ui_gloom", VOID, DREAD_DEEP, background=True, sort_order=-10),
     ])
+
+    # ── Chrome: on every page, because it is what the screen IS rather than what it is asking.
     centred("ThTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 72.0, BONE, "center")], 0, -250, 900, 90)
     centred("ThSubtitle", [Scene.text("keep the parish, and count what it costs you", WHISPER, 18.0, BONE_FAINT, "center")], 0, -186, 900, 30)
-
-    # A stack, not a scatter. Each field is a caption sitting ABOVE its control, both on the
-    # same 400px column, so every left edge on the screen is the same left edge. The captions
-    # used to be a half-width box laid across the control next to them: legible only because
-    # the words were short.
     # What this keeper already is, for a keeper who is already something. The threshold used
     # to greet a player with fifty-eight sigils and five visitors named exactly as it greeted
     # someone who had never opened the game - so a title screen that is the front door to a
     # long save said nothing at all about the save.
     centred("ThStanding", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, -155, 900, 26)
+    centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 322, 900, 26)
 
+    # One 400px column for everything, on every page, so nothing moves sideways when a page
+    # changes. A menu whose controls jump around between pages reads as three screens rather
+    # than as one screen showing different things.
     FIELD_W = 400.0
-    centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], 0, -129, FIELD_W, 22)
-    centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, -90, FIELD_W, 44)
-    centred("ThAddressLabel", [Scene.text("HOST ADDRESS", DISPLAY, 15.0, BONE_FAINT)], 0, -33, FIELD_W, 22)
-    centred("ThAddressBox", [Scene.text_box("127.0.0.1:7777", 48, "host")], 0, 6, FIELD_W, 44)
+    ROW_H = 48.0
 
-    centred("ThAlone", [Scene.button("KEEP VIGIL ALONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, ICHOR, 0.30), BONE, ICHOR), Scene.selectable("threshold")], 0, 84, FIELD_W, 48)
-    centred("ThHost", [Scene.button("HOST A CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], -104, 142, 192, 44)
-    centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], 104, 142, 192, 44)
+    # ── Root: who you are, and the four things you can do. ──────────────────────────────
+    centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], 0, -112, FIELD_W, 22)
+    centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, -72, FIELD_W, 44)
 
-    # Settings live in the SAME 400px column as the fields above, one setting per row with
-    # its control flush to the column's right edge. They used to straddle a wider band than
-    # anything else on screen, which read as a second, misaligned form.
-    SETTINGS_H = 26.0
-    centred("ThWhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -100, 217, 200, SETTINGS_H)
-    centred("ThWhisperToggle", [Scene.toggle(True), Scene.selectable("threshold")], 172, 217, 56, SETTINGS_H)
-    centred("ThShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, 255, 200, SETTINGS_H)
-    centred("ThShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable("threshold")], 140, 255, 120, SETTINGS_H)
+    # KEEP VIGIL is the reason the game is open, so it is the widest, the brightest, and the
+    # first thing focus lands on. The three below it are the same size as each other and
+    # quieter than it - a menu where every entry shouts equally has no first entry.
+    centred("ThPlay", [Scene.button("KEEP VIGIL", DISPLAY, 17.0, ROW, mix(ROW_HOT, ICHOR, 0.34), BONE, ICHOR), Scene.selectable("threshold")], 0, 2, FIELD_W, 54)
+    centred("ThCongregation", [Scene.button("CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], 0, 62, FIELD_W, ROW_H)
+    centred("ThSettings", [Scene.button("SETTINGS", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("threshold")], 0, 116, FIELD_W, ROW_H)
+    centred("ThLeave", [Scene.button("LEAVE", DISPLAY, 15.0, ROW, mix(ROW_HOT, DREAD, 0.35), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, 170, FIELD_W, ROW_H)
 
-    centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 312, 900, 26)
+    # ── Congregation: only ever seen by somebody who went looking for it. ───────────────
+    centred("ThAddressLabel", [Scene.text("HOST ADDRESS", DISPLAY, 15.0, BONE_FAINT)], 0, -112, FIELD_W, 22)
+    centred("ThAddressBox", [Scene.text_box("127.0.0.1:7777", 48, "host")], 0, -72, FIELD_W, 44)
+    centred("ThHost", [Scene.button("HOST A CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, 2, FIELD_W, ROW_H)
+    centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, 56, FIELD_W, ROW_H)
 
-    # Beginning again. Hidden entirely for a keeper with nothing to lose, and it asks twice
-    # before it does anything - there is no undo behind this button and no dialog system to
-    # put in front of it, so the button is its own confirmation.
-    centred("ThWipe", [Scene.button("BEGIN A NEW VIGIL", DISPLAY, 14.0, ROW, mix(ROW_HOT, DREAD, 0.45), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, 352, 260, 36)
+    # ── Settings: one row each, control flush to the column's right edge. ──────────────
+    SET_H = 26.0
+    centred("ThWhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -100, -104, 200, SET_H)
+    centred("ThWhisperToggle", [Scene.toggle(True), Scene.selectable("threshold")], 172, -104, 56, SET_H)
+    centred("ThShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, -60, 200, SET_H)
+    centred("ThShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable("threshold")], 140, -60, 120, SET_H)
+    # Type size. The complaint it answers - "the whole interface is too small" - used to need
+    # a rebuild AND the same number moved by hand in two languages.
+    centred("ThTypeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, -16, 200, SET_H)
+    centred("ThTypeSlider", [Scene.slider(0.85, 1.75, 0.05, 1.30), Scene.selectable("threshold")], 140, -16, 120, SET_H)
+
+    # Beginning again, at the bottom of the page a player has to go looking for rather than on
+    # the front door. It asks twice before it does anything - there is no undo behind this
+    # button and no dialog system to put in front of it, so the button is its own confirmation.
+    centred("ThWipe", [Scene.button("BEGIN A NEW VIGIL", DISPLAY, 14.0, ROW, mix(ROW_HOT, DREAD, 0.45), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, 104, 260, 36)
+
+    # One back, shared by every page that is not the root - which is the page it goes to.
+    centred("ThBack", [Scene.button("BACK", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("threshold")], 0, 240, 180, 40)
 
     body = s.render("# Hollowtide - the threshold. Authored chrome; ThresholdScreen only binds and drives it.\n")
     # Splice the hand-written camera / script-root / canvas prologue over the placeholders.

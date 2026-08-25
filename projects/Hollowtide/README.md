@@ -39,6 +39,8 @@ scripts/Content.cs         rites, offerings, marks, boons, visitors, the parish'
 scripts/VigilSaveData.cs   what a save contains and how it is applied (engine-free)
 scripts/SaveSystem.cs      reading and writing the file
 scripts/Layout.cs          where things stand in the parish, as pure arithmetic (engine-free)
+scripts/Menu.cs            which control lives on which page of the threshold (engine-free)
+scripts/TypeScale.cs       re-sizes every authored label when the type size changes
 scripts/Transcript.cs      everything the parish has said, as a ring (engine-free)
 scripts/Typography.cs      how big the type is - one number (engine-free)
 scripts/{Hud,Ledger,Parish,Congregation,Whispers}.cs   views onto the simulation
@@ -52,6 +54,12 @@ tools/balance/             the balance harness
 **no `AetherCore` reference**. That is not tidiness — it is what lets the harness compile the
 rules on their own and play them ten thousand times without a window, and what lets a whole
 save round-trip through JSON in a test that never goes near the player's real one.
+
+`Menu` joined for the same reason: the threshold is three pages over twenty-odd controls, and
+the failure mode of writing that as `SetActive` calls is a control shown on its own page and
+never hidden on the other two — which looks entirely correct until somebody opens another page.
+One table, one loop, and the harness can say every control has exactly one home and that the
+scene actually authors it.
 
 `Layout` is the newest member and joined for exactly that reason. The parish's geometry used to
 live inside `Parish`, tangled up with live rect reads, and so the only way to check any of it
@@ -84,7 +92,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **295 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **302 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:

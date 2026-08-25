@@ -66,6 +66,13 @@ public sealed class HollowtideGame : EntityScript
 		_parish.Bind();
 		BindOfflinePanel();
 
+		// The parish is a different scene from the threshold, so its authored labels are
+		// different entities and have to be adopted in their own right. Forget first: the list
+		// held from the threshold is a list of entities that no longer exist.
+		TypeScale.Forget();
+		TypeScale.Adopt(_canvas);
+		TypeScale.Apply(SaveSystem.TypeScale);
+
 		// Assigned, never subscribed: these are statics that outlive a hot reload, and a
 		// += here would stack a second copy of the feed onto every rebuild.
 		Vigil.Announce = (line, omen) => _whispers.Say(line, omen);

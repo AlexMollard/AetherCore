@@ -3752,6 +3752,125 @@ internal static class Balance
 	/// at down by one. At the forty lines a minute the feed manages when the parish is busy, the
 	/// sentence somebody is halfway through leaves their row about once a second.
 	/// </remarks>
+	/// <summary>
+	/// The threshold's controls each live on exactly one page.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The menu is three pages over twenty controls, which is sixty decisions about what is on
+	/// screen. Written as SetActive calls the failure is always the same: a control is shown on
+	/// the page it belongs to and never hidden on the other two, which looks entirely correct
+	/// until somebody opens another page. One table removes the shape of that bug - and this
+	/// checks the table itself is MECE, since a name in two lists or in none is the same fault
+	/// arriving a layer earlier.
+	/// </para>
+	/// <para>
+	/// It also reads the SCENE. A control the table names and the scene never authors is an
+	/// invalid entity at runtime: it silently never appears, on a page that otherwise looks
+	/// finished.
+	/// </para>
+	/// </remarks>
+	private static void EveryControlLivesOnOnePage()
+	{
+		Console.WriteLine("Every control lives on one page");
+
+		var seen = new Dictionary<string, int>();
+		void Count(IEnumerable<string> names)
+		{
+			foreach (string name in names)
+			{
+				seen[name] = seen.TryGetValue(name, out int had) ? had + 1 : 1;
+			}
+		}
+		foreach (MenuPage page in Menu.Pages)
+		{
+			Count(Menu.Widgets(page));
+		}
+		Count(Menu.Always);
+		Count(new[] { Menu.BackWidget });
+
+		int twice = 0;
+		string clash = "";
+		foreach (KeyValuePair<string, int> pair in seen)
+		{
+			if (pair.Value > 1)
+			{
+				twice++;
+				clash = pair.Key + " is on " + pair.Value + " lists";
+			}
+		}
+		Check("no control is on two pages", twice == 0,
+			twice == 0 ? seen.Count + " controls, one home each" : clash);
+
+		// Every page shows something, and every page but the root offers a way off it.
+		int empty = 0;
+		foreach (MenuPage page in Menu.Pages)
+		{
+			if (Menu.Widgets(page).Length == 0)
+			{
+				empty++;
+			}
+		}
+		Check("and every page has something on it", empty == 0, Menu.Pages.Length + " pages, none blank");
+
+		Menu.Reset();
+		Check("the root has no way back, because it is where back goes",
+			!Menu.Shows(Menu.BackWidget) && !Menu.Back(), "back is the root's own page");
+		foreach (MenuPage page in Menu.Pages)
+		{
+			if (page == MenuPage.Root)
+			{
+				continue;
+			}
+			Menu.Open(page);
+			Check("and " + page + " can be left", Menu.Shows(Menu.BackWidget) && Menu.Back()
+					&& Menu.Page == MenuPage.Root,
+				"back returns to the root");
+		}
+
+		// Showing a page hides the others. The property the table exists to guarantee.
+		Menu.Open(MenuPage.Settings);
+		int leaked = 0;
+		string leakedWorst = "";
+		foreach (MenuPage page in Menu.Pages)
+		{
+			if (page == MenuPage.Settings)
+			{
+				continue;
+			}
+			foreach (string name in Menu.Widgets(page))
+			{
+				if (Menu.Shows(name))
+				{
+					leaked++;
+					leakedWorst = name + " is still up on " + MenuPage.Settings;
+				}
+			}
+		}
+		Check("and opening one page takes the others down", leaked == 0,
+			leaked == 0 ? "nothing from another page survives" : leakedWorst);
+		Menu.Reset();
+
+		// And the scene actually has them.
+		string scene = ProjectFile("scenes", "Threshold.scene.toml");
+		string text = scene.Length == 0 ? "" : File.ReadAllText(scene);
+		int missing = 0;
+		string missingWorst = "";
+		foreach (string name in seen.Keys)
+		{
+			if (!text.Contains("name = '" + name + "'", StringComparison.Ordinal))
+			{
+				missing++;
+				missingWorst = name + " is named by the menu and not authored";
+			}
+		}
+		Check("and the scene authors every one of them", scene.Length > 0 && missing == 0,
+			scene.Length == 0 ? "could not read Threshold.scene.toml"
+				: missing == 0 ? "every control exists" : missingWorst);
+
+		Vigil.Reset();
+	}
+
 	private static void TheTranscriptHoldsStillWhileItIsRead()
 	{
 		Console.WriteLine("The transcript holds still while it is read");
@@ -5737,6 +5856,7 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		EveryControlLivesOnOnePage();
 		TheTranscriptHoldsStillWhileItIsRead();
 		ASatchelIndexIsNotAHandle();
 		EveryOfferingIsWorthBuying();
