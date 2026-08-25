@@ -688,6 +688,15 @@ internal static class Balance
 		Check("the meter filling starts a walk, not a loss", Vigil.Approaching && Vigil.AftermathSeconds == 0.0,
 			"\"" + Content.Rites[0].VisitorName + "\" is " + Vigil.ApproachSeconds.ToString("0") + "s away");
 
+		// You cannot reach further into the dark while it is already on its way. This lived in
+		// the HUD as an extra clause on the button and nowhere else, so it was a rule for the
+		// player and not for the game - and the harness spent every measurement stoking through
+		// approaches, exercising a keeper nobody can be.
+		Vigil.StokeCooldown = 0.0;
+		Vigil.Dread = 0.5;
+		Check("and nothing can be stoked while it is walking", !Vigil.CanStoke && !Vigil.Stoke(),
+			"the dark is not taking suggestions");
+
 		// -- The absent keeper: both branches must be byte-for-byte the old behaviour. --
 		Summon(3, 1, 0);
 		while (Vigil.Approaching)

@@ -393,7 +393,7 @@ public sealed class Hud
 		// Stoking pays now, so the button says what it pays - and the figure is asked of the
 		// simulation rather than recomputed here, because this line and Vigil.Stoke were two
 		// copies of one formula and had already drifted into being wrong together.
-		bool canStoke = Vigil.CanStoke && !Vigil.Approaching;
+		bool canStoke = Vigil.CanStoke;
 		_stoke.SetLabel(Vigil.Dread >= 0.999
 			? "IT IS AS CLOSE AS IT GETS"
 			: Vigil.StokeCooldown > 0.0

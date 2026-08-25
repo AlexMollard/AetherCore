@@ -1722,7 +1722,18 @@ public static class Vigil
 	/// time rather than wall time so it means the same thing in a test as in a session.</summary>
 	private static double s_lastStokeLine;
 
-	public static bool CanStoke => Dread < 0.999 && StokeCooldown <= 0.0;
+	/// <summary>
+	/// Whether the dark will take another step right now.
+	/// </summary>
+	/// <remarks>
+	/// The <c>!Approaching</c> half lived in the HUD, where it disabled the button while
+	/// something was walking - so the rule was real for a player and absent for everything else,
+	/// including the harness, which stoked through approaches while measuring strategies a keeper
+	/// could not actually play. It barely moved a number, because the meter is at the brink
+	/// during a walk and the first clause was already false; that is what made it the kind of
+	/// split that survives. A rule a view enforces alone is a rule the simulation does not have.
+	/// </remarks>
+	public static bool CanStoke => Dread < 0.999 && StokeCooldown <= 0.0 && !Approaching;
 
 	public static bool Stoke()
 	{
