@@ -4947,6 +4947,74 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// The sink cannot be bought into dominance.
+	/// </summary>
+	/// <remarks>
+	/// The Old Bargain's ladder runs to two hundred levels so that sigils always have somewhere
+	/// to go. That is safe only because its cost multiplies while its effect adds - what a
+	/// keeper actually gets grows with the logarithm of what they earn. Nothing enforced that
+	/// shape, though: raising Step, or flattening Growth, would turn the sink into the only
+	/// thing worth buying and make riding the brink the whole game. This pins both ends - how
+	/// far the ladder can be climbed with real earnings, and how strong it is when you get
+	/// there.
+	/// </remarks>
+	private static void TheSinkCannotBeBoughtIntoDominance()
+	{
+		Console.WriteLine("The prestige sink cannot be bought into dominance");
+
+		int sink = 0;
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			if (Content.Boons[i].MaxLevel > Content.Boons[sink].MaxLevel)
+			{
+				sink = i;
+			}
+		}
+
+		// What a fortnight of hard play earns, from the long run above. Rounded down hard: the
+		// question is what a keeper reaches, not what the richest possible one does.
+		const long earned = 124_000;
+		Vigil.Reset();
+		int affordable = 0;
+		long spent = 0;
+		while (affordable < Content.Boons[sink].MaxLevel)
+		{
+			Vigil.Boons[sink] = affordable;
+			long next = Vigil.BoonCost(sink);
+			if (spent + next > earned)
+			{
+				break;
+			}
+			spent += next;
+			affordable++;
+		}
+		Check("a fortnight's sigils buy a dozen levels, not the ladder",
+			affordable >= 6 && affordable <= 25,
+			"a fortnight buys " + affordable + " levels of " + Content.Boons[sink].Name
+				+ " for " + Numbers.Short(spent) + " sigils");
+
+		// And at that level the bargain is still a bargain rather than the whole game.
+		Vigil.Reset();
+		Vigil.Dread = 1.0;
+		double bare = Vigil.DreadMultiplier;
+		Vigil.Boons[sink] = affordable;
+		double bought = Vigil.DreadMultiplier;
+		Check("and what they buy is a better bargain, not a different game",
+			bought > bare && bought < bare * 3.0,
+			"dread pays " + Numbers.Mult(bare) + " bare and " + Numbers.Mult(bought)
+				+ " after a fortnight of buying it");
+
+		// The far end has to stay finite, since a save may legitimately hold it.
+		Vigil.Boons[sink] = Content.Boons[sink].MaxLevel;
+		double ceiling = Vigil.DreadMultiplier;
+		Check("and the top of the ladder is still a number", !double.IsNaN(ceiling)
+			&& !double.IsInfinity(ceiling), "dread pays " + Numbers.Mult(ceiling) + " at level "
+				+ Content.Boons[sink].MaxLevel);
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -5002,6 +5070,7 @@ internal static class Balance
 		TheSeedCounterCannotBeBrokenByAFile();
 		AWrongFileCannotBreakTheParish();
 		ALongVigilStaysFinite();
+		TheSinkCannotBeBoughtIntoDominance();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
