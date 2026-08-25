@@ -3487,6 +3487,81 @@ internal static class Balance
 	/// or count them toward the free doublings or the price of the next rite, which would turn a
 	/// loan of production into a shortcut through the cost curve.
 	/// </remarks>
+	/// <summary>
+	/// What the parish quotes is what the parish pays.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// There are two loops that answer "how much is this parish earning". <c>Rate</c> is the one
+	/// that gets quoted - on the HUD, in the ward's price, and in the offline catch-up, which
+	/// settles the whole time a keeper was away against it in one multiplication. <c>RunCycles</c>
+	/// is the one that actually hands ichor over, a working at a time, and it is the only one a
+	/// keeper who is present ever experiences.
+	/// </para>
+	/// <para>
+	/// They are meant to be the same total by construction, and that is exactly the kind of claim
+	/// that stops being true without anybody noticing: a term added to one of them is a silent
+	/// change to the other, in whichever direction nobody looked. It has already happened once,
+	/// to the count itself. This plays a real parish and compares what arrived against what was
+	/// promised, so the next divergence is a red harness rather than a keeper wondering why the
+	/// number on the screen is not the number in their purse.
+	/// </para>
+	/// <para>
+	/// Dread is parked at the parish's own EQUILIBRIUM, where pressure and relaxation cancel, so
+	/// the multiplier holds still for the length of the measurement. Pinning it by hand would
+	/// have been a fiction the game never produces; this is a state it settles into on its own.
+	/// </para>
+	/// </remarks>
+	private static void QuotedIsPaid()
+	{
+		Console.WriteLine("What the parish quotes is what it pays");
+
+		Vigil.Reset();
+		// Deliberately modest. A deep parish sits at an equilibrium ABOVE the brink and is
+		// visited every few seconds, and the aftermaths would then be measured as a shortfall
+		// against the quoted rate - which is true, and not what this is asking.
+		for (int rite = 0; rite < 4; rite++)
+		{
+			Vigil.Owned[rite] = 2 + rite;
+		}
+		// Offerings and milestones both multiply one rite and not the others, so turning some on
+		// is what makes this a check on the per-rite maths rather than on a single global factor.
+		for (int i = 0; i < Content.Offerings.Length; i += 3)
+		{
+			Vigil.OfferingsTaken[i] = true;
+		}
+
+		// Where the meter would sit if left alone, so it does not drift while we measure.
+		Vigil.Dread = Vigil.DreadEquilibrium;
+		Vigil.Fervour = 0.0;
+		Check("the parish under test settles short of the brink", Vigil.DreadEquilibrium < 0.95,
+			"equilibrium at " + Vigil.DreadEquilibrium.ToString("0.000"));
+
+		double quoted = Vigil.Rate;
+		double slowest = 0.0;
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			slowest = Math.Max(slowest, Content.Rites[rite].CycleSeconds);
+		}
+		int steps = (int)(60.0 * slowest / kDt);
+		double before = Vigil.Ichor;
+		double dreadBefore = Vigil.Dread;
+		for (int i = 0; i < steps; i++)
+		{
+			Vigil.Tick(kDt);
+		}
+		double elapsed = steps * kDt;
+		double played = (Vigil.Ichor - before) / elapsed;
+
+		Check("the meter held still while we measured", Math.Abs(Vigil.Dread - dreadBefore) < 0.02,
+			"dread " + dreadBefore.ToString("0.000") + " to " + Vigil.Dread.ToString("0.000"));
+		Check("a played parish earns what it quotes",
+			played > quoted * 0.97 && played < quoted * 1.03,
+			Numbers.Short(played) + "/s played against " + Numbers.Short(quoted) + "/s quoted");
+
+		Vigil.Reset();
+	}
+
 	private static void LentStructuresAreOnlyLent()
 	{
 		Console.WriteLine("A relic that lends structures takes them back");
@@ -5090,6 +5165,7 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		QuotedIsPaid();
 		LentStructuresAreOnlyLent();
 		EveryRelicCanBeRead();
 		LuckIsWorthWearing();

@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **248 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **251 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -112,6 +112,9 @@ visible by reading the code:
 - A relic that lends structures paid nothing while you watched and paid in full while
   you were away, because the loop that quotes the rate and the loop that hands the ichor
   over counted different things.
+- Nothing anywhere compared the rate the parish *quotes* against the ichor it actually
+  *pays*, which is how the above went unnoticed; a parish parked at its own dread
+  equilibrium now plays sixty workings and the two have to agree.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
