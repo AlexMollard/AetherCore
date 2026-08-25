@@ -488,6 +488,19 @@ internal static class Balance
 			"first run offers " + firstOffer + " against " + spendable + " to spend");
 		Check("a first communion still buys something", firstOffer >= 1,
 			firstOffer + " sigils after half an hour");
+
+		// The communion row quotes the bonus the keeper is about to have, and the button under it
+		// is the one irreversible thing in the game - so the promise on it has to be the promise
+		// kept. It used to quote the payout as a share of sigils taken and call that the gain "on
+		// what you hold", which at ten taken and five offered read as +50% for a bonus that moved
+		// from x1.60 to x1.90. Both numbers were real; neither was the one on the label.
+		double promised = Vigil.SigilMultiplierFor(Vigil.SigilsEarned + firstOffer);
+		Vigil.Commune();
+		Check("the communion pays the bonus it quoted",
+			Math.Abs(Vigil.SigilMultiplier - promised) < 1e-9,
+			"quoted " + Numbers.Mult(promised) + ", paid " + Numbers.Mult(Vigil.SigilMultiplier));
+
+		Vigil.Reset();
 	}
 
 	/// <summary>The tables have to agree with the code that indexes them.</summary>

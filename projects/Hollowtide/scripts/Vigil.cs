@@ -590,7 +590,13 @@ public static class Vigil
 
 	/// <summary>Each sigil ever taken is worth six percent of everything, forever - whether or
 	/// not it is still in hand.</summary>
-	public static double SigilMultiplier => 1.0 + 0.06 * SigilsEarned;
+	public static double SigilMultiplier => SigilMultiplierFor(SigilsEarned);
+
+	/// <summary>What a given number of sigils taken would be worth. Written as a function of the
+	/// count so the communion can quote what it is ABOUT to become without the ledger keeping a
+	/// second copy of the rule - a copy is how two numbers that are supposed to be the same
+	/// quietly stop being it.</summary>
+	public static double SigilMultiplierFor(int earned) => 1.0 + 0.06 * Math.Max(0, earned);
 
 	/// <summary>The bargain at the centre of the game: dread pays, up to two and a half times
 	/// at the brink. Every point of it is also what brings a visitation closer.</summary>

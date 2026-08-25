@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **251 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **252 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -115,6 +115,9 @@ visible by reading the code:
 - Nothing anywhere compared the rate the parish *quotes* against the ichor it actually
   *pays*, which is how the above went unnoticed; a parish parked at its own dread
   equilibrium now plays sixty workings and the two have to agree.
+- The communion — the one irreversible button in the game — quoted the payout as a share of
+  sigils *taken* and labelled it the gain on what you hold. At ten taken and five offered
+  that read as **+50%** for a bonus that moved from x1.60 to x1.90.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.

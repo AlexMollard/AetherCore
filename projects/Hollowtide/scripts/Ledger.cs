@@ -783,8 +783,17 @@ public sealed class Ledger
 			// tab a player has to trust: spending sigils never costs you the bonus they pay.
 			Ui.SetText(row.Cost, Vigil.Sigils + " held  /  " + Vigil.SigilsEarned + " taken");
 			Ui.SetTextColor(row.Cost, Palette.Sigil);
+			// The MULTIPLIER, before and after, because that is the only thing a sigil does and
+			// this row is the only place it is quoted. It used to read "+X% on what you hold",
+			// where X was the payout as a share of sigils TAKEN - which is neither what is held
+			// nor what the bonus does. The bonus is linear in the count and starts at one, so
+			// early on the two diverge badly: a keeper with ten taken and five on offer was told
+			// "+50%" for a bonus that went from x1.60 to x1.90, which is nineteen. The share is
+			// still the right number for the decision and still stated in the line above; this
+			// says what the decision buys.
 			Ui.SetText(row.Note, ready && Vigil.SigilsEarned > 0
-				? "+" + Numbers.Percent(share) + " on what you hold"
+				? Numbers.Mult(Vigil.SigilMultiplier) + "  ->  "
+					+ Numbers.Mult(Vigil.SigilMultiplierFor(Vigil.SigilsEarned + payout))
 				: Numbers.Mult(Vigil.SigilMultiplier) + " from every sigil taken");
 			Ui.SetTextColor(row.Note, ready && !worthIt ? Palette.TextFaint : Palette.Sigil);
 			row.Box.SetEnabled(ready);
