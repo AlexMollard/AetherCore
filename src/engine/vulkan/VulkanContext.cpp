@@ -506,16 +506,15 @@ namespace aether
 		// VK_EXT_calibrated_timestamps is required for Tracy host-calibrated GPU zones.
 		requiredExtensions.push_back(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
 #endif
-		// VK_KHR_maintenance9: optional device extension. Required by this renderer
-		requiredExtensions.push_back(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
-		requiredExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+		// Only what the renderer genuinely cannot draw without belongs here. VK_KHR_push_descriptor
+		// is deliberately absent: it is core in 1.4 and the pushDescriptor feature bit above already
+		// covers it, so naming it again only narrowed the set of devices that could pass selection.
+		//
 		// VK_EXT_shader_object: layout-free shaders bound directly via vkCmdBindShadersEXT.
 		requiredExtensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		// an extension and is required explicitly below because shader objects use EDS3
 		requiredExtensions.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
 		requiredExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
-		requiredExtensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
-		requiredExtensions.push_back(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
 		// picks one. Requesting them as *required* selector extensions this
 		for (const char* extension : requiredExtensions)
 		{
@@ -584,6 +583,21 @@ namespace aether
 			}
 		}
 #endif
+
+		// Enabled where present, skipped where not. None of these three change a single pixel:
+		// maintenance9 is chained but nothing in the engine depends on it, and device_fault and
+		// device_address_binding_report only feed post-mortem diagnostics that already null-check
+		// their entry points. They were hard selection requirements, which meant a GPU perfectly
+		// capable of running the renderer was rejected outright for missing a debugging aid -
+		// and device_address_binding_report in particular is close to NVIDIA-only.
+		const bool maintenance9Present = physicalDeviceResult.value().enable_extension_if_present(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
+		const bool deviceFaultPresent = physicalDeviceResult.value().enable_extension_if_present(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+		const bool addressBindingReportPresent = physicalDeviceResult.value().enable_extension_if_present(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
+		AE_INFO(LogCategory::Vulkan,
+		        "Optional device extensions: VK_KHR_maintenance9={}, VK_EXT_device_fault={} (GPU fault reports), VK_EXT_device_address_binding_report={} (allocation tracking).",
+		        maintenance9Present,
+		        deviceFaultPresent,
+		        addressBindingReportPresent);
 
 		// Optional present-timing pair, enabled only where the driver has both. Pacing a
 		// frame against a GUESSED vsync phase is worse than not pacing it - a mistimed frame
@@ -694,11 +708,22 @@ namespace aether
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
-		deviceBuilder.add_pNext(&maintenance9Features);
+		// A feature struct may only be chained when its extension was actually enabled;
+		// chaining one for an absent extension fails device creation outright.
+		if (maintenance9Present)
+		{
+			deviceBuilder.add_pNext(&maintenance9Features);
+		}
 		deviceBuilder.add_pNext(&shaderObjectFeatures);
 		deviceBuilder.add_pNext(&descriptorHeapFeatures);
-		deviceBuilder.add_pNext(&faultFeatures);
-		deviceBuilder.add_pNext(&addressBindingReportFeatures);
+		if (deviceFaultPresent)
+		{
+			deviceBuilder.add_pNext(&faultFeatures);
+		}
+		if (addressBindingReportPresent)
+		{
+			deviceBuilder.add_pNext(&addressBindingReportFeatures);
+		}
 		deviceBuilder.add_pNext(&extendedDynamicStateFeatures);
 		if (m_presentTimingSupported)
 		{
