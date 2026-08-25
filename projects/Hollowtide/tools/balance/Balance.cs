@@ -4158,14 +4158,82 @@ internal static class Balance
 	{
 		Console.WriteLine("Nothing collides at the largest type");
 
-		string path = ProjectFile("scenes", "Threshold.scene.toml");
-		if (path.Length == 0)
+		var threshold = ReadLabels("Threshold.scene.toml");
+		if (threshold.Count == 0)
 		{
 			Check("the threshold scene can be read", false, "could not find Threshold.scene.toml");
 			return;
 		}
-		var top = new Dictionary<string, double>();
-		var drawn = new Dictionary<string, double>();
+
+		double tightest = double.MaxValue;
+		string pinch = "";
+		foreach (MenuPage page in Menu.Pages)
+		{
+			var showing = new List<string>(Menu.Always);
+			showing.AddRange(Menu.Widgets(page));
+			if (page != MenuPage.Root)
+			{
+				showing.Add(Menu.BackWidget);
+			}
+			Pinch(threshold, showing, ref tightest, ref pinch);
+		}
+		Check("the threshold cannot be dragged into a collision", tightest >= Typography.Largest,
+			tightest >= Typography.Largest
+				? "room to x" + tightest.ToString("0.00") + ", slider stops at x" + Typography.Largest.ToString("0.00")
+				: pinch + ", but the slider goes to x" + Typography.Largest.ToString("0.00"));
+
+		// The vigil, in two parts. Its menu overlays the parish on purpose, so the two are never
+		// measured against each other - what must not collide is a menu row with another menu
+		// row, and a piece of the parish's own chrome with the piece beside it.
+		var vigil = ReadLabels("Vigil.scene.toml");
+		double menuTightest = double.MaxValue;
+		string menuPinch = "";
+		var menuNames = new HashSet<string>(VigilMenu.Always) { VigilMenu.BackWidget };
+		foreach (MenuPage page in Menu.Pages)
+		{
+			var showing = new List<string>(VigilMenu.Always);
+			showing.AddRange(VigilMenu.Widgets(page));
+			showing.Add(VigilMenu.BackWidget);
+			foreach (string one in showing)
+			{
+				menuNames.Add(one);
+			}
+			Pinch(vigil, showing, ref menuTightest, ref menuPinch);
+		}
+		Check("nor can the vigil's menu", menuTightest >= Typography.Largest,
+			menuTightest >= Typography.Largest
+				? "room to x" + menuTightest.ToString("0.00")
+				: menuPinch + ", but the slider goes to x" + Typography.Largest.ToString("0.00"));
+
+		var chrome = new List<string>();
+		foreach (string one in vigil.Keys)
+		{
+			if (!menuNames.Contains(one))
+			{
+				chrome.Add(one);
+			}
+		}
+		double chromeTightest = double.MaxValue;
+		string chromePinch = "";
+		Pinch(vigil, chrome, ref chromeTightest, ref chromePinch);
+		Check("nor the parish's own chrome", chromeTightest >= Typography.Largest,
+			chromeTightest >= Typography.Largest
+				? "room to x" + chromeTightest.ToString("0.00") + " across " + chrome.Count + " labels"
+				: chromePinch + ", but the slider goes to x" + Typography.Largest.ToString("0.00"));
+
+		Vigil.Reset();
+	}
+
+	/// <summary>Every label a scene authors: where its box's centre sits, and how big its glyphs
+	/// are drawn.</summary>
+	private static Dictionary<string, (double Centre, double Drawn, int Parent, double Left, double Right)> ReadLabels(string scene)
+	{
+		var labels = new Dictionary<string, (double, double, int, double, double)>();
+		string path = ProjectFile("scenes", scene);
+		if (path.Length == 0)
+		{
+			return labels;
+		}
 		foreach (string block in File.ReadAllText(path).Split("[[entities]]"))
 		{
 			Match name = Regex.Match(block, @"name = '([^']+)'");
@@ -4181,58 +4249,66 @@ internal static class Balance
 			// drawn height - and boxes are not all the same height, so top edges answer a
 			// different question. Measured off tops, the first version of this check reported a
 			// pinch between a label and the field under it that does not exist.
-			top[name.Groups[1].Value] =
+			Match parent = Regex.Match(block, @"parent = (-?[0-9]+)");
+			labels[name.Groups[1].Value] = (
 				(double.Parse(low.Groups[2].Value, CultureInfo.InvariantCulture)
-					+ double.Parse(high.Groups[2].Value, CultureInfo.InvariantCulture)) * 0.5;
-			drawn[name.Groups[1].Value] = double.Parse(size.Groups[1].Value, CultureInfo.InvariantCulture);
+					+ double.Parse(high.Groups[2].Value, CultureInfo.InvariantCulture)) * 0.5,
+				double.Parse(size.Groups[1].Value, CultureInfo.InvariantCulture),
+				parent.Success ? int.Parse(parent.Groups[1].Value, CultureInfo.InvariantCulture) : -1,
+				double.Parse(low.Groups[1].Value, CultureInfo.InvariantCulture),
+				double.Parse(high.Groups[1].Value, CultureInfo.InvariantCulture));
 		}
-
-		double tightest = double.MaxValue;
-		string pinch = "";
-		foreach (MenuPage page in Menu.Pages)
-		{
-			var showing = new List<string>(Menu.Always);
-			showing.AddRange(Menu.Widgets(page));
-			if (page != MenuPage.Root)
-			{
-				showing.Add(Menu.BackWidget);
-			}
-			var rows = new List<string>();
-			foreach (string one in showing)
-			{
-				if (top.ContainsKey(one))
-				{
-					rows.Add(one);
-				}
-			}
-			rows.Sort((a, b) => top[a].CompareTo(top[b]));
-			for (int i = 0; i + 1 < rows.Count; i++)
-			{
-				double gap = top[rows[i + 1]] - top[rows[i]];
-				// Back to the sizes somebody typed: what grows with the slider is the written
-				// size, and the authored file holds it already multiplied. Half of each, because
-				// each label grows about its own centre.
-				double half = (drawn[rows[i]] + drawn[rows[i + 1]]) * 0.5 / Typography.Authored;
-				if (gap <= 0.0 || half <= 0.0)
-				{
-					continue;
-				}
-				double ceiling = gap / half;
-				if (ceiling < tightest)
-				{
-					tightest = ceiling;
-					pinch = rows[i] + " reaches " + rows[i + 1] + " at x" + ceiling.ToString("0.00");
-				}
-			}
-		}
-
-		Check("the slider cannot be dragged into a collision", tightest >= Typography.Largest,
-			tightest >= Typography.Largest
-				? "room to x" + tightest.ToString("0.00") + ", slider stops at x" + Typography.Largest.ToString("0.00")
-				: pinch + ", but the slider goes to x" + Typography.Largest.ToString("0.00"));
-
-		Vigil.Reset();
+		return labels;
 	}
+
+	/// <summary>The scale at which the tightest pair in a co-visible set touches.</summary>
+	private static void Pinch(Dictionary<string, (double Centre, double Drawn, int Parent, double Left, double Right)> labels,
+		List<string> showing, ref double tightest, ref string pinch)
+	{
+		var rows = new List<string>();
+		foreach (string one in showing)
+		{
+			if (labels.ContainsKey(one))
+			{
+				rows.Add(one);
+			}
+		}
+		rows.Sort((a, b) => labels[a].Centre.CompareTo(labels[b].Centre));
+		for (int i = 0; i + 1 < rows.Count; i++)
+		{
+			// SIBLINGS only. Panels are positioned independently and stack on purpose - the
+			// visitation panel sits over the HUD, and the menu sits over everything - so two
+			// labels in different parents overlapping is the design rather than a fault. Asked
+			// flat, the tightest pair in the vigil is a HUD heading four hundredths of a scale
+			// from a visitor's name, which are never in the same panel and never both up.
+			if (labels[rows[i]].Parent != labels[rows[i + 1]].Parent)
+			{
+				continue;
+			}
+			// And only if they share any horizontal ground. A status bar puts the keeper's name
+			// at one end and their sigils at the other, on the same row - measured on the
+			// vertical alone that is a collision at four hundredths of a scale, and on any
+			// screen it is two labels a bar's width apart.
+			if (labels[rows[i]].Right <= labels[rows[i + 1]].Left
+				|| labels[rows[i + 1]].Right <= labels[rows[i]].Left)
+			{
+				continue;
+			}
+			double gap = labels[rows[i + 1]].Centre - labels[rows[i]].Centre;
+			double half = (labels[rows[i]].Drawn + labels[rows[i + 1]].Drawn) * 0.5 / Typography.Authored;
+			if (gap <= 0.0 || half <= 0.0)
+			{
+				continue;
+			}
+			double ceiling = gap / half;
+			if (ceiling < tightest)
+			{
+				tightest = ceiling;
+				pinch = rows[i] + " reaches " + rows[i + 1] + " at x" + ceiling.ToString("0.00");
+			}
+		}
+	}
+
 
 	private static void TypeSizeIsAppliedOnce()
 	{

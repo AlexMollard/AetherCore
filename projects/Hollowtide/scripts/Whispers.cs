@@ -26,7 +26,6 @@ public sealed class Whispers
 	private const int kLines = 6;
 	private const float kLifetime = 9.0f;
 	private const float kFadeSeconds = 2.5f;
-	private const float kLineHeight = 26.0f;
 	private const float kWidth = 720.0f;
 
 	private struct Line

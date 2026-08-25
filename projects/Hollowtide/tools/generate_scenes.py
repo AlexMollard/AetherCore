@@ -746,10 +746,14 @@ def vigil():
 
     # The whisper feed: a fixed pool of six lines along the bottom, newest last. Fixed count,
     # so it is chrome - the script only ever rewrites the string and the colour.
+    # Spaced for the largest type the slider offers, like everything else. Twenty-six pixels was
+    # right for eighteen-point text authored at 1.30 and became a pile at x1.44 - the parish's
+    # own voice, illegible at the setting a player reaches for because they could not read it.
+    WHISPER_STEP = 18.0 * LARGEST_TYPE + 6.0
     for i in range(6):
-        y = -34.0 - (5 - i) * 26.0
+        y = -34.0 - (5 - i) * WHISPER_STEP
         s.add(f"WhisperLine{i}", canvas, [
-            Scene.box(34, y, 920, 26, (0.0, 1.0), (0.0, 1.0)),
+            Scene.box(34, y, 920, WHISPER_STEP, (0.0, 1.0), (0.0, 1.0)),
             Scene.text("", WHISPER, 18.0, BONE_DIM),
         ])
 
