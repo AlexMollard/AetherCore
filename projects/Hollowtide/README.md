@@ -115,6 +115,24 @@ the numbers; what must not change is the shape.
 
 ### Sweeping the seeds
 
+**After adding any check that measures a simulated run, sweep a dozen seeds before trusting
+it.** A check that passes on one sample and fails on the next is worse than no check, and this
+suite has produced two of them: a first-find bound sitting at the 92nd percentile of an
+exponential wait, which failed roughly one seed in twelve, and a peak-production figure quoted
+as though it meant something when it spans eight orders of magnitude across seeds.
+
+```bash
+for s in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  dotnet run -c Release --project projects/Hollowtide/tools/balance -- --seed $s
+done
+```
+
+All twelve currently pass. Twelve is enough to catch a one-in-twelve fragility about as often
+as not — it is a smell test, not a proof, and a check whose bound sits anywhere near the spread
+of what it measures should be rewritten to assert the underlying rate instead of a sample of
+it.
+
+
 ```bash
 dotnet run -c Release --project projects/Hollowtide/tools/balance -- --seed 3
 ```
