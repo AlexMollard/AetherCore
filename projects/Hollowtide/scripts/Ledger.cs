@@ -806,7 +806,13 @@ public sealed class Ledger
 			bool maxed = level >= def.MaxLevel;
 			bool affordable = !maxed && Vigil.Sigils >= cost;
 
-			Ui.SetText(row.Title, def.Name + "   " + level + "/" + def.MaxLevel);
+			// A short ladder shows how much of it is done; the long one shows only how far the
+			// keeper has come. Two hundred is a safety limit rather than a target - nobody
+			// reaches it and nobody is meant to - so printing "12/200" would answer a question
+			// the keeper is not asking and answer it discouragingly, six percent of a goal that
+			// is not a goal.
+			bool longLadder = def.MaxLevel > 10;
+			Ui.SetText(row.Title, def.Name + "   " + level + (longLadder ? "" : "/" + def.MaxLevel));
 			Ui.SetTextColor(row.Title, level > 0 ? Palette.Sigil : Palette.TextBright);
 			Ui.SetText(row.Sub, def.Blurb);
 			Ui.SetText(row.Cost, maxed ? "KEPT" : cost + " sigils");
@@ -816,8 +822,13 @@ public sealed class Ledger
 			// The level pips: the same thin fill a rite uses for its working, standing in for
 			// how far along a boon is. One widget, two meanings, no third layout to keep.
 			float boonWidth = kWidth - kPad * 2.0f;
-			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f,
-				boonWidth * ((float)level / def.MaxLevel), 3.0f);
+			// The long ladder's bar fills toward the NEXT ten rather than toward two hundred, so
+			// it keeps meaning something instead of sitting near empty forever. A bar that never
+			// visibly moves is worse than no bar.
+			float along = longLadder
+				? level % 10 / 10.0f
+				: (float)level / def.MaxLevel;
+			Ui.SetRect(row.Progress, 0.0f, kRowHeight - 3.0f, boonWidth * along, 3.0f);
 			Ui.SetImageColor(row.Progress, Palette.Fade(Palette.Sigil, level > 0 ? 0.75f : 0.0f));
 
 			row.Box.SetEnabled(affordable);

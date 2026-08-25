@@ -164,6 +164,14 @@ done rather than a track.
 ### Prestige with something to spend on
 - **Six boons** (deeper wards, cold blood, the old bargain, steady hand, unsleeping, quick
   kindling), raising sigil sinks from **108 to 442**.
+- **A sink that never fills.** 442 was still nothing: a fortnight of hard play earns 124
+  thousand sigils, so every boon maxed long before then and prestige decayed back into a number
+  that only accumulates — the very fault the boons were added to fix, arriving further out. **The
+  Old Bargain** now runs to two hundred levels instead of three, taking total spending to **179
+  billion**. Its cost multiplies while its effect adds, so what a keeper gets grows with the
+  *logarithm* of what they have earned: the sink never fills and never runs away. It is that
+  boon rather than a new system because it is the game's own sentence — dread pays, and it is
+  coming, so buying more of the first half is choosing to want the meter higher.
 - The threshold reports a returning keeper's standing and offers to **begin a new vigil**.
 
 ---
@@ -349,7 +357,7 @@ looks like art. Every such pairing is now **verified by reading the other side**
 A missing file or an unmatched line **fails** rather than passing quietly: a verifier that
 silently stops verifying keeps reporting green.
 
-## Six things the checks themselves got wrong
+## Eight things the checks themselves got wrong
 
 Each was a *check* failing rather than the game, and each taught something the next one assumes.
 
@@ -365,6 +373,17 @@ Each was a *check* failing rather than the game, and each taught something the n
 - **A progress check that could not see a wrong denominator.** It compared every bar against its
   mark at an empty keeper and a maximal one — where every bar is empty and then full whatever it
   was divided by. A bar filling at 25 for a mark needing 50 is only visible in between.
+
+- **A sentinel that poisoned arithmetic.** "No ceiling" was first written as `MaxLevel = -1`,
+  and `MaxLevel` is arithmetic in eight other places: the ledger read the boon as already maxed,
+  printed `3/-1`, drew a progress bar of **negative width**, and a fixture divided by zero and
+  **crashed the whole suite** — a run that then reported "0 failures" because it aborted before
+  most checks ran. Replaced by a ladder that is simply long, which breaks nothing and says the
+  same thing.
+- **An `int` that could not hold the thing it measured.** The check for "a first communion
+  cannot buy the game out" sums every level of every boon; with the sink in place that is 179
+  billion, which wrapped to **−734,687,863**. The sink working is what broke the arithmetic
+  measuring it.
 
 - **A figure quoted as if it meant something.** The long-run check reported the peak
   production it reached, and that number was used to describe the game. Measured across three
