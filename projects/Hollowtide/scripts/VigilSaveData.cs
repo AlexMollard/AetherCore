@@ -216,7 +216,7 @@ public static class VigilData
 		// anything. Clamped per boon, because each has its own ceiling.
 		for (int i = 0; i < Vigil.Boons.Length && i < Content.Boons.Length; i++)
 		{
-			Vigil.Boons[i] = Math.Clamp(Vigil.Boons[i], 0, Content.Boons[i].MaxLevel);
+Vigil.Boons[i] = Math.Clamp(Vigil.Boons[i], 0, Content.Boons[i].MaxLevel);
 		}
 		Vigil.Wards = Math.Clamp(save.Wards, 0, Vigil.MaxWards);
 		Vigil.AftermathSeconds = Math.Max(0.0, save.Aftermath);

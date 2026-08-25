@@ -453,8 +453,14 @@ internal static class Balance
 		Check("waiting to commune beats taking it early", patient > greedy * 5.0,
 			"patience is worth " + Numbers.Short(patient / greedy) + "x over ninety minutes");
 
-		int spendable = 0;
+		long spendable = 0;
 		Vigil.Reset();
+		// Summed as a LONG. One boon is the prestige sink and its ladder runs to two hundred
+		// levels, each of the last hundred and eighty priced at the cost cap - two hundred
+		// billion sigils in total, which is a hundred times what an int holds. Summed as one it
+		// wrapped to minus seven hundred million, and the check then compared a first
+		// communion's three sigils against a negative total and called it a failure. The sink
+		// working is exactly what broke the arithmetic that measured it.
 		for (int i = 0; i < Content.Boons.Length; i++)
 		{
 			for (int level = 0; level < Content.Boons[i].MaxLevel; level++)
@@ -471,7 +477,7 @@ internal static class Balance
 		Vigil.Reset();
 		Play(30, 4, 0.25, ward: true);
 		int firstOffer = Vigil.SigilsOnOffer;
-		Check("a first communion cannot buy the game out", firstOffer * 8 < spendable,
+		Check("a first communion cannot buy the game out", (long)firstOffer * 8 < spendable,
 			"first run offers " + firstOffer + " against " + spendable + " to spend");
 		Check("a first communion still buys something", firstOffer >= 1,
 			firstOffer + " sigils after half an hour");
@@ -491,10 +497,36 @@ internal static class Balance
 		for (int i = 0; i < Content.Boons.Length; i++)
 		{
 			Vigil.Boons[i] = Content.Boons[i].MaxLevel;
-			Vigil.Sigils = 1000000;
+			Vigil.Sigils = 1_500_000_000;
 			maxedRefuses &= Vigil.BoonCost(i) == 0 && !Vigil.BuyBoon(i);
 		}
 		Check("a maxed boon cannot be bought again", maxedRefuses, "all six refuse");
+
+		// One boon has a very long ladder and is the prestige sink, so its PRICE has to stay a
+		// price the whole way up. A cost that multiplies every level reaches infinity in about
+		// forty more of them, and an unpayable-because-unprintable cost would close the sink as
+		// surely as a low ceiling would.
+		int longest = 0;
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			if (Content.Boons[i].MaxLevel > Content.Boons[longest].MaxLevel)
+			{
+				longest = i;
+			}
+		}
+		bool alwaysPayable = true;
+		foreach (int level in new[] { 0, 10, 40, 100, 199 })
+		{
+			Vigil.Boons[longest] = level;
+			int cost = Vigil.BoonCost(longest);
+			alwaysPayable &= cost > 0 && cost <= 1_000_000_000;
+		}
+		Check("the long ladder is priced all the way up", alwaysPayable,
+			Content.Boons[longest].Name + " stays payable to level "
+				+ Content.Boons[longest].MaxLevel);
+		Check("and it is long enough to be a sink", Content.Boons[longest].MaxLevel >= 50,
+			Content.Boons[longest].MaxLevel + " levels against three for the rest");
+
 
 		Vigil.Reset();
 		Check("the sigil curve inverts exactly", OffersExactly(7), "payout and target agree");

@@ -1752,12 +1752,31 @@ public static class Vigil
 	public static double BoonFactor(Boon boon) => Boons[(int)boon] * Content.Boons[(int)boon].Step;
 
 	/// <summary>What the next level of a boon costs, in sigils. Zero once it is maxed.</summary>
+	/// <summary>
+	/// What the next level of a boon costs, or zero when there is no next level.
+	/// </summary>
+	/// <remarks>
+	/// Capped at <see cref="kDearestBoon"/>. One boon has no ceiling on its LEVEL, and a cost
+	/// that multiplies every time reaches infinity in about forty more of them - at which point
+	/// the price would be unpayable, unprintable, and every comparison against it false. The cap
+	/// is far past what anybody reaches, and it means the ladder ends in something expensive
+	/// rather than in something broken.
+	/// </remarks>
 	public static int BoonCost(int index)
 	{
 		BoonDef def = Content.Boons[index];
 		int level = Boons[index];
-		return level >= def.MaxLevel ? 0 : (int)Math.Ceiling(def.BaseCost * Math.Pow(def.Growth, level));
+		if (level >= def.MaxLevel)
+		{
+			return 0;
+		}
+		double price = def.BaseCost * Math.Pow(def.Growth, level);
+		return price >= kDearestBoon ? kDearestBoon : (int)Math.Ceiling(price);
 	}
+
+	/// <summary>The most a single level of a boon can ever cost. Comfortably past anything a
+	/// keeper reaches, and short of where the arithmetic stops working.</summary>
+	private const int kDearestBoon = 1_000_000_000;
 
 	public static bool BuyBoon(int index)
 	{

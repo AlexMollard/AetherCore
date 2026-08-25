@@ -155,7 +155,26 @@ public sealed class BoonDef
 	/// per level that some later edit forgets to keep in order.</summary>
 	public double BaseCost;
 	public double Growth = 2.4;
+	/// <summary>
+	/// How far this boon goes, or <see cref="Endless"/> for one that never finishes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Most of them end at three. A ward cap that keeps rising stops being a cap; an aftermath
+	/// that keeps shrinking stops being a consequence. These are QUALITATIVE - each changes how
+	/// the vigil is played, and there are only so many meaningful steps in that.
+	/// </para>
+	/// <para>
+	/// One of them has a very long ladder instead, which is the prestige sink - see The Old
+	/// Bargain. It is a LONG ladder and not a special case: a sentinel meaning "no ceiling" was
+	/// tried and it was a mistake, because MaxLevel is arithmetic in eight other places and a
+	/// negative one poisoned all of them at once. It read as already maxed in the ledger, drew a
+	/// progress bar of negative width, printed "3/-1", and divided by zero in a fixture. A
+	/// number that is simply large breaks nothing and says the same thing.
+	/// </para>
+	/// </remarks>
 	public int MaxLevel = 3;
+
 	/// <summary>How much one level is worth, in whatever unit the boon deals in. Read by the
 	/// one place in <see cref="Vigil"/> that applies it.</summary>
 	public double Step;
@@ -576,10 +595,29 @@ public static class Content
 			Name = "Cold Blood", Blurb = "You recover faster from a visitation. A fifth faster, each time.",
 			BaseCost = 5.0, MaxLevel = 3, Step = 0.20,
 		},
+		// THE SINK. Every other boon ends, and measured over a fortnight of hard play a keeper
+		// earns three hundred thousand sigils against about four hundred of total spending - so
+		// prestige stopped being something you spend and became a number that only accumulates,
+		// which is exactly the decay the boons were added to fix, arriving again further out.
+		//
+		// This one never finishes. Its cost multiplies and its effect adds, so what a keeper
+		// gets grows with the LOGARITHM of what they have earned: a fortnight buys about twelve
+		// levels, and ten times the sigils buys three more. That shape is the point - the sink
+		// never fills, and it never runs away either.
+		//
+		// It is this boon rather than a new one because it is the game's own sentence. Dread
+		// pays, and it is coming; a keeper who buys more of the first half is choosing to want
+		// the meter higher, which is a decision and not a number.
 		new BoonDef
 		{
 			Name = "The Old Bargain", Blurb = "Dread pays better. It always did, for the ones who asked twice.",
-			BaseCost = 10.0, MaxLevel = 3, Step = 0.55,
+			// Step down from 0.55 to 0.30 because the ladder no longer stops at three: the first
+			// three levels are worth a little less than they were, and the fourth onward did not
+			// exist at all. The ceiling is far past anywhere a keeper arrives - the cost
+			// multiplies until it meets its cap, so beyond about the twentieth level each one
+			// costs a flat billion sigils, and a fortnight of hard play earns three hundred
+			// thousand.
+			BaseCost = 10.0, MaxLevel = 200, Step = 0.30,
 		},
 		new BoonDef
 		{
