@@ -103,7 +103,11 @@ public static class Menu
 	/// <summary>How the game presents itself - and, at the bottom and away from everything else,
 	/// the way out of a save. Wiping is the threshold's alone: offering to erase the save from
 	/// inside the vigil it is running would be a trapdoor in the middle of the floor.</summary>
-	public static readonly string[] SettingsWidgets = SettingsFor("Th", "ThWipe");
+	public static readonly string[] SettingsWidgets = SettingsFor("Th", WipeWidget);
+
+	/// <summary>Beginning again. The one control with a condition beyond which page it is on.
+	/// </summary>
+	public const string WipeWidget = "ThWipe";
 
 	/// <summary>The way back. On every page but the root, which is the page it goes to.</summary>
 	public const string BackWidget = "ThBack";
@@ -119,13 +123,27 @@ public static class Menu
 		_ => RootWidgets,
 	};
 
-	/// <summary>Whether a named control should be on screen right now.</summary>
+	/// <summary>
+	/// Whether a named control should be on screen right now.
+	/// </summary>
 	/// <remarks>
 	/// The single question the screen asks, once per control, every frame. Everything else here
 	/// exists to make this answer true without anybody maintaining a list of what to hide.
+	/// <para>
+	/// <paramref name="hasSave"/> is asked for rather than defaulted, because the one control it
+	/// governs is the one that erases a keeper's save. Wiping used to live on the front page and
+	/// was hidden outright for somebody with nothing to lose - moving it onto the settings page
+	/// put it back in front of a first-time player, offering to delete a save they had not made
+	/// yet. A default of "yes there is a save" would have hidden that from this check as neatly
+	/// as it hid it from me.
+	/// </para>
 	/// </remarks>
-	public static bool Shows(string widget)
+	public static bool Shows(string widget, bool hasSave)
 	{
+		if (widget == WipeWidget && !hasSave)
+		{
+			return false;
+		}
 		foreach (string always in Always)
 		{
 			if (always == widget)

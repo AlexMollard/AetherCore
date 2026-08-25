@@ -31,21 +31,34 @@ public static class TypeScale
 {
 	private static readonly List<Entity> s_elements = new();
 	private static readonly List<float> s_authored = new();
-	private static uint s_adopted;
 
-	/// <summary>Learn what everything under a canvas was authored at. Safe to call again for the
-	/// same canvas - it only does the walk once, because the second walk would be measuring its
-	/// own last result.</summary>
+	/// <summary>
+	/// Learn what everything under a canvas was authored at. Once per scene, from OnAttach.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Call it exactly once for a scene, and never again while that scene is up.</b> A second
+	/// walk would read sizes this has already scaled and record them as what somebody typed, so
+	/// the type would grow by the same factor every time - which is why it clears and re-walks
+	/// rather than trying to be clever about it.
+	/// </para>
+	/// <para>
+	/// It used to guard against that by remembering the canvas's ENTITY ID and skipping a repeat.
+	/// That is the same mistake an index into a satchel is: an id identifies a slot rather than a
+	/// thing, and slots are reused. Coming back to the threshold from a vigil whose canvas
+	/// happened to hold the same id, the walk was skipped, the list still held the vigil's dead
+	/// entities, and type size silently stopped working on the menu that sets it - on some
+	/// launches and not others, depending on what the allocator did.
+	/// </para>
+	/// </remarks>
 	public static void Adopt(Entity canvas)
 	{
-		if (!canvas.IsValid || s_adopted == canvas.Id)
-		{
-			return;
-		}
-		s_adopted = canvas.Id;
 		s_elements.Clear();
 		s_authored.Clear();
-		Walk(canvas);
+		if (canvas.IsValid)
+		{
+			Walk(canvas);
+		}
 	}
 
 	private static void Walk(Entity e)
@@ -76,12 +89,7 @@ public static class TypeScale
 		}
 	}
 
-	/// <summary>Forget a canvas, so the next scene adopts its own. Scene entities do not survive
-	/// a load, and a stale list is a list of invalid handles.</summary>
-	public static void Forget()
-	{
-		s_adopted = 0;
-		s_elements.Clear();
-		s_authored.Clear();
-	}
+	/// <summary>How many labels are being kept in step. Zero before any scene has been adopted,
+	/// which is the only thing outside here that can tell whether Adopt found anything.</summary>
+	public static int Count => s_elements.Count;
 }

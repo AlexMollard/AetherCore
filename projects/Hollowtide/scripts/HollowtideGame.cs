@@ -82,9 +82,8 @@ public sealed class HollowtideGame : EntityScript
 		BindMenu();
 
 		// The parish is a different scene from the threshold, so its authored labels are
-		// different entities and have to be adopted in their own right. Forget first: the list
-		// held from the threshold is a list of entities that no longer exist.
-		TypeScale.Forget();
+		// different entities and have to be adopted in their own right. Adopt clears what the
+		// threshold left behind, which is a list of entities that no longer exist.
 		TypeScale.Adopt(_canvas);
 		TypeScale.Apply(SaveSystem.TypeScale);
 

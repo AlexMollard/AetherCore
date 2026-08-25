@@ -124,7 +124,7 @@ public sealed class ThresholdScreen : EntityScript
 		if (!_focusSeeded)
 		{
 			_focusSeeded = true;
-			Ui.SetFocus(_play.Root);
+			ShowPage();
 		}
 
 		_presentation.Read();
@@ -216,7 +216,7 @@ public sealed class ThresholdScreen : EntityScript
 		{
 			if (pair.Value.IsValid)
 			{
-				pair.Value.SetActive(Menu.Shows(pair.Key));
+				pair.Value.SetActive(Menu.Shows(pair.Key, SaveSystem.HadSave));
 			}
 		}
 		_wipeArmed = false;
@@ -229,10 +229,6 @@ public sealed class ThresholdScreen : EntityScript
 			MenuPage.Settings => _back.Root,
 			_ => _play.Root,
 		});
-		if (SaveSystem.HadSave)
-		{
-			_wipe.SetActive(Menu.Page == MenuPage.Settings);
-		}
 	}
 
 	/// <summary>

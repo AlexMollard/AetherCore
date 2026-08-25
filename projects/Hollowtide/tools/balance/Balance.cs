@@ -3815,7 +3815,7 @@ internal static class Balance
 
 		Menu.Reset();
 		Check("the root has no way back, because it is where back goes",
-			!Menu.Shows(Menu.BackWidget) && !Menu.Back(), "back is the root's own page");
+			!Menu.Shows(Menu.BackWidget, true) && !Menu.Back(), "back is the root's own page");
 		foreach (MenuPage page in Menu.Pages)
 		{
 			if (page == MenuPage.Root)
@@ -3823,7 +3823,7 @@ internal static class Balance
 				continue;
 			}
 			Menu.Open(page);
-			Check("and " + page + " can be left", Menu.Shows(Menu.BackWidget) && Menu.Back()
+			Check("and " + page + " can be left", Menu.Shows(Menu.BackWidget, true) && Menu.Back()
 					&& Menu.Page == MenuPage.Root,
 				"back returns to the root");
 		}
@@ -3840,7 +3840,7 @@ internal static class Balance
 			}
 			foreach (string name in Menu.Widgets(page))
 			{
-				if (Menu.Shows(name))
+				if (Menu.Shows(name, true))
 				{
 					leaked++;
 					leakedWorst = name + " is still up on " + MenuPage.Settings;
@@ -3849,6 +3849,15 @@ internal static class Balance
 		}
 		Check("and opening one page takes the others down", leaked == 0,
 			leaked == 0 ? "nothing from another page survives" : leakedWorst);
+		Menu.Reset();
+
+		// A keeper with nothing to lose is never offered the chance to lose it. This moved when
+		// the wipe moved: hidden outright on the old front page, it came back onto a settings
+		// page that a first-time player can open, offering to delete a save they had not made.
+		Menu.Open(MenuPage.Settings);
+		Check("a first vigil is never offered the chance to erase itself",
+			!Menu.Shows(Menu.WipeWidget, hasSave: false) && Menu.Shows(Menu.WipeWidget, hasSave: true),
+			"the wipe needs a save to be about");
 		Menu.Reset();
 
 		// ── The vigil's menu, held to the same three properties. ────────────────────────
