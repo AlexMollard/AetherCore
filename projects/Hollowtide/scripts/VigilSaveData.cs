@@ -210,6 +210,14 @@ public static class VigilData
 		// Before the ward clamp below, and that order matters: the ward cap is itself a boon,
 		// so clamping first would confiscate the wards a Deeper Wards keeper was carrying.
 		CopyInto(save.Boons, Vigil.Boons);
+		// A boon LEVEL is read straight into the multipliers it drives - what dread pays, the
+		// ward cap, how fast fervour drains - so a file claiming level 999 does not give a
+		// keeper a very good boon, it gives them a parish whose arithmetic no longer means
+		// anything. Clamped per boon, because each has its own ceiling.
+		for (int i = 0; i < Vigil.Boons.Length && i < Content.Boons.Length; i++)
+		{
+			Vigil.Boons[i] = Math.Clamp(Vigil.Boons[i], 0, Content.Boons[i].MaxLevel);
+		}
 		Vigil.Wards = Math.Clamp(save.Wards, 0, Vigil.MaxWards);
 		Vigil.AftermathSeconds = Math.Max(0.0, save.Aftermath);
 		Vigil.PlayedSeconds = Math.Max(0.0, save.PlayedSeconds);
@@ -227,6 +235,15 @@ public static class VigilData
 		// an offering was added is then still a valid save, which is the difference between
 		// adding content and invalidating everybody.
 		CopyInto(save.Owned, Vigil.Owned);
+		// Never negative, and never past what the cost curve could ever have reached. A negative
+		// holding gives negative production and a negative price; an absurd one overflows both.
+		// The ceiling is far beyond anything buyable - growth of 1.13 per copy puts the price of
+		// the millionth past every number a double can hold - so it can only ever catch a file
+		// that is wrong, never a keeper who has played a long time.
+		for (int i = 0; i < Vigil.Owned.Length; i++)
+		{
+			Vigil.Owned[i] = Math.Clamp(Vigil.Owned[i], 0, MostOwnable);
+		}
 		CopyInto(save.Offerings, Vigil.OfferingsTaken);
 		// Clamped, because everything read off a file is: a hand-edited or corrupt value here
 		// would index the rite tables directly.
@@ -290,6 +307,21 @@ public static class VigilData
 	/// <summary>One relic off the wire, with its grade clamped to something that exists. A
 	/// grade out of range would index the name tables and the art shader with a number neither
 	/// was written for.</summary>
+	/// <summary>
+	/// The most copies of one rite a save may claim.
+	/// </summary>
+	/// <remarks>
+	/// Set by the FREE DOUBLINGS, not by the cost curve. The first attempt reasoned from the
+	/// price - growth of 1.13 per copy puts the millionth beyond any number a double holds, so a
+	/// million looked like a ceiling nobody could argue with. It is not the binding constraint:
+	/// production carries 2^(owned/25), which passes infinity at about twenty-five thousand
+	/// copies, so a save clamped to a million still produced an infinite rate and priced its
+	/// wards at infinity. Ten thousand leaves four hundred doublings - about 10^120 - with room
+	/// for every other multiplier in the game on top, and is still further than the cost curve
+	/// could carry anybody.
+	/// </remarks>
+	public const int MostOwnable = 10_000;
+
 	private static Relic ReadRelic(int seed, int grade) => new Relic
 	{
 		Seed = seed,

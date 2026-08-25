@@ -4657,6 +4657,71 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// A wrong file cannot make the parish's arithmetic meaningless.
+	/// </summary>
+	/// <remarks>
+	/// The two arrays read straight into the simulation are what a keeper HOLDS and what boons
+	/// they have. Neither was clamped: a negative holding gives negative production and a
+	/// negative price, and a boon level read past its own maximum drives multipliers - what
+	/// dread pays, the ward cap, how fast fervour drains - beyond anything the balance was ever
+	/// measured at. Everything else off a file was already clamped; these two were not, and they
+	/// are the two the whole economy is computed from.
+	/// </remarks>
+	private static void AWrongFileCannotBreakTheParish()
+	{
+		Console.WriteLine("A wrong file cannot break the parish");
+
+		Vigil.Reset();
+		VigilSave save = VigilData.Capture();
+
+		int[] wrongOwned = new int[Content.RiteCount];
+		int[] wrongBoons = new int[Content.Boons.Length];
+		for (int i = 0; i < wrongOwned.Length; i++)
+		{
+			wrongOwned[i] = i % 2 == 0 ? -50 : int.MaxValue;
+		}
+		for (int i = 0; i < wrongBoons.Length; i++)
+		{
+			wrongBoons[i] = i % 2 == 0 ? -7 : 999;
+		}
+		save.Owned = wrongOwned;
+		save.Boons = wrongBoons;
+		VigilData.Apply(save);
+
+		int badOwned = 0;
+		foreach (int owned in Vigil.Owned)
+		{
+			if (owned < 0 || owned > VigilData.MostOwnable)
+			{
+				badOwned++;
+			}
+		}
+		Check("nothing held is negative or beyond reach", badOwned == 0,
+			badOwned == 0 ? "every holding inside what the cost curve allows" : badOwned + " impossible");
+
+		int badBoons = 0;
+		for (int i = 0; i < Vigil.Boons.Length; i++)
+		{
+			if (Vigil.Boons[i] < 0 || Vigil.Boons[i] > Content.Boons[i].MaxLevel)
+			{
+				badBoons++;
+			}
+		}
+		Check("no boon is past its own ceiling", badBoons == 0,
+			badBoons == 0 ? "every level inside the ladder it was written for" : badBoons + " over");
+
+        // The point of the clamps: the numbers the game runs on stay numbers.
+		bool sane = !double.IsNaN(Vigil.Rate) && !double.IsInfinity(Vigil.Rate) && Vigil.Rate >= 0.0
+			&& !double.IsNaN(Vigil.DreadMultiplier) && Vigil.DreadMultiplier >= 1.0
+			&& Vigil.WardCost > 0.0 && !double.IsInfinity(Vigil.WardCost);
+		Check("and the parish still computes", sane,
+			sane ? Numbers.Rate(Vigil.Rate) + ", wards at " + Numbers.Short(Vigil.WardCost)
+				: "rate " + Vigil.Rate + ", wards " + Vigil.WardCost);
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4710,6 +4775,7 @@ internal static class Balance
 		NothingHereIsAssertedForShow();
 		AVisitorMeansTheSameHoweverItSpeaks();
 		TheSeedCounterCannotBeBrokenByAFile();
+		AWrongFileCannotBreakTheParish();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
