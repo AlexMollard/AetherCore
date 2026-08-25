@@ -340,6 +340,25 @@ MID = (0.5, 0.5)
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════
+# The settings rows, authored identically wherever they appear.
+#
+# There are two settings pages - the threshold's and the one over the vigil - because a setting
+# you can only reach from the title screen is a setting you cannot judge, and type size most of
+# all: the complaint it answers is about the parish's text, which the title screen has none of.
+# Two pages would be two chances to add a row to one and forget the other, so both are built
+# from here and the prefix is the only difference.
+def settings_rows(centred, prefix, top, group):
+    H = 26.0
+    centred(prefix + "WhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -100, top, 200, H)
+    centred(prefix + "WhisperToggle", [Scene.toggle(True), Scene.selectable(group)], 172, top, 56, H)
+    centred(prefix + "ShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, top + 44, 200, H)
+    centred(prefix + "ShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable(group)], 140, top + 44, 120, H)
+    # Type size. The complaint it answers - "the whole interface is too small" - used to need
+    # a rebuild AND the same number moved by hand in two languages.
+    centred(prefix + "TypeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, top + 88, 200, H)
+    centred(prefix + "TypeSlider", [Scene.slider(0.85, 1.75, 0.05, 1.30), Scene.selectable(group)], 140, top + 88, 120, H)
+
+
 # Threshold - entirely static, so all of it is authored.
 # ══════════════════════════════════════════════════════════════════════════════════════
 def threshold():
@@ -392,15 +411,7 @@ def threshold():
     centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, 56, FIELD_W, ROW_H)
 
     # ── Settings: one row each, control flush to the column's right edge. ──────────────
-    SET_H = 26.0
-    centred("ThWhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -100, -104, 200, SET_H)
-    centred("ThWhisperToggle", [Scene.toggle(True), Scene.selectable("threshold")], 172, -104, 56, SET_H)
-    centred("ThShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, -60, 200, SET_H)
-    centred("ThShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable("threshold")], 140, -60, 120, SET_H)
-    # Type size. The complaint it answers - "the whole interface is too small" - used to need
-    # a rebuild AND the same number moved by hand in two languages.
-    centred("ThTypeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, -16, 200, SET_H)
-    centred("ThTypeSlider", [Scene.slider(0.85, 1.75, 0.05, 1.30), Scene.selectable("threshold")], 140, -16, 120, SET_H)
+    settings_rows(centred, "Th", -104, "threshold")
 
     # Beginning again, at the bottom of the page a player has to go looking for rather than on
     # the front door. It asks twice before it does anything - there is no undo behind this
@@ -636,6 +647,33 @@ def vigil():
             Scene.box(34, y, 920, 26, (0.0, 1.0), (0.0, 1.0)),
             Scene.text("", WHISPER, 18.0, BONE_DIM),
         ])
+
+    # ── The vigil's own menu ────────────────────────────────────────────────────────
+    # Escape used to leave the parish outright: one press, no confirmation, straight back to
+    # the title screen. It saved first, so nothing was lost - but it is still the whole game
+    # closing on the key people press to mean "not this".
+    #
+    # It does NOT pause. The parish keeps working underneath and a visitation that arrives
+    # while this is open resolves as it would have. A menu that stopped the meter would be a
+    # button that suspends the game's one bargain while you think about it.
+    def vg(name, comps, x, y, w, h):
+        return s.add(name, canvas, [Scene.box(x, y, w, h, MID, CENTRE)] + comps)
+
+    # The veil dims the parish rather than hiding it: what the menu is over stays legible,
+    # which is the whole reason the settings are reachable from here.
+    s.add("VgMenuVeil", canvas, [
+        Scene.stretch((0, 0), (1, 1), (0, 0), (0, 0)),
+        Scene.image((VOID[0], VOID[1], VOID[2], 0.82), 0.0),
+    ])
+    vg("VgMenuTitle", [Scene.text("THE VIGIL STANDS", DISPLAY, 34.0, BONE, "center")], 0, -180, 900, 46)
+
+    MENU_W = 360.0
+    vg("VgResume", [Scene.button("RETURN TO IT", DISPLAY, 16.0, ROW, mix(ROW_HOT, ICHOR, 0.34), BONE, ICHOR), Scene.selectable("vigilmenu")], 0, -80, MENU_W, 50)
+    vg("VgSettings", [Scene.button("SETTINGS", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("vigilmenu")], 0, -24, MENU_W, 46)
+    vg("VgLeave", [Scene.button("LEAVE THE PARISH", DISPLAY, 15.0, ROW, mix(ROW_HOT, DREAD, 0.35), BONE_FAINT, DREAD), Scene.selectable("vigilmenu")], 0, 28, MENU_W, 46)
+
+    settings_rows(vg, "Vg", -80, "vigilmenu")
+    vg("VgBack", [Scene.button("BACK", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("vigilmenu")], 0, 60, 180, 40)
 
     # Flash last: an overlay drawn above everything, gated by its own sort order.
     s.add("VigilFlash", canvas, [

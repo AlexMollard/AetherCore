@@ -3851,11 +3851,82 @@ internal static class Balance
 			leaked == 0 ? "nothing from another page survives" : leakedWorst);
 		Menu.Reset();
 
+		// ── The vigil's menu, held to the same three properties. ────────────────────────
+		VigilMenu.Hide();
+		Check("the vigil's menu starts down", !VigilMenu.Showing
+				&& !VigilMenu.Shows("VgResume") && !VigilMenu.Shows(VigilMenu.BackWidget),
+			"nothing of it is on screen until asked for");
+
+		VigilMenu.Show();
+		Check("and comes up at its root", VigilMenu.Showing && VigilMenu.Page == MenuPage.Root
+				&& VigilMenu.Shows("VgResume") && !VigilMenu.Shows(VigilMenu.BackWidget),
+			"three choices and no way back, because back is out");
+
+		VigilMenu.Open(MenuPage.Settings);
+		int stranded = 0;
+		foreach (string name in VigilMenu.RootWidgets)
+		{
+			if (VigilMenu.Shows(name))
+			{
+				stranded++;
+			}
+		}
+		Check("and its settings page takes the root down", stranded == 0 && VigilMenu.Shows("VgTypeSlider"),
+			"one page at a time here too");
+
+		// One key, one meaning: out of a page to the root, out of the root to the parish.
+		Check("and one escape leaves a page, not the parish",
+			VigilMenu.Back() && VigilMenu.Showing && VigilMenu.Page == MenuPage.Root,
+			"back from settings is the menu, not the game");
+		Check("and the next one leaves the menu", VigilMenu.Back() && !VigilMenu.Showing,
+			"back from the root is the parish");
+		Check("and there is nothing to leave once it is closed", !VigilMenu.Back(),
+			"a closed menu swallows nothing");
+
+		// Both pages are built from one list, so a setting cannot exist on one and not the other.
+		int lopsided = 0;
+		string lopsidedWorst = "";
+		foreach (string control in Menu.SettingsControls)
+		{
+			bool onThreshold = false;
+			foreach (string name in Menu.SettingsWidgets)
+			{
+				onThreshold |= name == "Th" + control;
+			}
+			bool inVigil = false;
+			foreach (string name in VigilMenu.SettingsWidgets)
+			{
+				inVigil |= name == "Vg" + control;
+			}
+			if (!onThreshold || !inVigil)
+			{
+				lopsided++;
+				lopsidedWorst = control + (onThreshold ? " is missing from the vigil" : " is missing from the threshold");
+			}
+		}
+		Check("and every setting is on both pages", lopsided == 0,
+			lopsided == 0 ? Menu.SettingsControls.Length + " settings, twice over" : lopsidedWorst);
+
+		foreach (string name in VigilMenu.Always)
+		{
+			seen[name] = 1;
+		}
+		foreach (MenuPage page in Menu.Pages)
+		{
+			foreach (string name in VigilMenu.Widgets(page))
+			{
+				seen[name] = 1;
+			}
+		}
+		seen[VigilMenu.BackWidget] = 1;
+
 		// And the scene actually has them.
 		string scene = ProjectFile("scenes", "Threshold.scene.toml");
 		string text = scene.Length == 0 ? "" : File.ReadAllText(scene);
 		int missing = 0;
 		string missingWorst = "";
+		string vigilScene = ProjectFile("scenes", "Vigil.scene.toml");
+		text += vigilScene.Length == 0 ? "" : File.ReadAllText(vigilScene);
 		foreach (string name in seen.Keys)
 		{
 			if (!text.Contains("name = '" + name + "'", StringComparison.Ordinal))

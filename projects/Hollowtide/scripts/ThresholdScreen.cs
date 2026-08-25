@@ -29,13 +29,9 @@ public sealed class ThresholdScreen : EntityScript
 	private Entity _nameBox;
 	private Entity _addressBox;
 	private Entity _status;
-	private Entity _whisperToggle;
-	private Entity _shakeSlider;
-	private Entity _shakeLabel;
 	private Entity _standing;
 
-	private Entity _typeSlider;
-	private Entity _typeLabel;
+	private readonly VigilSettings _presentation = new();
 
 	private Button _play;
 	private Button _congregation;
@@ -76,11 +72,6 @@ public sealed class ThresholdScreen : EntityScript
 		_nameBox = Scene.Find("ThNameBox");
 		_addressBox = Scene.Find("ThAddressBox");
 		_status = Scene.Find("ThStatus");
-		_whisperToggle = Scene.Find("ThWhisperToggle");
-		_shakeSlider = Scene.Find("ThShakeSlider");
-		_shakeLabel = Scene.Find("ThShakeLabel");
-		_typeSlider = Scene.Find("ThTypeSlider");
-		_typeLabel = Scene.Find("ThTypeLabel");
 		_play = Button.Find("ThPlay");
 		_congregation = Button.Find("ThCongregation");
 		_settings = Button.Find("ThSettings");
@@ -105,9 +96,7 @@ public sealed class ThresholdScreen : EntityScript
 
 		Ui.SetTextBoxText(_nameBox, Vigil.KeeperName);
 		ShowStanding();
-		Ui.SetToggle(_whisperToggle, SaveSystem.ShowWhispers);
-		Ui.SetSliderValue(_shakeSlider, SaveSystem.DreadShake);
-		Ui.SetSliderValue(_typeSlider, SaveSystem.TypeScale);
+		_presentation.Bind("Th");
 		TypeScale.Adopt(_canvas);
 		TypeScale.Apply(SaveSystem.TypeScale);
 		ShowPage();
@@ -138,7 +127,7 @@ public sealed class ThresholdScreen : EntityScript
 			Ui.SetFocus(_play.Root);
 		}
 
-		ReadSettings();
+		_presentation.Read();
 		ReadWipe(deltaTime);
 
 		if (_joinTarget.Length > 0)
@@ -333,34 +322,6 @@ public sealed class ThresholdScreen : EntityScript
 		Ui.SetTextBoxText(_nameBox, Vigil.KeeperName);
 		ShowStanding();
 		SetStatus("The ledger is blank. Whoever you were, the parish has forgotten.", Palette.Dread);
-	}
-
-	/// <summary>Settings are persisted the moment they change rather than on the way out, so a
-	/// player who alt-F4s off this screen keeps what they just set.</summary>
-	private void ReadSettings()
-	{
-		if (Ui.WasChanged(_whisperToggle))
-		{
-			SaveSystem.ShowWhispers = Ui.GetToggle(_whisperToggle);
-			SaveSystem.Save();
-		}
-		if (Ui.WasChanged(_shakeSlider))
-		{
-			SaveSystem.DreadShake = Ui.GetSliderValue(_shakeSlider);
-			SaveSystem.Save();
-		}
-		Ui.SetText(_shakeLabel, "UNSTEADINESS " + Numbers.Percent(SaveSystem.DreadShake / 1.5f));
-
-		if (Ui.WasChanged(_typeSlider))
-		{
-			SaveSystem.TypeScale = Ui.GetSliderValue(_typeSlider);
-			// Applied on the spot rather than on the way out. Type size is the one setting whose
-			// effect IS the thing being looked at while it is chosen - a slider that only takes
-			// effect on the next launch cannot be judged at all.
-			TypeScale.Apply(SaveSystem.TypeScale);
-			SaveSystem.Save();
-		}
-		Ui.SetText(_typeLabel, "TYPE SIZE " + Numbers.Percent(SaveSystem.TypeScale / Typography.Authored));
 	}
 
 	private void CommitName()

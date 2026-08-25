@@ -2981,6 +2981,346 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgMenuVeil'
+node = -636416851047421454
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 1, 1 ]
+    anchor_min = [ 0, 0 ]
+    offset_max = [ 0, 0 ]
+    offset_min = [ 0, 0 ]
+    pivot = [ 0, 0 ]
+
+    [entities.ui_image]
+    color = [ 0.02, 0.024, 0.03, 0.82 ]
+    corner_radius = 0
+    pixel_art = false
+    texture = ''
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgMenuTitle'
+node = -7638362106643000696
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 450, -157 ]
+    offset_min = [ -450, -203 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.855, 0.851, 0.816, 1 ]
+    font = 'PixelStorm'
+    h_align = 'center'
+    pixel_size = 44.2
+    text = 'THE VIGIL STANDS'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgResume'
+node = 8611356940819617219
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 180, -55 ]
+    offset_min = [ -180, -105 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.2369, 0.3864, 0.3361, 0.9736 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'RETURN TO IT'
+    pixel_size = 20.8
+    text_color = [ 0.855, 0.851, 0.816, 1 ]
+    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgSettings'
+node = 6264342211487188986
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 180, -1 ]
+    offset_min = [ -180, -47 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'SETTINGS'
+    pixel_size = 19.5
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgLeave'
+node = 5798541243356210308
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 180, 51 ]
+    offset_min = [ -180, 5 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.3283, 0.1877, 0.181, 0.974 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'LEAVE THE PARISH'
+    pixel_size = 19.5
+    text_color = [ 0.29, 0.302, 0.322, 1 ]
+    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgWhisperLabel'
+node = 9000222511248913861
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 0, -67 ]
+    offset_min = [ -200, -93 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 19.5
+    text = 'SHOW WHISPERS'
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgWhisperToggle'
+node = -7725918366221330315
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, -67 ]
+    offset_min = [ 144, -93 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_toggle]
+    corner_radius = 13
+    knob_color = [ 0.855, 0.851, 0.816, 1 ]
+    knob_radius = 10
+    on = true
+    on_color = [ 0.22, 0.45, 0.36, 1 ]
+    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgShakeLabel'
+node = 8073510538884399299
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 0, -23 ]
+    offset_min = [ -200, -49 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 19.5
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgShakeSlider'
+node = -541949036875245575
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, -23 ]
+    offset_min = [ 80, -49 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_slider]
+    corner_radius = 4
+    fill_color = [ 0.706, 0.267, 0.22, 1 ]
+    handle_color = [ 0.855, 0.851, 0.816, 1 ]
+    handle_radius = 8
+    max = 1.5
+    min = 0
+    step = 0.1
+    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    value = 1
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgTypeLabel'
+node = 3914343152742946642
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 0, 21 ]
+    offset_min = [ -200, -5 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_text]
+    color = [ 0.29, 0.302, 0.322, 1 ]
+    font = 'PixelStorm'
+    h_align = 'left'
+    pixel_size = 19.5
+    text = ''
+    v_align = 'middle'
+    wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgTypeSlider'
+node = 977814604604099653
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 200, 21 ]
+    offset_min = [ 80, -5 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_slider]
+    corner_radius = 4
+    fill_color = [ 0.706, 0.267, 0.22, 1 ]
+    handle_color = [ 0.855, 0.851, 0.816, 1 ]
+    handle_radius = 8
+    max = 1.75
+    min = 0.85
+    step = 0.05
+    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    value = 1.3
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'VgBack'
+node = -8477020850953353267
+parent = 2
+parent_node = -496166502187134547
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.5, 0.5 ]
+    anchor_min = [ 0.5, 0.5 ]
+    offset_max = [ 90, 80 ]
+    offset_min = [ -90, 40 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_button]
+    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
+    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    corner_radius = 4
+    font = 'PixelStorm'
+    h_align = 'center'
+    label = 'BACK'
+    pixel_size = 19.5
+    text_color = [ 0.502, 0.51, 0.522, 1 ]
+    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    v_align = 'middle'
+
+    [entities.ui_selectable]
+    group = 'vigilmenu'
+    interactable = true
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'VigilFlash'
 node = 6749942476653571843
 parent = 2

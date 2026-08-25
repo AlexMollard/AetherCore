@@ -39,7 +39,8 @@ scripts/Content.cs         rites, offerings, marks, boons, visitors, the parish'
 scripts/VigilSaveData.cs   what a save contains and how it is applied (engine-free)
 scripts/SaveSystem.cs      reading and writing the file
 scripts/Layout.cs          where things stand in the parish, as pure arithmetic (engine-free)
-scripts/Menu.cs            which control lives on which page of the threshold (engine-free)
+scripts/Menu.cs            which control lives on which page, on both menus (engine-free)
+scripts/VigilSettings.cs   the three presentation settings, bound wherever they are shown
 scripts/TypeScale.cs       re-sizes every authored label when the type size changes
 scripts/Transcript.cs      everything the parish has said, as a ring (engine-free)
 scripts/Typography.cs      how big the type is - one number (engine-free)
@@ -92,7 +93,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **302 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **309 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:

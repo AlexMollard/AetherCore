@@ -34,6 +34,19 @@ public sealed class HollowtideGame : EntityScript
 	private readonly Parish _parish = new Parish();
 	private readonly Whispers _whispers = new Whispers();
 
+	/// <summary>The three presentation settings, shared with the threshold so a setting cannot
+	/// be added to one page and forgotten on the other.</summary>
+	private readonly VigilSettings _presentation = new VigilSettings();
+
+	private Button _menuResume;
+	private Button _menuSettings;
+	private Button _menuLeave;
+	private Button _menuBack;
+
+	/// <summary>Every control the vigil's menu knows about, kept beside its name so showing a
+	/// page is one loop rather than a dozen calls that have to stay in agreement.</summary>
+	private readonly System.Collections.Generic.Dictionary<string, Entity> _menuWidgets = new();
+
 	private Entity _canvas;
 	private Entity _gloom;
 	private Entity _flash;
@@ -65,6 +78,7 @@ public sealed class HollowtideGame : EntityScript
 		_whispers.Bind();
 		_parish.Bind();
 		BindOfflinePanel();
+		BindMenu();
 
 		// The parish is a different scene from the threshold, so its authored labels are
 		// different entities and have to be adopted in their own right. Forget first: the list
@@ -127,7 +141,19 @@ public sealed class HollowtideGame : EntityScript
 
 		if (!modal)
 		{
+			// The vigil is TICKED whether or not its menu is up. That is the point of it: the
+			// parish keeps working, the meter keeps climbing, and a visitation that arrives while
+			// somebody is reading the settings resolves exactly as it would have. A menu that
+			// stopped the clock would be a button that suspends the game's one bargain.
+			//
+			// What the menu does stop is ACTING. The HUD and the ledger are not drawn either,
+			// because the only way to stop a click reaching a button underneath is not to read
+			// that button - and behind a veil at four fifths black there is nothing legible left
+			// to go stale.
 			Vigil.Tick(deltaTime);
+		}
+		if (!modal && !VigilMenu.Showing)
+		{
 			_hud.Update(unscaled, connected, keepers);
 			_ledger.Update();
 			Hotkeys();
@@ -308,13 +334,109 @@ public sealed class HollowtideGame : EntityScript
 		_whispers.Say("You ring the bell. Only the parish hears it.", Omen.Plain);
 	}
 
-	/// <summary>Escape leaves: out of a session first, and out of the vigil after that.</summary>
+	/// <summary>
+	/// Escape opens the vigil's menu, and the menu is where leaving lives.
+	/// </summary>
+	/// <remarks>
+	/// It used to leave outright: one press of a key people use to mean "not this", and the game
+	/// closed. Nothing was lost - it saved first - but a parish somebody has kept for a week
+	/// should not be one keystroke from gone, and there was nowhere else to put the settings that
+	/// have to be judged against the parish's own text.
+	/// </remarks>
 	private void Leaving()
 	{
-		if (!Input.IsKeyPressed(Key.Escape) || Ui.HasFocus)
+		if (Input.IsKeyPressed(Key.Escape) && !Ui.HasFocus)
+		{
+			if (!VigilMenu.Showing)
+			{
+				VigilMenu.Show();
+			}
+			else
+			{
+				VigilMenu.Back();
+			}
+			ShowMenu();
+			return;
+		}
+
+		if (!VigilMenu.Showing)
 		{
 			return;
 		}
+		_presentation.Read();
+
+		if (_menuBack.Activated && VigilMenu.Back())
+		{
+			ShowMenu();
+		}
+		else if (VigilMenu.Page == MenuPage.Settings)
+		{
+			return;
+		}
+		else if (_menuResume.Activated)
+		{
+			VigilMenu.Hide();
+			ShowMenu();
+		}
+		else if (_menuSettings.Activated && VigilMenu.Open(MenuPage.Settings))
+		{
+			ShowMenu();
+		}
+		else if (_menuLeave.Activated)
+		{
+			LeaveTheParish();
+		}
+	}
+
+	/// <summary>Find the menu's controls by the names the model uses, so one it names and the
+	/// scene never authors is an invalid entity here rather than a control that never appears.
+	/// </summary>
+	private void BindMenu()
+	{
+		_menuResume = Button.Find("VgResume");
+		_menuSettings = Button.Find("VgSettings");
+		_menuLeave = Button.Find("VgLeave");
+		_menuBack = Button.Find("VgBack");
+
+		VigilMenu.Hide();
+		foreach (string name in VigilMenu.Always)
+		{
+			_menuWidgets[name] = Scene.Find(name);
+		}
+		foreach (MenuPage page in Menu.Pages)
+		{
+			foreach (string name in VigilMenu.Widgets(page))
+			{
+				_menuWidgets[name] = Scene.Find(name);
+			}
+		}
+		_menuWidgets[VigilMenu.BackWidget] = _menuBack.Root;
+		_presentation.Bind("Vg");
+		ShowMenu();
+	}
+
+	/// <summary>Put the vigil's menu where the model says it is. The same one loop over one
+	/// table the threshold uses, for the same reason.</summary>
+	private void ShowMenu()
+	{
+		foreach (System.Collections.Generic.KeyValuePair<string, Entity> pair in _menuWidgets)
+		{
+			if (pair.Value.IsValid)
+			{
+				pair.Value.SetActive(VigilMenu.Shows(pair.Key));
+			}
+		}
+		if (!VigilMenu.Showing)
+		{
+			Ui.ClearFocus();
+			return;
+		}
+		Ui.SetFocus(VigilMenu.Page == MenuPage.Settings ? _menuBack.Root : _menuResume.Root);
+	}
+
+	private void LeaveTheParish()
+	{
+		VigilMenu.Hide();
 		SaveSystem.Save();
 		if (Net.IsConnected)
 		{
