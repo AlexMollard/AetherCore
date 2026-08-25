@@ -38,6 +38,7 @@ public sealed class HollowtideGame : EntityScript
 	/// be added to one page and forgotten on the other.</summary>
 	private readonly VigilSettings _presentation = new VigilSettings();
 
+	private Entity _menuVeil;
 	private Button _menuResume;
 	private Button _menuSettings;
 	private Button _menuLeave;
@@ -411,6 +412,7 @@ public sealed class HollowtideGame : EntityScript
 			}
 		}
 		_menuWidgets[VigilMenu.BackWidget] = _menuBack.Root;
+		_menuVeil = Scene.Find("VgMenuVeil");
 		_presentation.Bind("Vg");
 		ShowMenu();
 	}
@@ -431,7 +433,9 @@ public sealed class HollowtideGame : EntityScript
 			Ui.ClearFocus();
 			return;
 		}
-		Ui.SetFocus(VigilMenu.Page == MenuPage.Settings ? _menuBack.Root : _menuResume.Root);
+		bool judging = VigilMenu.Page == MenuPage.Settings;
+		Ui.SetImageColor(_menuVeil, judging ? Palette.VeilLight : Palette.Veil);
+		Ui.SetFocus(judging ? _menuBack.Root : _menuResume.Root);
 	}
 
 	private void LeaveTheParish()

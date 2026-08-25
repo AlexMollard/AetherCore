@@ -105,6 +105,27 @@ public static class Palette
 	/// one quantity in two colours is the failure this whole file exists to prevent.</summary>
 	public static Vector4 DreadHot => Hex(0xF06B4D);
 
+	/// <summary>
+	/// The veil the vigil's menu lays over the parish, at its two weights.
+	/// </summary>
+	/// <remarks>
+	/// Heavy on the root, where the only thing behind it is a HUD and a ledger that have stopped
+	/// being read - the engine has no way to draw a control without also letting it be clicked,
+	/// so a menu that cannot be clicked through is a menu whose surroundings are frozen, and
+	/// frozen figures are better unreadable than wrong.
+	/// <para>
+	/// LIGHT on the settings page, because that page exists to be judged against the thing behind
+	/// it. Type size is applied to the labels themselves rather than redrawn by the panels that
+	/// own them, so a frozen ledger still shows its new size - it just has to be visible. A
+	/// settings page that hides the interface it is resizing is the same fault as a type-size
+	/// slider that only takes effect on the next launch.
+	/// </para>
+	/// </remarks>
+	public static Vector4 Veil => Fade(Ink, 0.82f);
+
+	/// <inheritdoc cref="Veil"/>
+	public static Vector4 VeilLight => Fade(Ink, 0.45f);
+
 	/// <summary>Something being taken. Between the dread accent and the text ramp, because a
 	/// line saying the parish lost something has to be legible as well as alarming - it was its
 	/// own raw literal, close to DreadHot without being it, for no reason either could state

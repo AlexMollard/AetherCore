@@ -26,14 +26,68 @@ import sys
 
 import hashlib
 import io
+import os
+import re
 import sys
 
-# ── Palette (mirrors scripts/Palette.cs) ────────────────────────────────────────────
-VOID = (0.020, 0.024, 0.030, 1.000)
-PANEL = (0.043, 0.050, 0.060, 0.941)
-PANEL_DEEP = (0.027, 0.032, 0.040, 0.960)
-ROW = (0.075, 0.086, 0.101, 0.900)
-ROW_HOT = (0.125, 0.145, 0.160, 0.960)
+PALETTE_CS = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "Palette.cs")
+
+# ── Palette ─────────────────────────────────────────────────────────────────────────
+#
+# READ from scripts/Palette.cs, not mirrored from it. It used to be a hand-copied block under a
+# comment saying "mirrors scripts/Palette.cs", and it had stopped: seven of its colours differed
+# from the ones the same names have in C#, and BONE - the colour most of the authored text is
+# drawn in - was a warm near-white against a cool mid-grey, left behind when the C# ramp was
+# reworked to move text off the surface steps. So every label this file authored was a different
+# colour from every label the game builds at runtime, both of them claiming the same name.
+#
+# Nothing here can drift now, because there is only one set of numbers. The derived colours are
+# computed by the same two operations Palette.cs uses, spelled out below.
+def _palette():
+    text = io.open(PALETTE_CS, encoding="utf-8").read()
+    base = {}
+    for name, digits in re.findall(r"Vector4 (\w+) = Hex\(0x([0-9A-Fa-f]{6})\)", text):
+        base[name] = tuple(int(digits[i:i + 2], 16) / 255.0 for i in (0, 2, 4)) + (1.0,)
+    missing = [n for n in ("Ink", "Pitch", "Slate", "Stone", "Ash", "Bone", "Pale", "Chalk",
+                           "Ichor", "IchorDim", "Dread", "DreadDeep", "Sigil") if n not in base]
+    if missing:
+        raise SystemExit("Palette.cs is missing " + ", ".join(missing) + " - has the ramp been renamed?")
+    return base
+
+
+def fade(c, a):
+    return (c[0], c[1], c[2], a)
+
+
+def mix(a, b, t):
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(4))
+
+
+P = _palette()
+
+# The ramp, under the names this file already used for them.
+VOID = P["Ink"]
+CLEAR = (0.0, 0.0, 0.0, 0.0)
+
+# Panels and rows, at the same weights Palette.cs fades them to.
+PANEL = fade(P["Slate"], 0.94)
+PANEL_DEEP = fade(P["Pitch"], 0.96)
+ROW = fade(P["Stone"], 0.90)
+ROW_HOT = fade(mix(P["Stone"], P["Ash"], 0.55), 0.97)
+
+# Text. These are Palette.TextBright / TextBody / TextDim, which is what the authored labels are
+# actually for - the old numbers here were the ramp's own steps, from before text was moved off
+# the surface colours because a row highlight and the faintest text were the same grey.
+BONE = P["Chalk"]
+BONE_DIM = P["Pale"]
+BONE_FAINT = mix(P["Bone"], P["Pale"], 0.55)
+
+ICHOR = P["Ichor"]
+ICHOR_DIM = P["IchorDim"]
+DREAD = P["Dread"]
+DREAD_DEEP = P["DreadDeep"]
+SIGIL = P["Sigil"]
 
 # Every authored face is multiplied by this. One number, because the complaint was about the
 # interface as a whole rather than any one label: at a short window the whole thing read small.
@@ -45,15 +99,6 @@ ROW_HOT = (0.125, 0.145, 0.160, 0.960)
 # read a C# constant, so the two have to be moved together - move both or neither, or half the
 # interface grows and half stays where it was.
 TYPE = 1.30
-BONE = (0.855, 0.851, 0.816, 1.0)
-BONE_DIM = (0.502, 0.510, 0.522, 1.0)
-BONE_FAINT = (0.290, 0.302, 0.322, 1.0)
-ICHOR = (0.454, 0.855, 0.678, 1.0)
-ICHOR_DIM = (0.220, 0.450, 0.360, 1.0)
-DREAD = (0.706, 0.267, 0.220, 1.0)
-DREAD_DEEP = (0.380, 0.110, 0.110, 1.0)
-SIGIL = (0.741, 0.639, 0.925, 1.0)
-CLEAR = (0.0, 0.0, 0.0, 0.0)
 
 BODY = "Roboto-Regular"
 WHISPER = "IBMPlexMono-Italic"
@@ -663,6 +708,8 @@ def vigil():
     # which is the whole reason the settings are reachable from here.
     s.add("VgMenuVeil", canvas, [
         Scene.stretch((0, 0), (1, 1), (0, 0), (0, 0)),
+        # Authored dark; the script sets the exact weight per page, because the settings page
+        # has to be judged against what is behind it and the root page does not.
         Scene.image((VOID[0], VOID[1], VOID[2], 0.82), 0.0),
     ])
     vg("VgMenuTitle", [Scene.text("THE VIGIL STANDS", DISPLAY, 34.0, BONE, "center")], 0, -180, 900, 46)
@@ -733,10 +780,6 @@ scale = [ 1.0, 1.0, 1.0 ]
         + spawns
     )
     return splice(body, prologue, 8)
-
-
-def mix(a, b, t):
-    return tuple(a[i] + (b[i] - a[i]) * t for i in range(4))
 
 
 def splice(body, prologue, placeholder_count):

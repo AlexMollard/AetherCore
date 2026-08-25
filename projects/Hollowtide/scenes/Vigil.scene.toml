@@ -130,8 +130,8 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_effect]
     background = true
-    color0 = [ 0.02, 0.024, 0.03, 1 ]
-    color1 = [ 0.38, 0.11, 0.11, 1 ]
+    color0 = [ 0.02745, 0.03137, 0.04314, 1 ]
+    color1 = [ 0.3529, 0.1137, 0.1059, 1 ]
     shader = 'ui_gloom'
     sort_order = -10
 
@@ -175,7 +175,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 0
     pixel_art = false
     texture = ''
@@ -197,7 +197,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 28.6
@@ -222,7 +222,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.454, 0.855, 0.678, 1 ]
+    color = [ 0.2902, 0.8706, 0.6039, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 52
@@ -247,7 +247,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 19.5
@@ -272,7 +272,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.706, 0.267, 0.22, 1 ]
+    color = [ 0.698, 0.2706, 0.2275, 1 ]
     font = 'Roboto-Regular'
     h_align = 'right'
     pixel_size = 20.8
@@ -297,7 +297,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -322,7 +322,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 23.4
@@ -347,7 +347,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.741, 0.639, 0.925, 1 ]
+    color = [ 0.6039, 0.5255, 0.8392, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 23.4
@@ -379,7 +379,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_progress_bar]
     corner_radius = 6
-    fill_color = [ 0.706, 0.267, 0.22, 1 ]
+    fill_color = [ 0.698, 0.2706, 0.2275, 1 ]
     track_color = [ 0.086, 0.075, 0.078, 1 ]
     value = 0
 
@@ -400,7 +400,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 1, 0 ]
 
     [entities.ui_text]
-    color = [ 0.741, 0.639, 0.925, 1 ]
+    color = [ 0.6039, 0.5255, 0.8392, 1 ]
     font = 'Roboto-Regular'
     h_align = 'right'
     pixel_size = 23.4
@@ -453,8 +453,8 @@ scale = [ 1.0, 1.0, 1.0 ]
     texture = ''
 
     [entities.ui_material]
-    color0 = [ 0.454, 0.855, 0.678, 1 ]
-    color1 = [ 0.706, 0.267, 0.22, 1 ]
+    color0 = [ 0.2902, 0.8706, 0.6039, 1 ]
+    color1 = [ 0.698, 0.2706, 0.2275, 1 ]
     shader = 'ui_sigil'
 
     [entities.ui_selectable]
@@ -478,7 +478,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'PixelStorm'
     h_align = 'center'
     pixel_size = 22.1
@@ -503,7 +503,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'center'
     pixel_size = 22.1
@@ -535,7 +535,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_progress_bar]
     corner_radius = 6
-    fill_color = [ 0.454, 0.855, 0.678, 1 ]
+    fill_color = [ 0.2902, 0.8706, 0.6039, 1 ]
     track_color = [ 0.086, 0.075, 0.078, 1 ]
     value = 0
 
@@ -556,15 +556,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.4446, 0.2121, 0.193, 0.982 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.468, 0.2437, 0.2432, 0.9865 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'STOKE THE DARK'
     pixel_size = 20.8
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -588,15 +588,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.2402, 0.3935, 0.3413, 0.974 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.223, 0.4417, 0.382, 0.9805 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RAISE WARD'
     pixel_size = 20.8
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -620,15 +620,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.3714, 0.3426, 0.466, 0.976 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.3537, 0.3367, 0.4932, 0.982 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RING THE BELL'
     pixel_size = 20.8
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -652,7 +652,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 8
     pixel_art = false
     texture = ''
@@ -674,7 +674,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.706, 0.267, 0.22, 1 ]
+    color = [ 0.698, 0.2706, 0.2275, 1 ]
     font = 'PixelStorm'
     h_align = 'center'
     pixel_size = 31.2
@@ -699,7 +699,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'Roboto-Regular'
     h_align = 'center'
     pixel_size = 20.8
@@ -724,7 +724,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'Roboto-Regular'
     h_align = 'center'
     pixel_size = 19.5
@@ -749,15 +749,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.3574, 0.1938, 0.184, 0.976 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.3913, 0.2347, 0.2485, 0.982 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'WARD IT'
     pixel_size = 19.5
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -781,15 +781,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.3574, 0.1938, 0.184, 0.976 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.3913, 0.2347, 0.2485, 0.982 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'OFFER'
     pixel_size = 19.5
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -813,15 +813,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.3574, 0.1938, 0.184, 0.976 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.3913, 0.2347, 0.2485, 0.982 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'THE BELL'
     pixel_size = 19.5
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -845,15 +845,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.3574, 0.1938, 0.184, 0.976 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.3913, 0.2347, 0.2485, 0.982 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'STAND STILL'
     pixel_size = 19.5
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -877,7 +877,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 1 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 8
     pixel_art = false
     texture = ''
@@ -899,14 +899,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.02, 0.024, 0.03, 1 ]
+    color = [ 0.02745, 0.03137, 0.04314, 1 ]
     corner_radius = 0
     pixel_art = false
     texture = ''
 
     [entities.ui_material]
-    color0 = [ 0.454, 0.855, 0.678, 1 ]
-    color1 = [ 0.706, 0.267, 0.22, 1 ]
+    color0 = [ 0.2902, 0.8706, 0.6039, 1 ]
+    color1 = [ 0.698, 0.2706, 0.2275, 1 ]
     shader = 'ui_relic'
 
 [[entities]]
@@ -926,7 +926,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.454, 0.855, 0.678, 1 ]
+    color = [ 0.2902, 0.8706, 0.6039, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 19.5
@@ -951,7 +951,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 27.3
@@ -976,7 +976,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 19.5
@@ -1001,7 +1001,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 8
     pixel_art = false
     texture = ''
@@ -1023,14 +1023,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.02, 0.024, 0.03, 1 ]
+    color = [ 0.02745, 0.03137, 0.04314, 1 ]
     corner_radius = 0
     pixel_art = false
     texture = ''
 
     [entities.ui_material]
-    color0 = [ 0.454, 0.855, 0.678, 1 ]
-    color1 = [ 0.706, 0.267, 0.22, 1 ]
+    color0 = [ 0.2902, 0.8706, 0.6039, 1 ]
+    color1 = [ 0.698, 0.2706, 0.2275, 1 ]
     shader = 'ui_relic'
 
 [[entities]]
@@ -1050,7 +1050,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 26
@@ -1075,7 +1075,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.454, 0.855, 0.678, 1 ]
+    color = [ 0.2902, 0.8706, 0.6039, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 19.5
@@ -1100,7 +1100,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.075, 0.086, 0.101, 0.9 ]
+    color = [ 0.1373, 0.1569, 0.2, 0.9 ]
     corner_radius = 0
     pixel_art = false
     texture = ''
@@ -1122,7 +1122,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 16.9
@@ -1147,7 +1147,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1172,7 +1172,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1197,7 +1197,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1222,7 +1222,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1247,7 +1247,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1272,7 +1272,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 18.2
@@ -1297,7 +1297,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 19.5
@@ -1322,7 +1322,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.043, 0.05, 0.06, 0.941 ]
+    color = [ 0.08235, 0.09412, 0.1216, 0.94 ]
     corner_radius = 0
     pixel_art = false
     texture = ''
@@ -1344,7 +1344,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 27.3
@@ -1369,15 +1369,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RITES'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1401,15 +1401,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'OFFERINGS'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1433,15 +1433,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'COMMUNION'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1465,15 +1465,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'MARKS'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1497,15 +1497,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RELICS'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1529,15 +1529,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'VOICES'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1561,15 +1561,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'WEAR THE BEST THREE'
     pixel_size = 19.5
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1593,15 +1593,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'x1'
     pixel_size = 20.8
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1625,15 +1625,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'x10'
     pixel_size = 20.8
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1657,15 +1657,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'x100'
     pixel_size = 20.8
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1689,15 +1689,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'MAX'
     pixel_size = 20.8
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1747,7 +1747,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.043, 0.05, 0.06, 0.941 ]
+    color = [ 0.08235, 0.09412, 0.1216, 0.94 ]
     corner_radius = 4
     pixel_art = false
     texture = ''
@@ -1769,7 +1769,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 20.8
@@ -1794,7 +1794,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.075, 0.086, 0.101, 0.9 ]
+    color = [ 0.1373, 0.1569, 0.2, 0.9 ]
     corner_radius = 4
     pixel_art = false
     texture = ''
@@ -1816,7 +1816,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1841,7 +1841,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'Roboto-Regular'
     h_align = 'right'
     pixel_size = 19.5
@@ -1866,7 +1866,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -1891,7 +1891,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -1913,7 +1913,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.706, 0.267, 0.22, 1 ]
+    color = [ 0.698, 0.2706, 0.2275, 1 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -1935,15 +1935,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.2402, 0.3935, 0.3413, 0.974 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.223, 0.4417, 0.382, 0.9805 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1967,15 +1967,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.3865, 0.1999, 0.187, 0.978 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.4169, 0.2377, 0.2468, 0.9835 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.698, 0.2706, 0.2275, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -1999,15 +1999,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.2075, 0.3427, 0.3308, 0.976 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RELIC'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2031,7 +2031,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.075, 0.086, 0.101, 0.9 ]
+    color = [ 0.1373, 0.1569, 0.2, 0.9 ]
     corner_radius = 4
     pixel_art = false
     texture = ''
@@ -2053,7 +2053,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -2078,7 +2078,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'Roboto-Regular'
     h_align = 'right'
     pixel_size = 19.5
@@ -2103,7 +2103,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -2128,7 +2128,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -2150,7 +2150,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.706, 0.267, 0.22, 1 ]
+    color = [ 0.698, 0.2706, 0.2275, 1 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -2172,15 +2172,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.2402, 0.3935, 0.3413, 0.974 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.223, 0.4417, 0.382, 0.9805 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2204,15 +2204,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.3865, 0.1999, 0.187, 0.978 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.4169, 0.2377, 0.2468, 0.9835 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.698, 0.2706, 0.2275, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2236,15 +2236,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.2075, 0.3427, 0.3308, 0.976 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RELIC'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2268,7 +2268,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.075, 0.086, 0.101, 0.9 ]
+    color = [ 0.1373, 0.1569, 0.2, 0.9 ]
     corner_radius = 4
     pixel_art = false
     texture = ''
@@ -2290,7 +2290,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -2315,7 +2315,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'Roboto-Regular'
     h_align = 'right'
     pixel_size = 19.5
@@ -2340,7 +2340,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -2365,7 +2365,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -2387,7 +2387,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.706, 0.267, 0.22, 1 ]
+    color = [ 0.698, 0.2706, 0.2275, 1 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -2409,15 +2409,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.2402, 0.3935, 0.3413, 0.974 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.223, 0.4417, 0.382, 0.9805 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2441,15 +2441,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.3865, 0.1999, 0.187, 0.978 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.4169, 0.2377, 0.2468, 0.9835 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.698, 0.2706, 0.2275, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2473,15 +2473,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.2075, 0.3427, 0.3308, 0.976 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RELIC'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2505,7 +2505,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.075, 0.086, 0.101, 0.9 ]
+    color = [ 0.1373, 0.1569, 0.2, 0.9 ]
     corner_radius = 4
     pixel_art = false
     texture = ''
@@ -2527,7 +2527,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -2552,7 +2552,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'Roboto-Regular'
     h_align = 'right'
     pixel_size = 19.5
@@ -2577,7 +2577,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.22, 0.45, 0.36, 1 ]
+    color = [ 0.1216, 0.4196, 0.298, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 20.8
@@ -2602,7 +2602,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -2624,7 +2624,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.706, 0.267, 0.22, 1 ]
+    color = [ 0.698, 0.2706, 0.2275, 1 ]
     corner_radius = 3
     pixel_art = false
     texture = ''
@@ -2646,15 +2646,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.2402, 0.3935, 0.3413, 0.974 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.223, 0.4417, 0.382, 0.9805 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TITHE'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2678,15 +2678,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.3865, 0.1999, 0.187, 0.978 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.4169, 0.2377, 0.2468, 0.9835 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SHUNT'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.698, 0.2706, 0.2275, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2710,15 +2710,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.027, 0.032, 0.04, 0.96 ]
-    bg_color_focused = [ 0.1908, 0.287, 0.2636, 0.968 ]
+    bg_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
+    bg_color_focused = [ 0.2075, 0.3427, 0.3308, 0.976 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RELIC'
     pixel_size = 16.9
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2742,7 +2742,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_image]
-    color = [ 0.027, 0.032, 0.04, 0.96 ]
+    color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     corner_radius = 6
     pixel_art = false
     texture = ''
@@ -2764,7 +2764,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 26
@@ -2789,7 +2789,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'Roboto-Regular'
     h_align = 'left'
     pixel_size = 22.1
@@ -2814,15 +2814,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.2237, 0.358, 0.3154, 0.972 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.2179, 0.4087, 0.365, 0.979 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'TAKE UP THE VIGIL'
     pixel_size = 19.5
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -2846,7 +2846,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 1 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 23.4
@@ -2871,7 +2871,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 1 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 23.4
@@ -2896,7 +2896,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 1 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 23.4
@@ -2921,7 +2921,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 1 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 23.4
@@ -2946,7 +2946,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 1 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 23.4
@@ -2971,7 +2971,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 1 ]
 
     [entities.ui_text]
-    color = [ 0.502, 0.51, 0.522, 1 ]
+    color = [ 0.6588, 0.6902, 0.7451, 1 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 23.4
@@ -2996,7 +2996,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0, 0 ]
 
     [entities.ui_image]
-    color = [ 0.02, 0.024, 0.03, 0.82 ]
+    color = [ 0.02745, 0.03137, 0.04314, 0.82 ]
     corner_radius = 0
     pixel_art = false
     texture = ''
@@ -3018,7 +3018,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.855, 0.851, 0.816, 1 ]
+    color = [ 0.8627, 0.8863, 0.9176, 1 ]
     font = 'PixelStorm'
     h_align = 'center'
     pixel_size = 44.2
@@ -3043,15 +3043,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.2369, 0.3864, 0.3361, 0.9736 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.222, 0.4351, 0.3786, 0.9802 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'RETURN TO IT'
     pixel_size = 20.8
-    text_color = [ 0.855, 0.851, 0.816, 1 ]
-    text_color_focused = [ 0.454, 0.855, 0.678, 1 ]
+    text_color = [ 0.8627, 0.8863, 0.9176, 1 ]
+    text_color_focused = [ 0.2902, 0.8706, 0.6039, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -3075,15 +3075,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'SETTINGS'
     pixel_size = 19.5
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -3107,15 +3107,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.3283, 0.1877, 0.181, 0.974 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.3658, 0.2317, 0.2503, 0.9805 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'LEAVE THE PARISH'
     pixel_size = 19.5
-    text_color = [ 0.29, 0.302, 0.322, 1 ]
-    text_color_focused = [ 0.706, 0.267, 0.22, 1 ]
+    text_color = [ 0.5565, 0.5878, 0.6463, 1 ]
+    text_color_focused = [ 0.698, 0.2706, 0.2275, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -3139,7 +3139,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 19.5
@@ -3165,11 +3165,11 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_toggle]
     corner_radius = 13
-    knob_color = [ 0.855, 0.851, 0.816, 1 ]
+    knob_color = [ 0.8627, 0.8863, 0.9176, 1 ]
     knob_radius = 10
     on = true
-    on_color = [ 0.22, 0.45, 0.36, 1 ]
-    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    on_color = [ 0.1216, 0.4196, 0.298, 1 ]
+    track_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
 
     [entities.ui_selectable]
     group = 'vigilmenu'
@@ -3192,7 +3192,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 19.5
@@ -3218,13 +3218,13 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_slider]
     corner_radius = 4
-    fill_color = [ 0.706, 0.267, 0.22, 1 ]
-    handle_color = [ 0.855, 0.851, 0.816, 1 ]
+    fill_color = [ 0.698, 0.2706, 0.2275, 1 ]
+    handle_color = [ 0.8627, 0.8863, 0.9176, 1 ]
     handle_radius = 8
     max = 1.5
     min = 0
     step = 0.1
-    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    track_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     value = 1
 
     [entities.ui_selectable]
@@ -3248,7 +3248,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.29, 0.302, 0.322, 1 ]
+    color = [ 0.5565, 0.5878, 0.6463, 1 ]
     font = 'PixelStorm'
     h_align = 'left'
     pixel_size = 19.5
@@ -3274,13 +3274,13 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_slider]
     corner_radius = 4
-    fill_color = [ 0.706, 0.267, 0.22, 1 ]
-    handle_color = [ 0.855, 0.851, 0.816, 1 ]
+    fill_color = [ 0.698, 0.2706, 0.2275, 1 ]
+    handle_color = [ 0.8627, 0.8863, 0.9176, 1 ]
     handle_radius = 8
     max = 1.75
     min = 0.85
     step = 0.05
-    track_color = [ 0.027, 0.032, 0.04, 0.96 ]
+    track_color = [ 0.05098, 0.05882, 0.07843, 0.96 ]
     value = 1.3
 
     [entities.ui_selectable]
@@ -3304,15 +3304,15 @@ scale = [ 1.0, 1.0, 1.0 ]
     pivot = [ 0.5, 0.5 ]
 
     [entities.ui_button]
-    bg_color = [ 0.075, 0.086, 0.101, 0.9 ]
-    bg_color_focused = [ 0.125, 0.145, 0.16, 0.96 ]
+    bg_color = [ 0.1373, 0.1569, 0.2, 0.9 ]
+    bg_color_focused = [ 0.1869, 0.2108, 0.2625, 0.97 ]
     corner_radius = 4
     font = 'PixelStorm'
     h_align = 'center'
     label = 'BACK'
     pixel_size = 19.5
-    text_color = [ 0.502, 0.51, 0.522, 1 ]
-    text_color_focused = [ 0.855, 0.851, 0.816, 1 ]
+    text_color = [ 0.6588, 0.6902, 0.7451, 1 ]
+    text_color_focused = [ 0.8627, 0.8863, 0.9176, 1 ]
     v_align = 'middle'
 
     [entities.ui_selectable]
@@ -3337,7 +3337,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.ui_effect]
     background = false
-    color0 = [ 0.706, 0.267, 0.22, 1 ]
-    color1 = [ 0.02, 0.024, 0.03, 1 ]
+    color0 = [ 0.698, 0.2706, 0.2275, 1 ]
+    color1 = [ 0.02745, 0.03137, 0.04314, 1 ]
     shader = 'ui_gloom'
     sort_order = 1000

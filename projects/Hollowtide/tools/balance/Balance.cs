@@ -4089,6 +4089,60 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// The scenes are authored in the same colours the game draws in.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Two languages draw this game. C# builds the ledger's rows and the parish's labels;
+	/// Python authors the scene files, and it kept its own copy of the palette under a comment
+	/// saying it mirrored the C# one. It had stopped mirroring it: seven colours differed, and
+	/// the worst was the one most authored text is drawn in - a warm near-white against a cool
+	/// mid-grey, left behind when the ramp was reworked to move text off the surface steps
+	/// because a highlighted row and the faintest text had turned out to be the same grey.
+	/// </para>
+	/// <para>
+	/// So half the interface was one colour and half was another, both claiming the same name,
+	/// and nothing could see it: each half is internally consistent, and the only place the two
+	/// meet is a screen. The generator reads Palette.cs now. This checks that it did.
+	/// </para>
+	/// </remarks>
+	private static void BothLanguagesDrawTheSameColours()
+	{
+		Console.WriteLine("Both languages draw the same colours");
+
+		string generator = ProjectFile("tools", "generate_scenes.py");
+		if (generator.Length == 0)
+		{
+			Check("the generator can be read", false, "could not find tools/generate_scenes.py");
+			return;
+		}
+		string text = File.ReadAllText(generator);
+
+		// A hand-copied colour is a FOUR-number tuple: three channels and an alpha. Anchors and
+		// pivots are pairs and are left alone - the first version of this check counted MID, the
+		// centre of a rect, as a colour somebody had written out by hand.
+		int copied = 0;
+		string worst = "";
+		foreach (Match match in Regex.Matches(text, @"^([A-Z_]+) = \(\s*[0-9.]+\s*,\s*[0-9.]+\s*,\s*[0-9.]+\s*,\s*[0-9.]+\s*\)", RegexOptions.Multiline))
+		{
+			if (match.Groups[1].Value == "CLEAR")
+			{
+				continue;
+			}
+			copied++;
+			worst = match.Groups[1].Value + " is still written out by hand";
+		}
+		Check("no colour is copied into the generator", copied == 0,
+			copied == 0 ? "every colour is read from Palette.cs" : worst);
+
+		Check("and it reads the palette the game uses", text.Contains("PALETTE_CS", StringComparison.Ordinal)
+				&& text.Contains("Palette.cs", StringComparison.Ordinal),
+			"the generator opens scripts/Palette.cs");
+
+		Vigil.Reset();
+	}
+
 	private static void EveryColourIsInThePalette()
 	{
 		Console.WriteLine("Every colour is in the palette");
@@ -5933,6 +5987,7 @@ internal static class Balance
 		EveryOfferingIsWorthBuying();
 		TheInspectorFitsTheBestRelic();
 		ARelicCanBeToldFromItsNeighbour();
+		BothLanguagesDrawTheSameColours();
 		EveryColourIsInThePalette();
 		EveryPowerSaysItsOwnThing();
 		BothShuntsAreOneAct();
