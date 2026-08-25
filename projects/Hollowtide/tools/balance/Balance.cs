@@ -1119,6 +1119,14 @@ internal static class Balance
 		Vigil.RelicsRendered = 9999;
 		Vigil.BestRelicGrade = (int)Grade.Hollowed;
 		Vigil.Consecrations = 9;
+		// Every boon taken as far as it goes, including the long ladder, so the mark aimed at
+		// the prestige sink is reachable in this fixture too. A fixture that does not know about
+		// a field reports the feature reading it as impossible - which this suite has already
+		// done once, for six marks at once.
+		for (int i = 0; i < Vigil.Boons.Length && i < Content.Boons.Length; i++)
+		{
+			Vigil.Boons[i] = Content.Boons[i].MaxLevel;
+		}
 		for (int i = 0; i < Content.Offerings.Length; i++)
 		{
 			Vigil.OfferingsTaken[i] = true;

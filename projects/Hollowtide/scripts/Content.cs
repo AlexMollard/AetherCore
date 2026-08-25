@@ -880,5 +880,17 @@ public static class Content
 		new MarkDef { Name = "Underwritten", Blurb = "Wear something that stands where nothing was built.", Earned = Vigil.WearingAFoundation },
 		new MarkDef { Name = "Consecrant", Blurb = "Give a vigil to one rite and mean it.", Earned = () => Vigil.Consecrations >= 1 },
 		new MarkDef { Name = "Well Provisioned", Blurb = "Have forty offerings standing at once.", Earned = () => Vigil.OfferingsCount() >= 40, Toward = () => Along(Vigil.OfferingsCount(), 40) },
+		// The one mark aimed at the prestige sink. Every other boon ends at three, so the ladder
+		// that does not had nothing pointed at it - a keeper could buy it for weeks with no sign
+		// that anybody had considered them doing so. Twenty is roughly twice what a fortnight of
+		// hard play affords, which makes it a thing to be working toward rather than a thing
+		// that happens.
+		new MarkDef
+		{
+			Name = "Asked Twenty Times",
+			Blurb = "Take The Old Bargain twenty times over.",
+			Earned = () => Vigil.Boons[(int)Vigil.Boon.OldBargain] >= 20,
+			Toward = () => Along(Vigil.Boons[(int)Vigil.Boon.OldBargain], 20),
+		},
 	};
 }
