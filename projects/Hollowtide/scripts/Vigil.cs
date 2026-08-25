@@ -2055,7 +2055,15 @@ public static class Vigil
 	{
 		for (int rite = 0; rite < Content.RiteCount; rite++)
 		{
-			if (Owned[rite] <= 0)
+			// EffectiveOwned, because this is the path that actually pays. RawRate was taught
+			// to count lent structures and this was not, so a relic that lends three looms drew
+			// them in the parish, quoted them in the rate, charged for them in the ward's price
+			// - and handed over nothing, for as long as the keeper was watching. It only paid
+			// while they were away, since the offline catch-up settles off Rate. The same
+			// mistake twice on two sides of the same number: whether a lent copy works must not
+			// depend on which loop is asking.
+			int working = EffectiveOwned(rite);
+			if (working <= 0)
 			{
 				CycleProgress[rite] = 0.0;
 				continue;
@@ -2068,7 +2076,7 @@ public static class Vigil
 			while (CycleProgress[rite] >= 1.0)
 			{
 				CycleProgress[rite] -= 1.0;
-				double yield = Owned[rite] * Content.Rites[rite].BaseRate * RiteMultiplier(rite) * cycle * AftermathScale;
+				double yield = working * Content.Rites[rite].BaseRate * RiteMultiplier(rite) * cycle * AftermathScale;
 				Ichor += yield;
 				RunIchor += yield;
 				LifetimeIchor += yield;

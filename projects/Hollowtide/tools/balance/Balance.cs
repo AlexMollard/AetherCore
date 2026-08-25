@@ -3524,6 +3524,35 @@ internal static class Balance
 		Check("and they produce", Vigil.Rate > 0.0,
 			"a parish of nothing but lent structures still works");
 
+		// PLAYED, not quoted. The check above reads Rate, which is the number the ward is priced
+		// off and the number an offline catch-up settles against - and for a while it was the
+		// only number that knew about lent structures at all. The loop that actually hands ichor
+		// over stepped its own cadence off the bought count, so a keeper wearing this watched
+		// three looms stand in their parish and earn nothing for as long as they were looking.
+		// It paid only while they were away. Anything that claims a structure works has to be
+		// asked by playing it.
+		// Sixty of this rite's own workings, so the answer is not dominated by however much of a
+		// cycle happened to be left unfinished at the end.
+		double quoted = Vigil.Rate;
+		double cycle = Math.Max(0.05, Content.Rites[rite].CycleSeconds);
+		int steps = (int)(60.0 * cycle / kDt);
+		double before = Vigil.Ichor;
+		for (int i = 0; i < steps; i++)
+		{
+			Vigil.Tick(kDt);
+		}
+		double earned = Vigil.Ichor - before;
+		Check("and they produce while the keeper is WATCHING", earned > 0.0,
+			Numbers.Short(earned) + " over " + (int)(steps * kDt) + "s of play");
+
+		// The two paths are meant to be the same total by construction, which is the licence the
+		// offline catch-up takes to skip the cadence timers entirely. If they disagree, one of
+		// them is wrong and the keeper is either being robbed for playing or paid twice for
+		// stepping away.
+		double played = earned / (steps * kDt);
+		Check("and the played rate is the quoted rate", played > quoted * 0.95 && played < quoted * 1.05,
+			Numbers.Short(played) + "/s played against " + Numbers.Short(quoted) + "/s quoted");
+
 		double lentRate = Vigil.Rate;
 		double priceBefore = Vigil.CostOf(rite, Vigil.Owned[rite]);
 		double milestoneBefore = Vigil.MilestoneMultiplier(rite);

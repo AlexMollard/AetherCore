@@ -212,6 +212,15 @@ done rather than a track.
   double-multiplier fix).
 - **A relic's Hand power silently stopped working** as the parish grew, reaching all of the
   by-hand figure early and none of it later.
+- **Lent structures only paid while you were away.** A relic that lends copies of a rite was
+  taught to count toward the quoted rate — which is what the ward is priced off, and what the
+  offline catch-up settles against — but the loop that actually hands ichor over stepped its
+  cadence off the *bought* count. So the structures stood in the parish, were charged for in
+  the ward's price, and earned **nothing at all** for as long as the keeper was watching. The
+  invariant that was supposed to cover this asked `Rate`, the quoted number, rather than
+  playing the parish; it now plays sixty of the rite's workings and compares what arrived
+  against what was quoted. Their conduits and the canopy above them were counting the bought
+  copies too, so a lent structure had no wire running from it.
 
 ### Long uptime
 - **The parish animation clock froze permanently after 6.1 days.** A float accumulating a

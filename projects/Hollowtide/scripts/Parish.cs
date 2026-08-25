@@ -587,7 +587,10 @@ public sealed class Parish
 		float highest = intake.Y;
 		for (int rite = 0; rite < Content.RiteCount; rite++)
 		{
-			if (Vigil.Owned[rite] > 0)
+			// EffectiveOwned, matching what was actually DRAWN above. A lent structure is a
+			// structure, and an arch that cleared only the bought ones would be routed straight
+			// through the roof of one the keeper is wearing.
+			if (Vigil.EffectiveOwned(rite) > 0)
 			{
 				highest = MathF.Min(highest, _crown[rite].Y);
 			}
@@ -600,7 +603,7 @@ public sealed class Parish
 			// A wire that only appears when a bead is travelling is just a longer bead: what
 			// makes the yield read as CARRIED rather than as floating is that the route was
 			// visibly there beforehand.
-			if (Vigil.Owned[rite] > 0)
+			if (Vigil.EffectiveOwned(rite) > 0)
 			{
 				DressWire(rite, _crown[rite], intake, bd);
 			}

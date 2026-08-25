@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **246 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **248 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -109,6 +109,9 @@ visible by reading the code:
 - Every relic drew the wrong features, because C# packed their powers with one number and the
   shader unpacked them with another.
 - Wearing the best three relics duplicated one in a third of random inventories.
+- A relic that lends structures paid nothing while you watched and paid in full while
+  you were away, because the loop that quotes the rate and the loop that hands the ichor
+  over counted different things.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
