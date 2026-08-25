@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **283 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **287 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -146,6 +146,11 @@ visible by reading the code:
   congregation's rows showing one quantity in two colours. Nothing was checking the README's
   own claim that colour means something, because the claim is about every file *except*
   `Palette.cs`.
+- A relic's name got a wear vocabulary and optional parts, so the *shape* of a name varies and
+  not only its words: 784 ways to name a Leavings became **312,816**, and the rarest grade —
+  which had the narrowest pool of all, because a guaranteed epithet locked it out of everything
+  else — became the widest. Names did not get longer; the row is 320px and that was the
+  constraint the design had to buy variety within.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.

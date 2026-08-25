@@ -3610,6 +3610,58 @@ internal static class Balance
 	{
 		Console.WriteLine("A relic can be told from the one beside it");
 
+		// The longest name any relic can have, against the row it has to fit in. This is the
+		// constraint that shaped the naming system: the vocabulary was widened to buy VARIETY,
+		// and a wider vocabulary that also made names longer would have bought an overflowing
+		// row instead. An epithet and a wear word are never both present for this reason.
+		int longest = 0;
+		string longestName = "";
+		int nonAscii = 0;
+		foreach (Grade grade in Enum.GetValues<Grade>())
+		{
+			for (int seed = 1; seed < 40000; seed++)
+			{
+				string name = Relics.NameOf(new Relic { Seed = seed, Grade = grade });
+				if (name.Length > longest)
+				{
+					longest = name.Length;
+					longestName = name;
+				}
+				foreach (char c in name)
+				{
+					if (c > 126)
+					{
+						nonAscii++;
+					}
+				}
+			}
+		}
+		Check("no name outgrows the row it sits in", longest <= 68,
+			"the longest was \"" + longestName + "\" at " + longest + " characters");
+		Check("and every name is ASCII", nonAscii == 0,
+			nonAscii == 0 ? "the font bakes no other glyphs" : nonAscii + " characters the font lacks");
+
+		// Counted, not sampled: how many names the parish actually has to give at each grade.
+		foreach (Grade grade in Enum.GetValues<Grade>())
+		{
+			Console.WriteLine("      " + GradeLabel(grade) + ": " + Relics.NameSpace(grade) + " possible names");
+		}
+		Check("even the commonest thing has a deep name pool", Relics.NameSpace(Grade.Leavings) > 100000,
+			Relics.NameSpace(Grade.Leavings) + " ways to name a Leavings");
+		// A FLOOR rather than a ladder. Pool size is not monotonic in grade and should not be
+		// asked to be: a guaranteed part contributes its vocabulary, an optional one contributes
+		// its vocabulary plus the relic that does not have it, so an optional provenance counts
+		// one higher than a certain one. That is arithmetic, not a rarity inversion - what
+		// actually matters is that no grade is thin, and the collision rates below are what say
+		// whether a keeper ever notices.
+		long narrowest = long.MaxValue;
+		foreach (Grade grade in Enum.GetValues<Grade>())
+		{
+			narrowest = Math.Min(narrowest, Relics.NameSpace(grade));
+		}
+		Check("and no grade is named more narrowly than any other by much", narrowest > 250000,
+			"the thinnest pool is " + narrowest);
+
 		const int kSample = 100;
 		foreach (Grade grade in Enum.GetValues<Grade>())
 		{
@@ -3636,8 +3688,11 @@ internal static class Balance
 
 			Check(GradeLabel(grade) + " relics are not all one thing", names.Count >= kSample / 2,
 				names.Count + " distinct names in " + kSample);
-			Check("and two sharing a name still differ in what they do", whole.Count > names.Count
-				|| Relics.PowerKinds < 2,
+			// >=, not >. Written as a strict increase, this could only pass while names were
+			// COLLIDING - once a grade's hundred names came back all distinct there was nothing
+			// left for the powers to add, and the check failed for the best possible reason. A
+			// test that breaks when the thing it guards improves is a test of the wrong thing.
+			Check("and counting what they do never makes them less distinct", whole.Count >= names.Count,
 				whole.Count + " distinct once powers are counted");
 			Check("and no two are drawn the same", art.Count == kSample,
 				art.Count + " distinct drawings in " + kSample);

@@ -108,6 +108,23 @@ public static class Relics
 		"Buckle", "Shroud-Pin",
 	};
 
+	/// <summary>
+	/// What time and the damp have done to it.
+	/// </summary>
+	/// <remarks>
+	/// Wear, not grandeur, so it belongs to the COMMON end of the ladder - which is exactly where
+	/// the vocabulary was thinnest. A material and a form alone is seven hundred and eighty-four
+	/// names, and a keeper who chases the fifty-relics mark was seeing about nine repeats in
+	/// every hundred. The words a Leavings deserves are the ones that say it has been in the
+	/// ground.
+	/// </remarks>
+	private static readonly string[] s_wear =
+	{
+		"Cracked", "Blackened", "Salt-Eaten", "Split", "Warped", "Weeping", "Verdigrised",
+		"Scorched", "Worn Smooth", "Rust-Locked", "Mould-Spotted", "Gnawed", "Sun-Bleached",
+		"Grave-Damp", "Bent", "Chipped", "Flaking", "Water-Marked",
+	};
+
 	/// <summary>Where it came from. Only the better grades earn one - a common thing is just
 	/// a thing, and giving everything a provenance makes provenance worthless.</summary>
 	private static readonly string[] s_provenance =
@@ -196,6 +213,45 @@ public static class Relics
 	public static int Forms => s_form.Length;
 	public static int Provenances => s_provenance.Length;
 	public static int Epithets => s_epithet.Length;
+	public static int Wears => s_wear.Length;
+
+	/// <summary>
+	/// How many different names a relic of this grade can have.
+	/// </summary>
+	/// <remarks>
+	/// Counted rather than sampled. Every optional part contributes its vocabulary PLUS ONE, the
+	/// one being the relic that does not have that part at all - which is a real difference in
+	/// the name and the reason the shapes vary instead of every relic reading as a filled-in
+	/// template.
+	/// </remarks>
+	public static long NameSpace(Grade grade)
+	{
+		// The prefix is ONE slot that an epithet and a wear word compete for, so their vocabularies
+		// add rather than multiply. Multiplying them - which is what treating each as an
+		// independent optional part does - claimed three and a quarter million names for a grade
+		// that has four hundred and fifty thousand, by counting every pairing the name can never
+		// actually have.
+		long prefixes = 0;
+		if (EpithetChance(grade) > 0)
+		{
+			prefixes += Epithets;
+		}
+		if (EpithetChance(grade) < kAlways && WearChance(grade) > 0)
+		{
+			prefixes += Wears;
+		}
+		if (EpithetChance(grade) < kAlways && WearChance(grade) < kAlways)
+		{
+			prefixes += 1;
+		}
+		long provenances = ProvenanceChance(grade) switch
+		{
+			0 => 1,
+			kAlways => Provenances,
+			_ => Provenances + 1,
+		};
+		return (long)Materials * Forms * Math.Max(1, prefixes) * provenances;
+	}
 
 	public static string GradeName(Grade grade) => grade switch
 	{
@@ -243,19 +299,89 @@ public static class Relics
 	/// </remarks>
 	public static float ArtSeed(Relic relic) => Hash(relic.Seed, 40) % 65536u;
 
-	/// <summary>The name, built from the seed. Longer and stranger the better the grade, so a
-	/// keeper can tell roughly what they are holding before reading a single number.</summary>
+	/// <summary>Out of a thousand, so a chance can be written as a number a reader recognises.
+	/// </summary>
+	private const int kAlways = 1000;
+
+	/// <summary>How often a relic of this grade is named for its wear. Common things mostly are;
+	/// a Hollowed thing never is, because it gets an epithet instead and the two together would
+	/// make a name too long for the row it has to fit in. Called wear rather than condition
+	/// because a relic's flavour already has a condition, and it is a sentence, not a word.
+	/// </summary>
+	private static int WearChance(Grade grade) => grade switch
+	{
+		Grade.Leavings => 700,
+		Grade.Keepsake => 600,
+		Grade.Anointed => 350,
+		Grade.Hallowed => 200,
+		_ => 200,
+	};
+
+	/// <summary>How often a relic of this grade is named for where it came from. Guaranteed from
+	/// Anointed up, as it always was, and now possible below - a common thing with a provenance
+	/// is a small surprise, and it was the whole vocabulary the low grades were locked out of.
+	/// </summary>
+	private static int ProvenanceChance(Grade grade) => grade switch
+	{
+		Grade.Leavings => 250,
+		Grade.Keepsake => 300,
+		_ => kAlways,
+	};
+
+	/// <summary>How often a relic of this grade is said to be something. Hollowed always;
+	/// Hallowed sometimes, which is what makes finding one that IS named feel like a step up
+	/// rather than a grade you can read off the shape of the sentence.</summary>
+	private static int EpithetChance(Grade grade) => grade switch
+	{
+		// Not ALWAYS, even at the top. Guaranteed, an epithet was the shape of the sentence
+		// telling you the grade before you had read a word of it - and it locked the rarest thing
+		// in the game out of the wear vocabulary entirely, leaving Hollowed with the NARROWEST
+		// name pool of any grade. One Hollowed relic in five is named for what the ground did to
+		// it instead, which is both a wider pool and a better sentence.
+		Grade.Hollowed => 800,
+		Grade.Hallowed => 350,
+		_ => 0,
+	};
+
+	/// <summary>
+	/// The name, built from the seed.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Longer and stranger the better the grade, so a keeper can tell roughly what they are
+	/// holding before reading a single number - but the parts are now OPTIONAL and their presence
+	/// is itself rolled, so the shape of the name varies as well as the words in it. Every
+	/// relic used to be its grade's template filled in; a Leavings was a material and a form and
+	/// nothing else, seven hundred and eighty-four ways.
+	/// </para>
+	/// <para>
+	/// An epithet and a condition are never both present. Not for tone - though "The Unquiet
+	/// Cracked Bone Whistle of the Ninth Night" is trying too hard - but because the row a name
+	/// has to fit in is three hundred and twenty pixels wide, and the point of this was more
+	/// names rather than longer ones.
+	/// </para>
+	/// <para>
+	/// The presence rolls take channels of their own, next to the ones the words come from, so
+	/// nothing already rolled moves: a relic keeps the powers it had and the picture it was
+	/// drawn with. Its NAME changes, which is unavoidable when the thing being fixed is how
+	/// names are built, and is why this is worth doing once rather than twice.
+	/// </para>
+	/// </remarks>
 	public static string NameOf(Relic relic)
 	{
 		string body = s_material[Pick(relic.Seed, 1, s_material.Length)] + " " +
 			s_form[Pick(relic.Seed, 2, s_form.Length)];
-		if (relic.Grade >= Grade.Anointed)
+		if (Pick(relic.Seed, 7, kAlways) < ProvenanceChance(relic.Grade))
 		{
 			body += " " + s_provenance[Pick(relic.Seed, 3, s_provenance.Length)];
 		}
-		if (relic.Grade == Grade.Hollowed)
+		if (Pick(relic.Seed, 8, kAlways) < EpithetChance(relic.Grade))
 		{
-			body = "The " + s_epithet[Pick(relic.Seed, 4, s_epithet.Length)] + " " + body;
+			return "The " + s_epithet[Pick(relic.Seed, 4, s_epithet.Length)] + " " + body;
+		}
+		if (Pick(relic.Seed, 6, kAlways) < WearChance(relic.Grade))
+		{
+			return s_wear[Pick(relic.Seed, 5, s_wear.Length)] + " " + body;
 		}
 		return body;
 	}
