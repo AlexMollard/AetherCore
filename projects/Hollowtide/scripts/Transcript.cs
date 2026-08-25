@@ -44,6 +44,15 @@ public static class Transcript
 	/// <summary>How many lines are held, never more than <see cref="Capacity"/>.</summary>
 	public static int Count { get; private set; }
 
+	/// <summary>
+	/// How many lines have ever been said. Not capped, and not the same as <see cref="Count"/>.
+	/// </summary>
+	/// <remarks>
+	/// Only ever read as a DIFFERENCE, by a reader who wants to know how much the list moved
+	/// under them since they last looked. See <see cref="Anchored"/>.
+	/// </remarks>
+	public static long Added { get; private set; }
+
 	/// <summary>Remember a line. Called from the one place the parish speaks.</summary>
 	public static void Add(string line, Omen omen, double at)
 	{
@@ -55,10 +64,49 @@ public static class Transcript
 		s_omens[s_next] = omen;
 		s_at[s_next] = at;
 		s_next = (s_next + 1) % Capacity;
+		Added++;
 		if (Count < Capacity)
 		{
 			Count++;
 		}
+	}
+
+	/// <summary>
+	/// Where a reader scrolled to <paramref name="scroll"/> should be looking now.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Index 0 is the newest line, so every new line pushes everything the reader is looking at
+	/// down by one. Scrolled twenty lines back to work out what took your relic, at forty lines a
+	/// minute, the sentence you are halfway through moves off your row about once a second - and
+	/// a panel that will not hold still is a panel nobody reads twice.
+	/// </para>
+	/// <para>
+	/// Shifting by the number of lines said since the reader last looked keeps the SAME lines
+	/// under them. A reader at the top is left alone, because there the newest line arriving is
+	/// the whole point.
+	/// </para>
+	/// <para>
+	/// Here rather than in the panel because it is arithmetic about a ring, which is what this
+	/// file is, and because the panel is the one place it could not be checked from.
+	/// </para>
+	/// </remarks>
+	/// <param name="scroll">Which line is at the top of the view.</param>
+	/// <param name="seenAdded">What <see cref="Added"/> was when the reader last looked.</param>
+	public static int Anchored(int scroll, long seenAdded)
+	{
+		if (scroll <= 0)
+		{
+			return 0;
+		}
+		long moved = Added - seenAdded;
+		if (moved <= 0)
+		{
+			return scroll;
+		}
+		// Never past the end: once the ring has turned over entirely, the lines the reader was
+		// holding are gone and the honest place to put them is the oldest line still kept.
+		return (int)Math.Min(scroll + moved, Math.Max(0, Count - 1));
 	}
 
 	/// <summary>

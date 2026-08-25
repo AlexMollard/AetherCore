@@ -3743,6 +3743,58 @@ internal static class Balance
 	/// shifts everything below it up. This pins the fact the view was wrong about, so the next
 	/// thing tempted to hold an index across frames has something to read.
 	/// </remarks>
+	/// <summary>
+	/// The transcript holds still while it is being read.
+	/// </summary>
+	/// <remarks>
+	/// Index 0 is the newest line, which is right for a panel whose usual question is "what did
+	/// that just say" - and it means every new line pushes what a scrolled-back reader is looking
+	/// at down by one. At the forty lines a minute the feed manages when the parish is busy, the
+	/// sentence somebody is halfway through leaves their row about once a second.
+	/// </remarks>
+	private static void TheTranscriptHoldsStillWhileItIsRead()
+	{
+		Console.WriteLine("The transcript holds still while it is read");
+
+		Transcript.Clear();
+		for (int i = 0; i < 60; i++)
+		{
+			Transcript.Add("line " + i, Omen.Plain, i);
+		}
+
+		// A reader twenty lines back, holding a particular sentence.
+		int scroll = 20;
+		long seen = Transcript.Added;
+		string held = Transcript.At(scroll).Line;
+
+		for (int i = 0; i < 15; i++)
+		{
+			Transcript.Add("interruption " + i, Omen.Plain, 100 + i);
+		}
+		int moved = Transcript.Anchored(scroll, seen);
+		Check("a reader keeps the line they were on", Transcript.At(moved).Line == held,
+			"held \"" + held + "\", now at " + moved + " reading \"" + Transcript.At(moved).Line + "\"");
+
+		// And the top is left alone, because there the newest line arriving IS the point.
+		Check("and a reader at the top follows the newest line",
+			Transcript.Anchored(0, seen) == 0, "the top does not drift");
+
+		// Once the ring has turned over completely the held lines are gone; the honest place to
+		// leave a reader is the oldest line still kept, not past the end of the list.
+		seen = Transcript.Added;
+		for (int i = 0; i < Transcript.Capacity * 2; i++)
+		{
+			Transcript.Add("flood " + i, Omen.Plain, 200 + i);
+		}
+		int drowned = Transcript.Anchored(20, seen);
+		Check("and a reader whose lines are gone lands on the oldest one kept",
+			drowned == Transcript.Count - 1 && Transcript.At(drowned).Line.Length > 0,
+			"left at " + drowned + " of " + Transcript.Count);
+
+		Transcript.Clear();
+		Vigil.Reset();
+	}
+
 	private static void ASatchelIndexIsNotAHandle()
 	{
 		Console.WriteLine("A satchel index is not a handle on a relic");
@@ -5685,6 +5737,7 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		TheTranscriptHoldsStillWhileItIsRead();
 		ASatchelIndexIsNotAHandle();
 		EveryOfferingIsWorthBuying();
 		TheInspectorFitsTheBestRelic();

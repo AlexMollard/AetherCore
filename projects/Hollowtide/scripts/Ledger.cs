@@ -134,6 +134,10 @@ public sealed class Ledger
 	private LedgerTab _tab = LedgerTab.Rites;
 	private int _amountIndex;
 	private int _scroll;
+
+	/// <summary>What the transcript's line count was last frame, so the panel can tell how far
+	/// the list moved under a reader who is scrolled back through it.</summary>
+	private long _seenSaid;
 	private int _itemCount;
 	private int _visibleRows = kRowPool;
 
@@ -513,6 +517,17 @@ public sealed class Ledger
 				_scroll -= (int)MathF.Round(wheel);
 			}
 		}
+		// The transcript grows at the END A READER IS LOOKING AT - index 0 is the newest line - so
+		// left alone it slides whatever is being read down a row every time the parish speaks.
+		// Anchoring moves the view with the lines rather than holding an offset that no longer
+		// points at them. Only the transcript needs it: every other tab's list either does not
+		// move or grows at the bottom.
+		if (_tab == LedgerTab.Voices)
+		{
+			_scroll = Transcript.Anchored(_scroll, _seenSaid);
+		}
+		_seenSaid = Transcript.Added;
+
 		int maxScroll = Math.Max(0, _itemCount - _visibleRows);
 		_scroll = Math.Clamp(_scroll, 0, maxScroll);
 	}
