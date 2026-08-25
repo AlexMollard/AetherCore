@@ -4722,6 +4722,100 @@ internal static class Balance
 		Vigil.Reset();
 	}
 
+	/// <summary>
+	/// A very long vigil never reaches a number that stops being one.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// An idle game's whole shape is a number climbing without end, and the genre's classic
+	/// failure is that it eventually stops being a number: production hits infinity, the price
+	/// of the next thing hits infinity, and the difference between them becomes NaN. From then
+	/// on nothing can be bought and nothing can be earned, and no error is ever raised.
+	/// </para>
+	/// <para>
+	/// This was only asked of a CORRUPT save until now - which found a real overflow - and never
+	/// of ordinary play, which is the case that actually matters because it arrives on its own.
+	/// Days of it are simulated here at speed, buying as hard as the ichor allows, since the
+	/// point is to reach the largest numbers the rules can produce rather than to play well.
+	/// </para>
+	/// </remarks>
+	private static void ALongVigilStaysFinite()
+	{
+		Console.WriteLine("A long vigil stays a number");
+
+		Vigil.Reset();
+		double worstRate = 0.0;
+		double worstIchor = 0.0;
+		int broke = 0;
+		string firstBreak = "";
+		int communions = 0;
+
+		// Sixty simulated days of hard play. Two were tried first and peaked at 22 trillion a
+		// second, which proves very little - the question is whether the curve ever turns, and a
+		// horizon that comfortable cannot answer it. Sixty reaches 9x10^16 across fourteen
+		// hundred communions, still some two hundred and ninety orders of magnitude short of
+		// where a double gives up, which is a real answer rather than a comfortable one.
+		const double step = 4.0;
+		for (int tick = 0; tick < (int)(60 * 24 * 3600 / step); tick++)
+		{
+			Vigil.Tick(step);
+			Vigil.Gather();
+			Buy();
+			TakeOfferings();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			// Commune whenever it pays, which is what a keeper chasing the biggest numbers does
+			// and what makes the permanent multipliers stack up over a long run.
+			if (Vigil.SigilsOnOffer > 0 && tick % 900 == 0)
+			{
+				if (Vigil.Commune())
+				{
+					communions++;
+					SpendSigils();
+				}
+			}
+
+			bool sane = !double.IsNaN(Vigil.Rate) && !double.IsInfinity(Vigil.Rate)
+				&& !double.IsNaN(Vigil.Ichor) && !double.IsInfinity(Vigil.Ichor)
+				&& !double.IsNaN(Vigil.LifetimeIchor) && !double.IsInfinity(Vigil.LifetimeIchor)
+				&& Vigil.Rate >= 0.0 && Vigil.Ichor >= 0.0;
+			if (!sane)
+			{
+				broke++;
+				if (firstBreak.Length == 0)
+				{
+					firstBreak = "after " + Numbers.Duration(tick * step) + ": rate " + Vigil.Rate
+						+ ", ichor " + Vigil.Ichor;
+				}
+			}
+			worstRate = Math.Max(worstRate, double.IsInfinity(Vigil.Rate) ? double.MaxValue : Vigil.Rate);
+			worstIchor = Math.Max(worstIchor, double.IsInfinity(Vigil.Ichor) ? double.MaxValue : Vigil.Ichor);
+		}
+
+		Check("two months of hard play never stop being numbers", broke == 0,
+			broke == 0
+				? "peaked at " + Numbers.Rate(worstRate) + " across " + communions + " communions"
+				: firstBreak);
+
+		// And the price of the next thing stays payable-or-not, rather than becoming NaN - which
+		// would make every comparison against it false and quietly end the game.
+		int unpriceable = 0;
+		for (int rite = 0; rite < Content.RiteCount; rite++)
+		{
+			double cost = Vigil.CostOf(rite, Vigil.Owned[rite]);
+			if (double.IsNaN(cost) || cost < 0.0)
+			{
+				unpriceable++;
+			}
+		}
+		Check("and everything still has a price", unpriceable == 0,
+			unpriceable == 0 ? "every rite still quotes one" : unpriceable + " cost nothing meaningful");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4776,6 +4870,7 @@ internal static class Balance
 		AVisitorMeansTheSameHoweverItSpeaks();
 		TheSeedCounterCannotBeBrokenByAFile();
 		AWrongFileCannotBreakTheParish();
+		ALongVigilStaysFinite();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
