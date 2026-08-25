@@ -93,7 +93,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **311 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **312 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -161,6 +161,9 @@ visible by reading the code:
   ramp was reworked. Half the interface was one colour and half was another, both claiming the
   same name, and nothing could see it because each half is internally consistent and the only
   place the two meet is a screen.
+  The fonts and the type scale beside it were paired by a comment saying "move both or neither",
+  which is an instruction to a person; the palette three lines up is what that is worth over
+  time. All of it is read now.
 - A relic's name got a wear vocabulary and optional parts, so the *shape* of a name varies and
   not only its words: 784 ways to name a Leavings became **312,816**, and the rarest grade —
   which had the narrowest pool of all, because a guaranteed epithet locked it out of everything

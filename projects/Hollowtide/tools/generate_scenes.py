@@ -94,15 +94,33 @@ SIGIL = P["Sigil"]
 # Boxes that were sized tightly around their old text are grown alongside it below - a bigger
 # face in an unchanged box clips, which is worse than a small one.
 #
-# PAIRED with Typography.Scale in scripts/Typography.cs, which covers the type this file does
-# not author: the ledger's rows and the parish's own labels are built at runtime. Python cannot
-# read a C# constant, so the two have to be moved together - move both or neither, or half the
-# interface grows and half stays where it was.
-TYPE = 1.30
+# READ from Typography.Authored rather than pasted beside it. The comment here used to say the
+# two had to be moved together, "move both or neither, or half the interface grows and half
+# stays where it was" - which is an instruction to a person, and the palette three lines up is
+# what an instruction to a person is worth over time.
+def _authored_scale():
+    text = io.open(os.path.join(os.path.dirname(PALETTE_CS), "Typography.cs"), encoding="utf-8").read()
+    found = re.search(r"float Authored = ([0-9.]+)f", text)
+    if found is None:
+        raise SystemExit("Typography.cs no longer states the scale the scenes are authored at")
+    return float(found.group(1))
 
-BODY = "Roboto-Regular"
-WHISPER = "IBMPlexMono-Italic"
-DISPLAY = "PixelStorm"
+
+TYPE = _authored_scale()
+
+# The three faces, read for the same reason the colours are. A font name that drifts does not
+# look wrong, it looks MISSING: the renderer falls back, and one half of the interface quietly
+# renders in something nobody chose.
+def _font(name):
+    found = re.search(r'string ' + name + r' = "([^"]+)"', io.open(PALETTE_CS, encoding="utf-8").read())
+    if found is None:
+        raise SystemExit("Palette.cs no longer names a font called " + name)
+    return found.group(1)
+
+
+BODY = _font("Body")
+WHISPER = _font("Whisper")
+DISPLAY = _font("Display")
 
 LEDGER_W = 760.0  # paired with Hud.LedgerWidth
 BAR_H = 104.0

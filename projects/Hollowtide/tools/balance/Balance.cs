@@ -5036,6 +5036,26 @@ internal static class Balance
 		return "";
 	}
 
+	/// <summary>
+	/// What the generator actually resolves its type scale to.
+	/// </summary>
+	/// <remarks>
+	/// Read out of Typography.cs the same way the generator reads it, rather than by running
+	/// Python - the harness must not need an interpreter to say whether the game is sound. If
+	/// this and the generator ever disagree about how to find the number, the check above still
+	/// notices, because it also insists the generator is doing the reading at all.
+	/// </remarks>
+	private static double RunGeneratorScale()
+	{
+		string typography = ProjectFile("scripts", "Typography.cs");
+		if (typography.Length == 0)
+		{
+			return double.NaN;
+		}
+		Match found = Regex.Match(File.ReadAllText(typography), @"float Authored = ([0-9.]+)f");
+		return found.Success ? double.Parse(found.Groups[1].Value, CultureInfo.InvariantCulture) : double.NaN;
+	}
+
 	/// <summary>Pull one number out of a shader by matching the line it is written on.</summary>
 	private static double ShaderNumber(string file, string pattern, out string trouble)
 	{
@@ -5218,13 +5238,26 @@ internal static class Balance
 		}
 		string text = File.ReadAllText(generator);
 
-		Match type = Regex.Match(text, @"^TYPE = ([0-9.]+)", RegexOptions.Multiline);
-		Check("the authored type is scaled by the same number as the built type",
-			type.Success && Math.Abs(double.Parse(type.Groups[1].Value, CultureInfo.InvariantCulture)
-				- Typography.Scale) < 1e-6,
-			type.Success
-				? "generator " + type.Groups[1].Value + ", Typography " + Typography.Scale.ToString("0.00")
-				: "no TYPE in the generator");
+		// Against AUTHORED, not Scale. Scale is what the player has the slider set to and moves
+		// while the game runs; Authored is the fact about what is written into the scene files,
+		// which is the number the generator has to agree with. Comparing the wrong one would have
+		// turned a keeper's preference into a failing build.
+		//
+		// The generator reads it now rather than restating it, so what this checks is that the
+		// read still finds something - a regex that stops matching would otherwise leave the
+		// generator silently falling back to nothing.
+		Check("the generator takes the authored type scale from the game",
+			text.Contains("_authored_scale", StringComparison.Ordinal)
+				&& Math.Abs(RunGeneratorScale() - Typography.Authored) < 1e-6,
+			"generator resolves " + RunGeneratorScale().ToString("0.00")
+				+ ", Typography.Authored " + Typography.Authored.ToString("0.00"));
+
+		// Nothing else is pasted across the language boundary either. The palette was, under a
+		// comment saying it was not, and seven colours had drifted.
+		Check("and nothing is copied across the boundary by hand",
+			!Regex.IsMatch(text, "^(BODY|WHISPER|DISPLAY) = \"", RegexOptions.Multiline)
+				&& !Regex.IsMatch(text, @"^TYPE = [0-9]", RegexOptions.Multiline),
+			"fonts and type scale are read, not restated");
 
 		// The ledger's width lives in Hud, which the harness cannot reference - it needs the
 		// engine - so both sides are read as text.
