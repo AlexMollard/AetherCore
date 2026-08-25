@@ -4221,7 +4221,53 @@ internal static class Balance
 				? "room to x" + chromeTightest.ToString("0.00") + " across " + chrome.Count + " labels"
 				: chromePinch + ", but the slider goes to x" + Typography.Largest.ToString("0.00"));
 
+		// The ledger's rows are built at runtime and appear in no scene file, so they are read
+		// out of the source that builds them. They are also the densest text in the game -
+		// fourteen rows of two stacked lines - which makes them the likeliest pinch of all.
+		string ledger = ProjectFile("scripts", "Ledger.cs");
+		string source = ledger.Length == 0 ? "" : File.ReadAllText(ledger);
+		double rowHeight = SourceNumber(source, @"kRowHeight = Typography\.Box\(([0-9.]+)f\)");
+		double rowGap = SourceNumber(source, @"kRowGap = ([0-9.]+)f");
+		double titleTop = SourceNumber(source, @"kTitleTop = ([0-9.]+)f");
+		double titleHeight = SourceNumber(source, @"kTitleHeight = ([0-9.]+)f");
+		double titleFace = SourceNumber(source, @"kTitleFace = ([0-9.]+)f");
+		double subTop = SourceNumber(source, @"kSubTop = ([0-9.]+)f");
+		double subHeight = SourceNumber(source, @"kSubHeight = ([0-9.]+)f");
+		double subFace = SourceNumber(source, @"kSubFace = ([0-9.]+)f");
+
+		bool read = !double.IsNaN(rowHeight + rowGap + titleTop + titleHeight + titleFace
+			+ subTop + subHeight + subFace);
+		Check("a ledger row's geometry can be read at all", read,
+			read ? "eight numbers, all named" : "Ledger.cs no longer states its row geometry");
+		if (read)
+		{
+			// Authored geometry, in the units the row is built in. Box() multiplies by the
+			// authored scale, so everything below is in the same space as the scene files.
+			double titleCentre = (titleTop + titleHeight * 0.5) * Typography.Authored;
+			double subCentre = (subTop + subHeight * 0.5) * Typography.Authored;
+			double nextTitle = (rowHeight + rowGap) + titleCentre;
+
+			double withinRow = (subCentre - titleCentre) / ((titleFace + subFace) * 0.5);
+			double betweenRows = (nextTitle - subCentre) / ((subFace + titleFace) * 0.5);
+			double worst = Math.Min(withinRow, betweenRows);
+			Check("and a row's two lines clear each other, and the row below",
+				worst >= Typography.Largest,
+				"room to x" + worst.ToString("0.00") + " within a row and x"
+					+ betweenRows.ToString("0.00") + " between them");
+		}
+
 		Vigil.Reset();
+	}
+
+	/// <summary>One number out of a source file, or NaN when the line it was written on has
+	/// moved. NaN rather than a default, so a check built on it fails instead of quietly
+	/// measuring zero.</summary>
+	private static double SourceNumber(string source, string pattern)
+	{
+		Match found = Regex.Match(source, pattern);
+		return found.Success
+			? double.Parse(found.Groups[1].Value, CultureInfo.InvariantCulture)
+			: double.NaN;
 	}
 
 	/// <summary>Every label a scene authors: where its box's centre sits, and how big its glyphs

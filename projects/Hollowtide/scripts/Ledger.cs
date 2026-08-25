@@ -64,6 +64,18 @@ public sealed class Ledger
 	/// faces without raising the row put the second line straight through the bar.</summary>
 	private static readonly float kRowHeight = Typography.Box(64.0f);
 	private const float kRowGap = 6.0f;
+
+	// ── A row's own geometry ─────────────────────────────────────────────────────────
+	// Named rather than left as arguments to the four calls that build a row. A ledger row is
+	// the densest text in the game - two stacked lines, fourteen rows deep - and it is built at
+	// runtime, so the check that reads the scene files to make sure nothing collides at the
+	// largest type a keeper can ask for cannot see any of it. Written down, it can.
+	private const float kTitleTop = 6.0f;
+	private const float kTitleHeight = 24.0f;
+	private const float kTitleFace = 17.0f;
+	private const float kSubTop = 32.0f;
+	private const float kSubHeight = 23.0f;
+	private const float kSubFace = 15.0f;
 	private const float kListTop = 150.0f;
 	private const int kRowPool = 14;
 
@@ -195,17 +207,17 @@ public sealed class Ledger
 			// The composed button's own centred label is unused: a ledger row has four columns,
 			// so they are placed individually and the pooled label is emptied.
 			Ui.SetText(row.Box.Label, "");
-			row.Title = UiKit.Text(row.Box.Root, "", kTextLeft, Typography.Box(6.0f), TextWidth,
-				Typography.Box(24.0f), Typography.Face(17.0f), Palette.TextBright);
-			row.Sub = UiKit.Text(row.Box.Root, "", kTextLeft, Typography.Box(32.0f), TextWidth,
-				Typography.Box(23.0f), Typography.Face(15.0f), Palette.TextFaint,
+			row.Title = UiKit.Text(row.Box.Root, "", kTextLeft, Typography.Box(kTitleTop), TextWidth,
+				Typography.Box(kTitleHeight), Typography.Face(kTitleFace), Palette.TextBright);
+			row.Sub = UiKit.Text(row.Box.Root, "", kTextLeft, Typography.Box(kSubTop), TextWidth,
+				Typography.Box(kSubHeight), Typography.Face(kSubFace), Palette.TextFaint,
 				UiHAlign.Left, Palette.Body);
 			row.Cost = UiKit.Text(row.Box.Root, "", FiguresLeft,
-				Typography.Box(6.0f), FiguresWidth, Typography.Box(24.0f), Typography.Face(17.0f),
-				Palette.Ichor, UiHAlign.Right);
+				Typography.Box(kTitleTop), FiguresWidth, Typography.Box(kTitleHeight),
+				Typography.Face(kTitleFace), Palette.Ichor, UiHAlign.Right);
 			row.Note = UiKit.Text(row.Box.Root, "", FiguresLeft,
-				Typography.Box(32.0f), FiguresWidth, Typography.Box(23.0f), Typography.Face(15.0f),
-				Palette.TextFaint, UiHAlign.Right);
+				Typography.Box(kSubTop), FiguresWidth, Typography.Box(kSubHeight),
+				Typography.Face(kSubFace), Palette.TextFaint, UiHAlign.Right);
 			row.Progress = UiKit.Image(row.Box.Root, 0.0f, kRowHeight - 3.0f, 0.0f, 3.0f, Palette.IchorDim);
 			// Ink, not white: ui_relic computes its own colour and takes only the alpha from the
 			// element, so on any frame before the material resolves the plain image draws

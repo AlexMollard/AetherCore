@@ -93,7 +93,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **318 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **320 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -176,6 +176,11 @@ visible by reading the code:
 - The whisper feed — the parish's own voice — was spaced 26px apart for 18pt text, so it piled
   up on itself above **x1.44**. Illegible at exactly the setting somebody reaches for because
   they could not read it.
+
+Every surface the type slider touches is now measured against the top of its own range: the
+threshold's three pages (x2.08), the vigil's menu (x2.13), the parish's chrome (x1.87) and the
+ledger's runtime rows (x2.07). The narrowest of those is what the slider's ceiling has to
+respect, and the harness fails if it stops respecting it.
 - A relic's name got a wear vocabulary and optional parts, so the *shape* of a name varies and
   not only its words: 784 ways to name a Leavings became **312,816**, and the rarest grade —
   which had the narrowest pool of all, because a guaranteed epithet locked it out of everything
