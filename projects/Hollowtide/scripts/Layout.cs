@@ -92,8 +92,18 @@ public static class Layout
 		return (steps * 8.0f + held + MathF.Min(progress, 0.999f)) / 256.0f;
 	}
 
-	/// <summary>Undo <see cref="PackWave"/>. Mirrors Unwave in ui_parish.slang line for line, so
-	/// the harness checking this is checking what the shader does.</summary>
+	/// <summary>
+	/// Undo <see cref="PackWave"/>.
+	/// </summary>
+	/// <remarks>
+	/// A hand-copy of <c>Unwave</c> in <c>ui_parish.slang</c>, and nothing but the harness calls
+	/// it. Round-tripping a packed front through this proves the C# side is self-consistent -
+	/// which is worth having, and is NOT the same as proving the shader agrees. That claim used
+	/// to be made here, and it is precisely the mistake that let the relic power mask ship
+	/// wrong: a check that compares one side of a boundary against a copy of itself passes
+	/// however far the other side has drifted. What actually holds the shader is
+	/// <c>TheShadersAgreeWithTheGame</c>, which reads the file.
+	/// </remarks>
 	public static (float Origin, float Progress, int Weight) UnpackWave(float packed)
 	{
 		float scaled = Math.Clamp(packed, 0.0f, 1.0f) * 256.0f;
