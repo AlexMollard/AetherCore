@@ -140,6 +140,8 @@ the same sentence forever, which turns a warning into a label.
   another. The bestiary still shows the canonical line, so what you *study* stays stable.
 
 ### Marks you can see yourself approaching
+**24 marks**, nine of them added here, covering relics, consecration, a full board of offerings
+and the prestige ladder.
 Twenty-three marks showed a name, a sentence and nothing else — a list of things you have not
 done rather than a track.
 
@@ -325,7 +327,7 @@ Mechanics that existed and worked, but that no player could see:
   and a red tree was committed. It never pipes, checks every return code directly, keeps going
   after a failure so one run reports everything, and skips the shaders **loudly** when no
   compiler is present.
-- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **227
+- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **246
   invariants**. Every check exists because the thing it checks was once broken.
 - **The parish's layout is checked too.** The geometry was split into an engine-free `Layout`
   and the harness now lays the parish out at **336 sizes across six window shapes**, asserting
