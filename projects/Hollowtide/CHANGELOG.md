@@ -127,6 +127,26 @@ describing an event where nothing was lost.
   decision rather than a rule learned by losing something.
 - A held ward and a right answer still cost nothing.
 
+### A visitor says it three ways
+The encounter is the most dramatic moment in the game and each visitor announced itself with
+the same sentence forever, which turns a warning into a label.
+
+- **24 approach lines** across eight visitors, and **24 more** for what the parish says when
+  something is lost.
+- **Every variant keeps the tell.** The line is the only thing a keeper has to work out what a
+  visitor wants, so varying the wording is flavour and varying the meaning would be cheating.
+- One line is drawn **per approach and shared** by the panel, the whisper and the transcript —
+  picking independently would have the parish warn about one thing while the panel described
+  another. The bestiary still shows the canonical line, so what you *study* stays stable.
+
+### Marks you can see yourself approaching
+Twenty-three marks showed a name, a sentence and nothing else — a list of things you have not
+done rather than a track.
+
+- The eleven that **count** toward something now draw a bar, on the same widget the relics use
+  for rarity and the rites use for a working.
+- Null where a mark cannot be partly done: lighting a first lantern is not 40% complete.
+
 ### The parish notices
 - **24 ambient lines** where there were eight, and **twelve more** the parish says only when
   they are true of this vigil — a rite consecrated, structures standing that were never bought,
@@ -297,7 +317,7 @@ Mechanics that existed and worked, but that no player could see:
   and a red tree was committed. It never pipes, checks every return code directly, keeps going
   after a failure so one run reports everything, and skips the shaders **loudly** when no
   compiler is present.
-- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **213
+- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **227
   invariants**. Every check exists because the thing it checks was once broken.
 - **The parish's layout is checked too.** The geometry was split into an engine-free `Layout`
   and the harness now lays the parish out at **336 sizes across six window shapes**, asserting
@@ -329,22 +349,26 @@ looks like art. Every such pairing is now **verified by reading the other side**
 A missing file or an unmatched line **fails** rather than passing quietly: a verifier that
 silently stops verifying keeps reporting green.
 
-## Three things the checks themselves got wrong
+## Five things the checks themselves got wrong
 
-Worth recording, because each was a *check* failing rather than the game.
+Each was a *check* failing rather than the game, and each taught something the next one assumes.
 
-- **A check that compared C# to C#.** "The drawing is made of the same powers as the words"
-  verified `PackedPowerMask` against `1 << PowerKinds` — both sides of the comparison were the
-  same side, so it passed happily while every relic drew the wrong features. A format that
-  crosses a language boundary is not checked until something pins the number on the far side.
-- **A fixture that did not know about a field.** The solo-reachability check maxes out every
-  counter and asserts each non-congregation mark becomes earnable; it had never heard of the
-  relic counters, so it reported **six perfectly earnable marks as impossible**.
-- **A bound tighter than its own distribution.** "A keeper finds something in their first
-  minutes" bounded one sample of an exponential waiting time at 300s. Measured over 200k digs
-  the mean wait is **1m56s**, putting that bound near the 92nd percentile — it would have
-  failed roughly one seed in twelve, forever, at random. The property is now asserted on the
-  rate, where no seed can move it.
+- **A check that compared C# to C#.** It verified a packed value against the constant that
+  packed it — both sides of the comparison were the same side — and passed happily while every
+  relic drew the wrong features.
+- **A fixture that did not know about a field**, reporting six earnable marks as impossible.
+- **A bound tighter than its own distribution.** One sample of an exponential wait, bounded at
+  the 92nd percentile: it would have failed one seed in twelve, forever, at random.
+- **A fixture that resolved nothing.** It answered a visitation with a call that returns early
+  for "no answer", then asserted the consequences against a visitation still walking. Two checks
+  passed that way, finding an intact satchel because nothing had happened to it yet.
+- **A progress check that could not see a wrong denominator.** It compared every bar against its
+  mark at an empty keeper and a maximal one — where every bar is empty and then full whatever it
+  was divided by. A bar filling at 25 for a mark needing 50 is only visible in between.
+
+And one **assertion that could not fail**: `lentRate > 0.0 && costBefore == 0`, where
+`costBefore` was declared zero and never assigned. Half always true, half a repeat of the check
+above it — and still counted in the total.
 
 ## What is still only checked by eye
 
