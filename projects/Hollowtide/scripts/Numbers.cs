@@ -45,9 +45,18 @@ public static class Numbers
 		else
 		{
 			int tier = (int)Math.Floor(Math.Log10(value) / 3.0);
+			double scaled = value / Math.Pow(1000.0, tier);
+			// Rounding can carry a value up out of its own tier: 999,999 is in the thousands by
+			// magnitude, but three significant figures of 999.999 is 1000, and it printed as
+			// "1000K" - a fifth character in a column sized for four, for a number that has a
+			// perfectly good name one tier up. Carry the tier with the rounding.
+			if (scaled >= 999.5)
+			{
+				tier++;
+				scaled = value / Math.Pow(1000.0, tier);
+			}
 			if (tier < s_suffixes.Length)
 			{
-				double scaled = value / Math.Pow(1000.0, tier);
 				// Three significant figures, always: 9.99K then 10.4K then 104K, so the
 				// column never changes width by more than a character.
 				string fmt = scaled < 10.0 ? "0.00" : scaled < 100.0 ? "0.0" : "0";

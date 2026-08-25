@@ -4667,6 +4667,27 @@ internal static class Balance
 				&& Numbers.Short(double.NegativeInfinity) == "-",
 			"NaN and infinity read as a dash");
 
+		// Every value just under a tier boundary, which is where three significant figures round
+		// UP and out of the tier they were measured in. Decades alone never land here, so the
+		// width check above walked straight past "1000K" - five characters in a four-character
+		// column, for a number whose name one tier up is "1.00M".
+		int carried = 0;
+		string carriedWorst = "";
+		for (int tier = 1; tier <= 11; tier++)
+		{
+			foreach (double nudge in new[] { 0.9999, 0.99999, 0.999999 })
+			{
+				string printed = Numbers.Short(Math.Pow(1000.0, tier) * 1000.0 * nudge);
+				if (printed.StartsWith("1000", StringComparison.Ordinal))
+				{
+					carried++;
+					carriedWorst = printed;
+				}
+			}
+		}
+		Check("a figure that rounds up carries its tier with it", carried == 0,
+			carried == 0 ? "999,999 reads as 1.00M" : carriedWorst + " is a tier behind itself");
+
 		// The suffixes have to be used wherever they exist; falling back to exponents early
 		// would be correct and unreadable.
 		bool suffixed = !Numbers.Short(1.0e30).Contains("e") && !Numbers.Short(9.9e32).Contains("e");

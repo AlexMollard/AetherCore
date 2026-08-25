@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **263 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **264 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -138,6 +138,9 @@ visible by reading the code:
 - Wiping the save deleted the save and left the *half-written* one beside it, which is what
   recovery reads when a save is unreadable. The one path in the game with no undo behind it
   could hand back the life the keeper had just asked twice to be rid of.
+- 999,999 ichor printed as **"1000K"** — five characters in a column sized for four — because
+  three significant figures round up out of the tier the magnitude was measured in. The width
+  check that was supposed to catch it only ever sampled decades.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
