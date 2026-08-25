@@ -385,7 +385,7 @@ public sealed class Hud
 		// The meter goes from rust to something brighter as it fills, so the last quarter
 		// reads as urgent without a second widget to say so.
 		_dreadTrack.Component("UI Progress Bar").SetVector4("fill_color",
-			Palette.Mix(Palette.DreadDeep, new Vector4(0.94f, 0.42f, 0.30f, 1.0f), MathF.Min(1.0f, dread * 1.15f)));
+			Palette.Mix(Palette.DreadDeep, Palette.DreadHot, MathF.Min(1.0f, dread * 1.15f)));
 
 		Ui.SetText(_sigilCount, Vigil.Sigils + " sigils   " + Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks");
 

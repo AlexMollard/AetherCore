@@ -113,7 +113,7 @@ public sealed class Congregation
 			Vector4 trackRect = Ui.GetRect(row.Track);
 			float width = MathF.Max(1.0f, trackRect.Z * dread);
 			Ui.SetRect(row.Fill, 0.0f, 0.0f, width, 6.0f);
-			Ui.SetImageColor(row.Fill, Palette.Mix(Palette.DreadDeep, new Vector4(0.94f, 0.42f, 0.30f, 1.0f), dread));
+			Ui.SetImageColor(row.Fill, Palette.Mix(Palette.DreadDeep, Palette.DreadHot, dread));
 			Ui.SetImageColor(row.Box, isSelf ? Palette.RowHot : Palette.Row);
 
 			// You cannot tithe or shunt yourself; the buttons stay visible so the row does not

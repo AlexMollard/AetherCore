@@ -99,6 +99,18 @@ public static class Palette
 	/// </remarks>
 	public static Vector4 DreadText => Mix(Dread, Pale, 0.30f);
 
+	/// <summary>The top of a dread meter: the accent lifted toward the light, so a full bar
+	/// reads as hot rather than as more of the same red. Named because it was spelled as a raw
+	/// literal in two files - the HUD's meter and the congregation's rows - and two bars showing
+	/// one quantity in two colours is the failure this whole file exists to prevent.</summary>
+	public static Vector4 DreadHot => Hex(0xF06B4D);
+
+	/// <summary>Something being taken. Between the dread accent and the text ramp, because a
+	/// line saying the parish lost something has to be legible as well as alarming - it was its
+	/// own raw literal, close to DreadHot without being it, for no reason either could state
+	/// against the other.</summary>
+	public static Vector4 Taken => Hex(0xE66A5A);
+
 	/// <summary>The quietest text there is. Bone, the first step above every surface. It used
 	/// to be Ash, whose own note in the ramp above calls it "structure in shade" - it is a
 	/// surface colour, and it was never legible as type.</summary>

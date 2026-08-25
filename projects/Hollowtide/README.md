@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **264 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **266 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -141,6 +141,11 @@ visible by reading the code:
 - 999,999 ichor printed as **"1000K"** — five characters in a column sized for four — because
   three significant figures round up out of the tier the magnitude was measured in. The width
   check that was supposed to catch it only ever sampled decades.
+- Three colours were written as raw literals in the views, and two of them were the same dread
+  meter spelled slightly differently — so tuning one would have left the HUD's bar and the
+  congregation's rows showing one quantity in two colours. Nothing was checking the README's
+  own claim that colour means something, because the claim is about every file *except*
+  `Palette.cs`.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.

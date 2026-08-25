@@ -3562,6 +3562,93 @@ internal static class Balance
 	/// interval, and the keeper went through a literal quarter and nothing else - so the half of
 	/// the mechanic aimed at a person was the one with no limit on it.
 	/// </remarks>
+	/// <summary>
+	/// Every power says its own thing.
+	/// </summary>
+	/// <remarks>
+	/// The switch that turns a power into a sentence ends in a default arm, which today catches
+	/// Steadiness and tomorrow catches whatever gets added next - silently, describing it as
+	/// "slower to lose fervour" on the inspector of every relic that carries it. The row would be
+	/// present, non-empty and ASCII, so the checks that already exist would all pass; the only
+	/// thing wrong with it would be that it is about a different power. Distinctness is the
+	/// property that actually fails when the table and the switch drift apart.
+	/// </remarks>
+	/// <summary>
+	/// Every colour in the game is in the palette.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The README's second load-bearing claim is that colour means something: one grey ramp and
+	/// three accents, and nothing else. That is not a property of Palette.cs - Palette.cs is
+	/// disciplined by definition - it is a property of every OTHER file, and nothing was checking
+	/// it. Three colours had been written as raw literals in the views, and two of them were the
+	/// same dread meter spelled slightly differently in two places, so tuning one would have left
+	/// the HUD's bar and the congregation's rows showing one quantity in two colours.
+	/// </para>
+	/// <para>
+	/// Read off the source, like the shader constants are, because the claim is about how the
+	/// code is written and there is no value at runtime that can be asked instead.
+	/// </para>
+	/// </remarks>
+	private static void EveryColourIsInThePalette()
+	{
+		Console.WriteLine("Every colour is in the palette");
+
+		string dir = ProjectFile("scripts", "Palette.cs");
+		if (dir.Length == 0)
+		{
+			Check("the scripts can be read at all", false, "could not find scripts/Palette.cs");
+			return;
+		}
+
+		int loose = 0;
+		string worst = "";
+		foreach (string file in Directory.GetFiles(Path.GetDirectoryName(dir)!, "*.cs"))
+		{
+			if (Path.GetFileName(file) == "Palette.cs")
+			{
+				continue;
+			}
+			foreach (Match match in Regex.Matches(File.ReadAllText(file), @"new Vector4\(\s*[0-9]"))
+			{
+				loose++;
+				worst = Path.GetFileName(file) + " writes " + match.Value.Trim() + "...";
+			}
+		}
+		Check("no colour is written outside the palette", loose == 0,
+			loose == 0 ? "every colour has a name" : worst);
+
+		Vigil.Reset();
+	}
+
+	private static void EveryPowerSaysItsOwnThing()
+	{
+		Console.WriteLine("Every power says its own thing");
+
+		var seen = new Dictionary<string, Power>();
+		int shared = 0;
+		string clash = "";
+		foreach (Power power in Enum.GetValues<Power>())
+		{
+			// One magnitude for all of them, so two powers reading alike is the switch and not
+			// the arithmetic.
+			string said = Relics.Describe(power, 0.05);
+			if (seen.TryGetValue(said, out Power already))
+			{
+				shared++;
+				clash = power + " and " + already + " both read \"" + said + "\"";
+			}
+			else
+			{
+				seen[said] = power;
+			}
+		}
+		Check("no two powers read as each other", shared == 0,
+			shared == 0 ? Relics.PowerKinds + " powers, " + seen.Count + " sentences" : clash);
+
+		Vigil.Reset();
+	}
+
 	private static void BothShuntsAreOneAct()
 	{
 		Console.WriteLine("Both shunts are one act");
@@ -5341,6 +5428,8 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		EveryColourIsInThePalette();
+		EveryPowerSaysItsOwnThing();
 		BothShuntsAreOneAct();
 		TheBellIsWorthSomethingAndNotEverything();
 		QuotedIsPaid();

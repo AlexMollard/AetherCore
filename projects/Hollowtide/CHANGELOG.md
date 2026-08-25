@@ -336,7 +336,7 @@ Mechanics that existed and worked, but that no player could see:
   and a red tree was committed. It never pipes, checks every return code directly, keeps going
   after a failure so one run reports everything, and skips the shaders **loudly** when no
   compiler is present.
-- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **264
+- **The balance harness** (`tools/balance`) — plays the real rules at speed and checks **266
   invariants**. Every check exists because the thing it checks was once broken. It counts them
   itself, and `verify.py` holds this sentence and the README's to that count — the figure was
   maintained by hand in two files and had already gone stale in one of them.
