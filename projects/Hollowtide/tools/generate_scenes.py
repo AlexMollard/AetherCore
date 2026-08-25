@@ -108,6 +108,24 @@ def _authored_scale():
 
 TYPE = _authored_scale()
 
+
+# How far the keeper may take the type, read from the same file. The authored layout has to
+# leave room for the LARGEST of them, or the slider's top end runs one line into the next.
+def _type_bound(name):
+    text = io.open(os.path.join(os.path.dirname(PALETTE_CS), "Typography.cs"), encoding="utf-8").read()
+    found = re.search(r"float " + name + r" = ([0-9.]+)f", text)
+    if found is None:
+        raise SystemExit("Typography.cs no longer states " + name)
+    return float(found.group(1))
+
+
+SMALLEST_TYPE = _type_bound("Smallest")
+LARGEST_TYPE = _type_bound("Largest")
+
+# One settings row's vertical step, with room for the largest type. Forty-four was fine for
+# type authored at 1.30 and ran the rows into each other above it.
+SETTINGS_STEP = 15.0 * LARGEST_TYPE + 12.0
+
 # The three faces, read for the same reason the colours are. A font name that drifts does not
 # look wrong, it looks MISSING: the renderer falls back, and one half of the interface quietly
 # renders in something nobody chose.
@@ -414,12 +432,12 @@ def settings_rows(centred, prefix, top, group):
     H = 26.0
     centred(prefix + "WhisperLabel", [Scene.text("SHOW WHISPERS", DISPLAY, 15.0, BONE_FAINT)], -100, top, 200, H)
     centred(prefix + "WhisperToggle", [Scene.toggle(True), Scene.selectable(group)], 172, top, 56, H)
-    centred(prefix + "ShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, top + 44, 200, H)
-    centred(prefix + "ShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable(group)], 140, top + 44, 120, H)
+    centred(prefix + "ShakeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, top + SETTINGS_STEP, 200, H)
+    centred(prefix + "ShakeSlider", [Scene.slider(0.0, 1.5, 0.1, 1.0), Scene.selectable(group)], 140, top + SETTINGS_STEP, 120, H)
     # Type size. The complaint it answers - "the whole interface is too small" - used to need
     # a rebuild AND the same number moved by hand in two languages.
-    centred(prefix + "TypeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, top + 88, 200, H)
-    centred(prefix + "TypeSlider", [Scene.slider(0.85, 1.75, 0.05, 1.30), Scene.selectable(group)], 140, top + 88, 120, H)
+    centred(prefix + "TypeLabel", [Scene.text("", DISPLAY, 15.0, BONE_FAINT)], -100, top + SETTINGS_STEP * 2, 200, H)
+    centred(prefix + "TypeSlider", [Scene.slider(SMALLEST_TYPE, LARGEST_TYPE, 0.05, TYPE), Scene.selectable(group)], 140, top + SETTINGS_STEP * 2, 120, H)
 
 
 # Threshold - entirely static, so all of it is authored.
@@ -440,14 +458,28 @@ def threshold():
     ])
 
     # ── Chrome: on every page, because it is what the screen IS rather than what it is asking.
-    centred("ThTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 72.0, BONE, "center")], 0, -250, 900, 90)
-    centred("ThSubtitle", [Scene.text("keep the parish, and count what it costs you", WHISPER, 18.0, BONE_FAINT, "center")], 0, -186, 900, 30)
+    #
+    # The gaps below are not chosen by eye. Layout is authored at one scale and the glyphs inside
+    # it grow with the keeper's setting, so every vertical gap has to be at least the written
+    # size of the label above it times the largest scale the slider offers - or dragging the
+    # slider up runs one line into the next. Measured, the title-to-subtitle gap allowed x1.31
+    # against a slider that went to x1.75, so the top third of the range broke the title screen.
+    def room(written, padding=8.0):
+        return written * LARGEST_TYPE + padding
+
+    y = -300.0
+    centred("ThTitle", [Scene.text("HOLLOWTIDE", DISPLAY, 72.0, BONE, "center")], 0, y, 900, 90)
+    y += room(72.0)
+    centred("ThSubtitle", [Scene.text("keep the parish, and count what it costs you", WHISPER, 18.0, BONE_FAINT, "center")], 0, y, 900, 30)
+    y += room(18.0)
     # What this keeper already is, for a keeper who is already something. The threshold used
     # to greet a player with fifty-eight sigils and five visitors named exactly as it greeted
     # someone who had never opened the game - so a title screen that is the front door to a
     # long save said nothing at all about the save.
-    centred("ThStanding", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, -155, 900, 26)
-    centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 322, 900, 26)
+    centred("ThStanding", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, y, 900, 26)
+    y += room(16.0, padding=18.0)
+    COLUMN_TOP = y
+    centred("ThStatus", [Scene.text("", WHISPER, 16.0, BONE_DIM, "center")], 0, 356, 900, 26)
 
     # One 400px column for everything, on every page, so nothing moves sideways when a page
     # changes. A menu whose controls jump around between pages reads as three screens rather
@@ -456,33 +488,43 @@ def threshold():
     ROW_H = 48.0
 
     # ── Root: who you are, and the four things you can do. ──────────────────────────────
-    centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], 0, -112, FIELD_W, 22)
-    centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, -72, FIELD_W, 44)
+    at = COLUMN_TOP
+    centred("ThNameLabel", [Scene.text("YOUR NAME", DISPLAY, 15.0, BONE_FAINT)], 0, at, FIELD_W, 22)
+    at += room(15.0)
+    centred("ThNameBox", [Scene.text_box("Keeper", 20, "alphanumeric")], 0, at, FIELD_W, 44)
+    at += room(18.0, padding=30.0)
 
     # KEEP VIGIL is the reason the game is open, so it is the widest, the brightest, and the
     # first thing focus lands on. The three below it are the same size as each other and
     # quieter than it - a menu where every entry shouts equally has no first entry.
-    centred("ThPlay", [Scene.button("KEEP VIGIL", DISPLAY, 17.0, ROW, mix(ROW_HOT, ICHOR, 0.34), BONE, ICHOR), Scene.selectable("threshold")], 0, 2, FIELD_W, 54)
-    centred("ThCongregation", [Scene.button("CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], 0, 62, FIELD_W, ROW_H)
-    centred("ThSettings", [Scene.button("SETTINGS", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("threshold")], 0, 116, FIELD_W, ROW_H)
-    centred("ThLeave", [Scene.button("LEAVE", DISPLAY, 15.0, ROW, mix(ROW_HOT, DREAD, 0.35), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, 170, FIELD_W, ROW_H)
+    centred("ThPlay", [Scene.button("KEEP VIGIL", DISPLAY, 17.0, ROW, mix(ROW_HOT, ICHOR, 0.34), BONE, ICHOR), Scene.selectable("threshold")], 0, at, FIELD_W, 54)
+    at += room(17.0, padding=26.0)
+    centred("ThCongregation", [Scene.button("CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE_DIM, SIGIL), Scene.selectable("threshold")], 0, at, FIELD_W, ROW_H)
+    at += room(15.0, padding=22.0)
+    centred("ThSettings", [Scene.button("SETTINGS", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("threshold")], 0, at, FIELD_W, ROW_H)
+    at += room(15.0, padding=22.0)
+    centred("ThLeave", [Scene.button("LEAVE", DISPLAY, 15.0, ROW, mix(ROW_HOT, DREAD, 0.35), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, at, FIELD_W, ROW_H)
 
     # ── Congregation: only ever seen by somebody who went looking for it. ───────────────
-    centred("ThAddressLabel", [Scene.text("HOST ADDRESS", DISPLAY, 15.0, BONE_FAINT)], 0, -112, FIELD_W, 22)
-    centred("ThAddressBox", [Scene.text_box("127.0.0.1:7777", 48, "host")], 0, -72, FIELD_W, 44)
-    centred("ThHost", [Scene.button("HOST A CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, 2, FIELD_W, ROW_H)
-    centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, 56, FIELD_W, ROW_H)
+    at = COLUMN_TOP
+    centred("ThAddressLabel", [Scene.text("HOST ADDRESS", DISPLAY, 15.0, BONE_FAINT)], 0, at, FIELD_W, 22)
+    at += room(15.0)
+    centred("ThAddressBox", [Scene.text_box("127.0.0.1:7777", 48, "host")], 0, at, FIELD_W, 44)
+    at += room(18.0, padding=30.0)
+    centred("ThHost", [Scene.button("HOST A CONGREGATION", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, at, FIELD_W, ROW_H)
+    at += room(15.0, padding=22.0)
+    centred("ThJoin", [Scene.button("JOIN ONE", DISPLAY, 15.0, ROW, mix(ROW_HOT, SIGIL, 0.30), BONE, SIGIL), Scene.selectable("threshold")], 0, at, FIELD_W, ROW_H)
 
     # ── Settings: one row each, control flush to the column's right edge. ──────────────
-    settings_rows(centred, "Th", -104, "threshold")
+    settings_rows(centred, "Th", COLUMN_TOP, "threshold")
 
     # Beginning again, at the bottom of the page a player has to go looking for rather than on
     # the front door. It asks twice before it does anything - there is no undo behind this
     # button and no dialog system to put in front of it, so the button is its own confirmation.
-    centred("ThWipe", [Scene.button("BEGIN A NEW VIGIL", DISPLAY, 14.0, ROW, mix(ROW_HOT, DREAD, 0.45), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, 104, 260, 36)
+    centred("ThWipe", [Scene.button("BEGIN A NEW VIGIL", DISPLAY, 14.0, ROW, mix(ROW_HOT, DREAD, 0.45), BONE_FAINT, DREAD), Scene.selectable("threshold")], 0, COLUMN_TOP + SETTINGS_STEP * 3 + 26.0, 260, 36)
 
     # One back, shared by every page that is not the root - which is the page it goes to.
-    centred("ThBack", [Scene.button("BACK", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("threshold")], 0, 240, 180, 40)
+    centred("ThBack", [Scene.button("BACK", DISPLAY, 15.0, ROW, ROW_HOT, BONE_DIM, BONE), Scene.selectable("threshold")], 0, 300, 180, 40)
 
     body = s.render("# Hollowtide - the threshold. Authored chrome; ThresholdScreen only binds and drives it.\n")
     # Splice the hand-written camera / script-root / canvas prologue over the placeholders.
