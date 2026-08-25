@@ -133,6 +133,11 @@ visible by reading the code:
   the amount unclamped and unlimited, so one client could hold a whole congregation at the
   brink. It is the one message that acts against somebody's interest, and it was the one with
   no limit.
+- The tithe's ten percent was a literal in the panel that drew the button — the third of the
+  congregation's three verbs to have its rule living in the view.
+- Wiping the save deleted the save and left the *half-written* one beside it, which is what
+  recovery reads when a save is unreadable. The one path in the game with no undo behind it
+  could hand back the life the keeper had just asked twice to be rid of.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.

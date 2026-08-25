@@ -119,7 +119,7 @@ public sealed class Congregation
 			// You cannot tithe or shunt yourself; the buttons stay visible so the row does not
 			// change shape when the roster reorders, and go dead instead.
 			bool canAct = !isSelf && local != null;
-			double gift = Vigil.Ichor * 0.10;
+			double gift = Vigil.TitheOffer;
 			bool canTithe = canAct && gift > 0.0;
 			bool canShunt = canAct && Vigil.CanShuntAway;
 

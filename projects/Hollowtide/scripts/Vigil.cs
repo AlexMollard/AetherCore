@@ -2038,6 +2038,15 @@ public static class Vigil
 		return shed;
 	}
 
+	/// <summary>What share of a purse one tithe hands over. Here rather than in the panel that
+	/// draws the button, which is where it was: the congregation's three verbs are the game's
+	/// rules about what one keeper may do to another, and two of them had already turned out to
+	/// be living in the view with no way for anything to check them.</summary>
+	public const double kTitheShare = 0.10;
+
+	/// <summary>What this keeper's next tithe would hand over.</summary>
+	public static double TitheOffer => Math.Max(0.0, Ichor) * kTitheShare;
+
 	public static bool SpendForTithe(double amount)
 	{
 		if (amount <= 0.0 || amount > Ichor)

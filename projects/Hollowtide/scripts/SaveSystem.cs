@@ -239,6 +239,21 @@ public static class SaveSystem
 			{
 				File.Delete(path);
 			}
+			// And the half-written one beside it. A save is written to a temporary file and then
+			// moved over the real one, so a machine that died in the gap leaves a complete vigil
+			// in the temporary file - which is exactly what Load reaches for when the real save
+			// cannot be read. Left behind by a wipe, it is a copy of the life the keeper just
+			// asked twice to be rid of, waiting for their NEXT save to be interrupted. Narrow,
+			// and the one place in the game with no undo behind it.
+			//
+			// The .broken rescues are deliberately left alone: those are copies kept because
+			// something went wrong, and a keeper starting again has not asked for the forensic
+			// evidence of the last failure to be destroyed too.
+			string half = path + SaveNaming.TempSuffix;
+			if (File.Exists(half))
+			{
+				File.Delete(half);
+			}
 		}
 		catch (Exception e)
 		{
