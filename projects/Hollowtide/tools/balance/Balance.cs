@@ -3590,6 +3590,101 @@ internal static class Balance
 	/// code is written and there is no value at runtime that can be asked instead.
 	/// </para>
 	/// </remarks>
+	/// <summary>
+	/// A relic can be told from the one beside it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A name is BUILT, not drawn from a list of unique ones: a material and a form, plus a
+	/// provenance from Anointed up and an epithet at Hollowed. So names repeat, and the lower the
+	/// grade the sooner - which is fine only for as long as two things sharing a name are still
+	/// obviously two things. What must never repeat with it is the rest of the relic: the powers
+	/// it carries, and the picture drawn from its seed.
+	/// </para>
+	/// <para>
+	/// Measured over a hundred of each grade, which is about what a keeper who chases the
+	/// fifty-relics mark ends up seeing.
+	/// </para>
+	/// </remarks>
+	private static void ARelicCanBeToldFromItsNeighbour()
+	{
+		Console.WriteLine("A relic can be told from the one beside it");
+
+		const int kSample = 100;
+		foreach (Grade grade in Enum.GetValues<Grade>())
+		{
+			var names = new HashSet<string>();
+			var whole = new HashSet<string>();
+			var art = new HashSet<float>();
+			for (int i = 0; i < kSample; i++)
+			{
+				Relic relic = new Relic { Seed = 1000 + i * 7, Grade = grade };
+				names.Add(Relics.NameOf(relic));
+				art.Add(Relics.ArtSeed(relic));
+				string powers = "";
+				for (int p = 0; p < Relics.PowerCount(grade); p++)
+				{
+					powers += Relics.PowerAt(relic, p) + "/";
+				}
+				whole.Add(Relics.NameOf(relic) + "|" + powers);
+			}
+			// The name alone is allowed to repeat, and does. Stated rather than asserted tightly,
+			// because it is a consequence of building names out of parts and not a fault.
+			Console.WriteLine("      " + GradeLabel(grade) + ": " + names.Count + "/" + kSample
+				+ " names, " + whole.Count + "/" + kSample + " name-and-powers, "
+				+ art.Count + "/" + kSample + " drawings");
+
+			Check(GradeLabel(grade) + " relics are not all one thing", names.Count >= kSample / 2,
+				names.Count + " distinct names in " + kSample);
+			Check("and two sharing a name still differ in what they do", whole.Count > names.Count
+				|| Relics.PowerKinds < 2,
+				whole.Count + " distinct once powers are counted");
+			Check("and no two are drawn the same", art.Count == kSample,
+				art.Count + " distinct drawings in " + kSample);
+		}
+
+		Vigil.Reset();
+	}
+
+	private static string GradeLabel(Grade grade) => Relics.GradeName(grade).ToLowerInvariant();
+
+	/// <summary>
+	/// The inspector has a line for everything the best relic can carry.
+	/// </summary>
+	/// <remarks>
+	/// The panel holds a fixed array of power lines and the scene authors a fixed set of text
+	/// elements to fill it, and both are written as literal fives that must equal what a Hollowed
+	/// relic carries. Nothing connects the three. Add a grade and the rarest thing in the game
+	/// quietly stops showing its last power - on a panel that otherwise looks entirely correct,
+	/// which is the only kind of fault this system can have that a player would never report.
+	/// Both counts are read off the source rather than restated here, for the same reason the
+	/// shader constants are.
+	/// </remarks>
+	private static void TheInspectorFitsTheBestRelic()
+	{
+		Console.WriteLine("The inspector fits the best relic");
+
+		int most = Relics.PowerCount(Grade.Hollowed);
+
+		string ledger = ProjectFile("scripts", "Ledger.cs");
+		Match slots = ledger.Length == 0
+			? Match.Empty
+			: Regex.Match(File.ReadAllText(ledger), @"_inspectPowers = new Entity\[([0-9]+)\]");
+		Check("the panel has a line per power", slots.Success && int.Parse(slots.Groups[1].Value) == most,
+			slots.Success
+				? slots.Groups[1].Value + " lines against " + most + " powers"
+				: "could not find the inspector's line count in Ledger.cs");
+
+		string scene = ProjectFile("scenes", "Vigil.scene.toml");
+		int authored = scene.Length == 0
+			? -1
+			: Regex.Matches(File.ReadAllText(scene), @"InspectPower[0-9]").Count;
+		Check("and the scene authors one for each", authored == most,
+			authored < 0 ? "could not read Vigil.scene.toml" : authored + " authored against " + most + " powers");
+
+		Vigil.Reset();
+	}
+
 	private static void EveryColourIsInThePalette()
 	{
 		Console.WriteLine("Every colour is in the palette");
@@ -5428,6 +5523,8 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		TheInspectorFitsTheBestRelic();
+		ARelicCanBeToldFromItsNeighbour();
 		EveryColourIsInThePalette();
 		EveryPowerSaysItsOwnThing();
 		BothShuntsAreOneAct();
