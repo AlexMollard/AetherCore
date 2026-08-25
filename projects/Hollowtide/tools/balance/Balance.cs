@@ -4116,6 +4116,71 @@ internal static class Balance
 	/// meet is a screen. The generator reads Palette.cs now. This checks that it did.
 	/// </para>
 	/// </remarks>
+	/// <summary>
+	/// A keeper's type size is applied exactly once, to everything.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Two kinds of text end up on screen: authored, written into the scene files at the size
+	/// somebody typed times the scale the generator bakes; and script-built, sized through
+	/// <c>Typography.Face</c> when a row is made. One thing applies the keeper's preference -
+	/// <c>TypeScale.Apply</c>, which multiplies every label by <c>Scale / Authored</c>. So both
+	/// kinds have to be BUILT at the authored scale, or the preference lands on one of them
+	/// twice.
+	/// </para>
+	/// <para>
+	/// It did. <c>Face</c> multiplied by <c>Scale</c>, which was a constant equal to the authored
+	/// scale until type size became a setting - at which point a ledger row was scaled by the
+	/// keeper's choice at build and again at apply. At the default the two are the same number
+	/// and everything cancels; the fault appeared only once somebody moved the slider, a third
+	/// too large at the top and a third too small at the bottom. Every check in this suite passed
+	/// throughout, because none of them had ever asked what a label is finally drawn at.
+	/// </para>
+	/// </remarks>
+	private static void TypeSizeIsAppliedOnce()
+	{
+		Console.WriteLine("A keeper's type size is applied once");
+
+		float was = Typography.Scale;
+		const float written = 17.0f;
+		int wrong = 0;
+		string worst = "";
+
+		foreach (float wanted in new[] { Typography.Smallest, 1.0f, Typography.Authored, 1.5f, Typography.Largest })
+		{
+			Typography.Scale = wanted;
+
+			// What TypeScale.Apply does, spelled out: back to the size somebody typed, then out
+			// to the size that was asked for. Both kinds of text go through it.
+			float authoredLabel = written * Typography.Authored / Typography.Authored * Typography.Scale;
+			float builtLabel = Typography.Face(written) / Typography.Authored * Typography.Scale;
+			float wantedSize = written * wanted;
+
+			if (Math.Abs(authoredLabel - wantedSize) > 1e-4 || Math.Abs(builtLabel - wantedSize) > 1e-4)
+			{
+				wrong++;
+				worst = "at x" + wanted.ToString("0.00") + " a built label lands at "
+					+ builtLabel.ToString("0.0") + " against an authored " + authoredLabel.ToString("0.0");
+			}
+		}
+		Typography.Scale = was;
+		Check("built type and authored type end up the same size", wrong == 0,
+			wrong == 0 ? "one multiplication, five scales" : worst);
+
+		// Boxes are authored geometry and must NOT follow the keeper: a box that grew with its
+		// text would push everything below it down, which is a re-layout rather than a setting.
+		Typography.Scale = Typography.Largest;
+		bool boxHeld = Math.Abs(Typography.Box(21.0f) - 21.0f * Typography.Authored) < 1e-4;
+		// The clearance above a rite is the exception, because what overflows a window is the
+		// size the glyphs are DRAWN at.
+		bool clearanceMoved = Layout.CountAllowance > 8.0f + 21.0f * Typography.Authored;
+		Typography.Scale = was;
+		Check("and the layout holds still while the glyphs inside it move", boxHeld && clearanceMoved,
+			"boxes are authored, clearances are drawn");
+
+		Vigil.Reset();
+	}
+
 	private static void BothLanguagesDrawTheSameColours()
 	{
 		Console.WriteLine("Both languages draw the same colours");
@@ -6029,6 +6094,7 @@ internal static class Balance
 		EveryOfferingIsWorthBuying();
 		TheInspectorFitsTheBestRelic();
 		ARelicCanBeToldFromItsNeighbour();
+		TypeSizeIsAppliedOnce();
 		BothLanguagesDrawTheSameColours();
 		EveryColourIsInThePalette();
 		EveryPowerSaysItsOwnThing();

@@ -93,7 +93,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **313 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **315 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -164,6 +164,11 @@ visible by reading the code:
   The fonts and the type scale beside it were paired by a comment saying "move both or neither",
   which is an instruction to a person; the palette three lines up is what that is worth over
   time. All of it is read now.
+- Type size, the moment it became a setting, was applied **twice** to every script-built row:
+  once when the row was made and once by the thing that scales every label. At the default the
+  two cancel exactly, so it looked right; a third too large at the top of the slider and a third
+  too small at the bottom. Nothing caught it because no check had ever asked what a label is
+  finally *drawn* at.
 - A relic's name got a wear vocabulary and optional parts, so the *shape* of a name varies and
   not only its words: 784 ways to name a Leavings became **312,816**, and the rarest grade —
   which had the narrowest pool of all, because a guaranteed epithet locked it out of everything

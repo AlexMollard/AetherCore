@@ -148,12 +148,13 @@ public static class Layout
 	/// </para>
 	/// </remarks>
 	/// <remarks>
-	/// A property, not a readonly field. Type scale is a live setting now, and a field would
-	/// have been computed once at class load and then quietly described the size the type used
-	/// to be - so the clearance above a rite would have been right only until somebody moved
-	/// the slider, and wrong in the direction that draws a count off the top of the window.
+	/// A property, not a readonly field, and measured in DRAWN type rather than authored. Type
+	/// scale is a live setting now, so a field would have been computed once at class load and
+	/// then quietly described the size the type used to be - wrong in the direction that draws a
+	/// count off the top of the window. This is the one place the keeper's setting belongs in a
+	/// layout number, because the question it answers is how much room the glyphs actually take.
 	/// </remarks>
-	public static float CountAllowance => 8.0f + Typography.Box(21.0f);
+	public static float CountAllowance => 8.0f + Typography.Drawn(21.0f);
 
 	/// <summary>
 	/// The tallest a rite may be drawn, as a fraction of the window height.
