@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **257 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **259 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -123,7 +123,9 @@ visible by reading the code:
 - The bell's whole rule — how often it can be rung — was a float on a widget, so the largest
   multiplier in the game had never been measured, a reload cleared it, and the host had nothing
   to check an arriving ring against. Ringing on every cooldown is worth **12x** over half an
-  hour, and a congregation answering each other's bells **108x**.
+  hour, and a congregation answering each other's bells **108x** — the answered surge ran for
+  22 seconds of a 25-second rope, so it was not a surge, it was the rate. Cut to **2.2x** and
+  **4.6x**.
 - The same press paid two different bells depending on whether the keeper's network entity had
   finished spawning.
 

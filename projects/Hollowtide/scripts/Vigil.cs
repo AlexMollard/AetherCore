@@ -1893,14 +1893,46 @@ public static class Vigil
 	/// <summary>How long between bells.</summary>
 	public const double kBellInterval = 25.0;
 
-	/// <summary>What a bell nobody answers is worth. One pair of numbers, because there were two:
-	/// a keeper whose ring reached the host got ten seconds at double, and one whose keeper
-	/// entity had not finished spawning got eight at one and a half - the same press, paying
-	/// differently depending on a piece of network bookkeeping the player cannot see.</summary>
-	public const double kLoneBellSeconds = 10.0;
+	/// <summary>
+	/// What a bell nobody answers is worth.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// One pair of numbers, because there were two: a keeper whose ring reached the host got ten
+	/// seconds at double, and one whose keeper entity had not finished spawning got eight at one
+	/// and a half - the same press, paying differently depending on a piece of network
+	/// bookkeeping the player cannot see.
+	/// </para>
+	/// <para>
+	/// A surge has to cover a MINORITY of its own cooldown or it stops being a surge and becomes
+	/// the rate. Ten seconds in twenty-five was forty percent of the time at double, which
+	/// compounds through everything it buys: measured, a keeper on the rope every cooldown
+	/// finished half an hour twelve times ahead of a quiet parish. Five at one and a half is a
+	/// fifth of the time and is worth a little over twice - an advantage for paying attention,
+	/// which is what it is for, rather than a second economy that has to be operated.
+	/// </para>
+	/// </remarks>
+	public const double kLoneBellSeconds = 5.0;
 
 	/// <inheritdoc cref="kLoneBellSeconds"/>
-	public const double kLoneBellMultiplier = 2.0;
+	public const double kLoneBellMultiplier = 1.5;
+
+	/// <summary>
+	/// What a bell another keeper answers is worth, to everybody.
+	/// </summary>
+	/// <remarks>
+	/// Here rather than with the networking that grants it, so the harness can measure the two
+	/// bells against each other and against their cooldown. It was twenty-two seconds at triple
+	/// on a twenty-five second rope - a surge covering seven eighths of its own interval, which
+	/// is not a surge at all - and two keepers answering each other finished half an hour a
+	/// HUNDRED times ahead. Rope duty was the dominant way to play a congregation. Now it pays
+	/// about twice what ringing alone pays, which is what a thing that needs two people should
+	/// be worth: better, and not a different game.
+	/// </remarks>
+	public const double kAnsweredBellSeconds = 7.0;
+
+	/// <inheritdoc cref="kAnsweredBellSeconds"/>
+	public const double kAnsweredBellMultiplier = 1.7;
 
 	/// <summary>Whether the rope will move.</summary>
 	public static bool CanRing => BellCooldown <= 0.0;

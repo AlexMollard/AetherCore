@@ -3568,21 +3568,29 @@ internal static class Balance
 		Check("and again when the interval is up", Vigil.CanRing && Vigil.Ring(),
 			"one bell every " + Vigil.kBellInterval.ToString("0") + "s");
 
+		// The SHAPE, first, because it is the thing that went wrong and it is checkable without
+		// playing anything: a surge that covers most of its own cooldown is not a surge, it is
+		// the rate, and it compounds through everything it buys. The answered bell used to run
+		// for twenty-two seconds of a twenty-five second rope.
+		Check("a bell is a moment, not the rate",
+			Vigil.kLoneBellSeconds < Vigil.kBellInterval * 0.5
+				&& Vigil.kAnsweredBellSeconds < Vigil.kBellInterval * 0.5,
+			"the rope is quiet for " + (Vigil.kBellInterval - Vigil.kAnsweredBellSeconds).ToString("0")
+				+ "s of every " + Vigil.kBellInterval.ToString("0"));
+
 		double quiet = RingingFor(30.0, ring: false);
-		double rung = RingingFor(30.0, ring: true);
-		double worth = rung / quiet;
-		Console.WriteLine("      lone bell x" + Numbers.Short(worth)
-			+ ", answered bell x" + Numbers.Short(RingingFor(30.0, ring: true, seconds: 22.0, mult: 3.0) / quiet));
-		// RECORDED, not endorsed. These bounds are wide because they are the first measurement of
-		// this mechanic ever taken - the interval lived on a widget until now, so nothing could
-		// ask - and what they record is that the bell is very large: a keeper on the rope every
-		// twenty-five seconds finishes half an hour twelve times ahead, and a congregation
-		// answering each other's bells finishes a hundred times ahead, because a surge covering
-		// twenty-two of every twenty-five seconds is not a surge, it is the rate. Whether that is
-		// the game it wants to be is a decision for the game and not for the harness. What the
-		// bounds are for is that it cannot now change by accident.
-		Check("a bell rung on every cooldown pays, and pays sanely", worth > 1.05 && worth < 20.0,
+		double worth = RingingFor(30.0, ring: true) / quiet;
+		double answered = RingingFor(30.0, ring: true,
+			seconds: Vigil.kAnsweredBellSeconds, mult: Vigil.kAnsweredBellMultiplier) / quiet;
+
+		// Perfect ringing for half an hour, which nobody actually does - so these are the ceiling
+		// on the mechanic rather than the experience of it. They were twelve and a hundred and
+		// eight before the surges were cut to a fifth and a quarter of the rope.
+		Check("a bell rung on every cooldown pays, and pays sanely", worth > 1.2 && worth < 3.5,
 			"perfect ringing is worth " + Numbers.Short(worth) + "x over half an hour");
+		Check("and an answered one is better without being a different game",
+			answered > worth * 1.4 && answered < worth * 3.0,
+			"answered is worth " + Numbers.Short(answered) + "x against " + Numbers.Short(worth) + "x alone");
 
 		Vigil.Reset();
 	}

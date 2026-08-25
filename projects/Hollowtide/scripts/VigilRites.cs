@@ -41,8 +41,8 @@ public sealed class VigilRites : EntityScript
 	/// bell is two bells.</summary>
 	private const double kLoneSeconds = Vigil.kLoneBellSeconds;
 	private const double kLoneMultiplier = Vigil.kLoneBellMultiplier;
-	private const double kCommunionSeconds = 22.0;
-	private const double kCommunionMultiplier = 3.0;
+	private const double kCommunionSeconds = Vigil.kAnsweredBellSeconds;
+	private const double kCommunionMultiplier = Vigil.kAnsweredBellMultiplier;
 
 	// Host-only bookkeeping: who rang, and when. Static because the host holds one instance
 	// of this script per keeper and the window is a property of the SESSION, not of a keeper.
