@@ -3541,6 +3541,83 @@ internal static class Balance
 	/// have been a fiction the game never produces; this is a state it settles into on its own.
 	/// </para>
 	/// </remarks>
+	/// <summary>
+	/// What the bell is worth, now that anything can ask.
+	/// </summary>
+	/// <remarks>
+	/// The bell multiplies the whole economy, and until its interval moved into the vigil there
+	/// was no way to measure it from here: the only thing that knew how often it could be rung
+	/// was a float on the HUD. So the largest single multiplier a keeper can hold down had never
+	/// been in front of the harness at all. This rings it as fast as it can be rung and states
+	/// what that is worth, which is the figure a rebalance has to be allowed to move and the
+	/// shape it is not.
+	/// </remarks>
+	private static void TheBellIsWorthSomethingAndNotEverything()
+	{
+		Console.WriteLine("The bell is worth something and not everything");
+
+		Vigil.Reset();
+		Check("the rope moves once", Vigil.Ring(), "the first pull takes");
+		Check("and not twice", !Vigil.Ring() && !Vigil.CanRing,
+			"another " + Vigil.BellCooldown.ToString("0") + "s on the rope");
+
+		for (double t = 0.0; t < Vigil.kBellInterval; t += kDt)
+		{
+			Vigil.Tick(kDt);
+		}
+		Check("and again when the interval is up", Vigil.CanRing && Vigil.Ring(),
+			"one bell every " + Vigil.kBellInterval.ToString("0") + "s");
+
+		double quiet = RingingFor(30.0, ring: false);
+		double rung = RingingFor(30.0, ring: true);
+		double worth = rung / quiet;
+		Console.WriteLine("      lone bell x" + Numbers.Short(worth)
+			+ ", answered bell x" + Numbers.Short(RingingFor(30.0, ring: true, seconds: 22.0, mult: 3.0) / quiet));
+		// RECORDED, not endorsed. These bounds are wide because they are the first measurement of
+		// this mechanic ever taken - the interval lived on a widget until now, so nothing could
+		// ask - and what they record is that the bell is very large: a keeper on the rope every
+		// twenty-five seconds finishes half an hour twelve times ahead, and a congregation
+		// answering each other's bells finishes a hundred times ahead, because a surge covering
+		// twenty-two of every twenty-five seconds is not a surge, it is the rate. Whether that is
+		// the game it wants to be is a decision for the game and not for the harness. What the
+		// bounds are for is that it cannot now change by accident.
+		Check("a bell rung on every cooldown pays, and pays sanely", worth > 1.05 && worth < 20.0,
+			"perfect ringing is worth " + Numbers.Short(worth) + "x over half an hour");
+
+		Vigil.Reset();
+	}
+
+	/// <summary>Half an hour of ordinary play, optionally with somebody on the rope the instant
+	/// it frees up. Everything else about the two runs is identical, including the seed.</summary>
+	private static double RingingFor(double minutes, bool ring, double seconds = 0.0, double mult = 0.0)
+	{
+		Vigil.Reset();
+		Vigil.Rng = Seeded(31);
+		double click = 0.0;
+		for (int step = 0; step < minutes * 60.0 / kDt; step++)
+		{
+			click += 4.0 * kDt;
+			while (click >= 1.0)
+			{
+				click -= 1.0;
+				Vigil.Gather();
+			}
+			if (ring && Vigil.Ring())
+			{
+				Vigil.BeginSurge(seconds > 0.0 ? seconds : Vigil.kLoneBellSeconds,
+					mult > 0.0 ? mult : Vigil.kLoneBellMultiplier, fromCongregation: false);
+			}
+			TakeOfferings();
+			Buy();
+			if (Vigil.Approaching)
+			{
+				Vigil.Give(Vigil.CorrectAnswer);
+			}
+			Vigil.Tick(kDt);
+		}
+		return Vigil.LifetimeIchor;
+	}
+
 	private static void QuotedIsPaid()
 	{
 		Console.WriteLine("What the parish quotes is what it pays");
@@ -5194,6 +5271,7 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		TheBellIsWorthSomethingAndNotEverything();
 		QuotedIsPaid();
 		LentStructuresAreOnlyLent();
 		EveryRelicCanBeRead();

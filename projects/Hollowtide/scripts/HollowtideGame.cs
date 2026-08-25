@@ -281,6 +281,10 @@ public sealed class HollowtideGame : EntityScript
 
 	private void RingBell()
 	{
+		if (!Vigil.Ring())
+		{
+			return;
+		}
 		VigilPresence? local = VigilPresence.Local;
 		VigilRites? rites = local?.Self.GetScript<VigilRites>();
 		if (rites != null)
@@ -288,9 +292,12 @@ public sealed class HollowtideGame : EntityScript
 			rites.RingBell();
 			return;
 		}
-		// Alone, the bell still does something - a smaller surge, granted locally. A control
-		// that is dead in single player teaches the player to ignore it in multiplayer too.
-		Vigil.BeginSurge(8.0, 1.6, fromCongregation: false);
+		// Reached while connected but before this keeper's entity exists - a real window during
+		// a join, and the only time a ring cannot be put to the host. It grants the lone bell
+		// LOCALLY, and it is deliberately the same lone bell the host would have granted: this
+		// used to be its own pair of numbers, so the identical press paid eight seconds at one
+		// and a half here and ten at double a moment later, for a reason no player could see.
+		Vigil.BeginSurge(Vigil.kLoneBellSeconds, Vigil.kLoneBellMultiplier, fromCongregation: false);
 		_whispers.Say("You ring the bell. Only the parish hears it.", Omen.Plain);
 	}
 

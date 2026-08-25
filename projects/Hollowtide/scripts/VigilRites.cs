@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using AetherCore;
 
@@ -35,9 +36,11 @@ public sealed class VigilRites : EntityScript
 	private const double kCommunionWindow = 6.0;
 
 	/// <summary>Surge granted to a keeper who rings alone, and to the whole congregation when
-	/// the bell is answered.</summary>
-	private const double kLoneSeconds = 10.0;
-	private const double kLoneMultiplier = 2.0;
+	/// the bell is answered. The lone pair is the vigil's, because the client grants exactly the
+	/// same bell to itself when its keeper entity has not spawned yet, and two spellings of one
+	/// bell is two bells.</summary>
+	private const double kLoneSeconds = Vigil.kLoneBellSeconds;
+	private const double kLoneMultiplier = Vigil.kLoneBellMultiplier;
 	private const double kCommunionSeconds = 22.0;
 	private const double kCommunionMultiplier = 3.0;
 
@@ -45,6 +48,30 @@ public sealed class VigilRites : EntityScript
 	// of this script per keeper and the window is a property of the SESSION, not of a keeper.
 	private static uint s_lastRinger = uint.MaxValue;
 	private static double s_lastRingAt = -1000.0;
+
+	/// <summary>
+	/// When each connection last got a bell out of the host.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The interval between bells was enforced by the button being greyed out, and by nothing
+	/// else. Everywhere else in this file a client is trusted only for the size of what it gives
+	/// AWAY - the note above says the worst a liar can do is be generous - but the bell is not a
+	/// gift. It multiplies the whole congregation's economy for a third of its cooldown, and a
+	/// client that simply sent the message on a loop would have held every keeper in the session
+	/// at a permanent surge. That is not generosity, and it is not something the other players
+	/// opted into.
+	/// </para>
+	/// <para>
+	/// A shade under the real interval, because the client is running its own timer against its
+	/// own clock and a ring that arrives a few milliseconds early is a legitimate press, not an
+	/// attack. Anything sooner than that was not pressed by a person.
+	/// </para>
+	/// </remarks>
+	private static readonly Dictionary<uint, double> s_ringingSince = new();
+
+	/// <summary>How much early a ring may arrive and still be a real one.</summary>
+	private const double kRingSlack = 1.0;
 
 	// ── Sending ──────────────────────────────────────────────────────────────────────
 
@@ -173,6 +200,14 @@ public sealed class VigilRites : EntityScript
 	private void Bell(uint sender, string from)
 	{
 		double now = Time.UnscaledTime;
+		if (s_ringingSince.TryGetValue(sender, out double rang) && now - rang < Vigil.kBellInterval - kRingSlack)
+		{
+			// Dropped in silence. There is nothing useful to tell the sender: an honest client
+			// cannot get here, and a dishonest one is not owed an explanation of the limit.
+			return;
+		}
+		s_ringingSince[sender] = now;
+
 		bool answered = s_lastRinger != uint.MaxValue
 			&& s_lastRinger != sender
 			&& now - s_lastRingAt <= kCommunionWindow;

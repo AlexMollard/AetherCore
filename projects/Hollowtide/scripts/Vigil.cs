@@ -1850,6 +1850,7 @@ public static class Vigil
 		Wards = 0;
 		AftermathSeconds = 0.0;
 		StokeCooldown = 0.0;
+		BellCooldown = 0.0;
 		ApproachRite = -1;
 		ApproachSeconds = 0.0;
 		ApproachLine = "";
@@ -1874,6 +1875,46 @@ public static class Vigil
 		Revision++;
 		Say("Communion. You wake with " + payout + " more sigils and none of the parish.", Omen.Good);
 		OnSpent?.Invoke(-1);
+		return true;
+	}
+
+	// ── The bell ─────────────────────────────────────────────────────────────────────
+
+	/// <summary>Seconds before the bell will ring again.</summary>
+	/// <remarks>
+	/// Here rather than in the HUD, where it used to be a float on the view. The bell is worth a
+	/// multiplier on the WHOLE economy for a third of its own cooldown, which makes it one of the
+	/// larger numbers in the game - and while the only thing that knew how often it could be rung
+	/// was a widget, the harness could not measure it, a reload silently cleared it, and the host
+	/// had nothing to check an arriving ring against.
+	/// </remarks>
+	public static double BellCooldown;
+
+	/// <summary>How long between bells.</summary>
+	public const double kBellInterval = 25.0;
+
+	/// <summary>What a bell nobody answers is worth. One pair of numbers, because there were two:
+	/// a keeper whose ring reached the host got ten seconds at double, and one whose keeper
+	/// entity had not finished spawning got eight at one and a half - the same press, paying
+	/// differently depending on a piece of network bookkeeping the player cannot see.</summary>
+	public const double kLoneBellSeconds = 10.0;
+
+	/// <inheritdoc cref="kLoneBellSeconds"/>
+	public const double kLoneBellMultiplier = 2.0;
+
+	/// <summary>Whether the rope will move.</summary>
+	public static bool CanRing => BellCooldown <= 0.0;
+
+	/// <summary>Take hold of the rope. Returns false if it is too soon, and does NOT grant the
+	/// surge - what a bell is worth is the host's decision when there is one, so this only
+	/// settles whether the ring happens at all.</summary>
+	public static bool Ring()
+	{
+		if (!CanRing)
+		{
+			return false;
+		}
+		BellCooldown = kBellInterval;
 		return true;
 	}
 
@@ -1969,6 +2010,10 @@ public static class Vigil
 		if (ShuntCooldown > 0.0)
 		{
 			ShuntCooldown = Math.Max(0.0, ShuntCooldown - deltaSeconds);
+		}
+		if (BellCooldown > 0.0)
+		{
+			BellCooldown = Math.Max(0.0, BellCooldown - deltaSeconds);
 		}
 		// Fervour drains steadily, so it is a reward for playing NOW rather than a level you
 		// grind once and keep.
@@ -2725,6 +2770,7 @@ public static class Vigil
 		Wards = 0;
 		AftermathSeconds = 0.0;
 		StokeCooldown = 0.0;
+		BellCooldown = 0.0;
 		Fervour = 0.0;
 		Communions = 0;
 		Dread = 0.0;

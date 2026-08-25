@@ -67,7 +67,6 @@ public sealed class Hud
 	/// <summary>Seconds of punch left on the sigil. Drives its size and its shader, and is the
 	/// only reason a click feels like anything.</summary>
 	private float _punch;
-	private float _bellCooldown;
 
 	public Entity SigilElement => _sigil;
 
@@ -308,10 +307,12 @@ public sealed class Hud
 		{
 			WardPressed = true;
 		}
-		if (_bell.Activated && _bellCooldown <= 0.0f)
+		// Only reported. Whether the rope actually moves - and the cooldown it starts - is the
+		// vigil's to decide, the same as the stoke button beside it; the HUD arming its own
+		// timer meant the one rule governing the bell was a float on a widget.
+		if (_bell.Activated)
 		{
 			BellPressed = true;
-			_bellCooldown = 25.0f;
 		}
 
 		if (GatheredThisFrame)
@@ -321,7 +322,6 @@ public sealed class Hud
 
 		// ── Animation ────────────────────────────────────────────────────────────────
 		_punch = MathF.Max(0.0f, _punch - deltaTime * 3.4f);
-		_bellCooldown = MathF.Max(0.0f, _bellCooldown - deltaTime);
 
 		float dread = (float)Vigil.Dread;
 		bool hovered = _sigil.IsValid && Ui.IsHovered(_sigil);
@@ -415,8 +415,8 @@ public sealed class Hud
 		_bell.SetActive(connected);
 		if (connected)
 		{
-			bool ready = _bellCooldown <= 0.0f;
-			_bell.SetLabel(ready ? "RING THE BELL" : "BELL  " + Numbers.Duration(_bellCooldown));
+			bool ready = Vigil.CanRing;
+			_bell.SetLabel(ready ? "RING THE BELL" : "BELL  " + Numbers.Duration(Vigil.BellCooldown));
 			_bell.SetEnabled(ready);
 			_bell.Style(ready, Palette.Mix(Palette.Row, Palette.Sigil, 0.40f), Palette.Row, Palette.PanelDeep);
 		}

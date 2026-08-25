@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **253 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **257 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -120,6 +120,12 @@ visible by reading the code:
   that read as **+50%** for a bonus that moved from x1.60 to x1.90.
 - One rule of the game lived in the HUD and nowhere else: you cannot stoke while something is
   walking. Every measurement ever taken had been of a keeper who could.
+- The bell's whole rule — how often it can be rung — was a float on a widget, so the largest
+  multiplier in the game had never been measured, a reload cleared it, and the host had nothing
+  to check an arriving ring against. Ringing on every cooldown is worth **12x** over half an
+  hour, and a congregation answering each other's bells **108x**.
+- The same press paid two different bells depending on whether the keeper's network entity had
+  finished spawning.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
