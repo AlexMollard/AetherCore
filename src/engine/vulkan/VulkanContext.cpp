@@ -13,6 +13,7 @@
 #	define VK_VALIDATION_GPU 0
 #endif
 
+#include <algorithm>
 #include <format>
 #include <fstream>
 #include <memory>
@@ -211,6 +212,135 @@ namespace
 		return VK_FALSE;
 	}
 
+	// vk-bootstrap collapses every reason a device can be rejected into one
+	// "no_suitable_device" error code, which is exactly the information a user on
+	// unsupported hardware does NOT have. Re-walk the devices ourselves and say, per
+	// device, which requirement it missed - that report is the whole bug report.
+	std::string DescribeDeviceSelectionFailure(VkInstance instance,
+	                                           const std::vector<const char*>& requiredExtensions,
+	                                           const VkPhysicalDeviceFeatures& required10,
+	                                           const VkPhysicalDeviceVulkan11Features& required11,
+	                                           const VkPhysicalDeviceVulkan12Features& required12,
+	                                           const VkPhysicalDeviceVulkan13Features& required13,
+	                                           const VkPhysicalDeviceVulkan14Features& required14)
+	{
+		std::uint32_t deviceCount = 0;
+		vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+		if (deviceCount == 0)
+		{
+			return "The Vulkan instance reports no physical devices at all. Check that a GPU driver with Vulkan support is installed.";
+		}
+
+		std::vector<VkPhysicalDevice> devices(deviceCount);
+		vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+		std::string report;
+		for (VkPhysicalDevice device : devices)
+		{
+			VkPhysicalDeviceProperties props{};
+			vkGetPhysicalDeviceProperties(device, &props);
+
+			std::vector<std::string> unmet;
+
+			if (props.apiVersion < VK_API_VERSION_1_4)
+			{
+				unmet.push_back(std::format("Vulkan {}.{}.{} (1.4 required)", VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion)));
+			}
+
+			std::uint32_t extensionCount = 0;
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+			std::vector<VkExtensionProperties> available(extensionCount);
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, available.data());
+			for (const char* required : requiredExtensions)
+			{
+				const bool present = std::any_of(available.begin(), available.end(), [required](const VkExtensionProperties& e) { return std::strcmp(e.extensionName, required) == 0; });
+				if (!present)
+				{
+					unmet.emplace_back(required);
+				}
+			}
+
+			// Only the promoted core feature structs are queried here: they are safe to
+			// chain on any 1.1+ device, whereas an extension's feature struct is only
+			// meaningful once the extension itself is present - and if it is missing, the
+			// extension line above already named it.
+			VkPhysicalDeviceVulkan14Features have14{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES};
+			VkPhysicalDeviceVulkan13Features have13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &have14};
+			VkPhysicalDeviceVulkan12Features have12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &have13};
+			VkPhysicalDeviceVulkan11Features have11{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, .pNext = &have12};
+			VkPhysicalDeviceFeatures2 have2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &have11};
+			if (props.apiVersion >= VK_API_VERSION_1_1)
+			{
+				vkGetPhysicalDeviceFeatures2(device, &have2);
+			}
+			else
+			{
+				vkGetPhysicalDeviceFeatures(device, &have2.features);
+			}
+
+#define AE_REPORT_MISSING_FEATURE(requiredStruct, haveStruct, field)                \
+	if ((requiredStruct).field == VK_TRUE && (haveStruct).field != VK_TRUE)         \
+	{                                                                              \
+		unmet.emplace_back("feature " #field);                                     \
+	}
+
+			AE_REPORT_MISSING_FEATURE(required10, have2.features, shaderInt64)
+			AE_REPORT_MISSING_FEATURE(required10, have2.features, shaderInt16)
+			AE_REPORT_MISSING_FEATURE(required10, have2.features, multiDrawIndirect)
+			AE_REPORT_MISSING_FEATURE(required10, have2.features, drawIndirectFirstInstance)
+			AE_REPORT_MISSING_FEATURE(required10, have2.features, fillModeNonSolid)
+			AE_REPORT_MISSING_FEATURE(required10, have2.features, wideLines)
+
+			AE_REPORT_MISSING_FEATURE(required11, have11, shaderDrawParameters)
+
+			AE_REPORT_MISSING_FEATURE(required12, have12, bufferDeviceAddress)
+			AE_REPORT_MISSING_FEATURE(required12, have12, descriptorIndexing)
+			AE_REPORT_MISSING_FEATURE(required12, have12, scalarBlockLayout)
+			AE_REPORT_MISSING_FEATURE(required12, have12, runtimeDescriptorArray)
+			AE_REPORT_MISSING_FEATURE(required12, have12, descriptorBindingPartiallyBound)
+			AE_REPORT_MISSING_FEATURE(required12, have12, descriptorBindingVariableDescriptorCount)
+			AE_REPORT_MISSING_FEATURE(required12, have12, descriptorBindingSampledImageUpdateAfterBind)
+			AE_REPORT_MISSING_FEATURE(required12, have12, shaderSampledImageArrayNonUniformIndexing)
+			AE_REPORT_MISSING_FEATURE(required12, have12, timelineSemaphore)
+			AE_REPORT_MISSING_FEATURE(required12, have12, drawIndirectCount)
+			AE_REPORT_MISSING_FEATURE(required12, have12, shaderInt8)
+			AE_REPORT_MISSING_FEATURE(required12, have12, hostQueryReset)
+
+			AE_REPORT_MISSING_FEATURE(required13, have13, dynamicRendering)
+			AE_REPORT_MISSING_FEATURE(required13, have13, synchronization2)
+
+			AE_REPORT_MISSING_FEATURE(required14, have14, hostImageCopy)
+			AE_REPORT_MISSING_FEATURE(required14, have14, pushDescriptor)
+
+#undef AE_REPORT_MISSING_FEATURE
+
+			std::string joined;
+			for (const std::string& item : unmet)
+			{
+				if (!joined.empty())
+				{
+					joined += ", ";
+				}
+				joined += item;
+			}
+
+			// driverVersion is vendor-encoded, not a Vulkan version, so it is reported raw
+			// rather than decoded into a major.minor.patch that would read as a lie.
+			report += std::format("\n  - '{}' (vendorID=0x{:04X}, deviceID=0x{:04X}, apiVersion {}.{}.{}, driverVersion 0x{:08X}): {}",
+			                      props.deviceName,
+			                      props.vendorID,
+			                      props.deviceID,
+			                      VK_API_VERSION_MAJOR(props.apiVersion),
+			                      VK_API_VERSION_MINOR(props.apiVersion),
+			                      VK_API_VERSION_PATCH(props.apiVersion),
+			                      props.driverVersion,
+			                      unmet.empty() ? std::string("meets every version/extension/core-feature requirement - rejected on a surface, queue-family or extension-feature requirement instead")
+			                                    : std::format("missing {}", joined));
+		}
+
+		return report;
+	}
+
 	// game never writes into its own install directory. Lives under
 	std::filesystem::path ResolveGpuCacheDir(std::string_view subdir)
 	{
@@ -362,35 +492,49 @@ namespace aether
 
 		vkb::PhysicalDeviceSelector selector{*m_instance};
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);
-		{
-			const VkPhysicalDeviceVulkan14Features features14{
-			        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-			        .hostImageCopy = VK_TRUE,
-			        .pushDescriptor = VK_TRUE,
-			};
-			selector.set_required_features_14(features14);
-		}
+		const VkPhysicalDeviceVulkan14Features requiredFeatures14{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+		        .hostImageCopy = VK_TRUE,
+		        .pushDescriptor = VK_TRUE,
+		};
+		selector.set_required_features_14(requiredFeatures14);
+
+		// Held as a list rather than fed straight into the selector so the failure path
+		// can diff it against each rejected device and name what is actually missing.
+		std::vector<const char*> requiredExtensions;
 #ifdef TRACY_ENABLE
 		// VK_EXT_calibrated_timestamps is required for Tracy host-calibrated GPU zones.
-		selector.add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
 #endif
 		// VK_KHR_maintenance9: optional device extension. Required by this renderer
-		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
-		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 		// VK_EXT_shader_object: layout-free shaders bound directly via vkCmdBindShadersEXT.
-		selector.add_required_extension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		// an extension and is required explicitly below because shader objects use EDS3
-		selector.add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
-		selector.add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
-		selector.add_required_extension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
-		selector.add_required_extension(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
 		// picks one. Requesting them as *required* selector extensions this
+		for (const char* extension : requiredExtensions)
+		{
+			selector.add_required_extension(extension);
+		}
 
 		auto physicalDeviceResult = selector.select();
 
 		if (!physicalDeviceResult)
 		{
-			Throw(AetherError::Vulkan(0, "Failed to select a suitable Vulkan physical device."));
+			// "Failed to select a suitable Vulkan physical device." on its own is the
+			// least actionable message the engine can produce: it fires on every
+			// unsupported GPU and says nothing about which requirement was missed. The
+			// per-device breakdown below is what a user on other hardware has to send back.
+			Throw(AetherError::Vulkan(0,
+			                          std::format("Failed to select a suitable Vulkan physical device: {} ({}).\nRequirements checked per device:{}",
+			                                      physicalDeviceResult.error().message(),
+			                                      physicalDeviceResult.error().value(),
+			                                      DescribeDeviceSelectionFailure(m_instance->instance, requiredExtensions, requiredFeatures10, requiredFeatures11, requiredFeatures12, requiredFeatures13, requiredFeatures14))));
 		}
 
 		// gated on two independent conditions, both required:
