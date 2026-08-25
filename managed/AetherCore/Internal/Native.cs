@@ -204,6 +204,12 @@ internal static unsafe partial class Native
     internal static partial void aether_ui_set_font_size(uint id, float pixelSize);
 
     [LibraryImport(Lib)]
+    internal static partial float aether_ui_get_font_size(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_app_quit();
+
+    [LibraryImport(Lib)]
     internal static partial void aether_ui_set_text_align(uint id, int h, int v);
 
     [LibraryImport(Lib)]

@@ -93,9 +93,20 @@ namespace
 			case FieldType::Enum:
 				out = static_cast<double>(v.enumValue);
 				return true;
-			default:
+			// Named rather than left to the default, because -Wswitch-enum is an error here on
+			// purpose: it is what makes adding a field type a compile failure in every switch
+			// that has to decide about it, instead of a silent fallthrough discovered later.
+			case FieldType::Vec2:
+			case FieldType::Vec3:
+			case FieldType::Vec4:
+			case FieldType::Color3:
+			case FieldType::Color4:
+			case FieldType::String:
+			case FieldType::EntityRef:
+			case FieldType::List:
 				return false;
 		}
+		return false;
 	}
 
 	bool WriteNumber(FieldValue& v, double value)
@@ -113,9 +124,18 @@ namespace
 			case FieldType::Enum:
 				v.enumValue = static_cast<int>(value);
 				return true;
-			default:
+			// Named for the same reason as in ReadNumber above.
+			case FieldType::Vec2:
+			case FieldType::Vec3:
+			case FieldType::Vec4:
+			case FieldType::Color3:
+			case FieldType::Color4:
+			case FieldType::String:
+			case FieldType::EntityRef:
+			case FieldType::List:
 				return false;
 		}
+		return false;
 	}
 
 	bool IsVectorField(FieldType t)

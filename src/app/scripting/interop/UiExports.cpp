@@ -144,6 +144,30 @@ AE_SCRIPT_API void aether_ui_set_font_size(std::uint32_t id, float pixelSize)
 	}
 }
 
+// The counterpart, and the reason it exists: a game that wants to offer type size as a
+// SETTING has to know what an element was authored at before it can scale it. Without a
+// getter the only way is to keep a second copy of every authored size in script, which is
+// the same size written twice in two languages - and one of them always drifts. Returns
+// zero for an entity that draws no glyphs, which is distinguishable from any real size.
+AE_SCRIPT_API float aether_ui_get_font_size(std::uint32_t id)
+{
+	auto& world = ActiveWorld();
+	const aether::Entity entity{id};
+	if (const auto* t = world.TryGet<aether::ui::UIText>(entity))
+	{
+		return t->pixelSize;
+	}
+	if (const auto* b = world.TryGet<aether::ui::UITextBox>(entity))
+	{
+		return b->pixelSize;
+	}
+	if (const auto* button = world.TryGet<aether::ui::UIButton>(entity))
+	{
+		return button->pixelSize;
+	}
+	return 0.0f;
+}
+
 AE_SCRIPT_API void aether_ui_set_font(std::uint32_t id, const char* name)
 {
 	auto& world = ActiveWorld();

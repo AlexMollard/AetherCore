@@ -81,6 +81,16 @@ public static class Ui
     /// a text label, a text box, or a button's label.</summary>
     public static void SetFontSize(Entity e, float pixelSize) => Native.aether_ui_set_font_size(e.Id, pixelSize);
 
+    /// <summary>
+    /// The size an element's glyphs are drawn at, or zero if it draws none.
+    /// </summary>
+    /// <remarks>
+    /// For a game that offers type size as a setting: to scale an authored label you have to
+    /// know what it was authored at, and the alternative is keeping a second copy of every
+    /// authored size in script - the same number written twice, in two places that drift.
+    /// </remarks>
+    public static float GetFontSize(Entity e) => Native.aether_ui_get_font_size(e.Id);
+
     /// <summary>Set the font by baked name (e.g. "IBMPlexMono-Italic", "PixelStorm"), on a
     /// text label, a text box, or a button's label.</summary>
     public static void SetFont(Entity e, string fontName) => Native.aether_ui_set_font(e.Id, fontName);
