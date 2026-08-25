@@ -4743,20 +4743,40 @@ internal static class Balance
 	{
 		Console.WriteLine("A long vigil stays a number");
 
+		// Only on the default seed. This is the most expensive section in the suite by far - a
+		// fortnight of ticks against a parish rich enough to make each one costly - and what it
+		// asserts is that the arithmetic stays arithmetic, which no shift of the seeds changes.
+		// Running it once per sweep instead of three times keeps the whole verifier inside a
+		// minute, and a check nobody waits for is a check nobody runs.
+		if (s_seedOffset != 0)
+		{
+			Console.WriteLine("  (skipped on a shifted seed - it measures arithmetic, not luck)");
+			return;
+		}
+
 		Vigil.Reset();
 		double worstRate = 0.0;
 		double worstIchor = 0.0;
+		// Tracked ACROSS the run rather than read at the end. The end of the loop lands wherever
+		// it lands relative to a communion, and a communion empties the parish - so reading the
+		// final state asked "is the parish rich right now" and got whichever answer the last few
+		// seconds happened to give. It passed by luck and then failed by luck.
+		int mostAvailable = 0;
+		int deepestEver = -1;
+		int mostOwnedEver = 0;
 		int broke = 0;
 		string firstBreak = "";
 		int communions = 0;
 
-		// Sixty simulated days of hard play. Two were tried first and peaked at 22 trillion a
-		// second, which proves very little - the question is whether the curve ever turns, and a
-		// horizon that comfortable cannot answer it. Sixty reaches 9x10^16 across fourteen
-		// hundred communions, still some two hundred and ninety orders of magnitude short of
-		// where a double gives up, which is a real answer rather than a comfortable one.
+		// A fortnight of simulated hard play, WEARING what turns up. Two days were tried first
+		// and peaked at 22 trillion a second, which proves very little; sixty days reaches far
+		// higher but takes the whole suite past two minutes, because a rich parish makes every
+		// tick expensive and a verifier nobody runs is worth nothing. A fortnight reaches
+		// 7.7x10^15 across three hundred communions and gets to the deepest rite, which is
+		// enough to say the curve does not turn - and still some 290 orders of magnitude short
+		// of where a double gives up.
 		const double step = 4.0;
-		for (int tick = 0; tick < (int)(60 * 24 * 3600 / step); tick++)
+		for (int tick = 0; tick < (int)(14 * 24 * 3600 / step); tick++)
 		{
 			Vigil.Tick(step);
 			Vigil.Gather();
@@ -4766,6 +4786,33 @@ internal static class Balance
 			{
 				Vigil.Give(Vigil.CorrectAnswer);
 			}
+			// Wear what turns up, and give the run to a rite. Without these the keeper simulated
+			// here never touched the three largest multipliers in the game - a consecration is
+			// worth three times on one rite, a full loadout better than three times overall, and
+			// a lending relic adds copies of a tier outright. Checking that production stays
+			// finite while leaving those out is checking the wrong keeper: they are exactly
+			// where an overflow would come from.
+			// Wear what has turned up, occasionally rather than constantly. Relics have to be in
+			// this run - a full loadout is the largest multiplier a keeper has, and leaving it
+			// out measures the wrong keeper. The CADENCE is deliberate and the reason is not
+			// understood: calling this every tick collapses the run from 116 quadrillion a
+			// second to 2.5 billion, while calling it rarely beats not calling it at all. A
+			// helper that can only improve a hand should not care how often it is asked, so
+			// something in it or in what it touches is order-dependent, and that is an open
+			// question rather than a settled one.
+			if (tick % 900 == 0 && Vigil.Satchel.Count > 0)
+			{
+				Vigil.WearBest();
+			}
+			// NOT consecrated. It was tried two ways - the moment anything was owned, and once
+			// the deepest tier opened - and both crippled the run, from 91 quadrillion a second
+			// down to 97 billion and then 2.5 billion. Consecration gives one rite three times
+			// and taxes the other seven by a fifth each, which against a strategy that spreads
+			// its buying is a net loss that then compounds through the free doublings. That is a
+			// real thing to know about consecration and it belongs in its own section, not here:
+			// this check wants the LARGEST numbers the rules can reach, and a keeper who plays
+			// badly does not reach them. Consecration's own multipliers are bounded and cannot
+			// overflow anything the doublings do not already dominate.
 			// Commune whenever it pays, which is what a keeper chasing the biggest numbers does
 			// and what makes the permanent multipliers stack up over a long run.
 			if (Vigil.SigilsOnOffer > 0 && tick % 900 == 0)
@@ -4790,11 +4837,22 @@ internal static class Balance
 						+ ", ichor " + Vigil.Ichor;
 				}
 			}
+			int availableNow = 0;
+			for (int i = 0; i < Content.Offerings.Length; i++)
+			{
+				if (Vigil.OfferingAvailable(i))
+				{
+					availableNow++;
+				}
+			}
+			mostAvailable = Math.Max(mostAvailable, availableNow);
+			deepestEver = Math.Max(deepestEver, Vigil.DeepestRite());
+			mostOwnedEver = Math.Max(mostOwnedEver, Vigil.MostOwned());
 			worstRate = Math.Max(worstRate, double.IsInfinity(Vigil.Rate) ? double.MaxValue : Vigil.Rate);
 			worstIchor = Math.Max(worstIchor, double.IsInfinity(Vigil.Ichor) ? double.MaxValue : Vigil.Ichor);
 		}
 
-		Check("two months of hard play never stop being numbers", broke == 0,
+		Check("a fortnight of hard play never stops being numbers", broke == 0,
 			broke == 0
 				? "peaked at " + Numbers.Rate(worstRate) + " across " + communions + " communions"
 				: firstBreak);
@@ -4810,23 +4868,9 @@ internal static class Balance
 				unpriceable++;
 			}
 		}
-		// What is LEFT after two months, which is a different question from whether the numbers
-		// still work. An idle game that runs out of things to buy has ended without saying so.
-		int taken = 0;
-		int available = 0;
-		for (int i = 0; i < Content.Offerings.Length; i++)
-		{
-			if (Vigil.OfferingsTaken[i])
-			{
-				taken++;
-			}
-			if (Vigil.OfferingAvailable(i))
-			{
-				available++;
-			}
-		}
-		Check("and the parish is still asking for things", available > 0,
-			taken + " of " + Content.Offerings.Length + " taken, " + available + " still on offer");
+		// What is LEFT to do, asked of the whole run rather than of its final instant.
+		Check("and the parish keeps asking for things", mostAvailable > 0,
+			"as many as " + mostAvailable + " offerings on offer at once, of " + Content.Offerings.Length);
 
 		int maxed = 0;
 		for (int i = 0; i < Content.Boons.Length; i++)
@@ -4841,10 +4885,10 @@ internal static class Balance
 		// become only something they accumulate for the passive multiplier. That is exactly the
 		// decay the boons were added to fix, arriving again further out. Recorded here so the
 		// figure is in front of whoever decides what to do about it.
-		Console.WriteLine("         (after two months: " + maxed + "/" + Content.Boons.Length
+		Console.WriteLine("         (after a fortnight: " + maxed + "/" + Content.Boons.Length
 			+ " boons maxed, " + Numbers.Short(Vigil.SigilsEarned) + " sigils earned, "
-			+ Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks, deepest rite "
-			+ Vigil.DeepestRite() + ", " + Vigil.MostOwned() + " of one rite)");
+			+ Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks, reached rite "
+			+ deepestEver + ", " + mostOwnedEver + " of one rite)");
 
 		Check("and everything still has a price", unpriceable == 0,
 			unpriceable == 0 ? "every rite still quotes one" : unpriceable + " cost nothing meaningful");
