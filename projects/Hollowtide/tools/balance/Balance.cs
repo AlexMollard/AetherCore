@@ -3552,6 +3552,47 @@ internal static class Balance
 	/// what that is worth, which is the figure a rebalance has to be allowed to move and the
 	/// shape it is not.
 	/// </remarks>
+	/// <summary>
+	/// Both shunts are one act.
+	/// </summary>
+	/// <remarks>
+	/// Turning dread loose on an echo and turning it loose on a living keeper are the same verb
+	/// with a different recipient, and the game says so in as many words next to the constant.
+	/// They were not the same: the echo went through a share, a floor and a twenty-second
+	/// interval, and the keeper went through a literal quarter and nothing else - so the half of
+	/// the mechanic aimed at a person was the one with no limit on it.
+	/// </remarks>
+	private static void BothShuntsAreOneAct()
+	{
+		Console.WriteLine("Both shunts are one act");
+
+		Vigil.Reset();
+		Vigil.Dread = 0.8;
+		double moved = Vigil.ShuntToKeeper();
+		Check("a shunt moves the share it says it does",
+			Math.Abs(moved - Vigil.kShuntShare) < 1e-9 && Math.Abs(Vigil.Dread - 0.55) < 1e-9,
+			"turned " + Numbers.Percent(moved) + " loose, leaving " + Numbers.Percent(Vigil.Dread));
+		Check("and the same interval holds for a keeper as for a ghost",
+			!Vigil.CanShuntAway && Vigil.ShuntToKeeper() == 0.0
+				&& Math.Abs(Vigil.ShuntCooldown - Vigil.kShuntInterval) < 1e-9,
+			Vigil.kShuntInterval.ToString("0") + "s either way");
+
+		for (double t = 0.0; t < Vigil.kShuntInterval; t += kDt)
+		{
+			Vigil.Tick(kDt);
+		}
+		Check("and it comes back", Vigil.CanShuntAway && Vigil.ShuntToKeeper() > 0.0,
+			"the line will take another");
+
+		Vigil.Reset();
+		Vigil.Dread = Vigil.kShuntFloor;
+		Check("nothing is turned loose when there is nothing to give",
+			!Vigil.CanShuntAway && Vigil.ShuntToKeeper() == 0.0,
+			"at " + Numbers.Percent(Vigil.Dread) + " there is nothing in your hands");
+
+		Vigil.Reset();
+	}
+
 	private static void TheBellIsWorthSomethingAndNotEverything()
 	{
 		Console.WriteLine("The bell is worth something and not everything");
@@ -5279,6 +5320,7 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		BothShuntsAreOneAct();
 		TheBellIsWorthSomethingAndNotEverything();
 		QuotedIsPaid();
 		LentStructuresAreOnlyLent();

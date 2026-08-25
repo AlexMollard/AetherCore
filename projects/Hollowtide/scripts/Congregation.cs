@@ -121,7 +121,7 @@ public sealed class Congregation
 			bool canAct = !isSelf && local != null;
 			double gift = Vigil.Ichor * 0.10;
 			bool canTithe = canAct && gift > 0.0;
-			bool canShunt = canAct && Vigil.Dread > 0.02;
+			bool canShunt = canAct && Vigil.CanShuntAway;
 
 			// Shown explicitly, because the echo panel hides it and one mode hiding something the
 			// other never shows again is how a two-mode panel rots. Net.IsConnected is false for
@@ -151,7 +151,7 @@ public sealed class Congregation
 			row.Tithe.SetEnabled(canTithe);
 			row.Tithe.Style(canTithe, Palette.Mix(Palette.RowHot, Palette.Ichor, 0.35f), Palette.PanelDeep, Palette.PanelDeep);
 
-			row.Shunt.SetLabel(canShunt ? "SHUNT " + Numbers.Percent(Math.Min(0.25, Vigil.Dread)) : "SHUNT");
+			row.Shunt.SetLabel(canShunt ? "SHUNT " + Numbers.Percent(Math.Min(Vigil.kShuntShare, Vigil.Dread)) : "SHUNT");
 			row.Shunt.SetEnabled(canShunt);
 			row.Shunt.Style(canShunt, Palette.Mix(Palette.RowHot, Palette.Dread, 0.45f), Palette.PanelDeep, Palette.PanelDeep);
 

@@ -73,6 +73,20 @@ public sealed class VigilRites : EntityScript
 	/// <summary>How much early a ring may arrive and still be a real one.</summary>
 	private const double kRingSlack = 1.0;
 
+	/// <summary>
+	/// When each connection last turned something loose on somebody.
+	/// </summary>
+	/// <remarks>
+	/// The note at the top of this file says a client is trusted for the size of what it gives
+	/// AWAY, on the reasoning that the worst a liar can do is be generous. That reasoning holds
+	/// for a tithe and for a relic. It does not hold here, because the shunt is the one message
+	/// that acts on somebody against their interest: it raises another keeper's dread, and dread
+	/// is what brings a visitation. Unlimited and unclamped, one client could hold every other
+	/// keeper in the session pinned at the brink - which is not generosity, and not something
+	/// they agreed to by joining.
+	/// </remarks>
+	private static readonly Dictionary<uint, double> s_shuntingSince = new();
+
 	// ── Sending ──────────────────────────────────────────────────────────────────────
 
 	/// <summary>Ring the bell. Everything after this is the host's decision.</summary>
@@ -93,7 +107,7 @@ public sealed class VigilRites : EntityScript
 	/// they are still there to receive it - which is the deal.</summary>
 	public bool Shunt(uint toConnection)
 	{
-		double shed = Vigil.ShedDread(0.25);
+		double shed = Vigil.ShuntToKeeper();
 		if (shed <= 0.0)
 		{
 			return false;
@@ -179,6 +193,18 @@ public sealed class VigilRites : EntityScript
 			case "shunt" when parts.Length >= 3:
 				if (uint.TryParse(parts[1], out uint shunted) && ParseAmount(parts[2], out double dread))
 				{
+					double since = s_shuntingSince.TryGetValue(sender, out double last)
+						? Time.UnscaledTime - last
+						: double.MaxValue;
+					if (since < Vigil.kShuntInterval - kRingSlack)
+					{
+						break;
+					}
+					s_shuntingSince[sender] = Time.UnscaledTime;
+					// Clamped to what a shunt IS. The amount is the sender's own claim about its
+					// own meter, which is the right shape - only that process knows what it is
+					// carrying - but nothing here has to believe a claim larger than the verb.
+					dread = Math.Min(dread, Vigil.kShuntShare);
 					Proclaim("shunt|" + shunted + "|" + dread.ToString("R", CultureInfo.InvariantCulture) + "|" + from);
 				}
 				break;

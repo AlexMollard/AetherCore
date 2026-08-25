@@ -726,9 +726,23 @@ public static class Vigil
 	/// <summary>What an echo can hold before it will not take any more.</summary>
 	public const double kEchoCapacity = 1.0;
 
+	/// <summary>The least dread worth turning loose. Below it there is nothing to give.</summary>
+	public const double kShuntFloor = 0.02;
+
+	/// <summary>
+	/// True when there is something to shed and the line will take it.
+	/// </summary>
+	/// <remarks>
+	/// Asked of BOTH shunts. Pushing onto an echo went through here and pushing onto a living
+	/// keeper did not, so the interval below - which exists because a keeper without one held the
+	/// meter wherever they liked by shunting the trickle back every frame - applied only to the
+	/// half of the mechanic aimed at a ghost. The half aimed at a person had no limit at all.
+	/// </remarks>
+	public static bool CanShuntAway => Dread > kShuntFloor && ShuntCooldown <= 0.0;
+
 	/// <summary>True when this echo has room for more.</summary>
 	public static bool CanShunt(int index)
-		=> index >= 0 && index < Echoes.Count && Dread > 0.02 && ShuntCooldown <= 0.0
+		=> index >= 0 && index < Echoes.Count && CanShuntAway
 			&& Echoes[index].Burden < kEchoCapacity - kShuntShare * 0.5;
 
 	/// <summary>Seconds before the line will take anything else. Without it a keeper can hold
@@ -766,6 +780,31 @@ public static class Vigil
 		ShuntCooldown = kShuntInterval;
 		Revision++;
 		Say(echo.Name + " takes it from you. They do not seem to mind, which is worse.", Omen.Dread);
+		return moved;
+	}
+
+	/// <summary>
+	/// Turn a share of what you are carrying loose on another keeper.
+	/// </summary>
+	/// <remarks>
+	/// The living counterpart of <see cref="ShuntToEcho"/>, and it exists so that the two are one
+	/// act with one rule. The networking used to shed its own quarter, spelled as a literal, and
+	/// start no cooldown - so the verb that lands on a real person was the unlimited one. Returns
+	/// what actually left, which is what the caller is allowed to claim it gave.
+	/// </remarks>
+	public static double ShuntToKeeper()
+	{
+		if (!CanShuntAway)
+		{
+			return 0.0;
+		}
+		double moved = ShedDread(kShuntShare);
+		if (moved <= 0.0)
+		{
+			return 0.0;
+		}
+		ShuntCooldown = kShuntInterval;
+		Revision++;
 		return moved;
 	}
 

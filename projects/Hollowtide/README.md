@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **259 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **263 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -128,6 +128,11 @@ visible by reading the code:
   **4.6x**.
 - The same press paid two different bells depending on whether the keeper's network entity had
   finished spawning.
+- Shunting dread onto a *living keeper* skipped every rule the same act obeys when aimed at an
+  echo — no floor, no twenty-second interval, and its own hardcoded quarter. The host relayed
+  the amount unclamped and unlimited, so one client could hold a whole congregation at the
+  brink. It is the one message that acts against somebody's interest, and it was the one with
+  no limit.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.
