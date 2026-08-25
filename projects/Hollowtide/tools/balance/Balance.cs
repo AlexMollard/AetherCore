@@ -2985,6 +2985,33 @@ internal static class Balance
 			Content.Offerings.Length + " offerings, " + (Content.Offerings.Length - frozen.Length)
 				+ " added past the frozen prefix");
 
+		// The BOONS are the fourth, and the one whose corruption a keeper would feel longest.
+		// They are stored as LEVELS indexed by position and they survive every communion, so
+		// reordering them does not lose a flag - it hands somebody three levels of the wrong
+		// permanent upgrade in the thing they spent the most runs earning.
+		string[] frozenBoons =
+		{
+			"Deeper Wards", "Cold Blood", "The Old Bargain", "Steady Hand", "Unsleeping",
+			"Quick Kindling",
+		};
+		int boonsMoved = 0;
+		string firstBoonMoved = "";
+		for (int i = 0; i < frozenBoons.Length; i++)
+		{
+			if (i >= Content.Boons.Length || Content.Boons[i].Name != frozenBoons[i])
+			{
+				if (boonsMoved == 0)
+				{
+					firstBoonMoved = "index " + i + " should be \"" + frozenBoons[i] + "\" and is \""
+						+ (i < Content.Boons.Length ? Content.Boons[i].Name : "off the end") + "\"";
+				}
+				boonsMoved++;
+			}
+		}
+		Check("the boons a save records levels against have not moved", boonsMoved == 0,
+			boonsMoved == 0 ? "all " + frozenBoons.Length + " where a keeper's levels expect them"
+				: boonsMoved + " moved - " + firstBoonMoved);
+
 		// The RITES are the most load-bearing table of the three and were the only one with no
 		// guard. Everything a keeper owns is indexed by rite - Owned, the offerings' targets, the
 		// visitors met and bested, the consecration, the echoes' memory of what a run was given
