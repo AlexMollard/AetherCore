@@ -2985,6 +2985,38 @@ internal static class Balance
 			Content.Offerings.Length + " offerings, " + (Content.Offerings.Length - frozen.Length)
 				+ " added past the frozen prefix");
 
+		// The RITES are the most load-bearing table of the three and were the only one with no
+		// guard. Everything a keeper owns is indexed by rite - Owned, the offerings' targets, the
+		// visitors met and bested, the consecration, the echoes' memory of what a run was given
+		// to - so reordering this table does not re-point one flag, it re-points the entire save
+		// at once: a keeper's four hundred Grave Lanterns become four hundred of something else.
+		// Nothing throws, and the numbers all stay plausible.
+		string[] frozenRites =
+		{
+			"Grave Lantern", "Bone Choir", "Weeping Statue", "Flesh Loom",
+			"Ossuary Engine", "Drowned Chapel", "Pale Shepherd", "Hollow Mouth",
+		};
+		int ritesMoved = 0;
+		string firstRiteMoved = "";
+		for (int i = 0; i < frozenRites.Length; i++)
+		{
+			if (i >= Content.Rites.Length || Content.Rites[i].Name != frozenRites[i])
+			{
+				if (ritesMoved == 0)
+				{
+					firstRiteMoved = "index " + i + " should be \"" + frozenRites[i] + "\" and is \""
+						+ (i < Content.Rites.Length ? Content.Rites[i].Name : "off the end") + "\"";
+				}
+				ritesMoved++;
+			}
+		}
+		Check("the rites a save is indexed against have not moved", ritesMoved == 0,
+			ritesMoved == 0 ? "all " + frozenRites.Length + " in the order every save assumes"
+				: ritesMoved + " moved - " + firstRiteMoved);
+		Check("and there are still exactly that many of them",
+			Content.Rites.Length == frozenRites.Length && Content.RiteCount == frozenRites.Length,
+			Content.Rites.Length + " rites, RiteCount " + Content.RiteCount);
+
 		// The marks carry the SAME hazard and had no check at all: which ones a keeper has earned
 		// is another array of flags indexed by position, so reordering that table hands somebody
 		// a record of things they never did - and a record is the one thing in this game that is
