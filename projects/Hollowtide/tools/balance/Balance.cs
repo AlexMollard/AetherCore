@@ -3558,6 +3558,17 @@ internal static class Balance
 			}
 		}
 
+		// The supply of NAMES, which the changelog quotes exact figures for. A number in
+		// documentation that nothing checks is a number that quietly stops being true - and this
+		// one is the whole claim that the relic system does not repeat itself.
+		long plain = (long)Relics.Materials * Relics.Forms;
+		long anointed = plain * Relics.Provenances;
+		long hollowed = anointed * Relics.Epithets;
+		Check("there are as many names as the changelog claims",
+			anointed >= 15_000 && hollowed >= 150_000,
+			Numbers.Short(plain) + " plain, " + Numbers.Short(anointed) + " with a provenance, "
+				+ Numbers.Short(hollowed) + " with an epithet as well");
+
 		Check("no relic has a nameless line in it", blankName == 0 && blankPower == 0
 			&& blankFlavour == 0, "over " + sampled + " relics, nothing blank");
 		Check("no relic grants the same power twice", repeatedPower == 0,

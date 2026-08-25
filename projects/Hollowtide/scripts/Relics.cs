@@ -260,10 +260,9 @@ public static class Relics
 		return body;
 	}
 
-	/// <summary>How many powers a relic of this grade carries. The whole reason a grade is
-	/// worth wanting: rarity is not a bigger number on the same line, it is more lines.</summary>
 	/// <summary>
-	/// How many powers a relic of this grade carries.
+	/// How many powers a relic of this grade carries. The whole reason a grade is worth wanting:
+	/// rarity is not a bigger number on the same line, it is more lines.
 	/// </summary>
 	/// <remarks>
 	/// One per step, so the ladder is legible at a glance: a Hollowed thing does five things and
