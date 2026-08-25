@@ -123,6 +123,34 @@ public static class Vigil
 	/// </remarks>
 	public static int RelicSeed;
 
+	/// <summary>
+	/// The largest seed a relic can carry, and the domain a fresh vigil draws its first from.
+	/// </summary>
+	/// <remarks>
+	/// A ceiling exists because the counter is floored above whatever a SAVE carries, and a save
+	/// is a file: one holding int.MaxValue - hand-edited, or written by something that went
+	/// wrong - would overflow the counter to a negative number on the very next find. The seed
+	/// is the only thing that stops two relics being the same object, so an overflowed one is
+	/// not a cosmetic problem.
+	/// </remarks>
+	public const int MaxRelicSeed = 1_000_000_000;
+
+	/// <summary>
+	/// The next seed to give a relic. Never zero, never negative, never overflowing.
+	/// </summary>
+	/// <remarks>
+	/// Wraps to one rather than growing without bound. Reaching the ceiling would take a billion
+	/// finds - some five hundred billion clicks - so the wrap is a guarantee rather than a
+	/// behaviour anybody will see; what matters is that the arithmetic cannot leave the range
+	/// the rest of the game assumes. Zero is skipped deliberately: a relic IS its seed, and a
+	/// seed of zero is how the game says a slot is empty.
+	/// </remarks>
+	public static int NextRelicSeed()
+	{
+		RelicSeed = RelicSeed >= MaxRelicSeed || RelicSeed < 1 ? 1 : RelicSeed + 1;
+		return RelicSeed;
+	}
+
 	/// <summary>How many keepers stand close enough to be asked. Matches the roster the
 	/// congregation panel already draws, so the same four rows serve both.</summary>
 	public const int MaxEchoes = 4;
@@ -1088,7 +1116,7 @@ public static class Vigil
 		// Luck from what is already worn, which is the pleasing loop: a relic that turns up more
 		// relics. Bounded by the multiplier in Dig rather than here, so several of them stack
 		// into something strong and never into a certainty.
-		Relic found = Relics.Dig(Rng, Dread, ++RelicSeed, Wearing(Power.Reliquary) * Relics.SeekingFactor);
+		Relic found = Relics.Dig(Rng, Dread, NextRelicSeed(), Wearing(Power.Reliquary) * Relics.SeekingFactor);
 		if (!found.Exists)
 		{
 			return;
@@ -2700,7 +2728,7 @@ public static class Vigil
 		Consecrations = 0;
 		// Somewhere in the first billion, leaving room to count up without ever wrapping into
 		// another keeper's stretch of the space.
-		RelicSeed = Rng.Next(1, 1_000_000_000);
+		RelicSeed = Rng.Next(1, MaxRelicSeed);
 		Revision++;
 	}
 }

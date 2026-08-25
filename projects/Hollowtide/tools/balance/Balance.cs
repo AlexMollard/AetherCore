@@ -4591,6 +4591,72 @@ internal static class Balance
 			"the line is cleared with the encounter");
 	}
 
+	/// <summary>
+	/// The counter that keeps every relic distinct cannot be broken by a file.
+	/// </summary>
+	/// <remarks>
+	/// It is floored above whatever a save carries, so that a reload cannot hand out seeds
+	/// already spoken for - which means a save is an INPUT to it, and a save is a file somebody
+	/// can edit or a disk can mangle. One carrying int.MaxValue used to overflow the counter to
+	/// a negative number on the very next find, and the seed is the only thing that stops two
+	/// relics being the same object.
+	/// </remarks>
+	private static void TheSeedCounterCannotBeBrokenByAFile()
+	{
+		Console.WriteLine("The seed counter cannot be broken by a file");
+
+		Vigil.Reset();
+		VigilSave save = VigilData.Capture();
+
+		save.RelicSeed = int.MaxValue;
+		VigilData.Apply(save);
+		int first = Vigil.NextRelicSeed();
+		bool firstOk = first >= 1 && first <= Vigil.MaxRelicSeed;
+		Check("a save carrying the largest possible seed does not overflow it", firstOk,
+			firstOk ? "the next seed is " + first + ", inside the range every relic assumes"
+				: "the next seed is " + first + ", outside it");
+
+		save.RelicSeed = int.MinValue;
+		VigilData.Apply(save);
+		int negative = Vigil.NextRelicSeed();
+		bool negativeOk = negative >= 1 && negative <= Vigil.MaxRelicSeed;
+		Check("nor does one carrying a negative", negativeOk,
+			"the next seed is " + negative + (negativeOk ? "" : ", outside the range"));
+
+		// Walked right up to the ceiling and over it, which is the only way to reach the wrap.
+		Vigil.RelicSeed = Vigil.MaxRelicSeed - 2;
+		int zeros = 0;
+		int outside = 0;
+		int previous = 0;
+		bool wrapped = false;
+		for (int i = 0; i < 6; i++)
+		{
+			int seed = Vigil.NextRelicSeed();
+			if (seed == 0)
+			{
+				zeros++;
+			}
+			if (seed < 1 || seed > Vigil.MaxRelicSeed)
+			{
+				outside++;
+			}
+			if (seed < previous)
+			{
+				wrapped = true;
+			}
+			previous = seed;
+		}
+		Check("it wraps rather than running past its own ceiling", wrapped && outside == 0,
+			wrapped && outside == 0
+				? "stepped over the ceiling and came back inside it"
+				: outside + " seeds past the ceiling, " + (wrapped ? "wrapped" : "never wrapped"));
+		// Zero is how the game says a slot is EMPTY, so a relic must never be given it.
+		Check("and it never hands out the seed that means nothing is there", zeros == 0,
+			"no relic is ever seeded zero");
+
+		Vigil.Reset();
+	}
+
 	private static int Main(string[] args)
 	{
 		for (int i = 0; i < args.Length - 1; i++)
@@ -4643,6 +4709,7 @@ internal static class Balance
 		ARescuedSaveNeverLandsOnAnother();
 		NothingHereIsAssertedForShow();
 		AVisitorMeansTheSameHoweverItSpeaks();
+		TheSeedCounterCannotBeBrokenByAFile();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");

@@ -262,7 +262,11 @@ public static class VigilData
 		// Never lower than what is already in hand: the seed counter is what stops two relics
 		// ever being the same object, so a save written before it existed must not hand out
 		// seeds that are already spoken for.
-		Vigil.RelicSeed = Math.Max(save.RelicSeed, HighestSeed(save));
+		// Clamped at BOTH ends. The floor stops a save handing out seeds already spoken for; the
+		// ceiling stops a file carrying int.MaxValue from overflowing the counter to a negative
+		// number on the next find. Everything read off a file gets this treatment - a seed is no
+		// more trustworthy than a sigil count.
+		Vigil.RelicSeed = Math.Clamp(Math.Max(save.RelicSeed, HighestSeed(save)), 1, Vigil.MaxRelicSeed);
 
 		Vigil.Satchel.Clear();
 		int carried = Math.Min(save.SatchelSeeds.Length, save.SatchelGrades.Length);
