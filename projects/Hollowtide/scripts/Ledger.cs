@@ -458,7 +458,26 @@ public sealed class Ledger
 	/// or hit a bug - and if it was a good one, they could not get it back. The gesture stays a
 	/// right-click, but it now takes two, and the row says so in between.
 	/// </remarks>
-	private int _renderArmed = -1;
+	/// <summary>
+	/// The SEED of the relic a right-click has armed for rendering, or zero.
+	/// </summary>
+	/// <remarks>
+	/// The seed and not the row. A satchel index is only meaningful for as long as the satchel
+	/// does not move, and between arming and confirming it can: the keeper wears something, or
+	/// hands one over, or presses wear-the-best, or a visitation takes one - four of the eight
+	/// places that remove an entry take it from the middle, and everything below it shifts up.
+	/// The armed row then pointed at a DIFFERENT relic, and the second click destroyed a thing
+	/// the keeper had not chosen. That is precisely the outcome the two clicks exist to prevent,
+	/// which made the confirmation itself a way to lose something by accident.
+	/// <para>
+	/// Two relics in one satchel CAN share a seed - every keeper's counter starts at one, so a
+	/// relic handed over by another player can collide with one of yours. All that does is light
+	/// up both rows: what is rendered is the relic on the row that was clicked, because the
+	/// second click reads the satchel at that row rather than the armed value. A duplicated
+	/// highlight is a fair price for a confirmation that cannot destroy the wrong thing.
+	/// </para>
+	/// </remarks>
+	private int _renderArmed;
 
 	/// <summary>Which rite is one click away from being consecrated, or -1. Same two-step as
 	/// rendering, and deliberately the same gesture: both are choices that cannot be undone, and
@@ -519,15 +538,15 @@ public sealed class Ledger
 			ResetColumns();
 			_lastTab = _tab;
 			// Leaving the tab is as clear a "no" as any.
-			_renderArmed = -1;
+			_renderArmed = 0;
 			_consecrateArmed = -1;
 		}
 
 		// An armed row forgets on its own. Scrolling disarms too, because the row indices under
 		// the pointer have moved and an armed index would point at a different relic.
-		if (_renderArmed >= 0 && (Time.UnscaledTime >= _renderArmedUntil || _tab != LedgerTab.Relics))
+		if (_renderArmed != 0 && (Time.UnscaledTime >= _renderArmedUntil || _tab != LedgerTab.Relics))
 		{
-			_renderArmed = -1;
+			_renderArmed = 0;
 		}
 		if (_consecrateArmed >= 0 && (Time.UnscaledTime >= _armedUntil || _tab != LedgerTab.Rites))
 		{
@@ -953,7 +972,7 @@ public sealed class Ledger
 			// what it pays; the second does it. One click destroying a thing the keeper spent
 			// an hour finding, with no warning and no undo, is the kind of interaction people
 			// remember a game for and not fondly.
-			if (_renderArmed == i)
+			if (_renderArmed == relic.Seed)
 			{
 				Ui.SetText(row.Note, "RIGHT-CLICK AGAIN   +" + Numbers.Short(Vigil.RenderValue(i)));
 				Ui.SetTextColor(row.Note, Palette.DreadText);
@@ -961,18 +980,18 @@ public sealed class Ledger
 
 			if (Ui.IsHovered(row.Box.Root) && Input.IsMousePressed(MouseButton.Right))
 			{
-				if (_renderArmed == i)
+				if (_renderArmed == relic.Seed)
 				{
 					// Vigil.Render says what it did, so the confirmation lands in the feed and
 					// stays in the transcript. No event back to the game for it: the parish's
 					// voice is the channel every other consequence already uses, and a line a
 					// keeper can scroll back to beats a pop they might blink through.
 					Vigil.Render(i);
-					_renderArmed = -1;
+					_renderArmed = 0;
 				}
 				else
 				{
-					_renderArmed = i;
+					_renderArmed = relic.Seed;
 					// Long enough to read the row, short enough that it cannot be armed now and
 					// fired by an unrelated click later.
 					_renderArmedUntil = Time.UnscaledTime + 3.0f;

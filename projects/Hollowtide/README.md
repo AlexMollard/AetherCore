@@ -84,7 +84,7 @@ anything, checks every return code directly, and runs every step even after one 
 single command tells you everything that is wrong.
 
 **Run it after any change to the economy, or to the parish's layout.** It plays the real rules
-at speed and checks **287 invariants**, printing PASS/FAIL and returning non-zero on a break.
+at speed and checks **292 invariants**, printing PASS/FAIL and returning non-zero on a break.
 
 Every check in it exists because the thing it checks was once broken, and *none* of them were
 visible by reading the code:
@@ -151,6 +151,10 @@ visible by reading the code:
   which had the narrowest pool of all, because a guaranteed epithet locked it out of everything
   else — became the widest. Names did not get longer; the row is 320px and that was the
   constraint the design had to buy variety within.
+- The two-click confirmation on rendering a relic armed a *row*, not a relic — so wearing
+  something, handing one over, pressing wear-the-best, or a visitation taking one would shift
+  the satchel underneath it and the second click destroyed a relic the keeper never chose. The
+  confirmation built to stop exactly that was the way it happened.
 
 The invariants are written as **bounds, not expected values** — a rebalance is meant to move
 the numbers; what must not change is the shape.

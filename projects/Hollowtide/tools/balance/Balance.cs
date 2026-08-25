@@ -3715,6 +3715,113 @@ internal static class Balance
 	/// Both counts are read off the source rather than restated here, for the same reason the
 	/// shader constants are.
 	/// </remarks>
+	/// <summary>
+	/// Every offering does something, and can be reached.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// An offering is a permanent purchase off a tab that only ever GROWS, so one that does
+	/// nothing is invisible in the worst way: the keeper pays, the row leaves the list, and the
+	/// parish is exactly as it was. Both of its knobs default to 1 - the multiplier deliberately,
+	/// so an offering that only changes a rite's dread does not switch the rite off - which means
+	/// an entry that sets neither is a well-formed row that costs money and has no effect.
+	/// </para>
+	/// <para>
+	/// And the threshold: a rite offering unlocks on copies owned, a global or by-hand one on
+	/// lifetime ichor, and each reads only its own field. An entry that fills in the other one is
+	/// not gated at all - it appears on the first frame of a new vigil, priced for the late game,
+	/// which reads as a bug in the tab rather than as an ambition.
+	/// </para>
+	/// </remarks>
+	/// <summary>
+	/// A satchel index is not a handle on a relic.
+	/// </summary>
+	/// <remarks>
+	/// Said here because a view believed otherwise. The ledger's render confirmation armed a ROW
+	/// and fired three seconds later, and in between any of four things - wearing one, handing
+	/// one over, wear-the-best, a visitation taking one - removes an entry from the middle and
+	/// shifts everything below it up. This pins the fact the view was wrong about, so the next
+	/// thing tempted to hold an index across frames has something to read.
+	/// </remarks>
+	private static void ASatchelIndexIsNotAHandle()
+	{
+		Console.WriteLine("A satchel index is not a handle on a relic");
+
+		Vigil.Reset();
+		for (int i = 0; i < 5; i++)
+		{
+			Vigil.Satchel.Add(new Relic { Seed = 500 + i, Grade = Grade.Keepsake });
+		}
+		int watched = Vigil.Satchel[3].Seed;
+
+		// The keeper wears something from the middle. Nothing about the relic at index 3 changed,
+		// and index 3 is now a different relic.
+		Vigil.Wear(1, 0);
+		Check("removing an earlier entry moves every later one",
+			Vigil.Satchel.Count == 4 && Vigil.Satchel[3].Seed != watched
+				&& Vigil.Satchel[2].Seed == watched,
+			"the relic at 3 is now at 2");
+
+		// Which is why identity survives what a position does not.
+		int at = -1;
+		for (int i = 0; i < Vigil.Satchel.Count; i++)
+		{
+			if (Vigil.Satchel[i].Seed == watched)
+			{
+				at = i;
+			}
+		}
+		Check("and a seed still finds it", at == 2, "found again at " + at);
+
+		Vigil.Reset();
+	}
+
+	private static void EveryOfferingIsWorthBuying()
+	{
+		Console.WriteLine("Every offering is worth buying");
+
+		int idle = 0;
+		int ungated = 0;
+		int misaimed = 0;
+		string idleWorst = "";
+		string ungatedWorst = "";
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			OfferingDef def = Content.Offerings[i];
+			if (def.Multiplier == 1.0 && def.DreadScale == 1.0)
+			{
+				idle++;
+				idleWorst = "\"" + def.Name + "\" changes nothing";
+			}
+			if (def.Target >= 0)
+			{
+				if (def.OwnedNeeded <= 0)
+				{
+					ungated++;
+					ungatedWorst = "\"" + def.Name + "\" wants no copies of its rite";
+				}
+				if (def.Target >= Content.RiteCount)
+				{
+					misaimed++;
+				}
+			}
+			else if (def.LifetimeNeeded <= 0.0)
+			{
+				ungated++;
+				ungatedWorst = "\"" + def.Name + "\" wants no lifetime at all";
+			}
+		}
+
+		Check("every offering changes something", idle == 0,
+			idle == 0 ? Content.Offerings.Length + " offerings, each with a knob" : idleWorst);
+		Check("and every one is gated on the field its target reads", ungated == 0,
+			ungated == 0 ? "every row is earned" : ungatedWorst);
+		Check("and none of them points past the last rite", misaimed == 0,
+			misaimed + " aimed outside the parish");
+
+		Vigil.Reset();
+	}
+
 	private static void TheInspectorFitsTheBestRelic()
 	{
 		Console.WriteLine("The inspector fits the best relic");
@@ -5578,6 +5685,8 @@ internal static class Balance
 		NothingSaidIsLost();
 		WearingTheBestOnlyHelps();
 		ConsecrationIsACommitment();
+		ASatchelIndexIsNotAHandle();
+		EveryOfferingIsWorthBuying();
 		TheInspectorFitsTheBestRelic();
 		ARelicCanBeToldFromItsNeighbour();
 		EveryColourIsInThePalette();
