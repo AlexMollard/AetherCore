@@ -46,12 +46,19 @@ internal static class Balance
 	/// </remarks>
 	private static int s_seedOffset;
 
+	/// <summary>How many invariants this run actually held up. Counted rather than quoted: the
+	/// figure appears in the README and the changelog, and hand-maintaining it in two places had
+	/// already left one of them three commits behind while the other was current. A number that
+	/// is only ever right by somebody remembering is a number that documents the past.</summary>
+	private static int s_checks;
+
 	/// <summary>A generator for a fixed seed, shifted by whatever the run was asked for.</summary>
 	private static Random Seeded(int seed) => new Random(seed + s_seedOffset);
 
 	private static void Check(string what, bool ok, string detail)
 	{
 		Console.WriteLine("  [" + (ok ? "PASS" : "FAIL") + "] " + what.PadRight(46) + " " + detail);
+		s_checks++;
 		if (!ok)
 		{
 			s_failures++;
@@ -5186,6 +5193,7 @@ internal static class Balance
 		TheSinkCannotBeBoughtIntoDominance();
 		NothingBreaksUnderPressure();
 		Console.WriteLine();
+		Console.WriteLine(s_checks + " invariants checked.");
 		Console.WriteLine(s_failures == 0 ? "The vigil holds." : s_failures + " invariant(s) broken.");
 		return s_failures == 0 ? 0 : 1;
 	}

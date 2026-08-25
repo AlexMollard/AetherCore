@@ -20,6 +20,7 @@ wrong, not just the first thing), and the summary at the end is the exit code.
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -51,11 +52,13 @@ def run(label, argv, cwd=None, warnings_fail=False):
     whether anything here is green, so it is the last place noise should be tolerated.
     """
     print(f"  {label} ... ", end="", flush=True)
+    run.output = ""
     try:
         done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
     except FileNotFoundError:
         print("SKIPPED (not installed)")
         return None
+    run.output = done.stdout + done.stderr
     if done.returncode == 0:
         noisy = [line for line in (done.stdout + done.stderr).splitlines() if "warning CS" in line]
         if warnings_fail and noisy:
@@ -72,6 +75,42 @@ def run(label, argv, cwd=None, warnings_fail=False):
     for line in (done.stdout + done.stderr).strip().splitlines()[-25:]:
         print("      " + line)
     return False
+
+
+def counted(output):
+    """How many invariants the harness said it checked, or None if it did not say."""
+    found = re.search(r"(\d+) invariants checked", output)
+    return int(found.group(1)) if found else None
+
+
+def docs_quote(count):
+    """Whether the README and the changelog both quote the harness's own figure.
+
+    The number lived in two prose files and was maintained by hand, so it documented
+    whenever somebody last remembered rather than what the suite does: the changelog sat
+    three commits behind the README, and both had been "updated" in the same breath. The
+    harness counts its checks now, and this makes the prose answer to it - the wording wraps
+    across a line break in one of the files, which is exactly how the last sed missed it, so
+    the whitespace between the number and the word is deliberately anything at all.
+    """
+    print(f"  the docs quote {count} ... ", end="", flush=True)
+    wrong = []
+    for name in ("README.md", "CHANGELOG.md"):
+        path = os.path.join(PROJECT, name)
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        said = re.findall(r"\*\*(\d+)\s+invariants", text)
+        if not said:
+            wrong.append(f"{name} quotes no figure at all")
+        elif any(int(one) != count for one in said):
+            wrong.append(f"{name} says {', '.join(said)}")
+    if wrong:
+        print("FAILED")
+        for line in wrong:
+            print("      " + line)
+        return False
+    print("ok")
+    return True
 
 
 def find_slangc():
@@ -105,6 +144,14 @@ def main():
     print("Playing the rules")
     results.append(("harness", run("balance harness",
                                    ["dotnet", "run", "-c", "Release", "--nologo", "--project", HARNESS])))
+    # Only the DEFAULT seed is counted against the docs: a shifted seed deliberately skips the
+    # checks that measure arithmetic rather than luck, so its total is legitimately smaller.
+    total = counted(run.output)
+    if total is None:
+        print("  the docs quote ... SKIPPED (the harness printed no count)")
+        results.append(("docs", None))
+    else:
+        results.append(("docs", docs_quote(total)))
     for seed in args.seeds:
         results.append((f"harness --seed {seed}",
                         run(f"seed {seed}",
