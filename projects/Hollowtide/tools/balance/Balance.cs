@@ -4792,14 +4792,21 @@ internal static class Balance
 			// a lending relic adds copies of a tier outright. Checking that production stays
 			// finite while leaving those out is checking the wrong keeper: they are exactly
 			// where an overflow would come from.
-			// Wear what has turned up, occasionally rather than constantly. Relics have to be in
-			// this run - a full loadout is the largest multiplier a keeper has, and leaving it
-			// out measures the wrong keeper. The CADENCE is deliberate and the reason is not
-			// understood: calling this every tick collapses the run from 116 quadrillion a
-			// second to 2.5 billion, while calling it rarely beats not calling it at all. A
-			// helper that can only improve a hand should not care how often it is asked, so
-			// something in it or in what it touches is order-dependent, and that is an open
-			// question rather than a settled one.
+			// Wear what has turned up. Relics have to be in this run - a full loadout is the
+			// largest multiplier a keeper has, and leaving it out measures the wrong keeper.
+			//
+			// The cadence looked like it mattered enormously and does not. Calling this every
+			// tick once collapsed a sixty-day run from 116 quadrillion a second to 2.5 billion,
+			// which reads exactly like an order-dependent bug in a helper that is supposed to be
+			// idempotent. Measured across three seeds it flips: every-tick came out seven and
+			// eighteen times WORSE on two of them and sixteen million times BETTER on the third.
+			// Wearing a relic changes the find chance, a find consumes an extra draw, and from
+			// there the two runs see different luck forever - in an economy built on repeated
+			// doublings that compounds into eight orders of magnitude either way.
+			//
+			// Which is the real lesson of this section: the peak below is a sample of something
+			// enormously variable and is NOT a figure to draw conclusions from. What is asserted
+			// is that the arithmetic stays arithmetic, and that holds on every trajectory.
 			if (tick % 900 == 0 && Vigil.Satchel.Count > 0)
 			{
 				Vigil.WearBest();
@@ -4854,7 +4861,8 @@ internal static class Balance
 
 		Check("a fortnight of hard play never stops being numbers", broke == 0,
 			broke == 0
-				? "peaked at " + Numbers.Rate(worstRate) + " across " + communions + " communions"
+				? "peaked at " + Numbers.Rate(worstRate) + " across " + communions
+					+ " communions (one sample of a very variable thing - see above)"
 				: firstBreak);
 
 		// And the price of the next thing stays payable-or-not, rather than becoming NaN - which

@@ -349,7 +349,7 @@ looks like art. Every such pairing is now **verified by reading the other side**
 A missing file or an unmatched line **fails** rather than passing quietly: a verifier that
 silently stops verifying keeps reporting green.
 
-## Five things the checks themselves got wrong
+## Six things the checks themselves got wrong
 
 Each was a *check* failing rather than the game, and each taught something the next one assumes.
 
@@ -365,6 +365,14 @@ Each was a *check* failing rather than the game, and each taught something the n
 - **A progress check that could not see a wrong denominator.** It compared every bar against its
   mark at an empty keeper and a maximal one — where every bar is empty and then full whatever it
   was divided by. A bar filling at 25 for a mark needing 50 is only visible in between.
+
+- **A figure quoted as if it meant something.** The long-run check reported the peak
+  production it reached, and that number was used to describe the game. Measured across three
+  seeds it spans **669 K/s to 127 T/s** — eight orders of magnitude — because wearing a relic
+  changes the find chance, a find consumes an extra random draw, and from there two runs see
+  different luck forever, which an economy built on repeated doublings compounds without limit.
+  The check asserts only that the arithmetic stays arithmetic; the peak beside it is a sample,
+  not a property.
 
 And one **assertion that could not fail**: `lentRate > 0.0 && costBefore == 0`, where
 `costBefore` was declared zero and never assigned. Half always true, half a repeat of the check
