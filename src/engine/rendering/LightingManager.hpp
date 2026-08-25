@@ -11,6 +11,7 @@
 #include "camera/Camera.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuDevice.hpp"
+#include "gpu/PushConstantsBytes.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstants.hpp"
@@ -107,26 +108,37 @@ namespace aether
 			std::vector<gpu::BufferHandle> staleBuffers;
 		};
 
-		// vkCmdPushConstants; layout must match the shader's push struct.
+		// vkCmdPushConstants; layout must match the shader's push struct. Slang emits this
+		// block in natural (scalar) layout - verified against the SPIR-V Offset decorations -
+		// so the members pack tight with no vec4 alignment padding.
+		//
+		// params0 and params2 used to be a vec4 and a uvec4 with a documented-unused trailing
+		// component each. That padding cost 8 bytes and pushed the block to 136, over the
+		// 128-byte floor Vulkan guarantees for maxPushConstantsSize - which is exactly what
+		// RDNA2 exposes. The block is at that floor now, and the static_assert below is what
+		// stops it drifting back over: see kMaxGuaranteedPushConstantSize.
 		struct LightingComputePush
 		{
 			gpu::DeviceAddress lightDataAddr = 0;
 			gpu::DeviceAddress tileHeadersAddr = 0;
 			gpu::DeviceAddress tileLightIndicesAddr = 0;
 			glm::mat4 view{1.0f};
-			glm::vec4 params0{0.0f};
-			glm::uvec4 params1{0u};
-			glm::uvec4 params2{0u};
+			glm::vec3 params0{0.0f};  // x=nearClip, y=1/proj[0][0], z=1/proj[1][1] (signed)
+			glm::uvec4 params1{0u};   // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+			glm::uvec3 params2{0u};   // x=maxLightsPerTile, y=screenW(px), z=screenH(px)
 		};
 
-		static_assert(sizeof(LightingComputePush) == 136);
+		static_assert(sizeof(LightingComputePush) == 128);
+		static_assert(sizeof(LightingComputePush) <= gpu::kMaxGuaranteedPushConstantSize,
+		        "LightingComputePush exceeds the push-constant size every Vulkan device is guaranteed to support. "
+		        "Move a field behind a buffer-device-address pointer rather than raising this bound.");
 		static_assert(offsetof(LightingComputePush, lightDataAddr) == 0);
 		static_assert(offsetof(LightingComputePush, tileHeadersAddr) == 8);
 		static_assert(offsetof(LightingComputePush, tileLightIndicesAddr) == 16);
 		static_assert(offsetof(LightingComputePush, view) == 24);
 		static_assert(offsetof(LightingComputePush, params0) == 88);
-		static_assert(offsetof(LightingComputePush, params1) == 104);
-		static_assert(offsetof(LightingComputePush, params2) == 120);
+		static_assert(offsetof(LightingComputePush, params1) == 100);
+		static_assert(offsetof(LightingComputePush, params2) == 116);
 
 		struct ViewSlot
 		{

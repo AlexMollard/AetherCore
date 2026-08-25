@@ -26,9 +26,9 @@ struct CullPush
     DevicePtr<uint>   tileHeadersFlat; // [tile*2+0]=offset, [tile*2+1]=count
     DevicePtr<uint>   tileLightIndices;
     float4x4 view;    // world -> view (NOT viewProj: culling runs in eye space)
-    float4   params0; // x=nearClip, y=1/proj[0][0], z=1/proj[1][1] (signed), w=unused
+    float3   params0; // x=nearClip, y=1/proj[0][0], z=1/proj[1][1] (signed)
     uint4    params1; // x=tilePx, y=tilesX, z=tilesY, w=lightCount
-    uint4    params2; // x=maxLightsPerTile, y=screenW(px), z=screenH(px), w=unused
+    uint3    params2; // x=maxLightsPerTile, y=screenW(px), z=screenH(px)
 };
 [[vk::push_constant]] CullPush pc;
 

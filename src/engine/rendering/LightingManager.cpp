@@ -262,9 +262,9 @@ namespace aether
 		vs.push.tileHeadersAddr = vs.headersAddr;
 		vs.push.tileLightIndicesAddr = vs.indicesAddr;
 		vs.push.view = viewMat;
-		vs.push.params0 = glm::vec4(nearPlane, 1.0f / proj[0][0], 1.0f / proj[1][1], 0.0f);
+		vs.push.params0 = glm::vec3(nearPlane, 1.0f / proj[0][0], 1.0f / proj[1][1]);
 		vs.push.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, frame.lightCount);
-		vs.push.params2 = glm::uvec4(m_maxLightsPerTile, extent.width, extent.height, 0u);
+		vs.push.params2 = glm::uvec3(m_maxLightsPerTile, extent.width, extent.height);
 		vs.tilesX = tilesX;
 		vs.tilesY = tilesY;
 		vs.ready = true;
