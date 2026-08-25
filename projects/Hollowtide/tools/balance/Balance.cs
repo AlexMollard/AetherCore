@@ -4810,6 +4810,42 @@ internal static class Balance
 				unpriceable++;
 			}
 		}
+		// What is LEFT after two months, which is a different question from whether the numbers
+		// still work. An idle game that runs out of things to buy has ended without saying so.
+		int taken = 0;
+		int available = 0;
+		for (int i = 0; i < Content.Offerings.Length; i++)
+		{
+			if (Vigil.OfferingsTaken[i])
+			{
+				taken++;
+			}
+			if (Vigil.OfferingAvailable(i))
+			{
+				available++;
+			}
+		}
+		Check("and the parish is still asking for things", available > 0,
+			taken + " of " + Content.Offerings.Length + " taken, " + available + " still on offer");
+
+		int maxed = 0;
+		for (int i = 0; i < Content.Boons.Length; i++)
+		{
+			if (Vigil.Boons[i] >= Content.Boons[i].MaxLevel)
+			{
+				maxed++;
+			}
+		}
+		// Reported rather than asserted, because it is a design question and not a fault: every
+		// boon is maxed long before here, so sigils stop being something a keeper SPENDS and
+		// become only something they accumulate for the passive multiplier. That is exactly the
+		// decay the boons were added to fix, arriving again further out. Recorded here so the
+		// figure is in front of whoever decides what to do about it.
+		Console.WriteLine("         (after two months: " + maxed + "/" + Content.Boons.Length
+			+ " boons maxed, " + Numbers.Short(Vigil.SigilsEarned) + " sigils earned, "
+			+ Vigil.MarksHeld() + "/" + Content.Marks.Length + " marks, deepest rite "
+			+ Vigil.DeepestRite() + ", " + Vigil.MostOwned() + " of one rite)");
+
 		Check("and everything still has a price", unpriceable == 0,
 			unpriceable == 0 ? "every rite still quotes one" : unpriceable + " cost nothing meaningful");
 
