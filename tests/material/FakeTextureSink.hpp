@@ -21,9 +21,12 @@ public:
 		return s;
 	}
 
-	aether::Expected<aether::TextureResource> Load(std::string_view resolvedPath) override
+	aether::Expected<aether::TextureResource> Load(std::string_view resolvedPath, aether::TextureColorSpace colorSpace) override
 	{
 		(void) resolvedPath;
+		// Recorded so a test can assert that a slot asked for as data was not loaded
+		// as colour, which is the whole point of the parameter.
+		lastColorSpace = colorSpace;
 		if (m_live >= m_capacity)
 		{
 			return std::unexpected(aether::AetherError::Engine("FakeTextureSink: at capacity"));
@@ -39,6 +42,7 @@ public:
 	}
 
 	int loadCount = 0;
+	aether::TextureColorSpace lastColorSpace = aether::TextureColorSpace::Srgb;
 	std::uint32_t m_nextSlot = 0;
 
 private:
