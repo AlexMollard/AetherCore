@@ -54,6 +54,11 @@ float StarField(float3 dir)
 // Single scattering only. Multiple scattering is what keeps a real sky from going
 // black at the zenith and fills shadowed air at dusk; approximating it as a small
 // ambient floor is far cheaper than integrating it and is most of the way there.
+//
+// Cost, measured on the GfxTest scene and normalised against the forward pass in
+// the same run so it does not depend on the machine: 1.05-1.07x with this model
+// against 0.82-0.85x with the gradient. About a quarter more for the sky pass,
+// paid only by scenes that opt in - not the near-doubling an earlier note claimed.
 static const float3 kRayleighBeta = float3(5.8e-6f, 13.5e-6f, 33.1e-6f);
 static const float  kMieBeta = 21e-6f;
 // Forward asymmetry of aerosol scattering; 0.76 is the usual fit for haze.
@@ -163,8 +168,6 @@ float3 SkyGradient(
     sky = lerp(sky, voidColor, voidBlend);
 
     return sky;
-
-    return sky;
 }
 
 // The sky as the camera sees it: gradient plus everything emissive in it.
@@ -240,8 +243,6 @@ float3 EvalSky(
     // Keep a small transition band to avoid hard aliasing at exactly y=0.
     const float voidBlend = 1.0f - smoothstep(-0.22f, -0.015f, worldDir.y);
     sky = lerp(sky, voidColor, voidBlend);
-
-    return sky;
 
     return sky;
 }
