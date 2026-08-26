@@ -95,105 +95,140 @@ static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* 
     return n;
 }
 
+// Ground-truth ambient occlusion, as Jimenez et al. define it: sweep a set of slices
+// through the view vector, find the horizon angle each side of every slice reaches, and
+// integrate the cosine-weighted visible arc between them analytically.
+//
+// The distinction that matters is what counts as an occluder. Asking whether a sample
+// sits above the receiver's tangent plane - the previous test - misses the single most
+// important case in any scene: a wall rising beside a floor is displaced almost purely
+// sideways, so it never registers, and wall/floor junctions came out with no occlusion
+// at all. A horizon angle is measured against the view vector instead, so a surface
+// blocking the sky is found wherever it stands.
 static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsData* fc)
 {
-    static const uint kDirectionCount = 6u;
-    static const uint kStepCount = 5u;
+    static const uint kSliceCount = 4u;
+    static const uint kStepCount = 6u;
+    static const float kPi = 3.14159265f;
+    static const float kHalfPi = 1.57079633f;
+
+    // How far behind the receiver an occluder may sit, along the view ray, before it
+    // reads as a separate surface rather than a fold of this one. Without it a distant
+    // wall behind a foreground object darkens that object's silhouette.
+    static const float kThickness = 1.0f;
+
+    float3 viewPos = mul(fc->view, float4(worldPos, 1.0f)).xyz;
+    float3 viewNormal = normalize(mul((float3x3)fc->view, normal));
+    float3 V = normalize(-viewPos);
+    float viewDepth = max(-viewPos.z, 1e-4f);
+
+    // World radius projected to pixels, so the kernel covers a fixed slice of the world
+    // rather than a fixed slice of the screen.
+    float pixelRadius = clamp(pc.radius * fc->proj[1][1] * 0.5f * float(pc.fullHeight) / viewDepth, 2.0f, 192.0f);
 
     float2 noise = Hash2(px);
-    float3 viewDir = normalize(fc->cameraWorldPos.xyz - worldPos);
-    float3 tangent = cross(normal, abs(viewDir.y) < 0.9f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f));
-    tangent = normalize(tangent);
-    float3 bitangent = normalize(cross(normal, tangent));
-
-    float occlusion = 0.0f;
-    float weightSum = 0.0f;
+    float visibility = 0.0f;
 
     [unroll]
-    for (uint d = 0u; d < kDirectionCount; ++d)
+    for (uint slice = 0u; slice < kSliceCount; ++slice)
     {
-        float angle = (float(d) + noise.x) * (6.2831853f / float(kDirectionCount));
-        float s;
-        float c;
-        sincos(angle, s, c);
-        float3 dir = normalize(c * tangent + s * bitangent + normal * 0.15f);
+        float phi = (float(slice) + noise.x) * (kPi / float(kSliceCount));
+        float2 omega = float2(cos(phi), sin(phi));
+
+        // The plane this slice sweeps, spanned by the screen direction and the view
+        // vector, rotating about `axis`.
+        float3 sliceDir = float3(omega, 0.0f);
+        float3 axis = cross(sliceDir, V);
+        float axisLen = length(axis);
+        if (axisLen < 1e-4f)
+        {
+            continue;
+        }
+        axis /= axisLen;
+
+        // The normal projected into that plane. Its length weights the slice, because a
+        // slice seen edge-on to the normal covers little of the hemisphere.
+        float3 projNormal = viewNormal - axis * dot(viewNormal, axis);
+        float projLen = length(projNormal);
+        if (projLen < 1e-4f)
+        {
+            continue;
+        }
+        float3 projNormalN = projNormal / projLen;
+
+        // Signed angle from the view vector to the projected normal, inside the slice
+        // plane. Every horizon below is measured relative to this.
+        float3 tangent = cross(axis, V);
+        float gamma = -sign(dot(projNormalN, tangent)) * acos(clamp(dot(projNormalN, V), -1.0f, 1.0f));
+
+        // Highest horizon each half of the slice reaches. -1 is "nothing found", i.e.
+        // open all the way to the far horizon.
+        float cosH1 = -1.0f;
+        float cosH2 = -1.0f;
 
         [unroll]
         for (uint step = 1u; step <= kStepCount; ++step)
         {
-            // Quadratic step distribution: denser samples near the receiver so
-            // small ground-contact occluders (feet, prop bases) register, while
-            // the last step still reaches (but never exceeds) the full radius.
-            float t = (float(step) + noise.y) / float(kStepCount + 1u);
-            t *= t;
+            float offsetPx = max(((float(step) - noise.y) / float(kStepCount)) * pixelRadius, 1.0f);
 
-            // The kernel weight comes from the sample we INTENDED to take, and is
-            // accumulated before any of the tests below can reject it. Renormalising by
-            // only the surviving weight was a hard discontinuity: whole rings of samples
-            // fail the reprojection test at once as a surface tilts away from the camera,
-            // and the ratio jumped instead of easing off - a visible band across flat
-            // ground at a fixed view depth. Counting a sample we could not resolve as
-            // "no occluder found there" lets the term fade smoothly toward open.
-            float sampleWeight = 1.0f - t;
-            weightSum += sampleWeight;
-
-            float3 sampleWorld = worldPos + dir * (pc.radius * t);
-            float4 sampleClip = mul(fc->viewProj, float4(sampleWorld, 1.0f));
-            if (sampleClip.w <= 1e-5f)
+            [unroll]
+            for (uint side = 0u; side < 2u; ++side)
             {
-                continue;
+                float2 dirPx = (side == 0u) ? omega : -omega;
+                uint2 samplePx = ClampFull(int2(float2(px) + dirPx * offsetPx));
+                float sampleDepth = LoadDepth(samplePx, fc);
+                if (sampleDepth >= 1.0f)
+                {
+                    // Sky: no horizon here, leave this side open.
+                    continue;
+                }
+
+                float3 sampleView = mul(fc->view, float4(ReconstructWorld(samplePx, sampleDepth, fc), 1.0f)).xyz;
+                float3 delta = sampleView - viewPos;
+                float len = length(delta);
+                if (len < 1e-4f)
+                {
+                    continue;
+                }
+
+                float cosH = dot(delta / len, V);
+
+                // Ease the horizon back toward open past the radius, so an occluder
+                // leaving the kernel fades out instead of popping, and drop occluders
+                // that sit far enough behind to be a different surface entirely.
+                float falloff = saturate(1.0f - (len - pc.radius) / kThickness);
+                cosH = lerp(-1.0f, cosH, falloff);
+
+                if (side == 0u)
+                {
+                    cosH1 = max(cosH1, cosH);
+                }
+                else
+                {
+                    cosH2 = max(cosH2, cosH);
+                }
             }
-
-            float3 sampleNdc = sampleClip.xyz / sampleClip.w;
-            float2 sampleUv = sampleNdc.xy * 0.5f + 0.5f;
-            if (any(sampleUv < 0.0f) || any(sampleUv > 1.0f))
-            {
-                continue;
-            }
-
-            uint2 samplePx = ClampFull(int2(sampleUv * float2(pc.fullWidth, pc.fullHeight)));
-            float sampleDepth = LoadDepth(samplePx, fc);
-            if (sampleDepth >= 1.0f)
-            {
-                continue;
-            }
-
-            float3 depthWorld = ReconstructWorld(samplePx, sampleDepth, fc);
-            float sampleError = length(depthWorld - sampleWorld);
-
-            // Screen-space sampling cannot land exactly on the world point it asked for,
-            // and that error grows smoothly with distance and grazing angle - so the
-            // rejection has to grow smoothly too. A threshold here turned a continuous
-            // quantity into a binary one and put the step back.
-            float validity = 1.0f - smoothstep(pc.radius * 0.35f, pc.radius * 0.75f, sampleError);
-            if (validity <= 0.0f)
-            {
-                continue;
-            }
-
-            float3 delta = depthWorld - worldPos;
-            float dist = length(delta);
-            if (dist <= 1e-4f)
-            {
-                continue;
-            }
-
-            // Distance attenuates the contribution rather than reweighting the average.
-            // Dividing it back out, as carrying it in the denominator did, made one
-            // distant occluder darken a point as much as one right against it.
-            float rangeWeight = saturate(1.0f - (dist / max(pc.radius, 1e-3f)));
-            float horizon = saturate((dot(delta / dist, normal) - 0.05f) * 2.0f);
-            occlusion += horizon * rangeWeight * validity * sampleWeight;
         }
+
+        // Horizons as signed angles either side of the view vector, then clamped into
+        // the hemisphere about the normal - past that a surface only occludes itself.
+        float h1 = -acos(clamp(cosH1, -1.0f, 1.0f));
+        float h2 = acos(clamp(cosH2, -1.0f, 1.0f));
+        h1 = gamma + max(h1 - gamma, -kHalfPi);
+        h2 = gamma + min(h2 - gamma, kHalfPi);
+
+        // Analytic cosine-weighted arc between the two horizons.
+        float sinGamma = sin(gamma);
+        float cosGamma = cos(gamma);
+        float arc1 = -cos(2.0f * h1 - gamma) + cosGamma + 2.0f * h1 * sinGamma;
+        float arc2 = -cos(2.0f * h2 - gamma) + cosGamma + 2.0f * h2 * sinGamma;
+        visibility += projLen * 0.25f * (arc1 + arc2);
     }
 
-    // weightSum no longer depends on which samples survived, so this ratio is
-    // continuous in the geometry by construction.
-    float ao = 1.0f - occlusion / max(weightSum, 1e-3f);
+    float ao = saturate(visibility / float(kSliceCount));
+
     // Low floor: creases and contact points are allowed to get genuinely dark.
-    // The old 0.35 floor capped worst-case darkening so hard that AO was
-    // invisible in scenes lit mostly by local lights.
-    return max(pow(saturate(ao), pc.strength), 0.05f);
+    return max(pow(ao, pc.strength), 0.05f);
 }
 
 [shader("fragment")]
