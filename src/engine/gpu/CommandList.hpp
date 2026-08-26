@@ -85,6 +85,9 @@ namespace aether::gpu
 		void EndRendering();
 
 		void WriteTimestamp(void* queryPool, std::uint32_t slot, PipelineStage stage) noexcept;
+		// Command-buffer reset rather than the host-side vkResetQueryPool, which would
+		// pull in the hostQueryReset feature for no benefit.
+		void ResetQueryPool(void* queryPool, std::uint32_t firstSlot, std::uint32_t slotCount) noexcept;
 
 		void CopyBuffer(void* src, void* dst, std::uint64_t srcOffset, std::uint64_t dstOffset, std::uint64_t size) noexcept;
 		void CopyImageToBuffer(void* srcImage,

@@ -1973,7 +1973,8 @@ namespace aether::editor
 				                {"consumedFrameProducts", pass.consumedFrameProducts},
 				                {"colorWriteCount", pass.colorWriteCount},
 				                {"hasDepthWrite", pass.hasDepthWrite},
-				                {"cpuTimeMs", pass.lastCpuTimeMs}});
+				                {"cpuTimeMs", pass.lastCpuTimeMs},
+				                {"gpuTimeMs", pass.lastGpuTimeMs}});
 			        }
 			        return json{{"passes", arr}};
 		        }});
@@ -2032,12 +2033,12 @@ namespace aether::editor
 			        for (const RenderGraph::PassInfo& p: passes)
 			        {
 				        total += p.lastCpuTimeMs;
-				        arr.push_back(json{{"name", p.name}, {"cpuTimeMs", p.lastCpuTimeMs}, {"graphics", p.isGraphics}, {"compute", p.isCompute}, {"asyncCompute", p.isAsyncCompute}});
+				        arr.push_back(json{{"name", p.name}, {"cpuTimeMs", p.lastCpuTimeMs}, {"gpuTimeMs", p.lastGpuTimeMs}, {"graphics", p.isGraphics}, {"compute", p.isCompute}, {"asyncCompute", p.isAsyncCompute}});
 			        }
 			        json result{{"passes", arr}, {"activePassCount", passes.size()}, {"totalCpuMs", total}, {"frame", ctx.frameIndex}, {"fps", ctx.fps}};
 			        if (!passes.empty())
 			        {
-				        result["hottest"] = json{{"name", passes.front().name}, {"cpuTimeMs", passes.front().lastCpuTimeMs}};
+				        result["hottest"] = json{{"name", passes.front().name}, {"cpuTimeMs", passes.front().lastCpuTimeMs}, {"gpuTimeMs", passes.front().lastGpuTimeMs}};
 			        }
 			        return result;
 		        }});

@@ -8,10 +8,12 @@
 #include <queue>
 
 #include "gpu/Bda.hpp"
+#include "gpu/GpuDeviceFactory.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/VulkanContext.hpp"
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
@@ -75,15 +77,112 @@ namespace aether
 	void RenderGraph::Initialize(gpu::Device device, gpu::Allocator allocator)
 	{
 		m_storage->Initialize(device, allocator);
+		m_timingDevice = device;
 	}
 
 	void RenderGraph::SetVulkanContext(class VulkanContext* ctx)
 	{
 		m_storage->SetVulkanContext(ctx);
+		m_timingContext = ctx;
+		m_timestampPeriodNs = 0.0f;
+		if (ctx != nullptr)
+		{
+			const gpu::Factory::PhysicalDeviceProperties props = gpu::Factory::GetPhysicalDeviceProperties(ctx->GetPhysicalDevice());
+			if (props.limits.timestampComputeAndGraphics)
+			{
+				m_timestampPeriodNs = props.limits.timestampPeriod;
+			}
+			else
+			{
+				AE_INFO(LogCategory::Render, "GPU timestamps unsupported on this device; per-pass GPU timings will read zero.");
+			}
+		}
+	}
+
+	// Read back the timings recorded into this slot a full frame cycle ago. The engine
+	// has already waited on that frame's fence before handing the slot back, so the
+	// results are guaranteed ready and this never blocks.
+	void RenderGraph::ResolveGpuTimings(const std::uint32_t frameSlot)
+	{
+		GpuTimingFrame& timing = m_gpuTiming[frameSlot];
+		if (!timing.pending || timing.pool == nullptr || timing.used == 0 || m_timestampPeriodNs <= 0.0f)
+		{
+			timing.pending = false;
+			return;
+		}
+
+		std::vector<std::uint64_t> ticks(timing.used, 0ull);
+		const std::uint32_t got = gpu::Factory::GetQueryPoolResults(m_timingDevice, timing.pool, 0, timing.used, ticks);
+		timing.pending = false;
+		if (got < timing.used)
+		{
+			return;
+		}
+
+		const std::scoped_lock lock(m_debugStateMutex);
+		for (std::size_t i = 0; i < timing.timedPasses.size(); ++i)
+		{
+			const std::uint32_t passIndex = timing.timedPasses[i];
+			if (passIndex >= m_passes.size())
+			{
+				continue;
+			}
+			const std::uint64_t begin = ticks[i * 2u];
+			const std::uint64_t end = ticks[i * 2u + 1u];
+			// A wrapped or unwritten pair reads as garbage rather than a negative
+			// duration, so drop it instead of reporting a nonsense spike.
+			m_passes[passIndex].lastGpuTimeMs = (end > begin) ? (static_cast<float>(end - begin) * m_timestampPeriodNs * 1e-6f) : 0.0f;
+		}
+	}
+
+	void RenderGraph::ResetGpuTimings(gpu::CommandList& cmdList, const std::uint32_t frameSlot, const std::uint32_t passCount)
+	{
+		if (m_timestampPeriodNs <= 0.0f || m_timingDevice == nullptr)
+		{
+			return;
+		}
+
+		GpuTimingFrame& timing = m_gpuTiming[frameSlot];
+		const std::uint32_t needed = passCount * 2u;
+		if (timing.capacity < needed)
+		{
+			if (timing.pool != nullptr)
+			{
+				gpu::Factory::DestroyQueryPool(m_timingDevice, timing.pool);
+			}
+			// Round up so a graph that grows by one pass does not reallocate every frame.
+			const std::uint32_t capacity = ((needed + 63u) / 64u) * 64u;
+			timing.pool = gpu::Factory::CreateQueryPool(m_timingDevice, gpu::Factory::QueryPoolDesc{.type = gpu::Factory::QueryType::Timestamp, .count = capacity});
+			timing.capacity = (timing.pool != nullptr) ? capacity : 0u;
+		}
+
+		timing.used = 0u;
+		timing.timedPasses.clear();
+		if (timing.pool != nullptr)
+		{
+			cmdList.ResetQueryPool(timing.pool, 0, timing.capacity);
+		}
+	}
+
+	void RenderGraph::DestroyGpuTimings()
+	{
+		if (m_timingDevice == nullptr)
+		{
+			return;
+		}
+		for (GpuTimingFrame& timing: m_gpuTiming)
+		{
+			if (timing.pool != nullptr)
+			{
+				gpu::Factory::DestroyQueryPool(m_timingDevice, timing.pool);
+			}
+			timing = {};
+		}
 	}
 
 	void RenderGraph::Shutdown()
 	{
+		DestroyGpuTimings();
 		const std::scoped_lock lock(m_debugStateMutex);
 		m_storage->Shutdown();
 		m_externalImages.clear();
@@ -264,6 +363,7 @@ namespace aether
 			        .bufferAccessCount = static_cast<std::uint32_t>(pass.bufferAccesses.size()),
 			        .extentOverride = pass.extentOverride,
 			        .lastCpuTimeMs = pass.lastCpuTimeMs,
+			        .lastGpuTimeMs = pass.lastGpuTimeMs,
 			};
 
 #ifndef NDEBUG
@@ -369,6 +469,7 @@ namespace aether
 			{
 				pass.debugDisabled = disabled;
 				pass.lastCpuTimeMs = disabled ? 0.0f : pass.lastCpuTimeMs;
+				pass.lastGpuTimeMs = disabled ? 0.0f : pass.lastGpuTimeMs;
 				return;
 			}
 		}
@@ -1963,6 +2064,9 @@ namespace aether
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 
+		ResolveGpuTimings(frameIndex);
+		ResetGpuTimings(cmdList, frameIndex, static_cast<std::uint32_t>(m_compiled.size()));
+
 		auto frameAddr = static_cast<gpu::DeviceAddress>(frame.frameConstantsAddr);
 
 		// solver migration: the engine code never names VkImage.
@@ -2222,14 +2326,34 @@ namespace aether
 				}
 				const std::scoped_lock lock(m_debugStateMutex);
 				pass.lastCpuTimeMs = 0.0f;
+				pass.lastGpuTimeMs = 0.0f;
 			}
 			else if (pass.execute)
 			{
 				AE_GPU_ZONE_SCOPED(cmd, pass.name);
+
+				// AllCommands both sides: the pair brackets everything this pass submits,
+				// which is what "how long did this pass cost the GPU" means at graph level.
+				GpuTimingFrame& timing = m_gpuTiming[frameIndex];
+				const bool timed = timing.pool != nullptr && (timing.used + 2u) <= timing.capacity;
+				if (timed)
+				{
+					recorder.WriteTimestamp(timing.pool, timing.used, gpu::PipelineStage::AllCommands);
+				}
+
 				const auto t0 = std::chrono::high_resolution_clock::now();
 				PassContext ctx{.recorder = recorder, .graph = *this, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
+
+				if (timed)
+				{
+					recorder.WriteTimestamp(timing.pool, timing.used + 1u, gpu::PipelineStage::AllCommands);
+					timing.timedPasses.push_back(cp.passIndex);
+					timing.used += 2u;
+					timing.pending = true;
+				}
+
 				const std::scoped_lock lock(m_debugStateMutex);
 				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
 			}

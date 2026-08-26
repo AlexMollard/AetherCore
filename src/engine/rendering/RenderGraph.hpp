@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -400,6 +401,7 @@ namespace aether
 			std::optional<gpu::Extent2D> extentOverride;
 			std::vector<ResourceAccessInfo> resources;
 			float lastCpuTimeMs = 0.f;
+			float lastGpuTimeMs = 0.f;
 		};
 
 		[[nodiscard]] std::vector<PassInfo> GetPasses() const;
@@ -542,6 +544,7 @@ namespace aether
 			std::function<void(PassContext&)> debugDisabledExecute;
 			std::optional<gpu::Extent2D> extentOverride;
 			float lastCpuTimeMs = 0.f;
+			float lastGpuTimeMs = 0.f;
 			bool debugDisabled = false;
 			bool hasSideEffects = false;
 			std::string sideEffectReason;
@@ -594,6 +597,32 @@ namespace aether
 
 		[[nodiscard]] std::vector<BarrierIssue> EvaluateBarriers() const;
 #endif
+
+		// Per-pass GPU timing. Timestamps are written either side of every pass into a
+		// pool owned by the frame slot, and read back one full cycle later, when that
+		// slot's fence has already been waited on - so the results are free and never
+		// stall. Whole-frame fps is far too noisy to optimise against (measured at 16ms
+		// median with a 6ms standard deviation in the editor), which left the renderer
+		// with no usable cost signal at all; this is that signal.
+		struct GpuTimingFrame
+		{
+			gpu::QueryPool pool = nullptr;
+			std::uint32_t capacity = 0;                 // queries allocated, = 2 * passes
+			std::uint32_t used = 0;                     // queries written this frame
+			std::vector<std::uint32_t> timedPasses;     // pass index per timed slot, in order
+			bool pending = false;                       // has results waiting to be read
+		};
+
+		void ResolveGpuTimings(std::uint32_t frameSlot);
+		void ResetGpuTimings(gpu::CommandList& cmdList, std::uint32_t frameSlot, std::uint32_t passCount);
+		void DestroyGpuTimings();
+
+		gpu::Device m_timingDevice = nullptr;
+		class VulkanContext* m_timingContext = nullptr;
+		// Nanoseconds per timestamp tick. Zero means the device cannot time, and every
+		// timing path below turns into a no-op.
+		float m_timestampPeriodNs = 0.0f;
+		std::array<GpuTimingFrame, kMaxFramesInFlight> m_gpuTiming{};
 
 		[[nodiscard]] static bool IsTransientId(uint32_t resourceId)
 		{
