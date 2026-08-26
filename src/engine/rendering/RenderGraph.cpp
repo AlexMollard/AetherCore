@@ -102,6 +102,14 @@ namespace aether
 	// Read back the timings recorded into this slot a full frame cycle ago. The engine
 	// has already waited on that frame's fence before handing the slot back, so the
 	// results are guaranteed ready and this never blocks.
+	//
+	// Reading these numbers: a pass's begin timestamp waits for everything submitted
+	// before it, so whichever pass runs FIRST in a frame also absorbs whatever drain
+	// was left from the previous frame. Measured here, three culls doing identical work
+	// read 1.42 / 0.42 / 0.30 ms purely in pass order, and 0.019 / 0.014 / 0.013 in the
+	// same order once their workload was removed. Compare a pass against itself across
+	// builds, not against its neighbours, and treat the first pass of a frame as an
+	// upper bound.
 	void RenderGraph::ResolveGpuTimings(const std::uint32_t frameSlot)
 	{
 		GpuTimingFrame& timing = m_gpuTiming[frameSlot];
