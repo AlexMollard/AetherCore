@@ -33,6 +33,7 @@
 #include "include/FullScreenTriangle.slangh"
 #include "include/OctNormal.slangh"
 #include "include/Sky.slangh"
+#include "include/ShadowSampling.slangh"
 
 struct SsrCompositePush
 {
@@ -48,9 +49,11 @@ struct SsrCompositePush
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
 	const int2 coord = int2(svPos.xy);
-	const float4 ssr = g_textures[pc.ssrSlot].Load(int3(coord, 0));
-	const float confidence = ssr.a;
-	if (confidence <= 0.001f)
+
+	// Peek at the centre first: most of the screen has no reflection at all, and
+	// there is no point gathering a disk to average a set of zeroes.
+	const float4 centreSsr = g_textures[pc.ssrSlot].Load(int3(coord, 0));
+	if (centreSsr.a <= 0.001f)
 	{
 		return float4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
@@ -63,19 +66,45 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	{
 		// No way to work out what the sky put here, so fall back to adding. Too
 		// bright is a better failure than a reflection that vanishes.
-		return float4(ssr.rgb, 1.0f);
+		return float4(centreSsr.rgb, 1.0f);
 	}
 
 	const float depth = g_textures[uint(depthEntry.address)].Load(int3(coord, 0)).r;
 	if (depth >= 1.0f)
 	{
-		return float4(ssr.rgb, 1.0f);
+		return float4(centreSsr.rgb, 1.0f);
 	}
 
 	const float4 gbuf = g_textures[uint(gbufEntry.address)].Load(int3(coord, 0));
 	const float3 N = DecodeOctNormal(gbuf.rg);
 	const float roughness = gbuf.b;
 	const float metallic = gbuf.a;
+
+	// One ray gives a mirror. A rough surface reflects a lobe, so the sharp result
+	// has to be spread to match: gather a disk whose radius grows with roughness.
+	// Blurring the reflection afterwards is what a prefiltered probe would have
+	// given directly from a coarser mip, and it costs a handful of taps instead of
+	// a ray per sample of the lobe.
+	//
+	// Premultiplied throughout, so colour and confidence average together and a tap
+	// that found nothing correctly dilutes its neighbours rather than darkening
+	// them - averaging unpremultiplied colour would let a miss wash out a hit.
+	float4 ssr = centreSsr;
+	if (roughness > 0.03f)
+	{
+		const float radiusPx = roughness * 24.0f;
+		const float phi = InterleavedGradientNoise(svPos.xy) * kTwoPi;
+		float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+		[unroll]
+		for (uint i = 0u; i < 8u; ++i)
+		{
+			const float2 o = VogelDiskSample(i, 8u, phi) * radiusPx;
+			const int2 t = clamp(coord + int2(o), int2(0, 0), int2(int(pc.width) - 1, int(pc.height) - 1));
+			sum += g_textures[pc.ssrSlot].Load(int3(t, 0));
+		}
+		ssr = sum * (1.0f / 8.0f);
+	}
+	const float confidence = ssr.a;
 
 	const float2 uv = (float2(coord) + 0.5f) / float2(pc.width, pc.height);
 	const float4 clip = float4(uv * 2.0f - 1.0f, depth, 1.0f);
