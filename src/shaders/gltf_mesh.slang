@@ -214,15 +214,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
 
-    // AO is a visibility term, not a light source. Apply it to diffuse and
-    // indirect fill, but keep it out of the final whole-lighting multiplier so
-    // shadows do not look like they are being re-lit by surrounding AO contrast.
-    const float diffuseAo = lerp(1.0f, ao, 0.70f);
-    // Local lights carry most scenes at night/indoors; at 0.35 the AO term was
-    // capped to ~10% darkening and contact shadows vanished entirely.
-    const float localLightingAo = lerp(1.0f, ao, 0.65f);
+    // Occlusion - screen-space and the material's baked map alike - is an estimate
+    // of INDIRECT visibility, so it modulates ambient only. Direct visibility is
+    // what the shadow maps already answer, exactly and per light. Attenuating the
+    // sun and the local lights by it as well darkened lit surfaces near corners
+    // until they met the shadowed ones in the middle, which read as the AO
+    // cancelling the shadows out. The clamps made it worse in both directions: a
+    // shadow bottoms out at 0.08 while AO could take a *lit* pixel to 0.05, so in
+    // a corner the contrast could invert outright. This also matches the glTF
+    // spec, where the occlusion texture applies to indirect light.
     const float ambientAo = ao;
-    float3 diffuse = kD * baseColor.rgb * diffuseAo / kPI;
+    float3 diffuse = kD * baseColor.rgb / kPI;
 
     const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L, input.svPosition.xy);
     // Materials can opt out of shadow receiving (flag set == opt out); such
@@ -231,9 +233,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float shadowVisibility = receivesShadows ? max(shadow, 0.08f) : 1.0f;
     float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
 
-    // Local lights accumulate separately so their AO weight does not also hit
-    // the sun term: sun diffuse already carries diffuseAo, and occluding sun
-    // specular with AO double-darkens sunlit geometry.
+    // Local lights accumulate separately from the sun so each keeps its own
+    // shadow term; neither carries an occlusion factor.
     float3 LoLocal = float3(0.0, 0.0, 0.0);
 
     // Tiled local lights (point + spot).
@@ -279,7 +280,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                 LoLocal);
         }
     }
-    Lo += LoLocal * localLightingAo;
+    Lo += LoLocal;
 
     // Image-based ambient (constant approximation - replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ambientAo;
