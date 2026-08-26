@@ -41,9 +41,15 @@ float3 KarisAverage(float3 a, float3 b, float3 c, float3 d)
     return (a * wa + b * wb + c * wc + d * wd) / max(wa + wb + wc + wd, 1e-5);
 }
 
+// The global sampler addresses REPEAT, so a tap reaching past an edge wraps to the
+// opposite side of the screen and drags whatever is bright there back in as a rim
+// along the border. Clamping to the half-texel inside the edge keeps every tap on
+// the image it belongs to.
 float3 Sample(float2 uv)
 {
-    return g_textures[pc.srcSlot].SampleLevel(g_linearSampler, uv, 0.0).rgb;
+    const float2 halfTexel = float2(0.5 / pc.srcWidth, 0.5 / pc.srcHeight);
+    const float2 clamped = clamp(uv, halfTexel, 1.0 - halfTexel);
+    return g_textures[pc.srcSlot].SampleLevel(g_linearSampler, clamped, 0.0).rgb;
 }
 
 [shader("fragment")]
