@@ -857,7 +857,7 @@ namespace aether
 				        }
 				        const auto frameSlot = ctx.frameSlot;
 				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
-				        bindless->CmdBindHeaps(ctx.recorder);
+				        bindless->CmdBindGlobalResources(ctx.recorder);
 				        const gpu::CullMode cullMode = m_renderer.GetCullMode();
 				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr, nullptr, 0, &cullMode);
 			        });
@@ -925,7 +925,7 @@ namespace aether
 				                gpu::CommandList& cmd = ctx.recorder;
 				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(w), .height = static_cast<float>(h)});
 				                cmd.SetScissor(gpu::Rect2D{.x = 0, .y = 0, .width = w, .height = h});
-				                bindless->CmdBindHeaps(cmd);
+				                bindless->CmdBindGlobalResources(cmd);
 				                cmd.BindPipeline(m_texturePreviewPipeline.GetPipeline());
 				                struct
 				                {

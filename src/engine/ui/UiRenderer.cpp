@@ -710,7 +710,7 @@ namespace aether::ui
 			                {
 				                const auto resolved = gpu::ResourceRegistry::ResolvePipeline(fx.pipeline);
 				                cmd.BindPipeline(resolved.state);
-				                bindless.CmdBindHeaps(cmd);
+				                bindless.CmdBindGlobalResources(cmd);
 
 				                const EffectPush push{
 				                        .screenSize = {frame.extent.x, frame.extent.y, 0.f, 0.f},
@@ -744,7 +744,7 @@ namespace aether::ui
 			                	}
 			                	const auto resolved = gpu::ResourceRegistry::ResolvePipeline(g.pipeline);
 			                	cmd.BindPipeline(resolved.state);
-			                	bindless.CmdBindHeaps(cmd);
+			                	bindless.CmdBindGlobalResources(cmd);
 			                	const std::uint64_t groupAddr = frame.address + static_cast<std::uint64_t>(g.first) * sizeof(UiDrawCommand);
 			                	if (g.shaderId != 0 && g.shaderId <= frame.materials.size())
 			                	{

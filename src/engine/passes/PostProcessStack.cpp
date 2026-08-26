@@ -242,7 +242,7 @@ namespace aether
 		                {
 			                gpu::CommandList& cmd = ctx.recorder;
 
-			                bindless.CmdBindHeaps(cmd);
+			                bindless.CmdBindGlobalResources(cmd);
 
 			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline());
 
@@ -328,7 +328,7 @@ namespace aether
 			        cmd.SetViewport(vp);
 			        cmd.SetScissor(scissor);
 
-			        bindless.CmdBindHeaps(cmd);
+			        bindless.CmdBindGlobalResources(cmd);
 
 			        cmd.BindPipeline(m_fxaaPipeline.GetPipeline());
 
@@ -390,7 +390,7 @@ namespace aether
 			                const auto mappedView = gpu::ResourceRegistry::ResolveMappedBuffer(m_histogramOutput[slot]);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                bindless.CmdBindHeaps(cmd);
+			                bindless.CmdBindGlobalResources(cmd);
 			                cmd.BindComputePipeline(histogramPipeline);
 
 			                struct

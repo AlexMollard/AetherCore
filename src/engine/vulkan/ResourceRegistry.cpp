@@ -770,7 +770,7 @@ namespace aether
 			AE_UNEXPECTED(slotResult.error());
 		}
 
-		Expected<void> writeResult = m_bindlessManager->WriteSampledImage(*slotResult, &entry->viewCreateInfo, descriptorLayout);
+		Expected<void> writeResult = m_bindlessManager->WriteSampledImage(*slotResult, &entry->viewCreateInfo, view, descriptorLayout);
 		if (!writeResult)
 		{
 			m_bindlessManager->FreeSampledImageSlot(*slotResult);
@@ -856,7 +856,7 @@ namespace aether
 			entry->viewCreateInfo = viewCreateInfo;
 		}
 
-		Expected<void> writeResult = m_bindlessManager->WriteSampledImage(slot, &entry->viewCreateInfo, descriptorLayout);
+		Expected<void> writeResult = m_bindlessManager->WriteSampledImage(slot, &entry->viewCreateInfo, view, descriptorLayout);
 		if (!writeResult)
 		{
 			if (makeView)

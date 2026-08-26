@@ -5,6 +5,7 @@
 #include "io/FileSystem.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/GlobalBindingLayout.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -31,20 +32,35 @@ namespace aether::vkutil
 
 		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
 
+		// See GraphicsPipelineFactory: layout-free on the descriptor-heap path, real set layout
+		// and push-constant range on the descriptor-buffer path. Same SPIR-V either way.
+		const auto& global = vulkan::GetGlobalBindingLayout();
+		// Keyed off the presence of a global layout, NOT off whether mappings were supplied:
+		// some pipelines pass no mappings even on the heap path, and treating those as
+		// "has a layout" hands vkCreateShadersEXT a null set layout.
+		const bool layoutFree = global.pipelineLayout == VK_NULL_HANDLE;
+
+		const VkDescriptorSetLayout setLayouts[] = {global.setLayout};
+		const VkPushConstantRange pushRange{
+		        .stageFlags = VK_SHADER_STAGE_ALL,
+		        .offset = 0,
+		        .size = global.pushConstantSize,
+		};
+
 		const VkShaderCreateInfoEXT createInfo{
 		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
 		        .pNext = mappings,
-		        .flags = VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT,
+		        .flags = layoutFree ? VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT : static_cast<VkShaderCreateFlagsEXT>(0),
 		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
 		        .nextStage = 0,
 		        .codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT,
 		        .codeSize = spirv->size(),
 		        .pCode = spirv->data(),
 		        .pName = entryName.c_str(),
-		        .setLayoutCount = 0,
-		        .pSetLayouts = nullptr,
-		        .pushConstantRangeCount = 0,
-		        .pPushConstantRanges = nullptr,
+		        .setLayoutCount = layoutFree ? 0u : 1u,
+		        .pSetLayouts = layoutFree ? nullptr : setLayouts,
+		        .pushConstantRangeCount = layoutFree ? 0u : 1u,
+		        .pPushConstantRanges = layoutFree ? nullptr : &pushRange,
 		        .pSpecializationInfo = nullptr,
 		};
 

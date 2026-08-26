@@ -123,7 +123,7 @@ namespace aether
 				                return; // 2D / no 3D geometry: skip the full-screen AO compute
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                m_bindlessManager->CmdBindHeaps(cmd);
+			                m_bindlessManager->CmdBindGlobalResources(cmd);
 			                cmd.BindPipeline(m_mainPipeline.GetPipeline());
 
 			                struct
@@ -167,7 +167,7 @@ namespace aether
 				                return; // matches $GTAO_Main: no AO compute for 2D scenes
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                m_bindlessManager->CmdBindHeaps(cmd);
+			                m_bindlessManager->CmdBindGlobalResources(cmd);
 			                cmd.BindPipeline(m_denoisePipeline.GetPipeline());
 
 			                struct

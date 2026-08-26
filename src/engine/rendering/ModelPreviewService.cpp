@@ -314,7 +314,7 @@ namespace aether
 				        return;
 			        }
 			        const DrawContracts::LightingAddresses lightingAddr{};
-			        bindless.CmdBindHeaps(ctx.recorder);
+			        bindless.CmdBindGlobalResources(ctx.recorder);
 			        m_queue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, &lightingAddr, m_constants.GetDeviceAddress(ctx.frameSlot), nullptr, 0, nullptr);
 		        });
 
@@ -329,7 +329,7 @@ namespace aether
 		                [this, &bindless, &postProcess](PassContext& ctx)
 		                {
 			                gpu::CommandList& cmd = ctx.recorder;
-			                bindless.CmdBindHeaps(cmd);
+			                bindless.CmdBindGlobalResources(cmd);
 			                cmd.BindPipeline(postProcess.GetTonemapPipeline());
 			                struct
 			                {

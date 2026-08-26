@@ -7,6 +7,7 @@
 #include "gpu/ResourceRegistry.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
+#include "vulkan/GlobalBindingLayout.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/volk.hpp"
@@ -362,6 +363,15 @@ namespace aether::gpu
 		{
 			return;
 		}
+		// vkCmdPushDataEXT is layout-free and belongs to VK_EXT_descriptor_heap. Without that
+		// extension the same payload goes through ordinary push constants against the one
+		// global pipeline layout BindlessManager published.
+		if (const auto& global = vulkan::GetGlobalBindingLayout(); global.pipelineLayout != VK_NULL_HANDLE)
+		{
+			vkCmdPushConstants(AsVkCmd(m_cmd), global.pipelineLayout, VK_SHADER_STAGE_ALL, offset, static_cast<std::uint32_t>(data.size()), data.data());
+			return;
+		}
+
 		const VkPushDataInfoEXT pushInfo{
 		        .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
 		        .pNext = nullptr,

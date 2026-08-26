@@ -513,7 +513,6 @@ namespace aether
 		// VK_EXT_shader_object: layout-free shaders bound directly via vkCmdBindShadersEXT.
 		requiredExtensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		// an extension and is required explicitly below because shader objects use EDS3
-		requiredExtensions.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
 		requiredExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
 		// picks one. Requesting them as *required* selector extensions this
 		for (const char* extension : requiredExtensions)
@@ -590,6 +589,30 @@ namespace aether
 		// their entry points. They were hard selection requirements, which meant a GPU perfectly
 		// capable of running the renderer was rejected outright for missing a debugging aid -
 		// and device_address_binding_report in particular is close to NVIDIA-only.
+		// VK_EXT_descriptor_heap is the renderer's preferred binding model, but it is a 2025
+		// extension that in practice only ships on very recent NVIDIA drivers. The shaders
+		// declare plain set-0 bindings (g_textures[] at binding 0, g_linearSampler at binding 1)
+		// and the heap path merely REMAPS those onto a heap buffer, so the exact same SPIR-V
+		// runs against an ordinary update-after-bind descriptor set. BindlessManager carries
+		// both backends; this flag picks which one the device gets.
+		m_descriptorHeapSupported = physicalDeviceResult.value().enable_extension_if_present(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+
+		// VK_EXT_descriptor_buffer is the same idea one generation earlier: descriptors written
+		// into a mapped buffer and addressed by offset, no pools and no vkUpdateDescriptorSets.
+		// It has been shipping since 2022 and covers the hardware descriptor_heap does not, so
+		// it is the fallback rather than classic descriptor sets - the renderer keeps one
+		// architecture on both paths instead of forking into two eras of Vulkan.
+		m_descriptorBufferSupported = !m_descriptorHeapSupported && physicalDeviceResult.value().enable_extension_if_present(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
+
+		if (!m_descriptorHeapSupported && !m_descriptorBufferSupported)
+		{
+			Throw(AetherError::Vulkan(0,
+			        std::format("Device '{}' exposes neither VK_EXT_descriptor_heap nor VK_EXT_descriptor_buffer; the renderer has no way to bind its bindless resource table.",
+			                physicalDeviceResult.value().properties.deviceName)));
+		}
+
+		AE_INFO(LogCategory::Vulkan, "Bindless backend: {}.", m_descriptorHeapSupported ? "VK_EXT_descriptor_heap" : "VK_EXT_descriptor_buffer");
+
 		const bool maintenance9Present = physicalDeviceResult.value().enable_extension_if_present(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
 		const bool deviceFaultPresent = physicalDeviceResult.value().enable_extension_if_present(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
 		const bool addressBindingReportPresent = physicalDeviceResult.value().enable_extension_if_present(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
@@ -634,6 +657,11 @@ namespace aether
 		VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeapFeatures{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
 		        .descriptorHeap = VK_TRUE,
+		};
+
+		VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+		        .descriptorBuffer = VK_TRUE,
 		};
 
 		VkPhysicalDeviceFaultFeaturesEXT supportedFaultFeatures{
@@ -715,7 +743,14 @@ namespace aether
 			deviceBuilder.add_pNext(&maintenance9Features);
 		}
 		deviceBuilder.add_pNext(&shaderObjectFeatures);
-		deviceBuilder.add_pNext(&descriptorHeapFeatures);
+		if (m_descriptorHeapSupported)
+		{
+			deviceBuilder.add_pNext(&descriptorHeapFeatures);
+		}
+		if (m_descriptorBufferSupported)
+		{
+			deviceBuilder.add_pNext(&descriptorBufferFeatures);
+		}
 		if (deviceFaultPresent)
 		{
 			deviceBuilder.add_pNext(&faultFeatures);
@@ -872,6 +907,7 @@ namespace aether
 			        "GPU", std::format("{} (Vulkan {}.{}.{}, driver 0x{:X})", props.deviceName, VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion), VK_API_VERSION_PATCH(props.apiVersion), props.driverVersion));
 		}
 
+		if (m_descriptorHeapSupported)
 		{
 			m_descriptorHeapProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
 			VkPhysicalDeviceProperties2 props2{
@@ -1207,6 +1243,16 @@ namespace aether
 	const VkPhysicalDeviceDescriptorHeapPropertiesEXT& VulkanContext::GetDescriptorHeapProperties() const
 	{
 		return m_descriptorHeapProps;
+	}
+
+	bool VulkanContext::SupportsDescriptorHeap() const
+	{
+		return m_descriptorHeapSupported;
+	}
+
+	bool VulkanContext::SupportsDescriptorBuffer() const
+	{
+		return m_descriptorBufferSupported;
 	}
 
 	void VulkanContext::SetGlobalAddressBindingTracker(GpuMemoryTracker* tracker)

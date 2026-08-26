@@ -193,7 +193,7 @@ namespace aether
 			                {
 				                return;
 			                }
-			                bindless.CmdBindHeaps(ctx.recorder);
+			                bindless.CmdBindGlobalResources(ctx.recorder);
 			                frame.spritePushData.resize(frame.count);
 			                std::size_t pushIndex = 0;
 			                for (const DrawBatch& batch: frame.batches)

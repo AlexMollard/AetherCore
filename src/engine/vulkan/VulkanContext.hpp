@@ -74,6 +74,13 @@ namespace aether
 
 		[[nodiscard]] const VkPhysicalDeviceDescriptorHeapPropertiesEXT& GetDescriptorHeapProperties() const;
 
+		// Exactly one of these is true. The heap path is preferred where the driver has it;
+		// descriptor_buffer covers everything else with the same descriptors-in-a-buffer model.
+		// Only the binding plumbing differs - shaders, slot indices and the rest of the
+		// renderer are identical on both paths.
+		[[nodiscard]] bool SupportsDescriptorHeap() const;
+		[[nodiscard]] bool SupportsDescriptorBuffer() const;
+
 		[[nodiscard]] Expected<void> WaitIdle() const;
 
 		void QueryDeviceFaultInfo() const;
@@ -120,6 +127,8 @@ namespace aether
 		std::uint32_t m_transferQueueFamily = 0;
 		std::unique_ptr<vulkan::TransferManager> m_transferManager;
 		VkPhysicalDeviceDescriptorHeapPropertiesEXT m_descriptorHeapProps{};
+		bool m_descriptorHeapSupported = false;
+		bool m_descriptorBufferSupported = false;
 		tracy::VkCtx* m_tracyVkCtx = nullptr;
 		gpu::ProfilerContextHandle m_tracyProfilerHandle = nullptr;
 		FaultCallback m_faultCallback = nullptr;

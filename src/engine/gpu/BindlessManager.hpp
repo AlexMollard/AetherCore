@@ -34,8 +34,10 @@ namespace aether
 
 		void SetMemoryTracker(class GpuMemoryTracker* tracker);
 
-		// recipe (not the VkImageView handle) - required by the extension.
-		[[nodiscard]] Expected<void> WriteSampledImage(std::uint32_t slot, const void* viewCreateInfo, gpu::ImageLayout layout);
+		// The descriptor-heap path takes the VkImageViewCreateInfo recipe (not the handle) -
+		// required by the extension. The descriptor-set fallback needs the real VkImageView
+		// instead, so callers pass both; each backend uses the one it can.
+		[[nodiscard]] Expected<void> WriteSampledImage(std::uint32_t slot, const void* viewCreateInfo, const void* imageView, gpu::ImageLayout layout);
 
 		void WriteLinearSampler();
 
@@ -47,7 +49,13 @@ namespace aether
 
 		[[nodiscard]] const void* GetDescriptorHeapMappings() const;
 
-		void CmdBindHeaps(gpu::CommandList& cmd) const;
+		// Binds whatever the active backend needs before draws: the two heaps, or the one
+		// global descriptor set.
+		void CmdBindGlobalResources(gpu::CommandList& cmd) const;
+
+		// True when the device had VK_EXT_descriptor_heap. False means the update-after-bind
+		// descriptor-set fallback is live - same slots, same shaders, different plumbing.
+		[[nodiscard]] bool UsesDescriptorHeap() const;
 
 		// must be destroyed by the caller via vkDestroySampler. Used by
 		[[nodiscard]] Expected<gpu::Sampler> CreateSampler(gpu::Filter filter, gpu::SamplerMipmapMode mipmap, gpu::SamplerAddressMode address) const;
@@ -68,6 +76,8 @@ namespace aether
 		void FreeSlotImmediateUnlocked(std::uint32_t slot);
 		void ShutdownUnlocked();
 		void WriteLinearSamplerUnlocked();
+		[[nodiscard]] Expected<void> InitializeDescriptorBufferBackendUnlocked(const VulkanContext& context);
+		void ShutdownDescriptorBufferBackendUnlocked();
 
 		mutable std::mutex m_mutex;
 		gpu::Device m_device = nullptr;
@@ -97,6 +107,17 @@ namespace aether
 		GpuMemoryTracker* m_memoryTracker = nullptr;
 
 		void* m_shaderMappingInfo = nullptr;
+
+		// Descriptor-buffer fallback (all null/zero while the heap backend is active). The
+		// descriptors themselves reuse m_resourceHeapBuffer/Mapped/Addr - both backends store
+		// descriptors in one mapped buffer, only the API that writes and binds them differs.
+		// Handles are void* to keep this header free of the Vulkan headers, as elsewhere here.
+		bool m_useDescriptorHeap = true;
+		void* m_setLayout = nullptr;
+		void* m_pipelineLayout = nullptr;
+		void* m_fallbackSampler = nullptr;
+		gpu::DeviceSize m_imageBindingOffset = 0;
+		gpu::DeviceSize m_samplerBindingOffset = 0;
 
 		std::uint32_t m_capacity = 0;
 		std::uint32_t m_deferredFreeFrames = 3;

@@ -6,6 +6,8 @@
 
 #include "utils/Assert.hpp"
 #include "utils/Profiler.hpp"
+#include "gpu/PushConstantsBytes.hpp"
+#include "vulkan/GlobalBindingLayout.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -26,6 +28,24 @@ namespace aether
 			VkShaderDescriptorSetAndBindingMappingInfoEXT shaderMappingInfo;
 		};
 	} // namespace
+
+	namespace vulkan
+	{
+		namespace
+		{
+			GlobalBindingLayout g_globalBindingLayout{};
+		} // namespace
+
+		void SetGlobalBindingLayout(const GlobalBindingLayout& layout)
+		{
+			g_globalBindingLayout = layout;
+		}
+
+		const GlobalBindingLayout& GetGlobalBindingLayout()
+		{
+			return g_globalBindingLayout;
+		}
+	} // namespace vulkan
 
 	BindlessManager::~BindlessManager()
 	{
@@ -55,6 +75,18 @@ namespace aether
 		for (std::uint32_t slot = 0; slot < m_capacity; ++slot)
 		{
 			m_freeSlots.push_back(m_capacity - 1 - slot);
+		}
+
+		m_useDescriptorHeap = context.SupportsDescriptorHeap();
+		if (!m_useDescriptorHeap)
+		{
+			Expected<void> fallback = InitializeDescriptorBufferBackendUnlocked(context);
+			if (!fallback)
+			{
+				ShutdownUnlocked();
+				return fallback;
+			}
+			return {};
 		}
 
 		const auto& heapProps = context.GetDescriptorHeapProperties();
@@ -228,6 +260,186 @@ namespace aether
 		return {};
 	}
 
+	Expected<void> BindlessManager::InitializeDescriptorBufferBackendUnlocked(const VulkanContext& context)
+	{
+		AE_PROFILE_ZONE();
+		auto* const device = static_cast<VkDevice>(m_device);
+
+		VkPhysicalDeviceDescriptorBufferPropertiesEXT bufferProps{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
+		};
+		VkPhysicalDeviceProperties2 props2{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+		        .pNext = &bufferProps,
+		};
+		vkGetPhysicalDeviceProperties2(context.GetDevice().physical_device, &props2);
+
+		// Every push block in the engine is asserted against kMaxGuaranteedPushConstantSize at
+		// compile time, so a device at or above the spec floor fits all of them. A device BELOW
+		// the floor is out of spec, but say so precisely here rather than letting
+		// vkCreateShadersEXT fail later with a bare error code.
+		if (props2.properties.limits.maxPushConstantsSize < gpu::kMaxGuaranteedPushConstantSize)
+		{
+			return Unexpected{AetherError::Vulkan(0,
+			        std::format("BindlessManager: device reports maxPushConstantsSize={}, below the {}-byte minimum the Vulkan spec guarantees; the renderer's push blocks cannot be bound.",
+			                props2.properties.limits.maxPushConstantsSize,
+			                gpu::kMaxGuaranteedPushConstantSize))};
+		}
+		const auto pushConstantSize = static_cast<std::uint32_t>(gpu::kMaxGuaranteedPushConstantSize);
+
+		m_imageDescriptorSize = bufferProps.sampledImageDescriptorSize;
+		m_samplerDescriptorSize = bufferProps.samplerDescriptorSize;
+
+		const VkDescriptorSetLayoutBinding bindings[2] = {
+		        {
+		                .binding = 0,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		                .descriptorCount = m_capacity,
+		                .stageFlags = VK_SHADER_STAGE_ALL,
+		                .pImmutableSamplers = nullptr,
+		        },
+		        {
+		                .binding = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		                .descriptorCount = 1,
+		                .stageFlags = VK_SHADER_STAGE_ALL,
+		                .pImmutableSamplers = nullptr,
+		        },
+		};
+
+		// DESCRIPTOR_BUFFER_BIT is what makes this layout addressable by offset instead of
+		// allocatable from a pool. There is no pool and no descriptor set on this path.
+		const VkDescriptorSetLayoutCreateInfo layoutInfo{
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		        .pNext = nullptr,
+		        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+		        .bindingCount = 2,
+		        .pBindings = bindings,
+		};
+
+		VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
+		if (const VkResult result = vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &setLayout); result != VK_SUCCESS)
+		{
+			return Unexpected{AetherError::Vulkan(static_cast<std::int32_t>(result), "BindlessManager: failed to create the global descriptor set layout.")};
+		}
+		m_setLayout = static_cast<void*>(setLayout);
+
+		// The driver decides the layout's byte size and where each binding sits inside it -
+		// never compute these by hand, the packing is implementation-defined.
+		VkDeviceSize layoutSize = 0;
+		vkGetDescriptorSetLayoutSizeEXT(device, setLayout, &layoutSize);
+		vkGetDescriptorSetLayoutBindingOffsetEXT(device, setLayout, 0, &m_imageBindingOffset);
+		vkGetDescriptorSetLayoutBindingOffsetEXT(device, setLayout, 1, &m_samplerBindingOffset);
+		m_resourceHeapSize = AlignUp(layoutSize, bufferProps.descriptorBufferOffsetAlignment);
+
+		const VkBufferUsageFlags2 descriptorUsage = VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_2_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+
+		const VkBufferUsageFlags2CreateInfo usageInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .pNext = nullptr,
+		        .usage = descriptorUsage,
+		};
+
+		const VkBufferCreateInfo bufferInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &usageInfo,
+		        .size = m_resourceHeapSize,
+		        .usage = 0,
+		};
+
+		const VmaAllocationCreateInfo allocInfo{
+		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
+		};
+
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VmaAllocation allocation = VK_NULL_HANDLE;
+		VmaAllocationInfo allocDetail{};
+		const auto allocator = reinterpret_cast<VmaAllocator>(m_vmaAllocator);
+		if (const VkResult result = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer, &allocation, &allocDetail); result != VK_SUCCESS)
+		{
+			return Unexpected{AetherError::Vulkan(static_cast<std::int32_t>(result), "BindlessManager: failed to create the descriptor buffer.")};
+		}
+
+		m_resourceHeapBuffer = static_cast<void*>(buffer);
+		m_resourceHeapAlloc = static_cast<void*>(allocation);
+		m_resourceHeapMapped = allocDetail.pMappedData;
+		AE_ASSERT(m_resourceHeapMapped != nullptr, "VMA_MAPPED_BIT should yield persistent mapped pointer");
+
+		const VkBufferDeviceAddressInfo addrInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr, .buffer = buffer};
+		m_resourceHeapAddr = vkGetBufferDeviceAddress(device, &addrInfo);
+		if (m_memoryTracker != nullptr && m_resourceHeapAddr != 0)
+		{
+			m_memoryTracker->Register(m_resourceHeapAddr, m_resourceHeapSize, "bindless_descriptor_buffer", GpuMemoryTracker::ResourceType::BindlessHeap);
+		}
+
+		const VkPushConstantRange pushRange{
+		        .stageFlags = VK_SHADER_STAGE_ALL,
+		        .offset = 0,
+		        .size = pushConstantSize,
+		};
+
+		const VkPipelineLayoutCreateInfo pipelineLayoutInfo{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .pNext = nullptr,
+		        .flags = 0,
+		        .setLayoutCount = 1,
+		        .pSetLayouts = &setLayout,
+		        .pushConstantRangeCount = 1,
+		        .pPushConstantRanges = &pushRange,
+		};
+
+		VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+		if (const VkResult result = vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout); result != VK_SUCCESS)
+		{
+			return Unexpected{AetherError::Vulkan(static_cast<std::int32_t>(result), "BindlessManager: failed to create the global pipeline layout.")};
+		}
+		m_pipelineLayout = static_cast<void*>(pipelineLayout);
+
+		vulkan::SetGlobalBindingLayout(vulkan::GlobalBindingLayout{
+		        .setLayout = setLayout,
+		        .pipelineLayout = pipelineLayout,
+		        .pushConstantSize = pushConstantSize,
+		});
+
+		WriteLinearSamplerUnlocked();
+
+		AE_INFO(LogCategory::Vulkan,
+		        "BindlessManager: descriptor-buffer backend ready - {}B buffer at 0x{:016x}, {} slots, sampledImageDescriptorSize={}, samplerDescriptorSize={}, imageBindingOffset={}, samplerBindingOffset={}.",
+		        m_resourceHeapSize,
+		        m_resourceHeapAddr,
+		        m_capacity,
+		        m_imageDescriptorSize,
+		        m_samplerDescriptorSize,
+		        m_imageBindingOffset,
+		        m_samplerBindingOffset);
+		return {};
+	}
+
+	void BindlessManager::ShutdownDescriptorBufferBackendUnlocked()
+	{
+		auto* const device = static_cast<VkDevice>(m_device);
+
+		if (m_pipelineLayout != nullptr)
+		{
+			vkDestroyPipelineLayout(device, static_cast<VkPipelineLayout>(m_pipelineLayout), nullptr);
+			m_pipelineLayout = nullptr;
+		}
+		if (m_setLayout != nullptr)
+		{
+			vkDestroyDescriptorSetLayout(device, static_cast<VkDescriptorSetLayout>(m_setLayout), nullptr);
+			m_setLayout = nullptr;
+		}
+		if (m_fallbackSampler != nullptr)
+		{
+			vkDestroySampler(device, static_cast<VkSampler>(m_fallbackSampler), nullptr);
+			m_fallbackSampler = nullptr;
+		}
+		m_imageBindingOffset = 0;
+		m_samplerBindingOffset = 0;
+		vulkan::SetGlobalBindingLayout(vulkan::GlobalBindingLayout{});
+	}
+
 	void BindlessManager::Shutdown()
 	{
 		AE_PROFILE_ZONE();
@@ -278,6 +490,11 @@ namespace aether
 		m_samplerDescriptorSize = 0;
 		m_samplerDescriptorAlignment = 0;
 
+		if (!m_useDescriptorHeap)
+		{
+			ShutdownDescriptorBufferBackendUnlocked();
+		}
+
 		if (m_shaderMappingInfo != nullptr)
 		{
 			auto* pm = reinterpret_cast<DescriptorHeapMappings*>(reinterpret_cast<std::byte*>(m_shaderMappingInfo) - offsetof(DescriptorHeapMappings, shaderMappingInfo));
@@ -286,6 +503,7 @@ namespace aether
 		}
 		m_device = nullptr;
 		m_vmaAllocator = nullptr;
+		m_useDescriptorHeap = true;
 		m_capacity = 0;
 		m_deferredFreeFrames = 3;
 		m_currentFrame = 0;
@@ -455,7 +673,7 @@ namespace aether
 		return m_shaderMappingInfo;
 	}
 
-	Expected<void> BindlessManager::WriteSampledImage(const std::uint32_t slot, const void* viewCreateInfo, const gpu::ImageLayout layout)
+	Expected<void> BindlessManager::WriteSampledImage(const std::uint32_t slot, const void* viewCreateInfo, const void* imageView, const gpu::ImageLayout layout)
 	{
 		const std::scoped_lock lock(m_mutex);
 		if (m_device == nullptr)
@@ -471,6 +689,35 @@ namespace aether
 		if (!m_slotAllocated[slot])
 		{
 			return Unexpected{AetherError::Engine("BindlessManager slot must be allocated before write.")};
+		}
+
+		if (!m_useDescriptorHeap)
+		{
+			if (imageView == nullptr)
+			{
+				return Unexpected{AetherError::Engine("BindlessManager: the descriptor-buffer backend needs a VkImageView, not just a create-info recipe.")};
+			}
+
+			const VkDescriptorImageInfo imageDesc{
+			        .sampler = VK_NULL_HANDLE,
+			        .imageView = static_cast<VkImageView>(const_cast<void*>(imageView)),
+			        .imageLayout = gpu::ToVk(layout),
+			};
+			const VkDescriptorGetInfoEXT getInfo{
+			        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+			        .pNext = nullptr,
+			        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+			        .data = {.pSampledImage = &imageDesc},
+			};
+
+			const VkDeviceSize offset = m_imageBindingOffset + static_cast<VkDeviceSize>(slot) * m_imageDescriptorSize;
+			vkGetDescriptorEXT(static_cast<VkDevice>(m_device), &getInfo, m_imageDescriptorSize, static_cast<std::byte*>(m_resourceHeapMapped) + offset);
+			const VkResult bufferFlush = vmaFlushAllocation(reinterpret_cast<VmaAllocator>(m_vmaAllocator), static_cast<VmaAllocation>(m_resourceHeapAlloc), offset, m_imageDescriptorSize);
+			if (bufferFlush != VK_SUCCESS)
+			{
+				return Unexpected{AetherError::Vulkan(static_cast<std::int32_t>(bufferFlush), "BindlessManager: failed to flush a sampled-image descriptor write.")};
+			}
+			return {};
 		}
 
 		const auto* pViewInfo = static_cast<const VkImageViewCreateInfo*>(viewCreateInfo);
@@ -515,7 +762,15 @@ namespace aether
 
 	void BindlessManager::WriteLinearSamplerUnlocked()
 	{
-		if (m_device == nullptr || m_samplerHeapMapped == nullptr)
+		if (m_device == nullptr)
+		{
+			return;
+		}
+		if (m_useDescriptorHeap && m_samplerHeapMapped == nullptr)
+		{
+			return;
+		}
+		if (!m_useDescriptorHeap && m_resourceHeapMapped == nullptr)
 		{
 			return;
 		}
@@ -535,6 +790,31 @@ namespace aether
 		        .unnormalizedCoordinates = VK_FALSE,
 		};
 
+		if (!m_useDescriptorHeap)
+		{
+			// vkGetDescriptorEXT takes a live VkSampler, so the fallback owns one for the
+			// lifetime of the layout rather than describing it inline like the heap path does.
+			if (m_fallbackSampler == nullptr)
+			{
+				VkSampler sampler = VK_NULL_HANDLE;
+				const VkResult created = vkCreateSampler(static_cast<VkDevice>(m_device), &samplerInfo, nullptr, &sampler);
+				AE_ASSERT_ALWAYS(created == VK_SUCCESS, "BindlessManager: failed to create the global linear sampler.");
+				m_fallbackSampler = static_cast<void*>(sampler);
+			}
+
+			const auto sampler = static_cast<VkSampler>(m_fallbackSampler);
+			const VkDescriptorGetInfoEXT getInfo{
+			        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+			        .pNext = nullptr,
+			        .type = VK_DESCRIPTOR_TYPE_SAMPLER,
+			        .data = {.pSampler = &sampler},
+			};
+			vkGetDescriptorEXT(static_cast<VkDevice>(m_device), &getInfo, m_samplerDescriptorSize, static_cast<std::byte*>(m_resourceHeapMapped) + m_samplerBindingOffset);
+			const VkResult bufferFlush = vmaFlushAllocation(reinterpret_cast<VmaAllocator>(m_vmaAllocator), static_cast<VmaAllocation>(m_resourceHeapAlloc), m_samplerBindingOffset, m_samplerDescriptorSize);
+			AE_ASSERT_ALWAYS(bufferFlush == VK_SUCCESS, "BindlessManager: failed to flush the sampler descriptor write.");
+			return;
+		}
+
 		const VkHostAddressRangeEXT hostRange{
 		        .address = m_samplerHeapMapped,
 		        .size = m_samplerDescriptorSize,
@@ -545,14 +825,45 @@ namespace aether
 		AE_ASSERT_ALWAYS(flushResult == VK_SUCCESS, "BindlessManager: failed to flush the sampler descriptor write.");
 	}
 
-	void BindlessManager::CmdBindHeaps(gpu::CommandList& cmd) const
+	bool BindlessManager::UsesDescriptorHeap() const
 	{
+		const std::scoped_lock lock(m_mutex);
+		return m_useDescriptorHeap;
+	}
+
+	void BindlessManager::CmdBindGlobalResources(gpu::CommandList& cmd) const
+	{
+		auto* const vkCmd = static_cast<VkCommandBuffer>(cmd.GetCommandBuffer());
+
+		if (!m_useDescriptorHeap)
+		{
+			if (m_resourceHeapBuffer == nullptr || m_pipelineLayout == nullptr)
+			{
+				return;
+			}
+
+			const VkDescriptorBufferBindingInfoEXT bindingInfo{
+			        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+			        .pNext = nullptr,
+			        .address = m_resourceHeapAddr,
+			        .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			};
+			vkCmdBindDescriptorBuffersEXT(vkCmd, 1, &bindingInfo);
+
+			// Set 0 lives at offset 0 of buffer 0. Both bind points get it: a command buffer
+			// mixes draws and dispatches, and the offsets are per-bind-point state.
+			constexpr std::uint32_t bufferIndex = 0;
+			constexpr VkDeviceSize setOffset = 0;
+			const auto layout = static_cast<VkPipelineLayout>(m_pipelineLayout);
+			vkCmdSetDescriptorBufferOffsetsEXT(vkCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &bufferIndex, &setOffset);
+			vkCmdSetDescriptorBufferOffsetsEXT(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, 1, &bufferIndex, &setOffset);
+			return;
+		}
+
 		if (m_resourceHeapBuffer == nullptr || m_samplerHeapBuffer == nullptr)
 		{
 			return;
 		}
-
-		auto* const vkCmd = static_cast<VkCommandBuffer>(cmd.GetCommandBuffer());
 
 		const VkBindHeapInfoEXT resourceBindInfo{
 		        .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,

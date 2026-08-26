@@ -270,7 +270,7 @@ namespace aether
 				                }
 				                if (!boundHeaps)
 				                {
-					                bindless.CmdBindHeaps(ctx.recorder);
+					                bindless.CmdBindGlobalResources(ctx.recorder);
 					                boundHeaps = true;
 				                }
 				                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(pipe).state);

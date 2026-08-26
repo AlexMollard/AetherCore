@@ -273,7 +273,7 @@ namespace aether
 			                {
 				                return; // mask stays cleared to 0 (no shadows)
 			                }
-			                bindless.CmdBindHeaps(ctx.recorder);
+			                bindless.CmdBindGlobalResources(ctx.recorder);
 			                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(m_occluderPipeline).state);
 			                const OccluderPush push{
 			                        .frameConstants = frameConstants != nullptr ? frameConstants->GetDeviceAddress(ctx.frameSlot) : ctx.frameConstantsAddr,
@@ -307,7 +307,7 @@ namespace aether
 			                {
 				                return;
 			                }
-			                bindless.CmdBindHeaps(ctx.recorder);
+			                bindless.CmdBindGlobalResources(ctx.recorder);
 			                ctx.recorder.BindPipeline(gpu::ResourceRegistry::ResolvePipeline(m_pipeline).state);
 			                // The mask drives both directional (normal) shading and cast shadows, so bind it
 			                // whenever occluders exist; shadow STRENGTH separately gates the cast-shadow march.

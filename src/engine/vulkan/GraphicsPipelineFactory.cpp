@@ -6,6 +6,7 @@
 #include "io/FileSystem.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/GlobalBindingLayout.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -48,8 +49,30 @@ namespace aether::vkutil
 
 		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
 
-		// Shader-object create flags: layout-free (descriptor heap) + link the
-		const VkShaderCreateFlagsEXT shaderFlags = VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT | VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
+		// Two ways to give a shader object its bindings. With VK_EXT_descriptor_heap the shader
+		// is created layout-free and the mappings redirect its set-0 bindings onto the heap.
+		// Without it, the identical SPIR-V is handed the real set layout and push-constant
+		// range instead - shader objects take those directly, so there is still no VkPipeline.
+		const auto& global = vulkan::GetGlobalBindingLayout();
+		// Keyed off the presence of a global layout, NOT off whether mappings were supplied:
+		// some pipelines pass no mappings even on the heap path, and treating those as
+		// "has a layout" hands vkCreateShadersEXT a null set layout.
+		const bool layoutFree = global.pipelineLayout == VK_NULL_HANDLE;
+
+		VkShaderCreateFlagsEXT shaderFlags = VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
+		if (layoutFree)
+		{
+			shaderFlags |= VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT;
+		}
+
+		const VkDescriptorSetLayout setLayouts[] = {global.setLayout};
+		const VkPushConstantRange pushRange{
+		        .stageFlags = VK_SHADER_STAGE_ALL,
+		        .offset = 0,
+		        .size = global.pushConstantSize,
+		};
+		const std::uint32_t setLayoutCount = layoutFree ? 0u : 1u;
+		const std::uint32_t pushRangeCount = layoutFree ? 0u : 1u;
 
 		const VkShaderCreateInfoEXT vertInfo{
 		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
@@ -61,10 +84,10 @@ namespace aether::vkutil
 		        .codeSize = vertSpirv->size(),
 		        .pCode = vertSpirv->data(),
 		        .pName = vertEntry.c_str(),
-		        .setLayoutCount = 0,
-		        .pSetLayouts = nullptr,
-		        .pushConstantRangeCount = 0,
-		        .pPushConstantRanges = nullptr,
+		        .setLayoutCount = setLayoutCount,
+		        .pSetLayouts = layoutFree ? nullptr : setLayouts,
+		        .pushConstantRangeCount = pushRangeCount,
+		        .pPushConstantRanges = layoutFree ? nullptr : &pushRange,
 		        .pSpecializationInfo = nullptr,
 		};
 
@@ -78,10 +101,10 @@ namespace aether::vkutil
 		        .codeSize = fragSpirv->size(),
 		        .pCode = fragSpirv->data(),
 		        .pName = fragEntry.c_str(),
-		        .setLayoutCount = 0,
-		        .pSetLayouts = nullptr,
-		        .pushConstantRangeCount = 0,
-		        .pPushConstantRanges = nullptr,
+		        .setLayoutCount = setLayoutCount,
+		        .pSetLayouts = layoutFree ? nullptr : setLayouts,
+		        .pushConstantRangeCount = pushRangeCount,
+		        .pPushConstantRanges = layoutFree ? nullptr : &pushRange,
 		        .pSpecializationInfo = nullptr,
 		};
 

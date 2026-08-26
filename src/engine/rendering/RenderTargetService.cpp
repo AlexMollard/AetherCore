@@ -351,7 +351,7 @@ namespace aether
 			                const auto frameIdx = ctx.frameSlot;
 			                auto lightingAddr = m_lightingManager && rit->second.lightViewId != kInvalidLightView ? m_lightingManager->GetLightingAddresses(rit->second.lightViewId, frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                m_bindlessManager->CmdBindHeaps(cmd);
+			                m_bindlessManager->CmdBindGlobalResources(cmd);
 			                const gpu::CullMode cullMode = m_renderer->GetCullMode();
 			                rit->second.renderQueue->FlushDrawPush(cmd, ctx.frameSlot, lightingAddr, nullptr, 0, &cullMode);
 		                });
