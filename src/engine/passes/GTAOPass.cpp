@@ -123,9 +123,9 @@ namespace aether
 		        .Execute(
 		                [this, isActive](PassContext& ctx)
 		                {
-			                if ((isActive && !isActive()) || !m_enabled)
+			                if (isActive && !isActive())
 			                {
-				                return; // 2D / no 3D geometry: skip the full-screen AO compute
+				                return; // 2D / no 3D geometry: nothing samples AO there
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindGlobalResources(cmd);
@@ -139,7 +139,7 @@ namespace aether
 				                std::uint64_t frameConstantsAddr;
 				                float radius;
 				                float strength;
-				                std::uint32_t _pad0;
+				                std::uint32_t enabled;
 				                std::uint32_t _pad1;
 			                } push{
 			                        .fullWidth = m_extent.width,
@@ -148,6 +148,7 @@ namespace aether
 			                        .frameConstantsAddr = ctx.frameConstantsAddr,
 			                        .radius = m_radius,
 			                        .strength = m_strength,
+			                        .enabled = m_enabled ? 1u : 0u,
 			                };
 
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));

@@ -14,7 +14,7 @@ struct GTAOPush
     uint64_t frameConstantsAddr;
     float radius;
     float strength;
-    uint _pad0;
+    uint enabled;
     uint _pad1;
 };
 
@@ -236,6 +236,16 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
     uint2 halfPx = uint2(svPos.xy);
     FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+
+    // Ambient occlusion off: still write the target rather than leaving the draw out.
+    // The graph publishes this image as a frame product whatever happens in here, so a
+    // pass that writes nothing leaves every shader reading a recycled transient - which
+    // is not white, and made switching AO OFF darken the scene instead of brightening
+    // it. Returning here skips all the sampling; only the write remains.
+    if (pc.enabled == 0u)
+    {
+        return float4(1.0f, 0.0f, 0.0f, 1.0f);
+    }
 
     if (pc.fullWidth == 0u || pc.fullHeight == 0u)
     {
