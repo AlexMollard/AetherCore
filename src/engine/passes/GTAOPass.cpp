@@ -117,9 +117,10 @@ namespace aether
 		                                // image happened to hold.
 		                                .loadOp = gpu::LoadOp::Clear,
 		                                .clearValue = ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f),
-		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
+		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth), RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer)},
 		                        })
 		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
 		        .Execute(
 		                [this, isActive](PassContext& ctx)
 		                {
@@ -165,10 +166,11 @@ namespace aether
 		                                // image happened to hold.
 		                                .loadOp = gpu::LoadOp::Clear,
 		                                .clearValue = ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f),
-		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
+		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth), RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer)},
 		                                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductGtao)},
 		                        })
 		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
 		        .ReadTexture(m_rawAoImage)
 		        .Execute(
 		                [this, isActive](PassContext& ctx)

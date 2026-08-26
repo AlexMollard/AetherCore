@@ -5,6 +5,7 @@
 
 #include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
+#include "include/OctNormal.slangh"
 
 struct GTAOPush
 {
@@ -58,6 +59,25 @@ static float3 ReconstructWorld(uint2 px, float depth, FrameConstantsData* fc)
     float4 clipPos = float4(ndc, depth, 1.0f);
     float4 worldPos = mul(fc->invViewProj, clipPos);
     return worldPos.xyz / max(worldPos.w, 1e-6f);
+}
+
+// The prepass writes the real surface normal, so prefer it. Reconstructing from
+// neighbouring depth samples is only ever an estimate of the plane through them:
+// across a silhouette the neighbours belong to different surfaces entirely, and
+// the normal comes out somewhere between the two, which is why occlusion softens
+// exactly where geometry meets. Falls back to the estimate when no G-buffer is
+// bound, so this still works if the prepass is ever skipped.
+static bool LoadGBufferNormal(uint2 px, FrameConstantsData* fc, out float3 normal)
+{
+    normal = float3(0.0f, 1.0f, 0.0f);
+    ResourceEntry e = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneGBuffer);
+    if (e.type != kResourceTypeBindlessTexture || e.address == 0xFFFFFFFFu || e.width == 0u || e.height == 0u)
+    {
+        return false;
+    }
+    const float2 oct = g_textures[uint(e.address)].Load(int3(px, 0)).rg;
+    normal = DecodeOctNormal(oct);
+    return true;
 }
 
 static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* fc)
@@ -260,7 +280,11 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     }
 
     float3 worldPos = ReconstructWorld(fullPx, depth, fc);
-    float3 normal = NormalFromDepth(fullPx, worldPos, fc);
+    float3 normal;
+    if (!LoadGBufferNormal(fullPx, fc, normal))
+    {
+        normal = NormalFromDepth(fullPx, worldPos, fc);
+    }
     float ao = ComputeAO(fullPx, worldPos, normal, fc);
     return float4(ao, 0.0f, 0.0f, 1.0f);
 }
