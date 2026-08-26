@@ -238,6 +238,9 @@ namespace aether
 			return m_histogramUpdatePeriod;
 		}
 
+		// Coarseness of the metering grid: the grid is a 1024x576 reference divided by
+		// this, so it is a fixed number of samples spread across the image rather than a
+		// stride in real pixels. Exposure must not move when the render resolution does.
 		void SetHistogramSampleStride(std::uint32_t stride)
 		{
 			m_histogramSampleStride = stride > 0u ? stride : 1u;

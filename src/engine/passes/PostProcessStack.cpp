@@ -569,9 +569,16 @@ namespace aether
 				                return;
 			                }
 
+			                // The grid is sized off a 1024x576 reference resolution, not the actual one, so
+			                // every sample covers the same fraction of the screen whatever the render
+			                // scale is. Metering a fixed slice of the world is the whole point: a
+			                // grid that tracked the resolution would change what exposure measures
+			                // every time the resolution moved.
+			                constexpr std::uint32_t kMeterReferenceWidth = 1024u;
+			                constexpr std::uint32_t kMeterReferenceHeight = 576u;
 			                const std::uint32_t sampleStride = m_histogramSampleStride > 0u ? m_histogramSampleStride : 1u;
-			                const std::uint32_t sampleWidth = (ctx.extent.width + sampleStride - 1u) / sampleStride;
-			                const std::uint32_t sampleHeight = (ctx.extent.height + sampleStride - 1u) / sampleStride;
+			                const std::uint32_t sampleWidth = std::max(kMeterReferenceWidth / sampleStride, 1u);
+			                const std::uint32_t sampleHeight = std::max(kMeterReferenceHeight / sampleStride, 1u);
 			                const std::uint32_t sampleCount = sampleWidth * sampleHeight;
 			                if (sampleCount == 0u)
 			                {
@@ -592,14 +599,16 @@ namespace aether
 				                std::uint64_t output;
 				                std::uint32_t width;
 				                std::uint32_t height;
-				                std::uint32_t sampleStride;
+				                std::uint32_t meterWidth;
+				                std::uint32_t meterHeight;
 			                } push;
 			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.ldrSlot = m_ldrBindlessSlot;
 			                push.output = mappedView.deviceAddress;
 			                push.width = ctx.extent.width;
 			                push.height = ctx.extent.height;
-			                push.sampleStride = sampleStride;
+			                push.meterWidth = sampleWidth;
+			                push.meterHeight = sampleHeight;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			                constexpr std::uint32_t kHistogramThreads = 256;
