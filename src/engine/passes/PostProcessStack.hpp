@@ -97,6 +97,42 @@ namespace aether
 			m_exposure = exposure;
 		}
 
+		void SetAutoExposureEnabled(bool enabled)
+		{
+			m_autoExposureEnabled = enabled;
+		}
+
+		[[nodiscard]] bool IsAutoExposureEnabled() const
+		{
+			return m_autoExposureEnabled;
+		}
+
+		void SetAutoExposureKey(float key)
+		{
+			m_autoExposureKey = std::clamp(key, 0.01f, 1.0f);
+		}
+
+		[[nodiscard]] float GetAutoExposureKey() const
+		{
+			return m_autoExposureKey;
+		}
+
+		void SetAutoExposureSpeed(float speed)
+		{
+			m_autoExposureSpeed = std::clamp(speed, 0.05f, 8.0f);
+		}
+
+		[[nodiscard]] float GetAutoExposureSpeed() const
+		{
+			return m_autoExposureSpeed;
+		}
+
+		// Exposure the adaptation has settled on, before the manual multiplier.
+		[[nodiscard]] float GetAutoExposureValue() const
+		{
+			return m_autoExposureValue;
+		}
+
 		void SetBloomStrength(float strength)
 		{
 			m_bloomStrength = std::clamp(strength, 0.0f, 1.0f);
@@ -281,6 +317,13 @@ namespace aether
 		// ACES by default. Reinhard has no shoulder worth the name - it compresses
 		// everything toward white and takes the colour with it - which undercuts both
 		// the bloom and the sky lighting feeding bright values into it.
+		// Auto exposure. The histogram was already being computed every frame purely to
+		// draw the HDR probe graph; this reads the same data and actually uses it.
+		bool m_autoExposureEnabled = true;
+		float m_autoExposureKey = 0.18f;   // middle grey the average is driven toward
+		float m_autoExposureSpeed = 2.0f;  // adaptation rate, in e-folds per second
+		float m_autoExposureValue = 1.0f;
+
 		TonemapMode m_tonemapMode = TonemapMode::AcesFilmic;
 		float m_exposure = 1.0f;
 		bool m_fxaaEnabled = false;
@@ -289,6 +332,7 @@ namespace aether
 		std::uint32_t m_debugModeCount = 0;
 
 		void ReadbackHistogram(std::uint32_t frameSlot);
+		void UpdateAutoExposure(const std::uint32_t* bins);
 		[[nodiscard]] bool ShouldRecordHistogram(std::uint32_t frameIndex) const;
 		static constexpr std::uint32_t kHistogramBins = 256;
 		static constexpr float kHistogramLogMin = -10.0f;

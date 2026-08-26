@@ -159,10 +159,39 @@ namespace aether::editor
 			ImGui::EndCombo();
 		}
 
+		bool autoExposure = stack.IsAutoExposureEnabled();
+		if (ImGui::Checkbox("Auto exposure", &autoExposure))
+		{
+			stack.SetAutoExposureEnabled(autoExposure);
+		}
+
 		float exposure = stack.GetExposure();
-		if (ImGui::SliderFloat("Exposure", &exposure, 0.01f, 10.0f, "%.2f"))
+		if (ImGui::SliderFloat(autoExposure ? "Exposure compensation" : "Exposure", &exposure, 0.01f, 10.0f, "%.2f"))
 		{
 			stack.SetExposure(exposure);
+		}
+
+		if (autoExposure)
+		{
+			float key = stack.GetAutoExposureKey();
+			if (ImGui::SliderFloat("Key", &key, 0.02f, 0.6f, "%.3f"))
+			{
+				stack.SetAutoExposureKey(key);
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Middle grey the scene average is driven toward. Higher is a brighter image.");
+			}
+			float speed = stack.GetAutoExposureSpeed();
+			if (ImGui::SliderFloat("Adaptation", &speed, 0.05f, 8.0f, "%.2f"))
+			{
+				stack.SetAutoExposureSpeed(speed);
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("How quickly the eye adapts, in e-folds per second. Low is a slow, cinematic adjust.");
+			}
+			ImGui::Text("Adapted: %.3fx  (final %.3fx)", stack.GetAutoExposureValue(), stack.GetAutoExposureValue() * exposure);
 		}
 
 		ImGui::SeparatorText("Bloom");

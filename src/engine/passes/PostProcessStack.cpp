@@ -266,6 +266,82 @@ namespace aether
 
 		normalise(bins, m_histogramBins, kHistogramBins);
 		normalise(bins + kHistogramBins, m_ldrHistogramBins, kHistogramBins);
+
+		UpdateAutoExposure(bins);
+	}
+
+	// Drive exposure from the HDR histogram the probe graph was already building.
+	//
+	// The average is taken in log2 space, because luminance is perceived that way and
+	// a linear mean lets one small bright region - a sun, a specular hit - drag the
+	// whole frame dark. The darkest and brightest slices are discarded outright for
+	// the same reason: a sky occupying a fifth of the screen should not decide the
+	// exposure for the other four fifths.
+	void PostProcessStack::UpdateAutoExposure(const std::uint32_t* bins)
+	{
+		if (!m_autoExposureEnabled)
+		{
+			return;
+		}
+
+		// Matches kLogMin / kLogRange in luminance_histogram.slang.
+		constexpr float kLogMin = -10.0f;
+		constexpr float kLogRange = 20.0f;
+		constexpr float kLowPercentile = 0.30f;
+		constexpr float kHighPercentile = 0.95f;
+
+		double total = 0.0;
+		// Bin 0 collects everything at or below the floor, which is mostly pixels with
+		// no geometry at all. Counting it would peg the average to black.
+		for (std::uint32_t i = 1; i < kHistogramBins; ++i)
+		{
+			total += bins[i];
+		}
+		if (total < 1.0)
+		{
+			return;
+		}
+
+		const double lowCount = total * kLowPercentile;
+		const double highCount = total * kHighPercentile;
+		double seen = 0.0;
+		double weighted = 0.0;
+		double weight = 0.0;
+		for (std::uint32_t i = 1; i < kHistogramBins; ++i)
+		{
+			const double count = bins[i];
+			if (count <= 0.0)
+			{
+				continue;
+			}
+			const double binStart = seen;
+			seen += count;
+			const double lo = std::max(binStart, lowCount);
+			const double hi = std::min(seen, highCount);
+			if (hi <= lo)
+			{
+				continue;
+			}
+			const float logLum = kLogMin + (static_cast<float>(i) / 255.0f) * kLogRange;
+			weighted += logLum * (hi - lo);
+			weight += (hi - lo);
+		}
+		if (weight <= 0.0)
+		{
+			return;
+		}
+
+		const float avgLuminance = std::exp2(static_cast<float>(weighted / weight));
+		const float target = std::clamp(m_autoExposureKey / std::max(avgLuminance, 1e-4f), 0.03f, 30.0f);
+
+		// Adapt in log space at a fixed rate, so going from bright to dark takes the
+		// same time as the reverse. A linear approach would snap one way and crawl the
+		// other, which reads as the image lurching.
+		constexpr float kFrameDt = 1.0f / 60.0f;
+		const float blend = 1.0f - std::exp(-m_autoExposureSpeed * kFrameDt);
+		const float current = std::log2(std::max(m_autoExposureValue, 1e-4f));
+		const float wanted = std::log2(target);
+		m_autoExposureValue = std::exp2(current + (wanted - current) * blend);
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
@@ -399,7 +475,10 @@ namespace aether
 			                push.bloomSlot = (m_bloomStrength > 0.0f) ? m_bloomSlots[0] : 0xFFFFFFFFu;
 			                push.bloomStrength = m_bloomStrength;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
-			                push.exposure = m_exposure;
+			                // Manual exposure multiplies the adapted value rather than
+				                // replacing it, so the slider stays a compensation control in
+				                // stops rather than fighting the adaptation.
+				                push.exposure = m_autoExposureEnabled ? (m_exposure * m_autoExposureValue) : m_exposure;
 			                push.debugCompare = m_debugCompare ? 1u : 0u;
 			                push.debugModeCount = m_debugModeCount;
 			                push.inspectX = -1;
