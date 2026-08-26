@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <span>
@@ -94,6 +95,26 @@ namespace aether
 		void SetExposure(float exposure)
 		{
 			m_exposure = exposure;
+		}
+
+		void SetBloomStrength(float strength)
+		{
+			m_bloomStrength = std::clamp(strength, 0.0f, 1.0f);
+		}
+
+		[[nodiscard]] float GetBloomStrength() const
+		{
+			return m_bloomStrength;
+		}
+
+		void SetBloomFilterRadius(float radius)
+		{
+			m_bloomFilterRadius = std::clamp(radius, 0.5f, 4.0f);
+		}
+
+		[[nodiscard]] float GetBloomFilterRadius() const
+		{
+			return m_bloomFilterRadius;
 		}
 
 		[[nodiscard]] float GetExposure() const

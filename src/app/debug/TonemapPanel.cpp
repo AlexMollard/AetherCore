@@ -165,6 +165,27 @@ namespace aether::editor
 			stack.SetExposure(exposure);
 		}
 
+		ImGui::SeparatorText("Bloom");
+		float bloomStrength = stack.GetBloomStrength();
+		if (ImGui::SliderFloat("Strength", &bloomStrength, 0.0f, 0.5f, "%.3f"))
+		{
+			stack.SetBloomStrength(bloomStrength);
+		}
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("How far the image is blended toward the blurred chain. 0 disables bloom.");
+		}
+		float bloomRadius = stack.GetBloomFilterRadius();
+		if (ImGui::SliderFloat("Radius", &bloomRadius, 0.5f, 4.0f, "%.2f"))
+		{
+			stack.SetBloomFilterRadius(bloomRadius);
+		}
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("Width of the tent filter on the way back up the chain, in source texels. Wider spreads the glow further at the same cost.");
+		}
+		ImGui::Separator();
+
 		bool debugCompare = stack.IsDebugCompareEnabled();
 		if (ImGui::Checkbox("Side-by-side comparison", &debugCompare))
 		{
