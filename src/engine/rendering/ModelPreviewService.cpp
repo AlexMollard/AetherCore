@@ -331,20 +331,7 @@ namespace aether
 			                gpu::CommandList& cmd = ctx.recorder;
 			                bindless.CmdBindGlobalResources(cmd);
 			                cmd.BindPipeline(postProcess.GetTonemapPipeline());
-			                struct
-			                {
-				                std::uint32_t hdrSlot;
-				                std::uint32_t mode;
-				                float exposure;
-				                std::uint32_t debugCompare;
-				                std::uint32_t debugModeCount;
-				                std::int32_t inspectX;
-				                std::int32_t inspectY;
-				                std::uint32_t screenWidth;
-				                std::uint32_t screenHeight;
-				                std::uint32_t _padBg;
-				                std::uint64_t backgroundParamsAddr;
-			                } push;
+			                TonemapContracts::PushConstants push{};
 			                push.hdrSlot = m_colorBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(postProcess.GetTonemapMode());
 			                push.exposure = postProcess.GetExposure();

@@ -229,6 +229,19 @@ namespace aether
 	private:
 		// Graph-owned. The bindless slots are reserved against the graph, so they stay valid
 		// while the images behind them move between frames and graph rebuilds.
+		// Bloom chain. Each level is half the previous; the chain is walked down with a
+		// 13-tap filter and back up with an additive 3x3 tent, so the widest level
+		// contributes a broad glow and the narrowest a tight one - a single pass at one
+		// radius cannot produce both.
+		static constexpr std::uint32_t kBloomMipCount = 5;
+		std::array<RGImage, kBloomMipCount> m_bloomMips{};
+		std::array<std::uint32_t, kBloomMipCount> m_bloomSlots{};
+		std::array<gpu::Extent2D, kBloomMipCount> m_bloomExtents{};
+		GraphicsPipeline m_bloomDownsamplePipeline;
+		GraphicsPipeline m_bloomUpsamplePipeline;
+		float m_bloomStrength = 0.05f;
+		float m_bloomFilterRadius = 1.0f;
+
 		RGImage m_hdrColor{};
 		std::uint32_t m_hdrBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_tonemapPipeline;

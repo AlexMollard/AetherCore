@@ -14,6 +14,9 @@
 [[vk::binding(0, 0)]]
 Texture2D g_textures[];
 
+[[vk::binding(1, 0)]]
+SamplerState g_linearSampler;
+
 #include "include/FullScreenTriangle.slangh"
 
 // Push constants.
@@ -28,6 +31,8 @@ struct TonemapPush
     int   inspectY;
     uint  screenWidth;    // render target width for debug division
     uint  screenHeight;   // render target height for header bar
+    uint  bloomSlot;      // bloom chain mip 0 (0xFFFFFFFF = bloom off)
+    float bloomStrength;  // linear blend toward the bloom result
     uint  _padBg;         // alignment before the 8-byte address
     uint64_t backgroundParamsAddr; // BDA -> GpuBackgroundParams (0 = disabled)
 };
@@ -108,8 +113,24 @@ static const float3 kBarColors[10] = {
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-    const int2   coord = int2(svPos.xy);
-    const float3 hdr   = g_textures[pc.hdrSlot].Load(int3(coord, 0)).rgb * pc.exposure;
+    const int2 coord = int2(svPos.xy);
+    float3 scene = g_textures[pc.hdrSlot].Load(int3(coord, 0)).rgb;
+
+    // Bloom is mixed in linear HDR, before exposure and the operator, so it is
+    // tonemapped along with everything else. Added afterwards it would sit on top of
+    // the curve and read as a flat wash rather than light.
+    //
+    // Lerp rather than add: the chain already carries the scene's own energy, so
+    // adding it would brighten the whole image as the strength rises. Blending
+    // redistributes that energy into the glow and leaves overall exposure alone.
+    if (pc.bloomSlot != 0xFFFFFFFFu)
+    {
+        const float2 uv = (float2(coord) + 0.5) / float2(pc.screenWidth, pc.screenHeight);
+        const float3 bloom = g_textures[pc.bloomSlot].SampleLevel(g_linearSampler, uv, 0.0).rgb;
+        scene = lerp(scene, bloom, saturate(pc.bloomStrength));
+    }
+
+    const float3 hdr = scene * pc.exposure;
 
     float3 mapped;
 

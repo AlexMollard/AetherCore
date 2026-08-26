@@ -44,6 +44,48 @@ namespace aether
 			Throw(AetherError::Engine("PostProcessStack: LdrColor bindless registration failed"));
 		}
 
+		// Bloom mips, each half the previous. Transient like the HDR target: written and
+		// consumed entirely inside one frame.
+		gpu::Extent2D mipExtent = desc.extent;
+		for (std::uint32_t i = 0; i < kBloomMipCount; ++i)
+		{
+			mipExtent.width = std::max(1u, mipExtent.width / 2u);
+			mipExtent.height = std::max(1u, mipExtent.height / 2u);
+			stack.m_bloomExtents[i] = mipExtent;
+			stack.m_bloomMips[i] = desc.renderGraph->CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, mipExtent, kSampledSrc);
+			stack.m_bloomSlots[i] = desc.renderGraph->EnsureBindlessSampled(stack.m_bloomMips[i]);
+			if (stack.m_bloomSlots[i] == 0xFFFFFFFFu)
+			{
+				Throw(AetherError::Engine("PostProcessStack: bloom mip bindless registration failed"));
+			}
+		}
+
+		AE_EXPECT_OR_THROW(bloomDownPipeline,
+		        GraphicsPipeline::Create(desc.device,
+		                {
+		                        .shaderVfsPath = "shaders://bloom.spv",
+		                        .fragmentEntry = "downsampleMain",
+		                        .colorFormat = gpu::Format::R16G16B16A16Sfloat,
+		                        .debugName = "Bloom.Downsample",
+		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
+		                }));
+		stack.m_bloomDownsamplePipeline = std::move(bloomDownPipeline);
+
+		// Additive: each upsample adds its blurred level onto the one above, which is
+		// what turns the chain into a sum of radii rather than only the last one.
+		AE_EXPECT_OR_THROW(bloomUpPipeline,
+		        GraphicsPipeline::Create(desc.device,
+		                {
+		                        .shaderVfsPath = "shaders://bloom.spv",
+		                        .fragmentEntry = "upsampleMain",
+		                        .colorFormat = gpu::Format::R16G16B16A16Sfloat,
+		                        .blendEnable = true,
+		                        .blendMode = gpu::BlendMode::Additive,
+		                        .debugName = "Bloom.Upsample",
+		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
+		                }));
+		stack.m_bloomUpsamplePipeline = std::move(bloomUpPipeline);
+
 		const gpu::TextureDesc finalDesc{
 		        .format = desc.swapchainFormat,
 		        .extent = desc.extent,
@@ -229,6 +271,78 @@ namespace aether
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
 	{
 		AE_PROFILE_ZONE();
+
+		struct BloomPush
+		{
+			std::uint32_t srcSlot;
+			float srcWidth;
+			float srcHeight;
+			float filterRadius;
+			float karisAverage;
+		};
+
+		for (std::uint32_t i = 0; i < kBloomMipCount; ++i)
+		{
+			const RGImage src = (i == 0) ? m_hdrColor : m_bloomMips[i - 1];
+			const std::uint32_t srcSlot = (i == 0) ? m_hdrBindlessSlot : m_bloomSlots[i - 1];
+			const gpu::Extent2D srcExtent = (i == 0) ? m_extent : m_bloomExtents[i - 1];
+
+			graph.AddFullscreenPass({
+			                                .name = "$BloomDown" + std::to_string(i),
+			                                .color = m_bloomMips[i],
+			                                .extent = m_bloomExtents[i],
+			                                .loadOp = gpu::LoadOp::DontCare,
+			                                .consumes = (i == 0) ? std::vector<RenderGraph::FrameProductRef>{RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)} : std::vector<RenderGraph::FrameProductRef>{},
+			                        })
+			        .ReadTexture(src)
+			        .Execute(
+			                [this, &bindless, srcSlot, srcExtent, i](PassContext& ctx)
+			                {
+				                gpu::CommandList& cmd = ctx.recorder;
+				                bindless.CmdBindGlobalResources(cmd);
+				                cmd.BindPipeline(m_bloomDownsamplePipeline.GetPipeline());
+				                const BloomPush push{
+				                        .srcSlot = srcSlot,
+				                        .srcWidth = static_cast<float>(srcExtent.width),
+				                        .srcHeight = static_cast<float>(srcExtent.height),
+				                        .filterRadius = 0.0f,
+				                        // Firefly suppression only on the first step: past that the
+				                        // signal is already averaged and re-weighting would dim it.
+				                        .karisAverage = (i == 0) ? 1.0f : 0.0f,
+				                };
+				                cmd.PushDataRaw(0, std::as_bytes(std::span{&push, 1}));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+		}
+
+		for (std::uint32_t i = kBloomMipCount - 1; i > 0; --i)
+		{
+			const std::uint32_t srcIndex = i;
+			const std::uint32_t dstIndex = i - 1;
+			graph.AddFullscreenPass({
+			                                .name = "$BloomUp" + std::to_string(dstIndex),
+			                                .color = m_bloomMips[dstIndex],
+			                                .extent = m_bloomExtents[dstIndex],
+			                                .loadOp = gpu::LoadOp::Load,
+			                        })
+			        .ReadTexture(m_bloomMips[srcIndex])
+			        .Execute(
+			                [this, &bindless, srcIndex](PassContext& ctx)
+			                {
+				                gpu::CommandList& cmd = ctx.recorder;
+				                bindless.CmdBindGlobalResources(cmd);
+				                cmd.BindPipeline(m_bloomUpsamplePipeline.GetPipeline());
+				                const BloomPush push{
+				                        .srcSlot = m_bloomSlots[srcIndex],
+				                        .srcWidth = static_cast<float>(m_bloomExtents[srcIndex].width),
+				                        .srcHeight = static_cast<float>(m_bloomExtents[srcIndex].height),
+				                        .filterRadius = m_bloomFilterRadius,
+				                        .karisAverage = 0.0f,
+				                };
+				                cmd.PushDataRaw(0, std::as_bytes(std::span{&push, 1}));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+		}
 		graph.AddFullscreenPass({
 		                                .name = "$PostProcess",
 		                                .color = m_ldrColor,
@@ -237,6 +351,10 @@ namespace aether
 		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
 		                        })
 		        .ReadTexture(m_hdrColor)
+		        // Declared even though the slot reaches the shader through a push constant:
+		        // the graph culls passes with no declared reader, and without this the last
+		        // upsample vanished and mip 0 was read without a barrier.
+		        .ReadTexture(m_bloomMips[0])
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {
@@ -276,21 +394,10 @@ namespace aether
 				                }
 			                }
 
-			                struct
-			                {
-				                std::uint32_t hdrSlot;
-				                std::uint32_t mode;
-				                float exposure;
-				                std::uint32_t debugCompare;
-				                std::uint32_t debugModeCount;
-				                std::int32_t inspectX;
-				                std::int32_t inspectY;
-				                std::uint32_t screenWidth;
-				                std::uint32_t screenHeight;
-				                std::uint32_t _padBg;
-				                std::uint64_t backgroundParamsAddr;
-			                } push;
+			                TonemapContracts::PushConstants push{};
 			                push.hdrSlot = m_hdrBindlessSlot;
+			                push.bloomSlot = (m_bloomStrength > 0.0f) ? m_bloomSlots[0] : 0xFFFFFFFFu;
+			                push.bloomStrength = m_bloomStrength;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
 			                push.exposure = m_exposure;
 			                push.debugCompare = m_debugCompare ? 1u : 0u;

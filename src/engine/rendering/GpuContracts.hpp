@@ -59,7 +59,39 @@ namespace aether
 		static_assert(offsetof(PushConstants, tileLightIndicesAddr) == 40);
 	} // namespace DrawContracts
 
-	namespace CullContracts
+	// Push constants for tonemap.slang. Three call sites share one pipeline - the main
+// post-process pass and the camera and model preview services - and each used to
+// declare its own copy of this layout. Adding a field to the shader then silently
+// shifted the others, handing the shader a garbage bindless index and faulting the
+// GPU. One definition, so that cannot happen again.
+namespace TonemapContracts
+{
+	struct PushConstants
+	{
+		std::uint32_t hdrSlot = 0;
+		std::uint32_t mode = 0;
+		float exposure = 1.0f;
+		std::uint32_t debugCompare = 0;
+		std::uint32_t debugModeCount = 0;
+		std::int32_t inspectX = -1;
+		std::int32_t inspectY = -1;
+		std::uint32_t screenWidth = 0;
+		std::uint32_t screenHeight = 0;
+		std::uint32_t bloomSlot = 0xFFFFFFFFu; // 0xFFFFFFFF = no bloom
+		float bloomStrength = 0.0f;
+		std::uint32_t _padBg = 0;
+		std::uint64_t backgroundParamsAddr = 0;
+	};
+
+	static_assert(offsetof(PushConstants, hdrSlot) == 0);
+	static_assert(offsetof(PushConstants, screenHeight) == 32);
+	static_assert(offsetof(PushConstants, bloomSlot) == 36);
+	static_assert(offsetof(PushConstants, bloomStrength) == 40);
+	static_assert(offsetof(PushConstants, backgroundParamsAddr) == 48);
+	static_assert(sizeof(PushConstants) == 56, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
+} // namespace TonemapContracts
+
+namespace CullContracts
 	{
 		struct DrawInput
 		{
