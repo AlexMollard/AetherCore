@@ -148,6 +148,38 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     roughness = clamp(roughness, 0.04, 1.0);
     metallic  = saturate(metallic);
 
+    // ── Geometric specular antialiasing ───────────────────────────────────
+    // Kaplanyan et al., HPG 2016, "Filtering Distributions of Normals for
+    // Shading Antialiasing".
+    //
+    // A pixel does not see one normal, it sees every normal inside its
+    // footprint. Where the surface bends or the normal map varies faster than
+    // the pixel grid - ground at a grazing angle, dense detail in the distance,
+    // any curved silhouette - a near-smooth material lands its specular lobe on
+    // wildly different answers in neighbouring pixels. That is the sparkle that
+    // crawls whenever anything moves, and no post-process antialiasing can
+    // touch it: FXAA reads the shimmer as real detail, and it is different
+    // every frame anyway.
+    //
+    // The fix is to widen the lobe rather than shrink the pixel. Measure how
+    // much the normal varies across this pixel from its screen-space
+    // derivatives, and fold that variance into the roughness, so the material
+    // is as rough as its footprint actually is and the highlight resolves
+    // instead of aliasing. Distant geometry converges to its average response
+    // rather than picking one sample of it.
+    {
+        const float3 dNdx = ddx(N);
+        const float3 dNdy = ddy(N);
+        // Half-pixel Gaussian filter width; 1/(2*pi) is the paper's fit.
+        const float kSigma2 = 0.15915494;
+        // Ceiling on the roughness that may be added, so a silhouette or a
+        // crease cannot turn the whole material matte.
+        const float kKappa = 0.18;
+        const float variance = kSigma2 * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
+        const float kernelRoughness = min(2.0 * variance, kKappa);
+        roughness = sqrt(saturate(roughness * roughness + kernelRoughness));
+    }
+
     // ── Occlusion ─────────────────────────────────────────────────────────
     float materialAo = 1.0;
     if (mat.occlusionSlot != kNoTexture)
