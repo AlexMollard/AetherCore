@@ -1,7 +1,41 @@
-// ACES Filmic - Narkowicz 2015 curve fit to the Academy RRT+ODT.
-// Slight toe and shoulder with pleasant saturation.
+// ACES filmic, Stephen Hill's fit of the Academy RRT + sRGB ODT.
+//
+// The widely copied Narkowicz curve this replaces is a single scalar applied to
+// each channel independently. That is cheap but it is not what ACES does: driving
+// R, G and B through the same curve separately pulls a saturated highlight toward
+// whichever channel clips first, so a bright orange skews red and a blue rim skews
+// magenta as they roll off, and nothing ever desaturates toward white the way real
+// film - or the actual ACES transform - does.
+//
+// The fix is to do the work in the right colour space. Convert to AP1 (ACEScg),
+// apply the fitted RRT+ODT there, and convert back. Highlights then roll off
+// toward white while keeping their hue, which is the whole point of ACES and what
+// makes bright bloom and sky read as light rather than as coloured clipping.
+//
+// Costs two 3x3 matrix multiplies over the scalar version.
+
+static const float3x3 kAcesInputMat = float3x3(
+    0.59719f, 0.35458f, 0.04823f,
+    0.07600f, 0.90834f, 0.01566f,
+    0.02840f, 0.13383f, 0.83777f);
+
+static const float3x3 kAcesOutputMat = float3x3(
+     1.60475f, -0.53108f, -0.07367f,
+    -0.10208f,  1.10813f, -0.00605f,
+    -0.00327f, -0.07276f,  1.07602f);
+
+// The RRT and ODT collapsed into one rational function, fitted in AP1.
+float3 RRTAndODTFit(float3 v)
+{
+    const float3 a = v * (v + 0.0245786f) - 0.000090537f;
+    const float3 b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+    return a / max(b, 1e-6f);
+}
+
 float3 AcesFilmic(float3 x)
 {
-    const float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0f, 1.0f);
+    float3 color = mul(kAcesInputMat, max(x, 0.0f));
+    color = RRTAndODTFit(color);
+    color = mul(kAcesOutputMat, color);
+    return saturate(color);
 }

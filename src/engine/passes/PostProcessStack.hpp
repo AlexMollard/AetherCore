@@ -278,7 +278,10 @@ namespace aether
 		gpu::Format m_swapchainFormat = gpu::Format::Undefined;
 		gpu::Extent2D m_extent;
 
-		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
+		// ACES by default. Reinhard has no shoulder worth the name - it compresses
+		// everything toward white and takes the colour with it - which undercuts both
+		// the bloom and the sky lighting feeding bright values into it.
+		TonemapMode m_tonemapMode = TonemapMode::AcesFilmic;
 		float m_exposure = 1.0f;
 		bool m_fxaaEnabled = false;
 		bool m_outputToTexture = false;
