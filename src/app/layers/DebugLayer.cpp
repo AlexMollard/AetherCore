@@ -516,7 +516,11 @@ namespace aether::editor
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<UiCanvasPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
-		m_panels.push_back(std::make_unique<ViewportPanel>());
+		{
+			auto viewportPanel = std::make_unique<ViewportPanel>();
+			m_viewportPanel = viewportPanel.get();
+			m_panels.push_back(std::move(viewportPanel));
+		}
 		m_panels.push_back(std::make_unique<TonemapPanel>());
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
 		m_panels.push_back(std::make_unique<SettingsPanel>());
@@ -624,6 +628,10 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
+		if (m_viewportPanel != nullptr)
+		{
+			m_viewportPanel->PersistCamera(m_debugConfig, context);
+		}
 		PersistSettings(context);
 		for (auto& panel: m_panels)
 		{

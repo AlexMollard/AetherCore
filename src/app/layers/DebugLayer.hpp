@@ -30,6 +30,7 @@ namespace aether
 
 namespace aether::editor
 {
+	class ViewportPanel;
 	class HierarchyPanel;
 
 	class DebugLayer final : public app::AppLayer
@@ -158,6 +159,9 @@ namespace aether::editor
 		EditorProjectManager m_projects;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
+		// Borrowed from m_panels, which owns it. Held typed so the edit camera can be
+		// written once on shutdown rather than from the per-frame settings path.
+		ViewportPanel* m_viewportPanel = nullptr;
 		HierarchyPanel* m_hierarchyPanel = nullptr;
 	};
 } // namespace aether::editor

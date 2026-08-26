@@ -298,7 +298,7 @@ namespace aether::editor
 		m_hasPersistedCamera = true;
 	}
 
-	void ViewportPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
+	void ViewportPanel::PersistCamera(TomlConfig& config, app::LayerContext& context) const
 	{
 		const auto* playState = context.TryGet<app::PlayState>();
 		if (playState != nullptr && playState->IsPlaying())
