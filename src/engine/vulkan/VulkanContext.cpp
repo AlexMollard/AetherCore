@@ -489,6 +489,11 @@ namespace aether
 		requiredFeatures10.drawIndirectFirstInstance = VK_TRUE;
 		requiredFeatures10.fillModeNonSolid = VK_TRUE;
 		requiredFeatures10.wideLines = VK_TRUE;
+		// Anisotropic filtering. Without it a mip chain is selected from the longer
+		// screen-space axis, so ground seen at a grazing angle is blurred along the
+		// axis that was still sharp. Universally supported on any device that already
+		// meets the Vulkan 1.4 requirements above.
+		requiredFeatures10.samplerAnisotropy = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{*m_instance};
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);

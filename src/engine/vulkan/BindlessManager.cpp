@@ -65,6 +65,14 @@ namespace aether
 
 		m_device = static_cast<gpu::Device>(context.GetDevice().device);
 		m_vmaAllocator = reinterpret_cast<void*>(context.GetAllocator());
+
+		{
+			// Cache the anisotropy ceiling once. It is a device limit, and every sampler
+			// below has to clamp to it or sampler creation is invalid.
+			VkPhysicalDeviceProperties deviceProps{};
+			vkGetPhysicalDeviceProperties(context.GetDevice().physical_device, &deviceProps);
+			m_maxAnisotropy = std::min(deviceProps.limits.maxSamplerAnisotropy, 16.0f);
+		}
 		m_capacity = config.maxSampledImages;
 		m_deferredFreeFrames = config.deferredFreeFrames;
 		m_currentFrame = 0;
@@ -534,6 +542,8 @@ namespace aether
 		        .addressModeU = gpu::ToVk(address),
 		        .addressModeV = gpu::ToVk(address),
 		        .addressModeW = gpu::ToVk(address),
+		        .anisotropyEnable = m_maxAnisotropy > 1.0f ? VK_TRUE : VK_FALSE,
+		        .maxAnisotropy = m_maxAnisotropy,
 		        .compareEnable = VK_FALSE,
 		        .minLod = 0.0f,
 		        .maxLod = VK_LOD_CLAMP_NONE,
@@ -783,6 +793,8 @@ namespace aether
 		        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		        .anisotropyEnable = m_maxAnisotropy > 1.0f ? VK_TRUE : VK_FALSE,
+		        .maxAnisotropy = m_maxAnisotropy,
 		        .compareEnable = VK_FALSE,
 		        .minLod = 0.0f,
 		        .maxLod = VK_LOD_CLAMP_NONE,

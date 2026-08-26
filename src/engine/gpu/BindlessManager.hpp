@@ -82,6 +82,8 @@ namespace aether
 		mutable std::mutex m_mutex;
 		gpu::Device m_device = nullptr;
 		void* m_vmaAllocator = nullptr;
+		// Device anisotropy ceiling, cached at init; 1.0 means the device offers none.
+		float m_maxAnisotropy = 1.0f;
 
 		void* m_resourceHeapBuffer = nullptr;
 		void* m_resourceHeapAlloc = nullptr;
