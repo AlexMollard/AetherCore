@@ -44,10 +44,6 @@ namespace
 	// constant is why the softness stops depending on how far the camera is.
 	constexpr float kSunTanAngularRadius = 0.00465f;
 
-	// Widest blocker search, in texels. Bounds the cost of the search and stops
-	// the penumbra estimate from sampling half the cascade.
-	constexpr float kMaxPenumbraTexels = 24.0f;
-
 	// Tightest enclosing sphere of the view frustum slice between near and far.
 	// Fitting a sphere rather than guessing a box is what makes coverage exact:
 	// the previous ratio-of-far-plane guess was about 1.5x too small for a 60

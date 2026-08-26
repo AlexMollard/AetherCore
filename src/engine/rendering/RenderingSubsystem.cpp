@@ -966,7 +966,7 @@ namespace aether
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductHdrColor, FrameResourceId::HdrColor)
 			        .Execute(
-			                [this, bindless = frame.bindless, sceneExtent](PassContext& ctx)
+			                [this, bindless = frame.bindless](PassContext& ctx)
 			                {
 				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws() || !m_renderer.AreReflectionsEnabled())
 				                {

@@ -487,6 +487,8 @@ namespace aether::editor
 				return "B8G8R8A8Srgb";
 			case gpu::Format::R16G16B16A16Sfloat:
 				return "R16G16B16A16Sfloat";
+			case gpu::Format::R32Sfloat:
+				return "R32Sfloat";
 			case gpu::Format::R32G32Sfloat:
 				return "R32G32Sfloat";
 			case gpu::Format::R32G32B32Sfloat:

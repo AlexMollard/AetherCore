@@ -40,6 +40,7 @@ namespace aether
 				case gpu::Format::B8G8R8A8Unorm:
 				case gpu::Format::B8G8R8A8Srgb:
 				case gpu::Format::D32Sfloat:
+				case gpu::Format::R32Sfloat:
 					return 4;
 				case gpu::Format::R16G16B16A16Sfloat:
 				case gpu::Format::R32G32Sfloat:
@@ -130,7 +131,11 @@ namespace aether
 					}
 					break;
 				case gpu::Format::D32Sfloat:
+				case gpu::Format::R32Sfloat:
 				{
+					// One float per pixel either way, so the same auto-ranged grey
+					// mapping applies. This is what makes the shadow atlas - which is
+					// R32Sfloat - readable in a screenshot at all.
 					const auto* d = reinterpret_cast<const float*>(src);
 					float mn = 1e30f;
 					float mx = -1e30f;
