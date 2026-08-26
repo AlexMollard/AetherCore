@@ -79,6 +79,14 @@ namespace aether
 		float fogSunScatter{0.6f};
 		// Ceiling on fog opacity, so the far plane never becomes a flat wall of colour.
 		float fogMaxOpacity{0.9f};
+
+		// Swap the authored horizon-to-zenith gradient for single-scattering atmosphere.
+		// Off by default: the gradient is what every existing scene was authored
+		// against, and turning this on globally would restyle all of them.
+		bool physicalSky{false};
+		// Haze. Low is a clear high-altitude sky, high is humid or dusty air - it
+		// widens the sun's halo and washes the horizon toward white.
+		float turbidity{2.5f};
 	};
 
 	struct DayNightComponent

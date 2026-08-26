@@ -78,10 +78,11 @@ float3 HeightFogColor(
     float3 horizonColor,
     float3 zenithColor,
     float3 voidColor,
-    float  sunScatter)
+    float  sunScatter,
+    float4 skyParams)
 {
 	// The sky in the direction being looked at: haze is that light, scattered.
-	const float3 ambientScatter = SkyGradient(viewDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor);
+	const float3 ambientScatter = SkyGradient(viewDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams);
 
 	// Henyey-Greenstein at a fixed forward asymmetry. A full phase function would
 	// take a per-scene g; at g = 0.6 the lobe is close enough to atmospheric haze

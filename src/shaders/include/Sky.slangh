@@ -36,6 +36,82 @@ float StarField(float3 dir)
     return star;
 }
 
+// Single-scattering atmosphere, as an alternative to the authored gradient.
+//
+// The gradient is a lerp between two colours somebody picked. It cannot produce
+// the things that make a real sky read as sky: the horizon warming while the
+// zenith stays deep, the halo tightening as the sun climbs, the whole vault
+// shifting red at sunset because the light is travelling through more air. Those
+// all come from one fact - air scatters short wavelengths far more than long
+// ones - and once that is modelled they fall out together instead of having to
+// be authored one by one.
+//
+// Rayleigh coefficients are the 1/lambda^4 dependence evaluated at roughly the
+// sRGB primaries, which is why blue is scattered about six times as strongly as
+// red. Mie is aerosol scattering: wavelength-independent, strongly forward, and
+// what makes the sun's surroundings glow white rather than blue.
+//
+// Single scattering only. Multiple scattering is what keeps a real sky from going
+// black at the zenith and fills shadowed air at dusk; approximating it as a small
+// ambient floor is far cheaper than integrating it and is most of the way there.
+static const float3 kRayleighBeta = float3(5.8e-6f, 13.5e-6f, 33.1e-6f);
+static const float  kMieBeta = 21e-6f;
+// Forward asymmetry of aerosol scattering; 0.76 is the usual fit for haze.
+static const float  kMieG = 0.76f;
+
+// Relative air mass along a view ray. The closed form is Kasten and Young's fit:
+// straight up the path is one atmosphere, at the horizon it is nearly forty, and
+// a plain 1/cos blows up before it gets there.
+float AirMass(float cosZenith)
+{
+	const float z = degrees(acos(clamp(cosZenith, -1.0f, 1.0f)));
+	return 1.0f / (max(cosZenith, 0.0f) + 0.15f * pow(max(93.885f - z, 1e-3f), -1.253f));
+}
+
+float3 PhysicalSky(
+	float3 worldDir,
+	float3 sunDir,
+	float3 sunColor,
+	float  sunIntensity,
+	float  turbidity,
+	float3 voidColor)
+{
+	const float cosTheta = dot(normalize(worldDir), normalize(sunDir));
+
+	// Rayleigh is symmetric front to back; Mie is a narrow forward lobe, which is
+	// the halo around the sun.
+	const float rayleighPhase = (3.0f / (16.0f * 3.14159265f)) * (1.0f + cosTheta * cosTheta);
+	const float g2 = kMieG * kMieG;
+	const float mieDenom = pow(max(1.0f + g2 - 2.0f * kMieG * cosTheta, 1e-4f), 1.5f);
+	const float miePhase = (3.0f / (8.0f * 3.14159265f)) * ((1.0f - g2) * (1.0f + cosTheta * cosTheta)) / ((2.0f + g2) * mieDenom);
+
+	// How much air this ray and the sunlight reaching it each pass through. The sun
+	// term is why a low sun reddens everything: its own light is filtered before it
+	// ever reaches the air being looked at.
+	const float viewMass = AirMass(worldDir.y);
+	const float sunMass = AirMass(sunDir.y);
+
+	// Turbidity scales the aerosol load; Rayleigh is a property of the air itself.
+	const float3 betaR = kRayleighBeta * 8000.0f;
+	const float3 betaM = float3(kMieBeta, kMieBeta, kMieBeta) * 1200.0f * max(turbidity, 1.0f);
+
+	const float3 opticalDepth = betaR * viewMass + betaM * viewMass;
+	const float3 sunTransmit = exp(-(betaR * sunMass + betaM * sunMass));
+	const float3 extinction = 1.0f - exp(-opticalDepth);
+
+	const float3 scatter = (betaR * rayleighPhase + betaM * miePhase) / max(betaR + betaM, 1e-8f);
+	float3 sky = scatter * extinction * sunTransmit * sunColor * sunIntensity;
+
+	// Stand-in for multiple scattering, so the zenith keeps a little colour and dusk
+	// does not fall to black the instant the sun sets.
+	sky += betaR / max(betaR + betaM, 1e-8f) * 0.02f * saturate(sunDir.y + 0.3f) * sunColor * sunIntensity;
+
+	// Same near-black floor below the horizon the gradient uses, so ground-facing
+	// reflections and the lower hemisphere agree between the two models.
+	const float voidBlend = 1.0f - smoothstep(-0.22f, -0.015f, worldDir.y);
+	return lerp(max(sky, 0.0f), voidColor, voidBlend);
+}
+
 // The atmosphere without the sun disk or stars: safe to treat as incoming radiance.
 float3 SkyGradient(
     float3 worldDir,
@@ -44,8 +120,17 @@ float3 SkyGradient(
     float  sunIntensity,
     float3 horizonColor,
     float3 zenithColor,
-    float3 voidColor)
+    float3 voidColor,
+    float4 skyParams)
 {
+    // One entry point, so the skybox, the image-based ambient and the fog colour all
+    // move together the moment a scene switches model. They read the same sky by
+    // construction rather than by three call sites being kept in agreement.
+    if (skyParams.x > 0.5f)
+    {
+        return PhysicalSky(worldDir, sunDir, sunColor, sunIntensity, skyParams.y, voidColor);
+    }
+
     const float sunAltitude = saturate(sunDir.y);
     const float nightAmount = 1.0f - smoothstep(-0.10f, 0.25f, sunDir.y);
     const float dayAmount   = 1.0f - nightAmount;
@@ -90,9 +175,10 @@ float3 EvalSky(
     float  sunIntensity,
     float3 horizonColor,
     float3 zenithColor,
-    float3 voidColor)
+    float3 voidColor,
+    float4 skyParams)
 {
-    float3 sky = SkyGradient(worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor);
+    float3 sky = SkyGradient(worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams);
 
     const float sunAltitude = saturate(sunDir.y);
     const float nightAmount = 1.0f - smoothstep(-0.10f, 0.25f, sunDir.y);

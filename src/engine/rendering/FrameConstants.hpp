@@ -59,6 +59,10 @@ namespace aether
 		// falloff, z = forward-scatter strength toward the sun, w = maximum opacity.
 		glm::vec4 fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 
+		// x = 1 when the sky is the scattering model rather than the authored gradient,
+		// y = turbidity. z, w spare.
+		glm::vec4 skyParams{0.0f, 2.5f, 0.0f, 0.0f};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -83,7 +87,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 832, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 848, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -113,5 +117,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowCascadeNormalOffset) == 784);
 	static_assert(offsetof(FrameConstants, shadowCascadePenumbraScale) == 800);
 	static_assert(offsetof(FrameConstants, fogParams) == 816);
-	static_assert(sizeof(FrameConstants) == 832);
+	static_assert(offsetof(FrameConstants, skyParams) == 832);
+	static_assert(sizeof(FrameConstants) == 848);
 } // namespace aether

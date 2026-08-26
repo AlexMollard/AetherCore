@@ -121,7 +121,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	const float3 sunDir = normalize(fc->sunDirectionIntensity.xyz);
 	const float sunIntensity = fc->sunDirectionIntensity.w;
 	const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
-	const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb);
+	const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
 
 	// Karis' analytic split-sum fit, matching the forward shader.
 	const float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);

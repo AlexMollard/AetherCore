@@ -254,6 +254,7 @@ namespace aether
 		fc.skyZenithColor = packet.skyZenithColor;
 		fc.skyVoidColor = packet.skyVoidColor;
 		fc.fogParams = packet.fogParams;
+		fc.skyParams = packet.skyParams;
 		return fc;
 	}
 

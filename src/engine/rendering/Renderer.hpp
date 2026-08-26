@@ -153,6 +153,16 @@ namespace aether
 			m_fogParams = params;
 		}
 
+		void SetSkyParams(glm::vec4 params)
+		{
+			m_skyParams = params;
+		}
+
+		[[nodiscard]] glm::vec4 GetSkyParams() const
+		{
+			return m_skyParams;
+		}
+
 		[[nodiscard]] glm::vec4 GetFogParams() const
 		{
 			return m_fogParams;
@@ -203,6 +213,7 @@ namespace aether
 		glm::vec4 m_skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
+		glm::vec4 m_skyParams{0.0f, 2.5f, 0.0f, 0.0f};
 		bool m_contactShadows = false;
 		bool m_reflections = true;
 		float m_reflectionMaxRoughness = 0.45f;

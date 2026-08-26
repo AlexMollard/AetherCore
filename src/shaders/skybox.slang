@@ -105,7 +105,8 @@ float4 fragmentMain(VSOut input) : SV_Target0
         sunIntensity,
         horizonColor,
         zenithColor,
-        voidColor);
+        voidColor,
+        fc->skyParams);
 
     // Tiny dither helps hide residual daytime gradient quantization.
     const float dayAmount = saturate(sunDir.y * 0.5f + 0.5f);
