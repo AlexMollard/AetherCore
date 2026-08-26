@@ -1,5 +1,9 @@
 #include "material/Texture.hpp"
 
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <stdexcept>
@@ -36,13 +40,96 @@ namespace aether
 			return slot;
 		}
 
+		// sRGB <-> linear. A mip is an average of the light the parent texels carry, and
+		// sRGB values are not proportional to light, so averaging them directly is simply
+		// the wrong sum: mid-tones come out too dark and the chain drifts as it descends.
+		// The decode is a 256-entry table because there are only 256 possible inputs.
+		const std::array<float, 256>& SrgbToLinearTable()
+		{
+			static const std::array<float, 256> table = []
+			{
+				std::array<float, 256> t{};
+				for (std::size_t i = 0; i < t.size(); ++i)
+				{
+					const float c = static_cast<float>(i) / 255.0f;
+					t[i] = (c <= 0.04045f) ? (c / 12.92f) : std::pow((c + 0.055f) / 1.055f, 2.4f);
+				}
+				return t;
+			}();
+			return table;
+		}
+
+		stbi_uc LinearToSrgbByte(float linear)
+		{
+			const float c = (linear <= 0.0031308f) ? (linear * 12.92f) : (1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f);
+			return static_cast<stbi_uc>(std::lround(std::clamp(c, 0.0f, 1.0f) * 255.0f));
+		}
+
+		std::uint32_t MipCountFor(int width, int height)
+		{
+			const auto largest = static_cast<std::uint32_t>(std::max(width, height));
+			return static_cast<std::uint32_t>(std::bit_width(largest));
+		}
+
+		// Box-filter the parent level down by two. Colour is averaged in linear light;
+		// alpha is already linear and is averaged as-is.
+		std::vector<stbi_uc> DownsampleRgba(const stbi_uc* src, int srcWidth, int srcHeight, int dstWidth, int dstHeight)
+		{
+			const auto& toLinear = SrgbToLinearTable();
+			std::vector<stbi_uc> dst(static_cast<std::size_t>(dstWidth) * static_cast<std::size_t>(dstHeight) * 4u);
+
+			for (int y = 0; y < dstHeight; ++y)
+			{
+				const int y0 = std::min(y * 2, srcHeight - 1);
+				const int y1 = std::min(y0 + 1, srcHeight - 1);
+				for (int x = 0; x < dstWidth; ++x)
+				{
+					const int x0 = std::min(x * 2, srcWidth - 1);
+					const int x1 = std::min(x0 + 1, srcWidth - 1);
+
+					const std::size_t taps[4] = {
+					        (static_cast<std::size_t>(y0) * srcWidth + x0) * 4u,
+					        (static_cast<std::size_t>(y0) * srcWidth + x1) * 4u,
+					        (static_cast<std::size_t>(y1) * srcWidth + x0) * 4u,
+					        (static_cast<std::size_t>(y1) * srcWidth + x1) * 4u,
+					};
+
+					float rgb[3] = {0.0f, 0.0f, 0.0f};
+					float alpha = 0.0f;
+					for (const std::size_t tap: taps)
+					{
+						rgb[0] += toLinear[src[tap + 0]];
+						rgb[1] += toLinear[src[tap + 1]];
+						rgb[2] += toLinear[src[tap + 2]];
+						alpha += static_cast<float>(src[tap + 3]);
+					}
+
+					const std::size_t out = (static_cast<std::size_t>(y) * dstWidth + x) * 4u;
+					dst[out + 0] = LinearToSrgbByte(rgb[0] * 0.25f);
+					dst[out + 1] = LinearToSrgbByte(rgb[1] * 0.25f);
+					dst[out + 2] = LinearToSrgbByte(rgb[2] * 0.25f);
+					dst[out + 3] = static_cast<stbi_uc>(std::lround(alpha * 0.25f));
+				}
+			}
+
+			return dst;
+		}
+
 		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, const char* debugName = nullptr)
 		{
+			// Without a mip chain a pixel that covers many texels reads exactly one of
+			// them, so a surface picks a different texel every frame as the camera moves
+			// and minified detail turns into crawling noise. This is not something
+			// post-process antialiasing can recover: by the time the frame exists the
+			// information that the other texels ever existed is gone.
+			const std::uint32_t mipLevels = MipCountFor(width, height);
+
 			const gpu::TextureDesc desc{
 			        .format = gpu::Format::R8G8B8A8Srgb,
 			        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 			        .aspect = gpu::ImageAspect::Color,
+			        .mipLevels = mipLevels,
 			        .debugName = debugName,
 			};
 			gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
@@ -54,10 +141,42 @@ namespace aether
 			const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(handle);
 
 			{
-				const std::int32_t copyResult = vkutil::HostCopyToImage(device, image, pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+				// One transition covers every level, then each is filled in turn. Each
+				// level is filtered from the one above rather than from the original, so
+				// the whole chain costs a third of the base image instead of a copy of it
+				// per level.
+				if (vkutil::HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, mipLevels) != VK_SUCCESS)
+				{
+					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host transition to GENERAL failed"));
+				}
+
+				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0u);
 				if (copyResult != 0)
 				{
-					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyToImage failed"));
+					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyMipToImage failed"));
+				}
+
+				const stbi_uc* parent = pixels;
+				std::vector<stbi_uc> parentOwned;
+				int parentWidth = width;
+				int parentHeight = height;
+				for (std::uint32_t level = 1; level < mipLevels; ++level)
+				{
+					const int levelWidth = std::max(1, parentWidth / 2);
+					const int levelHeight = std::max(1, parentHeight / 2);
+
+					std::vector<stbi_uc> levelPixels = DownsampleRgba(parent, parentWidth, parentHeight, levelWidth, levelHeight);
+					const std::int32_t levelResult =
+					        vkutil::HostCopyMipToImage(device, image, levelPixels.data(), static_cast<uint32_t>(levelWidth), static_cast<uint32_t>(levelHeight), level);
+					if (levelResult != 0)
+					{
+						Throw(AetherError::Vulkan(levelResult, "UploadRgbaToGpuImage: HostCopyMipToImage failed for a mip level"));
+					}
+
+					parentOwned = std::move(levelPixels);
+					parent = parentOwned.data();
+					parentWidth = levelWidth;
+					parentHeight = levelHeight;
 				}
 			}
 
@@ -67,7 +186,7 @@ namespace aether
 			// list omits SHADER_READ_ONLY_OPTIMAL.
 			if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
 			{
-				if (vkutil::HostTransitionImageToShaderRead(device, image) != 0)
+				if (vkutil::HostTransitionImageToShaderRead(device, image, mipLevels) != 0)
 				{
 					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host layout transition failed"));
 				}

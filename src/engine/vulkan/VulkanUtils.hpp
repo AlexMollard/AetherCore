@@ -25,23 +25,24 @@ namespace aether::vkutil
 	}
 
 	// Host-side layout transition (no queue, no command buffer, returns complete).
-	inline VkResult HostTransitionImage(VkDevice device, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+	inline VkResult HostTransitionImage(VkDevice device, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, std::uint32_t mipLevels = 1)
 	{
 		const VkHostImageLayoutTransitionInfo transition{
 		        .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
 		        .image = image,
 		        .oldLayout = oldLayout,
 		        .newLayout = newLayout,
-		        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1},
+		        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = mipLevels, .baseArrayLayer = 0, .layerCount = 1},
 		};
 		return vkTransitionImageLayout(device, 1, &transition);
 	}
 
 	// Finish a host-copied texture on the CPU: GENERAL -> SHADER_READ_ONLY_OPTIMAL with
 	// no queue submission. Only valid when SupportsHostImageLayout(SHADER_READ_ONLY).
-	inline std::int32_t HostTransitionImageToShaderRead(gpu::Device device, gpu::ImageView image)
+	inline std::int32_t HostTransitionImageToShaderRead(gpu::Device device, gpu::ImageView image, std::uint32_t mipLevels = 1)
 	{
-		return static_cast<std::int32_t>(HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+		return static_cast<std::int32_t>(
+		        HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels));
 	}
 
 	inline void TransitionImage(VkCommandBuffer cmd,
@@ -124,6 +125,35 @@ namespace aether::vkutil
 	inline std::int32_t HostCopyToImage(gpu::Device device, gpu::ImageView dstImage, const void* hostData, uint32_t width, uint32_t height)
 	{
 		return static_cast<std::int32_t>(HostCopyToImage(static_cast<VkDevice>(device), static_cast<VkImage>(dstImage), hostData, width, height));
+	}
+
+	// Copy one mip level. Unlike HostCopyToImage above this performs no layout
+	// transition, because a mip chain is transitioned once for all its levels and
+	// then filled level by level.
+	inline VkResult HostCopyMipToImage(VkDevice device, VkImage dstImage, const void* hostData, uint32_t width, uint32_t height, uint32_t mipLevel)
+	{
+		const VkMemoryToImageCopy region{
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY,
+		        .pHostPointer = hostData,
+		        .memoryRowLength = 0,
+		        .memoryImageHeight = 0,
+		        .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = mipLevel, .baseArrayLayer = 0, .layerCount = 1},
+		        .imageOffset = {.x = 0, .y = 0, .z = 0},
+		        .imageExtent = {.width = width, .height = height, .depth = 1},
+		};
+		const VkCopyMemoryToImageInfo copyInfo{
+		        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,
+		        .dstImage = dstImage,
+		        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		        .regionCount = 1,
+		        .pRegions = &region,
+		};
+		return vkCopyMemoryToImage(device, &copyInfo);
+	}
+
+	inline std::int32_t HostCopyMipToImage(gpu::Device device, gpu::ImageView dstImage, const void* hostData, uint32_t width, uint32_t height, uint32_t mipLevel)
+	{
+		return static_cast<std::int32_t>(HostCopyMipToImage(static_cast<VkDevice>(device), static_cast<VkImage>(dstImage), hostData, width, height, mipLevel));
 	}
 
 	// Thread-local storage for the debug-utils function pointer.

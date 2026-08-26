@@ -469,7 +469,10 @@ namespace aether::gpu
 		                {
 		                        .aspectMask = ToVk(aspect),
 		                        .baseMipLevel = 0,
-		                        .levelCount = 1,
+		                        // Whole-image barrier: a mipped texture has to move every
+		                        // level, and for the single-level images this used to see it
+		                        // is the same subresource range it always was.
+		                        .levelCount = VK_REMAINING_MIP_LEVELS,
 		                        .baseArrayLayer = 0,
 		                        .layerCount = 1,
 		                },
