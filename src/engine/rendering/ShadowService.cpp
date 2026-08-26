@@ -334,7 +334,7 @@ namespace aether
 		// offset using that cascade's own texel footprint and depth range. A depth-unit
 		// constant cannot work here - one cascade's ortho spans a couple of hundred metres,
 		// so 0.0014 of NDC was a third of a metre of peter-panning at the caster's feet.
-		fc.shadowParams = glm::vec4(kDepthBiasTexels, kNormalOffsetTexels, 1.0f, 0.0f);
+		fc.shadowParams = glm::vec4(kDepthBiasTexels, kNormalOffsetTexels, 1.0f, packet.contactShadows ? 1.0f : 0.0f);
 		// Half-angle tangents straight off the projection, so the fit tracks whatever
 		// FOV and aspect the camera actually has instead of assuming one.
 		const float tanHalfX = (std::abs(packet.proj[0][0]) > 1e-6f) ? (1.0f / std::abs(packet.proj[0][0])) : 1.0f;

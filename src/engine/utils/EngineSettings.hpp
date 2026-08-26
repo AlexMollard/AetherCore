@@ -65,6 +65,9 @@ namespace aether
 			// Texture samples taken along the footprint when a surface is seen edge-on.
 			// 1 disables it; the device ceiling is normally 16.
 			int anisotropy = 16;
+			// Short screen-space ray toward the sun, recovering the contact-scale occlusion
+			// a shadow cascade texel is too coarse to hold.
+			bool contactShadows = false;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
 			float uiScale = 1.0f;
@@ -121,6 +124,7 @@ namespace aether
 		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);
 		f("graphics.anisotropy", settings.graphics.anisotropy);
+		f("graphics.contactShadows", settings.graphics.contactShadows);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
 		f("graphics.uiScale", settings.graphics.uiScale);

@@ -1,0 +1,113 @@
+#ifndef AETHER_CONTACT_SHADOW_SLANGH
+#define AETHER_CONTACT_SHADOW_SLANGH
+
+// Screen-space contact shadows.
+//
+// A shadow map has one texel per some patch of the world, and a cascade covering
+// a large view distance has coarse texels near the camera. Everything smaller
+// than a texel is invisible to it: the gap under a foot, the seam where a prop
+// meets the floor, the shadow a thin object casts on the surface right behind
+// it. The result reads as objects hovering a few centimetres above the ground,
+// and no amount of extra shadow resolution fixes it at a sane memory cost,
+// because the detail wanted is sub-texel by definition.
+//
+// The depth buffer, though, already holds the scene at exactly the resolution
+// the eye is looking at it. Marching a short ray toward the light through that
+// buffer recovers precisely the contact-scale occlusion the cascade cannot
+// resolve - and only there, because the ray is deliberately short.
+//
+// This is not a replacement for the cascades. It is a small multiplier on top,
+// covering the last few centimetres they cannot.
+
+// Ray length in world units. Long enough to close a contact gap, short enough
+// that the march never wanders far enough to hit the classic screen-space
+// failure of shadowing against geometry that is simply nearer the camera.
+static const float kContactShadowLength = 0.35f;
+static const uint  kContactShadowSteps = 8u;
+
+// A hit only counts when the occluder sits within this depth of the ray. Without
+// it, anything closer to the camera along the ray - a wall in the foreground,
+// the silhouette edge of the caster itself - reads as an occluder and paints a
+// dark band that has nothing to do with the light.
+static const float kContactShadowThickness = 0.20f;
+
+// Screen-space contact term for one light direction. 1 = unoccluded.
+float ContactShadow(float3 worldPos, float3 N, float3 L, FrameConstantsData* fc, float2 pixelCoord)
+{
+	const ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+	if (depthEntry.type != kResourceTypeBindlessTexture || depthEntry.address == 0xFFFFFFFFu || depthEntry.width == 0u || depthEntry.height == 0u)
+	{
+		return 1.0f;
+	}
+
+	const float NdotL = dot(N, L);
+	if (NdotL <= 0.0f)
+	{
+		// Already facing away; the lighting term is zero and marching would only
+		// find this surface's own back face.
+		return 1.0f;
+	}
+
+	// Start off the surface along its normal, by more than the march's own step,
+	// so the first sample cannot report the surface occluding itself.
+	const float stepWorld = kContactShadowLength / float(kContactShadowSteps);
+	const float3 rayStart = worldPos + N * (stepWorld * 2.0f);
+
+	// Dither the ray's start along its own direction. Eight steps over a short
+	// ray is a coarse march; without the offset the misses land on the same
+	// depths for every pixel and the term bands. Interleaved gradient noise is
+	// stable frame to frame, so this reads as fine grain rather than crawl.
+	const float jitter = InterleavedGradientNoise(pixelCoord);
+
+	const uint  depthSlot = uint(depthEntry.address);
+	const float2 texelSize = 1.0f / float2(depthEntry.width, depthEntry.height);
+
+	float occlusion = 0.0f;
+	[unroll]
+	for (uint i = 0u; i < kContactShadowSteps; ++i)
+	{
+		const float t = (float(i) + jitter) * stepWorld;
+		const float3 samplePos = rayStart + L * t;
+
+		float4 clip = mul(fc->viewProj, float4(samplePos, 1.0f));
+		if (clip.w <= 0.0f)
+		{
+			break;
+		}
+		const float3 ndc = clip.xyz / clip.w;
+		if (any(ndc.xy < -1.0f) || any(ndc.xy > 1.0f))
+		{
+			// Left the screen: there is no information out here, and guessing
+			// would shadow the edge of the frame.
+			break;
+		}
+
+		const float2 uv = ndc.xy * 0.5f + 0.5f;
+		const int2 texel = int2(uv * float2(depthEntry.width, depthEntry.height));
+		const float sceneDepth = g_textures[depthSlot].Load(int3(texel, 0)).r;
+
+		// Both are NDC depth for the same projection, so they compare directly.
+		const float rayDepth = ndc.z;
+		if (sceneDepth < rayDepth)
+		{
+			// Something is in front of the ray here. Convert the gap back to a
+			// view-space distance to apply the thickness test, otherwise the
+			// test would mean different things at different distances.
+			float4 sceneClip = float4(ndc.xy, sceneDepth, 1.0f);
+			float4 sceneWorld = mul(fc->invViewProj, sceneClip);
+			sceneWorld.xyz /= max(sceneWorld.w, 1e-6f);
+
+			const float gap = distance(samplePos, sceneWorld.xyz);
+			if (gap < kContactShadowThickness)
+			{
+				// Fade with distance along the ray so the term dies out where the
+				// cascades take over, rather than ending in a hard ring.
+				occlusion = max(occlusion, 1.0f - (t / kContactShadowLength));
+			}
+		}
+	}
+
+	return saturate(1.0f - occlusion);
+}
+
+#endif

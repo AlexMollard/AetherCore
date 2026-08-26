@@ -42,6 +42,13 @@ namespace aether
 				renderer->SetFxaaEnabled(m_values.graphics.fxaa);
 			}
 		}
+		else if (key == "graphics.contactShadows")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetContactShadowsEnabled(m_values.graphics.contactShadows);
+			}
+		}
 		else if (key == "graphics.gtao")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

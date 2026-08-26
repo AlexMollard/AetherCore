@@ -22,6 +22,7 @@
 #include "include/HeightFog.slangh"
 #include "include/ShadowSampling.slangh"
 #include "include/DirectionalShadowCSM.slangh"
+#include "include/ContactShadow.slangh"
 #include "include/LocalShadow.slangh"
 #include "include/PBRUtilities.slangh"
 #include "include/MeshVertex.slangh"
@@ -264,7 +265,14 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Materials can opt out of shadow receiving (flag set == opt out); such
     // surfaces stay fully lit by the sun regardless of the shadow map.
     const bool receivesShadows = (mat.flags & kFlagNoReceiveShadows) == 0u;
-    const float shadowVisibility = receivesShadows ? max(shadow, 0.08f) : 1.0f;
+    // Contact shadows sharpen only where the cascade cannot resolve: the last few
+    // centimetres at the base of an object, which a cascade texel is simply too
+    // coarse to contain. Combined by min, because either occluder blocking the sun
+    // is enough - a surface is not lit twice over.
+    const float contact = (fc->shadowParams.w > 0.0f && receivesShadows)
+        ? ContactShadow(input.worldPos, Ngeom, L, fc, input.svPosition.xy)
+        : 1.0f;
+    const float shadowVisibility = receivesShadows ? max(min(shadow, contact), 0.08f) : 1.0f;
     float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
 
     // Local lights accumulate separately from the sun so each keeps its own

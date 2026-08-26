@@ -36,6 +36,7 @@ namespace aether
 		        {"graphics.gtao", {.description = "Ground-truth ambient occlusion: darkens creases and contact points that the light probes cannot see into."}},
 		        {"graphics.gtaoRadius", {.description = "How far, in world units, a surface looks for geometry occluding it. Too small and only tight creases darken; too large and the whole scene greys.", .minValue = 0.1, .maxValue = 5.0}},
 		        {"graphics.gtaoStrength", {.description = "How hard the occlusion is applied. Affects ambient light only, never direct light.", .minValue = 0.0, .maxValue = 3.0}},
+		        {"graphics.contactShadows", {.description = "Recovers the small shadow at the base of an object that a shadow cascade texel is too coarse to resolve, by marching a short ray through the depth buffer."}},
 		        {"graphics.anisotropy", {.description = "Texture samples taken along the footprint when a surface is seen edge-on. 1 disables it, which visibly blurs ground at a grazing angle.", .minValue = 1.0, .maxValue = 16.0, .restartRequired = true}},
 		        {"graphics.asyncCompute", {.description = "Overlap compute work with graphics on a separate queue.", .restartRequired = true}},
 		        {"graphics.imguiViewports", {.description = "Let editor panels become separate OS windows when dragged out of the main window."}},

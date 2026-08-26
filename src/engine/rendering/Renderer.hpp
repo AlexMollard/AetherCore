@@ -98,6 +98,16 @@ namespace aether
 
 		// Atmospheric height fog: density, height falloff, sun forward-scatter, max opacity.
 		// Ambient occlusion knobs, forwarded to the GTAO pass when one is attached.
+		void SetContactShadowsEnabled(bool enabled)
+		{
+			m_contactShadows = enabled;
+		}
+
+		[[nodiscard]] bool AreContactShadowsEnabled() const
+		{
+			return m_contactShadows;
+		}
+
 		void SetGtaoEnabled(bool enabled);
 		[[nodiscard]] bool IsGtaoEnabled() const;
 		void SetGtaoRadius(float radius);
@@ -160,6 +170,7 @@ namespace aether
 		glm::vec4 m_skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
+		bool m_contactShadows = false;
 		std::vector<PointLight> m_pointLights;
 		std::vector<SpotLight> m_spotLights;
 	};
