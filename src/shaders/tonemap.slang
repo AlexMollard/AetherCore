@@ -110,6 +110,41 @@ static const float3 kBarColors[10] = {
 };
 
 // ── Fragment shader ────────────────────────────────────────────────────────
+// Triangular-PDF dither, applied in display space immediately before the 8-bit
+// write.
+//
+// A smooth gradient across a large area - a sky, a soft falloff, a fog layer -
+// has far more distinct values than 8 bits can hold, so quantisation collapses
+// runs of rows onto one level and the eye reads the steps between them as
+// contour lines. Mach banding makes them look like hard edges even though the
+// step is a single LSB. ACES makes it worse, because its toe compresses the
+// darks where the steps are already widest.
+//
+// Adding sub-LSB noise before rounding turns the hard decision into a
+// probabilistic one: a pixel lands on the higher level in proportion to how far
+// between the two it really was, so the average over any small area carries the
+// original value and the contour disappears.
+//
+// The distribution matters. Uniform noise removes the banding but leaves the
+// residual error correlated with the signal, which shows up as noise that
+// visibly breathes across the gradient. Subtracting two uniform samples gives a
+// triangular PDF, which decorrelates it - the standard result from audio
+// dithering, and the reason TPDF is what everyone ends up at.
+float Hash12Dither(float2 p)
+{
+	return frac(sin(dot(p, float2(12.9898f, 78.233f))) * 43758.5453f);
+}
+
+// One LSB peak-to-peak, independent per channel so the noise stays neutral
+// rather than tinting toward whichever axis the hash happens to correlate on.
+float3 DitherTriangular(float2 pixel)
+{
+	const float r = Hash12Dither(pixel) - Hash12Dither(pixel + float2(37.0f, 17.0f));
+	const float g = Hash12Dither(pixel + float2(11.0f, 91.0f)) - Hash12Dither(pixel + float2(59.0f, 3.0f));
+	const float b = Hash12Dither(pixel + float2(73.0f, 41.0f)) - Hash12Dither(pixel + float2(23.0f, 67.0f));
+	return float3(r, g, b) * (1.0f / 255.0f);
+}
+
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
@@ -195,6 +230,10 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         const float3 bgCol = EvalBackground(bg, uv);
         outColor = lerp(bgCol, outColor, saturate(coverage));
     }
+
+    // Last thing before the 8-bit target: everything above, including the
+    // background composite, is a candidate for banding.
+    outColor += DitherTriangular(float2(coord));
 
     return float4(outColor, 1.0f);
 }
