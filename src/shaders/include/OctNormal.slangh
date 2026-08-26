@@ -1,0 +1,39 @@
+#ifndef AETHER_OCT_NORMAL_SLANGH
+#define AETHER_OCT_NORMAL_SLANGH
+
+// Octahedral normal encoding (Cigolle et al., "A Survey of Efficient
+// Representations for Independent Unit Vectors").
+//
+// The naive alternative - store x and y, rebuild z as sqrt(1 - x^2 - y^2) - loses
+// the sign of z, so every back-facing normal decodes to its mirror image. That is
+// invisible on a depth prepass of front faces and very visible the moment a
+// reflection ray uses it.
+//
+// The octahedral mapping folds the sphere onto a square bijectively, so both
+// hemispheres survive and the two channels are used evenly. At 8 bits per channel
+// the worst-case error is well under a degree, which is far finer than anything
+// built from these normals can resolve.
+
+float2 EncodeOctNormal(float3 n)
+{
+	n /= (abs(n.x) + abs(n.y) + abs(n.z));
+	float2 e = n.xy;
+	if (n.z < 0.0f)
+	{
+		// Fold the lower hemisphere out into the corners of the square.
+		e = (1.0f - abs(n.yx)) * float2(n.x >= 0.0f ? 1.0f : -1.0f, n.y >= 0.0f ? 1.0f : -1.0f);
+	}
+	// [-1,1] -> [0,1] for a UNORM target.
+	return e * 0.5f + 0.5f;
+}
+
+float3 DecodeOctNormal(float2 f)
+{
+	f = f * 2.0f - 1.0f;
+	float3 n = float3(f.x, f.y, 1.0f - abs(f.x) - abs(f.y));
+	const float t = saturate(-n.z);
+	n.xy += float2(n.x >= 0.0f ? -t : t, n.y >= 0.0f ? -t : t);
+	return normalize(n);
+}
+
+#endif

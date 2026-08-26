@@ -58,6 +58,7 @@ namespace aether
 	inline constexpr std::string_view kFrameProductSceneDepth = "SceneDepth";
 	inline constexpr std::string_view kFrameProductHdrColor = "HdrColor";
 	inline constexpr std::string_view kFrameProductGtao = "GTAO";
+	inline constexpr std::string_view kFrameProductSceneGBuffer = "SceneGBuffer";
 	inline constexpr std::string_view kFrameProductDirectionalShadows = "DirectionalShadows";
 	inline constexpr std::string_view kFrameProductLocalShadows = "LocalShadows";
 	inline constexpr std::string_view kFrameProductLightBuffers = "LightBuffers";

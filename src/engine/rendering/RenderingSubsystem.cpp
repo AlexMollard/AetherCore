@@ -307,6 +307,14 @@ namespace aether
 		{
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth bindless registration failed"));
 		}
+
+		// Same extent and lifetime as the depth it is written beside.
+		m_sceneGBuffer = graph.CreateTransientColor(gpu::Format::R8G8B8A8Unorm, extent, gpu::ImageUsage::Sampled);
+		m_sceneGBufferBindlessSlot = graph.EnsureBindlessSampled(m_sceneGBuffer);
+		if (m_sceneGBufferBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.GBuffer bindless registration failed"));
+		}
 	}
 
 	void RenderingSubsystem::Init(ServiceContainer& services, RuntimeProfile profile)
@@ -423,6 +431,23 @@ namespace aether
 		                        .debugName = "Scene.PreDepth",
 		                }));
 		m_preDepthPipeline = std::move(preDepthPipeline);
+
+		// Same geometry as the depth-only pipeline above, plus the thin G-buffer. Kept
+		// separate because shadow_depth.spv is shared with the shadow passes, which have
+		// no colour attachment to write.
+		AE_EXPECT_OR_THROW(prepassPipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://scene_prepass.spv",
+		                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
+		                        .depthFormat = swapchain.GetDepthFormat(),
+		                        .depthTestEnable = true,
+		                        .depthWriteEnable = true,
+		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
+		                        .debugName = "Scene.Prepass",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+		                }));
+		m_prepassPipeline = std::move(prepassPipeline);
 
 		m_renderTargetService.BindRuntime(FrameContext{
 		        .graph = &m_renderGraph,
@@ -718,6 +743,21 @@ namespace aether
 			                .bindlessSlot = m_sceneDepthBindlessSlot,
 			        });
 		}
+		if (m_sceneGBuffer.IsValid())
+		{
+			(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductSceneGBuffer},
+			        FrameTextureProduct{
+			                .image = m_sceneGBuffer,
+			                .extent = sceneExtent,
+			                .format = gpu::Format::R8G8B8A8Unorm,
+			                .bindlessSlot = m_sceneGBufferBindlessSlot,
+			        },
+			        FrameBlackboard::ProductMetadata{
+			                .extent = sceneExtent,
+			                .format = gpu::Format::R8G8B8A8Unorm,
+			                .bindlessSlot = m_sceneGBufferBindlessSlot,
+			        });
+		}
 		if constexpr (kEnableForwardGtao)
 		{
 			if (m_gtaoPass.GetAoImage().IsValid())
@@ -747,8 +787,9 @@ namespace aether
 			                .draws = mainSceneDraws,
 			                .extent = sceneExtent,
 			                .consumes = {RenderGraph::Product<MainViewProduct>(kFrameProductMainView)},
-			                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
+			                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth), RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer)},
 			        })
+			        .WriteColor(m_sceneGBuffer, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.5f, 0.5f, 1.0f, 0.0f))
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
@@ -756,8 +797,14 @@ namespace aether
 				                {
 					                return;
 				                }
+				                // The prepass now samples the roughness map, so unlike the old
+				                // depth-only pass it needs the bindless heaps bound.
+				                if (m_bindlessManager != nullptr)
+				                {
+					                m_bindlessManager->CmdBindGlobalResources(ctx.recorder);
+				                }
 				                const gpu::CullMode cullMode = m_renderer.GetCullMode();
-				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline, 0, &cullMode);
+				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, nullptr, ctx.frameConstantsAddr, &m_prepassPipeline, 0, &cullMode);
 			                });
 		}
 

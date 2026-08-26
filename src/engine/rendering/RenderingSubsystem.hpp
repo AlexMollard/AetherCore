@@ -336,8 +336,13 @@ namespace aether
 		GTAOPass m_gtaoPass;
 		PostProcessStack m_postProcessStack;
 		RGImage m_sceneDepth;
+		// Thin G-buffer written alongside depth in the prepass: octahedral normal,
+		// roughness, metallic. Transient - only screen-space passes read it.
+		RGImage m_sceneGBuffer;
 		BindlessManager* m_bindlessManager = nullptr;
 		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
+		std::uint32_t m_sceneGBufferBindlessSlot = 0xFFFFFFFFu;
+		GraphicsPipeline m_prepassPipeline;
 
 		// producer thread and read in the render-thread Execute (a torn read just
 		GraphicsPipeline m_texturePreviewPipeline;

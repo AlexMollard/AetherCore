@@ -386,7 +386,9 @@ namespace CullContracts
 		DirectionalShadowC1 = 4,
 		DirectionalShadowC2 = 5,
 		LocalShadowAtlas = 6,
-		Count = 7,
+		// Thin G-buffer from the depth prepass: octahedral normal, roughness, metallic.
+		SceneGBuffer = 7,
+		Count = 8,
 	};
 
 	inline constexpr std::uint32_t kResourceTypeInvalid = 0xFFFFFFFFu;
