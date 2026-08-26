@@ -10,9 +10,13 @@
 static const uint kCsmBlockerSamples = 12u;
 static const uint kCsmFilterSamples = 16u;
 
-// Widest blocker search, in texels. Bounds the search cost and stops the penumbra
-// estimate from sampling a large slice of the cascade.
-static const float kMaxPenumbraTexels = 24.0;
+// Widest blocker search, in texels. The sun subtends about half a degree, so a blocker
+// a metre above a receiver throws a penumbra under a centimetre wide - tens of texels is
+// far wider than any penumbra the sun can cast. On a character it just finds that
+// character's own head, arm and shoulder as blockers, the penumbra estimate explodes,
+// and the filter fans out across the body's own depth range, which reads as stippled
+// self-shadow acne. Bounding it bounds the search cost too.
+static const float kMaxPenumbraTexels = 6.0;
 
 // Fraction of a cascade's own depth range spent fading into the next one.
 static const float kCascadeBlendFraction = 0.15;
