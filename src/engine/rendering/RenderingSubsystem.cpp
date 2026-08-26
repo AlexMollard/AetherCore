@@ -1003,7 +1003,11 @@ namespace aether
 			                .color = hdrColor,
 			                .extent = sceneExtent,
 			                .loadOp = gpu::LoadOp::Load,
+			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer)},
 			        })
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
 			        .ReadTexture(m_ssrColor)
 			        .Execute(
 			                [this, bindless = frame.bindless](PassContext& ctx)
@@ -1019,11 +1023,17 @@ namespace aether
 				                cmd.BindPipeline(m_ssrCompositePipeline.GetPipeline());
 				                struct
 				                {
+					                std::uint64_t frameConstantsAddr;
 					                std::uint32_t ssrSlot;
+					                std::uint32_t width;
+					                std::uint32_t height;
 					                std::uint32_t pad0;
-					                std::uint32_t pad1;
-					                std::uint32_t pad2;
-				                } push{.ssrSlot = m_ssrBindlessSlot};
+				                } push{
+				                        .frameConstantsAddr = ctx.frameConstantsAddr,
+				                        .ssrSlot = m_ssrBindlessSlot,
+				                        .width = ctx.extent.width,
+				                        .height = ctx.extent.height,
+				                };
 				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 				                cmd.Draw(3, 1, 0, 0);
 			                });
