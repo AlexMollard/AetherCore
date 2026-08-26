@@ -134,6 +134,17 @@ namespace aether::editor
 		std::uint32_t m_lookThroughEntityId = 0;
 		glm::vec3 m_saved2DEditorPosition{0.0f, 0.0f, 10.0f};
 		float m_saved2DEditorHeight = 10.0f;
+
+		// Edit-mode camera carried across sessions. Owned here because this panel is
+		// what seeds the editor camera when it first creates one; persisting from
+		// anywhere else gets overwritten by that seed on the next project open.
+		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
+		bool m_hasPersistedCamera = false;
+		glm::vec3 m_persistedCamPosition{0.0f};
+		float m_persistedCamYaw = 0.0f;
+		float m_persistedCamPitch = 0.0f;
+		float m_persistedCamOrthoHeight = 10.0f;
 		bool m_hasSaved2DEditorCamera = false;
 	};
 } // namespace aether::editor

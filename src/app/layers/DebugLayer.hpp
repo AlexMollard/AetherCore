@@ -117,6 +117,7 @@ namespace aether::editor
 		int m_editorWindowW = 0;
 		int m_editorWindowH = 0;
 
+
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
 		TilePaintingState m_tilePainting;

@@ -60,6 +60,16 @@ namespace aether
 
 		void SetYawPitch(float yaw, float pitch);
 
+		[[nodiscard]] float GetYaw() const
+		{
+			return m_yaw;
+		}
+
+		[[nodiscard]] float GetPitch() const
+		{
+			return m_pitch;
+		}
+
 		void FocusOn(glm::vec3 target, float distance);
 
 		[[nodiscard]] float GetFocusDistance() const

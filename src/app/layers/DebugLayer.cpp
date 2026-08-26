@@ -456,6 +456,7 @@ namespace aether::editor
 		}
 	}
 
+
 	void DebugLayer::PersistSettings(app::LayerContext& context)
 	{
 		for (auto& panel: m_panels)

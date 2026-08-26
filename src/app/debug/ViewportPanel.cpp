@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
+#include "utils/TomlConfig.hpp"
 #include <array>
 #include <cmath>
 #include <format>
@@ -107,7 +109,17 @@ namespace aether::editor
 					editorCam->SetMode(CameraMode::Free);
 					editorCam->SetPerspective(60.0f, 0.1f, 1000.0f);
 				}
-				if (justCreated)
+				if (justCreated && m_hasPersistedCamera && !scene2D)
+				{
+					// A view carried over from the last session wins over the scene's own
+					// camera: reopening a project should land where you left off. This runs
+					// here rather than anywhere earlier because this seed is the last thing
+					// to touch the editor camera on project open, so an earlier restore
+					// would simply be overwritten by the branch below.
+					editorCam->SetPosition(m_persistedCamPosition);
+					editorCam->SetYawPitch(m_persistedCamYaw, m_persistedCamPitch);
+				}
+				else if (justCreated)
 				{
 					CameraHandle seedFrom{};
 					if (auto* cameraSystem = context.TryGet<CameraSystem>())
@@ -264,6 +276,63 @@ namespace aether::editor
 				}
 				m_lookThroughEntityId = 0;
 			}
+		}
+	}
+
+
+	void ViewportPanel::LoadSettings(TomlConfig& config, app::LayerContext& /*context*/)
+	{
+		const float sentinel = std::numeric_limits<float>::max();
+		const float x = config.GetFloat("viewport.camera_x", sentinel);
+		const float y = config.GetFloat("viewport.camera_y", sentinel);
+		const float z = config.GetFloat("viewport.camera_z", sentinel);
+		if (x == sentinel || y == sentinel || z == sentinel)
+		{
+			// First run, or a config predating this: keep the scene's own framing.
+			return;
+		}
+		m_persistedCamPosition = glm::vec3(x, y, z);
+		m_persistedCamYaw = config.GetFloat("viewport.camera_yaw", 0.0f);
+		m_persistedCamPitch = config.GetFloat("viewport.camera_pitch", 0.0f);
+		m_persistedCamOrthoHeight = config.GetFloat("viewport.camera_ortho_height", 10.0f);
+		m_hasPersistedCamera = true;
+	}
+
+	void ViewportPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
+	{
+		const auto* playState = context.TryGet<app::PlayState>();
+		if (playState != nullptr && playState->IsPlaying())
+		{
+			// The play camera belongs to the game; saving it would replace the authored
+			// edit view with wherever gameplay left off.
+			return;
+		}
+		auto* cameras = context.TryGet<CameraManager>();
+		const Camera* editorCam = cameras != nullptr ? cameras->TryGet(CameraHandle{m_editorCamId}) : nullptr;
+		if (editorCam == nullptr)
+		{
+			return;
+		}
+
+		// Written only when the value actually moved, so an untouched camera never
+		// dirties the config and turns every frame into a settings save.
+		const auto store = [&config](const char* key, const float value)
+		{
+			if (std::abs(config.GetFloat(key, std::numeric_limits<float>::max()) - value) >= 1e-4f)
+			{
+				config.Set(key, value);
+			}
+		};
+
+		const glm::vec3 position = editorCam->GetPosition();
+		store("viewport.camera_x", position.x);
+		store("viewport.camera_y", position.y);
+		store("viewport.camera_z", position.z);
+		store("viewport.camera_yaw", editorCam->GetYaw());
+		store("viewport.camera_pitch", editorCam->GetPitch());
+		if (editorCam->GetProjection() == CameraProjection::Orthographic)
+		{
+			store("viewport.camera_ortho_height", editorCam->GetOrthographicHeight());
 		}
 	}
 
