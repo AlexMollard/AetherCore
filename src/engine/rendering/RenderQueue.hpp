@@ -68,6 +68,14 @@ namespace aether
 		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
 		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
 
+		// Hash of the animation inputs each slot's skin palette was built from, so a
+		// frame whose pose is unchanged can reuse what that slot already holds instead
+		// of recomputing it. Keyed per slot rather than globally on purpose: reusing
+		// only a slot's OWN buffer means we never point at memory another in-flight
+		// frame owns, and never rewrite a buffer that is still being read. Zero means
+		// the slot holds nothing trustworthy.
+		std::array<std::uint64_t, kFramesInFlight> m_animationInputHash{};
+
 		RenderQueue() = default;
 
 		~RenderQueue()

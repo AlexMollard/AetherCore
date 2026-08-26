@@ -1,5 +1,7 @@
 #include "rendering/RenderQueue.hpp"
 
+#include <bit>
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -215,6 +217,7 @@ namespace aether
 		// Freshly created buffers hold garbage, so every slot needs its zero-fill
 		// again before the animation compute passes read from it.
 		m_animationSlotCleared.fill(false);
+		m_animationInputHash.fill(0ull);
 		m_animationBuffersReady = true;
 
 		AE_INFO(LogCategory::Render,
@@ -268,6 +271,8 @@ namespace aether
 			prepared.nodeGlobalTransformsAddr = 0;
 		}
 		m_animationSlotCleared.fill(false);
+		// The palettes those hashes described are gone.
+		m_animationInputHash.fill(0ull);
 		m_animationBuffersReady = false;
 
 		AE_INFO(LogCategory::Render, "RenderQueue({}): animation buffers released after sustained absence of skinned draws.", m_debugName);
@@ -315,6 +320,7 @@ namespace aether
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
+		m_animationInputHash = {};
 		m_animationBuffersReady = false;
 		m_slotHasAnimatedDraws = {};
 	}
@@ -400,6 +406,7 @@ namespace aether
 
 		std::uint32_t skinJointCursor = 0;
 		std::uint32_t nodePoseCursor = 0;
+		std::uint64_t animationInputHash = 0ull;
 		std::uint32_t skinJobCount = 0;
 		std::uint32_t sampleJobsThisFrame = 0;
 
@@ -542,6 +549,21 @@ namespace aether
 							skinPaletteBatches[skinPaletteBatchCount++] = {.db = drawAnimDb, .dbGeneration = drawAnimDb ? drawAnimDb->GetGeneration() : 0, .startJob = skinJobCount, .count = 1u};
 						}
 
+						// Everything the palette content depends on. Offsets are in here too,
+						// so a reordered draw list counts as a change even when the poses
+						// themselves are identical.
+						const auto mix = [&animationInputHash](std::uint64_t v)
+						{
+							animationInputHash ^= v + 0x9e3779b97f4a7c15ull + (animationInputHash << 6) + (animationInputHash >> 2);
+						};
+						mix(reinterpret_cast<std::uintptr_t>(drawAnimDb));
+						mix(drawAnimDb->GetGeneration());
+						mix(static_cast<std::uint64_t>(dc.animClipIndex));
+						mix(std::bit_cast<std::uint32_t>(dc.animTime));
+						mix(static_cast<std::uint64_t>(dc.skinIndex));
+						mix((static_cast<std::uint64_t>(skinPaletteOffset) << 32) | dc.skinJointCount);
+						mix((static_cast<std::uint64_t>(nodePoseCursor) << 32) | drawNodeCount);
+
 						++sampleJobsThisFrame;
 						++skinJobCount;
 						skinJointCursor += dc.skinJointCount;
@@ -606,7 +628,14 @@ namespace aether
 
 		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
-		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
+		// The palette this slot already holds is still correct if nothing feeding it moved.
+		// An idle or paused character - and every character in the editor, where animation
+		// time does not advance - then costs nothing per frame instead of a full sample,
+		// blend, node-flatten and palette build.
+		const bool poseUnchanged = sampleJobsThisFrame > 0 && animationInputHash != 0ull && m_animationInputHash[frameSlot] == animationInputHash;
+		m_animationInputHash[frameSlot] = animationInputHash;
+
+		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation && !poseUnchanged)
 		{
 			AE_VERBOSE(LogCategory::Animation, "Animation dispatch enabled: {} sampleJobs, {} skinJobs", sampleJobsThisFrame, skinJobCount);
 			// in parallel (each thread handles one (job, node) pair).
