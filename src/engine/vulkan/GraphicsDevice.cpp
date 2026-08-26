@@ -43,7 +43,7 @@ namespace aether
 			m_swapchain.SetPresentTimingTracker(&m_presentTiming);
 		}
 		m_swapchain.Initialize(*m_vulkanContext, window, config.presentMode);
-		AE_TRY_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
+		AE_TRY_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {.maxAnisotropy = config.maxAnisotropy}));
 		m_resourceRegistry.SetBindlessManager(&m_bindlessManager);
 
 		auto& memTracker = m_diagnosticEngine.GetMemoryTracker();

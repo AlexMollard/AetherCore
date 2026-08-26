@@ -26,6 +26,7 @@ namespace aether
 			gpu::PresentMode presentMode = gpu::PresentMode::Fifo;
 			bool enableGpuDiagnostics = false;
 			bool enableValidation = true;
+		std::uint32_t maxAnisotropy = 16;
 		};
 
 		[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);

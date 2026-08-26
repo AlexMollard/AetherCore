@@ -56,6 +56,15 @@ namespace aether
 			// where covering the output means 2.25x the pixels of a 1440p window.
 			float renderScale = 1.0f;
 			bool fxaa = true;
+			// Ambient occlusion. Radius is in world units - how far a surface looks for
+			// something occluding it - so it wants to match the scale of the scene's
+			// geometry rather than a fixed number of pixels.
+			bool gtao = true;
+			float gtaoRadius = 1.4f;
+			float gtaoStrength = 1.35f;
+			// Texture samples taken along the footprint when a surface is seen edge-on.
+			// 1 disables it; the device ceiling is normally 16.
+			int anisotropy = 16;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
 			float uiScale = 1.0f;
@@ -108,6 +117,10 @@ namespace aether
 		f("graphics.renderScale", settings.graphics.renderScale);
 		f("graphics.latencyPacing", settings.graphics.latencyPacing);
 		f("graphics.fxaa", settings.graphics.fxaa);
+		f("graphics.gtao", settings.graphics.gtao);
+		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
+		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);
+		f("graphics.anisotropy", settings.graphics.anisotropy);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
 		f("graphics.uiScale", settings.graphics.uiScale);

@@ -5,6 +5,8 @@
 #include <utility>
 
 #include "passes/PostProcessStack.hpp"
+#include "passes/GTAOPass.hpp"
+#include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether
@@ -13,6 +15,50 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_postProcessStack = postProcessStack;
+	}
+
+	void Renderer::AttachGtaoPass(GTAOPass* pass)
+	{
+		m_gtaoPass = pass;
+	}
+
+	void Renderer::SetGtaoEnabled(bool enabled)
+	{
+		if (m_gtaoPass)
+		{
+			m_gtaoPass->SetEnabled(enabled);
+		}
+	}
+
+	bool Renderer::IsGtaoEnabled() const
+	{
+		return m_gtaoPass ? m_gtaoPass->IsEnabled() : false;
+	}
+
+	void Renderer::SetGtaoRadius(float radius)
+	{
+		if (m_gtaoPass)
+		{
+			m_gtaoPass->SetRadius(radius);
+		}
+	}
+
+	float Renderer::GetGtaoRadius() const
+	{
+		return m_gtaoPass ? m_gtaoPass->GetRadius() : 0.0f;
+	}
+
+	void Renderer::SetGtaoStrength(float strength)
+	{
+		if (m_gtaoPass)
+		{
+			m_gtaoPass->SetStrength(strength);
+		}
+	}
+
+	float Renderer::GetGtaoStrength() const
+	{
+		return m_gtaoPass ? m_gtaoPass->GetStrength() : 0.0f;
 	}
 
 	void Renderer::SetTonemapMode(TonemapMode mode)

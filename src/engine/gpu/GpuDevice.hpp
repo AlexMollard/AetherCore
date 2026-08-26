@@ -35,6 +35,7 @@ namespace aether
 			gpu::PresentMode presentMode = gpu::PresentMode::Fifo;
 			bool enableGpuDiagnostics = false;
 			bool enableValidation = true;
+			std::uint32_t maxAnisotropy = 16;
 		};
 
 		GpuDevice();

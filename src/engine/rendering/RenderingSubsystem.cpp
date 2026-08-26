@@ -386,6 +386,7 @@ namespace aether
 		CreateSceneViewportDepth(vk.GetDevice().device, swapchain.GetDepthFormat(), m_renderGraph, bindless);
 
 		m_renderer.Initialize(&m_postProcessStack);
+		m_renderer.AttachGtaoPass(&m_gtaoPass);
 
 		{
 			AE_EXPECT_OR_THROW(texturePreviewPipeline,

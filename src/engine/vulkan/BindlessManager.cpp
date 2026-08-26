@@ -71,7 +71,7 @@ namespace aether
 			// below has to clamp to it or sampler creation is invalid.
 			VkPhysicalDeviceProperties deviceProps{};
 			vkGetPhysicalDeviceProperties(context.GetDevice().physical_device, &deviceProps);
-			m_maxAnisotropy = std::min(deviceProps.limits.maxSamplerAnisotropy, 16.0f);
+			m_maxAnisotropy = std::min(deviceProps.limits.maxSamplerAnisotropy, static_cast<float>(std::max(config.maxAnisotropy, 1u)));
 		}
 		m_capacity = config.maxSampledImages;
 		m_deferredFreeFrames = config.deferredFreeFrames;

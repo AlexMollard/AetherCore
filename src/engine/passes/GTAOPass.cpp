@@ -111,14 +111,19 @@ namespace aether
 		                                .name = "$GTAO_Main",
 		                                .color = m_rawAoImage,
 		                                .extent = m_aoExtent,
-		                                .loadOp = gpu::LoadOp::DontCare,
+		                                // Cleared to fully-open rather than DontCare, so that when the
+		                                // pass skips its draw - a 2D scene, or AO switched off - the
+		                                // texture reads as no occlusion instead of whatever the pooled
+		                                // image happened to hold.
+		                                .loadOp = gpu::LoadOp::Clear,
+		                                .clearValue = ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f),
 		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
 		                        })
 		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 		        .Execute(
 		                [this, isActive](PassContext& ctx)
 		                {
-			                if (isActive && !isActive())
+			                if ((isActive && !isActive()) || !m_enabled)
 			                {
 				                return; // 2D / no 3D geometry: skip the full-screen AO compute
 			                }
@@ -141,8 +146,8 @@ namespace aether
 			                        .fullHeight = m_extent.height,
 			                        .frameIndex = static_cast<std::uint32_t>(ctx.frame.frameIndex),
 			                        .frameConstantsAddr = ctx.frameConstantsAddr,
-			                        .radius = 1.4f,
-			                        .strength = 1.35f,
+			                        .radius = m_radius,
+			                        .strength = m_strength,
 			                };
 
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
@@ -153,7 +158,12 @@ namespace aether
 		                                .name = "$GTAO_Denoise",
 		                                .color = m_denoisedAoImage,
 		                                .extent = m_aoExtent,
-		                                .loadOp = gpu::LoadOp::DontCare,
+		                                // Cleared to fully-open rather than DontCare, so that when the
+		                                // pass skips its draw - a 2D scene, or AO switched off - the
+		                                // texture reads as no occlusion instead of whatever the pooled
+		                                // image happened to hold.
+		                                .loadOp = gpu::LoadOp::Clear,
+		                                .clearValue = ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f),
 		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
 		                                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductGtao)},
 		                        })

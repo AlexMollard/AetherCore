@@ -43,6 +43,7 @@ namespace aether
 		~Renderer() = default;
 
 		void Initialize(PostProcessStack* postProcessStack);
+		void AttachGtaoPass(class GTAOPass* pass);
 
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
@@ -96,6 +97,14 @@ namespace aether
 		[[nodiscard]] glm::vec3 GetSkyVoidColor() const;
 
 		// Atmospheric height fog: density, height falloff, sun forward-scatter, max opacity.
+		// Ambient occlusion knobs, forwarded to the GTAO pass when one is attached.
+		void SetGtaoEnabled(bool enabled);
+		[[nodiscard]] bool IsGtaoEnabled() const;
+		void SetGtaoRadius(float radius);
+		[[nodiscard]] float GetGtaoRadius() const;
+		void SetGtaoStrength(float strength);
+		[[nodiscard]] float GetGtaoStrength() const;
+
 		void SetFogParams(glm::vec4 params)
 		{
 			m_fogParams = params;
@@ -141,6 +150,7 @@ namespace aether
 
 	private:
 		PostProcessStack* m_postProcessStack = nullptr;
+		class GTAOPass* m_gtaoPass = nullptr;
 
 		gpu::CullMode m_cullMode = gpu::CullMode::Back;
 		glm::vec4 m_sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f};

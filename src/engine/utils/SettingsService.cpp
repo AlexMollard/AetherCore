@@ -42,6 +42,27 @@ namespace aether
 				renderer->SetFxaaEnabled(m_values.graphics.fxaa);
 			}
 		}
+		else if (key == "graphics.gtao")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetGtaoEnabled(m_values.graphics.gtao);
+			}
+		}
+		else if (key == "graphics.gtaoRadius")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetGtaoRadius(m_values.graphics.gtaoRadius);
+			}
+		}
+		else if (key == "graphics.gtaoStrength")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetGtaoStrength(m_values.graphics.gtaoStrength);
+			}
+		}
 		else if (key == "app.targetFps")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())

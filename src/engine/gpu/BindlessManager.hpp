@@ -21,6 +21,9 @@ namespace aether
 		{
 			std::uint32_t maxSampledImages = 4096;
 			std::uint32_t deferredFreeFrames = 3;
+			// Texture samples along the footprint when a surface is seen edge-on. Clamped
+			// to the device ceiling; 1 disables anisotropic filtering.
+			std::uint32_t maxAnisotropy = 16;
 		};
 
 		BindlessManager() = default;
