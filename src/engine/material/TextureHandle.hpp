@@ -4,6 +4,19 @@
 
 namespace aether
 {
+	// Whether a texture's bytes encode light (sRGB) or numbers (linear).
+	//
+	// The distinction is not cosmetic: an sRGB-formatted image is decoded by the
+	// sampler on every fetch. Run a normal map, a roughness map or an occlusion map
+	// through that decode and every value comes back wrong - a flat normal stored as
+	// 128 arrives as 0.216 instead of 0.502 - which tilts the entire surface. Only
+	// base colour and emissive are actually sRGB-encoded.
+	enum class TextureColorSpace : std::uint8_t
+	{
+		Srgb,
+		Linear,
+	};
+
 	// (never a bindless heap slot); generation guards against use-after-release.
 	struct TextureHandle
 	{

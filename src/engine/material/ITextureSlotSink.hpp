@@ -51,7 +51,7 @@ namespace aether
 
 		[[nodiscard]] virtual std::string ResolvePath(std::string_view path) const = 0;
 
-		[[nodiscard]] virtual Expected<TextureResource> Load(std::string_view resolvedPath) = 0;
+		[[nodiscard]] virtual Expected<TextureResource> Load(std::string_view resolvedPath, TextureColorSpace colorSpace) = 0;
 
 		[[nodiscard]] virtual std::uint32_t Capacity() const = 0;
 	};

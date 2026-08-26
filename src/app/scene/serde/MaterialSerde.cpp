@@ -63,15 +63,17 @@ namespace aether::app::scene
 			}
 			MaterialAsset asset = c.rec.material->asset;
 			TextureRegistry& textures = c.deps.assets->GetTextureRegistry();
-			const auto acquire = [&textures](const std::string& path, TextureHandle& out)
+			const auto acquire = [&textures](const std::string& path, TextureHandle& out, TextureColorSpace colorSpace)
 			{
-				out = path.empty() ? TextureHandle{} : textures.Acquire(path);
+				out = path.empty() ? TextureHandle{} : textures.Acquire(path, colorSpace);
 			};
-			acquire(c.rec.material->albedoPath, asset.albedoTex);
-			acquire(c.rec.material->normalPath, asset.normalTex);
-			acquire(c.rec.material->metallicRoughnessPath, asset.metallicRoughnessTex);
-			acquire(c.rec.material->occlusionPath, asset.occlusionTex);
-			acquire(c.rec.material->emissivePath, asset.emissiveTex);
+			// Base colour and emissive encode light; the rest encode numbers and must not
+			// be run through the sampler's sRGB decode.
+			acquire(c.rec.material->albedoPath, asset.albedoTex, TextureColorSpace::Srgb);
+			acquire(c.rec.material->normalPath, asset.normalTex, TextureColorSpace::Linear);
+			acquire(c.rec.material->metallicRoughnessPath, asset.metallicRoughnessTex, TextureColorSpace::Linear);
+			acquire(c.rec.material->occlusionPath, asset.occlusionTex, TextureColorSpace::Linear);
+			acquire(c.rec.material->emissivePath, asset.emissiveTex, TextureColorSpace::Srgb);
 			if (c.deps.assetDatabase != nullptr)
 			{
 				for (const std::string& texPath: {c.rec.material->albedoPath, c.rec.material->normalPath, c.rec.material->metallicRoughnessPath, c.rec.material->occlusionPath, c.rec.material->emissivePath})

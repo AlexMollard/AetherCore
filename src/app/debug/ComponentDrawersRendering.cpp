@@ -220,7 +220,7 @@ namespace aether::editor
 			changed |= PropFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f, "%.2f");
 		}
 
-		auto textureRow = [&](const char* label, const char* mapId, TextureHandle& h)
+		auto textureRow = [&](const char* label, const char* mapId, TextureHandle& h, TextureColorSpace colorSpace)
 		{
 			ImGui::PushID(mapId);
 			ImGui::TextDisabled("%s", label);
@@ -246,7 +246,7 @@ namespace aether::editor
 						const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
 						if (file->kind == dragdrop::FileKind::Texture)
 						{
-							h = assets->GetTextureRegistry().Acquire(file->path);
+							h = assets->GetTextureRegistry().Acquire(file->path, colorSpace);
 							transientTextureRefs.push_back(h);
 							changed = true;
 							if (assetDb != nullptr)
@@ -295,7 +295,7 @@ namespace aether::editor
 					AssetSource src;
 					if (assetDb->Describe(pk, src))
 					{
-						h = assets->GetTextureRegistry().Acquire(src.path);
+						h = assets->GetTextureRegistry().Acquire(src.path, colorSpace);
 						transientTextureRefs.push_back(h);
 						changed = true;
 					}
@@ -305,11 +305,11 @@ namespace aether::editor
 		};
 		if (ImGui::TreeNodeEx("Textures", ImGuiTreeNodeFlags_SpanAvailWidth))
 		{
-			textureRow("Albedo", "albedo", asset.albedoTex);
-			textureRow("Normal", "normal", asset.normalTex);
-			textureRow("Metal/Rough", "metalrough", asset.metallicRoughnessTex);
-			textureRow("Occlusion", "occlusion", asset.occlusionTex);
-			textureRow("Emissive", "emissive", asset.emissiveTex);
+			textureRow("Albedo", "albedo", asset.albedoTex, TextureColorSpace::Srgb);
+			textureRow("Normal", "normal", asset.normalTex, TextureColorSpace::Linear);
+			textureRow("Metal/Rough", "metalrough", asset.metallicRoughnessTex, TextureColorSpace::Linear);
+			textureRow("Occlusion", "occlusion", asset.occlusionTex, TextureColorSpace::Linear);
+			textureRow("Emissive", "emissive", asset.emissiveTex, TextureColorSpace::Srgb);
 			ImGui::TreePop();
 		}
 		if (changed)

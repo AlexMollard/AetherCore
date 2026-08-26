@@ -28,7 +28,10 @@ namespace aether
 		// magenta stays an unambiguous "asset load failed" signal.
 		void InitializeWhite(TextureResource&& white);
 
-		[[nodiscard]] TextureHandle Acquire(std::string_view path);
+		// colorSpace is part of the cache identity: the same file loaded as colour and
+		// as data are two different GPU images, because the format decides whether the
+		// sampler decodes sRGB on every fetch.
+		[[nodiscard]] TextureHandle Acquire(std::string_view path, TextureColorSpace colorSpace = TextureColorSpace::Srgb);
 
 		void AddRef(TextureHandle handle);
 
@@ -56,6 +59,7 @@ namespace aether
 		{
 			std::string resolvedPath;
 			std::uint64_t hash = 0;
+			TextureColorSpace colorSpace = TextureColorSpace::Srgb;
 			TextureResource texture;
 			std::uint32_t refcount = 0;
 			std::uint32_t generation = 0;

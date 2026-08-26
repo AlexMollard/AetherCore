@@ -51,10 +51,10 @@ namespace aether
 		m_whiteHandle = TextureHandle{index, e.generation};
 	}
 
-	TextureHandle TextureRegistry::Acquire(std::string_view path)
+	TextureHandle TextureRegistry::Acquire(std::string_view path, TextureColorSpace colorSpace)
 	{
 		const std::string resolved = m_sink.ResolvePath(path);
-		const std::uint64_t hash = utils::Fnv1a(resolved);
+		const std::uint64_t hash = utils::Fnv1a(resolved) ^ (colorSpace == TextureColorSpace::Linear ? 0x9e3779b97f4a7c15ull : 0ull);
 
 		const std::scoped_lock lock(m_mutex);
 
@@ -62,7 +62,7 @@ namespace aether
 		for (auto it = range.first; it != range.second; ++it)
 		{
 			Entry& e = m_entries[it->second];
-			if (e.alive && e.resolvedPath == resolved)
+			if (e.alive && e.colorSpace == colorSpace && e.resolvedPath == resolved)
 			{
 				++e.refcount;
 				return TextureHandle{it->second, e.generation};
@@ -70,7 +70,7 @@ namespace aether
 		}
 
 		// it, so packing routes it through ResolveSlot -> the magenta default (a
-		auto loaded = m_sink.Load(resolved);
+		auto loaded = m_sink.Load(resolved, colorSpace);
 		if (!loaded)
 		{
 			AE_WARN(LogCategory::Asset, "TextureRegistry: load failed '{}': {}", resolved, loaded.error());
@@ -95,6 +95,7 @@ namespace aether
 		Entry& e = m_entries[index];
 		e.resolvedPath = resolved;
 		e.hash = hash;
+		e.colorSpace = colorSpace;
 		e.texture = std::move(*loaded);
 		e.refcount = 1;
 		e.alive = true;

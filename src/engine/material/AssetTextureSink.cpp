@@ -18,9 +18,9 @@ namespace aether
 		return Texture::ResolveTexturePath(path);
 	}
 
-	Expected<TextureResource> AssetTextureSink::Load(std::string_view resolvedPath)
+	Expected<TextureResource> AssetTextureSink::Load(std::string_view resolvedPath, TextureColorSpace colorSpace)
 	{
-		AE_TRY(tex, Texture::LoadFromFile(resolvedPath, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_upload->GetCommandPool()));
+		AE_TRY(tex, Texture::LoadFromFile(resolvedPath, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_upload->GetCommandPool(), colorSpace));
 		return TextureResource{std::move(*tex)};
 	}
 } // namespace aether

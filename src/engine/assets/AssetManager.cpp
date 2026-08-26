@@ -413,9 +413,13 @@ namespace aether
 						const std::string texRelPath = reader.ReadString();
 						const std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
 
-						const TextureHandle tex = m_textureRegistry->Acquire(texPath);
-
 						auto texType = static_cast<TextureTypeDisk>(type);
+
+						// Only base colour and emissive are sRGB-encoded; the rest are data.
+						const TextureColorSpace colorSpace =
+						        (texType == TextureTypeDisk::BaseColor || texType == TextureTypeDisk::Emissive) ? TextureColorSpace::Srgb : TextureColorSpace::Linear;
+						const TextureHandle tex = m_textureRegistry->Acquire(texPath, colorSpace);
+
 						switch (texType)
 						{
 							case TextureTypeDisk::BaseColor:
@@ -456,13 +460,13 @@ namespace aether
 			material.templateDesc.shaderVfsPath = InternShaderVfsPath(spec.shaderVfsPath);
 		}
 
-		auto acquireTexture = [this](std::string_view texturePath) -> TextureHandle
+		auto acquireTexture = [this](std::string_view texturePath, TextureColorSpace colorSpace) -> TextureHandle
 		{
 			if (texturePath.empty())
 			{
 				return {};
 			}
-			return m_textureRegistry->Acquire(texturePath);
+			return m_textureRegistry->Acquire(texturePath, colorSpace);
 		};
 
 		std::string autoAlbedo;
@@ -485,11 +489,14 @@ namespace aether
 		const std::string occlusionPath = !spec.occlusionPath.empty() ? spec.occlusionPath : autoOcclusion;
 		const std::string emissivePath = !spec.emissivePath.empty() ? spec.emissivePath : autoEmissive;
 
-		material.albedoTex = acquireTexture(albedoPath);
-		material.normalTex = acquireTexture(normalPath);
-		material.metallicRoughnessTex = acquireTexture(metallicRoughnessPath);
-		material.occlusionTex = acquireTexture(occlusionPath);
-		material.emissiveTex = acquireTexture(emissivePath);
+		// Base colour and emissive carry light and are sRGB-encoded. The rest carry
+		// numbers - directions, roughness, occlusion - and must not be run through the
+		// sampler's sRGB decode.
+		material.albedoTex = acquireTexture(albedoPath, TextureColorSpace::Srgb);
+		material.normalTex = acquireTexture(normalPath, TextureColorSpace::Linear);
+		material.metallicRoughnessTex = acquireTexture(metallicRoughnessPath, TextureColorSpace::Linear);
+		material.occlusionTex = acquireTexture(occlusionPath, TextureColorSpace::Linear);
+		material.emissiveTex = acquireTexture(emissivePath, TextureColorSpace::Srgb);
 
 		AE_INFO(LogCategory::Engine,
 		        "Loaded material preset '{}' (albedo={}, normal={}, metallicRoughness={}, occlusion={}, emissive={}).",
@@ -580,13 +587,13 @@ namespace aether
 			worldNodeTransforms[nodeIndex] = transform;
 		}
 
-		auto acquireTexture = [this](std::string_view texturePath) -> TextureHandle
+		auto acquireTexture = [this](std::string_view texturePath, TextureColorSpace colorSpace) -> TextureHandle
 		{
 			if (texturePath.empty())
 			{
 				return {};
 			}
-			return m_textureRegistry->Acquire(texturePath);
+			return m_textureRegistry->Acquire(texturePath, colorSpace);
 		};
 
 		loaded.primitives.reserve(source.primitives.size());
@@ -634,11 +641,11 @@ namespace aether
 
 				if (imageHandles.empty())
 				{
-					mat.albedoTex = acquireTexture(srcMat.albedoPath);
-					mat.normalTex = acquireTexture(srcMat.normalPath);
-					mat.metallicRoughnessTex = acquireTexture(srcMat.metallicRoughnessPath);
-					mat.occlusionTex = acquireTexture(srcMat.occlusionPath);
-					mat.emissiveTex = acquireTexture(srcMat.emissivePath);
+					mat.albedoTex = acquireTexture(srcMat.albedoPath, TextureColorSpace::Srgb);
+					mat.normalTex = acquireTexture(srcMat.normalPath, TextureColorSpace::Linear);
+					mat.metallicRoughnessTex = acquireTexture(srcMat.metallicRoughnessPath, TextureColorSpace::Linear);
+					mat.occlusionTex = acquireTexture(srcMat.occlusionPath, TextureColorSpace::Linear);
+					mat.emissiveTex = acquireTexture(srcMat.emissivePath, TextureColorSpace::Srgb);
 				}
 				else
 				{

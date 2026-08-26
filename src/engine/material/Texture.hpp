@@ -12,6 +12,7 @@
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "material/TextureHandle.hpp"
 #include "utils/Expected.hpp"
 
 namespace aether
@@ -47,9 +48,9 @@ namespace aether
 
 		[[nodiscard]] static std::string ResolveTexturePath(std::string_view path);
 
-		[[nodiscard]] static Expected<Texture> LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool);
-		[[nodiscard]] static Expected<Texture> LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool);
-		[[nodiscard]] static Expected<Texture> LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool);
+		[[nodiscard]] static Expected<Texture> LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace = TextureColorSpace::Srgb);
+		[[nodiscard]] static Expected<Texture> LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace = TextureColorSpace::Srgb);
+		[[nodiscard]] static Expected<Texture> LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace = TextureColorSpace::Srgb);
 
 		// missing-texture marker) so they can never themselves fail to load.
 		[[nodiscard]] static Expected<Texture> CreateSolidColor(std::array<std::uint8_t, 4> rgba, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool);

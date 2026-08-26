@@ -73,8 +73,9 @@ namespace aether
 
 		// Box-filter the parent level down by two. Colour is averaged in linear light;
 		// alpha is already linear and is averaged as-is.
-		std::vector<stbi_uc> DownsampleRgba(const stbi_uc* src, int srcWidth, int srcHeight, int dstWidth, int dstHeight)
+		std::vector<stbi_uc> DownsampleRgba(const stbi_uc* src, int srcWidth, int srcHeight, int dstWidth, int dstHeight, TextureColorSpace colorSpace)
 		{
+			const bool decode = colorSpace == TextureColorSpace::Srgb;
 			const auto& toLinear = SrgbToLinearTable();
 			std::vector<stbi_uc> dst(static_cast<std::size_t>(dstWidth) * static_cast<std::size_t>(dstHeight) * 4u);
 
@@ -98,16 +99,20 @@ namespace aether
 					float alpha = 0.0f;
 					for (const std::size_t tap: taps)
 					{
-						rgb[0] += toLinear[src[tap + 0]];
-						rgb[1] += toLinear[src[tap + 1]];
-						rgb[2] += toLinear[src[tap + 2]];
+						rgb[0] += decode ? toLinear[src[tap + 0]] : static_cast<float>(src[tap + 0]);
+						rgb[1] += decode ? toLinear[src[tap + 1]] : static_cast<float>(src[tap + 1]);
+						rgb[2] += decode ? toLinear[src[tap + 2]] : static_cast<float>(src[tap + 2]);
 						alpha += static_cast<float>(src[tap + 3]);
 					}
 
 					const std::size_t out = (static_cast<std::size_t>(y) * dstWidth + x) * 4u;
-					dst[out + 0] = LinearToSrgbByte(rgb[0] * 0.25f);
-					dst[out + 1] = LinearToSrgbByte(rgb[1] * 0.25f);
-					dst[out + 2] = LinearToSrgbByte(rgb[2] * 0.25f);
+					const auto encode = [decode](float v) -> stbi_uc
+					{
+						return decode ? LinearToSrgbByte(v) : static_cast<stbi_uc>(std::lround(std::clamp(v, 0.0f, 255.0f)));
+					};
+					dst[out + 0] = encode(rgb[0] * 0.25f);
+					dst[out + 1] = encode(rgb[1] * 0.25f);
+					dst[out + 2] = encode(rgb[2] * 0.25f);
 					dst[out + 3] = static_cast<stbi_uc>(std::lround(alpha * 0.25f));
 				}
 			}
@@ -115,7 +120,7 @@ namespace aether
 			return dst;
 		}
 
-		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, const char* debugName = nullptr)
+		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace, const char* debugName = nullptr)
 		{
 			// Without a mip chain a pixel that covers many texels reads exactly one of
 			// them, so a surface picks a different texel every frame as the camera moves
@@ -125,7 +130,7 @@ namespace aether
 			const std::uint32_t mipLevels = MipCountFor(width, height);
 
 			const gpu::TextureDesc desc{
-			        .format = gpu::Format::R8G8B8A8Srgb,
+			        .format = colorSpace == TextureColorSpace::Srgb ? gpu::Format::R8G8B8A8Srgb : gpu::Format::R8G8B8A8Unorm,
 			        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 			        .aspect = gpu::ImageAspect::Color,
@@ -165,7 +170,7 @@ namespace aether
 					const int levelWidth = std::max(1, parentWidth / 2);
 					const int levelHeight = std::max(1, parentHeight / 2);
 
-					std::vector<stbi_uc> levelPixels = DownsampleRgba(parent, parentWidth, parentHeight, levelWidth, levelHeight);
+					std::vector<stbi_uc> levelPixels = DownsampleRgba(parent, parentWidth, parentHeight, levelWidth, levelHeight, colorSpace);
 					const std::int32_t levelResult =
 					        vkutil::HostCopyMipToImage(device, image, levelPixels.data(), static_cast<uint32_t>(levelWidth), static_cast<uint32_t>(levelHeight), level);
 					if (levelResult != 0)
@@ -340,7 +345,7 @@ namespace aether
 		}
 	} // namespace
 
-	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
+	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace)
 	{
 		if (fileData.size() < 4)
 		{
@@ -368,7 +373,7 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, std::string(debugPath).c_str());
+		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, colorSpace, std::string(debugPath).c_str());
 		texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 		stbi_image_free(pixels);
 		return texture;
@@ -378,7 +383,7 @@ namespace aether
 	{
 		static_assert(sizeof(stbi_uc) == sizeof(std::uint8_t));
 		Texture texture;
-		texture.m_handle = UploadRgbaToGpuImage(rgba.data(), 1, 1, device, uploadQueue, uploadPool, "builtin:solid-color");
+		texture.m_handle = UploadRgbaToGpuImage(rgba.data(), 1, 1, device, uploadQueue, uploadPool, TextureColorSpace::Srgb, "builtin:solid-color");
 		texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 		return texture;
 	}
@@ -402,17 +407,17 @@ namespace aether
 		return io::FileSystem::Exists(texturePath) ? texturePath : pathStr;
 	}
 
-	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
+	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace)
 	{
 		AE_PROFILE_ZONE();
 		AE_PROFILE_SET_ZONE_NAME(path.data());
 
 		const std::string resolved = ResolveTexturePath(path);
 		AE_TRY(data, io::FileSystem::ReadFile(resolved));
-		return LoadFromFileData(*data, resolved, device, uploadQueue, uploadPool);
+		return LoadFromFileData(*data, resolved, device, uploadQueue, uploadPool, colorSpace);
 	}
 
-	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
+	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace)
 	{
 		int width = 0;
 		int height = 0;
@@ -426,7 +431,7 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, path.string().c_str());
+		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, colorSpace, path.string().c_str());
 		texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 
 		stbi_image_free(pixels);

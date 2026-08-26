@@ -22,7 +22,7 @@ namespace aether
 		void Initialize(VulkanContext& context, gpu::UploadContext& upload, std::uint32_t capacity);
 
 		[[nodiscard]] std::string ResolvePath(std::string_view path) const override;
-		[[nodiscard]] Expected<TextureResource> Load(std::string_view resolvedPath) override;
+		[[nodiscard]] Expected<TextureResource> Load(std::string_view resolvedPath, TextureColorSpace colorSpace) override;
 
 		[[nodiscard]] std::uint32_t Capacity() const override
 		{
