@@ -94,7 +94,7 @@ mesh_renderer = true
 name = 'Rough_0.05'
 node = 6320933208470154681
 parent = -1
-position = [ -9.0, 1.0, -4.0 ]
+position = [ -9.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -121,7 +121,7 @@ mesh_renderer = true
 name = 'Rough_0.20'
 node = -4008926973983841850
 parent = -1
-position = [ -6.0, 1.0, -4.0 ]
+position = [ -6.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -148,7 +148,7 @@ mesh_renderer = true
 name = 'Rough_0.35'
 node = 6844622341549446645
 parent = -1
-position = [ -3.0, 1.0, -4.0 ]
+position = [ -3.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -175,7 +175,7 @@ mesh_renderer = true
 name = 'Rough_0.50'
 node = 9214153628712694576
 parent = -1
-position = [ 0.0, 1.0, -4.0 ]
+position = [ 0.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -202,7 +202,7 @@ mesh_renderer = true
 name = 'Rough_0.65'
 node = -6854045911221362755
 parent = -1
-position = [ 3.0, 1.0, -4.0 ]
+position = [ 3.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -229,7 +229,7 @@ mesh_renderer = true
 name = 'Rough_0.80'
 node = -107327529975020529
 parent = -1
-position = [ 6.0, 1.0, -4.0 ]
+position = [ 6.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -256,7 +256,7 @@ mesh_renderer = true
 name = 'Rough_0.95'
 node = -5762334337131300960
 parent = -1
-position = [ 9.0, 1.0, -4.0 ]
+position = [ 9.0, 0.5, -4.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -283,7 +283,7 @@ mesh_renderer = true
 name = 'Metal_0.05'
 node = 3498601061621072136
 parent = -1
-position = [ -9.0, 1.0, 0.0 ]
+position = [ -9.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -310,7 +310,7 @@ mesh_renderer = true
 name = 'Metal_0.20'
 node = -8655490359296974574
 parent = -1
-position = [ -6.0, 1.0, 0.0 ]
+position = [ -6.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -337,7 +337,7 @@ mesh_renderer = true
 name = 'Metal_0.35'
 node = -2206082297422143489
 parent = -1
-position = [ -3.0, 1.0, 0.0 ]
+position = [ -3.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -364,7 +364,7 @@ mesh_renderer = true
 name = 'Metal_0.50'
 node = 6192510123566582236
 parent = -1
-position = [ 0.0, 1.0, 0.0 ]
+position = [ 0.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -391,7 +391,7 @@ mesh_renderer = true
 name = 'Metal_0.65'
 node = 3397874293153256184
 parent = -1
-position = [ 3.0, 1.0, 0.0 ]
+position = [ 3.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -418,7 +418,7 @@ mesh_renderer = true
 name = 'Metal_0.80'
 node = -5028262400081107707
 parent = -1
-position = [ 6.0, 1.0, 0.0 ]
+position = [ 6.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
@@ -445,7 +445,7 @@ mesh_renderer = true
 name = 'Metal_0.95'
 node = 4460646777665538655
 parent = -1
-position = [ 9.0, 1.0, 0.0 ]
+position = [ 9.0, 0.5, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]

@@ -111,6 +111,20 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	const float3 V = normalize(fc->cameraWorldPos.xyz - worldPos);
 	const float3 R = reflect(-V, N);
 
+	// Lift the ray off the surface before marching. At a contact - the base of an
+	// object standing on a floor, which is exactly where a reflection is most
+	// obviously right or wrong - the reflected ray leaves at a grazing angle and
+	// travels nearly parallel to the surface it started on. Without an offset its
+	// first samples land on that same surface, register as a hit, and the march
+	// stops before reaching the object, leaving a band of missing reflection right
+	// where the two meet.
+	//
+	// Scaled by distance from the camera so it stays a roughly constant number of
+	// pixels: a fixed world offset is far too small up close and far too large in
+	// the distance, where a texel covers more world.
+	const float viewDist = distance(worldPos, fc->cameraWorldPos.xyz);
+	const float3 rayOrigin = worldPos + N * (viewDist * 0.004f);
+
 	// A ray heading back toward the camera exits the frame immediately and cannot
 	// hit anything useful; skip the march rather than spend it discovering that.
 	if (dot(R, V) > 0.999f)
@@ -121,7 +135,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// Project the ray's start and a point along it, and step between them in
 	// screen space so the stride is measured in pixels.
 	const float rayLength = 40.0f;
-	const float3 endWorld = worldPos + R * rayLength;
+	const float3 endWorld = rayOrigin + R * rayLength;
 	float4 endClip = mul(fc->viewProj, float4(endWorld, 1.0f));
 	if (endClip.w <= 0.0f)
 	{
@@ -129,7 +143,16 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	}
 
 	const float3 endNdc = endClip.xyz / endClip.w;
-	const float2 startPx = uv * float2(pc.width, pc.height);
+
+	// Project the lifted origin rather than reusing this pixel's coordinates, so the
+	// depth the march starts from matches where the ray actually begins.
+	float4 startClip = mul(fc->viewProj, float4(rayOrigin, 1.0f));
+	if (startClip.w <= 0.0f)
+	{
+		return float4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+	const float3 startNdc = startClip.xyz / startClip.w;
+	const float2 startPx = (startNdc.xy * 0.5f + 0.5f) * float2(pc.width, pc.height);
 	const float2 endPx = (endNdc.xy * 0.5f + 0.5f) * float2(pc.width, pc.height);
 
 	const float2 deltaPx = endPx - startPx;
@@ -142,7 +165,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	}
 
 	const float2 stepPx = deltaPx / float(steps);
-	const float startNdcZ = centreDepth;
+	const float startNdcZ = startNdc.z;
 	const float stepZ = (endNdc.z - startNdcZ) / float(steps);
 
 	// Dither the start so the fixed stride does not band. Interleaved gradient
