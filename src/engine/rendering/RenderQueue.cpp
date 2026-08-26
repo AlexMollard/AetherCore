@@ -633,6 +633,12 @@ namespace aether
 		// time does not advance - then costs nothing per frame instead of a full sample,
 		// blend, node-flatten and palette build.
 		const bool poseUnchanged = sampleJobsThisFrame > 0 && animationInputHash != 0ull && m_animationInputHash[frameSlot] == animationInputHash;
+		// A pose that should be static but keeps missing means something upstream is
+		// perturbing the draw list, which costs a full animation rebuild every frame.
+		if (sampleJobsThisFrame > 0 && m_animationInputHash[frameSlot] != animationInputHash && m_animationInputHash[frameSlot] != 0ull)
+		{
+			AE_VERBOSE(LogCategory::Animation, "Skin palette rebuild on {} slot={}: {} jobs, {} joints, {} node poses", m_debugName, frameSlot, sampleJobsThisFrame, skinJointCursor, nodePoseCursor);
+		}
 		m_animationInputHash[frameSlot] = animationInputHash;
 
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation && !poseUnchanged)
