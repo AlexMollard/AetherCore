@@ -346,7 +346,20 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // sky at all - so an indoor or stylised scene can still set its own base level.
     const float3 ambientDiffuse = (ambientColor + skyDiffuse) * baseColor.rgb * kD;
     const float3 ambientSpecular = skySpecular * (F0 * envBrdf.x + envBrdf.y);
-    float3 ambient = (ambientDiffuse + ambientSpecular) * ambientAo;
+    // Diffuse and specular are not occluded by the same amount. Diffuse gathers the
+    // whole hemisphere, so ambient occlusion describes it directly. A specular lobe
+    // gathers a cone whose width is set by roughness: the smoother the surface, the
+    // narrower that cone, and the less likely the geometry that occludes the
+    // hemisphere also occludes the one direction the reflection comes from. Applying
+    // the diffuse term to both - which is what this did - over-darkens reflections on
+    // smooth surfaces inside any crease or contact, so polished materials go dull
+    // exactly where they should still catch light.
+    //
+    // Lagarde's approximation ("Moving Frostbite to Physically Based Rendering")
+    // reconstructs the cone's occlusion from the hemisphere's. At roughness 1 it
+    // returns the plain AO, because then the lobe IS the hemisphere.
+    const float specularAo = saturate(pow(NdotV + ambientAo, exp2(-16.0 * roughness - 1.0)) - 1.0 + ambientAo);
+    float3 ambient = ambientDiffuse * ambientAo + ambientSpecular * specularAo;
 
     float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
 
