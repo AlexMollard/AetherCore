@@ -137,6 +137,22 @@ CPMAddPackage(
     GIT_SHALLOW    TRUE
 )
 
+# toml++ disables std::to_chars for floats whenever the compiler is clang, guarding
+# against the libstdc++/libc++ versions that shipped <charconv> without the floating
+# point overloads. clang-cl uses the MSVC standard library, which has had them since
+# VS2017, so on Windows that guard costs us the shortest round-trip format for no
+# reason: a clang-built editor writes 0.41999999999999998 where an MSVC-built one
+# writes 0.42, and the same scene file churns depending on who compiled the tool.
+# Turn it back on only where the overloads are genuinely present - the clang/libc++
+# case the guard was written for is left alone.
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    if(TARGET tomlplusplus_tomlplusplus)
+        target_compile_definitions(tomlplusplus_tomlplusplus INTERFACE TOML_FLOAT_CHARCONV=1)
+    elseif(TARGET tomlplusplus)
+        target_compile_definitions(tomlplusplus INTERFACE TOML_FLOAT_CHARCONV=1)
+    endif()
+endif()
+
 # ── Font rendering ────────────────────────────────────────────────────────────
 CPMAddPackage(
     NAME freetype
