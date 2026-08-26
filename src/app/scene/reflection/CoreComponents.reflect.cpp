@@ -158,6 +158,16 @@ AE_FIELD_N("autoplay", autoplay, Bool)
 AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
+AE_COMPONENT(SkyComponent, "Sky", "Rendering", ICON_FA_CLOUD)
+AE_FIELD_N("horizon_color", horizonColor, Color3)
+AE_FIELD_N("zenith_color", zenithColor, Color3)
+AE_FIELD_N("ground_color", groundColor, Color3)
+AE_FIELD_N("ambient_color", ambientColor, Color3)
+b.RequiresFeature(SceneFeatureFlags::Lighting3D);
+AE_GENERIC_SERIALIZE()
+AE_HAND_AUTHORED_CATALOG()
+AE_COMPONENT_END()
+
 AE_COMPONENT(PointLightComponent, "Point Light", "Rendering", ICON_FA_LIGHTBULB)
 AE_FIELD_N("color", color, Color3)
 AE_FIELD_R(intensity, Float, 0.0f, 1000.0f)

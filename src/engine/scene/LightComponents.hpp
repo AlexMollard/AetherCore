@@ -57,6 +57,18 @@ namespace aether
 	// leaves the authored environment untouched when no entity carries one, so
 	// 2D scenes (no Lighting3D feature) never fight it. Time state lives here
 	// so it serializes and play-restores like any other authored data.
+	// Authored procedural sky. Without this the gradient could only be reached by
+	// hand-editing the scene's [environment] block or by adding a Day/Night cycle,
+	// which meant a scene that just wants a fixed sky had no way to say so.
+	// A Day/Night component on any entity drives the sky itself and takes precedence.
+	struct SkyComponent
+	{
+		glm::vec3 horizonColor{0.34f, 0.52f, 0.82f};
+		glm::vec3 zenithColor{0.08f, 0.19f, 0.45f};
+		glm::vec3 groundColor{0.001f, 0.002f, 0.005f};
+		glm::vec3 ambientColor{0.03f, 0.04f, 0.06f};
+	};
+
 	struct DayNightComponent
 	{
 		bool animate = true;

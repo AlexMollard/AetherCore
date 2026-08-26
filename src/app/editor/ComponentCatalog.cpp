@@ -182,6 +182,12 @@ namespace aether::editor
 			        },
 			        [](World& w, Entity e) { w.Remove<MaterialComponent>(e); }});
 
+			c.push_back(ComponentCatalogEntry{"Sky",
+			        "Rendering",
+			        ICON_FA_CLOUD,
+			        [](const World& w, Entity e) { return w.Has<SkyComponent>(e); },
+			        [](World& w, Entity e, ServiceContainer&) { w.EmplaceOrReplace<SkyComponent>(e); },
+			        [](World& w, Entity e) { w.Remove<SkyComponent>(e); }});
 			c.push_back(ComponentCatalogEntry{"Point Light",
 			        "Rendering",
 			        ICON_FA_LIGHTBULB,

@@ -30,6 +30,7 @@ namespace aether::app
 		}
 
 		void OnRegister(aether::World& world) override;
+		void ApplyStaticSky(aether::World& world);
 		void Update(aether::World& world, float dt) override;
 		void OnUnregister(aether::World& world) override;
 

@@ -121,6 +121,26 @@ namespace aether::app
 		return FindDriver(m_world) != nullptr;
 	}
 
+	// The first live entity carrying a Sky component wins, matching how the day/night
+	// driver is chosen, so two of them in a scene behave predictably rather than by
+	// iteration order.
+	void DayNightSystem::ApplyStaticSky(aether::World& world)
+	{
+		auto view = world.GetRegistry().view<SkyComponent>();
+		for (const auto handle: view)
+		{
+			if (world.GetRegistry().all_of<DisabledComponent>(handle))
+			{
+				continue;
+			}
+			const SkyComponent& sky = view.get<SkyComponent>(handle);
+			m_renderer->SetSkyGradient(sky.horizonColor, sky.zenithColor);
+			m_renderer->SetSkyVoidColor(sky.groundColor);
+			m_renderer->SetAmbientLight(sky.ambientColor);
+			return;
+		}
+	}
+
 	void DayNightSystem::Update(aether::World& world, float dt)
 	{
 		AE_PROFILE_ZONE();
@@ -131,7 +151,11 @@ namespace aether::app
 		auto* driver = FindDriver(&world);
 		if (driver == nullptr)
 		{
-			return; // no entity drives the environment: keep the authored one
+			// No cycle running, so a Sky component - if any entity carries one - is what
+			// the scene wants. Applied every frame rather than on load so edits in the
+			// inspector show up immediately.
+			ApplyStaticSky(world);
+			return;
 		}
 
 		if (driver->animate)
