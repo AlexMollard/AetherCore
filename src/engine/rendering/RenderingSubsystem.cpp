@@ -997,7 +997,7 @@ namespace aether
 				                cmd.Draw(3, 1, 0, 0);
 			                });
 
-			m_renderGraph
+			auto& compositePass = m_renderGraph
 			        .AddFullscreenPass({
 			                .name = "$SSRComposite",
 			                .color = hdrColor,
@@ -1008,8 +1008,20 @@ namespace aether
 			        })
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
-			        .ReadTexture(m_ssrColor)
-			        .Execute(
+			        .ReadTexture(m_ssrColor);
+
+			// Occlusion only exists when the AO pass ran; the shader falls back to fully
+			// open without it, so consuming it unconditionally would only invent a
+			// dependency on a product nothing produced.
+			if constexpr (kEnableForwardGtao)
+			{
+				if (m_gtaoPass.GetAoImage().IsValid())
+				{
+					compositePass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
+				}
+			}
+
+			compositePass.Execute(
 			                [this, bindless = frame.bindless](PassContext& ctx)
 			                {
 				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws() || !m_renderer.AreReflectionsEnabled())

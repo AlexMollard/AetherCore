@@ -33,6 +33,7 @@
 #include "include/FullScreenTriangle.slangh"
 #include "include/OctNormal.slangh"
 #include "include/Sky.slangh"
+#include "include/HeightFog.slangh"
 #include "include/ShadowSampling.slangh"
 
 struct SsrCompositePush
@@ -130,7 +131,28 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	const float2 envBrdf = float2(-1.04f, 1.04f) * a004 + r.zw;
 
 	const float F0 = lerp(0.04f, 1.0f, metallic);
-	const float specWeight = F0 * envBrdf.x + envBrdf.y;
+	float specWeight = F0 * envBrdf.x + envBrdf.y;
+
+	// The forward pass did not add the sky specular raw - it multiplied it by
+	// specular occlusion and then fogged the result. Subtracting the raw value would
+	// take out more than was ever put in, darkening exactly the creases and hazy
+	// distances where the sky contributed least. Both factors scale the whole
+	// contribution, because the reflection replacing that sky is occluded and fogged
+	// by the same amounts.
+	{
+		float ao = 1.0f;
+		ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
+		if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.width > 0u && aoEntry.height > 0u)
+		{
+			ao = saturate(g_textures[uint(aoEntry.address)].SampleLevel(g_linearSampler, uv, 0.0f).r);
+		}
+		// Lagarde's specular occlusion, matching the forward shader exactly.
+		const float specularAo = saturate(pow(NdotV + ao, exp2(-16.0f * roughness - 1.0f)) - 1.0f + ao);
+		specWeight *= specularAo;
+	}
+
+	const float fogAmount = HeightFogAmount(fc->cameraWorldPos.xyz, worldPos, fc->fogParams.x, fc->fogParams.y, fc->fogParams.w);
+	specWeight *= (1.0f - fogAmount);
 
 	// The march returns the raw colour it landed on. A surface does not reflect all
 	// of that: it reflects the Fresnel-weighted fraction, which for a dielectric is
