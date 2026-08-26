@@ -7,6 +7,7 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <numbers>
 #include <string>
 
 #include "animation/AnimationDatabase.hpp"
@@ -36,6 +37,13 @@ namespace
 	constexpr float kOrthoHalfViewRangeRatio = 0.60f;
 
 	constexpr float kCascadeOverlap = 1.30f;
+
+	// Shadow bias budget, in shadow-map texels of the cascade doing the lookup.
+	constexpr float kDepthBiasTexels = 1.0f;
+	constexpr float kNormalOffsetTexels = 1.5f;
+	// One texel per PCF step keeps the 5x5 kernel contiguous. Anything wider skips
+	// texels between taps, which point fetches turn into a sparkling checkerboard.
+	constexpr float kPcfRadiusTexels = 1.0f;
 
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
 	{
@@ -284,7 +292,12 @@ namespace aether
 		}
 
 		fc.shadowCascadeSplits = glm::vec4(split0, split1, split2, 0.0f);
-		fc.shadowParams = glm::vec4(0.0014f, 0.0030f, 1.0f, 2.0f);
+		// x/y are bias budgets measured in shadow texels, not depth units: the per-cascade
+		// conversion below turns them into a constant NDC bias and a world-space normal
+		// offset using that cascade's own texel footprint and depth range. A depth-unit
+		// constant cannot work here - one cascade's ortho spans a couple of hundred metres,
+		// so 0.0014 of NDC was a third of a metre of peter-panning at the caster's feet.
+		fc.shadowParams = glm::vec4(kDepthBiasTexels, kNormalOffsetTexels, 1.0f, kPcfRadiusTexels);
 		const glm::vec3 camPos = packet.hasCameraData ? glm::vec3(packet.cameraWorldPos) : glm::vec3(0.0f);
 		glm::vec3 camForward(0.0f, 0.0f, -1.0f);
 		if (packet.hasCameraData)
@@ -338,6 +351,16 @@ namespace aether
 			shadowFc.skyZenithColor = packet.skyZenithColor;
 			shadowFc.skyVoidColor = packet.skyVoidColor;
 			shadowFc.RefreshDerived();
+
+			// Constant bias stays at roughly one texel diagonal along the light: it only has
+			// to cover depth quantisation on surfaces facing the light. Everything the slope
+			// used to pay for is now the normal offset, which slides the lookup across the
+			// surface instead of pushing it toward the light, so the silhouette stays put.
+			const float depthRange = std::max(farPlane - nearPlane, 1e-3f);
+			const float pcfSpan = 1.0f + std::max(kPcfRadiusTexels, 0.5f);
+			const auto cascadeIdx = static_cast<glm::length_t>(cascade);
+			fc.shadowCascadeDepthBias[cascadeIdx] = (kDepthBiasTexels * texelSize * std::numbers::sqrt2_v<float>) / depthRange;
+			fc.shadowCascadeNormalOffset[cascadeIdx] = kNormalOffsetTexels * texelSize * pcfSpan;
 
 			m_shadowFrameConstants[cascade].Write(frameIdx, shadowFc);
 			fc.shadowViewProjCascades[cascade] = shadowFc.viewProj;

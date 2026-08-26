@@ -10,7 +10,7 @@ namespace aether
 {
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (768 bytes):
+	// Layout (800 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -45,6 +45,11 @@ namespace aether
 		glm::mat4 invViewProj{1.0f};
 		std::uint64_t resourceTableAddr = 0;
 		std::uint64_t effectParamBufferAddr = 0;
+		// Per-cascade shadow bias, derived on the CPU from each cascade's real texel
+		// footprint and ortho depth range (ShadowService::BuildFrameShadowData). xyz =
+		// cascade 0..2, w unused.
+		glm::vec4 shadowCascadeDepthBias{0.0f};   // constant bias in NDC depth units
+		glm::vec4 shadowCascadeNormalOffset{0.0f}; // normal-offset distance in world units
 
 		void RefreshDerived()
 		{
@@ -70,7 +75,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 768, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 800, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -96,5 +101,7 @@ namespace aether
 	static_assert(offsetof(FrameConstants, invViewProj) == 688);
 	static_assert(offsetof(FrameConstants, resourceTableAddr) == 752);
 	static_assert(offsetof(FrameConstants, effectParamBufferAddr) == 760);
-	static_assert(sizeof(FrameConstants) == 768);
+	static_assert(offsetof(FrameConstants, shadowCascadeDepthBias) == 768);
+	static_assert(offsetof(FrameConstants, shadowCascadeNormalOffset) == 784);
+	static_assert(sizeof(FrameConstants) == 800);
 } // namespace aether

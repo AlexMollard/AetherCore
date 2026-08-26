@@ -5,7 +5,6 @@
 //
 // Requirements in the including shader:
 // - g_textures[] bindless Texture2D array
-// - g_linearSampler sampler for shadow depth sampling
 // - FrameConstantsData from FrameConstants.slangh
 
 float ComputeDirectionalShadowCascade(
@@ -22,7 +21,26 @@ float ComputeDirectionalShadowCascade(
         return 1.0;
     }
 
-    const float4 clip = mul(fc->shadowViewProjCascades[cascadeIdx], float4(worldPos, 1.0));
+    const float3 N = normalize(worldNormal);
+    const float3 L = normalize(lightDir);
+    const float NdotL = dot(N, L);
+    if (NdotL <= 0.0)
+    {
+        // Backface to the light: the lighting term already zeroes this out, and biasing a
+        // surface that steep only eats into the shadow of whatever stands on it.
+        return 1.0;
+    }
+
+    // Normal-offset bias: move the lookup off the surface along its own normal rather
+    // than pushing the receiver's depth toward the light. A depth push shifts the whole
+    // silhouette down the light direction, which is what detaches a shadow from its
+    // caster's feet; sliding along the normal stays in the same plane as the surface, so
+    // the contact edge holds. Scaled by sin(theta) because that is exactly how far the
+    // shadow texel's depth can drift across the footprint of a slanted surface.
+    const float sinTheta = sqrt(saturate(1.0 - NdotL * NdotL));
+    const float3 samplePos = worldPos + N * (fc->shadowCascadeNormalOffset[cascadeIdx] * sinTheta);
+
+    const float4 clip = mul(fc->shadowViewProjCascades[cascadeIdx], float4(samplePos, 1.0));
     if (abs(clip.w) < 1e-6)
     {
         return 1.0;
@@ -40,11 +58,9 @@ float ComputeDirectionalShadowCascade(
     }
 
     const float receiverDepth = saturate(ndc.z);
-    const float cascadeBiasScale = 1.0 + (float)cascadeIdx * 0.55;
-    const float depthBias = fc->shadowParams.x * cascadeBiasScale;
-    const float normalBias = fc->shadowParams.y * cascadeBiasScale;
-    const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(lightDir)));
-    const float bias = depthBias + normalBias * slope;
+    // One number, already expressed in this cascade's NDC depth units on the CPU from its
+    // real texel size and ortho depth range - no ad-hoc per-cascade multiplier.
+    const float bias = fc->shadowCascadeDepthBias[cascadeIdx];
 
     const uint shadowW = entry.width;
     const uint shadowH = entry.height;
@@ -71,7 +87,12 @@ float ComputeDirectionalShadowCascade(
             const float wy = max(0.0, 3.0 - dist.y);
             const float w = wx * wy;
 
-            const float shadowDepth = g_textures[shadowSlot].Sample(g_linearSampler, sampleUv).r;
+            // Point fetch, not a filtered one: hardware linear filtering averages the stored
+            // depths before the comparison, so across a silhouette the occluder's depth is
+            // blended toward the receiver's and the shadow loses another texel of edge. PCF
+            // has to filter the comparison results, which is what the weights below do.
+            const int2 texelCoord = clamp(int2(floor(sampleUv * float2((float)shadowW, (float)shadowH))), int2(0, 0), int2((int)shadowW - 1, (int)shadowH - 1));
+            const float shadowDepth = g_textures[shadowSlot].Load(int3(texelCoord, 0)).r;
             visibility += ((receiverDepth - bias <= shadowDepth) ? 1.0 : 0.0) * w;
             weightSum += w;
         }
