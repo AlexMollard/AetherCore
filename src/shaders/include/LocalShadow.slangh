@@ -1,14 +1,34 @@
 #ifndef AETHER_LOCAL_SHADOW_SLANGH
 #define AETHER_LOCAL_SHADOW_SLANGH
 
-// Local shadow sampling helpers for the shadow atlas (VSM).
-// Included by gltf_mesh.slang.
+// Local shadow sampling for the depth atlas: PCSS (percentage-closer soft
+// shadows) with contact hardening.
+//
+// The atlas stores linear radial distance from the light, normalized by range
+// (local_shadow_depth.slang). Three stages per lookup:
+//   1. Blocker search - average the occluders inside a search radius derived
+//      from the light's physical size, to find how far the caster is in front
+//      of the receiver.
+//   2. Penumbra estimate - similar triangles: a caster far from the receiver
+//      throws a wide penumbra, one touching the receiver throws none. This is
+//      what sharpens the shadow at contact instead of shrinking it there.
+//   3. PCF - Poisson-disk taps over the estimated penumbra, the disk rotated
+//      per pixel by interleaved-gradient noise so undersampling reads as fine
+//      dither rather than banding. Deterministic in a single frame; needs no
+//      temporal history.
 //
 // Light type encoding:
 //   0 = spot light  (1 consecutive entry in ShadowLightData)
 //   1 = point light (6 consecutive cube-style face entries)
 
 static const uint kPointLightShadowFaceCount = 6u;
+
+static const uint kPcssBlockerSamples = 12u;
+static const uint kPcssFilterSamples = 16u;
+
+// Bias budget, in shadow texels of the face doing the lookup.
+static const float kDepthBiasTexels = 1.0;
+static const float kNormalOffsetTexels = 1.5;
 
 uint SelectPointShadowFace(float3 lightToReceiver)
 {
@@ -28,106 +48,136 @@ struct ShadowLightData
 {
     [[vk::offset(0)]]  float4x4 viewProj;
     [[vk::offset(64)]] float4   atlasRegion;   // xy=UV offset, zw=UV scale
-    [[vk::offset(80)]] float    depthBias;     // world units
+    [[vk::offset(80)]] float    texelScale;    // world units per texel, per unit distance
     [[vk::offset(84)]] uint     lightType;     // 0=spot, 1=point
-    [[vk::offset(88)]] float    normalBias;    // world units
-    [[vk::offset(92)]] float    _pad;
+    [[vk::offset(92)]] float    sourceRadius;  // physical light size, world units
     [[vk::offset(96)]] float4   lightPosRange; // xyz=light world position, w=range
 };
 
-// Convert world-space position to shadow atlas UV for a perspective light.
-// Returns UV in atlas space (not normalized [0,1] - caller checks region bounds).
-float2 LocalShadowUV(float3 worldPos, float4x4 viewProj, float4 atlasRegion)
-{
-    float4 clipPos = mul(viewProj, float4(worldPos, 1.0));
-    float3 ndc = clipPos.xyz / clipPos.w;
-    float2 uv = ndc.xy * 0.5 + 0.5;
-    return atlasRegion.xy + uv * atlasRegion.zw;
-}
-
-float2 LoadVsmMoments(uint atlasSlot, float2 atlasUV, float4 atlasRegion, uint2 atlasSize)
+// One atlas fetch, clamped to this light's own region so a tap that wanders
+// past the edge reads this light's border instead of a neighbour's shadow.
+float LoadAtlasDepth(uint atlasSlot, float2 atlasUV, float4 atlasRegion, uint2 atlasSize)
 {
     float2 atlasSizeF = float2(atlasSize);
-    uint2 regionMin = uint2(floor(atlasRegion.xy * atlasSizeF + 0.5f));
-    uint2 regionSize = max(uint2(1u, 1u), uint2(floor(atlasRegion.zw * atlasSizeF + 0.5f)));
-    uint2 regionMax = min(atlasSize - uint2(1u, 1u), regionMin + regionSize - uint2(1u, 1u));
+    float2 regionMin = atlasRegion.xy * atlasSizeF;
+    float2 regionMax = regionMin + atlasRegion.zw * atlasSizeF - 1.0;
 
-    float2 texelPos = atlasUV * atlasSizeF - 0.5f;
-    int2 base = int2(floor(texelPos));
-    float2 f = frac(texelPos);
-
-    int2 minPx = int2(regionMin);
-    int2 maxPx = int2(regionMax);
-    uint2 p00 = uint2(clamp(base, minPx, maxPx));
-    uint2 p10 = uint2(clamp(base + int2(1, 0), minPx, maxPx));
-    uint2 p01 = uint2(clamp(base + int2(0, 1), minPx, maxPx));
-    uint2 p11 = uint2(clamp(base + int2(1, 1), minPx, maxPx));
-
-    float2 m00 = g_textures[atlasSlot].Load(int3(p00, 0)).rg;
-    float2 m10 = g_textures[atlasSlot].Load(int3(p10, 0)).rg;
-    float2 m01 = g_textures[atlasSlot].Load(int3(p01, 0)).rg;
-    float2 m11 = g_textures[atlasSlot].Load(int3(p11, 0)).rg;
-
-    return lerp(lerp(m00, m10, f.x), lerp(m01, m11, f.x), f.y);
+    int2 texel = int2(clamp(atlasUV * atlasSizeF, regionMin, regionMax));
+    return g_textures[atlasSlot].Load(int3(texel, 0)).r;
 }
 
-// Evaluate VSM shadow for a single face entry.
-float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 L, uint atlasSlot, uint2 atlasSize)
+// Evaluate PCSS for a single face entry.
+float SamplePcss(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 L, uint atlasSlot, uint2 atlasSize, float2 pixelCoord)
 {
-    float4 clipPos = mul(sd.viewProj, float4(worldPos, 1.0));
-    float3 ndc = clipPos.xyz / clipPos.w;
+    const float3 N = normalize(worldNormal);
+    const float3 Ln = normalize(L);
+    const float NdotL = dot(N, Ln);
+    if (NdotL <= 0.0)
+    {
+        // Facing away from the light. The lighting term is already zero here, and
+        // biasing a surface this steep only eats the shadow of what stands on it.
+        return 1.0;
+    }
 
+    const float range = max(sd.lightPosRange.w, 1e-3);
+    const float receiverDist = distance(worldPos, sd.lightPosRange.xyz);
+
+    // Bias is measured in shadow texels, and a texel's world footprint grows with
+    // distance from the light, so both terms below track the receiver instead of
+    // being a constant that is too tight up close and too loose far away.
+    const float texelWorld = max(receiverDist * sd.texelScale, 1e-5);
+
+    // Normal-offset bias, applied in world space before projecting. Pushing the
+    // sample along the surface normal keeps the silhouette in place, where
+    // pushing depth toward the light slides the shadow off the caster's feet.
+    const float sinTheta = sqrt(saturate(1.0 - NdotL * NdotL));
+    const float3 samplePos = worldPos + N * (kNormalOffsetTexels * texelWorld * sinTheta);
+
+    float4 clipPos = mul(sd.viewProj, float4(samplePos, 1.0));
+    if (clipPos.w <= 0.0)
+    {
+        return 1.0;
+    }
+    float3 ndc = clipPos.xyz / clipPos.w;
     if (any(ndc.xy < -1.0) || any(ndc.xy > 1.0) || ndc.z < 0.0 || ndc.z > 1.0)
     {
         return 1.0;
     }
 
     float2 uv = ndc.xy * 0.5 + 0.5;
-    float2 atlasUV = sd.atlasRegion.xy + uv * sd.atlasRegion.zw;
+    const float2 regionScale = sd.atlasRegion.zw;
 
-    float2 moments = LoadVsmMoments(atlasSlot, atlasUV, sd.atlasRegion, atlasSize);
-
-    // Receiver depth in the same space the caster writes: linear radial
-    // distance from the light normalized by range, exponentially warped
-    // (local_shadow_depth.slang). Biases are world-space offsets toward the
-    // light, applied in linear space before the warp.
-    // Must match kEvsmExponent in local_shadow_depth.slang and the atlas
-    // clear color exp(c)/exp(2c) in LocalShadowService.cpp.
-    const float kEvsmExponent = 40.0;
-    const float range = max(sd.lightPosRange.w, 1e-3);
-    const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(L)));
-    // Clamp the world-space bias to a fraction of the light range so small
-    // lights (range < ~1m) do not peter-pan by a large slice of their depth.
-    const float worldBias = min(sd.depthBias + sd.normalBias * slope, 0.02 * range);
-    const float receiverDist = distance(worldPos, sd.lightPosRange.xyz);
-    const float receiverDepth = saturate((receiverDist - worldBias) / range);
-    const float warpedReceiver = exp(kEvsmExponent * receiverDepth);
-
-    float ex = moments.x;
-    float exSq = moments.y;
-
-    // Receiver is in front of all stored occluders - definitely lit.
-    if (warpedReceiver <= ex)
+    // Receiver depth in the atlas' own units: linear radial distance / range. The
+    // constant term only has to cover depth quantisation on surfaces facing the
+    // light; the normal offset above carries everything the slope costs.
+    const float receiverDepth = saturate((receiverDist - kDepthBiasTexels * texelWorld) / range);
+    if (receiverDepth <= 0.0)
     {
         return 1.0;
     }
 
-    // Relative variance floor: exp-warped moments scale with e^(c*d), so an
-    // absolute floor would be wrong at both ends of the range.
-    float variance = max(exSq - ex * ex, 1e-4 * ex * ex);
-    float md = warpedReceiver - ex;
-    float p = variance / (variance + md * md);
+    // Search radius is the light's projected size at the receiver: an occluder
+    // further out than that cannot shade this point, so the disk is bounded by
+    // the light's geometry rather than by a tuned constant.
+    const float sourceRadiusNorm = max(sd.sourceRadius, 1e-4) / range;
+    const float searchRadiusUv = sourceRadiusNorm / max(receiverDepth, 1e-3);
 
-    // Moderate light-bleed reduction: dark enough to read as a defined shadow
-    // (not the washed-out VSM membrane) but not so aggressive that the core goes
-    // harsh/black. Between the waxy 0.40 and the harsh 0.60.
-    const float kLightBleed = 0.50;
-    return saturate((p - kLightBleed) / (1.0 - kLightBleed));
+    const float phi = InterleavedGradientNoise(pixelCoord) * kTwoPi;
+
+    // Stage 1: average blocker depth.
+    float blockerSum = 0.0;
+    float blockerCount = 0.0;
+    [unroll]
+    for (uint i = 0u; i < kPcssBlockerSamples; ++i)
+    {
+        const float2 offset = VogelDiskSample(i, kPcssBlockerSamples, phi) * searchRadiusUv;
+        const float2 atlasUV = sd.atlasRegion.xy + saturate(uv + offset) * regionScale;
+        const float d = LoadAtlasDepth(atlasSlot, atlasUV, sd.atlasRegion, atlasSize);
+        if (d < receiverDepth)
+        {
+            blockerSum += d;
+            blockerCount += 1.0;
+        }
+    }
+
+    if (blockerCount <= 0.0)
+    {
+        // Nothing in front of the receiver anywhere in the search disk.
+        return 1.0;
+    }
+
+    const float avgBlocker = blockerSum / blockerCount;
+
+    // Stage 2: penumbra width by similar triangles. As the blocker approaches
+    // the receiver this collapses toward zero and the filter shrinks to a single
+    // texel - that is the contact hardening. The shadow gets sharper at the
+    // caster's base, never smaller.
+    const float penumbra = (receiverDepth - avgBlocker) / max(avgBlocker, 1e-4);
+    float filterRadiusUv = penumbra * sourceRadiusNorm / max(receiverDepth, 1e-3);
+
+    // Never below one texel, or the edge aliases back into stair-steps; never
+    // above the search radius, or the estimate extrapolates past the disk it
+    // was measured over.
+    const float2 texelUv = 1.0 / (float2(atlasSize) * regionScale);
+    filterRadiusUv = clamp(filterRadiusUv, max(texelUv.x, texelUv.y), searchRadiusUv);
+
+    // Stage 3: filter the comparison results, never the depths.
+    float visibility = 0.0;
+    [unroll]
+    for (uint j = 0u; j < kPcssFilterSamples; ++j)
+    {
+        const float2 offset = VogelDiskSample(j, kPcssFilterSamples, phi) * filterRadiusUv;
+        const float2 atlasUV = sd.atlasRegion.xy + saturate(uv + offset) * regionScale;
+        const float d = LoadAtlasDepth(atlasSlot, atlasUV, sd.atlasRegion, atlasSize);
+        visibility += (receiverDepth <= d) ? 1.0 : 0.0;
+    }
+
+    return visibility / float(kPcssFilterSamples);
 }
 
 // Evaluate shadow visibility for a local light by its ShadowLightData index.
 // Returns 1.0 = fully lit, 0.0 = fully shadowed.
-float SampleLocalShadow(uint shadowIdx, uint atlasSlot, uint2 atlasSize, float3 worldPos, float3 worldNormal, float3 L, FrameConstantsData* fc)
+float SampleLocalShadow(uint shadowIdx, uint atlasSlot, uint2 atlasSize, float3 worldPos, float3 worldNormal, float3 L, FrameConstantsData* fc, float2 pixelCoord)
 {
     if (fc->shadowLightDataAddr == 0u || shadowIdx >= fc->shadowLightCount)
     {
@@ -140,7 +190,7 @@ float SampleLocalShadow(uint shadowIdx, uint atlasSlot, uint2 atlasSize, float3 
     if (sd.lightType == 0u)
     {
         // Spot light: single perspective entry.
-        return SampleVSM(sd, worldPos, worldNormal, L, atlasSlot, atlasSize);
+        return SamplePcss(sd, worldPos, worldNormal, L, atlasSlot, atlasSize, pixelCoord);
     }
     else
     {
@@ -151,7 +201,7 @@ float SampleLocalShadow(uint shadowIdx, uint atlasSlot, uint2 atlasSize, float3 
         {
             return 1.0;
         }
-        return SampleVSM(shadowData[shadowIdx + face], worldPos, worldNormal, L, atlasSlot, atlasSize);
+        return SamplePcss(shadowData[shadowIdx + face], worldPos, worldNormal, L, atlasSlot, atlasSize, pixelCoord);
     }
 }
 

@@ -76,6 +76,7 @@ namespace aether
 			        .radius = l.radius,
 			        .color = l.color,
 			        .intensity = l.intensity * flick,
+			        .sourceRadius = l.sourceRadius,
 			        .castsShadow = l.castsShadow,
 			});
 		}
@@ -95,6 +96,7 @@ namespace aether
 			        .color = l.color,
 			        .intensity = l.intensity * flick,
 			        .outerAngleRad = l.outerAngleRad,
+			        .sourceRadius = l.sourceRadius,
 			        .castsShadow = l.castsShadow,
 			});
 		}

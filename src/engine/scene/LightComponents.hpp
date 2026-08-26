@@ -17,6 +17,10 @@ namespace aether
 		glm::vec3 color{1.0f};
 		float intensity = 20.0f;
 		float radius = 15.0f;
+		// Physical size of the emitter, in world units. Drives PCSS penumbra width:
+		// a bare filament throws razor shadows, a softbox throws broad ones. Not the
+		// falloff radius above, which is how far the light reaches.
+		float sourceRadius = 0.1f;
 		bool castsShadow = false;
 		// Flame-style flicker: intensity dips by up to `flicker` [0..1] at `flickerSpeed` (Hz-ish),
 		// with an organic per-light phase. 0 = steady. Applied on the CPU so it affects 2D and 3D alike.
@@ -31,6 +35,7 @@ namespace aether
 		float radius = 30.0f;
 		float innerAngleRad = 0.35f;
 		float outerAngleRad = 0.60f;
+		float sourceRadius = 0.1f;
 		bool castsShadow = false;
 		float flicker = 0.0f;
 		float flickerSpeed = 8.0f;

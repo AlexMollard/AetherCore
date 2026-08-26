@@ -22,6 +22,8 @@ namespace aether::gpu
 				return VK_FORMAT_B8G8R8A8_SRGB;
 			case Format::R16G16B16A16Sfloat:
 				return VK_FORMAT_R16G16B16A16_SFLOAT;
+			case Format::R32Sfloat:
+				return VK_FORMAT_R32_SFLOAT;
 			case Format::R32G32Sfloat:
 				return VK_FORMAT_R32G32_SFLOAT;
 			case Format::R32G32B32Sfloat:
@@ -70,6 +72,8 @@ namespace aether::gpu
 				return Format::B8G8R8A8Srgb;
 			case VK_FORMAT_R16G16B16A16_SFLOAT:
 				return Format::R16G16B16A16Sfloat;
+			case VK_FORMAT_R32_SFLOAT:
+				return Format::R32Sfloat;
 			case VK_FORMAT_R32G32_SFLOAT:
 				return Format::R32G32Sfloat;
 			case VK_FORMAT_R32G32B32_SFLOAT:
@@ -122,6 +126,7 @@ namespace aether::gpu
 			case Format::B8G8R8A8Unorm:
 			case Format::B8G8R8A8Srgb:
 			case Format::R16G16B16A16Sfloat:
+			case Format::R32Sfloat:
 			case Format::R32G32Sfloat:
 			case Format::R32G32B32Sfloat:
 			case Format::R32G32B32A32Sfloat:
@@ -148,6 +153,7 @@ namespace aether::gpu
 			case Format::B8G8R8A8Unorm:
 			case Format::B8G8R8A8Srgb:
 			case Format::R16G16B16A16Sfloat:
+			case Format::R32Sfloat:
 			case Format::R32G32Sfloat:
 			case Format::R32G32B32Sfloat:
 			case Format::R32G32B32A32Sfloat:
@@ -177,6 +183,7 @@ namespace aether::gpu
 			case Format::B8G8R8A8Unorm:
 			case Format::B8G8R8A8Srgb:
 			case Format::R16G16B16A16Sfloat:
+			case Format::R32Sfloat:
 			case Format::R32G32Sfloat:
 			case Format::R32G32B32Sfloat:
 			case Format::R32G32B32A32Sfloat:
@@ -208,6 +215,8 @@ namespace aether::gpu
 				return 4u;
 			case Format::R16G16B16A16Sfloat:
 				return 8u;
+			case Format::R32Sfloat:
+				return 4u;
 			case Format::R32G32Sfloat:
 				return 8u;
 			case Format::R32G32B32Sfloat:

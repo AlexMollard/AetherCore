@@ -18,6 +18,7 @@
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
 #include "include/GpuMaterial.slangh"
+#include "include/ShadowSampling.slangh"
 #include "include/DirectionalShadowCSM.slangh"
 #include "include/LocalShadow.slangh"
 #include "include/PBRUtilities.slangh"
@@ -223,7 +224,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float ambientAo = ao;
     float3 diffuse = kD * baseColor.rgb * diffuseAo / kPI;
 
-    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L);
+    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L, input.svPosition.xy);
     // Materials can opt out of shadow receiving (flag set == opt out); such
     // surfaces stay fully lit by the sun regardless of the shadow map.
     const bool receivesShadows = (mat.flags & kFlagNoReceiveShadows) == 0u;
@@ -274,6 +275,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                 metallic,
                 roughness,
                 fc,
+                input.svPosition.xy,
                 LoLocal);
         }
     }

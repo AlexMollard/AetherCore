@@ -30,19 +30,22 @@ namespace aether
 	{
 		glm::mat4 viewProj{1.0f};
 		glm::vec4 atlasRegion{0.0f};
-		float depthBias = 0.01f;
+		// World units a single shadow texel covers per unit of distance from the light
+		// (2*tan(fov/2)/resolution). Bias scales off this, so it tracks the real texel
+		// footprint at the receiver instead of a constant that is wrong at some range.
+		float texelScale = 0.0f;
 		std::uint32_t lightType = 0;
-		float normalBias = 0.03f;
 		float _pad1 = 0.0f;
+		float sourceRadius = 0.1f;
 		glm::vec4 lightPosRange{0.0f};
 	};
 
 	static_assert(sizeof(ShadowLightData) == 112, "ShadowLightData must be 112 bytes for GPU layout");
 	static_assert(offsetof(ShadowLightData, viewProj) == 0, "ShadowLightData viewProj offset mismatch");
 	static_assert(offsetof(ShadowLightData, atlasRegion) == 64, "ShadowLightData atlasRegion offset mismatch");
-	static_assert(offsetof(ShadowLightData, depthBias) == 80, "ShadowLightData depthBias offset mismatch");
+	static_assert(offsetof(ShadowLightData, texelScale) == 80, "ShadowLightData texelScale offset mismatch");
 	static_assert(offsetof(ShadowLightData, lightType) == 84, "ShadowLightData lightType offset mismatch");
-	static_assert(offsetof(ShadowLightData, normalBias) == 88, "ShadowLightData normalBias offset mismatch");
+	static_assert(offsetof(ShadowLightData, sourceRadius) == 92, "ShadowLightData sourceRadius offset mismatch");
 	static_assert(offsetof(ShadowLightData, lightPosRange) == 96, "ShadowLightData lightPosRange offset mismatch");
 
 	inline constexpr std::uint32_t kMaxLocalShadows = 256u;
@@ -118,8 +121,8 @@ namespace aether
 		{
 			glm::mat4 viewProj{1.0f};
 			ShadowAtlasManager::Region region;
-			float depthBias = 0.01f;
-			float normalBias = 0.03f;
+			float texelScale = 0.0f;
+			float sourceRadius = 0.1f;
 			std::uint32_t lightType = 0;
 			glm::vec4 lightPosRange{0.0f};
 		};
@@ -151,10 +154,5 @@ namespace aether
 
 		std::vector<glm::vec2> m_lightShadowIndices;
 
-		gpu::PipelineHandle m_blurPipelineHandle;
-		// Scratch for the VSM separable blur: filled from the atlas, ping-ponged, copied
-		// back, all inside one frame. Graph-owned, so the addresses are fetched per frame.
-		RGBuffer m_blurBufferRG{};
-		RGBuffer m_blurScratchBufferRG{};
 	};
 } // namespace aether

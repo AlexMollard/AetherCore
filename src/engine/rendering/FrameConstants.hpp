@@ -10,7 +10,7 @@ namespace aether
 {
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (800 bytes):
+	// Layout (816 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -30,7 +30,7 @@ namespace aether
 		glm::uvec4 tiledLightBufferOffsets{0u, 0u, 0u, 0u};
 		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)};
 		glm::vec4 shadowCascadeSplits{24.0f, 80.0f, 220.0f, 0.0f};
-		glm::vec4 shadowParams{0.0014f, 0.0030f, 1.0f, 2.0f};
+		glm::vec4 shadowParams{1.0f, 1.5f, 1.0f, 0.0f}; // x=depthBiasTexels, y=normalOffsetTexels, z=strength
 		std::uint32_t shadowLightCount = 0;
 		std::uint32_t _padShadowAlign = 0; // offset 580, alignment before uint64
 		std::uint64_t shadowLightDataAddr = 0;
@@ -50,6 +50,10 @@ namespace aether
 		// cascade 0..2, w unused.
 		glm::vec4 shadowCascadeDepthBias{0.0f};   // constant bias in NDC depth units
 		glm::vec4 shadowCascadeNormalOffset{0.0f}; // normal-offset distance in world units
+		// Penumbra UV width per unit of NDC depth separation between blocker and
+		// receiver, i.e. the sun's angular size expressed in this cascade's own
+		// shadow-map space. xyz = cascade 0..2, w unused.
+		glm::vec4 shadowCascadePenumbraScale{0.0f};
 
 		void RefreshDerived()
 		{
@@ -75,7 +79,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 800, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 816, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -103,5 +107,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, effectParamBufferAddr) == 760);
 	static_assert(offsetof(FrameConstants, shadowCascadeDepthBias) == 768);
 	static_assert(offsetof(FrameConstants, shadowCascadeNormalOffset) == 784);
-	static_assert(sizeof(FrameConstants) == 800);
+	static_assert(offsetof(FrameConstants, shadowCascadePenumbraScale) == 800);
+	static_assert(sizeof(FrameConstants) == 816);
 } // namespace aether

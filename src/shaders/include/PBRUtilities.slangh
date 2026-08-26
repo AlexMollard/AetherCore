@@ -85,6 +85,7 @@ void AccumulateLocalLight(
     in float metallic,
     in float roughness,
     in FrameConstantsData* fc,
+    in float2 pixelCoord,
     inout float3 sum)
 {
     float3 toLight = light.position - worldPos;
@@ -146,7 +147,7 @@ void AccumulateLocalLight(
         if (atlasEntry.type == kResourceTypeBindlessTexture && shadowSlot != 0xFFFFFFFFu && atlasEntry.width > 0u && atlasEntry.height > 0u)
         {
             uint shadowIdx = (uint)light.shadowIndex;
-            shadowVis = SampleLocalShadow(shadowIdx, shadowSlot, uint2(atlasEntry.width, atlasEntry.height), worldPos, N, L, fc);
+            shadowVis = SampleLocalShadow(shadowIdx, shadowSlot, uint2(atlasEntry.width, atlasEntry.height), worldPos, N, L, fc, pixelCoord);
             shadowVis = lerp(1.0, shadowVis, light.shadowStrength);
         }
     }

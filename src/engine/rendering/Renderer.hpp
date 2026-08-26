@@ -22,6 +22,7 @@ namespace aether
 			float radius = 1.0f;
 			glm::vec3 color{1.0f};
 			float intensity = 1.0f;
+			float sourceRadius = 0.1f;
 			bool castsShadow = false;
 		};
 
@@ -34,6 +35,7 @@ namespace aether
 			glm::vec3 color{1.0f};
 			float intensity = 1.0f;
 			float outerAngleRad = 0.60f;
+			float sourceRadius = 0.1f;
 			bool castsShadow = false;
 		};
 

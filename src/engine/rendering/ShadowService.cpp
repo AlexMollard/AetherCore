@@ -34,16 +34,53 @@ namespace
 
 	constexpr float kOrthoHalfMin = 20.0f;
 
-	constexpr float kOrthoHalfViewRangeRatio = 0.60f;
+	// Small outward margin on the fitted sphere so PCF taps near the cascade edge
+	// still land on valid texels.
+	constexpr float kCascadeOverlap = 1.04f;
 
-	constexpr float kCascadeOverlap = 1.30f;
+	// Tangent of the sun's angular radius. The real sun subtends about half a
+	// degree, which is what makes a shadow sharp at the caster's base and soft
+	// metres away. Driving the penumbra from this rather than a filter-width
+	// constant is why the softness stops depending on how far the camera is.
+	constexpr float kSunTanAngularRadius = 0.00465f;
 
-	// Shadow bias budget, in shadow-map texels of the cascade doing the lookup.
+	// Widest blocker search, in texels. Bounds the cost of the search and stops
+	// the penumbra estimate from sampling half the cascade.
+	constexpr float kMaxPenumbraTexels = 24.0f;
+
+	// Tightest enclosing sphere of the view frustum slice between near and far.
+	// Fitting a sphere rather than guessing a box is what makes coverage exact:
+	// the previous ratio-of-far-plane guess was about 1.5x too small for a 60
+	// degree camera, so the far third of every cascade fell outside its own map
+	// and read as unshadowed - crisp at one distance, broken at the next. A
+	// sphere is also rotation-invariant, so the fit does not breathe as the
+	// camera turns.
+	struct CascadeSphere
+	{
+		float centerDistance;
+		float radius;
+	};
+
+	CascadeSphere FitCascadeSphere(const float nearZ, const float farZ, const float tanHalfX, const float tanHalfY)
+	{
+		const float a2 = tanHalfX * tanHalfX + tanHalfY * tanHalfY;
+		const float center = (farZ + nearZ) * (a2 + 1.0f) * 0.5f;
+		if (center >= farZ)
+		{
+			// Centre would sit past the far plane, so the far corners alone bound it.
+			return CascadeSphere{.centerDistance = farZ, .radius = farZ * std::sqrt(a2)};
+		}
+		const float dz = nearZ - center;
+		return CascadeSphere{.centerDistance = center, .radius = std::sqrt(nearZ * nearZ * a2 + dz * dz)};
+	}
+
+	// Shadow bias budget, in shadow-map texels of the cascade doing the lookup. The
+	// offset only has to clear the filter that is actually in use, which contact
+	// hardening keeps at a texel or two exactly where acne would otherwise show;
+	// where the penumbra opens up the shadow is soft enough that acne cannot form.
 	constexpr float kDepthBiasTexels = 1.0f;
-	constexpr float kNormalOffsetTexels = 1.5f;
-	// One texel per PCF step keeps the 5x5 kernel contiguous. Anything wider skips
-	// texels between taps, which point fetches turn into a sparkling checkerboard.
-	constexpr float kPcfRadiusTexels = 1.0f;
+	constexpr float kNormalOffsetTexels = 3.0f;
+
 
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
 	{
@@ -297,7 +334,12 @@ namespace aether
 		// offset using that cascade's own texel footprint and depth range. A depth-unit
 		// constant cannot work here - one cascade's ortho spans a couple of hundred metres,
 		// so 0.0014 of NDC was a third of a metre of peter-panning at the caster's feet.
-		fc.shadowParams = glm::vec4(kDepthBiasTexels, kNormalOffsetTexels, 1.0f, kPcfRadiusTexels);
+		fc.shadowParams = glm::vec4(kDepthBiasTexels, kNormalOffsetTexels, 1.0f, 0.0f);
+		// Half-angle tangents straight off the projection, so the fit tracks whatever
+		// FOV and aspect the camera actually has instead of assuming one.
+		const float tanHalfX = (std::abs(packet.proj[0][0]) > 1e-6f) ? (1.0f / std::abs(packet.proj[0][0])) : 1.0f;
+		const float tanHalfY = (std::abs(packet.proj[1][1]) > 1e-6f) ? (1.0f / std::abs(packet.proj[1][1])) : 1.0f;
+
 		const glm::vec3 camPos = packet.hasCameraData ? glm::vec3(packet.cameraWorldPos) : glm::vec3(0.0f);
 		glm::vec3 camForward(0.0f, 0.0f, -1.0f);
 		if (packet.hasCameraData)
@@ -310,17 +352,17 @@ namespace aether
 		{
 			const float cascadeNear = (cascade == 0u) ? camNear : fc.shadowCascadeSplits[static_cast<glm::length_t>(cascade - 1u)];
 			const float cascadeFar = fc.shadowCascadeSplits[static_cast<glm::length_t>(cascade)];
-			const float cascadeMid = 0.5f * (cascadeNear + cascadeFar);
 			const float cascadeRange = std::max(cascadeFar - cascadeNear, 1.0f);
+			const CascadeSphere sphere = FitCascadeSphere(cascadeNear, cascadeFar, tanHalfX, tanHalfY);
 
-			glm::vec3 shadowCenter = camPos + camForward * cascadeMid;
+			glm::vec3 shadowCenter = camPos + camForward * sphere.centerDistance;
 			glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 			if (std::abs(glm::dot(up, lightDir)) > 0.95f)
 			{
 				up = glm::vec3(1.0f, 0.0f, 0.0f);
 			}
 
-			const float orthoHalf = std::max(kOrthoHalfMin, cascadeFar * kOrthoHalfViewRangeRatio) * kCascadeOverlap;
+			const float orthoHalf = std::max(kOrthoHalfMin, sphere.radius) * kCascadeOverlap;
 			glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
 			glm::mat4 lightView = glm::lookAt(lightEye, shadowCenter, up);
 
@@ -357,10 +399,13 @@ namespace aether
 			// used to pay for is now the normal offset, which slides the lookup across the
 			// surface instead of pushing it toward the light, so the silhouette stays put.
 			const float depthRange = std::max(farPlane - nearPlane, 1e-3f);
-			const float pcfSpan = 1.0f + std::max(kPcfRadiusTexels, 0.5f);
 			const auto cascadeIdx = static_cast<glm::length_t>(cascade);
 			fc.shadowCascadeDepthBias[cascadeIdx] = (kDepthBiasTexels * texelSize * std::numbers::sqrt2_v<float>) / depthRange;
-			fc.shadowCascadeNormalOffset[cascadeIdx] = kNormalOffsetTexels * texelSize * pcfSpan;
+			fc.shadowCascadeNormalOffset[cascadeIdx] = kNormalOffsetTexels * texelSize;
+			// A blocker one NDC unit in front of the receiver spans the cascade's whole
+			// depth range, so its penumbra is that range times the sun's angular radius,
+			// expressed as a fraction of the map's world width.
+			fc.shadowCascadePenumbraScale[cascadeIdx] = (depthRange * kSunTanAngularRadius) / (2.0f * orthoHalf);
 
 			m_shadowFrameConstants[cascade].Write(frameIdx, shadowFc);
 			fc.shadowViewProjCascades[cascade] = shadowFc.viewProj;

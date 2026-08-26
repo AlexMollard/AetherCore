@@ -12,7 +12,7 @@ namespace aether
 {
 	class BindlessManager;
 
-	// Shelf-packs a 4K x 4K R32G32_SFLOAT VSM shadow atlas. The image itself belongs to the
+	// Shelf-packs a 4K x 4K R32_SFLOAT local shadow atlas. The image itself belongs to the
 	// render graph; this is only the layout.
 	//
 	// The extent is not arbitrary: LocalShadowService renders a hard-capped number
@@ -27,7 +27,7 @@ namespace aether
 	public:
 		static constexpr std::uint32_t kAtlasWidth = 4096u;
 		static constexpr std::uint32_t kAtlasHeight = 4096u;
-		static constexpr gpu::Format kAtlasFormat = gpu::Format::R32G32Sfloat;
+		static constexpr gpu::Format kAtlasFormat = gpu::Format::R32Sfloat;
 
 		struct Region
 		{

@@ -25,7 +25,7 @@ struct FrameConstantsData
     [[vk::offset(336)]] uint4  tiledLightBufferOffsets; // x=lightBase, y=headerBase, z=indexBase
     [[vk::offset(352)]] float4x4 shadowViewProjCascades[3]; // light clip transforms for CSM cascades
     [[vk::offset(544)]] float4 shadowCascadeSplits;         // xyz=split far distances in view-space units
-    [[vk::offset(560)]] float4 shadowParams;                // x=depthBiasTexels, y=normalOffsetTexels, z=strength, w=pcfRadiusTexels
+    [[vk::offset(560)]] float4 shadowParams;                // x=depthBiasTexels, y=normalOffsetTexels, z=strength, w=unused
     [[vk::offset(576)]] uint    shadowLightCount;           // number of active local shadow lights
     [[vk::offset(584)]] uint64_t shadowLightDataAddr;       // BDA -> ShadowLightData[]
     [[vk::offset(592)]] float4  frustumPlanes[6];           // normalized planes, xyz=n, w=d
@@ -34,6 +34,7 @@ struct FrameConstantsData
     [[vk::offset(760)]] uint64_t effectParamBufferAddr;     // BDA of EffectParamBuffer (0 = no effects active)
     [[vk::offset(768)]] float4  shadowCascadeDepthBias;     // xyz = per-cascade constant bias, NDC depth units
     [[vk::offset(784)]] float4  shadowCascadeNormalOffset;  // xyz = per-cascade normal-offset distance, world units
+    [[vk::offset(800)]] float4  shadowCascadePenumbraScale; // xyz = penumbra UV width per unit of NDC depth separation
 };
 
 #endif

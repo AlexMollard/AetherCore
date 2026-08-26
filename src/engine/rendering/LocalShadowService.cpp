@@ -31,11 +31,27 @@ namespace
 {
 	constexpr std::uint32_t kPointLightFaceCount = 6u;
 	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 48u;
-	// EVSM exponential warp constant. Must match kEvsmExponent in
-	constexpr float kEvsmExponent = 40.0f;
 	constexpr std::uint32_t kPointShadowFaceRes = 384u;
 	// which needs no separate coverage). Radial depth is face-invariant, so the
 	constexpr float kPointLightFovDeg = 90.0f;
+
+	// Guard band, in texels, around each cube face. The six faces partition direction
+	// space at exactly 90 degrees, so a receiver sitting on a boundary projects to the
+	// very edge of its face - and once normal-offset bias nudges it, a hair past the
+	// edge, where the sampler has to call it unshadowed. That reads as a bright seam
+	// along every face boundary, and with several shadowed point lights the seams cross
+	// into a grid. Rendering each face slightly wider than 90 degrees puts the boundary
+	// well inside valid texels and gives the filter kernel room to land.
+	constexpr float kPointShadowGuardTexels = 6.0f;
+
+	// FOV that covers the 90-degree cone plus the guard band on each side.
+	// World units one texel spans per unit of distance from the light.
+	float TexelScaleFor(const float fovRad, const std::uint32_t resolution)
+	{
+		return 2.0f * glm::tan(fovRad * 0.5f) / static_cast<float>(resolution);
+	}
+
+	const float kPointLightPaddedFovRad = 2.0f * std::atan(glm::tan(glm::radians(kPointLightFovDeg) * 0.5f) * ((static_cast<float>(kPointShadowFaceRes) + 2.0f * kPointShadowGuardTexels) / static_cast<float>(kPointShadowFaceRes)));
 	constexpr float kSpotShadowFovPaddingRad = glm::radians(4.0f);
 
 	// Fixed resolution for all spot shadows - avoids atlas layout shifts when
@@ -80,31 +96,6 @@ namespace
 
 namespace aether
 {
-	// Must match BlurPushConstants in vsm_blur.slang.
-	struct BlurPushConstants
-	{
-		std::uint32_t atlasWidth;
-		std::uint32_t atlasHeight;
-		std::uint32_t blurOffsetX;
-		std::uint32_t blurOffsetY;
-		std::uint32_t isHorizontal;
-		std::uint32_t blurWidth;
-		std::uint32_t blurHeight;
-		float _pad2;
-		gpu::DeviceAddress srcAddr;
-		gpu::DeviceAddress dstAddr;
-	};
-
-	static_assert(sizeof(BlurPushConstants) == 48, "BlurPushConstants must be 48 bytes");
-	static_assert(offsetof(BlurPushConstants, atlasWidth) == 0, "BlurPushConstants atlasWidth offset mismatch");
-	static_assert(offsetof(BlurPushConstants, blurOffsetX) == 8, "BlurPushConstants blurOffsetX offset mismatch");
-	static_assert(offsetof(BlurPushConstants, isHorizontal) == 16, "BlurPushConstants isHorizontal offset mismatch");
-	static_assert(offsetof(BlurPushConstants, blurWidth) == 20, "BlurPushConstants blurWidth offset mismatch");
-	static_assert(offsetof(BlurPushConstants, blurHeight) == 24, "BlurPushConstants blurHeight offset mismatch");
-	static_assert(offsetof(BlurPushConstants, _pad2) == 28, "BlurPushConstants _pad2 offset mismatch");
-	static_assert(offsetof(BlurPushConstants, srcAddr) == 32, "BlurPushConstants srcAddr offset mismatch");
-	static_assert(offsetof(BlurPushConstants, dstAddr) == 40, "BlurPushConstants dstAddr offset mismatch");
-
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
@@ -120,7 +111,7 @@ namespace aether
 		        GraphicsPipeline::Create(device,
 		                {
 		                        .shaderVfsPath = "shaders://local_shadow_depth.spv",
-		                        .colorFormat = gpu::Format::R32G32Sfloat,
+		                        .colorFormat = ShadowAtlasManager::kAtlasFormat,
 		                        .depthFormat = depthFormat,
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
@@ -166,17 +157,7 @@ namespace aether
 		}
 
 		{
-			m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
-			        gpu::ComputePipelineDesc{
-			                .shaderVfsPath = "shaders://vsm_blur.spv",
-			                .shaderEntry = "main",
-			                .debugName = "VSMBlur",
-			        });
-			if (!m_blurPipelineHandle.IsValid())
-			{
-				AE_ASSERT_ALWAYS(false, "Failed to create VSM blur compute pipeline");
 			}
-		}
 
 		m_atlasDepthFormat = depthFormat;
 	}
@@ -196,8 +177,6 @@ namespace aether
 		m_atlasBindlessSlot = 0xFFFFFFFFu;
 		m_atlasImage = {};
 		m_atlasDepthImage = {};
-		m_blurBufferRG = {};
-		m_blurScratchBufferRG = {};
 		m_perLightShadows.clear();
 		m_atlasReady = false;
 	}
@@ -228,12 +207,6 @@ namespace aether
 			buf.address = 0;
 		}
 		DestroyShadowTargets();
-
-		if (m_blurPipelineHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_blurPipelineHandle);
-			m_blurPipelineHandle = {};
-		}
 	}
 
 	bool LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
@@ -287,6 +260,7 @@ namespace aether
 		{
 			glm::vec3 position;
 			float radius;
+			float sourceRadius;
 			std::uint32_t lightIndex;
 			std::uint32_t lightType;
 			float distanceSq;
@@ -307,6 +281,7 @@ namespace aether
 				candidates.push_back(ShadowCandidate{
 				        .position = ptLights[i].position,
 				        .radius = ptLights[i].radius,
+				        .sourceRadius = ptLights[i].sourceRadius,
 				        .lightIndex = static_cast<std::uint32_t>(i),
 				        .lightType = 0u,
 				        .distanceSq = dsq,
@@ -327,6 +302,7 @@ namespace aether
 				candidates.push_back(ShadowCandidate{
 				        .position = spLights[i].position,
 				        .radius = spLights[i].radius,
+				        .sourceRadius = spLights[i].sourceRadius,
 				        .lightIndex = static_cast<std::uint32_t>(i),
 				        .lightType = 1u,
 				        .distanceSq = dsq,
@@ -383,12 +359,12 @@ namespace aether
 				{
 					const PointShadowFace& faceDesc = kPointShadowFaces[face];
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + faceDesc.direction, faceDesc.up);
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(kPointLightFovDeg), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(kPointLightPaddedFovRad, 1.0f, 1.0f, 0.1f, c.radius);
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = regions[face],
-					        .depthBias = 0.01f,
-					        .normalBias = 0.03f,
+					        .texelScale = TexelScaleFor(kPointLightPaddedFovRad, kPointShadowFaceRes),
+					        .sourceRadius = c.sourceRadius,
 					        .lightType = 1u,
 					        .lightPosRange = glm::vec4(c.position, c.radius),
 					});
@@ -421,8 +397,8 @@ namespace aether
 				m_perLightShadows.push_back(PerLightShadow{
 				        .viewProj = lightProj * lightView,
 				        .region = r,
-				        .depthBias = 0.01f,
-				        .normalBias = 0.03f,
+				        .texelScale = TexelScaleFor(fov, kSpotShadowRes),
+				        .sourceRadius = c.sourceRadius,
 				        .lightType = 0u,
 				        .lightPosRange = glm::vec4(src.position, src.radius),
 				});
@@ -443,8 +419,8 @@ namespace aether
 			        static_cast<float>(pls.region.y) / static_cast<float>(ShadowAtlasManager::kAtlasHeight),
 			        static_cast<float>(pls.region.width) / static_cast<float>(ShadowAtlasManager::kAtlasWidth),
 			        static_cast<float>(pls.region.height) / static_cast<float>(ShadowAtlasManager::kAtlasHeight));
-			mapped[i].depthBias = pls.depthBias;
-			mapped[i].normalBias = pls.normalBias;
+			mapped[i].texelScale = pls.texelScale;
+			mapped[i].sourceRadius = pls.sourceRadius;
 			mapped[i].lightType = pls.lightType;
 			mapped[i].lightPosRange = pls.lightPosRange;
 		}
@@ -472,21 +448,17 @@ namespace aether
 
 	void LocalShadowService::SetupPassResources(RenderGraph& graph)
 	{
-		// Written by $LocalShadowAtlasRender, blurred through the buffer chain and read for the
-		// last time by $EngineForward - 128 MiB that never outlives the frame.
+		// Written by $LocalShadowAtlasRender and read for the last time by $EngineForward -
+		// 64 MiB that never outlives the frame. PCSS samples the atlas in place, so there is
+		// no post-process chain and no scratch copy of it.
 		m_atlasImage = graph.CreateTransientColor(ShadowAtlasManager::kAtlasFormat,
 		        gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
-		        gpu::ImageUsage::TransferSrc | gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage);
+		        gpu::ImageUsage::Sampled);
 		m_atlasBindlessSlot = graph.EnsureBindlessSampled(m_atlasImage);
 		if (m_atlasBindlessSlot == 0xFFFFFFFFu)
 		{
 			Throw(AetherError::Engine("LocalShadowService: shadow atlas bindless registration failed"));
 		}
-
-		constexpr gpu::DeviceSize kBlurBufSize = static_cast<gpu::DeviceSize>(ShadowAtlasManager::kAtlasWidth) * ShadowAtlasManager::kAtlasHeight * sizeof(float) * 2u;
-		constexpr gpu::BufferUsage kBlurBufUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferSrc | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
-		m_blurBufferRG = graph.CreateTransientBuffer(kBlurBufSize, kBlurBufUsage);
-		m_blurScratchBufferRG = graph.CreateTransientBuffer(kBlurBufSize, kBlurBufUsage);
 
 		m_atlasDepthImage = graph.CreateTransientDepth(m_atlasDepthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight});
 		(void) graph.GetBlackboard().DeclareGraphProduct<LocalShadowProduct>(std::string{kFrameProductLocalShadows},
@@ -495,7 +467,7 @@ namespace aether
 		                .atlasDepthImage = m_atlasDepthImage,
 		                .atlasBindlessSlot = m_atlasBindlessSlot,
 		                .atlasExtent = gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
-		                .atlasFormat = gpu::Format::R32G32Sfloat,
+		                .atlasFormat = ShadowAtlasManager::kAtlasFormat,
 		        });
 	}
 
@@ -519,8 +491,9 @@ namespace aether
 	void LocalShadowService::RegisterGraphicsPasses(RenderGraph& graph)
 	{
 		graph.AddPass("$LocalShadowAtlasRender")
+		        .ProducesProduct<LocalShadowProduct>(kFrameProductLocalShadows)
 		        .ConsumesDrawList(m_shadowDrawList)
-		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(std::exp(kEvsmExponent), std::exp(2.0f * kEvsmExponent), 0.0f, 0.0f))
+		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 0.0f, 0.0f, 0.0f))
 		        .WriteDepth(m_atlasDepthImage, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
 		        .Execute(
@@ -559,135 +532,5 @@ namespace aether
 			                }
 		                });
 
-		graph.AddComputePass("$VSMCopyToBuffer")
-		        .ReadImageTransfer(m_atlasImage)
-		        .WriteBufferTransfer(m_blurBufferRG)
-		        .ExecuteCompute(
-		                [this](PassContext& ctx)
-		                {
-			                const auto bounds = m_atlasManager.GetUsedBounds();
-			                if (bounds.width == 0 || bounds.height == 0)
-			                {
-				                return;
-			                }
-
-			                auto* const atlasImage = ctx.graph.ResolveImage(m_atlasImage);
-			                auto* const blurVkBuf = ctx.graph.ResolveBuffer(m_blurBufferRG);
-
-			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.CopyImageToBuffer(atlasImage, blurVkBuf, gpu::ImageLayout::TransferSrc, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
-		                });
-
-		graph.AddComputeBufferPass({
-		                                   .name = "$VSMBlurH",
-		                                   .reads = {m_blurBufferRG},
-		                                   .writes = {m_blurScratchBufferRG},
-		                           })
-		        .ExecuteCompute(
-		                [this](PassContext& ctx)
-		                {
-			                const auto bounds = m_atlasManager.GetUsedBounds();
-			                if (bounds.width == 0 || bounds.height == 0)
-			                {
-				                return;
-			                }
-
-			                // Pooled buffers move whenever the graph is rebuilt, so the
-			                // addresses are read now rather than cached at construction.
-			                const gpu::DeviceAddress srcAddr = ctx.graph.GetBufferAddress(m_blurBufferRG);
-			                const gpu::DeviceAddress dstAddr = ctx.graph.GetBufferAddress(m_blurScratchBufferRG);
-
-			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
-
-			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.BindComputePipeline(blurPipeline.state);
-			                for (const PerLightShadow& pls: m_perLightShadows)
-			                {
-				                if (!pls.region.IsValid())
-				                {
-					                continue;
-				                }
-
-				                const BlurPushConstants hPc{
-				                        .atlasWidth = bounds.width,
-				                        .atlasHeight = bounds.height,
-				                        .blurOffsetX = pls.region.x - bounds.x,
-				                        .blurOffsetY = pls.region.y - bounds.y,
-				                        .isHorizontal = 1u,
-				                        .blurWidth = pls.region.width,
-				                        .blurHeight = pls.region.height,
-				                        ._pad2 = 0.0f,
-				                        .srcAddr = srcAddr,
-				                        .dstAddr = dstAddr,
-				                };
-				                cmd.PushDataRaw(0, std::as_bytes(std::span{&hPc, 1}));
-				                cmd.Dispatch((pls.region.width + 15u) / 16u, (pls.region.height + 15u) / 16u, 1u);
-			                }
-		                });
-
-		graph.AddComputeBufferPass({
-		                                   .name = "$VSMBlurV",
-		                                   .reads = {m_blurScratchBufferRG},
-		                                   .writes = {m_blurBufferRG},
-		                           })
-		        .ExecuteCompute(
-		                [this](PassContext& ctx)
-		                {
-			                const auto bounds = m_atlasManager.GetUsedBounds();
-			                if (bounds.width == 0 || bounds.height == 0)
-			                {
-				                return;
-			                }
-
-			                const gpu::DeviceAddress srcAddr = ctx.graph.GetBufferAddress(m_blurScratchBufferRG);
-			                const gpu::DeviceAddress dstAddr = ctx.graph.GetBufferAddress(m_blurBufferRG);
-
-			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
-
-			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.BindComputePipeline(blurPipeline.state);
-			                for (const PerLightShadow& pls: m_perLightShadows)
-			                {
-				                if (!pls.region.IsValid())
-				                {
-					                continue;
-				                }
-
-				                const BlurPushConstants vPc{
-				                        .atlasWidth = bounds.width,
-				                        .atlasHeight = bounds.height,
-				                        .blurOffsetX = pls.region.x - bounds.x,
-				                        .blurOffsetY = pls.region.y - bounds.y,
-				                        .isHorizontal = 0u,
-				                        .blurWidth = pls.region.width,
-				                        .blurHeight = pls.region.height,
-				                        ._pad2 = 0.0f,
-				                        .srcAddr = srcAddr,
-				                        .dstAddr = dstAddr,
-				                };
-				                cmd.PushDataRaw(0, std::as_bytes(std::span{&vPc, 1}));
-				                cmd.Dispatch((pls.region.width + 15u) / 16u, (pls.region.height + 15u) / 16u, 1u);
-			                }
-		                });
-
-		graph.AddComputePass("$VSMCopyToAtlas")
-		        .ProducesProduct<LocalShadowProduct>(kFrameProductLocalShadows)
-		        .ReadBufferTransfer(m_blurBufferRG)
-		        .WriteImageTransfer(m_atlasImage)
-		        .ExecuteCompute(
-		                [this](PassContext& ctx)
-		                {
-			                const auto bounds = m_atlasManager.GetUsedBounds();
-			                if (bounds.width == 0 || bounds.height == 0)
-			                {
-				                return;
-			                }
-
-			                auto* const atlasImage = ctx.graph.ResolveImage(m_atlasImage);
-			                auto* const blurVkBuf = ctx.graph.ResolveBuffer(m_blurBufferRG);
-
-			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.CopyBufferToImage(blurVkBuf, atlasImage, gpu::ImageLayout::TransferDst, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
-		                });
 	}
 } // namespace aether
