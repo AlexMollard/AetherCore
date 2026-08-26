@@ -23,8 +23,10 @@
 
 static const uint kPointLightShadowFaceCount = 6u;
 
-static const uint kPcssBlockerSamples = 12u;
-static const uint kPcssFilterSamples = 16u;
+// See DirectionalShadowCSM.slangh: cost is near-linear in tap count and the visible
+// difference is confined to penumbra edges.
+static const uint kPcssBlockerSamples = 6u;
+static const uint kPcssFilterSamples = 8u;
 
 // Bias budget, in shadow texels of the face doing the lookup.
 static const float kDepthBiasTexels = 1.0;

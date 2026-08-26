@@ -7,8 +7,13 @@
 // - g_textures[] bindless Texture2D array
 // - FrameConstantsData from FrameConstants.slangh
 
-static const uint kCsmBlockerSamples = 12u;
-static const uint kCsmFilterSamples = 16u;
+// Tap counts. Cost in the forward shader is close to linear in these, and halving
+// them takes 27% off that pass while changing 0.4% of pixels by more than 4/255 -
+// all of it inside penumbra edges. The blocker search only has to estimate an
+// average occluder depth, which is coarse by nature, so it is the cheaper half to
+// economise on.
+static const uint kCsmBlockerSamples = 6u;
+static const uint kCsmFilterSamples = 8u;
 
 // Widest blocker search, in texels. The sun subtends about half a degree, so a blocker
 // a metre above a receiver throws a penumbra under a centimetre wide - tens of texels is

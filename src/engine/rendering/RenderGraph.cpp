@@ -110,6 +110,11 @@ namespace aether
 	// same order once their workload was removed. Compare a pass against itself across
 	// builds, not against its neighbours, and treat the first pass of a frame as an
 	// upper bound.
+	//
+	// Absolute figures also drift with GPU clocks between runs - measured at 13% for an
+	// untouched pass - which is easily large enough to invert an A/B verdict, and did
+	// once here. Normalise against a pass the change cannot affect ($GTAO_Main and
+	// $Skybox are stable to well under 1%) and compare the ratio, not the milliseconds.
 	void RenderGraph::ResolveGpuTimings(const std::uint32_t frameSlot)
 	{
 		GpuTimingFrame& timing = m_gpuTiming[frameSlot];
