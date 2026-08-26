@@ -343,6 +343,12 @@ namespace aether
 		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		std::uint32_t m_sceneGBufferBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_prepassPipeline;
+		// Screen-space reflections march into their own buffer, because the march has to
+		// sample the HDR colour it would otherwise be writing.
+		RGImage m_ssrColor;
+		std::uint32_t m_ssrBindlessSlot = 0xFFFFFFFFu;
+		GraphicsPipeline m_ssrPipeline;
+		GraphicsPipeline m_ssrCompositePipeline;
 
 		// producer thread and read in the render-thread Execute (a torn read just
 		GraphicsPipeline m_texturePreviewPipeline;

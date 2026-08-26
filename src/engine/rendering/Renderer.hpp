@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <numbers>
@@ -98,6 +99,38 @@ namespace aether
 
 		// Atmospheric height fog: density, height falloff, sun forward-scatter, max opacity.
 		// Ambient occlusion knobs, forwarded to the GTAO pass when one is attached.
+		// Screen-space reflections. maxRoughness is the cutoff above which a single ray
+		// stops representing the lobe and the sky probe answers instead.
+		void SetReflectionsEnabled(bool enabled)
+		{
+			m_reflections = enabled;
+		}
+
+		[[nodiscard]] bool AreReflectionsEnabled() const
+		{
+			return m_reflections;
+		}
+
+		void SetReflectionMaxRoughness(float v)
+		{
+			m_reflectionMaxRoughness = std::clamp(v, 0.0f, 1.0f);
+		}
+
+		[[nodiscard]] float GetReflectionMaxRoughness() const
+		{
+			return m_reflectionMaxRoughness;
+		}
+
+		void SetReflectionIntensity(float v)
+		{
+			m_reflectionIntensity = std::clamp(v, 0.0f, 2.0f);
+		}
+
+		[[nodiscard]] float GetReflectionIntensity() const
+		{
+			return m_reflectionIntensity;
+		}
+
 		void SetContactShadowsEnabled(bool enabled)
 		{
 			m_contactShadows = enabled;
@@ -171,6 +204,9 @@ namespace aether
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		bool m_contactShadows = false;
+		bool m_reflections = true;
+		float m_reflectionMaxRoughness = 0.45f;
+		float m_reflectionIntensity = 1.0f;
 		std::vector<PointLight> m_pointLights;
 		std::vector<SpotLight> m_spotLights;
 	};

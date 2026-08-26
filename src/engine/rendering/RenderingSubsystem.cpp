@@ -315,6 +315,14 @@ namespace aether
 		{
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.GBuffer bindless registration failed"));
 		}
+
+		// HDR, because a reflection carries the same range as what it reflects.
+		m_ssrColor = graph.CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, extent, gpu::ImageUsage::Sampled);
+		m_ssrBindlessSlot = graph.EnsureBindlessSampled(m_ssrColor);
+		if (m_ssrBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.SSR bindless registration failed"));
+		}
 	}
 
 	void RenderingSubsystem::Init(ServiceContainer& services, RuntimeProfile profile)
@@ -448,6 +456,34 @@ namespace aether
 		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_prepassPipeline = std::move(prepassPipeline);
+
+		AE_EXPECT_OR_THROW(ssrPipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://ssr.spv",
+		                        .colorFormat = gpu::Format::R16G16B16A16Sfloat,
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .debugName = "SSR",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+		                }));
+		m_ssrPipeline = std::move(ssrPipeline);
+
+		// Additive: the SSR buffer is premultiplied by its own confidence, so adding it
+		// contributes nothing where a ray failed and leaves the sky probe showing.
+		AE_EXPECT_OR_THROW(ssrCompositePipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://ssr_composite.spv",
+		                        .colorFormat = PostProcessStack::GetForwardColorFormat(),
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .blendEnable = true,
+		                        .blendMode = gpu::BlendMode::Additive,
+		                        .debugName = "SSR.Composite",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+		                }));
+		m_ssrCompositePipeline = std::move(ssrCompositePipeline);
 
 		m_renderTargetService.BindRuntime(FrameContext{
 		        .graph = &m_renderGraph,
@@ -909,6 +945,88 @@ namespace aether
 				        const gpu::CullMode cullMode = m_renderer.GetCullMode();
 				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr, nullptr, 0, &cullMode);
 			        });
+		}
+
+		// Screen-space reflections, after the forward pass so the HDR colour it samples
+		// is the shaded scene. Two passes: the march cannot write the buffer it reads.
+		if (m_ssrColor.IsValid() && m_sceneGBuffer.IsValid())
+		{
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$SSR",
+			                .color = m_ssrColor,
+			                .extent = sceneExtent,
+			                .loadOp = gpu::LoadOp::Clear,
+			                .clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
+			        })
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductHdrColor, FrameResourceId::HdrColor)
+			        .Execute(
+			                [this, bindless = frame.bindless, sceneExtent](PassContext& ctx)
+			                {
+				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws() || !m_renderer.AreReflectionsEnabled())
+				                {
+					                return;
+				                }
+				                gpu::CommandList cmd = ctx.recorder.View();
+				                bindless->CmdBindGlobalResources(cmd);
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(ctx.extent.width), .height = static_cast<float>(ctx.extent.height)});
+				                cmd.SetScissor(gpu::Rect2D{.width = ctx.extent.width, .height = ctx.extent.height});
+				                cmd.BindPipeline(m_ssrPipeline.GetPipeline());
+				                struct
+				                {
+					                std::uint64_t frameConstantsAddr;
+					                std::uint32_t width;
+					                std::uint32_t height;
+					                float maxRoughness;
+					                float intensity;
+					                std::uint32_t pad0;
+					                std::uint32_t pad1;
+				                } push{
+				                        .frameConstantsAddr = ctx.frameConstantsAddr,
+				                        .width = ctx.extent.width,
+				                        .height = ctx.extent.height,
+				                        .maxRoughness = m_renderer.GetReflectionMaxRoughness(),
+				                        .intensity = m_renderer.GetReflectionIntensity(),
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$SSRComposite",
+			                .color = hdrColor,
+			                .extent = sceneExtent,
+			                .loadOp = gpu::LoadOp::Load,
+			        })
+			        .ReadTexture(m_ssrColor)
+			        .Execute(
+			                [this, bindless = frame.bindless](PassContext& ctx)
+			                {
+				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws() || !m_renderer.AreReflectionsEnabled())
+				                {
+					                return;
+				                }
+				                gpu::CommandList cmd = ctx.recorder.View();
+				                bindless->CmdBindGlobalResources(cmd);
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(ctx.extent.width), .height = static_cast<float>(ctx.extent.height)});
+				                cmd.SetScissor(gpu::Rect2D{.width = ctx.extent.width, .height = ctx.extent.height});
+				                cmd.BindPipeline(m_ssrCompositePipeline.GetPipeline());
+				                struct
+				                {
+					                std::uint32_t ssrSlot;
+					                std::uint32_t pad0;
+					                std::uint32_t pad1;
+					                std::uint32_t pad2;
+				                } push{.ssrSlot = m_ssrBindlessSlot};
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
 		}
 
 		// Project-registered custom passes, injected around the 2D scene (both stages draw into the

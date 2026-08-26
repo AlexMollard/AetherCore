@@ -68,6 +68,10 @@ namespace aether
 			// Short screen-space ray toward the sun, recovering the contact-scale occlusion
 			// a shadow cascade texel is too coarse to hold.
 			bool contactShadows = false;
+			// Screen-space reflections.
+			bool reflections = true;
+			float reflectionMaxRoughness = 0.45f;
+			float reflectionIntensity = 1.0f;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
 			float uiScale = 1.0f;
@@ -125,6 +129,9 @@ namespace aether
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);
 		f("graphics.anisotropy", settings.graphics.anisotropy);
 		f("graphics.contactShadows", settings.graphics.contactShadows);
+		f("graphics.reflections", settings.graphics.reflections);
+		f("graphics.reflectionMaxRoughness", settings.graphics.reflectionMaxRoughness);
+		f("graphics.reflectionIntensity", settings.graphics.reflectionIntensity);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
 		f("graphics.uiScale", settings.graphics.uiScale);

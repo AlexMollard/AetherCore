@@ -42,6 +42,27 @@ namespace aether
 				renderer->SetFxaaEnabled(m_values.graphics.fxaa);
 			}
 		}
+		else if (key == "graphics.reflections")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetReflectionsEnabled(m_values.graphics.reflections);
+			}
+		}
+		else if (key == "graphics.reflectionMaxRoughness")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetReflectionMaxRoughness(m_values.graphics.reflectionMaxRoughness);
+			}
+		}
+		else if (key == "graphics.reflectionIntensity")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetReflectionIntensity(m_values.graphics.reflectionIntensity);
+			}
+		}
 		else if (key == "graphics.contactShadows")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())
