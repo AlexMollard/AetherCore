@@ -57,7 +57,8 @@ static const uint  kThreadCount = 256;
 // completely would mean reading every pixel of both buffers every time the
 // histogram runs, which costs far more than metering is worth; sixteen texels
 // already cut the variance - and with it the resolution sensitivity this whole
-// scheme exists to remove - to well under a percent.
+// scheme exists to remove - by roughly an order of magnitude. The size of the
+// residual has not been measured against a real resolution change.
 static const uint kMaxTapsPerAxis = 2u;
 
 groupshared uint g_hdrHist[256];
