@@ -126,6 +126,17 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
             // the last step still reaches (but never exceeds) the full radius.
             float t = (float(step) + noise.y) / float(kStepCount + 1u);
             t *= t;
+
+            // The kernel weight comes from the sample we INTENDED to take, and is
+            // accumulated before any of the tests below can reject it. Renormalising by
+            // only the surviving weight was a hard discontinuity: whole rings of samples
+            // fail the reprojection test at once as a surface tilts away from the camera,
+            // and the ratio jumped instead of easing off - a visible band across flat
+            // ground at a fixed view depth. Counting a sample we could not resolve as
+            // "no occluder found there" lets the term fade smoothly toward open.
+            float sampleWeight = 1.0f - t;
+            weightSum += sampleWeight;
+
             float3 sampleWorld = worldPos + dir * (pc.radius * t);
             float4 sampleClip = mul(fc->viewProj, float4(sampleWorld, 1.0f));
             if (sampleClip.w <= 1e-5f)
@@ -149,7 +160,13 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
 
             float3 depthWorld = ReconstructWorld(samplePx, sampleDepth, fc);
             float sampleError = length(depthWorld - sampleWorld);
-            if (sampleError > pc.radius * 0.75f)
+
+            // Screen-space sampling cannot land exactly on the world point it asked for,
+            // and that error grows smoothly with distance and grazing angle - so the
+            // rejection has to grow smoothly too. A threshold here turned a continuous
+            // quantity into a binary one and put the step back.
+            float validity = 1.0f - smoothstep(pc.radius * 0.35f, pc.radius * 0.75f, sampleError);
+            if (validity <= 0.0f)
             {
                 continue;
             }
@@ -161,13 +178,17 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
                 continue;
             }
 
+            // Distance attenuates the contribution rather than reweighting the average.
+            // Dividing it back out, as carrying it in the denominator did, made one
+            // distant occluder darken a point as much as one right against it.
             float rangeWeight = saturate(1.0f - (dist / max(pc.radius, 1e-3f)));
             float horizon = saturate((dot(delta / dist, normal) - 0.05f) * 2.0f);
-            occlusion += horizon * rangeWeight;
-            weightSum += rangeWeight;
+            occlusion += horizon * rangeWeight * validity * sampleWeight;
         }
     }
 
+    // weightSum no longer depends on which samples survived, so this ratio is
+    // continuous in the geometry by construction.
     float ao = 1.0f - occlusion / max(weightSum, 1e-3f);
     // Low floor: creases and contact points are allowed to get genuinely dark.
     // The old 0.35 floor capped worst-case darkening so hard that AO was
