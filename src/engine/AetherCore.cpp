@@ -963,6 +963,7 @@ namespace aether
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
+		packet.fogParams = renderer.GetFogParams();
 
 		// The scene background is owned by the main camera. Solid/Gradient are
 		// composited WYSIWYG in the tonemap pass (see PostProcessStack); only the

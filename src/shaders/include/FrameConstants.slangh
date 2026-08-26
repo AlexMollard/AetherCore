@@ -35,6 +35,7 @@ struct FrameConstantsData
     [[vk::offset(768)]] float4  shadowCascadeDepthBias;     // xyz = per-cascade constant bias, NDC depth units
     [[vk::offset(784)]] float4  shadowCascadeNormalOffset;  // xyz = per-cascade normal-offset distance, world units
     [[vk::offset(800)]] float4  shadowCascadePenumbraScale; // xyz = penumbra UV width per unit of NDC depth separation
+    [[vk::offset(816)]] float4  fogParams;                  // x=density at y=0, y=height falloff, z=sun forward scatter, w=max opacity
 };
 
 #endif

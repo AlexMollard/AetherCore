@@ -1,0 +1,101 @@
+#ifndef AETHER_HEIGHT_FOG_SLANGH
+#define AETHER_HEIGHT_FOG_SLANGH
+
+// Exponential height fog with sun inscattering.
+//
+// Without atmospheric perspective a distant hill has exactly the contrast and
+// saturation of the ground under your feet, which is the strongest single cue
+// that a rendered scene is not a place. Real air scatters, and how much it has
+// scattered by the time light reaches the eye is what the brain reads as
+// distance.
+//
+// Density falls off exponentially with height, so the integral along a view ray
+// has a closed form and needs no marching:
+//
+//   density(y) = d0 * exp(-k * y)
+//   integral along a segment of length L rising by dy
+//     = d0 * exp(-k * y0) * L * (1 - exp(-k * dy)) / (k * dy)
+//
+// The (1 - exp(-x))/x factor degenerates at dy -> 0, which is exactly the common
+// case of a level view, so that branch is handled separately rather than left to
+// float division.
+//
+// Fog colour comes from the same SkyGradient the sky and the image-based ambient
+// use, evaluated along the view ray. That is not a convenience: haze IS sky
+// light scattered toward the eye, so sampling the sky in the direction you are
+// looking gives the correct hue for free - warm toward a low sun, cool away from
+// it - and it stays correct through a day/night cycle with nothing to re-tune.
+//
+// The inscattering term adds the forward-scattering lobe on top. Looking into
+// the sun through haze is much brighter than looking across it, which is what
+// makes low sun through air read as glare rather than as grey wash.
+
+#include "Sky.slangh"
+
+// Fraction of the surface's radiance that the air has replaced, 0 = clear.
+float HeightFogAmount(float3 cameraPos, float3 worldPos, float density, float heightFalloff, float maxOpacity)
+{
+	if (density <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const float3 toSurface = worldPos - cameraPos;
+	const float distance = length(toSurface);
+	if (distance <= 1e-4f)
+	{
+		return 0.0f;
+	}
+
+	const float k = max(heightFalloff, 1e-4f);
+	const float dy = toSurface.y;
+
+	// Density at the camera, then the height-integral factor over the segment.
+	const float baseDensity = density * exp2(-k * cameraPos.y * 1.442695f);
+
+	float heightFactor;
+	if (abs(k * dy) > 1e-3f)
+	{
+		heightFactor = (1.0f - exp2(-k * dy * 1.442695f)) / (k * dy);
+	}
+	else
+	{
+		// Level view: the exponential is flat over the segment, so the integral is
+		// just the segment length. Taking the branch above here would divide by ~0.
+		heightFactor = 1.0f;
+	}
+
+	const float opticalDepth = baseDensity * distance * max(heightFactor, 0.0f);
+	return min(1.0f - exp2(-opticalDepth * 1.442695f), maxOpacity);
+}
+
+// Radiance the air itself sends toward the eye along this ray.
+float3 HeightFogColor(
+    float3 viewDir,
+    float3 sunDir,
+    float3 sunColor,
+    float  sunIntensity,
+    float3 horizonColor,
+    float3 zenithColor,
+    float3 voidColor,
+    float  sunScatter)
+{
+	// The sky in the direction being looked at: haze is that light, scattered.
+	const float3 ambientScatter = SkyGradient(viewDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor);
+
+	// Henyey-Greenstein at a fixed forward asymmetry. A full phase function would
+	// take a per-scene g; at g = 0.6 the lobe is close enough to atmospheric haze
+	// that exposing the parameter would only invite mistuning.
+	const float g = 0.6f;
+	const float cosTheta = dot(normalize(viewDir), normalize(sunDir));
+	const float denom = 1.0f + g * g - 2.0f * g * cosTheta;
+	const float phase = (1.0f - g * g) / (4.0f * 3.14159265f * max(denom * sqrt(max(denom, 1e-4f)), 1e-4f));
+
+	// Only above the horizon: below it there is no sun to scatter.
+	const float sunVisibility = saturate(sunDir.y * 4.0f);
+	const float3 inscatter = sunColor * sunIntensity * phase * sunScatter * sunVisibility;
+
+	return ambientScatter + inscatter;
+}
+
+#endif

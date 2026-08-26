@@ -19,6 +19,7 @@
 #include "include/RenderContracts.slangh"
 #include "include/GpuMaterial.slangh"
 #include "include/Sky.slangh"
+#include "include/HeightFog.slangh"
 #include "include/ShadowSampling.slangh"
 #include "include/DirectionalShadowCSM.slangh"
 #include "include/LocalShadow.slangh"
@@ -348,6 +349,30 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 ambient = (ambientDiffuse + ambientSpecular) * ambientAo;
 
     float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
+
+    // Atmospheric perspective. Applied here rather than as a separate screen pass
+    // because the world position and the sky terms this needs are already in hand;
+    // a fullscreen pass would reconstruct both from depth to reach the same answer.
+    const float fogAmount = HeightFogAmount(
+        fc->cameraWorldPos.xyz,
+        input.worldPos,
+        fc->fogParams.x,
+        fc->fogParams.y,
+        fc->fogParams.w);
+    if (fogAmount > 0.0f)
+    {
+        const float3 fogViewDir = normalize(input.worldPos - fc->cameraWorldPos.xyz);
+        const float3 fogColor = HeightFogColor(
+            fogViewDir,
+            sunDir,
+            sunColor,
+            sunIntensity,
+            fc->skyHorizonColor.rgb,
+            fc->skyZenithColor.rgb,
+            fc->skyVoidColor.rgb,
+            fc->fogParams.z);
+        finalColor = lerp(finalColor, fogColor, fogAmount);
+    }
 
     // Alpha carries scene coverage for the background compositor: opaque forward
     // geometry always fully covers (the forward pass has no transparent path).

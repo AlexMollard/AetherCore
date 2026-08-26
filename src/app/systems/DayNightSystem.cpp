@@ -137,6 +137,7 @@ namespace aether::app
 			m_renderer->SetSkyGradient(sky.horizonColor, sky.zenithColor);
 			m_renderer->SetSkyVoidColor(sky.groundColor);
 			m_renderer->SetAmbientLight(sky.ambientColor);
+			m_renderer->SetFogParams({sky.fogDensity, sky.fogHeightFalloff, sky.fogSunScatter, sky.fogMaxOpacity});
 			return;
 		}
 	}

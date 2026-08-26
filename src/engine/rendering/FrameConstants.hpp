@@ -55,6 +55,10 @@ namespace aether
 		// shadow-map space. xyz = cascade 0..2, w unused.
 		glm::vec4 shadowCascadePenumbraScale{0.0f};
 
+		// Atmospheric height fog: x = density per world unit at y = 0, y = height
+		// falloff, z = forward-scatter strength toward the sun, w = maximum opacity.
+		glm::vec4 fogParams{0.0f, 0.08f, 0.6f, 0.9f};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -79,7 +83,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 816, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 832, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -108,5 +112,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowCascadeDepthBias) == 768);
 	static_assert(offsetof(FrameConstants, shadowCascadeNormalOffset) == 784);
 	static_assert(offsetof(FrameConstants, shadowCascadePenumbraScale) == 800);
-	static_assert(sizeof(FrameConstants) == 816);
+	static_assert(offsetof(FrameConstants, fogParams) == 816);
+	static_assert(sizeof(FrameConstants) == 832);
 } // namespace aether

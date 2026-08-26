@@ -305,6 +305,7 @@ namespace aether
 			                fc.skyHorizonColor = m_renderer->GetSkyHorizonColorVector();
 			                fc.skyZenithColor = m_renderer->GetSkyZenithColorVector();
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
+			                fc.fogParams = m_renderer->GetFogParams();
 
 			                const auto frameIdx = ctx.frameSlot;
 			                if (rit->second.lightViewId == kInvalidLightView)

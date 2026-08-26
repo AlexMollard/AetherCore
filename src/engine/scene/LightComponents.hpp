@@ -67,6 +67,18 @@ namespace aether
 		glm::vec3 zenithColor{0.08f, 0.19f, 0.45f};
 		glm::vec3 groundColor{0.001f, 0.002f, 0.005f};
 		glm::vec3 ambientColor{0.03f, 0.04f, 0.06f};
+
+		// Atmospheric perspective. Without it distant geometry keeps the same contrast
+		// and saturation as anything near the camera, which is the single strongest cue
+		// that a scene is not a place. Density is per world unit at y = 0 and thins
+		// exponentially with height at fogHeightFalloff.
+		float fogDensity{0.0f};
+		float fogHeightFalloff{0.08f};
+		// Forward scattering toward the sun, which is what makes haze glow when you
+		// look into it and stay flat when you look away.
+		float fogSunScatter{0.6f};
+		// Ceiling on fog opacity, so the far plane never becomes a flat wall of colour.
+		float fogMaxOpacity{0.9f};
 	};
 
 	struct DayNightComponent

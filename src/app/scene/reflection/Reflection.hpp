@@ -467,6 +467,10 @@ namespace aether::reflect
 #define AE_FIELD_R(member, TypeTag, lo, hi) \
 	b.Field(#member, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.min = (lo), .max = (hi)});
 
+// Named counterpart of AE_FIELD_R, for when the on-disk key differs from the member.
+#define AE_FIELD_NR(name, member, TypeTag, lo, hi) \
+	b.Field(name, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.min = (lo), .max = (hi)});
+
 #define AE_FIELD_ANGLE(member) \
 	b.Field(#member, ::aether::reflect::FieldType::Float, &C::member, ::aether::reflect::FieldMeta{.min = 1.0f, .max = 89.0f, .isAngleDegrees = true});
 

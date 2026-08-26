@@ -392,6 +392,7 @@ namespace aether
 			shadowFc.skyHorizonColor = packet.skyHorizonColor;
 			shadowFc.skyZenithColor = packet.skyZenithColor;
 			shadowFc.skyVoidColor = packet.skyVoidColor;
+			shadowFc.fogParams = packet.fogParams;
 			shadowFc.RefreshDerived();
 
 			// Constant bias stays at roughly one texel diagonal along the light: it only has

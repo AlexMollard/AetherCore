@@ -95,6 +95,17 @@ namespace aether
 		void SetSkyVoidColor(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetSkyVoidColor() const;
 
+		// Atmospheric height fog: density, height falloff, sun forward-scatter, max opacity.
+		void SetFogParams(glm::vec4 params)
+		{
+			m_fogParams = params;
+		}
+
+		[[nodiscard]] glm::vec4 GetFogParams() const
+		{
+			return m_fogParams;
+		}
+
 		[[nodiscard]] glm::vec4 GetSkyVoidColorVector() const
 		{
 			return m_skyVoidColor;
@@ -138,6 +149,7 @@ namespace aether
 		glm::vec4 m_skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};
 		glm::vec4 m_skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
+		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		std::vector<PointLight> m_pointLights;
 		std::vector<SpotLight> m_spotLights;
 	};
