@@ -55,7 +55,7 @@ namespace aether
 			// and sprites stay sharp. This is what makes borderless viable on a 4K panel,
 			// where covering the output means 2.25x the pixels of a 1440p window.
 			float renderScale = 1.0f;
-			bool fxaa = false;
+			bool fxaa = true;
 			bool asyncCompute = true;
 			bool imguiViewports = true;
 			float uiScale = 1.0f;

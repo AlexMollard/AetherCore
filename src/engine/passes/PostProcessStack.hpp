@@ -326,7 +326,7 @@ namespace aether
 
 		TonemapMode m_tonemapMode = TonemapMode::AcesFilmic;
 		float m_exposure = 1.0f;
-		bool m_fxaaEnabled = false;
+		bool m_fxaaEnabled = true;
 		bool m_outputToTexture = false;
 		bool m_debugCompare = false;
 		std::uint32_t m_debugModeCount = 0;

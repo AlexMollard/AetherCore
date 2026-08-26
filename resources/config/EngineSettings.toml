@@ -13,7 +13,7 @@ height = 1440
 
 [graphics]
 vsync = true
-fxaa = false
+fxaa = true
 asyncCompute = true
 
 [app]

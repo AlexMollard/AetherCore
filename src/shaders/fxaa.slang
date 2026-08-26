@@ -1,158 +1,257 @@
-// Post-process pass: FXAA (Fast Approximate Anti-Aliasing).
+// Post-process pass: FXAA 3.11 (Lottes), quality path.
 //
-// Applied after tonemapping on the LDR R8G8B8A8 buffer so edge detection
-// works on perceptual luminance rather than linear HDR values.
+// Applied after tonemapping on the LDR buffer so edge detection works on
+// perceptual luminance rather than linear HDR values, which is where the eye
+// actually sees the staircase.
 //
-// Algorithm: FXAA quality variant using only integer Load() calls so no
-// sampler is required.  The neighbourhood samples are fetched with
-// SV_Position pixel coordinates, the dominant edge direction is computed
-// from luma gradients, the edge endpoints are found by walking up to
-// ±8 pixels in each direction, and the final blend samples the perpendicular
-// neighbour pixel (lerped against centre).  This is equivalent in quality to
-// the bilinear-filter version because the final blend is always between the
-// centre pixel and exactly one adjacent pixel in the perpendicular direction.
+// This is the full quality algorithm, not the cut-down cross-filter version:
 //
-// Binding layout (identical to tonemap.slang - no sampler needed):
-//   set 0, binding 0 - bindless combined image samplers (Load() ignores sampler)
+//   1. Contrast reject. Most of the screen has no edge in it; bail before
+//      touching the eleven extra taps below.
+//   2. Edge orientation from the 3x3 luma neighbourhood.
+//   3. Endpoint search ALONG the edge, sampling on the boundary between the
+//      two rows (or columns) that form it - a bilinear tap at a half-texel
+//      offset averages both sides in one fetch, which is what makes the search
+//      track the edge rather than one side of it.
+//      The steps lengthen as they go (1,1,1,1,1.5,2,2,2,2,4,8), so eleven
+//      iterations reach about 25 pixels. Reach is what decides whether a
+//      near-horizontal edge resolves as a smooth line or as a dashed one:
+//      a search that gives up mid-edge blends part of it and leaves the rest,
+//      which reads worse than no antialiasing at all.
+//   4. Correct-variation test. The blend is only applied if the luma at the
+//      nearer endpoint sits on the opposite side of the local average from the
+//      centre pixel. Without this check, thin bright features - wires, text,
+//      specular glints - get blended into their background instead of
+//      antialiased, which is the "FXAA looks blurry" complaint.
+//   5. Sub-pixel term for features too small to have endpoints at all,
+//      clamped to 0.75 so a single pixel can never be fully erased.
+//
+// The final offset lands somewhere inside +-0.5 of a texel perpendicular to
+// the edge; one bilinear fetch there reconstructs the coverage exactly.
+//
+// Binding layout:
+//   set 0, binding 0 - bindless combined image samplers
+//   set 0, binding 1 - global linear sampler
 
 [[vk::binding(0, 0)]]
 Texture2D g_textures[];
+[[vk::binding(1, 0)]]
+SamplerState g_linearSampler;
 
 #include "include/FullScreenTriangle.slangh"
 
-// Push constant: bindless slot, FXAA toggle
-struct FxaaPush { uint ldrSlot; uint fxaaEnabled; };
+struct FxaaPush
+{
+	uint  ldrSlot;
+	uint  fxaaEnabled;
+	float rcpWidth;
+	float rcpHeight;
+};
 [[vk::push_constant]] FxaaPush pc;
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Contrast thresholds. Below the absolute one the region is too dark for an
+// edge to be visible; below the relative one it is too flat to be an edge.
+static const float kAbsoluteThreshold = 0.0833f;
+static const float kRelativeThreshold = 0.125f;
+
+// Ceiling on the sub-pixel term. At 1.0 a lone bright pixel is replaced by its
+// neighbourhood average and disappears entirely.
+static const float kSubpixelQuality = 0.75f;
+
+// Step multipliers for the endpoint search. Fine near the centre where the
+// endpoint usually is, coarse further out where being a texel off costs
+// nothing, so the reach grows far faster than the iteration count.
+static const uint  kSearchSteps = 11u;
+static const float kSearchQuality[kSearchSteps] = {
+	1.0f, 1.0f, 1.0f, 1.0f, 1.5f, 2.0f, 2.0f, 2.0f, 2.0f, 4.0f, 8.0f
+};
+
+float Luma(float3 rgb)
+{
+	return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));
+}
+
+// The global sampler addresses REPEAT, so a tap past an edge would wrap to the
+// far side of the screen. Clamping to the half-texel inside keeps every fetch
+// on the image it belongs to.
+float3 SampleRGB(Texture2D tex, float2 uv)
+{
+	const float2 halfTexel = float2(pc.rcpWidth, pc.rcpHeight) * 0.5f;
+	return tex.SampleLevel(g_linearSampler, clamp(uv, halfTexel, 1.0f - halfTexel), 0.0f).rgb;
+}
+
+float SampleLuma(Texture2D tex, float2 uv)
+{
+	return Luma(SampleRGB(tex, uv));
+}
 
 float3 LoadRGB(Texture2D tex, int2 coord)
 {
-    return tex.Load(int3(coord, 0)).rgb;
+	return tex.Load(int3(coord, 0)).rgb;
 }
 
-// Rec. 709 perceptual luminance.
-float Luma(float3 rgb)
-{
-    return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));
-}
-
-// ── Fragment shader ────────────────────────────────────────────────────────
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-    const int2 coord = int2(svPos.xy);
-    Texture2D  tex   = g_textures[pc.ldrSlot];
+	const int2   coord   = int2(svPos.xy);
+	Texture2D    tex     = g_textures[pc.ldrSlot];
+	const float2 rcpSize = float2(pc.rcpWidth, pc.rcpHeight);
+	const float2 uv      = svPos.xy * rcpSize;
 
-    // Skip FXAA when toggled off - passthrough avoids graph rebuilds.
-    if (pc.fxaaEnabled == 0u)
-    {
-        return float4(LoadRGB(tex, coord), 1.0f);
-    }
+	const float3 rgbM = LoadRGB(tex, coord);
 
-    // ── 5-tap cross ────────────────────────────────────────────────────────
-    const float3 rgbM  = LoadRGB(tex, coord);
-    const float3 rgbN  = LoadRGB(tex, coord + int2( 0, -1));
-    const float3 rgbS  = LoadRGB(tex, coord + int2( 0,  1));
-    const float3 rgbW  = LoadRGB(tex, coord + int2(-1,  0));
-    const float3 rgbE  = LoadRGB(tex, coord + int2( 1,  0));
+	// Skip FXAA when toggled off - passthrough avoids graph rebuilds.
+	if (pc.fxaaEnabled == 0u)
+	{
+		return float4(rgbM, 1.0f);
+	}
 
-    const float lumaM = Luma(rgbM);
-    const float lumaN = Luma(rgbN);
-    const float lumaS = Luma(rgbS);
-    const float lumaW = Luma(rgbW);
-    const float lumaE = Luma(rgbE);
+	// --- 1. Contrast reject ------------------------------------------------
+	const float lumaM = Luma(rgbM);
+	const float lumaN = Luma(LoadRGB(tex, coord + int2( 0, -1)));
+	const float lumaS = Luma(LoadRGB(tex, coord + int2( 0,  1)));
+	const float lumaW = Luma(LoadRGB(tex, coord + int2(-1,  0)));
+	const float lumaE = Luma(LoadRGB(tex, coord + int2( 1,  0)));
 
-    const float lumaMin   = min(lumaM, min(min(lumaN, lumaS), min(lumaW, lumaE)));
-    const float lumaMax   = max(lumaM, max(max(lumaN, lumaS), max(lumaW, lumaE)));
-    const float lumaRange = lumaMax - lumaMin;
+	const float lumaMin   = min(lumaM, min(min(lumaN, lumaS), min(lumaW, lumaE)));
+	const float lumaMax   = max(lumaM, max(max(lumaN, lumaS), max(lumaW, lumaE)));
+	const float lumaRange = lumaMax - lumaMin;
 
-    // FXAA quality thresholds (preset 12):
-    //   skip very dark pixels (< 0.0833) and low-contrast regions (< 12.5% of peak)
-    static const float kAbsoluteThreshold = 0.0833f;
-    static const float kRelativeThreshold = 0.125f;
+	if (lumaRange < max(kAbsoluteThreshold, lumaMax * kRelativeThreshold))
+	{
+		return float4(rgbM, 1.0f);
+	}
 
-    if (lumaRange < max(kAbsoluteThreshold, lumaMax * kRelativeThreshold))
-    {
-        return float4(rgbM, 1.0f);
-    }
+	// --- 2. Edge orientation ----------------------------------------------
+	const float lumaNW = Luma(LoadRGB(tex, coord + int2(-1, -1)));
+	const float lumaNE = Luma(LoadRGB(tex, coord + int2( 1, -1)));
+	const float lumaSW = Luma(LoadRGB(tex, coord + int2(-1,  1)));
+	const float lumaSE = Luma(LoadRGB(tex, coord + int2( 1,  1)));
 
-    // ── 4 diagonal corners (for axis-aligned gradient + box filter) ────────
-    const float3 rgbNW = LoadRGB(tex, coord + int2(-1, -1));
-    const float3 rgbNE = LoadRGB(tex, coord + int2( 1, -1));
-    const float3 rgbSW = LoadRGB(tex, coord + int2(-1,  1));
-    const float3 rgbSE = LoadRGB(tex, coord + int2( 1,  1));
+	const float edgeH = abs(-2.0f * lumaW + lumaNW + lumaSW)
+	                  + abs(-2.0f * lumaM + lumaN  + lumaS ) * 2.0f
+	                  + abs(-2.0f * lumaE + lumaNE + lumaSE);
+	const float edgeV = abs(-2.0f * lumaN + lumaNW + lumaNE)
+	                  + abs(-2.0f * lumaM + lumaW  + lumaE ) * 2.0f
+	                  + abs(-2.0f * lumaS + lumaSW + lumaSE);
 
-    const float lumaNW = Luma(rgbNW);
-    const float lumaNE = Luma(rgbNE);
-    const float lumaSW = Luma(rgbSW);
-    const float lumaSE = Luma(rgbSE);
+	const bool isHorizontal = (edgeH >= edgeV);
 
-    // ── Edge direction ─────────────────────────────────────────────────────
-    const float edgeH = abs(-2.0f * lumaW + lumaNW + lumaSW)
-                      + abs(-2.0f * lumaM + lumaN  + lumaS ) * 2.0f
-                      + abs(-2.0f * lumaE + lumaNE + lumaSE);
-    const float edgeV = abs(-2.0f * lumaN + lumaNW + lumaNE)
-                      + abs(-2.0f * lumaM + lumaW  + lumaE ) * 2.0f
-                      + abs(-2.0f * lumaS + lumaSW + lumaSE);
+	// Neighbours across the edge, and which side it actually falls on.
+	const float luma1 = isHorizontal ? lumaS : lumaE;
+	const float luma2 = isHorizontal ? lumaN : lumaW;
+	const float gradient1 = luma1 - lumaM;
+	const float gradient2 = luma2 - lumaM;
 
-    const bool isHorizontal = (edgeH >= edgeV);
+	const bool is1Steepest = abs(gradient1) >= abs(gradient2);
 
-    // Perpendicular neighbour pixels and the blend step direction.
-    const float luma1     = isHorizontal ? lumaS : lumaE;
-    const float luma2     = isHorizontal ? lumaN : lumaW;
-    const float gradient1 = abs(luma1 - lumaM);
-    const float gradient2 = abs(luma2 - lumaM);
-    const int   stepSign  = (gradient1 >= gradient2) ? 1 : -1;
+	// The search terminates when the luma along the edge departs from the local
+	// average by a quarter of the gradient across it. Scaling the threshold by
+	// the edge's own contrast is what keeps the search from stopping early on a
+	// soft edge or running past the end of a hard one.
+	const float gradientScaled = 0.25f * max(abs(gradient1), abs(gradient2));
 
-    // Blend towards the neighbour with the larger gradient.
-    const int2 stepDirPx  = isHorizontal ? int2(0, stepSign) : int2(stepSign, 0);
-    const int2 edgeDirPx  = isHorizontal ? int2(1, 0)        : int2(0, 1);
+	float stepLength = isHorizontal ? rcpSize.y : rcpSize.x;
+	float lumaLocalAverage;
+	if (is1Steepest)
+	{
+		stepLength = -stepLength;
+		lumaLocalAverage = 0.5f * (luma1 + lumaM);
+	}
+	else
+	{
+		lumaLocalAverage = 0.5f * (luma2 + lumaM);
+	}
 
-    // ── Edge endpoint search (±8 steps) ───────────────────────────────────
-    const float lumaAvg       = (luma1 + luma2) * 0.5f;
-    const float lumaThreshold = abs(lumaAvg - lumaM);
+	// --- 3. Endpoint search ------------------------------------------------
+	// Shift half a step across the edge so each tap straddles both sides of it.
+	float2 currentUv = uv;
+	if (isHorizontal)
+	{
+		currentUv.y += stepLength * 0.5f;
+	}
+	else
+	{
+		currentUv.x += stepLength * 0.5f;
+	}
 
-    int2 pos1 = coord + edgeDirPx;
-    int2 pos2 = coord - edgeDirPx;
-    bool reached1 = false;
-    bool reached2 = false;
+	const float2 offset = isHorizontal ? float2(rcpSize.x, 0.0f) : float2(0.0f, rcpSize.y);
 
-    [unroll(8)]
-    for (int i = 0; i < 8; ++i)
-    {
-        if (!reached1)
-        {
-            reached1 = abs(Luma(LoadRGB(tex, pos1)) - lumaAvg) >= lumaThreshold;
-            if (!reached1) pos1 += edgeDirPx;
-        }
-        if (!reached2)
-        {
-            reached2 = abs(Luma(LoadRGB(tex, pos2)) - lumaAvg) >= lumaThreshold;
-            if (!reached2) pos2 -= edgeDirPx;
-        }
-    }
+	float2 uv1 = currentUv - offset;
+	float2 uv2 = currentUv + offset;
 
-    const float dist1  = isHorizontal ? abs(pos1.x - coord.x) : abs(pos1.y - coord.y);
-    const float dist2  = isHorizontal ? abs(pos2.x - coord.x) : abs(pos2.y - coord.y);
-    const float distMin = min(dist1, dist2);
-    const float edgeLen = dist1 + dist2;
+	float lumaEnd1 = SampleLuma(tex, uv1) - lumaLocalAverage;
+	float lumaEnd2 = SampleLuma(tex, uv2) - lumaLocalAverage;
 
-    // How far along the edge are we?  0 at centre, 0.5 at endpoint -> blend 0..1.
-    float blendFactor = max(0.0f, 0.5f - distMin / edgeLen);
+	bool reached1 = abs(lumaEnd1) >= gradientScaled;
+	bool reached2 = abs(lumaEnd2) >= gradientScaled;
 
-    // ── Sub-pixel blend (3x3 box filter) ──────────────────────────────────
-    const float3 rgbBox  = (rgbN + rgbS + rgbW + rgbE
-                          + rgbNW + rgbNE + rgbSW + rgbSE) * (1.0f / 8.0f);
-    const float  lumaBox = Luma(rgbBox);
-    const float  subBlend   = clamp(abs(lumaBox - lumaM) / lumaRange, 0.0f, 1.0f);
-    const float  subBlendCu = subBlend * subBlend * subBlend * 0.5f;
-    blendFactor = max(blendFactor, subBlendCu);
+	if (!reached1) { uv1 -= offset; }
+	if (!reached2) { uv2 += offset; }
 
-    // ── Final blend between centre and perpendicular neighbour ─────────────
-    // blendFactor is in [0, 0.5], scale to [0, 1] for the lerp.
-    const float3 neighbour = LoadRGB(tex, coord + stepDirPx);
-    const float3 result    = lerp(rgbM, neighbour, min(blendFactor * 2.0f, 1.0f));
+	[unroll]
+	for (uint i = 0u; i < kSearchSteps; ++i)
+	{
+		if (reached1 && reached2)
+		{
+			break;
+		}
+		if (!reached1)
+		{
+			lumaEnd1 = SampleLuma(tex, uv1) - lumaLocalAverage;
+			reached1 = abs(lumaEnd1) >= gradientScaled;
+		}
+		if (!reached2)
+		{
+			lumaEnd2 = SampleLuma(tex, uv2) - lumaLocalAverage;
+			reached2 = abs(lumaEnd2) >= gradientScaled;
+		}
+		if (!reached1) { uv1 -= offset * kSearchQuality[i]; }
+		if (!reached2) { uv2 += offset * kSearchQuality[i]; }
+	}
 
-    return float4(result, 1.0f);
+	const float distance1 = isHorizontal ? (uv.x - uv1.x) : (uv.y - uv1.y);
+	const float distance2 = isHorizontal ? (uv2.x - uv.x) : (uv2.y - uv.y);
+
+	const bool  isDirection1 = distance1 < distance2;
+	const float distanceMin  = min(distance1, distance2);
+	const float edgeLength   = distance1 + distance2;
+
+	// Nearer the endpoint means nearer full coverage of the neighbouring pixel.
+	const float pixelOffset = -distanceMin / max(edgeLength, 1e-6f) + 0.5f;
+
+	// --- 4. Correct-variation test ----------------------------------------
+	// If the endpoint we are closest to varies the same way the centre does,
+	// this pixel is not on the transition it looked like it was on, and
+	// blending it would smear a feature rather than antialias an edge.
+	const bool isLumaCenterSmaller = lumaM < lumaLocalAverage;
+	const bool correctVariation =
+	    ((isDirection1 ? lumaEnd1 : lumaEnd2) < 0.0f) != isLumaCenterSmaller;
+
+	float finalOffset = correctVariation ? pixelOffset : 0.0f;
+
+	// --- 5. Sub-pixel term -------------------------------------------------
+	// Weighted 3x3 average; features smaller than the search can resolve show
+	// up here as a gap between the centre and its neighbourhood.
+	const float lumaAverage = (1.0f / 12.0f) *
+	    (2.0f * (lumaN + lumaS + lumaW + lumaE) + lumaNW + lumaNE + lumaSW + lumaSE);
+
+	const float subPixelOffset1 = saturate(abs(lumaAverage - lumaM) / max(lumaRange, 1e-6f));
+	const float subPixelOffset2 = (-2.0f * subPixelOffset1 + 3.0f) * subPixelOffset1 * subPixelOffset1;
+	const float subPixelFinal   = subPixelOffset2 * subPixelOffset2 * kSubpixelQuality;
+
+	finalOffset = max(finalOffset, subPixelFinal);
+
+	// --- Final fetch -------------------------------------------------------
+	float2 finalUv = uv;
+	if (isHorizontal)
+	{
+		finalUv.y += finalOffset * stepLength;
+	}
+	else
+	{
+		finalUv.x += finalOffset * stepLength;
+	}
+
+	return float4(SampleRGB(tex, finalUv), 1.0f);
 }

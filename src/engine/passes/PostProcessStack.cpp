@@ -522,9 +522,15 @@ namespace aether
 			        {
 				        std::uint32_t ldrSlot;
 				        std::uint32_t fxaaEnabled;
+				        float rcpWidth;
+				        float rcpHeight;
 			        } push;
 			        push.ldrSlot = m_ldrBindlessSlot;
 			        push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
+			        // The edge search walks in UV, so it needs the size of the image it is
+			        // walking across; ctx.extent is the only place that is known per frame.
+			        push.rcpWidth = 1.0f / static_cast<float>(std::max(ctx.extent.width, 1u));
+			        push.rcpHeight = 1.0f / static_cast<float>(std::max(ctx.extent.height, 1u));
 			        cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			        cmd.Draw(3, 1, 0, 0);
