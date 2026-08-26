@@ -70,12 +70,14 @@ TEST_CASE("Serialize round-trips through Apply for every field (no save/load dri
 TEST_CASE("SerializeOverrides emits only keys that differ from the base") {
     EngineSettings base;
     EngineSettings current = base;
-    current.graphics.fxaa = true;
+    // FXAA ships enabled, so turning it OFF is what makes this an override at all.
+    // Setting it to the default would be indistinguishable from not setting it.
+    current.graphics.fxaa = false;
     current.window.width = 3840;
 
     const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
 
-    CHECK(toml.find("fxaa = true") != std::string::npos);
+    CHECK(toml.find("fxaa = false") != std::string::npos);
     CHECK(toml.find("width = 3840") != std::string::npos);
     // Unchanged keys must NOT be written, so they keep tracking shipped defaults.
     CHECK(toml.find("vsync") == std::string::npos);
@@ -163,7 +165,7 @@ TEST_CASE("SerializeOverrides never writes the startup scene into the per-user f
     EngineSettings base;
     EngineSettings current = base;
     current.app.startupScene = "Title";
-    current.graphics.fxaa = true;
+    current.graphics.fxaa = false;
 
     const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
 
@@ -172,7 +174,9 @@ TEST_CASE("SerializeOverrides never writes the startup scene into the per-user f
     // the machine that set it and an empty world everywhere else.
     CHECK(toml.find("startupScene") == std::string::npos);
     CHECK(toml.find("Title") == std::string::npos);
-    CHECK(toml.find("fxaa = true") != std::string::npos);
+    // Something unrelated still has to come through, or the check above would pass
+    // just as well on an empty document.
+    CHECK(toml.find("fxaa = false") != std::string::npos);
 }
 
 TEST_CASE("A user-layer document cannot set the startup scene") {

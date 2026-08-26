@@ -1,20 +1,45 @@
 #include <doctest/doctest.h>
 
+#include <cstdint>
+
 #include "ui/FontRegistry.hpp"
 
 using namespace aether::ui;
 
+// The atlas-era fixture described this mono font in pixels at a bake size of 48.
+// FontAsset carries no bake size any more - metrics are em units and the requested
+// pixel size is the whole scale - so the same font is those pixel numbers divided
+// through by that em. Every expected value below is unchanged as a result.
+static constexpr float kFixtureEm = 48.f;
+
+static GlyphCurve MonoGlyph(std::uint32_t cp, bool visible)
+{
+	GlyphCurve g{};
+	g.codepoint = cp;
+	g.minX = 0.f;
+	g.minY = 0.f;
+	g.maxX = visible ? 20.f / kFixtureEm : 0.f;
+	g.maxY = visible ? 30.f / kFixtureEm : 0.f;
+	g.advance = 24.f / kFixtureEm;
+	g.bearingX = 0.f;
+	g.bearingY = visible ? 30.f / kFixtureEm : 0.f;
+	g.bandTexel = 0u;
+	// No bands means no outline: ShapeText advances the pen and emits nothing, which
+	// is how a blank is expressed now that there is no zero-sized atlas rect.
+	g.bandCountX = visible ? std::uint16_t{1} : std::uint16_t{0};
+	g.bandCountY = visible ? std::uint16_t{1} : std::uint16_t{0};
+	return g;
+}
+
 static FontAsset MakeMonoFont() {
     FontAsset f;
-    f.atlasWidth = f.atlasHeight = 128;
-    f.ascent = 40;
-    f.descent = 10;
-    f.lineHeight = 50;
-    f.bakeSize = 48;
+    f.ascent = 40.f / kFixtureEm;
+    f.descent = 10.f / kFixtureEm;
+    f.lineHeight = 50.f / kFixtureEm;
     for (std::uint32_t c = 'A'; c <= 'Z'; ++c) {
-        f.glyphs[c] = GlyphMeta{c, 0, 0, 0.1f, 0.1f, 20, 30, 0, 30, 24};
+        f.glyphs[c] = MonoGlyph(c, true);
     }
-    f.glyphs[' '] = GlyphMeta{' ', 0, 0, 0, 0, 0, 0, 0, 0, 24};
+    f.glyphs[' '] = MonoGlyph(' ', false);
     return f;
 }
 
@@ -28,7 +53,7 @@ TEST_CASE("ShapeText advances left-to-right at the glyph advance") {
     CHECK(g[1].rect.x - g[0].rect.x == doctest::Approx(24.f));
 }
 
-TEST_CASE("ShapeText scales by pixelSize/bakeSize") {
+TEST_CASE("ShapeText scales by the requested pixel size") {
     const auto f = MakeMonoFont();
     const auto g = ShapeText(f, "AB", 24.f, {0, 0, 1000, 100}, false, 0, 0);
     CHECK(g[1].rect.x - g[0].rect.x == doctest::Approx(12.f));

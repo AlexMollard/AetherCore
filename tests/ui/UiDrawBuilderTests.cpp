@@ -12,17 +12,43 @@
 
 using namespace aether;
 
+// The atlas-era fixture described this mono font in pixels at a bake size of 48.
+// FontAsset carries no bake size any more - metrics are em units and the requested
+// pixel size is the whole scale - so the same font is those pixel numbers divided
+// through by that em. Every expected value below is unchanged as a result.
+static constexpr float kFixtureEm = 48.f;
+
+static ui::GlyphCurve MonoGlyph(std::uint32_t cp, std::uint32_t bandTexel)
+{
+	ui::GlyphCurve g{};
+	g.codepoint = cp;
+	g.minX = 0.f;
+	g.minY = 0.f;
+	g.maxX = 20.f / kFixtureEm;
+	g.maxY = 30.f / kFixtureEm;
+	g.advance = 24.f / kFixtureEm;
+	g.bearingX = 0.f;
+	g.bearingY = 30.f / kFixtureEm;
+	g.bandTexel = bandTexel;
+	// A non-zero band count is what makes ShapeText emit a quad at all, so every glyph
+	// here is visible - matching the atlas fixture, where all of them had extent.
+	g.bandCountX = 1u;
+	g.bandCountY = 1u;
+	return g;
+}
+
 static ui::FontAsset MakeMonoFont()
 {
 	ui::FontAsset f;
-	f.atlasBindlessSlot = 42;
-	f.atlasWidth = f.atlasHeight = 128;
-	f.ascent = 40;
-	f.descent = 10;
-	f.lineHeight = 50;
-	f.bakeSize = 48;
-	f.glyphs['A'] = ui::GlyphMeta{'A', 0.f, 0.f, 0.1f, 0.1f, 20.f, 30.f, 0.f, 30.f, 24.f};
-	f.glyphs['B'] = ui::GlyphMeta{'B', 0.1f, 0.f, 0.2f, 0.1f, 20.f, 30.f, 0.f, 30.f, 24.f};
+	f.curveBindlessSlot = 42;
+	f.textureWidth = f.textureHeight = 128;
+	f.ascent = 40.f / kFixtureEm;
+	f.descent = 10.f / kFixtureEm;
+	f.lineHeight = 50.f / kFixtureEm;
+	// Distinct band texels so a test can tell whether the builder forwarded THIS
+	// glyph's curve data rather than some other glyph's.
+	f.glyphs['A'] = MonoGlyph('A', 7u);
+	f.glyphs['B'] = MonoGlyph('B', 11u);
 	return f;
 }
 
@@ -83,14 +109,16 @@ TEST_CASE("Builder emits glyph commands for UIText")
 	ui::BuildDrawCommands(w, cmds, &fonts);
 
 	REQUIRE(cmds.size() == 2);
-	CHECK(cmds[0].type == ui::kShapeSdfGlyph);
+	CHECK(cmds[0].type == ui::kShapeGlyph);
 	CHECK(cmds[0].data0.x == doctest::Approx(0.f));
 	CHECK(cmds[0].data0.y == doctest::Approx(10.f));
-	CHECK(cmds[0].data1.z == doctest::Approx(0.1f));
+	// data1 carries the glyph's band table now that text is drawn from outlines
+	// rather than an atlas; x is the texel the curve data starts at.
+	CHECK(cmds[0].data1.x == doctest::Approx(7.f));
 	CHECK(cmds[0].color.g == doctest::Approx(0.5f));
 	CHECK(cmds[0].textureSlot == 42);
 	CHECK(cmds[0].layer == 0);
-	CHECK(cmds[1].type == ui::kShapeSdfGlyph);
+	CHECK(cmds[1].type == ui::kShapeGlyph);
 	CHECK(cmds[1].data0.x == doctest::Approx(24.f));
 	CHECK(cmds[1].textureSlot == 42);
 	CHECK(cmds[1].layer == 1);
@@ -126,7 +154,7 @@ TEST_CASE("Builder emits image before glyphs on the same entity")
 	REQUIRE(cmds.size() == 2);
 	CHECK(cmds[0].type == ui::kShapeRect);
 	CHECK(cmds[0].layer == 0);
-	CHECK(cmds[1].type == ui::kShapeSdfGlyph);
+	CHECK(cmds[1].type == ui::kShapeGlyph);
 	CHECK(cmds[1].layer == 1);
 }
 
@@ -369,7 +397,7 @@ TEST_CASE("Text box emits a background and clips its glyphs to the padded inner 
 
 	for (std::size_t i = 1; i < cmds.size(); ++i)
 	{
-		CHECK(cmds[i].type == ui::kShapeSdfGlyph);
+		CHECK(cmds[i].type == ui::kShapeGlyph);
 		CHECK((cmds[i].flags & ui::kFlagClip) != 0u);
 		CHECK(cmds[i].clipRect.x == doctest::Approx(108)); // 100 + 8 padding
 		CHECK(cmds[i].clipRect.z == doctest::Approx(184)); // 200 - 2 * 8

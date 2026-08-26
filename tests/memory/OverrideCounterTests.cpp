@@ -25,6 +25,19 @@ namespace
 			memory::SetTrackingLevel(previous);
 		}
 	};
+
+	// The standard lets a compiler delete a new/delete pair whose storage is never
+	// observed, and at the optimisation level these tests are built at, clang does exactly
+	// that - so the tracker has nothing to count and the test measures an allocation that
+	// never happened. Writing through a volatile pointer is an observable side effect on
+	// the block, which forces it to exist.
+	//
+	// This matters just as much for the tests that expect NO counting: without it they
+	// pass whether the tracker is correct or the allocation simply vanished.
+	void Touch(std::byte* block) noexcept
+	{
+		*static_cast<volatile std::byte*>(block) = std::byte{1};
+	}
 } // namespace
 
 TEST_CASE("An allocation under a scope is counted against that tag") {
@@ -34,6 +47,7 @@ TEST_CASE("An allocation under a scope is counted against that tag") {
     {
         AE_MEM_SCOPE(memory::MemTag::Particles);
         auto* block = new std::byte[4096];
+        Touch(block);
         CHECK(memory::GlobalStats().Get(memory::MemTag::Particles).currentBytes >= before + 4096);
         delete[] block;
     }
@@ -53,6 +67,7 @@ TEST_CASE("A free attributes to the allocating tag, not the freeing one") {
     {
         AE_MEM_SCOPE(memory::MemTag::Mesh);
         block = new std::byte[8192];
+        Touch(block);
     }
     CHECK(memory::GlobalStats().Get(memory::MemTag::Mesh).currentBytes >= meshBefore + 8192);
 
@@ -72,6 +87,7 @@ TEST_CASE("Nothing is counted while tracking is disabled") {
     {
         AE_MEM_SCOPE(memory::MemTag::Net);
         auto* block = new std::byte[2048];
+        Touch(block);
         CHECK(memory::GlobalStats().Get(memory::MemTag::Net).currentBytes == before);
         delete[] block;
     }
@@ -89,6 +105,7 @@ TEST_CASE("A block outlives a tracking-level change without stranding bytes") {
     {
         AE_MEM_SCOPE(memory::MemTag::Tilemap);
         block = new std::byte[4096];
+        Touch(block);
     }
     CHECK(memory::GlobalStats().Get(memory::MemTag::Tilemap).currentBytes >= before + 4096);
 

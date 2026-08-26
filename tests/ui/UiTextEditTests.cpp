@@ -169,20 +169,44 @@ TEST_CASE("DisplayText masks a password")
 	CHECK(ui::DisplayText("", true).empty());
 }
 
-// Mirrors MakeMonoFont in UiDrawBuilderTests: bakeSize 48, advance 24 -> at pixelSize 48 every
-// glyph is exactly 24 px wide, so expected pixel positions are caret * 24.
+// The atlas-era fixture described this mono font in pixels at a bake size of 48.
+// FontAsset carries no bake size any more - metrics are em units and the requested
+// pixel size is the whole scale - so the same font is those pixel numbers divided
+// through by that em. Every expected value below is unchanged as a result.
+static constexpr float kFixtureEm = 48.f;
+
+static ui::GlyphCurve MonoGlyph(std::uint32_t cp)
+{
+	ui::GlyphCurve g{};
+	g.codepoint = cp;
+	g.minX = 0.f;
+	g.minY = 0.f;
+	g.maxX = 20.f / kFixtureEm;
+	g.maxY = 30.f / kFixtureEm;
+	g.advance = 24.f / kFixtureEm;
+	g.bearingX = 0.f;
+	g.bearingY = 30.f / kFixtureEm;
+	g.bandTexel = 0u;
+	// A non-zero band count is what makes ShapeText emit a quad at all, so every glyph
+	// here is visible - matching the atlas fixture, where all of them had extent.
+	g.bandCountX = 1u;
+	g.bandCountY = 1u;
+	return g;
+}
+
+// Mirrors MakeMonoFont in UiDrawBuilderTests: at pixelSize 48 every glyph is exactly
+// 24 px wide, so expected pixel positions are caret * 24.
 static ui::FontAsset MakeTextEditFont()
 {
 	ui::FontAsset f;
-	f.atlasBindlessSlot = 42;
-	f.atlasWidth = f.atlasHeight = 128;
-	f.ascent = 40;
-	f.descent = 10;
-	f.lineHeight = 50;
-	f.bakeSize = 48;
+	f.curveBindlessSlot = 42;
+	f.textureWidth = f.textureHeight = 128;
+	f.ascent = 40.f / kFixtureEm;
+	f.descent = 10.f / kFixtureEm;
+	f.lineHeight = 50.f / kFixtureEm;
 	for (char c = 0x20; c > 0 && c <= 0x7E; ++c)
 	{
-		f.glyphs[static_cast<std::uint32_t>(c)] = ui::GlyphMeta{static_cast<std::uint32_t>(c), 0.f, 0.f, 0.1f, 0.1f, 20.f, 30.f, 0.f, 30.f, 24.f};
+		f.glyphs[static_cast<std::uint32_t>(c)] = MonoGlyph(static_cast<std::uint32_t>(c));
 	}
 	return f;
 }
