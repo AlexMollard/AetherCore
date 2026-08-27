@@ -79,7 +79,7 @@ float3 EvalBackground(GpuBackgroundParams* bg, float2 uv)
 // ── Debug header bar: operator labels ──────────────────────────────────────
 // Each vertical strip gets a colored header bar with the operator index digit.
 // Must match kTonemapCount in TonemapDefs.hpp.
-static const uint kNumOperators = 10u;
+static const uint kNumOperators = 11u;
 
 // 3×5 bitmap font digits (0 = empty, 1 = filled), rows packed as 3-bit values.
 static const uint kDigitRows[10][5] = {
@@ -96,7 +96,7 @@ static const uint kDigitRows[10][5] = {
 };
 
 // Unique hue per operator for the header bar.
-static const float3 kBarColors[10] = {
+static const float3 kBarColors[11] = {
     float3(0.78f, 0.39f, 0.39f), // 0 Reinhard      - muted red
     float3(0.39f, 0.78f, 0.39f), // 1 ACES Filmic   - muted green
     float3(0.39f, 0.39f, 0.78f), // 2 Uncharted 2   - muted blue
@@ -107,6 +107,7 @@ static const float3 kBarColors[10] = {
     float3(0.78f, 0.59f, 0.31f), // 7 Lottes         - orange
     float3(0.31f, 0.78f, 0.59f), // 8 RomBinDaHouse  - teal
     float3(1.00f, 1.00f, 1.00f), // 9 Vanilla        - white
+    float3(0.59f, 0.47f, 0.78f), // 10 AgX           - violet
 };
 
 // ── Fragment shader ────────────────────────────────────────────────────────
@@ -188,19 +189,34 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
             // Render the operator index digit (0–9) using a 3×5 bitmap font
             // with 4×4 screen-pixel blocks per font pixel.
-            uint localX   = uint(coord.x) - stripStart;
-            uint digitW   = 12u; // 3 font cols × 4 px
-            uint digitH   = 20u; // 5 font rows × 4 px
-            uint digitOff = (stripWidth > digitW) ? (stripWidth - digitW) / 2u : 0u;
+            // kDigitRows is a font indexed by digit, not by operator, so an
+            // operator index of 10 or more has to be spelled out across two
+            // glyphs rather than used as a row directly.
+            uint localX    = uint(coord.x) - stripStart;
+            uint glyphW    = 12u; // 3 font cols × 4 px
+            uint glyphGap  = 4u;
+            uint digitH    = 20u; // 5 font rows × 4 px
+            uint numDigits = (stripIdx >= 10u) ? 2u : 1u;
+            uint labelW    = numDigits * glyphW + (numDigits - 1u) * glyphGap;
+            uint digitOff  = (stripWidth > labelW) ? (stripWidth - labelW) / 2u : 0u;
 
-            if (localX >= digitOff && localX < digitOff + digitW &&
+            if (localX >= digitOff && localX < digitOff + labelW &&
                 uint(coord.y) < digitH)
             {
-                uint fontX = (localX - digitOff) / 4u;
-                uint fontY = uint(coord.y) / 4u;
-                if (((kDigitRows[stripIdx][fontY] >> (2u - fontX)) & 1u) != 0u)
+                uint labelX = localX - digitOff;
+                uint glyph  = labelX / (glyphW + glyphGap);
+                uint inX    = labelX - glyph * (glyphW + glyphGap);
+                if (inX < glyphW)
                 {
-                    barColor = float3(1.0f, 1.0f, 1.0f);
+                    uint digit = (numDigits == 2u)
+                        ? ((glyph == 0u) ? (stripIdx / 10u) : (stripIdx % 10u))
+                        : stripIdx;
+                    uint fontX = inX / 4u;
+                    uint fontY = uint(coord.y) / 4u;
+                    if (((kDigitRows[min(digit, 9u)][fontY] >> (2u - fontX)) & 1u) != 0u)
+                    {
+                        barColor = float3(1.0f, 1.0f, 1.0f);
+                    }
                 }
             }
 

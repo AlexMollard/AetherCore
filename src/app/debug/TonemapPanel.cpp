@@ -13,6 +13,7 @@
 #include "passes/TonemapDefs.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "rendering/Renderer.hpp"
+#include "utils/SettingsService.hpp"
 
 namespace aether::editor
 {
@@ -83,6 +84,29 @@ namespace aether::editor
 			return x;
 		}
 
+		// AgX on the achromatic axis. The inset and outset matrices are what give
+		// AgX its hue behaviour, and both have rows summing to one, so on grey they
+		// cancel and what is left is the log encoding and the sigmoid - which is
+		// exactly the part a one-dimensional curve plot can show.
+		float Agx(float x)
+		{
+			constexpr float kMinEv = -12.47393f;
+			constexpr float kMaxEv = 4.026069f;
+
+			float v = std::log2((std::max) (x, 1e-10f));
+			v = (std::min) ((std::max) (v, kMinEv), kMaxEv);
+			v = (v - kMinEv) / (kMaxEv - kMinEv);
+
+			const float v2 = v * v;
+			const float v4 = v2 * v2;
+			float y = 15.5f * v4 * v2 - 40.14f * v4 * v + 31.96f * v4 - 6.868f * v2 * v + 0.4298f * v2 + 0.1191f * v - 0.00232f;
+			y = (std::min) ((std::max) (y, 0.0f), 1.0f);
+
+			// Matches the shader, which returns linear so the pass's own 1/2.2 can
+			// re-apply AgX's 2.2 encoding.
+			return std::pow(y, 2.2f);
+		}
+
 		float TonemapByIndex(std::uint32_t idx, float x)
 		{
 			switch (idx)
@@ -107,6 +131,8 @@ namespace aether::editor
 					return RomBinDaHouse(x);
 				case 9u:
 					return Vanilla(x);
+				case 10u:
+					return Agx(x);
 				default:
 					return Reinhard(x);
 			}
@@ -123,6 +149,7 @@ namespace aether::editor
 		        IM_COL32(200, 150, 80, 220),
 		        IM_COL32(80, 200, 150, 220),
 		        IM_COL32(200, 200, 200, 220),
+		        IM_COL32(150, 120, 200, 220),
 		};
 
 	} // namespace
@@ -149,7 +176,21 @@ namespace aether::editor
 				const bool selected = static_cast<std::uint32_t>(stack.GetTonemapMode()) == i;
 				if (ImGui::Selectable(kTonemapDefs[i].name, selected))
 				{
-					stack.SetTonemapMode(kTonemapDefs[i].mode);
+					// Write through the setting where there is one, so this panel and the
+					// settings file cannot end up disagreeing about which operator is
+					// selected - and so the choice survives a restart. Falling back to the
+					// stack directly keeps the panel working in a build with no settings
+					// service, which is what the preview tools run as.
+					if (auto* settings = context.TryGet<aether::SettingsService>())
+					{
+						settings->Values().graphics.tonemap = kTonemapDefs[i].name;
+						settings->ApplyField("graphics.tonemap");
+						settings->MarkDirty();
+					}
+					else
+					{
+						stack.SetTonemapMode(kTonemapDefs[i].mode);
+					}
 				}
 				if (selected)
 				{

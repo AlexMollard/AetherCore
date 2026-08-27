@@ -11,6 +11,7 @@
 #include "Lottes.slangh"
 #include "RomBinDaHouse.slangh"
 #include "Vanilla.slangh"
+#include "Agx.slangh"
 
 // Dispatch by index - single switch site for operator selection.
 // Slot order must match kTonemapDefs in TonemapDefs.hpp.
@@ -28,6 +29,7 @@ float3 TonemapByIndex(uint idx, float3 x)
         case 7u: return Lottes(x);
         case 8u: return RomBinDaHouse(x);
         case 9u: return Vanilla(x);
+        case 10u: return Agx(x);
         default: return Reinhard(x);
     }
 }

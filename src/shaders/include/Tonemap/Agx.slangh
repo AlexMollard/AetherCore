@@ -1,0 +1,82 @@
+// AgX, Troy Sobotka's display transform, as adopted by Blender 4.0.
+//
+// Every operator in this family so far is a curve: feed it a linear value, get a
+// display value. That is the source of the one artefact all of them share. A
+// bright saturated colour has one channel far above the others, so as the curve
+// compresses the top end that channel flattens first while the others are still
+// climbing. The hue rotates on the way to white - fire goes yellow then bilious
+// green, a blue emissive turns purple, a strong sky clips cyan. ACES in AP1
+// (AcesFilmic.slangh) fixes the desaturation half of this, but the hue still
+// walks, because the rotation is inherent in compressing three channels
+// independently no matter which primaries they are expressed in.
+//
+// AgX attacks it from the other end. Before compressing anything it mixes the
+// channels toward each other - the "inset" matrix below - so no channel can be
+// far enough ahead of the others to flatten alone. The sigmoid is then applied in
+// log space, where the eye's response actually lives, and the mix is undone
+// afterwards. Highlights walk to white along a straight line in chromaticity
+// instead of curving through whatever hue clips first.
+//
+// The visible consequence: bright things read as bright rather than as coloured
+// clipping, and the image tolerates far more exposure before it stops looking
+// photographic. The cost is that mid-tones come out less saturated than ACES -
+// that is the transform being honest about what a real capture does, not a
+// deficiency, but it is a look and it is why this is an option rather than the
+// default.
+//
+// Cost is a log2, a sixth-order polynomial and two 3x3 matrices - the same order
+// as the ACES fit, no textures and no LUT.
+
+// sRGB primaries -> AgX working space, with the channels inset toward each other.
+static const float3x3 kAgxInsetMat = float3x3(
+    0.8424790622530940f, 0.0784335999999992f, 0.0792237451477643f,
+    0.0423282422610123f, 0.8784686364697720f, 0.0791661274605434f,
+    0.0423756549057051f, 0.0784336000000000f, 0.8791429737931040f);
+
+static const float3x3 kAgxOutsetMat = float3x3(
+     1.1968790051201700f, -0.0980208811401368f, -0.0990297440797205f,
+    -0.0528968517574562f,  1.1519031299041700f, -0.0989611768448433f,
+    -0.0529716355144438f, -0.0980434501171241f,  1.1510736726411600f);
+
+// The dynamic range the log encoding spans, in stops either side of mid grey.
+// Anything outside is clipped rather than compressed - beyond about 4 stops over
+// there is no colour information worth preserving, only intensity.
+static const float kAgxMinEv = -12.47393f;
+static const float kAgxMaxEv = 4.026069f;
+
+// Sixth-order fit of AgX's default sigmoid over the normalised log range. A
+// polynomial rather than the analytic curve because the fit is within a quantised
+// step of it across the whole domain and costs a handful of multiplies.
+float3 AgxContrastApprox(float3 x)
+{
+    const float3 x2 = x * x;
+    const float3 x4 = x2 * x2;
+    return 15.5f * x4 * x2
+         - 40.14f * x4 * x
+         + 31.96f * x4
+         - 6.868f * x2 * x
+         + 0.4298f * x2
+         + 0.1191f * x
+         - 0.00232f;
+}
+
+float3 Agx(float3 x)
+{
+    float3 color = mul(kAgxInsetMat, max(x, 0.0f));
+
+    // Log encode. The clamp is what bounds the transform: without it log2 of a
+    // black pixel is -inf and the polynomial returns garbage.
+    color = clamp(log2(max(color, 1e-10f)), kAgxMinEv, kAgxMaxEv);
+    color = (color - kAgxMinEv) / (kAgxMaxEv - kAgxMinEv);
+
+    color = saturate(AgxContrastApprox(color));
+
+    color = mul(kAgxOutsetMat, color);
+
+    // AgX emits display-encoded values at a 2.2 exponent. This pass applies its
+    // own 1/2.2 on the way to the 8-bit target, so undo it here rather than
+    // special-casing the caller - the two cancel and AgX's own encoding is what
+    // reaches the display, which is the entire point of it being a display
+    // transform rather than a curve.
+    return saturate(pow(max(color, 0.0f), 2.2f));
+}
