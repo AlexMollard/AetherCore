@@ -158,32 +158,44 @@ namespace aether::vkutil
 		entry.lineWidth = 1.0f;
 		entry.hasLineWidth = desc.lineWidthDynamic;
 
-		// Color blend (single attachment - the engine never uses MRT).
-		if (hasColorAttachment)
+		// Colour blend. Every attachment gets the same state - the one pipeline that
+		// writes more than one (the depth prepass) wants both written opaquely - but the
+		// count has to be right, because the dynamic-state calls below only cover the
+		// attachments they are told about and the rest are left undefined.
+		const std::uint32_t colorAttachments = hasColorAttachment
+		        ? (std::min) (
+		                  (std::max) (desc.colorAttachmentCount, 1u),
+		                  ResourceRegistry::PipelineEntry::kMaxColorAttachments)
+		        : 0u;
+		entry.colorAttachmentCount = colorAttachments;
+		for (std::uint32_t i = 0; i < colorAttachments; ++i)
 		{
-			entry.colorBlendEnable = desc.blendEnable && desc.blendMode != gpu::BlendMode::Opaque ? VK_TRUE : VK_FALSE;
-			entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-			entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			entry.colorBlendEnable[i] = desc.blendEnable && desc.blendMode != gpu::BlendMode::Opaque ? VK_TRUE : VK_FALSE;
+			entry.colorBlendEquation[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			entry.colorBlendEquation[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 			if (desc.blendMode == gpu::BlendMode::Additive)
 			{
-				entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-				entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+				entry.colorBlendEquation[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+				entry.colorBlendEquation[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
 			}
 			else if (desc.blendMode == gpu::BlendMode::Multiply)
 			{
-				entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
-				entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+				entry.colorBlendEquation[i].srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
+				entry.colorBlendEquation[i].dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
 			}
-			entry.colorBlendEquation.colorBlendOp = VK_BLEND_OP_ADD;
-			entry.colorBlendEquation.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			entry.colorBlendEquation.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-			entry.colorBlendEquation.alphaBlendOp = VK_BLEND_OP_ADD;
-			entry.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			entry.colorBlendEquation[i].colorBlendOp = VK_BLEND_OP_ADD;
+			entry.colorBlendEquation[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			entry.colorBlendEquation[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			entry.colorBlendEquation[i].alphaBlendOp = VK_BLEND_OP_ADD;
+			entry.colorWriteMask[i] = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 		}
-		else
+		if (colorAttachments == 0)
 		{
-			entry.colorBlendEnable = VK_FALSE;
-			entry.colorWriteMask = 0;
+			// Still one element of state, all writes masked off, so a depth-only pipeline
+			// leaves nothing enabled behind it.
+			entry.colorAttachmentCount = 1;
+			entry.colorBlendEnable[0] = VK_FALSE;
+			entry.colorWriteMask[0] = 0;
 		}
 
 		if (!desc.vertexBindings.empty())

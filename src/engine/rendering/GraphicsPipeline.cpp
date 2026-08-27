@@ -50,6 +50,7 @@ namespace aether
 		        .vertexEntry = desc.vertexEntry.data() ? desc.vertexEntry.data() : "vertexMain",
 		        .fragmentEntry = desc.fragmentEntry.data() ? desc.fragmentEntry.data() : "fragmentMain",
 		        .colorFormat = desc.colorFormat,
+		        .colorAttachmentCount = desc.colorAttachmentCount,
 		        .depthFormat = desc.depthFormat,
 		        .depthTestEnable = desc.depthTestEnable,
 		        .depthWriteEnable = desc.depthWriteEnable,

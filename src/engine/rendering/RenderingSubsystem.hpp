@@ -339,9 +339,14 @@ namespace aether
 		// Thin G-buffer written alongside depth in the prepass: octahedral normal,
 		// roughness, metallic. Transient - only screen-space passes read it.
 		RGImage m_sceneGBuffer;
+		// Base colour, written by the same prepass into a second target. A metal's Fresnel
+		// reflectance IS its base colour, and the reflection composite has to reproduce the
+		// exact colour the forward pass weighted its sky specular by.
+		RGImage m_sceneBaseColor;
 		BindlessManager* m_bindlessManager = nullptr;
 		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		std::uint32_t m_sceneGBufferBindlessSlot = 0xFFFFFFFFu;
+		std::uint32_t m_sceneBaseColorBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_prepassPipeline;
 		// Screen-space reflections march into their own buffer, because the march has to
 		// sample the HDR colour it would otherwise be writing.

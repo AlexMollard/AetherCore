@@ -125,9 +125,9 @@ namespace aether::gpu
 		{
 			vkCmdSetAlphaToOneEnableEXT(cmd, entry->alphaToOneEnable);
 		}
-		vkCmdSetColorBlendEnableEXT(cmd, 0, 1, &entry->colorBlendEnable);
-		vkCmdSetColorBlendEquationEXT(cmd, 0, 1, &entry->colorBlendEquation);
-		vkCmdSetColorWriteMaskEXT(cmd, 0, 1, &entry->colorWriteMask);
+		vkCmdSetColorBlendEnableEXT(cmd, 0, entry->colorAttachmentCount, entry->colorBlendEnable);
+		vkCmdSetColorBlendEquationEXT(cmd, 0, entry->colorAttachmentCount, entry->colorBlendEquation);
+		vkCmdSetColorWriteMaskEXT(cmd, 0, entry->colorAttachmentCount, entry->colorWriteMask);
 		if (entry->hasLineWidth)
 		{
 			vkCmdSetLineWidth(cmd, entry->lineWidth);

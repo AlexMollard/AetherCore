@@ -388,7 +388,10 @@ namespace CullContracts
 		LocalShadowAtlas = 6,
 		// Thin G-buffer from the depth prepass: octahedral normal, roughness, metallic.
 		SceneGBuffer = 7,
-		Count = 8,
+		// Base colour from the same prepass. Separate from the G-buffer above because a
+		// colour needs three channels and that one has none to spare.
+		SceneBaseColor = 8,
+		Count = 9,
 	};
 
 	inline constexpr std::uint32_t kResourceTypeInvalid = 0xFFFFFFFFu;

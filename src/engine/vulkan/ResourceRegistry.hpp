@@ -111,9 +111,15 @@ namespace aether
 			std::uint32_t viewportCount = 1;
 			VkViewport viewports[8] = {{0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f}};
 
-			VkBool32 colorBlendEnable = VK_FALSE;
-			VkColorBlendEquationEXT colorBlendEquation{};
-			VkColorComponentFlags colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			// Per-attachment, because the depth prepass writes two: a surface buffer and a
+			// base-colour buffer. The dynamic-state calls take a count, and passing 1 while
+			// rendering to 2 leaves the second attachment's blend state and write mask
+			// undefined - which shows up as an attachment that silently stays cleared.
+			static constexpr std::uint32_t kMaxColorAttachments = 8;
+			std::uint32_t colorAttachmentCount = 1;
+			VkBool32 colorBlendEnable[kMaxColorAttachments] = {VK_FALSE};
+			VkColorBlendEquationEXT colorBlendEquation[kMaxColorAttachments] = {};
+			VkColorComponentFlags colorWriteMask[kMaxColorAttachments] = {VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT};
 			float lineWidth = 1.0f;
 			bool hasLineWidth = false;
 

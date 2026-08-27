@@ -1597,6 +1597,7 @@ namespace aether::gpu
 		        .vertexEntry = desc.vertexEntry,
 		        .fragmentEntry = desc.fragmentEntry,
 		        .colorFormat = desc.colorFormat,
+		        .colorAttachmentCount = desc.colorAttachmentCount,
 		        .depthFormat = desc.depthFormat,
 		        .depthTestEnable = desc.depthTestEnable,
 		        .depthWriteEnable = desc.depthWriteEnable,

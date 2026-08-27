@@ -19,12 +19,10 @@
 // with full confidence the sky term cancels and the reflection replaces it; where
 // it missed, confidence is zero and nothing changes.
 //
-// Two approximations remain, both second-order and both in the SUBTRACTION only:
-//   * F0 is scalar, interpolated from 0.04 to 1 by metallic, where a real metal
-//     tints it by base colour. Base colour is not in the G-buffer. Dielectrics -
-//     floors, which is where this is most visible - cancel exactly.
-//   * Ambient occlusion and fog modulate the forward pass's ambient after this
-//     term, and are not reapplied here.
+// The subtraction reproduces what the forward pass added term for term: the same
+// sky function, the same split-sum fit, the same specular occlusion and fog, and
+// the same COLOURED F0 - a metal reflects its own base colour, so the prepass
+// writes base colour into a second target for exactly this.
 
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
@@ -130,8 +128,23 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	const float a004 = min(r.x * r.x, exp2(-9.28f * NdotV)) * r.x + r.y;
 	const float2 envBrdf = float2(-1.04f, 1.04f) * a004 + r.zw;
 
-	const float F0 = lerp(0.04f, 1.0f, metallic);
-	float specWeight = F0 * envBrdf.x + envBrdf.y;
+	// A metal's Fresnel reflectance is its base colour - gold reflects gold - so this
+	// has to be the same float3 the forward pass used, not a scalar standing in for it.
+	// With a scalar every channel where the metal is dark was over-subtracted; on copper
+	// that removed about half the blue the sky had put there, and the reflection clipped
+	// to black.
+	//
+	// Rebuilt from base colour rather than read as F0 directly, so metallic == 0 gives
+	// exactly 0.04 and dielectrics keep cancelling exactly - quantising 0.04 into a
+	// texel would have broken that everywhere it is most visible.
+	float3 tint = float3(1.0f, 1.0f, 1.0f);
+	const ResourceEntry baseEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneBaseColor);
+	if (baseEntry.type == kResourceTypeBindlessTexture)
+	{
+		tint = g_textures[uint(baseEntry.address)].Load(int3(coord, 0)).rgb;
+	}
+	const float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), tint, metallic);
+	float3 specWeight = F0 * envBrdf.x + envBrdf.y;
 
 	// The forward pass did not add the sky specular raw - it multiplied it by
 	// specular occlusion and then fogged the result. Subtracting the raw value would

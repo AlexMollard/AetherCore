@@ -19,6 +19,7 @@
 #define kFrameResourceId_DirectionalShadowC2  5u
 #define kFrameResourceId_LocalShadowAtlas     6u
 #define kFrameResourceId_SceneGBuffer         7u
+#define kFrameResourceId_SceneBaseColor       8u
 
 struct ResourceEntry
 {

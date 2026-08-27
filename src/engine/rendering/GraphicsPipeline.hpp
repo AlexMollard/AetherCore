@@ -19,6 +19,12 @@ namespace aether
 			std::string_view vertexEntry = "vertexMain";
 			std::string_view fragmentEntry = "fragmentMain";
 			gpu::Format colorFormat = gpu::Format::Undefined;
+			// How many colour attachments this pipeline writes. The formats themselves are
+			// dynamic under VK_EXT_shader_object - they come from vkCmdBeginRendering - so
+			// all the pipeline needs is the COUNT, to set blend state and write masks for
+			// every attachment rather than only the first. A count above one with
+			// colorFormat left Undefined still means no colour attachments.
+			std::uint32_t colorAttachmentCount = 1;
 			gpu::Format depthFormat = gpu::Format::Undefined;
 			bool depthTestEnable = false;
 			bool depthWriteEnable = false;

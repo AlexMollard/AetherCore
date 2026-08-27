@@ -69,6 +69,7 @@ namespace aether::gpu
 		const char* vertexEntry = "vertexMain";
 		const char* fragmentEntry = "fragmentMain";
 		Format colorFormat = Format::Undefined;
+		std::uint32_t colorAttachmentCount = 1;
 		Format depthFormat = Format::Undefined;
 		bool depthTestEnable = false;
 		bool depthWriteEnable = false;

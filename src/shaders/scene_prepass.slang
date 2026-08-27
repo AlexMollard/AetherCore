@@ -17,10 +17,28 @@
 // here costs no extra geometry submission and changes nothing any other shader
 // has to know about.
 //
-// Layout, RGBA8:
+// Layout, target 0, RGBA8:
 //   RG = world normal, octahedral-encoded
 //   B  = roughness
 //   A  = metallic
+//
+// Target 1, RGBA8 sRGB: base colour.
+//
+// That second target exists for one reason. A metal's Fresnel reflectance is its
+// base colour - gold reflects gold - so the forward pass weights its sky specular
+// by lerp(0.04, baseColour, metallic), a COLOUR. The reflection composite has to
+// subtract exactly what the forward pass added, and without base colour it could
+// only guess with a scalar, over-subtracting every channel where the metal is dark.
+// On copper that removes about half the blue the sky put there.
+//
+// Base colour rather than F0 itself, deliberately: storing F0 would quantise a
+// dielectric's 0.04 to 10/255, and the subtraction would stop cancelling on the
+// floors and walls that make up most of the screen. Reconstructing
+// lerp(0.04, base, metallic) in the composite keeps metallic == 0 exact no matter
+// what the texel holds.
+//
+// sRGB rather than Unorm, because base colour is perceptual data: the hardware
+// encode spends its 8 bits where the eye needs them and hands back linear on read.
 //
 // Octahedral rather than storing xy and rebuilding z: the sign of z is lost that
 // way, so back-facing normals come back wrong. Octahedral mapping spends both
@@ -47,6 +65,13 @@ struct PrepassVSOutput
 	float3 worldNormal   : TEXCOORD0;
 	float2 uv            : TEXCOORD1;
 	nointerpolation uint materialIndex : TEXCOORD2;
+	float3 vertexColor   : TEXCOORD3;
+};
+
+struct PrepassOutput
+{
+	float4 surface   : SV_Target0;
+	float4 baseColor : SV_Target1;
 };
 
 [shader("vertex")]
@@ -108,18 +133,21 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 	o.worldNormal = nWorld;
 	o.uv = v.uv;
 	o.materialIndex = instance.materialIndex;
+	o.vertexColor = v.color;
 	return o;
 }
 
 [shader("fragment")]
-float4 fragmentMain(PrepassVSOutput input) : SV_Target0
+PrepassOutput fragmentMain(PrepassVSOutput input)
 {
 	FrameConstantsData* fc = pc.frame.Ptr();
 	GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
 
 	float roughness = 1.0f;
 	float metallic = 0.0f;
-	if (input.materialIndex != kNoTexture)
+	float3 baseColor = float3(1.0f, 1.0f, 1.0f);
+	const bool hasMaterial = input.materialIndex != kNoTexture;
+	if (hasMaterial)
 	{
 		const GpuMaterial mat = materials[input.materialIndex];
 		roughness = mat.roughnessFactor;
@@ -134,8 +162,32 @@ float4 fragmentMain(PrepassVSOutput input) : SV_Target0
 			roughness *= orm.g;
 			metallic *= orm.b;
 		}
+
+		baseColor = mat.baseColorFactor.rgb;
+		if (mat.albedoSlot != kNoTexture)
+		{
+			baseColor *= g_textures[mat.albedoSlot].Sample(g_linearSampler, input.uv).rgb;
+		}
 	}
 
+	// Vertex colour, gated and sanitised exactly as the forward shader gates it. The
+	// two have to agree term for term or the composite subtracts something the
+	// forward pass never added.
+	float3 vertexColor = float3(1.0f, 1.0f, 1.0f);
+	if (!hasMaterial || (materials[input.materialIndex].flags & kFlagModulateVertexColor) != 0u)
+	{
+		vertexColor = input.vertexColor;
+	}
+	if (any(vertexColor < 0.0f) || any(vertexColor > 1.0f) || dot(vertexColor, vertexColor) < 0.0025f)
+	{
+		vertexColor = float3(1.0f, 1.0f, 1.0f);
+	}
+	baseColor *= vertexColor;
+
 	const float3 N = normalize(input.worldNormal);
-	return float4(EncodeOctNormal(N), saturate(roughness), saturate(metallic));
+
+	PrepassOutput o;
+	o.surface = float4(EncodeOctNormal(N), saturate(roughness), saturate(metallic));
+	o.baseColor = float4(saturate(baseColor), 1.0f);
+	return o;
 }

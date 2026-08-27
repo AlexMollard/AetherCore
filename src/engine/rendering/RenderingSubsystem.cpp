@@ -316,6 +316,15 @@ namespace aether
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.GBuffer bindless registration failed"));
 		}
 
+		// sRGB, not Unorm: base colour is perceptual data, so the hardware encode spends
+		// its eight bits where the eye needs them and still hands back linear on read.
+		m_sceneBaseColor = graph.CreateTransientColor(gpu::Format::R8G8B8A8Srgb, extent, gpu::ImageUsage::Sampled);
+		m_sceneBaseColorBindlessSlot = graph.EnsureBindlessSampled(m_sceneBaseColor);
+		if (m_sceneBaseColorBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.BaseColor bindless registration failed"));
+		}
+
 		// HDR, because a reflection carries the same range as what it reflects.
 		m_ssrColor = graph.CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, extent, gpu::ImageUsage::Sampled);
 		m_ssrBindlessSlot = graph.EnsureBindlessSampled(m_ssrColor);
@@ -448,6 +457,10 @@ namespace aether
 		                {
 		                        .shaderVfsPath = "shaders://scene_prepass.spv",
 		                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
+		                        // Surface buffer and base colour. The formats come from
+		                        // vkCmdBeginRendering; the pipeline only needs the count, so
+		                        // that blend state and write masks reach the second target.
+		                        .colorAttachmentCount = 2,
 		                        .depthFormat = swapchain.GetDepthFormat(),
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
@@ -794,6 +807,21 @@ namespace aether
 			                .bindlessSlot = m_sceneGBufferBindlessSlot,
 			        });
 		}
+		if (m_sceneBaseColor.IsValid())
+		{
+			(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductSceneBaseColor},
+			        FrameTextureProduct{
+			                .image = m_sceneBaseColor,
+			                .extent = sceneExtent,
+			                .format = gpu::Format::R8G8B8A8Srgb,
+			                .bindlessSlot = m_sceneBaseColorBindlessSlot,
+			        },
+			        FrameBlackboard::ProductMetadata{
+			                .extent = sceneExtent,
+			                .format = gpu::Format::R8G8B8A8Srgb,
+			                .bindlessSlot = m_sceneBaseColorBindlessSlot,
+			        });
+		}
 		if constexpr (kEnableForwardGtao)
 		{
 			if (m_gtaoPass.GetAoImage().IsValid())
@@ -823,9 +851,14 @@ namespace aether
 			                .draws = mainSceneDraws,
 			                .extent = sceneExtent,
 			                .consumes = {RenderGraph::Product<MainViewProduct>(kFrameProductMainView)},
-			                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth), RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer)},
+			                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth), RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneBaseColor)},
 			        })
 			        .WriteColor(m_sceneGBuffer, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.5f, 0.5f, 1.0f, 0.0f))
+			        // Cleared to white so a pixel the prepass never covers reads as an
+			        // untinted metal rather than a black one, which would subtract nothing
+			        // and leave the sky reflection double counted.
+			        .WriteColor(m_sceneBaseColor, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
@@ -1004,10 +1037,12 @@ namespace aether
 			                .extent = sceneExtent,
 			                .loadOp = gpu::LoadOp::Load,
 			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
-			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer)},
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneBaseColor)},
 			        })
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneBaseColor, FrameResourceId::SceneBaseColor)
 			        .ReadTexture(m_ssrColor);
 
 			// Occlusion only exists when the AO pass ran; the shader falls back to fully
