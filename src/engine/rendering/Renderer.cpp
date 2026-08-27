@@ -74,6 +74,14 @@ namespace aether
 		return m_postProcessStack ? m_postProcessStack->GetTonemapMode() : TonemapMode{};
 	}
 
+	void Renderer::SetGrade(float contrast, float saturation, float temperature, float tint)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetGrade(contrast, saturation, temperature, tint);
+		}
+	}
+
 	void Renderer::SetFxaaEnabled(bool enabled)
 	{
 		if (m_postProcessStack)

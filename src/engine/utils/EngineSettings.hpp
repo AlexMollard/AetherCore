@@ -56,6 +56,11 @@ namespace aether
 			// where covering the output means 2.25x the pixels of a 1440p window.
 			float renderScale = 1.0f;
 			bool fxaa = true;
+			// Colour grade. These defaults are the identity transform.
+			float gradeContrast = 1.0f;
+			float gradeSaturation = 1.0f;
+			float gradeTemperature = 0.0f;
+			float gradeTint = 0.0f;
 			// Ambient occlusion. Radius is in world units - how far a surface looks for
 			// something occluding it - so it wants to match the scale of the scene's
 			// geometry rather than a fixed number of pixels.
@@ -149,6 +154,10 @@ namespace aether
 		f("graphics.renderScale", settings.graphics.renderScale);
 		f("graphics.latencyPacing", settings.graphics.latencyPacing);
 		f("graphics.fxaa", settings.graphics.fxaa);
+		f("graphics.gradeContrast", settings.graphics.gradeContrast);
+		f("graphics.gradeSaturation", settings.graphics.gradeSaturation);
+		f("graphics.gradeTemperature", settings.graphics.gradeTemperature);
+		f("graphics.gradeTint", settings.graphics.gradeTint);
 		f("graphics.gtao", settings.graphics.gtao);
 		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);

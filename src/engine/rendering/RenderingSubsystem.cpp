@@ -662,6 +662,10 @@ namespace aether
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
 		const bool fxaaEnabled = m_postProcessStack.IsFxaaEnabled();
+		const float gradeContrast = m_postProcessStack.GetGradeContrast();
+		const float gradeSaturation = m_postProcessStack.GetGradeSaturation();
+		const float gradeTemperature = m_postProcessStack.GetGradeTemperature();
+		const float gradeTint = m_postProcessStack.GetGradeTint();
 		const bool histogramCaptureEnabled = m_postProcessStack.IsHistogramCaptureEnabled();
 		const std::uint32_t histogramUpdatePeriod = m_postProcessStack.GetHistogramUpdatePeriod();
 		const std::uint32_t histogramSampleStride = m_postProcessStack.GetHistogramSampleStride();
@@ -685,6 +689,7 @@ namespace aether
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
+		m_postProcessStack.SetGrade(gradeContrast, gradeSaturation, gradeTemperature, gradeTint);
 		m_postProcessStack.SetHistogramCaptureEnabled(histogramCaptureEnabled);
 		m_postProcessStack.SetHistogramUpdatePeriod(histogramUpdatePeriod);
 		m_postProcessStack.SetHistogramSampleStride(histogramSampleStride);

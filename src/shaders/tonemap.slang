@@ -35,8 +35,61 @@ struct TonemapPush
     float bloomStrength;  // linear blend toward the bloom result
     uint  dofSlot;        // half-res out-of-focus image (0xFFFFFFFF = lens off)
     uint64_t backgroundParamsAddr; // BDA -> GpuBackgroundParams (0 = disabled)
+    float gradeContrast;    // 1 = unchanged
+    float gradeSaturation;  // 1 = unchanged, 0 = greyscale
+    float gradeTemperature; // 0 = unchanged, >0 warmer
+    float gradeTint;        // 0 = unchanged, >0 greener
 };
 [[vk::push_constant]] TonemapPush pc;
+
+// Colour grade, in LINEAR space and BEFORE the tonemap curve.
+//
+// Order matters and this is the order a grading desk uses: white balance, then saturation,
+// then contrast. Doing it before the curve is the point - grading display-referred values
+// fights the operator, because the curve has already compressed the highlights that a
+// contrast push most wants to move.
+//
+// Every term is written so its neutral value is an exact identity, not an approximate one:
+// at contrast 1, saturation 1 and no white balance the input is returned unchanged, so a
+// project that never touches these renders bit-for-bit as it did before.
+float3 ApplyGrade(float3 color)
+{
+    // Luminance weights, used by both the white balance and the saturation term.
+    const float3 kLuma = float3(0.2126f, 0.7152f, 0.0722f);
+
+    // White balance. Temperature trades red against blue, tint trades green against
+    // magenta - the two axes a camera actually exposes. The result is renormalised by its
+    // own luminance so that warming an image does not also brighten it; without that the
+    // control doubles as an exposure slider and stops being usable.
+    if (pc.gradeTemperature != 0.0f || pc.gradeTint != 0.0f)
+    {
+        float3 balance = float3(1.0f + pc.gradeTemperature,
+                                1.0f + pc.gradeTint,
+                                1.0f - pc.gradeTemperature);
+        balance = max(balance, float3(0.0f, 0.0f, 0.0f));
+        const float norm = max(dot(balance, kLuma), 1e-4f);
+        color *= balance / norm;
+    }
+
+    // Saturation about the pixel's own luminance. Values above 1 extrapolate, which can
+    // push a channel negative on already-saturated colours, so clamp at zero.
+    if (pc.gradeSaturation != 1.0f)
+    {
+        const float luma = dot(color, kLuma);
+        color = max(lerp(float3(luma, luma, luma), color, pc.gradeSaturation), 0.0f);
+    }
+
+    // Contrast about middle grey. The pivot has to be a scene-referred mid-tone rather
+    // than 0.5: in linear space 0.5 is nearly two stops above middle grey, so pivoting
+    // there darkens the entire image the moment contrast is raised.
+    if (pc.gradeContrast != 1.0f)
+    {
+        const float kPivot = 0.18f;
+        color = kPivot * pow(max(color, 1e-6f) / kPivot, pc.gradeContrast);
+    }
+
+    return color;
+}
 
 // Camera-owned WYSIWYG background, composited in display space (see
 // PostProcessStack::SetBackgroundParams). Layout matches the CPU fill.
@@ -182,7 +235,9 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         scene = lerp(scene, bloom, saturate(pc.bloomStrength));
     }
 
-    const float3 hdr = scene * pc.exposure;
+    // Graded after exposure and before the operator: exposure decides what part of the
+    // scene's range the curve sees, and the grade shapes what lands there.
+    const float3 hdr = ApplyGrade(scene * pc.exposure);
 
     float3 mapped;
 

@@ -36,6 +36,19 @@ namespace aether
 				        });
 			}
 		}
+		else if (key == "graphics.gradeContrast" || key == "graphics.gradeSaturation"
+		        || key == "graphics.gradeTemperature" || key == "graphics.gradeTint")
+		{
+			// One setter for all four: the grade is a single transform and pushing it whole
+			// keeps the four values from ever reaching the shader half-updated.
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetGrade(m_values.graphics.gradeContrast,
+				        m_values.graphics.gradeSaturation,
+				        m_values.graphics.gradeTemperature,
+				        m_values.graphics.gradeTint);
+			}
+		}
 		else if (key == "graphics.fxaa")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

@@ -107,6 +107,22 @@ namespace aether
 			return m_tonemapMode;
 		}
 
+		// Colour grade, applied in LINEAR space before the tonemap curve. Identity by
+		// default (contrast 1, saturation 1, no white-balance shift), so a project that
+		// never touches these renders exactly as it did before.
+		void SetGrade(float contrast, float saturation, float temperature, float tint)
+		{
+			m_gradeContrast = contrast;
+			m_gradeSaturation = saturation;
+			m_gradeTemperature = temperature;
+			m_gradeTint = tint;
+		}
+
+		[[nodiscard]] float GetGradeContrast() const { return m_gradeContrast; }
+		[[nodiscard]] float GetGradeSaturation() const { return m_gradeSaturation; }
+		[[nodiscard]] float GetGradeTemperature() const { return m_gradeTemperature; }
+		[[nodiscard]] float GetGradeTint() const { return m_gradeTint; }
+
 		void SetExposure(float exposure)
 		{
 			m_exposure = exposure;
@@ -347,6 +363,10 @@ namespace aether
 
 		TonemapMode m_tonemapMode = TonemapMode::AcesFilmic;
 		float m_exposure = 1.0f;
+		float m_gradeContrast = 1.0f;
+		float m_gradeSaturation = 1.0f;
+		float m_gradeTemperature = 0.0f;
+		float m_gradeTint = 0.0f;
 		bool m_fxaaEnabled = true;
 		bool m_outputToTexture = false;
 		bool m_debugCompare = false;

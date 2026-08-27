@@ -498,6 +498,10 @@ namespace aether
 			                push.screenWidth = m_extent.width;
 			                push.screenHeight = m_extent.height;
 			                push.dofSlot = m_dofSlot;
+			                push.gradeContrast = m_gradeContrast;
+			                push.gradeSaturation = m_gradeSaturation;
+			                push.gradeTemperature = m_gradeTemperature;
+			                push.gradeTint = m_gradeTint;
 			                push.backgroundParamsAddr = backgroundParamsAddr;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 

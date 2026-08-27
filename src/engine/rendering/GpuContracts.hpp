@@ -83,6 +83,14 @@ namespace TonemapContracts
 		// moving anything the offset asserts below pin down.
 		std::uint32_t dofSlot = 0xFFFFFFFFu;
 		std::uint64_t backgroundParamsAddr = 0;
+		// Colour grade, applied in linear space before the tonemap curve. These defaults
+		// are the identity transform, so the two preview services - which never set them -
+		// keep rendering exactly as before. Appended after the address so every offset
+		// asserted below is untouched.
+		float gradeContrast = 1.0f;
+		float gradeSaturation = 1.0f;
+		float gradeTemperature = 0.0f;
+		float gradeTint = 0.0f;
 	};
 
 	static_assert(offsetof(PushConstants, hdrSlot) == 0);
@@ -90,7 +98,8 @@ namespace TonemapContracts
 	static_assert(offsetof(PushConstants, bloomSlot) == 36);
 	static_assert(offsetof(PushConstants, bloomStrength) == 40);
 	static_assert(offsetof(PushConstants, backgroundParamsAddr) == 48);
-	static_assert(sizeof(PushConstants) == 56, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
+	static_assert(offsetof(PushConstants, gradeContrast) == 56);
+	static_assert(sizeof(PushConstants) == 72, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
 } // namespace TonemapContracts
 
 namespace CullContracts
