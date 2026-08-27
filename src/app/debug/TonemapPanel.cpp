@@ -266,6 +266,62 @@ namespace aether::editor
 		{
 			ImGui::SetTooltip("Width of the tent filter on the way back up the chain, in source texels. Wider spreads the glow further at the same cost.");
 		}
+		// Only offered when there is a settings service to write through. The grade lives
+		// entirely in the settings, so without one there is nothing to edit or persist -
+		// and the preview tools run exactly that way, which is why the operator selector
+		// above carries a fallback.
+		if (auto* settings = context.TryGet<aether::SettingsService>())
+		{
+			ImGui::SeparatorText("Colour grade");
+			// Written through the settings service for the same reason the operator above
+			// is: the grade is a persisted setting, so editing it here and leaving the
+			// settings file behind would make the two disagree and the change vanish on
+			// restart. Each slider pushes all four values, because SetGrade takes the
+			// transform whole.
+			auto& g = settings->Values().graphics;
+
+			bool changed = false;
+			changed |= ImGui::SliderFloat("Contrast", &g.gradeContrast, 0.25f, 2.5f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Contrast about middle grey, in linear light before the tonemap curve. 1 leaves the image untouched.");
+			}
+			changed |= ImGui::SliderFloat("Saturation", &g.gradeSaturation, 0.0f, 2.5f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("0 is greyscale, 1 is untouched, above 1 pushes further from grey.");
+			}
+			changed |= ImGui::SliderFloat("Temperature", &g.gradeTemperature, -1.0f, 1.0f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Warm/cool white balance. Luminance is held constant, so this does not double as an exposure control.");
+			}
+			changed |= ImGui::SliderFloat("Tint", &g.gradeTint, -1.0f, 1.0f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Green/magenta white balance.");
+			}
+
+			if (ImGui::SmallButton("Reset grade"))
+			{
+				g.gradeContrast = 1.0f;
+				g.gradeSaturation = 1.0f;
+				g.gradeTemperature = 0.0f;
+				g.gradeTint = 0.0f;
+				changed = true;
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Back to the identity transform - the image the renderer produces with no grade at all.");
+			}
+
+			if (changed)
+			{
+				settings->ApplyField("graphics.gradeContrast");
+				settings->MarkDirty();
+			}
+		}
+
 		ImGui::Separator();
 
 		bool debugCompare = stack.IsDebugCompareEnabled();
