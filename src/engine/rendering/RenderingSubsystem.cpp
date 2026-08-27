@@ -325,6 +325,16 @@ namespace aether
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.BaseColor bindless registration failed"));
 		}
 
+		// Half resolution. Rounded up, so an odd extent still covers every full-res
+		// pixel rather than leaving a column with no fog.
+		const gpu::Extent2D halfExtent{(extent.width + 1u) / 2u, (extent.height + 1u) / 2u};
+		m_volumetricFog = graph.CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, halfExtent, gpu::ImageUsage::Sampled);
+		m_volumetricBindlessSlot = graph.EnsureBindlessSampled(m_volumetricFog);
+		if (m_volumetricBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.VolumetricFog bindless registration failed"));
+		}
+
 		// HDR, because a reflection carries the same range as what it reflects.
 		m_ssrColor = graph.CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, extent, gpu::ImageUsage::Sampled);
 		m_ssrBindlessSlot = graph.EnsureBindlessSampled(m_ssrColor);
@@ -497,6 +507,35 @@ namespace aether
 		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_ssrCompositePipeline = std::move(ssrCompositePipeline);
+
+		AE_EXPECT_OR_THROW(volumetricPipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://volumetric_fog.spv",
+		                        .colorFormat = gpu::Format::R16G16B16A16Sfloat,
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .debugName = "Volumetric.Fog",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+		                }));
+		m_volumetricPipeline = std::move(volumetricPipeline);
+
+		// Premultiplied, because that IS the medium's compositing rule: the scattered
+		// light is added whole and the scene behind it is attenuated by what the air
+		// hides. One blend, and it reproduces the lerp the analytic path did.
+		AE_EXPECT_OR_THROW(volumetricCompositePipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://volumetric_composite.spv",
+		                        .colorFormat = PostProcessStack::GetForwardColorFormat(),
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .blendEnable = true,
+		                        .blendMode = gpu::BlendMode::Premultiplied,
+		                        .debugName = "Volumetric.Composite",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+		                }));
+		m_volumetricCompositePipeline = std::move(volumetricCompositePipeline);
 
 		m_renderTargetService.BindRuntime(FrameContext{
 		        .graph = &m_renderGraph,
@@ -1080,6 +1119,95 @@ namespace aether
 				                        .ssrSlot = m_ssrBindlessSlot,
 				                        .width = ctx.extent.width,
 				                        .height = ctx.extent.height,
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+		}
+
+		// Volumetric fog, after reflections so the air sits in front of everything the
+		// scene put in the HDR buffer, and before bloom so a beam can glow.
+		if (m_volumetricFog.IsValid() && m_sceneDepth.IsValid())
+		{
+			const gpu::Extent2D halfExtent{(sceneExtent.width + 1u) / 2u, (sceneExtent.height + 1u) / 2u};
+
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$VolumetricFog",
+			                .color = m_volumetricFog,
+			                .extent = halfExtent,
+			                .loadOp = gpu::LoadOp::Clear,
+			                .clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductDirectionalShadows)},
+			        })
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			        .Execute(
+			                [this, bindless = frame.bindless](PassContext& ctx)
+			                {
+				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws() || !ShouldMarchVolumetrics())
+				                {
+					                return;
+				                }
+				                gpu::CommandList cmd = ctx.recorder.View();
+				                bindless->CmdBindGlobalResources(cmd);
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(ctx.extent.width), .height = static_cast<float>(ctx.extent.height)});
+				                cmd.SetScissor(gpu::Rect2D{.width = ctx.extent.width, .height = ctx.extent.height});
+				                cmd.BindPipeline(m_volumetricPipeline.GetPipeline());
+				                struct
+				                {
+					                std::uint64_t frameConstantsAddr;
+					                std::uint32_t width;
+					                std::uint32_t height;
+					                std::uint32_t depthSlot;
+					                std::uint32_t pad0;
+				                } push{
+				                        .frameConstantsAddr = ctx.frameConstantsAddr,
+				                        .width = ctx.extent.width,
+				                        .height = ctx.extent.height,
+				                        .depthSlot = m_sceneDepthBindlessSlot,
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$VolumetricComposite",
+			                .color = hdrColor,
+			                .extent = sceneExtent,
+			                .loadOp = gpu::LoadOp::Load,
+			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
+			        })
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			        .ReadTexture(m_volumetricFog)
+			        .Execute(
+			                [this, bindless = frame.bindless, halfExtent](PassContext& ctx)
+			                {
+				                if (!IsForwardPassEnabled() || !HasFrameSceneDraws() || !ShouldMarchVolumetrics())
+				                {
+					                return;
+				                }
+				                gpu::CommandList cmd = ctx.recorder.View();
+				                bindless->CmdBindGlobalResources(cmd);
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(ctx.extent.width), .height = static_cast<float>(ctx.extent.height)});
+				                cmd.SetScissor(gpu::Rect2D{.width = ctx.extent.width, .height = ctx.extent.height});
+				                cmd.BindPipeline(m_volumetricCompositePipeline.GetPipeline());
+				                struct
+				                {
+					                std::uint64_t frameConstantsAddr;
+					                std::uint32_t volumetricSlot;
+					                std::uint32_t depthSlot;
+					                std::uint32_t halfWidth;
+					                std::uint32_t halfHeight;
+					                std::uint32_t pad0;
+					                std::uint32_t pad1;
+				                } push{
+				                        .frameConstantsAddr = ctx.frameConstantsAddr,
+				                        .volumetricSlot = m_volumetricBindlessSlot,
+				                        .depthSlot = m_sceneDepthBindlessSlot,
+				                        .halfWidth = halfExtent.width,
+				                        .halfHeight = halfExtent.height,
 				                };
 				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 				                cmd.Draw(3, 1, 0, 0);

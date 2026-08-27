@@ -111,6 +111,19 @@ namespace aether
 			return m_reflections;
 		}
 
+		// Global off switch for the volumetric march. Whether it runs at all is the
+		// scene's call - a scene with no fog has nothing to march - so this only takes
+		// the option away, it never turns it on.
+		void SetVolumetricsEnabled(bool enabled)
+		{
+			m_volumetrics = enabled;
+		}
+
+		[[nodiscard]] bool AreVolumetricsEnabled() const
+		{
+			return m_volumetrics;
+		}
+
 		void SetReflectionMaxRoughness(float v)
 		{
 			m_reflectionMaxRoughness = std::clamp(v, 0.0f, 1.0f);
@@ -214,6 +227,7 @@ namespace aether
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 m_skyParams{0.0f, 2.5f, 0.0f, 0.0f};
+		bool m_volumetrics = true;
 		bool m_contactShadows = false;
 		bool m_reflections = true;
 		float m_reflectionMaxRoughness = 0.45f;

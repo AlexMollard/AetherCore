@@ -175,6 +175,15 @@ namespace aether
 			return m_frameSceneDraws.load(std::memory_order_relaxed);
 		}
 
+		// Both halves of the volumetric pass ask this, and they have to agree: marching
+		// without compositing wastes the work, and compositing without marching reads a
+		// cleared buffer. Three conditions - the machine allows it, the scene asked for
+		// it, and there is actually air to march through.
+		[[nodiscard]] bool ShouldMarchVolumetrics() const
+		{
+			return m_renderer.AreVolumetricsEnabled() && m_renderer.GetSkyParams().z > 0.0f && m_renderer.GetFogParams().x > 0.0f;
+		}
+
 		void SetBackgroundParams(std::uint32_t mode, float angleRadians, std::uint32_t stopCount, const std::array<glm::vec4, PostProcessStack::kMaxBackgroundStops>& stops)
 		{
 			m_postProcessStack.SetBackgroundParams(mode, angleRadians, stopCount, stops);
@@ -354,6 +363,12 @@ namespace aether
 		std::uint32_t m_ssrBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_ssrPipeline;
 		GraphicsPipeline m_ssrCompositePipeline;
+		// Half resolution: an integral through a medium is smooth, so the only detail
+		// lost is the depth buffer's edges, and those come back on upsample.
+		RGImage m_volumetricFog;
+		std::uint32_t m_volumetricBindlessSlot = 0xFFFFFFFFu;
+		GraphicsPipeline m_volumetricPipeline;
+		GraphicsPipeline m_volumetricCompositePipeline;
 
 		// producer thread and read in the render-thread Execute (a torn read just
 		GraphicsPipeline m_texturePreviewPipeline;

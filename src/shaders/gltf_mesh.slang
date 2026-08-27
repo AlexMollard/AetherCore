@@ -374,7 +374,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Atmospheric perspective. Applied here rather than as a separate screen pass
     // because the world position and the sky terms this needs are already in hand;
     // a fullscreen pass would reconstruct both from depth to reach the same answer.
-    const float fogAmount = HeightFogAmount(
+    //
+    // Unless the volumetric pass is running, which solves this very integral by
+    // marching so that shadows can carve beams out of it. Applying both would count
+    // the same scattering twice.
+    const float fogAmount = (fc->skyParams.z > 0.0f) ? 0.0f : HeightFogAmount(
         fc->cameraWorldPos.xyz,
         input.worldPos,
         fc->fogParams.x,

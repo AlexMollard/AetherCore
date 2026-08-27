@@ -164,7 +164,11 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 		specWeight *= specularAo;
 	}
 
-	const float fogAmount = HeightFogAmount(fc->cameraWorldPos.xyz, worldPos, fc->fogParams.x, fc->fogParams.y, fc->fogParams.w);
+	// Zero while the volumetric pass is running: it fogs the composited result
+	// afterwards, so taking it out here as well would apply the air twice.
+	const float fogAmount = (fc->skyParams.z > 0.0f)
+	        ? 0.0f
+	        : HeightFogAmount(fc->cameraWorldPos.xyz, worldPos, fc->fogParams.x, fc->fogParams.y, fc->fogParams.w);
 	specWeight *= (1.0f - fogAmount);
 
 	// The march returns the raw colour it landed on. A surface does not reflect all

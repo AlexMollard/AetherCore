@@ -109,6 +109,11 @@ namespace aether::gpu
 		Additive,
 		Multiply,
 		Opaque,
+		// Source colour is already multiplied by its own coverage, so it is added
+		// whole and the destination is attenuated by what the source covers. This is
+		// how a participating medium composites: colour scattered toward the eye plus
+		// whatever light survived the medium, in one blend.
+		Premultiplied,
 	};
 
 	enum class LoadOp : std::uint32_t

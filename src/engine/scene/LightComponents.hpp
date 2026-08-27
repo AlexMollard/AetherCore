@@ -87,6 +87,24 @@ namespace aether
 		// Haze. Low is a clear high-altitude sky, high is humid or dusty air - it
 		// widens the sun's halo and washes the horizon toward white.
 		float turbidity{2.5f};
+
+		// Solve the fog above by marching the sun's shadow cascades instead of by the
+		// closed form. It is the same integral - light scattered toward the eye, plus
+		// what survived the air - but the march knows which parts of the air the sun
+		// actually reaches, so shadows carve beams out of the haze. Air only looks like
+		// a volume once something can block it.
+		//
+		// Off by default, and it REPLACES the analytic fog rather than adding to it:
+		// running both would count the same scattering twice.
+		bool volumetricFog{false};
+		// Scales the scattered light alone. The extinction that dims distant geometry
+		// stays tied to fogDensity, so this brightens the beams without quietly
+		// changing how far you can see.
+		float volumetricIntensity{1.0f};
+		// Mie asymmetry. 0 scatters evenly, and toward 1 the air throws light forward,
+		// which is what makes a beam blaze when you look into the sun and fade as you
+		// turn away.
+		float volumetricAnisotropy{0.6f};
 	};
 
 	struct DayNightComponent

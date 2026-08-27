@@ -43,6 +43,13 @@ namespace aether
 				renderer->SetFxaaEnabled(m_values.graphics.fxaa);
 			}
 		}
+		else if (key == "graphics.volumetrics")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetVolumetricsEnabled(m_values.graphics.volumetrics);
+			}
+		}
 		else if (key == "graphics.tonemap")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

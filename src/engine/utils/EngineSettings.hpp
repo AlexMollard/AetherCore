@@ -78,6 +78,9 @@ namespace aether
 			// something was inserted above it. Matched case-insensitively against the names
 			// in TonemapDefs.hpp; an unrecognised name falls back to the default rather than
 			// leaving the screen black.
+			// Marched, shadow-aware fog. Only ever active where a scene asked for it; this
+			// is the machine-side off switch for when the march is too expensive.
+			bool volumetrics = true;
 			std::string tonemap = "ACES Filmic";
 			bool asyncCompute = true;
 			bool imguiViewports = true;
@@ -139,6 +142,7 @@ namespace aether
 		f("graphics.reflections", settings.graphics.reflections);
 		f("graphics.reflectionMaxRoughness", settings.graphics.reflectionMaxRoughness);
 		f("graphics.reflectionIntensity", settings.graphics.reflectionIntensity);
+		f("graphics.volumetrics", settings.graphics.volumetrics);
 		f("graphics.tonemap", settings.graphics.tonemap);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);

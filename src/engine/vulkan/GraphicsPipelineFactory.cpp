@@ -183,6 +183,11 @@ namespace aether::vkutil
 				entry.colorBlendEquation[i].srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
 				entry.colorBlendEquation[i].dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
 			}
+			else if (desc.blendMode == gpu::BlendMode::Premultiplied)
+			{
+				entry.colorBlendEquation[i].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+				entry.colorBlendEquation[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			}
 			entry.colorBlendEquation[i].colorBlendOp = VK_BLEND_OP_ADD;
 			entry.colorBlendEquation[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 			entry.colorBlendEquation[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
