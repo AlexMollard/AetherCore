@@ -25,11 +25,21 @@ namespace aether::editor
 			return x / (x + 1.0f);
 		}
 
+		// Stephen Hill's RRT+ODT fit, the same one AcesFilmic.slangh evaluates. Grey
+		// survives the AP1 matrices untouched - their rows each sum to one - so on the
+		// achromatic axis the whole transform reduces to this fit alone, which is exactly
+		// what a one-dimensional curve plot and a grey probe need.
+		//
+		// This used to be the Narkowicz curve the shader deliberately replaced, so the
+		// plot and the HDR probe were reporting a different operator than the one being
+		// rendered: 0.267 against 0.106 at mid grey, and triple the correct value down in
+		// the shadows. A diagnostic that lies is worse than no diagnostic.
 		float AcesFilmic(float x)
 		{
-			const float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
-			const float v = (x * (a * x + b)) / (x * (c * x + d) + e);
-			return (std::min) ((std::max) (v, 0.0f), 1.0f);
+			const float v = (std::max) (x, 0.0f);
+			const float a = v * (v + 0.0245786f) - 0.000090537f;
+			const float b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+			return (std::min) ((std::max) (a / (std::max) (b, 1e-6f), 0.0f), 1.0f);
 		}
 
 		float Uncharted2Partial(float x)
