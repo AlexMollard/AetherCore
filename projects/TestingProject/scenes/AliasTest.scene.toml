@@ -1,0 +1,249 @@
+# Antialiasing test.
+#
+# Built to give FXAA the clearest case it can possibly have, because two earlier attempts to
+# measure it were confounded:
+#   - a smooth-shaded scene had edges too low in contrast for FXAA to key on, so doing
+#     nothing there was arguably correct
+#   - a depth-of-field scene pre-blurred the very silhouettes under test, and its sky sat at
+#     maximum circle of confusion
+#
+# So: depth of field OFF, no fog, near-black geometry against a bright sky - the largest luma
+# step available - and every box rotated off-axis. Diagonals matter because a vertical or
+# horizontal silhouette lands on the pixel grid exactly and barely aliases; it is the shallow
+# diagonal that staircases, and that is what an edge filter exists to fix.
+#
+# The measurement is the count of INTERMEDIATE pixels along a silhouette: values between the
+# dark object and the bright sky. Antialiasing works by creating those, so the count going up
+# is the effect itself rather than a proxy for it.
+[environment]
+ambient = [ 0.02, 0.02, 0.03 ]
+sky_horizon = [ 0.85, 0.90, 1.0 ]
+sky_void = [ 0.8, 0.85, 0.95 ]
+sky_zenith = [ 0.75, 0.85, 1.0 ]
+sun_color = [ 1.0, 1.0, 1.0 ]
+sun_direction = [ 0.0, 1.0, 0.2 ]
+sun_intensity = 0.4
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+[[assets]]
+builtin = true
+id = '0522571ed8cb4104'
+path = 'sphere'
+type = 'mesh'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 950000000
+parent = -1
+position = [ 0.0, 0.0, 12.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 8.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 12.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+[[entities]]
+euler = [ 0.0, 0.0, 7.0 ]
+mesh_renderer = true
+name = 'Diag_7'
+node = 950000100
+parent = -1
+position = [ -6.4, 1.6, 0.0 ]
+scale = [ 1.6, 1.6, 1.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0.0, 0.0, 15.0 ]
+mesh_renderer = true
+name = 'Diag_15'
+node = 950000101
+parent = -1
+position = [ -3.2, 1.6, 0.0 ]
+scale = [ 1.6, 1.6, 1.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0.0, 0.0, 26.0 ]
+mesh_renderer = true
+name = 'Diag_26'
+node = 950000102
+parent = -1
+position = [ 0.0, 1.6, 0.0 ]
+scale = [ 1.6, 1.6, 1.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0.0, 0.0, 38.0 ]
+mesh_renderer = true
+name = 'Diag_38'
+node = 950000103
+parent = -1
+position = [ 3.2, 1.6, 0.0 ]
+scale = [ 1.6, 1.6, 1.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0.0, 0.0, 52.0 ]
+mesh_renderer = true
+name = 'Diag_52'
+node = 950000104
+parent = -1
+position = [ 6.4, 1.6, 0.0 ]
+scale = [ 1.6, 1.6, 1.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0.0, 0.0, 4.0 ]
+mesh_renderer = true
+name = 'Bar_4'
+node = 950000200
+parent = -1
+position = [ 0.0, -2.2, 0.0 ]
+scale = [ 9.0, 0.35, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0.0, 0.0, 9.0 ]
+mesh_renderer = true
+name = 'Bar_9'
+node = 950000201
+parent = -1
+position = [ 0.0, -4.0, 0.0 ]
+scale = [ 9.0, 0.35, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.02, 0.02, 0.025, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
