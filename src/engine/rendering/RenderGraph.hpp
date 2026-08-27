@@ -8,6 +8,7 @@
 #include <mutex>
 #include <optional>
 #include <span>
+#include <unordered_set>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -681,6 +682,9 @@ namespace aether
 		std::vector<PassRecord> m_passes;
 		std::vector<CompiledPass> m_compiled;
 		std::vector<bool> m_lastCulledPasses;
+		// Names already reported as culled, so the warning below fires on the transition
+		// rather than every frame the graph is rebuilt.
+		std::unordered_set<std::string> m_reportedCulledPasses;
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<gpu::Buffer> m_externalBuffers;
 		std::vector<PreparedDrawListRecord> m_preparedDrawLists;

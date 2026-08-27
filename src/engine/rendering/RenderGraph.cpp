@@ -1404,18 +1404,40 @@ namespace aether
 				if (!anyReaderFound)
 				{
 					passCulledByPassIdx[passIdx] = true;
-#ifndef NDEBUG
-					std::string deadResources;
-					for (uint32_t resId: writeTargets)
+
+					// Reported in every configuration, not just debug builds. A pass that
+					// silently stops executing is one of the hardest things to diagnose
+					// here - the work simply is not there, with no error and no visual
+					// clue beyond whatever it should have produced being stale or blank.
+					// It has cost real time twice: once when the last bloom upsample
+					// vanished (see the tonemap pass's ReadTexture of mip 0), and again
+					// on a pass whose only reader took its slot through a push constant,
+					// which the graph cannot see.
+					//
+					// Once per pass name, on the transition into being culled, because
+					// the graph is rebuilt every frame and this must never become spam.
+					if (m_reportedCulledPasses.insert(std::string(pass.name)).second)
 					{
-						if (!deadResources.empty())
+						std::string deadResources;
+						for (uint32_t resId: writeTargets)
 						{
-							deadResources += ", ";
+							if (!deadResources.empty())
+							{
+								deadResources += ", ";
+							}
+							deadResources += std::to_string(resId);
 						}
-						deadResources += std::to_string(resId);
+						AE_WARN(LogCategory::Engine,
+						        "RenderGraph: pass '{}' writes RGImage(s) {} that no later pass reads, so it is culled and will not execute. "
+						        "If something does read it, declare that read - a slot passed through a push constant is invisible here.",
+						        pass.name,
+						        deadResources);
 					}
-					AE_WARN(LogCategory::Engine, "Pass '{}' writes to RGImage(s) {}, but no subsequent pass reads {}. Culled from execution.", pass.name, deadResources, writeTargets.size() > 1 ? "them" : "it");
-#endif
+				}
+				else
+				{
+					// Reading again is a fresh event worth hearing about.
+					m_reportedCulledPasses.erase(std::string(pass.name));
 				}
 			}
 		}
