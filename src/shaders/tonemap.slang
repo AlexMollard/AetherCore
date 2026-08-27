@@ -33,7 +33,7 @@ struct TonemapPush
     uint  screenHeight;   // render target height for header bar
     uint  bloomSlot;      // bloom chain mip 0 (0xFFFFFFFF = bloom off)
     float bloomStrength;  // linear blend toward the bloom result
-    uint  _padBg;         // alignment before the 8-byte address
+    uint  dofSlot;        // half-res out-of-focus image (0xFFFFFFFF = lens off)
     uint64_t backgroundParamsAddr; // BDA -> GpuBackgroundParams (0 = disabled)
 };
 [[vk::push_constant]] TonemapPush pc;
@@ -159,6 +159,15 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // Lerp rather than add: the chain already carries the scene's own energy, so
     // adding it would brighten the whole image as the strength rises. Blending
     // redistributes that energy into the glow and leaves overall exposure alone.
+    // Depth of field before bloom, so a bright spot that is out of focus glows from the
+    // disc it actually covers rather than from the point it would have been.
+    if (pc.dofSlot != 0xFFFFFFFFu)
+    {
+        const float2 dofUv = (float2(coord) + 0.5f) / float2(pc.screenWidth, pc.screenHeight);
+        const float4 blurred = g_textures[pc.dofSlot].SampleLevel(g_linearSampler, dofUv, 0.0);
+        scene = lerp(scene, blurred.rgb, blurred.a);
+    }
+
     if (pc.bloomSlot != 0xFFFFFFFFu)
     {
         const float2 uv = (float2(coord) + 0.5) / float2(pc.screenWidth, pc.screenHeight);

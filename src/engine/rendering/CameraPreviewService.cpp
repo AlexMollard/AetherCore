@@ -267,7 +267,8 @@ namespace aether
 			                // The tonemap shader reads the full TonemapPush (48 bytes) incl. the
 			                // background BDA; push the whole struct so it never dereferences an
 			                // uninitialised device address. No camera background in this preview.
-			                push._padBg = 0u;
+			                // Previews render their own small view with no lens of their own.
+			                push.dofSlot = 0xFFFFFFFFu;
 			                push.backgroundParamsAddr = 0u;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                cmd.Draw(3, 1, 0, 0);

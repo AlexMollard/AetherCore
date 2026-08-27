@@ -222,6 +222,10 @@ AE_FIELD_N("far", farPlane, Float)
 AE_FIELD_ENUM("background", background, CameraBackgroundEnum())
 AE_FIELD_N("clear_color", clearColor, Color3)
 AE_FIELD_N("gradient_angle", gradientAngleDegrees, Float)
+		AE_FIELD_N("depth_of_field", depthOfField, Bool)
+		AE_FIELD_NR("focus_distance", focusDistance, Float, 0.05f, 1000.0f)
+		AE_FIELD_NR("aperture", aperture, Float, 0.7f, 32.0f)
+		AE_FIELD_NR("focal_length_mm", focalLengthMm, Float, 8.0f, 400.0f)
 // gradient_stops is a variable-length list of {colour, position} - the first field to
 // use the reflected List type, so it is reachable via MCP/serializer instead of being
 // hand-parsed. The setter re-applies the clamp/sort/min-two validation on every write.

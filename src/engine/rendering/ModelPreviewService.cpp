@@ -343,7 +343,8 @@ namespace aether
 			                push.screenHeight = kSize;
 			                // Push the full 48-byte TonemapPush; the shader reads the background
 			                // BDA and must never see an uninitialised device address.
-			                push._padBg = 0u;
+			                // Previews render their own small view with no lens of their own.
+			                push.dofSlot = 0xFFFFFFFFu;
 			                push.backgroundParamsAddr = 0u;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                cmd.Draw(3, 1, 0, 0);

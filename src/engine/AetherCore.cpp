@@ -974,6 +974,23 @@ namespace aether
 		{
 			if (const auto* cam = world.TryGet<CameraComponent>(mainCamera); cam != nullptr)
 			{
+				// Thin lens against a full-frame 24 mm sensor height, so aperture and focal
+				// length mean what they mean on a camera:
+				//   c = (f^2 / N) * |d - S| / (d * (S - f))    blur circle on the sensor
+				// Everything but the per-pixel depth is constant for the frame, so it
+				// folds into one coefficient and the shader multiplies by |d - S| / d.
+				{
+					constexpr float kSensorHeightMetres = 0.024f;
+					const float focal = std::clamp(cam->focalLengthMm, 1.0f, 1000.0f) * 0.001f;
+					const float subjectGap = std::max(cam->focusDistance - focal, 1e-4f);
+					const float coeff = (focal * focal) / (std::max(cam->aperture, 0.1f) * kSensorHeightMetres * subjectGap);
+					packet.dofParams = glm::vec4(std::max(cam->focusDistance, 1e-3f),
+					        coeff,
+					        // Wider than this stops being a lens and starts being a budget.
+					        24.0f,
+					        (cam->depthOfField && cam->projection == CameraProjection::Perspective) ? 1.0f : 0.0f);
+				}
+
 				packet.backgroundMode = static_cast<std::uint32_t>(cam->background);
 				packet.backgroundAngleRadians = glm::radians(cam->gradientAngleDegrees);
 				packet.backgroundStopCount = 0;
@@ -1060,6 +1077,7 @@ namespace aether
 			m_rendering->SetSceneFeatures(packet.sceneFeatures);
 			m_rendering->SetFrameSceneDraws(packet.hasSceneDraws);
 			m_rendering->SetBackgroundParams(packet.backgroundMode, packet.backgroundAngleRadians, packet.backgroundStopCount, packet.backgroundStops);
+			m_rendering->SetDepthOfFieldParams(packet.dofParams);
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
 			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);
 			debugRenderer.SetFramePhysicsShapes(&packet.physicsDebugShapes);

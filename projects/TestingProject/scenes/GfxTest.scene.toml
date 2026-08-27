@@ -35,6 +35,29 @@ path = 'sphere'
 type = 'mesh'
 
 [[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 900000900
+parent = -1
+position = [ 0.0, 2.2, 9.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 85.0
+    focus_distance = 9.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+[[entities]]
 euler = [ -90.0, 0.0, 0.0 ]
 mesh_renderer = true
 name = 'Ground'

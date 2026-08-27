@@ -52,6 +52,21 @@ namespace aether
 			return m_hdrColor;
 		}
 
+		// Which texture the tonemap samples the out-of-focus image from. Set per frame
+		// because it follows the main camera, which a scene can change at any time.
+		void SetDepthOfFieldSlot(std::uint32_t slot)
+		{
+			m_dofSlot = slot;
+		}
+
+		// The image itself, not just its slot: the tonemap pass has to DECLARE the read or
+		// the graph culls whatever produced it, since a slot travelling in a push constant
+		// is invisible to the graph.
+		void SetDepthOfFieldImage(RGImage image)
+		{
+			m_dofImage = image;
+		}
+
 		[[nodiscard]] std::uint32_t GetHdrBindlessSlot() const
 		{
 			return m_hdrBindlessSlot;
@@ -296,6 +311,9 @@ namespace aether
 		static constexpr std::uint32_t kBloomMipCount = 5;
 		std::array<RGImage, kBloomMipCount> m_bloomMips{};
 		std::array<std::uint32_t, kBloomMipCount> m_bloomSlots{};
+		// 0xFFFFFFFF whenever the main camera is not using a lens, which is the usual case.
+		std::uint32_t m_dofSlot = 0xFFFFFFFFu;
+		RGImage m_dofImage;
 		std::array<gpu::Extent2D, kBloomMipCount> m_bloomExtents{};
 		GraphicsPipeline m_bloomDownsamplePipeline;
 		GraphicsPipeline m_bloomUpsamplePipeline;

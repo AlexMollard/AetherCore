@@ -325,6 +325,13 @@ namespace aether
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.BaseColor bindless registration failed"));
 		}
 
+		m_dofColor = graph.CreateTransientColor(gpu::Format::R16G16B16A16Sfloat, gpu::Extent2D{(extent.width + 1u) / 2u, (extent.height + 1u) / 2u}, gpu::ImageUsage::Sampled);
+		m_dofBindlessSlot = graph.EnsureBindlessSampled(m_dofColor);
+		if (m_dofBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.DepthOfField bindless registration failed"));
+		}
+
 		// Half resolution. Rounded up, so an odd extent still covers every full-res
 		// pixel rather than leaving a column with no fog.
 		const gpu::Extent2D halfExtent{(extent.width + 1u) / 2u, (extent.height + 1u) / 2u};
@@ -536,6 +543,18 @@ namespace aether
 		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_volumetricCompositePipeline = std::move(volumetricCompositePipeline);
+
+		AE_EXPECT_OR_THROW(dofPipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://dof.spv",
+		                        .colorFormat = gpu::Format::R16G16B16A16Sfloat,
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .debugName = "DepthOfField",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+		                }));
+		m_dofPipeline = std::move(dofPipeline);
 
 		m_renderTargetService.BindRuntime(FrameContext{
 		        .graph = &m_renderGraph,
@@ -1221,6 +1240,71 @@ namespace aether
 			                });
 		}
 
+		// Depth of field, after the fog so the air is blurred with everything it sits in
+		// front of. Mixed in during tonemapping rather than written back over the HDR
+		// buffer, which would need a second full-resolution target for a pass that only
+		// ever produces something out of focus.
+		if (m_dofColor.IsValid() && m_sceneDepth.IsValid())
+		{
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$DepthOfField",
+			                .color = m_dofColor,
+			                .extent = gpu::Extent2D{(sceneExtent.width + 1u) / 2u, (sceneExtent.height + 1u) / 2u},
+			                .loadOp = gpu::LoadOp::Clear,
+			                .clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
+			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
+			        })
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductHdrColor, FrameResourceId::HdrColor)
+			        .Execute(
+			                [this, bindless = frame.bindless](PassContext& ctx)
+			                {
+				                // Told to the tonemap pass from here, every frame: the graph
+				                // is built once but which camera is main - and whether it has
+				                // a lens - is a per-frame answer.
+				                const bool wantLens = IsForwardPassEnabled() && HasFrameSceneDraws() && IsDepthOfFieldEnabled();
+				                // Read now, never captured at build time. A stale or unset
+				                // slot is an out-of-bounds descriptor index, which does not
+				                // fail gracefully - it hangs the device.
+				                const std::uint32_t hdrSlot = m_postProcessStack.GetHdrBindlessSlot();
+				                const bool slotsValid = hdrSlot != 0xFFFFFFFFu && m_sceneDepthBindlessSlot != 0xFFFFFFFFu && m_dofBindlessSlot != 0xFFFFFFFFu;
+				                m_postProcessStack.SetDepthOfFieldSlot((wantLens && slotsValid) ? m_dofBindlessSlot : 0xFFFFFFFFu);
+				                if (!wantLens || !slotsValid)
+				                {
+					                return;
+				                }
+				                gpu::CommandList cmd = ctx.recorder.View();
+				                bindless->CmdBindGlobalResources(cmd);
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(ctx.extent.width), .height = static_cast<float>(ctx.extent.height)});
+				                cmd.SetScissor(gpu::Rect2D{.width = ctx.extent.width, .height = ctx.extent.height});
+				                cmd.BindPipeline(m_dofPipeline.GetPipeline());
+				                struct
+				                {
+					                std::uint64_t frameConstantsAddr;
+					                std::uint32_t hdrSlot;
+					                std::uint32_t depthSlot;
+					                std::uint32_t width;
+					                std::uint32_t height;
+					                float focusDistance;
+					                float cocCoeff;
+					                float maxCocPixels;
+				                } push{
+				                        .frameConstantsAddr = ctx.frameConstantsAddr,
+				                        .hdrSlot = hdrSlot,
+				                        .depthSlot = m_sceneDepthBindlessSlot,
+				                        .width = ctx.extent.width,
+				                        .height = ctx.extent.height,
+				                        .focusDistance = m_dofParams.x,
+				                        .cocCoeff = m_dofParams.y,
+				                        .maxCocPixels = m_dofParams.z,
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+		}
+
 		// Project-registered custom passes, injected around the 2D scene (both stages draw into the
 		// scene HDR colour). BehindScene2D runs before sprites/tiles, OverScene2D after.
 		constexpr gpu::Format kSceneColorFormat = PostProcessStack::GetForwardColorFormat();
@@ -1241,6 +1325,9 @@ namespace aether
 
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
+		// Handed over before the stack registers, so its tonemap pass can declare the read
+		// that keeps this producer from being culled.
+		m_postProcessStack.SetDepthOfFieldImage(m_dofColor);
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
 		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
 		// SetFrameDebugVertices there). Must run before $SceneViewportReady below

@@ -419,19 +419,31 @@ namespace aether
 				                cmd.Draw(3, 1, 0, 0);
 			                });
 		}
-		graph.AddFullscreenPass({
-		                                .name = "$PostProcess",
-		                                .color = m_ldrColor,
-		                                .extent = m_extent,
-		                                .loadOp = gpu::LoadOp::DontCare,
-		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
-		                        })
-		        .ReadTexture(m_hdrColor)
+		// By VALUE. AddFullscreenPass hands back a prvalue and the chained calls return
+		// references into it, so binding auto& here would leave a reference to an object
+		// destroyed at the end of the statement - and a later ReadTexture would record
+		// against whatever reused the storage, silently culling the producer it meant to
+		// keep alive.
+		auto postProcessPass = graph.AddFullscreenPass({
+		        .name = "$PostProcess",
+		        .color = m_ldrColor,
+		        .extent = m_extent,
+		        .loadOp = gpu::LoadOp::DontCare,
+		        .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
+		});
+		postProcessPass.ReadTexture(m_hdrColor)
 		        // Declared even though the slot reaches the shader through a push constant:
 		        // the graph culls passes with no declared reader, and without this the last
 		        // upsample vanished and mip 0 was read without a barrier.
-		        .ReadTexture(m_bloomMips[0])
-		        .Execute(
+		        .ReadTexture(m_bloomMips[0]);
+		// Same reason for the out-of-focus image, declared whenever the target exists
+		// rather than only when a lens is switched on - whether a camera has one is a
+		// per-frame answer and the graph is built once.
+		if (m_dofImage.IsValid())
+		{
+			postProcessPass.ReadTexture(m_dofImage);
+		}
+		postProcessPass.Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {
 			                gpu::CommandList& cmd = ctx.recorder;
@@ -485,7 +497,7 @@ namespace aether
 			                push.inspectY = -1;
 			                push.screenWidth = m_extent.width;
 			                push.screenHeight = m_extent.height;
-			                push._padBg = 0u;
+			                push.dofSlot = m_dofSlot;
 			                push.backgroundParamsAddr = backgroundParamsAddr;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 

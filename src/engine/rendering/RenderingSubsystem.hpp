@@ -184,6 +184,16 @@ namespace aether
 			return m_renderer.AreVolumetricsEnabled() && m_renderer.GetSkyParams().z > 0.0f && m_renderer.GetFogParams().x > 0.0f;
 		}
 
+		void SetDepthOfFieldParams(glm::vec4 params)
+		{
+			m_dofParams = params;
+		}
+
+		[[nodiscard]] bool IsDepthOfFieldEnabled() const
+		{
+			return m_dofParams.w > 0.5f;
+		}
+
 		void SetBackgroundParams(std::uint32_t mode, float angleRadians, std::uint32_t stopCount, const std::array<glm::vec4, PostProcessStack::kMaxBackgroundStops>& stops)
 		{
 			m_postProcessStack.SetBackgroundParams(mode, angleRadians, stopCount, stops);
@@ -365,6 +375,11 @@ namespace aether
 		GraphicsPipeline m_ssrCompositePipeline;
 		// Half resolution: an integral through a medium is smooth, so the only detail
 		// lost is the depth buffer's edges, and those come back on upsample.
+		glm::vec4 m_dofParams{10.0f, 0.0f, 0.0f, 0.0f};
+		// Half resolution: the whole point of the buffer is that it is out of focus.
+		RGImage m_dofColor;
+		std::uint32_t m_dofBindlessSlot = 0xFFFFFFFFu;
+		GraphicsPipeline m_dofPipeline;
 		RGImage m_volumetricFog;
 		std::uint32_t m_volumetricBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_volumetricPipeline;

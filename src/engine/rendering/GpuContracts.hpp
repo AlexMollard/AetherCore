@@ -79,7 +79,9 @@ namespace TonemapContracts
 		std::uint32_t screenHeight = 0;
 		std::uint32_t bloomSlot = 0xFFFFFFFFu; // 0xFFFFFFFF = no bloom
 		float bloomStrength = 0.0f;
-		std::uint32_t _padBg = 0;
+		// Was padding before the 8-byte address; the out-of-focus image fits here without
+		// moving anything the offset asserts below pin down.
+		std::uint32_t dofSlot = 0xFFFFFFFFu;
 		std::uint64_t backgroundParamsAddr = 0;
 	};
 

@@ -160,6 +160,9 @@ namespace aether
 		// backgroundMode mirrors CameraBackground (0 solid, 1 gradient, 2 sky).
 		// Stops pack xyz = display-space colour, w = position (0..1).
 		static constexpr std::uint32_t kMaxBackgroundStops = 8;
+		// Depth of field from the main camera: x = focus distance, y = the optics folded
+		// into one coefficient, z = the pixel ceiling on the blur circle, w = enabled.
+		glm::vec4 dofParams{10.0f, 0.0f, 0.0f, 0.0f};
 		std::uint32_t backgroundMode = 2; // 2 = SkyGradient (composite disabled)
 		float backgroundAngleRadians = 0.0f;
 		std::uint32_t backgroundStopCount = 0;

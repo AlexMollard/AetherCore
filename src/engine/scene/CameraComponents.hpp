@@ -47,6 +47,25 @@ namespace aether
 		};
 		float gradientAngleDegrees = 0.0f; // 0 = top->bottom
 
+		// Depth of field, as a lens rather than a distance blur. A lens focuses one plane
+		// and everything else lands as a disc; how big that disc grows is set by the
+		// aperture. These are the numbers a photographer reaches for, not a blur radius
+		// that means nothing outside this renderer.
+		bool depthOfField = false;
+		// Distance to the plane that comes out sharp, in world units.
+		float focusDistance = 10.0f;
+		// f-number. Small is a wide aperture and a shallow slice in focus.
+		float aperture = 5.6f;
+		// Lens focal length in millimetres, for the blur only - the field of view above
+		// still frames the shot.
+		//
+		// On a real camera these are one number, and deriving one from the other was the
+		// first thing tried here. It does not survive contact with a game: a 60 degree
+		// field of view is a 21 mm lens, and a 21 mm lens is so deep in focus that even
+		// f/1.4 leaves a whole scene sharp. Field of view is a gameplay decision, so tying
+		// the lens to it means a normal game camera can never have shallow focus.
+		float focalLengthMm = 50.0f;
+
 		// in sync (0 = not created yet). Never serialized - it is re-established on
 		std::uint32_t backingCamera = 0;
 	};
