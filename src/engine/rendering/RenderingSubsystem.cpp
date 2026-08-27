@@ -1069,7 +1069,14 @@ namespace aether
 				                cmd.Draw(3, 1, 0, 0);
 			                });
 
-			auto& compositePass = m_renderGraph
+			// By VALUE, not by reference. AddFullscreenPass returns a PassBuilder as a
+			// prvalue and the chained calls hand back references into that temporary, so
+			// binding auto& to one leaves a reference to an object destroyed at the end of
+			// the statement. It appears to work - the builder is just a graph reference and
+			// an index, with a trivial destructor - right up until something reuses the
+			// storage, at which point a later ReadTexture records onto some other pass and
+			// the producer it was meant to keep alive is silently culled instead.
+			auto compositePass = m_renderGraph
 			        .AddFullscreenPass({
 			                .name = "$SSRComposite",
 			                .color = hdrColor,
@@ -1078,8 +1085,8 @@ namespace aether
 			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
 			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneGBuffer),
 			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneBaseColor)},
-			        })
-			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			        });
+			compositePass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneGBuffer, FrameResourceId::SceneGBuffer)
 			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneBaseColor, FrameResourceId::SceneBaseColor)
 			        .ReadTexture(m_ssrColor);
