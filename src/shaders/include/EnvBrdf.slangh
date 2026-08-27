@@ -48,6 +48,11 @@ float3 EnvSpecularWeight(float3 F0, float2 envBrdf)
 	// The geometric series of repeated bounces, summed.
 	const float3 FmsEms = Ems * FssEss * Favg / max(float3(1.0f, 1.0f, 1.0f) - Ems * Favg, 1e-4f);
 
+	// Worth knowing that this is EXACT, not a fit: for a perfect reflector F0 = 1 gives
+	// Favg = 1, so FmsEms collapses to (1 - Ess) * Ess / Ess = 1 - Ess and the total is
+	// Ess + (1 - Ess) = 1 identically. Swept over the whole roughness x NdotV domain the
+	// weight comes out 1.0000 everywhere, so a white metal can neither lose nor invent
+	// energy at any angle - only the split-sum fit underneath it carries any error.
 	return FssEss + FmsEms;
 }
 
