@@ -272,8 +272,21 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float contact = (fc->shadowParams.w > 0.0f && receivesShadows)
         ? ContactShadow(input.worldPos, Ngeom, L, fc, input.svPosition.xy)
         : 1.0f;
-    const float shadowVisibility = receivesShadows ? max(min(shadow, contact), 0.08f) : 1.0f;
-    float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
+    const float sunVisibility = receivesShadows ? min(shadow, contact) : 1.0f;
+
+    // The 0.08 floor exists so a shadowed surface does not read as a black hole, and
+    // that is a DIFFUSE concern - it stands in for bounce light the renderer does not
+    // compute. Specular is a different thing entirely: it is an image of the light
+    // source, and a light that is blocked has no image to reflect. Leaking 8% of it was
+    // enough to put a sun glint on a glossy floor inside a wall's shadow, because the
+    // lobe on a smooth surface is orders of magnitude brighter than 1 and 8% of that is
+    // still blinding.
+    //
+    // So the floor applies where it was meant to and nowhere else. Shadowed specular
+    // goes to zero, which is what a blocked sun does.
+    const float diffuseVisibility = lerp(1.0f, max(sunVisibility, 0.08f), fc->shadowParams.z);
+    const float specularVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
+    float3 Lo = (diffuse * diffuseVisibility + specular * specularVisibility) * (sunColor * (sunIntensity * NdotL));
 
     // Local lights accumulate separately from the sun so each keeps its own
     // shadow term; neither carries an occlusion factor.
