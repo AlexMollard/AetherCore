@@ -404,8 +404,13 @@ namespace aether
 				info.preBarrierCount = static_cast<std::uint32_t>(compiled.preBarriers.size());
 				info.bufferBarrierCount = static_cast<std::uint32_t>(compiled.bufferBarriers.size());
 				info.waitCount = static_cast<std::uint32_t>(compiled.waits.size());
-				info.signalBarrierCount = static_cast<std::uint32_t>(compiled.signalBarriers.size());
-				info.splitEventIndex = compiled.splitEventIndex;
+				std::size_t signalled = 0;
+				for (const CompiledSignal& sg: compiled.signals)
+				{
+					signalled += sg.barriers.size();
+				}
+				info.signalBarrierCount = static_cast<std::uint32_t>(signalled);
+				info.splitEventIndex = compiled.signals.empty() ? UINT32_MAX : compiled.signals.front().eventIndex;
 			}
 
 			for (const PreparedDrawList drawList: pass.producedDrawLists)
@@ -1887,6 +1892,10 @@ namespace aether
 			std::vector<CompiledBarrier> unsplittable;
 			unsplittable.reserve(cp.preBarriers.size());
 
+			// Which event this consumer already took from a given producer, so several
+			// resources coming from the same producer share one event rather than one each.
+			std::unordered_map<std::size_t, std::uint32_t> producerToWait;
+
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
 				if (b.isWAR)
@@ -1962,26 +1971,38 @@ namespace aether
 				}
 
 				auto& producerCp = m_compiled[producerCi];
-				if (producerCp.splitEventIndex == UINT32_MAX)
+
+				// One event per producer/consumer PAIR. Sharing a single event per producer
+				// was the bug: the producer signalled the union of what all its consumers
+				// needed while each consumer waited on its own subset, and the spec requires
+				// the wait's dependency info to be exactly equal to the set's. A prepass
+				// writing depth and a G-buffer, read by two different passes, is enough to
+				// trip it.
+				auto pairIt = producerToWait.find(producerCi);
+				if (pairIt == producerToWait.end())
 				{
-					producerCp.splitEventIndex = m_storage->AllocateEvent();
+					const std::uint32_t eventIndex = m_storage->AllocateEvent();
+					if (eventIndex == UINT32_MAX)
+					{
+						// Out of events: fall back to an ordinary barrier rather than
+						// emitting a split half that nothing can wait on.
+						unsplittable.push_back(b);
+						continue;
+					}
+					producerCp.signals.push_back(CompiledSignal{.eventIndex = eventIndex, .barriers = {}});
+					cp.waits.push_back(CompiledWait{.eventIndex = eventIndex, .barriers = {}});
+					pairIt = producerToWait.emplace(producerCi, eventIndex).first;
 				}
 
-				producerCp.signalBarriers.push_back(b);
+				const std::uint32_t eventIndex = pairIt->second;
 
-				auto waitIt = std::ranges::find_if(cp.waits, [eventIdx = producerCp.splitEventIndex](const CompiledWait& w) { return w.eventIndex == eventIdx; });
-
-				if (waitIt != cp.waits.end())
-				{
-					waitIt->barriers.push_back(b);
-				}
-				else
-				{
-					cp.waits.push_back(CompiledWait{
-					        .eventIndex = producerCp.splitEventIndex,
-					        .barriers = {b},
-					});
-				}
+				// Appended to both halves together and in the same order, so the two
+				// dependency infos stay element-for-element identical.
+				auto sigIt = std::ranges::find_if(producerCp.signals, [eventIndex](const CompiledSignal& sg) { return sg.eventIndex == eventIndex; });
+				auto waitIt = std::ranges::find_if(cp.waits, [eventIndex](const CompiledWait& w) { return w.eventIndex == eventIndex; });
+				AE_ASSERT(sigIt != producerCp.signals.end() && waitIt != cp.waits.end(), "split barrier pair went missing after being inserted");
+				sigIt->barriers.push_back(b);
+				waitIt->barriers.push_back(b);
 			}
 
 			cp.preBarriers = std::move(unsplittable);
@@ -2381,13 +2402,17 @@ namespace aether
 				recorder.EndRendering();
 			}
 
-			if (!cp.signalBarriers.empty())
+			for (const CompiledSignal& sg: cp.signals)
 			{
-				const gpu::Event event = m_storage->GetEvent(cp.splitEventIndex);
+				if (sg.barriers.empty())
+				{
+					continue;
+				}
+				const gpu::Event event = m_storage->GetEvent(sg.eventIndex);
 				if (event != nullptr)
 				{
 					scratchEventBars.clear();
-					for (const CompiledBarrier& b: cp.signalBarriers)
+					for (const CompiledBarrier& b: sg.barriers)
 					{
 						const gpu::Image image = resolveImage(b.resourceId);
 						if (image == nullptr)

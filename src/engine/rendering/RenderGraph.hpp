@@ -498,14 +498,25 @@ namespace aether
 			std::vector<CompiledBarrier> barriers;
 		};
 
+		// The producer half of a split barrier. There is one of these per CONSUMER, not
+		// per producer: vkCmdWaitEvents2 requires the dependency info it is given to be
+		// exactly equal to the one the matching vkCmdSetEvent2 used, so a producer feeding
+		// two consumers cannot signal one event carrying the union of what they need and
+		// have each wait on its own subset. Pairing them one to one is what keeps the two
+		// lists identical by construction rather than by agreement between two call sites.
+		struct CompiledSignal
+		{
+			std::uint32_t eventIndex = UINT32_MAX;
+			std::vector<CompiledBarrier> barriers;
+		};
+
 		struct CompiledPass
 		{
 			std::size_t passIndex = 0;
 			QueueClass queueClass = QueueClass::Graphics;
 			std::vector<CompiledBarrier> preBarriers;
 			std::vector<CompiledBufferBarrier> bufferBarriers;
-			std::vector<CompiledBarrier> signalBarriers;
-			std::uint32_t splitEventIndex = UINT32_MAX;
+			std::vector<CompiledSignal> signals;
 			std::vector<CompiledWait> waits;
 		};
 
