@@ -248,6 +248,19 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 F = F_Schlick(VdotH, F0);
     float3 specular = (D * G * F) / max(4.0 * NdotL * NdotV, 1e-4);
 
+    // Same multi-scatter deficit the ambient specular had, and the same terms fix it.
+    // Leaving one path compensated and the other not would give a rough metal correct
+    // ambient and a highlight half as bright as it should be, which is a worse state
+    // than having both wrong together.
+    //
+    // Ess is the single-scatter directional albedo - the fraction of light the BRDF
+    // manages to send back out - so 1/Ess is exactly the factor that restores what the
+    // remaining bounces would have carried, weighted by F0 because those bounces are
+    // themselves reflections and a dark material swallows them.
+    const float2 directEnvBrdf = EnvBrdfApprox(roughness, NdotV);
+    const float Ess = max(directEnvBrdf.x + directEnvBrdf.y, 1e-3);
+    specular *= 1.0 + F0 * (1.0 / Ess - 1.0);
+
     float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
 
     // Occlusion - screen-space and the material's baked map alike - is an estimate

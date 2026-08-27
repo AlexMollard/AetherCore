@@ -6,6 +6,10 @@
 # there is nowhere else for that light to go. Any darkening as roughness rises is
 # energy the BRDF lost rather than a material property.
 #
+# Two rows: metals at y=0 (all reflection) and white DIELECTRICS at y=3 (mostly
+# diffuse). Both must vanish - a white non-metal reflects and re-emits every photon
+# too, so the diffuse/specular split has to add back up to exactly one.
+#
 # The sky gradient is flat here on purpose (horizon = zenith = void), so the
 # environment really is uniform and the comparison is sphere against background.
 [environment]
@@ -208,6 +212,195 @@ scale = [ 1.0, 1.0, 1.0 ]
     double_sided = false
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 1.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.95
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.05'
+node = 920000000
+parent = -1
+position = [ -7.800000000000001, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.05
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.20'
+node = 920000001
+parent = -1
+position = [ -5.2, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.2
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.35'
+node = 920000002
+parent = -1
+position = [ -2.6, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.35
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.50'
+node = 920000003
+parent = -1
+position = [ 0.0, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.5
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.65'
+node = 920000004
+parent = -1
+position = [ 2.6, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.65
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.80'
+node = 920000005
+parent = -1
+position = [ 5.2, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Furnace_D_0.95'
+node = 920000006
+parent = -1
+position = [ 7.800000000000001, 3.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
     occlusion = 1.0
     receive_shadows = true
     roughness = 0.95
