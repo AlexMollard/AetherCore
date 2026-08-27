@@ -186,8 +186,39 @@ PrepassOutput fragmentMain(PrepassVSOutput input)
 
 	const float3 N = normalize(input.worldNormal);
 
+	// The forward shader does not shade with the roughness the material declares - it
+	// floors it, then widens it by however much the normal varies across the pixel
+	// (geometric specular antialiasing). Everything reading this buffer has to see the
+	// SAME number, or it describes a surface the renderer never shaded.
+	//
+	// The reflection composite is the sharp end of that: it subtracts the sky the forward
+	// pass added, and if the two disagree about roughness the subtraction leaves a
+	// residue.
+	//
+	// How much it can diverge is bounded by the widening cap of 0.18, which would take a
+	// roughness of 0.05 to 0.43 - but that is the ceiling, not a measurement. On the test
+	// scene the correction moves nothing above the noise floor, because smooth spheres at
+	// a few metres barely vary their normal across a pixel. It is worth doing anyway: the
+	// cost is nothing, and the variance climbs with distance and with geometric detail,
+	// which is exactly where a mirror-sharp reflection on a surface being shaded as matte
+	// would be most obvious.
+	//
+	// Reproduced term for term from gltf_mesh.slang. The one difference left is that this
+	// pass has no normal map, so the variance it measures is the geometry's alone; a
+	// normal-mapped surface still widens slightly more in the forward pass than here.
+	float shadedRoughness = clamp(roughness, 0.04f, 1.0f);
+	{
+		const float3 dNdx = ddx(N);
+		const float3 dNdy = ddy(N);
+		const float kSigma2 = 0.15915494f;
+		const float kKappa = 0.18f;
+		const float variance = kSigma2 * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
+		const float kernelRoughness = min(2.0f * variance, kKappa);
+		shadedRoughness = sqrt(saturate(shadedRoughness * shadedRoughness + kernelRoughness));
+	}
+
 	PrepassOutput o;
-	o.surface = float4(EncodeOctNormal(N), saturate(roughness), saturate(metallic));
+	o.surface = float4(EncodeOctNormal(N), saturate(shadedRoughness), saturate(metallic));
 	o.baseColor = float4(saturate(baseColor), 1.0f);
 	return o;
 }
