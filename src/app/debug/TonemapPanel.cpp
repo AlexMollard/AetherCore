@@ -304,12 +304,26 @@ namespace aether::editor
 		ImGui::Separator();
 
 		{
-			const float plotW = ImGui::GetContentRegionAvail().x;
+			// The legend sits to the right of the plot, so the plot cannot have the full
+			// content width or the legend lands outside the window and is clipped away -
+			// which left the curves unlabelled. Measure the widest operator name rather
+			// than guessing a column width, so adding an operator cannot silently
+			// truncate it.
+			float legendTextW = 0.0f;
+			for (const TonemapDef& def: kTonemapDefs)
+			{
+				legendTextW = (std::max) (legendTextW, ImGui::CalcTextSize(def.name).x);
+			}
+			const float legendW = legendTextW + 26.0f; // swatch + gap
+			const float avail = ImGui::GetContentRegionAvail().x;
+			const float plotW = (std::max) (avail - legendW, avail * 0.5f);
 			const float plotH = 220.0f;
 			const ImVec2 plotPos = ImGui::GetCursorScreenPos();
 			const ImVec2 plotSize(plotW, plotH);
+			const ImVec2 plotMin = plotPos;
+			const ImVec2 plotMax(plotPos.x + plotSize.x, plotPos.y + plotSize.y);
 
-			ImGui::InvisibleButton("##curvePlot", plotSize);
+			ImGui::InvisibleButton("##curvePlot", ImVec2(avail, plotH));
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
 
@@ -332,6 +346,14 @@ namespace aether::editor
 			dl->AddText(ImVec2(plotPos.x + 2, plotPos.y + 2), IM_COL32(180, 180, 180, 200), "1.0");
 			dl->AddText(ImVec2(plotPos.x + plotSize.x - 30, plotPos.y + plotSize.y - 14), IM_COL32(180, 180, 180, 200), "10");
 
+			// Clip the curves to the plot box. Not every operator lands inside it: Vanilla
+			// is the identity, so at the right-hand edge of the graph it returns 10 and its
+			// point sits nine plot-heights above the top. The draw list clips to the WINDOW,
+			// not to this rectangle, so without pushing one that line streaked up across the
+			// whole panel and over the tab bar. Clipping rather than clamping keeps the plot
+			// honest - a curve that leaves the top is one that exceeds 1.0, which is exactly
+			// what Vanilla does and worth being able to see.
+			dl->PushClipRect(plotMin, plotMax, true);
 			for (std::size_t m = 0; m < kTonemapCount; ++m)
 			{
 				ImVec2 pts[kSamples];
@@ -340,11 +362,18 @@ namespace aether::editor
 					const float input = (static_cast<float>(s) / static_cast<float>(kSamples - 1)) * kXMax;
 					const float output = TonemapByIndex(static_cast<std::uint32_t>(m), input);
 					pts[s].x = plotPos.x + (input / kXMax) * plotSize.x;
-					pts[s].y = plotPos.y + plotSize.y - (output * plotSize.y);
+					// Keep the coordinate finite and near the box even for an operator that
+					// runs far off it; the clip decides what is actually visible.
+					const float clamped = (std::min) ((std::max) (output, -1.0f), 2.0f);
+					pts[s].y = plotPos.y + plotSize.y - (clamped * plotSize.y);
 				}
 				dl->AddPolyline(pts, kSamples, kCurveColors[m], ImDrawFlags_None, 2.0f);
+			}
+			dl->PopClipRect();
 
-				const float legendX = plotPos.x + plotSize.x + 8.0f;
+			for (std::size_t m = 0; m < kTonemapCount; ++m)
+			{
+				const float legendX = plotMax.x + 8.0f;
 				const float legendY = plotPos.y + 4.0f + static_cast<float>(m) * 18.0f;
 				dl->AddRectFilled(ImVec2(legendX, legendY), ImVec2(legendX + 10, legendY + 10), kCurveColors[m]);
 				dl->AddText(ImVec2(legendX + 14, legendY - 2), IM_COL32(200, 200, 200, 220), kTonemapDefs[m].name);
