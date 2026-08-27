@@ -1,0 +1,514 @@
+# Near-field depth of field test.
+#
+# A lens spreads whatever sits in FRONT of the focus plane over its background: the
+# near object's own outline dissolves, because nothing is occluding it. That is the
+# one part of defocus a gather cannot express with a single pool of samples - a sharp
+# background pixel asked only about its OWN circle of confusion answers "I am in
+# focus" and keeps its sharp value, so the foreground stops dead at its silhouette.
+#
+# The scene is built to make that failure impossible to miss: one bright sphere at
+# 3 m against a wall of dark spheres at 25 m, with the lens focused on the wall. At
+# f/1.4 and 85 mm the near sphere is far past the blur ceiling, so its edge should be
+# a wide soft gradient over sharp background detail - not a crisp circle.
+[environment]
+ambient = [ 0.05, 0.06, 0.08 ]
+sky_horizon = [ 0.35, 0.42, 0.55 ]
+sky_void = [ 0.1, 0.12, 0.16 ]
+sky_zenith = [ 0.15, 0.25, 0.5 ]
+sun_color = [ 1.0, 0.96, 0.9 ]
+sun_direction = [ -0.4, 0.75, 0.5 ]
+sun_intensity = 3.0
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+[[assets]]
+builtin = true
+id = '0522571ed8cb4104'
+path = 'sphere'
+type = 'mesh'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 920000000
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 1.4
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = true
+    far = 1000.0
+    focal_length_mm = 85.0
+    focus_distance = 25.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_0_0'
+node = 920000100
+parent = -1
+position = [ -6.0, -3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_1_0'
+node = 920000101
+parent = -1
+position = [ -3.0, -3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_2_0'
+node = 920000102
+parent = -1
+position = [ 0.0, -3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_3_0'
+node = 920000103
+parent = -1
+position = [ 3.0, -3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_4_0'
+node = 920000104
+parent = -1
+position = [ 6.0, -3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_0_1'
+node = 920000105
+parent = -1
+position = [ -6.0, 0.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_1_1'
+node = 920000106
+parent = -1
+position = [ -3.0, 0.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_2_1'
+node = 920000107
+parent = -1
+position = [ 0.0, 0.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_3_1'
+node = 920000108
+parent = -1
+position = [ 3.0, 0.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_4_1'
+node = 920000109
+parent = -1
+position = [ 6.0, 0.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_0_2'
+node = 920000110
+parent = -1
+position = [ -6.0, 3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_1_2'
+node = 920000111
+parent = -1
+position = [ -3.0, 3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_2_2'
+node = 920000112
+parent = -1
+position = [ 0.0, 3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_3_2'
+node = 920000113
+parent = -1
+position = [ 3.0, 3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06, 0.06, 0.07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Wall_4_2'
+node = 920000114
+parent = -1
+position = [ 6.0, 3.0, -25.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.6
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'NearSphere'
+node = 920000900
+parent = -1
+position = [ 0.0, 0.0, -3.0 ]
+scale = [ 0.25, 0.25, 0.25 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.95, 0.55, 0.2, 1.0 ]
+    double_sided = false
+    emissive = [ 0.6, 0.3, 0.05 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.5
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Backdrop'
+node = 920000950
+parent = -1
+position = [ 0.0, 0.0, -26.0 ]
+scale = [ 60.0, 40.0, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.30, 0.32, 0.36, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.8
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
