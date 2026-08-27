@@ -2015,7 +2015,7 @@ namespace aether::editor
 
 		methods.push_back({"render.benchmark",
 		        "render_benchmark",
-		        "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.",
+		        "Per-pass GPU and CPU timing for the last rendered frame, sorted by GPU time (slowest first), plus the hottest pass, graph totals for both, and this frame's fps. GPU time is the one that answers \"what does this pass cost\" - CPU time here is only the cost of RECORDING the pass, so a heavy shader shows as expensive on gpuTimeMs and near-free on cpuTimeMs. Poll repeatedly to sample min/avg/max; single frames vary by ~10%.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -2027,18 +2027,23 @@ namespace aether::editor
 			        }
 			        std::vector<RenderGraph::PassInfo> passes = rendering->GetRenderGraph().GetPasses();
 			        std::erase_if(passes, [](const RenderGraph::PassInfo& p) { return p.isCulled || !p.isCompiled; });
-			        std::ranges::sort(passes, std::ranges::greater{}, &RenderGraph::PassInfo::lastCpuTimeMs);
+			        // Sorted by GPU time, because that is what a pass actually costs. Sorting
+			        // by CPU time puts whichever pass recorded the most draw calls on top and
+			        // buries the expensive shaders, which reads as "the renderer is cheap".
+			        std::ranges::sort(passes, std::ranges::greater{}, &RenderGraph::PassInfo::lastGpuTimeMs);
 			        json arr = json::array();
-			        float total = 0.0f;
+			        float totalCpu = 0.0f;
+			        float totalGpu = 0.0f;
 			        for (const RenderGraph::PassInfo& p: passes)
 			        {
-				        total += p.lastCpuTimeMs;
-				        arr.push_back(json{{"name", p.name}, {"cpuTimeMs", p.lastCpuTimeMs}, {"gpuTimeMs", p.lastGpuTimeMs}, {"graphics", p.isGraphics}, {"compute", p.isCompute}, {"asyncCompute", p.isAsyncCompute}});
+				        totalCpu += p.lastCpuTimeMs;
+				        totalGpu += p.lastGpuTimeMs;
+				        arr.push_back(json{{"name", p.name}, {"gpuTimeMs", p.lastGpuTimeMs}, {"cpuTimeMs", p.lastCpuTimeMs}, {"graphics", p.isGraphics}, {"compute", p.isCompute}, {"asyncCompute", p.isAsyncCompute}});
 			        }
-			        json result{{"passes", arr}, {"activePassCount", passes.size()}, {"totalCpuMs", total}, {"frame", ctx.frameIndex}, {"fps", ctx.fps}};
+			        json result{{"passes", arr}, {"activePassCount", passes.size()}, {"totalGpuMs", totalGpu}, {"totalCpuMs", totalCpu}, {"frame", ctx.frameIndex}, {"fps", ctx.fps}};
 			        if (!passes.empty())
 			        {
-				        result["hottest"] = json{{"name", passes.front().name}, {"cpuTimeMs", passes.front().lastCpuTimeMs}, {"gpuTimeMs", passes.front().lastGpuTimeMs}};
+				        result["hottest"] = json{{"name", passes.front().name}, {"gpuTimeMs", passes.front().lastGpuTimeMs}, {"cpuTimeMs", passes.front().lastCpuTimeMs}};
 			        }
 			        return result;
 		        }});
