@@ -3,6 +3,7 @@
 
 #include <imgui.h>
 
+#include "PlayState.hpp"
 #include "debug/DebugPanel.hpp"
 #include "layers/AppLayer.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
@@ -13,6 +14,18 @@
 
 namespace aether::editor
 {
+	void DevToolsPanel::OnUpdate(app::LayerContext& context)
+	{
+		AE_PROFILE_ZONE();
+
+		// Resolved every frame rather than on the play transition, so it is correct however
+		// play mode is entered - the toolbar button, a keybind, or the control server - and
+		// there is no transition hook to forget to hook up.
+		const auto* play = context.TryGet<app::PlayState>();
+		const bool suppressForPlay = play != nullptr && play->IsPlaying() && !aether::AreEditorGizmosInPlayEnabled();
+		aether::SetPhysicsDebugShapesEnabled(m_physicsShapesWanted && !suppressForPlay);
+	}
+
 	void DevToolsPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -26,10 +39,21 @@ namespace aether::editor
 				aether::SetDebugRenderingEnabled(debugRenderer);
 			}
 
-			bool physicsShapes = aether::IsPhysicsDebugShapesEnabled();
-			if (ImGui::Checkbox("Physics debug rendering", &physicsShapes))
+			// Bound to the wish, not to the live flag: while playing the live flag reads
+			// false, and binding to it would make the checkbox appear to untick itself.
+			if (ImGui::Checkbox("Physics debug rendering", &m_physicsShapesWanted))
 			{
-				aether::SetPhysicsDebugShapesEnabled(physicsShapes);
+				aether::SetPhysicsDebugShapesEnabled(m_physicsShapesWanted);
+			}
+
+			bool gizmosInPlay = aether::AreEditorGizmosInPlayEnabled();
+			if (ImGui::Checkbox("Editor gizmos while playing", &gizmosInPlay))
+			{
+				aether::SetEditorGizmosInPlayEnabled(gizmosInPlay);
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Keep light volumes and physics shapes on screen during play. Off by default so Play shows the game itself.");
 			}
 
 			ImGui::SeparatorText("Render");
@@ -66,14 +90,17 @@ namespace aether::editor
 		(void) context;
 		const bool overlay = config.GetBool("debug.debugoverlay", aether::IsDebugRenderingEnabled());
 		aether::SetDebugRenderingEnabled(overlay);
-		const bool physicsShapes = config.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
-		aether::SetPhysicsDebugShapesEnabled(physicsShapes);
+		m_physicsShapesWanted = config.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
+		aether::SetPhysicsDebugShapesEnabled(m_physicsShapesWanted);
+		aether::SetEditorGizmosInPlayEnabled(config.GetBool("debug.editorgizmosinplay", aether::AreEditorGizmosInPlayEnabled()));
 	}
 
 	void DevToolsPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
 		(void) context;
 		config.Set("debug.debugoverlay", aether::IsDebugRenderingEnabled());
-		config.Set("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
+		// The wish, not the live flag - see the member's declaration.
+		config.Set("debug.physicsdebugrendering", m_physicsShapesWanted);
+		config.Set("debug.editorgizmosinplay", aether::AreEditorGizmosInPlayEnabled());
 	}
 } // namespace aether::editor

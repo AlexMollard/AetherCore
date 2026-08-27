@@ -88,6 +88,18 @@ namespace aether
 		return s_physicsDebugShapesEnabled;
 	}
 
+	static bool s_editorGizmosInPlay = false;
+
+	void SetEditorGizmosInPlayEnabled(bool enabled)
+	{
+		s_editorGizmosInPlay = enabled;
+	}
+
+	bool AreEditorGizmosInPlayEnabled()
+	{
+		return s_editorGizmosInPlay;
+	}
+
 	static bool s_collisionOnlyViewEnabled = false;
 
 	void SetCollisionOnlyViewEnabled(bool enabled)

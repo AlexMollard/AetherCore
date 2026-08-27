@@ -12,6 +12,7 @@
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "Color.hpp"
+#include "PlayState.hpp"
 #include "debug/DebugPanel.hpp"
 #include "layers/AppLayer.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
@@ -165,7 +166,13 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
-		if (m_lightGizmos && aether::IsDebugRenderingEnabled())
+		// Editor gizmos step aside while the game is playing, unless explicitly asked to
+		// stay. A light volume drawn over every light is a scene-authoring aid; during play
+		// it is just a wall of circles between you and the thing you pressed Play to look at.
+		const auto* play = context.TryGet<app::PlayState>();
+		const bool suppressForPlay = play != nullptr && play->IsPlaying() && !aether::AreEditorGizmosInPlayEnabled();
+
+		if (m_lightGizmos && aether::IsDebugRenderingEnabled() && !suppressForPlay)
 		{
 			if (auto* engine = context.TryGet<aether::AetherCore>())
 			{

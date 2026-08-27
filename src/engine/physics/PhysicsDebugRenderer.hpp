@@ -26,6 +26,13 @@ namespace aether
 	bool IsDebugRenderingEnabled();
 	void SetPhysicsDebugShapesEnabled(bool enabled);
 	bool IsPhysicsDebugShapesEnabled();
+	// Whether the EDITOR's own gizmos - light volumes, physics shapes - stay on screen while
+	// the game is playing. Off by default: pressing Play is a request to see the game, and a
+	// screen full of light radii and collider outlines is the one thing standing in the way.
+	// The toggle exists because watching collisions resolve in motion is a real reason to
+	// want them, and that must stay possible.
+	void SetEditorGizmosInPlayEnabled(bool enabled);
+	bool AreEditorGizmosInPlayEnabled();
 
 	// Collision-only view: scene rendering (meshes, sprites, tiles) is
 	// suppressed and every collider wireframe draws - for reading collision
