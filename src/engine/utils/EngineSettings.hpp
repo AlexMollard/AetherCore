@@ -72,6 +72,13 @@ namespace aether
 			bool reflections = true;
 			float reflectionMaxRoughness = 0.45f;
 			float reflectionIntensity = 1.0f;
+			// Display transform applied to the HDR image on the way to the screen. Stored
+			// by NAME rather than by index: the operator list is a registry that grows, and
+			// a project that picked one should not silently get a different look because
+			// something was inserted above it. Matched case-insensitively against the names
+			// in TonemapDefs.hpp; an unrecognised name falls back to the default rather than
+			// leaving the screen black.
+			std::string tonemap = "ACES Filmic";
 			bool asyncCompute = true;
 			bool imguiViewports = true;
 			float uiScale = 1.0f;
@@ -132,6 +139,7 @@ namespace aether
 		f("graphics.reflections", settings.graphics.reflections);
 		f("graphics.reflectionMaxRoughness", settings.graphics.reflectionMaxRoughness);
 		f("graphics.reflectionIntensity", settings.graphics.reflectionIntensity);
+		f("graphics.tonemap", settings.graphics.tonemap);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
 		f("graphics.uiScale", settings.graphics.uiScale);

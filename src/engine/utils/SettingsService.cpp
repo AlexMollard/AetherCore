@@ -9,6 +9,7 @@
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
+#include "passes/TonemapDefs.hpp"
 
 namespace aether
 {
@@ -40,6 +41,13 @@ namespace aether
 			if (auto* renderer = m_services.TryGet<Renderer>())
 			{
 				renderer->SetFxaaEnabled(m_values.graphics.fxaa);
+			}
+		}
+		else if (key == "graphics.tonemap")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetTonemapMode(TonemapModeFromName(m_values.graphics.tonemap));
 			}
 		}
 		else if (key == "graphics.reflections")

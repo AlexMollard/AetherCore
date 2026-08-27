@@ -14,6 +14,7 @@
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TextIni.hpp"
+#include "passes/TonemapDefs.hpp"
 
 namespace aether
 {
@@ -41,6 +42,7 @@ namespace aether
 		        {"graphics.reflectionIntensity", {.description = "Strength of the screen-space reflection contribution.", .minValue = 0.0, .maxValue = 2.0}},
 		        {"graphics.contactShadows", {.description = "Recovers the small shadow at the base of an object that a shadow cascade texel is too coarse to resolve, by marching a short ray through the depth buffer."}},
 		        {"graphics.anisotropy", {.description = "Texture samples taken along the footprint when a surface is seen edge-on. 1 disables it, which visibly blurs ground at a grazing angle.", .minValue = 1.0, .maxValue = 16.0, .restartRequired = true}},
+		        {"graphics.tonemap", {.description = "Display transform applied to the HDR image. ACES rolls highlights toward white in AP1; AgX mixes the channels before compressing them, so bright saturated colour stops rotating hue on its way to white.", .choices = kTonemapNames}},
 		        {"graphics.asyncCompute", {.description = "Overlap compute work with graphics on a separate queue.", .restartRequired = true}},
 		        {"graphics.imguiViewports", {.description = "Let editor panels become separate OS windows when dragged out of the main window."}},
 		        {"graphics.uiScale", {.description = "Extra multiplier on editor UI size, on top of the display's own DPI scale.", .minValue = 0.5, .maxValue = 3.0}},
