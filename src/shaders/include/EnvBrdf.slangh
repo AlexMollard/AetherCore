@@ -1,0 +1,54 @@
+#ifndef AETHER_ENV_BRDF_SLANGH
+#define AETHER_ENV_BRDF_SLANGH
+
+// The environment BRDF: how much of an environment's light a surface sends to the eye.
+//
+// Shared rather than duplicated, because the reflection composite has to subtract
+// EXACTLY what the forward pass added. Two copies of this maths that drift apart do not
+// fail loudly - they leave a residue on every glossy surface, which is far harder to
+// notice than a crash.
+
+// Karis' analytic fit to the split-sum environment BRDF, so the Fresnel and roughness
+// response are right without shipping a lookup texture.
+float2 EnvBrdfApprox(float roughness, float NdotV)
+{
+	const float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
+	const float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
+	const float4 r = roughness * c0 + c1;
+	const float a004 = min(r.x * r.x, exp2(-9.28f * NdotV)) * r.x + r.y;
+	return float2(-1.04f, 1.04f) * a004 + r.zw;
+}
+
+// Fraction of the environment a surface reflects, INCLUDING the light that bounces more
+// than once between microfacets.
+//
+// The split-sum term alone is single scattering: it counts light that strikes the
+// microsurface, reflects once, and leaves. On a rough surface most light does not manage
+// that - it bounces between facets several times before escaping - and a single-scatter
+// BRDF simply drops all of it. A white furnace test shows exactly how much: a white metal
+// under a uniform environment must come out invisible against it at every roughness, and
+// before this it was losing 2.7% at roughness 0.05 rising to 51.3% at 0.95. Half the
+// light, gone, on precisely the materials that should look bright and soft.
+//
+// Fdez-Aguera's analytic compensation recovers it from terms already in hand: the missing
+// energy is 1 - (bx + by), and it re-enters weighted by the average Fresnel over the
+// hemisphere, tinted by F0 so a coloured metal's multiple bounces saturate its own colour
+// the way real metal does. No lookup table, a handful of instructions.
+float3 EnvSpecularWeight(float3 F0, float2 envBrdf)
+{
+	const float3 FssEss = F0 * envBrdf.x + envBrdf.y;
+
+	// What single scattering failed to account for.
+	const float Ems = saturate(1.0f - (envBrdf.x + envBrdf.y));
+
+	// Average Fresnel over the hemisphere; the 1/21 is the analytic integral of the
+	// Schlick term, so this stays closed-form.
+	const float3 Favg = F0 + (float3(1.0f, 1.0f, 1.0f) - F0) / 21.0f;
+
+	// The geometric series of repeated bounces, summed.
+	const float3 FmsEms = Ems * FssEss * Favg / max(float3(1.0f, 1.0f, 1.0f) - Ems * Favg, 1e-4f);
+
+	return FssEss + FmsEms;
+}
+
+#endif

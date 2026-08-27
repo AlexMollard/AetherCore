@@ -30,6 +30,7 @@
 #include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/OctNormal.slangh"
+#include "include/EnvBrdf.slangh"
 #include "include/Sky.slangh"
 #include "include/HeightFog.slangh"
 #include "include/ShadowSampling.slangh"
@@ -121,12 +122,9 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
 	const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
 
-	// Karis' analytic split-sum fit, matching the forward shader.
-	const float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
-	const float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
-	const float4 r = roughness * c0 + c1;
-	const float a004 = min(r.x * r.x, exp2(-9.28f * NdotV)) * r.x + r.y;
-	const float2 envBrdf = float2(-1.04f, 1.04f) * a004 + r.zw;
+	// Shared with the forward shader, so the term this subtracts cannot drift from the
+	// term that was added.
+	const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
 
 	// A metal's Fresnel reflectance is its base colour - gold reflects gold - so this
 	// has to be the same float3 the forward pass used, not a scalar standing in for it.
@@ -144,7 +142,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 		tint = g_textures[uint(baseEntry.address)].Load(int3(coord, 0)).rgb;
 	}
 	const float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), tint, metallic);
-	float3 specWeight = F0 * envBrdf.x + envBrdf.y;
+	float3 specWeight = EnvSpecularWeight(F0, envBrdf);
 
 	// The forward pass did not add the sky specular raw - it multiplied it by
 	// specular occlusion and then fogged the result. Subtracting the raw value would

@@ -19,6 +19,7 @@
 #include "include/RenderContracts.slangh"
 #include "include/GpuMaterial.slangh"
 #include "include/Sky.slangh"
+#include "include/EnvBrdf.slangh"
 #include "include/HeightFog.slangh"
 #include "include/ShadowSampling.slangh"
 #include "include/DirectionalShadowCSM.slangh"
@@ -355,18 +356,14 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
     const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
 
-    // Karis' analytic fit to the split-sum environment BRDF, so the Fresnel and
-    // roughness response are right without shipping a lookup texture.
-    const float4 c0 = float4(-1.0, -0.0275, -0.572, 0.022);
-    const float4 c1 = float4(1.0, 0.0425, 1.04, -0.04);
-    const float4 r = roughness * c0 + c1;
-    const float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
-    const float2 envBrdf = float2(-1.04, 1.04) * a004 + r.zw;
+    const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
 
     // ambientColor stays in as the scene's authored floor - the light that is not the
     // sky at all - so an indoor or stylised scene can still set its own base level.
     const float3 ambientDiffuse = (ambientColor + skyDiffuse) * baseColor.rgb * kD;
-    const float3 ambientSpecular = skySpecular * (F0 * envBrdf.x + envBrdf.y);
+    // Multi-scatter compensated, so a rough surface stops losing the light that bounces
+    // between its microfacets - see EnvBrdf.slangh.
+    const float3 ambientSpecular = skySpecular * EnvSpecularWeight(F0, envBrdf);
     // Diffuse and specular are not occluded by the same amount. Diffuse gathers the
     // whole hemisphere, so ambient occlusion describes it directly. A specular lobe
     // gathers a cone whose width is set by roughness: the smoother the surface, the
