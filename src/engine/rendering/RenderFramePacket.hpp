@@ -154,6 +154,8 @@ namespace aether
 		glm::vec4 fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 skyParams{0.0f, 2.5f, 0.0f, 0.0f};
 		bool contactShadows = false;
+		// 0 splits the cascades evenly across the view distance, 1 logarithmically.
+		float shadowSplitLambda = 0.65f;
 		bool directionalShadowEnabled = false;
 
 		// Camera-owned background, composited WYSIWYG in the tonemap pass.

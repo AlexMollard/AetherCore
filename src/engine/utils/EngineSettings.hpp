@@ -78,6 +78,21 @@ namespace aether
 			// something was inserted above it. Matched case-insensitively against the names
 			// in TonemapDefs.hpp; an unrecognised name falls back to the default rather than
 			// leaving the screen black.
+			// How the shadow cascades divide the view distance. 0 splits them evenly, 1
+			// splits them logarithmically; the default sits between.
+			//
+			// This is a trade with no universally right answer, which is why it is a knob
+			// rather than a constant. Measured as screen pixels covered by one shadow
+			// texel - lower is crisper - at a 60 degree field of view:
+			//
+			//            1 m    10 m    60 m   200 m
+			//   0.65    32.1     3.2     1.2     1.3
+			//   0.90    10.0     1.0     4.5     1.3
+			//
+			// Raising it sharpens everything close to the camera and coarsens the middle
+			// distance; past about 120 m the last cascade is unaffected either way. A game
+			// whose subject is a few metres away wants it high, a vista wants it low.
+			float shadowSplitLambda = 0.65f;
 			// Marched, shadow-aware fog. Only ever active where a scene asked for it; this
 			// is the machine-side off switch for when the march is too expensive.
 			bool volumetrics = true;
@@ -142,6 +157,7 @@ namespace aether
 		f("graphics.reflections", settings.graphics.reflections);
 		f("graphics.reflectionMaxRoughness", settings.graphics.reflectionMaxRoughness);
 		f("graphics.reflectionIntensity", settings.graphics.reflectionIntensity);
+		f("graphics.shadowSplitLambda", settings.graphics.shadowSplitLambda);
 		f("graphics.volumetrics", settings.graphics.volumetrics);
 		f("graphics.tonemap", settings.graphics.tonemap);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);

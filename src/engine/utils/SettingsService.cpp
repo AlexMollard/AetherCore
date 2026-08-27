@@ -43,6 +43,13 @@ namespace aether
 				renderer->SetFxaaEnabled(m_values.graphics.fxaa);
 			}
 		}
+		else if (key == "graphics.shadowSplitLambda")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetShadowSplitLambda(m_values.graphics.shadowSplitLambda);
+			}
+		}
 		else if (key == "graphics.volumetrics")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

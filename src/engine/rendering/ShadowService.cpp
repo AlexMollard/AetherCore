@@ -30,8 +30,7 @@ namespace
 	constexpr float kFarPlanePadding = 64.0f;
 	constexpr float kCascadeRangePadding = 140.0f;
 
-	constexpr float kPssmLambda = 0.65f;
-
+	
 	constexpr float kOrthoHalfMin = 20.0f;
 
 	// Small outward margin on the fitted sphere so PCF taps near the cascade edge
@@ -319,8 +318,9 @@ namespace aether
 			const float uni1 = camNear + viewRange * (2.0f / 3.0f);
 			const float log0 = camNear * std::pow(camFar / camNear, 1.0f / 3.0f);
 			const float log1 = camNear * std::pow(camFar / camNear, 2.0f / 3.0f);
-			split0 = kPssmLambda * log0 + (1.0f - kPssmLambda) * uni0;
-			split1 = kPssmLambda * log1 + (1.0f - kPssmLambda) * uni1;
+			const float lambda = std::clamp(packet.shadowSplitLambda, 0.0f, 1.0f);
+			split0 = lambda * log0 + (1.0f - lambda) * uni0;
+			split1 = lambda * log1 + (1.0f - lambda) * uni1;
 			split2 = camFar;
 		}
 

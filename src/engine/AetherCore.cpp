@@ -966,6 +966,7 @@ namespace aether
 		packet.fogParams = renderer.GetFogParams();
 		packet.skyParams = renderer.GetSkyParams();
 		packet.contactShadows = renderer.AreContactShadowsEnabled();
+		packet.shadowSplitLambda = renderer.GetShadowSplitLambda();
 
 		// The scene background is owned by the main camera. Solid/Gradient are
 		// composited WYSIWYG in the tonemap pass (see PostProcessStack); only the
