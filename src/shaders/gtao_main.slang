@@ -154,7 +154,15 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
 
     // World radius projected to pixels, so the kernel covers a fixed slice of the world
     // rather than a fixed slice of the screen.
-    float pixelRadius = clamp(pc.radius * fc->proj[1][1] * 0.5f * float(pc.fullHeight) / viewDepth, 2.0f, 192.0f);
+    //
+    // abs(), because proj[1][1] is NEGATIVE: Camera.cpp flips it to put Vulkan's Y axis the
+    // right way up. Without that the whole expression came out negative and clamp() pinned
+    // the search to its 2-pixel floor at every depth, on every surface. The effect was not
+    // subtle - occlusion could only ever be found two pixels away, so the buffer held a
+    // one-pixel line wherever there was a depth discontinuity and nothing else at all.
+    // It also explains why the feature appeared insensitive to its own settings: raising
+    // gtaoRadius from 1.4 to 3.0 changed nothing, because the result was clamped either way.
+    float pixelRadius = clamp(pc.radius * abs(fc->proj[1][1]) * 0.5f * float(pc.fullHeight) / viewDepth, 2.0f, 192.0f);
 
     float2 noise = Hash2(px);
     float visibility = 0.0f;
