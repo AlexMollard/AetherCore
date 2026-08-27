@@ -48,8 +48,10 @@ namespace aether::editor
 
 		float HejlRichard(float x)
 		{
+			// Gamma is baked into this curve, so linearise it the way the shader does -
+			// the pass re-applies the encode on the way to the screen.
 			const float v = (std::max) (x - 0.004f, 0.0f);
-			return (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
+			return std::pow((v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f), 2.2f);
 		}
 
 		float LinearClamp(float x)
@@ -65,7 +67,7 @@ namespace aether::editor
 		float FilmicDice(float x)
 		{
 			const float v = (std::max) (x, 0.0f);
-			return (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
+			return std::pow((v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f), 2.2f);
 		}
 
 		float Lottes(float x)

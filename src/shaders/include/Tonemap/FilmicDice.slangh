@@ -1,5 +1,13 @@
 // Dice/Khronos PBR Neutral - filmic S-curve similar to ACES Base.
+// The curve has sRGB gamma BAKED IN - that is the whole point of it, and what makes it
+// a single cheap ALU sequence instead of a curve plus an encode. This pass applies its
+// own linear-to-display encode afterwards to every operator, so the result has to be
+// handed back linear or the gamma lands twice.
+//
+// Untreated that was not subtle: mid-grey 0.18 reached the screen at 0.735 instead of
+// 0.508, which is why this operator read washed out and flat next to the others.
 float3 FilmicDice(float3 x)
 {
-    return max(float3(0.0f), (x * (6.2f * x + 0.5f)) / (x * (6.2f * x + 1.7f) + 0.06f));
+    const float3 display = max(float3(0.0f), (x * (6.2f * x + 0.5f)) / (x * (6.2f * x + 1.7f) + 0.06f));
+    return pow(display, 2.2f);
 }

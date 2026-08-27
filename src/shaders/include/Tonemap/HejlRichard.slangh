@@ -1,7 +1,15 @@
 // Hejl Richard / Filmic ALU - cost-effective curve used in Frostbite.
 // Dark offset prevents division-by-near-zero noise.
+// The curve has sRGB gamma BAKED IN - that is the whole point of it, and what makes it
+// a single cheap ALU sequence instead of a curve plus an encode. This pass applies its
+// own linear-to-display encode afterwards to every operator, so the result has to be
+// handed back linear or the gamma lands twice.
+//
+// Untreated that was not subtle: mid-grey 0.18 reached the screen at 0.735 instead of
+// 0.508, which is why this operator read washed out and flat next to the others.
 float3 HejlRichard(float3 x)
 {
     float3 v = max(x - 0.004f, 0.0f);
-    return (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
+    const float3 display = (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
+    return pow(max(display, 0.0f), 2.2f);
 }
