@@ -7,7 +7,7 @@ sky_zenith = [ 0.16, 0.3, 0.58 ]
 # Sun well above the horizon and near-neutral, so shadows, contact and material
 # response are all exercised and colour can be judged without a cast.
 sun_color = [ 1.0, 0.97, 0.92 ]
-sun_direction = [ 0.35, 0.72, 0.6 ]
+sun_direction = [ 0.26, 0.19, -0.95 ]
 sun_intensity = 3.0
 
 [scene]
@@ -773,10 +773,13 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.sky]
     ambient_color = [ 0.05, 0.055, 0.065 ]
-    fog_density = 0.0
+    fog_density = 0.075
     fog_height_falloff = 0.08
     fog_max_opacity = 0.9
     fog_sun_scatter = 0.6
+    volumetric_anisotropy = 0.6
+    volumetric_fog = true
+    volumetric_intensity = 1.0
     ground_color = [ 0.05, 0.05, 0.06 ]
     horizon_color = [ 0.52, 0.6, 0.72 ]
     zenith_color = [ 0.16, 0.3, 0.58 ]
