@@ -61,6 +61,8 @@ namespace aether
 			float gradeSaturation = 1.0f;
 			float gradeTemperature = 0.0f;
 			float gradeTint = 0.0f;
+			float vignetteIntensity = 0.0f;
+			float vignetteRoundness = 1.0f;
 			// Ambient occlusion. Radius is in world units - how far a surface looks for
 			// something occluding it - so it wants to match the scale of the scene's
 			// geometry rather than a fixed number of pixels.
@@ -158,6 +160,8 @@ namespace aether
 		f("graphics.gradeSaturation", settings.graphics.gradeSaturation);
 		f("graphics.gradeTemperature", settings.graphics.gradeTemperature);
 		f("graphics.gradeTint", settings.graphics.gradeTint);
+		f("graphics.vignetteIntensity", settings.graphics.vignetteIntensity);
+		f("graphics.vignetteRoundness", settings.graphics.vignetteRoundness);
 		f("graphics.gtao", settings.graphics.gtao);
 		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);

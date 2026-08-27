@@ -91,6 +91,9 @@ namespace TonemapContracts
 		float gradeSaturation = 1.0f;
 		float gradeTemperature = 0.0f;
 		float gradeTint = 0.0f;
+		// Lens vignette, also linear-space. 0 intensity is off.
+		float vignetteIntensity = 0.0f;
+		float vignetteRoundness = 1.0f;
 	};
 
 	static_assert(offsetof(PushConstants, hdrSlot) == 0);
@@ -99,7 +102,8 @@ namespace TonemapContracts
 	static_assert(offsetof(PushConstants, bloomStrength) == 40);
 	static_assert(offsetof(PushConstants, backgroundParamsAddr) == 48);
 	static_assert(offsetof(PushConstants, gradeContrast) == 56);
-	static_assert(sizeof(PushConstants) == 72, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
+	static_assert(offsetof(PushConstants, vignetteIntensity) == 72);
+	static_assert(sizeof(PushConstants) == 80, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
 } // namespace TonemapContracts
 
 namespace CullContracts

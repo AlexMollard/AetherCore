@@ -118,6 +118,15 @@ namespace aether
 			m_gradeTint = tint;
 		}
 
+		void SetVignette(float intensity, float roundness)
+		{
+			m_vignetteIntensity = intensity;
+			m_vignetteRoundness = roundness;
+		}
+
+		[[nodiscard]] float GetVignetteIntensity() const { return m_vignetteIntensity; }
+		[[nodiscard]] float GetVignetteRoundness() const { return m_vignetteRoundness; }
+
 		[[nodiscard]] float GetGradeContrast() const { return m_gradeContrast; }
 		[[nodiscard]] float GetGradeSaturation() const { return m_gradeSaturation; }
 		[[nodiscard]] float GetGradeTemperature() const { return m_gradeTemperature; }
@@ -367,6 +376,8 @@ namespace aether
 		float m_gradeSaturation = 1.0f;
 		float m_gradeTemperature = 0.0f;
 		float m_gradeTint = 0.0f;
+		float m_vignetteIntensity = 0.0f;
+		float m_vignetteRoundness = 1.0f;
 		bool m_fxaaEnabled = true;
 		bool m_outputToTexture = false;
 		bool m_debugCompare = false;

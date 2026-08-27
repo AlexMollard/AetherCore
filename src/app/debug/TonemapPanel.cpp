@@ -302,12 +302,26 @@ namespace aether::editor
 				ImGui::SetTooltip("Green/magenta white balance.");
 			}
 
+			ImGui::SeparatorText("Vignette");
+			changed |= ImGui::SliderFloat("Amount", &g.vignetteIntensity, 0.0f, 1.0f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Lens falloff toward the edge of frame, in linear light so corner highlights roll off rather than just dimming. 0 is off.");
+			}
+			changed |= ImGui::SliderFloat("Roundness", &g.vignetteRoundness, 0.0f, 1.0f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("1 is circular on screen; 0 follows the aspect ratio, darkening the sides of a wide frame rather than only the corners.");
+			}
+
 			if (ImGui::SmallButton("Reset grade"))
 			{
 				g.gradeContrast = 1.0f;
 				g.gradeSaturation = 1.0f;
 				g.gradeTemperature = 0.0f;
 				g.gradeTint = 0.0f;
+				g.vignetteIntensity = 0.0f;
+				g.vignetteRoundness = 1.0f;
 				changed = true;
 			}
 			if (ImGui::IsItemHovered())
@@ -317,7 +331,11 @@ namespace aether::editor
 
 			if (changed)
 			{
+				// Both keys, because the grade and the vignette are pushed by separate
+				// setters - applying only one would leave the other stale until something
+				// else happened to touch it.
 				settings->ApplyField("graphics.gradeContrast");
+				settings->ApplyField("graphics.vignetteIntensity");
 				settings->MarkDirty();
 			}
 		}

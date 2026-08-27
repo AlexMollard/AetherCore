@@ -50,6 +50,7 @@ namespace aether
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
 
 		void SetGrade(float contrast, float saturation, float temperature, float tint);
+		void SetVignette(float intensity, float roundness);
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 

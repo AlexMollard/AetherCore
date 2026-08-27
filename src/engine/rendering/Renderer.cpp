@@ -82,6 +82,14 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetVignette(float intensity, float roundness)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetVignette(intensity, roundness);
+		}
+	}
+
 	void Renderer::SetFxaaEnabled(bool enabled)
 	{
 		if (m_postProcessStack)

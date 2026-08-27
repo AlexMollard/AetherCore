@@ -37,6 +37,8 @@ namespace aether
 		        {"graphics.gradeContrast", {.description = "Contrast about middle grey, applied in linear light before tonemapping. 1 leaves the image untouched.", .minValue = 0.25, .maxValue = 2.5}},
 		        {"graphics.gradeSaturation", {.description = "Colour saturation. 1 leaves the image untouched, 0 is greyscale, above 1 pushes further from grey.", .minValue = 0.0, .maxValue = 2.5}},
 		        {"graphics.gradeTemperature", {.description = "White balance along the warm/cool axis. Negative is cooler (bluer), positive warmer (redder); 0 is neutral. Luminance is preserved, so this does not double as an exposure control.", .minValue = -1.0, .maxValue = 1.0}},
+		        {"graphics.vignetteIntensity", {.description = "Lens falloff toward the edge of frame, applied in linear light so corner highlights roll off rather than just dimming. 0 is off.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"graphics.vignetteRoundness", {.description = "1 makes the falloff circular on screen; 0 follows the aspect ratio, darkening the sides of a wide frame rather than only the corners.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"graphics.gradeTint", {.description = "White balance along the green/magenta axis. Negative is magenta, positive green; 0 is neutral.", .minValue = -1.0, .maxValue = 1.0}},
 		        {"graphics.gtao", {.description = "Ground-truth ambient occlusion: darkens creases and contact points that the light probes cannot see into."}},
 		        {"graphics.gtaoRadius", {.description = "How far, in world units, a surface looks for geometry occluding it. Too small and only tight creases darken; too large and the whole scene greys.", .minValue = 0.1, .maxValue = 5.0}},

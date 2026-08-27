@@ -39,6 +39,8 @@ struct TonemapPush
     float gradeSaturation;  // 1 = unchanged, 0 = greyscale
     float gradeTemperature; // 0 = unchanged, >0 warmer
     float gradeTint;        // 0 = unchanged, >0 greener
+    float vignetteIntensity; // 0 = off
+    float vignetteRoundness; // 1 = circular, 0 = follows the aspect ratio
 };
 [[vk::push_constant]] TonemapPush pc;
 
@@ -89,6 +91,36 @@ float3 ApplyGrade(float3 color)
     }
 
     return color;
+}
+
+// Lens vignette: the falloff a real lens has toward the edge of its image circle.
+//
+// Applied in LINEAR light with the grade, not to the tonemapped result. A lens dims the
+// light arriving at the sensor, so the curve should see the already-dimmed value - a bright
+// highlight in the corner then rolls down the shoulder the way it would in camera. Scaling
+// the display-referred pixel instead just greys the corner and reads as a dirty screen.
+//
+// Roundness selects what "the edge" means: at 1 the falloff is circular in screen space, at
+// 0 it follows the aspect ratio, so a wide frame darkens at the sides rather than in a
+// circle that never reaches the corners.
+float3 ApplyVignette(float3 color, float2 uv)
+{
+    if (pc.vignetteIntensity <= 0.0f)
+    {
+        return color;
+    }
+
+    float2 centered = uv * 2.0f - 1.0f;
+    const float aspect = float(max(pc.screenWidth, 1u)) / float(max(pc.screenHeight, 1u));
+    // Stretch x back toward square by however round the falloff is asked to be.
+    centered.x *= lerp(1.0f, aspect, saturate(pc.vignetteRoundness));
+
+    // cos^4 is the classic natural-vignetting falloff; using the squared radius keeps it a
+    // smooth curve to the corner rather than a ring with a visible edge.
+    const float r2 = saturate(dot(centered, centered) * 0.5f);
+    const float falloff = 1.0f - r2 * r2;
+
+    return color * lerp(1.0f, falloff, saturate(pc.vignetteIntensity));
 }
 
 // Camera-owned WYSIWYG background, composited in display space (see
@@ -237,7 +269,8 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
     // Graded after exposure and before the operator: exposure decides what part of the
     // scene's range the curve sees, and the grade shapes what lands there.
-    const float3 hdr = ApplyGrade(scene * pc.exposure);
+    const float2 gradeUv = (float2(coord) + 0.5f) / float2(pc.screenWidth, pc.screenHeight);
+    const float3 hdr = ApplyVignette(ApplyGrade(scene * pc.exposure), gradeUv);
 
     float3 mapped;
 

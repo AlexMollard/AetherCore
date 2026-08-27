@@ -502,6 +502,8 @@ namespace aether
 			                push.gradeSaturation = m_gradeSaturation;
 			                push.gradeTemperature = m_gradeTemperature;
 			                push.gradeTint = m_gradeTint;
+			                push.vignetteIntensity = m_vignetteIntensity;
+			                push.vignetteRoundness = m_vignetteRoundness;
 			                push.backgroundParamsAddr = backgroundParamsAddr;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 

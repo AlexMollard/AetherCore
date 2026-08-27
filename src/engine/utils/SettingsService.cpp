@@ -36,6 +36,13 @@ namespace aether
 				        });
 			}
 		}
+		else if (key == "graphics.vignetteIntensity" || key == "graphics.vignetteRoundness")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetVignette(m_values.graphics.vignetteIntensity, m_values.graphics.vignetteRoundness);
+			}
+		}
 		else if (key == "graphics.gradeContrast" || key == "graphics.gradeSaturation"
 		        || key == "graphics.gradeTemperature" || key == "graphics.gradeTint")
 		{
