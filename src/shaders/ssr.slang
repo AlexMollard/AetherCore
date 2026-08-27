@@ -218,8 +218,17 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 				}
 				hitPx = startPx + stepPx * hi;
 				hit = true;
+				break;
 			}
-			break;
+
+			// Crossed this surface but landed further behind it than it could plausibly
+			// be thick: the ray did not hit it, it went PAST it. Stopping here was
+			// throwing away everything beyond, and the pixel fell back to the analytic
+			// sky - which stamped the occluder's silhouette into an otherwise correct
+			// reflection, as a sphere-shaped hole in the wall behind it.
+			//
+			// So a rejected crossing is not the end of the march, it is one surface
+			// ruled out. What the ray actually reflects may still be further along.
 		}
 		prevT = t;
 	}
