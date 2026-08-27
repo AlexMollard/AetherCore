@@ -54,6 +54,16 @@ struct TonemapPush
 // Every term is written so its neutral value is an exact identity, not an approximate one:
 // at contrast 1, saturation 1 and no white balance the input is returned unchanged, so a
 // project that never touches these renders bit-for-bit as it did before.
+// True when the grade would return its input unchanged. Used to skip the background's
+// decode/grade/re-encode round trip entirely, so an ungraded project keeps its camera colour
+// EXACTLY as authored rather than approximately - pow(pow(x, 2.2), 1/2.2) is only x to within
+// float error, and "the colour I picked" is the whole promise of that setting.
+bool GradeIsIdentity()
+{
+    return pc.gradeContrast == 1.0f && pc.gradeSaturation == 1.0f
+        && pc.gradeTemperature == 0.0f && pc.gradeTint == 0.0f;
+}
+
 float3 ApplyGrade(float3 color)
 {
     // Luminance weights, used by both the white balance and the saturation term.
@@ -362,7 +372,30 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         // because this colour is display-referred by design - the author picked the pixel
         // they want to see - and never passes through the tonemap curve at all, so there is
         // no shoulder for it to roll down.
-        const float3 bgCol = EvalBackground(bg, uv) * vignette;
+        float3 bgCol = EvalBackground(bg, uv);
+
+        // The grade covers the background as well. A look applied to everything except the
+        // sky is not a look: desaturate a 2D game and the backdrop would stay the one
+        // coloured thing on screen, which is worse than not grading at all.
+        //
+        // Decoded to linear first, graded, then re-encoded, rather than graded where it sits.
+        // ApplyGrade pivots contrast at 0.18 because that is middle grey in LINEAR light; in
+        // display-referred values middle grey is nearer 0.46, so grading this colour in place
+        // would pivot around the wrong tone and darken every background the moment contrast
+        // moved. Going through linear also means there is exactly ONE definition of the look,
+        // rather than a second copy with its own pivot to keep in step.
+        //
+        // 2.2 is the same approximation the scene is encoded with a few lines above, so the
+        // round trip is consistent with this shader's own convention rather than a new
+        // assumption about the display.
+        if (!GradeIsIdentity())
+        {
+            const float3 bgLinear = pow(max(bgCol, float3(0.0f, 0.0f, 0.0f)), float3(2.2f, 2.2f, 2.2f));
+            const float3 graded = max(ApplyGrade(bgLinear), float3(0.0f, 0.0f, 0.0f));
+            bgCol = pow(graded, float3(1.0f / 2.2f, 1.0f / 2.2f, 1.0f / 2.2f));
+        }
+
+        bgCol *= vignette;
         outColor = lerp(bgCol, outColor, saturate(coverage));
     }
 
