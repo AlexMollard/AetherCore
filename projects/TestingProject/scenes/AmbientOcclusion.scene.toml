@@ -1,0 +1,275 @@
+# Ambient occlusion test.
+#
+# GTAO only has anything to do where geometry hides the sky from itself: inside
+# corners, along creases, and at the contact line where one surface meets another.
+# The 3D testbed is the opposite of that - isolated convex spheres floating over a
+# flat backdrop, where the correct amount of occlusion really is close to none - so
+# measuring AO there says nothing about whether it works.
+#
+# This scene is built to give it real work AND a control:
+#   - a back wall and a side wall meeting in an inside corner (strongest signal)
+#   - boxes sitting flush on the ground, so each has a hard contact crease
+#   - a box parked one hand's width from the wall, forming a narrow slot
+#   - open ground and open wall well away from anything, which must stay unoccluded
+#
+# Ambient is deliberately the dominant light and the sun is weak, because AO scales
+# ambient only. With a strong sun the direct term washes out exactly the term under test.
+[environment]
+ambient = [ 0.55, 0.58, 0.62 ]
+sky_horizon = [ 0.55, 0.58, 0.62 ]
+sky_void = [ 0.5, 0.52, 0.56 ]
+sky_zenith = [ 0.55, 0.58, 0.62 ]
+sun_color = [ 1.0, 0.98, 0.94 ]
+sun_direction = [ 0.3, 0.9, 0.35 ]
+sun_intensity = 0.6
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+[[assets]]
+builtin = true
+id = '0522571ed8cb4104'
+path = 'sphere'
+type = 'mesh'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 930000000
+parent = -1
+position = [ 0.0, 2.0, 11.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 8.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 12.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'Ground'
+node = 930000010
+parent = -1
+position = [ 0, -0.25, 0 ]
+scale = [ 40, 0.5, 40 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.62, 0.62, 0.64, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'WallBack'
+node = 930000011
+parent = -1
+position = [ 0, 4, -6 ]
+scale = [ 24, 8, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.62, 0.62, 0.64, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'WallSide'
+node = 930000012
+parent = -1
+position = [ -6, 4, 0 ]
+scale = [ 0.5, 8, 12 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.62, 0.62, 0.64, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'BoxA'
+node = 930000020
+parent = -1
+position = [ -1.5, 1.0, -1.0 ]
+scale = [ 2, 2, 2 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.70, 0.68, 0.64, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'BoxB'
+node = 930000021
+parent = -1
+position = [ 2.5, 0.75, 0.5 ]
+scale = [ 1.5, 1.5, 1.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.70, 0.68, 0.64, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'BoxSlot'
+node = 930000022
+parent = -1
+position = [ 4.5, 1.25, -5.1 ]
+scale = [ 2.5, 2.5, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.70, 0.68, 0.64, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'SphereA'
+node = 930000030
+parent = -1
+position = [ 0.6, 0.8, 2.2 ]
+scale = [ 0.8, 0.8, 0.8 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ 0, 0, 0 ]
+mesh_renderer = true
+name = 'SphereB'
+node = 930000031
+parent = -1
+position = [ -3.4, 0.7, 1.4 ]
+scale = [ 0.7, 0.7, 0.7 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.72, 0.70, 0.66, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.85
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'

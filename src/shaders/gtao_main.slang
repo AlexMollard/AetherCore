@@ -137,6 +137,16 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     // wall behind a foreground object darkens that object's silhouette.
     static const float kThickness = 1.0f;
 
+    // Minimum elevation, as a sine, that a sample must clear above the receiver's tangent
+    // plane before it is allowed to occlude - a touch under half a degree. Guards against a
+    // flat surface shadowing itself at grazing angles; see the note at its use below.
+    //
+    // A numerical guard, not a look knob: swept from 0.46 to 3 degrees, the flat-surface
+    // readings were IDENTICAL to the last value, so nothing in that range trades artifact
+    // against correctness. Only the creases move, and they keep more of their darkening the
+    // smaller it is, so it sits just high enough to clear depth quantisation.
+    static const float kSinBias = 0.008f;
+
     float3 viewPos = mul(fc->view, float4(worldPos, 1.0f)).xyz;
     float3 viewNormal = normalize(mul((float3x3)fc->view, normal));
     float3 V = normalize(-viewPos);
@@ -207,6 +217,36 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
                 float3 delta = sampleView - viewPos;
                 float len = length(delta);
                 if (len < 1e-4f)
+                {
+                    continue;
+                }
+
+                // A surface does not occlude itself. Seen edge-on, a flat surface's own
+                // neighbours are displaced almost entirely ALONG the view ray, so each one
+                // reports a horizon sitting right at the view vector - the strongest
+                // occlusion the integral can express. Depth quantisation then scatters
+                // those co-planar samples either side of the tangent plane, and because the
+                // horizon is accumulated with max(), the scatter is rectified: only the
+                // samples that landed on the occluding side survive. Noise becomes bias.
+                //
+                // Measured on flat, entirely unoccluded walls before this test existed: a
+                // back wall fell from 255 to 157 across its width as the view grazed it, and
+                // a wall seen almost edge-on sat at 48/255 - 80% occlusion - over its whole
+                // face, with no geometry near it at all.
+                //
+                // So a sample has to rise clear of the receiver's own tangent plane before
+                // it counts - and the margin is an ANGLE, not a distance. Measuring it as a
+                // fixed world offset instead rejects every sample within that offset, which
+                // is precisely the contact crease at the foot of a wall or box: those
+                // samples are close, so their height above the plane is small even though
+                // they rise almost vertically. Tried that first and it erased the contact
+                // darkening along with the artifact, leaving an almost uniformly white
+                // buffer. Dividing by the sample's own distance makes the test scale-free:
+                // a co-planar neighbour sits at zero elevation however far away it is, while
+                // anything genuinely standing up off the surface clears the threshold at any
+                // distance.
+                const float sinElevation = dot(delta, viewNormal) / len;
+                if (sinElevation < kSinBias)
                 {
                     continue;
                 }
