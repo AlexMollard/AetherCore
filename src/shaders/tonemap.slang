@@ -159,8 +159,15 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // Lerp rather than add: the chain already carries the scene's own energy, so
     // adding it would brighten the whole image as the strength rises. Blending
     // redistributes that energy into the glow and leaves overall exposure alone.
-    // Depth of field before bloom, so a bright spot that is out of focus glows from the
-    // disc it actually covers rather than from the point it would have been.
+    // Defocus is mixed in before the bloom blend, but that is NOT the same as bloom
+    // seeing it: the bloom chain downsamples the HDR target directly, which is still
+    // sharp at that point. So an out-of-focus highlight glows from the point it would
+    // have been rather than from the disc it actually covers.
+    //
+    // Left that way deliberately. Bloom is a wide blur already, so the difference is
+    // small, and closing it would mean writing the defocused image back to a second
+    // full-resolution target for the chain to read - a real cost for a subtle gain on a
+    // pass that only runs when a camera has a lens at all.
     if (pc.dofSlot != 0xFFFFFFFFu)
     {
         const float2 dofUv = (float2(coord) + 0.5f) / float2(pc.screenWidth, pc.screenHeight);
