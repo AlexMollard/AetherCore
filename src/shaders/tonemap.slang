@@ -95,19 +95,23 @@ float3 ApplyGrade(float3 color)
 
 // Lens vignette: the falloff a real lens has toward the edge of its image circle.
 //
-// Applied in LINEAR light with the grade, not to the tonemapped result. A lens dims the
-// light arriving at the sensor, so the curve should see the already-dimmed value - a bright
-// highlight in the corner then rolls down the shoulder the way it would in camera. Scaling
-// the display-referred pixel instead just greys the corner and reads as a dirty screen.
+// Returns the falloff as a scalar so both the scene and the camera background can use the
+// same curve. The scene is dimmed in LINEAR light, before the tonemap: a lens dims the light
+// arriving at the sensor, so the curve should see the already-dimmed value and a bright
+// corner highlight then rolls down the shoulder the way it would in camera. Scaling the
+// display-referred pixel instead just greys the corner and reads as a dirty screen.
+//
+// The background is the exception and is multiplied after the curve - see the note at its
+// composite, which explains why it has to be dimmed at all.
 //
 // Roundness selects what "the edge" means: at 1 the falloff is circular in screen space, at
 // 0 it follows the aspect ratio, so a wide frame darkens at the sides rather than in a
 // circle that never reaches the corners.
-float3 ApplyVignette(float3 color, float2 uv)
+float VignetteFactor(float2 uv)
 {
     if (pc.vignetteIntensity <= 0.0f)
     {
-        return color;
+        return 1.0f;
     }
 
     float2 centered = uv * 2.0f - 1.0f;
@@ -120,7 +124,7 @@ float3 ApplyVignette(float3 color, float2 uv)
     const float r2 = saturate(dot(centered, centered) * 0.5f);
     const float falloff = 1.0f - r2 * r2;
 
-    return color * lerp(1.0f, falloff, saturate(pc.vignetteIntensity));
+    return lerp(1.0f, falloff, saturate(pc.vignetteIntensity));
 }
 
 // Camera-owned WYSIWYG background, composited in display space (see
@@ -270,7 +274,8 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // Graded after exposure and before the operator: exposure decides what part of the
     // scene's range the curve sees, and the grade shapes what lands there.
     const float2 gradeUv = (float2(coord) + 0.5f) / float2(pc.screenWidth, pc.screenHeight);
-    const float3 hdr = ApplyVignette(ApplyGrade(scene * pc.exposure), gradeUv);
+    const float vignette = VignetteFactor(gradeUv);
+    const float3 hdr = ApplyGrade(scene * pc.exposure) * vignette;
 
     float3 mapped;
 
@@ -347,7 +352,17 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         GpuBackgroundParams* bg = (GpuBackgroundParams*)pc.backgroundParamsAddr;
         const float  coverage = g_textures[pc.hdrSlot].Load(int3(coord, 0)).a;
         const float2 uv = (float2(coord) + 0.5f) / float2(max(pc.screenWidth, 1u), max(pc.screenHeight, 1u));
-        const float3 bgCol = EvalBackground(bg, uv);
+        // The vignette dims the background too. It is a LENS effect, so it darkens
+        // everything the lens sees - leaving the backdrop at full brightness puts a bright
+        // border around a darkened scene, which reads as a bug rather than as a lens. It
+        // matters most exactly where the background is most of the frame: a 2D scene on a
+        // flat colour, where otherwise the vignette would have almost nothing to act on.
+        //
+        // Applied here as a straight multiply rather than in linear light like the scene,
+        // because this colour is display-referred by design - the author picked the pixel
+        // they want to see - and never passes through the tonemap curve at all, so there is
+        // no shoulder for it to roll down.
+        const float3 bgCol = EvalBackground(bg, uv) * vignette;
         outColor = lerp(bgCol, outColor, saturate(coverage));
     }
 
