@@ -1165,17 +1165,44 @@ namespace aether
 		{
 			const gpu::Extent2D halfExtent{(sceneExtent.width + 1u) / 2u, (sceneExtent.height + 1u) / 2u};
 
-			m_renderGraph
-			        .AddFullscreenPass({
-			                .name = "$VolumetricFog",
-			                .color = m_volumetricFog,
-			                .extent = halfExtent,
-			                .loadOp = gpu::LoadOp::Clear,
-			                .clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
-			                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth),
-			                        RenderGraph::Product<FrameTextureProduct>(kFrameProductDirectionalShadows)},
-			        })
-			        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
+			// The shadow cascades are an ARRAY product, and asking for them as a plain
+			// texture matched nothing: the graph reported "exists in metadata but has no
+			// typed storage" and "no producer pass was found", twice a frame forever.
+			//
+			// What that cost was the ORDERING, not the picture. The frame resource table is
+			// written once from every pass's bindings, so the forward pass had already put
+			// the cascades in it and this shader's lookup by id found them anyway - the
+			// beams were never broken. But a consume that matches no producer creates no
+			// edge, so nothing in the graph actually required the shadow maps to be drawn
+			// before the march read them; that it held was incidental.
+			//
+			// Declared only when a producer exists, the way CameraPreviewService does it: a
+			// 2D scene has no directional shadows, and consuming an unpublished product
+			// leaves a dependency nothing can satisfy - which is what filled the log.
+			const bool haveDirectionalShadows =
+			        m_renderGraph.GetBlackboard().TryGet<FrameTextureArrayProduct>(kFrameProductDirectionalShadows) != nullptr;
+
+			std::vector<RenderGraph::FrameProductRef> volumetricConsumes{
+			        RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)};
+			if (haveDirectionalShadows)
+			{
+				volumetricConsumes.push_back(RenderGraph::Product<FrameTextureArrayProduct>(kFrameProductDirectionalShadows));
+			}
+
+			auto volumetricPass = m_renderGraph.AddFullscreenPass({
+			        .name = "$VolumetricFog",
+			        .color = m_volumetricFog,
+			        .extent = halfExtent,
+			        .loadOp = gpu::LoadOp::Clear,
+			        .clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+			        .consumes = std::move(volumetricConsumes),
+			});
+			volumetricPass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth);
+			if (haveDirectionalShadows)
+			{
+				volumetricPass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
+			}
+			volumetricPass
 			        .Execute(
 			                [this, bindless = frame.bindless](PassContext& ctx)
 			                {
