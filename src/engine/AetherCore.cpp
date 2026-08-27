@@ -986,7 +986,14 @@ namespace aether
 					const float coeff = (focal * focal) / (std::max(cam->aperture, 0.1f) * kSensorHeightMetres * subjectGap);
 					packet.dofParams = glm::vec4(std::max(cam->focusDistance, 1e-3f),
 					        coeff,
-					        // Wider than this stops being a lens and starts being a budget.
+					        // Ceiling on the blur circle, in pixels. Not a taste setting: it
+					        // is tied to the gather's tap count. Twenty-four taps spread
+					        // over a disc this size already sit about two texels apart, and
+					        // widening the disc without adding taps turns the bokeh into
+					        // visible rings. It keeps the effect subtle - a defocused
+					        // surface loses about 5% of its detail rather than dissolving -
+					        // so a stronger look means more taps and more cost, not a
+					        // bigger number here.
 					        24.0f,
 					        (cam->depthOfField && cam->projection == CameraProjection::Perspective) ? 1.0f : 0.0f);
 				}

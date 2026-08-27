@@ -78,8 +78,14 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// radius and halve it again for the resolution.
 	const float centreRadius = abs(centreCoc) * 0.25f;
 
-	float3 sum = g_textures[pc.hdrSlot].SampleLevel(g_linearSampler, uv, 0.0f).rgb;
-	float weight = 1.0f;
+	// The centre is a tap like any other and must carry the same weight, or it wins by
+	// default. A tap's weight is 1/r^2 because a wide disc spreads the same light over
+	// more area; giving the centre a flat 1.0 while its neighbours each got 1/36 left a
+	// fully defocused pixel still 60% its own sharp value, and the silhouette of a sphere
+	// well outside the focus plane softened by two pixels instead of twenty-four.
+	const float centreWeight = 1.0f / max(centreRadius * centreRadius, 1.0f);
+	float3 sum = g_textures[pc.hdrSlot].SampleLevel(g_linearSampler, uv, 0.0f).rgb * centreWeight;
+	float weight = centreWeight;
 
 	// The gather radius has to cover the widest disc that could reach here, not this
 	// pixel's own. A sharp pixel in front of a blurred background still needs to collect
