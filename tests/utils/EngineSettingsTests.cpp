@@ -67,32 +67,37 @@ TEST_CASE("Serialize round-trips through Apply for every field (no save/load dri
     CHECK(rebuilt.app.autoplay == original.app.autoplay);
 }
 
-TEST_CASE("SerializeOverrides emits only keys that differ from the base") {
+TEST_CASE("SerializeOverrides emits only user-homed keys that differ from the base") {
     EngineSettings base;
     EngineSettings current = base;
-    // FXAA ships enabled, so turning it OFF is what makes this an override at all.
-    // Setting it to the default would be indistinguishable from not setting it.
-    current.graphics.fxaa = false;
+    // Both are overrides, but they belong to different files now: renderScale describes
+    // this machine, fxaa describes the game. Only the first may enter the per-user file.
+    current.graphics.renderScale = 0.5f;
     current.window.width = 3840;
+    current.graphics.fxaa = false;
 
     const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
 
-    CHECK(toml.find("fxaa = false") != std::string::npos);
+    CHECK(toml.find("renderScale") != std::string::npos);
     CHECK(toml.find("width = 3840") != std::string::npos);
+    // Project-homed even though it changed: writing it here is what stopped an authored
+    // look from ever reaching a published build, which reads shipped+project only.
+    CHECK(toml.find("fxaa") == std::string::npos);
     // Unchanged keys must NOT be written, so they keep tracking shipped defaults.
     CHECK(toml.find("vsync") == std::string::npos);
     CHECK(toml.find("height") == std::string::npos);
-    CHECK(toml.find("asyncCompute") == std::string::npos);
 }
 
 TEST_CASE("SerializeOverrides round-trips: applying the delta onto base reproduces current") {
     EngineSettings base;
     EngineSettings current = base;
-    current.graphics.fxaa = true;
     current.graphics.vsync = false;
+    current.graphics.renderScale = 0.75f;
     current.window.width = 3440;
     current.window.height = 1440;
     current.app.targetFps = 120.0f;
+    // Project-homed, so none of these belong in the per-user delta.
+    current.graphics.fxaa = true;
     current.app.startupScene = "arena";
     current.app.autoplay = true;
 
@@ -101,15 +106,17 @@ TEST_CASE("SerializeOverrides round-trips: applying the delta onto base reproduc
     EngineSettings rebuilt = base;
     EngineSettingsIO::Apply(delta, rebuilt);
 
-    CHECK(rebuilt.graphics.fxaa == current.graphics.fxaa);
     CHECK(rebuilt.graphics.vsync == current.graphics.vsync);
+    CHECK(rebuilt.graphics.renderScale == doctest::Approx(current.graphics.renderScale));
     CHECK(rebuilt.window.width == current.window.width);
     CHECK(rebuilt.window.height == current.window.height);
     CHECK(rebuilt.app.targetFps == doctest::Approx(current.app.targetFps));
-    CHECK(rebuilt.app.autoplay == current.app.autoplay);
-    // Every user-overridable field round-trips. The startup scene deliberately does not:
-    // it is project data and never enters the per-user layer.
+    // Every USER-homed field round-trips. The project-homed ones deliberately do not: they
+    // are project data and never enter the per-user layer, which is what lets a published
+    // build - which reads shipped+project and ignores the user file - see them at all.
+    CHECK(rebuilt.graphics.fxaa == base.graphics.fxaa);
     CHECK(rebuilt.app.startupScene == base.app.startupScene);
+    CHECK(rebuilt.app.autoplay == base.app.autoplay);
 }
 
 TEST_CASE("SerializeOverrides with no changes writes no key lines") {
@@ -165,7 +172,7 @@ TEST_CASE("SerializeOverrides never writes the startup scene into the per-user f
     EngineSettings base;
     EngineSettings current = base;
     current.app.startupScene = "Title";
-    current.graphics.fxaa = false;
+    current.graphics.renderScale = 0.5f;
 
     const std::string toml = EngineSettingsIO::SerializeOverrides(current, base);
 
@@ -175,8 +182,9 @@ TEST_CASE("SerializeOverrides never writes the startup scene into the per-user f
     CHECK(toml.find("startupScene") == std::string::npos);
     CHECK(toml.find("Title") == std::string::npos);
     // Something unrelated still has to come through, or the check above would pass
-    // just as well on an empty document.
-    CHECK(toml.find("fxaa = false") != std::string::npos);
+    // just as well on an empty document. It has to be a USER-homed key: an authored one
+    // like fxaa is now excluded from this file for the same reason the startup scene is.
+    CHECK(toml.find("renderScale") != std::string::npos);
 }
 
 TEST_CASE("A user-layer document cannot set the startup scene") {
@@ -273,4 +281,98 @@ TEST_CASE("An unrecognised window mode falls back to windowed") {
     CHECK(ParseWindowMode("Borderless") == Window::Mode::Windowed); // case-sensitive by design
     CHECK(ParseWindowMode("") == Window::Mode::Windowed);
     CHECK(ParseWindowMode("bordrless") == Window::Mode::Windowed);
+}
+
+namespace
+{
+	// A project file holds far more than settings, and the writer has to preserve all of it.
+	// These fixtures stand in for that: a name, paths, an existing graphics key.
+	std::filesystem::path WriteTempProject(const std::string& name, const std::string& body)
+	{
+		const auto path = std::filesystem::temp_directory_path() / ("aether_projsettings_" + name + ".toml");
+		REQUIRE(aether::io::file_util::WriteText(path, body).has_value());
+		return path;
+	}
+} // namespace
+
+TEST_CASE("SaveProjectOverrides writes authored keys and leaves the rest of the project alone") {
+	const auto path = WriteTempProject("basic", R"([project]
+name = "Demo"
+
+[paths]
+scenes = "scenes"
+
+[graphics]
+fxaa = false
+)");
+
+	EngineSettings shippedBase;
+	EngineSettings current = shippedBase;
+	current.graphics.gradeSaturation = 0.25f; // authored: belongs to the project
+	current.graphics.renderScale = 0.5f;      // machine-local: must NOT go here
+
+	std::string error;
+	CHECK(EngineSettingsIO::SaveProjectOverrides(current, shippedBase, path, error));
+	CHECK(error.empty());
+
+	const auto text = aether::io::file_util::ReadText(path);
+	REQUIRE(text.has_value());
+
+	CHECK(text->find("gradesaturation") != std::string::npos);
+	// A machine's own settings never enter a file that ships.
+	CHECK(text->find("renderscale") == std::string::npos);
+	// Everything the project already said about itself survives the merge.
+	CHECK(text->find("Demo") != std::string::npos);
+	CHECK(text->find("scenes") != std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(path, ec);
+}
+
+TEST_CASE("SaveProjectOverrides drops a key that is back at the engine default") {
+	const auto path = WriteTempProject("revert", R"([graphics]
+gradesaturation = 0.25
+
+[project]
+name = "Demo"
+)");
+
+	EngineSettings shippedBase;
+	EngineSettings current = shippedBase; // saturation back at its default
+
+	std::string error;
+	CHECK(EngineSettingsIO::SaveProjectOverrides(current, shippedBase, path, error));
+
+	const auto text = aether::io::file_util::ReadText(path);
+	REQUIRE(text.has_value());
+	// Reverting a setting removes it rather than pinning the default, so the project keeps
+	// tracking the engine instead of freezing today's value forever.
+	CHECK(text->find("gradesaturation") == std::string::npos);
+	CHECK(text->find("Demo") != std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(path, ec);
+}
+
+TEST_CASE("SaveProjectOverrides refuses to overwrite a project file it cannot parse") {
+	const auto path = WriteTempProject("broken", R"([project
+name = oops
+)");
+
+	EngineSettings shippedBase;
+	EngineSettings current = shippedBase;
+	current.graphics.gradeSaturation = 0.25f;
+
+	std::string error;
+	// Refusing is the whole point: writing would replace a project's paths, name and startup
+	// scene with a couple of graphics keys because the file happened to be malformed.
+	CHECK(EngineSettingsIO::SaveProjectOverrides(current, shippedBase, path, error) == false);
+	CHECK(!error.empty());
+
+	const auto text = aether::io::file_util::ReadText(path);
+	REQUIRE(text.has_value());
+	CHECK(text->find("oops") != std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(path, ec);
 }

@@ -107,7 +107,10 @@ namespace aether::editor
 			}
 		}
 
-		bool MatchesFilter(const std::string_view key, const char* filter)
+		// Matches the description as well as the key, because what you remember about a
+		// setting is usually what it does, not what it is called - "greyscale" finds
+		// saturation, "beam" finds the volumetrics, and neither word is in a key.
+		bool MatchesFilter(const std::string_view key, const std::string_view description, const char* filter)
 		{
 			if (filter[0] == '\0')
 			{
@@ -118,7 +121,9 @@ namespace aether::editor
 				std::ranges::transform(text, text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 				return text;
 			};
-			return lower(std::string(key)).find(lower(std::string(filter))) != std::string::npos;
+			const std::string needle = lower(std::string(filter));
+			return lower(std::string(key)).find(needle) != std::string::npos
+			        || lower(std::string(description)).find(needle) != std::string::npos;
 		}
 	} // namespace
 
@@ -126,6 +131,10 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
+		// A settings window that opens as a 32-pixel stub is useless, and ImGui has no idea
+		// what a sensible size for one is. FirstUseEver so a resized window stays resized.
+		ImGui::SetNextWindowSize(ImVec2(560.0f, 720.0f), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 240.0f), ImVec2(FLT_MAX, FLT_MAX));
 		ImGui::Begin("Settings", VisiblePtr());
 
 		auto* settingsService = context.TryGet<aether::SettingsService>();
@@ -138,44 +147,124 @@ namespace aether::editor
 
 		chrome::PanelHeader("SETTINGS");
 
-		ImGui::SetNextItemWidth(-FLT_MIN);
-		ImGui::InputTextWithHint("##settingsFilter", ICON_FA_MAGNIFYING_GLASS "  Filter settings...", m_filter, sizeof(m_filter));
+		const bool hasProject = !settingsService->ProjectFile().empty();
+
+		// Saving is explicit. It used to happen only on exit, which meant a crash lost the
+		// edit and - worse - there was no moment at which the editor could tell you the
+		// project file could not be written.
+		{
+			const bool dirty = settingsService->IsDirty();
+			ImGui::BeginDisabled(!dirty);
+			if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save"))
+			{
+				settingsService->Save();
+			}
+			ImGui::EndDisabled();
+			ImGui::SameLine();
+			if (dirty)
+			{
+				ImGui::TextColored(chrome::kWarning, "Unsaved changes");
+			}
+			else
+			{
+				ImGui::TextColored(chrome::kMuted, "Saved");
+			}
+
+			const std::string& saveError = settingsService->LastSaveError();
+			if (!saveError.empty())
+			{
+				ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  %s", saveError.c_str());
+			}
+		}
+
+		// The split is the thing a newcomer most needs told: half these settings travel with
+		// the project and half stay on this machine, and until now everything went to the
+		// machine and quietly failed to ship.
+		if (hasProject)
+		{
+			ImGui::TextColored(chrome::kMuted, ICON_FA_CIRCLE_INFO "  " ICON_FA_BOX " settings ship with the project; " ICON_FA_DESKTOP " stay on this machine.");
+		}
+		else
+		{
+			ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  No project open - every change is saved for this machine only.");
+		}
+
 		ImGui::Spacing();
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		ImGui::InputTextWithHint("##settingsFilter", ICON_FA_MAGNIFYING_GLASS "  Filter by name or description...", m_filter, sizeof(m_filter));
+		ImGui::Checkbox("Only changed", &m_onlyModified);
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("Show only settings that differ from their default - which is also exactly what gets written to a file.");
+		}
+		ImGui::Separator();
+
+		ImGui::BeginChild("##settingsList", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
 
 		std::string currentSection;
+		bool sectionOpen = true;
+		int shown = 0;
+
 		ForEachSettingField(settingsService->Values(),
 		        [&](std::string_view key, auto& field)
 		        {
-			        if (!MatchesFilter(key, m_filter))
+			        const SettingInfo& info = SettingMetadata(key);
+
+			        using FieldType = std::decay_t<decltype(field)>;
+			        FieldType defaultValue{};
+			        const bool hasDefault = DefaultSettingValue<FieldType>(key, defaultValue);
+			        const bool modified = hasDefault && field != defaultValue;
+
+			        if (!MatchesFilter(key, info.description, m_filter) || (m_onlyModified && !modified))
 			        {
 				        return;
 			        }
+
 			        const auto [section, name] = SplitSettingKey(key);
 			        const std::string sectionLabel(section);
 			        if (sectionLabel != currentSection)
 			        {
 				        currentSection = sectionLabel;
-				        ImGui::SeparatorText(currentSection.c_str());
+				        // Collapsible, so a long list can be folded down to the part you are
+				        // working on. Open by default: a settings window that hides its
+				        // contents on first open is worse than a long one.
+				        sectionOpen = ImGui::CollapsingHeader(currentSection.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 			        }
+			        if (!sectionOpen)
+			        {
+				        return;
+			        }
+			        ++shown;
 
-			        const SettingInfo& info = SettingMetadata(key);
 			        const std::string label(name);
 			        ImGui::PushID(label.c_str());
 
-			        // Leave room for the per-field reset, so long labels do not push it off.
 			        const float resetWidth = ImGui::GetFrameHeight();
-			        ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x * 0.45f));
+			        ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x * 0.40f));
 			        const bool changed = DrawSettingWidget(("##" + label).c_str(), field, info);
 
 			        ImGui::SameLine();
 			        ImGui::AlignTextToFramePadding();
-			        ImGui::TextUnformatted(label.c_str());
-			        // Every non-obvious knob in here already had a paragraph explaining it on
-			        // the struct field; none of it reached the panel, which showed bare names.
+			        // A changed setting is worth spotting at a glance; it is the one that will
+			        // end up in a file and the one to suspect when the build looks wrong.
+			        if (modified)
+			        {
+				        ImGui::TextUnformatted(label.c_str());
+			        }
+			        else
+			        {
+				        ImGui::TextColored(chrome::kMuted, "%s", label.c_str());
+			        }
+
 			        if (!info.description.empty() && ImGui::IsItemHovered() && ImGui::BeginTooltip())
 			        {
 				        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28.0f);
 				        ImGui::TextUnformatted(std::string(info.description).c_str());
+				        ImGui::Spacing();
+				        ImGui::TextColored(chrome::kMuted, "%s",
+				                aether::SettingsHomeFor(key) == aether::SettingsHome::Project
+				                        ? "Saved with the project - ships with the game."
+				                        : "Saved for this machine only - not published.");
 				        if (info.restartRequired)
 				        {
 					        ImGui::TextColored(chrome::kWarning, "Takes effect on the next launch.");
@@ -183,22 +272,30 @@ namespace aether::editor
 				        ImGui::PopTextWrapPos();
 				        ImGui::EndTooltip();
 			        }
+
+			        // Home and restart markers, right-aligned so the column of icons reads as
+			        // a column rather than trailing each label at a different offset.
+			        const bool project = aether::SettingsHomeFor(key) == aether::SettingsHome::Project;
+			        ImGui::SameLine(ImGui::GetContentRegionMax().x - resetWidth * 3.0f);
+			        ImGui::TextColored(chrome::kMuted, "%s", project ? ICON_FA_BOX : ICON_FA_DESKTOP);
+			        ImGui::SameLine(ImGui::GetContentRegionMax().x - resetWidth * 2.0f);
 			        if (info.restartRequired)
 			        {
-				        ImGui::SameLine();
 				        ImGui::TextColored(chrome::kMuted, ICON_FA_ROTATE);
 			        }
+			        else
+			        {
+				        ImGui::TextUnformatted(" ");
+			        }
 
-			        using FieldType = std::decay_t<decltype(field)>;
-			        FieldType defaultValue{};
-			        const bool hasDefault = DefaultSettingValue<FieldType>(key, defaultValue);
-			        if (hasDefault && field != defaultValue)
+			        if (modified)
 			        {
 				        ImGui::SameLine(ImGui::GetContentRegionMax().x - resetWidth);
 				        if (chrome::GhostIconButton(ICON_FA_ROTATE_LEFT, "##reset", ImVec2(resetWidth, resetWidth)))
 				        {
 					        field = defaultValue;
 					        settingsService->ApplyField(key);
+					        settingsService->MarkDirty();
 				        }
 				        if (ImGui::IsItemHovered())
 				        {
@@ -210,12 +307,16 @@ namespace aether::editor
 			        if (changed)
 			        {
 				        settingsService->ApplyField(key);
+				        settingsService->MarkDirty();
 			        }
 		        });
 
-		ImGui::Separator();
-		ImGui::TextDisabled("Saved on exit. " ICON_FA_ROTATE " marks a setting read once at startup.");
+		if (shown == 0)
+		{
+			ImGui::TextColored(chrome::kMuted, "Nothing matches that filter.");
+		}
 
+		ImGui::EndChild();
 		ImGui::End();
 	}
 } // namespace aether::editor

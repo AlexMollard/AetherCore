@@ -12,6 +12,9 @@
 #include "io/PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
+#include "utils/TomlConfig.hpp"
+
+#include <sstream>
 #include "utils/Profiler.hpp"
 #include "utils/TextIni.hpp"
 #include "passes/TonemapDefs.hpp"
@@ -208,7 +211,8 @@ namespace aether
 		        [&](std::string_view key, const auto& field)
 		        {
 			        const auto [section, name] = SplitSettingKey(key);
-			        current.push_back({section, name, FormatField(field), IsProjectOnlySettingKey(key)});
+			        const bool belongsToProject = IsProjectOnlySettingKey(key) || SettingsHomeFor(key) == SettingsHome::Project;
+			        current.push_back({section, name, FormatField(field), belongsToProject});
 		        });
 		ForEachSettingField(base, [&](std::string_view, const auto& field) { baseline.push_back(FormatField(field)); });
 
@@ -219,8 +223,10 @@ namespace aether
 		std::string currentSection;
 		for (std::size_t i = 0; i < current.size(); ++i)
 		{
-			// Project-only keys are never a user preference, so they never enter the
-			// per-user file even when they differ from the base.
+			// Keys that live in the project never enter the per-user file, even when they
+			// differ from the base. Writing them here is what made an authored look fail to
+			// ship: publishing reads shipped+project and ignores this file entirely. Any
+			// such key left over from an older build is dropped the first time this runs.
 			if (current[i].projectOnly || current[i].value == baseline[i])
 			{
 				continue;
@@ -233,6 +239,96 @@ namespace aether
 			out << current[i].name << " = " << current[i].value << "\n";
 		}
 		return out.str();
+	}
+
+	bool EngineSettingsIO::SaveProjectOverrides(const EngineSettings& settings, const EngineSettings& shippedBase, const std::filesystem::path& projectFile, std::string& error)
+	{
+		if (projectFile.empty())
+		{
+			error = "No project is open.";
+			return false;
+		}
+
+		// Read and parse first, and refuse on either failure. A project file holds paths, the
+		// project name and the startup scene; replacing all of that with a handful of
+		// graphics keys because it happened to be locked or malformed would be far worse than
+		// declining to save. Same guard as WriteProjectStartupScene, for the same reason.
+		TomlConfig config;
+		{
+			auto text = io::file_util::ReadText(projectFile);
+			std::error_code ec;
+			if (!text && std::filesystem::exists(projectFile, ec))
+			{
+				error = "Could not read project settings; refusing to overwrite " + projectFile.generic_string();
+				return false;
+			}
+			if (text && !config.Load(*text))
+			{
+				error = "Could not parse project settings; refusing to overwrite " + projectFile.generic_string();
+				return false;
+			}
+		}
+
+		// Walk both structs in lockstep. ForEachSettingField visits in a fixed order, so an
+		// index is enough to pair a value with its shipped counterpart.
+		std::vector<std::string> shippedValues;
+		ForEachSettingField(shippedBase, [&](std::string_view, const auto& field) { shippedValues.push_back(FormatField(field)); });
+
+		std::size_t index = 0;
+		ForEachSettingField(settings,
+		        [&](std::string_view key, const auto& field)
+		        {
+			        const std::size_t i = index++;
+			        if (SettingsHomeFor(key) != SettingsHome::Project)
+			        {
+				        return;
+			        }
+
+			        // Back at the engine's own value: drop the key rather than restating it.
+			        // A project that pins every default would stop tracking engine changes,
+			        // and the file would say nothing about what the project actually chose.
+			        if (i < shippedValues.size() && FormatField(field) == shippedValues[i])
+			        {
+				        config.Erase(key);
+				        return;
+			        }
+
+			        using FieldType = std::decay_t<decltype(field)>;
+			        if constexpr (std::is_same_v<FieldType, bool>)
+			        {
+				        config.Set(key, field);
+			        }
+			        else if constexpr (std::is_same_v<FieldType, float>)
+			        {
+				        config.Set(key, field);
+			        }
+			        else if constexpr (std::is_same_v<FieldType, int>)
+			        {
+				        config.Set(key, field);
+			        }
+			        else if constexpr (std::is_same_v<FieldType, std::string>)
+			        {
+				        config.Set(key, std::string_view{field});
+			        }
+			        else
+			        {
+				        // ForEachSettingField instantiates this for EVERY field type, not just
+				        // the project-homed ones, so a type with no writer here is a build
+				        // error rather than a key silently missing from the file that ships.
+				        static_assert(std::is_same_v<FieldType, bool> || std::is_same_v<FieldType, float>
+				                        || std::is_same_v<FieldType, int> || std::is_same_v<FieldType, std::string>,
+				                "SaveProjectOverrides has no writer for this setting field type");
+			        }
+		        });
+
+		std::ostringstream buffer;
+		config.Save(buffer, "AetherCore project file.");
+		if (auto result = io::file_util::WriteText(projectFile, buffer.str()); !result)
+		{
+			error = "Could not write project settings: " + result.error().message;
+			return false;
+		}
+		return true;
 	}
 
 	std::filesystem::path EngineSettingsIO::ResolvePath(std::string_view fileName)
@@ -290,6 +386,11 @@ namespace aether
 		{
 			AE_INFO(LogCategory::Engine, "No shipped settings file at {}; using compiled-in defaults.", shippedPath.string());
 		}
+
+		// Snapshot before the project layer: a project override is measured against the
+		// engine's own shipped values.
+		Sanitize(result.values);
+		result.shipped = result.values;
 
 		if (!projectFile.empty())
 		{

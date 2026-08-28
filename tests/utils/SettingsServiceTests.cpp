@@ -15,7 +15,7 @@ TEST_CASE("SettingsService exposes the values it was constructed with") {
     EngineSettings base;
 
     ServiceContainer services;
-    SettingsService service(values, base, services);
+    SettingsService service(values, base, base, services);
 
     CHECK(service.Get().graphics.fxaa == true);
     CHECK(service.Get().window.width == 3840);
@@ -26,7 +26,7 @@ TEST_CASE("ApplyField marks the settings dirty") {
     EngineSettings values;
     EngineSettings base;
     ServiceContainer services;
-    SettingsService service(values, base, services);
+    SettingsService service(values, base, base, services);
 
     CHECK(service.IsDirty() == false);
 
@@ -44,7 +44,7 @@ TEST_CASE("ApplyAll is a safe no-op when no subsystems are registered") {
 
     ServiceContainer services;
 
-    SettingsService service(values, base, services);
+    SettingsService service(values, base, base, services);
     service.ApplyAll(); // must not crash / dereference a missing subsystem
 
     CHECK(service.Get().graphics.fxaa == true);

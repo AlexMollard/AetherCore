@@ -11,6 +11,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_set>
+#include <span>
 #include <vector>
 
 #ifdef _WIN32
@@ -190,12 +191,26 @@ namespace aether::editor
 		}
 
 		// Reset the dockspace and arrange panels for the given workflow.
-		void BuildWorkflowLayout(WorkflowLayout kind, ImGuiID id, ImVec2 size)
+		// 'allPanels' is every panel the editor owns. Each layout below docks the windows it
+		// has an opinion about; a panel added later appears in none of those lists, and an
+		// undocked panel becomes its own floating OS window sized to whatever it auto-fits
+		// to. So every panel is docked to a sensible fallback FIRST and the explicit calls
+		// then override it - DockBuilderDockWindow keeps the last assignment, so named
+		// windows still land exactly where each layout intends.
+		void BuildWorkflowLayout(WorkflowLayout kind, ImGuiID id, ImVec2 size, std::span<const std::string_view> allPanels)
 		{
 			ImGui::DockBuilderRemoveNode(id);
 			ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
 			ImGui::DockBuilderSetNodeSize(id, size);
 			ImGuiID root = id;
+
+			const auto dockRemainingTo = [&](ImGuiID node)
+			{
+				for (const std::string_view name: allPanels)
+				{
+					ImGui::DockBuilderDockWindow(std::string(name).c_str(), node);
+				}
+			};
 
 			switch (kind)
 			{
@@ -203,6 +218,7 @@ namespace aether::editor
 				{
 					const ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.20f, nullptr, &root);
 					const ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.25f, nullptr, &root);
+					dockRemainingTo(right);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Inspector", right);
 					ImGui::DockBuilderDockWindow("Build", right);
@@ -216,6 +232,7 @@ namespace aether::editor
 					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.24f, nullptr, &root);
 					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.50f, nullptr, &right);
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.30f, nullptr, &root);
+					dockRemainingTo(rightBottom);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftBottom);
 					ImGui::DockBuilderDockWindow("Build", leftBottom);
@@ -237,6 +254,7 @@ namespace aether::editor
 					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.24f, nullptr, &root);
 					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.45f, nullptr, &right);
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.26f, nullptr, &root);
+					dockRemainingTo(rightBottom);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftBottom);
 					ImGui::DockBuilderDockWindow("Build", leftBottom);
@@ -254,6 +272,7 @@ namespace aether::editor
 					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.28f, nullptr, &root);
 					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.45f, nullptr, &right);
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.26f, nullptr, &root);
+					dockRemainingTo(rightBottom);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Render Graph", right);
 					ImGui::DockBuilderDockWindow("Tonemap", right);
@@ -273,6 +292,7 @@ namespace aether::editor
 					const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
 					const ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.22f, nullptr, &root);
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.34f, nullptr, &root);
+					dockRemainingTo(right);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftBottom);
 					ImGui::DockBuilderDockWindow("Build", leftBottom);
@@ -293,6 +313,7 @@ namespace aether::editor
 					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.27f, nullptr, &root);
 					const ImGuiID rightTools = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.38f, nullptr, &right);
 					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.28f, nullptr, &root);
+					dockRemainingTo(rightTools);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Project", leftFiles);
 					ImGui::DockBuilderDockWindow("Build", leftFiles);
@@ -1996,7 +2017,15 @@ namespace aether::editor
 		if (m_resetLayout || (!m_dockspaceBuilt && !hasSavedDockspace))
 		{
 			const WorkflowLayout layout = (m_pendingWorkflowLayout >= 0 && m_pendingWorkflowLayout < static_cast<int>(WorkflowLayout::Count)) ? static_cast<WorkflowLayout>(m_pendingWorkflowLayout) : WorkflowLayout::Default;
-			BuildWorkflowLayout(layout, dockspace_id, viewport->WorkSize);
+			// Every panel the editor owns, so the builder can give a home to the ones this
+			// layout says nothing about.
+			std::vector<std::string_view> panelNames;
+			panelNames.reserve(m_panels.size());
+			for (const auto& panel: m_panels)
+			{
+				panelNames.push_back(panel->GetName());
+			}
+			BuildWorkflowLayout(layout, dockspace_id, viewport->WorkSize, panelNames);
 			m_focusViewportAfterLayout = true;
 		}
 		m_dockspaceBuilt = true;

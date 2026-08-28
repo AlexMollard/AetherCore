@@ -534,6 +534,10 @@ namespace aether::editor
 			auto loaded = EngineSettingsIO::LoadLayered("EngineSettings.toml", m_currentProject.projectFile);
 			settings->Values() = loaded.values;
 			settings->Base() = loaded.base;
+			settings->Shipped() = loaded.shipped;
+			// Tells the service where authored settings belong. Without it a save would fall
+			// back to the per-user file, which is the behaviour this split exists to end.
+			settings->SetProjectFile(m_currentProject.projectFile);
 			settings->ApplyAll();
 		}
 	}

@@ -168,7 +168,7 @@ namespace aether::app
 
 	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded)
 	      : m_engine(BuildConfigFromSettings(engineConfig, loaded.values), loaded.values), m_windowCenterX(engineConfig.windowCenterX), m_windowCenterY(engineConfig.windowCenterY),
-	        m_settingsService(loaded.values, loaded.base, m_engine.GetServiceContainer())
+	        m_settingsService(loaded.values, loaded.base, loaded.shipped, m_engine.GetServiceContainer())
 	{
 #ifdef AETHERCORE_WITH_IMGUI
 		// (never inside AetherCore, which has zero knowledge of any UI toolkit) and

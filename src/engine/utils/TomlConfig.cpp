@@ -276,6 +276,18 @@ namespace aether
 		}
 	}
 
+	void TomlConfig::Set(std::string_view key, int value)
+	{
+		const std::string lowerKey = text::ToLowerAscii(std::string(key));
+		const std::string str = std::to_string(value);
+		auto& entry = m_values[lowerKey];
+		if (entry != str)
+		{
+			entry = str;
+			m_dirty = true;
+		}
+	}
+
 	void TomlConfig::Set(std::string_view key, std::string_view value)
 	{
 		const std::string lowerKey = text::ToLowerAscii(std::string(key));

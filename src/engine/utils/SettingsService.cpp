@@ -13,8 +13,8 @@
 
 namespace aether
 {
-	SettingsService::SettingsService(const EngineSettings& values, const EngineSettings& base, ServiceContainer& services)
-	      : m_values(values), m_base(base), m_services(services)
+	SettingsService::SettingsService(const EngineSettings& values, const EngineSettings& base, const EngineSettings& shipped, ServiceContainer& services)
+	      : m_values(values), m_base(base), m_shipped(shipped), m_services(services)
 	{
 	}
 
@@ -212,6 +212,21 @@ namespace aether
 
 	void SettingsService::Save()
 	{
+		// Two files, because a setting belongs to one of two owners. Authored ones - the
+		// tonemap, the grade, the startup scene - go beside the scenes in the project so they
+		// travel with it and reach a published build, which reads shipped+project and ignores
+		// the per-user file entirely. Machine-local ones stay per user.
+		m_lastSaveError.clear();
+		if (!m_projectFile.empty())
+		{
+			if (!EngineSettingsIO::SaveProjectOverrides(m_values, m_shipped, m_projectFile, m_lastSaveError))
+			{
+				// Reported rather than thrown away: the per-user file is still written below,
+				// so nothing is lost, but the author needs to know the project did not take
+				// the change or they will publish without it.
+				AE_WARN(LogCategory::Engine, "Project settings not saved: {}", m_lastSaveError);
+			}
+		}
 		EngineSettingsIO::SaveUserOverrides(m_values, m_base);
 		m_dirty = false;
 	}

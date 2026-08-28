@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+#include <string>
 #include <string_view>
 
 #include "utils/EngineSettings.hpp"
@@ -12,7 +14,7 @@ namespace aether
 	{
 	public:
 		// 1+2+3 (defaults -> shipped -> project) for delta saves. 'services' must
-		SettingsService(const EngineSettings& values, const EngineSettings& base, ServiceContainer& services);
+		SettingsService(const EngineSettings& values, const EngineSettings& base, const EngineSettings& shipped, ServiceContainer& services);
 
 		[[nodiscard]] const EngineSettings& Get() const
 		{
@@ -23,6 +25,30 @@ namespace aether
 		[[nodiscard]] EngineSettings& Values()
 		{
 			return m_values;
+		}
+
+		[[nodiscard]] EngineSettings& Shipped() noexcept
+		{
+			return m_shipped;
+		}
+
+		// Where authored settings are written. Empty until a project is open, in which case
+		// Save() writes only the per-user file - there is nowhere else to put them.
+		void SetProjectFile(std::filesystem::path projectFile)
+		{
+			m_projectFile = std::move(projectFile);
+		}
+
+		[[nodiscard]] const std::filesystem::path& ProjectFile() const noexcept
+		{
+			return m_projectFile;
+		}
+
+		// Populated by Save() when the project file could not be written, so the editor can
+		// say so instead of silently losing the edit.
+		[[nodiscard]] const std::string& LastSaveError() const noexcept
+		{
+			return m_lastSaveError;
 		}
 
 		[[nodiscard]] EngineSettings& Base() noexcept
@@ -56,6 +82,9 @@ namespace aether
 
 		EngineSettings m_values;
 		EngineSettings m_base;
+		EngineSettings m_shipped;
+		std::filesystem::path m_projectFile;
+		std::string m_lastSaveError;
 		ServiceContainer& m_services;
 		bool m_dirty = false;
 	};

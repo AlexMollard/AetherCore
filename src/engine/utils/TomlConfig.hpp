@@ -30,6 +30,9 @@ namespace aether
 
 		void Set(std::string_view key, bool value);
 		void Set(std::string_view key, float value);
+		// Written as an integer rather than routed through the float overload, which formats
+		// to two decimals and would turn a window width of 2560 into 2560.00.
+		void Set(std::string_view key, int value);
 		void Set(std::string_view key, std::string_view value);
 
 		// Without this, Set(key, "some string") silently writes `true`: a const char*

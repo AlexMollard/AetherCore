@@ -242,6 +242,41 @@ namespace aether
 		return key == "app.startupScene";
 	}
 
+	// Where the EDITOR saves a setting the user changed.
+	//
+	// Deliberately a separate question from IsProjectOnlySettingKey above, which asks whether
+	// a per-user file is ALLOWED to override a key. A player tuning quality on their own
+	// machine is legitimate, so most of these stay user-overridable; what changes here is only
+	// which file the editor writes them to.
+	//
+	// Project keys describe the GAME - how it looks and how it boots - so they belong beside
+	// the scenes in source control and must travel with a published build. User keys describe
+	// one machine: its window, how it presents frames, how the editor's own chrome is scaled.
+	// Before this split every edit went to the per-user file, which publishing deliberately
+	// ignores, so an authored look silently failed to ship.
+	enum class SettingsHome
+	{
+		User,
+		Project,
+	};
+
+	[[nodiscard]] inline SettingsHome SettingsHomeFor(std::string_view key) noexcept
+	{
+		// Window geometry, presentation and pacing, and the editor's own UI: all describe the
+		// machine sitting in front of the project, not the project.
+		if (key == "window.width" || key == "window.height" || key == "window.mode"
+		        || key == "graphics.vsync" || key == "graphics.framesInFlight" || key == "graphics.lowLatencyPresent"
+		        || key == "graphics.renderScale" || key == "graphics.latencyPacing" || key == "graphics.asyncCompute"
+		        || key == "graphics.anisotropy" || key == "graphics.imguiViewports" || key == "graphics.uiScale"
+		        || key == "app.targetFps" || key == "app.autosaveSeconds")
+		{
+			return SettingsHome::User;
+		}
+		// Everything else - the tonemap and grade, the vignette, ambient occlusion,
+		// reflections, shadows, the startup scene, the cursor - is authored, and ships.
+		return SettingsHome::Project;
+	}
+
 	// Which keys a document is allowed to contribute. UserOverridable drops the
 	// project-only keys above, so a stale machine-local file can never mask the project.
 	enum class SettingsScope
@@ -253,7 +288,13 @@ namespace aether
 	struct LoadedEngineSettings
 	{
 		EngineSettings values;
+		// Everything below the per-user file: defaults, then shipped, then project. What a
+		// user override is measured against.
 		EngineSettings base;
+		// Defaults plus the shipped file only. What a PROJECT override is measured against,
+		// so a project file records what it changed about the engine rather than restating
+		// every default and pinning it against future engine changes.
+		EngineSettings shipped;
 	};
 
 	// the base (1+2+3), so keys the user never touched keep tracking shipped/project
@@ -266,6 +307,12 @@ namespace aether
 
 		// settings file (io::PlatformPaths::GetUserConfigDir()/userFile). Never
 		static void SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile = "UserSettings.toml");
+
+		// Merges the project-homed settings that differ from the shipped baseline into an
+		// existing ProjectSettings.toml, leaving its other sections untouched. Refuses to
+		// write a file it could not read or parse rather than replacing a project's paths and
+		// publish config with a handful of graphics keys.
+		static bool SaveProjectOverrides(const EngineSettings& settings, const EngineSettings& shippedBase, const std::filesystem::path& projectFile, std::string& error);
 
 		static void Apply(std::string_view tomlText, EngineSettings& settings, SettingsScope scope = SettingsScope::All);
 
