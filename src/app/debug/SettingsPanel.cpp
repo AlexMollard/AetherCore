@@ -149,9 +149,10 @@ namespace aether::editor
 
 		const bool hasProject = !settingsService->ProjectFile().empty();
 
-		// Saving is explicit. It used to happen only on exit, which meant a crash lost the
-		// edit and - worse - there was no moment at which the editor could tell you the
-		// project file could not be written.
+		// One row of chrome, not four. Save and its state sit together because they are one
+		// thought; the filter and the only-changed toggle share the next line because they
+		// are the other. What the two homes mean lives behind the hint icon rather than
+		// spending a permanent line to say something you need told once.
 		{
 			const bool dirty = settingsService->IsDirty();
 			ImGui::BeginDisabled(!dirty);
@@ -160,14 +161,21 @@ namespace aether::editor
 				settingsService->Save();
 			}
 			ImGui::EndDisabled();
+
 			ImGui::SameLine();
-			if (dirty)
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextColored(dirty ? chrome::kWarning : chrome::kMuted, dirty ? "Unsaved" : "Saved");
+
+			ImGui::SameLine();
+			ImGui::TextColored(chrome::kMuted, ICON_FA_CIRCLE_INFO);
+			if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
 			{
-				ImGui::TextColored(chrome::kWarning, "Unsaved changes");
-			}
-			else
-			{
-				ImGui::TextColored(chrome::kMuted, "Saved");
+				ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+				ImGui::TextUnformatted(hasProject
+				        ? ICON_FA_BOX " marks a setting saved with the project, so it ships with the game. Everything else is saved for this machine only."
+				        : "No project is open, so every change is saved for this machine only and none of it will ship.");
+				ImGui::PopTextWrapPos();
+				ImGui::EndTooltip();
 			}
 
 			const std::string& saveError = settingsService->LastSaveError();
@@ -177,25 +185,14 @@ namespace aether::editor
 			}
 		}
 
-		// The split is the thing a newcomer most needs told: half these settings travel with
-		// the project and half stay on this machine, and until now everything went to the
-		// machine and quietly failed to ship.
-		if (hasProject)
-		{
-			ImGui::TextColored(chrome::kMuted, ICON_FA_CIRCLE_INFO "  " ICON_FA_BOX " settings ship with the project; " ICON_FA_DESKTOP " stay on this machine.");
-		}
-		else
-		{
-			ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  No project open - every change is saved for this machine only.");
-		}
-
-		ImGui::Spacing();
-		ImGui::SetNextItemWidth(-FLT_MIN);
-		ImGui::InputTextWithHint("##settingsFilter", ICON_FA_MAGNIFYING_GLASS "  Filter by name or description...", m_filter, sizeof(m_filter));
+		const float toggleWidth = ImGui::CalcTextSize("Only changed").x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - toggleWidth);
+		ImGui::InputTextWithHint("##settingsFilter", ICON_FA_MAGNIFYING_GLASS "  Filter...", m_filter, sizeof(m_filter));
+		ImGui::SameLine();
 		ImGui::Checkbox("Only changed", &m_onlyModified);
 		if (ImGui::IsItemHovered())
 		{
-			ImGui::SetTooltip("Show only settings that differ from their default - which is also exactly what gets written to a file.");
+			ImGui::SetTooltip("Show only settings that differ from their default - which is exactly what gets written to a file.");
 		}
 		ImGui::Separator();
 
@@ -203,7 +200,20 @@ namespace aether::editor
 
 		std::string currentSection;
 		bool sectionOpen = true;
+		bool tableOpen = false;
 		int shown = 0;
+
+		// A table, so the controls line up in a column and the eye runs down one edge
+		// instead of tracking a ragged one. Ends and restarts around each section header,
+		// because a header inside a table row cannot span it cleanly.
+		const auto closeTable = [&]()
+		{
+			if (tableOpen)
+			{
+				ImGui::EndTable();
+				tableOpen = false;
+			}
+		};
 
 		ForEachSettingField(settingsService->Values(),
 		        [&](std::string_view key, auto& field)
@@ -224,46 +234,53 @@ namespace aether::editor
 			        const std::string sectionLabel(section);
 			        if (sectionLabel != currentSection)
 			        {
+				        closeTable();
 				        currentSection = sectionLabel;
-				        // Collapsible, so a long list can be folded down to the part you are
-				        // working on. Open by default: a settings window that hides its
-				        // contents on first open is worse than a long one.
 				        sectionOpen = ImGui::CollapsingHeader(currentSection.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 			        }
 			        if (!sectionOpen)
 			        {
 				        return;
 			        }
+
+			        if (!tableOpen)
+			        {
+				        if (!ImGui::BeginTable(("##rows" + currentSection).c_str(), 3, ImGuiTableFlags_SizingFixedFit))
+				        {
+					        return;
+				        }
+				        tableOpen = true;
+				        ImGui::TableSetupColumn("c", ImGuiTableColumnFlags_WidthFixed, ImGui::GetContentRegionAvail().x * 0.38f);
+				        ImGui::TableSetupColumn("n", ImGuiTableColumnFlags_WidthStretch);
+				        ImGui::TableSetupColumn("m", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() * 1.6f);
+			        }
 			        ++shown;
 
-			        const std::string label(name);
-			        ImGui::PushID(label.c_str());
+			        ImGui::TableNextRow();
+			        ImGui::PushID(std::string(name).c_str());
 
-			        const float resetWidth = ImGui::GetFrameHeight();
-			        ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x * 0.40f));
-			        const bool changed = DrawSettingWidget(("##" + label).c_str(), field, info);
+			        ImGui::TableSetColumnIndex(0);
+			        ImGui::SetNextItemWidth(-FLT_MIN);
+			        const bool changed = DrawSettingWidget("##v", field, info);
 
-			        ImGui::SameLine();
+			        ImGui::TableSetColumnIndex(1);
 			        ImGui::AlignTextToFramePadding();
-			        // A changed setting is worth spotting at a glance; it is the one that will
-			        // end up in a file and the one to suspect when the build looks wrong.
-			        if (modified)
-			        {
-				        ImGui::TextUnformatted(label.c_str());
-			        }
-			        else
-			        {
-				        ImGui::TextColored(chrome::kMuted, "%s", label.c_str());
-			        }
+			        // A changed setting is the one that ends up in a file and the one to
+			        // suspect when a build looks wrong, so it reads at full strength and
+			        // everything still at its default recedes.
+			        ImGui::TextColored(modified ? ImGui::GetStyleColorVec4(ImGuiCol_Text) : chrome::kMuted, "%s", std::string(name).c_str());
 
-			        if (!info.description.empty() && ImGui::IsItemHovered() && ImGui::BeginTooltip())
+			        const bool project = aether::SettingsHomeFor(key) == aether::SettingsHome::Project;
+			        if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
 			        {
-				        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28.0f);
-				        ImGui::TextUnformatted(std::string(info.description).c_str());
-				        ImGui::Spacing();
+				        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 26.0f);
+				        if (!info.description.empty())
+				        {
+					        ImGui::TextUnformatted(std::string(info.description).c_str());
+					        ImGui::Spacing();
+				        }
 				        ImGui::TextColored(chrome::kMuted, "%s",
-				                aether::SettingsHomeFor(key) == aether::SettingsHome::Project
-				                        ? "Saved with the project - ships with the game."
+				                project ? "Saved with the project - ships with the game."
 				                        : "Saved for this machine only - not published.");
 				        if (info.restartRequired)
 				        {
@@ -273,25 +290,14 @@ namespace aether::editor
 				        ImGui::EndTooltip();
 			        }
 
-			        // Home and restart markers, right-aligned so the column of icons reads as
-			        // a column rather than trailing each label at a different offset.
-			        const bool project = aether::SettingsHomeFor(key) == aether::SettingsHome::Project;
-			        ImGui::SameLine(ImGui::GetContentRegionMax().x - resetWidth * 3.0f);
-			        ImGui::TextColored(chrome::kMuted, "%s", project ? ICON_FA_BOX : ICON_FA_DESKTOP);
-			        ImGui::SameLine(ImGui::GetContentRegionMax().x - resetWidth * 2.0f);
-			        if (info.restartRequired)
-			        {
-				        ImGui::TextColored(chrome::kMuted, ICON_FA_ROTATE);
-			        }
-			        else
-			        {
-				        ImGui::TextUnformatted(" ");
-			        }
-
+			        // One marker column. Only project-homed settings are badged: "ships with
+			        // the game" is the surprising half, and drawing a glyph on every row for
+			        // the ordinary case is most of what made this list noisy. Restart lives
+			        // in the tooltip for the same reason.
+			        ImGui::TableSetColumnIndex(2);
 			        if (modified)
 			        {
-				        ImGui::SameLine(ImGui::GetContentRegionMax().x - resetWidth);
-				        if (chrome::GhostIconButton(ICON_FA_ROTATE_LEFT, "##reset", ImVec2(resetWidth, resetWidth)))
+				        if (chrome::GhostIconButton(ICON_FA_ROTATE_LEFT, "##reset", ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight())))
 				        {
 					        field = defaultValue;
 					        settingsService->ApplyField(key);
@@ -302,6 +308,11 @@ namespace aether::editor
 					        ImGui::SetTooltip("Reset to the default");
 				        }
 			        }
+			        else if (project)
+			        {
+				        ImGui::AlignTextToFramePadding();
+				        ImGui::TextColored(chrome::kMuted, ICON_FA_BOX);
+			        }
 
 			        ImGui::PopID();
 			        if (changed)
@@ -310,6 +321,8 @@ namespace aether::editor
 				        settingsService->MarkDirty();
 			        }
 		        });
+
+		closeTable();
 
 		if (shown == 0)
 		{

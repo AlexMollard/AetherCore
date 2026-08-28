@@ -14,6 +14,11 @@ namespace aether::editor
 			return "DevTools";
 		}
 
+		[[nodiscard]] std::string_view GetWindowTitle() const override
+		{
+			return "Debug";
+		}
+
 		void OnUpdate(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
 		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;

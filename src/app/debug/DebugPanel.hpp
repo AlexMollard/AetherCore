@@ -123,6 +123,15 @@ namespace aether::editor
 
 		virtual void OnImGui(app::LayerContext& context) = 0;
 
+		// The ImGui window title this panel Begins, which is what DockBuilderDockWindow keys
+		// on. Usually the same as GetName(), but a few panels present a shorter title than
+		// their registered name - and a dock call naming the wrong string silently does
+		// nothing, which is exactly the kind of no-op that looks like it works.
+		[[nodiscard]] virtual std::string_view GetWindowTitle() const
+		{
+			return GetName();
+		}
+
 		virtual void OnRenderTargetsInvalidated(app::LayerContext& /*unused*/)
 		{
 		}

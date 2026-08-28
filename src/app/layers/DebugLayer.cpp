@@ -2023,7 +2023,7 @@ namespace aether::editor
 			panelNames.reserve(m_panels.size());
 			for (const auto& panel: m_panels)
 			{
-				panelNames.push_back(panel->GetName());
+				panelNames.push_back(panel->GetWindowTitle());
 			}
 			BuildWorkflowLayout(layout, dockspace_id, viewport->WorkSize, panelNames);
 			m_focusViewportAfterLayout = true;

@@ -23,6 +23,11 @@ namespace aether::editor
 			return "TextureInspector";
 		}
 
+		[[nodiscard]] std::string_view GetWindowTitle() const override
+		{
+			return "Textures";
+		}
+
 		void OnDetach(app::LayerContext& context) override;
 		void OnUpdate(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
