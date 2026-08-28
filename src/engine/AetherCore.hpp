@@ -144,6 +144,7 @@ namespace aether
 
 		// recreate (present-mode change) on the next producer-thread poll. No-op
 		void SetVsync(bool enabled);
+		void SetRenderScale(float scale);
 
 		// MAILBOX instead of FIFO while vsync is on. Same mechanism as SetVsync, because it
 		// decides the same thing: the present mode the swapchain is built with. Without

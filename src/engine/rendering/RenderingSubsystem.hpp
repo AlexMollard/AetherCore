@@ -86,6 +86,15 @@ namespace aether
 			return extent;
 		}
 
+		// Ask for the render targets and graph to be rebuilt at the next safe point. Rides
+		// the scene viewport's existing pending flag rather than recreating anything here:
+		// a setting can change on any thread at any point in a frame, and tearing down
+		// targets underneath work already recorded is how this crashes.
+		void RequestResourceRebuild()
+		{
+			m_sceneViewportRebuildPending.store(true, std::memory_order_release);
+		}
+
 		void SetSceneViewportEnabled(ServiceContainer& services, bool enabled);
 		void SetSceneViewportSettings(ServiceContainer& services, const SceneViewportSettings& settings);
 		bool CommitPendingSceneViewportSettings();

@@ -35,7 +35,7 @@ namespace aether
 		        {"graphics.framesInFlight", {.description = "How far the game thread may run ahead of the screen. Every frame of run-ahead is one display interval of input lag (~17 ms at 60 Hz).", .minValue = 1.0, .maxValue = 3.0}},
 		        {"graphics.lowLatencyPresent", {.description = "Prefer MAILBOX over FIFO while vsync is on: a finished frame replaces the pending one instead of queueing behind it."}},
 		        {"graphics.latencyPacing", {.description = "Idle out most of the display interval and latch input just before the flip. Needs a measured flip phase; does nothing without one."}},
-		        {"graphics.renderScale", {.description = "Render the scene at this fraction of the output and upscale it. UI still draws at native resolution.", .minValue = 0.25, .maxValue = 1.0, .restartRequired = true}},
+		        {"graphics.renderScale", {.description = "Render the scene at this fraction of the output and upscale it. UI still draws at native resolution.", .minValue = 0.25, .maxValue = 1.0}},
 		        {"graphics.fxaa", {.description = "Cheap post-process antialiasing."}},
 		        {"graphics.gradeContrast", {.description = "Contrast about middle grey, applied in linear light before tonemapping. 1 leaves the image untouched.", .minValue = 0.25, .maxValue = 2.5}},
 		        {"graphics.gradeSaturation", {.description = "Colour saturation. 1 leaves the image untouched, 0 is greyscale, above 1 pushes further from grey.", .minValue = 0.0, .maxValue = 2.5}},

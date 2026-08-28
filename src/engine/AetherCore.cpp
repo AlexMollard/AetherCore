@@ -753,6 +753,23 @@ namespace aether
 		return m_rendering->GetRenderGraph().GetPasses().size();
 	}
 
+	void AetherCore::SetRenderScale(float scale)
+	{
+		const float clamped = std::clamp(scale, 0.25f, 1.0f);
+		if (m_settings.graphics.renderScale == clamped)
+		{
+			return;
+		}
+		m_settings.graphics.renderScale = clamped;
+		if (m_rendering)
+		{
+			// The scale only feeds the extent calculation, so the new value is picked up
+			// when the targets are next resolved - which is exactly what the rebuild does.
+			m_rendering->SetRenderScale(clamped);
+			m_rendering->RequestResourceRebuild();
+		}
+	}
+
 	void AetherCore::SetVsync(bool enabled)
 	{
 		if (m_settings.graphics.vsync == enabled)

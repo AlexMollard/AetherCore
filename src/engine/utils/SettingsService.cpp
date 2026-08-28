@@ -140,6 +140,13 @@ namespace aether
 				engine->SetTargetFps(m_values.app.targetFps);
 			}
 		}
+		else if (key == "graphics.renderScale")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetRenderScale(m_values.graphics.renderScale);
+			}
+		}
 		else if (key == "graphics.vsync")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())
