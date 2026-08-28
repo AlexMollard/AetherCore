@@ -251,7 +251,18 @@ add_dependencies(EngineAssetsPak AssetPacker)
 # publisher ships wholesale (EditorProjectPublisher copies the exe dir as a unit). The
 # runtime payload is staged into it exactly ONCE here, not copied per target; that removes
 # the old 3x-redundant copies and the copy-race serialisation between the apps.
-set(_aether_app_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+# The bundle IS the executable's own directory: EditorProjectPublisher takes
+# GetExecutableDir() and ships it wholesale. Multi-config generators (Visual Studio) put the
+# exe under <config>/, single-config ones (Ninja) put it straight in the target binary dir -
+# so hard-coding the config subdirectory staged the payload one level BELOW the exe under
+# Ninja. Publishing then failed looking for src/app/data/engine.pak, and nethost.dll never
+# landed beside the editor, which is why launching it needed the dotnet host pack on PATH.
+get_property(_aether_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_aether_multi_config)
+    set(_aether_app_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+else()
+    set(_aether_app_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
 
 set(_aether_stage_cmds
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${_aether_app_bundle_dir}/data/config"
