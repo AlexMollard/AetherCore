@@ -70,19 +70,31 @@ namespace aether
 		void RecreateSwapchainResources(ServiceContainer& services);
 		// Fraction of the output the SCENE renders at; the final fullscreen pass upscales.
 		// Only applies outside the editor viewport, which has its own resolution control.
+		// Same range the setting and AetherCore::SetRenderScale use. Three copies of this
+		// bound exist and all three have to agree: raising the other two while this one
+		// still said 1.0 left supersampling silently doing nothing at all.
 		void SetRenderScale(float scale)
 		{
-			m_renderScale = std::clamp(scale, 0.25f, 1.0f);
+			m_renderScale = std::clamp(scale, 0.25f, 2.0f);
 		}
 
+		// Scales BOTH ways. Below 1 the scene renders small and is upscaled on present, which
+		// is the performance dial. Above 1 it renders large and is downsampled, which is
+		// supersampling - every output pixel becomes the average of several shaded samples,
+		// so geometric edges, specular glints and alpha-tested foliage all resolve. It is
+		// the bluntest antialiasing there is and also the best, and the editor viewport has
+		// quietly been getting it for free all along by rendering at window resolution into
+		// a smaller docked panel. A shipped game had no way to ask for the same thing.
+		//
+		// Capped at 2x, where the target memory is already 4x and the shading cost with it.
 		[[nodiscard]] gpu::Extent2D ApplyRenderScale(gpu::Extent2D extent) const
 		{
-			if (m_renderScale >= 1.0f)
+			if (m_renderScale == 1.0f)
 			{
 				return extent;
 			}
-			extent.width = std::max(64u, static_cast<std::uint32_t>(static_cast<float>(extent.width) * m_renderScale));
-			extent.height = std::max(64u, static_cast<std::uint32_t>(static_cast<float>(extent.height) * m_renderScale));
+			extent.width = std::clamp(static_cast<std::uint32_t>(static_cast<float>(extent.width) * m_renderScale), 64u, 8192u);
+			extent.height = std::clamp(static_cast<std::uint32_t>(static_cast<float>(extent.height) * m_renderScale), 64u, 8192u);
 			return extent;
 		}
 

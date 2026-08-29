@@ -35,7 +35,7 @@ namespace aether
 		        {"graphics.framesInFlight", {.description = "How far the game thread may run ahead of the screen. Every frame of run-ahead is one display interval of input lag (~17 ms at 60 Hz).", .minValue = 1.0, .maxValue = 3.0}},
 		        {"graphics.lowLatencyPresent", {.description = "Prefer MAILBOX over FIFO while vsync is on: a finished frame replaces the pending one instead of queueing behind it."}},
 		        {"graphics.latencyPacing", {.description = "Idle out most of the display interval and latch input just before the flip. Needs a measured flip phase; does nothing without one."}},
-		        {"graphics.renderScale", {.description = "Render the scene at this fraction of the output and upscale it. UI still draws at native resolution.", .minValue = 0.25, .maxValue = 1.0}},
+		        {"graphics.renderScale", {.description = "Scene resolution as a multiple of the output. Below 1 renders small and upscales, for performance. Above 1 renders large and downsamples - supersampling, the bluntest and best antialiasing, at 4x the pixels for 2x. UI always draws at native resolution.", .minValue = 0.25, .maxValue = 2.0}},
 		        {"graphics.fxaa", {.description = "Cheap post-process antialiasing."}},
 		        {"graphics.gradeContrast", {.description = "Contrast about middle grey, applied in linear light before tonemapping. 1 leaves the image untouched.", .minValue = 0.25, .maxValue = 2.5}},
 		        {"graphics.gradeSaturation", {.description = "Colour saturation. 1 leaves the image untouched, 0 is greyscale, above 1 pushes further from grey.", .minValue = 0.0, .maxValue = 2.5}},
@@ -165,7 +165,7 @@ namespace aether
 		settings.graphics.uiScale = std::clamp(settings.graphics.uiScale, 0.5f, 3.0f);
 		// Below a quarter the scene is unrecognisable, and above 1 it would be supersampling
 		// rather than the cost saving this exists for.
-		settings.graphics.renderScale = std::clamp(settings.graphics.renderScale, 0.25f, 1.0f);
+		settings.graphics.renderScale = std::clamp(settings.graphics.renderScale, 0.25f, 2.0f);
 
 		// MAILBOX never blocks the producer, so with no frame cap the loop runs as fast as it
 		// possibly can - a 2D game measured 3700 fps to put 60 on the screen, discarding 98%

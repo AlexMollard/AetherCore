@@ -767,7 +767,7 @@ namespace aether
 
 	void AetherCore::SetRenderScale(float scale)
 	{
-		const float clamped = std::clamp(scale, 0.25f, 1.0f);
+		const float clamped = std::clamp(scale, 0.25f, 2.0f);
 		if (m_settings.graphics.renderScale == clamped)
 		{
 			return;

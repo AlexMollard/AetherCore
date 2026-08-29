@@ -549,10 +549,15 @@ namespace aether
 			        } push;
 			        push.ldrSlot = m_ldrBindlessSlot;
 			        push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
-			        // The edge search walks in UV, so it needs the size of the image it is
-			        // walking across; ctx.extent is the only place that is known per frame.
-			        push.rcpWidth = 1.0f / static_cast<float>(std::max(ctx.extent.width, 1u));
-			        push.rcpHeight = 1.0f / static_cast<float>(std::max(ctx.extent.height, 1u));
+			        // The edge search walks in UV across the LDR image, so it needs the size
+			        // of THAT image - m_extent - not the size of whatever it is being drawn
+			        // into. The two are the same only when the scene renders at the output
+			        // resolution. Under a render scale they are not, and using the
+			        // destination made every step of the search the wrong length: at 0.5 it
+			        // walked half a texel at a time, so an edge it should have traced to its
+			        // endpoint was abandoned partway and left half-antialiased.
+			        push.rcpWidth = 1.0f / static_cast<float>(std::max(m_extent.width, 1u));
+			        push.rcpHeight = 1.0f / static_cast<float>(std::max(m_extent.height, 1u));
 			        cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			        cmd.Draw(3, 1, 0, 0);

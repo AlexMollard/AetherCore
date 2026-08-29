@@ -41,7 +41,11 @@ namespace aether
 			{
 				return;
 			}
-			AE_INFO(LogCategory::Engine, "Scene renders at {}x{}, upscaled to {}x{} on present.", scene.width, scene.height, swapchain.width, swapchain.height);
+			// Which direction it goes matters to whoever reads this: one is a performance
+			// trade and the other is antialiasing, and calling both "upscaled" made the log
+			// contradict what the setting was asked to do.
+			const char* const direction = (scene.width > swapchain.width) ? "downsampled" : "upscaled";
+			AE_INFO(LogCategory::Engine, "Scene renders at {}x{}, {} to {}x{} on present.", scene.width, scene.height, direction, swapchain.width, swapchain.height);
 		}
 	} // namespace
 

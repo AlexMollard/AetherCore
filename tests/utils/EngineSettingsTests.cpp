@@ -274,6 +274,39 @@ TEST_CASE("Producer run-ahead is clamped to the resource slots that exist") {
     CHECK(settings.graphics.framesInFlight == 3);
 }
 
+// Render scale goes BOTH ways: below 1 to render small and upscale for performance, above
+// 1 to render large and downsample, which is supersampling. It used to be capped at 1, so
+// the only antialiasing a shipped game could reach was FXAA - the editor viewport had been
+// getting supersampling for free the whole time by rendering at window resolution into a
+// smaller panel.
+TEST_CASE("Render scale allows supersampling as well as downscaling") {
+    EngineSettings s;
+
+    s.graphics.renderScale = 2.0f;
+    EngineSettingsIO::Sanitize(s);
+    CHECK(s.graphics.renderScale == doctest::Approx(2.0f));
+
+    s.graphics.renderScale = 1.5f;
+    EngineSettingsIO::Sanitize(s);
+    CHECK(s.graphics.renderScale == doctest::Approx(1.5f));
+
+    // Still bounded at both ends: 4x the pixels is the most this will hand out, and a
+    // scale small enough to be unreadable is not a performance option.
+    s.graphics.renderScale = 9.0f;
+    EngineSettingsIO::Sanitize(s);
+    CHECK(s.graphics.renderScale == doctest::Approx(2.0f));
+
+    s.graphics.renderScale = 0.01f;
+    EngineSettingsIO::Sanitize(s);
+    CHECK(s.graphics.renderScale == doctest::Approx(0.25f));
+
+    // The metadata drives the settings UI, so a value the loader accepts must be one the
+    // slider can reach.
+    const aether::SettingInfo& info = SettingMetadata("graphics.renderScale");
+    CHECK(info.maxValue == doctest::Approx(2.0));
+    CHECK(info.minValue == doctest::Approx(0.25));
+}
+
 // A typo must not hand someone an undecorated window covering their screen.
 TEST_CASE("An unrecognised window mode falls back to windowed") {
     CHECK(ParseWindowMode("borderless") == Window::Mode::Borderless);
@@ -332,7 +365,7 @@ TEST_CASE("Setting a value by key parses, validates and clamps") {
 
     SUBCASE("a number outside its range is clamped, as the loader would clamp it") {
         CHECK(SetSettingValueFromString(s, "graphics.renderScale", "9.0"));
-        CHECK(s.graphics.renderScale == doctest::Approx(1.0f));
+        CHECK(s.graphics.renderScale == doctest::Approx(2.0f));
         CHECK(SetSettingValueFromString(s, "graphics.renderScale", "0.01"));
         CHECK(s.graphics.renderScale == doctest::Approx(0.25f));
     }
