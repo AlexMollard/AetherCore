@@ -54,7 +54,7 @@ namespace aether
 		        {"graphics.shadowSplitLambda", {.description = "How the shadow cascades divide the view distance. 0 is even, 1 is logarithmic. Higher sharpens shadows near the camera and coarsens the middle distance; the far cascade is unaffected.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"graphics.volumetrics", {.description = "March the sun's shadow cascades through the scene's fog so shadows carve beams out of it. Costs nothing in a scene with no fog authored."}},
 		        {"graphics.tonemap", {.description = "Display transform applied to the HDR image. ACES rolls highlights toward white in AP1; AgX mixes the channels before compressing them, so bright saturated colour stops rotating hue on its way to white.", .choices = kTonemapNames}},
-		        {"graphics.asyncCompute", {.description = "Overlap compute work with graphics on a separate queue.", .restartRequired = true}},
+		        {"graphics.asyncCompute", {.description = "Overlap compute work with graphics on a separate queue. Does nothing on a device without a dedicated compute queue."}},
 		        {"graphics.imguiViewports", {.description = "Let editor panels become separate OS windows when dragged out of the main window."}},
 		        {"graphics.uiScale", {.description = "Extra multiplier on editor UI size, on top of the display's own DPI scale.", .minValue = 0.5, .maxValue = 3.0}},
 		        {"app.targetFps", {.description = "Frame cap. 0 leaves it uncapped.", .minValue = 0.0, .maxValue = 1000.0}},

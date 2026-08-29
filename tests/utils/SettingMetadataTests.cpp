@@ -160,7 +160,6 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	std::ranges::sort(restartOnly);
 
 	// Each of these is read during startup and never again:
-	//   graphics.asyncCompute AetherCore.cpp - queue selection during init
 	//   app.startupScene     read by the boot path / bake
 	//   app.autoplay         read by the boot path
 	//
@@ -177,10 +176,12 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	//                                    needed recreating, only the swapchain
 	//   anisotropy                     - only one sampler is shader-visible, so a device
 	//                                    wait-idle plus a descriptor rewrite is enough
+	//   asyncCompute                   - the compute queue is created unconditionally; this
+	//                                    only decides whether the render graph uses it, so
+	//                                    toggling it is a graph rebuild, not a new device
 	const std::vector<std::string> expected{
 	        "app.autoplay",
 	        "app.startupScene",
-	        "graphics.asyncCompute",
 	};
 	CHECK(restartOnly == expected);
 }

@@ -415,6 +415,19 @@ namespace aether
 
 		void EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily);
 
+		// The other half of EnableAsyncCompute: releases the cross-queue timeline and the
+		// per-frame compute pools, and stops passes being scheduled off the graphics queue.
+		// Deliberately NOT called DisableAsyncCompute - PassBuilder already has a method by
+		// that name which opts a single pass out, and the two do very different things.
+		//
+		// Requires the GPU to be idle: it destroys objects submitted work may still hold.
+		void ShutdownAsyncCompute();
+
+		[[nodiscard]] bool IsAsyncComputeEnabled() const
+		{
+			return m_asyncComputeEnabled;
+		}
+
 		[[nodiscard]] bool HasAsyncComputeWork() const;
 
 		// compute queue submission signals. The graphics queue submission must wait

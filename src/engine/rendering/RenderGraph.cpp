@@ -515,6 +515,12 @@ namespace aether
 		m_asyncComputeEnabled = true;
 	}
 
+	void RenderGraph::ShutdownAsyncCompute()
+	{
+		m_storage->ShutdownComputeResources();
+		m_asyncComputeEnabled = false;
+	}
+
 	bool RenderGraph::HasAsyncComputeWork() const
 	{
 		if (!m_asyncComputeEnabled)

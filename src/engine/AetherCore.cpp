@@ -701,7 +701,8 @@ namespace aether
 		const bool lazyTargetsPending = m_rendering != nullptr && m_rendering->IsLazyTargetRebuildPending();
 		// Same reason: the sampler rewrite needs the GPU idle, which is only true on that path.
 		const bool anisotropyPending = m_pendingAnisotropy.load(std::memory_order_acquire) != 0;
-		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending || anisotropyPending;
+		const bool asyncComputePending = m_pendingAsyncCompute.load(std::memory_order_acquire) != 0;
+		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending || anisotropyPending || asyncComputePending;
 	}
 
 	void AetherCore::RecreateSwapchainAndResources()
@@ -710,6 +711,10 @@ namespace aether
 		// - not a swapchain rebuild. A change of anisotropy on its own leaves everything
 		// below with nothing to do.
 		(void) ApplyPendingAnisotropy();
+
+		// Before the rebuild below, because the graph only picks up the change when its
+		// passes are registered again.
+		const bool asyncComputeCommitted = ApplyPendingAsyncCompute();
 
 		const bool framebufferResized = m_services.Get<PlatformSubsystem>().GetWindow().ConsumeFramebufferResized();
 		const bool swapchainDirty = framebufferResized || m_gpu->SwapchainNeedsRecreation();
@@ -721,7 +726,7 @@ namespace aether
 		{
 			RecreateSwapchain();
 		}
-		else if ((viewportCommitted || lazyTargetsCommitted) && m_rendering != nullptr)
+		else if ((viewportCommitted || lazyTargetsCommitted || asyncComputeCommitted) && m_rendering != nullptr)
 		{
 			m_rendering->RecreateSwapchainResources(m_services);
 		}
@@ -814,6 +819,62 @@ namespace aether
 		// So it rides the same quiesced path as a viewport rebuild instead, which runs with
 		// the render thread parked and the GPU already idle.
 		m_pendingAnisotropy.store(clamped, std::memory_order_release);
+	}
+
+	void AetherCore::SetAsyncCompute(const bool enabled)
+	{
+		if (m_settings.graphics.asyncCompute == enabled)
+		{
+			return;
+		}
+		m_settings.graphics.asyncCompute = enabled;
+
+		// Recorded, applied on the quiesced frame - the same reason as anisotropy. Turning
+		// it off destroys the cross-queue timeline and the compute command pools, which
+		// submitted work may still hold, and turning it on changes how the render graph
+		// schedules passes, so the graph has to be rebuilt around the new answer.
+		m_pendingAsyncCompute.store(enabled ? 1 : -1, std::memory_order_release);
+	}
+
+	bool AetherCore::ApplyPendingAsyncCompute()
+	{
+		const int pending = m_pendingAsyncCompute.exchange(0, std::memory_order_acq_rel);
+		if (pending == 0 || !m_gpu || !m_rendering)
+		{
+			return false;
+		}
+
+		const bool wanted = pending > 0;
+		auto& graph = m_rendering->GetRenderGraph();
+
+		// A machine with no dedicated compute queue cannot do this at all, and says so once
+		// rather than pretending the setting took.
+		if (wanted && !m_gpu->HasDedicatedComputeQueue())
+		{
+			AE_WARN(LogCategory::Engine, "Async compute requested, but this device has no dedicated compute queue.");
+			return false;
+		}
+		if (wanted == graph.IsAsyncComputeEnabled())
+		{
+			return false;
+		}
+
+		m_gpu->WaitIdle();
+		if (wanted)
+		{
+			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
+			graph.EnableAsyncCompute(m_gpu->GetComputeQueue(), m_gpu->GetComputeQueueFamily());
+		}
+		else
+		{
+			graph.ShutdownAsyncCompute();
+			m_services.Get<AsyncComputeContext>().Shutdown(*m_gpu);
+		}
+		AE_INFO(LogCategory::Engine, "Async compute {}.", wanted ? "enabled" : "disabled");
+
+		// The caller rebuilds the graph: queue assignment is decided when passes are
+		// registered, so the change is inert until they are registered again.
+		return true;
 	}
 
 	bool AetherCore::ApplyPendingAnisotropy()

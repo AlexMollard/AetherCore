@@ -147,6 +147,13 @@ namespace aether
 				engine->SetRenderScale(m_values.graphics.renderScale);
 			}
 		}
+		else if (key == "graphics.asyncCompute")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetAsyncCompute(m_values.graphics.asyncCompute);
+			}
+		}
 		else if (key == "graphics.anisotropy")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())

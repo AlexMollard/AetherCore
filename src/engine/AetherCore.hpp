@@ -174,6 +174,10 @@ namespace aether
 		// whichever thread changed the setting while the render thread is still submitting.
 		void SetAnisotropy(int anisotropy);
 
+		// Whether the render graph may schedule passes on a dedicated compute queue. Applied
+		// on the next quiesced frame, which then rebuilds the graph around the new answer.
+		void SetAsyncCompute(bool enabled);
+
 		// MAILBOX instead of FIFO while vsync is on. Same mechanism as SetVsync, because it
 		// decides the same thing: the present mode the swapchain is built with. Without
 		// this the setting only took hold if you happened to toggle vsync afterwards.
@@ -213,6 +217,10 @@ namespace aether
 		// Rewrites the bindless sampler when a new anisotropy has been requested. Must only
 		// be called with the render thread parked and the GPU idle. Returns whether it ran.
 		bool ApplyPendingAnisotropy();
+
+		// Enables or disables async compute when one has been requested. Same preconditions
+		// as ApplyPendingAnisotropy. Returns whether the graph now needs rebuilding.
+		bool ApplyPendingAsyncCompute();
 		void FlushImguiPendingTextureReleases();
 
 		[[nodiscard]] static GpuFormat GetForwardColorFormat();
@@ -233,6 +241,9 @@ namespace aether
 		// Requested anisotropy waiting to be applied, or 0 for none. Atomic because the
 		// setting can change on any thread while the render loop reads it.
 		std::atomic<int> m_pendingAnisotropy{0};
+		// Requested async-compute state: +1 on, -1 off, 0 nothing pending. A tri-state
+		// rather than a bool pair, because "no request" and "requested off" are different.
+		std::atomic<int> m_pendingAsyncCompute{0};
 
 		void BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc);
 		void PatchShadowIndices(std::uint32_t frameIdx);
