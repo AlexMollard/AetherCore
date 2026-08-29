@@ -160,7 +160,6 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	std::ranges::sort(restartOnly);
 
 	// Each of these is read during startup and never again:
-	//   window.mode          AetherCore.cpp - platform.Init
 	//   graphics.anisotropy  AetherCore.cpp - GraphicsDevice::Init, baked into every sampler
 	//   graphics.asyncCompute AetherCore.cpp - queue selection during init
 	//   app.startupScene     read by the boot path / bake
@@ -174,12 +173,14 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	//   renderScale                    - AetherCore::SetRenderScale now also asks the
 	//                                    rendering subsystem to rebuild its targets, which
 	//                                    is where the extent is recomputed
+	//   window.mode                    - Window::SetMode switches presentation in place and
+	//                                    flags a framebuffer resize; the window itself never
+	//                                    needed recreating, only the swapchain
 	const std::vector<std::string> expected{
 	        "app.autoplay",
 	        "app.startupScene",
 	        "graphics.anisotropy",
 	        "graphics.asyncCompute",
-	        "window.mode",
 	};
 	CHECK(restartOnly == expected);
 }

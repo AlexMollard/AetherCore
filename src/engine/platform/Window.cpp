@@ -369,6 +369,86 @@ namespace aether
 		glfwSetWindowSize(m_window, width, height);
 	}
 
+	void Window::SetMode(Mode mode)
+	{
+		if (m_window == nullptr || mode == m_mode)
+		{
+			return;
+		}
+
+		// Capture the rectangle to come back to BEFORE leaving windowed. Once GLFW has
+		// resized the window to the video mode there is nothing left to remember.
+		if (m_mode == Mode::Windowed)
+		{
+			glfwGetWindowPos(m_window, &m_windowedX, &m_windowedY);
+			glfwGetWindowSize(m_window, &m_windowedWidth, &m_windowedHeight);
+		}
+
+		GLFWmonitor* const monitor = glfwGetPrimaryMonitor();
+		const GLFWvidmode* const videoMode = (monitor != nullptr) ? glfwGetVideoMode(monitor) : nullptr;
+		if (mode != Mode::Windowed && videoMode == nullptr)
+		{
+			// Same choice the constructor makes: staying in the mode that works beats
+			// covering a monitor that is not there.
+			AE_WARN(LogCategory::Window, "No monitor available; leaving the window mode unchanged.");
+			return;
+		}
+
+		switch (mode)
+		{
+			case Mode::Windowed:
+			{
+				// A window that has only ever been borderless or fullscreen has no remembered
+				// rectangle, so fall back to a reasonable fraction of the display rather than
+				// to zero.
+				if (m_windowedWidth < 1 || m_windowedHeight < 1)
+				{
+					m_windowedWidth = (videoMode != nullptr) ? (videoMode->width * 3 / 4) : 1280;
+					m_windowedHeight = (videoMode != nullptr) ? (videoMode->height * 3 / 4) : 720;
+					m_windowedX = 0;
+					m_windowedY = 0;
+				}
+				glfwSetWindowAttrib(m_window, GLFW_DECORATED, GLFW_TRUE);
+				glfwSetWindowMonitor(m_window, nullptr, m_windowedX, m_windowedY, m_windowedWidth, m_windowedHeight, GLFW_DONT_CARE);
+				m_mode = mode;
+				// The remembered rectangle came from a different mode's desktop; make sure it
+				// still fits the work area it is being restored into.
+				FitToPrimaryWorkArea();
+				break;
+			}
+			case Mode::Borderless:
+			{
+				// Undecorate FIRST: changing the decoration of a positioned window moves it by
+				// the frame size, so doing it after placement would leave the window off the
+				// output by exactly the amount that disqualifies independent flip.
+				glfwSetWindowAttrib(m_window, GLFW_DECORATED, GLFW_FALSE);
+				int monitorX = 0;
+				int monitorY = 0;
+				glfwGetMonitorPos(monitor, &monitorX, &monitorY);
+				// Monitor stays null: borderless is a window that covers the output, not an
+				// exclusive mode.
+				glfwSetWindowMonitor(m_window, nullptr, monitorX, monitorY, videoMode->width, videoMode->height, GLFW_DONT_CARE);
+				m_mode = mode;
+				break;
+			}
+			case Mode::Fullscreen:
+			{
+				glfwSetWindowAttrib(m_window, GLFW_DECORATED, GLFW_TRUE);
+				glfwSetWindowMonitor(m_window, monitor, 0, 0, videoMode->width, videoMode->height, videoMode->refreshRate);
+				m_mode = mode;
+				break;
+			}
+		}
+
+		// GLFW posts the framebuffer-size callback for these changes on most platforms, but
+		// not for every transition - notably one where the pixel dimensions happen to match.
+		// Flagging it unconditionally costs one redundant swapchain recreate at worst, and
+		// guarantees the renderer is never left presenting to a surface of the old shape.
+		m_framebufferResized.store(true, std::memory_order_release);
+
+		AE_INFO(LogCategory::Window, "Window mode changed to {}.", mode == Mode::Windowed ? "windowed" : (mode == Mode::Borderless ? "borderless" : "fullscreen"));
+	}
+
 	void Window::SetMinimumSize(int minWidth, int minHeight)
 	{
 		if (m_window == nullptr || minWidth < 1 || minHeight < 1)

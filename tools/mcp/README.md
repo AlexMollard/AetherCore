@@ -58,7 +58,8 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `scene_stats` | yes | Per-component-type entity-count histogram over the live ECS. |
 | `list_lights` | yes | Every light: id, name, type (point/spot), position, color, intensity, radius, shadow flag (spots add cone angles + aim). |
 | `camera_info` | yes | Active camera: projection, world position, forward direction, vertical FOV, and orthographic height. |
-| `get_settings` | yes | Current engine settings: resolution, vsync, target fps. |
+| `get_settings` | yes | Read one engine setting by key, or every setting when no key is given. |
+| `set_setting` | yes | Set one engine setting by key and apply it live, as the Settings panel does. |
 | `list_component_types` | yes | The 28 components the ComponentCatalog can add (name + category). |
 | `screenshot` | yes | Capture the current editor frame to a compressed `.png` and return its path — lets the agent *see* what's rendered. |
 

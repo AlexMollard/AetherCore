@@ -770,6 +770,25 @@ namespace aether
 		}
 	}
 
+	void AetherCore::SetWindowMode(Window::Mode mode)
+	{
+		if (m_settings.window.mode == WindowModeToString(mode))
+		{
+			return;
+		}
+		m_settings.window.mode = WindowModeToString(mode);
+
+		auto* platform = m_services.TryGet<PlatformSubsystem>();
+		if (platform == nullptr)
+		{
+			return;
+		}
+		// Window::SetMode flags a framebuffer resize, and the existing swapchain recreate
+		// path picks it up on the next poll - the same route a user dragging the window
+		// edge already takes. Nothing here has to touch the GPU directly.
+		platform->GetWindow().SetMode(mode);
+	}
+
 	void AetherCore::SetVsync(bool enabled)
 	{
 		if (m_settings.graphics.vsync == enabled)

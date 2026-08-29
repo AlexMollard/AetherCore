@@ -2,6 +2,8 @@
 
 #include <filesystem>
 #include <span>
+#include <algorithm>
+#include <charconv>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -228,6 +230,96 @@ namespace aether
 				        out = field;
 				        found = true;
 			        }
+		        });
+		return found;
+	}
+
+	// Write a setting by key, from text.
+	//
+	// The counterpart to DefaultSettingValue, and the reason it takes a STRING rather than a
+	// typed value: the callers that need this - a control endpoint, a config importer - have
+	// text and no idea which of bool/int/float/string the key holds. Reflection knows, so
+	// the parse belongs here rather than duplicated at every call site.
+	//
+	// Returns false when the key does not exist or the text does not parse as its type. It
+	// does NOT apply the change; call SettingsService::ApplyField afterwards, which is the
+	// same two-step the settings UI follows.
+	[[nodiscard]] inline bool SetSettingValueFromString(EngineSettings& settings, std::string_view key, std::string_view text)
+	{
+		bool assigned = false;
+		ForEachSettingField(settings,
+		        [&](std::string_view candidate, auto& field)
+		        {
+			        if (candidate != key || assigned)
+			        {
+				        return;
+			        }
+			        using Field = std::decay_t<decltype(field)>;
+			        if constexpr (std::is_same_v<Field, bool>)
+			        {
+				        if (text == "true" || text == "1") { field = true; assigned = true; }
+				        else if (text == "false" || text == "0") { field = false; assigned = true; }
+			        }
+			        else if constexpr (std::is_same_v<Field, std::string>)
+			        {
+				        // A key with a closed value set gets checked against it. The metadata
+				        // exists so a value the loader would silently reject cannot be entered;
+				        // accepting one here just moves the rejection to the next launch, where
+				        // it reads as the setting having been forgotten.
+				        const std::span<const std::string_view> choices = SettingMetadata(key).choices;
+				        if (choices.empty() || std::find(choices.begin(), choices.end(), text) != choices.end())
+				        {
+					        field = std::string(text);
+					        assigned = true;
+				        }
+			        }
+			        else if constexpr (std::is_integral_v<Field> || std::is_floating_point_v<Field>)
+			        {
+				        Field parsed{};
+				        if (std::from_chars(text.data(), text.data() + text.size(), parsed).ec == std::errc{})
+				        {
+					        // Clamped rather than rejected, to match what the loader does with
+					        // the same value out of a settings file.
+					        const SettingInfo& info = SettingMetadata(key);
+					        if (info.minValue < info.maxValue)
+					        {
+						        const double clamped = std::min(std::max(static_cast<double>(parsed), info.minValue), info.maxValue);
+						        parsed = static_cast<Field>(clamped);
+					        }
+					        field = parsed;
+					        assigned = true;
+				        }
+			        }
+		        });
+		return assigned;
+	}
+
+	// Read a setting by key as text, so a caller can show or round-trip a value without
+	// knowing its type.
+	[[nodiscard]] inline bool GetSettingValueAsString(const EngineSettings& settings, std::string_view key, std::string& out)
+	{
+		bool found = false;
+		ForEachSettingField(settings,
+		        [&](std::string_view candidate, const auto& field)
+		        {
+			        if (candidate != key || found)
+			        {
+				        return;
+			        }
+			        using Field = std::decay_t<decltype(field)>;
+			        if constexpr (std::is_same_v<Field, bool>)
+			        {
+				        out = field ? "true" : "false";
+			        }
+			        else if constexpr (std::is_same_v<Field, std::string>)
+			        {
+				        out = field;
+			        }
+			        else
+			        {
+				        out = std::to_string(field);
+			        }
+			        found = true;
 		        });
 		return found;
 	}

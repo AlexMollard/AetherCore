@@ -85,6 +85,18 @@ namespace aether
 		{
 			return m_mode;
 		}
+
+		// Change presentation without recreating the window.
+		//
+		// The windowed rectangle is remembered on the way out and restored on the way back,
+		// because borderless and fullscreen overwrite the size with the video mode's. Without
+		// that, leaving fullscreen would have to invent a size, and the window a user had
+		// carefully placed would come back somewhere else at some other size.
+		//
+		// Only the presentation changes: this posts a framebuffer resize, which the existing
+		// swapchain recreate path already handles, so callers do not have to do anything else.
+		// Must be called on the main thread, like every other GLFW call here.
+		void SetMode(Mode mode);
 		FramebufferSize WaitForValidFramebufferSize();
 
 		[[nodiscard]] FramebufferSize GetWindowSize() const;
@@ -114,6 +126,16 @@ namespace aether
 		GLFWwindow* m_window = nullptr;
 
 		Mode m_mode = Mode::Windowed;
+
+		// The windowed geometry to return to. Captured whenever the window is windowed and
+		// about to stop being so, never while it is already covering a monitor - restoring
+		// a monitor-sized rectangle as a "window" is how a decorated window ends up with its
+		// title bar off the top of the screen and no way to drag it back.
+		int m_windowedX = 0;
+		int m_windowedY = 0;
+		int m_windowedWidth = 0;
+		int m_windowedHeight = 0;
+
 		std::atomic<bool> m_framebufferResized{false};
 	};
 } // namespace aether

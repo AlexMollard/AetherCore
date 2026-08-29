@@ -147,6 +147,13 @@ namespace aether
 				engine->SetRenderScale(m_values.graphics.renderScale);
 			}
 		}
+		else if (key == "window.mode")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetWindowMode(ParseWindowMode(m_values.window.mode));
+			}
+		}
 		else if (key == "graphics.vsync")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())

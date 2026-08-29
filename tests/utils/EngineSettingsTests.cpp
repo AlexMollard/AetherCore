@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -281,6 +282,95 @@ TEST_CASE("An unrecognised window mode falls back to windowed") {
     CHECK(ParseWindowMode("Borderless") == Window::Mode::Windowed); // case-sensitive by design
     CHECK(ParseWindowMode("") == Window::Mode::Windowed);
     CHECK(ParseWindowMode("bordrless") == Window::Mode::Windowed);
+}
+
+// The two directions are written separately, so they can disagree: a mode that formats to
+// a string the parser does not recognise would silently save as "windowed" and undo the
+// user's choice on the next launch. Round-tripping every mode is what stops that.
+TEST_CASE("Every window mode survives a round trip through its name") {
+    for (const Window::Mode mode: {Window::Mode::Windowed, Window::Mode::Borderless, Window::Mode::Fullscreen})
+    {
+        CHECK(ParseWindowMode(WindowModeToString(mode)) == mode);
+    }
+
+    // And the names are the ones the settings UI offers, not a private spelling.
+    const aether::SettingInfo& info = SettingMetadata("window.mode");
+    for (const Window::Mode mode: {Window::Mode::Windowed, Window::Mode::Borderless, Window::Mode::Fullscreen})
+    {
+        CHECK(std::ranges::find(info.choices, WindowModeToString(mode)) != info.choices.end());
+    }
+}
+
+// Setting a value by key, from text, is what a control endpoint and a config importer both
+// need: they have a string and no idea whether the key holds a bool, an int, a float or a
+// string. The metadata already declares the closed sets and the ranges, so honouring them
+// here is what stops a value the loader would reject from being stored and saved.
+TEST_CASE("Setting a value by key parses, validates and clamps") {
+    EngineSettings s;
+
+    SUBCASE("each type parses from its text form") {
+        CHECK(SetSettingValueFromString(s, "graphics.vsync", "false"));
+        CHECK(s.graphics.vsync == false);
+        CHECK(SetSettingValueFromString(s, "graphics.vsync", "1"));
+        CHECK(s.graphics.vsync == true);
+
+        CHECK(SetSettingValueFromString(s, "window.width", "1920"));
+        CHECK(s.window.width == 1920);
+
+        CHECK(SetSettingValueFromString(s, "graphics.renderScale", "0.5"));
+        CHECK(s.graphics.renderScale == doctest::Approx(0.5f));
+
+        CHECK(SetSettingValueFromString(s, "window.mode", "borderless"));
+        CHECK(s.window.mode == "borderless");
+    }
+
+    SUBCASE("a value outside a closed set is refused, leaving the old one") {
+        REQUIRE(SetSettingValueFromString(s, "window.mode", "fullscreen"));
+        CHECK_FALSE(SetSettingValueFromString(s, "window.mode", "nonsense"));
+        CHECK(s.window.mode == "fullscreen");
+    }
+
+    SUBCASE("a number outside its range is clamped, as the loader would clamp it") {
+        CHECK(SetSettingValueFromString(s, "graphics.renderScale", "9.0"));
+        CHECK(s.graphics.renderScale == doctest::Approx(1.0f));
+        CHECK(SetSettingValueFromString(s, "graphics.renderScale", "0.01"));
+        CHECK(s.graphics.renderScale == doctest::Approx(0.25f));
+    }
+
+    SUBCASE("text that is not a number at all is refused") {
+        const int before = s.window.width;
+        CHECK_FALSE(SetSettingValueFromString(s, "window.width", "wide"));
+        CHECK(s.window.width == before);
+    }
+
+    SUBCASE("an unknown key is refused") {
+        CHECK_FALSE(SetSettingValueFromString(s, "graphics.notAThing", "1"));
+    }
+}
+
+TEST_CASE("Reading a value by key round-trips through its text form") {
+    EngineSettings s;
+    REQUIRE(SetSettingValueFromString(s, "window.mode", "borderless"));
+    REQUIRE(SetSettingValueFromString(s, "graphics.vsync", "false"));
+
+    std::string text;
+    REQUIRE(GetSettingValueAsString(s, "window.mode", text));
+    CHECK(text == "borderless");
+    REQUIRE(GetSettingValueAsString(s, "graphics.vsync", text));
+    CHECK(text == "false");
+
+    CHECK_FALSE(GetSettingValueAsString(s, "graphics.notAThing", text));
+
+    // Whatever the reader prints, the writer must accept - otherwise a value cannot survive
+    // being shown and set back, which is exactly what a settings UI does.
+    EngineSettings target;
+    ForEachSettingField(s,
+            [&](std::string_view key, const auto&)
+            {
+                std::string value;
+                REQUIRE(GetSettingValueAsString(s, key, value));
+                CHECK(SetSettingValueFromString(target, key, value));
+            });
 }
 
 namespace

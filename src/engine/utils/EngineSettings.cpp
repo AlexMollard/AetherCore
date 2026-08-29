@@ -30,7 +30,7 @@ namespace aether
 		const std::array kSettingInfo = std::to_array<std::pair<std::string_view, SettingInfo>>({
 		        {"window.width", {.description = "Window width in pixels. Ignored in borderless and fullscreen, which match the display.", .minValue = 320.0, .maxValue = 16384.0}},
 		        {"window.height", {.description = "Window height in pixels. Ignored in borderless and fullscreen, which match the display.", .minValue = 240.0, .maxValue = 16384.0}},
-		        {"window.mode", {.description = "Borderless is the only mode besides fullscreen that can win DWM independent flip; composition costs about a frame of latency.", .choices = kWindowModes, .restartRequired = true}},
+		        {"window.mode", {.description = "Borderless is the only mode besides fullscreen that can win DWM independent flip; composition costs about a frame of latency.", .choices = kWindowModes}},
 		        {"graphics.vsync", {.description = "Wait for the display to refresh. Turning it off tears, but removes a frame of latency."}},
 		        {"graphics.framesInFlight", {.description = "How far the game thread may run ahead of the screen. Every frame of run-ahead is one display interval of input lag (~17 ms at 60 Hz).", .minValue = 1.0, .maxValue = 3.0}},
 		        {"graphics.lowLatencyPresent", {.description = "Prefer MAILBOX over FIFO while vsync is on: a finished frame replaces the pending one instead of queueing behind it."}},

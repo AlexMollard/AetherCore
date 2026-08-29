@@ -57,6 +57,23 @@ namespace aether
 		return Window::Mode::Windowed;
 	}
 
+	// The inverse, kept next to the parse so the two spellings cannot drift apart. These
+	// are the strings in kWindowModes, which is what a settings file holds and what the
+	// settings UI offers.
+	[[nodiscard]] inline std::string_view WindowModeToString(const Window::Mode mode) noexcept
+	{
+		switch (mode)
+		{
+			case Window::Mode::Borderless:
+				return "borderless";
+			case Window::Mode::Fullscreen:
+				return "fullscreen";
+			case Window::Mode::Windowed:
+				break;
+		}
+		return "windowed";
+	}
+
 	class GpuDevice;
 	class CameraSubsystem;
 	class RenderingSubsystem;
@@ -145,6 +162,10 @@ namespace aether
 		// recreate (present-mode change) on the next producer-thread poll. No-op
 		void SetVsync(bool enabled);
 		void SetRenderScale(float scale);
+
+		// Switch presentation live. The window keeps its identity - and so does every Vulkan
+		// object tied to it except the swapchain, which the resize path recreates.
+		void SetWindowMode(Window::Mode mode);
 
 		// MAILBOX instead of FIFO while vsync is on. Same mechanism as SetVsync, because it
 		// decides the same thing: the present mode the swapchain is built with. Without

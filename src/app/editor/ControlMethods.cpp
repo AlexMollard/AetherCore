@@ -2337,22 +2337,6 @@ namespace aether::editor
 			                {"orthographicHeight", cam->GetOrthographicHeight()}};
 		        }});
 
-		methods.push_back({"settings.get",
-		        "get_settings",
-		        "Current engine settings: resolution, vsync, and target fps.",
-		        false,
-		        Obj(),
-		        [](const json&, MethodContext& ctx) -> json
-		        {
-			        auto* svc = ctx.services.TryGet<SettingsService>();
-			        if (svc == nullptr)
-			        {
-				        return json{{"error", "no settings service"}};
-			        }
-			        const EngineSettings& s = svc->Get();
-			        return json{{"width", s.window.width}, {"height", s.window.height}, {"vsync", s.graphics.vsync}, {"targetFps", s.app.targetFps}};
-		        }});
-
 		methods.push_back({"editor.open_scene_dialog",
 		        "open_scene_dialog",
 		        "Open the editor's Open Scene dialog (the same one as File > Open).",
@@ -2408,6 +2392,75 @@ namespace aether::editor
 				        return json{{"error", "no window named '" + name + "' (call list_windows)"}};
 			        }
 			        return json{{"name", name}, {"visible", visible}};
+		        }});
+
+		// Settings over the control endpoint, so "this setting applies without a restart"
+		// is a claim that can be TESTED rather than asserted. Without it the only way to
+		// change a setting is the panel's combo boxes, which a headless session cannot drive
+		// - and a live-apply hook that is wired but never exercised looks exactly like one
+		// that works.
+		methods.push_back({"settings.get",
+		        "get_settings",
+		        "Read one engine setting by key (e.g. 'window.mode', 'graphics.renderScale') as text, plus whether it is marked as needing a restart. Omit `key` to list every setting.",
+		        false,
+		        Obj({{"key", StrProp()}}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* settings = ctx.services.TryGet<SettingsService>();
+			        if (settings == nullptr)
+			        {
+				        return json{{"error", "no settings service"}};
+			        }
+			        const std::string key = p.value("key", std::string{});
+			        if (key.empty())
+			        {
+				        json all = json::object();
+				        ForEachSettingField(settings->Get(),
+				                [&](std::string_view candidate, const auto&)
+				                {
+					                std::string text;
+					                if (GetSettingValueAsString(settings->Get(), candidate, text))
+					                {
+						                all[std::string(candidate)] = text;
+					                }
+				                });
+				        return json{{"settings", all}};
+			        }
+			        std::string text;
+			        if (!GetSettingValueAsString(settings->Get(), key, text))
+			        {
+				        return json{{"error", "no setting named '" + key + "'"}};
+			        }
+			        return json{{"key", key}, {"value", text}, {"restartRequired", SettingMetadata(key).restartRequired}};
+		        }});
+
+		methods.push_back({"settings.set",
+		        "set_setting",
+		        "Set one engine setting by key and apply it live, exactly as the Settings panel does: {key, value} with value as text ('true', '0.5', 'borderless'). Does not save to disk unless {save:true}.",
+		        true,
+		        Obj({{"key", StrProp()}, {"value", StrProp()}, {"save", json{{"type", "boolean"}}}}, {"key", "value"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* settings = ctx.services.TryGet<SettingsService>();
+			        if (settings == nullptr)
+			        {
+				        return json{{"error", "no settings service"}};
+			        }
+			        const std::string key = p.value("key", std::string{});
+			        const std::string value = p.value("value", std::string{});
+			        if (!SetSettingValueFromString(settings->Values(), key, value))
+			        {
+				        return json{{"error", "no setting named '" + key + "', or '" + value + "' is not valid for its type"}};
+			        }
+			        settings->ApplyField(key);
+			        settings->MarkDirty();
+			        if (p.value("save", false))
+			        {
+				        settings->Save();
+			        }
+			        std::string readBack;
+			        (void) GetSettingValueAsString(settings->Get(), key, readBack);
+			        return json{{"key", key}, {"value", readBack}, {"restartRequired", SettingMetadata(key).restartRequired}};
 		        }});
 
 		methods.push_back({"editor.layouts_list",
