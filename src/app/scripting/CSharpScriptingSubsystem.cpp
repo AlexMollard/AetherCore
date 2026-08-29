@@ -345,7 +345,7 @@ namespace aether::app::scripting
 
 			if (!HasDotnetToolchain())
 			{
-				error = "No .NET SDK found on this machine, so C# scripts cannot be compiled. Install the .NET SDK (dotnet.microsoft.com), or set DOTNET_ROOT to an existing install.";
+				error = DescribeMissingDotnetToolchain();
 				return false;
 			}
 
@@ -367,6 +367,15 @@ namespace aether::app::scripting
 
 			// on-disk dll mid-run is safe.
 			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / "debug";
+			// A zero exit with no assembly behind it is not a success. It happened with a
+			// runtime-only .NET, where the muxer failed to find a compiler rather than the
+			// compiler failing - the loop below would then copy nothing, report success, and
+			// leave the previous build loaded, so an edit silently did nothing.
+			if (!fs::exists(buildOut / "AetherGame.dll"))
+			{
+				error = "The script build reported success but produced no AetherGame.dll in '" + buildOut.string() + "'.";
+				return false;
+			}
 			for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
 			{
 				const fs::path src = buildOut / name;

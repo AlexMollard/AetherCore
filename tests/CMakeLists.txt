@@ -8,7 +8,8 @@ add_executable(EngineTests
     # App-side TUs under test: EngineTests links Engine only, so the scene serializer (plus
     # the reflection TUs that populate the component registry at static-init) and the
     # ImguiFrameData type its test exercises are compiled straight in here.
-    "${CMAKE_SOURCE_DIR}/src/app/EngineContentPaths.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/DotnetToolchain.cpp"
+"${CMAKE_SOURCE_DIR}/src/app/EngineContentPaths.cpp"
 "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerApply.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerCapture.cpp"

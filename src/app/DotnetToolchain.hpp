@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 namespace aether::app
 {
@@ -21,7 +22,22 @@ namespace aether::app
 	// Cheap to call: the answer is resolved once and cached for the process.
 	[[nodiscard]] const std::filesystem::path& DotnetExecutable();
 
-	// Whether a script build can be attempted at all. False means "no .NET SDK here",
-	// which callers should surface to the user rather than treat as a build failure.
+	// Whether a script build can be attempted at all.
+	//
+	// True requires an SDK, not merely a `dotnet` executable. Those are different things:
+	// the CLI ships with the RUNTIME, so a machine that can run a game but not build one
+	// passes any "is dotnet installed" test and then fails the build with a message from
+	// MSBuild that reads, to the person holding it, as the script being broken.
 	[[nodiscard]] bool HasDotnetToolchain();
+
+	// Why HasDotnetToolchain() said no, phrased for the person who has to fix it - the two
+	// causes have different fixes and one of them is easy to mistake for the other. Empty
+	// when the toolchain is fine.
+	[[nodiscard]] std::string DescribeMissingDotnetToolchain();
+
+	// Whether the install containing `dotnetExe` can compile, i.e. has an sdk/<version>
+	// directory beside the executable - the same thing the muxer looks for. Exposed because
+	// it is the single distinction this whole file exists to make, and the one that was
+	// missing: a runtime-only install has dotnet.exe and no sdk directory at all.
+	[[nodiscard]] bool DotnetInstallHasSdk(const std::filesystem::path& dotnetExe);
 } // namespace aether::app
