@@ -13,6 +13,7 @@
 #	undef CopyFile
 #endif
 
+#include "EngineContentPaths.hpp"
 #include "io/FileUtil.hpp"
 #include "utils/AetherExceptions.hpp"
 #include "utils/LogCategory.hpp"
@@ -96,11 +97,7 @@ namespace aether::app::project
 
 		std::filesystem::path ManagedSdkProjectPath()
 		{
-#ifdef AETHER_MANAGED_SDK_PROJECT
-			return AbsolutePath(AETHER_MANAGED_SDK_PROJECT);
-#else
-			return {};
-#endif
+			return AbsolutePath(EngineManagedSdkProject());
 		}
 
 		// A new project used to be one camera, an empty scripts folder and nothing to copy
@@ -170,23 +167,27 @@ namespace aether::app::project
 				return false;
 			}
 
-#ifdef AETHER_SCENES_SOURCE_DIR
 			const std::filesystem::path seedScene = root / "scenes" / "default.scene.toml";
 			if (!io::file_util::Exists(seedScene))
 			{
+				const std::filesystem::path templates = EngineSceneTemplatesDir();
+				if (templates.empty())
+				{
+					error = "Could not find the engine's scene templates. The install looks incomplete: expected them beside the executable in data/templates/scenes.";
+					return false;
+				}
 				if (auto dirResult = io::file_util::CreateDirectories(seedScene.parent_path()); !dirResult)
 				{
 					error = "Could not create project folder: " + dirResult.error().message;
 					return false;
 				}
 				const std::string_view sourceScene = projectTemplate == ProjectTemplate::Blank2D ? "default2d.scene.toml" : "default.scene.toml";
-				if (auto copyResult = io::file_util::CopyFile(std::filesystem::path(AETHER_SCENES_SOURCE_DIR) / sourceScene, seedScene); !copyResult)
+				if (auto copyResult = io::file_util::CopyFile(templates / sourceScene, seedScene); !copyResult)
 				{
 					error = "Could not copy project template scene: " + copyResult.error().message;
 					return false;
 				}
 			}
-#endif
 			return true;
 		}
 	} // namespace

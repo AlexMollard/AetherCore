@@ -179,10 +179,14 @@ if(AETHER_HAS_DOTNET)
         target_link_libraries(${_aether_runtime_target} PRIVATE DotNet::NetHost)
     endforeach()
 
-    # Build-machine facts the editor/publisher use to build a project's scripts at runtime
-    # (CSharpScriptingSubsystem::RebuildFromSource / EditorProjectPublisher). Editor-only; a
-    # packaged build leaves these undefined so a source rebuild is a reload-only no-op.
+    # Compiling a project's scripts is an EDITOR capability, and this is what says so.
+    # It used to be implied by AETHER_DOTNET_EXE being defined, which conflated "we know
+    # where dotnet is" with "this build is allowed to invoke it" - so making the dotnet
+    # path resolve at runtime would have quietly handed a shipped GameRuntime a compiler.
+    # The two facts are now separate: this one is the capability, AETHER_DOTNET_EXE below
+    # is only the build machine's hint for DotnetToolchain's runtime lookup.
     target_compile_definitions(Editor PRIVATE
+        AETHER_SCRIPT_BUILD_ENABLED=1
         AETHER_DOTNET_EXE="${AETHER_DOTNET_EXE}"
         AETHER_MANAGED_CONFIG="$<IF:$<CONFIG:Debug>,Debug,Release>"
         AETHER_MANAGED_CONFIGDIR="$<IF:$<CONFIG:Debug>,debug,release>")
@@ -270,6 +274,29 @@ set(_aether_stage_cmds
         "${CMAKE_BINARY_DIR}/data/engine.pak" "${_aether_app_bundle_dir}/data/engine.pak"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml" "${_aether_app_bundle_dir}/data/config/EngineSettings.toml"
+
+    # What "New Project" copies FROM. These used to be read straight out of the source
+    # tree through AETHER_SCENES_SOURCE_DIR and friends, which is a path that exists only
+    # on the machine that built the engine - so scaffolding a project worked for a
+    # developer and failed for everyone who was handed the binaries. Staged here, and
+    # found through PlatformPaths::ResolveBundlePath, they travel with the executable.
+    # Only scenes: resources/prefabs does not exist and never has, so
+    # AETHER_PREFABS_SOURCE_DIR has always named a dead path. EnginePrefabTemplatesDir
+    # resolves to nothing and the prefab lookup falls through to the settings-resolved
+    # location, which is what it should always have done.
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/scenes" "${_aether_app_bundle_dir}/data/templates/scenes"
+
+    # The SDK C# SOURCE, not just the built assembly: a generated game .csproj carries a
+    # ProjectReference to it, and the generated solution pairs the two so an IDE resolves
+    # engine types. Referencing the shipped AetherCore.dll instead would work for the
+    # compile and lose both. The nesting mirrors the source tree (managed/AetherCore next
+    # to managed/Directory.Build.props) because the csproj resolves the props by walking
+    # up from itself - flattening it here would silently drop TargetFramework.
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/managed/AetherCore" "${_aether_app_bundle_dir}/data/sdk/managed/AetherCore"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/managed/Directory.Build.props" "${_aether_app_bundle_dir}/data/sdk/managed/Directory.Build.props"
 )
 if(AETHER_HAS_DOTNET)
     list(APPEND _aether_stage_cmds

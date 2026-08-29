@@ -11,6 +11,7 @@
 
 #include <entt/entt.hpp>
 
+#include "EngineContentPaths.hpp"
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
@@ -209,11 +210,11 @@ namespace aether::app::scene
 		{
 			return g_projectScenesDirectory.string();
 		}
-#ifdef AETHER_SCENES_SOURCE_DIR
-		return AETHER_SCENES_SOURCE_DIR;
-#else
+		if (const std::filesystem::path templates = EngineSceneTemplatesDir(); !templates.empty())
+		{
+			return templates.string();
+		}
 		return EngineSettingsIO::ResolvePath("scenes").string();
-#endif
 	}
 
 	std::string PrefabsDirectory()
@@ -222,11 +223,11 @@ namespace aether::app::scene
 		{
 			return g_projectPrefabsDirectory.string();
 		}
-#ifdef AETHER_PREFABS_SOURCE_DIR
-		return AETHER_PREFABS_SOURCE_DIR;
-#else
+		if (const std::filesystem::path templates = EnginePrefabTemplatesDir(); !templates.empty())
+		{
+			return templates.string();
+		}
 		return EngineSettingsIO::ResolvePath("prefabs").string();
-#endif
 	}
 
 	void AssignPrefabGuids(SceneDescription& prefab)
@@ -492,15 +493,15 @@ namespace aether::app::scene
 			}
 		}
 
-#ifdef AETHER_SCENES_SOURCE_DIR
 		// Shipped templates ("default", "default2d"): older projects predate
-		// some templates, so fall back to the engine's resources.
-		const std::filesystem::path shipped = std::filesystem::path{AETHER_SCENES_SOURCE_DIR} / (sceneName + ".scene.toml");
-		if (auto text = io::file_util::ReadText(shipped))
+		// some templates, so fall back to the engine's own copy.
+		if (const std::filesystem::path templates = EngineSceneTemplatesDir(); !templates.empty())
 		{
-			return ParseToml(*text);
+			if (auto text = io::file_util::ReadText(templates / (sceneName + ".scene.toml")))
+			{
+				return ParseToml(*text);
+			}
 		}
-#endif
 
 		AE_WARN(LogCategory::App, "ReadSceneFile: cannot read scene '{}' from project:// {}", sceneName, scenesDir.empty() ? std::string{"(no project scenes directory scoped)"} : scenesDir.string());
 		return std::nullopt;

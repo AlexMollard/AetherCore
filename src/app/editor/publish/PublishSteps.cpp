@@ -6,6 +6,8 @@
 #include <system_error>
 
 #include "AssetPipeline.hpp"
+#include "DotnetToolchain.hpp"
+#include "EngineContentPaths.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "editor/publish/PublishPlan.hpp"
 #include "editor/publish/PublishReport.hpp"
@@ -347,18 +349,14 @@ namespace aether::editor
 	PublishToolchain MakePublishToolchain()
 	{
 		PublishToolchain toolchain;
-#ifdef AETHER_DOTNET_EXE
-		toolchain.dotnetExe = AETHER_DOTNET_EXE;
-#endif
+		toolchain.dotnetExe = app::DotnetExecutable();
 #ifdef AETHER_MANAGED_CONFIG
 		toolchain.managedConfig = AETHER_MANAGED_CONFIG;
 #endif
 #ifdef AETHER_MANAGED_CONFIGDIR
 		toolchain.managedConfigDir = AETHER_MANAGED_CONFIGDIR;
 #endif
-#ifdef AETHER_MANAGED_SDK_PROJECT
-		toolchain.managedSdkProject = AETHER_MANAGED_SDK_PROJECT;
-#endif
+		toolchain.managedSdkProject = app::EngineManagedSdkProject();
 		return toolchain;
 	}
 

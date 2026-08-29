@@ -8,6 +8,8 @@
 #include <thread>
 #include <utility>
 
+#include "DotnetToolchain.hpp"
+#include "EngineContentPaths.hpp"
 #include "RuntimeProjectSettings.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
@@ -115,9 +117,28 @@ namespace aether::app::scripting
 
 	namespace
 	{
-#if defined(AETHER_DOTNET_EXE)
+#if defined(AETHER_SCRIPT_BUILD_ENABLED)
 		constexpr std::string_view kEditorScriptBuildProfile = "Debug";
 		constexpr std::string_view kEditorScriptBuildProfileFile = ".aethercore-script-profile";
+
+		// managed/Directory.Build.props, which supplies TargetFramework and friends to the
+		// SDK and to a project's own scripts. Derived from the SDK csproj so it follows the
+		// SDK wherever it resolves to - the source tree during development, the staged copy
+		// in a packaged install, which is why the bundle mirrors the source nesting.
+		//
+		// Both callers previously walked up THREE levels from the csproj and called the
+		// result the repo root. That is one level too many: it landed on the directory
+		// ABOVE managed/, where no props file has ever existed. Editing the props therefore
+		// never invalidated a script build, and the stale assembly was kept.
+		std::filesystem::path ManagedDirectoryBuildProps()
+		{
+			const std::filesystem::path sdkProject = EngineManagedSdkProject();
+			if (sdkProject.empty())
+			{
+				return {};
+			}
+			return sdkProject.parent_path().parent_path() / "Directory.Build.props";
+		}
 
 		bool IsScriptBuildInput(const std::filesystem::path& path)
 		{
@@ -299,9 +320,7 @@ namespace aether::app::scripting
 				return true;
 			}
 
-			const std::filesystem::path repoRoot = std::filesystem::path(AETHER_MANAGED_SDK_PROJECT).parent_path().parent_path().parent_path();
-			const std::filesystem::path directoryBuildProps = repoRoot / "Directory.Build.props";
-			(void) AccumulateLatestScriptInputTime(directoryBuildProps, latestInput, inputSignature);
+			(void) AccumulateLatestScriptInputTime(ManagedDirectoryBuildProps(), latestInput, inputSignature);
 
 			// The set of inputs changing counts as much as any one of them being newer.
 			// Deleting a script moves no surviving mtime, so the timestamp test alone
@@ -324,7 +343,13 @@ namespace aether::app::scripting
 				return true;
 			}
 
-			const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + gameProject.string()
+			if (!HasDotnetToolchain())
+			{
+				error = "No .NET SDK found on this machine, so C# scripts cannot be compiled. Install the .NET SDK (dotnet.microsoft.com), or set DOTNET_ROOT to an existing install.";
+				return false;
+			}
+
+			const std::string inner = std::string("\"") + DotnetExecutable().string() + "\" build \"" + gameProject.string()
 			                          + "\" -c Debug --nologo -v:m -p:UseSharedCompilation=false -p:DebugSymbols=true -p:DebugType=portable -p:Optimize=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
 
 			std::string output;
@@ -368,8 +393,7 @@ namespace aether::app::scripting
 				std::optional<std::filesystem::file_time_type> builtInput;
 				std::uint64_t builtSignature = 1469598103934665603ULL;
 				(void) AccumulateLatestScriptInputTime(gameProject.parent_path(), builtInput, builtSignature);
-				const std::filesystem::path propsRoot = std::filesystem::path(AETHER_MANAGED_SDK_PROJECT).parent_path().parent_path().parent_path() / "Directory.Build.props";
-				(void) AccumulateLatestScriptInputTime(propsRoot, builtInput, builtSignature);
+				(void) AccumulateLatestScriptInputTime(ManagedDirectoryBuildProps(), builtInput, builtSignature);
 				if (auto written = io::file_util::WriteText(artifactsDir / kScriptInputSignatureFile, std::to_string(builtSignature)); !written)
 				{
 					AE_WARN(LogCategory::App, "Could not record the C# script input signature: {}", written.error().message);
@@ -378,7 +402,7 @@ namespace aether::app::scripting
 			return true;
 		}
 
-		// Inside the AETHER_DOTNET_EXE guard with its only callers: this exists solely to quiet and
+		// Inside the script-build guard with its only callers: this exists solely to quiet and
 		// de-daemonise the dotnet CLI we are about to shell out to, so without a CLI to shell out to
 		// there is nothing for it to configure.
 		void ConfigureDotnetEnvironmentOnce()
@@ -419,7 +443,7 @@ namespace aether::app::scripting
 
 	bool CSharpScriptingSubsystem::RebuildFromSource(std::string& error)
 	{
-#if defined(AETHER_DOTNET_EXE)
+#if defined(AETHER_SCRIPT_BUILD_ENABLED)
 		if (m_scriptProject.empty())
 		{
 			(void) error;
@@ -435,7 +459,7 @@ namespace aether::app::scripting
 
 	void CSharpScriptingSubsystem::BeginRebuildFromSource()
 	{
-#if defined(AETHER_DOTNET_EXE)
+#if defined(AETHER_SCRIPT_BUILD_ENABLED)
 		if (!m_scriptProject.empty())
 		{
 			if (m_buildJob && !m_buildJob->done.load(std::memory_order_acquire))
