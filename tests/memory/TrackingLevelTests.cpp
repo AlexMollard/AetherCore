@@ -28,19 +28,28 @@ TEST_CASE("Levels are ordered from cheapest to most expensive") {
     CHECK(TrackingLevel::Ledger < TrackingLevel::Callstacks);
 }
 
-// EngineTests is a dev-tooling build, so the ceiling must be the top.
-TEST_CASE("A dev build can reach every level") {
+// The ceiling follows the build, and the tests are built in whatever configuration the
+// caller asked for - including Release, which is what a shipped editor is compiled as.
+// Asserting the dev ceiling unconditionally made these tests fail in Release for the one
+// reason that is not a defect: the gate working exactly as intended.
+TEST_CASE("The ceiling matches what this build is allowed to pay for") {
+#if AE_DEV_TOOLING
     CHECK(kMaxTrackingLevel == TrackingLevel::Callstacks);
+#else
+    CHECK(kMaxTrackingLevel == TrackingLevel::Counters);
+#endif
 }
 
 TEST_CASE("Setting a level takes effect and LevelAtLeast follows it") {
     const LevelGuard guard;
 
-    SetTrackingLevel(TrackingLevel::Ledger);
-    CHECK(CurrentLevel() == TrackingLevel::Ledger);
+    // Ledger is above a retail build's ceiling, so ask for the highest level this build
+    // actually offers and assert against that. Clamping is covered by its own case below.
+    constexpr TrackingLevel target = kMaxTrackingLevel;
+    SetTrackingLevel(target);
+    CHECK(CurrentLevel() == target);
     CHECK(LevelAtLeast(TrackingLevel::Counters));
-    CHECK(LevelAtLeast(TrackingLevel::Ledger));
-    CHECK_FALSE(LevelAtLeast(TrackingLevel::Callstacks));
+    CHECK(LevelAtLeast(target));
 
     SetTrackingLevel(TrackingLevel::Disabled);
     CHECK_FALSE(LevelAtLeast(TrackingLevel::Counters));

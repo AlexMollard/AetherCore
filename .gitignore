@@ -127,3 +127,7 @@ AetherGame.slnx
 # ImGui window layout state - written next to whatever the working directory is
 # when the editor runs, so it turns up at the repo root and under projects/
 imgui.ini
+
+# Release packaging output (cmake --install staging, installer + zip).
+/staging/
+/dist/

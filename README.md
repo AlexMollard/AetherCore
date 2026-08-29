@@ -269,6 +269,46 @@ metallicRoughness = "project://assets/textures/metal-roughness.png"
 
 Asset references are catalogued through stable `AssetId` values, while texture and material registries remain the owning backends. See [Asset Database](docs/asset-database.md) for the design and reload roadmap.
 
+## Releases
+
+A release is a self-contained editor: someone downloads one file, installs it, and builds
+games without a compiler, the Vulkan SDK, or this repository. Tagging publishes one.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+That runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
+`Release`, stages the payload, bundles a .NET runtime, verifies the result, and attaches
+an installer plus a portable zip to the GitHub Release. Running the workflow manually from
+the Actions tab builds the same artifacts without publishing anything.
+
+What ships is declared in one place - the `_aether_payload` list in
+[`src/app/CMakeLists.txt`](src/app/CMakeLists.txt) - which drives both the build-tree
+staging and the install rules, so the two cannot disagree. To reproduce a package locally:
+
+```powershell
+cmake --install build/vs2022-msvc --config Release --component Runtime --prefix staging
+```
+
+```powershell
+./scripts/Verify-Package.ps1 -PayloadDir staging
+```
+
+The verifier is the guard against the failure mode that matters here: a package missing a
+file that every developer's machine happens to have anyway, from a source tree or a
+system-wide install, and which is therefore invisible until a stranger tries to use it.
+
+The installer is per-user (`%LOCALAPPDATA%\Programs\AetherCore`), so it needs no
+elevation and stays writable afterwards - MSBuild writes build artifacts beside the
+bundled SDK when a project's scripts are first compiled.
+
+**The .NET split.** The runtime is bundled, so the editor starts on a machine with no .NET
+at all. The **SDK** is not - it is much larger, and it is only needed to *compile* a
+project's C# scripts. The editor resolves `dotnet` at runtime and reports its absence
+rather than failing a build opaquely, so an install without the SDK is a working editor
+that cannot yet build scripts.
+
 ## Build targets
 
 | Target | Output |
