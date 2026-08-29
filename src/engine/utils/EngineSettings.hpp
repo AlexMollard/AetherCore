@@ -65,6 +65,11 @@ namespace aether
 			float gradeTint = 0.0f;
 			float vignetteIntensity = 0.0f;
 			float vignetteRoundness = 1.0f;
+			// Camera motion blur: the shutter's open fraction of the frame interval, and the
+			// ceiling on how far one frame may smear. Off by default - it is a look, and a
+			// look nobody asked for is a regression.
+			float motionBlur = 0.0f;
+			float motionBlurMaxRadius = 64.0f;
 			// Ambient occlusion. Radius is in world units - how far a surface looks for
 			// something occluding it - so it wants to match the scale of the scene's
 			// geometry rather than a fixed number of pixels.
@@ -164,6 +169,8 @@ namespace aether
 		f("graphics.gradeTint", settings.graphics.gradeTint);
 		f("graphics.vignetteIntensity", settings.graphics.vignetteIntensity);
 		f("graphics.vignetteRoundness", settings.graphics.vignetteRoundness);
+		f("graphics.motionBlur", settings.graphics.motionBlur);
+		f("graphics.motionBlurMaxRadius", settings.graphics.motionBlurMaxRadius);
 		f("graphics.gtao", settings.graphics.gtao);
 		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);

@@ -94,6 +94,15 @@ namespace TonemapContracts
 		// Lens vignette, also linear-space. 0 intensity is off.
 		float vignetteIntensity = 0.0f;
 		float vignetteRoundness = 1.0f;
+		// Camera motion blur, gathered in linear HDR before the curve - the same reason the
+		// grade is applied there. Needs depth and both view-projections to reproject a pixel
+		// to where it was last frame; 0 strength is off, and so is a null address, which is
+		// what the two preview services pass.
+		std::uint32_t motionBlurDepthSlot = 0xFFFFFFFFu;
+		float motionBlurStrength = 0.0f;
+		float motionBlurMaxRadiusPixels = 0.0f;
+		std::uint32_t _padMotionBlur = 0;
+		std::uint64_t frameConstantsAddr = 0;
 	};
 
 	static_assert(offsetof(PushConstants, hdrSlot) == 0);
@@ -103,7 +112,9 @@ namespace TonemapContracts
 	static_assert(offsetof(PushConstants, backgroundParamsAddr) == 48);
 	static_assert(offsetof(PushConstants, gradeContrast) == 56);
 	static_assert(offsetof(PushConstants, vignetteIntensity) == 72);
-	static_assert(sizeof(PushConstants) == 80, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
+	static_assert(offsetof(PushConstants, motionBlurDepthSlot) == 80);
+	static_assert(offsetof(PushConstants, frameConstantsAddr) == 96);
+	static_assert(sizeof(PushConstants) == 104, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
 } // namespace TonemapContracts
 
 namespace CullContracts

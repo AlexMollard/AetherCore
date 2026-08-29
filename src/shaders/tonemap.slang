@@ -17,7 +17,9 @@ Texture2D g_textures[];
 [[vk::binding(1, 0)]]
 SamplerState g_linearSampler;
 
+#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
+#include "include/ShadowSampling.slangh"
 
 // Push constants.
 struct TonemapPush
@@ -41,6 +43,11 @@ struct TonemapPush
     float gradeTint;        // 0 = unchanged, >0 greener
     float vignetteIntensity; // 0 = off
     float vignetteRoundness; // 1 = circular, 0 = follows the aspect ratio
+    uint  motionBlurDepthSlot;      // scene depth (0xFFFFFFFF = no depth, blur off)
+    float motionBlurStrength;       // shutter fraction of the frame interval; 0 = off
+    float motionBlurMaxRadiusPixels;// ceiling, so a teleport cannot smear the screen
+    uint  _padMotionBlur;
+    uint64_t frameConstantsAddr;    // BDA -> FrameConstantsData (0 = motion blur off)
 };
 [[vk::push_constant]] TonemapPush pc;
 
@@ -245,11 +252,138 @@ float3 DitherTriangular(float2 pixel)
 	return float3(r, g, b) * (1.0f / 255.0f);
 }
 
+// Camera motion blur: a shutter that stays open for part of the frame.
+//
+// A real camera integrates light over its exposure, so anything whose image moves during
+// it lands smeared along the path it travelled. A rasteriser samples one instant, which is
+// why a rendered pan looks unnaturally crisp and, at low frame rates, judders.
+//
+// Reconstructed here without a velocity buffer, because CAMERA motion does not need one: a
+// static world point's screen position follows entirely from its depth and the
+// view-projection, so reprojecting this pixel through LAST frame's matrix says exactly
+// where it used to be. The difference is its screen velocity and averaging along that
+// segment is the missing integral.
+//
+// Done here rather than in a pass of its own for the same reason the grade is: this is
+// linear HDR, before the curve, where a bright streak still carries its real energy. It
+// also costs no extra render target and no extra full-screen pass.
+//
+// The limitation, stated rather than discovered later: this is camera motion ONLY. An
+// object crossing a stationary camera is not blurred, and one moving with the camera is
+// blurred as though it were scenery. Per-object motion needs previous transforms in a
+// velocity buffer; this is the half that costs one matrix.
+static const uint kMotionBlurTaps = 12u;
+
+// Below this the streak is narrower than the pixel it is drawn on, so there is nothing to
+// integrate and every tap lands on the same texel.
+static const float kMotionBlurMinPixels = 0.75f;
+
+// How much farther than the centre a tap may be before it counts as background rather than
+// as part of this surface. Relative, because a metre of separation is a different surface
+// up close and the same one far away.
+static const float kMotionBlurDepthRejectRatio = 1.05f;
+
+float MotionBlurViewDistance(float ndcDepth, float2 uv, FrameConstantsData* fc)
+{
+    const float4 clip = float4(uv * 2.0f - 1.0f, ndcDepth, 1.0f);
+    const float4 world = mul(fc->invViewProj, clip);
+    return distance(world.xyz / max(world.w, 1e-6f), fc->cameraWorldPos.xyz);
+}
+
+float3 ApplyCameraMotionBlur(float3 centre, int2 coord, float2 svPos)
+{
+    if (pc.motionBlurStrength <= 0.0f || pc.frameConstantsAddr == 0 || pc.motionBlurDepthSlot == 0xFFFFFFFFu)
+    {
+        return centre;
+    }
+
+    FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+
+    const float2 size = float2(pc.screenWidth, pc.screenHeight);
+    if (size.x < 1.0f || size.y < 1.0f)
+    {
+        return centre;
+    }
+    const float2 uv = (float2(coord) + 0.5f) / size;
+
+    const float depth = g_textures[pc.motionBlurDepthSlot].Load(int3(coord, 0)).r;
+    // Sky sits at infinity, where reprojection is degenerate: a rotating camera would smear
+    // it across the whole screen, which is both wrong and the most expensive case there is.
+    if (depth >= 1.0f)
+    {
+        return centre;
+    }
+
+    const float4 clip = float4(uv * 2.0f - 1.0f, depth, 1.0f);
+    const float4 world = mul(fc->invViewProj, clip);
+    const float3 worldPos = world.xyz / max(world.w, 1e-6f);
+
+    const float4 prevClip = mul(fc->prevViewProj, float4(worldPos, 1.0f));
+    if (abs(prevClip.w) < 1e-6f)
+    {
+        return centre;
+    }
+    const float2 prevUv = (prevClip.xy / prevClip.w) * 0.5f + 0.5f;
+    const float centreDistance = distance(worldPos, fc->cameraWorldPos.xyz);
+
+    // The shutter was open for only part of the interval, so the image travelled that far.
+    float2 velocityUv = (uv - prevUv) * pc.motionBlurStrength;
+    const float lengthPixels = length(velocityUv * size);
+    if (lengthPixels < kMotionBlurMinPixels)
+    {
+        return centre;
+    }
+    if (lengthPixels > pc.motionBlurMaxRadiusPixels)
+    {
+        velocityUv *= pc.motionBlurMaxRadiusPixels / lengthPixels;
+    }
+
+    // Jittered so the taps do not land on identical positions in every pixel, which shows
+    // the streak as a row of discrete copies. Interleaved gradient noise is stable frame to
+    // frame, so it reads as grain rather than as crawl.
+    const float jitter = InterleavedGradientNoise(svPos);
+
+    float3 sum = centre;
+    float weight = 1.0f;
+
+    [unroll]
+    for (uint i = 0u; i < kMotionBlurTaps; ++i)
+    {
+        // Centred on the pixel and spread over the whole segment, so the streak sits
+        // symmetrically about where the surface is rather than lagging behind it.
+        const float t = ((float(i) + jitter) / float(kMotionBlurTaps)) - 0.5f;
+        const float2 tapUv = uv + velocityUv * t;
+        if (any(tapUv < 0.0f) || any(tapUv > 1.0f))
+        {
+            continue;
+        }
+
+        const int2 tapCoord = int2(tapUv * size);
+        const float tapDepth = g_textures[pc.motionBlurDepthSlot].Load(int3(tapCoord, 0)).r;
+        // Reject anything BEHIND this surface: without it a fast pan drags the background
+        // across a near silhouette and the object grows a halo of whatever was behind it,
+        // the classic tell of naive motion blur. Nearer taps are kept deliberately - a
+        // foreground object genuinely should smear over its background.
+        if (tapDepth >= 1.0f || MotionBlurViewDistance(tapDepth, tapUv, fc) > centreDistance * kMotionBlurDepthRejectRatio)
+        {
+            continue;
+        }
+
+        sum += g_textures[pc.hdrSlot].Load(int3(tapCoord, 0)).rgb;
+        weight += 1.0f;
+    }
+
+    return sum / max(weight, 1.0f);
+}
+
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
     const int2 coord = int2(svPos.xy);
     float3 scene = g_textures[pc.hdrSlot].Load(int3(coord, 0)).rgb;
+
+    // Before bloom and the grade: a streak should carry its real energy into both.
+    scene = ApplyCameraMotionBlur(scene, coord, svPos.xy);
 
     // Bloom is mixed in linear HDR, before exposure and the operator, so it is
     // tonemapped along with everything else. Added afterwards it would sit on top of

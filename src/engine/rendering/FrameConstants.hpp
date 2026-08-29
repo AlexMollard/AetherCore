@@ -10,7 +10,7 @@ namespace aether
 {
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (816 bytes):
+	// Layout (912 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -63,6 +63,15 @@ namespace aether
 		// y = turbidity. z, w spare.
 		glm::vec4 skyParams{0.0f, 2.5f, 0.0f, 0.0f};
 
+		// Last frame's viewProj, so a pass can reproject a pixel and learn how far it moved
+		// on screen. That is the whole input camera motion blur needs - no velocity buffer,
+		// because depth plus two matrices already describes every static surface's motion.
+		//
+		// Equal to viewProj on the first frame and whenever there is no continuity to
+		// reproject through (a teleport, a scene load), which yields zero velocity rather
+		// than a frame-long smear.
+		glm::mat4 prevViewProj{1.0f};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -87,7 +96,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 848, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 912, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -118,5 +127,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowCascadePenumbraScale) == 800);
 	static_assert(offsetof(FrameConstants, fogParams) == 816);
 	static_assert(offsetof(FrameConstants, skyParams) == 832);
-	static_assert(sizeof(FrameConstants) == 848);
+	static_assert(offsetof(FrameConstants, prevViewProj) == 848);
+	static_assert(sizeof(FrameConstants) == 912);
 } // namespace aether

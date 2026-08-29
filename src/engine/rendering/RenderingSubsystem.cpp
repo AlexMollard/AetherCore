@@ -307,6 +307,8 @@ namespace aether
 		{
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth bindless registration failed"));
 		}
+		// Camera motion blur reprojects through this in the tonemap pass.
+		m_postProcessStack.SetSceneDepthSlot(m_sceneDepthBindlessSlot);
 
 		// Same extent and lifetime as the depth it is written beside.
 		m_sceneGBuffer = graph.CreateTransientColor(gpu::Format::R8G8B8A8Unorm, extent, gpu::ImageUsage::Sampled);
@@ -668,6 +670,8 @@ namespace aether
 		const float gradeTint = m_postProcessStack.GetGradeTint();
 		const float vignetteIntensity = m_postProcessStack.GetVignetteIntensity();
 		const float vignetteRoundness = m_postProcessStack.GetVignetteRoundness();
+		const float motionBlurStrength = m_postProcessStack.GetMotionBlurStrength();
+		const float motionBlurMaxRadius = m_postProcessStack.GetMotionBlurMaxRadiusPixels();
 		const bool histogramCaptureEnabled = m_postProcessStack.IsHistogramCaptureEnabled();
 		const std::uint32_t histogramUpdatePeriod = m_postProcessStack.GetHistogramUpdatePeriod();
 		const std::uint32_t histogramSampleStride = m_postProcessStack.GetHistogramSampleStride();
@@ -693,6 +697,7 @@ namespace aether
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 		m_postProcessStack.SetGrade(gradeContrast, gradeSaturation, gradeTemperature, gradeTint);
 		m_postProcessStack.SetVignette(vignetteIntensity, vignetteRoundness);
+		m_postProcessStack.SetMotionBlur(motionBlurStrength, motionBlurMaxRadius);
 		m_postProcessStack.SetHistogramCaptureEnabled(histogramCaptureEnabled);
 		m_postProcessStack.SetHistogramUpdatePeriod(histogramUpdatePeriod);
 		m_postProcessStack.SetHistogramSampleStride(histogramSampleStride);

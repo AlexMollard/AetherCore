@@ -41,6 +41,8 @@ namespace aether
 		        {"graphics.gradeSaturation", {.description = "Colour saturation. 1 leaves the image untouched, 0 is greyscale, above 1 pushes further from grey.", .minValue = 0.0, .maxValue = 2.5}},
 		        {"graphics.gradeTemperature", {.description = "White balance along the warm/cool axis. Negative is cooler (bluer), positive warmer (redder); 0 is neutral. Luminance is preserved, so this does not double as an exposure control.", .minValue = -1.0, .maxValue = 1.0}},
 		        {"graphics.vignetteIntensity", {.description = "Lens falloff toward the edge of frame, applied in linear light so corner highlights roll off rather than just dimming. 0 is off.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"graphics.motionBlur", {.description = "Camera motion blur: how much of the frame the shutter stays open for. 0.5 is the film convention (a 180-degree shutter); 0 is off. Blurs camera movement only, not moving objects.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"graphics.motionBlurMaxRadius", {.description = "Ceiling on how far one frame may smear, in pixels. Bounds both the cost and the streak a camera cut would otherwise leave.", .minValue = 8.0, .maxValue = 256.0}},
 		        {"graphics.vignetteRoundness", {.description = "1 makes the falloff circular on screen; 0 follows the aspect ratio, darkening the sides of a wide frame rather than only the corners.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"graphics.gradeTint", {.description = "White balance along the green/magenta axis. Negative is magenta, positive green; 0 is neutral.", .minValue = -1.0, .maxValue = 1.0}},
 		        {"graphics.gtao", {.description = "Ground-truth ambient occlusion: darkens creases and contact points that the light probes cannot see into."}},

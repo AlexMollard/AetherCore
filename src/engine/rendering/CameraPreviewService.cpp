@@ -112,6 +112,11 @@ namespace aether
 			fc.proj = m_reqProj;
 			fc.viewProj = m_reqProj * m_reqView;
 			fc.cameraWorldPos = glm::vec4(m_reqCameraPos, 1.0f);
+			// The preview is a still of another camera, not a continuous view, so it has no
+			// motion to reproject through. Equal matrices mean zero screen velocity; leaving
+			// the default identity here would read as the camera having jumped from the
+			// origin every frame.
+			fc.prevViewProj = fc.viewProj;
 			nearPlane = m_reqNearPlane;
 		}
 

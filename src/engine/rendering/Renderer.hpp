@@ -51,6 +51,11 @@ namespace aether
 
 		void SetGrade(float contrast, float saturation, float temperature, float tint);
 		void SetVignette(float intensity, float roundness);
+
+		// Camera motion blur. `strength` is the shutter's open fraction of the frame
+		// interval (0.5 is the film convention, 0 is off); `maxRadiusPixels` bounds how far
+		// a single frame may ever smear.
+		void SetMotionBlur(float strength, float maxRadiusPixels);
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 

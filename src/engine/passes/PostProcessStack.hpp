@@ -59,6 +59,33 @@ namespace aether
 			m_dofSlot = slot;
 		}
 
+		// Scene depth, which camera motion blur reprojects through. Unlike the DoF image
+		// this needs no ReadTexture declaration: the depth buffer is produced and consumed
+		// by passes the graph already orders, so nothing is culled by reading it here.
+		void SetSceneDepthSlot(std::uint32_t slot)
+		{
+			m_sceneDepthSlot = slot;
+		}
+
+		// Shutter fraction of the frame interval - 0.5 is the film convention (a
+		// 180-degree shutter) and 0 is off - and the ceiling in pixels that stops a
+		// teleport smearing the whole screen for one frame.
+		void SetMotionBlur(float strength, float maxRadiusPixels)
+		{
+			m_motionBlurStrength = strength;
+			m_motionBlurMaxRadiusPixels = maxRadiusPixels;
+		}
+
+		[[nodiscard]] float GetMotionBlurStrength() const
+		{
+			return m_motionBlurStrength;
+		}
+
+		[[nodiscard]] float GetMotionBlurMaxRadiusPixels() const
+		{
+			return m_motionBlurMaxRadiusPixels;
+		}
+
 		// The image itself, not just its slot: the tonemap pass has to DECLARE the read or
 		// the graph culls whatever produced it, since a slot travelling in a push constant
 		// is invisible to the graph.
@@ -338,6 +365,9 @@ namespace aether
 		std::array<std::uint32_t, kBloomMipCount> m_bloomSlots{};
 		// 0xFFFFFFFF whenever the main camera is not using a lens, which is the usual case.
 		std::uint32_t m_dofSlot = 0xFFFFFFFFu;
+		std::uint32_t m_sceneDepthSlot = 0xFFFFFFFFu;
+		float m_motionBlurStrength = 0.0f;
+		float m_motionBlurMaxRadiusPixels = 64.0f;
 		RGImage m_dofImage;
 		std::array<gpu::Extent2D, kBloomMipCount> m_bloomExtents{};
 		GraphicsPipeline m_bloomDownsamplePipeline;

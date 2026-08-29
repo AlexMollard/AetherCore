@@ -505,6 +505,10 @@ namespace aether
 			                push.vignetteIntensity = m_vignetteIntensity;
 			                push.vignetteRoundness = m_vignetteRoundness;
 			                push.backgroundParamsAddr = backgroundParamsAddr;
+			                push.motionBlurDepthSlot = m_sceneDepthSlot;
+			                push.motionBlurStrength = m_motionBlurStrength;
+			                push.motionBlurMaxRadiusPixels = m_motionBlurMaxRadiusPixels;
+			                push.frameConstantsAddr = ctx.frameConstantsAddr;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			                cmd.Draw(3, 1, 0, 0);

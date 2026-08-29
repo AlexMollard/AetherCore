@@ -90,6 +90,14 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetMotionBlur(float strength, float maxRadiusPixels)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetMotionBlur(strength, maxRadiusPixels);
+		}
+	}
+
 	void Renderer::SetFxaaEnabled(bool enabled)
 	{
 		if (m_postProcessStack)

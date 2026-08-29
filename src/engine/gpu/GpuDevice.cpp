@@ -255,6 +255,15 @@ namespace aether
 		fc.skyVoidColor = packet.skyVoidColor;
 		fc.fogParams = packet.fogParams;
 		fc.skyParams = packet.skyParams;
+
+		// A first frame has nothing behind it, and a camera that jumped has nothing
+		// meaningful behind it either - reprojecting through either produces a screen-wide
+		// smear for one frame. Both are handled by starting from this frame's own matrix:
+		// the very first frame because m_hasPrevViewProj is false, a jump because the pass
+		// clamps how far it will ever blur.
+		fc.prevViewProj = m_hasPrevViewProj ? m_prevViewProj : fc.viewProj;
+		m_prevViewProj = fc.viewProj;
+		m_hasPrevViewProj = true;
 		return fc;
 	}
 

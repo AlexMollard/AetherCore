@@ -1311,7 +1311,7 @@ namespace aether
 			return;
 		}
 
-		FrameConstants fc = aether::GpuDevice::ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
+		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
 
 		if (m_profile == RuntimeProfile::Full)
 		{

@@ -95,12 +95,19 @@ namespace aether
 			return GpuFormat::R16G16B16A16Sfloat;
 		}
 
-		[[nodiscard]] static FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
+		// No longer static: it carries the previous frame's viewProj so a pass can reproject
+		// through it, and that is per-device state rather than something a caller should have
+		// to remember and thread through.
+		[[nodiscard]] FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
 
 		static void ApplyNoCameraLightingFallback(FrameConstants& fc);
 
 	private:
 		std::unique_ptr<GraphicsDevice> m_gfx;
 		std::function<void()> m_swapchainRecreatedCallback;
+
+		// Last frame's viewProj, published to shaders as FrameConstants::prevViewProj.
+		glm::mat4 m_prevViewProj{1.0f};
+		bool m_hasPrevViewProj = false;
 	};
 } // namespace aether

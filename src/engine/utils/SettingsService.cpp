@@ -36,6 +36,13 @@ namespace aether
 				        });
 			}
 		}
+		else if (key == "graphics.motionBlur" || key == "graphics.motionBlurMaxRadius")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetMotionBlur(m_values.graphics.motionBlur, m_values.graphics.motionBlurMaxRadius);
+			}
+		}
 		else if (key == "graphics.vignetteIntensity" || key == "graphics.vignetteRoundness")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())
