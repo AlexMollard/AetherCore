@@ -70,6 +70,13 @@ Require-File 'data/scripts/managed/AetherCore.dll' 'the C# SDK assembly'
 Require-File 'data/scripts/managed/AetherCore.Interop.dll' 'the CoreCLR boot assembly'
 Require-File 'data/scripts/managed/AetherCore.Interop.runtimeconfig.json' 'hostfxr initialises from this'
 
+# The C# compiler, hosted in-process so the editor needs no .NET SDK. A library project
+# does NOT copy its NuGet dependencies to the output by default - they resolve from the
+# build machine's package cache instead - so these can go missing in a way that works
+# perfectly for whoever built it and breaks Play for everyone else.
+Require-File 'data/scripts/managed/Microsoft.CodeAnalysis.dll' 'without it no project can compile its scripts' -minBytes 1000000
+Require-File 'data/scripts/managed/Microsoft.CodeAnalysis.CSharp.dll' 'the C# compiler itself' -minBytes 1000000
+
 # What "New Project" needs. These are the files that used to be read out of the build
 # machine's source tree, which is the whole reason this check exists.
 Require-File 'data/templates/scenes/default.scene.toml' 'seeds a new 3D project'
