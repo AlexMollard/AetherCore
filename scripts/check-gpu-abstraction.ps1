@@ -10,6 +10,13 @@
 #
 # Exit 0 = clean. Non-zero = one or more leaks detected.
 
+param(
+    # Rewrite the baseline from what the tree currently contains. For when a tolerated line
+    # is legitimately reworded - the entry then matches nothing and its violation reads as
+    # new - not for waving through violations you just introduced. Review the diff.
+    [switch]$UpdateBaseline
+)
+
 $ErrorActionPreference = 'Stop'
 
 # Engine dirs that must remain vulkan-free. These match the audit
@@ -64,13 +71,28 @@ if (Test-Path $baselineFile) {
 # invocation produced them; without normalising, the same violation would not match
 # its own baseline entry.
 function Get-NormalisedMatch([string]$text) {
-    return ($text -replace '\\', '/' -replace '\s+', ' ').Trim()
+    $normalised = ($text -replace '\\', '/' -replace '\s+', ' ').Trim()
+
+    # Drop the line number, keeping "<path>: <code>".
+    #
+    # The baseline is a ratchet: a tolerated violation stays tolerated until it is fixed.
+    # Keying on the line number broke that, because editing anything ABOVE a tolerated
+    # line renumbers it, so the same violation stops matching its own entry and is
+    # reported as new. That is what had this guard failing on every commit for days while
+    # reporting "no new ones" in the same breath.
+    #
+    # The staleness check below already says line numbers move and that treating that as
+    # an error would make the guard flaky. This is the same argument applied to matching.
+    return ($normalised -replace '^(.+?\.(?:cpp|hpp|h|inl)):\d+:', '$1:')
 }
+
+$script:seenViolations = [System.Collections.Generic.List[string]]::new()
 
 function Test-Empty([string]$label, [string[]]$matches) {
     $new = @()
     foreach ($m in $matches) {
         $key = Get-NormalisedMatch $m
+        $script:seenViolations.Add($key)
         if ($baseline.ContainsKey($key)) { $baseline[$key] = $true } else { $new += $m }
     }
 
@@ -193,6 +215,25 @@ Test-Empty 'No Vk* tokens in gpu/GpuProfiler.hpp (excluding comments)' $headerLe
 # A baseline entry that no longer matches anything means the violation was fixed. Say so
 # rather than failing: the line numbers in here move whenever the file above them changes,
 # so treating staleness as an error would make the guard flaky instead of useful.
+if ($UpdateBaseline) {
+    $header = @(
+        '# GPU abstraction baseline - violations that predate the guard being enforced.',
+        '#',
+        '# A ratchet, not amnesty: everything here is tolerated so CI can be green, and any NEW',
+        '# violation fails the build. Shrink this list; never grow it to silence a fresh leak.',
+        '#',
+        '# Entries carry no line number on purpose - editing anything above a tolerated line',
+        '# would otherwise renumber it and make the guard report it as new.',
+        '#',
+        '# Regenerate with: pwsh scripts/check-gpu-abstraction.ps1 -UpdateBaseline'
+    )
+    $unique = $script:seenViolations | Sort-Object -Unique
+    Set-Content -LiteralPath $baselineFile -Value ($header + $unique)
+    Write-Host ""
+    Write-Host "Baseline rewritten: $($unique.Count) entr(y/ies)." -ForegroundColor Yellow
+    exit 0
+}
+
 $stale = $baseline.Keys | Where-Object { -not $baseline[$_] }
 if ($stale) {
     Write-Host ""
