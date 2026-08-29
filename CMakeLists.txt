@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(AetherCore VERSION 0.2.0 LANGUAGES CXX)
+project(AetherCore VERSION 0.2.1 LANGUAGES CXX)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_STANDARD 26)
