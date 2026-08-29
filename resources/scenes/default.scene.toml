@@ -18,6 +18,12 @@
 # the editor opens on the engine's implicit default pose rather than on the scene, and
 # publishing warns that the startup scene has no main camera.
 #
+# The Main Camera is a CHILD of the Player, which is the whole camera-follow system: scene
+# transforms are world-space and ecs::SetWorldTransform propagates a parent's delta to its
+# subtree, so moving the Player carries the camera with it. No follow script, no smoothing,
+# no code at all. Without it the Player walked off the edge of the screen a second after the
+# first key press and never came back.
+
 # Re-saving this from the editor must not rewrite it - see the round-trip test in
 # tests/scene/SceneRoundTripTests.cpp - so it is written exactly as the serializer emits it.
 [environment]
@@ -40,37 +46,6 @@ builtin = true
 id = '0da40010cbf8c4cc'
 path = 'cube'
 type = 'mesh'
-
-[[entities]]
-euler = [ -15.8866005, 34.6952, 0.0 ]
-name = 'Main Camera'
-node = 900000901
-parent = -1
-position = [ 4.5, 3.0, 6.5 ]
-scale = [ 1.0, 0.99999994, 1.0 ]
-
-    [entities.camera]
-    aperture = 2.0
-    background = 'sky_gradient'
-    clear_color = [ 0.1, 0.1, 0.12 ]
-    depth_of_field = false
-    far = 1000.0
-    focal_length_mm = 50.0
-    focus_distance = 8.22
-    fov = 60.0
-    gradient_angle = 0.0
-    main = true
-    near = 0.1
-    orthographic_height = 10.0
-    projection = 'perspective'
-
-        [[entities.camera.gradient_stops]]
-        colour = [ 0.05, 0.06, 0.1 ]
-        position = 0.0
-
-        [[entities.camera.gradient_stops]]
-        colour = [ 0.02, 0.02, 0.03 ]
-        position = 1.0
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -185,6 +160,38 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'Player'
+
+[[entities]]
+euler = [ -15.8866005, 34.6952, 0.0 ]
+name = 'Main Camera'
+node = 900000901
+parent = 2
+parent_node = 5211485563892258367
+position = [ 4.5, 3.0, 6.5 ]
+scale = [ 1.0, 0.9999999, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 8.22
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]

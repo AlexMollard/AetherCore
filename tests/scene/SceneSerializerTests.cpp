@@ -679,20 +679,34 @@ TEST_CASE("Blank 2D template scene has an orthographic main camera") {
     CHECK(scene->kind == SceneKind::Scene2D);
     CHECK(scene->features == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
     REQUIRE(scene->entities.size() == 2);
-    REQUIRE(scene->entities[0].camera.has_value());
-    CHECK(scene->entities[0].mainCamera);
-    CHECK(scene->entities[0].camera->projection == CameraProjection::Orthographic);
-    CHECK(scene->entities[0].camera->orthographicHeight == doctest::Approx(10.0f));
+
+    // Found by what it IS, not by where it sits. The serializer orders parents before their
+    // children, so parenting the camera to the Player moved it to the second slot - an index
+    // this test used to hard-code, which made a scene reorder look like a missing camera.
+    const auto cameraIt = std::ranges::find_if(scene->entities, [](const EntityRecord& e) { return e.camera.has_value(); });
+    REQUIRE(cameraIt != scene->entities.end());
+    const EntityRecord& cameraEntity = *cameraIt;
+
+    CHECK(cameraEntity.mainCamera);
+    CHECK(cameraEntity.camera->projection == CameraProjection::Orthographic);
+    CHECK(cameraEntity.camera->orthographicHeight == doctest::Approx(10.0f));
     // 2D scenes clear to a flat camera-owned colour instead of the 3D sky.
-    CHECK(scene->entities[0].camera->background == CameraBackground::SolidColour);
-    CHECK(scene->entities[0].camera->clearColor.r == doctest::Approx(0.10f));
+    CHECK(cameraEntity.camera->background == CameraBackground::SolidColour);
+    CHECK(cameraEntity.camera->clearColor.r == doctest::Approx(0.10f));
+
+    // The camera rides the Player, so a new project's view follows what you are moving
+    // instead of watching it walk off the edge of the screen.
+    const auto playerIndex = static_cast<int>(std::distance(scene->entities.begin(),
+            std::ranges::find_if(scene->entities, [](const EntityRecord& e) { return !e.scripts.empty(); })));
+    CHECK(cameraEntity.parentIndex == playerIndex);
 
     World world = MakeWorld();
     const auto created = ApplyScene(*scene, world, ApplySceneDeps{});
     REQUIRE(created.size() == 2);
     CHECK(world.GetSceneKind() == SceneKind::Scene2D);
     CHECK(world.GetSceneFeatures() == (SceneFeatureFlags::Sprites | SceneFeatureFlags::Physics2D | SceneFeatureFlags::Tilemaps));
-    CHECK(world.Get<CameraComponent>(created[0]).projection == CameraProjection::Orthographic);
+    const auto cameraEntityIndex = static_cast<std::size_t>(std::distance(scene->entities.begin(), cameraIt));
+    CHECK(world.Get<CameraComponent>(created[cameraEntityIndex]).projection == CameraProjection::Orthographic);
 }
 
 // The template's whole job: a project made from it must DO something the first time Play is
