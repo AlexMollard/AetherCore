@@ -268,24 +268,28 @@ else()
     set(_aether_app_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
-set(_aether_stage_cmds
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_aether_app_bundle_dir}/data/config"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/engine.pak" "${_aether_app_bundle_dir}/data/engine.pak"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml" "${_aether_app_bundle_dir}/data/config/EngineSettings.toml"
+# The runtime payload, declared ONCE. Two consumers read it: the build-tree staging
+# below, and the install rules that produce a redistributable. Those used to be the same
+# list written twice, which is a list that drifts - and the failure mode is the worst
+# kind, a release missing one file that every developer's machine still has lying around
+# from their build tree.
+#
+# Each entry is "<kind>|<source>|<destination relative to the executable>", where kind is
+# `file` for one file or `dir` for a directory's contents.
+set(_aether_payload
+    "file|${CMAKE_BINARY_DIR}/data/engine.pak|data/engine.pak"
+    "file|${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml|data/config/EngineSettings.toml"
 
     # What "New Project" copies FROM. These used to be read straight out of the source
     # tree through AETHER_SCENES_SOURCE_DIR and friends, which is a path that exists only
     # on the machine that built the engine - so scaffolding a project worked for a
-    # developer and failed for everyone who was handed the binaries. Staged here, and
+    # developer and failed for everyone who was handed the binaries. Shipped here, and
     # found through PlatformPaths::ResolveBundlePath, they travel with the executable.
     # Only scenes: resources/prefabs does not exist and never has, so
     # AETHER_PREFABS_SOURCE_DIR has always named a dead path. EnginePrefabTemplatesDir
     # resolves to nothing and the prefab lookup falls through to the settings-resolved
     # location, which is what it should always have done.
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/scenes" "${_aether_app_bundle_dir}/data/templates/scenes"
+    "dir|${CMAKE_SOURCE_DIR}/resources/scenes|data/templates/scenes"
 
     # The SDK C# SOURCE, not just the built assembly: a generated game .csproj carries a
     # ProjectReference to it, and the generated solution pairs the two so an IDE resolves
@@ -293,24 +297,51 @@ set(_aether_stage_cmds
     # compile and lose both. The nesting mirrors the source tree (managed/AetherCore next
     # to managed/Directory.Build.props) because the csproj resolves the props by walking
     # up from itself - flattening it here would silently drop TargetFramework.
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/managed/AetherCore" "${_aether_app_bundle_dir}/data/sdk/managed/AetherCore"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/managed/Directory.Build.props" "${_aether_app_bundle_dir}/data/sdk/managed/Directory.Build.props"
+    "dir|${CMAKE_SOURCE_DIR}/managed/AetherCore|data/sdk/managed/AetherCore"
+    "file|${CMAKE_SOURCE_DIR}/managed/Directory.Build.props|data/sdk/managed/Directory.Build.props"
 )
 if(AETHER_HAS_DOTNET)
-    list(APPEND _aether_stage_cmds
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-            "${CMAKE_BINARY_DIR}/data/scripts/managed" "${_aether_app_bundle_dir}/data/scripts/managed")
+    list(APPEND _aether_payload "dir|${CMAKE_BINARY_DIR}/data/scripts/managed|data/scripts/managed")
 endif()
 if(WIN32 AND AETHER_NETHOST_DLL)
-    list(APPEND _aether_stage_cmds
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${AETHER_NETHOST_DLL}" "${_aether_app_bundle_dir}/nethost.dll")
+    list(APPEND _aether_payload "file|${AETHER_NETHOST_DLL}|nethost.dll")
 endif()
 
+set(_aether_stage_cmds "")
+foreach(_entry IN LISTS _aether_payload)
+    string(REPLACE "|" ";" _parts "${_entry}")
+    list(GET _parts 0 _kind)
+    list(GET _parts 1 _src_raw)
+    list(GET _parts 2 _dst)
+    # nethost.dll is found through the Windows environment, so its path arrives with
+    # backslashes. install() re-parses its arguments as CMake source, where "\P" of
+    # "C:\Program Files" is an invalid escape and a hard configure error.
+    file(TO_CMAKE_PATH "${_src_raw}" _src)
+    if(_kind STREQUAL "dir")
+        list(APPEND _aether_stage_cmds
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_src}" "${_aether_app_bundle_dir}/${_dst}")
+        install(DIRECTORY "${_src}/" DESTINATION "${_dst}" COMPONENT Runtime)
+    else()
+        list(APPEND _aether_stage_cmds
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_src}" "${_aether_app_bundle_dir}/${_dst}")
+        get_filename_component(_dst_dir "${_dst}" DIRECTORY)
+        get_filename_component(_dst_name "${_dst}" NAME)
+        # A payload entry that sits at the bundle root (nethost.dll) has no directory
+        # part, and install(FILES) rejects an empty DESTINATION.
+        if(_dst_dir STREQUAL "")
+            set(_dst_dir ".")
+        endif()
+        get_filename_component(_src_name "${_src}" NAME)
+        if(_src_name STREQUAL _dst_name)
+            install(FILES "${_src}" DESTINATION "${_dst_dir}" COMPONENT Runtime)
+        else()
+            install(FILES "${_src}" DESTINATION "${_dst_dir}" RENAME "${_dst_name}" COMPONENT Runtime)
+        endif()
+    endif()
+endforeach()
+
 add_custom_target(StageAppBundle ${_aether_stage_cmds}
-    COMMENT "Staging the app bundle (engine.pak, settings, managed, nethost)"
+    COMMENT "Staging the app bundle (engine.pak, settings, templates, SDK, managed, nethost)"
     VERBATIM)
 add_dependencies(StageAppBundle EngineAssetsPak)
 if(AETHER_HAS_DOTNET)
@@ -318,6 +349,7 @@ if(AETHER_HAS_DOTNET)
 endif()
 add_dependencies(Editor StageAppBundle)
 add_dependencies(GameRuntime StageAppBundle)
+
 
 # Aftermath's DLL is dev-only + editor-only (VulkanContext gate + Engine's /DELAYLOAD);
 # only the editor gets it, and the publisher explicitly skips it.
@@ -374,3 +406,14 @@ set_target_properties(Launcher PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE
 add_dependencies(Launcher StageAppBundle)
 add_dependencies(Launcher Editor)
 
+# The three executables a redistributable carries. Deliberately NOT "everything in the
+# bundle directory": that also holds import libraries, PDBs, CMake scaffolding and the
+# Aftermath DLL, which is a dev-only crash-analysis dependency the publisher already
+# refuses to ship.
+#
+# Everything here is in the `Runtime` component so that `cmake --install --component
+# Runtime` yields ONLY the app. The third-party libraries CPM fetches register install
+# rules of their own, and an uncomponented install collects all of them - the first
+# attempt produced 51 MB of Jolt/box2d/freetype headers and import libraries around a
+# handful of actual product files.
+install(TARGETS Launcher Editor GameRuntime RUNTIME DESTINATION "." COMPONENT Runtime)

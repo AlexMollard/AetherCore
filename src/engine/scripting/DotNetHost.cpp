@@ -4,11 +4,15 @@
 
 #if AETHER_HAS_DOTNET
 
+#	include <filesystem>
 #	include <string_view>
+#	include <system_error>
 
 #	include <nethost.h>
 #	include <coreclr_delegates.h>
 #	include <hostfxr.h>
+
+#	include "io/PlatformPaths.hpp"
 
 #	ifdef _WIN32
 #		include <windows.h>
@@ -171,12 +175,34 @@ namespace aether::scripting
 		m_initialized = true;
 		g_host = this;
 
+		// A packaged install ships its own .NET runtime beside the executable, so the
+		// editor runs on a machine with no .NET at all. Point hostfxr at it EXPLICITLY
+		// rather than through DOTNET_ROOT: that variable is inherited by the `dotnet build`
+		// the editor shells out to for a project's scripts, and aiming MSBuild at a
+		// runtime-only layout with no SDK in it would break compilation to fix hosting.
+		//
+		// Absent - a development build, or an install that relies on a system-wide .NET -
+		// nullptr keeps the default global resolution.
+		const std::filesystem::path bundledRoot = io::PlatformPaths::GetExecutableDir() / "dotnet";
+		std::error_code bundledEc;
+		const bool hasBundledRuntime = std::filesystem::is_directory(bundledRoot, bundledEc);
+		const string_t bundledRootStr = hasBundledRuntime ? ToCharT(bundledRoot) : string_t{};
+
+		get_hostfxr_parameters hostfxrParams{};
+		hostfxrParams.size = sizeof(hostfxrParams);
+		hostfxrParams.assembly_path = nullptr;
+		hostfxrParams.dotnet_root = hasBundledRuntime ? bundledRootStr.c_str() : nullptr;
+
 		char_t hostfxrPath[1024];
 		size_t hostfxrPathLen = std::size(hostfxrPath);
-		if (const int rc = get_hostfxr_path(hostfxrPath, &hostfxrPathLen, nullptr); rc != 0)
+		if (const int rc = get_hostfxr_path(hostfxrPath, &hostfxrPathLen, hasBundledRuntime ? &hostfxrParams : nullptr); rc != 0)
 		{
 			AE_WARN(LogCategory::App, ".NET runtime not found (get_hostfxr_path=0x{:08X}) - C# scripting disabled", static_cast<unsigned>(rc));
 			return false;
+		}
+		if (hasBundledRuntime)
+		{
+			AE_INFO(LogCategory::App, ".NET runtime: bundled ({})", bundledRoot.string());
 		}
 
 		void* hostfxrLib = LoadHostLibrary(hostfxrPath);
