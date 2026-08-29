@@ -71,7 +71,11 @@ namespace aether
 			// below has to clamp to it or sampler creation is invalid.
 			VkPhysicalDeviceProperties deviceProps{};
 			vkGetPhysicalDeviceProperties(context.GetDevice().physical_device, &deviceProps);
-			m_maxAnisotropy = std::min(deviceProps.limits.maxSamplerAnisotropy, static_cast<float>(std::max(config.maxAnisotropy, 1u)));
+			// The device ceiling is kept as well as the resolved value, because a later
+			// SetMaxAnisotropy has to clamp against the hardware again and the resolved
+			// value has already lost that information.
+			m_deviceMaxAnisotropy = deviceProps.limits.maxSamplerAnisotropy;
+			m_maxAnisotropy = std::min(m_deviceMaxAnisotropy, static_cast<float>(std::max(config.maxAnisotropy, 1u)));
 		}
 		m_capacity = config.maxSampledImages;
 		m_deferredFreeFrames = config.deferredFreeFrames;
@@ -762,6 +766,38 @@ namespace aether
 		}
 
 		return {};
+	}
+
+	bool BindlessManager::SetMaxAnisotropy(const std::uint32_t requested)
+	{
+		const std::scoped_lock lock(m_mutex);
+		if (m_device == nullptr)
+		{
+			return false;
+		}
+
+		const float clamped = std::min(m_deviceMaxAnisotropy, static_cast<float>(std::max(requested, 1u)));
+		if (clamped == m_maxAnisotropy)
+		{
+			return false;
+		}
+		m_maxAnisotropy = clamped;
+
+		// The fallback path hands vkGetDescriptorEXT a live VkSampler, so the old anisotropy
+		// is baked into that object and rewriting the descriptor alone would change nothing.
+		// The heap path has no such object - it describes the sampler inline - so it needs
+		// only the rewrite below.
+		//
+		// Destroying it here is safe ONLY because the caller has already waited for the
+		// device to go idle; nothing may still be sampling through it.
+		if (m_fallbackSampler != nullptr)
+		{
+			vkDestroySampler(static_cast<VkDevice>(m_device), static_cast<VkSampler>(m_fallbackSampler), nullptr);
+			m_fallbackSampler = nullptr;
+		}
+
+		WriteLinearSamplerUnlocked();
+		return true;
 	}
 
 	void BindlessManager::WriteLinearSampler()

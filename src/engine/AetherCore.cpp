@@ -699,11 +699,18 @@ namespace aether
 		// same quiesced path as a viewport change: render thread parked, GPU idle, graph
 		// rebuilt around what exists afterwards.
 		const bool lazyTargetsPending = m_rendering != nullptr && m_rendering->IsLazyTargetRebuildPending();
-		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending;
+		// Same reason: the sampler rewrite needs the GPU idle, which is only true on that path.
+		const bool anisotropyPending = m_pendingAnisotropy.load(std::memory_order_acquire) != 0;
+		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending || anisotropyPending;
 	}
 
 	void AetherCore::RecreateSwapchainAndResources()
 	{
+		// First, because it only needs the quiesced state this function is already called in
+		// - not a swapchain rebuild. A change of anisotropy on its own leaves everything
+		// below with nothing to do.
+		(void) ApplyPendingAnisotropy();
+
 		const bool framebufferResized = m_services.Get<PlatformSubsystem>().GetWindow().ConsumeFramebufferResized();
 		const bool swapchainDirty = framebufferResized || m_gpu->SwapchainNeedsRecreation();
 
@@ -787,6 +794,41 @@ namespace aether
 		// path picks it up on the next poll - the same route a user dragging the window
 		// edge already takes. Nothing here has to touch the GPU directly.
 		platform->GetWindow().SetMode(mode);
+	}
+
+	void AetherCore::SetAnisotropy(const int anisotropy)
+	{
+		const int clamped = std::clamp(anisotropy, 1, 16);
+		if (m_settings.graphics.anisotropy == clamped)
+		{
+			return;
+		}
+		m_settings.graphics.anisotropy = clamped;
+
+		// Recorded, not applied. Rewriting the sampler descriptor means waiting for the
+		// device to go idle, and vkDeviceWaitIdle requires every queue to be externally
+		// synchronised - so calling it here, on whichever thread changed the setting, races
+		// the render thread's own submits. Validation says so plainly: "VkQueue is
+		// simultaneously used in current thread N and thread M", once per change.
+		//
+		// So it rides the same quiesced path as a viewport rebuild instead, which runs with
+		// the render thread parked and the GPU already idle.
+		m_pendingAnisotropy.store(clamped, std::memory_order_release);
+	}
+
+	bool AetherCore::ApplyPendingAnisotropy()
+	{
+		const int pending = m_pendingAnisotropy.exchange(0, std::memory_order_acq_rel);
+		if (pending == 0 || !m_gpu)
+		{
+			return false;
+		}
+		m_gpu->WaitIdle();
+		if (m_gpu->GetBindlessManager().SetMaxAnisotropy(static_cast<std::uint32_t>(pending)))
+		{
+			AE_INFO(LogCategory::Engine, "Anisotropic filtering set to {}x.", pending);
+		}
+		return true;
 	}
 
 	void AetherCore::SetVsync(bool enabled)

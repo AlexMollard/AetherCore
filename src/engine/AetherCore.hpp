@@ -13,6 +13,8 @@
 #include "RuntimeProfile.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
+#include <atomic>
+
 #include "platform/Window.hpp"
 #include "rendering/IUiOverlay.hpp"
 #include "rendering/RenderFramePacket.hpp"
@@ -167,6 +169,11 @@ namespace aether
 		// object tied to it except the swapchain, which the resize path recreates.
 		void SetWindowMode(Window::Mode mode);
 
+		// Anisotropic filtering level. Records the request; the sampler is rewritten on the
+		// next quiesced frame, because doing it here would call vkDeviceWaitIdle from
+		// whichever thread changed the setting while the render thread is still submitting.
+		void SetAnisotropy(int anisotropy);
+
 		// MAILBOX instead of FIFO while vsync is on. Same mechanism as SetVsync, because it
 		// decides the same thing: the present mode the swapchain is built with. Without
 		// this the setting only took hold if you happened to toggle vsync afterwards.
@@ -202,6 +209,10 @@ namespace aether
 		// --- Main-thread quiesced swapchain / scene-viewport recreate ----------
 		[[nodiscard]] bool NeedsSwapchainOrViewportRecreate();
 		void RecreateSwapchainAndResources();
+
+		// Rewrites the bindless sampler when a new anisotropy has been requested. Must only
+		// be called with the render thread parked and the GPU idle. Returns whether it ran.
+		bool ApplyPendingAnisotropy();
 		void FlushImguiPendingTextureReleases();
 
 		[[nodiscard]] static GpuFormat GetForwardColorFormat();
@@ -218,6 +229,10 @@ namespace aether
 
 		[[nodiscard]] std::vector<std::string> GetRenderPassNames() const;
 		[[nodiscard]] std::size_t GetRenderPassCount() const;
+
+		// Requested anisotropy waiting to be applied, or 0 for none. Atomic because the
+		// setting can change on any thread while the render loop reads it.
+		std::atomic<int> m_pendingAnisotropy{0};
 
 		void BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc);
 		void PatchShadowIndices(std::uint32_t frameIdx);

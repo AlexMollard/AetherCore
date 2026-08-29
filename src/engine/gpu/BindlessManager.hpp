@@ -44,6 +44,14 @@ namespace aether
 
 		void WriteLinearSampler();
 
+		// Change the anisotropy every sampler is created with, and rewrite the one
+		// shader-visible sampler so the change takes effect without recreating the device.
+		// Returns false when the value was already in force (or was clamped to it).
+		//
+		// The CALLER must have waited for the device to be idle: this overwrites a descriptor
+		// the GPU reads and may destroy a sampler object it is still using.
+		bool SetMaxAnisotropy(std::uint32_t requested);
+
 		[[nodiscard]] gpu::DeviceAddress GetResourceHeapAddress() const;
 		[[nodiscard]] gpu::DeviceAddress GetSamplerHeapAddress() const;
 		[[nodiscard]] gpu::DeviceSize GetResourceHeapSize() const;
@@ -85,8 +93,11 @@ namespace aether
 		mutable std::mutex m_mutex;
 		gpu::Device m_device = nullptr;
 		void* m_vmaAllocator = nullptr;
-		// Device anisotropy ceiling, cached at init; 1.0 means the device offers none.
+		// What samplers are actually created with: the requested setting clamped to the
+		// hardware ceiling below. 1.0 means no anisotropic filtering.
 		float m_maxAnisotropy = 1.0f;
+		// The hardware ceiling itself, kept so a later request can be re-clamped.
+		float m_deviceMaxAnisotropy = 1.0f;
 
 		void* m_resourceHeapBuffer = nullptr;
 		void* m_resourceHeapAlloc = nullptr;
