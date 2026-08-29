@@ -90,7 +90,11 @@ jobs:
           CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
 
       - name: Build
-        run: cmake --build --preset vs2026-msvc --target Editor GameRuntime EngineTests
+        # --parallel is what makes MSBuild build projects concurrently: without it CMake
+        # passes no /m and the projects go one at a time, leaving most of the runner idle
+        # between targets. /MP already parallelises files WITHIN a first-party project, but
+        # the third-party targets do not set it, so those were fully serial.
+        run: cmake --build --preset vs2026-msvc --parallel --target Editor GameRuntime EngineTests
 
       # The gauntlet sees $env:CI (GitHub sets it) and skips the two GPU smokes on
       # its own, so this is the same entry point used locally rather than a second,

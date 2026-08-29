@@ -80,7 +80,9 @@ jobs:
       # editor's other development-only cost to the debug configurations, so a shipped
       # editor must not be built in one of them.
       - name: Build
-        run: cmake --build build/vs2026-msvc --config Release --target Editor GameRuntime Launcher EngineTests
+        # --parallel: see the note in ci.yml. Without it MSBuild builds one project at a
+        # time and the build step dominates the whole run.
+        run: cmake --build build/vs2026-msvc --config Release --parallel --target Editor GameRuntime Launcher EngineTests
 
       # Nothing should be published that has not been tested. The GPU smokes need a
       # display the runner does not have, so this is the unit suite only - the same
