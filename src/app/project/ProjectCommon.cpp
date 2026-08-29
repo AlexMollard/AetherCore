@@ -110,9 +110,12 @@ namespace aether::app::project
 			src += "using System.Numerics;\n";
 			src += "using AetherCore;\n\n";
 			src += "namespace AetherGame;\n\n";
-			src += "// Attach this to an entity: select it, then Add Component > Script > Player.\n";
-			src += "// Public fields show up in the Inspector and save with the scene.\n";
-			src += "// Press Play to run it; F5 rebuilds and hot-reloads while Play is running.\n";
+			// Both templates ship with this already attached to their Player, so the first
+			// thing a new user reads must not be an instruction to do what is already done.
+			src += "// Already attached to the Player in this scene - press Play and move with WASD.\n";
+			src += "// Speed below shows up in the Inspector and saves with the scene. Change it, Play again.\n";
+			src += "// F5 rebuilds and hot-reloads this file while Play is still running.\n";
+			src += "// To use it elsewhere: select an entity, then Add Component > Script > Player.\n";
 			src += "public sealed class Player : EntityScript\n";
 			src += "{\n";
 			src += "\tpublic float Speed = 5.0f;\n\n";
