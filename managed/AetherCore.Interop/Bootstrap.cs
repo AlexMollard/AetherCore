@@ -84,6 +84,7 @@ internal static unsafe class Bootstrap
             outApi->GetReplicatedPropertyIndices = &ScriptRegistry.GetReplicatedPropertyIndices;
             outApi->GetNetRpcMethod = &ScriptRegistry.GetNetRpcMethod;
             outApi->InvokeNetRpc = &ScriptRegistry.InvokeNetRpc;
+        outApi->CompileScripts = &Api_CompileScripts;
 
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;
@@ -125,6 +126,36 @@ internal static unsafe class Bootstrap
         catch
         {
             // Latency mode is best-effort; some GC configs reject it.
+        }
+    }
+
+    /// <summary>
+    /// Compiles a project's scripts and reports what the compiler said.
+    /// </summary>
+    /// <remarks>
+    /// Returns 0 on success. Diagnostics are written into the caller's buffer as UTF-8 and
+    /// truncated to fit - the caller shows them to a human, so losing the tail of a hundred
+    /// errors costs nothing, whereas overrunning the buffer would cost the process.
+    /// </remarks>
+    [UnmanagedCallersOnly]
+    private static int Api_CompileScripts(byte* scriptDir, byte* outputPath, byte* referenceDir, int optimize, byte* diagBuf, int diagLen)
+    {
+        try
+        {
+            int rc = ScriptCompiler.Compile(
+                Utf8.ToString(scriptDir),
+                Utf8.ToString(outputPath),
+                Utf8.ToString(referenceDir),
+                optimize != 0,
+                out string diagnostics);
+            Utf8.Write(diagnostics, diagBuf, diagLen);
+            return rc;
+        }
+        catch (Exception ex)
+        {
+            // Nothing may cross this boundary as an exception: the caller is C++.
+            Utf8.Write(ex.ToString(), diagBuf, diagLen);
+            return 3;
         }
     }
 

@@ -12,7 +12,6 @@ namespace aether::editor
 	// Where the external tools live. Populated from the AETHER_* compile definitions.
 	struct PublishToolchain
 	{
-		std::filesystem::path dotnetExe;
 		std::string managedConfig;
 		std::string managedConfigDir;
 		std::filesystem::path managedSdkProject;

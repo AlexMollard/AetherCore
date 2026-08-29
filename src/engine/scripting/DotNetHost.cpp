@@ -166,6 +166,11 @@ namespace aether::scripting
 		}
 	}
 
+	DotNetHost* DotNetHost::Active() noexcept
+	{
+		return g_host;
+	}
+
 	bool DotNetHost::Initialize(const std::filesystem::path& managedDir)
 	{
 		if (m_initialized)

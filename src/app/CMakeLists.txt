@@ -179,15 +179,15 @@ if(AETHER_HAS_DOTNET)
         target_link_libraries(${_aether_runtime_target} PRIVATE DotNet::NetHost)
     endforeach()
 
-    # Compiling a project's scripts is an EDITOR capability, and this is what says so.
-    # It used to be implied by AETHER_DOTNET_EXE being defined, which conflated "we know
-    # where dotnet is" with "this build is allowed to invoke it" - so making the dotnet
-    # path resolve at runtime would have quietly handed a shipped GameRuntime a compiler.
-    # The two facts are now separate: this one is the capability, AETHER_DOTNET_EXE below
-    # is only the build machine's hint for DotnetToolchain's runtime lookup.
+    # Compiling a project's scripts is an EDITOR capability, and this is what says so. A
+    # shipped GameRuntime loads the assembly it was given and never builds one, so it must
+    # not carry the compiler path at all.
+    #
+    # The compiling itself is done in-process by Roslyn (managed/AetherCore.Interop/
+    # ScriptCompiler.cs), not by invoking `dotnet` - which is why the editor runs on a
+    # machine with no .NET SDK on it.
     target_compile_definitions(Editor PRIVATE
         AETHER_SCRIPT_BUILD_ENABLED=1
-        AETHER_DOTNET_EXE="${AETHER_DOTNET_EXE}"
         AETHER_MANAGED_CONFIG="$<IF:$<CONFIG:Debug>,Debug,Release>"
         AETHER_MANAGED_CONFIGDIR="$<IF:$<CONFIG:Debug>,debug,release>")
 

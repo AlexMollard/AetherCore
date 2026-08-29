@@ -87,6 +87,16 @@ namespace aether::scripting
 		// managed side and simply produce no call.
 		std::int32_t (*GetNetRpcMethod)(const char* typeNameUtf8, const char* methodNameUtf8, std::int32_t* outTarget) = nullptr;
 		void (*InvokeNetRpc)(std::uint64_t handle, std::int32_t methodIndex, const std::uint8_t* argBlob, std::int32_t argLen) = nullptr;
+
+		// Compiles a project's scripts in-process, with the Roslyn assemblies shipped beside
+		// the engine's managed output. Returns 0 on success; anything else means the build
+		// failed and `diagBuf` holds the compiler's own diagnostics, already formatted for a
+		// human, truncated to `diagLen`.
+		//
+		// This is why the editor needs no .NET SDK. `dotnet.exe` ships with the RUNTIME, so
+		// asking it to build on a machine that has only that produces "a compatible .NET SDK
+		// was not found" - which reached one user as their script failing to compile.
+		std::int32_t (*CompileScripts)(const char* scriptDirUtf8, const char* outputPathUtf8, const char* referenceDirUtf8, std::int32_t optimize, char* diagBuf, std::int32_t diagLen) = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

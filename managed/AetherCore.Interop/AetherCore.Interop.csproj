@@ -14,6 +14,18 @@
     <RootNamespace>AetherCore.Interop</RootNamespace>
 
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+
+    <!--
+      Copy NuGet dependencies into the output. A library does not do this by default: it
+      leaves them to be resolved from the machine's package cache through deps.json, which
+      works on the machine that built it and nowhere else. The compiler assemblies have to
+      SHIP, so they have to be in the output directory CMake stages.
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <!-- Roslyn ships translated diagnostics for thirteen languages. The engine logs in
+         English, so they are weight in every download for text nothing will read. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>true</InvariantGlobalization>
 
     <!-- GC tuned for a game host: workstation concurrent, keep decommitted VM
@@ -25,6 +37,15 @@
 
   <ItemGroup>
     <ProjectReference Include="../AetherCore/AetherCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The C# compiler, hosted in-process. The editor compiles a project's scripts itself
+      rather than shelling out to `dotnet build`, so that a machine with no .NET SDK - which
+      is most machines - can still open a project and press Play. See ScriptCompiler.cs.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
   </ItemGroup>
 
 </Project>

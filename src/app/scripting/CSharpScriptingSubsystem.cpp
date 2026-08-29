@@ -8,7 +8,6 @@
 #include <thread>
 #include <utility>
 
-#include "DotnetToolchain.hpp"
 #include "EngineContentPaths.hpp"
 #include "RuntimeProjectSettings.hpp"
 #include "io/FileUtil.hpp"
@@ -334,35 +333,47 @@ namespace aether::app::scripting
 		}
 
 		// the Editor must have predictable stepping and locals. Pure file IO with no
-		bool PerformScriptBuild(const std::filesystem::path& managedDir, const std::filesystem::path& gameProject, const std::filesystem::path& artifactsDir, std::string& error)
+		bool PerformScriptBuild(const ::aether::scripting::ManagedScriptApi* api, const std::filesystem::path& managedDir, const std::filesystem::path& gameProject, const std::filesystem::path& artifactsDir, std::string& error)
 		{
 			namespace fs = std::filesystem;
 			if (!IsScriptBuildRequired(gameProject, managedDir, artifactsDir))
 			{
-				AE_VERBOSE(LogCategory::App, "C# debug scripts are current; skipping dotnet build.");
+				AE_VERBOSE(LogCategory::App, "C# scripts are current; skipping the compile.");
 				return true;
 			}
 
-			if (!HasDotnetToolchain())
+			if (api == nullptr || api->CompileScripts == nullptr)
 			{
-				error = DescribeMissingDotnetToolchain();
+				error = "The C# host is not available, so scripts cannot be compiled.";
 				return false;
 			}
 
-			const std::string inner = std::string("\"") + DotnetExecutable().string() + "\" build \"" + gameProject.string()
-			                          + "\" -c Debug --nologo -v:m -p:UseSharedCompilation=false -p:DebugSymbols=true -p:DebugType=portable -p:Optimize=false -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
+			// Compiled in-process by Roslyn rather than by shelling out to `dotnet build`.
+			// The editor already hosts the .NET runtime, so it can host the compiler too -
+			// which is what lets a machine with no .NET SDK open a project and press Play.
+			const fs::path scriptDir = gameProject.parent_path();
+			const fs::path outputPath = artifactsDir / "bin" / "AetherGame" / "debug" / "AetherGame.dll";
 
-			std::string output;
-			const int rc = io::RunProcessCapture(inner, output);
-			if (rc == io::kProcessTimedOut)
-			{
-				error = "dotnet build timed out";
-				return false;
-			}
+			// Big enough for a wall of compiler errors; the managed side truncates to fit.
+			std::string diagnostics(64 * 1024, char{0});
+			const int rc = api->CompileScripts(scriptDir.string().c_str(),
+			        outputPath.string().c_str(),
+			        managedDir.string().c_str(),
+			        0, // debug: the editor steps through these
+			        diagnostics.data(),
+			        static_cast<std::int32_t>(diagnostics.size()));
+			diagnostics.resize(std::strlen(diagnostics.c_str()));
+
 			if (rc != 0)
 			{
-				error = output.empty() ? "dotnet build failed" : output;
+				error = diagnostics.empty() ? "The C# compile failed." : diagnostics;
 				return false;
+			}
+			if (!diagnostics.empty())
+			{
+				// Warnings: the build worked, so these are worth seeing but must not read as
+				// a failure.
+				AE_WARN(LogCategory::App, "C# compile warnings: {}", diagnostics);
 			}
 
 			// on-disk dll mid-run is safe.
@@ -411,28 +422,6 @@ namespace aether::app::scripting
 			return true;
 		}
 
-		// Inside the script-build guard with its only callers: this exists solely to quiet and
-		// de-daemonise the dotnet CLI we are about to shell out to, so without a CLI to shell out to
-		// there is nothing for it to configure.
-		void ConfigureDotnetEnvironmentOnce()
-		{
-			static const bool done = []()
-			{
-#ifdef _WIN32
-				_putenv_s("MSBUILDDISABLENODEREUSE", "1");
-				_putenv_s("DOTNET_CLI_USE_MSBUILD_SERVER", "0");
-				_putenv_s("DOTNET_CLI_TELEMETRY_OPTOUT", "1");
-				_putenv_s("DOTNET_NOLOGO", "1");
-#else
-				setenv("MSBUILDDISABLENODEREUSE", "1", 1);
-				setenv("DOTNET_CLI_USE_MSBUILD_SERVER", "0", 1);
-				setenv("DOTNET_CLI_TELEMETRY_OPTOUT", "1", 1);
-				setenv("DOTNET_NOLOGO", "1", 1);
-#endif
-				return true;
-			}();
-			(void) done;
-		}
 #endif
 	} // namespace
 
@@ -458,8 +447,7 @@ namespace aether::app::scripting
 			(void) error;
 			return true;
 		}
-		ConfigureDotnetEnvironmentOnce();
-		return PerformScriptBuild(m_managedDir, m_scriptProject, m_scriptArtifactsDir, error);
+		return PerformScriptBuild(Api(), m_managedDir, m_scriptProject, m_scriptArtifactsDir, error);
 #else
 		(void) error;
 		return true;
@@ -475,18 +463,19 @@ namespace aether::app::scripting
 			{
 				return;
 			}
-			ConfigureDotnetEnvironmentOnce();
-			auto job = std::make_shared<ScriptBuildJob>();
+				auto job = std::make_shared<ScriptBuildJob>();
 			m_buildJob = job;
-			// Copies; the worker never touches `this`.
+			// Copies; the worker never touches `this`. The api pointer is owned by the host
+			// and outlives every build, so it travels by value like the paths do.
 			const std::filesystem::path managedDir = m_managedDir;
 			const std::filesystem::path gameProject = m_scriptProject;
 			const std::filesystem::path artifactsDir = m_scriptArtifactsDir;
+			const ::aether::scripting::ManagedScriptApi* const api = Api();
 			std::thread(
-			        [job, managedDir, gameProject, artifactsDir]()
+			        [job, api, managedDir, gameProject, artifactsDir]()
 			        {
 				        std::string err;
-				        const bool ok = PerformScriptBuild(managedDir, gameProject, artifactsDir, err);
+				        const bool ok = PerformScriptBuild(api, managedDir, gameProject, artifactsDir, err);
 				        job->error = std::move(err);
 				        job->ok.store(ok, std::memory_order_relaxed);
 				        job->done.store(true, std::memory_order_release);

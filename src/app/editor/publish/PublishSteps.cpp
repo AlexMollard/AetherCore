@@ -6,7 +6,7 @@
 #include <system_error>
 
 #include "AssetPipeline.hpp"
-#include "DotnetToolchain.hpp"
+#include "scripting/DotNetHost.hpp"
 #include "EngineContentPaths.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "editor/publish/PublishPlan.hpp"
@@ -267,13 +267,17 @@ namespace aether::editor
 			{
 				return {}; // A project without scripts is fine.
 			}
-			if (toolchain.dotnetExe.empty())
+			// Compiled in-process by the same Roslyn path the editor uses for Play, so a
+			// publish needs no .NET SDK either - and so a game cannot be built by a different
+			// compiler than the one that was being played a moment earlier.
+			scripting::DotNetHost* const host = scripting::DotNetHost::Active();
+			const scripting::ManagedScriptApi* const api = (host != nullptr && host->IsAvailable()) ? &host->Api() : nullptr;
+			if (api == nullptr || api->CompileScripts == nullptr)
 			{
-				return Failed("The project has C# scripts, but this editor was built without .NET publishing support.", "Install the .NET SDK and reconfigure CMake, then publish again.");
+				return Failed("The project has C# scripts, but the C# host is not running, so they cannot be compiled.", "Reopen the project and publish again.");
 			}
 
 			const std::filesystem::path artifactsDir = plan.projectRoot / "Builds" / "Intermediate" / "managed";
-			const std::filesystem::path publishLog = plan.projectRoot / "Builds" / "publish-scripts.log";
 			std::error_code ec;
 			std::filesystem::remove_all(artifactsDir, ec);
 			if (ec)
@@ -281,17 +285,27 @@ namespace aether::editor
 				return Failed("Could not clean script build intermediates: " + ec.message(), "Close anything using the project's Builds folder and publish again.");
 			}
 
-			const std::string command = "\"" + toolchain.dotnetExe.string() + "\" build \"" + scriptsProject.string()
-			        + "\" -c Release --nologo -v:m -p:DebugSymbols=false -p:DebugType=none -p:Optimize=true -p:ArtifactsPath=\"" + artifactsDir.string() + "\"";
-			if (const int rc = io::RunProcessToLog(command, publishLog); rc != 0)
+			const std::filesystem::path outputDll = artifactsDir / "bin" / "AetherGame" / "release" / "AetherGame.dll";
+			std::string diagnostics(64 * 1024, char{0});
+			const int rc = api->CompileScripts(plan.scriptsDir.string().c_str(),
+			        outputDll.string().c_str(),
+			        (plan.outputDir / "data" / "scripts" / "managed").string().c_str(),
+			        1, // optimized, and without symbols: this is what ships
+			        diagnostics.data(),
+			        static_cast<std::int32_t>(diagnostics.size()));
+			diagnostics.resize(std::strlen(diagnostics.c_str()));
+
+			if (rc != 0)
 			{
-				return Failed("The project's C# scripts failed to build (exit " + std::to_string(rc) + ").", "See " + publishLog.generic_string() + " for the compiler output.");
+				const std::filesystem::path publishLog = plan.projectRoot / "Builds" / "publish-scripts.log";
+				(void) io::file_util::WriteText(publishLog, diagnostics);
+				return Failed("The project's C# scripts failed to compile.", "See " + publishLog.generic_string() + " for the compiler output.");
 			}
 
 			std::string error;
 			if (!CopyTree(artifactsDir / "bin" / "AetherGame" / "release", plan.outputDir / "data" / "scripts" / "managed", error))
 			{
-				return Failed("Could not stage the built C# scripts: " + error, "See " + publishLog.generic_string() + ".");
+				return Failed("Could not stage the built C# scripts: " + error, "Check write permissions on the Builds folder.");
 			}
 			return {};
 		}
@@ -349,7 +363,6 @@ namespace aether::editor
 	PublishToolchain MakePublishToolchain()
 	{
 		PublishToolchain toolchain;
-		toolchain.dotnetExe = app::DotnetExecutable();
 #ifdef AETHER_MANAGED_CONFIG
 		toolchain.managedConfig = AETHER_MANAGED_CONFIG;
 #endif

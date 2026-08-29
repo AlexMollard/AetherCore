@@ -124,6 +124,14 @@ namespace aether::editor
 
 	bool IsPrunablePublishedFile(const std::filesystem::path& path)
 	{
+		// The C# compiler. The editor ships it so that a machine with no .NET SDK can build
+		// a project's scripts, but a game only ever LOADS the assembly it was given - it has
+		// nothing to compile, and Roslyn is ten megabytes in every copy that goes out.
+		if (LowerAscii(path.stem().generic_string()).starts_with("microsoft.codeanalysis"))
+		{
+			return true;
+		}
+
 		const std::string ext = LowerAscii(path.extension().generic_string());
 		return ext == ".pdb" || ext == ".lib" || ext == ".exp" || ext == ".ilk";
 	}

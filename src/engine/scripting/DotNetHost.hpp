@@ -27,6 +27,14 @@ namespace aether::scripting
 			return m_available;
 		}
 
+		// The host that is currently initialised, or null.
+		//
+		// CoreCLR is a process singleton - there is exactly one runtime, and exactly one
+		// host bound to it - so this is a fact rather than a convenience. It exists for
+		// code that legitimately needs the managed API but sits outside the service
+		// container that owns the subsystem, such as the publish steps.
+		[[nodiscard]] static DotNetHost* Active() noexcept;
+
 		[[nodiscard]] const ManagedScriptApi& Api() const noexcept
 		{
 			return m_api;

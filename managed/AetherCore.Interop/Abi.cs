@@ -93,4 +93,8 @@ internal unsafe struct ManagedScriptApi
     // one-string-parameter method.
     public delegate* unmanaged<byte*, byte*, int*, int> GetNetRpcMethod;
     public delegate* unmanaged<ulong, int, byte*, int, void> InvokeNetRpc;
+
+    // Compile a project's scripts in-process. Returns 0 on success and fills the diagnostics
+    // buffer with compiler output; see ScriptCompiler.cs for why this is not `dotnet build`.
+    public delegate* unmanaged<byte*, byte*, byte*, int, byte*, int, int> CompileScripts;
 }
