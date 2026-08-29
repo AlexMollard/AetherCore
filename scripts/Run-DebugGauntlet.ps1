@@ -85,6 +85,29 @@ if (-not $BuildDir) { $BuildDir = if ($Fast) { "build/default" } else { "build/v
 if (-not $Config)   { $Config   = if ($Fast) { "RelWithDebInfo" } else { "Debug" } }
 
 $BuildRoot = if ([System.IO.Path]::IsPathRooted($BuildDir)) { $BuildDir } else { Join-Path $RepoRoot $BuildDir }
+
+# Where CMake actually put the binaries.
+#
+# Multi-config generators (Visual Studio) nest them under <config>/; single-config ones
+# (Ninja) put them straight in the target directory. Hard-coding the config subdirectory
+# meant every phase reported "not found" against a Ninja tree in which everything was
+# built and passing - the same assumption that once staged the app bundle one level below
+# its own executable.
+#
+# CMAKE_CONFIGURATION_TYPES is the authority: CMake writes it into the cache only for a
+# multi-config generator, which is exactly the distinction being made here.
+$IsMultiConfig = $false
+$CacheFile = Join-Path $BuildRoot "CMakeCache.txt"
+if (Test-Path $CacheFile) {
+    $IsMultiConfig = [bool](Select-String -LiteralPath $CacheFile -Pattern '^CMAKE_CONFIGURATION_TYPES:' -Quiet)
+}
+
+# Join a build-tree path whose <config> segment is written as {config}, resolving that
+# segment to the configuration directory or to nothing.
+function Join-BuildPath([string]$relative) {
+    $resolved = if ($IsMultiConfig) { $relative -replace '\{config\}', $Config } else { $relative -replace '\{config\}/', '' -replace '/\{config\}', '' }
+    return Join-Path $BuildRoot $resolved
+}
 if (-not $ReportPath) { $ReportPath = Join-Path $BuildRoot "gauntlet-report.json" }
 
 # GitHub Actions and most CI systems set $env:CI. No GPU/display there -> the
@@ -244,7 +267,7 @@ function Invoke-Build {
 # --- Phase 2: Unit tests -------------------------------------------------
 function Invoke-UnitTests {
     Write-Head "Phase 2: Unit tests"
-    $exe = Join-Path $BuildRoot "tests/$Config/EngineTests.exe"
+    $exe = Join-BuildPath "tests/{config}/EngineTests.exe"
     if (-not (Test-Path $exe)) {
         Write-Bad "EngineTests.exe not found at $exe"
         Add-Phase @{ name = "unit"; status = "fail"; detail = "EngineTests.exe missing" }
@@ -270,7 +293,7 @@ function Invoke-UnitTests {
 # --- Smoke (shared by editor + runtime) ----------------------------------
 function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string]$ExeArgs = "") {
     Write-Head "Phase: $Name smoke"
-    $exe = Join-Path $BuildRoot $ExePath
+    $exe = Join-BuildPath $ExePath
     if (-not (Test-Path $exe)) {
         Write-Bad "$Name executable not found at $exe"
         Add-Phase @{ name = $Name; status = "fail"; detail = "executable missing: $exe" }
@@ -394,7 +417,7 @@ else {
     # The editor is always project-scoped now: pass --project (as F5 does), else it
     # exits requesting one. (Launching the Launcher would spawn a separate process the
     # smoke can't track, so drive the Editor directly.)
-    else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/$Config/Editor.exe" -LogName "Editor.log" -ExeArgs "--project `"$RepoRoot\projects\TestingProject`""; if (-not $results.editor) { $overall = $false } }
+    else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/{config}/Editor.exe" -LogName "Editor.log" -ExeArgs "--project `"$RepoRoot\projects\TestingProject`""; if (-not $results.editor) { $overall = $false } }
 
     if ($SkipRuntime) { Write-Head "Phase: runtime smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "runtime"; status = "skip" } }
     # Point the runtime at the same project the editor smoke uses. Without this it resolves
@@ -405,7 +428,7 @@ else {
     # documented override and beats that check.
     else {
         $env:AETHER_PROJECT_DIR = "$RepoRoot\projects\TestingProject"
-        try { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/$Config/AetherGame.exe" -LogName "AetherGame.log" }
+        try { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/{config}/AetherGame.exe" -LogName "AetherGame.log" }
         finally { Remove-Item Env:\AETHER_PROJECT_DIR -ErrorAction SilentlyContinue }
         if (-not $results.runtime) { $overall = $false }
     }
