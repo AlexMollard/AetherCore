@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <initializer_list>
 #include <map>
 #include <memory>
@@ -57,15 +58,36 @@ namespace aether::io
 			return {virtualPath.substr(0, sep), virtualPath.substr(sep + separator.size())};
 		}
 
-		std::shared_ptr<IFileBackend> ResolveBackend(std::string_view mountPoint)
+		// Null when nothing is mounted there. Reading through a mount point that does not
+		// exist is a MISS, not a programmer error: callers legitimately probe several
+		// prefixes and take the first that answers - FontRegistry tries project:// before
+		// engine:// so a game can override a typeface. Asserting instead made every such
+		// probe fatal in any app that mounts no project, which is exactly what the
+		// Launcher is. It only ever survived because a developer build mounts the sample
+		// project baked in at configure time, so the crash could not happen on the machine
+		// that built it.
+		std::shared_ptr<IFileBackend> TryResolveBackend(std::string_view mountPoint)
 		{
 			const std::scoped_lock lock(s_backend->mountsMutex);
 			auto it = s_backend->mounts.find(mountPoint);
-			if (it == s_backend->mounts.end())
+			return it == s_backend->mounts.end() ? nullptr : it->second;
+		}
+
+		// For the mount wiring below, where the mount has just been established and its
+		// absence really would be a bug in this file.
+		std::shared_ptr<IFileBackend> ResolveBackend(std::string_view mountPoint)
+		{
+			std::shared_ptr<IFileBackend> backend = TryResolveBackend(mountPoint);
+			if (backend == nullptr)
 			{
 				AE_ASSERT_ALWAYS(false, "No backend mounted at: " + std::string(mountPoint));
 			}
-			return it->second;
+			return backend;
+		}
+
+		AetherError NotMounted(std::string_view mountPoint, std::string_view virtualPath)
+		{
+			return AetherError::FileSystem(std::format("nothing is mounted at '{}://' (reading '{}')", mountPoint, virtualPath));
 		}
 
 		void MountBackend(std::string_view mountPoint, std::shared_ptr<IFileBackend> backend)
@@ -512,8 +534,8 @@ namespace aether::io
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
-		const auto backend = ResolveBackend(mountPoint);
-		return backend->Exists(relativePath);
+		const auto backend = TryResolveBackend(mountPoint);
+		return backend != nullptr && backend->Exists(relativePath);
 	}
 
 	Expected<std::vector<std::byte>> FileSystem::ReadFile(std::string_view virtualPath)
@@ -526,7 +548,11 @@ namespace aether::io
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		AE_VERBOSE(LogCategory::FileSystem, "ReadFile: {}", virtualPath);
-		const auto backend = ResolveBackend(mountPoint);
+		const auto backend = TryResolveBackend(mountPoint);
+		if (backend == nullptr)
+		{
+			AE_UNEXPECTED(NotMounted(mountPoint, virtualPath));
+		}
 		return backend->Read(relativePath);
 	}
 
@@ -545,7 +571,11 @@ namespace aether::io
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		AE_VERBOSE(LogCategory::FileSystem, "WriteFile: {}", virtualPath);
-		const auto backend = ResolveBackend(mountPoint);
+		const auto backend = TryResolveBackend(mountPoint);
+		if (backend == nullptr)
+		{
+			AE_UNEXPECTED(NotMounted(mountPoint, virtualPath));
+		}
 		return backend->Write(relativePath, data);
 	}
 
@@ -564,7 +594,11 @@ namespace aether::io
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		AE_VERBOSE(LogCategory::FileSystem, "OpenStream: {}", virtualPath);
-		const auto backend = ResolveBackend(mountPoint);
+		const auto backend = TryResolveBackend(mountPoint);
+		if (backend == nullptr)
+		{
+			AE_UNEXPECTED(NotMounted(mountPoint, virtualPath));
+		}
 		return backend->OpenStream(relativePath);
 	}
 
@@ -576,7 +610,12 @@ namespace aether::io
 		}
 
 		const auto [mountPoint, relativePattern] = ParseVirtualPath(virtualPattern);
-		const auto backend = ResolveBackend(mountPoint);
+		const auto backend = TryResolveBackend(mountPoint);
+		if (backend == nullptr)
+		{
+			// An unmounted prefix contributes no matches, the same as an empty directory.
+			return std::vector<std::string>{};
+		}
 		auto result = backend->Glob(relativePattern, options);
 		if (!result.has_value())
 		{
