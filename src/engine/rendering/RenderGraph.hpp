@@ -639,7 +639,7 @@ namespace aether
 		};
 
 		void ResolveGpuTimings(std::uint32_t frameSlot);
-		void ResetGpuTimings(gpu::CommandList& cmdList, std::uint32_t frameSlot, std::uint32_t passCount);
+		void ResetGpuTimings(std::uint32_t frameSlot, std::uint32_t passCount);
 		void DestroyGpuTimings();
 
 		gpu::Device m_timingDevice = nullptr;

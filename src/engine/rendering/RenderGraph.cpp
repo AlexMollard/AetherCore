@@ -148,7 +148,12 @@ namespace aether
 		}
 	}
 
-	void RenderGraph::ResetGpuTimings(gpu::CommandList& cmdList, const std::uint32_t frameSlot, const std::uint32_t passCount)
+	// The timestamp pool for a frame slot is shared by the graphics and the async compute
+	// queue, so a vkCmdResetQueryPool recorded on either one is ordered against that queue
+	// only - the other queue's writes race it, and validation reports "query not reset" for
+	// every timestamp the compute queue takes. Resetting on the HOST removes the ordering
+	// question entirely; the caller guarantees the slot is idle on both queues first.
+	void RenderGraph::ResetGpuTimings(const std::uint32_t frameSlot, const std::uint32_t passCount)
 	{
 		if (m_timestampPeriodNs <= 0.0f || m_timingDevice == nullptr)
 		{
@@ -173,7 +178,7 @@ namespace aether
 		timing.timedPasses.clear();
 		if (timing.pool != nullptr)
 		{
-			cmdList.ResetQueryPool(timing.pool, 0, timing.capacity);
+			gpu::Factory::ResetQueryPool(m_timingDevice, timing.pool, 0, timing.capacity);
 		}
 	}
 
@@ -2126,8 +2131,18 @@ namespace aether
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 
+		// Begun here rather than where the compute passes are recorded: this waits the
+		// compute queue's fence for this frame slot, which together with the graphics fence
+		// already waited before recording is what makes the host-side timestamp reset below
+		// safe. Both queues are then known to be finished with the slot's query pool.
+		const bool hasAsyncCompute = HasAsyncComputeWork();
+		if (hasAsyncCompute)
+		{
+			m_storage->BeginComputeCommandBuffer(frameIndex);
+		}
+
 		ResolveGpuTimings(frameIndex);
-		ResetGpuTimings(cmdList, frameIndex, static_cast<std::uint32_t>(m_compiled.size()));
+		ResetGpuTimings(frameIndex, static_cast<std::uint32_t>(m_compiled.size()));
 
 		auto frameAddr = static_cast<gpu::DeviceAddress>(frame.frameConstantsAddr);
 
@@ -2477,12 +2492,10 @@ namespace aether
 			recorder.EndDebugLabel();
 		};
 
-		const bool hasAsyncCompute = HasAsyncComputeWork();
 		std::uint32_t passMarker = 0;
 
 		if (hasAsyncCompute)
 		{
-			m_storage->BeginComputeCommandBuffer(frameIndex);
 			const gpu::CommandBuffer computeCmd = m_storage->GetComputeCommandBuffer(frameIndex);
 			gpu::CommandList computeRecorder(computeCmd);
 			computeRecorder.BeginDebugLabel("Frame.RenderGraph.AsyncCompute", 0.90f, 0.45f, 0.10f, 1.0f);

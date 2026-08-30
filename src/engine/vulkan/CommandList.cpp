@@ -532,15 +532,6 @@ namespace aether::gpu
 		vkCmdWriteTimestamp2(AsVkCmd(m_cmd), ToVk(stage), static_cast<VkQueryPool>(queryPool), slot);
 	}
 
-	void CommandList::ResetQueryPool(void* queryPool, std::uint32_t firstSlot, std::uint32_t slotCount) noexcept
-	{
-		if (m_cmd == nullptr || queryPool == nullptr || slotCount == 0u)
-		{
-			return;
-		}
-		vkCmdResetQueryPool(AsVkCmd(m_cmd), static_cast<VkQueryPool>(queryPool), firstSlot, slotCount);
-	}
-
 	void CommandList::CopyBuffer(void* src, void* dst, std::uint64_t srcOffset, std::uint64_t dstOffset, std::uint64_t size) noexcept
 	{
 		if (m_cmd == nullptr)
