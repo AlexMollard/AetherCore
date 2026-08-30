@@ -98,6 +98,14 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetSharpness(float sharpness)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetSharpness(sharpness);
+		}
+	}
+
 	void Renderer::SetMotionBlur(float strength, float maxRadiusPixels)
 	{
 		if (m_postProcessStack)

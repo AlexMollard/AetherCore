@@ -46,6 +46,7 @@ struct FxaaPush
 	uint  fxaaEnabled;
 	float rcpWidth;
 	float rcpHeight;
+	float sharpness; // contrast-adaptive sharpening, 0 = off
 };
 [[vk::push_constant]] FxaaPush pc;
 
@@ -90,8 +91,9 @@ float3 LoadRGB(Texture2D tex, int2 coord)
 	return tex.Load(int3(coord, 0)).rgb;
 }
 
-[shader("fragment")]
-float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
+// The FXAA resolve, factored out so the sharpening below can act on its result no matter
+// which of the three exits produced it.
+float3 ResolveFxaa(float4 svPos)
 {
 	const int2   coord   = int2(svPos.xy);
 	Texture2D    tex     = g_textures[pc.ldrSlot];
@@ -103,7 +105,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// Skip FXAA when toggled off - passthrough avoids graph rebuilds.
 	if (pc.fxaaEnabled == 0u)
 	{
-		return float4(rgbM, 1.0f);
+		return rgbM;
 	}
 
 	// --- 1. Contrast reject ------------------------------------------------
@@ -119,7 +121,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
 	if (lumaRange < max(kAbsoluteThreshold, lumaMax * kRelativeThreshold))
 	{
-		return float4(rgbM, 1.0f);
+		return rgbM;
 	}
 
 	// --- 2. Edge orientation ----------------------------------------------
@@ -253,5 +255,56 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 		finalUv.x += finalOffset * stepLength;
 	}
 
-	return float4(SampleRGB(tex, finalUv), 1.0f);
+	return SampleRGB(tex, finalUv);
+}
+
+// Contrast Adaptive Sharpening (AMD FidelityFX CAS), sharpen-only path.
+//
+// FXAA is a blur: it reconstructs an edge by fetching between two texels, and everything it
+// touches comes back softer. CAS is the natural partner because it is contrast-ADAPTIVE - the
+// amount is scaled by how much headroom the local neighbourhood has left, so flat regions are
+// untouched and an edge already near black or white is not pushed through it. A fixed unsharp
+// mask would halo exactly where FXAA just did its work.
+//
+// Run on the pre-FXAA neighbourhood and transferred as a delta, because the resolved value is
+// only known for THIS pixel - sharpening against resolved neighbours would mean running FXAA
+// four more times for one pass that costs less than a tenth of a millisecond.
+float3 SharpenDelta(Texture2D tex, int2 coord, float3 center)
+{
+	if (pc.sharpness <= 0.0f)
+	{
+		return float3(0.0f, 0.0f, 0.0f);
+	}
+
+	// Load clamps out-of-range reads to zero, which on a border pixel is a black tap and a
+	// dark rim around the frame. The image size comes from the reciprocals already pushed.
+	const int2 maxCoord = int2(int(round(1.0f / pc.rcpWidth)) - 1, int(round(1.0f / pc.rcpHeight)) - 1);
+	const float3 n = LoadRGB(tex, clamp(coord + int2( 0, -1), int2(0, 0), maxCoord));
+	const float3 s = LoadRGB(tex, clamp(coord + int2( 0,  1), int2(0, 0), maxCoord));
+	const float3 w = LoadRGB(tex, clamp(coord + int2(-1,  0), int2(0, 0), maxCoord));
+	const float3 e = LoadRGB(tex, clamp(coord + int2( 1,  0), int2(0, 0), maxCoord));
+
+	const float3 mn = min(center, min(min(n, s), min(w, e)));
+	const float3 mx = max(center, max(max(n, s), max(w, e)));
+
+	// How much room the neighbourhood has before it clips, per channel. Near 0 where the
+	// signal is already at a limit, which is what stops the halo.
+	const float3 amp = sqrt(saturate(min(mn, 2.0f - mx) / max(mx, 1e-5f)));
+
+	// -1/8 at the lowest setting, -1/5 at the highest: the neighbour weight of the unsharp
+	// kernel, normalised by (1 + 4w) so overall brightness is unchanged.
+	const float peak = -1.0f / lerp(8.0f, 5.0f, saturate(pc.sharpness));
+	const float3 weight = amp * peak;
+	const float3 sharpened = saturate((n * weight + s * weight + w * weight + e * weight + center) / (1.0f + 4.0f * weight));
+	return sharpened - center;
+}
+
+[shader("fragment")]
+float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
+{
+	const int2 coord = int2(svPos.xy);
+	Texture2D  tex   = g_textures[pc.ldrSlot];
+
+	const float3 resolved = ResolveFxaa(svPos);
+	return float4(saturate(resolved + SharpenDelta(tex, coord, LoadRGB(tex, coord))), 1.0f);
 }

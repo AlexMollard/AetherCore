@@ -321,6 +321,13 @@ namespace aether::editor
 				ImGui::SetTooltip("Red/blue separation at the corner of frame, in pixels. Zero at the centre and strongest at the edges, as on a real lens. 0 is off.");
 			}
 
+			ImGui::SeparatorText("Sharpening");
+			changed |= ImGui::SliderFloat("Amount##sharpen", &g.sharpness, 0.0f, 1.0f, "%.2f");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Contrast-adaptive sharpening after antialiasing, to recover the detail FXAA softens. 0 is off.");
+			}
+
 			if (ImGui::SmallButton("Reset grade"))
 			{
 				g.gradeContrast = 1.0f;
@@ -330,6 +337,7 @@ namespace aether::editor
 				g.vignetteIntensity = 0.0f;
 				g.vignetteRoundness = 1.0f;
 				g.chromaticAberration = 0.0f;
+				g.sharpness = 0.0f;
 				changed = true;
 			}
 			if (ImGui::IsItemHovered())

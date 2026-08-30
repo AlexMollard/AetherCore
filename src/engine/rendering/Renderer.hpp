@@ -52,6 +52,7 @@ namespace aether
 		void SetGrade(float contrast, float saturation, float temperature, float tint);
 		void SetVignette(float intensity, float roundness);
 		void SetChromaticAberration(float pixels);
+		void SetSharpness(float sharpness);
 
 		// Camera motion blur. `strength` is the shutter's open fraction of the frame
 		// interval (0.5 is the film convention, 0 is off); `maxRadiusPixels` bounds how far

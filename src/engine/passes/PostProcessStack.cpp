@@ -547,6 +547,7 @@ namespace aether
 				        std::uint32_t fxaaEnabled;
 				        float rcpWidth;
 				        float rcpHeight;
+				        float sharpness;
 			        } push;
 			        push.ldrSlot = m_ldrBindlessSlot;
 			        push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
@@ -559,6 +560,7 @@ namespace aether
 			        // endpoint was abandoned partway and left half-antialiased.
 			        push.rcpWidth = 1.0f / static_cast<float>(std::max(m_extent.width, 1u));
 			        push.rcpHeight = 1.0f / static_cast<float>(std::max(m_extent.height, 1u));
+			        push.sharpness = m_sharpness;
 			        cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			        cmd.Draw(3, 1, 0, 0);
