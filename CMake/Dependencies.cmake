@@ -257,6 +257,33 @@ endif()
 
 # ── Physics ───────────────────────────────────────────────────────────────────
 # Cross-platform determinism is required for future lockstep / rollback networking.
+# Jolt sets /MP on itself and compiles through a precompiled header. Both make a compiler
+# cache refuse the work - sccache reports "multiple input files" for /MP and cannot cache a
+# /Yc or /Fp command at all - and Jolt is over a hundred translation units, so that is a
+# sixth of a clean build permanently uncacheable.
+#
+# Neither earns anything under a generator that invokes the compiler once per file and
+# schedules the parallelism itself. The Visual Studio generator is left alone, because there
+# one cl invocation really is handed many files.
+#
+# Jolt also asks for /Zi, which our preset then overrides with /Z7 - once per file, as a
+# D9025 warning. Separate PDBs are uncacheable anyway (the compiler writes to a file the
+# cache does not model), which is why embedded debug info is the setting in the first place,
+# so the flag is dropped rather than argued with.
+#
+# The PCH is a target property. These are not: Jolt appends them to CMAKE_CXX_FLAGS in its
+# own directory scope, long after any hook we can attach runs. So the hook defers a call to
+# the END of Jolt's directory, where the flags are final and still editable.
+function(aethercore_strip_uncacheable_flags)
+    string(REGEX REPLACE "(^| )/(MP|Zi)( |$)" " " _flags "${CMAKE_CXX_FLAGS}")
+    string(REGEX REPLACE "(^| )/(MP|Zi)( |$)" " " _flags "${_flags}")
+    set(CMAKE_CXX_FLAGS "${_flags}" PARENT_SCOPE)
+endfunction()
+
+if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+    set(CMAKE_PROJECT_JoltPhysics_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/JoltNoMultiProcess.cmake")
+endif()
+
 CPMAddPackage(
     NAME JoltPhysics
     GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
@@ -271,6 +298,13 @@ CPMAddPackage(
         "USE_AVX2 OFF"
         "USE_AVX512 OFF"
 )
+
+
+unset(CMAKE_PROJECT_JoltPhysics_INCLUDE)
+
+if(TARGET Jolt AND NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+    set_target_properties(Jolt PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+endif()
 
 # ── 2D physics ────────────────────────────────────────────────────────────────
 # Box2D v3 (C API). Cross-platform deterministic since 3.1 - required for the

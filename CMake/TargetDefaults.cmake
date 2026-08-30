@@ -7,6 +7,16 @@ option(AETHERCORE_ENABLE_FAST_MATH "Use fast, non-IEEE floating point (/fp:fast,
 # Apply project-wide compiler/linker flags to a first-party target. Call after the
 # target's sources are declared.
 function(aethercore_target_defaults target)
+    # /MP tells one cl.exe invocation to compile its inputs across several processes, which
+    # only helps a generator that hands cl many files at once - the Visual Studio one. Ninja
+    # invokes cl per file and schedules the parallelism itself, so there /MP buys nothing and
+    # actively costs: sccache refuses to cache a command it reads as having multiple inputs,
+    # which is 502 of 820 compiles going uncached on CI.
+    set(_aethercore_mp "")
+    if(CMAKE_GENERATOR MATCHES "Visual Studio")
+        set(_aethercore_mp /MP)
+    endif()
+
     # Check Clang first: clang-cl on Windows is COMPILER_ID=Clang AND MSVC=TRUE and wants
     # Clang-style flags, not MSVC ones.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32)
@@ -21,7 +31,7 @@ function(aethercore_target_defaults target)
             -Wno-missing-designated-field-initializers
             -Wno-missing-field-initializers
             -fms-compatibility-version=19.40
-            /MP
+            ${_aethercore_mp}
             /FS
             $<$<BOOL:${AETHERCORE_ENABLE_FAST_MATH}>:/fp:fast>
             /Gy
@@ -66,7 +76,7 @@ function(aethercore_target_defaults target)
             /we4062
             /we4063
             /we4715
-            /MP
+            ${_aethercore_mp}
             /FS
             $<$<BOOL:${AETHERCORE_ENABLE_FAST_MATH}>:/fp:fast>
             /Gy

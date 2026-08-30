@@ -131,3 +131,6 @@ imgui.ini
 # Release packaging output (cmake --install staging, installer + zip).
 /staging/
 /dist/
+
+# CPM_SOURCE_CACHE, when pointed at the tree the way CI does.
+.cpm-cache/
