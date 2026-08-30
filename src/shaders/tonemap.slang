@@ -48,6 +48,7 @@ struct TonemapPush
     float motionBlurMaxRadiusPixels;// ceiling, so a teleport cannot smear the screen
     uint  _padMotionBlur;
     uint64_t frameConstantsAddr;    // BDA -> FrameConstantsData (0 = motion blur off)
+    float chromaticAberration;      // pixels of channel separation at the corner; 0 = off
 };
 [[vk::push_constant]] TonemapPush pc;
 
@@ -376,11 +377,45 @@ float3 ApplyCameraMotionBlur(float3 centre, int2 coord, float2 svPos)
     return sum / max(weight, 1.0f);
 }
 
+// Lateral chromatic aberration: a lens brings short wavelengths to focus slightly closer to
+// the axis than long ones, so the three channels land at different radii. The separation is
+// zero on the optical axis and grows toward the edge - hence the radius-squared falloff
+// rather than a constant offset, which would smear the centre of frame where a real lens is
+// at its sharpest.
+//
+// Sampled from the HDR target before anything else runs, because on a real camera this
+// happens at the glass, ahead of every effect the renderer applies afterwards.
+float3 SampleSceneWithAberration(int2 coord)
+{
+    if (pc.chromaticAberration <= 0.0f)
+    {
+        // The original path exactly: an unfiltered load, so a project that never turns this
+        // on renders bit-for-bit as it did before.
+        return g_textures[pc.hdrSlot].Load(int3(coord, 0)).rgb;
+    }
+
+    const float2 dims = float2(pc.screenWidth, pc.screenHeight);
+    const float2 uv = (float2(coord) + 0.5f) / dims;
+    const float2 centered = uv * 2.0f - 1.0f;
+
+    // Authored in PIXELS rather than UV, so the look survives a resolution change instead of
+    // doubling when the frame does. 0.5 normalises the radial term to 1 at the corner.
+    const float2 offset = centered * dot(centered, centered) * 0.5f * pc.chromaticAberration / dims;
+
+    // Saturate rather than trust the sampler's addressing: an offset near the border would
+    // otherwise be free to wrap and pull the opposite edge into frame.
+    const float3 outward = g_textures[pc.hdrSlot].SampleLevel(g_linearSampler, saturate(uv + offset), 0.0).rgb;
+    const float3 middle  = g_textures[pc.hdrSlot].SampleLevel(g_linearSampler, uv, 0.0).rgb;
+    const float3 inward  = g_textures[pc.hdrSlot].SampleLevel(g_linearSampler, saturate(uv - offset), 0.0).rgb;
+
+    return float3(outward.r, middle.g, inward.b);
+}
+
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
     const int2 coord = int2(svPos.xy);
-    float3 scene = g_textures[pc.hdrSlot].Load(int3(coord, 0)).rgb;
+    float3 scene = SampleSceneWithAberration(coord);
 
     // Before bloom and the grade: a streak should carry its real energy into both.
     scene = ApplyCameraMotionBlur(scene, coord, svPos.xy);

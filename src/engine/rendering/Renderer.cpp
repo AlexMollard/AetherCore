@@ -90,6 +90,14 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetChromaticAberration(float pixels)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetChromaticAberration(pixels);
+		}
+	}
+
 	void Renderer::SetMotionBlur(float strength, float maxRadiusPixels)
 	{
 		if (m_postProcessStack)

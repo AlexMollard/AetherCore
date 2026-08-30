@@ -103,6 +103,10 @@ namespace TonemapContracts
 		float motionBlurMaxRadiusPixels = 0.0f;
 		std::uint32_t _padMotionBlur = 0;
 		std::uint64_t frameConstantsAddr = 0;
+		// Lateral chromatic aberration, in pixels of channel separation at the corner of
+		// frame. 0 is off and takes the shader back to its original unfiltered load, which
+		// is what the two preview services rely on.
+		float chromaticAberration = 0.0f;
 	};
 
 	static_assert(offsetof(PushConstants, hdrSlot) == 0);
@@ -114,7 +118,10 @@ namespace TonemapContracts
 	static_assert(offsetof(PushConstants, vignetteIntensity) == 72);
 	static_assert(offsetof(PushConstants, motionBlurDepthSlot) == 80);
 	static_assert(offsetof(PushConstants, frameConstantsAddr) == 96);
-	static_assert(sizeof(PushConstants) == 104, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
+	static_assert(offsetof(PushConstants, chromaticAberration) == 104);
+	// Vulkan only guarantees 128 bytes of push constants.
+	static_assert(sizeof(PushConstants) <= 128);
+	static_assert(sizeof(PushConstants) == 112, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
 } // namespace TonemapContracts
 
 namespace CullContracts

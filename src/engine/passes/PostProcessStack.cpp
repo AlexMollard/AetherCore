@@ -504,6 +504,7 @@ namespace aether
 			                push.gradeTint = m_gradeTint;
 			                push.vignetteIntensity = m_vignetteIntensity;
 			                push.vignetteRoundness = m_vignetteRoundness;
+			                push.chromaticAberration = m_chromaticAberration;
 			                push.backgroundParamsAddr = backgroundParamsAddr;
 			                push.motionBlurDepthSlot = m_sceneDepthSlot;
 			                push.motionBlurStrength = m_motionBlurStrength;

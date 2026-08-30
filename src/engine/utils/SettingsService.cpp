@@ -43,6 +43,13 @@ namespace aether
 				renderer->SetMotionBlur(m_values.graphics.motionBlur, m_values.graphics.motionBlurMaxRadius);
 			}
 		}
+		else if (key == "graphics.chromaticAberration")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetChromaticAberration(m_values.graphics.chromaticAberration);
+			}
+		}
 		else if (key == "graphics.vignetteIntensity" || key == "graphics.vignetteRoundness")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

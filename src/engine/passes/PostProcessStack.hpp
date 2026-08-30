@@ -151,6 +151,10 @@ namespace aether
 			m_vignetteRoundness = roundness;
 		}
 
+		void SetChromaticAberration(float pixels) { m_chromaticAberration = pixels; }
+
+		[[nodiscard]] float GetChromaticAberration() const { return m_chromaticAberration; }
+
 		[[nodiscard]] float GetVignetteIntensity() const { return m_vignetteIntensity; }
 		[[nodiscard]] float GetVignetteRoundness() const { return m_vignetteRoundness; }
 
@@ -408,6 +412,7 @@ namespace aether
 		float m_gradeTint = 0.0f;
 		float m_vignetteIntensity = 0.0f;
 		float m_vignetteRoundness = 1.0f;
+		float m_chromaticAberration = 0.0f;
 		bool m_fxaaEnabled = true;
 		bool m_outputToTexture = false;
 		bool m_debugCompare = false;

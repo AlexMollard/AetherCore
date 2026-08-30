@@ -314,6 +314,13 @@ namespace aether::editor
 				ImGui::SetTooltip("1 is circular on screen; 0 follows the aspect ratio, darkening the sides of a wide frame rather than only the corners.");
 			}
 
+			ImGui::SeparatorText("Chromatic aberration");
+			changed |= ImGui::SliderFloat("Fringing", &g.chromaticAberration, 0.0f, 16.0f, "%.2f px");
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Red/blue separation at the corner of frame, in pixels. Zero at the centre and strongest at the edges, as on a real lens. 0 is off.");
+			}
+
 			if (ImGui::SmallButton("Reset grade"))
 			{
 				g.gradeContrast = 1.0f;
@@ -322,6 +329,7 @@ namespace aether::editor
 				g.gradeTint = 0.0f;
 				g.vignetteIntensity = 0.0f;
 				g.vignetteRoundness = 1.0f;
+				g.chromaticAberration = 0.0f;
 				changed = true;
 			}
 			if (ImGui::IsItemHovered())

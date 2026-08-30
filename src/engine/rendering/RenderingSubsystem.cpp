@@ -674,6 +674,7 @@ namespace aether
 		const float gradeTint = m_postProcessStack.GetGradeTint();
 		const float vignetteIntensity = m_postProcessStack.GetVignetteIntensity();
 		const float vignetteRoundness = m_postProcessStack.GetVignetteRoundness();
+		const float chromaticAberration = m_postProcessStack.GetChromaticAberration();
 		const float motionBlurStrength = m_postProcessStack.GetMotionBlurStrength();
 		const float motionBlurMaxRadius = m_postProcessStack.GetMotionBlurMaxRadiusPixels();
 		const bool histogramCaptureEnabled = m_postProcessStack.IsHistogramCaptureEnabled();
@@ -701,6 +702,7 @@ namespace aether
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 		m_postProcessStack.SetGrade(gradeContrast, gradeSaturation, gradeTemperature, gradeTint);
 		m_postProcessStack.SetVignette(vignetteIntensity, vignetteRoundness);
+		m_postProcessStack.SetChromaticAberration(chromaticAberration);
 		m_postProcessStack.SetMotionBlur(motionBlurStrength, motionBlurMaxRadius);
 		m_postProcessStack.SetHistogramCaptureEnabled(histogramCaptureEnabled);
 		m_postProcessStack.SetHistogramUpdatePeriod(histogramUpdatePeriod);
