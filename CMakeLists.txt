@@ -26,6 +26,10 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
+# Must run before any target is created - a launcher set afterwards applies to nothing.
+include(CompilerCache)
+aethercore_enable_compiler_cache()
+
 option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for faster iterative builds" ON)
 option(AETHERCORE_DEAD_STRIP_REPORT
     "Emit link map files (and per-section gc log) for Editor and AssetPacker" OFF)
