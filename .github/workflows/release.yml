@@ -71,10 +71,19 @@ jobs:
           key: cpm-${{ runner.os }}-${{ hashFiles('CMake/Dependencies.cmake') }}
           restore-keys: cpm-${{ runner.os }}-
 
+      # Ninja + sccache: see the note in ci.yml. The Visual Studio generator ignores
+      # CMAKE_<LANG>_COMPILER_LAUNCHER, so a compiler cache cannot attach to it.
+      - name: Set up the MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Configure
-        run: cmake --preset vs2026-msvc
+        run: cmake --preset ci-windows-release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         env:
           CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
+          SCCACHE_GHA_ENABLED: "true"
 
       # Release, not RelWithDebInfo: AE_DEV_TOOLING gates the validation layer and the
       # editor's other development-only cost to the debug configurations, so a shipped
@@ -82,16 +91,21 @@ jobs:
       - name: Build
         # --parallel: see the note in ci.yml. Without it MSBuild builds one project at a
         # time and the build step dominates the whole run.
-        run: cmake --build build/vs2026-msvc --config Release --parallel --target Editor GameRuntime Launcher EngineTests
+        run: cmake --build --preset ci-windows-release --target Editor GameRuntime Launcher EngineTests
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+
+      - name: sccache stats
+        run: sccache --show-stats
 
       # Nothing should be published that has not been tested. The GPU smokes need a
       # display the runner does not have, so this is the unit suite only - the same
       # boundary ci.yml draws.
       - name: Unit tests
-        run: build/vs2026-msvc/tests/Release/EngineTests.exe
+        run: build/ci-windows-release/tests/EngineTests.exe
 
       - name: Stage the redistributable
-        run: cmake --install build/vs2026-msvc --config Release --component Runtime --prefix "${{ github.workspace }}/staging"
+        run: cmake --install build/ci-windows-release --component Runtime --prefix "${{ github.workspace }}/staging"
 
       # A bundled runtime is what lets the editor start on a machine with no .NET at all;
       # DotNetHost points hostfxr at this directory when it exists. The SDK is a separate

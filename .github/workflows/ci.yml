@@ -81,32 +81,46 @@ jobs:
           key: cpm-${{ runner.os }}-${{ hashFiles('CMake/Dependencies.cmake') }}
           restore-keys: cpm-${{ runner.os }}-
 
-      # windows-latest is now windows-2025-vs2026, which has no VS 2022 - so the
-      # `default` preset's "Visual Studio 17 2022" generator cannot be found. Use the
-      # matching preset the repo already ships rather than pinning to a retiring image.
+      # Ninja + sccache. The Visual Studio generator ignores
+      # CMAKE_<LANG>_COMPILER_LAUNCHER, so sccache cannot attach to it and every run
+      # recompiles everything - which is the whole reason the build step took ~55 minutes
+      # regardless of parallelism. Ninja also schedules the graph globally rather than a
+      # project at a time.
+      - name: Set up the MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Configure
-        run: cmake --preset vs2026-msvc
+        run: cmake --preset ci-windows -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         env:
           CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
+          SCCACHE_GHA_ENABLED: "true"
 
       - name: Build
         # --parallel is what makes MSBuild build projects concurrently: without it CMake
         # passes no /m and the projects go one at a time, leaving most of the runner idle
         # between targets. /MP already parallelises files WITHIN a first-party project, but
         # the third-party targets do not set it, so those were fully serial.
-        run: cmake --build --preset vs2026-msvc --parallel --target Editor GameRuntime EngineTests
+        run: cmake --build --preset ci-windows --target Editor GameRuntime EngineTests
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+
+      - name: sccache stats
+        run: sccache --show-stats
 
       # The gauntlet sees $env:CI (GitHub sets it) and skips the two GPU smokes on
       # its own, so this is the same entry point used locally rather than a second,
       # drifting definition of "what CI runs".
       - name: Gauntlet (build + unit)
         shell: pwsh
-        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build/vs2026-msvc -Config RelWithDebInfo -SkipBuild
+        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build/ci-windows -Config RelWithDebInfo -SkipBuild
 
       - name: Upload the gauntlet report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gauntlet-report
-          path: build/vs2026-msvc/gauntlet-report.json
+          path: build/ci-windows/gauntlet-report.json
           if-no-files-found: ignore

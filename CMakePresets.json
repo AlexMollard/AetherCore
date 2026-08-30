@@ -1,6 +1,10 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "vs2022-clang",
@@ -120,6 +124,34 @@
         "AETHERCORE_RETAIL": "ON",
         "CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE": "ON"
       }
+    },
+    {
+      "name": "ci-windows",
+      "displayName": "CI (Ninja + MSVC)",
+      "description": "What CI builds with. Ninja rather than the Visual Studio generator for one specific reason: CMAKE_<LANG>_COMPILER_LAUNCHER is ignored by the VS generator, so sccache cannot attach to it and every CI run recompiles the world.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ci-windows",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded"
+      }
+    },
+    {
+      "name": "ci-windows-release",
+      "displayName": "CI Release (Ninja + MSVC)",
+      "description": "What the release workflow ships. Same generator and compiler cache as ci-windows, built Release.",
+      "inherits": "ci-windows",
+      "binaryDir": "${sourceDir}/build/ci-windows-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -183,6 +215,16 @@
       "displayName": "VS 2022 MSVC Retail",
       "description": "Retail build with LTCG and maximum stripping.",
       "configurePreset": "vs2022-msvc-retail",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ci-windows-release",
+      "configurePreset": "ci-windows-release",
       "configuration": "Release"
     }
   ]
