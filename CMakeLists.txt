@@ -7,6 +7,15 @@ else()
     set(CMAKE_CXX_STANDARD 23)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# At C++20 and above CMake assumes any translation unit might declare a module, so it runs a
+# separate dependency-scan invocation of the compiler over every source and hands the real
+# compile a generated .modmap. Nothing here uses modules - there is not one module interface
+# unit or import declaration in the tree - so that bought 478 extra compiler runs per clean
+# build and, because a modmap reads as a second input, made 966 compiles uncacheable.
+#
+# Turn it back on in the same breath as introducing the first module.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # for clangd / tooling (ignored by VS generator)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
