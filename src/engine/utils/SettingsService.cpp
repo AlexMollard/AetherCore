@@ -43,6 +43,13 @@ namespace aether
 				renderer->SetMotionBlur(m_values.graphics.motionBlur, m_values.graphics.motionBlurMaxRadius);
 			}
 		}
+		else if (key == "graphics.filmGrain")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetFilmGrain(m_values.graphics.filmGrain);
+			}
+		}
 		else if (key == "graphics.sharpness")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

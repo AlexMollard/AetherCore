@@ -107,6 +107,8 @@ namespace TonemapContracts
 		// frame. 0 is off and takes the shader back to its original unfiltered load, which
 		// is what the two preview services rely on.
 		float chromaticAberration = 0.0f;
+		// Film grain, applied after the tonemap curve in display space. 0 is off.
+		float filmGrain = 0.0f;
 	};
 
 	static_assert(offsetof(PushConstants, hdrSlot) == 0);
@@ -119,6 +121,7 @@ namespace TonemapContracts
 	static_assert(offsetof(PushConstants, motionBlurDepthSlot) == 80);
 	static_assert(offsetof(PushConstants, frameConstantsAddr) == 96);
 	static_assert(offsetof(PushConstants, chromaticAberration) == 104);
+	static_assert(offsetof(PushConstants, filmGrain) == 108);
 	// Vulkan only guarantees 128 bytes of push constants.
 	static_assert(sizeof(PushConstants) <= 128);
 	static_assert(sizeof(PushConstants) == 112, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");

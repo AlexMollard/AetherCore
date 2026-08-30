@@ -1,0 +1,97 @@
+# Does a plane primitive receive light the same as a box?
+#
+# Two floors, identical material, identical lighting, side by side: one a plane rotated
+# -90 about X (which maps its +Z normal to +Y), one a thin box. The camera looks straight
+# down so both are seen at the same angle. Any brightness difference between them is the
+# plane's normal handling, because nothing else differs.
+[environment]
+ambient = [ 0.0, 0.0, 0.0 ]
+sky_horizon = [ 0.0, 0.0, 0.0 ]
+sky_void = [ 0.0, 0.0, 0.0 ]
+sky_zenith = [ 0.0, 0.0, 0.0 ]
+sun_color = [ 1.0, 1.0, 1.0 ]
+sun_direction = [ 0.0, 1.0, 0.0 ]
+sun_intensity = 3.0
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+[[entities]]
+euler = [ -90.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 960000000
+parent = -1
+position = [ 0.0, 10.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 8.0
+    background = 'solid_color'
+    clear_color = [ 0.0, 0.0, 0.0 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 10.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+[[entities]]
+euler = [ -90.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'PlaneFloor'
+node = 960000100
+parent = -1
+position = [ -3.0, 0.0, 0.0 ]
+scale = [ 4.0, 4.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.5, 0.5, 0.5, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'plane'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'BoxFloor'
+node = 960000101
+parent = -1
+position = [ 3.0, 0.0, 0.0 ]
+scale = [ 4.0, 0.1, 4.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.5, 0.5, 0.5, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.9
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'

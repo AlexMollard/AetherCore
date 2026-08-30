@@ -49,6 +49,7 @@ struct TonemapPush
     uint  _padMotionBlur;
     uint64_t frameConstantsAddr;    // BDA -> FrameConstantsData (0 = motion blur off)
     float chromaticAberration;      // pixels of channel separation at the corner; 0 = off
+    float filmGrain;                // grain strength in display space; 0 = off
 };
 [[vk::push_constant]] TonemapPush pc;
 
@@ -411,6 +412,47 @@ float3 SampleSceneWithAberration(int2 coord)
     return float3(outward.r, middle.g, inward.b);
 }
 
+// Film grain, applied in display space after the curve and before the dither.
+//
+// Emulsion grain is not uniform noise. The silver halide crystals that record an image are
+// developed probabilistically, so density variance peaks where roughly half of them have
+// been exposed - the midtones - and falls away in deep shadow and in a blown highlight,
+// where almost none or almost all have. Weighting by luma*(1-luma)*4 reproduces that, and it
+// also keeps grain out of the two places uniform noise looks worst: crushed blacks, where it
+// reads as sensor noise, and flat skies, where it reads as compression artefacts.
+//
+// Applied after the tonemap because grain belongs to the film, not to the scene - putting it
+// in linear light would let exposure scale it, so the same setting would grain a dark scene
+// differently from a bright one.
+float3 ApplyFilmGrain(float3 color, int2 coord)
+{
+    if (pc.filmGrain <= 0.0f)
+    {
+        return color;
+    }
+
+    // Without a per-frame offset the pattern is welded to the screen and reads as dirt on
+    // the lens rather than grain in the image. elapsedTime is only available when frame
+    // constants were bound - the two preview services pass none, and a static grain there is
+    // better than none at all.
+    float animate = 0.0f;
+    if (pc.frameConstantsAddr != 0)
+    {
+        FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+        animate = frac(fc->elapsedTime * 60.0f) * 71.0f;
+    }
+
+    // Triangular again, for the same reason the dither below is: a uniform sample leaves the
+    // residual correlated with the signal.
+    const float2 p = float2(coord) + animate;
+    const float n = Hash12Dither(p) - Hash12Dither(p + 17.0f);
+
+    const float luma = dot(color, float3(0.2126f, 0.7152f, 0.0722f));
+    const float response = saturate(luma * (1.0f - luma) * 4.0f);
+
+    return color + n * response * pc.filmGrain * 0.12f;
+}
+
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
@@ -567,6 +609,8 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         bgCol *= vignette;
         outColor = lerp(bgCol, outColor, saturate(coverage));
     }
+
+    outColor = ApplyFilmGrain(outColor, coord);
 
     // Last thing before the 8-bit target: everything above, including the
     // background composite, is a candidate for banding.

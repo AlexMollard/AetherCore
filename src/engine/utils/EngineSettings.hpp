@@ -71,6 +71,9 @@ namespace aether
 			// Contrast-adaptive sharpening, applied after FXAA. Off by default: FXAA is off
 			// in some projects, and sharpening an already-sharp image only adds haloes.
 			float sharpness = 0.0f;
+			// Film grain. Off by default - it is a look, and one nobody asked for is a
+			// regression.
+			float filmGrain = 0.0f;
 			// Camera motion blur: the shutter's open fraction of the frame interval, and the
 			// ceiling on how far one frame may smear. Off by default - it is a look, and a
 			// look nobody asked for is a regression.
@@ -177,6 +180,7 @@ namespace aether
 		f("graphics.vignetteRoundness", settings.graphics.vignetteRoundness);
 		f("graphics.chromaticAberration", settings.graphics.chromaticAberration);
 		f("graphics.sharpness", settings.graphics.sharpness);
+		f("graphics.filmGrain", settings.graphics.filmGrain);
 		f("graphics.motionBlur", settings.graphics.motionBlur);
 		f("graphics.motionBlurMaxRadius", settings.graphics.motionBlurMaxRadius);
 		f("graphics.gtao", settings.graphics.gtao);

@@ -106,6 +106,14 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetFilmGrain(float amount)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetFilmGrain(amount);
+		}
+	}
+
 	void Renderer::SetMotionBlur(float strength, float maxRadiusPixels)
 	{
 		if (m_postProcessStack)

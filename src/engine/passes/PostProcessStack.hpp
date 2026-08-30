@@ -153,6 +153,10 @@ namespace aether
 
 		void SetChromaticAberration(float pixels) { m_chromaticAberration = pixels; }
 
+		void SetFilmGrain(float amount) { m_filmGrain = amount; }
+
+		[[nodiscard]] float GetFilmGrain() const { return m_filmGrain; }
+
 		void SetSharpness(float sharpness) { m_sharpness = sharpness; }
 
 		[[nodiscard]] float GetSharpness() const { return m_sharpness; }
@@ -418,6 +422,7 @@ namespace aether
 		float m_vignetteRoundness = 1.0f;
 		float m_chromaticAberration = 0.0f;
 		float m_sharpness = 0.0f;
+		float m_filmGrain = 0.0f;
 		bool m_fxaaEnabled = true;
 		bool m_outputToTexture = false;
 		bool m_debugCompare = false;
