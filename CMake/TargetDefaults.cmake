@@ -80,7 +80,12 @@ function(aethercore_target_defaults target)
             /FS
             $<$<BOOL:${AETHERCORE_ENABLE_FAST_MATH}>:/fp:fast>
             /Gy
-            /jumptablerdata
+            # Keeps switch jump tables out of the instruction cache. sccache does not know
+            # this option (MSVC 17.7+) and so reads it as a second input file, which made
+            # every first-party translation unit uncacheable - 437 of 754 compiles on CI.
+            # It buys cache locality in a shipped binary and nothing in a test build, so it
+            # is scoped to the config that ships rather than dropped.
+            $<$<CONFIG:Release>:/jumptablerdata>
             /external:anglebrackets
             /external:W0
         )
