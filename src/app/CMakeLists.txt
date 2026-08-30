@@ -48,6 +48,48 @@ list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug/ProjectLaunc
 # table in LauncherLayer.cpp; the editor-only ControlMethods.cpp stays excluded.
 list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/editor/ControlServer.cpp")
 
+# ── Shared app objects ──────────────────────────────────────────────────────
+# Editor and GameRuntime compile most of src/app identically, and EngineTests compiles a
+# third copy of much of it. Measured on a clean build, 20% of all compile time went on
+# recompiling the same sources for a second and third target.
+#
+# They can share because almost nothing in src/app actually reads the macros that differ
+# between the targets: AETHERCORE_EDITOR_APP, AETHERCORE_WITH_IMGUI, AETHERCORE_SCENE_APP
+# and AETHER_SCRIPT_BUILD_ENABLED are consumed by exactly four files, listed below, and
+# those stay per-target. Everything else produces byte-identical objects either way.
+#
+# An OBJECT library rather than STATIC, deliberately: a static library only contributes the
+# objects something references, and much of this code registers itself through static
+# initialisers - the component reflection tables above all. Those objects have no referenced
+# symbol, so a static library would drop them and the components would quietly disappear.
+set(APP_CONFIG_SENSITIVE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Application.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/layers/ScriptedSceneLayer.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripting/CSharpScriptingSubsystem.cpp"
+)
+
+set(APP_SHARED_SOURCES ${APP_RUNTIME_SOURCES})
+list(REMOVE_ITEM APP_SHARED_SOURCES ${APP_CONFIG_SENSITIVE_SOURCES})
+
+add_library(AppShared OBJECT ${APP_SHARED_SOURCES} ${APP_RUNTIME_HEADERS})
+target_include_directories(AppShared PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(AppShared PRIVATE Engine)
+# Only the definitions Editor and GameRuntime agree on. Anything target-specific belongs on
+# the target, not here - if a shared source ever needs one, it stops being shared.
+target_compile_definitions(AppShared PRIVATE
+    AETHERCORE_SCENE_APP=1
+    AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
+    AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
+    AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
+)
+aethercore_target_defaults(AppShared)
+
+# What each executable still compiles for itself: its own sources, minus everything the
+# shared objects already cover.
+list(REMOVE_ITEM APP_EDITOR_SOURCES ${APP_SHARED_SOURCES})
+list(REMOVE_ITEM APP_RUNTIME_SOURCES ${APP_SHARED_SOURCES})
+
 add_executable(Editor)
 add_executable(GameRuntime)
 
@@ -55,12 +97,14 @@ target_sources(Editor
     PRIVATE
         ${APP_EDITOR_SOURCES}
         ${APP_HEADERS}
+        $<TARGET_OBJECTS:AppShared>
 )
 
 target_sources(GameRuntime
     PRIVATE
         ${APP_RUNTIME_SOURCES}
         ${APP_RUNTIME_HEADERS}
+        $<TARGET_OBJECTS:AppShared>
 )
 
 if(WIN32)
