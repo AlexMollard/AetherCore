@@ -2419,9 +2419,9 @@ namespace aether::editor
 
 		methods.push_back({"editor.window_set",
 		        "set_window",
-		        "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.",
+		        "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it. Pass focus to also bring it to the front of its dock node - a panel sharing a node with others is visible while its tab is behind theirs, which reads as a panel that draws nothing.",
 		        true,
-		        Obj({{"name", StrProp()}, {"visible", json{{"type", "boolean"}}}}, {"name", "visible"}),
+		        Obj({{"name", StrProp()}, {"visible", json{{"type", "boolean"}}}, {"focus", json{{"type", "boolean"}}}}, {"name", "visible"}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        auto* windows = ctx.services.TryGet<EditorWindowActions>();
@@ -2435,7 +2435,12 @@ namespace aether::editor
 			        {
 				        return json{{"error", "no window named '" + name + "' (call list_windows)"}};
 			        }
-			        return json{{"name", name}, {"visible", visible}};
+			        bool focused = false;
+			        if (visible && p.value("focus", false) && windows->focusWindow)
+			        {
+				        focused = windows->focusWindow(name);
+			        }
+			        return json{{"name", name}, {"visible", visible}, {"focused", focused}};
 		        }});
 
 		// Settings over the control endpoint, so "this setting applies without a restart"

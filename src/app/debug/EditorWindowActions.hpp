@@ -18,6 +18,10 @@ namespace aether::editor
 	{
 		std::function<std::vector<EditorWindowInfo>()> list;
 		std::function<bool(std::string_view name, bool visible)> setVisible;
+		// Bring a panel to the front of whatever dock node it sits in. Visibility alone is not
+		// enough to see one: a panel sharing a node with others is "visible" while its tab is
+		// behind theirs, which looks exactly like a panel that draws nothing.
+		std::function<bool(std::string_view name)> focusWindow;
 		std::function<void(std::string_view component)> focusInspectorComponent;
 		// Opens the File > Open scene dialog (used by the menu and the control
 		// endpoint alike).

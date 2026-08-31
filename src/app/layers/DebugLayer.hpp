@@ -159,6 +159,9 @@ namespace aether::editor
 		EditorProjectManager m_projects;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
+		// Deferred so the focus lands inside the ImGui frame; the request may arrive from a
+		// control command drained before one has begun.
+		std::string m_pendingFocusWindow;
 		// Borrowed from m_panels, which owns it. Held typed so the edit camera can be
 		// written once on shutdown rather than from the per-frame settings path.
 		ViewportPanel* m_viewportPanel = nullptr;

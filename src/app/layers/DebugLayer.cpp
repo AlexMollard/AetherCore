@@ -650,6 +650,35 @@ namespace aether::editor
 			}
 			return false;
 		};
+		windowActions.focusWindow = [this](std::string_view name) -> bool
+		{
+			for (auto& panel: m_panels)
+			{
+				const std::string_view panelName = panel->GetName();
+				if (panelName.size() != name.size())
+				{
+					continue;
+				}
+				bool same = true;
+				for (std::size_t i = 0; i < panelName.size(); ++i)
+				{
+					if (std::tolower(static_cast<unsigned char>(panelName[i])) != std::tolower(static_cast<unsigned char>(name[i])))
+					{
+						same = false;
+						break;
+					}
+				}
+				if (same)
+				{
+					// Focusing a hidden panel would put a tab nobody can see in front, so it
+					// is shown first - which is what someone asking to focus it meant anyway.
+					panel->SetVisible(true);
+					m_pendingFocusWindow = panelName;
+					return true;
+				}
+			}
+			return false;
+		};
 		windowActions.focusInspectorComponent = [this](std::string_view component)
 		{
 			if (DebugPanel* inspector = FindPanelByName("Inspector"))
@@ -1623,6 +1652,15 @@ namespace aether::editor
 		PollRecoveryOffer(context);
 
 		ImGuizmo::BeginFrame();
+
+		// Applied here rather than where the request was made: ImGui only records a focus
+		// against a live frame, and the control command that asked for it was drained before
+		// this one started.
+		if (!m_pendingFocusWindow.empty())
+		{
+			ImGui::SetWindowFocus(m_pendingFocusWindow.c_str());
+			m_pendingFocusWindow.clear();
+		}
 
 		// A layout preset queued last frame is applied here, before any window
 		if (m_pendingLayoutApply)
