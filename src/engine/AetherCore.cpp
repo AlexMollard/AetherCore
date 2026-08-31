@@ -1096,7 +1096,7 @@ namespace aether
 		{
 			const auto& s = world.GetRegistry().get<Light2DSettingsComponent>(e);
 			packet.light2DAmbient = glm::vec4(s.ambientColor * s.ambientIntensity, 1.0f);
-			packet.light2DShadowParams = glm::vec4(s.shadowStrength, s.shadowSoftness, s.shaftStrength, 0.0f);
+			packet.light2DShadowParams = glm::vec4(s.shadowStrength, s.shadowSoftness, s.shaftStrength, s.shaftNoise);
 			packet.light2DHasSettings = true;
 			break;
 		}

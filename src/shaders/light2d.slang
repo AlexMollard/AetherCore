@@ -31,10 +31,50 @@ struct Light2DPush
     float2 viewportSize;
     float4 ambient;        // rgb = ambient floor, a = per-channel clamp ceiling
     float4 shadowParams;   // x = cast-shadows enabled, y = strength, z = softness, w = world bias
-    float4 shaftParams;    // x = light-shaft strength (0 = off)
+    float4 shaftParams;    // x = light-shaft strength (0 = off), y = medium density variation
 };
 
 static const int kShadowSteps = 16;
+
+// Density of the air at a world point. Two octaves of value noise drifting slowly upward, so
+// the haze reads as dust and mist hanging in the room rather than a uniform wash.
+//
+// Sampled once per pixel rather than once per march step: the variation you actually see is
+// across the screen, and paying for it sixteen times over would buy detail along a ray that is
+// already averaged into a single number.
+float MediumHash(float2 p)
+{
+    // Sine-free, so it keeps its randomness at the large world coordinates a level reaches.
+    float3 q = frac(float3(p.x, p.y, p.x) * 0.1031);
+    q += dot(q, float3(q.y, q.z, q.x) + 33.33);
+    return frac((q.x + q.y) * q.z);
+}
+
+float MediumNoise(float2 p)
+{
+    const float2 i = floor(p);
+    const float2 f = p - i;
+    const float2 u = f * f * (3.0 - 2.0 * f);
+    const float a = MediumHash(i);
+    const float b = MediumHash(i + float2(1.0, 0.0));
+    const float c = MediumHash(i + float2(0.0, 1.0));
+    const float d = MediumHash(i + float2(1.0, 1.0));
+    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+}
+
+float MediumDensity(float2 worldPos, float time, float amount)
+{
+    if (amount <= 0.001)
+    {
+        return 1.0;
+    }
+    // Two scales drifting at different speeds, so the field never reads as one moving texture.
+    const float2 drift = float2(time * 0.06, time * -0.13);
+    const float n = MediumNoise(worldPos * 0.18 + drift) * 0.65
+                  + MediumNoise(worldPos * 0.41 - drift * 1.7) * 0.35;
+    // Centred on 1 so raising the amount thickens and thins the air rather than dimming it.
+    return max(1.0 + (n - 0.5) * 2.0 * amount, 0.0);
+}
 
 [[vk::push_constant]] Light2DPush pc;
 
@@ -141,6 +181,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         surfaceness = smoothstep(0.05, 0.35, gmag);
     }
 
+    // One evaluation for the pixel, shared by every light: the air's density is a property of
+    // the place, not of which lamp is shining through it.
+    const float medium = (pc.shaftParams.x > 0.001)
+        ? MediumDensity(world, frame->elapsedTime, pc.shaftParams.y)
+        : 1.0;
+
     float3 light = pc.ambient.rgb;
 
     GpuLight2D* lights = pc.lights.Ptr();
@@ -214,7 +260,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // reflects - and it is suppressed inside solids, which have no air in them.
         if (pc.shaftParams.x > 0.001)
         {
-            const float shaft = openFraction * pc.shaftParams.x * (1.0 - solidMask);
+            const float shaft = openFraction * pc.shaftParams.x * (1.0 - solidMask) * medium;
             light += L.colorIntensity.rgb * L.colorIntensity.a * shaft * atten2;
         }
     }

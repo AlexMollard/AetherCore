@@ -325,7 +325,7 @@ namespace aether
 			                        .ambient = frame.ambient,
 			                        // x = cast-shadows enabled, y = strength, z = softness, w = world bias. Steps are a shader constant.
 			                        .shadowParams = glm::vec4(doShadows ? 1.0f : 0.0f, frame.shadowParams.x, frame.shadowParams.y, kShadowWorldBias),
-			                        .shaftParams = glm::vec4(frame.shadowParams.z, 0.0f, 0.0f, 0.0f),
+			                        .shaftParams = glm::vec4(frame.shadowParams.z, frame.shadowParams.w, 0.0f, 0.0f),
 			                };
 			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                ctx.recorder.Draw(6, 1, 0, 0);

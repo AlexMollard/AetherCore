@@ -54,6 +54,10 @@ namespace aether
 		// beam visible in the gap between two occluders. 0 is off, and it is off by default:
 		// it is a look, and a look nobody asked for is a regression.
 		float shaftStrength = 0.0f;
+		// How much the air's density varies from place to place. 0 is a perfectly uniform
+		// haze; higher values break it into drifting dust and mist, which is what stops a
+		// lit room reading as a flat wash of fog.
+		float shaftNoise = 0.0f;
 	};
 
 	// Animated sun/sky environment driver. Scene content, not a global: the
