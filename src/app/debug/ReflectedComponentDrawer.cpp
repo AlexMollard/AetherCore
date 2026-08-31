@@ -11,6 +11,8 @@
 
 #include "debug/EditorCommand.hpp"
 #include "debug/Icons.hpp"
+#include "Color.hpp"
+#include "debug/ComponentDrawers.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/UndoStack.hpp"
@@ -222,6 +224,58 @@ namespace aether::editor
 			}
 		};
 
+		// Do two entities hold the same value for one field? Compared field-by-field rather
+		// than through the JSON codec: this runs for every drawn field against every other
+		// selected entity, every frame, so it must not allocate.
+		bool SameFieldValue(const reflect::FieldValue& a, const reflect::FieldValue& b)
+		{
+			if (a.type != b.type)
+			{
+				return false;
+			}
+			switch (a.type)
+			{
+				case FieldType::Bool:
+					return a.boolean == b.boolean;
+				case FieldType::Enum:
+					return a.enumValue == b.enumValue;
+				case FieldType::EntityRef:
+					return a.entity == b.entity;
+				case FieldType::String:
+					return a.str == b.str;
+				case FieldType::Color3:
+				case FieldType::Color4:
+				case FieldType::Vec2:
+				case FieldType::Vec3:
+				case FieldType::Vec4:
+					return a.vec == b.vec;
+				case FieldType::List:
+				{
+					if (a.list.size() != b.list.size())
+					{
+						return false;
+					}
+					for (std::size_t row = 0; row < a.list.size(); ++row)
+					{
+						if (a.list[row].size() != b.list[row].size())
+						{
+							return false;
+						}
+						for (std::size_t col = 0; col < a.list[row].size(); ++col)
+						{
+							if (!SameFieldValue(a.list[row][col], b.list[row][col]))
+							{
+								return false;
+							}
+						}
+					}
+					return true;
+				}
+				default:
+					return a.num == b.num; // Float / Int / UInt
+			}
+		}
+
 		bool DrawField(const reflect::FieldDesc& f, void* comp, const FieldEditSink& sink)
 		{
 			reflect::FieldValue v = f.get(comp);
@@ -280,7 +334,38 @@ namespace aether::editor
 				bool anyChanged = false;
 				for (const auto& f: rt.fields)
 				{
-					if (!DrawField(f, comp, sink))
+					// Warn before the value is flattened, not after: the widget shows the
+					// primary's number, so without this a field where the selection disagrees
+					// looks unanimous and one drag silently overwrites the rest.
+					bool mixed = false;
+					if (propagate)
+					{
+						const reflect::FieldValue mine = f.get(comp);
+						for (const Entity other: selection->All())
+						{
+							if (other == entity || !world.GetRegistry().valid(World::ToEntt(other)))
+							{
+								continue;
+							}
+							const void* otherComp = rt.tryGetRawConst(world, other);
+							if (otherComp != nullptr && !SameFieldValue(mine, f.get(otherComp)))
+							{
+								mixed = true;
+								break;
+							}
+						}
+					}
+					if (mixed)
+					{
+						ImGui::PushStyleColor(ImGuiCol_Text, iw::ToImVec4(colors::Orange));
+					}
+					const bool fieldChanged = DrawField(f, comp, sink);
+					if (mixed)
+					{
+						ImGui::PopStyleColor();
+						ImGui::SetItemTooltip("Differs across the selection - showing %s. Editing this sets it on all of them.", EntityDisplayName(world, entity));
+					}
+					if (!fieldChanged)
 					{
 						continue;
 					}
