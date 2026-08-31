@@ -503,6 +503,18 @@ namespace aether::editor
 			ImGui::PopFont();
 		}
 
+		// A transient entity is deliberately left out of the saved scene. That is the whole
+		// point of the marker, but from the Inspector it is invisible: the entity looks exactly
+		// like any other right up until it is not in the file. Say so where the decision is
+		// made, rather than letting a save quietly drop it.
+		if (world.Has<SceneTransientComponent>(entity))
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, iw::WithAlpha(colors::Orange, 0.95f));
+			ImGui::TextWrapped("%s  Not saved with the scene - this entity is marked Scene Transient.", ICON_FA_GHOST);
+			ImGui::PopStyleColor();
+			ImGui::Spacing();
+		}
+
 		const float trashW = ImGui::GetFrameHeight() + 8.0f;
 		const float toolWidth = ImGui::GetContentRegionAvail().x - trashW - ImGui::GetStyle().ItemSpacing.x;
 		if (iw::AccentButton(ICON_FA_PLUS "  Add Component", ImVec2(toolWidth, 0.0f)))
