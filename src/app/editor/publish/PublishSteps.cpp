@@ -191,17 +191,29 @@ namespace aether::editor
 			}
 
 			int baked = 0;
+			int skipped = 0;
 			for (const std::string& model: models)
 			{
 				std::string error;
-				if (!EnsureModelBaked(model, plan.projectRoot, error))
+				if (EnsureModelBaked(model, plan.projectRoot, error))
 				{
-					return Failed("Could not bake model '" + model + "': " + error,
-					        "Open the model in the editor to see what the importer rejects, then publish again.");
+					++baked;
+					continue;
 				}
-				++baked;
+				// Not fatal. A glTF can legitimately carry no mesh - an animation-only clip
+				// source is one - and the same message covers a genuinely broken file, so
+				// there is no way to tell them apart here. Failing the publish would block
+				// shipping over an asset that was never going to contribute a mesh; a model
+				// that really is broken still surfaces, as the runtime's missing-mesh error.
+				AE_WARN(LogCategory::App, "Publish: skipping model '{}': {}", model, error);
+				++skipped;
 			}
-			return {.ok = true, .message = baked == 0 ? "No models to bake." : "Baked " + std::to_string(baked) + " referenced model(s)."};
+			std::string summary = baked == 0 ? "No models baked." : "Baked " + std::to_string(baked) + " referenced model(s).";
+			if (skipped > 0)
+			{
+				summary += " Skipped " + std::to_string(skipped) + " with no mesh data.";
+			}
+			return {.ok = true, .message = std::move(summary)};
 		}
 
 		StepResult PackProjectAssets(const PublishPlan& plan, PublishContext& context, const PublishToolchain&)
