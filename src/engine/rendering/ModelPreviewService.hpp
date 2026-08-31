@@ -39,6 +39,20 @@ namespace aether
 		// Show one mesh wearing an arbitrary material, for previewing a material on its own.
 		// The mesh is borrowed, not owned - callers pass a long-lived primitive.
 		bool ShowMaterialOnMesh(AssetManager& assets, const Mesh& mesh, const MaterialAsset& material, std::string& outError);
+
+		// Whether the preview is lit by the SCENE's sky or by a neutral studio environment.
+		// A scene sky is what the material will actually sit in, but it also tints every
+		// preview by whatever the level happens to look like, which makes two materials
+		// impossible to compare.
+		void SetSceneEnvironmentEnabled(bool enabled) noexcept
+		{
+			m_sceneEnvironment.store(enabled, std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] bool IsSceneEnvironmentEnabled() const noexcept
+		{
+			return m_sceneEnvironment.load(std::memory_order_relaxed);
+		}
 		void ClearModel(AssetManager& assets);
 
 		[[nodiscard]] bool HasModel() const
@@ -105,6 +119,7 @@ namespace aether
 		LoadedModel m_model;
 		glm::vec4 m_bounds{0.0f, 0.0f, 0.0f, 1.0f};
 		float m_turntableAngle = 0.0f;
+		std::atomic<bool> m_sceneEnvironment{true};
 		std::atomic<bool> m_hasModel{false};
 
 		// Turntable camera, produced on the game thread, consumed on the render thread.

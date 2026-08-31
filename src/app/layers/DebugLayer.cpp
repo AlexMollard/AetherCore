@@ -145,6 +145,8 @@ namespace aether::editor
 			TwoD,
 			ThreeD,
 			Rendering,
+			Materials,
+			Assets,
 			Scripting,
 			Minimal,
 			Count,
@@ -162,6 +164,8 @@ namespace aether::editor
 		        {WorkflowLayout::TwoD, "2D / Sprites", "Tilemaps, sprite slicing, animation and pixel art around the viewport."},
 		        {WorkflowLayout::ThreeD, "3D / Scene", "Scene building with lighting; 2D tool panels hidden."},
 		        {WorkflowLayout::Rendering, "Rendering / Look-dev", "Render graph, tonemap, post-processing, lighting and textures."},
+		        {WorkflowLayout::Materials, "Materials / Shading", "The material graph front and centre, with the file explorer and a viewport to check it against."},
+		        {WorkflowLayout::Assets, "Assets / Import", "Browsing and inspecting project files: explorer, textures, materials and the asset inspector."},
 		        {WorkflowLayout::Scripting, "Scripting / Debug", "Console, control server, performance and debug tools along the bottom."},
 		        {WorkflowLayout::Minimal, "Minimal", "Just hierarchy, viewport and inspector."},
 		};
@@ -180,6 +184,10 @@ namespace aether::editor
 					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Lighting", "Console", "Performance"};
 				case WorkflowLayout::Rendering:
 					return {"Scene Outliner", "Viewport", "Inspector", "Render Graph", "Tonemap", "Post Processing", "Lighting", "TextureInspector", "Performance", "Console"};
+				case WorkflowLayout::Materials:
+					return {"File Explorer", "Project", "Material", "Viewport", "Inspector", "Scene Outliner", "Console"};
+				case WorkflowLayout::Assets:
+					return {"File Explorer", "Project", "Build", "Material", "TextureInspector", "Inspector", "Viewport", "Console"};
 				case WorkflowLayout::Scripting:
 					return {"Scene Outliner", "Project", "Build", "File Explorer", "Viewport", "Inspector", "Console", "Control Server", "Performance", "DevTools"};
 				case WorkflowLayout::Minimal:
@@ -282,6 +290,44 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Inspector", rightBottom);
 					ImGui::DockBuilderDockWindow("Build", rightBottom);
 					ImGui::DockBuilderDockWindow("Performance", bottom);
+					ImGui::DockBuilderDockWindow("Textures", bottom);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Viewport", root);
+					break;
+				}
+				case WorkflowLayout::Materials:
+				{
+					// The node canvas needs the widest node in the layout, so the Material
+					// window takes the centre and the viewport moves to the side - the scene is
+					// a reference here rather than the thing being edited.
+					const ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.17f, nullptr, &root);
+					ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.32f, nullptr, &root);
+					const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.45f, nullptr, &right);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.20f, nullptr, &root);
+					dockRemainingTo(rightBottom);
+					ImGui::DockBuilderDockWindow("File Explorer", left);
+					ImGui::DockBuilderDockWindow("Project", left);
+					ImGui::DockBuilderDockWindow("Viewport", right);
+					ImGui::DockBuilderDockWindow("Scene", rightBottom);
+					ImGui::DockBuilderDockWindow("Inspector", rightBottom);
+					ImGui::DockBuilderDockWindow("Console", bottom);
+					ImGui::DockBuilderDockWindow("Material", root);
+					break;
+				}
+				case WorkflowLayout::Assets:
+				{
+					// Browsing, so the explorer gets real width rather than a strip, and the
+					// things that inspect one file sit around it.
+					ImGuiID left = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.26f, nullptr, &root);
+					const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.35f, nullptr, &left);
+					const ImGuiID right = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.30f, nullptr, &root);
+					const ImGuiID bottom = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.30f, nullptr, &root);
+					dockRemainingTo(right);
+					ImGui::DockBuilderDockWindow("File Explorer", left);
+					ImGui::DockBuilderDockWindow("Project", leftBottom);
+					ImGui::DockBuilderDockWindow("Build", leftBottom);
+					ImGui::DockBuilderDockWindow("Material", right);
+					ImGui::DockBuilderDockWindow("Inspector", right);
 					ImGui::DockBuilderDockWindow("Textures", bottom);
 					ImGui::DockBuilderDockWindow("Console", bottom);
 					ImGui::DockBuilderDockWindow("Viewport", root);
@@ -1771,8 +1817,8 @@ namespace aether::editor
 
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "Build", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
-				        {ICON_FA_IMAGE, "2D", {"Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
-				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "TextureInspector", "Particles"}},
+				        {ICON_FA_BRUSH, "Authoring", {"Material", "TextureInspector", "Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Particles"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools", "Control Server"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings", "Theme"}},
 				};

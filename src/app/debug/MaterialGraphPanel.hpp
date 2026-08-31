@@ -36,7 +36,8 @@ namespace aether::editor
 		void SyncLinks();
 		void DeleteSelection();
 		bool Compile(app::LayerContext& context);
-		void RefreshPreview(app::LayerContext& context, const std::string& materialPath);
+		void RefreshPreview(app::LayerContext& context, const std::string& materialPath, const std::string& shaderOverride = {});
+		void DrawPreviewControls(app::LayerContext& context);
 		void DrawPreview(float side) const;
 
 		// Graph mode.
@@ -61,5 +62,6 @@ namespace aether::editor
 		std::string m_previewMaterialPath;
 		MaterialPresetSpec m_previewSpec;
 		bool m_previewDirty = false;
+		int m_previewGeneration = 0;
 	};
 } // namespace aether::editor

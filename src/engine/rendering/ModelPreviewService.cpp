@@ -285,6 +285,19 @@ namespace aether
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);
 		fc.shadowParams.z = 0.0f; // shadow strength: never sample the scene's cascades
 		fc.shadowLightCount = 0;
+
+		if (!m_sceneEnvironment.load(std::memory_order_relaxed))
+		{
+			// A neutral studio: an even grey dome and a plain white key. Deliberately not
+			// black - killing the sky entirely would leave the unlit side of the sphere with
+			// no information in it at all, which reads as a broken material rather than a
+			// dark one.
+			fc.skyHorizonColor = glm::vec4(0.32f, 0.33f, 0.35f, 0.0f);
+			fc.skyZenithColor = glm::vec4(0.42f, 0.44f, 0.48f, 0.0f);
+			fc.skyVoidColor = glm::vec4(0.16f, 0.16f, 0.17f, 0.0f);
+			fc.sunColor = glm::vec4(1.0f, 1.0f, 1.0f, fc.sunColor.a);
+			fc.sunDirectionIntensity = glm::vec4(glm::normalize(glm::vec3(-0.4f, -0.75f, -0.5f)), 2.6f);
+		}
 		fc.RefreshDerived();
 		m_constants.Write(frameIdx, fc);
 	}

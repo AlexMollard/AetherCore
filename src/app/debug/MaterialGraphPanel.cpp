@@ -56,6 +56,38 @@ namespace aether::editor
 			const std::filesystem::path p(graphPath);
 			return (p.parent_path() / (GraphStem(graphPath) + ".material.toml")).generic_string();
 		}
+
+		// The reverse: the graph that generated a material, if there is one.
+		std::string GraphForMaterial(const std::string& materialPath)
+		{
+			const std::filesystem::path p(materialPath);
+			const std::string stem = std::filesystem::path(materialPath).stem().stem().generic_string();
+			return (p.parent_path() / (stem + ".materialgraph.toml")).generic_string();
+		}
+
+		// Seeds a graph from a material's current values, so moving an existing material onto
+		// the node editor starts from what it already looks like rather than from grey.
+		MaterialGraph GraphFromMaterial(const MaterialPresetSpec& spec)
+		{
+			MaterialGraph graph;
+			MaterialNode out{.id = 1, .type = MaterialNodeType::Output, .x = 460.0f, .y = 160.0f};
+			MaterialNode colour{.id = 2, .type = MaterialNodeType::ConstantColor, .x = 80.0f, .y = 80.0f};
+			MaterialNode metallic{.id = 3, .type = MaterialNodeType::ConstantFloat, .x = 80.0f, .y = 230.0f};
+			MaterialNode roughness{.id = 4, .type = MaterialNodeType::ConstantFloat, .x = 80.0f, .y = 330.0f};
+			for (int i = 0; i < 4; ++i)
+			{
+				colour.value[i] = spec.material.baseColorFactor[i];
+			}
+			metallic.value[0] = metallic.value[1] = metallic.value[2] = spec.material.metallicFactor;
+			roughness.value[0] = roughness.value[1] = roughness.value[2] = spec.material.roughnessFactor;
+			graph.nodes = {out, colour, metallic, roughness};
+			graph.links = {
+			        MaterialLink{.id = 5, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 0},
+			        MaterialLink{.id = 6, .fromNode = 3, .fromPin = 0, .toNode = 1, .toPin = 1},
+			        MaterialLink{.id = 7, .fromNode = 4, .fromPin = 0, .toNode = 1, .toPin = 2}};
+			graph.nextId = 8;
+			return graph;
+		}
 	} // namespace
 
 	void MaterialGraphPanel::SyncLinks()
@@ -287,14 +319,37 @@ namespace aether::editor
 			return false;
 		}
 
+		// PipelineCache keys on the shader PATH and has no invalidation, so recompiling to the
+		// same name leaves the old pipeline - and therefore the old shader - rendering. The
+		// committed material keeps the stable name so a fresh clone resolves it, and the
+		// preview points at an alternating copy in build output purely to force a new key.
+		//
+		// Alternating rather than incrementing bounds the cache at two pipelines per graph.
+		// Dropping and rebuilding the real one would mean destroying a pipeline that may be in
+		// flight, and a vkDeviceWaitIdle from this thread is the cross-queue bug the settings
+		// work already ran into once.
+		m_previewGeneration = 1 - m_previewGeneration;
+		const std::filesystem::path builtSpv = ProjectShaderIntermediateDir(root) / (stem + ".spv");
+		const std::filesystem::path previewSpv = ProjectShaderIntermediateDir(root) / std::format("{}.preview{}.spv", stem, m_previewGeneration);
+		// std::filesystem rather than io::file_util::CopyFile: windows.h defines CopyFile as
+		// an object-like macro for CopyFileA, which rewrites the name even when it is
+		// qualified, so the call never resolves.
+		std::string previewShaderPath;
+		std::error_code copyEc;
+		std::filesystem::copy_file(builtSpv, previewSpv, std::filesystem::copy_options::overwrite_existing, copyEc);
+		if (!copyEc)
+		{
+			previewShaderPath = std::format("shaders://{}.preview{}.spv", stem, m_previewGeneration);
+		}
+
 		m_status = std::format("Compiled to {}.material.toml", stem);
 		m_statusIsError = false;
 		m_compiledSignature = SerializeMaterialGraph(m_graph);
-		RefreshPreview(context, materialPath);
+		RefreshPreview(context, materialPath, previewShaderPath);
 		return true;
 	}
 
-	void MaterialGraphPanel::RefreshPreview(app::LayerContext& context, const std::string& materialPath)
+	void MaterialGraphPanel::RefreshPreview(app::LayerContext& context, const std::string& materialPath, const std::string& shaderOverride)
 	{
 		m_previewDirty = false;
 		m_previewImGuiId = 0;
@@ -318,8 +373,14 @@ namespace aether::editor
 			return;
 		}
 
+		MaterialAsset material = *loaded;
+		if (!shaderOverride.empty())
+		{
+			material.templateDesc.shaderVfsPath = assets->InternShaderVfsPath(shaderOverride);
+		}
+
 		std::string error;
-		if (!rendering->GetModelPreview().ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), *loaded, error))
+		if (!rendering->GetModelPreview().ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), material, error))
 		{
 			m_previewError = error;
 		}
@@ -340,6 +401,21 @@ namespace aether::editor
 				textures.Release(h);
 			}
 		}
+	}
+
+	void MaterialGraphPanel::DrawPreviewControls(app::LayerContext& context)
+	{
+		auto* rendering = context.TryGet<RenderingSubsystem>();
+		if (rendering == nullptr)
+		{
+			return;
+		}
+		bool sceneSky = rendering->GetModelPreview().IsSceneEnvironmentEnabled();
+		if (ImGui::Checkbox("Scene sky", &sceneSky))
+		{
+			rendering->GetModelPreview().SetSceneEnvironmentEnabled(sceneSky);
+		}
+		ImGui::SetItemTooltip("On: lit by the scene's sky, which is where the material will actually sit.\nOff: a neutral studio, so two materials can be compared.");
 	}
 
 	void MaterialGraphPanel::DrawPreview(float side) const
@@ -393,15 +469,37 @@ namespace aether::editor
 			return;
 		}
 
-		// The material a graph generates must not knock its own graph out of the window.
-		// Compiling writes that file, so selecting it - or having the file explorer land on it
-		// after a refresh - otherwise turned the graph editor back into the property editor.
-		if (!m_graphPath.empty() && path == CompanionMaterialPath(m_graphPath))
+		// Keyed on what the file IS, not on how it is named. A model import writes materials
+		// with no .material.toml suffix at all, and keying on the suffix meant clicking one of
+		// those left the window saying "nothing open" while the explorer called it a material.
+		if (selection->SelectedAsset().kind != SceneSelection::AssetKind::Material)
 		{
 			return;
 		}
 
-		if (path.ends_with(".material.toml") && !path.ends_with(".materialgraph.toml") && path != m_edit.path)
+		// A material that HAS a graph is always shown as its graph. Without this, whether you
+		// got the node editor or the property list depended on what you had clicked before it:
+		// the graph's own material kept the graph open, but arriving from another material
+		// dropped you into the property editor for the same file.
+		if (const std::string graphPath = GraphForMaterial(path); io::FileSystem::Exists(graphPath))
+		{
+			if (graphPath != m_graphPath)
+			{
+				m_graphPath = graphPath;
+				m_edit = MaterialAssetEditState{};
+				if (auto text = io::FileSystem::ReadFileText(graphPath))
+				{
+					m_graph = ParseMaterialGraph(*text);
+				}
+				m_positionsApplied = false;
+				m_compiledSignature.clear();
+				m_status.clear();
+				RefreshPreview(context, path);
+			}
+			return;
+		}
+
+		if (path != m_edit.path)
 		{
 			m_graphPath.clear();
 			m_edit = MaterialAssetEditState{};
@@ -449,7 +547,10 @@ namespace aether::editor
 		// The preview sits beside the canvas rather than above it: a node graph wants the
 		// height, and the whole point is watching the sphere while wiring.
 		const float previewSide = std::min(220.0f, ImGui::GetContentRegionAvail().x * 0.35f);
+		ImGui::BeginGroup();
 		DrawPreview(previewSide);
+		DrawPreviewControls(context);
+		ImGui::EndGroup();
 		ImGui::SameLine();
 
 		ImGui::BeginChild("##canvas", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
@@ -538,6 +639,15 @@ namespace aether::editor
 		ImGui::SetItemTooltip("%s", m_edit.path.c_str());
 		ImGui::Separator();
 
+		if (m_edit.path.ends_with(".material"))
+		{
+			// The importer's cooked binary. Editing it would be overwritten by the next model
+			// import, and there is no authored source to edit instead.
+			ImGui::TextDisabled("Imported with a model - not editable.");
+			ImGui::End();
+			return;
+		}
+
 		// The preview follows the values being edited, so it has to be rebuilt whenever they
 		// differ from what it was last built with rather than only when the file is written.
 		if (m_previewDirty || m_previewMaterialPath != m_edit.path || !MaterialSpecEquals(m_edit.spec, m_previewSpec))
@@ -546,6 +656,25 @@ namespace aether::editor
 			m_previewSpec = m_edit.spec;
 		}
 		DrawPreview(std::min(220.0f, ImGui::GetContentRegionAvail().x));
+		DrawPreviewControls(context);
+
+		// The way out of the property editor and onto the node graph, seeded from what this
+		// material already is so the conversion changes nothing about how it looks.
+		if (ImGui::Button(ICON_FA_DIAGRAM_PROJECT "  Convert to graph"))
+		{
+			const std::string graphPath = GraphForMaterial(m_edit.path);
+			const MaterialGraph seeded = GraphFromMaterial(m_edit.spec);
+			if (auto written = io::FileSystem::WriteFileText(graphPath, SerializeMaterialGraph(seeded)); written)
+			{
+				m_graph = seeded;
+				m_graphPath = graphPath;
+				m_positionsApplied = false;
+				m_compiledSignature.clear();
+				m_status = "Converted. The graph now drives this material.";
+				m_statusIsError = false;
+			}
+		}
+		ImGui::SetItemTooltip("Start a node graph from these values. The material keeps its name and everything using it.");
 		ImGui::Separator();
 
 		DrawMaterialAssetEditor(context, context.Get<World>(), m_edit.path, m_edit);
