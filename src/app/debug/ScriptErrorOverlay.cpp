@@ -18,6 +18,25 @@ namespace aether::editor
 		outPath.clear();
 		outLine = 0;
 
+		// The C# toolchain writes "Foo.cs(10,17):"; the older runtime wrote "Foo.cs:10".
+		// Only the second was handled, so a build error never offered its Open button.
+		if (const auto paren = error.find(".cs("); paren != std::string::npos)
+		{
+			std::size_t start = paren;
+			while (start > 0 && error[start - 1] != ' ' && error[start - 1] != '\n' && error[start - 1] != '\r')
+			{
+				--start;
+			}
+			outPath = error.substr(start, paren + 3 - start);
+			int parsed = 0;
+			for (std::size_t i = paren + 4; i < error.size() && error[i] >= '0' && error[i] <= '9'; ++i)
+			{
+				parsed = parsed * 10 + (error[i] - '0');
+			}
+			outLine = parsed;
+			return;
+		}
+
 		std::size_t searchPos = 0;
 		while (searchPos < error.size())
 		{
@@ -90,7 +109,11 @@ namespace aether::editor
 		for (auto& err: errors)
 		{
 			std::vector<std::string> individualErrors;
-			static const std::regex errorPattern(R"(error\[\d+\]:)");
+			// One toast per compiler error. The C# toolchain writes "error CS1525:"; the older
+			// "error[1234]:" form is kept because the same overlay reports runtime script
+			// faults, which still use it. Matching neither is what collapsed a whole build
+			// into a single toast reading "Project script build failed:" and nothing else.
+			static const std::regex errorPattern(R"(error (?:CS)?\d+:|error \[?[A-Z]*\d+\]?:)");
 			auto begin = std::sregex_iterator(err.begin(), err.end(), errorPattern);
 			auto end = std::sregex_iterator();
 
@@ -100,21 +123,25 @@ namespace aether::editor
 			}
 			else
 			{
-				std::size_t lastPos = 0;
+				// Text before the first match is the wrapper line ("Project script build
+				// failed:"), which says nothing on its own - the errors below it are the
+				// message. Starting at the first match drops it.
+				std::size_t lastPos = std::string::npos;
 				for (auto it = begin; it != end; ++it)
 				{
 					const std::smatch& match = *it;
-					if (it == begin)
+					std::size_t lineStart = err.rfind('\n', match.position());
+					lineStart = (lineStart == std::string::npos) ? 0 : lineStart + 1;
+					if (lastPos != std::string::npos && lineStart > lastPos)
 					{
-						lastPos = match.position();
+						individualErrors.push_back(err.substr(lastPos, lineStart - lastPos));
 					}
-					else
-					{
-						individualErrors.push_back(err.substr(lastPos, match.position() - lastPos));
-						lastPos = match.position();
-					}
+					lastPos = lineStart;
 				}
-				individualErrors.push_back(err.substr(lastPos));
+				if (lastPos != std::string::npos)
+				{
+					individualErrors.push_back(err.substr(lastPos));
+				}
 			}
 
 			for (const auto& singleErr: individualErrors)
