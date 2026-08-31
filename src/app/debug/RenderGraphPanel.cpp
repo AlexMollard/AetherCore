@@ -11,6 +11,7 @@
 #include <utility>
 
 #include <imgui.h>
+#include <implot.h>
 
 #include "Color.hpp"
 #include "debug/DebugPanel.hpp"
@@ -296,6 +297,77 @@ namespace aether::editor
 			        frameStats.transientCacheMiss,
 			        frameStats.cacheSize);
 			ImGui::EndTable();
+		}
+
+		// Where the frame's GPU time actually goes, sorted, before the table of everything.
+		// The table has the same numbers, but a column of 50 floats does not tell you that
+		// two passes are the frame - a sorted bar chart does it at a glance.
+		{
+			struct PassCost
+			{
+				const std::string* name;
+				float gpuMs;
+			};
+			std::vector<PassCost> costs;
+			costs.reserve(passes.size());
+			float totalGpuMs = 0.0f;
+			for (const auto& pass: passes)
+			{
+				if (pass.isCulled || pass.isDebugDisabled)
+				{
+					continue;
+				}
+				totalGpuMs += pass.lastGpuTimeMs;
+				costs.push_back({&pass.name, pass.lastGpuTimeMs});
+			}
+			std::ranges::sort(costs, std::ranges::greater{}, &PassCost::gpuMs);
+
+			// A long tail of sub-microsecond passes is noise on a chart; the table still has
+			// every one of them.
+			constexpr std::size_t kMaxBars = 12;
+			if (costs.size() > kMaxBars)
+			{
+				costs.resize(kMaxBars);
+			}
+
+			if (!costs.empty() && totalGpuMs > 0.0f)
+			{
+				ImGui::SeparatorText("GPU cost by pass");
+				std::vector<double> values;
+				std::vector<double> ticks;
+				std::vector<std::string> labelStorage;
+				std::vector<const char*> labels;
+				values.reserve(costs.size());
+				labelStorage.reserve(costs.size());
+				for (std::size_t i = 0; i < costs.size(); ++i)
+				{
+					// Drawn top-down: the highest bar belongs at the top, and the y axis
+					// grows upward, so the first entry takes the largest coordinate.
+					values.push_back(static_cast<double>(costs[i].gpuMs));
+					ticks.push_back(static_cast<double>(costs.size() - 1 - i));
+					labelStorage.push_back(ShortRenderPassName(*costs[i].name));
+				}
+				for (const std::string& label: labelStorage)
+				{
+					labels.push_back(label.c_str());
+				}
+
+				const float chartHeight = 22.0f * static_cast<float>(costs.size()) + 40.0f;
+				if (ImPlot::BeginPlot("##passcost", ImVec2(-1.0f, chartHeight), ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText))
+				{
+					ImPlot::SetupAxes("ms", nullptr, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_NoGridLines);
+					ImPlot::SetupAxisTicks(ImAxis_Y1, ticks.data(), static_cast<int>(ticks.size()), labels.data());
+					ImPlot::SetupAxisLimits(ImAxis_Y1, -0.75, static_cast<double>(costs.size()) - 0.25, ImPlotCond_Always);
+
+					std::vector<double> ys = ticks;
+					ImPlotSpec bars;
+					bars.Flags = ImPlotBarsFlags_Horizontal;
+					bars.FillAlpha = 0.85f;
+					ImPlot::PlotBars("GPU", values.data(), ys.data(), static_cast<int>(values.size()), 0.62, bars);
+					ImPlot::EndPlot();
+				}
+				ImGui::TextDisabled("%.3f ms total across %zu live passes", static_cast<double>(totalGpuMs), passes.size());
+			}
 		}
 
 		ImGui::InputTextWithHint("##RenderGraphFilter", "Filter passes or source files", m_renderGraphFilter, sizeof(m_renderGraphFilter));
