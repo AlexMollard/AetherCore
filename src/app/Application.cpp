@@ -477,7 +477,7 @@ namespace aether::app
 			// Preview particle emitters while editing so effects are authorable.
 			if (auto* particles = ctx.TryGet<aether::ParticleSystem>())
 			{
-				particles->Update(editWorld, static_cast<float>(gameDt));
+				particles->UpdatePreview(editWorld, static_cast<float>(gameDt));
 			}
 			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>())
 			{

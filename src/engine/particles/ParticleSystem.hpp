@@ -32,6 +32,16 @@ namespace aether
 		}
 
 		void Update(World& world, float dt) override;
+		// The same simulation WITHOUT retiring finished emitters. Edit mode previews effects so
+		// they can be authored, and an emitter with autoDestroyWhenDone is finished the moment
+		// it is added - so running the runtime path there deletes the entity out from under
+		// whoever is building it, before the scene has ever been played.
+		void UpdatePreview(World& world, float dt);
+
+	private:
+		void Simulate(World& world, float dt, bool retireFinished);
+
+	public:
 
 		void OnUnregister(World& world) override
 		{

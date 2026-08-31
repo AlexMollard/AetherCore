@@ -255,6 +255,16 @@ namespace aether
 
 	void ParticleSystem::Update(World& world, float dt)
 	{
+		Simulate(world, dt, /*retireFinished=*/true);
+	}
+
+	void ParticleSystem::UpdatePreview(World& world, float dt)
+	{
+		Simulate(world, dt, /*retireFinished=*/false);
+	}
+
+	void ParticleSystem::Simulate(World& world, float dt, bool retireFinished)
+	{
 		AE_PROFILE_ZONE();
 		if (dt <= 0.0f)
 		{
@@ -283,7 +293,7 @@ namespace aether
 
 			// One-shot emitter that has finished: retire its entity.
 			const bool idle = emitter.particles.empty() && emitter.pendingBurst == 0 && !(emitter.emitting && emitter.rate > 0.0f);
-			if (emitter.autoDestroyWhenDone && emitter.started && idle)
+			if (retireFinished && emitter.autoDestroyWhenDone && emitter.started && idle)
 			{
 				toDestroy.push_back(entity);
 			}
