@@ -193,11 +193,26 @@ float3 SkyGradient(
     float3 zenithColor,
     float3 voidColor,
     float4 skyParams,
-    float  cloudCoverage)
+    float  cloudCoverage,
+    float  lobeWidth)
 {
     // One entry point, so the skybox, the image-based ambient and the fog colour all
     // move together the moment a scene switches model. They read the same sky by
     // construction rather than by three call sites being kept in agreement.
+    //
+    // lobeWidth is what separates those uses. Drawing the sky asks a question about ONE
+    // direction, and the answer is allowed to change sharply from one direction to the
+    // next - the ground line is meant to be a line. Lighting a surface asks a different
+    // question: how much light arrives over a whole lobe around that direction. That
+    // integral cannot contain an edge sharper than the lobe is wide, so reading the drawn
+    // sky along a single normal reproduces detail that the real answer would have averaged
+    // away. On a sphere it puts a hard horizontal seam straight across the middle, exactly
+    // where the normal crosses the horizon.
+    //
+    // 0 is the sky as drawn. 1 is a full cosine hemisphere, for diffuse. A specular lobe
+    // sits between the two and narrows as the surface smooths, so roughness is the value
+    // to pass - a mirror wants the sharp sky, a chalky surface wants the averaged one.
+    const float lobe = saturate(lobeWidth);
     if (skyParams.x > 0.5f)
     {
         return ApplyOvercast(
@@ -221,7 +236,7 @@ float3 SkyGradient(
     float3 sky = lerp(warmHorizon, zenith, Smooth5(gradientBlend));
 
     // Gentle atmospheric haze hugging the horizon to further soften the junction.
-    const float horizonHaze = exp2(-18.0f * abs(worldDir.y));
+    const float horizonHaze = exp2(-lerp(18.0f, 3.0f, lobe) * abs(worldDir.y));
     sky = lerp(sky, warmHorizon, horizonHaze * (0.16f + 0.10f * lowSunAmount));
 
     // Daytime cyan lift around mid-elevations to keep noon sky lively.
@@ -231,12 +246,15 @@ float3 SkyGradient(
     sky = ApplyOvercast(sky, worldDir, cloudCoverage);
 
     // Below the horizon: darken gently to avoid a sharp cutoff.
-    const float belowHorizon = saturate(-worldDir.y * 2.0f);
+    const float belowHorizon = saturate(-worldDir.y * lerp(2.0f, 0.55f, lobe));
     sky = lerp(sky, sky * 0.15f, belowHorizon);
 
     // Force a near-black void below the horizon.
     // Keep a small transition band to avoid hard aliasing at exactly y=0.
-    const float voidBlend = 1.0f - smoothstep(-0.22f, -0.015f, worldDir.y);
+    const float voidBlend = 1.0f - smoothstep(
+        lerp(-0.22f, -0.90f, lobe),
+        lerp(-0.015f, 0.60f, lobe),
+        worldDir.y);
     sky = lerp(sky, voidColor, voidBlend);
 
     return sky;
@@ -427,7 +445,8 @@ float3 EvalSky(
     float4 skyParams,
     float  cloudCoverage)
 {
-    float3 sky = SkyGradient(worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams, cloudCoverage);
+    // 0: EvalSky is the sky as seen, never a lighting probe.
+    float3 sky = SkyGradient(worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams, cloudCoverage, 0.0f);
 
     const float sunAltitude = saturate(sunDir.y);
     const float nightAmount = 1.0f - smoothstep(-0.10f, 0.25f, sunDir.y);
