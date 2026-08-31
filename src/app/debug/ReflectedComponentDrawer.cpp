@@ -12,6 +12,7 @@
 #include "debug/EditorCommand.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/SceneSelection.hpp"
 #include "debug/UndoStack.hpp"
 #include "editor/ComponentFields.hpp"
 #include "editor/ReflectionJson.hpp"
@@ -269,10 +270,43 @@ namespace aether::editor
 			if (open)
 			{
 				const FieldEditSink sink{undo, entity.id, &rt.name};
+				// Editing a field with several entities selected sets it on all of them that
+				// carry this component - the same field, the same value. Unlike a transform
+				// (which propagates a delta, so entities keep their relative offsets) an
+				// intensity or a colour has no meaningful "relative" version, so the edited
+				// value is applied outright. Entities without the component are left alone.
+				const auto* selection = services.TryGet<SceneSelection>();
+				const bool propagate = selection != nullptr && selection->All().size() > 1 && selection->Contains(entity);
 				bool anyChanged = false;
 				for (const auto& f: rt.fields)
 				{
-					anyChanged |= DrawField(f, comp, sink);
+					if (!DrawField(f, comp, sink))
+					{
+						continue;
+					}
+					anyChanged = true;
+					if (!propagate)
+					{
+						continue;
+					}
+					const reflect::FieldValue edited = f.get(comp);
+					for (const Entity other: selection->All())
+					{
+						if (other == entity || !world.GetRegistry().valid(World::ToEntt(other)))
+						{
+							continue;
+						}
+						void* otherComp = rt.tryGetRaw(world, other);
+						if (otherComp == nullptr)
+						{
+							continue;
+						}
+						f.set(otherComp, edited);
+						if (rt.postSet)
+						{
+							rt.postSet(world, other);
+						}
+					}
 				}
 				if (anyChanged && rt.postSet)
 				{
