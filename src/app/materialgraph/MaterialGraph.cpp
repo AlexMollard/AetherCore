@@ -826,7 +826,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         roughness = sqrt(saturate(roughness * roughness + min(2.0f * variance, kKappa)));
     }}
     const float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
-    const float3 L = normalize(-fc->sunDirectionIntensity.xyz);
+    // sunDirectionIntensity.xyz points TOWARDS the sun - the scene's sun_direction reaches the
+    // renderer unnegated, DayNightSystem treats a positive y as daytime, and gltf_mesh feeds it
+    // straight in as L. This negated it, so a graph material took its NdotL, its half vector and
+    // its shadow lookup from the opposite direction to every other surface in the same scene.
+    const float3 L = normalize(fc->sunDirectionIntensity.xyz);
     const float3 H = normalize(V + L);
 
     const float NdotL = saturate(dot(N, L));
@@ -860,7 +864,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Ambient, matching gltf_mesh: a sky-coloured diffuse probe along the normal AND a
     // specular probe along the reflection. Without the specular half a metal has nothing to
     // reflect and renders almost black, which is what every graph-driven metal did.
-    const float3 sunDir = normalize(-fc->sunDirectionIntensity.xyz);
+    const float3 sunDir = normalize(fc->sunDirectionIntensity.xyz);
     const float  sunIntensity = fc->sunDirectionIntensity.w;
     const float3 skyDiffuse = SkyGradient(N, sunDir, fc->sunColor.rgb, sunIntensity,
                                           fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
