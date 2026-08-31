@@ -134,6 +134,10 @@ namespace aether::editor
 		std::vector<Entity> m_filteredRowsScratch;
 		std::vector<FlatTreeEntry> m_flatTree;
 		std::unordered_set<std::uint32_t> m_expandedNodes;
+		// Drag-hover spring-loading: hovering a collapsed row mid-drag opens it, so a subtree
+		// can be dropped into without breaking the drag to expand it first.
+		std::uint32_t m_dragHoverEntity = 0;
+		float m_dragHoverSeconds = 0.0f;
 		Entity m_rangeAnchor{};
 		Entity m_pendingCollapse{};
 		Entity m_pendingClick{};

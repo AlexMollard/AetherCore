@@ -39,7 +39,10 @@ namespace aether::app
 		// A drag cannot be built out of two clicks: ImGui only reports one once the mouse has
 		// MOVED while held, so the intermediate positions are the whole mechanism. This is
 		// what makes a node editor's links, and any drag-and-drop, reachable from a test.
-		void QueueDrag(float fromX, float fromY, float toX, float toY, int button);
+		// `holdFrames` keeps the button down at the destination for that many extra frames
+		// before releasing, so dwell-triggered behaviour - a tree that spring-loads open under a
+		// hovering drag - can be driven. 0 keeps the default brief hold.
+		void QueueDrag(float fromX, float fromY, float toX, float toY, int button, int holdFrames = 0);
 		void QueueHover(float x, float y);
 		void QueueKey(int imguiKey);
 		// A key pressed WITH modifiers held, which is what an editor shortcut actually is.

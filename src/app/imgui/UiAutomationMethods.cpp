@@ -132,10 +132,11 @@ namespace aether::editor
 
 		methods.push_back({"ui.drag",
 		        "ui_drag",
-		        "Press at one widget or point and release at another: {from_window,from_label} or {from_x,from_y} to {to_window,to_label} or {to_x,to_y}. This is how a node-graph link or any drag-and-drop is made. Async: query or screenshot afterwards.",
+		        "Press at one widget or point and release at another: {from_window,from_label} or {from_x,from_y} to {to_window,to_label} or {to_x,to_y}. This is how a node-graph link or any drag-and-drop is made. hold_frames keeps the button down at the destination longer, for dwell-triggered behaviour. Async: query or screenshot afterwards.",
 		        true,
 		        Obj({{"from_x", NumProp()}, {"from_y", NumProp()}, {"from_window", StrProp()}, {"from_label", StrProp()},
-		                {"to_x", NumProp()}, {"to_y", NumProp()}, {"to_window", StrProp()}, {"to_label", StrProp()}, {"button", StrProp()}}),
+		                {"to_x", NumProp()}, {"to_y", NumProp()}, {"to_window", StrProp()}, {"to_label", StrProp()}, {"button", StrProp()},
+		                {"hold_frames", NumProp()}}),
 		        [](const json& params, MethodContext&) -> json
 		        {
 			        // Both ends go through the same resolver as ui_click, by renaming the
@@ -165,7 +166,8 @@ namespace aether::editor
 				        return json{{"error", "drag end: " + err}};
 			        }
 			        const int button = params.value("button", std::string{"left"}) == "right" ? 1 : 0;
-			        app::UiAutomation::Get().Input().QueueDrag(fromX, fromY, toX, toY, button);
+			        const int holdFrames = params.value("hold_frames", 0);
+			        app::UiAutomation::Get().Input().QueueDrag(fromX, fromY, toX, toY, button, holdFrames);
 			        return json{{"status", "queued"}, {"from", json{{"x", fromX}, {"y", fromY}}}, {"to", json{{"x", toX}, {"y", toY}}}};
 		        }});
 

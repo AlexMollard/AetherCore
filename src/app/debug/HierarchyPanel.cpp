@@ -251,11 +251,35 @@ namespace aether::editor
 			}
 		}
 
-		void DrawEntityDragPreview(const World& world, Entity e)
+		// What a drag actually moves: the whole selection when the dragged row is part of it,
+		// otherwise just that row. An entity whose ancestor is also selected travels with that
+		// ancestor, so moving it separately would tear it out of the subtree the user can see
+		// they picked. The drag preview counts these and the drop applies them, so both agree.
+		std::vector<Entity> EntitiesMovedByDrag(const World& world, const SceneSelection& selection, Entity dragged)
+		{
+			std::vector<Entity> moved;
+			if (!selection.Contains(dragged) || selection.All().size() <= 1)
+			{
+				moved.push_back(dragged);
+				return moved;
+			}
+			for (const Entity candidate: selection.All())
+			{
+				if (candidate.IsValid() && world.GetRegistry().valid(World::ToEntt(candidate)) && !HasSelectedAncestor(world, candidate, selection))
+				{
+					moved.push_back(candidate);
+				}
+			}
+			return moved;
+		}
+
+		void DrawEntityDragPreview(const World& world, Entity e, std::size_t movedCount)
 		{
 			const KindBadge badge = EntityKindBadge(world, e);
 			const std::string name = EntityDisplayName(world, e);
-			const std::string idText = "  #" + std::to_string(e.id);
+			// Dragging a multi-selection moved everything but only ever named one entity, so a
+			// three-entity drag was indistinguishable from a one-entity drag until you dropped it.
+			const std::string idText = movedCount > 1 ? "  +" + std::to_string(movedCount - 1) + " more" : "  #" + std::to_string(e.id);
 
 			const ImVec2 padding(10.0f, 7.0f);
 			const ImVec2 gap(7.0f, 0.0f);
@@ -674,7 +698,7 @@ namespace aether::editor
 			m_pendingClick = {};
 			m_pendingCollapse = {};
 			ImGui::SetDragDropPayload(dragdrop::kEntityPayload, &e.id, sizeof(e.id));
-			DrawEntityDragPreview(world, e);
+			DrawEntityDragPreview(world, e, EntitiesMovedByDrag(world, selection, e).size());
 			ImGui::EndDragDropSource();
 		}
 		const ImRect itemRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
@@ -736,6 +760,34 @@ namespace aether::editor
 			const bool canParentHere = !hasEntityPayload || (dragged != e && !ecs::IsAncestor(world, e, dragged));
 			const bool canReorderHere = !hasEntityPayload || (dragged != e && (!targetParent.IsValid() || (targetParent != dragged && !ecs::IsAncestor(world, targetParent, dragged))));
 			const bool canDropHere = zone == DropZone::Inside ? canParentHere : canReorderHere;
+
+			// Spring-loaded expansion. Hovering a collapsed parent while dragging opens it after
+			// a short dwell, which is the only way to reach a nested drop target without
+			// abandoning the drag to click the arrow. The dwell keeps rows you merely drag ACROSS
+			// from all popping open on the way past.
+			const auto* hoverHierarchy = world.TryGet<HierarchyComponent>(e);
+			const bool hoverHasKids = hoverHierarchy != nullptr && !hoverHierarchy->children.empty();
+			if (zone == DropZone::Inside && canDropHere && hoverHasKids && !m_expandedNodes.contains(e.id))
+			{
+				constexpr float kSpringLoadDelay = 0.5f;
+				if (m_dragHoverEntity != e.id)
+				{
+					m_dragHoverEntity = e.id;
+					m_dragHoverSeconds = 0.0f;
+				}
+				m_dragHoverSeconds += ImGui::GetIO().DeltaTime;
+				if (m_dragHoverSeconds >= kSpringLoadDelay)
+				{
+					m_expandedNodes.insert(e.id);
+					m_dragHoverEntity = 0;
+					m_dragHoverSeconds = 0.0f;
+				}
+			}
+			else if (m_dragHoverEntity == e.id)
+			{
+				m_dragHoverEntity = 0;
+				m_dragHoverSeconds = 0.0f;
+			}
 
 			if (ImGui::IsDragDropActive() && (hasScriptPayload || hasFilePayload || canDropHere))
 			{
@@ -2291,38 +2343,7 @@ namespace aether::editor
 				m_pendingReparent.reset();
 				if (world.GetRegistry().valid(World::ToEntt(pr.child)))
 				{
-					std::vector<Entity> moved;
-					if (selection.Contains(pr.child) && selection.All().size() > 1)
-					{
-						for (const Entity e: selection.All())
-						{
-							if (!world.GetRegistry().valid(World::ToEntt(e)))
-							{
-								continue;
-							}
-							bool ancestorSelected = false;
-							const auto* h = world.TryGet<HierarchyComponent>(e);
-							Entity cur = h ? h->parent : Entity{};
-							while (cur.IsValid())
-							{
-								if (selection.Contains(cur))
-								{
-									ancestorSelected = true;
-									break;
-								}
-								const auto* ch = world.TryGet<HierarchyComponent>(cur);
-								cur = ch ? ch->parent : Entity{};
-							}
-							if (!ancestorSelected)
-							{
-								moved.push_back(e);
-							}
-						}
-					}
-					else
-					{
-						moved.push_back(pr.child);
-					}
+					const std::vector<Entity> moved = EntitiesMovedByDrag(world, selection, pr.child);
 					// Snapshot each mover's slot up front; the post-move slots are read
 					// back below so one drag becomes one undo step.
 					std::vector<HierarchyMoveCommand::Item> moveItems;

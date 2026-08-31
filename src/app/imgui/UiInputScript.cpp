@@ -1,5 +1,7 @@
 #include "imgui/UiInputScript.hpp"
 
+#include <algorithm>
+
 #include <imgui.h>
 
 namespace aether::app
@@ -71,7 +73,7 @@ namespace aether::app
 		}
 	}
 
-	void UiInputScript::QueueDrag(float fromX, float fromY, float toX, float toY, int button)
+	void UiInputScript::QueueDrag(float fromX, float fromY, float toX, float toY, int button, int holdFrames)
 	{
 		// Enough intermediate frames that ImGui's drag threshold is crossed well before the
 		// release, and that a target under the cursor gets a frame to notice it is hovered.
@@ -98,7 +100,7 @@ namespace aether::app
 		}
 		// And hold at the destination before releasing, for the same reason at the other end:
 		// the drop target has to be hovered on the frame the button comes up.
-		for (int i = 0; i < kSettleFrames; ++i)
+		for (int i = 0; i < kSettleFrames + std::max(0, holdFrames); ++i)
 		{
 			PushFrame({SynEvent{SynKind::MousePos, toX, toY}, SynEvent{SynKind::MouseButton, toX, toY, button, true}});
 		}
