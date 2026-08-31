@@ -498,3 +498,66 @@ TEST_CASE("A saved state that ages out of the ring stops being reachable")
 	}
 	CHECK(stack.HasUnsavedChanges());
 }
+
+TEST_CASE("UndoStack groups a batch into one history entry")
+{
+	World world;
+	ServiceContainer services;
+	const Entity a = world.Create();
+	const Entity b = world.Create();
+	world.Emplace<NameComponent>(a, NameComponent{"A"});
+	world.Emplace<NameComponent>(b, NameComponent{"B"});
+
+	UndoStack stack;
+	{
+		UndoStack::ScopedGroup group(&stack, "Batch edit");
+		stack.Record(std::make_unique<RenameCommand>(a.id, "A", "A2"));
+		stack.Record(std::make_unique<RenameCommand>(b.id, "B", "B2"));
+		CHECK(stack.UndoDepth() == 0); // nothing lands until the group closes
+	}
+	REQUIRE(stack.UndoDepth() == 1);
+
+	world.Get<NameComponent>(a).name = "A2";
+	world.Get<NameComponent>(b).name = "B2";
+	REQUIRE(stack.Undo(world, services) != nullptr);
+	CHECK(world.Get<NameComponent>(a).name == "A");
+	CHECK(world.Get<NameComponent>(b).name == "B");
+	CHECK(stack.UndoDepth() == 0);
+}
+
+TEST_CASE("UndoStack group of one records the command itself")
+{
+	UndoStack stack;
+	{
+		UndoStack::ScopedGroup group(&stack, "Batch edit");
+		stack.Record(std::make_unique<RenameCommand>(1, "x", "y"));
+	}
+	// No composite wrapper for a single command - one entry either way, but the history
+	// should read as the edit that happened, not as a batch of one.
+	REQUIRE(stack.UndoDepth() == 1);
+}
+
+TEST_CASE("UndoStack empty group leaves no entry")
+{
+	UndoStack stack;
+	{
+		UndoStack::ScopedGroup group(&stack, "Batch edit");
+	}
+	CHECK(stack.UndoDepth() == 0);
+}
+
+TEST_CASE("UndoStack nested groups emit once")
+{
+	UndoStack stack;
+	{
+		UndoStack::ScopedGroup outer(&stack, "Outer");
+		stack.Record(std::make_unique<RenameCommand>(1, "a", "b"));
+		{
+			UndoStack::ScopedGroup inner(&stack, "Inner");
+			stack.Record(std::make_unique<RenameCommand>(2, "c", "d"));
+			CHECK(stack.UndoDepth() == 0);
+		}
+		CHECK(stack.UndoDepth() == 0); // the inner close must not emit
+	}
+	CHECK(stack.UndoDepth() == 1);
+}

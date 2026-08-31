@@ -16,6 +16,14 @@ namespace aether::editor
 
 	void UndoStack::Record(std::unique_ptr<IEditorCommand> command)
 	{
+		if (m_groupDepth > 0)
+		{
+			if (command != nullptr)
+			{
+				m_grouped.push_back(std::move(command));
+			}
+			return;
+		}
 		if (command == nullptr)
 		{
 			return;
@@ -88,6 +96,43 @@ namespace aether::editor
 		// scene reads dirty the moment the drag ends.
 		FlushFieldEdit();
 		m_cleanDepth = m_undo.size();
+	}
+
+	void UndoStack::BeginGroup(std::string label)
+	{
+		if (m_groupDepth == 0)
+		{
+			// A drag still in flight belongs to what came before the group, not inside it.
+			FlushFieldEdit();
+			m_groupLabel = std::move(label);
+			m_grouped.clear();
+		}
+		++m_groupDepth;
+	}
+
+	void UndoStack::EndGroup()
+	{
+		if (m_groupDepth == 0)
+		{
+			return;
+		}
+		--m_groupDepth;
+		if (m_groupDepth > 0)
+		{
+			return;
+		}
+		std::vector<std::unique_ptr<IEditorCommand>> commands;
+		commands.swap(m_grouped);
+		if (commands.empty())
+		{
+			return;
+		}
+		if (commands.size() == 1)
+		{
+			RecordCommand(std::move(commands.front()));
+			return;
+		}
+		RecordCommand(std::make_unique<CompositeCommand>(std::move(commands), m_groupLabel));
 	}
 
 	void UndoStack::RecordCommand(std::unique_ptr<IEditorCommand> command)

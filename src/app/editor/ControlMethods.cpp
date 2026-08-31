@@ -318,6 +318,11 @@ namespace aether::editor
 					return json{{"error", "'items' must contain between 1 and 10000 entries"}};
 				}
 
+				// One request, one history entry. Each item records its own command, so without
+				// this a 200-entity batch cost 200 Ctrl+Z presses and left the scene in a
+				// half-applied state between them.
+				UndoStack::ScopedGroup group(ctx.services.TryGet<UndoStack>(), "Batch edit");
+
 				json results = json::array();
 				std::size_t succeeded = 0;
 				for (std::size_t index = 0; index < items.size(); ++index)

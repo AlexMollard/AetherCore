@@ -31,6 +31,40 @@ namespace aether::editor
 		// flight is finalized first, so history stays in the order the user made it.
 		void Record(std::unique_ptr<IEditorCommand> command);
 
+		// Collect everything recorded until the matching EndGroup into ONE history entry, so a
+		// request that edits many entities costs a single Ctrl+Z - the same way the hierarchy's
+		// own multi-delete already behaves. Nests: only the outermost group emits.
+		void BeginGroup(std::string label);
+		void EndGroup();
+
+		// Scoped BeginGroup/EndGroup, so an early return cannot leave the stack collecting.
+		class ScopedGroup
+		{
+		public:
+			ScopedGroup(UndoStack* stack, std::string label)
+			    : m_stack(stack)
+			{
+				if (m_stack != nullptr)
+				{
+					m_stack->BeginGroup(std::move(label));
+				}
+			}
+			~ScopedGroup()
+			{
+				if (m_stack != nullptr)
+				{
+					m_stack->EndGroup();
+				}
+			}
+			ScopedGroup(const ScopedGroup&) = delete;
+			ScopedGroup& operator=(const ScopedGroup&) = delete;
+			ScopedGroup(ScopedGroup&&) = delete;
+			ScopedGroup& operator=(ScopedGroup&&) = delete;
+
+		private:
+			UndoStack* m_stack = nullptr;
+		};
+
 		// Inspector field edits fire every frame a widget is active (one slider drag
 		// is hundreds of calls), so they are coalesced instead of recorded per frame:
 		// the first value seen for a field is kept as its "before", the latest as its
@@ -102,6 +136,11 @@ namespace aether::editor
 
 	private:
 		void RecordCommand(std::unique_ptr<IEditorCommand> command);
+
+		// Non-zero while a group is open; only the outermost close emits an entry.
+		int m_groupDepth = 0;
+		std::string m_groupLabel;
+		std::vector<std::unique_ptr<IEditorCommand>> m_grouped;
 
 		// In-flight inspector field edits, one entry per (entity, component) touched by
 		// the current interaction (see RecordFieldEdit).
