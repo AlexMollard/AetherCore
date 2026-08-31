@@ -64,6 +64,13 @@ namespace aether
 				renderer->SetChromaticAberration(m_values.graphics.chromaticAberration);
 			}
 		}
+		else if (key == "graphics.bloomStrength" || key == "graphics.bloomRadius")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetBloom(m_values.graphics.bloomStrength, m_values.graphics.bloomRadius);
+			}
+		}
 		else if (key == "graphics.vignetteIntensity" || key == "graphics.vignetteRoundness")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

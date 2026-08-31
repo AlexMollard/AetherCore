@@ -86,6 +86,8 @@ namespace aether
 			float gtaoRadius = 1.4f;
 			float gtaoStrength = 1.35f;
 			float specularFilter = 1.0f;
+			float bloomStrength = 0.05f;
+			float bloomRadius = 1.0f;
 			// Texture samples taken along the footprint when a surface is seen edge-on.
 			// 1 disables it; the device ceiling is normally 16.
 			int anisotropy = 16;
@@ -188,6 +190,8 @@ namespace aether
 		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);
 		f("graphics.specularFilter", settings.graphics.specularFilter);
+		f("graphics.bloomStrength", settings.graphics.bloomStrength);
+		f("graphics.bloomRadius", settings.graphics.bloomRadius);
 		f("graphics.anisotropy", settings.graphics.anisotropy);
 		f("graphics.contactShadows", settings.graphics.contactShadows);
 		f("graphics.reflections", settings.graphics.reflections);

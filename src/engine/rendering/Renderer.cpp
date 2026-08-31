@@ -90,6 +90,15 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetBloom(float strength, float filterRadius)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetBloomStrength(strength);
+			m_postProcessStack->SetBloomFilterRadius(filterRadius);
+		}
+	}
+
 	void Renderer::SetChromaticAberration(float pixels)
 	{
 		if (m_postProcessStack)
