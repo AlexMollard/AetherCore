@@ -55,6 +55,21 @@ namespace aether::editor
 
 	} // namespace
 
+	bool MaterialSpecEquals(const MaterialPresetSpec& a, const MaterialPresetSpec& b)
+	{
+		const MaterialAsset& x = a.material;
+		const MaterialAsset& y = b.material;
+		return x.baseColorFactor == y.baseColorFactor && x.emissiveFactor == y.emissiveFactor
+		        && x.metallicFactor == y.metallicFactor && x.roughnessFactor == y.roughnessFactor
+		        && x.occlusionStrength == y.occlusionStrength && x.alphaCutoff == y.alphaCutoff
+		        && x.doubleSided == y.doubleSided && x.alphaBlend == y.alphaBlend && x.alphaMask == y.alphaMask
+		        && x.modulateVertexColor == y.modulateVertexColor && x.receiveShadows == y.receiveShadows
+		        && a.albedoPath == b.albedoPath && a.normalPath == b.normalPath
+		        && a.metallicRoughnessPath == b.metallicRoughnessPath && a.occlusionPath == b.occlusionPath
+		        && a.emissivePath == b.emissivePath && a.shaderVfsPath == b.shaderVfsPath;
+	}
+
+
 	// Push a just-saved material asset into every entity linked to it, leaving each
 	// entity's own overridden fields alone. This is the half of "linked" that you can
 	// actually see: edit the asset, and the objects using it change now rather than on
@@ -121,6 +136,7 @@ namespace aether::editor
 			else
 			{
 				state.spec = MaterialSerializer::Parse(assetPath, *text);
+				state.saved = state.spec;
 				state.loaded = true;
 			}
 		}
@@ -191,11 +207,19 @@ namespace aether::editor
 			ImGui::PopID();
 		}
 
-		state.dirty |= changed;
+		// `changed` only tells us a widget reported an edit; whether anything actually moved
+		// is a comparison against what is on disk. That is also what drives the preview, so a
+		// drag updates it continuously rather than only on mouse-up.
+		(void) changed;
+		state.dirty = !MaterialSpecEquals(state.spec, state.saved);
 
-		// Written once the drag ends rather than on every slider frame: dragging Roughness
-		// across its range would otherwise be a few hundred file writes.
-		if (state.dirty && !ImGui::IsAnyItemActive())
+		ImGui::Separator();
+
+		// Written only when asked. Saving on every mouse-up rewrites the asset - and with it
+		// every object linked to the asset - for a slider you were only auditioning, and
+		// there is no undo for a file.
+		ImGui::BeginDisabled(!state.dirty);
+		if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save"))
 		{
 			if (auto written = io::FileSystem::WriteFileText(assetPath, MaterialSerializer::ToToml(state.spec)); !written)
 			{
@@ -203,15 +227,22 @@ namespace aether::editor
 			}
 			else
 			{
+				state.saved = state.spec;
+				state.dirty = false;
 				state.linkedCount = PropagateMaterialAsset(context, world, assetPath);
 			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Revert"))
+		{
+			state.spec = state.saved;
 			state.dirty = false;
 		}
-
-		ImGui::Separator();
+		ImGui::EndDisabled();
+		ImGui::SameLine();
 		if (state.dirty)
 		{
-			ImGui::TextDisabled("Saving...");
+			ImGui::TextColored(chrome::kWarning, "Unsaved changes");
 		}
 		else if (state.linkedCount > 0)
 		{

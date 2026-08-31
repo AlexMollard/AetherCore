@@ -10,6 +10,8 @@
 #include <imgui.h>
 #include <implot.h>
 
+#include "debug/Icons.hpp"
+
 #include "layers/AppLayer.hpp"
 #include "utils/FrameStats.hpp"
 #include "utils/Profiler.hpp"
@@ -95,61 +97,128 @@ namespace aether::editor
 		}
 		ImGui::SeparatorText("Frame timeline");
 
-		// Stacked bands rather than one bar per frame. A single wall-time histogram tells you
-		// THAT a frame was long; the stack tells you which phase made it long, which is the
-		// only question worth asking of a profiler. ImGui's built-in PlotHistogram can draw
-		// exactly one unlabelled series with no axes, so this is ImPlot's job.
+		// NOT a stacked breakdown. The phases are measured on different threads and overlap:
+		// on an idle editor frame the in-flight wait and the present wait are both ~16 ms of
+		// the same 16.6 ms frame, so stacking them draws a 33 ms frame that never happened.
+		// What is honest per frame is the wall time, and the game work inside it - the part
+		// that is actually yours to shrink. The overlapping waits are means in the table below.
 		const int count = static_cast<int>(m_frames.size());
 		std::vector<float> x(count);
 		std::vector<float> wall(count);
-		std::vector<float> zero(count, 0.0f);
-		std::vector<float> cGame(count);
-		std::vector<float> cRender(count);
-		std::vector<float> cInFlight(count);
-		std::vector<float> cPacer(count);
-		std::vector<float> cPresent(count);
+		std::vector<float> game(count);
+		float peakMs = 0.0f;
 		for (int i = 0; i < count; ++i)
 		{
 			const FrameTiming& frame = m_frames[static_cast<std::size_t>(i)];
 			x[i] = static_cast<float>(i);
 			wall[i] = frame.wallMs;
-			cGame[i] = frame.gameWorkMs;
-			cRender[i] = cGame[i] + frame.renderExecMs;
-			cInFlight[i] = cRender[i] + frame.inFlightWaitMs;
-			cPacer[i] = cInFlight[i] + frame.pacerWaitMs;
-			cPresent[i] = cPacer[i] + frame.presentWaitMs;
+			game[i] = frame.gameWorkMs;
+			peakMs = std::max(peakMs, frame.wallMs);
 		}
 
-		if (ImPlot::BeginPlot("##frames", ImVec2(-1.0f, 190.0f), ImPlotFlags_NoTitle | ImPlotFlags_Crosshairs))
+		// The axis top snaps to whole multiples of the frame budget rather than tracking the
+		// peak continuously. A range that rescales every frame makes the trace appear to
+		// breathe when nothing changed, which is most of why this read as unsteady.
+		constexpr float kBudgetMs = 1000.0f / 60.0f;
+		double yMax = kBudgetMs * 2.0;
+		for (const double multiple: {1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0})
 		{
-			ImPlot::SetupAxes("frame", "ms", ImPlotAxisFlags_NoGridLines, ImPlotAxisFlags_AutoFit);
-			ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, static_cast<double>(count), ImPlotCond_Always);
-			ImPlot::SetupLegend(ImPlotLocation_NorthWest, ImPlotLegendFlags_Horizontal);
+			yMax = kBudgetMs * multiple;
+			if (peakMs <= yMax * 0.92)
+			{
+				break;
+			}
+		}
 
-			ImPlotSpec band;
-			band.FillAlpha = 0.55f;
-			ImPlot::PlotShaded("Game work", x.data(), zero.data(), cGame.data(), count, band);
-			ImPlot::PlotShaded("Render exec", x.data(), cGame.data(), cRender.data(), count, band);
-			ImPlot::PlotShaded("In-flight wait", x.data(), cRender.data(), cInFlight.data(), count, band);
-			ImPlot::PlotShaded("Pacer wait", x.data(), cInFlight.data(), cPacer.data(), count, band);
-			ImPlot::PlotShaded("Present wait", x.data(), cPacer.data(), cPresent.data(), count, band);
+		constexpr ImVec4 kWallColor{0.42f, 0.68f, 0.96f, 1.0f};
+		constexpr ImVec4 kGameColor{0.98f, 0.76f, 0.31f, 1.0f};
+		constexpr ImVec4 kBudgetColor{0.92f, 0.38f, 0.30f, 1.0f};
+
+		// The legend is drawn below as plain text: ImPlot's own is a chunky box that has to
+		// live either inside the plot (covering the trace) or outside it (eating the height
+		// this strip does not have).
+		if (ImPlot::BeginPlot("##frames", ImVec2(-1.0f, 120.0f),
+		            ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect))
+		{
+			// The frame ordinal is a meaningless number to read; the axis says only
+			// "older on the left". Dropping its ticks and label is most of the height saved.
+			ImPlot::SetupAxes(nullptr, "ms", ImPlotAxisFlags_NoDecorations,
+			        ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_LockMin | ImPlotAxisFlags_LockMax);
+			ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, static_cast<double>(count), ImPlotCond_Always);
+			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, yMax, ImPlotCond_Always);
+
+			ImPlotSpec wallFill;
+			wallFill.FillColor = kWallColor;
+			wallFill.FillAlpha = 0.22f;
+			ImPlot::PlotShaded("Frame", x.data(), wall.data(), count, 0.0, wallFill);
 
 			ImPlotSpec wallLine;
-			wallLine.LineWeight = 1.6f;
-			wallLine.LineColor = ImVec4(0.95f, 0.95f, 0.95f, 0.9f);
-			ImPlot::PlotLine("Wall", x.data(), wall.data(), count, wallLine);
+			wallLine.LineColor = kWallColor;
+			wallLine.LineWeight = 1.5f;
+			ImPlot::PlotLine("Frame", x.data(), wall.data(), count, wallLine);
 
-			// The line a frame has to stay under to hold 60 Hz. Having it drawn is the
-			// difference between reading numbers and seeing whether you are inside budget.
-			const double budgetMs = 1000.0 / 60.0;
-			ImPlotSpec budget;
-			budget.LineColor = ImVec4(0.90f, 0.35f, 0.25f, 0.8f);
-			budget.Flags = ImPlotInfLinesFlags_Horizontal;
-			ImPlot::PlotInfLines("60 Hz budget", &budgetMs, 1, budget);
+			ImPlotSpec gameLine;
+			gameLine.LineColor = kGameColor;
+			gameLine.LineWeight = 1.25f;
+			ImPlot::PlotLine("Game work", x.data(), game.data(), count, gameLine);
+
+			const double budget = static_cast<double>(kBudgetMs);
+			ImPlotSpec budgetLine;
+			budgetLine.LineColor = kBudgetColor;
+			budgetLine.LineWeight = 1.0f;
+			budgetLine.Flags = ImPlotInfLinesFlags_Horizontal;
+			ImPlot::PlotInfLines("60 Hz", &budget, 1, budgetLine);
+
+			// Reading a spike off a trace is only useful if you can find out what it was.
+			// ImPlot's own mouse text prints plot coordinates, which is the position of the
+			// cursor rather than the frame under it - this reports the frame itself.
+			if (ImPlot::IsPlotHovered())
+			{
+				const int hovered = std::clamp(static_cast<int>(ImPlot::GetPlotMousePos().x + 0.5), 0, count - 1);
+				const FrameTiming& frame = m_frames[static_cast<std::size_t>(hovered)];
+				ImGui::BeginTooltip();
+				ImGui::Text("frame %llu", static_cast<unsigned long long>(frame.frameIndex));
+				ImGui::Separator();
+				ImGui::TextColored(kWallColor, "%.2f ms", static_cast<double>(frame.wallMs));
+				ImGui::SameLine();
+				ImGui::TextDisabled(frame.wallMs > kBudgetMs ? "over budget" : "in budget");
+				ImGui::TextColored(kGameColor, "%.3f ms", static_cast<double>(frame.gameWorkMs));
+				ImGui::SameLine();
+				ImGui::TextDisabled("game work");
+				ImGui::TextDisabled("in-flight %.2f   pacer %.2f   present %.2f",
+				        static_cast<double>(frame.inFlightWaitMs), static_cast<double>(frame.pacerWaitMs),
+				        static_cast<double>(frame.presentWaitMs));
+				ImGui::EndTooltip();
+			}
 
 			ImPlot::EndPlot();
 		}
-		ImGui::TextDisabled("hover to read a frame; bands stack to the wall time above them");
+
+		const auto key = [](const ImVec4& color, const char* label, const bool first)
+		{
+			if (!first)
+			{
+				ImGui::SameLine();
+			}
+			ImGui::TextColored(color, ICON_FA_MINUS);
+			ImGui::SameLine(0.0f, 4.0f);
+			ImGui::TextDisabled("%s", label);
+		};
+		key(kWallColor, "frame", true);
+		key(kGameColor, "game work", false);
+		key(kBudgetColor, "60 Hz budget", false);
+
+		// The time direction belongs at the end of the axis it describes, not wedged into the
+		// middle of the colour key where it read as one more series.
+		const char* direction = "older to newer";
+		const float directionWidth = ImGui::CalcTextSize(direction).x;
+		ImGui::SameLine();
+		if (const float slack = ImGui::GetContentRegionAvail().x - directionWidth; slack > 0.0f)
+		{
+			ImGui::Dummy(ImVec2(slack, 0.0f));
+			ImGui::SameLine();
+		}
+		ImGui::TextDisabled("%s", direction);
 	}
 
 	void PerformancePanel::DrawPhaseBreakdown() const

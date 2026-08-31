@@ -33,18 +33,24 @@ namespace aether::editor
 			return;
 		}
 
-		// Loaded back from the file rather than resolved from the in-memory spec: the spec
-		// holds texture PATHS, and going through the loader is the same path the renderer
-		// takes, so the preview cannot quietly disagree with the real thing.
-		auto loaded = assets->LoadMaterialPreset(m_edit.path);
-		if (!loaded)
+		// Built from the IN-MEMORY spec, not reloaded from the file: the point of the preview
+		// is to show the values you are dragging right now, and those are not on disk until
+		// you press Save.
+		MaterialAsset material = m_edit.spec.material;
+		auto& textures = assets->GetTextureRegistry();
+		const auto acquire = [&textures](const std::string& path, TextureHandle& out, TextureColorSpace colorSpace)
 		{
-			m_previewError = "Could not load this material for preview.";
-			return;
-		}
+			out = path.empty() ? TextureHandle{} : textures.Acquire(path, colorSpace);
+		};
+		// Base colour and emissive carry light and decode as sRGB; the rest are data.
+		acquire(m_edit.spec.albedoPath, material.albedoTex, TextureColorSpace::Srgb);
+		acquire(m_edit.spec.normalPath, material.normalTex, TextureColorSpace::Linear);
+		acquire(m_edit.spec.metallicRoughnessPath, material.metallicRoughnessTex, TextureColorSpace::Linear);
+		acquire(m_edit.spec.occlusionPath, material.occlusionTex, TextureColorSpace::Linear);
+		acquire(m_edit.spec.emissivePath, material.emissiveTex, TextureColorSpace::Srgb);
 
 		std::string error;
-		if (!rendering->GetModelPreview().ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), *loaded, error))
+		if (!rendering->GetModelPreview().ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), material, error))
 		{
 			m_previewError = error;
 		}
@@ -57,14 +63,14 @@ namespace aether::editor
 			}
 		}
 
-		auto& textures = assets->GetTextureRegistry();
-		for (const TextureHandle h: {loaded->albedoTex, loaded->normalTex, loaded->metallicRoughnessTex, loaded->occlusionTex, loaded->emissiveTex})
+		for (const TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
 		{
 			if (h.IsValid())
 			{
 				textures.Release(h);
 			}
 		}
+		m_previewSpec = m_edit.spec;
 	}
 
 	void MaterialEditorPanel::OnImGui(app::LayerContext& context)
@@ -100,7 +106,9 @@ namespace aether::editor
 		ImGui::SetItemTooltip("%s", m_edit.path.c_str());
 		ImGui::Separator();
 
-		if (m_previewDirty)
+		// Refreshed whenever the values differ from what the preview was last built with, so
+		// dragging a slider updates it continuously instead of only on release.
+		if (m_previewDirty || !MaterialSpecEquals(m_edit.spec, m_previewSpec))
 		{
 			RefreshPreview(context);
 		}
@@ -116,15 +124,7 @@ namespace aether::editor
 		}
 		ImGui::Separator();
 
-		// A save is what makes the preview stale, so the refresh is keyed off the dirty flag
-		// falling rather than off any edit - otherwise every slider frame would reload the
-		// material from disk and re-record a preview pass.
-		const bool wasDirty = m_edit.dirty;
 		DrawMaterialAssetEditor(context, world, m_edit.path, m_edit);
-		if (wasDirty && !m_edit.dirty)
-		{
-			m_previewDirty = true;
-		}
 
 		ImGui::End();
 	}

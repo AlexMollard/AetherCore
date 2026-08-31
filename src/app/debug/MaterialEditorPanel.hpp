@@ -35,6 +35,9 @@ namespace aether::editor
 		void RefreshPreview(app::LayerContext& context);
 
 		MaterialAssetEditState m_edit;
+		// The values the preview image was last built from, so a change can be detected
+		// without rebuilding it every frame.
+		MaterialPresetSpec m_previewSpec;
 		std::uint64_t m_previewImGuiId = 0;
 		std::string m_previewError;
 		bool m_previewDirty = false;

@@ -247,7 +247,11 @@ namespace aether
 		m_turntableAngle += glm::radians(0.55f);
 		const glm::vec3 center = glm::vec3(m_bounds);
 		const float radius = m_bounds.w;
-		const float distance = radius * 2.4f;
+		// Distance at which a sphere of this radius exactly fills the vertical FOV, plus a
+		// margin so it does not touch the frame edge. The previous 2.4x was nearer than the
+		// geometry allows - r / sin(20 deg) is 2.92r - so every preview was cropped.
+		constexpr float kHalfFovRadians = glm::radians(40.0f) * 0.5f;
+		const float distance = (radius / std::sin(kHalfFovRadians)) * 1.12f;
 		const glm::vec3 eye = center + glm::vec3(std::cos(m_turntableAngle) * distance, distance * 0.45f, std::sin(m_turntableAngle) * distance);
 		const glm::mat4 view = glm::lookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f));
 		glm::mat4 proj = glm::perspective(glm::radians(40.0f), 1.0f, std::max(0.02f, radius * 0.05f), std::max(10.0f, radius * 20.0f));
