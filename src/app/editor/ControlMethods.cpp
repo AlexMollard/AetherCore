@@ -948,22 +948,29 @@ namespace aether::editor
 				        return json{{"error", "prefab not found: " + prefabName}};
 			        }
 			        auto* undo = ctx.services.TryGet<UndoStack>();
-			        if (undo)
+			        Entity newRoot;
 			        {
-				        auto oldCmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {root}, false, "Revert Prefab");
-				        if (oldCmd)
+				        // The subtree that went and the one that replaced it are halves of one
+				        // edit: undoing between them would leave the scene with no instance at
+				        // all, which is a state the user never asked for.
+				        UndoStack::ScopedGroup group(undo, "Revert Prefab");
+				        if (undo)
 				        {
-					        undo->Record(std::move(oldCmd));
+					        auto oldCmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {root}, false, "Revert Prefab");
+					        if (oldCmd)
+					        {
+						        undo->Record(std::move(oldCmd));
+					        }
 				        }
-			        }
-			        ecs::DestroyHierarchy(world, root);
-			        const Entity newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(ctx.services), xform);
-			        if (undo)
-			        {
-				        auto newCmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {newRoot}, true, "Revert Prefab");
-				        if (newCmd)
+				        ecs::DestroyHierarchy(world, root);
+				        newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(ctx.services), xform);
+				        if (undo)
 				        {
-					        undo->Record(std::move(newCmd));
+					        auto newCmd = SubtreeLifetimeCommand::Capture(world, ctx.services, {newRoot}, true, "Revert Prefab");
+					        if (newCmd)
+					        {
+						        undo->Record(std::move(newCmd));
+					        }
 				        }
 			        }
 			        return json{{"id", newRoot.id}, {"prefab", prefabName}, {"reverted", true}};

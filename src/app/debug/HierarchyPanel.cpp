@@ -775,8 +775,30 @@ namespace aether::editor
 				}
 				if (const auto prefab = app::scene::ReadPrefabFile(prefabName))
 				{
-					ecs::DestroyHierarchy(world, e);
-					const Entity newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(context.services), xform);
+					Entity newRoot;
+					{
+						// Reverting throws away every override on the instance. Recorded as one
+						// entry - the subtree that went, and the one that replaced it - so a
+						// mis-click is a Ctrl+Z rather than lost work.
+						auto* undo = context.services.TryGet<UndoStack>();
+						UndoStack::ScopedGroup group(undo, "Revert Prefab");
+						if (undo != nullptr)
+						{
+							if (auto before = SubtreeLifetimeCommand::Capture(world, context.services, {e}, /*createdByThisEdit=*/false, "Revert Prefab"))
+							{
+								undo->Record(std::move(before));
+							}
+						}
+						ecs::DestroyHierarchy(world, e);
+						newRoot = app::scene::InstantiatePrefabInstance(prefabName, *prefab, world, app::scene::MakeApplySceneDeps(context.services), xform);
+						if (undo != nullptr)
+						{
+							if (auto after = SubtreeLifetimeCommand::Capture(world, context.services, {newRoot}, /*createdByThisEdit=*/true, "Revert Prefab"))
+							{
+								undo->Record(std::move(after));
+							}
+						}
+					}
 					selection.Select(newRoot);
 					m_dirty = true;
 					ImGui::EndPopup();
