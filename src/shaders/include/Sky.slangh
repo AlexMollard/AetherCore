@@ -22,6 +22,23 @@ float Hash12(float2 p)
     return frac(sin(dot(p, float2(127.1f, 311.7f))) * 43758.5453f);
 }
 
+// A hash that survives large coordinates.
+//
+// Hash12's frac(sin(dot(p))) form is fine for the stars, whose input stays small. The cloud
+// field's coordinates run into the hundreds near the horizon and grow further as the layer
+// drifts, and sin() loses fp32 precision there: the hash stops being random and becomes a
+// smooth function of a linear combination of x and y, whose contours are straight lines at a
+// fixed angle. That is what drew hard parallelogram edges across the clouds.
+//
+// This is the integer-free bit-mixing hash from Dave Hoskins' "Hash without Sine": no
+// trigonometry, and stable across the whole range the cloud plane reaches.
+float CloudHash12(float2 p)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * 0.1031f);
+    p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 33.33f);
+    return frac((p3.x + p3.y) * p3.z);
+}
+
 float Smooth5(float x)
 {
     x = saturate(x);
@@ -30,10 +47,26 @@ float Smooth5(float x)
 
 float StarField(float3 dir)
 {
-    const float3 cell = floor(dir * 180.0f);
-    float star = smoothstep(0.997f, 1.0f, Hash31(cell));
-    star *= saturate(dir.y + 0.1f); // hide below the horizon
-    return star;
+    const float3 scaled = dir * 180.0f;
+    const float3 cell = floor(scaled);
+    const float3 f = scaled - cell;
+
+    // Whether this cell holds a star at all.
+    const float presence = smoothstep(0.997f, 1.0f, Hash31(cell));
+
+    // ...and WHERE in the cell it sits. Hashing the cell alone gives every star the same
+    // value across the whole cell, so each one rendered as a solid axis-aligned square. A
+    // jittered point with a falloff makes it a round dot instead, and scatters the field so
+    // the stars no longer sit on a lattice.
+    const float3 jitter = float3(Hash31(cell + 11.0f), Hash31(cell + 23.0f), Hash31(cell + 37.0f));
+    const float d = length(f - jitter);
+    const float point = saturate(1.0f - d * 3.2f);
+
+    // A little variation in brightness, so the field does not read as one uniform magnitude.
+    const float magnitude = 0.55f + 0.45f * Hash31(cell + 57.0f);
+
+    const float star = presence * point * point * magnitude;
+    return star * saturate(dir.y + 0.1f); // hide below the horizon
 }
 
 // Single-scattering atmosphere, as an alternative to the authored gradient.
@@ -177,10 +210,10 @@ float CloudNoise(float2 p)
     const float2 cell = floor(p);
     const float2 f = p - cell;
     const float2 w = float2(Smooth5(f.x), Smooth5(f.y));
-    const float a = Hash12(cell);
-    const float b = Hash12(cell + float2(1.0f, 0.0f));
-    const float c = Hash12(cell + float2(0.0f, 1.0f));
-    const float d = Hash12(cell + float2(1.0f, 1.0f));
+    const float a = CloudHash12(cell);
+    const float b = CloudHash12(cell + float2(1.0f, 0.0f));
+    const float c = CloudHash12(cell + float2(0.0f, 1.0f));
+    const float d = CloudHash12(cell + float2(1.0f, 1.0f));
     return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
 }
 
@@ -233,8 +266,16 @@ float3 ApplySkyClouds(
     // the derivative at one exact altitude, which draws a hard horizontal seam right across
     // the sky. This approaches the same limit smoothly.
     const float t = 1.0f / (max(worldDir.y, 0.0f) + 0.07f);
-    const float2 drift = float2(time * speed, time * speed * 0.6f);
-    const float2 uv = worldDir.xz * t * 0.35f + drift;
+    // Wrapped, so the coordinate cannot grow without bound over a long session and lose its
+    // fractional precision - the noise is tileable over this period, so the wrap is invisible.
+    const float wrapped = fmod(time * speed, 1024.0f);
+    const float2 drift = float2(wrapped, wrapped * 0.6f);
+    // The scale has to work at every elevation. `t` inflates the frequency enormously toward
+    // the horizon and collapses it toward the zenith, so a value tuned on a horizon view
+    // produces a single cloud spanning the whole sky when the camera looks up - which is to
+    // say, no visible cloud at all. This is picked so a few cells still span the frame at the
+    // zenith.
+    const float2 uv = worldDir.xz * t * 3.0f + drift;
 
     // Continuous density, not a threshold: a hard cut is what makes a cloud look like a slab
     // of grey card. Coverage lowers the threshold so cloud grows in extent rather than opacity.
@@ -245,7 +286,7 @@ float3 ApplySkyClouds(
     density = density * density * (3.0f - 2.0f * density);
 
     // Erode the silhouette with a finer tap, weighted to the edges so cores stay intact.
-    const float erosion = CloudNoise(uv * 5.7f);
+    const float erosion = CloudNoise(uv * 3.1f);
     density = saturate(density - erosion * 0.45f * (1.0f - density));
 
     if (density <= 0.001f)
@@ -256,7 +297,7 @@ float3 ApplySkyClouds(
     // Self-shadowing: step towards the sun and compare. Denser ahead means this sample sits
     // behind cloud and is shadowed.
     const float2 sunXZ = sunDir.xz / max(length(sunDir.xz), 1e-4f);
-    const float sunN = CloudFbm(uv + sunXZ * 0.30f);
+    const float sunN = CloudFbm(uv + sunXZ * 0.55f);
     const float lightAmount = saturate(1.0f - (sunN - baseN) * 3.2f);
 
     // Thickness darkens the base: a deep cloud passes less light through it.
