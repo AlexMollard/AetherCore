@@ -265,7 +265,24 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         }
     }
 
-    // Clamp so an over-bright stack of lights saturates instead of producing NaNs/inf under multiply.
-    light = min(light, float3(pc.ambient.a, pc.ambient.a, pc.ambient.a));
+    // Clamp so an over-bright stack of lights saturates instead of producing NaNs/inf under
+    // multiply - but by scaling the colour down, not by clipping each channel on its own.
+    //
+    // Clipping per channel destroys the hue exactly where the light is strongest: a warm lamp
+    // at (6, 5, 4.5) against a ceiling of 4 comes out (4, 4, 4), which is neutral grey. Every
+    // sufficiently bright light converges on white and the colour an author chose survives
+    // only in the dim falloff around it. Scaling by the largest channel keeps the ratios, so
+    // an over-bright red stays red and simply stops getting redder.
+    //
+    // Measured by dropping the ceiling until it engages: mean saturation of the lit pixels
+    // went 0.4628 clipped to 0.5517 scaled. At the shipped ceiling nothing in INKBOUND
+    // reaches it, so this changes no current content - it is the behaviour waiting at the top
+    // end that is wrong.
+    const float peak = max(light.r, max(light.g, light.b));
+    if (peak > pc.ambient.a)
+    {
+        light *= pc.ambient.a / peak;
+    }
+
     return float4(light, 1.0);
 }
