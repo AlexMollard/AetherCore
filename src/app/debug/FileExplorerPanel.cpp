@@ -447,7 +447,7 @@ namespace aether::editor
 
 	void FileExplorerPanel::OnDetach(app::LayerContext& context)
 	{
-		ReleasePreview(context);
+		ReleaseThumbnails(context);
 	}
 
 	void FileExplorerPanel::RefreshRoot(app::LayerContext& context)
@@ -460,6 +460,8 @@ namespace aether::editor
 			m_projectName.clear();
 			m_rootAvailable = false;
 			m_tree = Entry{};
+			ReleaseThumbnails(context);
+			m_currentDir.clear();
 			return;
 		}
 
@@ -469,6 +471,8 @@ namespace aether::editor
 		std::error_code ec;
 		m_rootAvailable = std::filesystem::exists(m_root, ec) && std::filesystem::is_directory(m_root, ec);
 		m_createDir = m_root;
+		ReleaseThumbnails(context);
+		m_currentDir = m_root;
 		m_treeDirty = true;
 	}
 
@@ -892,6 +896,8 @@ namespace aether::editor
 			RescanTree();
 		}
 
+		m_thumbnailLoadsThisFrame = 0;
+
 		DrawToolbar(context);
 
 		if (!m_opError.empty() || !m_scanError.empty())
@@ -902,38 +908,61 @@ namespace aether::editor
 		ImGui::PushStyleColor(ImGuiCol_Header, chrome::kSelectionBg);
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, chrome::kHoverBg);
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, chrome::WithAlpha(chrome::kAccent, 0.35f));
-		const bool showPreview = !m_selectedPath.empty() && !m_selectedIsDirectory;
-		constexpr float kPreviewCardH = 205.0f;
-		ImGui::BeginChild("##feRows", ImVec2(0.0f, showPreview ? -(kPreviewCardH + 6.0f) : 0.0f), ImGuiChildFlags_Borders);
+
+		// Folders on the left, the open folder's contents on the right. A resizable table is
+		// the splitter: ImGui already remembers the column width per user, so there is no
+		// bespoke drag handle or saved setting to maintain.
+		const ImGuiTableFlags splitFlags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoSavedSettings;
+		ImGui::BeginChild("##feRows", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
 		if (m_search[0] != '\0')
 		{
+			// A search is about finding a file anywhere, so it takes the whole pane and shows
+			// matches from the entire project rather than only the open folder.
 			DrawSearchResults(context, m_tree);
 		}
-		else
+		// A table cell does not know its own height while it is being filled, so a child sized
+		// 0 inside one collapses to nothing. Both panes are given the height measured before
+		// the table instead.
+		else if (const float paneH = ImGui::GetContentRegionAvail().y; ImGui::BeginTable("##feSplit", 2, splitFlags))
 		{
-			for (Entry& child: m_tree.children)
+			ImGui::TableSetupColumn("##folders", ImGuiTableColumnFlags_WidthFixed, 190.0f);
+			ImGui::TableSetupColumn("##contents", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::BeginChild("##feFolders", ImVec2(0.0f, paneH));
+			DrawFolderTree(context, m_tree);
+			ImGui::EndChild();
+
+			ImGui::TableSetColumnIndex(1);
+			const float contentsTop = ImGui::GetCursorPosY();
+			DrawBreadcrumb(context);
+			// Right-aligned from what is left in this cell. GetContentRegionMax is relative to
+			// the window, not the table cell, so using it here put the controls off-screen.
+			const float controlsW = m_viewMode == ViewMode::Grid ? 172.0f : 40.0f;
+			const float slack = ImGui::GetContentRegionAvail().x - controlsW;
+			ImGui::SameLine(0.0f, std::max(4.0f, slack));
+			if (chrome::GhostButton(m_viewMode == ViewMode::Grid ? ICON_FA_LIST : ICON_FA_TABLE_CELLS_LARGE))
 			{
-				if (child.isDirectory)
-				{
-					DrawDirectoryNode(context, child, 0);
-				}
-				else
-				{
-					DrawFileRow(context, child);
-				}
+				m_viewMode = m_viewMode == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
 			}
-			if (m_tree.children.empty())
+			ImGui::SetItemTooltip(m_viewMode == ViewMode::Grid ? "Switch to list view" : "Switch to grid view");
+			if (m_viewMode == ViewMode::Grid)
 			{
-				ImGui::TextDisabled("This project folder is empty.");
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(110.0f);
+				ImGui::SliderFloat("##feTileSize", &m_tileSize, 56.0f, 160.0f, "%.0f px");
+				ImGui::SetItemTooltip("Thumbnail size");
 			}
+			const float used = ImGui::GetCursorPosY() - contentsTop + ImGui::GetTextLineHeightWithSpacing();
+			ImGui::BeginChild("##feContents", ImVec2(0.0f, std::max(40.0f, paneH - used)));
+			DrawFolderContents(context);
+			ImGui::EndChild();
+
+			ImGui::EndTable();
 		}
 		ImGui::EndChild();
 		ImGui::PopStyleColor(3);
-
-		if (showPreview)
-		{
-			DrawPreviewCard(context);
-		}
 
 		DrawPendingPopups(context);
 		ImGui::End();
@@ -1086,75 +1115,6 @@ namespace aether::editor
 		return true;
 	}
 
-	void FileExplorerPanel::DrawDirectoryNode(app::LayerContext& context, Entry& entry, const int depth)
-	{
-		(void) depth;
-		ImGui::PushID(entry.path.generic_string().c_str());
-
-		if (DrawActiveRename(entry))
-		{
-			ImGui::PopID();
-			return;
-		}
-
-		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
-		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
-		if (selected)
-		{
-			flags |= ImGuiTreeNodeFlags_Selected;
-		}
-		const bool open = ImGui::TreeNodeEx("##dir", flags);
-
-		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 rowMin = ImGui::GetItemRectMin();
-			const ImVec2 rowMax = ImGui::GetItemRectMax();
-			const float textY = rowMin.y + (rowMax.y - rowMin.y - ImGui::GetFontSize()) * 0.5f;
-			const float iconX = rowMin.x + ImGui::GetTreeNodeToLabelSpacing();
-			const float nameX = iconX + ImGui::GetFontSize() * 1.5f;
-			drawList->AddText(ImVec2(iconX, textY), chrome::U32(chrome::WithAlpha(chrome::kAccent, 0.85f)), open ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER);
-			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
-			char countText[24];
-			std::snprintf(countText, sizeof(countText), "%zu", entry.children.size());
-			const float countW = chrome::MeasureSized(12.0f, countText).x;
-			chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - countW - 8.0f, textY + 2.0f), chrome::kFaint, countText);
-			if (selected)
-			{
-				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
-			}
-		}
-
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
-		{
-			m_selectedPath = ToUtf8Path(entry.path);
-			m_selectedPayloadPath.clear();
-			m_selectedKind = dragdrop::FileKind::Unknown;
-			m_selectedIsDirectory = true;
-			m_createDir = entry.path;
-		}
-		const bool mutated = DrawRowContextMenu(context, entry);
-
-		if (open)
-		{
-			if (!mutated)
-			{
-				for (Entry& child: entry.children)
-				{
-					if (child.isDirectory)
-					{
-						DrawDirectoryNode(context, child, depth + 1);
-					}
-					else
-					{
-						DrawFileRow(context, child);
-					}
-				}
-			}
-			ImGui::TreePop();
-		}
-		ImGui::PopID();
-	}
-
 	void FileExplorerPanel::DrawFileRow(app::LayerContext& context, const Entry& entry)
 	{
 		ImGui::PushID(entry.path.generic_string().c_str());
@@ -1186,6 +1146,14 @@ namespace aether::editor
 				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
 			}
 		}
+
+		ApplyEntryInteractions(context, entry);
+		ImGui::PopID();
+	}
+
+	void FileExplorerPanel::ApplyEntryInteractions(app::LayerContext& context, const Entry& entry)
+	{
+		const bool isScript = entry.kind == dragdrop::FileKind::Script;
 
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 		{
@@ -1234,7 +1202,436 @@ namespace aether::editor
 		}
 
 		DrawRowContextMenu(context, entry);
+	}
+
+	FileExplorerPanel::Entry* FileExplorerPanel::FindDirectory(Entry& node, const std::filesystem::path& dir)
+	{
+		if (node.isDirectory && node.path == dir)
+		{
+			return &node;
+		}
+		for (Entry& child: node.children)
+		{
+			if (!child.isDirectory)
+			{
+				continue;
+			}
+			if (Entry* found = FindDirectory(child, dir))
+			{
+				return found;
+			}
+		}
+		return nullptr;
+	}
+
+	void FileExplorerPanel::OpenDirectory(app::LayerContext& context, const std::filesystem::path& dir)
+	{
+		if (m_currentDir == dir)
+		{
+			return;
+		}
+		// Thumbnails are scoped to the folder on screen. Keeping every folder ever visited
+		// would grow without bound in a big project, and a folder's worth reloads cheaply.
+		ReleaseThumbnails(context);
+		m_currentDir = dir;
+		m_createDir = dir;
+	}
+
+	void FileExplorerPanel::DrawFolderTree(app::LayerContext& context, Entry& entry)
+	{
+		ImGui::PushID(entry.path.generic_string().c_str());
+
+		if (DrawActiveRename(entry))
+		{
+			ImGui::PopID();
+			return;
+		}
+
+		bool hasSubdirs = false;
+		for (const Entry& child: entry.children)
+		{
+			if (child.isDirectory)
+			{
+				hasSubdirs = true;
+				break;
+			}
+		}
+
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
+		if (!hasSubdirs)
+		{
+			flags |= ImGuiTreeNodeFlags_Leaf;
+		}
+		if (m_currentDir == entry.path)
+		{
+			flags |= ImGuiTreeNodeFlags_Selected;
+		}
+		const bool open = ImGui::TreeNodeEx("##dir", flags);
+
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 rowMin = ImGui::GetItemRectMin();
+			const ImVec2 rowMax = ImGui::GetItemRectMax();
+			const float textY = rowMin.y + (rowMax.y - rowMin.y - ImGui::GetFontSize()) * 0.5f;
+			const float iconX = rowMin.x + ImGui::GetTreeNodeToLabelSpacing();
+			const float nameX = iconX + ImGui::GetFontSize() * 1.5f;
+			drawList->AddText(ImVec2(iconX, textY), chrome::U32(chrome::WithAlpha(chrome::kAccent, 0.85f)), open ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER);
+			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
+			if (m_currentDir == entry.path)
+			{
+				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
+			}
+		}
+
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+		{
+			OpenDirectory(context, entry.path);
+			m_selectedPath = ToUtf8Path(entry.path);
+			m_selectedIsDirectory = true;
+		}
+		DrawRowContextMenu(context, entry);
+
+		if (open)
+		{
+			for (Entry& child: entry.children)
+			{
+				if (child.isDirectory)
+				{
+					DrawFolderTree(context, child);
+				}
+			}
+			ImGui::TreePop();
+		}
 		ImGui::PopID();
+	}
+
+	void FileExplorerPanel::DrawBreadcrumb(app::LayerContext& context)
+	{
+		// The path back to the project root, each step clickable, so getting out of a deep
+		// folder does not mean hunting for it again in the tree.
+		std::vector<std::filesystem::path> crumbs;
+		for (std::filesystem::path p = m_currentDir; !p.empty(); p = p.parent_path())
+		{
+			crumbs.push_back(p);
+			if (p == m_root || p.parent_path() == p)
+			{
+				break;
+			}
+		}
+		std::reverse(crumbs.begin(), crumbs.end());
+
+		for (std::size_t i = 0; i < crumbs.size(); ++i)
+		{
+			if (i > 0)
+			{
+				ImGui::SameLine(0.0f, 4.0f);
+				ImGui::TextDisabled("/");
+				ImGui::SameLine(0.0f, 4.0f);
+			}
+			const std::string label = crumbs[i] == m_root ? m_projectName : crumbs[i].filename().generic_string();
+			ImGui::PushID(static_cast<int>(i));
+			const bool last = i + 1 == crumbs.size();
+			if (chrome::GhostButton(label.c_str(), ImVec2(0.0f, 0.0f), last ? chrome::kText : chrome::kMuted))
+			{
+				OpenDirectory(context, crumbs[i]);
+			}
+			ImGui::PopID();
+		}
+	}
+
+	const FileExplorerPanel::Thumbnail* FileExplorerPanel::ThumbnailFor(app::LayerContext& context, const Entry& entry)
+	{
+		const bool isTexture = entry.kind == dragdrop::FileKind::Texture;
+		const bool isMaterial = entry.kind == dragdrop::FileKind::Material;
+		if (!isTexture && !isMaterial)
+		{
+			return nullptr;
+		}
+		const std::string key = ToUtf8Path(entry.path);
+		if (const auto it = m_thumbnails.find(key); it != m_thumbnails.end())
+		{
+			return &it->second;
+		}
+
+		// Budgeted: a folder of hundreds of assets fills in over several frames rather than
+		// decoding all of them on the frame it is opened.
+		constexpr int kMaxLoadsPerFrame = 4;
+		if (m_thumbnailLoadsThisFrame >= kMaxLoadsPerFrame)
+		{
+			return nullptr;
+		}
+
+		auto* assets = context.TryGet<AssetManager>();
+		auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+		if (assets == nullptr || imgui == nullptr)
+		{
+			return nullptr;
+		}
+		++m_thumbnailLoadsThisFrame;
+
+		Thumbnail thumb{};
+		thumb.resolved = true;
+		std::string texturePath = entry.payloadPath.empty() ? key : entry.payloadPath;
+
+		if (isMaterial)
+		{
+			// A material shows the surface it actually describes: its albedo map, or failing
+			// that its base colour. A palette glyph on every material tells you nothing about
+			// which material it is.
+			texturePath.clear();
+			if (const auto text = io::file_util::ReadText(entry.path); text)
+			{
+				bool parsed = false;
+				const MaterialPresetSpec spec = MaterialSerializer::Parse(key, *text, &parsed);
+				if (parsed)
+				{
+					texturePath = spec.albedoPath;
+					const glm::vec4 base = spec.material.baseColorFactor;
+					thumb.swatch = IM_COL32(static_cast<int>(std::clamp(base.x, 0.0f, 1.0f) * 255.0f),
+					        static_cast<int>(std::clamp(base.y, 0.0f, 1.0f) * 255.0f),
+					        static_cast<int>(std::clamp(base.z, 0.0f, 1.0f) * 255.0f),
+					        255);
+					thumb.hasSwatch = true;
+				}
+			}
+			// The importer writes texture names relative to the material's own folder, not as
+			// virtual paths. Acquire asserts on anything without a scheme, so resolve those
+			// against the material's directory and drop whatever still is not addressable.
+			if (!texturePath.empty() && texturePath.find("://") == std::string::npos)
+			{
+				texturePath = VfsPathFor(entry.path.parent_path() / texturePath);
+			}
+			if (texturePath.empty() || texturePath.find("://") == std::string::npos)
+			{
+				m_thumbnails.emplace(key, thumb);
+				return &m_thumbnails.at(key);
+			}
+		}
+
+		auto& textures = assets->GetTextureRegistry();
+		thumb.texture = textures.Acquire(texturePath);
+		const std::uint32_t slot = textures.ResolveSlot(thumb.texture);
+		const std::uint32_t fallbackSlot = textures.ResolveSlot(textures.DefaultHandle());
+		if (!thumb.texture.IsValid() || slot == 0xFFFFFFFFu || slot == fallbackSlot)
+		{
+			// A texture that will not resolve is remembered as such, so the walk below is not
+			// repeated for it every time the folder is drawn.
+			if (thumb.texture.IsValid())
+			{
+				textures.Release(thumb.texture);
+				thumb.texture = {};
+			}
+			m_thumbnails.emplace(key, thumb);
+			return &m_thumbnails.at(key);
+		}
+		for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
+		{
+			if (info.hasBindlessSampled && info.bindlessSampledSlot == slot && info.view != nullptr)
+			{
+				const ImTextureID id = imgui->RegisterTexture(info.view, gpu::ImageLayout::ShaderReadOnly);
+				if (id != ImTextureID_Invalid)
+				{
+					thumb.imguiId = static_cast<std::uint64_t>(id);
+				}
+				break;
+			}
+		}
+		if (thumb.imguiId == 0)
+		{
+			textures.Release(thumb.texture);
+			thumb.texture = {};
+		}
+		m_thumbnails.emplace(key, thumb);
+		return &m_thumbnails.at(key);
+	}
+	void FileExplorerPanel::ReleaseThumbnails(app::LayerContext& context)
+	{
+		auto* assets = context.TryGet<AssetManager>();
+		auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+		for (auto& [key, thumb]: m_thumbnails)
+		{
+			(void) key;
+			if (thumb.imguiId != 0 && imgui != nullptr)
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(thumb.imguiId));
+			}
+			if (thumb.texture.IsValid() && assets != nullptr)
+			{
+				assets->GetTextureRegistry().Release(thumb.texture);
+			}
+		}
+		m_thumbnails.clear();
+	}
+
+	void FileExplorerPanel::DrawFileTile(app::LayerContext& context, const Entry& entry, const float tileSize)
+	{
+		ImGui::PushID(entry.path.generic_string().c_str());
+
+		const bool isScript = entry.kind == dragdrop::FileKind::Script;
+		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
+		const float labelH = ImGui::GetFontSize() * 1.9f;
+		const ImVec2 tile(tileSize, tileSize + labelH);
+
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		ImGui::InvisibleButton("##tile", tile);
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImVec2 tileMax(origin.x + tile.x, origin.y + tile.y);
+		const ImVec2 artMin(origin.x + 4.0f, origin.y + 4.0f);
+		const ImVec2 artMax(tileMax.x - 4.0f, origin.y + tileSize - 4.0f);
+
+		if (selected || ImGui::IsItemHovered())
+		{
+			drawList->AddRectFilled(origin, tileMax, chrome::U32(selected ? chrome::kSelectionBg : chrome::kHoverBg), 5.0f);
+		}
+		if (selected)
+		{
+			drawList->AddRect(origin, tileMax, chrome::U32(chrome::kAccent), 5.0f, 0, 1.0f);
+		}
+
+		const Thumbnail* thumb = entry.isDirectory ? nullptr : ThumbnailFor(context, entry);
+		const auto drawKindIcon = [&](const char* icon, const ImVec4& tint, const float scale)
+		{
+			const float iconSize = tileSize * scale;
+			const ImVec2 iconExtent = chrome::MeasureSized(iconSize, icon);
+			const ImVec2 centre((artMin.x + artMax.x) * 0.5f, (artMin.y + artMax.y) * 0.5f);
+			chrome::TextSized(drawList, iconSize, ImVec2(centre.x - iconExtent.x * 0.5f, centre.y - iconExtent.y * 0.5f), tint, icon);
+		};
+
+		if (entry.isDirectory)
+		{
+			drawKindIcon(ICON_FA_FOLDER, chrome::WithAlpha(chrome::kAccent, 0.9f), 0.44f);
+		}
+		else if (thumb != nullptr && thumb->imguiId != 0)
+		{
+			drawList->AddImageRounded(static_cast<ImTextureID>(thumb->imguiId), artMin, artMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, 4.0f);
+		}
+		else if (thumb != nullptr && thumb->hasSwatch)
+		{
+			// A material with no map: its base colour fills the tile, with the kind icon on
+			// top so it still reads as a material rather than a coloured square.
+			drawList->AddRectFilled(artMin, artMax, thumb->swatch, 4.0f);
+			drawList->AddRect(artMin, artMax, chrome::U32(chrome::WithAlpha(chrome::kText, 0.25f)), 4.0f, 0, 1.0f);
+			drawKindIcon(KindIcon(entry.kind, isScript), chrome::WithAlpha(chrome::kText, 0.55f), 0.3f);
+		}
+		else
+		{
+			// Everything that is not a picture still gets a face: a large tinted kind icon,
+			// which is what makes a grid scannable at all.
+			drawKindIcon(KindIcon(entry.kind, isScript), KindTint(entry.kind, isScript), 0.42f);
+		}
+
+		// A grid tile is far narrower than a filename, and hard-clipping made
+		// "X.material.toml" and "X.materialgraph.toml" render identically. Dropping the
+		// middle keeps both the head and the tail that tell them apart.
+		const float nameSize = ImGui::GetFontSize() * 0.85f;
+		const float nameRoom = tile.x - 6.0f;
+		std::string label = entry.name;
+		if (chrome::MeasureSized(nameSize, label.c_str()).x > nameRoom && label.size() > 4)
+		{
+			std::size_t head = label.size();
+			while (head > 2)
+			{
+				--head;
+				const std::size_t tail = head / 2;
+				std::string candidate = label.substr(0, head - tail) + "\xE2\x80\xA6" + label.substr(label.size() - tail);
+				if (chrome::MeasureSized(nameSize, candidate.c_str()).x <= nameRoom)
+				{
+					label = candidate;
+					break;
+				}
+			}
+		}
+		const ImVec2 nameExtent = chrome::MeasureSized(nameSize, label.c_str());
+		const float nameX = std::max(origin.x + 3.0f, (origin.x + tileMax.x) * 0.5f - nameExtent.x * 0.5f);
+		chrome::TextSized(drawList, nameSize, ImVec2(nameX, artMax.y + 4.0f), selected ? chrome::kText : chrome::kMuted, label.c_str());
+
+		if (entry.isDirectory)
+		{
+			ImGui::SetItemTooltip("%s", entry.name.c_str());
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+			{
+				m_selectedPath = ToUtf8Path(entry.path);
+				m_selectedIsDirectory = true;
+				m_createDir = entry.path;
+			}
+			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			{
+				m_pendingOpenDir = entry.path;
+			}
+			DrawRowContextMenu(context, entry);
+		}
+		else
+		{
+			ImGui::SetItemTooltip("%s\n%s", entry.name.c_str(), FormatSize(entry.sizeBytes).c_str());
+			ApplyEntryInteractions(context, entry);
+		}
+		ImGui::PopID();
+	}
+	void FileExplorerPanel::DrawFolderContents(app::LayerContext& context)
+	{
+		Entry* dir = FindDirectory(m_tree, m_currentDir);
+		if (dir == nullptr)
+		{
+			// The folder went away underneath us (deleted, or the project changed).
+			OpenDirectory(context, m_root);
+			dir = FindDirectory(m_tree, m_currentDir);
+		}
+		if (dir == nullptr)
+		{
+			ImGui::TextDisabled("This folder is no longer available.");
+			return;
+		}
+
+		m_pendingOpenDir.clear();
+		int shown = 0;
+		if (m_viewMode == ViewMode::Grid)
+		{
+			const float avail = ImGui::GetContentRegionAvail().x;
+			const float stride = m_tileSize + ImGui::GetStyle().ItemSpacing.x;
+			const int columns = std::max(1, static_cast<int>(avail / std::max(1.0f, stride)));
+			int column = 0;
+			// Folders first, so entering one is possible from the grid itself rather than only
+			// from the tree on the left.
+			for (const bool wantDirectories: {true, false})
+			{
+				for (const Entry& child: dir->children)
+				{
+					if (child.isDirectory != wantDirectories)
+					{
+						continue;
+					}
+					if (column > 0)
+					{
+						ImGui::SameLine();
+					}
+					DrawFileTile(context, child, m_tileSize);
+					++shown;
+					column = (column + 1) % columns;
+				}
+			}
+		}
+		else
+		{
+			for (const Entry& child: dir->children)
+			{
+				if (!child.isDirectory)
+				{
+					DrawFileRow(context, child);
+					++shown;
+				}
+			}
+		}
+
+		if (shown == 0)
+		{
+			ImGui::TextDisabled("This folder is empty.");
+		}
+		if (!m_pendingOpenDir.empty())
+		{
+			OpenDirectory(context, m_pendingOpenDir);
+			m_pendingOpenDir.clear();
+		}
 	}
 
 	void FileExplorerPanel::DrawSearchResults(app::LayerContext& context, const Entry& entry)
@@ -1402,203 +1799,4 @@ namespace aether::editor
 		}
 	}
 
-	void FileExplorerPanel::ReleasePreview(app::LayerContext& context)
-	{
-		if (m_previewImGuiId != 0)
-		{
-			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
-			{
-				imgui->UnregisterTexture(static_cast<ImTextureID>(m_previewImGuiId));
-			}
-			m_previewImGuiId = 0;
-		}
-		if (m_previewIsModel)
-		{
-			auto* rendering = context.TryGet<aether::RenderingSubsystem>();
-			auto* assets = context.TryGet<AssetManager>();
-			if (rendering != nullptr && assets != nullptr)
-			{
-				rendering->GetModelPreview().ClearModel(*assets);
-			}
-			m_previewIsModel = false;
-		}
-		if (m_previewTexture.IsValid())
-		{
-			if (auto* assets = context.TryGet<AssetManager>())
-			{
-				assets->GetTextureRegistry().Release(m_previewTexture);
-			}
-			m_previewTexture = {};
-		}
-		m_previewExtent = {};
-		m_previewText.clear();
-		m_previewIsImage = false;
-		m_previewIsText = false;
-		m_previewFailed = false;
-		m_previewLoadedFor = "<none>";
-	}
-
-	void FileExplorerPanel::UpdatePreview(app::LayerContext& context)
-	{
-		if (m_previewLoadedFor == m_selectedPath)
-		{
-			return;
-		}
-		ReleasePreview(context);
-		m_previewLoadedFor = m_selectedPath;
-		if (m_selectedPath.empty() || m_selectedIsDirectory)
-		{
-			return;
-		}
-
-		const std::filesystem::path path(m_selectedPath);
-		if (m_selectedKind == dragdrop::FileKind::Texture)
-		{
-			auto* assets = context.TryGet<AssetManager>();
-			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
-			if (assets == nullptr || imgui == nullptr)
-			{
-				m_previewFailed = true;
-				return;
-			}
-			auto& textures = assets->GetTextureRegistry();
-			m_previewTexture = textures.Acquire(m_selectedPayloadPath.empty() ? m_selectedPath : m_selectedPayloadPath);
-			const std::uint32_t slot = textures.ResolveSlot(m_previewTexture);
-			const std::uint32_t fallbackSlot = textures.ResolveSlot(textures.DefaultHandle());
-			if (!m_previewTexture.IsValid() || slot == 0xFFFFFFFFu || slot == fallbackSlot)
-			{
-				m_previewFailed = true;
-				return;
-			}
-			for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
-			{
-				if (info.hasBindlessSampled && info.bindlessSampledSlot == slot && info.view != nullptr)
-				{
-					const ImTextureID id = imgui->RegisterTexture(info.view, gpu::ImageLayout::ShaderReadOnly);
-					if (id != ImTextureID_Invalid)
-					{
-						m_previewImGuiId = static_cast<std::uint64_t>(id);
-						m_previewExtent = info.extent;
-						m_previewIsImage = true;
-					}
-					break;
-				}
-			}
-			m_previewFailed = !m_previewIsImage;
-			return;
-		}
-
-		if (m_selectedKind == dragdrop::FileKind::Model)
-		{
-			auto* assets = context.TryGet<AssetManager>();
-			auto* rendering = context.TryGet<aether::RenderingSubsystem>();
-			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
-			if (assets == nullptr || rendering == nullptr || imgui == nullptr)
-			{
-				m_previewFailed = true;
-				return;
-			}
-			const std::string modelPath = m_selectedPayloadPath.empty() ? m_selectedPath : m_selectedPayloadPath;
-			if (const auto* project = context.TryGet<app::EditorProjectContext>(); project != nullptr && project->IsLoaded())
-			{
-				std::string bakeError;
-				(void) editor::EnsureModelBaked(modelPath, *project, bakeError);
-			}
-			std::string error;
-			if (rendering->GetModelPreview().ShowModel(*assets, modelPath, error))
-			{
-				const ImTextureID id = imgui->RegisterTexture(rendering->GetModelPreview().GetColorView(), gpu::ImageLayout::ShaderReadOnly);
-				if (id != ImTextureID_Invalid)
-				{
-					m_previewImGuiId = static_cast<std::uint64_t>(id);
-					m_previewExtent = {aether::ModelPreviewService::kSize, aether::ModelPreviewService::kSize};
-					m_previewIsModel = true;
-				}
-			}
-			m_previewFailed = !m_previewIsModel;
-			return;
-		}
-
-		if (IsTextPreviewable(path))
-		{
-			if (auto text = io::file_util::ReadText(path))
-			{
-				constexpr std::size_t kMaxPreviewChars = 2400;
-				m_previewText = text->size() > kMaxPreviewChars ? text->substr(0, kMaxPreviewChars) + "\n..." : *text;
-				m_previewIsText = true;
-			}
-			else
-			{
-				m_previewFailed = true;
-			}
-		}
-	}
-
-	void FileExplorerPanel::DrawPreviewCard(app::LayerContext& context)
-	{
-		UpdatePreview(context);
-
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, chrome::WithAlpha(chrome::kPanel, 0.6f));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
-		ImGui::BeginChild("##fePreview", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-
-		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 bp = ImGui::GetCursorScreenPos();
-			const float bandW = ImGui::GetContentRegionAvail().x;
-			drawList->AddRectFilled(ImVec2(bp.x, bp.y + 1.0f), ImVec2(bp.x + 3.0f, bp.y + 13.0f), chrome::U32(chrome::kAccent));
-			chrome::TextSized(drawList, 12.0f, ImVec2(bp.x + 10.0f, bp.y), chrome::kMuted, "PREVIEW");
-			const char* kindLabel = KindLabel(m_selectedKind);
-			const float kindW = chrome::MeasureSized(12.0f, kindLabel).x;
-			chrome::TextSized(drawList, 12.0f, ImVec2(bp.x + bandW - kindW, bp.y), chrome::kFaint, kindLabel);
-			ImGui::Dummy(ImVec2(0.0f, 16.0f));
-		}
-
-		const std::filesystem::path path(m_selectedPath);
-		ImGui::TextUnformatted(path.filename().generic_string().c_str());
-
-		const float contentH = ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing();
-		if ((m_previewIsImage || m_previewIsModel) && m_previewImGuiId != 0 && m_previewExtent.width > 0 && m_previewExtent.height > 0)
-		{
-			const float availW = ImGui::GetContentRegionAvail().x;
-			const float scale = std::min(availW / static_cast<float>(m_previewExtent.width), std::max(40.0f, contentH) / static_cast<float>(m_previewExtent.height));
-			const ImVec2 size(static_cast<float>(m_previewExtent.width) * std::min(scale, 1.0f), static_cast<float>(m_previewExtent.height) * std::min(scale, 1.0f));
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (availW - size.x) * 0.5f));
-			ImGui::Image(ImTextureRef(static_cast<ImTextureID>(m_previewImGuiId)), size);
-		}
-		else if (m_previewIsText)
-		{
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.25f));
-			ImGui::BeginChild("##fePrevText", ImVec2(0.0f, std::max(40.0f, contentH)), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
-			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
-			ImGui::TextUnformatted(m_previewText.c_str());
-			ImGui::PopStyleColor();
-			ImGui::EndChild();
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			ImGui::TextDisabled(m_previewFailed ? "Preview could not be loaded." : "No preview for this file type.");
-		}
-
-		if (m_previewIsModel)
-		{
-			if (auto* rendering = context.TryGet<aether::RenderingSubsystem>())
-			{
-				ImGui::TextDisabled("%zu primitive(s)  \xC2\xB7  %s", rendering->GetModelPreview().PrimitiveCount(), m_selectedPayloadPath.c_str());
-			}
-		}
-		else if (m_previewIsImage)
-		{
-			ImGui::TextDisabled("%u x %u  \xC2\xB7  %s", m_previewExtent.width, m_previewExtent.height, m_selectedPayloadPath.c_str());
-		}
-		else if (!m_selectedPayloadPath.empty())
-		{
-			ImGui::TextDisabled("%s", m_selectedPayloadPath.c_str());
-		}
-
-		ImGui::EndChild();
-		ImGui::PopStyleVar();
-		ImGui::PopStyleColor();
-	}
 } // namespace aether::editor
