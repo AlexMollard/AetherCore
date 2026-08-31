@@ -348,7 +348,9 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // as the surface roughens - a one-sample stand-in for a prefiltered mip chain.
     const float3 R = reflect(-V, N);
     const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
-    const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y, roughness);
+    const float3 skySpecular = SkySpecularProbe(skySpecularDir, input.worldPos, sunDir, sunColor, sunIntensity,
+            fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams,
+            fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime, roughness);
 
     const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
 

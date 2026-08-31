@@ -434,6 +434,45 @@ float3 ApplySkyClouds(
     return lerp(sky, cloudColor, alpha);
 }
 
+// The sky a REFLECTION sees: the gradient plus the cloud deck.
+//
+// Clouds belong in a reflection and the solar disk does not, and the two have opposite
+// reasons. The direct specular term already puts the sun's highlight on the surface, so a
+// disk here would draw a second, wrongly shaped sun into every glossy surface. Nothing
+// anywhere accounts for the clouds, though - SkyGradient carries only their averaged effect
+// on the sky's colour - so without this a mirror under a full overcast reflects a blank grey
+// field while the sky directly above it is covered in cloud.
+//
+// The ray starts at the SURFACE, not the camera: that is what makes the reflected deck line
+// up with the one overhead and shift correctly as either the surface or the viewer moves.
+//
+// The shapes fade out as the lobe widens, because a rough surface averages the cloud field
+// rather than mirroring it - and its average is already in the gradient, so fading to the
+// plain gradient is fading to the right answer rather than merely fading out.
+float3 SkySpecularProbe(
+    float3 reflectDir,
+    float3 rayOrigin,
+    float3 sunDir,
+    float3 sunColor,
+    float  sunIntensity,
+    float3 horizonColor,
+    float3 zenithColor,
+    float3 voidColor,
+    float4 skyParams,
+    float  cloudCoverage,
+    float  cloudSpeed,
+    float  time,
+    float  lobeWidth)
+{
+    const float3 sky = SkyGradient(reflectDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams, cloudCoverage, lobeWidth);
+    if (cloudCoverage <= 0.001f)
+    {
+        return sky;
+    }
+    const float3 clouded = ApplySkyClouds(sky, reflectDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, rayOrigin, cloudCoverage, cloudSpeed, time);
+    return lerp(clouded, sky, saturate(lobeWidth));
+}
+
 float3 EvalSky(
     float3 worldDir,
     float3 sunDir,

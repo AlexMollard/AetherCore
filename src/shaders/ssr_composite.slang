@@ -120,7 +120,9 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	const float3 sunDir = normalize(fc->sunDirectionIntensity.xyz);
 	const float sunIntensity = fc->sunDirectionIntensity.w;
 	const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
-	const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y, roughness);
+	const float3 skySpecular = SkySpecularProbe(skySpecularDir, worldPos, sunDir, fc->sunColor.rgb, sunIntensity,
+	        fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams,
+	        fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime, roughness);
 
 	// Shared with the forward shader, so the term this subtracts cannot drift from the
 	// term that was added.
