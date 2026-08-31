@@ -1,4 +1,5 @@
 #include "editor/publish/PublishSteps.hpp"
+#include "editor/ModelBake.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -147,6 +148,60 @@ namespace aether::editor
 				return Failed("Could not create the output folder: " + dirResult.error().message, "Check write permissions on " + plan.outputDir.generic_string() + ".");
 			}
 			return {};
+		}
+
+		// Every model a project file points at, baked so the pak carries the .mesh the runtime
+		// actually reads. The editor bakes on drop and on scene load, which means a machine
+		// that has not opened the right scenes - a fresh clone, or a build agent - published a
+		// game whose models could not load: GltfAsset only ever reads the baked sibling.
+		StepResult BakeReferencedModels(const PublishPlan& plan, PublishContext&, const PublishToolchain&)
+		{
+			static constexpr std::string_view kPrefix = "project://";
+			std::vector<std::string> models;
+			std::error_code ec;
+			for (const auto& entry: std::filesystem::recursive_directory_iterator(plan.projectRoot, ec))
+			{
+				if (ec)
+				{
+					break;
+				}
+				if (!entry.is_regular_file(ec) || entry.path().extension() != ".toml")
+				{
+					continue;
+				}
+				const auto text = io::file_util::ReadText(entry.path());
+				if (!text)
+				{
+					continue;
+				}
+				for (std::size_t at = text->find(kPrefix); at != std::string::npos; at = text->find(kPrefix, at + kPrefix.size()))
+				{
+					const std::size_t end = text->find_first_of("'\"", at);
+					if (end == std::string::npos)
+					{
+						break;
+					}
+					std::string ref = text->substr(at, end - at);
+					if ((ref.ends_with(".gltf") || ref.ends_with(".glb")) && std::ranges::find(models, ref) == models.end())
+					{
+						models.push_back(std::move(ref));
+					}
+					at = end;
+				}
+			}
+
+			int baked = 0;
+			for (const std::string& model: models)
+			{
+				std::string error;
+				if (!EnsureModelBaked(model, plan.projectRoot, error))
+				{
+					return Failed("Could not bake model '" + model + "': " + error,
+					        "Open the model in the editor to see what the importer rejects, then publish again.");
+				}
+				++baked;
+			}
+			return {.ok = true, .message = baked == 0 ? "No models to bake." : "Baked " + std::to_string(baked) + " referenced model(s)."};
 		}
 
 		StepResult PackProjectAssets(const PublishPlan& plan, PublishContext& context, const PublishToolchain&)
@@ -378,6 +433,7 @@ namespace aether::editor
 		static constexpr PublishStep kSteps[] = {
 		        {"Validating project", &ValidateProject},
 		        {"Cleaning output", &CleanOutput},
+		        {"Baking models", &BakeReferencedModels},
 		        {"Packing project assets", &PackProjectAssets},
 		        {"Staging game runtime", &StageRuntime},
 		        {"Baking game settings", &BakeSettings},

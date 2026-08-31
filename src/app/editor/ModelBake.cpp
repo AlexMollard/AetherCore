@@ -58,6 +58,16 @@ namespace aether::editor
 			error = "no project loaded";
 			return false;
 		}
+		return EnsureModelBaked(vfsModelPath, project.root, error);
+	}
+
+	bool EnsureModelBaked(const std::string& vfsModelPath, const fs::path& projectRoot, std::string& error)
+	{
+		const std::string meshVfs = assets::GltfAsset::ResolveMeshPath(vfsModelPath);
+		if (!meshVfs.empty() && io::FileSystem::Exists(meshVfs))
+		{
+			return true;
+		}
 
 		const auto raw = io::FileSystem::ReadFile(vfsModelPath);
 		if (!raw)
@@ -67,9 +77,9 @@ namespace aether::editor
 		}
 
 		const std::string rel = StripMount(vfsModelPath);
-		const fs::path diskPath = project.root / rel;
+		const fs::path diskPath = projectRoot / rel;
 
-		const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, project.root);
+		const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, projectRoot);
 
 		if (result.meshData.empty())
 		{
@@ -79,7 +89,7 @@ namespace aether::editor
 
 		// Mirror AssetProcessor's pak layout, but under the project root on disk.
 		const std::string stem = fs::path(rel).stem().generic_string();
-		const fs::path modelDir = (project.root / rel).parent_path();
+		const fs::path modelDir = (projectRoot / rel).parent_path();
 
 		if (!WriteBaked(modelDir / (stem + ".mesh"), result.meshData, error))
 		{
@@ -95,14 +105,14 @@ namespace aether::editor
 		}
 		for (const auto& [fileName, animData]: result.animFiles)
 		{
-			if (!animData.empty() && !WriteBaked(project.root / "animations" / fileName, animData, error))
+			if (!animData.empty() && !WriteBaked(projectRoot / "animations" / fileName, animData, error))
 			{
 				return false;
 			}
 		}
 		for (const auto& [matVfsPath, matData]: result.materialFiles)
 		{
-			if (!matData.empty() && !WriteBaked(project.root / matVfsPath, matData, error))
+			if (!matData.empty() && !WriteBaked(projectRoot / matVfsPath, matData, error))
 			{
 				return false;
 			}
