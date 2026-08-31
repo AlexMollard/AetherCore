@@ -96,6 +96,9 @@ namespace aether::editor
 		if (selection != nullptr && selection->HasAsset()
 		        && selection->SelectedAsset().kind == SceneSelection::AssetKind::Material
 		        && !selection->SelectedAsset().path.ends_with(".material")
+		        // A graph sitting next to the materials classifies as one; it belongs to the
+		        // Material Graph panel, and parsing it here would read a graph as a material.
+		        && !selection->SelectedAsset().path.ends_with(".materialgraph.toml")
 		        && selection->SelectedAsset().path != m_edit.path)
 		{
 			m_edit = MaterialAssetEditState{};

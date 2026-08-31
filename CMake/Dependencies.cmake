@@ -274,6 +274,25 @@ if(implot_ADDED AND TARGET imgui)
     target_include_directories(imgui PUBLIC "${implot_SOURCE_DIR}")
 endif()
 
+# ImNodes (material graph canvas), same in-target arrangement as above.
+#
+# Chosen over thedmd/imgui-node-editor, which was tried first and does not build against
+# ImGui 1.92: its imgui_extra_math.h enables IMGUI_DEFINE_MATH_OPERATORS and then redefines
+# operator*(float, ImVec2), which ImGui now provides, and imgui_internal.h refuses to be
+# included with the macro off - so there is no include order that satisfies both. ImNodes
+# carries an explicit "Fix AddRect call for ImGui 1.92.8" and defines no vector operators.
+CPMAddPackage(
+    NAME imnodes
+    GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+    GIT_TAG        eb36902c892548ef94f88f51ad7e7c9c7058a71c
+    DOWNLOAD_ONLY  YES
+)
+
+if(imnodes_ADDED AND TARGET imgui)
+    target_sources(imgui PRIVATE "${imnodes_SOURCE_DIR}/imnodes.cpp")
+    target_include_directories(imgui PUBLIC "${imnodes_SOURCE_DIR}")
+endif()
+
 # ── Physics ───────────────────────────────────────────────────────────────────
 # Cross-platform determinism is required for future lockstep / rollback networking.
 # Jolt sets /MP on itself and compiles through a precompiled header. Both make a compiler

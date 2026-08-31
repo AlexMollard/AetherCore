@@ -1,0 +1,62 @@
+# AetherCore material graph.
+next_id = 20
+
+[node.0]
+id = 1
+type = 0
+x = 520
+y = 160
+value = [ 1, 1, 1, 1 ]
+slot = 0
+
+[node.1]
+id = 2
+type = 1
+x = 120
+y = 120
+value = [ 0.9, 0.35, 0.2, 1 ]
+slot = 0
+
+[node.2]
+id = 3
+type = 6
+x = 120
+y = 300
+value = [ 1, 1, 1, 1 ]
+slot = 0
+
+[node.3]
+id = 4
+type = 7
+x = 320
+y = 220
+value = [ 1, 1, 1, 1 ]
+slot = 0
+
+[link.0]
+id = 10
+from_node = 2
+from_pin = 0
+to_node = 4
+to_pin = 0
+
+[link.1]
+id = 11
+from_node = 3
+from_pin = 0
+to_node = 4
+to_pin = 1
+
+[link.2]
+id = 12
+from_node = 2
+from_pin = 0
+to_node = 1
+to_pin = 0
+
+[link.3]
+id = 13
+from_node = 4
+from_pin = 0
+to_node = 1
+to_pin = 3
