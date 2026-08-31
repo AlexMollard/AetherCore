@@ -35,6 +35,10 @@ namespace aether
 
 		// Game thread: load `path` (VFS-aware; the caller bakes raw glTF first)
 		bool ShowModel(AssetManager& assets, const std::string& path, std::string& outError);
+
+		// Show one mesh wearing an arbitrary material, for previewing a material on its own.
+		// The mesh is borrowed, not owned - callers pass a long-lived primitive.
+		bool ShowMaterialOnMesh(AssetManager& assets, const Mesh& mesh, const MaterialAsset& material, std::string& outError);
 		void ClearModel(AssetManager& assets);
 
 		[[nodiscard]] bool HasModel() const

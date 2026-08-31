@@ -199,6 +199,30 @@ namespace aether
 		return true;
 	}
 
+	bool ModelPreviewService::ShowMaterialOnMesh(AssetManager& assets, const Mesh& mesh, const MaterialAsset& material, std::string& outError)
+	{
+		if (!m_initialized)
+		{
+			outError = "Model preview renderer is unavailable.";
+			return false;
+		}
+		ClearModel(assets);
+
+		const Entity e = m_world.Create();
+		auto& transform = m_world.Emplace<TransformComponent>(e);
+		transform.localToWorld = glm::mat4(1.0f);
+		m_world.Emplace<MeshComponent>(e, MeshComponent{.mesh = &mesh});
+		MaterialSystem::AssignMaterial(m_world, e, assets.GetMaterialRegistry(), assets.GetPipelineCache(), material);
+
+		// m_model stays empty: there is no loaded model to own here, and DestroyModelEntities
+		// walks the preview world rather than that list, so teardown is unaffected.
+		const glm::vec4 sphere = mesh.GetBoundingSphere();
+		m_bounds = glm::vec4(glm::vec3(sphere), std::max(sphere.w, 0.01f));
+		m_turntableAngle = glm::radians(30.0f);
+		m_hasModel.store(true, std::memory_order_release);
+		return true;
+	}
+
 	void ModelPreviewService::ClearModel(AssetManager& assets)
 	{
 		m_hasModel.store(false, std::memory_order_release);
