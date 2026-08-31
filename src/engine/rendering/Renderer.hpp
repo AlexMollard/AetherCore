@@ -191,6 +191,23 @@ namespace aether
 			m_skyParams = params;
 		}
 
+		// How strongly roughness is widened to hide specular aliasing. See
+		// graphics.specularFilter; 0 restores the unfiltered highlight.
+		void SetSpecularFilter(float strength)
+		{
+			m_shadingParams.x = strength;
+		}
+
+		[[nodiscard]] float GetSpecularFilter() const
+		{
+			return m_shadingParams.x;
+		}
+
+		[[nodiscard]] glm::vec4 GetShadingParams() const
+		{
+			return m_shadingParams;
+		}
+
 		[[nodiscard]] glm::vec4 GetSkyParams() const
 		{
 			return m_skyParams;
@@ -247,6 +264,7 @@ namespace aether
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 m_skyParams{0.0f, 2.5f, 0.0f, 0.0f};
+		glm::vec4 m_shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
 		bool m_volumetrics = true;
 		float m_shadowSplitLambda = 0.65f;
 		bool m_contactShadows = false;

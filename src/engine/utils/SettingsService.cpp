@@ -154,6 +154,13 @@ namespace aether
 				renderer->SetGtaoRadius(m_values.graphics.gtaoRadius);
 			}
 		}
+		else if (key == "graphics.specularFilter")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetSpecularFilter(m_values.graphics.specularFilter);
+			}
+		}
 		else if (key == "graphics.gtaoStrength")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

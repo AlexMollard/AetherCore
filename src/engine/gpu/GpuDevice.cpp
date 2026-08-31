@@ -255,6 +255,7 @@ namespace aether
 		fc.skyVoidColor = packet.skyVoidColor;
 		fc.fogParams = packet.fogParams;
 		fc.skyParams = packet.skyParams;
+		fc.shadingParams = packet.shadingParams;
 
 		// A first frame has nothing behind it, and a camera that jumped has nothing
 		// meaningful behind it either - reprojecting through either produces a screen-wide

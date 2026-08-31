@@ -1104,6 +1104,7 @@ namespace aether
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
 		packet.fogParams = renderer.GetFogParams();
 		packet.skyParams = renderer.GetSkyParams();
+		packet.shadingParams = renderer.GetShadingParams();
 		packet.contactShadows = renderer.AreContactShadowsEnabled();
 		packet.shadowSplitLambda = renderer.GetShadowSplitLambda();
 

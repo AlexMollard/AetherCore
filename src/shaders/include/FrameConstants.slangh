@@ -38,6 +38,7 @@ struct FrameConstantsData
     [[vk::offset(832)]] float4  skyParams;                 // x=physical sky on, y=turbidity, z=volumetric strength (0=off), w=Mie g
     [[vk::offset(816)]] float4  fogParams;                  // x=density at y=0, y=height falloff, z=sun forward scatter, w=max opacity
     [[vk::offset(848)]] float4x4 prevViewProj;              // last frame's viewProj, for reprojecting a pixel to find its screen motion
+    [[vk::offset(912)]] float4  shadingParams;             // x=specular filter strength (1=full, 0=off)
 };
 
 #endif

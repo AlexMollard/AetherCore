@@ -72,6 +72,11 @@ namespace aether
 		// than a frame-long smear.
 		glm::mat4 prevViewProj{1.0f};
 
+		// x = specular filter strength: how much of the roughness widening that hides
+		// specular aliasing is applied. 1 is the full filter, 0 disables it and restores the
+		// unfiltered highlight. y, z, w spare.
+		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -96,7 +101,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 912, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 928, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -128,5 +133,5 @@ namespace aether
 	static_assert(offsetof(FrameConstants, fogParams) == 816);
 	static_assert(offsetof(FrameConstants, skyParams) == 832);
 	static_assert(offsetof(FrameConstants, prevViewProj) == 848);
-	static_assert(sizeof(FrameConstants) == 912);
+	static_assert(offsetof(FrameConstants, shadingParams) == 912);
 } // namespace aether

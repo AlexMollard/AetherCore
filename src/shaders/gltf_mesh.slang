@@ -198,7 +198,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // normal map's own shortfall is added alongside, scaled by the same influence the
         // map was blended in with.
         const float mipVariance = normalMapVariance * 0.60;
-        const float kernelRoughness = min(2.0 * variance + mipVariance, kKappa);
+        // Dialable, because this widens roughness on every normal-mapped surface in the
+        // scene and how much sparkle is worth trading for how much gloss is a look decision.
+        const float filterStrength = saturate(fc->shadingParams.x);
+        const float kernelRoughness = min(2.0 * variance + mipVariance, kKappa) * filterStrength;
         roughness = sqrt(saturate(roughness * roughness + kernelRoughness));
     }
 
