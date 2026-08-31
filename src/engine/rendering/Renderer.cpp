@@ -99,6 +99,24 @@ namespace aether
 		}
 	}
 
+	void Renderer::SetExposure(float exposure)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetExposure(exposure);
+		}
+	}
+
+	void Renderer::SetAutoExposure(bool enabled, float key, float speed)
+	{
+		if (m_postProcessStack)
+		{
+			m_postProcessStack->SetAutoExposureEnabled(enabled);
+			m_postProcessStack->SetAutoExposureKey(key);
+			m_postProcessStack->SetAutoExposureSpeed(speed);
+		}
+	}
+
 	void Renderer::SetChromaticAberration(float pixels)
 	{
 		if (m_postProcessStack)

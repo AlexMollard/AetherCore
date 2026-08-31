@@ -51,6 +51,8 @@ namespace aether
 		        {"graphics.gtao", {.description = "Ground-truth ambient occlusion: darkens creases and contact points that the light probes cannot see into."}},
 		        {"graphics.gtaoRadius", {.description = "How far, in world units, a surface looks for geometry occluding it. Too small and only tight creases darken; too large and the whole scene greys.", .minValue = 0.1, .maxValue = 5.0}},
 		        {"graphics.gtaoStrength", {.description = "How hard the occlusion is applied. Affects ambient light only, never direct light.", .minValue = 0.0, .maxValue = 3.0}},
+		        {"graphics.exposure",
+		                {.description = "Manual exposure multiplier, applied on top of auto-exposure and used alone when it is off.", .minValue = 0.01, .maxValue = 16.0}},
 		        {"graphics.bloomStrength",
 		                {.description = "How much of the bright pass is added back over the image. 0 disables bloom.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"graphics.bloomRadius",

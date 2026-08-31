@@ -52,6 +52,8 @@ namespace aether
 		void SetGrade(float contrast, float saturation, float temperature, float tint);
 		void SetVignette(float intensity, float roundness);
 		void SetBloom(float strength, float filterRadius);
+		void SetExposure(float exposure);
+		void SetAutoExposure(bool enabled, float key, float speed);
 		void SetChromaticAberration(float pixels);
 		void SetSharpness(float sharpness);
 		void SetFilmGrain(float amount);
