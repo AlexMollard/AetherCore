@@ -50,6 +50,10 @@ namespace aether
 		float ambientIntensity = 1.0f; // scales ambientColor
 		float shadowStrength = 0.94f;  // 0 = no shadows, 1 = fully black
 		float shadowSoftness = 1.0f;   // penumbra width multiplier
+		// Light scattered by the air between the pixel and the light, which is what makes a
+		// beam visible in the gap between two occluders. 0 is off, and it is off by default:
+		// it is a look, and a look nobody asked for is a regression.
+		float shaftStrength = 0.0f;
 	};
 
 	// Animated sun/sky environment driver. Scene content, not a global: the

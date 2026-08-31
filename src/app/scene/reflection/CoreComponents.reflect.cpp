@@ -212,6 +212,7 @@ AE_FIELD_N("ambient_color", ambientColor, Color3)
 AE_FIELD_R(ambientIntensity, Float, 0.0f, 4.0f)
 AE_FIELD_R(shadowStrength, Float, 0.0f, 1.0f)
 AE_FIELD_R(shadowSoftness, Float, 0.0f, 8.0f)
+AE_FIELD_R(shaftStrength, Float, 0.0f, 4.0f)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 

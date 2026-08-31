@@ -27,7 +27,7 @@ namespace aether
 		// (kShadowSteps in light2d.slang) and is deliberately not duplicated here.
 		constexpr float kShadowWorldBias = 0.9f;
 
-		// MUST match Light2DPush in shaders/light2d.slang (64 bytes).
+		// MUST match Light2DPush in shaders/light2d.slang (80 bytes).
 		struct Light2DPush
 		{
 			gpu::DeviceAddress frameConstants;
@@ -38,6 +38,8 @@ namespace aether
 			float viewportHeight;
 			glm::vec4 ambient;
 			glm::vec4 shadowParams;
+			// x = light-shaft strength. Its own vector because shadowParams is full.
+			glm::vec4 shaftParams;
 		};
 
 		// MUST match OccluderPush in shaders/occluder2d.slang (24 bytes).
@@ -49,7 +51,7 @@ namespace aether
 			std::uint32_t pad;
 		};
 
-		static_assert(sizeof(Light2DPush) == 64);
+		static_assert(sizeof(Light2DPush) == 80);
 		static_assert(sizeof(OccluderPush) == 24);
 		static_assert(sizeof(GpuLight2D) == 64);
 		static_assert(sizeof(Occluder2D) == 48);
@@ -323,6 +325,7 @@ namespace aether
 			                        .ambient = frame.ambient,
 			                        // x = cast-shadows enabled, y = strength, z = softness, w = world bias. Steps are a shader constant.
 			                        .shadowParams = glm::vec4(doShadows ? 1.0f : 0.0f, frame.shadowParams.x, frame.shadowParams.y, kShadowWorldBias),
+			                        .shaftParams = glm::vec4(frame.shadowParams.z, 0.0f, 0.0f, 0.0f),
 			                };
 			                ctx.recorder.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                ctx.recorder.Draw(6, 1, 0, 0);

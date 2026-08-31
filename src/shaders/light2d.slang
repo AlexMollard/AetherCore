@@ -31,6 +31,7 @@ struct Light2DPush
     float2 viewportSize;
     float4 ambient;        // rgb = ambient floor, a = per-channel clamp ceiling
     float4 shadowParams;   // x = cast-shadows enabled, y = strength, z = softness, w = world bias
+    float4 shaftParams;    // x = light-shaft strength (0 = off)
 };
 
 static const int kShadowSteps = 16;
@@ -65,7 +66,13 @@ float SampleOccluder(float2 uv)
 // screen-UV space (ortho: the world line maps to a straight UV line), with perpendicular taps that widen
 // toward the light for a soft penumbra. Surface/interior darkening is done by the N.L term in the
 // fragment; here we only occlude line-of-sight, with a modest bias so a lit face doesn't self-shadow.
-float ShadowTerm(float2 fragUV, float2 lightUV, float worldDist)
+// Visibility of the light AND how much of the path to it is open air.
+//
+// The beam you see between two occluders is light scattered toward the eye by the air along
+// that line, so its brightness is the fraction of the pixel-to-light segment that is clear -
+// which is exactly what this march already walks. Accumulating it here rather than in a second
+// loop means the shafts cost a few instructions instead of another sixteen texture samples.
+float ShadowTerm(float2 fragUV, float2 lightUV, float worldDist, out float openFraction)
 {
     const float2 ray = lightUV - fragUV;
     const float2 perp = normalize(float2(-ray.y, ray.x) + float2(1e-6, 0.0));
@@ -74,6 +81,7 @@ float ShadowTerm(float2 fragUV, float2 lightUV, float worldDist)
     const float t0 = clamp(0.35 / max(worldDist, 1e-3), 0.0, 0.6); // ~0.35 world-unit bias
 
     float occ = 0.0;
+    float openSum = 0.0;
     for (int s = 0; s < kShadowSteps; ++s)
     {
         const float t = lerp(t0, 1.0, (float(s) + 0.5) / float(kShadowSteps));
@@ -82,8 +90,13 @@ float ShadowTerm(float2 fragUV, float2 lightUV, float worldDist)
         const float c = SampleOccluder(uv);
         const float a = SampleOccluder(uv + perp * spread);
         const float b = SampleOccluder(uv - perp * spread);
-        occ = max(occ, (c * 2.0 + a + b) * 0.25);
+        const float blocked = (c * 2.0 + a + b) * 0.25;
+        occ = max(occ, blocked);
+        // Weighted toward the light: air nearer the source is lit more brightly and so
+        // scatters more, which is what gives a shaft its taper instead of a flat slab.
+        openSum += (1.0 - saturate(blocked)) * t;
     }
+    openFraction = openSum / (float(kShadowSteps) * 0.5);
     return 1.0 - saturate(occ) * strength;
 }
 
@@ -151,6 +164,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             atten *= smoothstep(L.spotDirCone.w, L.spotDirCone.z, cosAng); // cosOuter -> cosInner
         }
 
+        const float atten2 = atten; // distance/cone falloff before shadow and surface terms
+
         if (atten <= 0.001)
         {
             continue;
@@ -179,14 +194,24 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         }
 
         // Cast shadows for shadow-casting lights that still reach this pixel.
+        float openFraction = 0.0;
         if (atten > 0.001 && L.flags.x > 0.5 && doShadows)
         {
             const float4 lc = mul(frame->viewProj, float4(p, 0.0, 1.0));
             const float2 lightUV = (lc.xy / lc.w) * 0.5 + 0.5;
-            atten *= ShadowTerm(fragUV, lightUV, d);
+            atten *= ShadowTerm(fragUV, lightUV, d, openFraction);
         }
 
         light += L.colorIntensity.rgb * L.colorIntensity.a * atten;
+
+        // Light scattered by the air on the way here. It is added rather than multiplied
+        // because it is light arriving from the medium itself, not light this surface
+        // reflects - and it is suppressed inside solids, which have no air in them.
+        if (pc.shaftParams.x > 0.001 && openFraction > 0.0)
+        {
+            const float shaft = openFraction * pc.shaftParams.x * (1.0 - solidMask);
+            light += L.colorIntensity.rgb * L.colorIntensity.a * shaft * atten2;
+        }
     }
 
     // Clamp so an over-bright stack of lights saturates instead of producing NaNs/inf under multiply.
