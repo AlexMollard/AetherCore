@@ -311,44 +311,20 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // the ground while still retaining some normal-map detail.
     const float localNormalMapInfluence = 0.35;
     const float3 Nlocal = normalize(lerp(Ngeom, N, localNormalMapInfluence));
-    uint tilePx = fc->tiledLightGridInfo.x;
-    uint tilesX = fc->tiledLightGridInfo.y;
-    uint tilesY = fc->tiledLightGridInfo.z;
-    if (tilePx > 0u && tilesX > 0u && tilesY > 0u)
-    {
-        uint2 tileCoord = uint2(
-            min((uint)input.svPosition.x / tilePx, tilesX - 1u),
-            min((uint)input.svPosition.y / tilePx, tilesY - 1u));
-        uint tile = tileCoord.y * tilesX + tileCoord.x;
-
-        uint2 header = pc.tileHeaders.Load(tile);
-        uint start = header.x;
-        uint count = header.y;
-        uint maxPerTile = fc->tiledLightBufferOffsets.w;
-        if (maxPerTile > 0u)
-        {
-            count = min(count, maxPerTile);
-        }
-        count = min(count, 512u); // hard cap to keep worst-case bounded
-
-        for (uint i = 0u; i < count; ++i)
-        {
-            uint lightIndex = pc.tileLightIndices.Load(start + i);
-            LocalLight light = LoadLocalLight(pc.lightData, lightIndex);
-            AccumulateLocalLight(
-                light,
-                input.worldPos,
-                Nlocal,
-                V,
-                F0,
-                baseColor.rgb,
-                metallic,
-                roughness,
-                fc,
-                input.svPosition.xy,
-                LoLocal);
-        }
-    }
+    AccumulateTiledLocalLights(
+        pc.tileHeaders,
+        pc.tileLightIndices,
+        pc.lightData,
+        input.worldPos,
+        Nlocal,
+        V,
+        F0,
+        baseColor.rgb,
+        metallic,
+        roughness,
+        fc,
+        input.svPosition.xy,
+        LoLocal);
     Lo += LoLocal;
 
     // Image-based ambient from the same procedural sky the skybox draws, rather than

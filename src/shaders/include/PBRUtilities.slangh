@@ -155,4 +155,56 @@ void AccumulateLocalLight(
     sum += (diffuse + specular * localSpecularWeight) * radiance * NdotL * shadowVis;
 }
 
+
+// Every local light touching this pixel's tile, accumulated.
+//
+// The tile walk used to be written out at the call site. That was fine while there was one
+// call site; the material graph generates a second shader that needs exactly the same loop,
+// and two copies of a light loop drift the moment either is touched.
+void AccumulateTiledLocalLights(
+    in DevicePtr<uint2> tileHeaders,
+    in DevicePtr<uint> tileLightIndices,
+    in DevicePtr<float4> lightData,
+    in float3 worldPos,
+    in float3 N,
+    in float3 V,
+    in float3 F0,
+    in float3 baseColor,
+    in float metallic,
+    in float roughness,
+    in FrameConstantsData* fc,
+    in float2 pixelCoord,
+    inout float3 sum)
+{
+    const uint tilePx = fc->tiledLightGridInfo.x;
+    const uint tilesX = fc->tiledLightGridInfo.y;
+    const uint tilesY = fc->tiledLightGridInfo.z;
+    if (tilePx == 0u || tilesX == 0u || tilesY == 0u)
+    {
+        return;
+    }
+
+    const uint2 tileCoord = uint2(
+        min((uint)pixelCoord.x / tilePx, tilesX - 1u),
+        min((uint)pixelCoord.y / tilePx, tilesY - 1u));
+    const uint tile = tileCoord.y * tilesX + tileCoord.x;
+
+    const uint2 header = tileHeaders.Load(tile);
+    const uint start = header.x;
+    uint count = header.y;
+    const uint maxPerTile = fc->tiledLightBufferOffsets.w;
+    if (maxPerTile > 0u)
+    {
+        count = min(count, maxPerTile);
+    }
+    count = min(count, 512u); // hard cap to keep worst-case bounded
+
+    for (uint i = 0u; i < count; ++i)
+    {
+        const uint lightIndex = tileLightIndices.Load(start + i);
+        const LocalLight light = LoadLocalLight(lightData, lightIndex);
+        AccumulateLocalLight(light, worldPos, N, V, F0, baseColor, metallic, roughness, fc, pixelCoord, sum);
+    }
+}
+
 #endif
