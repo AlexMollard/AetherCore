@@ -1,4 +1,6 @@
 #include "debug/ParticlePanel.hpp"
+#include "debug/UndoStack.hpp"
+#include "debug/EditorCommand.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -497,6 +499,15 @@ namespace aether::editor
 				world.Emplace<TransformComponent>(e, tc);
 				world.Emplace<ParticleEmitterComponent>(e, m_config);
 				context.Get<SceneSelection>().Select(e);
+				// An entity appearing in the scene is an edit like any other; without this the
+				// next Ctrl+Z reached past it.
+				if (auto* undo = context.services.TryGet<UndoStack>())
+				{
+					if (auto command = SubtreeLifetimeCommand::Capture(world, context.services, {e}, /*createdByThisEdit=*/true, "Create Emitter"))
+					{
+						undo->Record(std::move(command));
+					}
+				}
 				m_status = "Created emitter entity at the view centre.";
 				m_statusError = false;
 			}
@@ -507,7 +518,34 @@ namespace aether::editor
 			ImGui::BeginDisabled(!hasSelection);
 			if (chrome::OutlineButton(ICON_FA_LINK "  Apply to Selected", ImVec2(half, 0.0f)) && hasSelection)
 			{
+				// Overwrites whatever the entity's emitter held, so the previous config has to
+				// be recoverable - as an add when there was no emitter, or a before/after pair
+				// when there was.
+				auto* applyUndo = context.services.TryGet<UndoStack>();
+				const bool hadEmitter = world.Has<ParticleEmitterComponent>(selected);
+				nlohmann::json emitterBefore;
+				bool emitterReflected = false;
+				if (hadEmitter && applyUndo != nullptr)
+				{
+					CaptureComponentFields(world, selected, "Particle Emitter", context.services, emitterBefore, emitterReflected);
+				}
 				world.EmplaceOrReplace<ParticleEmitterComponent>(selected, m_config);
+				if (applyUndo != nullptr)
+				{
+					if (!hadEmitter)
+					{
+						applyUndo->Record(std::make_unique<AddComponentCommand>(selected.id, "Particle Emitter"));
+					}
+					else
+					{
+						nlohmann::json emitterAfter;
+						bool afterReflected = false;
+						if (CaptureComponentFields(world, selected, "Particle Emitter", context.services, emitterAfter, afterReflected) && emitterAfter != emitterBefore)
+						{
+							applyUndo->Record(std::make_unique<SetComponentCommand>(selected.id, "Particle Emitter", std::move(emitterBefore), std::move(emitterAfter), afterReflected));
+						}
+					}
+				}
 				m_status = "Applied config to the selected entity.";
 				m_statusError = false;
 			}

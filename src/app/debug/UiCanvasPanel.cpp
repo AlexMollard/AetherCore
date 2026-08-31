@@ -22,6 +22,8 @@
 #include "layers/AppLayer.hpp"
 #include "material/TextureRegistry.hpp"
 #include "scene/Components.hpp"
+#include "debug/EditorCommand.hpp"
+#include "debug/UndoStack.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "ui/UiLayoutSystem.hpp"
@@ -1744,7 +1746,17 @@ namespace aether::editor
 				{
 					selection->Clear();
 				}
-				world.Destroy(m_hoveredEntity);
+				// Recorded, and the whole subtree: a bare Destroy left this element's children
+				// pointing at a dead parent and left the parent's child list holding a dead
+				// entity, on top of the delete not being undoable at all.
+				if (auto* undo = context.services.TryGet<UndoStack>())
+				{
+					if (auto command = SubtreeLifetimeCommand::Capture(world, context.services, {m_hoveredEntity}, /*createdByThisEdit=*/false, "Delete UI Element"))
+					{
+						undo->Record(std::move(command));
+					}
+				}
+				ecs::DestroyHierarchy(world, m_hoveredEntity);
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Zoom to Fit (F)"))
