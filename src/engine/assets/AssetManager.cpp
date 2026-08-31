@@ -14,6 +14,7 @@
 #include "io/FileGlobOptions.hpp"
 #include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
+#include "material/MaterialSerializer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/MaterialSystem.hpp"
@@ -33,17 +34,6 @@ namespace aether
 {
 	namespace
 	{
-		struct MaterialPresetSpec
-		{
-			MaterialAsset material{};
-			std::string albedoPath;
-			std::string normalPath;
-			std::string metallicRoughnessPath;
-			std::string occlusionPath;
-			std::string emissivePath;
-			std::string shaderVfsPath;
-		};
-
 		std::string NormalizeVirtualFolder(std::string path)
 		{
 			while (!path.empty() && (path.back() == '/' || path.back() == '\\'))
@@ -51,32 +41,6 @@ namespace aether
 				path.pop_back();
 			}
 			return path;
-		}
-
-		std::string ResolvePathRelativeTo(std::string_view basePath, const std::string& resourcePath)
-		{
-			if (resourcePath.empty())
-			{
-				return {};
-			}
-
-			if (resourcePath.contains("://"))
-			{
-				return resourcePath;
-			}
-
-			const std::string base(basePath);
-			const std::size_t mountPos = base.find("://");
-			if (mountPos == std::string::npos)
-			{
-				return resourcePath;
-			}
-
-			const std::string mount = base.substr(0, mountPos);
-			const std::filesystem::path rel = base.substr(mountPos + 3);
-			const std::filesystem::path dir = rel.parent_path();
-			const std::filesystem::path resolved = (dir / resourcePath).lexically_normal();
-			return mount + "://" + resolved.generic_string();
 		}
 
 		std::string ResolvePathInFolder(std::string_view folderPath, const std::string& resourcePath)
@@ -137,127 +101,6 @@ namespace aether
 			}
 			return {};
 		}
-
-		std::string ResolvePresetPath(std::string_view presetPath, const std::string& texturePath)
-		{
-			return ResolvePathRelativeTo(presetPath, texturePath);
-		}
-
-		MaterialPresetSpec ParseMaterialPreset(std::string_view path, const std::string& text)
-		{
-			MaterialPresetSpec spec;
-
-			text::ParseToml(text,
-			        [&spec, path](const text::IniEntry& entry)
-			        {
-				        if (entry.fullKey == "material.basecolorfactor" || entry.fullKey == "basecolorfactor")
-				        {
-					        if (const auto parsed = text::ParseFloatArray<4>(entry.value))
-					        {
-						        spec.material.baseColorFactor = glm::vec4((*parsed)[0], (*parsed)[1], (*parsed)[2], (*parsed)[3]);
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.emissivefactor" || entry.fullKey == "emissivefactor")
-				        {
-					        if (const auto parsed = text::ParseFloatArray<3>(entry.value))
-					        {
-						        spec.material.emissiveFactor = glm::vec3((*parsed)[0], (*parsed)[1], (*parsed)[2]);
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.metallicfactor" || entry.fullKey == "metallicfactor")
-				        {
-					        if (const auto parsed = text::ParseFloat(entry.value))
-					        {
-						        spec.material.metallicFactor = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.roughnessfactor" || entry.fullKey == "roughnessfactor")
-				        {
-					        if (const auto parsed = text::ParseFloat(entry.value))
-					        {
-						        spec.material.roughnessFactor = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.occlusionstrength" || entry.fullKey == "occlusionstrength")
-				        {
-					        if (const auto parsed = text::ParseFloat(entry.value))
-					        {
-						        spec.material.occlusionStrength = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.alphacutoff" || entry.fullKey == "alphacutoff")
-				        {
-					        if (const auto parsed = text::ParseFloat(entry.value))
-					        {
-						        spec.material.alphaCutoff = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.doublesided" || entry.fullKey == "doublesided")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        spec.material.doubleSided = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.alphablend" || entry.fullKey == "alphablend")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        spec.material.alphaBlend = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.alphamask" || entry.fullKey == "alphamask")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        spec.material.alphaMask = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "material.shader" || entry.fullKey == "shader")
-				        {
-					        spec.shaderVfsPath = entry.value;
-					        return;
-				        }
-
-				        if (entry.fullKey == "textures.albedo" || entry.fullKey == "albedo" || entry.fullKey == "textures.basecolor")
-				        {
-					        spec.albedoPath = ResolvePresetPath(path, entry.value);
-					        return;
-				        }
-				        if (entry.fullKey == "textures.normal" || entry.fullKey == "normal")
-				        {
-					        spec.normalPath = ResolvePresetPath(path, entry.value);
-					        return;
-				        }
-				        if (entry.fullKey == "textures.metallicroughness" || entry.fullKey == "metallicroughness")
-				        {
-					        spec.metallicRoughnessPath = ResolvePresetPath(path, entry.value);
-					        return;
-				        }
-
-				        if (entry.fullKey == "textures.occlusion" || entry.fullKey == "occlusion" || entry.fullKey == "textures.ao")
-				        {
-					        spec.occlusionPath = ResolvePresetPath(path, entry.value);
-					        return;
-				        }
-				        if (entry.fullKey == "textures.emissive" || entry.fullKey == "emissive")
-				        {
-					        spec.emissivePath = ResolvePresetPath(path, entry.value);
-				        }
-			        });
-
-			return spec;
-		}
-
 		Expected<std::string> ReadTextFile(std::string_view path)
 		{
 			AE_TRY(bytes, io::FileSystem::ReadFile(path));
@@ -411,7 +254,7 @@ namespace aether
 					{
 						auto type = reader.Read<uint8_t>();
 						const std::string texRelPath = reader.ReadString();
-						const std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
+						const std::string texPath = io::FileSystem::ResolveRelative(presetPath, texRelPath);
 
 						auto texType = static_cast<TextureTypeDisk>(type);
 
@@ -453,7 +296,7 @@ namespace aether
 		}
 
 		AE_TRY(text, ReadTextFile(presetPath));
-		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
+		const MaterialPresetSpec spec = MaterialSerializer::Parse(presetPath, *text);
 		MaterialAsset material = spec.material;
 		if (!spec.shaderVfsPath.empty())
 		{

@@ -39,6 +39,11 @@ namespace aether::io
 		// rebuild them from the fresh .spv. Thread-safe.
 		[[nodiscard]] static std::uint64_t ShaderOverlayGeneration();
 
+		// Resolve a path written RELATIVE to another virtual path, as asset files reference
+		// their siblings. An argument that already names a mount is returned unchanged, and
+		// so is one whose base names no mount - there is nothing to resolve against.
+		[[nodiscard]] static std::string ResolveRelative(std::string_view basePath, std::string_view relativePath);
+
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
 		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFile(std::string_view virtualPath);

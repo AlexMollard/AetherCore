@@ -1,0 +1,223 @@
+#include "material/MaterialSerializer.hpp"
+
+#include <format>
+
+#include "io/FileSystem.hpp"
+#include "material/TextureRegistry.hpp"
+#include "utils/TextIni.hpp"
+
+namespace aether
+{
+	namespace MaterialSerializer
+	{
+	MaterialPresetSpec Parse(std::string_view path, const std::string& text)
+	{
+		MaterialPresetSpec spec;
+
+		text::ParseToml(text,
+		        [&spec, path](const text::IniEntry& entry)
+		        {
+			        if (entry.fullKey == "material.basecolorfactor" || entry.fullKey == "basecolorfactor")
+			        {
+				        if (const auto parsed = text::ParseFloatArray<4>(entry.value))
+				        {
+					        spec.material.baseColorFactor = glm::vec4((*parsed)[0], (*parsed)[1], (*parsed)[2], (*parsed)[3]);
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.emissivefactor" || entry.fullKey == "emissivefactor")
+			        {
+				        if (const auto parsed = text::ParseFloatArray<3>(entry.value))
+				        {
+					        spec.material.emissiveFactor = glm::vec3((*parsed)[0], (*parsed)[1], (*parsed)[2]);
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.metallicfactor" || entry.fullKey == "metallicfactor")
+			        {
+				        if (const auto parsed = text::ParseFloat(entry.value))
+				        {
+					        spec.material.metallicFactor = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.roughnessfactor" || entry.fullKey == "roughnessfactor")
+			        {
+				        if (const auto parsed = text::ParseFloat(entry.value))
+				        {
+					        spec.material.roughnessFactor = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.occlusionstrength" || entry.fullKey == "occlusionstrength")
+			        {
+				        if (const auto parsed = text::ParseFloat(entry.value))
+				        {
+					        spec.material.occlusionStrength = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.alphacutoff" || entry.fullKey == "alphacutoff")
+			        {
+				        if (const auto parsed = text::ParseFloat(entry.value))
+				        {
+					        spec.material.alphaCutoff = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.doublesided" || entry.fullKey == "doublesided")
+			        {
+				        if (const auto parsed = text::ParseBool(entry.value))
+				        {
+					        spec.material.doubleSided = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.alphablend" || entry.fullKey == "alphablend")
+			        {
+				        if (const auto parsed = text::ParseBool(entry.value))
+				        {
+					        spec.material.alphaBlend = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.alphamask" || entry.fullKey == "alphamask")
+			        {
+				        if (const auto parsed = text::ParseBool(entry.value))
+				        {
+					        spec.material.alphaMask = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.modulatevertexcolor" || entry.fullKey == "modulatevertexcolor")
+			        {
+				        if (const auto parsed = text::ParseBool(entry.value))
+				        {
+					        spec.material.modulateVertexColor = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.receiveshadows" || entry.fullKey == "receiveshadows")
+			        {
+				        if (const auto parsed = text::ParseBool(entry.value))
+				        {
+					        spec.material.receiveShadows = *parsed;
+				        }
+				        return;
+			        }
+			        if (entry.fullKey == "material.shader" || entry.fullKey == "shader")
+			        {
+				        spec.shaderVfsPath = entry.value;
+				        return;
+			        }
+
+			        if (entry.fullKey == "textures.albedo" || entry.fullKey == "albedo" || entry.fullKey == "textures.basecolor")
+			        {
+				        spec.albedoPath = io::FileSystem::ResolveRelative(path, entry.value);
+				        return;
+			        }
+			        if (entry.fullKey == "textures.normal" || entry.fullKey == "normal")
+			        {
+				        spec.normalPath = io::FileSystem::ResolveRelative(path, entry.value);
+				        return;
+			        }
+			        if (entry.fullKey == "textures.metallicroughness" || entry.fullKey == "metallicroughness")
+			        {
+				        spec.metallicRoughnessPath = io::FileSystem::ResolveRelative(path, entry.value);
+				        return;
+			        }
+
+			        if (entry.fullKey == "textures.occlusion" || entry.fullKey == "occlusion" || entry.fullKey == "textures.ao")
+			        {
+				        spec.occlusionPath = io::FileSystem::ResolveRelative(path, entry.value);
+				        return;
+			        }
+			        if (entry.fullKey == "textures.emissive" || entry.fullKey == "emissive")
+			        {
+				        spec.emissivePath = io::FileSystem::ResolveRelative(path, entry.value);
+			        }
+		        });
+
+		return spec;
+	}
+
+		std::string ToToml(const MaterialPresetSpec& spec)
+		{
+			const MaterialAsset& m = spec.material;
+			std::string out;
+
+			// std::format's default for a float is the SHORTEST representation that reads
+			// back as the same value, which is exactly what a round-trip needs - a fixed
+			// precision either truncates or writes noise digits nobody wants in a diff.
+			out += "# AetherCore material. Edit here or in the editor's material inspector.\n";
+			out += "[material]\n";
+			out += std::format("basecolorfactor = [ {}, {}, {}, {} ]\n",
+			        m.baseColorFactor.x, m.baseColorFactor.y, m.baseColorFactor.z, m.baseColorFactor.w);
+			out += std::format("emissivefactor = [ {}, {}, {} ]\n", m.emissiveFactor.x, m.emissiveFactor.y, m.emissiveFactor.z);
+			out += std::format("metallicfactor = {}\n", m.metallicFactor);
+			out += std::format("roughnessfactor = {}\n", m.roughnessFactor);
+			out += std::format("occlusionstrength = {}\n", m.occlusionStrength);
+			out += std::format("alphacutoff = {}\n", m.alphaCutoff);
+			out += std::format("doublesided = {}\n", m.doubleSided ? "true" : "false");
+			out += std::format("alphablend = {}\n", m.alphaBlend ? "true" : "false");
+			out += std::format("alphamask = {}\n", m.alphaMask ? "true" : "false");
+			out += std::format("modulatevertexcolor = {}\n", m.modulateVertexColor ? "true" : "false");
+			out += std::format("receiveshadows = {}\n", m.receiveShadows ? "true" : "false");
+			if (!spec.shaderVfsPath.empty())
+			{
+				out += std::format("shader = '{}'\n", spec.shaderVfsPath);
+			}
+
+			// Omitted entirely when there is no texture, rather than written empty: an empty
+			// value would read back as a path and resolve to the material's own directory.
+			const bool anyTexture = !spec.albedoPath.empty() || !spec.normalPath.empty()
+			        || !spec.metallicRoughnessPath.empty() || !spec.occlusionPath.empty() || !spec.emissivePath.empty();
+			if (anyTexture)
+			{
+				out += "\n[textures]\n";
+				const std::pair<const char*, const std::string*> slots[] = {
+				        {"albedo", &spec.albedoPath},
+				        {"normal", &spec.normalPath},
+				        {"metallicroughness", &spec.metallicRoughnessPath},
+				        {"occlusion", &spec.occlusionPath},
+				        {"emissive", &spec.emissivePath},
+				};
+				for (const auto& [key, value]: slots)
+				{
+					if (!value->empty())
+					{
+						out += std::format("{} = '{}'\n", key, *value);
+					}
+				}
+			}
+			return out;
+		}
+
+		MaterialPresetSpec Describe(const MaterialAsset& material, const TextureRegistry& textures)
+		{
+			MaterialPresetSpec spec;
+			spec.material = material;
+			spec.shaderVfsPath = material.templateDesc.shaderVfsPath;
+
+			const std::pair<TextureHandle, std::string*> slots[] = {
+			        {material.albedoTex, &spec.albedoPath},
+			        {material.normalTex, &spec.normalPath},
+			        {material.metallicRoughnessTex, &spec.metallicRoughnessPath},
+			        {material.occlusionTex, &spec.occlusionPath},
+			        {material.emissiveTex, &spec.emissivePath},
+			};
+			for (const auto& [handle, out]: slots)
+			{
+				if (handle.IsValid())
+				{
+					std::string path;
+					if (textures.TryGetPath(handle, path))
+					{
+						*out = std::move(path);
+					}
+				}
+			}
+			return spec;
+		}
+	} // namespace MaterialSerializer
+} // namespace aether

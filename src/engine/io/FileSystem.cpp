@@ -526,6 +526,31 @@ namespace aether::io
 		return s_shaderOverlayGen.load(std::memory_order_relaxed);
 	}
 
+	std::string FileSystem::ResolveRelative(std::string_view basePath, std::string_view relativePath)
+	{
+		if (relativePath.empty())
+		{
+			return {};
+		}
+		if (relativePath.contains("://"))
+		{
+			return std::string(relativePath);
+		}
+
+		const std::string base(basePath);
+		const std::size_t mountPos = base.find("://");
+		if (mountPos == std::string::npos)
+		{
+			return std::string(relativePath);
+		}
+
+		const std::string mount = base.substr(0, mountPos);
+		const std::filesystem::path rel = base.substr(mountPos + 3);
+		const std::filesystem::path dir = rel.parent_path();
+		const std::filesystem::path resolved = (dir / std::filesystem::path(relativePath)).lexically_normal();
+		return mount + "://" + resolved.generic_string();
+	}
+
 	bool FileSystem::Exists(std::string_view virtualPath)
 	{
 		if (s_backend == nullptr)
