@@ -919,24 +919,22 @@ namespace aether::editor
 			{
 				divider();
 				const bool hasErrors = logCounts.error > 0;
+				char logLabel[64];
+				std::snprintf(logLabel, sizeof(logLabel), "%s  %zu##logCounts", hasErrors ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_TRIANGLE_EXCLAMATION, hasErrors ? logCounts.error : logCounts.warn);
+				// A real item rather than text plus IsItemClicked: this is meant to be clicked,
+				// so it should hover and respond like anything else that is.
 				ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? C(colors::Error) : C(colors::Orange));
-				if (hasErrors)
+				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(hasErrors ? C(colors::Error) : C(colors::Orange), 0.18f));
+				const float logWidth = ImGui::CalcTextSize(logLabel).x;
+				if (ImGui::Selectable(logLabel, false, ImGuiSelectableFlags_None, ImVec2(logWidth, 0.0f)))
 				{
-					ImGui::Text(ICON_FA_CIRCLE_EXCLAMATION "  %zu", logCounts.error);
+					m_pendingFocusWindow = "Console";
 				}
-				else
-				{
-					ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION "  %zu", logCounts.warn);
-				}
-				ImGui::PopStyleColor();
+				ImGui::PopStyleColor(2);
 				if (ImGui::IsItemHovered())
 				{
 					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 					ImGui::SetTooltip("%zu error(s), %zu warning(s)  -  click to open the Console", logCounts.error, logCounts.warn);
-				}
-				if (ImGui::IsItemClicked())
-				{
-					m_pendingFocusWindow = "Console";
 				}
 			}
 
