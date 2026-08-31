@@ -17,6 +17,8 @@
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/AssetTypes.hpp"
+#include "debug/SelectionBounds.hpp"
+#include <glm/gtc/matrix_transform.hpp>
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
@@ -564,6 +566,107 @@ namespace aether::editor
 		}
 	}
 
+	void HierarchyPanel::GroupSelectionUnderNewParent(app::LayerContext& context, World& world, SceneSelection& selection, Entity fallback)
+	{
+		// Whatever is selected, or the row that was right-clicked when it is not part of the
+		// selection - the same rule the other row commands follow.
+		std::vector<Entity> members;
+		if (selection.Contains(fallback))
+		{
+			for (const Entity candidate: selection.All())
+			{
+				if (candidate.IsValid() && world.GetRegistry().valid(World::ToEntt(candidate)))
+				{
+					members.push_back(candidate);
+				}
+			}
+		}
+		else if (fallback.IsValid() && world.GetRegistry().valid(World::ToEntt(fallback)))
+		{
+			members.push_back(fallback);
+		}
+		if (members.empty())
+		{
+			return;
+		}
+
+		// An entity whose ancestor is also selected comes along with that ancestor; moving it
+		// separately would tear it out of the subtree the user can see they picked.
+		std::vector<Entity> roots;
+		for (const Entity candidate: members)
+		{
+			if (!HasSelectedAncestor(world, candidate, selection))
+			{
+				roots.push_back(candidate);
+			}
+		}
+		if (roots.empty())
+		{
+			return;
+		}
+
+		// The group lands beside its members: under their shared parent when they have one, at
+		// the scene root when they do not, so grouping never changes where things sit.
+		Entity sharedParent{};
+		bool shared = true;
+		for (std::size_t i = 0; i < roots.size(); ++i)
+		{
+			const auto* hierarchy = world.TryGet<HierarchyComponent>(roots[i]);
+			const Entity parent = hierarchy != nullptr ? hierarchy->parent : Entity{};
+			if (i == 0)
+			{
+				sharedParent = parent;
+			}
+			else if (parent != sharedParent)
+			{
+				shared = false;
+				break;
+			}
+		}
+
+		auto* undo = context.services.TryGet<UndoStack>();
+		UndoStack::ScopedGroup group(undo, "Group Entities");
+
+		const Entity parent = world.Create();
+		world.Emplace<NameComponent>(parent, NameComponent{.name = "Group"});
+		// Centred on what it contains, so the gizmo appears where the group visually is.
+		TransformComponent transform;
+		if (const auto box = ComputeSelectionFocusBox(world, roots))
+		{
+			transform.localToWorld = glm::translate(glm::mat4(1.0f), box->center);
+		}
+		world.Emplace<TransformComponent>(parent, transform);
+		if (shared && sharedParent.IsValid())
+		{
+			ecs::SetParent(world, parent, sharedParent);
+		}
+
+		// Captured while the parent is still EMPTY. A composite undoes in reverse, so this
+		// runs last: the reparents below put the members back first, and only the bare parent
+		// is left to remove. Capturing it after the members moved in would have swept them
+		// into the same subtree and deleted them on undo.
+		if (undo != nullptr)
+		{
+			if (auto command = SubtreeLifetimeCommand::Capture(world, context.services, {parent}, /*createdByThisEdit=*/true, "Group Entities"))
+			{
+				undo->Record(std::move(command));
+			}
+		}
+
+		for (const Entity member: roots)
+		{
+			const auto* hierarchy = world.TryGet<HierarchyComponent>(member);
+			const std::uint32_t previousParent = hierarchy != nullptr ? hierarchy->parent.id : 0u;
+			if (ecs::SetParent(world, member, parent) && undo != nullptr)
+			{
+				undo->Record(std::make_unique<ReparentCommand>(member.id, previousParent, parent.id));
+			}
+		}
+
+		selection.Select(parent);
+		m_dirty = true;
+	}
+
 	void HierarchyPanel::HandleRowDragDrop(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX)
 	{
 		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
@@ -582,18 +685,28 @@ namespace aether::editor
 			const float relY = ImGui::GetMousePos().y - extendedDropRect.Min.y;
 			const float rowH = extendedDropRect.GetHeight();
 
+			// Three bands, the way every other hierarchy behaves: the top and bottom edges of a
+			// row insert above or below it, and the whole middle drops INTO it. Parenting used
+			// to require Ctrl, which is not something anyone expects to have to discover - the
+			// common operation was the hidden one.
+			constexpr float kReorderBand = 0.28f;
 			DropZone zone{};
 			if (ImGui::GetIO().KeyCtrl)
 			{
+				// Still forces parenting, which helps when a row is too short to aim at.
 				zone = DropZone::Inside;
 			}
-			else if (relY < rowH * 0.5f)
+			else if (relY < rowH * kReorderBand)
 			{
 				zone = DropZone::Before;
 			}
-			else
+			else if (relY > rowH * (1.0f - kReorderBand))
 			{
 				zone = DropZone::After;
+			}
+			else
+			{
+				zone = DropZone::Inside;
 			}
 
 			Entity dragged{};
@@ -709,10 +822,25 @@ namespace aether::editor
 		}
 		if (ImGui::MenuItem(ICON_FA_PLUS "  Create child"))
 		{
+			auto* childUndo = context.services.TryGet<UndoStack>();
+			UndoStack::ScopedGroup childGroup(childUndo, "Create Child");
 			const Entity child = world.Create();
 			world.Emplace<NameComponent>(child, NameComponent{.name = "Entity"});
 			ecs::SetParent(world, child, e);
+			if (childUndo != nullptr)
+			{
+				if (auto command = SubtreeLifetimeCommand::Capture(world, context.services, {child}, /*createdByThisEdit=*/true, "Create Child"))
+				{
+					childUndo->Record(std::move(command));
+				}
+			}
 			selection.Select(child);
+		}
+		// Wrapping a selection in a fresh parent is how a hierarchy actually gets built, and
+		// there was no way to do it but create an empty and drag each entity onto it.
+		if (ImGui::MenuItem(ICON_FA_SITEMAP "  Group into new parent", "Ctrl+G"))
+		{
+			GroupSelectionUnderNewParent(context, world, selection, e);
 		}
 		if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D"))
 		{
@@ -2030,6 +2158,10 @@ namespace aether::editor
 			if (panelKeys && ImGui::IsKeyPressed(ImGuiKey_D, false))
 			{
 				m_pendingDuplicate = true;
+			}
+			if (panelKeys && ImGui::IsKeyPressed(ImGuiKey_G, false) && !selection.All().empty())
+			{
+				GroupSelectionUnderNewParent(context, world, selection, selection.Primary());
 			}
 			const bool copyKey = m_pendingCopy || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_C, false));
 			const bool cutKey = m_pendingCut || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_X, false));

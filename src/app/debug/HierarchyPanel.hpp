@@ -87,6 +87,8 @@ namespace aether::editor
 		void BeginRename(const World& world, Entity e);
 		// `undo` may be null (no editor undo stack); the toggles still apply.
 		void DrawRowUtilityToggles(World& world, Entity e, UndoStack* undo);
+		// Wrap the selection (or `fallback`) in a fresh empty parent, as one undo step.
+		void GroupSelectionUnderNewParent(app::LayerContext& context, World& world, SceneSelection& selection, Entity fallback);
 		void DrawBreadcrumbTrail(const World& world, SceneSelection& selection);
 		void DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const;
 		void UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax);
