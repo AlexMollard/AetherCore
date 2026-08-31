@@ -342,13 +342,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // SkyGradient, never EvalSky: the latter carries the solar disk, and lighting a
     // surface with it would add the sun a second time on top of the direct term and
     // smear a duplicate sun across every glossy surface.
-    const float3 skyDiffuse = SkyGradient(N, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
+    const float3 skyDiffuse = SkyGradient(N, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y);
 
     // Specular probe along the reflection vector, drifting toward the diffuse sample
     // as the surface roughens - a one-sample stand-in for a prefiltered mip chain.
     const float3 R = reflect(-V, N);
     const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
-    const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
+    const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y);
 
     const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
 
@@ -400,7 +400,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             fc->skyZenithColor.rgb,
             fc->skyVoidColor.rgb,
             fc->fogParams.z,
-            fc->skyParams);
+            fc->skyParams,
+            fc->shadingParams.y);
         finalColor = lerp(finalColor, fogColor, fogAmount);
     }
 

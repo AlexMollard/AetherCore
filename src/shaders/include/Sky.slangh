@@ -151,6 +151,39 @@ float3 PhysicalSky(
 }
 
 // The atmosphere without the sun disk or stars: safe to treat as incoming radiance.
+// The aggregate effect of a cloud deck on the sky's own radiance - its MEAN, not its
+// shape. The shapes are drawn by ApplySkyClouds over the visible sky only; this is the
+// part that has to reach the ambient, the fog and the reflections too, because an
+// overcast scene is not a clear scene with grey blobs pasted on it. It is lit
+// differently: flatter, neutral, and without the sun's warm horizon.
+//
+// Two things happen physically, and both matter more to the look than the blobs do.
+// A cloud is white, so it scatters every wavelength alike and the sky's blue goes with
+// it. And the deck redistributes the light: a clear sky is brightest at the horizon
+// looking through the most atmosphere, while an overcast one is brightest overhead,
+// about three times its horizon - the CIE standard overcast distribution, which this
+// approximates with a linear ramp.
+float3 ApplyOvercast(float3 sky, float3 worldDir, float coverage)
+{
+    if (coverage <= 0.001f)
+    {
+        return sky;
+    }
+    // The deck's brightness is taken from the sky it replaces rather than authored, so a
+    // stylised or night sky keeps its own exposure range instead of being overridden by
+    // a constant that only suits daylight.
+    const float clearLum = dot(sky, float3(0.2126f, 0.7152f, 0.0722f));
+    const float3 deck = lerp(sky, float3(clearLum, clearLum, clearLum), 0.88f) * 1.15f;
+
+    const float up = saturate(worldDir.y);
+    const float3 overcast = deck * (0.55f + 0.90f * up);
+
+    // Above the horizon only: there is no deck underground, and blending into the void
+    // colour would put a grey band along the bottom of the sky.
+    const float aboveHorizon = smoothstep(-0.05f, 0.10f, worldDir.y);
+    return lerp(sky, overcast, saturate(coverage) * aboveHorizon);
+}
+
 float3 SkyGradient(
     float3 worldDir,
     float3 sunDir,
@@ -159,14 +192,18 @@ float3 SkyGradient(
     float3 horizonColor,
     float3 zenithColor,
     float3 voidColor,
-    float4 skyParams)
+    float4 skyParams,
+    float  cloudCoverage)
 {
     // One entry point, so the skybox, the image-based ambient and the fog colour all
     // move together the moment a scene switches model. They read the same sky by
     // construction rather than by three call sites being kept in agreement.
     if (skyParams.x > 0.5f)
     {
-        return PhysicalSky(worldDir, sunDir, sunColor, sunIntensity, skyParams.y, voidColor);
+        return ApplyOvercast(
+            PhysicalSky(worldDir, sunDir, sunColor, sunIntensity, skyParams.y, voidColor),
+            worldDir,
+            cloudCoverage);
     }
 
     const float sunAltitude = saturate(sunDir.y);
@@ -190,6 +227,8 @@ float3 SkyGradient(
     // Daytime cyan lift around mid-elevations to keep noon sky lively.
     const float midBand = saturate(1.0f - abs(t * 2.0f - 1.0f) * 1.35f);
     sky += float3(0.0f, 0.018f, 0.055f) * midBand * dayAmount;
+
+    sky = ApplyOvercast(sky, worldDir, cloudCoverage);
 
     // Below the horizon: darken gently to avoid a sharp cutoff.
     const float belowHorizon = saturate(-worldDir.y * 2.0f);
@@ -289,7 +328,15 @@ float CloudSunVisibility(float3 worldPos, float3 sunDir, float coverage, float s
     const float density = CloudDensityAt(uv, coverage) * grazeFade;
     // Never fully dark: a cloud shadow is a dimming, not an occlusion - the sky still lights
     // the ground underneath it, and that is what the ambient term already provides.
-    return 1.0f - density * 0.75f;
+    const float patterned = 1.0f - density * 0.75f;
+
+    // A broken deck casts distinct shadows, because there are gaps for a beam to come
+    // through and the shape of the layer is what you see on the ground. A closed one does
+    // not: there is no beam left anywhere, so it stops being a pattern and becomes uniform
+    // dimming. Without this the sun still carves the same hard lit/unlit split across every
+    // object at full overcast, which is the one thing an overcast sky does not do.
+    const float closure = smoothstep(0.62f, 1.0f, coverage);
+    return lerp(patterned, 0.15f, closure);
 }
 
 // A cloud layer over the visible sky.
@@ -377,9 +424,10 @@ float3 EvalSky(
     float3 horizonColor,
     float3 zenithColor,
     float3 voidColor,
-    float4 skyParams)
+    float4 skyParams,
+    float  cloudCoverage)
 {
-    float3 sky = SkyGradient(worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams);
+    float3 sky = SkyGradient(worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor, voidColor, skyParams, cloudCoverage);
 
     const float sunAltitude = saturate(sunDir.y);
     const float nightAmount = 1.0f - smoothstep(-0.10f, 0.25f, sunDir.y);

@@ -150,7 +150,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
 	// Both scattering terms are constant along the ray - the view direction does not
 	// change - so they are evaluated once and only the shadow varies per step.
-	const float3 ambientScatter = SkyGradient(rayDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
+	const float3 ambientScatter = SkyGradient(rayDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y);
 
 	const float g = clamp(fc->skyParams.w, 0.0f, 0.95f);
 	const float cosTheta = dot(rayDir, sunDir);

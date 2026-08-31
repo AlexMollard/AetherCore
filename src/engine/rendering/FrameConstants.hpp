@@ -60,7 +60,8 @@ namespace aether
 		glm::vec4 fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 
 		// x = 1 when the sky is the scattering model rather than the authored gradient,
-		// y = turbidity. z, w spare.
+		// y = turbidity, z = volumetric fog strength (0 leaves the analytic fog to do the
+		// job), w = the Mie asymmetry the volumetric march scatters with.
 		glm::vec4 skyParams{0.0f, 2.5f, 0.0f, 0.0f};
 
 		// Last frame's viewProj, so a pass can reproject a pixel and learn how far it moved

@@ -106,10 +106,12 @@ float4 fragmentMain(VSOut input) : SV_Target0
         horizonColor,
         zenithColor,
         voidColor,
-        fc->skyParams);
+        fc->skyParams,
+        fc->shadingParams.y);
 
-    // Clouds are applied to the visible sky only - never to SkyGradient, which is what every
-    // surface samples for its ambient.
+    // The cloud SHAPES are drawn on the visible sky only. Their aggregate effect on the
+    // sky's radiance already went through SkyGradient above, so it also reaches the ambient,
+    // the fog and the reflections - which is the half that changes how the scene is lit.
     sky = ApplySkyClouds(sky, worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor,
                          fc->cameraWorldPos.xyz, fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime);
 
