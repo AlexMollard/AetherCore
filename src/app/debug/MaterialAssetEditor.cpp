@@ -137,9 +137,23 @@ namespace aether::editor
 			}
 			else
 			{
-				state.spec = MaterialSerializer::Parse(assetPath, *text);
-				state.saved = state.spec;
-				state.loaded = true;
+				// A file that does not parse yields a DEFAULT spec, and saving that back is
+				// exactly the "unreadable material into an overwritten one" this guard exists
+				// to prevent - the read check above only caught a file that could not be read
+				// at all.
+				bool parsed = false;
+				state.spec = MaterialSerializer::Parse(assetPath, *text, &parsed);
+				if (!parsed)
+				{
+					state.error = "This material is not readable TOML, so editing it here would overwrite it with defaults. Fix the file first.";
+					state.spec = {};
+					state.loaded = false;
+				}
+				else
+				{
+					state.saved = state.spec;
+					state.loaded = true;
+				}
 			}
 		}
 
@@ -330,7 +344,7 @@ namespace aether::editor
 		// Written only when asked. Saving on every mouse-up rewrites the asset - and with it
 		// every object linked to the asset - for a slider you were only auditioning, and
 		// there is no undo for a file.
-		ImGui::BeginDisabled(!state.dirty);
+		ImGui::BeginDisabled(!state.dirty || !state.loaded);
 		if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save"))
 		{
 			if (auto written = io::FileSystem::WriteFileText(assetPath, MaterialSerializer::ToToml(state.spec)); !written)

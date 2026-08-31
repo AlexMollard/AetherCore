@@ -975,7 +975,17 @@ namespace aether::editor
 			m_edit.error = "Could not read this material.";
 			return;
 		}
-		m_edit.spec = MaterialSerializer::Parse(materialPath, *text);
+		// Not loaded when it does not parse: Parse hands back a DEFAULT spec, and WriteMaterial
+		// would then save those defaults over the user's material.
+		bool parsed = false;
+		m_edit.spec = MaterialSerializer::Parse(materialPath, *text, &parsed);
+		if (!parsed)
+		{
+			m_edit.error = "This material is not readable TOML; fix the file before editing its graph.";
+			m_edit.spec = {};
+			m_edit.loaded = false;
+			return;
+		}
 		m_edit.loaded = true;
 
 		// A graph that still lives in the old sidecar is folded into the material and the

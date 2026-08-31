@@ -63,12 +63,12 @@ namespace aether
 		}
 	} // namespace
 
-	MaterialPresetSpec Parse(std::string_view path, const std::string& text)
+	MaterialPresetSpec Parse(std::string_view path, const std::string& text, bool* ok)
 	{
 		MaterialPresetSpec spec;
 		spec.graphSection = ExtractGraphSection(text);
 
-		text::ParseToml(text,
+		const bool parsed = text::ParseToml(text,
 		        [&spec, path](const text::IniEntry& entry)
 		        {
 			        if (entry.fullKey == "material.basecolorfactor" || entry.fullKey == "basecolorfactor")
@@ -192,6 +192,10 @@ namespace aether
 			        }
 		        });
 
+		if (ok != nullptr)
+		{
+			*ok = parsed;
+		}
 		return spec;
 	}
 

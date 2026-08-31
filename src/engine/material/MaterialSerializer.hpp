@@ -47,7 +47,11 @@ namespace aether
 	namespace MaterialSerializer
 	{
 		// `path` is the material's own VFS path, used to resolve relative texture references.
-		[[nodiscard]] MaterialPresetSpec Parse(std::string_view path, const std::string& text);
+		// `ok` reports whether the text parsed. A malformed file yields a DEFAULT spec, and
+		// writing that back over the user's material destroys it - so anything that may save
+		// must refuse when this is false. (Scenes learned the same lesson: never save over a
+		// file that did not parse.)
+		[[nodiscard]] MaterialPresetSpec Parse(std::string_view path, const std::string& text, bool* ok = nullptr);
 
 		[[nodiscard]] std::string ToToml(const MaterialPresetSpec& spec);
 
