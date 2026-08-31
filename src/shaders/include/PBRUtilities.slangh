@@ -93,8 +93,22 @@ void AccumulateLocalLight(
     float dist = sqrt(max(dist2, 1e-8));
     float3 L = toLight / max(dist, 1e-4);
 
-    float rangeAtten = saturate(1.0 - (dist / light.radius));
-    rangeAtten *= rangeAtten;
+    // Physical inverse-square falloff, windowed so it still reaches exactly zero at the
+    // light's radius. A bare 1/d^2 never reaches zero, and a light that never ends cannot be
+    // culled or bounded; the window is what keeps the radius meaningful.
+    //
+    // This replaced a bare (1 - d/r)^2 window carrying NO distance term at all - dist2 was
+    // computed right above and never used. A lamp was very nearly as bright eight metres away
+    // as at two (measured 103 -> 92 where inverse-square gives 103 -> 6), so distance barely
+    // entered into how a scene was lit and intensities could not be reasoned about at all.
+    //
+    // Authoring note: an intensity tuned against the old curve reads far dimmer away from the
+    // light now. Scale an old value by roughly the square of the distance it was tuned at.
+    const float kMinDist2 = 0.01f; // 10 cm, so a surface touching the light does not blow up
+    const float radius2 = light.radius * light.radius;
+    float window = saturate(1.0 - (dist2 * dist2) / max(radius2 * radius2, 1e-6));
+    window *= window;
+    float rangeAtten = window / max(dist2, kMinDist2);
     if (rangeAtten <= 1e-5)
     {
         return;
