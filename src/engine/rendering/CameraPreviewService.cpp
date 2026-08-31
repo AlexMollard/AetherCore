@@ -94,7 +94,7 @@ namespace aether
 		m_queue.Clear(drawSlot);
 		if (m_enabled.load(std::memory_order_relaxed))
 		{
-			WorldRenderer::Flush(world, m_queue, /*shadowPass*/ false);
+			WorldRenderer::Flush(world, m_queue, m_reqCameraPos, /*shadowPass*/ false);
 		}
 	}
 

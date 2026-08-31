@@ -1009,7 +1009,10 @@ namespace aether
 		renderQueue.SetWriteSlot(drawSlot);
 		if (!collisionOnly)
 		{
-			WorldRenderer::Flush(world, renderQueue);
+			// The eye transparent geometry is ordered against. No main camera means nothing is
+			// being viewed from anywhere in particular, and the ordering is moot.
+			const Camera* const mainCam = cameras.TryGetMainCamera();
+			WorldRenderer::Flush(world, renderQueue, mainCam ? mainCam->GetPosition() : glm::vec3(0.0f));
 		}
 
 		rttService.PrepareQueues(drawSlot, world);

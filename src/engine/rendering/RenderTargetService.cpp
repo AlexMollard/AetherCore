@@ -112,7 +112,10 @@ namespace aether
 		{
 			rt.renderQueue->SetWriteSlot(drawSlot);
 			rt.renderQueue->Clear(drawSlot);
-			WorldRenderer::Flush(world, *rt.renderQueue);
+			// Each target has its own camera, and transparent geometry has to be ordered
+			// against the eye that will actually see it rather than the main view's.
+			const Camera* const cam = (m_cameraManager != nullptr) ? m_cameraManager->TryGet(CameraHandle{rt.cameraHandleRaw}) : nullptr;
+			WorldRenderer::Flush(world, *rt.renderQueue, cam ? cam->GetPosition() : glm::vec3(0.0f));
 		}
 	}
 

@@ -221,7 +221,8 @@ namespace aether
 			m_shadowRenderQueue.DiscardPending(drawSlot);
 		}
 		m_shadowRenderQueue.Clear(drawSlot);
-		WorldRenderer::Flush(world, m_shadowRenderQueue, /*shadowPass*/ true);
+		// Depth only, so nothing blends and the transparent ordering cannot matter.
+		WorldRenderer::Flush(world, m_shadowRenderQueue, glm::vec3(0.0f), /*shadowPass*/ true);
 		const bool hasShadowCasters = !m_shadowRenderQueue.IsEmpty(drawSlot);
 		if (!m_atlasReady)
 		{

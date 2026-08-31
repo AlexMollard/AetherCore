@@ -51,8 +51,11 @@ namespace aether
 		const AnimationDatabase* animDb = nullptr;
 		std::uint32_t animDbGeneration = 0;
 		std::uint32_t meshGeneration = 0;
-		// Blended draws are ordered after every opaque one; see the sort in RenderQueue.cpp.
+		// Blended draws are ordered after every opaque one, and among themselves far to near;
+		// see the sort in RenderQueue.cpp. Squared distance from the eye, because ordering only
+		// needs the comparison and the square root would not change it.
 		bool blended = false;
+		float viewDepthSq = 0.0f;
 	};
 
 	struct RenderQueueConfig

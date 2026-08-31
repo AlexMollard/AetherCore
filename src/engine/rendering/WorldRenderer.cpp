@@ -26,7 +26,7 @@ namespace aether
 		}
 	} // namespace
 
-	void WorldRenderer::Flush(const World& world, RenderQueue& queue, bool shadowPass)
+	void WorldRenderer::Flush(const World& world, RenderQueue& queue, glm::vec3 eyeWorldPos, bool shadowPass)
 	{
 		AE_PROFILE_ZONE();
 		auto view = world.GetRegistry().view<const PipelineComponent, const MeshComponent, const TransformComponent>();
@@ -87,6 +87,8 @@ namespace aether
 				localSphere.w *= kSkinnedMeshSphereMargin;
 			}
 
+			const glm::vec4 worldSphere = TransformBoundingSphere(localSphere, transformComp.localToWorld);
+
 			queue.Submit({
 			        .pipeline = pipelineComp.pipeline,
 			        .mesh = meshComp.mesh,
@@ -97,11 +99,12 @@ namespace aether
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
-			        .worldBoundingSphere = TransformBoundingSphere(localSphere, transformComp.localToWorld),
+			        .worldBoundingSphere = worldSphere,
 			        .animDb = animDb,
 			        .animDbGeneration = animDb ? animDb->GetGeneration() : 0,
 			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,
 			        .blended = pipelineComp.blended,
+			        .viewDepthSq = glm::dot(glm::vec3(worldSphere) - eyeWorldPos, glm::vec3(worldSphere) - eyeWorldPos),
 			});
 		}
 	}

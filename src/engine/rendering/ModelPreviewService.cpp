@@ -267,7 +267,7 @@ namespace aether
 			m_camPos = eye;
 		}
 
-		WorldRenderer::Flush(m_world, m_queue, /*shadowPass*/ false);
+		WorldRenderer::Flush(m_world, m_queue, eye, /*shadowPass*/ false);
 	}
 
 	void ModelPreviewService::BuildFrameConstants(const FrameConstants& mainFc, const std::uint32_t frameIdx)

@@ -443,15 +443,17 @@ namespace aether
 			        {
 				        return !a.blended;
 			        }
+			        // Transparent surfaces composite in the order they are drawn, so two of
+			        // them overlapping only reads correctly if the far one goes down first.
+			        // Opaque geometry does not need this - the depth test resolves it however
+			        // it is ordered - and sorting it by depth would break the batching below,
+			        // so only the blended group pays for it.
+			        if (a.blended && a.viewDepthSq != b.viewDepthSq)
+			        {
+				        return a.viewDepthSq > b.viewDepthSq;
+			        }
 			        // Within each group the order stays by pipeline then mesh, which is what
 			        // keeps state changes down.
-			        //
-			        // Ceiling: blended draws are not sorted back-to-front among themselves,
-			        // so two overlapping transparent surfaces composite in submission order
-			        // rather than depth order. Correct for the common case of transparent
-			        // geometry over opaque; wrong where transparent surfaces overlap each
-			        // other. Sorting them properly needs the camera position, which this
-			        // queue is not given - add it here when overlapping transparency matters.
 			        if (a.pipeline != b.pipeline)
 			        {
 				        return a.pipeline < b.pipeline;
