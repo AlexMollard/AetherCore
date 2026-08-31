@@ -3,25 +3,32 @@
 #include <algorithm>
 #include <filesystem>
 #include <format>
+#include <vector>
 
 #include <imgui.h>
 #include <imnodes.h>
 
+#include "assets/AssetManager.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/EditorProjectManager.hpp"
+#include "editor/EditorProjectContext.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "editor/ShaderCompiler.hpp"
+#include "imgui/ImguiSubsystem.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "layers/AppLayer.hpp"
+#include "material/TextureRegistry.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
+#include "rendering/RenderingSubsystem.hpp"
+#include "scene/World.hpp"
 
 namespace aether::editor
 {
 	namespace
 	{
 		// ImNodes addresses pins by a flat integer id, so node and pin are packed into one.
-		// A stride of 16 leaves room for the four Output inputs plus an output pin, and keeps
+		// A stride of 16 leaves room for the five Output inputs plus an output pin, and keeps
 		// pin ids from aliasing onto node ids.
 		constexpr int kPinStride = 16;
 		constexpr int kOutputPinSlot = 8;
@@ -31,6 +38,24 @@ namespace aether::editor
 		int NodeOfPin(int pinId) { return pinId / kPinStride; }
 		bool IsOutputPin(int pinId) { return (pinId % kPinStride) == kOutputPinSlot; }
 		int PinIndex(int pinId) { return pinId % kPinStride; }
+
+		// Compiling runs slangc as a subprocess, so it waits for a pause rather than firing on
+		// every mouse-move of a slider.
+		constexpr float kAutoCompileIdleSeconds = 0.35f;
+
+		std::string GraphStem(const std::string& graphPath)
+		{
+			return std::filesystem::path(graphPath).stem().stem().generic_string();
+		}
+
+		// The material a graph drives. Written next to the graph so compiling produces
+		// something that can actually be dropped on an object, rather than an instruction to
+		// go and make one by hand.
+		std::string CompanionMaterialPath(const std::string& graphPath)
+		{
+			const std::filesystem::path p(graphPath);
+			return (p.parent_path() / (GraphStem(graphPath) + ".material.toml")).generic_string();
+		}
 	} // namespace
 
 	void MaterialGraphPanel::SyncLinks()
@@ -62,6 +87,43 @@ namespace aether::editor
 		}
 	}
 
+	void MaterialGraphPanel::DeleteSelection()
+	{
+		if (!ImGui::IsKeyPressed(ImGuiKey_Delete) && !ImGui::IsKeyPressed(ImGuiKey_X))
+		{
+			return;
+		}
+
+		if (const int count = ImNodes::NumSelectedLinks(); count > 0)
+		{
+			std::vector<int> selected(static_cast<std::size_t>(count));
+			ImNodes::GetSelectedLinks(selected.data());
+			std::erase_if(m_graph.links, [&](const MaterialLink& l) { return std::ranges::find(selected, l.id) != selected.end(); });
+			ImNodes::ClearLinkSelection();
+		}
+
+		if (const int count = ImNodes::NumSelectedNodes(); count > 0)
+		{
+			std::vector<int> selected(static_cast<std::size_t>(count));
+			ImNodes::GetSelectedNodes(selected.data());
+			// The Output node is the graph's reason to exist; deleting it would leave a graph
+			// that cannot generate anything, so it is kept whatever the selection says.
+			std::erase_if(selected, [&](int id)
+			        {
+				        const MaterialNode* node = m_graph.Find(id);
+				        return node == nullptr || node->type == MaterialNodeType::Output;
+			        });
+			std::erase_if(m_graph.nodes, [&](const MaterialNode& n) { return std::ranges::find(selected, n.id) != selected.end(); });
+			// Links to a removed node would otherwise dangle and re-emit on the next frame.
+			std::erase_if(m_graph.links, [&](const MaterialLink& l)
+			        {
+				        return std::ranges::find(selected, l.fromNode) != selected.end()
+				                || std::ranges::find(selected, l.toNode) != selected.end();
+			        });
+			ImNodes::ClearNodeSelection();
+		}
+	}
+
 	void MaterialGraphPanel::DrawCanvas()
 	{
 		ImNodes::BeginNodeEditor();
@@ -80,8 +142,7 @@ namespace aether::editor
 			ImGui::TextUnformatted(MaterialNodeTypeName(node.type));
 			ImNodes::EndNodeTitleBar();
 
-			const int inputs = MaterialNodeInputCount(node.type);
-			for (int pin = 0; pin < inputs; ++pin)
+			for (int pin = 0; pin < MaterialNodeInputCount(node.type); ++pin)
 			{
 				ImNodes::BeginInputAttribute(InputPinId(node.id, pin));
 				ImGui::TextUnformatted(MaterialNodeInputName(node.type, pin));
@@ -138,6 +199,7 @@ namespace aether::editor
 			ImNodes::Link(link.id, OutputPinId(link.fromNode), InputPinId(link.toNode, link.toPin));
 		}
 
+		ImNodes::MiniMap(0.18f, ImNodesMiniMapLocation_BottomRight);
 		ImNodes::EndNodeEditor();
 		m_positionsApplied = true;
 
@@ -149,22 +211,35 @@ namespace aether::editor
 		}
 
 		SyncLinks();
+		DeleteSelection();
+
+		// BeginPopupContextItem keys off the LAST submitted item, which after EndNodeEditor is
+		// whatever ImNodes drew last rather than the canvas - so the add menu never opened.
+		// Asking ImNodes whether the editor itself is hovered is the actual question.
+		if (ImNodes::IsEditorHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+		{
+			const ImVec2 mouse = ImGui::GetMousePos();
+			m_addNodeScreenX = mouse.x;
+			m_addNodeScreenY = mouse.y;
+			ImGui::OpenPopup("##addnode");
+		}
 	}
 
-	void MaterialGraphPanel::Compile(app::LayerContext& context)
+	bool MaterialGraphPanel::Compile(app::LayerContext& context)
 	{
-		auto* projects = context.TryGet<EditorProjectManager>();
-		if (projects == nullptr || !projects->CurrentProject().IsLoaded())
+		// EditorProjectContext is the registered service; EditorProjectManager is not, and
+		// asking for it returned null - which made every compile bail before doing anything,
+		// silently, because this branch used to report nothing.
+		const auto* project = context.TryGet<app::EditorProjectContext>();
+		if (project == nullptr || !project->IsLoaded())
 		{
-			m_status = "Open a project first.";
+			m_status = "No project is open, so there is nowhere to write the shader.";
 			m_statusIsError = true;
-			return;
+			return false;
 		}
-		if (m_path.empty())
+		if (m_graphPath.empty())
 		{
-			m_status = "Select a .materialgraph.toml in the File Explorer first.";
-			m_statusIsError = true;
-			return;
+			return false;
 		}
 
 		std::string error;
@@ -173,23 +248,17 @@ namespace aether::editor
 		{
 			m_status = error;
 			m_statusIsError = true;
-			return;
+			return false;
 		}
 
-		const std::filesystem::path root = projects->CurrentProject().root;
-		const std::string stem = std::filesystem::path(m_path).stem().stem().generic_string();
+		const std::filesystem::path root = project->root;
+		const std::string stem = GraphStem(m_graphPath);
 		const std::filesystem::path slangPath = root / "assets" / "shaders" / (stem + ".slang");
-		if (auto dirs = io::file_util::CreateDirectories(slangPath.parent_path()); !dirs)
-		{
-			m_status = "Could not create the shader folder.";
-			m_statusIsError = true;
-			return;
-		}
-		if (auto written = io::file_util::WriteText(slangPath, shader); !written)
+		if (!io::file_util::CreateDirectories(slangPath.parent_path()) || !io::file_util::WriteText(slangPath, shader))
 		{
 			m_status = "Could not write the generated shader.";
 			m_statusIsError = true;
-			return;
+			return false;
 		}
 
 		// The same compiler the project shaders go through, so a graph result is an ordinary
@@ -199,35 +268,155 @@ namespace aether::editor
 		{
 			m_status = compileError;
 			m_statusIsError = true;
+			return false;
+		}
+
+		// A material to carry the shader, written once and then left alone: the texture slots
+		// and factors on it are the author's, and recompiling a graph must not reset them.
+		const std::string materialPath = CompanionMaterialPath(m_graphPath);
+		MaterialPresetSpec spec;
+		if (auto existing = io::FileSystem::ReadFileText(materialPath))
+		{
+			spec = MaterialSerializer::Parse(materialPath, *existing);
+		}
+		spec.shaderVfsPath = std::format("shaders://{}.spv", stem);
+		if (auto written = io::FileSystem::WriteFileText(materialPath, MaterialSerializer::ToToml(spec)); !written)
+		{
+			m_status = "Compiled, but could not write the material beside the graph.";
+			m_statusIsError = true;
+			return false;
+		}
+
+		m_status = std::format("Compiled to {}.material.toml", stem);
+		m_statusIsError = false;
+		m_compiledSignature = SerializeMaterialGraph(m_graph);
+		RefreshPreview(context, materialPath);
+		return true;
+	}
+
+	void MaterialGraphPanel::RefreshPreview(app::LayerContext& context, const std::string& materialPath)
+	{
+		m_previewDirty = false;
+		m_previewImGuiId = 0;
+		m_previewError.clear();
+		m_previewMaterialPath = materialPath;
+
+		auto* assets = context.TryGet<AssetManager>();
+		auto* rendering = context.TryGet<RenderingSubsystem>();
+		auto* imgui = context.TryGet<ImguiSubsystem>();
+		auto* primitives = context.TryGet<PrimitiveMeshes>();
+		if (assets == nullptr || rendering == nullptr || imgui == nullptr || primitives == nullptr)
+		{
+			m_previewError = "Preview is unavailable in this build.";
 			return;
 		}
 
-		m_status = std::format("Compiled. Set a material shader to shaders://{}.spv", stem);
-		m_statusIsError = false;
+		auto loaded = assets->LoadMaterialPreset(materialPath);
+		if (!loaded)
+		{
+			m_previewError = "Could not load the material for preview.";
+			return;
+		}
+
+		std::string error;
+		if (!rendering->GetModelPreview().ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), *loaded, error))
+		{
+			m_previewError = error;
+		}
+		else
+		{
+			const ImTextureID id = imgui->RegisterTexture(rendering->GetModelPreview().GetColorView(), gpu::ImageLayout::ShaderReadOnly);
+			if (id != ImTextureID_Invalid)
+			{
+				m_previewImGuiId = static_cast<std::uint64_t>(id);
+			}
+		}
+
+		auto& textures = assets->GetTextureRegistry();
+		for (const TextureHandle h: {loaded->albedoTex, loaded->normalTex, loaded->metallicRoughnessTex, loaded->occlusionTex, loaded->emissiveTex})
+		{
+			if (h.IsValid())
+			{
+				textures.Release(h);
+			}
+		}
 	}
 
-	void MaterialGraphPanel::DrawToolbar(app::LayerContext& context)
+	void MaterialGraphPanel::DrawPreview(float side) const
+	{
+		if (m_previewImGuiId != 0)
+		{
+			ImGui::Image(static_cast<ImTextureID>(m_previewImGuiId), ImVec2(side, side));
+		}
+		else if (!m_previewError.empty())
+		{
+			ImGui::TextColored(chrome::kWarning, "%s", m_previewError.c_str());
+		}
+		else
+		{
+			ImGui::Dummy(ImVec2(side, side));
+		}
+	}
+
+	void MaterialGraphPanel::FollowSelection(app::LayerContext& context)
 	{
 		auto* selection = context.TryGet<SceneSelection>();
-		if (selection != nullptr && selection->HasAsset()
-		        && selection->SelectedAsset().path.ends_with(".materialgraph.toml")
-		        && selection->SelectedAsset().path != m_path)
+		if (selection == nullptr || !selection->HasAsset())
 		{
-			m_path = selection->SelectedAsset().path;
-			if (auto text = io::FileSystem::ReadFileText(m_path))
+			return;
+		}
+		const std::string& path = selection->SelectedAsset().path;
+
+		if (path.ends_with(".materialgraph.toml") && path != m_graphPath)
+		{
+			m_graphPath = path;
+			m_edit = MaterialAssetEditState{};
+			if (auto text = io::FileSystem::ReadFileText(path))
 			{
 				m_graph = ParseMaterialGraph(*text);
 			}
 			m_positionsApplied = false;
+			m_compiledSignature.clear();
 			m_status.clear();
+			// Show whatever the graph last compiled to, and otherwise show nothing rather
+			// than leaving the previous material's sphere on screen looking like this one.
+			if (io::FileSystem::Exists(CompanionMaterialPath(path)))
+			{
+				RefreshPreview(context, CompanionMaterialPath(path));
+			}
+			else
+			{
+				m_previewImGuiId = 0;
+				m_previewError.clear();
+				m_previewMaterialPath.clear();
+			}
+			return;
 		}
 
-		ImGui::TextDisabled("%s", m_path.empty() ? "no graph open" : std::filesystem::path(m_path).filename().generic_string().c_str());
+		// The material a graph generates must not knock its own graph out of the window.
+		// Compiling writes that file, so selecting it - or having the file explorer land on it
+		// after a refresh - otherwise turned the graph editor back into the property editor.
+		if (!m_graphPath.empty() && path == CompanionMaterialPath(m_graphPath))
+		{
+			return;
+		}
+
+		if (path.ends_with(".material.toml") && !path.ends_with(".materialgraph.toml") && path != m_edit.path)
+		{
+			m_graphPath.clear();
+			m_edit = MaterialAssetEditState{};
+			m_edit.path = path;
+			m_previewDirty = true;
+		}
+	}
+
+	void MaterialGraphPanel::DrawGraphMode(app::LayerContext& context)
+	{
+		ImGui::TextDisabled("%s", std::filesystem::path(m_graphPath).filename().generic_string().c_str());
 		ImGui::SameLine();
-		ImGui::BeginDisabled(m_path.empty());
 		if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save"))
 		{
-			if (auto written = io::FileSystem::WriteFileText(m_path, SerializeMaterialGraph(m_graph)); !written)
+			if (auto written = io::FileSystem::WriteFileText(m_graphPath, SerializeMaterialGraph(m_graph)); !written)
 			{
 				m_status = "Could not write the graph.";
 				m_statusIsError = true;
@@ -243,23 +432,30 @@ namespace aether::editor
 		{
 			Compile(context);
 		}
-		ImGui::EndDisabled();
 		ImGui::SameLine();
-		ImGui::TextDisabled("right-click the canvas to add a node");
+		ImGui::Checkbox("Auto", &m_autoCompile);
+		ImGui::SetItemTooltip("Recompile shortly after the graph stops changing");
+		ImGui::SameLine();
+		ImGui::TextDisabled("right-click to add  |  Del removes");
+		ImGui::SameLine();
+		ImGui::TextDisabled("-> %s", std::filesystem::path(CompanionMaterialPath(m_graphPath)).filename().generic_string().c_str());
+		ImGui::SetItemTooltip("The material this graph writes. Drop it on an object to use the graph.");
 
 		if (!m_status.empty())
 		{
 			ImGui::TextColored(m_statusIsError ? chrome::kWarning : chrome::kSuccess, "%s", m_status.c_str());
 		}
-	}
 
-	void MaterialGraphPanel::OnImGui(app::LayerContext& context)
-	{
-		ImGui::Begin("Material Graph", VisiblePtr());
-		DrawToolbar(context);
+		// The preview sits beside the canvas rather than above it: a node graph wants the
+		// height, and the whole point is watching the sphere while wiring.
+		const float previewSide = std::min(220.0f, ImGui::GetContentRegionAvail().x * 0.35f);
+		DrawPreview(previewSide);
+		ImGui::SameLine();
+
+		ImGui::BeginChild("##canvas", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
 		DrawCanvas();
 
-		if (ImGui::BeginPopupContextItem("##addnode"))
+		if (ImGui::BeginPopup("##addnode"))
 		{
 			const MaterialNodeType addable[] = {
 			        MaterialNodeType::ConstantColor, MaterialNodeType::ConstantFloat, MaterialNodeType::TextureSample,
@@ -287,13 +483,72 @@ namespace aether::editor
 					{
 						node.slot = MaterialTextureSlot::Normal;
 					}
-					ImNodes::SetNodeGridSpacePos(node.id, ImVec2(node.x, node.y));
+					// Placed where the menu was opened; the grid-space position is written
+					// back by the canvas loop on the next frame.
+					ImNodes::SetNodeScreenSpacePos(node.id, ImVec2(m_addNodeScreenX, m_addNodeScreenY));
 					m_graph.nodes.push_back(node);
 				}
 			}
 			ImGui::EndPopup();
 		}
+		ImGui::EndChild();
 
+		// Compiling shells out to slangc, so it waits for the graph to settle. Comparing the
+		// serialised graph is what makes "changed" mean changed rather than "a frame passed".
+		if (m_autoCompile)
+		{
+			const std::string signature = SerializeMaterialGraph(m_graph);
+			if (signature != m_compiledSignature)
+			{
+				m_idleSeconds += ImGui::GetIO().DeltaTime;
+				if (m_idleSeconds >= kAutoCompileIdleSeconds && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				{
+					m_idleSeconds = 0.0f;
+					Compile(context);
+				}
+			}
+			else
+			{
+				m_idleSeconds = 0.0f;
+			}
+		}
+	}
+
+	void MaterialGraphPanel::OnImGui(app::LayerContext& context)
+	{
+		ImGui::Begin("Material", VisiblePtr());
+		FollowSelection(context);
+
+		if (!m_graphPath.empty())
+		{
+			DrawGraphMode(context);
+			ImGui::End();
+			return;
+		}
+
+		if (m_edit.path.empty())
+		{
+			ImGui::TextDisabled("Nothing open.");
+			ImGui::TextDisabled("Select a .material.toml or a .materialgraph.toml in the File Explorer.");
+			ImGui::End();
+			return;
+		}
+
+		ImGui::TextUnformatted(std::filesystem::path(m_edit.path).filename().generic_string().c_str());
+		ImGui::SetItemTooltip("%s", m_edit.path.c_str());
+		ImGui::Separator();
+
+		// The preview follows the values being edited, so it has to be rebuilt whenever they
+		// differ from what it was last built with rather than only when the file is written.
+		if (m_previewDirty || m_previewMaterialPath != m_edit.path || !MaterialSpecEquals(m_edit.spec, m_previewSpec))
+		{
+			RefreshPreview(context, m_edit.path);
+			m_previewSpec = m_edit.spec;
+		}
+		DrawPreview(std::min(220.0f, ImGui::GetContentRegionAvail().x));
+		ImGui::Separator();
+
+		DrawMaterialAssetEditor(context, context.Get<World>(), m_edit.path, m_edit);
 		ImGui::End();
 	}
 } // namespace aether::editor

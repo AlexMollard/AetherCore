@@ -280,7 +280,7 @@ namespace aether::editor
 			}
 		}
 
-		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection, MaterialAssetEditState& editState)
+		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection)
 		{
 			const SceneSelection::Asset& asset = selection.SelectedAsset();
 			const Entity target = selection.LastEntityPrimary();
@@ -349,17 +349,10 @@ namespace aether::editor
 				{
 					ImGui::SetItemTooltip("Select an entity to apply this material to it");
 				}
-				ImGui::SeparatorText("Material");
-				if (asset.path.ends_with(".material"))
-				{
-					// The importer's cooked binary. Editing it would be overwritten by the
-					// next model import, and it has no authored source to edit instead.
-					ImGui::TextDisabled("Imported with a model - not editable here.");
-				}
-				else
-				{
-					DrawMaterialAssetEditor(context, world, asset.path, editState);
-				}
+				// Editing lives in the Material window and nowhere else. Two surfaces that
+				// both edited a material meant which one you happened to be looking at decided
+				// what you saw, and a graph opened as a property list about half the time.
+				ImGui::TextDisabled("Edit this in the Material window.");
 			}
 			else if (asset.kind == SceneSelection::AssetKind::Texture)
 			{
@@ -407,8 +400,7 @@ namespace aether::editor
 		// material selected, and was the reason a material looked like it had no UI at all.
 		if (selection.HasAsset())
 		{
-			DrawAssetInspector(context, world, selection,
-			        m_materialEdit);
+			DrawAssetInspector(context, world, selection);
 			ImGui::End();
 			return;
 		}

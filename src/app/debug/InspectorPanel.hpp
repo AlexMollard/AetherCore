@@ -3,7 +3,6 @@
 #include <string_view>
 
 #include "debug/DebugPanel.hpp"
-#include "debug/MaterialAssetEditor.hpp"
 #include "scene/Entity.hpp"
 
 namespace aether
@@ -36,7 +35,5 @@ namespace aether::editor
 		bool m_addFocusPending = false;
 		char m_addTagBuf[48] = {};
 
-		// The material asset currently open for editing, if the selection is one.
-		MaterialAssetEditState m_materialEdit;
 	};
 } // namespace aether::editor

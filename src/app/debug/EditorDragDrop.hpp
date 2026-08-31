@@ -15,6 +15,7 @@ namespace aether::editor::dragdrop
 		Unknown,
 		Model,
 		Material,
+		MaterialGraph,
 		Texture,
 		Script,
 		Prefab,
@@ -64,6 +65,13 @@ namespace aether::editor::dragdrop
 		if (ext == ".toml")
 		{
 			const std::string generic = path.generic_string();
+			// A material GRAPH is not a material: it generates one. Checked before the
+			// material suffix and before the folder heuristic below, or the Inspector renders
+			// a graph file as a set of material properties and parses a graph as a material.
+			if (generic.contains(".materialgraph.toml"))
+			{
+				return FileKind::MaterialGraph;
+			}
 			if (generic.contains(".material.toml"))
 			{
 				return FileKind::Material;
