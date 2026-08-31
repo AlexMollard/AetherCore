@@ -317,10 +317,16 @@ float3 ApplySkyClouds(
     const float rim = saturate(lightAmount - density) * lowSun;
     cloudColor += sunColor * min(sunIntensity, 4.0f) * 0.22f * rim;
 
+    // EvalSky darkens the whole vault at night, and this runs after it - so without the same
+    // factor the clouds keep their daylight brightness and glow against a near-black sky.
+    // Same expression as EvalSky's nightAmount, deliberately: they have to agree.
+    const float nightAmount = 1.0f - smoothstep(-0.10f, 0.25f, sunDir.y);
+    cloudColor *= lerp(1.0f, 0.18f, nightAmount);
+
     // Thin cloud is translucent, so it keeps some of the sky behind it; only the cores go
     // fully opaque. Horizon haze also washes the layer out as it recedes.
     const float horizonFade = smoothstep(0.02f, 0.22f, worldDir.y);
-    cloudColor = lerp(horizonColor * 0.85f, cloudColor, horizonFade);
+    cloudColor = lerp(horizonColor * 0.85f * lerp(1.0f, 0.18f, nightAmount), cloudColor, horizonFade);
     const float alpha = density * horizonFade;
 
     return lerp(sky, cloudColor, alpha);
