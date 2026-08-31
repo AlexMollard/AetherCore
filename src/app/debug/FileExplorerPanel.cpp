@@ -575,6 +575,83 @@ namespace aether::editor
 		m_renameFocusPending = true;
 	}
 
+	int FileExplorerPanel::RetargetAssetReferences(const std::filesystem::path& oldPath, const std::filesystem::path& newPath)
+	{
+		// Scenes, prefabs and materials refer to assets by "project://" string. Renaming only
+		// the file left all of them pointing at nothing: the scene still loaded, but an entity
+		// inheriting from the asset fell back to defaults with only a log line to say so.
+		std::error_code ec;
+		const std::filesystem::path oldRel = std::filesystem::relative(oldPath, m_root, ec);
+		const std::filesystem::path newRel = std::filesystem::relative(newPath, m_root, ec);
+		if (ec || oldRel.empty() || newRel.empty())
+		{
+			return 0;
+		}
+		const std::string oldVfs = "project://" + oldRel.generic_string();
+		const std::string newVfs = "project://" + newRel.generic_string();
+		if (oldVfs == newVfs)
+		{
+			return 0;
+		}
+
+		int rewritten = 0;
+		for (const auto& entry: std::filesystem::recursive_directory_iterator(m_root, ec))
+		{
+			if (ec)
+			{
+				break;
+			}
+			if (!entry.is_regular_file(ec) || entry.path().extension() != ".toml")
+			{
+				continue;
+			}
+			const auto text = io::file_util::ReadText(entry.path());
+			if (!text)
+			{
+				continue;
+			}
+			std::string updated = *text;
+			bool changed = false;
+			for (std::size_t at = updated.find(oldVfs); at != std::string::npos; at = updated.find(oldVfs, at + newVfs.size()))
+			{
+				// Only a whole quoted path: without this, renaming "Rock" would also rewrite a
+				// reference to "Rock_Wet" that merely starts with the same text.
+				const std::size_t after = at + oldVfs.size();
+				if (after >= updated.size() || (updated[after] != '\'' && updated[after] != '"'))
+				{
+					continue;
+				}
+				updated.replace(at, oldVfs.size(), newVfs);
+				changed = true;
+			}
+			if (!changed || !io::file_util::WriteText(entry.path(), updated))
+			{
+				continue;
+			}
+			++rewritten;
+			// The cooked sibling still holds the old path and is preferred over the .toml, so
+			// leaving it behind would undo the rewrite on the next load.
+			for (const std::string_view cooked: {".scene.bin", ".prefab.bin"})
+			{
+				const std::string name = entry.path().filename().generic_string();
+				const std::string_view suffix = cooked == ".scene.bin" ? ".scene.toml" : ".prefab.toml";
+				if (!name.ends_with(suffix))
+				{
+					continue;
+				}
+				std::filesystem::path bin = entry.path();
+				bin.replace_filename(name.substr(0, name.size() - suffix.size()) + std::string(cooked));
+				std::error_code removeEc;
+				std::filesystem::remove(bin, removeEc);
+			}
+		}
+		if (rewritten > 0)
+		{
+			AE_INFO(LogCategory::App, "Renamed '{}' -> '{}'; updated references in {} file(s).", oldVfs, newVfs, rewritten);
+		}
+		return rewritten;
+	}
+
 	bool FileExplorerPanel::ApplyRename(const std::filesystem::path& target, std::string_view newName)
 	{
 		const std::string trimmed = TrimCopy(newName);
@@ -600,6 +677,9 @@ namespace aether::editor
 			m_opError = "Rename failed (" + ec.message() + ").";
 			return false;
 		}
+		// After the move, so a failed rename cannot leave references pointing at a file that
+		// was never renamed.
+		RetargetAssetReferences(target, newPath);
 		m_opError.clear();
 		m_selectedPath = ToUtf8Path(newPath);
 		m_treeDirty = true;

@@ -62,6 +62,9 @@ namespace aether::editor
 
 		void BeginRename(const Entry& entry);
 		bool ApplyRename(const std::filesystem::path& target, std::string_view newName);
+		// Point every scene / prefab / material that referenced a renamed asset at its new
+		// path. Returns how many files were rewritten.
+		int RetargetAssetReferences(const std::filesystem::path& oldPath, const std::filesystem::path& newPath);
 		bool DuplicateEntry(const std::filesystem::path& target);
 		bool DeleteEntry(const std::filesystem::path& target, bool isDirectory);
 
