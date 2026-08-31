@@ -78,7 +78,9 @@ struct PrepassOutput
 PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
 {
 	float3 worldPos;
-	const float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos);
+	float2 depthUv;
+	uint depthMaterialIndex;
+	const float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, depthUv, depthMaterialIndex);
 
 	FrameConstantsData* fc = pc.frame.Ptr();
 	const DrawInstanceData instance = pc.instanceData.Load(startInstance);

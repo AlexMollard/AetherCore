@@ -1,0 +1,44 @@
+#ifndef AETHER_SHADOW_ALPHA_TEST_SLANGH
+#define AETHER_SHADOW_ALPHA_TEST_SLANGH
+
+// Kept out of DepthVertex.slangh on purpose: this samples through the bindless heap, and not
+// every depth pass has one bound. A pass that includes this must declare g_textures and
+// g_linearSampler at set 0, and its pipeline must carry the descriptor heap mappings.
+
+// A cutout material's shadow has to be cut out too. The depth passes were depth-only with an
+// empty fragment shader, so a leaf card, a grate or a fence cast the shadow of the quad it is
+// painted on rather than of the shape you can see - and a fully masked-out surface, invisible
+// in the forward pass, still cast a solid shadow.
+//
+// Requires the bindless heap (g_textures, g_linearSampler) to be declared by the caller.
+// Ceiling: every shadow pixel loads its material to find out whether it needs testing at all,
+// because the shadow pass draws everything through one override pipeline and so cannot select
+// a cheaper shader per material. Measured at +0.012 ms across three cascades on a small scene
+// - if a heavy one shows this in a profile, the fix is to split casters into alpha-tested and
+// opaque draw lists with a pipeline each, not to make the test cheaper.
+void ShadowAlphaDiscard(uint materialIndex, float2 uv)
+{
+    if (materialIndex == kNoTexture)
+    {
+        return;
+    }
+    FrameConstantsData* fc = pc.frame.Ptr();
+    GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
+    const GpuMaterial mat = materials[materialIndex];
+    if ((mat.flags & kFlagAlphaMask) == 0u)
+    {
+        return;
+    }
+    float alpha = mat.baseColorFactor.a;
+    if (mat.albedoSlot != kNoTexture)
+    {
+        alpha *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv).a;
+    }
+    if (alpha < mat.alphaCutoff)
+    {
+        discard;
+    }
+}
+
+
+#endif

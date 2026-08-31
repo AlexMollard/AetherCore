@@ -23,11 +23,15 @@
 DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
 {
     float3 worldPos;
-    float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos);
+    float2 uv;
+    uint materialIndex;
+    float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, uv, materialIndex);
 
     DepthVSOutputWithWorldPos o;
     o.svPosition = clipPos;
     o.worldPos   = worldPos;
+    o.uv = uv;
+    o.materialIndex = materialIndex;
     return o;
 }
 

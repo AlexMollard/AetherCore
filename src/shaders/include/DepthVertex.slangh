@@ -10,24 +10,31 @@
 struct DepthVSOutput
 {
     float4 svPosition : SV_Position;
+    float2 uv         : TEXCOORD0;
+    nointerpolation uint materialIndex : TEXCOORD1;
 };
 
 struct DepthVSOutputWithWorldPos
 {
     float4 svPosition : SV_Position;
     float3 worldPos   : TEXCOORD0;
+    float2 uv         : TEXCOORD1;
+    nointerpolation uint materialIndex : TEXCOORD2;
 };
 
 // Shared vertex transform for depth-only and VSM shadow passes.
 // Computes skinned world-space position and its clip-space transform.
 // Returns clip-space position; worldPos is an output parameter.
-float4 DepthVertexTransform(uint vertexId, uint instanceIndex, out float3 worldPos)
+float4 DepthVertexTransform(uint vertexId, uint instanceIndex, out float3 worldPos, out float2 uv, out uint materialIndex)
 {
     FrameConstantsData* fc = pc.frame.Ptr();
     DrawInstanceData instance = pc.instanceData.Load(instanceIndex);
 
     Vertex* verts = (Vertex*)(instance.vertexBufferAddr);
     Vertex input = verts[vertexId];
+
+    uv = input.uv;
+    materialIndex = instance.materialIndex;
 
     float4 wPos;
     if (pc.skinPalette.addr != 0uL && instance.skinJointCount > 0u)

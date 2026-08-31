@@ -167,6 +167,9 @@ namespace aether
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		                        .debugName = "ShadowService.Depth",
+		                        // The caster's alpha test samples the albedo through the bindless
+		                        // heap, so this pipeline needs the same mappings the forward one has.
+		                        .descriptorHeapMappings = m_bindless != nullptr ? m_bindless->GetDescriptorHeapMappings() : nullptr,
 		                }));
 		m_shadowPipeline = std::move(shadowPipeline);
 	}
@@ -280,6 +283,12 @@ namespace aether
 				                }
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
 				                gpu::CommandList cmd = ctx.recorder.View();
+				                // The caster's alpha test reads the albedo through the heap, so it has
+				                // to be bound here as it is for every other pass that samples a texture.
+				                if (m_bindless != nullptr)
+				                {
+					                m_bindless->CmdBindGlobalResources(cmd);
+				                }
 				                m_shadowRenderQueue.FlushDraw(cmd, ctx.frameSlot, nullptr, &m_shadowPipeline, cascadeOffset);
 			                });
 		}
