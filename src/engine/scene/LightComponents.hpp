@@ -80,6 +80,12 @@ namespace aether
 		// Ceiling on fog opacity, so the far plane never becomes a flat wall of colour.
 		float fogMaxOpacity{0.9f};
 
+		// Cloud cover over the visible sky. Weather sits with the rest of the atmosphere
+		// rather than in graphics settings: one game holds a clear level and an overcast
+		// one. Coverage 0 costs nothing - the shader returns before sampling any noise.
+		float cloudCoverage{0.0f};
+		float cloudSpeed{0.02f};
+
 		// Swap the authored horizon-to-zenith gradient for single-scattering atmosphere.
 		// Off by default: the gradient is what every existing scene was authored
 		// against, and turning this on globally would restyle all of them.

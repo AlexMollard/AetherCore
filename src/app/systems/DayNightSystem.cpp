@@ -138,6 +138,7 @@ namespace aether::app
 			m_renderer->SetSkyVoidColor(sky.groundColor);
 			m_renderer->SetAmbientLight(sky.ambientColor);
 			m_renderer->SetFogParams({sky.fogDensity, sky.fogHeightFalloff, sky.fogSunScatter, sky.fogMaxOpacity});
+			m_renderer->SetClouds(sky.cloudCoverage, sky.cloudSpeed);
 			// z carries volumetric strength and doubles as the enable - zero means the
 			// analytic fog keeps the job. w is the Mie asymmetry the march scatters with.
 			m_renderer->SetSkyParams({sky.physicalSky ? 1.0f : 0.0f,
