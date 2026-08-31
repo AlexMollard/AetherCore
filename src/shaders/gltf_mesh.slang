@@ -286,7 +286,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float contact = (fc->shadowParams.w > 0.0f && receivesShadows)
         ? ContactShadow(input.worldPos, Ngeom, L, fc, input.svPosition.xy)
         : 1.0f;
-    const float sunVisibility = receivesShadows ? min(shadow, contact) : 1.0f;
+    // Cloud shadow, from the same layer the sky draws. Combined by min for the same reason
+    // the contact term is: either occluder blocking the sun is enough.
+    const float cloudShadow = receivesShadows
+        ? CloudSunVisibility(input.worldPos, L, fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime)
+        : 1.0f;
+    const float sunVisibility = receivesShadows ? min(min(shadow, contact), cloudShadow) : 1.0f;
 
     // The 0.08 floor exists so a shadowed surface does not read as a black hole, and
     // that is a DIFFUSE concern - it stands in for bounce light the renderer does not

@@ -111,7 +111,7 @@ float4 fragmentMain(VSOut input) : SV_Target0
     // Clouds are applied to the visible sky only - never to SkyGradient, which is what every
     // surface samples for its ambient.
     sky = ApplySkyClouds(sky, worldDir, sunDir, sunColor, sunIntensity, horizonColor, zenithColor,
-                         fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime);
+                         fc->cameraWorldPos.xyz, fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime);
 
     // Tiny dither helps hide residual daytime gradient quantization.
     const float dayAmount = saturate(sunDir.y * 0.5f + 0.5f);

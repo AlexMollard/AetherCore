@@ -232,6 +232,61 @@ float CloudFbm(float2 p)
     return sum;
 }
 
+// The cloud layer lives at a fixed world altitude, and both the sky and the ground sample it
+// through the same two helpers. Anchoring it in WORLD space rather than to the view direction
+// is what lets a shadow on the ground line up with the cloud the camera can see - and it also
+// gives the layer proper parallax as the camera moves.
+static const float kCloudAltitude = 140.0f;
+// Cells per world unit. Sized so several cells span the visible sky from a normal camera
+// height - the layer is 140 units up, so the ray crosses it a few hundred units out, and a
+// scale an order of magnitude smaller put the whole sky inside a single cell.
+static const float kCloudScale = 0.012f;
+
+// Where a ray from `origin` along `dir` crosses the cloud plane, as the noise coordinate for
+// that point. `dir.y` is expected positive (upward).
+float2 CloudPlaneUv(float3 origin, float3 dir, float time, float speed)
+{
+    // The offset caps the stretch as the ray flattens toward the horizon. A min() would cap it
+    // too, but it puts a corner in the derivative at one exact altitude, which draws a hard
+    // horizontal seam right across the sky.
+    const float travel = (kCloudAltitude - origin.y) / (max(dir.y, 0.0f) + 0.07f);
+    const float2 hit = origin.xz + dir.xz * travel;
+    const float wrapped = fmod(time * speed, 4096.0f);
+    return hit * kCloudScale + float2(wrapped, wrapped * 0.6f);
+}
+
+// How much cloud sits at that coordinate, 0..1. Shared so the shadow on the ground and the
+// cloud in the sky can never disagree about where the cloud is.
+float CloudDensityAt(float2 uv, float coverage)
+{
+    // Continuous, not a threshold: a hard cut is what makes a cloud look like a slab of grey
+    // card. Coverage lowers the threshold so cloud grows in extent rather than opacity.
+    const float threshold = lerp(0.72f, 0.24f, saturate(coverage));
+    const float baseN = CloudFbm(uv);
+    float density = saturate((baseN - threshold) / max(1.0f - threshold, 1e-3f));
+    density = density * density * (3.0f - 2.0f * density);
+    // Erode the silhouette with a finer tap, weighted to the edges so cores stay intact.
+    const float erosion = CloudNoise(uv * 3.1f);
+    return saturate(density - erosion * 0.45f * (1.0f - density));
+}
+
+// How much sunlight reaches a world point through the cloud layer. 1 is full sun.
+//
+// One tap, no march: the layer is thin compared with how far away it is, so the shadow is the
+// layer's own density read where the sun ray crosses it.
+float CloudSunVisibility(float3 worldPos, float3 sunDir, float coverage, float speed, float time)
+{
+    if (coverage <= 0.001f || sunDir.y <= 0.05f)
+    {
+        return 1.0f;
+    }
+    const float2 uv = CloudPlaneUv(worldPos, sunDir, time, speed);
+    const float density = CloudDensityAt(uv, coverage);
+    // Never fully dark: a cloud shadow is a dimming, not an occlusion - the sky still lights
+    // the ground underneath it, and that is what the ambient term already provides.
+    return 1.0f - density * 0.75f;
+}
+
 // A cloud layer over the visible sky.
 //
 // Deliberately NOT part of SkyGradient: that function is the lighting probe every surface
@@ -252,6 +307,7 @@ float3 ApplySkyClouds(
     float  sunIntensity,
     float3 horizonColor,
     float3 zenithColor,
+    float3 cameraPos,
     float  coverage,
     float  speed,
     float  time)
@@ -261,33 +317,9 @@ float3 ApplySkyClouds(
         return sky;
     }
 
-    // The view ray projected onto a plane overhead. The offset in the denominator is what
-    // caps the stretch near the horizon - a min() would cap it too, but it puts a corner in
-    // the derivative at one exact altitude, which draws a hard horizontal seam right across
-    // the sky. This approaches the same limit smoothly.
-    const float t = 1.0f / (max(worldDir.y, 0.0f) + 0.07f);
-    // Wrapped, so the coordinate cannot grow without bound over a long session and lose its
-    // fractional precision - the noise is tileable over this period, so the wrap is invisible.
-    const float wrapped = fmod(time * speed, 1024.0f);
-    const float2 drift = float2(wrapped, wrapped * 0.6f);
-    // The scale has to work at every elevation. `t` inflates the frequency enormously toward
-    // the horizon and collapses it toward the zenith, so a value tuned on a horizon view
-    // produces a single cloud spanning the whole sky when the camera looks up - which is to
-    // say, no visible cloud at all. This is picked so a few cells still span the frame at the
-    // zenith.
-    const float2 uv = worldDir.xz * t * 3.0f + drift;
-
-    // Continuous density, not a threshold: a hard cut is what makes a cloud look like a slab
-    // of grey card. Coverage lowers the threshold so cloud grows in extent rather than opacity.
-    const float threshold = lerp(0.72f, 0.24f, saturate(coverage));
+    const float2 uv = CloudPlaneUv(cameraPos, worldDir, time, speed);
     const float baseN = CloudFbm(uv);
-    float density = saturate((baseN - threshold) / max(1.0f - threshold, 1e-3f));
-    // Feather the thin edges and keep the cores solid.
-    density = density * density * (3.0f - 2.0f * density);
-
-    // Erode the silhouette with a finer tap, weighted to the edges so cores stay intact.
-    const float erosion = CloudNoise(uv * 3.1f);
-    density = saturate(density - erosion * 0.45f * (1.0f - density));
+    float density = CloudDensityAt(uv, coverage);
 
     if (density <= 0.001f)
     {
