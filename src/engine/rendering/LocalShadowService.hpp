@@ -129,6 +129,9 @@ namespace aether
 
 		ShadowAtlasManager m_atlasManager;
 		RenderQueue m_shadowRenderQueue;
+		// Held so the caster's alpha test can sample the albedo, exactly as the directional
+		// shadow does. Initialize already receives one; it simply was not kept.
+		BindlessManager* m_bindless = nullptr;
 		GraphicsPipeline m_shadowPipeline;
 		PreparedDrawList m_shadowDrawList{};
 		RGImage m_atlasImage{};

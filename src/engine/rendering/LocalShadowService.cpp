@@ -106,6 +106,8 @@ namespace aether
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu);
 
+		m_bindless = &bindless;
+
 		const gpu::Format depthFormat = swapchain.GetDepthFormat();
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
@@ -118,6 +120,7 @@ namespace aether
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		                        .cullMode = gpu::CullMode::Back,
 		                        .debugName = "LocalShadow.Depth",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_shadowPipeline = std::move(pipeline);
 
@@ -432,6 +435,11 @@ namespace aether
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
 			lightFc[i].cameraWorldPos = m_perLightShadows[i].lightPosRange;
+			// The caster's alpha test looks its material up through this pointer. These constants
+			// are built from scratch per light rather than copied from the frame's, so a field the
+			// shadow shader needs has to be carried across explicitly - left at zero it is a null
+			// dereference on the GPU, not a missing texture.
+			lightFc[i].materialBufferAddr = fc.materialBufferAddr;
 			lightFc[i].RefreshDerived();
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));
@@ -506,6 +514,11 @@ namespace aether
 			                }
 
 			                gpu::CommandList cmd = ctx.recorder.View();
+			                // The caster's alpha test reads the albedo through the heap.
+			                if (m_bindless != nullptr)
+			                {
+				                m_bindless->CmdBindGlobalResources(cmd);
+			                }
 			                for (std::uint32_t li = 0; li < static_cast<std::uint32_t>(m_perLightShadows.size()); ++li)
 			                {
 				                const PerLightShadow& pls = m_perLightShadows[li];

@@ -11,13 +11,20 @@
 // The per-light FrameConstants repurpose cameraWorldPos as xyz=light position,
 // w=light range (see LocalShadowService::BuildFrameShadowData).
 
+// The bindless heap must be at set 0 - every other set reads garbage on this backend - and
+// has to be declared before the headers that sample through it.
+[[vk::binding(0, 0)]] Texture2D    g_textures[];
+[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+
 #include "include/FrameConstants.slangh"
+#include "include/GpuMaterial.slangh"
 #include "include/RenderContracts.slangh"
 #include "include/MeshVertex.slangh"
 
 [[vk::push_constant]] DrawPushConstants pc;
 
 #include "include/DepthVertex.slangh"
+#include "include/ShadowAlphaTest.slangh"
 
 [shader("vertex")]
 DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
@@ -38,6 +45,8 @@ DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInst
 [shader("fragment")]
 float fragmentMain(DepthVSOutputWithWorldPos input) : SV_Target
 {
+    ShadowAlphaDiscard(input.materialIndex, input.uv);
+
     FrameConstantsData* fc = pc.frame.Ptr();
     const float3 lightPos = fc->cameraWorldPos.xyz;
     const float range = max(fc->cameraWorldPos.w, 1e-3);
