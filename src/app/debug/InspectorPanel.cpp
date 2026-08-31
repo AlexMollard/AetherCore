@@ -94,6 +94,69 @@ namespace aether::editor
 			}
 		}
 
+		// Same field mapping the scene serde uses, keyed by the scene TOML names so the
+		// component, the file and both copiers agree on what a field is called.
+		void ApplyMaterialOverridesTo(MaterialAsset& onto, const MaterialAsset& from, const std::vector<std::string>& keys)
+		{
+			for (const std::string& key: keys)
+			{
+				if (key == "base_color") { onto.baseColorFactor = from.baseColorFactor; }
+				else if (key == "metallic") { onto.metallicFactor = from.metallicFactor; }
+				else if (key == "roughness") { onto.roughnessFactor = from.roughnessFactor; }
+				else if (key == "occlusion") { onto.occlusionStrength = from.occlusionStrength; }
+				else if (key == "alpha_cutoff") { onto.alphaCutoff = from.alphaCutoff; }
+				else if (key == "emissive") { onto.emissiveFactor = from.emissiveFactor; }
+				else if (key == "double_sided") { onto.doubleSided = from.doubleSided; }
+				else if (key == "alpha_blend") { onto.alphaBlend = from.alphaBlend; }
+				else if (key == "alpha_mask") { onto.alphaMask = from.alphaMask; }
+				else if (key == "vertex_color") { onto.modulateVertexColor = from.modulateVertexColor; }
+				else if (key == "receive_shadows") { onto.receiveShadows = from.receiveShadows; }
+			}
+		}
+
+		// Push a just-saved material asset into every entity linked to it, leaving each
+		// entity's own overridden fields alone. This is the half of "linked" that you can
+		// actually see: edit the asset, and the objects using it change now rather than on
+		// the next scene load.
+		int PropagateMaterialAsset(app::LayerContext& context, World& world, const std::string& assetPath)
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			if (assets == nullptr)
+			{
+				return 0;
+			}
+			auto loaded = assets->LoadMaterialPreset(assetPath);
+			if (!loaded)
+			{
+				return 0;
+			}
+
+			std::vector<std::pair<Entity, MaterialAsset>> pending;
+			for (const auto& [enttE, link]: world.GetRegistry().view<MaterialLinkComponent>().each())
+			{
+				if (link.assetPath != assetPath)
+				{
+					continue;
+				}
+				const Entity entity = World::FromEntt(enttE);
+				MaterialAsset merged = *loaded;
+				if (const auto* inst = world.TryGet<MaterialInstanceComponent>(entity))
+				{
+					// Re-applying the asset must not undo what this entity overrode.
+					ApplyMaterialOverridesTo(merged, inst->asset, link.overrides);
+				}
+				pending.emplace_back(entity, merged);
+			}
+
+			// Collected first: AssignMaterial touches components the view is iterating.
+			for (const auto& [entity, material]: pending)
+			{
+				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
+			}
+			ReleaseMaterialAssetTextures(*assets, *loaded);
+			return static_cast<int>(pending.size());
+		}
+
 		bool AssignMaterialPreset(app::LayerContext& context, World& world, Entity entity, std::string_view path)
 		{
 			auto* assets = context.TryGet<AssetManager>();
@@ -109,6 +172,10 @@ namespace aether::editor
 			const MaterialAsset material = loaded.value();
 			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
 			ReleaseMaterialAssetTextures(*assets, material);
+			// Linked, not copied: MaterialLinkComponent is what lets a later edit to the asset
+			// reach this entity. A fresh assignment clears any overrides the previous material
+			// had accumulated, because they described fields of a different material.
+			world.EmplaceOrReplace<MaterialLinkComponent>(entity, MaterialLinkComponent{.assetPath = std::string(path)});
 			if (auto* db = context.TryGet<AssetDatabase>())
 			{
 				db->Register(MakeMaterialPresetSource(std::string(path)));
@@ -284,12 +351,13 @@ namespace aether::editor
 			bool& loaded;
 			bool& dirty;
 			std::string& error;
+			int& linkedCount;
 		};
 
 		// Edits the .material.toml itself, rather than a copy living on some entity. This is
 		// what makes a material an asset: change it here and every object that references it
 		// changes, instead of you re-applying a preset object by object.
-		void DrawMaterialAssetEditor(const std::string& assetPath, MaterialAssetEditState state)
+		void DrawMaterialAssetEditor(app::LayerContext& context, World& world, const std::string& assetPath, MaterialAssetEditState state)
 		{
 			if (!state.loaded || state.path != assetPath)
 			{
@@ -388,11 +456,26 @@ namespace aether::editor
 				{
 					state.error = "Could not write this material.";
 				}
+				else
+				{
+					state.linkedCount = PropagateMaterialAsset(context, world, assetPath);
+				}
 				state.dirty = false;
 			}
 
 			ImGui::Separator();
-			ImGui::TextDisabled(state.dirty ? "Saving..." : "Saved");
+			if (state.dirty)
+			{
+				ImGui::TextDisabled("Saving...");
+			}
+			else if (state.linkedCount > 0)
+			{
+				ImGui::TextDisabled("Saved - updated %d linked object%s", state.linkedCount, state.linkedCount == 1 ? "" : "s");
+			}
+			else
+			{
+				ImGui::TextDisabled("Saved");
+			}
 		}
 
 		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection, MaterialAssetEditState editState)
@@ -473,7 +556,7 @@ namespace aether::editor
 				}
 				else
 				{
-					DrawMaterialAssetEditor(asset.path, editState);
+					DrawMaterialAssetEditor(context, world, asset.path, editState);
 				}
 			}
 			else if (asset.kind == SceneSelection::AssetKind::Texture)
@@ -523,7 +606,7 @@ namespace aether::editor
 		if (selection.HasAsset())
 		{
 			DrawAssetInspector(context, world, selection,
-			        MaterialAssetEditState{m_materialAssetPath, m_materialAsset, m_materialAssetLoaded, m_materialAssetDirty, m_materialAssetError});
+			        MaterialAssetEditState{m_materialAssetPath, m_materialAsset, m_materialAssetLoaded, m_materialAssetDirty, m_materialAssetError, m_materialAssetLinkedCount});
 			ImGui::End();
 			return;
 		}

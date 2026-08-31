@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <map>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
@@ -55,6 +56,35 @@ namespace aether
 	struct MaterialInstanceComponent
 	{
 		MaterialAsset asset{};
+	};
+
+	// A material whose values LIVE IN AN ASSET rather than on this entity.
+	//
+	// MaterialInstanceComponent still holds the resolved values - this records where they came
+	// from, so editing the asset can push a change into every entity that references it. The
+	// same linked model the prefab system uses, for the same reason: without it, assigning a
+	// material is a copy, and changing the look of fifty objects means editing fifty objects.
+	//
+	// `overrides` names the fields this entity has changed since (by their scene TOML key, so
+	// the component and the file agree). Those are left alone when the asset changes, and are
+	// the only fields the scene stores for a linked material.
+	struct MaterialLinkComponent
+	{
+		std::string assetPath;
+		std::vector<std::string> overrides;
+
+		[[nodiscard]] bool IsOverridden(std::string_view key) const
+		{
+			return std::ranges::find(overrides, key) != overrides.end();
+		}
+
+		void MarkOverridden(std::string_view key)
+		{
+			if (!IsOverridden(key))
+			{
+				overrides.emplace_back(key);
+			}
+		}
 	};
 
 	struct EffectParamsComponent

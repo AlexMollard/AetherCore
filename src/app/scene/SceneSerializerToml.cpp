@@ -886,20 +886,32 @@ namespace aether::app::scene
 			{
 				const MaterialAsset& a = rec.material->asset;
 				toml::table m;
-				m.insert("base_color", Vec4ToToml(a.baseColorFactor));
-				m.insert("metallic", a.metallicFactor);
-				m.insert("roughness", a.roughnessFactor);
-				m.insert("occlusion", a.occlusionStrength);
-				m.insert("alpha_cutoff", a.alphaCutoff);
-				m.insert("emissive", Vec3ToToml(a.emissiveFactor));
-				m.insert("double_sided", a.doubleSided);
-				m.insert("alpha_blend", a.alphaBlend);
-				m.insert("alpha_mask", a.alphaMask);
-				m.insert("vertex_color", a.modulateVertexColor);
-				m.insert("receive_shadows", a.receiveShadows);
-				const auto tex = [&m](const char* key, const std::string& path)
+				// A linked material writes its asset path and NOTHING it has not overridden.
+				// Every key omitted here is re-read from the asset on load, which is what
+				// lets one edit to the asset reach every entity that references it.
+				const bool linked = !rec.material->assetPath.empty();
+				const auto wants = [&](const char* key)
 				{
-					if (!path.empty())
+					return !linked || std::ranges::find(rec.material->overrides, key) != rec.material->overrides.end();
+				};
+				if (linked)
+				{
+					m.insert("asset", rec.material->assetPath);
+				}
+				if (wants("base_color")) { m.insert("base_color", Vec4ToToml(a.baseColorFactor)); }
+				if (wants("metallic")) { m.insert("metallic", a.metallicFactor); }
+				if (wants("roughness")) { m.insert("roughness", a.roughnessFactor); }
+				if (wants("occlusion")) { m.insert("occlusion", a.occlusionStrength); }
+				if (wants("alpha_cutoff")) { m.insert("alpha_cutoff", a.alphaCutoff); }
+				if (wants("emissive")) { m.insert("emissive", Vec3ToToml(a.emissiveFactor)); }
+				if (wants("double_sided")) { m.insert("double_sided", a.doubleSided); }
+				if (wants("alpha_blend")) { m.insert("alpha_blend", a.alphaBlend); }
+				if (wants("alpha_mask")) { m.insert("alpha_mask", a.alphaMask); }
+				if (wants("vertex_color")) { m.insert("vertex_color", a.modulateVertexColor); }
+				if (wants("receive_shadows")) { m.insert("receive_shadows", a.receiveShadows); }
+				const auto tex = [&m, &wants](const char* key, const std::string& path)
+				{
+					if (!path.empty() && wants(key))
 					{
 						m.insert(key, path);
 					}
@@ -1305,21 +1317,51 @@ namespace aether::app::scene
 			{
 				const toml::node_view<const toml::node> mv{*m};
 				MaterialRecord mat;
+				mat.assetPath = mv["asset"].value_or(std::string{});
+				// For a linked material, a key BEING PRESENT is what makes it an override -
+				// an absent key is not a default, it is "ask the asset". So presence is
+				// recorded here and the merge happens in the material serde, which can load
+				// the asset.
+				const bool linked = !mat.assetPath.empty();
+				const auto took = [&](const char* key)
+				{
+					if (linked && mv[key])
+					{
+						mat.overrides.emplace_back(key);
+					}
+					return static_cast<bool>(mv[key]);
+				};
+				took("base_color");
 				mat.asset.baseColorFactor = Vec4FromToml(mv["base_color"], glm::vec4(1.0f));
+				took("metallic");
 				mat.asset.metallicFactor = static_cast<float>(mv["metallic"].value_or(0.0));
+				took("roughness");
 				mat.asset.roughnessFactor = static_cast<float>(mv["roughness"].value_or(0.5));
+				took("occlusion");
 				mat.asset.occlusionStrength = static_cast<float>(mv["occlusion"].value_or(1.0));
+				took("alpha_cutoff");
 				mat.asset.alphaCutoff = static_cast<float>(mv["alpha_cutoff"].value_or(0.5));
+				took("emissive");
 				mat.asset.emissiveFactor = Vec3FromToml(mv["emissive"], glm::vec3(0.0f));
+				took("double_sided");
 				mat.asset.doubleSided = mv["double_sided"].value_or(false);
+				took("alpha_blend");
 				mat.asset.alphaBlend = mv["alpha_blend"].value_or(false);
+				took("alpha_mask");
 				mat.asset.alphaMask = mv["alpha_mask"].value_or(false);
+				took("vertex_color");
 				mat.asset.modulateVertexColor = mv["vertex_color"].value_or(false);
+				took("receive_shadows");
 				mat.asset.receiveShadows = mv["receive_shadows"].value_or(true);
+				took("albedo");
 				mat.albedoPath = mv["albedo"].value_or(std::string{});
+				took("normal");
 				mat.normalPath = mv["normal"].value_or(std::string{});
+				took("metallic_roughness");
 				mat.metallicRoughnessPath = mv["metallic_roughness"].value_or(std::string{});
+				took("occlusion_tex");
 				mat.occlusionPath = mv["occlusion_tex"].value_or(std::string{});
+				took("emissive_tex");
 				mat.emissivePath = mv["emissive_tex"].value_or(std::string{});
 				rec.material = std::move(mat);
 				if (legacySprite && rec.sprite)

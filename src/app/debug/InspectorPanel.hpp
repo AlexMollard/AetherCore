@@ -44,5 +44,6 @@ namespace aether::editor
 		bool m_materialAssetLoaded = false;
 		bool m_materialAssetDirty = false;
 		std::string m_materialAssetError;
+		int m_materialAssetLinkedCount = 0;
 	};
 } // namespace aether::editor

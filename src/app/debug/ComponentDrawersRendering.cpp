@@ -200,21 +200,67 @@ namespace aether::editor
 		}
 		iw::ItemTooltip("Replace this material with a catalogued preset");
 
-		changed |= PropColor4("Base color", &asset.baseColorFactor.x);
-		changed |= PropSlider("Metallic", &asset.metallicFactor, 0.0f, 1.0f, "%.2f");
-		changed |= PropSlider("Roughness", &asset.roughnessFactor, 0.0f, 1.0f, "%.2f");
-		changed |= PropSlider("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f, "%.2f");
-		changed |= PropColor3("Emissive", &asset.emissiveFactor.x);
+		auto* link = world.TryGet<MaterialLinkComponent>(entity);
+		if (link != nullptr && !link->assetPath.empty())
+		{
+			// A linked material's values come from the asset. Editing one here does not
+			// change the asset - it overrides that one field on this object, and the field is
+			// listed so the next asset edit knows to leave it alone.
+			iw::PropLabel("Linked");
+			ImGui::TextUnformatted(std::filesystem::path(link->assetPath).filename().generic_string().c_str());
+			ImGui::SetItemTooltip("%s", link->assetPath.c_str());
+			if (!link->overrides.empty())
+			{
+				ImGui::SameLine();
+				ImGui::TextDisabled("(%zu overridden)", link->overrides.size());
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Revert"))
+				{
+					if (auto* am = context.TryGet<AssetManager>())
+					{
+						if (auto reloaded = am->LoadMaterialPreset(link->assetPath))
+						{
+							asset = *reloaded;
+							link->overrides.clear();
+							changed = true;
+						}
+					}
+				}
+				ImGui::SetItemTooltip("Drop this object's changes and take every value from the asset again");
+			}
+		}
+
+		// Each field is tracked on its own so an override is recorded per field rather than
+		// per material - otherwise touching one slider would pin every other value against
+		// later asset edits.
+		const auto edited = [&](bool fieldChanged, const char* key)
+		{
+			if (fieldChanged)
+			{
+				changed = true;
+				if (link != nullptr && !link->assetPath.empty())
+				{
+					link->MarkOverridden(key);
+				}
+			}
+			return fieldChanged;
+		};
+
+		edited(PropColor4("Base color", &asset.baseColorFactor.x), "base_color");
+		edited(PropSlider("Metallic", &asset.metallicFactor, 0.0f, 1.0f, "%.2f"), "metallic");
+		edited(PropSlider("Roughness", &asset.roughnessFactor, 0.0f, 1.0f, "%.2f"), "roughness");
+		edited(PropSlider("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f, "%.2f"), "occlusion");
+		edited(PropColor3("Emissive", &asset.emissiveFactor.x), "emissive");
 
 		iw::PropLabel("Flags");
-		changed |= ImGui::Checkbox("Two-sided", &asset.doubleSided);
+		edited(ImGui::Checkbox("Two-sided", &asset.doubleSided), "double_sided");
 		ImGui::SameLine();
-		changed |= ImGui::Checkbox("Blend", &asset.alphaBlend);
+		edited(ImGui::Checkbox("Blend", &asset.alphaBlend), "alpha_blend");
 		ImGui::SameLine();
-		changed |= ImGui::Checkbox("Mask", &asset.alphaMask);
+		edited(ImGui::Checkbox("Mask", &asset.alphaMask), "alpha_mask");
 		ImGui::SameLine();
-		changed |= ImGui::Checkbox("Vtx color", &asset.modulateVertexColor);
-		changed |= PropCheckbox("Receives shadows", &asset.receiveShadows, "When off, the sun never shadows this surface");
+		edited(ImGui::Checkbox("Vtx color", &asset.modulateVertexColor), "vertex_color");
+		edited(PropCheckbox("Receives shadows", &asset.receiveShadows, "When off, the sun never shadows this surface"), "receive_shadows");
 		if (asset.alphaMask)
 		{
 			changed |= PropFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f, "%.2f");

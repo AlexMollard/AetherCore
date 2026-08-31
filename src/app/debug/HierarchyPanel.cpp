@@ -124,6 +124,10 @@ namespace aether::editor
 			const MaterialAsset material = loaded.value();
 			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
 			ReleaseMaterialAssetTextures(*assets, material);
+			// Linked, not copied: MaterialLinkComponent is what lets a later edit to the asset
+			// reach this entity. A fresh assignment clears any overrides the previous material
+			// had accumulated, because they described fields of a different material.
+			world.EmplaceOrReplace<MaterialLinkComponent>(entity, MaterialLinkComponent{.assetPath = std::string(path)});
 			if (auto* db = context.TryGet<AssetDatabase>())
 			{
 				db->Register(MakeMaterialPresetSource(std::string(path)));

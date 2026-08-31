@@ -54,6 +54,12 @@ namespace aether::app::scene
 
 	struct MaterialRecord
 	{
+		// When set, this material is a LINK to that asset and `asset` below holds the resolved
+		// values. Only the keys named in `overrides` are written to the scene - everything
+		// else is re-read from the asset on load, which is what makes an edit to the asset
+		// reach every entity using it.
+		std::string assetPath;
+		std::vector<std::string> overrides;
 		MaterialAsset asset{};
 		std::string albedoPath;
 		std::string normalPath;
