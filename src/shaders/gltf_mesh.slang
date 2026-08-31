@@ -407,7 +407,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         finalColor = lerp(finalColor, fogColor, fogAmount);
     }
 
-    // Alpha carries scene coverage for the background compositor: opaque forward
-    // geometry always fully covers (the forward pass has no transparent path).
-    return float4(finalColor, 1.0);
+    // Alpha is this surface's coverage. For opaque geometry that is 1 - it fully hides
+    // whatever is behind it, which is what the background compositor needs to know. A
+    // blended material instead reports how much it actually covers, which is the same
+    // number the blend hardware needs, so the two uses agree rather than competing: a
+    // half-transparent surface half-covers the background and half-blends with it.
+    const float coverage = ((mat.flags & kMaterialAlphaBlend) != 0u) ? saturate(baseColor.a) : 1.0f;
+    return float4(finalColor, coverage);
 }

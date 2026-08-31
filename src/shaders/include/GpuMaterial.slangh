@@ -10,6 +10,9 @@ static const uint kFlagAlphaMask   = 4u;
 static const uint kFlagModulateVertexColor = 8u;
 static const uint kFlagNoReceiveShadows = 16u; // set == material opts out of shadow receiving
 
+// Mirrors GpuMaterial::kAlphaBlend in src/engine/material/GpuMaterial.hpp.
+static const uint kMaterialAlphaBlend = 1u << 1;
+
 struct GpuMaterial
 {
     [[vk::offset(0)]]  float4 baseColorFactor;

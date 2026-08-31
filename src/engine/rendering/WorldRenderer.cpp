@@ -101,6 +101,7 @@ namespace aether
 			        .animDb = animDb,
 			        .animDbGeneration = animDb ? animDb->GetGeneration() : 0,
 			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,
+			        .blended = pipelineComp.blended,
 			});
 		}
 	}

@@ -96,6 +96,10 @@ namespace aether
 	struct PipelineComponent
 	{
 		const GraphicsPipeline* pipeline = nullptr;
+		// Whether this material blends. Recorded here rather than asked of the pipeline
+		// because a GraphicsPipeline is only a handle - it does not remember the state it
+		// was built with - and the draw submitter already has this component in hand.
+		bool blended = false;
 	};
 
 	struct MeshSourceComponent

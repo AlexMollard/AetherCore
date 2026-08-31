@@ -435,6 +435,23 @@ namespace aether
 
 		        [](const DrawCommand& a, const DrawCommand& b)
 		        {
+			        // Transparent geometry draws after everything opaque. It does not write
+			        // depth, so anything opaque submitted after it would pass the depth test
+			        // and paint straight over it - the blend would be undone by the very
+			        // surface it was meant to show through.
+			        if (a.blended != b.blended)
+			        {
+				        return !a.blended;
+			        }
+			        // Within each group the order stays by pipeline then mesh, which is what
+			        // keeps state changes down.
+			        //
+			        // Ceiling: blended draws are not sorted back-to-front among themselves,
+			        // so two overlapping transparent surfaces composite in submission order
+			        // rather than depth order. Correct for the common case of transparent
+			        // geometry over opaque; wrong where transparent surfaces overlap each
+			        // other. Sorting them properly needs the camera position, which this
+			        // queue is not given - add it here when overlapping transparency matters.
 			        if (a.pipeline != b.pipeline)
 			        {
 				        return a.pipeline < b.pipeline;
