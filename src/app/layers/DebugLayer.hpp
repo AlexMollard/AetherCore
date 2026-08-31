@@ -162,6 +162,10 @@ namespace aether::editor
 		// Deferred so the focus lands inside the ImGui frame; the request may arrive from a
 		// control command drained before one has begun.
 		std::string m_pendingFocusWindow;
+		// Undo/redo steps requested through the control endpoint, drained next frame
+		// alongside the keyboard shortcut.
+		int m_pendingUndoSteps = 0;
+		int m_pendingRedoSteps = 0;
 		// Borrowed from m_panels, which owns it. Held typed so the edit camera can be
 		// written once on shutdown rather than from the per-frame settings path.
 		ViewportPanel* m_viewportPanel = nullptr;

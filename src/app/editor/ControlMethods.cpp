@@ -2453,9 +2453,44 @@ namespace aether::editor
 			        return json{{"windows", arr}};
 		        }});
 
+		const auto historyStep = [](bool redo)
+		{
+			return [redo](const json&, MethodContext& ctx) -> json
+			{
+				auto* undo = ctx.services.TryGet<UndoStack>();
+				auto* actions = ctx.services.TryGet<EditorWindowActions>();
+				if (undo == nullptr || actions == nullptr || !actions->historyStep)
+				{
+					return json{{"error", "no undo stack (editor only)"}};
+				}
+				const int depth = redo ? undo->RedoDepth() : undo->UndoDepth();
+				if (depth <= 0)
+				{
+					return json{{"queued", false}, {"reason", redo ? "nothing to redo" : "nothing to undo"}};
+				}
+				actions->historyStep(redo);
+				return json{{"queued", true}, {"undoDepth", undo->UndoDepth()}, {"redoDepth", undo->RedoDepth()}};
+			};
+		};
+
+		methods.push_back({"editor.undo",
+		        "undo",
+		        "Undo the last scene edit, exactly as Ctrl+Z does - selection is remapped through the undone command. The step lands on the next editor frame, so read editor.undo_status afterwards to confirm it was consumed. Refused while playing or "
+		        "compiling, and when there is nothing to undo ('queued' comes back false).",
+		        true,
+		        Obj(),
+		        historyStep(false)});
+
+		methods.push_back({"editor.redo",
+		        "redo",
+		        "Redo the last undone scene edit, exactly as Ctrl+Y does. Like editor.undo, the step lands on the next editor frame and 'queued' comes back false when the redo stack is empty.",
+		        true,
+		        Obj(),
+		        historyStep(true)});
+
 		methods.push_back({"editor.undo_status",
 		        "undo_status",
-		        "How deep the editor's undo and redo stacks are, and whether the scene has unsaved edits. Undo and redo themselves are keyboard actions (ui_key z/y with ctrl); this is how you tell what they will do, and whether one actually consumed an entry.",
+		        "How deep the editor's undo and redo stacks are, and whether the scene has unsaved edits. Pair it with editor.undo / editor.redo to tell what they will do, and whether one actually consumed an entry.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json

@@ -687,6 +687,17 @@ namespace aether::editor
 			}
 			iw::InspectorFocusRequest() = std::string(component);
 		};
+		windowActions.historyStep = [this](bool redo)
+		{
+			if (redo)
+			{
+				++m_pendingRedoSteps;
+			}
+			else
+			{
+				++m_pendingUndoSteps;
+			}
+		};
 		windowActions.openSceneDialog = [this]()
 		{
 			if (m_hierarchyPanel != nullptr)
@@ -1702,6 +1713,10 @@ namespace aether::editor
 		{
 			// Compiling/playing: the scene is the running sim, not an editable doc.
 			m_undoStack.AbandonPending();
+			// Drop queued control-endpoint steps too, rather than replaying them into
+			// whatever scene is loaded once editing resumes.
+			m_pendingUndoSteps = 0;
+			m_pendingRedoSteps = 0;
 		}
 		if (undoEditable)
 		{
@@ -1715,6 +1730,14 @@ namespace aether::editor
 				{
 					ApplyHistoryStep(context, redoCombo);
 				}
+			}
+			for (; m_pendingUndoSteps > 0; --m_pendingUndoSteps)
+			{
+				ApplyHistoryStep(context, false);
+			}
+			for (; m_pendingRedoSteps > 0; --m_pendingRedoSteps)
+			{
+				ApplyHistoryStep(context, true);
 			}
 		}
 

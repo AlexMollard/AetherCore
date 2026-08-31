@@ -22,6 +22,11 @@ namespace aether::editor
 		// enough to see one: a panel sharing a node with others is "visible" while its tab is
 		// behind theirs, which looks exactly like a panel that draws nothing.
 		std::function<bool(std::string_view name)> focusWindow;
+		// Queue one undo (redo=false) or redo (redo=true) step. It is applied on the next
+		// frame at the same point as the Ctrl+Z / Ctrl+Y shortcut, so both share the same
+		// play-mode gate and selection remapping - the effect shows in the following
+		// undo_status, not in the call that queued it.
+		std::function<void(bool redo)> historyStep;
 		std::function<void(std::string_view component)> focusInspectorComponent;
 		// Opens the File > Open scene dialog (used by the menu and the control
 		// endpoint alike).
