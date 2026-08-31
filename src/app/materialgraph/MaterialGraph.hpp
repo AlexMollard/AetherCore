@@ -164,4 +164,9 @@ namespace aether::editor
 	// Emits a complete Slang fragment shader. `error` is set and the result is empty when the
 	// graph cannot be generated - a cycle, or no Output node.
 	[[nodiscard]] std::string GenerateMaterialShader(const MaterialGraph& graph, std::string& error);
+
+	// Rewrites a graph from the old per-material sidecar (".materialgraph.toml") into the
+	// [graph] section a material file carries, so both the editor's lazy migration and the
+	// project-open shader refresh read a legacy graph the same way.
+	[[nodiscard]] std::string MigrateLegacyGraphText(const std::string& sidecar);
 } // namespace aether::editor

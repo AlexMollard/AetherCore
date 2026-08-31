@@ -690,6 +690,35 @@ namespace aether::editor
 		};
 	} // namespace
 
+	std::string MigrateLegacyGraphText(const std::string& sidecar)
+	{
+		std::string out = "# Node graph for this material's shader. Edited in the editor's Material window.\n[graph]\n";
+		std::size_t at = 0;
+		while (at <= sidecar.size())
+		{
+			const std::size_t eol = sidecar.find('\n', at);
+			const std::size_t end = (eol == std::string::npos) ? sidecar.size() : eol;
+			std::string line = sidecar.substr(at, end - at);
+			if (!line.starts_with('#'))
+			{
+				// The old form put nodes at the top level ("[node.0]"); they are the same
+				// tables one level down.
+				if (line.starts_with("[node.") || line.starts_with("[link."))
+				{
+					line.insert(1, "graph.");
+				}
+				out += line;
+				out += '\n';
+			}
+			if (eol == std::string::npos)
+			{
+				break;
+			}
+			at = eol + 1;
+		}
+		return out;
+	}
+
 	std::string GenerateMaterialShader(const MaterialGraph& graph, std::string& error)
 	{
 		error.clear();
