@@ -254,3 +254,37 @@ TEST_CASE("Selection focus box ignores entities that cannot be framed")
 	const std::array<Entity, 1> nothing{noTransform};
 	CHECK_FALSE(aether::editor::ComputeSelectionFocusBox(world, nothing).has_value());
 }
+
+TEST_CASE("Selection focus box measures a sprite by its quad, not its scale")
+{
+	World world;
+	const Entity sprite = world.Create();
+	world.Emplace<TransformComponent>(sprite, TransformComponent{.localToWorld = glm::mat4(1.0f)});
+	// 400x200 pixels at 100 px/unit, pivot centred -> a 4 x 2 unit quad.
+	world.Emplace<SpriteRendererComponent>(sprite, SpriteRendererComponent{.pixelSize = glm::vec2(400.0f, 200.0f), .pivot = glm::vec2(0.5f), .pixelsPerUnit = 100.0f});
+
+	const std::array<Entity, 1> one{sprite};
+	const auto box = aether::editor::ComputeSelectionFocusBox(world, one);
+	REQUIRE(box.has_value());
+	// The scale fallback would have said 1 x 1: the sprite's own size is what matters.
+	CHECK(box->size.x == doctest::Approx(4.0f));
+	CHECK(box->size.y == doctest::Approx(2.0f));
+	CHECK(box->center.x == doctest::Approx(0.0f));
+	CHECK(box->center.y == doctest::Approx(0.0f));
+}
+
+TEST_CASE("Selection focus box respects a sprite's pivot")
+{
+	World world;
+	const Entity sprite = world.Create();
+	world.Emplace<TransformComponent>(sprite, TransformComponent{.localToWorld = glm::mat4(1.0f)});
+	// Pivot at the bottom-left corner, so the quad extends up and to the right of the origin.
+	world.Emplace<SpriteRendererComponent>(sprite, SpriteRendererComponent{.pixelSize = glm::vec2(200.0f, 200.0f), .pivot = glm::vec2(0.0f), .pixelsPerUnit = 100.0f});
+
+	const std::array<Entity, 1> one{sprite};
+	const auto box = aether::editor::ComputeSelectionFocusBox(world, one);
+	REQUIRE(box.has_value());
+	CHECK(box->size.x == doctest::Approx(2.0f));
+	CHECK(box->center.x == doctest::Approx(1.0f));
+	CHECK(box->center.y == doctest::Approx(1.0f));
+}
