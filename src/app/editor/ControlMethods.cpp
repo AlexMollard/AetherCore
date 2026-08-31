@@ -1187,6 +1187,18 @@ namespace aether::editor
 				{
 					return json{{"error", "'" + type + "' is reference-only and cannot be added/removed as a component (e.g. UI Text is authored as a UI entity)"}};
 				}
+				// Report what actually happened. Claiming an add or a remove that did not occur
+				// is not only a misleading answer - the undo entry recorded below would be for
+				// a change that never happened, so the next undo appears to do nothing.
+				const bool present = entry->has && entry->has(world, entity);
+				if (add && present)
+				{
+					return json{{"id", entity.id}, {"type", type}, {"added", false}, {"alreadyPresent", true}};
+				}
+				if (!add && !present)
+				{
+					return json{{"id", entity.id}, {"type", type}, {"removed", false}, {"notPresent", true}};
+				}
 				if (add)
 				{
 					if (const std::string blockReason = ComponentAddBlockReason(world, entity, *entry); !blockReason.empty())
