@@ -1,0 +1,13 @@
+# AetherCore material. Edit here or in the editor's material inspector.
+[material]
+basecolorfactor = [ 0.4, 0.35, 0.3, 1 ]
+emissivefactor = [ 0, 0, 0 ]
+metallicfactor = 0
+roughnessfactor = 0.85
+occlusionstrength = 1
+alphacutoff = 0.5
+doublesided = false
+alphablend = false
+alphamask = false
+modulatevertexcolor = false
+receiveshadows = true

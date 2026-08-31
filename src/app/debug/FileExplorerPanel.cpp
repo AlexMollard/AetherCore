@@ -36,6 +36,7 @@
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/FileUtil.hpp"
+#include "material/MaterialSerializer.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/TextureRegistry.hpp"
 #include "rendering/RenderingSubsystem.hpp"
@@ -67,41 +68,7 @@ namespace aether::editor
 
 		dragdrop::FileKind InferFileKind(const std::filesystem::path& path)
 		{
-			std::string ext = path.extension().generic_string();
-			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-			if (ext == ".mesh" || ext == ".gltf" || ext == ".glb")
-			{
-				return dragdrop::FileKind::Model;
-			}
-			if (ext == ".cs")
-			{
-				return dragdrop::FileKind::Script;
-			}
-			if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".dds" || ext == ".texture")
-			{
-				return dragdrop::FileKind::Texture;
-			}
-			if (ext == ".slang")
-			{
-				return dragdrop::FileKind::Shader;
-			}
-			if (ext == ".toml")
-			{
-				const std::string generic = path.generic_string();
-				if (generic.contains(".prefab.toml"))
-				{
-					return dragdrop::FileKind::Prefab;
-				}
-				if (generic.contains(".scene.toml"))
-				{
-					return dragdrop::FileKind::Scene;
-				}
-				if (generic.contains("/materials/") || generic.contains("\\materials\\") || path.filename() == "properties.toml")
-				{
-					return dragdrop::FileKind::Material;
-				}
-			}
-			return dragdrop::FileKind::Unknown;
+			return dragdrop::ClassifyFile(path);
 		}
 
 		SceneSelection::AssetKind ToSelectionKind(dragdrop::FileKind kind)
@@ -838,7 +805,7 @@ namespace aether::editor
 			}
 			ImGui::OpenPopup("##feNew");
 		}
-		ImGui::SetItemTooltip("Create a script or folder (in the selected folder)");
+		ImGui::SetItemTooltip("Create a script, material or folder (in the selected folder)");
 
 		if (ImGui::BeginPopup("##feNew"))
 		{
@@ -875,6 +842,35 @@ namespace aether::editor
 			{
 				ImGui::TextDisabled("Use a C# class name, e.g. PlayerMotor");
 			}
+
+			ImGui::SetNextItemWidth(220.0f);
+			const bool materialEntered = ImGui::InputTextWithHint("##feMaterial", "Material name...", m_newMaterialNameBuf, sizeof(m_newMaterialNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+			ImGui::SameLine();
+			const std::string materialName = TrimCopy(m_newMaterialNameBuf);
+			const bool validMaterial = !materialName.empty() && !materialName.contains('/') && !materialName.contains('\\');
+			ImGui::BeginDisabled(!validMaterial);
+			if (chrome::GhostButton(ICON_FA_PALETTE " Material") || (materialEntered && validMaterial))
+			{
+				// A default MaterialAsset, written through the same serializer the inspector
+				// saves with, so a new material and an edited one are the same file shape.
+				const std::filesystem::path file = m_createDir / (materialName + ".material.toml");
+				if (io::file_util::Exists(file))
+				{
+					m_opError = "A material of that name is already here.";
+				}
+				else if (io::file_util::WriteText(file, MaterialSerializer::ToToml(MaterialPresetSpec{})))
+				{
+					m_newMaterialNameBuf[0] = '\0';
+					m_opError.clear();
+					m_treeDirty = true;
+					ImGui::CloseCurrentPopup();
+				}
+				else
+				{
+					m_opError = "Could not create the material.";
+				}
+			}
+			ImGui::EndDisabled();
 
 			ImGui::SetNextItemWidth(220.0f);
 			const bool folderEntered = ImGui::InputTextWithHint("##feFolder", "Folder name...", m_newFolderNameBuf, sizeof(m_newFolderNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);

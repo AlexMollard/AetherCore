@@ -29,6 +29,7 @@
 #include "assets/AssetManager.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
+#include "debug/EditorDragDrop.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorCommand.hpp"
 #include "debug/EditorWindowActions.hpp"
@@ -433,6 +434,39 @@ namespace aether::editor
 		{
 			return std::ranges::search(text, needle, [](char lhs, char rhs) { return std::tolower(static_cast<unsigned char>(lhs)) == std::tolower(static_cast<unsigned char>(rhs)); }).begin() != text.end();
 		}
+		// A free function rather than a switch inside the asset.select lambda: MSVC 14.51
+		// hits an internal compiler error on the latter, in a lambda nested that deep.
+		SceneSelection::AssetKind AssetKindForFile(const std::string& path)
+		{
+			using editor::dragdrop::FileKind;
+			const FileKind kind = editor::dragdrop::ClassifyFile(std::filesystem::path(path));
+			if (kind == FileKind::Model)
+			{
+				return SceneSelection::AssetKind::Model;
+			}
+			if (kind == FileKind::Material)
+			{
+				return SceneSelection::AssetKind::Material;
+			}
+			if (kind == FileKind::Texture)
+			{
+				return SceneSelection::AssetKind::Texture;
+			}
+			if (kind == FileKind::Script)
+			{
+				return SceneSelection::AssetKind::Script;
+			}
+			if (kind == FileKind::Prefab)
+			{
+				return SceneSelection::AssetKind::Prefab;
+			}
+			if (kind == FileKind::Scene)
+			{
+				return SceneSelection::AssetKind::Scene;
+			}
+			return SceneSelection::AssetKind::File;
+		}
+
 	} // namespace
 
 	std::vector<ControlMethod> BuildControlMethods()
@@ -2537,29 +2571,9 @@ namespace aether::editor
 			        {
 				        return json{{"error", "path is required"}};
 			        }
-			        std::string ext = std::filesystem::path(path).extension().generic_string();
-			        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-			        SceneSelection::AssetKind kind = SceneSelection::AssetKind::File;
-			        if (ext == ".mesh" || ext == ".gltf" || ext == ".glb")
-			        {
-				        kind = SceneSelection::AssetKind::Model;
-			        }
-			        else if (ext == ".cs")
-			        {
-				        kind = SceneSelection::AssetKind::Script;
-			        }
-			        else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".dds" || ext == ".texture")
-			        {
-				        kind = SceneSelection::AssetKind::Texture;
-			        }
-			        else if (path.contains(".prefab.toml"))
-			        {
-				        kind = SceneSelection::AssetKind::Prefab;
-			        }
-			        else if (path.contains(".scene.toml"))
-			        {
-				        kind = SceneSelection::AssetKind::Scene;
-			        }
+			        // Shared with the File Explorer, so selecting a file from a script and
+			        // clicking the same file in the browser agree on what it is.
+			        const SceneSelection::AssetKind kind = AssetKindForFile(path);
 			        const std::string name = std::filesystem::path(path).filename().generic_string();
 			        selection->SelectAsset(kind, path, name);
 			        return json{{"selected", path}, {"kind", static_cast<int>(kind)}};

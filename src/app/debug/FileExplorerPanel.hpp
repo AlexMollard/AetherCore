@@ -105,6 +105,7 @@ namespace aether::editor
 		bool m_openNewPopup = false;
 		char m_newScriptNameBuf[64] = {};
 		char m_newFolderNameBuf[64] = {};
+		char m_newMaterialNameBuf[64] = {};
 		std::filesystem::path m_createDir;
 		std::string m_opError;
 	};

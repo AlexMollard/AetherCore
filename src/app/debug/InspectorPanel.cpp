@@ -16,6 +16,7 @@
 
 #include "Color.hpp"
 #include "assets/AssetDatabase.hpp"
+#include "io/FileSystem.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
 #include "debug/ComponentDrawers.hpp"
@@ -274,7 +275,127 @@ namespace aether::editor
 			}
 		}
 
-		[[maybe_unused]] void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection)
+		// Editing state for the open material, owned by the panel so a slider drag mutates one
+		// in-memory copy instead of the file.
+		struct MaterialAssetEditState
+		{
+			std::string& path;
+			MaterialPresetSpec& spec;
+			bool& loaded;
+			bool& dirty;
+			std::string& error;
+		};
+
+		// Edits the .material.toml itself, rather than a copy living on some entity. This is
+		// what makes a material an asset: change it here and every object that references it
+		// changes, instead of you re-applying a preset object by object.
+		void DrawMaterialAssetEditor(const std::string& assetPath, MaterialAssetEditState state)
+		{
+			if (!state.loaded || state.path != assetPath)
+			{
+				state.path = assetPath;
+				state.loaded = false;
+				state.dirty = false;
+				state.error.clear();
+				auto text = io::FileSystem::ReadFileText(assetPath);
+				if (!text)
+				{
+					// Never offer to save over a file we could not read - that turns an
+					// unreadable material into an overwritten one.
+					state.error = "Could not read this material.";
+					state.spec = {};
+				}
+				else
+				{
+					state.spec = MaterialSerializer::Parse(assetPath, *text);
+					state.loaded = true;
+				}
+			}
+
+			if (!state.error.empty())
+			{
+				ImGui::TextColored(chrome::kWarning, "%s", state.error.c_str());
+				return;
+			}
+
+			MaterialAsset& m = state.spec.material;
+			bool changed = false;
+			changed |= ImGui::ColorEdit4("Base color", &m.baseColorFactor.x);
+			changed |= ImGui::SliderFloat("Metallic", &m.metallicFactor, 0.0f, 1.0f, "%.2f");
+			changed |= ImGui::SliderFloat("Roughness", &m.roughnessFactor, 0.0f, 1.0f, "%.2f");
+			changed |= ImGui::SliderFloat("Occlusion", &m.occlusionStrength, 0.0f, 1.0f, "%.2f");
+			changed |= ImGui::ColorEdit3("Emissive", &m.emissiveFactor.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
+			changed |= ImGui::Checkbox("Two-sided", &m.doubleSided);
+			ImGui::SameLine();
+			changed |= ImGui::Checkbox("Blend", &m.alphaBlend);
+			ImGui::SameLine();
+			changed |= ImGui::Checkbox("Mask", &m.alphaMask);
+			changed |= ImGui::Checkbox("Vertex colour", &m.modulateVertexColor);
+			ImGui::SameLine();
+			changed |= ImGui::Checkbox("Receives shadows", &m.receiveShadows);
+			if (m.alphaMask)
+			{
+				changed |= ImGui::SliderFloat("Cutoff", &m.alphaCutoff, 0.0f, 1.0f, "%.2f");
+			}
+
+			ImGui::SeparatorText("Textures");
+			const std::pair<const char*, std::string*> slots[] = {
+			        {"Albedo", &state.spec.albedoPath},
+			        {"Normal", &state.spec.normalPath},
+			        {"Metallic/Rough", &state.spec.metallicRoughnessPath},
+			        {"Occlusion", &state.spec.occlusionPath},
+			        {"Emissive", &state.spec.emissivePath},
+			};
+			for (const auto& [label, path]: slots)
+			{
+				ImGui::PushID(label);
+				ImGui::TextDisabled("%s", label);
+				ImGui::SameLine(140.0f);
+				ImGui::TextUnformatted(path->empty() ? "(none)  drop a texture here" : path->c_str());
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload);
+					        payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
+					{
+						const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+						if (file->kind == dragdrop::FileKind::Texture)
+						{
+							*path = file->path;
+							changed = true;
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+				if (!path->empty())
+				{
+					ImGui::SameLine();
+					if (ImGui::SmallButton(ICON_FA_XMARK))
+					{
+						path->clear();
+						changed = true;
+					}
+				}
+				ImGui::PopID();
+			}
+
+			state.dirty |= changed;
+
+			// Written once the drag ends rather than on every slider frame: dragging Roughness
+			// across its range would otherwise be a few hundred file writes.
+			if (state.dirty && !ImGui::IsAnyItemActive())
+			{
+				if (auto written = io::FileSystem::WriteFileText(assetPath, MaterialSerializer::ToToml(state.spec)); !written)
+				{
+					state.error = "Could not write this material.";
+				}
+				state.dirty = false;
+			}
+
+			ImGui::Separator();
+			ImGui::TextDisabled(state.dirty ? "Saving..." : "Saved");
+		}
+
+		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection, MaterialAssetEditState editState)
 		{
 			const SceneSelection::Asset& asset = selection.SelectedAsset();
 			const Entity target = selection.LastEntityPrimary();
@@ -339,6 +460,21 @@ namespace aether::editor
 					}
 				}
 				ImGui::EndDisabled();
+				if (!hasTarget)
+				{
+					ImGui::SetItemTooltip("Select an entity to apply this material to it");
+				}
+				ImGui::SeparatorText("Material");
+				if (asset.path.ends_with(".material"))
+				{
+					// The importer's cooked binary. Editing it would be overwritten by the
+					// next model import, and it has no authored source to edit instead.
+					ImGui::TextDisabled("Imported with a model - not editable here.");
+				}
+				else
+				{
+					DrawMaterialAssetEditor(asset.path, editState);
+				}
 			}
 			else if (asset.kind == SceneSelection::AssetKind::Texture)
 			{
@@ -379,11 +515,20 @@ namespace aether::editor
 		ImGui::Begin("Inspector", VisiblePtr());
 		World& world = context.Get<World>();
 		auto& selection = context.Get<SceneSelection>();
-		Entity entity = selection.Primary();
-		if (!IsAlive(world, entity) && selection.HasAsset() && IsAlive(world, selection.LastEntityPrimary()))
+
+		// An asset selection gets the asset's own inspector. It carries the last selected
+		// entity as an apply target itself, which is why the entity fallback that used to
+		// stand here is gone - it showed the previous entity's components while you had a
+		// material selected, and was the reason a material looked like it had no UI at all.
+		if (selection.HasAsset())
 		{
-			entity = selection.LastEntityPrimary();
+			DrawAssetInspector(context, world, selection,
+			        MaterialAssetEditState{m_materialAssetPath, m_materialAsset, m_materialAssetLoaded, m_materialAssetDirty, m_materialAssetError});
+			ImGui::End();
+			return;
 		}
+
+		const Entity entity = selection.Primary();
 
 		if (!IsAlive(world, entity))
 		{
