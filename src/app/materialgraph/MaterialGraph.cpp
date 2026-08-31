@@ -805,10 +805,24 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 {}
     const float3 albedo    = {};
     const float  metallic  = saturate({});
-    const float  roughness = clamp({}, 0.04f, 1.0f);
+    float        roughness = clamp({}, 0.04f, 1.0f);
     const float3 emissive  = {};
 
     const float3 N = normalize({});
+
+    // Geometric specular anti-aliasing, the same filter gltf_mesh applies. A normal that
+    // swings hard across one pixel - a normal map, or curvature at distance - concentrates
+    // the highlight into single pixels that sparkle as the camera moves. Widening the
+    // roughness by the normal's screen-space variance makes the surface as rough as its
+    // footprint actually is, so the highlight resolves instead of aliasing.
+    {{
+        const float3 dNdx = ddx(N);
+        const float3 dNdy = ddy(N);
+        const float kSigma2 = 0.15915494f; // half-pixel Gaussian width, the paper's fit
+        const float kKappa = 0.18f;        // ceiling, so a crease cannot turn the material matte
+        const float variance = kSigma2 * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
+        roughness = sqrt(saturate(roughness * roughness + min(2.0f * variance, kKappa)));
+    }}
     const float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
     const float3 L = normalize(-fc->sunDirectionIntensity.xyz);
     const float3 H = normalize(V + L);
