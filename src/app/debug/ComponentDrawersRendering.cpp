@@ -703,6 +703,7 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_IMAGE "  Sprite Renderer", ICON_FA_XMARK "##removeSprite", removed, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removed)
 		{
+			RecordComponentRemoval(context, world, entity, "Sprite Renderer");
 			world.Remove<SpriteRendererComponent>(entity);
 			return;
 		}
@@ -827,6 +828,7 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_FILM "  Sprite Animator", ICON_FA_XMARK "##removeSpriteAnimator", removed, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removed)
 		{
+			RecordComponentRemoval(context, world, entity, "Sprite Animator");
 			world.Remove<SpriteAnimatorComponent>(entity);
 			return;
 		}

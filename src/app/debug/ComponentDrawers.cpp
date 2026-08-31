@@ -8,9 +8,13 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 
+#include "debug/EditorCommand.hpp"
+#include "debug/UndoStack.hpp"
+#include "editor/ComponentFields.hpp"
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAnimationAsset.hpp"
@@ -299,7 +303,25 @@ namespace aether::editor
 			}
 		}
 	}
-	void DrawCamera(World& world, Entity entity)
+	// The reflected drawer records a RemoveComponentCommand when its X is pressed, and the
+	// inspector's field-edit net deliberately skips a component that vanished mid-frame
+	// ("recorded elsewhere"). For the bespoke drawers that elsewhere did not exist: their X
+	// removed the component and left no history, so the next Ctrl+Z reached past it into an
+	// unrelated edit.
+	void RecordComponentRemoval(app::LayerContext& context, World& world, Entity entity, const char* componentName)
+	{
+		auto* undo = context.services.TryGet<UndoStack>();
+		if (undo == nullptr)
+		{
+			return;
+		}
+		nlohmann::json snapshot;
+		bool isReflected = false;
+		CaptureComponentFields(world, entity, componentName, context.services, snapshot, isReflected);
+		undo->Record(std::make_unique<RemoveComponentCommand>(entity.id, componentName, std::move(snapshot), isReflected));
+	}
+
+	void DrawCamera(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* cam = world.TryGet<CameraComponent>(entity);
 		if (cam == nullptr)
@@ -310,6 +332,7 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_VIDEO "  Camera", ICON_FA_XMARK "##removeCamera", removed, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removed)
 		{
+			RecordComponentRemoval(context, world, entity, "Camera");
 			world.Remove<CameraComponent>(entity);
 			if (world.Has<MainCameraComponent>(entity))
 			{

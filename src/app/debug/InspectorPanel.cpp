@@ -866,7 +866,7 @@ namespace aether::editor
 		DrawUiRect(world, entity);
 		DrawUiImage(context, world, entity);
 		DrawUiText(world, entity);
-		DrawCamera(world, entity);
+		DrawCamera(context, world, entity);
 		DrawScript(context, world, entity);
 		// UI Canvas/Rect/Image/Text have richer bespoke drawers above; exclude them here so the
 		// reflected pass does not draw them a second time. UI Slider/Toggle/Button/Progress Bar and

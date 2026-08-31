@@ -45,7 +45,10 @@ namespace aether::editor
 	void DrawUiRect(World& world, Entity entity);
 	void DrawUiImage(app::LayerContext& context, World& world, Entity entity);
 	void DrawUiText(World& world, Entity entity);
-	void DrawCamera(World& world, Entity entity);
+	void DrawCamera(app::LayerContext& context, World& world, Entity entity);
+
+	// Snapshot a component into history before a bespoke drawer's X removes it.
+	void RecordComponentRemoval(app::LayerContext& context, World& world, Entity entity, const char* componentName);
 	void AddScriptToEntity(World& world, Entity entity, std::string typeName = {});
 	bool AcceptScriptDropOnEntity(World& world, Entity entity);
 	void DrawScript(app::LayerContext& context, World& world, Entity entity);
