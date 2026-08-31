@@ -131,10 +131,23 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // against tangent-space normal-map directionality.
     float3 Ngeom = N;
 
+    // Variation the normal map lost to mip filtering, recovered below as roughness.
+    // Averaging conflicting normals shortens the result; the shortfall is Toksvig's measure
+    // of the detail that averaging removed.
+    float normalMapVariance = 0.0;
     if (mat.normalSlot != kNoTexture)
     {
         float3 tn = g_textures[mat.normalSlot].Sample(g_linearSampler, uv).xyz;
         tn = tn * 2.0 - 1.0;
+
+        // A deadzone before this counts as lost variation: an 8-bit normal map does not
+        // reconstruct to exactly unit length even at mip 0, and treating that quantisation
+        // as detail would roughen every normal-mapped surface at every distance.
+        const float tnLength = saturate(length(tn));
+        const float kQuantisationSlack = 0.04;
+        const float shortfall = max(0.0, 1.0 - tnLength - kQuantisationSlack);
+        normalMapVariance = shortfall / max(tnLength, 1e-3);
+
         N = normalize(mul(tn, TBN));
         N = normalize(lerp(Ngeom, N, 0.60f));
     }
@@ -180,7 +193,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // crease cannot turn the whole material matte.
         const float kKappa = 0.18;
         const float variance = kSigma2 * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
-        const float kernelRoughness = min(2.0 * variance, kKappa);
+        // Screen-space derivatives only see the change ACROSS a pixel. Detail finer than a
+        // pixel is gone before this runs - the mip chain already averaged it away - so the
+        // normal map's own shortfall is added alongside, scaled by the same influence the
+        // map was blended in with.
+        const float mipVariance = normalMapVariance * 0.60;
+        const float kernelRoughness = min(2.0 * variance + mipVariance, kKappa);
         roughness = sqrt(saturate(roughness * roughness + kernelRoughness));
     }
 
