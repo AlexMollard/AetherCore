@@ -722,7 +722,7 @@ namespace aether::editor
 
 		methods.push_back({"scene.get",
 		        "get_entity",
-		        "Full detail for one entity by id: name, world position, scale, and its component type list.",
+		        "Full detail for one entity by id: name, world position, scale, its component type list, and 'editable' - the subset of those names get_component and set_component accept. Unreflected internals appear in 'components' under their raw C++ type name; they are real, just not addressable.",
 		        false,
 		        Obj({{"id", IntProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -767,6 +767,30 @@ namespace aether::editor
 				        comps.push_back(match != types.end() ? match->name : std::string(raw));
 			        }
 			        j["components"] = comps;
+
+			        // Which of those names get_component / set_component actually accept. The
+			        // list above deliberately keeps unreflected internals under their raw C++
+			        // names, so it cannot be used to decide what is editable - and a component
+			        // carrying no editable fields (a tag such as Scene Transient) reports the
+			        // same error whether it is present or absent, so probing was no answer
+			        // either.
+			        json editable = json::array();
+			        for (const reflect::ComponentType& rt: reflect::ComponentTypes())
+			        {
+				        if (rt.tryGetRawConst(world, entity) != nullptr)
+				        {
+					        editable.push_back(rt.name);
+				        }
+			        }
+			        for (const ComponentFieldSet& set: ComponentFieldSets())
+			        {
+				        json probe = json::object();
+				        if (set.read(world, entity, ctx.services, probe))
+				        {
+					        editable.push_back(set.name);
+				        }
+			        }
+			        j["editable"] = editable;
 			        return j;
 		        }});
 
