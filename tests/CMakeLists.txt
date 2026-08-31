@@ -9,6 +9,7 @@ add_executable(EngineTests
     # the reflection TUs that populate the component registry at static-init) and the
     # ImguiFrameData type its test exercises are compiled straight in here.
     "${CMAKE_SOURCE_DIR}/src/app/EngineContentPaths.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/editor/ShaderCompiler.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/materialgraph/MaterialGraph.cpp"
 "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerApply.cpp"
@@ -87,6 +88,15 @@ target_include_directories(EngineTests PRIVATE "${box2d_SOURCE_DIR}/include")
 # Mirror App's scenes dir so ReadSceneFile("default") resolves the committed template.
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 target_compile_definitions(EngineTests PRIVATE AETHER_TESTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
+# The generated-shader compile test drives the editor's ShaderCompiler, which needs the same
+# slangc, arguments and engine include dir the app is given. Absent when CMake found no
+# slangc, and the test skips itself in that case.
+if(SLANGC_EXECUTABLE)
+    target_compile_definitions(EngineTests PRIVATE
+        AETHER_SLANGC_EXE="${SLANGC_EXECUTABLE}"
+        AETHER_SLANG_ARGS="${AETHERCORE_SLANG_SHADER_ARGS}"
+        AETHER_SHADER_INCLUDE_DIR="${AETHERCORE_SHADER_SOURCE_DIR}")
+endif()
 target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest imgui nlohmann_json::nlohmann_json)
 aethercore_target_defaults(EngineTests)
 if(MSVC)

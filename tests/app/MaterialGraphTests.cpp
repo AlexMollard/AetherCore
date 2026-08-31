@@ -9,7 +9,11 @@
 #include <vector>
 #include <fstream>
 
+#include "editor/ShaderCompiler.hpp"
 #include "materialgraph/MaterialGraph.hpp"
+
+#include <filesystem>
+#include <system_error>
 
 using namespace aether::editor;
 
@@ -418,4 +422,75 @@ TEST_CASE("A float feeding a colour is broadcast rather than truncated")
 	const std::string shader = GenerateMaterialShader(graph, error);
 	REQUIRE(error.empty());
 	CHECK(shader.find("float3(n2)") != std::string::npos);
+}
+
+// The generator writes calls into engine shader headers it does not own. Those headers keep
+// changing - a parameter gets added to SkyGradient, a helper gains an argument - and nothing
+// in the build tells the generator about it: the app compiles clean, every string assertion
+// above still passes, and the breakage only surfaces when somebody opens a graph material and
+// slangc reports "not enough arguments to call". That has already happened once, and it went
+// unnoticed for several changes because generated shaders are only compiled on demand.
+//
+// So this actually compiles the generated source, through the same ShaderCompiler the editor
+// uses rather than a second hand-rolled slangc invocation - the point is to exercise the real
+// path, including the engine include directory that lets a generated shader reach those
+// headers at all.
+TEST_CASE("Every generated shader compiles against the engine headers")
+{
+	if (!CanCompileShaders())
+	{
+		// No slangc in this build (it is optional). Nothing to assert rather than a failure.
+		return;
+	}
+
+	namespace fs = std::filesystem;
+	const fs::path dir = fs::temp_directory_path() / "aether-materialgraph-compile";
+	std::error_code ec;
+	fs::create_directories(dir, ec);
+
+	const auto compiles = [&](const MaterialGraph& graph, const char* name)
+	{
+		std::string error;
+		const std::string shader = GenerateMaterialShader(graph, error);
+		REQUIRE(error.empty());
+
+		const fs::path slangFile = dir / (std::string(name) + ".slang");
+		{
+			std::ofstream out(slangFile, std::ios::binary);
+			REQUIRE(out.good());
+			out << shader;
+		}
+
+		std::string compileError;
+		const bool ok = CompileOne(slangFile, dir, compileError);
+		INFO("slangc rejected the generated shader '" << std::string(name) << "': " << compileError);
+		CHECK(ok);
+	};
+
+	// The default graph is what every new material starts as, so it must always compile.
+	compiles(MakeDefaultMaterialGraph(), "default");
+
+	// And one using every addable node, so a node whose emitted expression stops matching a
+	// header is caught too, not just the lighting tail every graph shares.
+	{
+		MaterialGraph graph;
+		graph.nodes.push_back(MaterialNode{.id = 1, .type = MaterialNodeType::Output});
+		int id = 2;
+		int previous = 0;
+		for (const MaterialNodeType type: MaterialAddableNodeTypes())
+		{
+			MaterialNode node = MakeMaterialNode(id++, type);
+			graph.nodes.push_back(node);
+			if (previous != 0)
+			{
+				graph.links.push_back(MaterialLink{.id = id + 1000, .fromNode = previous, .fromPin = 0, .toNode = node.id, .toPin = 0});
+			}
+			previous = node.id;
+		}
+		graph.links.push_back(MaterialLink{.id = 999, .fromNode = previous, .fromPin = 0, .toNode = 1, .toPin = 0});
+		graph.nextId = id;
+		compiles(graph, "every-node");
+	}
+
+	fs::remove_all(dir, ec);
 }
