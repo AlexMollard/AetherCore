@@ -212,16 +212,36 @@ namespace aether::editor
 			ImGui::EndCombo();
 		}
 
+		// These values are SETTINGS. Writing them straight to the stack made this window and
+		// the Settings window disagree, and a viewport resize rebuilds the stack from the
+		// settings - so a change made here vanished the next time the window was resized.
+		auto* settings = context.TryGet<aether::SettingsService>();
+		const auto commit = [&](const char* key, auto&& store, auto&& applyDirect)
+		{
+			if (settings != nullptr)
+			{
+				store(settings->Values().graphics);
+				settings->ApplyField(key);
+				settings->MarkDirty();
+			}
+			else
+			{
+				applyDirect();
+			}
+		};
+
 		bool autoExposure = stack.IsAutoExposureEnabled();
 		if (ImGui::Checkbox("Auto exposure", &autoExposure))
 		{
-			stack.SetAutoExposureEnabled(autoExposure);
+			commit(
+			        "graphics.autoExposure", [&](auto& g) { g.autoExposure = autoExposure; }, [&] { stack.SetAutoExposureEnabled(autoExposure); });
 		}
 
 		float exposure = stack.GetExposure();
 		if (ImGui::SliderFloat(autoExposure ? "Exposure compensation" : "Exposure", &exposure, 0.01f, 10.0f, "%.2f"))
 		{
-			stack.SetExposure(exposure);
+			commit(
+			        "graphics.exposure", [&](auto& g) { g.exposure = exposure; }, [&] { stack.SetExposure(exposure); });
 		}
 
 		if (autoExposure)
@@ -229,7 +249,8 @@ namespace aether::editor
 			float key = stack.GetAutoExposureKey();
 			if (ImGui::SliderFloat("Key", &key, 0.02f, 0.6f, "%.3f"))
 			{
-				stack.SetAutoExposureKey(key);
+				commit(
+				        "graphics.exposureKey", [&](auto& g) { g.exposureKey = key; }, [&] { stack.SetAutoExposureKey(key); });
 			}
 			if (ImGui::IsItemHovered())
 			{
@@ -238,7 +259,8 @@ namespace aether::editor
 			float speed = stack.GetAutoExposureSpeed();
 			if (ImGui::SliderFloat("Adaptation", &speed, 0.05f, 8.0f, "%.2f"))
 			{
-				stack.SetAutoExposureSpeed(speed);
+				commit(
+				        "graphics.exposureSpeed", [&](auto& g) { g.exposureSpeed = speed; }, [&] { stack.SetAutoExposureSpeed(speed); });
 			}
 			if (ImGui::IsItemHovered())
 			{
@@ -251,7 +273,8 @@ namespace aether::editor
 		float bloomStrength = stack.GetBloomStrength();
 		if (ImGui::SliderFloat("Strength", &bloomStrength, 0.0f, 0.5f, "%.3f"))
 		{
-			stack.SetBloomStrength(bloomStrength);
+			commit(
+			        "graphics.bloomStrength", [&](auto& g) { g.bloomStrength = bloomStrength; }, [&] { stack.SetBloomStrength(bloomStrength); });
 		}
 		if (ImGui::IsItemHovered())
 		{
@@ -260,7 +283,8 @@ namespace aether::editor
 		float bloomRadius = stack.GetBloomFilterRadius();
 		if (ImGui::SliderFloat("Radius", &bloomRadius, 0.5f, 4.0f, "%.2f"))
 		{
-			stack.SetBloomFilterRadius(bloomRadius);
+			commit(
+			        "graphics.bloomRadius", [&](auto& g) { g.bloomRadius = bloomRadius; }, [&] { stack.SetBloomFilterRadius(bloomRadius); });
 		}
 		if (ImGui::IsItemHovered())
 		{
