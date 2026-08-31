@@ -1,7 +1,9 @@
 #include <doctest/doctest.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
+#include "debug/SelectionBounds.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformEdit.hpp"
@@ -9,6 +11,7 @@
 #include "scene/World.hpp"
 #include "scene/reflection/Reflection.hpp"
 
+#include <array>
 #include <cstdlib>
 
 using namespace aether;
@@ -199,4 +202,55 @@ TEST_CASE("Setting euler leaves position bit-identical")
 	CHECK(t.localToWorld[3].x == posBefore.x);
 	CHECK(t.localToWorld[3].y == posBefore.y);
 	CHECK(t.localToWorld[3].z == posBefore.z);
+}
+
+// ── Viewport focus box (what F frames) ────────────────────────────────────────
+
+TEST_CASE("Selection focus box covers every selected entity")
+{
+	World world;
+	const Entity a = world.Create();
+	const Entity b = world.Create();
+	world.Emplace<TransformComponent>(a, TransformComponent{.localToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(-10.0f, 0.0f, 0.0f))});
+	world.Emplace<TransformComponent>(b, TransformComponent{.localToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 4.0f, 0.0f))});
+
+	const std::array<Entity, 2> both{a, b};
+	const auto box = aether::editor::ComputeSelectionFocusBox(world, both);
+	REQUIRE(box.has_value());
+	// Centred between them, not on either one: framing only the primary was the bug.
+	CHECK(box->center.x == doctest::Approx(0.0f));
+	CHECK(box->center.y == doctest::Approx(2.0f));
+	CHECK(box->size.x == doctest::Approx(21.0f)); // 20 apart, plus half a unit of scale each side
+}
+
+TEST_CASE("Selection focus box keeps a lone entity's framing unchanged")
+{
+	World world;
+	const Entity only = world.Create();
+	world.Emplace<TransformComponent>(only, TransformComponent{.localToWorld = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 1.0f, -2.0f)), glm::vec3(4.0f))});
+
+	const std::array<Entity, 1> one{only};
+	const auto box = aether::editor::ComputeSelectionFocusBox(world, one);
+	REQUIRE(box.has_value());
+	CHECK(box->center.x == doctest::Approx(3.0f));
+	CHECK(box->center.y == doctest::Approx(1.0f));
+	CHECK(box->center.z == doctest::Approx(-2.0f));
+	// The old code framed at 2.5 * max(scale); the box's largest side must still be that scale.
+	CHECK(glm::max(box->size.x, glm::max(box->size.y, box->size.z)) == doctest::Approx(4.0f));
+}
+
+TEST_CASE("Selection focus box ignores entities that cannot be framed")
+{
+	World world;
+	const Entity placed = world.Create();
+	const Entity noTransform = world.Create();
+	world.Emplace<TransformComponent>(placed, TransformComponent{.localToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f, 0.0f, 0.0f))});
+
+	const std::array<Entity, 3> mixed{placed, noTransform, Entity{}};
+	const auto box = aether::editor::ComputeSelectionFocusBox(world, mixed);
+	REQUIRE(box.has_value());
+	CHECK(box->center.x == doctest::Approx(5.0f));
+
+	const std::array<Entity, 1> nothing{noTransform};
+	CHECK_FALSE(aether::editor::ComputeSelectionFocusBox(world, nothing).has_value());
 }

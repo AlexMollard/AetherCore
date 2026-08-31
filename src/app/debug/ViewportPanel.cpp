@@ -26,6 +26,7 @@
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/SelectionBounds.hpp"
 #include "debug/ScenePicker.hpp"
 #include "debug/UndoStack.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
@@ -2060,28 +2061,23 @@ namespace aether::editor
 		{
 			auto& selection = context.Get<SceneSelection>();
 			World& world = context.Get<World>();
-			const Entity primary = selection.Primary();
-			if (primary.IsValid() && world.GetRegistry().valid(World::ToEntt(primary)))
+			const auto focus = ComputeSelectionFocusBox(world, selection.All());
+			if (focus)
 			{
-				if (const auto* tc = world.TryGet<TransformComponent>(primary))
+				if (Camera* cam = context.Get<CameraManager>().TryGet(CameraHandle{m_editorCamId}))
 				{
-					if (Camera* cam = context.Get<CameraManager>().TryGet(CameraHandle{m_editorCamId}))
+					const glm::vec3 target = focus->center;
+					const glm::vec3 size = focus->size;
+					if (world.GetSceneKind() == SceneKind::Scene2D)
 					{
-						const glm::vec3 target = glm::vec3(tc->localToWorld[3]);
-						const float sx = glm::length(glm::vec3(tc->localToWorld[0]));
-						const float sy = glm::length(glm::vec3(tc->localToWorld[1]));
-						const float sz = glm::length(glm::vec3(tc->localToWorld[2]));
-						if (world.GetSceneKind() == SceneKind::Scene2D)
-						{
-							const glm::vec3 current = cam->GetPosition();
-							cam->SetPosition({target.x, target.y, current.z});
-							cam->SetOrthographic(glm::max(2.0f, 2.5f * glm::max(sx, sy)), cam->GetNearPlane(), cam->GetFarPlane());
-						}
-						else
-						{
-							const float dist = glm::max(4.0f, 2.5f * glm::max(sx, glm::max(sy, sz)));
-							cam->FocusOn(target, dist);
-						}
+						const glm::vec3 current = cam->GetPosition();
+						cam->SetPosition({target.x, target.y, current.z});
+						cam->SetOrthographic(glm::max(2.0f, 2.5f * glm::max(size.x, size.y)), cam->GetNearPlane(), cam->GetFarPlane());
+					}
+					else
+					{
+						const float dist = glm::max(4.0f, 2.5f * glm::max(size.x, glm::max(size.y, size.z)));
+						cam->FocusOn(target, dist);
 					}
 				}
 			}
