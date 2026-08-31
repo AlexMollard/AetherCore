@@ -56,6 +56,8 @@ namespace aether
 		[[nodiscard]] coro::async<Expected<Texture>> CreateTextureAsync(std::string_view path);
 
 		[[nodiscard]] Expected<GraphicsPipeline> CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
+		// The expensive half of the above, callable from any thread. See PipelineCache.
+		[[nodiscard]] gpu::ResourceRegistry::PreparedPipeline PrepareGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 
 		[[nodiscard]] Expected<MaterialAsset> LoadMaterialPreset(std::string_view path);
 

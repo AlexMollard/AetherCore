@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <future>
 #include <filesystem>
 #include <format>
 #include <string_view>
@@ -21,7 +23,9 @@
 #include "io/FileUtil.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/PipelineCache.hpp"
+#include "material/PipelineCache.hpp"
 #include "material/TextureRegistry.hpp"
+#include <utility>
 #include "mesh/PrimitiveMeshes.hpp"
 #include "rendering/ModelPreviewService.hpp"
 #include "rendering/RenderingSubsystem.hpp"
@@ -557,7 +561,7 @@ namespace aether::editor
 		return true;
 	}
 
-	bool MaterialGraphPanel::Compile(app::LayerContext& context)
+	void MaterialGraphPanel::RequestCompile(app::LayerContext& context)
 	{
 		// EditorProjectContext is the registered service; EditorProjectManager is not, and
 		// asking for it returned null - which made every compile bail before doing anything,
@@ -567,11 +571,17 @@ namespace aether::editor
 		{
 			m_status = "No project is open, so there is nowhere to write the shader.";
 			m_statusIsError = true;
-			return false;
+			return;
 		}
 		if (!m_graph || m_path.empty())
 		{
-			return false;
+			return;
+		}
+		if (m_compiling)
+		{
+			// One run at a time. The graph's current state is picked up when this one lands,
+			// so dragging a slider queues exactly one more compile rather than one per frame.
+			return;
 		}
 
 		std::string error;
@@ -580,7 +590,10 @@ namespace aether::editor
 		{
 			m_status = error;
 			m_statusIsError = true;
-			return false;
+			// Marked as submitted so a graph that cannot generate is reported once instead of
+			// being retried every frame.
+			m_submittedSignature = GraphSignature();
+			return;
 		}
 
 		const std::filesystem::path root = project->root;
@@ -590,24 +603,92 @@ namespace aether::editor
 		{
 			m_status = "Could not write the generated shader.";
 			m_statusIsError = true;
-			return false;
+			return;
 		}
 
-		// The same compiler the project shaders go through, so a graph result is an ordinary
-		// project shader from here on and nothing downstream has to know better.
-		std::string compileError;
-		if (!CompileOne(slangPath, ProjectShaderIntermediateDir(root), compileError))
+		PendingCompile pending;
+		pending.materialPath = m_path;
+		pending.signature = GraphSignature();
+		pending.shaderVfsPath = std::format("shaders://{}.spv", stem);
+		// The worker gets paths by value and touches nothing else on this object: the shader
+		// source is already on disk, so slangc needs no access to the graph at all.
+		const std::filesystem::path outDir = ProjectShaderIntermediateDir(root);
+		auto* assets = context.TryGet<AssetManager>();
+		// Interned HERE, on this thread: InternShaderVfsPath mutates a set the worker must
+		// not touch. The view it returns is stable for the life of the AssetManager.
+		const std::string_view internedShaderPath = assets != nullptr ? assets->InternShaderVfsPath(pending.shaderVfsPath) : std::string_view{};
+		using PreparedList = std::vector<PipelineCache::PreparedReload>;
+		pending.result = std::async(std::launch::async,
+		        [slangPath, outDir, assets, internedShaderPath]() -> std::optional<PreparedList>
+		        {
+			        std::string compileError;
+			        if (!CompileOne(slangPath, outDir, compileError))
+			        {
+				        // Reported through the log rather than carried back, so the worker
+				        // owns no storage the panel might already have replaced.
+				        AE_WARN(LogCategory::App, "Material graph: {}", compileError);
+				        return std::nullopt;
+			        }
+			        // Building the shader objects is the other half of the stall: the driver
+			        // compiles SPIR-V to machine code here, tens of milliseconds. Only the
+			        // swap itself is left for the main thread.
+			        if (assets == nullptr || internedShaderPath.empty())
+			        {
+				        return PreparedList{};
+			        }
+			        return assets->GetPipelineCache().PrepareReload(internedShaderPath);
+		        });
+		m_submittedSignature = pending.signature;
+		m_compiling = std::move(pending);
+		m_status = "Compiling...";
+		m_statusIsError = false;
+	}
+
+	void MaterialGraphPanel::PollCompile(app::LayerContext& context)
+	{
+		if (!m_compiling)
 		{
-			m_status = compileError;
-			m_statusIsError = true;
-			return false;
+			return;
+		}
+		if (m_compiling->result.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		{
+			return;
 		}
 
-		const std::string shaderVfsPath = std::format("shaders://{}.spv", stem);
-		m_edit.spec.shaderVfsPath = shaderVfsPath;
+		PendingCompile finished = std::move(*m_compiling);
+		m_compiling.reset();
+
+		std::optional<std::vector<PipelineCache::PreparedReload>> built = finished.result.get();
+		auto* assets = context.TryGet<AssetManager>();
+		// Any path that abandons the result has to hand the shader objects back, or they are
+		// leaked - they were created by the driver but never registered.
+		const auto discard = [&]()
+		{
+			if (built && !built->empty() && assets != nullptr)
+			{
+				assets->GetPipelineCache().DiscardPrepared(std::move(*built));
+			}
+		};
+
+		if (!built)
+		{
+			m_status = "Shader compile failed - see the Console. The previous shader is still in use.";
+			m_statusIsError = true;
+			return;
+		}
+		// The selection can move while a compile is in flight. Applying the result then would
+		// write one material's shader path into another's file.
+		if (finished.materialPath != m_path)
+		{
+			discard();
+			return;
+		}
+
+		m_edit.spec.shaderVfsPath = finished.shaderVfsPath;
 		if (!WriteMaterial(context))
 		{
-			return false;
+			discard();
+			return;
 		}
 
 		// PipelineCache keys on the shader path, so recompiling to the same name used to
@@ -619,17 +700,15 @@ namespace aether::editor
 		// a new cache key. That is worse than it looks: the key comes back round on the third
 		// compile and returns the pipeline built on the first, so the preview froze on an old
 		// version - and looked correct exactly once, which is how it got committed.
-		if (auto* assets = context.TryGet<AssetManager>(); assets != nullptr)
+		if (assets != nullptr && !built->empty())
 		{
-			const std::size_t reloaded = assets->GetPipelineCache().Reload(assets->InternShaderVfsPath(shaderVfsPath));
-			AE_INFO(LogCategory::App, "Material graph: compiled {} and reloaded {} pipeline(s)", stem, reloaded);
+			assets->GetPipelineCache().CommitReload(std::move(*built));
 		}
 
 		m_status = std::format("Compiled {}", std::filesystem::path(m_path).filename().generic_string());
 		m_statusIsError = false;
-		m_compiledSignature = GraphSignature();
+		m_compiledSignature = finished.signature;
 		RefreshPreview(context);
-		return true;
 	}
 
 	void MaterialGraphPanel::RefreshPreview(app::LayerContext& context)
@@ -801,6 +880,7 @@ namespace aether::editor
 
 		m_graph = ParseMaterialGraph(MaterialSerializer::ToToml(m_edit.spec));
 		m_compiledSignature = GraphSignature();
+		m_submittedSignature = m_compiledSignature;
 		RefreshPreview(context);
 	}
 
@@ -861,6 +941,7 @@ namespace aether::editor
 				m_graph = GraphFromMaterial(m_edit.spec);
 				m_positionsApplied = false;
 				m_compiledSignature.clear();
+				m_submittedSignature.clear();
 				m_status = "Graph created from this material's values and textures.";
 				m_statusIsError = false;
 			}
@@ -871,7 +952,7 @@ namespace aether::editor
 		ImGui::SameLine();
 		if (ImGui::Button(ICON_FA_HAMMER "  Compile"))
 		{
-			Compile(context);
+			RequestCompile(context);
 		}
 		ImGui::SameLine();
 		ImGui::Checkbox("Auto", &m_autoCompile);
@@ -904,6 +985,7 @@ namespace aether::editor
 				// rendering a shader nothing can edit any more.
 				m_edit.spec.shaderVfsPath.clear();
 				m_compiledSignature.clear();
+				m_submittedSignature.clear();
 				WriteMaterial(context);
 				RefreshPreview(context);
 				m_status = "Graph removed.";
@@ -934,6 +1016,7 @@ namespace aether::editor
 	void MaterialGraphPanel::OnImGui(app::LayerContext& context)
 	{
 		ImGui::Begin("Material", VisiblePtr());
+		PollCompile(context);
 		FollowSelection(context);
 
 		if (m_path.empty())
@@ -992,13 +1075,15 @@ namespace aether::editor
 			// passed".
 			if (m_autoCompile)
 			{
-				if (GraphSignature() != m_compiledSignature)
+				// Compared against what was SUBMITTED, not what last succeeded: a graph that
+				// fails to compile would otherwise be resubmitted every frame forever.
+				if (GraphSignature() != m_submittedSignature)
 				{
 					m_idleSeconds += ImGui::GetIO().DeltaTime;
 					if (m_idleSeconds >= kAutoCompileIdleSeconds && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
 					{
 						m_idleSeconds = 0.0f;
-						Compile(context);
+						RequestCompile(context);
 					}
 				}
 				else

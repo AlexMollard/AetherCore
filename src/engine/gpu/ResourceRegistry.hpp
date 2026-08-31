@@ -176,6 +176,32 @@ namespace aether::gpu
 
 		[[nodiscard]] static PipelineHandle CreateGraphicsPipeline(Device device, const struct GraphicsPipelineDesc& desc) noexcept;
 
+		// A graphics pipeline built but not yet registered.
+		//
+		// Creating one costs the driver tens of milliseconds - it compiles SPIR-V to machine
+		// code - while REGISTERING it is a handful of pointer writes. The registry keeps no
+		// locks and is single-threaded by design, so the two are split: the expensive half
+		// can run on a worker and the cheap half on the thread that owns the registry.
+		struct PreparedPipeline
+		{
+			void* opaque = nullptr;
+
+			[[nodiscard]] bool IsValid() const noexcept
+			{
+				return opaque != nullptr;
+			}
+		};
+
+		// ANY THREAD. Does the driver work and nothing else; touches no registry state.
+		[[nodiscard]] static PreparedPipeline PrepareGraphicsPipeline(Device device, const struct GraphicsPipelineDesc& desc) noexcept;
+
+		// REGISTRY THREAD. Consumes `prepared` either way.
+		[[nodiscard]] static PipelineHandle CommitPreparedPipeline(PreparedPipeline prepared, const char* debugName) noexcept;
+
+		// REGISTRY THREAD. Destroys a prepared pipeline that will never be committed - the
+		// material was switched, or the editor closed, while it was still being built.
+		static void DiscardPreparedPipeline(PreparedPipeline prepared) noexcept;
+
 		struct ResolvedPipeline
 		{
 			const void* state = nullptr;

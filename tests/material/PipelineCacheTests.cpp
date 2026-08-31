@@ -3,6 +3,9 @@
 #include "material/PipelineCache.hpp"
 #include "FakePipelineFactory.hpp"
 
+#include <cstdint>
+#include <utility>
+
 using namespace aether;
 
 static MaterialTemplate GltfTemplate()
@@ -125,4 +128,107 @@ TEST_CASE("PipelineCache retires a replaced pipeline instead of destroying it im
 	CHECK(cache.Size() == 1);
 	CHECK(cache.Acquire(GltfTemplate()) != nullptr);
 	CHECK(factory.buildCount == 2);
+}
+
+namespace
+{
+	// Stands in for the driver half of a reload. The "prepared pipeline" is an opaque void* to
+	// everything above the Vulkan layer, so a counter cast to a pointer is a faithful fake.
+	struct FakePrepare
+	{
+		int prepared = 0;
+		int committed = 0;
+		int discarded = 0;
+
+		[[nodiscard]] PipelineCache::PrepareFn Prepare()
+		{
+			return [this](const GraphicsPipeline::Desc&)
+			{
+				++prepared;
+				return gpu::ResourceRegistry::PreparedPipeline{reinterpret_cast<void*>(static_cast<std::uintptr_t>(prepared))};
+			};
+		}
+
+		[[nodiscard]] PipelineCache::CommitFn Commit()
+		{
+			return [this](gpu::ResourceRegistry::PreparedPipeline) -> Expected<GraphicsPipeline>
+			{
+				++committed;
+				return GraphicsPipeline{};
+			};
+		}
+
+		[[nodiscard]] PipelineCache::DiscardFn Discard()
+		{
+			return [this](gpu::ResourceRegistry::PreparedPipeline) { ++discarded; };
+		}
+	};
+} // namespace
+
+// The split exists so the driver's SPIR-V compile - tens of milliseconds - happens on a
+// worker while only the swap runs on the thread that owns the registry.
+TEST_CASE("PrepareReload builds one pipeline per affected template without touching the cache") {
+	PipelineCache cache;
+	FakePipelineFactory factory;
+	FakePrepare fake;
+	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard());
+
+	MaterialTemplate opaque = GltfTemplate();
+	MaterialTemplate blended = GltfTemplate(); blended.blendEnable = true;
+	MaterialTemplate other; other.shaderVfsPath = "shaders://plasma.spv";
+	const GraphicsPipeline* before = cache.Acquire(opaque);
+	cache.Acquire(blended);
+	cache.Acquire(other);
+
+	auto prepared = cache.PrepareReload("shaders://gltf_mesh.spv");
+	CHECK(prepared.size() == 2);
+	CHECK(fake.prepared == 2);
+	// Nothing has been swapped yet: the old pipelines must keep rendering until commit.
+	CHECK(fake.committed == 0);
+	CHECK(cache.Acquire(opaque) == before);
+
+	CHECK(cache.CommitReload(std::move(prepared)) == 2);
+	CHECK(fake.committed == 2);
+	// Same entry, rebuilt in place, so every material still holding this pointer is fine.
+	CHECK(cache.Acquire(opaque) == before);
+	CHECK(cache.Size() == 3);
+}
+
+// Abandoned prepared pipelines own real driver objects that nothing else will ever free.
+TEST_CASE("DiscardPrepared hands back pipelines that are never committed") {
+	PipelineCache cache;
+	FakePipelineFactory factory;
+	FakePrepare fake;
+	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard());
+
+	cache.Acquire(GltfTemplate());
+	auto prepared = cache.PrepareReload("shaders://gltf_mesh.spv");
+	REQUIRE(prepared.size() == 1);
+
+	cache.DiscardPrepared(std::move(prepared));
+	CHECK(fake.discarded == 1);
+	CHECK(fake.committed == 0);
+}
+
+TEST_CASE("PrepareReload is empty when no pipeline uses that shader") {
+	PipelineCache cache;
+	FakePipelineFactory factory;
+	FakePrepare fake;
+	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard());
+
+	cache.Acquire(GltfTemplate());
+	CHECK(cache.PrepareReload("shaders://never_used.spv").empty());
+	CHECK(fake.prepared == 0);
+}
+
+// A cache initialised the old way must still work: the synchronous Reload is what everything
+// other than the material editor uses.
+TEST_CASE("PrepareReload is inert when no async factory was supplied") {
+	PipelineCache cache;
+	FakePipelineFactory factory;
+	cache.Initialize({}, std::ref(factory));
+
+	cache.Acquire(GltfTemplate());
+	CHECK(cache.PrepareReload("shaders://gltf_mesh.spv").empty());
+	CHECK(cache.Reload("shaders://gltf_mesh.spv") == 1);
 }

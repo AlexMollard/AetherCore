@@ -41,10 +41,13 @@ namespace aether
 		}
 	}
 
-	Expected<GraphicsPipeline> GraphicsPipeline::Create(gpu::Device device, const Desc& desc)
+	namespace
 	{
-		AE_PROFILE_ZONE();
-		const gpu::GraphicsPipelineDesc facadeDesc{
+		// One translation, used by both Create and Prepare: a pipeline built on a worker must
+		// be described exactly like one built inline, or the two silently differ.
+		gpu::GraphicsPipelineDesc ToFacadeDesc(const GraphicsPipeline::Desc& desc)
+		{
+			return gpu::GraphicsPipelineDesc{
 		        .shaderVfsPath = desc.shaderVfsPath.data() ? desc.shaderVfsPath.data() : "",
 		        .fragmentVfsPath = desc.fragmentVfsPath.data() ? desc.fragmentVfsPath.data() : "",
 		        .vertexEntry = desc.vertexEntry.data() ? desc.vertexEntry.data() : "vertexMain",
@@ -66,13 +69,41 @@ namespace aether
 		        .debugName = desc.debugName,
 		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
+		}
+	} // namespace
+
+	Expected<GraphicsPipeline> GraphicsPipeline::Create(gpu::Device device, const Desc& desc)
+	{
+		AE_PROFILE_ZONE();
 		GraphicsPipeline out;
-		out.m_handle = gpu::ResourceRegistry::CreateGraphicsPipeline(device, facadeDesc);
+		out.m_handle = gpu::ResourceRegistry::CreateGraphicsPipeline(device, ToFacadeDesc(desc));
 		if (!out.m_handle.IsValid())
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(0, "GraphicsPipeline: failed to register with ResourceRegistry."));
 		}
 		return out;
+	}
+
+	gpu::ResourceRegistry::PreparedPipeline GraphicsPipeline::Prepare(gpu::Device device, const Desc& desc)
+	{
+		AE_PROFILE_ZONE();
+		return gpu::ResourceRegistry::PrepareGraphicsPipeline(device, ToFacadeDesc(desc));
+	}
+
+	Expected<GraphicsPipeline> GraphicsPipeline::Commit(gpu::ResourceRegistry::PreparedPipeline prepared)
+	{
+		GraphicsPipeline out;
+		out.m_handle = gpu::ResourceRegistry::CommitPreparedPipeline(prepared, nullptr);
+		if (!out.m_handle.IsValid())
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "GraphicsPipeline: failed to register a prepared pipeline."));
+		}
+		return out;
+	}
+
+	void GraphicsPipeline::Discard(gpu::ResourceRegistry::PreparedPipeline prepared)
+	{
+		gpu::ResourceRegistry::DiscardPreparedPipeline(prepared);
 	}
 
 	gpu::PipelineView GraphicsPipeline::GetPipeline() const

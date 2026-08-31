@@ -1589,35 +1589,79 @@ namespace aether::gpu
 		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 	}
 
+	namespace
+	{
+		// Shared by CreateGraphicsPipeline and PrepareGraphicsPipeline so the pipeline built
+		// on a worker is described identically to one built inline.
+		::aether::GraphicsPipeline::Desc ToVkPipelineDesc(const GraphicsPipelineDesc& desc)
+		{
+			return ::aether::GraphicsPipeline::Desc{
+			        .shaderVfsPath = desc.shaderVfsPath,
+			        .fragmentVfsPath = desc.fragmentVfsPath != nullptr ? std::string_view(desc.fragmentVfsPath) : std::string_view{},
+			        .vertexEntry = desc.vertexEntry,
+			        .fragmentEntry = desc.fragmentEntry,
+			        .colorFormat = desc.colorFormat,
+			        .colorAttachmentCount = desc.colorAttachmentCount,
+			        .depthFormat = desc.depthFormat,
+			        .depthTestEnable = desc.depthTestEnable,
+			        .depthWriteEnable = desc.depthWriteEnable,
+			        .depthCompareOp = desc.depthCompareOp,
+			        .blendEnable = desc.blendEnable,
+			        .blendMode = desc.blendMode,
+			        .topology = desc.topology,
+			        .polygonMode = desc.polygonMode,
+			        .cullMode = desc.cullMode,
+			        .vertexBindings = desc.vertexBindings,
+			        .vertexAttributes = desc.vertexAttributes,
+			        .lineWidthDynamic = desc.lineWidthDynamic,
+			        .descriptorHeapMappings = desc.descriptorHeapMappings,
+			};
+		}
+	} // namespace
+
 	PipelineHandle ResourceRegistry::CreateGraphicsPipeline(Device device, const GraphicsPipelineDesc& desc) noexcept
 	{
-		const GraphicsPipeline::Desc vkDesc{
-		        .shaderVfsPath = desc.shaderVfsPath,
-		        .fragmentVfsPath = desc.fragmentVfsPath != nullptr ? std::string_view(desc.fragmentVfsPath) : std::string_view{},
-		        .vertexEntry = desc.vertexEntry,
-		        .fragmentEntry = desc.fragmentEntry,
-		        .colorFormat = desc.colorFormat,
-		        .colorAttachmentCount = desc.colorAttachmentCount,
-		        .depthFormat = desc.depthFormat,
-		        .depthTestEnable = desc.depthTestEnable,
-		        .depthWriteEnable = desc.depthWriteEnable,
-		        .depthCompareOp = desc.depthCompareOp,
-		        .blendEnable = desc.blendEnable,
-		        .blendMode = desc.blendMode,
-		        .topology = desc.topology,
-		        .polygonMode = desc.polygonMode,
-		        .cullMode = desc.cullMode,
-		        .vertexBindings = desc.vertexBindings,
-		        .vertexAttributes = desc.vertexAttributes,
-		        .lineWidthDynamic = desc.lineWidthDynamic,
-		        .descriptorHeapMappings = desc.descriptorHeapMappings,
-		};
-		const auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, vkDesc);
+		const auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, ToVkPipelineDesc(desc));
 		if (!entryExp.has_value())
 		{
 			return PipelineHandle{};
 		}
 		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
+	}
+
+	ResourceRegistry::PreparedPipeline ResourceRegistry::PrepareGraphicsPipeline(Device device, const GraphicsPipelineDesc& desc) noexcept
+	{
+		auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, ToVkPipelineDesc(desc));
+		if (!entryExp.has_value())
+		{
+			return {};
+		}
+		// Heap-allocated so the caller can carry it across a thread boundary as an opaque
+		// pointer, without the Vulkan type escaping this layer.
+		return PreparedPipeline{new ::aether::ResourceRegistry::PipelineEntry(entryExp.value())};
+	}
+
+	PipelineHandle ResourceRegistry::CommitPreparedPipeline(PreparedPipeline prepared, const char* debugName) noexcept
+	{
+		if (!prepared.IsValid())
+		{
+			return PipelineHandle{};
+		}
+		const std::unique_ptr<::aether::ResourceRegistry::PipelineEntry> entry(
+		        static_cast<::aether::ResourceRegistry::PipelineEntry*>(prepared.opaque));
+		return s_reg->RegisterPipeline(*entry, debugName ? std::string_view(debugName) : std::string_view{});
+	}
+
+	void ResourceRegistry::DiscardPreparedPipeline(PreparedPipeline prepared) noexcept
+	{
+		if (!prepared.IsValid())
+		{
+			return;
+		}
+		const std::unique_ptr<::aether::ResourceRegistry::PipelineEntry> entry(
+		        static_cast<::aether::ResourceRegistry::PipelineEntry*>(prepared.opaque));
+		// It was never registered, so nothing else will ever destroy these shader objects.
+		::aether::ResourceRegistry::DestroyPipelineEntryNow(*entry);
 	}
 
 	ResourceRegistry::ResolvedPipeline ResourceRegistry::ResolvePipeline(PipelineHandle h) noexcept

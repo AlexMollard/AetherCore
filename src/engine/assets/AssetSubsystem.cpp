@@ -66,7 +66,12 @@ namespace aether
 
 	void AssetSubsystem::InitializePipelineCache(PipelineCache::Context context)
 	{
-		m_pipelineCache.Initialize(context, [this](const GraphicsPipeline::Desc& desc) { return m_assetManager.CreateGraphicsPipeline(desc); });
+		m_pipelineCache.Initialize(
+		        context,
+		        [this](const GraphicsPipeline::Desc& desc) { return m_assetManager.CreateGraphicsPipeline(desc); },
+		        [this](const GraphicsPipeline::Desc& desc) { return m_assetManager.PrepareGraphicsPipeline(desc); },
+		        [](gpu::ResourceRegistry::PreparedPipeline prepared) { return GraphicsPipeline::Commit(prepared); },
+		        [](gpu::ResourceRegistry::PreparedPipeline prepared) { GraphicsPipeline::Discard(prepared); });
 	}
 
 	void AssetSubsystem::LinkRenderingDeps(ServiceContainer& services)

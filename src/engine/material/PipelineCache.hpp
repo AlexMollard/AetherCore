@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "material/MaterialTemplate.hpp"
 
@@ -26,8 +27,12 @@ namespace aether
 		};
 
 		using Factory = std::function<Expected<GraphicsPipeline>(const GraphicsPipeline::Desc&)>;
+		// The same build, split in two so the driver's SPIR-V compile can happen on a worker.
+		using PrepareFn = std::function<gpu::ResourceRegistry::PreparedPipeline(const GraphicsPipeline::Desc&)>;
+		using CommitFn = std::function<Expected<GraphicsPipeline>(gpu::ResourceRegistry::PreparedPipeline)>;
+		using DiscardFn = std::function<void(gpu::ResourceRegistry::PreparedPipeline)>;
 
-		void Initialize(Context context, Factory factory);
+		void Initialize(Context context, Factory factory, PrepareFn prepare = {}, CommitFn commit = {}, DiscardFn discard = {});
 
 		[[nodiscard]] const GraphicsPipeline* Acquire(const MaterialTemplate& tmpl);
 
@@ -44,6 +49,24 @@ namespace aether
 		//
 		// Returns how many pipelines were rebuilt. Safe to call for a path nothing uses.
 		std::size_t Reload(std::string_view shaderVfsPath);
+
+		// Reload, split across a thread boundary.
+		//
+		// A shader object costs the driver tens of milliseconds to build, which on the main
+		// thread is several dropped frames every time a material recompiles. PrepareReload
+		// does that work and may be called from ANY thread; CommitReload swaps the results in
+		// and must run on the thread that owns the resource registry.
+		struct PreparedReload
+		{
+			MaterialTemplate tmpl{};
+			gpu::ResourceRegistry::PreparedPipeline prepared{};
+		};
+
+		[[nodiscard]] std::vector<PreparedReload> PrepareReload(std::string_view shaderVfsPath);
+		std::size_t CommitReload(std::vector<PreparedReload> prepared);
+		// Throw away prepared pipelines that will never be committed, so their shader objects
+		// are not leaked when the material is switched mid-compile.
+		void DiscardPrepared(std::vector<PreparedReload> prepared);
 
 		// Destroy pipelines retired by Reload once no in-flight frame can still be using
 		// them. Called once per frame alongside the other deferred-free lists.
@@ -74,6 +97,9 @@ namespace aether
 		mutable std::mutex m_mutex;
 		Context m_context{};
 		Factory m_factory;
+		PrepareFn m_prepare;
+		CommitFn m_commit;
+		DiscardFn m_discard;
 		std::unordered_multimap<std::uint64_t, Entry> m_entries;
 		std::vector<Retired> m_retired;
 		std::uint64_t m_frameIndex = 0;

@@ -200,6 +200,11 @@ namespace aether
 		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
 	}
 
+	gpu::ResourceRegistry::PreparedPipeline AssetManager::PrepareGraphicsPipeline(const GraphicsPipeline::Desc& desc)
+	{
+		return GraphicsPipeline::Prepare(m_context->GetDevice().device, desc);
+	}
+
 	std::string_view AssetManager::InternShaderVfsPath(std::string path)
 	{
 		if (path.empty())

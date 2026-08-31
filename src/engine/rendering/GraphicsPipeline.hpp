@@ -5,6 +5,7 @@
 #include <string_view>
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "utils/Assert.hpp"
 
 namespace aether
@@ -51,6 +52,13 @@ namespace aether
 		GraphicsPipeline& operator=(GraphicsPipeline&&) noexcept;
 
 		static Expected<GraphicsPipeline> Create(gpu::Device device, const Desc& desc);
+
+		// The two halves of Create, split so the expensive one can run off the main thread.
+		// Prepare does the driver's SPIR-V compile and may be called from any thread; Commit
+		// registers the result and must run on the thread that owns the resource registry.
+		[[nodiscard]] static gpu::ResourceRegistry::PreparedPipeline Prepare(gpu::Device device, const Desc& desc);
+		[[nodiscard]] static Expected<GraphicsPipeline> Commit(gpu::ResourceRegistry::PreparedPipeline prepared);
+		static void Discard(gpu::ResourceRegistry::PreparedPipeline prepared);
 
 		void Destroy();
 

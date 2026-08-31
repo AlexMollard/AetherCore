@@ -139,6 +139,10 @@ namespace aether
 
 		gpu::BufferHandle RegisterBuffer(const BufferEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
+		// Public because a PREPARED pipeline - built for a swap but never registered - has
+		// no slot to be destroyed through, so its owner has to free it directly.
+		static void DestroyPipelineEntryNow(const PipelineEntry& entry);
+
 		gpu::PipelineHandle RegisterPipeline(const PipelineEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
 		void Destroy(gpu::TextureHandle handle);
@@ -270,7 +274,6 @@ namespace aether
 		static void RunDestroyersInRing(std::vector<PendingDestruction>& ring);
 		static void DestroyTextureEntryNow(const TextureEntry& entry);
 		static void DestroyBufferEntryNow(const BufferEntry& entry, GpuMemoryTracker* memoryTracker);
-		static void DestroyPipelineEntryNow(const PipelineEntry& entry);
 
 		std::vector<TextureSlot> m_textures;
 		std::vector<BufferSlot> m_buffers;
