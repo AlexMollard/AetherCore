@@ -83,6 +83,7 @@ using namespace std::string_view_literals;
 #include "vulkan/Swapchain.hpp"
 #include "utils/FuzzyMatch.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "utils/LogRingBuffer.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/StringUtils.hpp"
@@ -908,6 +909,35 @@ namespace aether::editor
 			if (unsaved && ImGui::IsItemHovered())
 			{
 				ImGui::SetTooltip("Unsaved changes  -  Ctrl+S to save");
+			}
+
+			// Errors and warnings otherwise live only in the Console's own badges, which say
+			// nothing while that panel sits behind another tab. A project whose shaders fail
+			// to compile on open looked completely healthy from here.
+			const LogRingBuffer::LevelCounts logCounts = LogRingBuffer::Get().Counts();
+			if (logCounts.error > 0 || logCounts.warn > 0)
+			{
+				divider();
+				const bool hasErrors = logCounts.error > 0;
+				ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? C(colors::Error) : C(colors::Orange));
+				if (hasErrors)
+				{
+					ImGui::Text(ICON_FA_CIRCLE_EXCLAMATION "  %zu", logCounts.error);
+				}
+				else
+				{
+					ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION "  %zu", logCounts.warn);
+				}
+				ImGui::PopStyleColor();
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+					ImGui::SetTooltip("%zu error(s), %zu warning(s)  -  click to open the Console", logCounts.error, logCounts.warn);
+				}
+				if (ImGui::IsItemClicked())
+				{
+					m_pendingFocusWindow = "Console";
+				}
 			}
 
 			{

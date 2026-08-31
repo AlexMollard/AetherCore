@@ -43,10 +43,51 @@ namespace aether
 		        .time = FormatClock(timestamp),
 		        .seq = m_nextSeq++,
 		});
+		Tally(level, 1);
 		while (m_records.size() > kCapacity)
 		{
+			// Evicted records leave the buffer, so they leave the totals too - otherwise the
+			// status bar would keep reporting errors the console can no longer show.
+			Tally(m_records.front().level, -1);
 			m_records.pop_front();
 		}
+	}
+
+	void LogRingBuffer::Tally(const LogLevel level, const int delta)
+	{
+		const auto apply = [delta](std::size_t& n)
+		{
+			if (delta < 0 && n > 0)
+			{
+				--n;
+			}
+			else if (delta > 0)
+			{
+				++n;
+			}
+		};
+		switch (level)
+		{
+			case LogLevel::Error:
+				apply(m_counts.error);
+				break;
+			case LogLevel::Warn:
+				apply(m_counts.warn);
+				break;
+			case LogLevel::Info:
+				apply(m_counts.info);
+				break;
+			case LogLevel::Verbose:
+			default:
+				apply(m_counts.verbose);
+				break;
+		}
+	}
+
+	LogRingBuffer::LevelCounts LogRingBuffer::Counts() const
+	{
+		const std::scoped_lock lock(m_mutex);
+		return m_counts;
 	}
 
 	void LogRingBuffer::Snapshot(std::vector<Record>& out) const
@@ -59,6 +100,7 @@ namespace aether
 	{
 		const std::scoped_lock lock(m_mutex);
 		m_records.clear();
+		m_counts = {};
 	}
 
 	std::vector<CollapsedRecord> CollapseConsecutive(const std::vector<LogRingBuffer::Record>& records)
