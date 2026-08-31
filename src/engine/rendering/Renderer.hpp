@@ -209,6 +209,16 @@ namespace aether
 			m_shadingParams.z = speed;
 		}
 
+		[[nodiscard]] float GetCloudCoverage() const
+		{
+			return m_shadingParams.y;
+		}
+
+		[[nodiscard]] float GetCloudSpeed() const
+		{
+			return m_shadingParams.z;
+		}
+
 		[[nodiscard]] float GetSpecularFilter() const
 		{
 			return m_shadingParams.x;

@@ -217,6 +217,10 @@ namespace aether::app::scene
 		glm::vec3 skyHorizon{0.5f};
 		glm::vec3 skyZenith{0.2f};
 		glm::vec3 skyVoid{0.05f};
+		// Weather belongs to the scene, not to a graphics setting: one game has a clear
+		// level and an overcast one, and a global slider cannot express that.
+		float cloudCoverage = 0.0f;
+		float cloudSpeed = 0.02f;
 	};
 
 	// A per-entity override inside a prefab instance: `guid` is the source prefab

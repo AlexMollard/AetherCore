@@ -334,6 +334,8 @@ namespace aether::app::scene
 			env.skyHorizon = renderer->GetSkyHorizonColor();
 			env.skyZenith = renderer->GetSkyZenithColor();
 			env.skyVoid = renderer->GetSkyVoidColor();
+			env.cloudCoverage = renderer->GetCloudCoverage();
+			env.cloudSpeed = renderer->GetCloudSpeed();
 			scene.environment = env;
 		}
 

@@ -789,6 +789,14 @@ namespace aether::app::scene
 			e.insert("sky_horizon", Vec3ToToml(env.skyHorizon));
 			e.insert("sky_zenith", Vec3ToToml(env.skyZenith));
 			e.insert("sky_void", Vec3ToToml(env.skyVoid));
+			// Only written when there is cloud. Emitting the defaults into every scene would
+			// rewrite every existing file on its next save for no change in meaning - which is
+			// exactly what SceneRoundTripTests guards against.
+			if (env.cloudCoverage > 0.0f)
+			{
+				e.insert("cloud_coverage", env.cloudCoverage);
+				e.insert("cloud_speed", env.cloudSpeed);
+			}
 			root.insert("environment", std::move(e));
 		}
 
@@ -1202,6 +1210,8 @@ namespace aether::app::scene
 			env.skyHorizon = Vec3FromToml(ev["sky_horizon"], env.skyHorizon);
 			env.skyZenith = Vec3FromToml(ev["sky_zenith"], env.skyZenith);
 			env.skyVoid = Vec3FromToml(ev["sky_void"], env.skyVoid);
+			env.cloudCoverage = static_cast<float>(ev["cloud_coverage"].value_or(0.0));
+			env.cloudSpeed = static_cast<float>(ev["cloud_speed"].value_or(0.02));
 			scene.environment = env;
 		}
 
