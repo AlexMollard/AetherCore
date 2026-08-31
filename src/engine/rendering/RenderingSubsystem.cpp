@@ -679,6 +679,11 @@ namespace aether
 		const float filmGrain = m_postProcessStack.GetFilmGrain();
 		const float motionBlurStrength = m_postProcessStack.GetMotionBlurStrength();
 		const float motionBlurMaxRadius = m_postProcessStack.GetMotionBlurMaxRadiusPixels();
+		const float bloomStrength = m_postProcessStack.GetBloomStrength();
+		const float bloomFilterRadius = m_postProcessStack.GetBloomFilterRadius();
+		const bool autoExposureEnabled = m_postProcessStack.IsAutoExposureEnabled();
+		const float autoExposureKey = m_postProcessStack.GetAutoExposureKey();
+		const float autoExposureSpeed = m_postProcessStack.GetAutoExposureSpeed();
 		const bool histogramCaptureEnabled = m_postProcessStack.IsHistogramCaptureEnabled();
 		const std::uint32_t histogramUpdatePeriod = m_postProcessStack.GetHistogramUpdatePeriod();
 		const std::uint32_t histogramSampleStride = m_postProcessStack.GetHistogramSampleStride();
@@ -708,6 +713,11 @@ namespace aether
 		m_postProcessStack.SetSharpness(sharpness);
 		m_postProcessStack.SetFilmGrain(filmGrain);
 		m_postProcessStack.SetMotionBlur(motionBlurStrength, motionBlurMaxRadius);
+		m_postProcessStack.SetBloomStrength(bloomStrength);
+		m_postProcessStack.SetBloomFilterRadius(bloomFilterRadius);
+		m_postProcessStack.SetAutoExposureEnabled(autoExposureEnabled);
+		m_postProcessStack.SetAutoExposureKey(autoExposureKey);
+		m_postProcessStack.SetAutoExposureSpeed(autoExposureSpeed);
 		m_postProcessStack.SetHistogramCaptureEnabled(histogramCaptureEnabled);
 		m_postProcessStack.SetHistogramUpdatePeriod(histogramUpdatePeriod);
 		m_postProcessStack.SetHistogramSampleStride(histogramSampleStride);

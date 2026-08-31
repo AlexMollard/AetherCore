@@ -449,6 +449,13 @@ namespace aether
 		float m_ldrHistogramBins[kHistogramBins]{};
 		bool m_histogramDataValid = false;
 		bool m_histogramCaptureEnabled = false;
+
+		// Whether the histogram has to be read back to the CPU this frame. The debug view is
+		// one reason; auto-exposure is the other, and it is the one that ships.
+		[[nodiscard]] bool NeedsHistogramReadback() const
+		{
+			return m_histogramCaptureEnabled || m_autoExposureEnabled;
+		}
 		std::uint32_t m_histogramUpdatePeriod = 6;
 		std::uint32_t m_histogramSampleStride = 4;
 	};

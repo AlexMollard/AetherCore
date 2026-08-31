@@ -659,7 +659,7 @@ namespace aether
 		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
 		graph.UpdateExternalBuffer(m_histogramOutputRG, gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]));
 
-		if (m_histogramCaptureEnabled && m_perFrameHistogramReady[slot])
+		if (NeedsHistogramReadback() && m_perFrameHistogramReady[slot])
 		{
 			ReadbackHistogram(slot);
 			m_perFrameHistogramReady[slot] = false;
@@ -669,7 +669,10 @@ namespace aether
 
 	bool PostProcessStack::ShouldRecordHistogram(const std::uint32_t frameIndex) const
 	{
-		if (!m_histogramCaptureEnabled)
+		// Auto-exposure needs this as much as the debug view does. Gated on the view alone,
+		// the compute early-returned, the ready flag was never set, and exposure sat frozen at
+		// its initial value for the whole run - in a shipped game, forever.
+		if (!NeedsHistogramReadback())
 		{
 			return false;
 		}

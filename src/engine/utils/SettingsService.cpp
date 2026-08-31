@@ -64,6 +64,13 @@ namespace aether
 				renderer->SetChromaticAberration(m_values.graphics.chromaticAberration);
 			}
 		}
+		else if (key == "graphics.autoExposure" || key == "graphics.exposureKey" || key == "graphics.exposureSpeed")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetAutoExposure(m_values.graphics.autoExposure, m_values.graphics.exposureKey, m_values.graphics.exposureSpeed);
+			}
+		}
 		else if (key == "graphics.exposure")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())
