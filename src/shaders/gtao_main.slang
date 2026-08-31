@@ -164,7 +164,20 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     // gtaoRadius from 1.4 to 3.0 changed nothing, because the result was clamped either way.
     float pixelRadius = clamp(pc.radius * abs(fc->proj[1][1]) * 0.5f * float(pc.fullHeight) / viewDepth, 2.0f, 192.0f);
 
-    float2 noise = Hash2(px);
+    // Not white noise. This renderer has no temporal accumulation to average the sampling
+    // error away over frames, so the spatial denoise below is the ONLY thing that gets to
+    // remove it - and a white-noise hash spreads its error across every frequency, including
+    // the low ones a blur of any practical radius cannot touch. What survives is the clumpy
+    // grain that shows up in creases.
+    //
+    // A low-discrepancy pattern puts almost all of its error at high frequency instead, in a
+    // form the bilateral filter removes nearly completely, for the same sample count. The
+    // rotation uses interleaved gradient noise (Jimenez) and the step offset a 4x4 ordered
+    // pattern, chosen to decorrelate from it so the two do not line up into a visible weave.
+    const float ign = frac(52.9829189f * frac(0.06711056f * px.x + 0.00583715f * px.y));
+    const uint2 ipx = uint2(px);
+    const float ordered = (1.0f / 16.0f) * float((((ipx.y - ipx.x) & 3u) << 2u) + (ipx.x & 3u));
+    float2 noise = float2(ign, ordered);
     float visibility = 0.0f;
 
     [unroll]
