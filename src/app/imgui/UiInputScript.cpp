@@ -75,7 +75,15 @@ namespace aether::app
 		// release, and that a target under the cursor gets a frame to notice it is hovered.
 		constexpr int kMoveFrames = 8;
 
-		PushFrame({SynEvent{SynKind::MousePos, fromX, fromY}});
+		// Several position-only frames before the press. ImGui resolves which window is
+		// hovered at the START of a frame, and a widget that only reacts to a press while
+		// hovered - a node editor's pins - sees nothing if the press arrives on the same
+		// frame the cursor first appears there.
+		constexpr int kSettleFrames = 3;
+		for (int i = 0; i < kSettleFrames; ++i)
+		{
+			PushFrame({SynEvent{SynKind::MousePos, fromX, fromY}});
+		}
 		PushFrame({SynEvent{SynKind::MousePos, fromX, fromY}, SynEvent{SynKind::MouseButton, fromX, fromY, button, true}});
 		for (int i = 1; i <= kMoveFrames; ++i)
 		{
@@ -85,6 +93,12 @@ namespace aether::app
 			// The button is re-asserted every frame for the same reason QueueClick re-asserts
 			// the position: the backend re-posts real input each frame otherwise.
 			PushFrame({SynEvent{SynKind::MousePos, x, y}, SynEvent{SynKind::MouseButton, x, y, button, true}});
+		}
+		// And hold at the destination before releasing, for the same reason at the other end:
+		// the drop target has to be hovered on the frame the button comes up.
+		for (int i = 0; i < kSettleFrames; ++i)
+		{
+			PushFrame({SynEvent{SynKind::MousePos, toX, toY}, SynEvent{SynKind::MouseButton, toX, toY, button, true}});
 		}
 		PushFrame({SynEvent{SynKind::MousePos, toX, toY}, SynEvent{SynKind::MouseButton, toX, toY, button, false}});
 		PushFrame({SynEvent{SynKind::MousePos, toX, toY}});
