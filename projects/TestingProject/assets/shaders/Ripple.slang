@@ -9,8 +9,12 @@
 #include "include/GpuMaterial.slangh"
 #include "include/Sky.slangh"
 #include "include/ShadowSampling.slangh"
+#include "include/DirectionalShadowCSM.slangh"
 #include "include/LocalShadow.slangh"
 #include "include/PBRUtilities.slangh"
+#include "include/EnvBrdf.slangh"
+#include "include/AmbientOcclusion.slangh"
+#include "include/HeightFog.slangh"
 #include "include/MeshVertex.slangh"
 #include "include/DefaultVertex.slangh"
 
@@ -34,6 +38,20 @@ float GraphValueNoise(float2 p)
     const float d = GraphHash21(cell + float2(1.0f, 1.0f));
     return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
 }
+
+// Dividing by zero produces an inf that spreads through everything downstream, so the
+// divisor is pushed off zero while keeping its sign. sign() returns 0 exactly at zero, which
+// is why the 1 is added back in there. One overload per width, because the graph now emits
+// values of the width the nodes actually carry.
+float  GraphSafeDivide(float  a, float  b) { const float  s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+float2 GraphSafeDivide(float2 a, float2 b) { const float2 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+float3 GraphSafeDivide(float3 a, float3 b) { const float3 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+float4 GraphSafeDivide(float4 a, float4 b) { const float4 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+
+float  GraphRemap(float  x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+float2 GraphRemap(float2 x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+float3 GraphRemap(float3 x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+float4 GraphRemap(float4 x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
@@ -65,21 +83,39 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float3 graphB = cross(graphGeometricNormal, graphT) * input.tangentSign;
     const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
 
-    const float4 n5 = float4(float4(input.uv, 0.0f, 1.0f).xy + fc->elapsedTime * float2(0.08, -0.03), 0.0f, 1.0f);
-    const float4 n6 = GraphValueNoise(n5.xy * 10).xxxx;
+    const float2 n5 = (float2(0, 0) + fc->elapsedTime * float2(0.08, -0.03));
+    const float n6 = GraphValueNoise(n5 * 10);
     const float4 n2 = float4(0.9, 0.35, 0.2, 1);
-    const float4 n8 = (n2 * n6);
-    const float4 n7 = step(float4(0.5f, 0.5f, 0.5f, 0.5f), n6);
-    const float4 n9 = ((mat.albedoSlot != kNoTexture) ? float4(normalize(mul(g_textures[mat.albedoSlot].Sample(g_linearSampler, float4(input.uv, 0.0f, 1.0f).xy).xyz * 2.0f - 1.0f, graphTBN)), 1.0f) : float4(graphGeometricNormal, 1.0f));
+    const float4 n8 = (n2 * float4(n6));
+    const float n7 = step(0.5, n6);
+    const float3 n9 = ((mat.albedoSlot != kNoTexture) ? normalize(mul(g_textures[mat.albedoSlot].Sample(g_linearSampler, float2(0, 0)).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal);
 
-    const float3 albedo    = n8.rgb;
-    const float  metallic  = saturate(float4(0, 0, 0, 1).x);
-    const float  roughness = clamp(n7.x, 0.04f, 1.0f);
-    const float3 emissive  = float4(0, 0, 0, 1).rgb;
+    const float3 albedo    = (n8).xyz;
+    const float  metallic  = saturate(0);
+    float        roughness = clamp(n7, 0.04f, 1.0f);
+    const float3 emissive  = float3(0, 0, 0);
 
-    const float3 N = normalize(n9.xyz);
+    const float3 N = normalize(n9);
+
+    // Geometric specular anti-aliasing, the same filter gltf_mesh applies. A normal that
+    // swings hard across one pixel - a normal map, or curvature at distance - concentrates
+    // the highlight into single pixels that sparkle as the camera moves. Widening the
+    // roughness by the normal's screen-space variance makes the surface as rough as its
+    // footprint actually is, so the highlight resolves instead of aliasing.
+    {
+        const float3 dNdx = ddx(N);
+        const float3 dNdy = ddy(N);
+        const float kSigma2 = 0.15915494f; // half-pixel Gaussian width, the paper's fit
+        const float kKappa = 0.18f;        // ceiling, so a crease cannot turn the material matte
+        const float variance = kSigma2 * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
+        roughness = sqrt(saturate(roughness * roughness + min(2.0f * variance, kKappa)));
+    }
     const float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
-    const float3 L = normalize(-fc->sunDirectionIntensity.xyz);
+    // sunDirectionIntensity.xyz points TOWARDS the sun - the scene's sun_direction reaches the
+    // renderer unnegated, DayNightSystem treats a positive y as daytime, and gltf_mesh feeds it
+    // straight in as L. This negated it, so a graph material took its NdotL, its half vector and
+    // its shadow lookup from the opposite direction to every other surface in the same scene.
+    const float3 L = normalize(fc->sunDirectionIntensity.xyz);
     const float3 H = normalize(V + L);
 
     const float NdotL = saturate(dot(N, L));
@@ -92,12 +128,73 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float  G  = G_SmithSchlick(NdotV, NdotL, roughness);
 
     const float3 specular = (D * G) * F / max(4.0f * NdotV * NdotL, 1e-4f);
-    const float3 diffuse  = (float3(1, 1, 1) - F) * (1.0f - metallic) * albedo / 3.14159265f;
-    const float3 direct   = (diffuse + specular) * fc->sunColor.rgb * fc->sunDirectionIntensity.w * NdotL;
+    const float3 kD       = (float3(1, 1, 1) - F) * (1.0f - metallic);
+    const float3 diffuse  = kD * albedo / 3.14159265f;
 
-    const float3 ambient = SkyGradient(N, normalize(-fc->sunDirectionIntensity.xyz), fc->sunColor.rgb, fc->sunDirectionIntensity.w,
-                                       fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams)
-                         * albedo * (1.0f - metallic);
+    // The same cascade the standard shader samples, through the same helper. An earlier
+    // version left shadows out on the grounds that a generated shader should not invent its
+    // own - but calling the engine's own function is not inventing anything, and a material
+    // that stayed lit inside every shadow was the more obviously wrong of the two.
+    const float sunVisibility = ComputeDirectionalShadow(fc, input.worldPos, graphGeometricNormal, L, input.svPosition.xy);
+    float3 direct = (diffuse + specular) * fc->sunColor.rgb * fc->sunDirectionIntensity.w * NdotL * sunVisibility;
 
-    return float4(direct + ambient + emissive, 1.0f);
+    // Point and spot lights, through the same tile walk gltf_mesh uses. Without this a graph
+    // material was lit by the sun and the sky and nothing else, so it simply ignored every
+    // lamp in the scene. The normal is blended back towards the geometric one exactly as the
+    // standard shader does, so local lights stay visibly radial on a normal-mapped surface.
+    const float3 graphLocalNormal = normalize(lerp(graphGeometricNormal, N, 0.35f));
+    AccumulateTiledLocalLights(pc.tileHeaders, pc.tileLightIndices, pc.lightData, input.worldPos, graphLocalNormal,
+                               V, F0, albedo, metallic, roughness, fc, input.svPosition.xy, direct);
+
+    // Ambient, matching gltf_mesh: a sky-coloured diffuse probe along the normal AND a
+    // specular probe along the reflection. Without the specular half a metal has nothing to
+    // reflect and renders almost black, which is what every graph-driven metal did.
+    const float3 sunDir = normalize(fc->sunDirectionIntensity.xyz);
+    const float  sunIntensity = fc->sunDirectionIntensity.w;
+    const float3 skyDiffuse = SkyGradient(N, sunDir, fc->sunColor.rgb, sunIntensity,
+                                          fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
+                                          fc->skyParams, fc->shadingParams.y, 1.0f);
+    // One sample standing in for a prefiltered mip chain: the probe direction drifts from
+    // the mirror reflection towards the normal as the surface roughens.
+    const float3 R = reflect(-V, N);
+    const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
+    const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, fc->sunColor.rgb, sunIntensity,
+                                           fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
+                                           fc->skyParams, fc->shadingParams.y, roughness);
+
+    const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
+    // ambientColor is the scene's authored floor - the light that is not the sky at all.
+    const float3 ambientDiffuse  = (fc->ambientColor.rgb + skyDiffuse) * albedo * kD;
+    // Multi-scatter compensated, so a rough surface stops losing the light that bounces
+    // between its own microfacets.
+    const float3 ambientSpecular = skySpecular * EnvSpecularWeight(F0, envBrdf);
+
+    // Occlusion: the material's baked map times this frame's screen-space GTAO, applied to
+    // the ambient only - direct light is already occluded by the shadow maps. Without it a
+    // graph material collected the full sky everywhere, so it read brighter than the surface
+    // beside it exactly in the creases and near the silhouette.
+    const float ambientAo = saturate(MaterialOcclusion(mat, input.uv) * GtaoVisibility(fc, input.svPosition.xy));
+    const float specularAo = SpecularOcclusion(ambientAo, NdotV, roughness);
+
+    float3 finalColor = direct + ambientDiffuse * MultiBounceAo(ambientAo, albedo) + ambientSpecular * specularAo + emissive;
+
+    // Height fog, exactly as gltf_mesh applies it. Fog is resolved per fragment rather than
+    // as a fullscreen pass, so a shader that skips it renders a material that stays sharp
+    // and saturated at a distance where everything beside it has faded - the object simply
+    // does not belong to the scene any more.
+    //
+    // Skipped while the volumetric pass is running: that pass solves the same integral by
+    // marching, and applying both would count the same scattering twice.
+    const float fogAmount = (fc->skyParams.z > 0.0f) ? 0.0f : HeightFogAmount(
+        fc->cameraWorldPos.xyz, input.worldPos, fc->fogParams.x, fc->fogParams.y, fc->fogParams.w);
+    if (fogAmount > 0.0f)
+    {
+        const float3 fogViewDir = normalize(input.worldPos - fc->cameraWorldPos.xyz);
+        const float3 fogColor = HeightFogColor(fogViewDir, sunDir, fc->sunColor.rgb, sunIntensity,
+                                               fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
+                                               fc->fogParams.z, fc->skyParams, fc->shadingParams.y);
+        finalColor = lerp(finalColor, fogColor, fogAmount);
+    }
+
+    return float4(finalColor, 1.0f);
 }
