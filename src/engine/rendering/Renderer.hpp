@@ -201,6 +201,14 @@ namespace aether
 			m_shadingParams.x = strength;
 		}
 
+		// Cloud cover over the visible sky. Coverage 0 is a clear sky and costs nothing:
+		// the shader returns before sampling any noise.
+		void SetClouds(float coverage, float speed)
+		{
+			m_shadingParams.y = coverage;
+			m_shadingParams.z = speed;
+		}
+
 		[[nodiscard]] float GetSpecularFilter() const
 		{
 			return m_shadingParams.x;

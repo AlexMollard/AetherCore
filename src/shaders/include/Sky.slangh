@@ -171,6 +171,120 @@ float3 SkyGradient(
 }
 
 // The sky as the camera sees it: gradient plus everything emissive in it.
+// Value noise on the cloud plane. Hash12 is already here for the stars.
+float CloudNoise(float2 p)
+{
+    const float2 cell = floor(p);
+    const float2 f = p - cell;
+    const float2 w = float2(Smooth5(f.x), Smooth5(f.y));
+    const float a = Hash12(cell);
+    const float b = Hash12(cell + float2(1.0f, 0.0f));
+    const float c = Hash12(cell + float2(0.0f, 1.0f));
+    const float d = Hash12(cell + float2(1.0f, 1.0f));
+    return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
+}
+
+// Three octaves is enough for a cloud edge to read as ragged rather than as a blob, and
+// cheap enough to run per skybox pixel without a march.
+float CloudFbm(float2 p)
+{
+    float sum = 0.0f;
+    float amplitude = 0.5f;
+    for (int i = 0; i < 3; ++i)
+    {
+        sum += CloudNoise(p) * amplitude;
+        p *= 2.17f;          // not exactly 2, so the octaves do not line up into a grid
+        amplitude *= 0.5f;
+    }
+    return sum;
+}
+
+// A cloud layer over the visible sky.
+//
+// Deliberately NOT part of SkyGradient: that function is the lighting probe every surface
+// samples for its ambient, and clouds moving across it would swing the whole scene's ambient
+// as they drifted. This only touches what the camera sees.
+//
+// No march. What makes a cloud read as volume rather than a cut-out is not resolution, it is
+// SELF-SHADOWING - so the one extra thing this does is take a second noise tap stepped
+// towards the sun. Where the cloud is denser in that direction the sample is in shadow, which
+// gives bright sunward edges and dark interiors. Everything else here is edge quality:
+// continuous density instead of a threshold, and a high-frequency tap to erode the silhouette
+// so it is ragged rather than a smooth blob.
+float3 ApplySkyClouds(
+    float3 sky,
+    float3 worldDir,
+    float3 sunDir,
+    float3 sunColor,
+    float  sunIntensity,
+    float3 horizonColor,
+    float3 zenithColor,
+    float  coverage,
+    float  speed,
+    float  time)
+{
+    if (coverage <= 0.001f || worldDir.y <= 0.02f)
+    {
+        return sky;
+    }
+
+    // The view ray projected onto a plane overhead. The offset in the denominator is what
+    // caps the stretch near the horizon - a min() would cap it too, but it puts a corner in
+    // the derivative at one exact altitude, which draws a hard horizontal seam right across
+    // the sky. This approaches the same limit smoothly.
+    const float t = 1.0f / (max(worldDir.y, 0.0f) + 0.07f);
+    const float2 drift = float2(time * speed, time * speed * 0.6f);
+    const float2 uv = worldDir.xz * t * 0.35f + drift;
+
+    // Continuous density, not a threshold: a hard cut is what makes a cloud look like a slab
+    // of grey card. Coverage lowers the threshold so cloud grows in extent rather than opacity.
+    const float threshold = lerp(0.72f, 0.24f, saturate(coverage));
+    const float baseN = CloudFbm(uv);
+    float density = saturate((baseN - threshold) / max(1.0f - threshold, 1e-3f));
+    // Feather the thin edges and keep the cores solid.
+    density = density * density * (3.0f - 2.0f * density);
+
+    // Erode the silhouette with a finer tap, weighted to the edges so cores stay intact.
+    const float erosion = CloudNoise(uv * 5.7f);
+    density = saturate(density - erosion * 0.45f * (1.0f - density));
+
+    if (density <= 0.001f)
+    {
+        return sky;
+    }
+
+    // Self-shadowing: step towards the sun and compare. Denser ahead means this sample sits
+    // behind cloud and is shadowed.
+    const float2 sunXZ = sunDir.xz / max(length(sunDir.xz), 1e-4f);
+    const float sunN = CloudFbm(uv + sunXZ * 0.30f);
+    const float lightAmount = saturate(1.0f - (sunN - baseN) * 3.2f);
+
+    // Thickness darkens the base: a deep cloud passes less light through it.
+    const float thickness = saturate(density * 1.3f);
+    const float dayAmount = saturate(sunDir.y * 2.0f + 0.35f);
+
+    const float3 litColor = lerp(float3(0.16f, 0.17f, 0.21f), float3(1.02f, 1.00f, 0.97f), dayAmount);
+    // Shadowed cloud is not black, it is lit by the sky above it - so it takes the zenith
+    // colour, which is what keeps an overcast sky looking blue-grey rather than dead grey.
+    const float3 shadowColor = lerp(float3(0.05f, 0.06f, 0.09f), zenithColor * 1.15f + 0.10f, dayAmount);
+
+    float3 cloudColor = lerp(shadowColor, litColor, lightAmount * lightAmount);
+    cloudColor = lerp(cloudColor, cloudColor * 0.72f, thickness * 0.55f);
+
+    // A warm rim where a thin sunward edge is lit through, strongest when the sun is low.
+    const float lowSun = 1.0f - smoothstep(0.08f, 0.55f, saturate(sunDir.y));
+    const float rim = saturate(lightAmount - density) * lowSun;
+    cloudColor += sunColor * min(sunIntensity, 4.0f) * 0.22f * rim;
+
+    // Thin cloud is translucent, so it keeps some of the sky behind it; only the cores go
+    // fully opaque. Horizon haze also washes the layer out as it recedes.
+    const float horizonFade = smoothstep(0.02f, 0.22f, worldDir.y);
+    cloudColor = lerp(horizonColor * 0.85f, cloudColor, horizonFade);
+    const float alpha = density * horizonFade;
+
+    return lerp(sky, cloudColor, alpha);
+}
+
 float3 EvalSky(
     float3 worldDir,
     float3 sunDir,

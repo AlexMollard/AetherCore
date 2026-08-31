@@ -175,6 +175,13 @@ namespace aether
 				renderer->SetGtaoRadius(m_values.graphics.gtaoRadius);
 			}
 		}
+		else if (key == "graphics.cloudCoverage" || key == "graphics.cloudSpeed")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetClouds(m_values.graphics.cloudCoverage, m_values.graphics.cloudSpeed);
+			}
+		}
 		else if (key == "graphics.specularFilter")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

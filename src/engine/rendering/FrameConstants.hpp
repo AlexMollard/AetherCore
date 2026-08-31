@@ -74,7 +74,8 @@ namespace aether
 
 		// x = specular filter strength: how much of the roughness widening that hides
 		// specular aliasing is applied. 1 is the full filter, 0 disables it and restores the
-		// unfiltered highlight. y, z, w spare.
+		// unfiltered highlight. y = cloud coverage (0 = clear sky), z = cloud drift speed.
+		// w spare.
 		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
 
 		void RefreshDerived()
