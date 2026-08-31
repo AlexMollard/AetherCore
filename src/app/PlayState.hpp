@@ -49,23 +49,33 @@ namespace aether::app
 			if (m_mode == Mode::Playing)
 			{
 				m_paused = paused;
-				m_stepPending = false;
+				m_stepsPending = 0;
 			}
 		}
 
-		// Queue exactly one simulated frame while paused (Unity-style "Step").
+		// Queue `count` simulated frames while paused (Unity-style "Step").
 		// Ignored unless currently paused.
-		void RequestStep()
+		//
+		// A COUNT rather than a flag: reaching a KNOWN frame is what makes two runs
+		// comparable pixel for pixel, and a flag can only be set once per frame however many
+		// times it is asked for - so "advance 900 frames" silently advanced one.
+		void RequestStep(int count = 1)
 		{
-			if (IsPaused())
+			if (IsPaused() && count > 0)
 			{
-				m_stepPending = true;
+				m_stepsPending += count;
 			}
 		}
 
 		[[nodiscard]] bool HasPendingStep() const
 		{
-			return m_stepPending;
+			return m_stepsPending > 0;
+		}
+
+		// How many queued frames are still to be simulated.
+		[[nodiscard]] int PendingSteps() const
+		{
+			return m_stepsPending;
 		}
 
 		// Called once per frame by the update loop. Returns true when the
@@ -83,9 +93,9 @@ namespace aether::app
 			{
 				return true;
 			}
-			if (m_stepPending)
+			if (m_stepsPending > 0)
 			{
-				m_stepPending = false;
+				--m_stepsPending;
 				return true;
 			}
 			return false;
@@ -140,7 +150,7 @@ namespace aether::app
 			{
 				// Pause/step live only inside Playing; drop them on any transition.
 				m_paused = false;
-				m_stepPending = false;
+				m_stepsPending = 0;
 				// A fresh Play session (entered from Editing or Compiling) restarts
 				// the HUD timing.
 				if (mode == Mode::Playing)
@@ -167,7 +177,7 @@ namespace aether::app
 	private:
 		Mode m_mode = Mode::Editing;
 		bool m_paused = false;
-		bool m_stepPending = false;
+		int m_stepsPending = 0;
 		double m_playElapsedSeconds = 0.0;
 		double m_lastFrameSeconds = 0.0;
 		std::uint64_t m_playFrameCount = 0;

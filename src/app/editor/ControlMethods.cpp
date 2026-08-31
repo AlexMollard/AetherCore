@@ -1608,7 +1608,7 @@ namespace aether::editor
 
 		const auto playHandler = [](const char* which)
 		{
-			return [which](const json&, MethodContext& ctx) -> json
+			return [which](const json& params, MethodContext& ctx) -> json
 			{
 				app::LayerContext lc{.services = ctx.services, .frameIndex = ctx.frameIndex};
 				bool ok = false;
@@ -1631,7 +1631,11 @@ namespace aether::editor
 				}
 				else if (w == "step")
 				{
-					ok = StepPlaySession(lc);
+					// `frames` exists so a capture can be taken at a KNOWN frame. Rendering is
+					// bit-identical while paused, but the simulation is not static, so two runs
+					// only compare if they are stopped on the same frame - and reaching one a
+					// step at a time is a round trip per frame.
+					ok = StepPlaySession(lc, std::max(1, params.value("frames", 1)));
 				}
 				else
 				{
@@ -1665,7 +1669,12 @@ namespace aether::editor
 		methods.push_back({"engine.toggle_play", "toggle_play", "Toggle Play/Stop.", true, Obj(), playHandler("toggle")});
 		methods.push_back({"engine.pause", "pause", "Freeze the running simulation (state='paused'). Session stays live; no-op unless playing.", true, Obj(), playHandler("pause")});
 		methods.push_back({"engine.resume", "resume", "Unfreeze a paused simulation (state='playing'). No-op unless playing.", true, Obj(), playHandler("resume")});
-		methods.push_back({"engine.step", "step", "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.", true, Obj(), playHandler("step")});
+		methods.push_back({"engine.step",
+		        "step",
+		        "Advance the simulation exactly {frames} frames (default 1; pauses first if running). Use for frame-by-frame debugging, and to reach a KNOWN frame before render.capture_texture - a paused frame renders bit-identically, so two runs stopped on the same frame can be compared pixel for pixel.",
+		        true,
+		        Obj({{"frames", json{{"type", "integer"}, {"minimum", 1}, {"maximum", 100000}}}}),
+		        playHandler("step")});
 		methods.push_back({"engine.set_speed",
 		        "set_speed",
 		        "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",

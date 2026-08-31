@@ -297,7 +297,7 @@ namespace aether::app
 		return true;
 	}
 
-	bool StepPlaySession(LayerContext& context)
+	bool StepPlaySession(LayerContext& context, int frames)
 	{
 		auto* playState = context.TryGet<PlayState>();
 		if (playState == nullptr || !playState->IsPlaying())
@@ -309,7 +309,7 @@ namespace aether::app
 		{
 			playState->SetPaused(true);
 		}
-		playState->RequestStep();
+		playState->RequestStep(frames);
 		return true;
 	}
 } // namespace aether::app
