@@ -276,12 +276,17 @@ float CloudDensityAt(float2 uv, float coverage)
 // layer's own density read where the sun ray crosses it.
 float CloudSunVisibility(float3 worldPos, float3 sunDir, float coverage, float speed, float time)
 {
-    if (coverage <= 0.001f || sunDir.y <= 0.05f)
+    if (coverage <= 0.001f || sunDir.y <= 0.02f)
     {
         return 1.0f;
     }
     const float2 uv = CloudPlaneUv(worldPos, sunDir, time, speed);
-    const float density = CloudDensityAt(uv, coverage);
+    // Faded out as the sun approaches the horizon rather than cut off at a threshold: the
+    // shadow ray travels further across the layer the lower the sun gets, so the pattern both
+    // stretches and loses meaning, and a hard cutoff would pop it off at one exact elevation.
+    // Direct light is nearly gone by then anyway, so this is only removing a discontinuity.
+    const float grazeFade = smoothstep(0.02f, 0.18f, sunDir.y);
+    const float density = CloudDensityAt(uv, coverage) * grazeFade;
     // Never fully dark: a cloud shadow is a dimming, not an occlusion - the sky still lights
     // the ground underneath it, and that is what the ambient term already provides.
     return 1.0f - density * 0.75f;
