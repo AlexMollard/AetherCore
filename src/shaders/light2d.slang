@@ -194,7 +194,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         }
 
         // Cast shadows for shadow-casting lights that still reach this pixel.
-        float openFraction = 0.0;
+        //
+        // The scatter fraction starts at 1 - fully open air - because a light that does not
+        // cast shadows has nothing occluding it by the author's own choice, and its beam
+        // should not silently disappear. The march below replaces this with what it measures
+        // for the lights that DO cast, so scattering follows the same rule the light does.
+        float openFraction = 1.0;
         if (atten > 0.001 && L.flags.x > 0.5 && doShadows)
         {
             const float4 lc = mul(frame->viewProj, float4(p, 0.0, 1.0));
@@ -207,7 +212,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         // Light scattered by the air on the way here. It is added rather than multiplied
         // because it is light arriving from the medium itself, not light this surface
         // reflects - and it is suppressed inside solids, which have no air in them.
-        if (pc.shaftParams.x > 0.001 && openFraction > 0.0)
+        if (pc.shaftParams.x > 0.001)
         {
             const float shaft = openFraction * pc.shaftParams.x * (1.0 - solidMask);
             light += L.colorIntensity.rgb * L.colorIntensity.a * shaft * atten2;
