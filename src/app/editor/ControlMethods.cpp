@@ -1072,6 +1072,20 @@ namespace aether::editor
 			        {
 				        return json{{"error", "no such parent"}};
 			        }
+			        // Say WHY a reparent was refused. The two ways it can fail are the two ways a
+			        // hierarchy stops being a tree, and from a bare ok:false they are
+			        // indistinguishable from each other and from a no-op.
+			        if (child == parent)
+			        {
+				        return json{{"error", "an entity cannot be its own parent"}, {"id", child.id}, {"ok", false}};
+			        }
+			        if (parent.id != 0 && aether::ecs::IsAncestor(world, parent, child))
+			        {
+				        return json{{"error", "that would make a cycle: the chosen parent is already a descendant of this entity"},
+				                {"id", child.id},
+				                {"parent", parent.id},
+				                {"ok", false}};
+			        }
 			        const auto* hc = world.TryGet<HierarchyComponent>(child);
 			        const std::uint32_t oldParentId = hc != nullptr ? hc->parent.id : 0;
 			        const bool ok = aether::ecs::SetParent(world, child, parent);
