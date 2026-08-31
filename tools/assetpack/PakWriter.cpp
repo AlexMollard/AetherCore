@@ -30,7 +30,10 @@ namespace aether::assetpipeline
 				return false;
 			}
 			const std::string first = it->generic_string();
-			return first == "Builds" || first == "artifacts" || first == "scripts" || first == ".git" || first == ".vs";
+			// ".aether" is the editor's own corner of a project: the launcher thumbnail and
+			// crash-recovery autosaves. Packing it shipped several megabytes of dead weight
+			// AND put snapshots of the developer's in-progress scenes in the players' build.
+			return first == "Builds" || first == "artifacts" || first == "scripts" || first == ".git" || first == ".vs" || first == ".aether";
 		}
 
 		bool IsExcludedProjectFile(const fs::path& rel)
