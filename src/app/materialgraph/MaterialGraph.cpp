@@ -863,13 +863,15 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float3 sunDir = normalize(-fc->sunDirectionIntensity.xyz);
     const float  sunIntensity = fc->sunDirectionIntensity.w;
     const float3 skyDiffuse = SkyGradient(N, sunDir, fc->sunColor.rgb, sunIntensity,
-                                          fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
+                                          fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
+                                          fc->skyParams, fc->shadingParams.y, 1.0f);
     // One sample standing in for a prefiltered mip chain: the probe direction drifts from
     // the mirror reflection towards the normal as the surface roughens.
     const float3 R = reflect(-V, N);
     const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
     const float3 skySpecular = SkyGradient(skySpecularDir, sunDir, fc->sunColor.rgb, sunIntensity,
-                                           fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams);
+                                           fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
+                                           fc->skyParams, fc->shadingParams.y, roughness);
 
     const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
     // ambientColor is the scene's authored floor - the light that is not the sky at all.
@@ -901,7 +903,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         const float3 fogViewDir = normalize(input.worldPos - fc->cameraWorldPos.xyz);
         const float3 fogColor = HeightFogColor(fogViewDir, sunDir, fc->sunColor.rgb, sunIntensity,
                                                fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb,
-                                               fc->fogParams.z, fc->skyParams);
+                                               fc->fogParams.z, fc->skyParams, fc->shadingParams.y);
         finalColor = lerp(finalColor, fogColor, fogAmount);
     }}
 
